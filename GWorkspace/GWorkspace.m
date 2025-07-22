@@ -429,6 +429,9 @@ NSString *_pendingSystemActionTitle = nil;
   
   startAppWin = [[StartAppWin alloc] init];
   
+  // Create standard user directories in $HOME if they don't exist
+  [self createStandardUserDirectories];
+  
   watchedPaths = [[NSCountedSet alloc] initWithCapacity: 1];
   fswatcher = nil;
   fswnotifications = YES;
@@ -2147,7 +2150,7 @@ NSString *_pendingSystemActionTitle = nil;
 	      from:(NSPoint)fromPoint
 		to:(NSPoint)toPoint
 {
-     [[NSWorkspace sharedWorkspace] slideImage: image from: fromPoint to: toPoint];
+         [[NSWorkspace sharedWorkspace] slideImage: image from: fromPoint to: toPoint];
 }
 
 
@@ -2909,6 +2912,47 @@ NSString *_pendingSystemActionTitle = nil;
         message:NSLocalizedString(@"Are you sure you want to quit\nall applications and shut down now?", @"")
         systemAction:NSLocalizedString(@"Shut Down", @"")
         pendingCommand:@"shutdown"];
+}
+
+- (void)createStandardUserDirectories
+{
+  NSFileManager *fileManager = [NSFileManager defaultManager];
+  NSString *homeDirectory = NSHomeDirectory();
+  NSArray *standardDirectories = @[
+    @"Applications",
+    @"Desktop",
+    @"Documents", 
+    @"Downloads",
+    @"Music",
+    @"Pictures",
+    @"Public",
+    @"Templates",
+    @"Videos"
+  ];
+  
+  for (NSString *dirName in standardDirectories) {
+    NSString *dirPath = [homeDirectory stringByAppendingPathComponent:dirName];
+    BOOL isDirectory = NO;
+    
+    if (![fileManager fileExistsAtPath:dirPath isDirectory:&isDirectory]) {
+      NS_DURING
+        {
+          if ([fileManager createDirectoryAtPath:dirPath 
+                                       attributes:nil]) {
+            NSLog(@"Created standard directory: %@", dirPath);
+          } else {
+            NSLog(@"Failed to create directory: %@", dirPath);
+          }
+        }
+      NS_HANDLER
+        {
+          NSLog(@"Error creating directory %@: %@", dirPath, [localException reason]);
+        }
+      NS_ENDHANDLER
+    } else if (!isDirectory) {
+      NSLog(@"Warning: %@ exists but is not a directory", dirPath);
+    }
+  }
 }
 
 @end
