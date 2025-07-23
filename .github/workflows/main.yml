@@ -42,8 +42,6 @@ env:
     libpng-dev
     libicns-dev
     libobjc-10-dev
-    gobjc
-    gcc
     libxt-dev
     libfreetype-dev
     libcairo2-dev
@@ -60,10 +58,10 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: Ubuntu x64 GCC
-            library-combo: gnu-gnu-gnu
-            CC: gcc
-            CXX: g++
+          - name: Ubuntu x64 Clang gnustep-2.0
+            library-combo: ng-gnu-gnu
+            CC: clang
+            CXX: clang++
 
     env:
       SRC_PATH: ${{ github.workspace }}/source
@@ -89,6 +87,7 @@ jobs:
 
       - name: Install dependencies
         env:
+          LIBOBCJ2_BRANCH: ${{github.event.inputs.libobjc2_branch}}
           TOOLS_MAKE_BRANCH: ${{github.event.inputs.tools_make_branch}}
           LIBS_BASE_BRANCH: ${{github.event.inputs.libs_base_branch}}
           LIBS_GUI_BRANCH: ${{github.event.inputs.libs_gui_branch}}

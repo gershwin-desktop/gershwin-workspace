@@ -22,6 +22,25 @@ install_gnustep_make() {
     echo "::endgroup::"
 }
 
+install_libobjc2() {
+    echo "::group::libobjc2"
+    cd $DEPS_PATH
+    git clone -q https://github.com/gnustep/libobjc2.git
+    cd libobjc2
+    git submodule sync
+    git submodule update --init
+    mkdir build
+    cd build
+    cmake \
+      -DTESTS=off \
+      -DCMAKE_BUILD_TYPE=RelWithDebInfo \
+      -DGNUSTEP_INSTALL_TYPE=NONE \
+      -DCMAKE_INSTALL_PREFIX:PATH=$INSTALL_PATH \
+      ../
+    make install
+    echo "::endgroup::"
+}
+
 install_gnustep_base() {
     echo "::group::GNUstep Base"
     cd $DEPS_PATH
@@ -57,6 +76,11 @@ install_gnustep_back() {
 }
 
 mkdir -p $DEPS_PATH
+
+# Windows MSVC toolchain uses tools-windows-msvc scripts to install non-GNUstep dependencies
+if [ "$LIBRARY_COMBO" = "ng-gnu-gnu" -a "$IS_WINDOWS_MSVC" != "true" ]; then
+    install_libobjc2
+fi
 
 install_gnustep_make
 install_gnustep_base

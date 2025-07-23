@@ -56,30 +56,83 @@
   return self;
 }
 
+- (NSString *)findExecutableInPATH:(NSString *)executableName
+{
+  NSString *pathEnv = [[[NSProcessInfo processInfo] environment] objectForKey:@"PATH"];
+  NSArray *paths = [pathEnv componentsSeparatedByString:@":"];
+  NSFileManager *fileManager = [NSFileManager defaultManager];
+  for (NSString *dir in paths) {
+    NSString *fullPath = [dir stringByAppendingPathComponent:executableName];
+    if ([fileManager isExecutableFileAtPath:fullPath]) {
+      return fullPath;
+    }
+  }
+  return nil;
+}
+
+- (NSArray *)parseArgumentsRespectingQuotes:(NSString *)argsString {
+  NSMutableArray *args = [NSMutableArray array];
+  NSScanner *scanner = [NSScanner scannerWithString:argsString];
+  [scanner setCharactersToBeSkipped:nil];
+  while (![scanner isAtEnd]) {
+    NSString *arg = nil;
+    // Skip whitespace
+    [scanner scanCharactersFromSet:[NSCharacterSet whitespaceCharacterSet] intoString:NULL];
+    if ([scanner scanString:@"'" intoString:NULL]) {
+      [scanner scanUpToString:@"'" intoString:&arg];
+      [scanner scanString:@"'" intoString:NULL];
+    } else if ([scanner scanString:@"\"" intoString:NULL]) {
+      [scanner scanUpToString:@"\"" intoString:&arg];
+      [scanner scanString:@"\"" intoString:NULL];
+    } else {
+      [scanner scanUpToCharactersFromSet:[NSCharacterSet whitespaceCharacterSet] intoString:&arg];
+    }
+    if ([arg length]) {
+      [args addObject:arg];
+    }
+  }
+  return args;
+}
 
 - (IBAction)okButtAction:(id)sender
 {
   NSString *str = [cfield string];
-  NSUInteger i;
-
   if ([str length])
     {
-      NSArray *components = [str componentsSeparatedByString: @" "];
-      NSMutableArray *args = [NSMutableArray array];
-      NSString *command = [components objectAtIndex: 0];
-
-      for (i = 1; i < [components count]; i++)
-        {
-          [args addObject: [components objectAtIndex: i]];
+      NSString *command = nil;
+      NSScanner *scanner = [NSScanner scannerWithString:str];
+      [scanner setCharactersToBeSkipped:nil];
+      // Scan command, supporting quotes
+      if ([scanner scanString:@"'" intoString:NULL] || [scanner scanString:@"\"" intoString:NULL]) {
+        NSString *quote = [str substringWithRange:NSMakeRange(0,1)];
+        NSString *cmd = nil;
+        [scanner scanUpToString:quote intoString:&cmd];
+        command = cmd;
+        [scanner scanString:quote intoString:NULL];
+      } else {
+        [scanner scanUpToCharactersFromSet:[NSCharacterSet whitespaceCharacterSet] intoString:&command];
+      }
+      // Skip whitespace
+      [scanner scanCharactersFromSet:[NSCharacterSet whitespaceCharacterSet] intoString:NULL];
+      // Remaining string is arguments
+      NSString *argsString = [[scanner string] substringFromIndex:[scanner scanLocation]];
+      NSArray *args = [self parseArgumentsRespectingQuotes:argsString];
+      NSString *checkedCommand = [self checkCommand: command];
+      if (!checkedCommand) {
+        // First, treat as a path
+        if ([[NSFileManager defaultManager] isExecutableFileAtPath:command]) {
+          checkedCommand = command;
+        } else {
+          // Try to find executable in $PATH
+          checkedCommand = [self findExecutableInPATH:command];
         }
-
-      command = [self checkCommand: command];
-      if (command)
+      }
+      if (checkedCommand)
         {
-          if ([command hasSuffix:@".app"])
-            [[NSWorkspace sharedWorkspace] launchApplication: command];
+          if ([checkedCommand hasSuffix:@".app"])
+            [[NSWorkspace sharedWorkspace] launchApplication: checkedCommand];
           else
-            [NSTask launchedTaskWithLaunchPath: command arguments: args];
+            [NSTask launchedTaskWithLaunchPath: checkedCommand arguments: args];
           [win close];
         }
       else
