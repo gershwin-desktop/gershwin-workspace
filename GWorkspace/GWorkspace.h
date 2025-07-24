@@ -441,6 +441,8 @@
 
 - (void)removeWatcherForPath:(NSString *)path;
 
+- (void)createStandardUserDirectories;
+
 - (NSString *)trashPath;
 
 - (id)workspaceApplication;
