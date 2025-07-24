@@ -2919,7 +2919,6 @@ NSString *_pendingSystemActionTitle = nil;
   NSFileManager *fileManager = [NSFileManager defaultManager];
   NSString *homeDirectory = NSHomeDirectory();
   NSArray *standardDirectories = @[
-    @"Applications",
     @"Desktop",
     @"Documents", 
     @"Downloads",
