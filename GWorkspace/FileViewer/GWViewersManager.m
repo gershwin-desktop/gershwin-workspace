@@ -495,11 +495,13 @@ static GWViewersManager *vwrsmanager = nil;
   for (i = 0; i < [selnodes count]; i++)
     {
       FSNode *node = [selnodes objectAtIndex: i];
-        
+      // Note: Open in icon view by default.
+      // If we would like to open in the same view type as the parent,
+      // we should use showType [viewer viewType] instead of 0.  
       if ([node isDirectory])
         {
           [self viewerForNode: node
-                     showType: [viewer viewType]
+                     showType: 0
                 showSelection: NO
                      forceNew: force
 		      withKey: nil];

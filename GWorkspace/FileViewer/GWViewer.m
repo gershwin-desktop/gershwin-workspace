@@ -159,7 +159,7 @@
       }
     }
     
-    viewType = GWViewTypeBrowser;
+    viewType = GWViewTypeIcon;
     viewTypeStr = [viewerPrefs objectForKey: @"viewtype"];
     if (viewTypeStr == nil)
       {

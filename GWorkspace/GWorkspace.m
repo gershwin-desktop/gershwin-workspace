@@ -204,10 +204,6 @@ NSString *_pendingSystemActionTitle = nil;
   menuItem = [mainMenu addItemWithTitle:_(@"View") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
   [mainMenu setSubmenu: menu forItem: menuItem];
-  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Browser") action:@selector(setViewerType:) keyEquivalent:@"3"];
-  [menuItem setTag:GWViewTypeBrowser];
-  [menuItem autorelease];
-  [menu addItem:menuItem];
   menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Icon") action:@selector(setViewerType:) keyEquivalent:@"1"];
   [menuItem setTag:GWViewTypeIcon];
   [menuItem autorelease];
@@ -216,7 +212,13 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setTag:GWViewTypeList];
   [menuItem autorelease];
   [menu addItem:menuItem];
+
+  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Browser") action:@selector(setViewerType:) keyEquivalent:@"3"];
+  [menuItem setTag:GWViewTypeBrowser];
+  [menuItem autorelease];
+  [menu addItem:menuItem];
   [menu addItem:[NSMenuItem separatorItem]];
+
   menuItem = [menu addItemWithTitle:_(@"Show") action:NULL keyEquivalent:@""];
   subMenu = AUTORELEASE ([NSMenu new]);
   [menu setSubmenu: subMenu forItem: menuItem];
