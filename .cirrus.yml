@@ -21,4 +21,4 @@ trigger_ports_build_task:
         "https://api.github.com/repos/gershwin-desktop/gershwin-unstable-ports/dispatches"
   
   env:
-    GITHUB_TOKEN: ENCRYPTED[2044e69b6c0b98831e048d8a0802403d9f0b57c31f4bc4d175b379367f0225b6acc08d9a8c6adf47d109739e4e07b3e8]
+    GITHUB_TOKEN: ENCRYPTED[771de1ce213dbda78174b8c9b649b86e120316b8837de579acfa3d3e077d948197d90b1da4cd2fa6e64e4b8d03a57538]
