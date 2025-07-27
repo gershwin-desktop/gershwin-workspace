@@ -142,7 +142,7 @@ static GWViewersManager *vwrsmanager = nil;
     }
   else
     {
-      //[self showRootViewer];
+      [self showRootViewer];
   }
 }
 
