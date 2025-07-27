@@ -3,7 +3,7 @@ only_if: $CIRRUS_BRANCH == 'main' && $CIRRUS_PR == ''
 trigger_ports_build_task:
   name: "Trigger ports build"
   container:
-    image: cirrusci/wget:latest
+    image: curlimages/curl:latest
   
   # Trigger via GitHub repository dispatch (no additional token needed if same org)
   trigger_script:
