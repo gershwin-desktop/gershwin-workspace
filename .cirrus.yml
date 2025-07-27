@@ -1,0 +1,22 @@
+only_if: $CIRRUS_BRANCH == 'main' && $CIRRUS_PR == ''
+
+trigger_ports_build_task:
+  name: "Trigger ports build"
+  container:
+    image: cirrusci/wget:latest
+  
+  # Trigger via GitHub repository dispatch (no additional token needed if same org)
+  trigger_script:
+    - |
+      curl -X POST \
+        -H "Authorization: token $CIRRUS_REPO_CLONE_TOKEN" \
+        -H "Accept: application/vnd.github.v3+json" \
+        -d '{
+          "event_type": "workspace_merge",
+          "client_payload": {
+            "workspace_commit": "'$CIRRUS_CHANGE_IN_REPO'",
+            "workspace_branch": "'$CIRRUS_BRANCH'",
+            "triggered_by": "gershwin-workspace"
+          }
+        }' \
+        "https://api.github.com/repos/gershwin-desktop/gershwin-unstable-ports/dispatches"
