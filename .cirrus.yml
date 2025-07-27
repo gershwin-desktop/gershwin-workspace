@@ -5,11 +5,10 @@ trigger_ports_build_task:
   container:
     image: curlimages/curl:latest
   
-  # Trigger via GitHub repository dispatch (no additional token needed if same org)
   trigger_script:
     - |
       curl -X POST \
-        -H "Authorization: token $CIRRUS_REPO_CLONE_TOKEN" \
+        -H "Authorization: token $GITHUB_TOKEN" \
         -H "Accept: application/vnd.github.v3+json" \
         -d '{
           "event_type": "workspace_merge",
@@ -20,3 +19,6 @@ trigger_ports_build_task:
           }
         }' \
         "https://api.github.com/repos/gershwin-desktop/gershwin-unstable-ports/dispatches"
+  
+  env:
+    GITHUB_TOKEN: ENCRYPTED[2044e69b6c0b98831e048d8a0802403d9f0b57c31f4bc4d175b379367f0225b6acc08d9a8c6adf47d109739e4e07b3e8]
