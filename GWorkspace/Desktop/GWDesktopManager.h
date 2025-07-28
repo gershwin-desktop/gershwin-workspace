@@ -36,7 +36,6 @@ typedef enum {
 @class GWorkspace;
 @class GWDesktopView;
 @class Dock;
-@class TopPanel;
 @class MPointWatcher;
 
 @interface GWDesktopManager : NSObject
@@ -62,10 +61,7 @@ typedef enum {
   MPointWatcher *mpointWatcher;
   id ws;
   NSFileManager *fm;
-  NSNotificationCenter *nc;
-
-  TopPanel *_topPanel;
-  NSRect _topPanelReservedFrame;      
+  NSNotificationCenter *nc;      
 }
 
 + (GWDesktopManager *)desktopManager;
@@ -164,8 +160,6 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath;
 - (void)updateDefaults;
 
 - (void)setContextHelp;
-
-- (NSRect)topPanelReservedFrame;
 
 @end
 

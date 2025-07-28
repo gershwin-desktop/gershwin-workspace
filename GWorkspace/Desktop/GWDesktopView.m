@@ -427,7 +427,6 @@
   gridrect.size.height -= tshfr.size.height;
   gridrect.size.width -= dckr.size.width;
   gridrect.size.height -= mmfr.size.height;
-  gridrect.size.height -= [manager topPanelReservedFrame].size.height;
 
   if ([manager dockPosition] == DockPositionLeft)
     {

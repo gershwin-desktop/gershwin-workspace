@@ -73,7 +73,6 @@ Desktop/GWDesktopView.m \
 Desktop/GWDesktopIcon.m \
 Desktop/Dock/Dock.m \
 Desktop/Dock/DockIcon.m \
-Desktop/TopPanel/TopPanel.m \
 FileViewer/GWViewersManager.m \
 FileViewer/GWViewer.m \
 FileViewer/GWViewerWindow.m \

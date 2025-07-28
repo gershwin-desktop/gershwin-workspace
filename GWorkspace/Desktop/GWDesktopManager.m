@@ -34,7 +34,6 @@
 #import "GWViewersManager.h"
 #import "TShelf/TShelfWin.h"
 #import "Thumbnailer/GWThumbnailer.h"
-#import "TopPanel/TopPanel.h"
 
 #define RESV_MARGIN 10
 
@@ -116,8 +115,6 @@ static GWDesktopManager *desktopManager = nil;
 
     hidedock = [defaults boolForKey: @"hidedock"];
     dock = [[Dock alloc] initForManager: self];
-
-    _topPanel = [[TopPanel alloc] initForManager:self];
         
     [nc addObserver: self 
            selector: @selector(fileSystemWillChange:) 
@@ -165,11 +162,6 @@ static GWDesktopManager *desktopManager = nil;
   if ((hidedock == NO) && ([dock superview] == nil)) {
     [desktopView addSubview: dock];
     [dock tile];
-  }
-
-  if ([_topPanel superview] == nil) {
-      [desktopView addSubview:_topPanel];
-      [_topPanel tile];
   }
   
   [mpointWatcher startWatching];  
@@ -363,11 +355,6 @@ static GWDesktopManager *desktopManager = nil;
     macmenuReservedFrame.origin.x = 0;
     macmenuReservedFrame.origin.y = screenFrame.size.height - 25;    
   }
-
-  _topPanelReservedFrame = NSMakeRect(0,
-      screenFrame.size.height - 30,  // top
-      screenFrame.size.width,
-      30);
 
   dockReservedFrame.size.height = screenFrame.size.height;
   dockReservedFrame.size.width = 64 + RESV_MARGIN;
@@ -664,10 +651,6 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   help = @"Recycler.rtfd";
   [manager setContextHelp: (NSAttributedString *)help 
                withObject: [dock trashIcon]];
-}
-
-- (NSRect)topPanelReservedFrame {
-    return _topPanelReservedFrame;
 }
 
 @end
