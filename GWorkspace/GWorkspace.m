@@ -270,7 +270,6 @@ NSString *_pendingSystemActionTitle = nil;
 
   [menu addItemWithTitle:_(@"Finder") action:@selector(showFinder:) keyEquivalent:@"f"];
 
-  [menu addItemWithTitle:_(@"Terminal") action:@selector(showTerminal:) keyEquivalent:@"t"];
   [menu addItemWithTitle:_(@"Run...") action:@selector(runCommand:) keyEquivalent:@"0"];  
 
   menuItem = [menu addItemWithTitle:_(@"History") action:NULL keyEquivalent:@""];
