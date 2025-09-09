@@ -195,7 +195,7 @@
     if (defEntry) {
       [vwrwin setFrameFromString: defEntry];
     } else {
-      r = NSMakeRect(200, 200, resizeIncrement * 6, 700);
+      r = NSMakeRect(200, 200, resizeIncrement * 5, 700);
       [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
                display: NO];
     }
