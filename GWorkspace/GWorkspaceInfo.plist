@@ -2,13 +2,15 @@
     ApplicationName = "Workspace";
     ApplicationDescription = "GWorkspace fork for Gershwin";
     ApplicationIcon = "FileManager.tiff";
-    ApplicationRelease = "1.1.0";
-    NSBuildVersion = "02 2025";
+    ApplicationRelease = "20250909";
+    NSBuildVersion = "09 2025";
     CFBundleIdentifier = "org.gnustep.GWorkspace";
     Authors = (
+      "",
       "Modified by Gershwin Team",
       "Joseph Maloney",
       "Simon Peter",
+      "",
       "Orginal Authors",,
       "Riccardo Mottola",
       "Enrico Sersale",
