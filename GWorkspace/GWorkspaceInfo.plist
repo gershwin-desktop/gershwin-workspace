@@ -1,18 +1,22 @@
  {
     ApplicationName = "Workspace";
-    ApplicationDescription = "GNUstep Workspace Manager";
+    ApplicationDescription = "GWorkspace fork for Gershwin";
     ApplicationIcon = "FileManager.tiff";
     ApplicationRelease = "1.1.0";
     NSBuildVersion = "02 2025";
     CFBundleIdentifier = "org.gnustep.GWorkspace";
     Authors = (
+      "Modified by Gershwin Team",
+      "Joseph Maloney",
+      "Simon Peter",
+      "Orginal Authors",,
       "Riccardo Mottola",
       "Enrico Sersale",
       "Documentation and Help contents by:",
       "Dennis Leeuw <dleeuw@made-it.com>"
     );
-    URL = "http://www.gnustep.org/experience/GWorkspace.html";
-    Copyright = "Copyright (C) 2003-2025 Free Software Foundation, Inc.";
+    URL = "https://www.github.com/gershwin-desktop/gershwin-desktop";
+    Copyright = "GWorkspace Copyright (C) 2003-2025 Free Software Foundation, Inc.";
     CopyrightDescription = "Released under the GNU General Public License 2.0 or later";
     NSIcon = "FileManager.tiff";
     NSRole = "Viewer";
