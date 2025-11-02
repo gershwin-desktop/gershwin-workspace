@@ -92,7 +92,8 @@ static GWDesktopManager *desktopManager = nil;
 
     [self setReservedFrames];
     
-    usexbundle = [defaults boolForKey: @"xbundle"];
+    defentry = [defaults objectForKey: @"xbundle"];
+    usexbundle = defentry ? [defentry boolValue] : YES;
 
     if (usexbundle) {
       window = [self loadXWinBundle];

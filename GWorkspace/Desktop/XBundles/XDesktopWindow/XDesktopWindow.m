@@ -58,17 +58,25 @@
   Display *dpy = (Display *)[server serverDevice];
   void *winptr = [server windowDevice: [self windowNumber]];
   Window win = *(Window *)winptr;
-  Atom atom = 0;  
+  Atom atom = 0;
   long data = 1;
-  
+
+  // Set NET_WM_WINDOW_TYPE_DESKTOP for modern window managers
+  Atom net_wm_window_type = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
+  Atom net_wm_window_type_desktop = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", False);
+
+  XChangeProperty(dpy, win, net_wm_window_type, XA_ATOM, 32,
+                        PropModeReplace, (unsigned char *)&net_wm_window_type_desktop, 1);
+
+  // Keep legacy window manager hints for compatibility
   atom = XInternAtom(dpy, "KWM_WIN_STICKY", False);
 
-  XChangeProperty(dpy, win, atom, atom, 32, 
+  XChangeProperty(dpy, win, atom, atom, 32,
                         PropModeReplace, (unsigned char *)&data, 1);
 
   atom = XInternAtom(dpy, "WIN_STATE_STICKY", False);
 
-  XChangeProperty(dpy, win, atom, atom, 32, 
+  XChangeProperty(dpy, win, atom, atom, 32,
                         PropModeReplace, (unsigned char *)&data, 1);
 
   [self orderFront: nil];
