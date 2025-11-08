@@ -30,10 +30,12 @@
 @interface XDesktopWindow : NSWindow
 {
   id delegate;
+  int windowHintsRetryCount;
 }
 
 - (void)activate;
 - (void)deactivate;
+- (void)setWindowManagerHints;
 - (id)desktopView;
 
 - (void)openSelection:(id)sender;

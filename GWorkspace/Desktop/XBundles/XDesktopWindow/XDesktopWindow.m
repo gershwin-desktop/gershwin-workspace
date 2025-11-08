@@ -47,6 +47,7 @@
     [self setExcludedFromWindowsMenu: YES];
     [self setAcceptsMouseMovedEvents: YES];
     [self setCanHide: NO];
+    windowHintsRetryCount = 0;
 	}
   
 	return self;
@@ -54,32 +55,87 @@
 
 - (void)activate
 {
-  GSDisplayServer *server = GSCurrentServer();
-  Display *dpy = (Display *)[server serverDevice];
-  void *winptr = [server windowDevice: [self windowNumber]];
-  Window win = *(Window *)winptr;
-  Atom atom = 0;
-  long data = 1;
-
-  // Set NET_WM_WINDOW_TYPE_DESKTOP for modern window managers
-  Atom net_wm_window_type = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
-  Atom net_wm_window_type_desktop = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", False);
-
-  XChangeProperty(dpy, win, net_wm_window_type, XA_ATOM, 32,
-                        PropModeReplace, (unsigned char *)&net_wm_window_type_desktop, 1);
-
-  // Keep legacy window manager hints for compatibility
-  atom = XInternAtom(dpy, "KWM_WIN_STICKY", False);
-
-  XChangeProperty(dpy, win, atom, atom, 32,
-                        PropModeReplace, (unsigned char *)&data, 1);
-
-  atom = XInternAtom(dpy, "WIN_STATE_STICKY", False);
-
-  XChangeProperty(dpy, win, atom, atom, 32,
-                        PropModeReplace, (unsigned char *)&data, 1);
-
   [self orderFront: nil];
+
+  // Defer X11 window manager hints until after window is visible
+  [self performSelector:@selector(setWindowManagerHints) withObject:nil afterDelay:0.1];
+}
+
+- (void)setWindowManagerHints
+{
+  @try {
+    GSDisplayServer *server = GSCurrentServer();
+    if (server == nil) {
+      NSLog(@"Warning: GSCurrentServer() returned nil, skipping window manager hints");
+      return;
+    }
+
+    Display *dpy = (Display *)[server serverDevice];
+    if (dpy == NULL) {
+      NSLog(@"Warning: X11 Display not available, skipping window manager hints");
+      return;
+    }
+
+    void *winptr = [server windowDevice: [self windowNumber]];
+
+    // Enhanced pointer validation with proper bounds checking
+    if (winptr == NULL ||
+        (uintptr_t)winptr < 0x1000 ||
+        (uintptr_t)winptr > 0x7fffffffffff ||  // Check for reasonable upper bound on 64-bit
+        ((uintptr_t)winptr & 0x3) != 0) {     // Check for proper alignment
+
+      windowHintsRetryCount++;
+      if (windowHintsRetryCount > 10) {
+        NSLog(@"Error: Maximum retries exceeded for window manager hints setup. Giving up.");
+        return;
+      }
+
+      NSLog(@"Warning: windowDevice returned invalid pointer %p (attempt %d/10), retrying window manager hints",
+            winptr, windowHintsRetryCount);
+      [self performSelector:@selector(setWindowManagerHints) withObject:nil afterDelay:0.2];
+      return;
+    }
+
+    Window win = *(Window *)winptr;
+    if (win == 0) {
+      windowHintsRetryCount++;
+      if (windowHintsRetryCount > 10) {
+        NSLog(@"Error: Maximum retries exceeded for window manager hints setup. Giving up.");
+        return;
+      }
+
+      NSLog(@"Warning: Invalid X11 window ID (attempt %d/10), retrying window manager hints", windowHintsRetryCount);
+      [self performSelector:@selector(setWindowManagerHints) withObject:nil afterDelay:0.2];
+      return;
+    }
+
+    // Reset retry count on successful validation
+    windowHintsRetryCount = 0;
+
+    Atom atom = 0;
+    long data = 1;
+
+    // Set NET_WM_WINDOW_TYPE_DESKTOP for modern window managers
+    Atom net_wm_window_type = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
+    Atom net_wm_window_type_desktop = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", False);
+
+    XChangeProperty(dpy, win, net_wm_window_type, XA_ATOM, 32,
+                          PropModeReplace, (unsigned char *)&net_wm_window_type_desktop, 1);
+
+    // Keep legacy window manager hints for compatibility
+    atom = XInternAtom(dpy, "KWM_WIN_STICKY", False);
+    XChangeProperty(dpy, win, atom, atom, 32,
+                          PropModeReplace, (unsigned char *)&data, 1);
+
+    atom = XInternAtom(dpy, "WIN_STATE_STICKY", False);
+    XChangeProperty(dpy, win, atom, atom, 32,
+                          PropModeReplace, (unsigned char *)&data, 1);
+
+    NSLog(@"Successfully applied window manager hints to window %lu", (unsigned long)win);
+  }
+  @catch (NSException *e) {
+    NSLog(@"Exception in setWindowManagerHints: %@", e);
+  }
 }
 
 - (void)deactivate
