@@ -10,7 +10,8 @@ VERSION = @PACKAGE_VERSION@
 # subprojects
 #
 SUBPROJECTS = Finder/Modules \
-	Thumbnailer
+	Thumbnailer \
+	Desktop/XBundles
 
 #
 # MAIN APP
