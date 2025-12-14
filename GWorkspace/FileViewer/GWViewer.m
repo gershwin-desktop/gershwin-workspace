@@ -454,6 +454,16 @@
   return viewType;
 }
 
+- (BOOL)isSpatial
+{
+  return NO;
+}
+
+- (int)vtype
+{
+  return BROWSING;
+}
+
 - (BOOL)isFirstRootViewer
 {
   return firstRootViewer;
@@ -1209,6 +1219,12 @@ constrainMinCoordinate:(CGFloat)proposedMin
 - (void)goForwardInHistory
 {
   [manager goForwardInHistoryOfViewer: self];
+}
+
+- (void)setViewerBehaviour:(id)sender
+{
+  // For now, this is a placeholder for spatial/browsing mode selection
+  // The actual implementation would switch between viewer types
 }
 
 - (void)setViewerType:(id)sender

@@ -838,6 +838,8 @@
 
       DESTROY (lastSelection);
       [self selectionDidChange];
+
+      [manager deselectInSpatialViewers];
     }
 }
 
@@ -1516,7 +1518,9 @@ static void GWHighlightFrameRect(NSRect aRect)
       NSArray *selection = [self selectedNodes];
 
       if ([selection count] == 0)
-	selection = [NSArray arrayWithObject: node];
+        selection = [NSArray arrayWithObject: node];
+      else
+        [manager deselectInSpatialViewers];
 
       ASSIGN (lastSelection, selection);
       [desktopApp selectionChanged: selection];
