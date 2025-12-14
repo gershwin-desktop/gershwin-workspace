@@ -237,6 +237,10 @@
 
 - (void)setDefaultSortType:(int)type;
 
+- (int)defaultViewerType;
+
+- (void)setDefaultViewerType:(int)type;
+
 - (void)createTabbedShelf;
 
 - (TShelfWin *)tabbedShelf;
@@ -327,10 +331,15 @@
 
 - (void)mdextractorConnectionDidDie:(NSNotification *)notif;
 
-- (void)slideImage:(NSImage *)image 
-							from:(NSPoint)fromPoint 
+- (void)slideImage:(NSImage *)image
+							from:(NSPoint)fromPoint
 								to:(NSPoint)toPoint;
 
+- (void)setViewerBehaviour:(id)sender;
+
+- (void)setDefaultBrowsingBehaviour:(id)sender;
+
+- (void)setDefaultSpatialBehaviour:(id)sender;
 
 //
 // NSServicesRequests protocol
