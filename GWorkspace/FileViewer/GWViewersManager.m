@@ -25,6 +25,7 @@
 #import <AppKit/AppKit.h>
 #import "GWViewersManager.h"
 #import "GWViewer.h"
+#import "GWSpatialViewer.h"
 #import "GWViewerWindow.h"
 #import "History.h"
 #import "FSNFunctions.h"
@@ -439,11 +440,24 @@ static GWViewersManager *vwrsmanager = nil;
                     }
                   else
                     {
-                      [self viewerForNode: node 
-                                 showType: 0
-                            showSelection: NO
-                                 forceNew: NO
-			          withKey: nil];
+                      // Use the default viewer type preference
+                      int defaultType = [gworkspace defaultViewerType];
+                      NSLog(@"openSelectionInViewer: using default viewer type %d for folder %@", defaultType, [node path]);
+
+                      if (defaultType == SPATIAL) {
+                        [self viewerOfType: SPATIAL
+                                  showType: nil
+                                   forNode: node
+                             showSelection: NO
+                            closeOldViewer: nil
+                                  forceNew: NO];
+                      } else {
+                        [self viewerForNode: node
+                                   showType: 0
+                              showSelection: NO
+                                   forceNew: NO
+                                    withKey: nil];
+                      }
                     } 
                 }
               else if ([node isPlain])
@@ -495,16 +509,26 @@ static GWViewersManager *vwrsmanager = nil;
   for (i = 0; i < [selnodes count]; i++)
     {
       FSNode *node = [selnodes objectAtIndex: i];
-      // Note: Open in icon view by default.
-      // If we would like to open in the same view type as the parent,
-      // we should use showType [viewer viewType] instead of 0.  
+      // Use the default viewer type preference
       if ([node isDirectory])
         {
-          [self viewerForNode: node
-                     showType: 0
-                showSelection: NO
-                     forceNew: force
-		      withKey: nil];
+          int defaultType = [gworkspace defaultViewerType];
+          NSLog(@"openAsFolderSelectionInViewer: using default viewer type %d for folder %@", defaultType, [node path]);
+
+          if (defaultType == SPATIAL) {
+            [self viewerOfType: SPATIAL
+                      showType: nil
+                       forNode: node
+                 showSelection: NO
+                closeOldViewer: nil
+                      forceNew: force];
+          } else {
+            [self viewerForNode: node
+                       showType: 0
+                  showSelection: NO
+                       forceNew: force
+                        withKey: nil];
+          }
         }
       else if ([node isPlain])
         {        
@@ -826,6 +850,131 @@ static GWViewersManager *vwrsmanager = nil;
     NSLog(@"mountedVolumeDidUnmount notification received with empty NSDevicePath");
 }
 
+// Stub implementations for missing methods to prevent build warnings and crashes
+
+- (id)viewerOfType:(unsigned)vtype
+          showType:(NSString *)stype
+           forNode:(FSNode *)node
+     showSelection:(BOOL)showsel
+    closeOldViewer:(id)oldvwr
+          forceNew:(BOOL)force
+{
+  NSLog(@"viewerOfType:showType:forNode:showSelection:closeOldViewer:forceNew: called");
+  NSLog(@"vtype=%u, node=%@, showsel=%d, force=%d", vtype, [node path], showsel, force);
+
+  id viewer = nil;
+
+  // Close old viewer if requested
+  if (oldvwr) {
+    NSLog(@"Closing old viewer");
+    [oldvwr deactivate];
+  }
+
+  if (vtype == SPATIAL) {
+    NSLog(@"Creating spatial viewer");
+
+    // Check if we already have a spatial viewer for this node (unless forcing new)
+    if (!force) {
+      viewer = [self viewerOfType:SPATIAL withBaseNode:node];
+      if (viewer) {
+        NSLog(@"Found existing spatial viewer, activating it");
+        [viewer activate];
+        return viewer;
+      }
+    }
+
+    // Create new spatial viewer
+    GWViewerWindow *win = [GWViewerWindow new];
+    [win setReleasedWhenClosed: NO];
+
+    viewer = [[GWSpatialViewer alloc] initForNode: node
+                                         inWindow: win
+                                         showType: stype
+                                    showSelection: showsel];
+
+    if (viewer) {
+      [viewers addObject: viewer];
+      [win release];
+      [viewer release]; // viewers array retains it
+
+      NSLog(@"Successfully created spatial viewer for %@", [node path]);
+      [viewer activate];
+    } else {
+      NSLog(@"Failed to create spatial viewer");
+      [win release];
+    }
+
+  } else {
+    NSLog(@"Creating browsing viewer");
+    // For browsing mode, use the existing method
+    viewer = [self viewerForNode:node showType:GWViewTypeBrowser showSelection:showsel forceNew:force withKey:nil];
+    if (viewer) {
+      NSLog(@"Successfully created browsing viewer for %@", [node path]);
+    }
+  }
+
+  return viewer;
+}
+
+- (void)setBehaviour:(NSString *)behaviour forViewer:(id)aviewer
+{
+  NSLog(@"setBehaviour:%@ forViewer: called - STUB IMPLEMENTATION", behaviour);
+  // TODO: Implement behavior setting
+}
+
+- (id)viewerOfType:(unsigned)type withBaseNode:(FSNode *)node
+{
+  NSLog(@"viewerOfType:withBaseNode: called - STUB IMPLEMENTATION");
+  // Return existing viewer if any
+  return [self viewerWithBaseNode:node];
+}
+
+- (id)viewerOfType:(unsigned)type showingNode:(FSNode *)node
+{
+  NSLog(@"viewerOfType:showingNode: called - STUB IMPLEMENTATION");
+  // Return existing viewer if any
+  return [self viewerShowingNode:node];
+}
+
+- (NSNumber *)nextRootViewerKey
+{
+  NSLog(@"nextRootViewerKey called - STUB IMPLEMENTATION");
+  // Return a simple key for now
+  return [NSNumber numberWithUnsignedLong:(unsigned long)[[NSDate date] timeIntervalSince1970]];
+}
+
+- (int)typeOfViewerForNode:(FSNode *)node
+{
+  NSLog(@"typeOfViewerForNode: called - STUB IMPLEMENTATION");
+  // Default to browsing for now
+  return BROWSING;
+}
+
+- (id)parentOfSpatialViewer:(id)aviewer
+{
+  NSLog(@"parentOfSpatialViewer: called - STUB IMPLEMENTATION");
+  // TODO: Implement spatial viewer parent lookup
+  return nil;
+}
+
+- (void)selectedSpatialViewerChanged:(id)aviewer
+{
+  NSLog(@"selectedSpatialViewerChanged: called - STUB IMPLEMENTATION");
+  // TODO: Implement spatial viewer selection change handling
+}
+
+- (void)synchronizeSelectionInParentOfViewer:(id)aviewer
+{
+  NSLog(@"synchronizeSelectionInParentOfViewer: called - STUB IMPLEMENTATION");
+  // TODO: Implement selection synchronization
+}
+
+- (void)viewer:(id)aviewer didShowNode:(FSNode *)node
+{
+  NSLog(@"viewer:didShowNode: called - STUB IMPLEMENTATION");
+  // TODO: Implement viewer node show notification
+}
+
 @end
 
 
@@ -1048,4 +1197,3 @@ if (*pos >= i) *pos -= n; \
 }
 
 @end
-

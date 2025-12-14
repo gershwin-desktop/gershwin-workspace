@@ -1,9 +1,9 @@
-/* GWViewer.h
- *  
- * Copyright (C) 2004-2013 Free Software Foundation, Inc.
+/* GWSpatialViewer.h
+ *
+ * Copyright (C) 2004-2012 Free Software Foundation, Inc.
  *
  * Author: Enrico Sersale <enrico@imago.ro>
- * Date: July 2004
+ * Date: June 2004
  *
  * This file is part of the GNUstep GWorkspace application
  *
@@ -11,87 +11,68 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
- * Foundation, Inc., 31 Milk Street #960789 Boston, MA 02196 USA.
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02111 USA.
  */
-
-
 
 #import <Foundation/Foundation.h>
 
-typedef enum
-  {
-    GWViewTypeBrowser = 1,
-    GWViewTypeIcon,
-    GWViewTypeList
-  } GWViewType;
-
 @class GWViewersManager;
+@class GWViewerPathsPopUp;
 @class FSNode;
 @class FSNodeRep;
 @class GWViewerWindow;
-@class GWViewerSplit;
-@class GWViewerShelf;
-@class GWViewerScrollView;
-@class GWViewerIconsPath;
-@class GWViewerPathsScroll;
-@class NSView;
 @class GWorkspace;
+@class NSView;
+@class NSTextField;
+@class GWViewerScrollView;
 
-@interface GWViewer : NSObject
+@interface GWSpatialViewer : NSObject
 {
   GWViewerWindow *vwrwin;
-  GWViewerSplit *split;
-  GWViewerShelf *shelf;
-  float shelfHeight;
-  NSView *lowBox;
-  GWViewerPathsScroll *pathsScroll;
-  GWViewerIconsPath *pathsView;
-  GWViewerScrollView *nviewScroll;
+  NSView *mainView;
+  NSView *topBox;
+  NSTextField *elementsLabel;
+  NSTextField *spaceLabel;
+  GWViewerPathsPopUp *pathsPopUp;
+  GWViewerScrollView *scroll;
   id nodeView;
-  
-  NSDictionary *viewerPrefs;
-  GWViewType viewType;
 
-  BOOL rootViewer; /* base path = root */
-  BOOL firstRootViewer; /* special first viewer */
-  NSString *defaultsKeyStr;
+  NSDictionary *viewerPrefs;
+  NSString *viewType;
+  BOOL rootviewer;
+  NSNumber *rootViewerKey;
 
   int visibleCols;
   int resizeIncrement;
-    
+
   FSNode *baseNode;
   NSArray *baseNodeArray;
-  NSArray *lastSelection;  
+  NSArray *lastSelection;
   NSMutableArray *watchedNodes;
 
   FSNodeRep *fsnodeRep;
 
-  NSMutableArray *history;
-  int historyPosition;
-  
   BOOL invalidated;
   BOOL closing;
-  
+
   GWViewersManager *manager;
   GWorkspace *gworkspace;
 
-  NSNotificationCenter *nc;        
+  NSNotificationCenter *nc;
 }
 
 - (id)initForNode:(FSNode *)node
          inWindow:(GWViewerWindow *)win
-         showType:(GWViewType)stype
-    showSelection:(BOOL)showsel
-	  withKey:(NSString *)key;
-
+         showType:(NSString *)stype
+    showSelection:(BOOL)showsel;
 - (void)createSubviews;
 - (FSNode *)baseNode;
 - (BOOL)isShowingNode:(FSNode *)anode;
@@ -99,38 +80,31 @@ typedef enum
 - (void)reloadNodeContents;
 - (void)reloadFromNode:(FSNode *)anode;
 - (void)unloadFromNode:(FSNode *)anode;
-- (void)updateShownSelection;
 
 - (GWViewerWindow *)win;
 - (id)nodeView;
 - (id)shelf;
-- (GWViewType)viewType;
+- (NSString *)viewType;
+- (BOOL)isRootViewer;
+- (NSNumber *)rootViewerKey;
 - (BOOL)isSpatial;
 - (int)vtype;
 
-/* the first among root viewers, the default Viewer */
-- (BOOL)isFirstRootViewer;
-
-/* returns the key used in the defaults (prefsname) */
-- (NSString *)defaultsKey;
-
 - (void)activate;
 - (void)deactivate;
-- (void)tileViews;
 - (void)scrollToBeginning;
 - (void)invalidate;
 - (BOOL)invalidated;
 - (BOOL)isClosing;
 
-- (void)setOpened:(BOOL)opened 
+- (void)setOpened:(BOOL)opened
         repOfNode:(FSNode *)anode;
 - (void)unselectAllReps;
 - (void)selectionChanged:(NSArray *)newsel;
 - (void)multipleNodeViewDidSelectSubNode:(FSNode *)node;
-- (void)pathsViewDidSelectIcon:(id)icon;
-- (void)shelfDidSelectIcon:(id)icon;
 - (void)setSelectableNodesRange:(NSRange)range;
 - (void)updeateInfoLabels;
+- (void)popUpAction:(id)sender;
 
 - (BOOL)involvedByFileOperation:(NSDictionary *)opinfo;
 - (void)nodeContentsWillChange:(NSDictionary *)info;
@@ -142,10 +116,6 @@ typedef enum
 - (void)hideDotsFileChanged:(BOOL)hide;
 - (void)hiddenFilesChanged:(NSArray *)paths;
 
-- (NSMutableArray *)history;
-- (int)historyPosition;
-- (void)setHistoryPosition:(int)pos;
-
 - (void)columnsWidthChanged:(NSNotification *)notification;
 
 - (void)updateDefaults;
@@ -156,7 +126,7 @@ typedef enum
 //
 // GWViewerWindow Delegate Methods
 //
-@interface GWViewer (GWViewerWindowDelegateMethods)
+@interface GWSpatialViewer (GWViewerWindowDelegateMethods)
 
 - (void)openSelectionInNewViewer:(BOOL)newv;
 - (void)openSelectionAsFolder;
@@ -181,8 +151,5 @@ typedef enum
 - (void)selectAllInViewer;
 - (void)showTerminal;
 - (BOOL)validateItem:(id)menuItem;
-- (void)makeThumbnails:(id)sender;
-- (void)removeThumbnails:(id)sender;
 
 @end
-

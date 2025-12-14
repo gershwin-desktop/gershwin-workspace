@@ -210,6 +210,35 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem autorelease];
   [menu addItem:menuItem];
 
+  menuItem = [menu addItemWithTitle:_(@"View Behaviour") action:NULL keyEquivalent:@""];
+  subMenu = AUTORELEASE ([NSMenu new]);
+  [menu setSubmenu: subMenu forItem: menuItem];
+  NSLog(@"Created View Behaviour submenu");
+
+  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Browsing") action:@selector(setViewerBehaviour:) keyEquivalent:@"B"];
+  [menuItem setTarget:self];
+  [subMenu addItem:menuItem];
+  [menuItem release];
+  NSLog(@"Added Browsing menu item with target: %@", self);
+
+  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Spatial") action:@selector(setViewerBehaviour:) keyEquivalent:@"S"];
+  [menuItem setTarget:self];
+  [subMenu addItem:menuItem];
+  [menuItem release];
+  NSLog(@"Added Spatial menu item with target: %@", self);
+
+  [subMenu addItem:[NSMenuItem separatorItem]];
+
+  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Set Browsing as Default") action:@selector(setDefaultBrowsingBehaviour:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  [subMenu addItem:menuItem];
+  [menuItem release];
+
+  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Set Spatial as Default") action:@selector(setDefaultSpatialBehaviour:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  [subMenu addItem:menuItem];
+  [menuItem release];
+
   menuItem = [menu addItemWithTitle:_(@"Show") action:NULL keyEquivalent:@""];
   subMenu = AUTORELEASE ([NSMenu new]);
   [menu setSubmenu: subMenu forItem: menuItem];
@@ -761,12 +790,26 @@ NSString *_pendingSystemActionTitle = nil;
 - (void)newViewerAtPath:(NSString *)path
 {
   FSNode *node = [FSNode nodeWithPath: path];
+  int defaultType = [self defaultViewerType];
 
-  [vwrsManager viewerForNode: node 
-                    showType: 0
-               showSelection: NO
-                    forceNew: NO
-	             withKey: nil];
+  NSLog(@"newViewerAtPath: %@ using default viewer type: %d", path, defaultType);
+
+  if (defaultType == SPATIAL) {
+    // Create spatial viewer
+    [vwrsManager viewerOfType: SPATIAL
+                     showType: nil
+                      forNode: node
+                showSelection: NO
+               closeOldViewer: nil
+                     forceNew: NO];
+  } else {
+    // Create browsing viewer (original behavior)
+    [vwrsManager viewerForNode: node
+                      showType: 0
+                 showSelection: NO
+                      forceNew: NO
+                       withKey: nil];
+  }
 }
 
 - (NSImage *)tshelfBackground
@@ -1006,6 +1049,29 @@ NSString *_pendingSystemActionTitle = nil;
 - (void)setDefaultSortType:(int)type
 {
   [fsnodeRep setDefaultSortOrder: type];
+}
+
+- (int)defaultViewerType
+{
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  id entry = [defaults objectForKey: @"defaultViewerType"];
+
+  if (entry) {
+    return [entry intValue];
+  }
+
+  // Default to browsing mode for backward compatibility
+  return BROWSING;
+}
+
+- (void)setDefaultViewerType:(int)type
+{
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  [defaults setObject: [NSNumber numberWithInt: type] forKey: @"defaultViewerType"];
+  [defaults synchronize];
+
+  NSLog(@"Default viewer type set to: %d (%@)", type,
+        (type == SPATIAL) ? @"Spatial" : @"Browsing");
 }
 
 - (void)createTabbedShelf
@@ -2949,6 +3015,88 @@ NSString *_pendingSystemActionTitle = nil;
       NSLog(@"Warning: %@ exists but is not a directory", dirPath);
     }
   }
+}
+
+- (void)setViewerBehaviour:(id)sender
+{
+  NSLog(@"*** setViewerBehaviour method called! ***");
+  NSString *title = [sender title];
+  NSLog(@"setViewerBehaviour called with title: %@", title);
+
+  // Get current key window to determine what path we're working with
+  NSWindow *keyWindow = [NSApp keyWindow];
+  if (!keyWindow) {
+    NSLog(@"No key window found");
+    return;
+  }
+
+  // Try to get viewer from the key window
+  id viewer = [vwrsManager viewerWithWindow: keyWindow];
+  if (!viewer) {
+    NSLog(@"No viewer found for key window");
+    return;
+  }
+
+  // Get the base node (current path) from the viewer
+  FSNode *currentNode = [viewer baseNode];
+  if (!currentNode) {
+    NSLog(@"No base node found in viewer");
+    return;
+  }
+
+  NSLog(@"Current path: %@", [currentNode path]);
+
+  // Determine viewer type based on menu item title
+  unsigned int viewerType;
+  if ([title isEqualToString: @"Browsing"]) {
+    viewerType = BROWSING;
+    NSLog(@"Setting viewer to BROWSING mode");
+  } else if ([title isEqualToString: @"Spatial"]) {
+    viewerType = SPATIAL;
+    NSLog(@"Setting viewer to SPATIAL mode");
+  } else {
+    NSLog(@"Unknown viewer behaviour: %@", title);
+    return;
+  }
+
+  // Create new viewer with the selected behavior
+  NSLog(@"Attempting to create new viewer with type %u", viewerType);
+
+  id newViewer = [vwrsManager viewerOfType: viewerType
+                                  showType: nil
+                                   forNode: currentNode
+                             showSelection: YES
+                            closeOldViewer: viewer
+                                  forceNew: YES];
+
+  if (newViewer) {
+    NSLog(@"Successfully created new viewer for path %@", [currentNode path]);
+    [newViewer activate];
+  } else {
+    NSLog(@"Failed to create new viewer");
+  }
+
+  NSLog(@"Finished processing viewer behavior change");
+}
+
+- (void)setDefaultBrowsingBehaviour:(id)sender
+{
+  NSLog(@"Setting default viewer behavior to Browsing");
+  [self setDefaultViewerType: BROWSING];
+
+  NSRunAlertPanel(@"Default Viewer Set",
+                  @"Browsing mode is now the default for new viewer windows.",
+                  @"OK", nil, nil);
+}
+
+- (void)setDefaultSpatialBehaviour:(id)sender
+{
+  NSLog(@"Setting default viewer behavior to Spatial");
+  [self setDefaultViewerType: SPATIAL];
+
+  NSRunAlertPanel(@"Default Viewer Set",
+                  @"Spatial mode is now the default for new viewer windows.",
+                  @"OK", nil, nil);
 }
 
 @end
