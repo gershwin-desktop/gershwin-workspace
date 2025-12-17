@@ -46,6 +46,11 @@ env:
     libfreetype-dev
     libcairo2-dev
 
+  # GNUstep Windows MSVC toolchain release tag to be used (keep up to date with latest release):
+  # https://github.com/gnustep/tools-windows-msvc/releases
+  # Note: Using release-20250219 which includes libs-gui and libs-back with headless support
+  TOOLS_WINDOWS_MSVC_RELEASE_TAG: release-20250219
+
 jobs:
   ########### Linux ###########
   linux:
@@ -113,3 +118,107 @@ jobs:
           path: |
             ${{ env.SRC_PATH }}/config.log
             ${{ env.SRC_PATH }}/Tests/tests.log
+
+  ########### Windows ###########
+  windows:
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    # don't run pull requests from local branches twice
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows x64 MSVC Clang gnustep-2.0
+            os: windows-2022
+            arch: x64
+            host: x86_64-pc-windows
+            library-combo: ng-gnu-gnu
+            runtime-version: gnustep-2.0
+            CC: clang -m64
+            CXX: clang++ -m64
+            LDFLAGS: -fuse-ld=lld
+
+    env:
+      SRC_PATH: ${{ github.workspace }}\source
+      DEPS_PATH: ${{ github.workspace }}\dependencies
+      INSTALL_PATH: ${{ github.workspace }}\build
+      IS_WINDOWS_MSVC: true
+      CC: ${{ matrix.CC }}
+      CXX: ${{ matrix.CXX }}
+      LDFLAGS: ${{ matrix.LDFLAGS }}
+      HOST: ${{ matrix.host }}
+      ARCH: ${{ matrix.arch }}
+      LIBRARY_COMBO: ${{ matrix.library-combo }}
+      RUNTIME_VERSION: ${{ matrix.runtime-version }}
+      # MSYS2: disable conversion to native-form paths when configuring GNUstep Make
+      # https://www.msys2.org/wiki/Porting/#filesystem-namespaces
+      MSYS2_ARG_CONV_EXCL: --prefix=
+      # provide GitHub token to scripts to prevent rate limit errors when accessing GitHub
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    defaults:
+      run:
+        shell: msys2 {0}
+        working-directory: ${{ env.SRC_PATH }}
+
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          path: ${{ env.SRC_PATH }}
+
+      - name: Set up MSYS2 (MSVC)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MSYS
+          install: make autoconf automake libtool pkg-config
+          # make Windows packages like Clang available in MSYS
+          path-type: inherit
+
+      - name: Remove Perl Strawberry installation (MSVC)
+        # C:\Strawberry contains various MinGW libraries and binaries like pkg-config
+        # that can get picked up by configure/CMake and don't necessarily behave
+        # correctly when not using a MinGW environment, and more specifically we cannot
+        # use MinGW gmake but must use MSYS make for correctly handling of Windows paths,
+        # so we delete everything that could mess up our builds
+        run: rmdir /S /Q C:\Strawberry
+        shell: cmd
+
+      - name: Set up VS Developer Command Prompt (MSVC)
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: ${{ matrix.arch }}
+
+      - name: Install pre-built GNUstep toolchain (MSVC)
+        shell: cmd
+        run: |
+          mkdir %INSTALL_PATH% & cd %INSTALL_PATH%
+          echo Downloading pre-built release...
+          curl --silent --show-error --fail-with-body --header "Authorization: Bearer %GITHUB_TOKEN%" --location -o GNUstep-Windows-MSVC.zip ^
+            https://github.com/gnustep/tools-windows-msvc/releases/download/%TOOLS_WINDOWS_MSVC_RELEASE_TAG%/GNUstep-Windows-MSVC-%ARCH%-Release.zip || exit /b 1
+          echo Extracting pre-built release...
+          tar -xvf GNUstep-Windows-MSVC.zip --strip 1 || exit /b 1
+          del /Q GNUstep-Windows-MSVC.zip
+
+      - name: Set environment variables
+        run: |
+          # MSVC: update install path to include [x86|x64]/Release subdir used by the toolchain
+          INSTALL_PATH=$INSTALL_PATH\\$ARCH\\Release
+          # convert Windows paths to Unix paths for MSYS2 shell
+          echo "INSTALL_PATH=`cygpath -u $INSTALL_PATH`" >> $GITHUB_ENV
+          echo "DEPS_PATH=`cygpath -u $DEPS_PATH`" >> $GITHUB_ENV
+
+      - name: Build source
+        run: |
+          . $INSTALL_PATH/share/GNUstep/Makefiles/GNUstep.sh
+          ./configure --host=$HOST
+          make && make install
+
+      - name: Upload logs
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Logs - ${{ matrix.name }}
+          path: |
+            ${{ env.SRC_PATH }}/config.log
