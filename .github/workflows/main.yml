@@ -204,11 +204,13 @@ jobs:
 
       - name: Set environment variables
         run: |
+          # Convert Windows paths to Unix paths for MSYS2 shell first
+          INSTALL_PATH_UNIX=$(cygpath -u "$INSTALL_PATH")
+          DEPS_PATH_UNIX=$(cygpath -u "$DEPS_PATH")
           # MSVC: update install path to include [x86|x64]/Release subdir used by the toolchain
-          INSTALL_PATH=$INSTALL_PATH\\$ARCH\\Release
-          # convert Windows paths to Unix paths for MSYS2 shell
-          echo "INSTALL_PATH=`cygpath -u $INSTALL_PATH`" >> $GITHUB_ENV
-          echo "DEPS_PATH=`cygpath -u $DEPS_PATH`" >> $GITHUB_ENV
+          INSTALL_PATH_UNIX="$INSTALL_PATH_UNIX/$ARCH/Release"
+          echo "INSTALL_PATH=$INSTALL_PATH_UNIX" >> $GITHUB_ENV
+          echo "DEPS_PATH=$DEPS_PATH_UNIX" >> $GITHUB_ENV
 
       - name: Build source
         run: |
