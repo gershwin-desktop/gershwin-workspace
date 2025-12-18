@@ -212,12 +212,13 @@ jobs:
           echo "INSTALL_PATH=$INSTALL_PATH_UNIX" >> $GITHUB_ENV
           echo "DEPS_PATH=$DEPS_PATH_UNIX" >> $GITHUB_ENV
 
+      - name: List files (Debug)
+        run: find $INSTALL_PATH -name "GNUstep.sh"
+
       - name: Build source
-        shell: bash
         run: |
-          readlink -f $INSTALL_PATH
-          readlink -f $INSTALL_PATH/share/GNUstep/Makefiles/GNUstep.sh
-          ls -lh $INSTALL_PATH/share/GNUstep/Makefiles/
+          echo $INSTALL_PATH
+          ls -lh $INSTALL_PATH
           . $INSTALL_PATH/share/GNUstep/Makefiles/GNUstep.sh
           ./configure --host=$HOST
           make && make install
