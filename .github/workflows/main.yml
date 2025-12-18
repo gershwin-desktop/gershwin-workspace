@@ -213,7 +213,11 @@ jobs:
           echo "DEPS_PATH=$DEPS_PATH_UNIX" >> $GITHUB_ENV
 
       - name: Build source
+        shell: bash
         run: |
+          readlink -f $INSTALL_PATH
+          readlink -f $INSTALL_PATH/share/GNUstep/Makefiles/GNUstep.sh
+          ls -lh $INSTALL_PATH/share/GNUstep/Makefiles/
           . $INSTALL_PATH/share/GNUstep/Makefiles/GNUstep.sh
           ./configure --host=$HOST
           make && make install
