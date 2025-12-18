@@ -213,7 +213,9 @@ jobs:
           echo "DEPS_PATH=$DEPS_PATH_UNIX" >> $GITHUB_ENV
 
       - name: List files (Debug)
-        run: find $INSTALL_PATH -name "GNUstep.sh"
+        run: |
+             find /c -name "GNUstep.sh"
+             find $INSTALL_PATH -name "GNUstep.sh"
 
       - name: Build source
         run: |
