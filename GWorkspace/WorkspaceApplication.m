@@ -39,6 +39,24 @@
 #import "Operation.h"
 #import "StartAppWin.h"
 
+// Keep the UI painting while we wait for helper services to come up.
+static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
+{
+  [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+                           beforeDate: [NSDate dateWithTimeIntervalSinceNow: delay]];
+  [NSApp setWindowsNeedUpdate: YES];
+  [NSApp updateWindows];
+  NSArray *wins = [NSApp windows];
+  NSUInteger wc = [wins count];
+  for (NSUInteger wi = 0; wi < wc; wi++) {
+    NSWindow *w = [wins objectAtIndex: wi];
+    if ([w isVisible]) {
+      [w displayIfNeeded];
+      [w flushWindowIfNeeded];
+    }
+  }
+}
+
 @implementation GWorkspace (WorkspaceApplication)
 
 - (BOOL)performFileOperation:(NSString *)operation 
@@ -194,14 +212,12 @@
     return [self launchApplication: appname arguments: args];
   
   } else {  
-    NSDate *delay = [NSDate dateWithTimeIntervalSinceNow: 0.1];
-    
     /*
     * If we are opening many files together and our app is a wrapper,
     * we must wait a little for the last launched task to terminate.
     * Else we'd end waiting two seconds in -connectApplication.
     */
-    [[NSRunLoop currentRunLoop] runUntilDate: delay];
+    GWProcessStartupRunLoop(0.1);
     
     application = [app application];
     
@@ -1078,7 +1094,7 @@
   if (([app name] == nil) || ([app path] == nil) || ([app identifier] == nil)) {
     DESTROY (app);
   } else if (check) {
-    [app connectApplication: YES];
+    [app connectApplication: NO];
   }
   
   return AUTORELEASE (app);  
@@ -1363,68 +1379,26 @@
       RETAIN (application);
       ASSIGN (conn, c);
       
-	  } else {
-      StartAppWin *startAppWin = nil;
-      int i;
-
-	    if ((task == nil || [task isRunning] == NO) && (showProgress == NO)) {
+    } else {
+      if ((task == nil || [task isRunning] == NO)) {
         DESTROY (task);
         return;
-	    }
-
-      if (showProgress) {
-        startAppWin = [gw startAppWin];
-        [startAppWin showWindowWithTitle: @"GWorkspace"
-                                 appName: name
-                               operation: NSLocalizedString(@"contacting:", @"")         
-                            maxProgValue: 20.0];
       }
 
-      for (i = 0; i < 20; i++) {
-        if (showProgress) {
-          [startAppWin updateProgressBy: 1.0];
-        }
-
-	      [[NSRunLoop currentRunLoop] runUntilDate:
-		                     [NSDate dateWithTimeIntervalSinceNow: 0.1]];
-
-        app = [NSConnection rootProxyForConnectionWithRegisteredName: name
-                                                                host: host];                  
-        if (app) {
-          NSConnection *c = [app connectionForProxy];
-
-	        [nc addObserver: self
-	               selector: @selector(connectionDidDie:)
-		                 name: NSConnectionDidDieNotification
-		               object: c];
-
-          application = app;
-          RETAIN (application);
-          ASSIGN (conn, c);
-          break;
-        }
+      // Non-blocking: try once quickly without UI, then return.
+      GWProcessStartupRunLoop(0.05);
+      app = [NSConnection rootProxyForConnectionWithRegisteredName: name host: host];
+      if (app) {
+        NSConnection *c = [app connectionForProxy];
+        [nc addObserver: self
+               selector: @selector(connectionDidDie:)
+                   name: NSConnectionDidDieNotification
+                 object: c];
+        application = app;
+        RETAIN (application);
+        ASSIGN (conn, c);
       }
-
-      if (showProgress) {
-        [[startAppWin win] close];
-      }
-      
-      if (application == nil) {          
-        if (task && [task isRunning]) {
-          [task terminate];
-        }
-        DESTROY (task);
-          
-        if (showProgress == NO) {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""),
-                      [NSString stringWithFormat: @"%@ %@", 
-                          name, NSLocalizedString(@"seems to have hung", @"")], 
-		                                      NSLocalizedString(@"OK", @""), 
-                                          nil, 
-                                          nil);
-        }
-      }
-	  }
+    }
   }
 }
 
