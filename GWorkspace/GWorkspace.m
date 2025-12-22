@@ -2134,6 +2134,12 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 
 - (void)_probeFSWatcherTimer:(NSTimer *)timer
 {
+  // If already connected, don't attempt to reconnect to avoid memory leak
+  if (fswatcher) {
+    [timer invalidate];
+    return;
+  }
+  
   NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
   fswatcher = [NSConnection rootProxyForConnectionWithRegisteredName:@"fswatcher" host:@""];
   if (fswatcher) {
