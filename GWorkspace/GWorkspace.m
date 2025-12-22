@@ -2156,6 +2156,12 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 
 - (void)_probeRecyclerTimer:(NSTimer *)timer
 {
+  // If already connected, don't attempt to reconnect to avoid memory leak
+  if (recyclerApp) {
+    [timer invalidate];
+    return;
+  }
+  
   NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
   recyclerApp = [NSConnection rootProxyForConnectionWithRegisteredName:@"Recycler" host:@""];
   if (recyclerApp) {
@@ -2181,6 +2187,12 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 
 - (void)_probeDDBdTimer:(NSTimer *)timer
 {
+  // If already connected, don't attempt to reconnect to avoid memory leak
+  if (ddbd) {
+    [timer invalidate];
+    return;
+  }
+  
   NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
   ddbd = [NSConnection rootProxyForConnectionWithRegisteredName:@"ddbd" host:@""];
   if (ddbd) {
@@ -2201,6 +2213,12 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 
 - (void)_probeMDExtractorTimer:(NSTimer *)timer
 {
+  // If already connected, don't attempt to reconnect to avoid memory leak
+  if (mdextractor) {
+    [timer invalidate];
+    return;
+  }
+  
   NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
   mdextractor = [NSConnection rootProxyForConnectionWithRegisteredName:@"mdextractor" host:@""];
   if (mdextractor) {
