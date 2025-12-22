@@ -71,6 +71,11 @@ NSString *_pendingSystemActionTitle = nil;
 
 @interface	GWorkspace (PrivateMethods)
 - (void)_updateTrashContents;
+// Async service connection probes
+- (void)_probeFSWatcherTimer:(NSTimer *)timer;
+- (void)_probeRecyclerTimer:(NSTimer *)timer;
+- (void)_probeDDBdTimer:(NSTimer *)timer;
+- (void)_probeMDExtractorTimer:(NSTimer *)timer;
 @end
 
 @implementation GWorkspace
@@ -88,6 +93,24 @@ NSString *_pendingSystemActionTitle = nil;
 #ifndef TSHF_MAXF
   #define TSHF_MAXF 999
 #endif
+
+// Keep the UI painting while we wait for helper services to come up.
+static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
+{
+  [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+                           beforeDate: [NSDate dateWithTimeIntervalSinceNow: delay]];
+  [NSApp setWindowsNeedUpdate: YES];
+  [NSApp updateWindows];
+  NSArray *wins = [NSApp windows];
+  NSUInteger wc = [wins count];
+  for (NSUInteger wi = 0; wi < wc; wi++) {
+    NSWindow *w = [wins objectAtIndex: wi];
+    if ([w isVisible]) {
+      [w displayIfNeeded];
+      [w flushWindowIfNeeded];
+    }
+  }
+}
 
 
 + (void)initialize
@@ -1796,35 +1819,19 @@ NSString *_pendingSystemActionTitle = nil;
     {
       NSString *cmd;
       NSMutableArray *arguments;
-      unsigned i;
-    
       cmd = [NSTask launchPathForTool: @"fswatcher"];    
-                
-      [startAppWin showWindowWithTitle: @"GWorkspace"
-                               appName: @"fswatcher"
-                             operation: NSLocalizedString(@"starting:", @"")
-                          maxProgValue: 40.0];
-    
       arguments = [NSMutableArray arrayWithCapacity:2];
       [arguments addObject:@"--daemon"];
       [arguments addObject:@"--auto"];  
       [NSTask launchedTaskWithLaunchPath: cmd arguments: arguments];
-   
-      for (i = 1; i <= 40; i++) {
-        [startAppWin updateProgressBy: 1.0];
-	      [[NSRunLoop currentRunLoop] runUntilDate:
-		                     [NSDate dateWithTimeIntervalSinceNow: 0.1]];
 
-        fswatcher = [NSConnection rootProxyForConnectionWithRegisteredName: @"fswatcher" 
-                                                                      host: @""];                  
-        if (fswatcher)
-	{
-          [startAppWin updateProgressBy: 40.0 - (double)i];
-          break;
-        }
-      }
-
-      [[startAppWin win] close];
+      NSDictionary *info = [NSDictionary dictionaryWithObject:[NSDate dateWithTimeIntervalSinceNow: 6.0]
+                                                       forKey:@"deadline"];
+      [NSTimer scheduledTimerWithTimeInterval:0.2
+                                       target:self
+                                     selector:@selector(_probeFSWatcherTimer:)
+                                     userInfo:info
+                                      repeats:YES];
     }
     
     if (fswatcher)
@@ -1841,11 +1848,7 @@ NSString *_pendingSystemActionTitle = nil;
                 isGlobalWatcher: NO];
     } else {
       fswnotifications = NO;
-      NSRunAlertPanel(nil,
-              NSLocalizedString(@"unable to contact fswatcher\nfswatcher notifications disabled!", @""),
-              NSLocalizedString(@"Ok", @""),
-              nil, 
-              nil);  
+      NSLog(@"GWorkspace: unable to contact fswatcher; notifications disabled");
     }
   }
 }
@@ -1928,30 +1931,15 @@ NSString *_pendingSystemActionTitle = nil;
       
       if (recyclerApp == nil)
         {
-          unsigned i;
-          
-          [startAppWin showWindowWithTitle: @"GWorkspace"
-                                   appName: @"Recycler"
-                                 operation: NSLocalizedString(@"starting:", @"")
-                              maxProgValue: 80.0];
-          
           [ws launchApplication: @"Recycler"];
-          
-          for (i = 1; i <= 80; i++)
-            {
-              [startAppWin updateProgressBy: 1.0];
-              [[NSRunLoop currentRunLoop] runUntilDate:
-                                            [NSDate dateWithTimeIntervalSinceNow: 0.1]];
-              recyclerApp = [NSConnection rootProxyForConnectionWithRegisteredName: @"Recycler" 
-                                                                              host: @""];                  
-              if (recyclerApp)
-                {
-                  [startAppWin updateProgressBy: 80.0 - (double)i];
-                  break;
-                }
-            }
 
-          [[startAppWin win] close];
+          NSDictionary *info = [NSDictionary dictionaryWithObject:[NSDate dateWithTimeIntervalSinceNow: 8.0]
+                                                           forKey:@"deadline"];
+          [NSTimer scheduledTimerWithTimeInterval:0.2
+                                           target:self
+                                         selector:@selector(_probeRecyclerTimer:)
+                                         userInfo:info
+                                          repeats:YES];
         }
     
       if (recyclerApp)
@@ -1973,11 +1961,7 @@ NSString *_pendingSystemActionTitle = nil;
         } 
       else
         {
-          NSRunAlertPanel(nil,
-                          NSLocalizedString(@"unable to contact Recycler!", @""),
-                          NSLocalizedString(@"Ok", @""),
-                          nil, 
-                          nil);  
+          NSLog(@"GWorkspace: unable to contact Recycler");
         }
     }
 }
@@ -2021,39 +2005,22 @@ NSString *_pendingSystemActionTitle = nil;
 
       if (ddbd == nil)
 	{
-	  NSString *cmd;
-	  NSMutableArray *arguments;
-	  unsigned i;
-    
-	  cmd = [NSTask launchPathForTool: @"ddbd"];    
-                
-	  [startAppWin showWindowWithTitle: @"GWorkspace"
-				   appName: @"ddbd"
-				 operation: NSLocalizedString(@"starting:", @"")
-			      maxProgValue: 40.0];
- 
-	  arguments = [NSMutableArray arrayWithCapacity:2];
-	  [arguments addObject:@"--daemon"];
-	  [arguments addObject:@"--auto"];  
-	  [NSTask launchedTaskWithLaunchPath: cmd arguments: arguments];
+    NSString *cmd;
+    NSMutableArray *arguments;
+    cmd = [NSTask launchPathForTool: @"ddbd"];    
 
-   
-	  for (i = 1; i <= 40; i++)
-	    {
-	      [startAppWin updateProgressBy: 1.0];
-	      [[NSRunLoop currentRunLoop] runUntilDate:
-					    [NSDate dateWithTimeIntervalSinceNow: 0.1]];
+    arguments = [NSMutableArray arrayWithCapacity:2];
+    [arguments addObject:@"--daemon"];
+    [arguments addObject:@"--auto"];  
+    [NSTask launchedTaskWithLaunchPath: cmd arguments: arguments];
 
-	      ddbd = [NSConnection rootProxyForConnectionWithRegisteredName: @"ddbd" 
-								       host: @""];                  
-	      if (ddbd)
-		{
-		  [startAppWin updateProgressBy: 40.0 - (double)i];
-		  break;
-		}
-	    }
-
-	  [[startAppWin win] close];
+    NSDictionary *info = [NSDictionary dictionaryWithObject:[NSDate dateWithTimeIntervalSinceNow: 6.0]
+                                                     forKey:@"deadline"];
+    [NSTimer scheduledTimerWithTimeInterval:0.2
+                                     target:self
+                                   selector:@selector(_probeDDBdTimer:)
+                                   userInfo:info
+                                    repeats:YES];
 	}
     
       if (ddbd)
@@ -2068,11 +2035,7 @@ NSString *_pendingSystemActionTitle = nil;
 	}
       else
 	{
-	  NSRunAlertPanel(nil,
-			  NSLocalizedString(@"unable to contact ddbd.", @""),
-			  NSLocalizedString(@"Ok", @""),
-			  nil, 
-			  nil);  
+    NSLog(@"GWorkspace: unable to contact ddbd");
 	}
     }
 }  
@@ -2141,31 +2104,16 @@ NSString *_pendingSystemActionTitle = nil;
 
     if (mdextractor == nil) {
 	    NSString *cmd;
-      unsigned i;
-    
       cmd = [NSTask launchPathForTool: @"mdextractor"];    
-                
-      [startAppWin showWindowWithTitle: @"MDIndexing"
-                               appName: @"mdextractor"
-                             operation: NSLocalizedString(@"starting:", @"")
-                          maxProgValue: 80.0];
-    
       [NSTask launchedTaskWithLaunchPath: cmd arguments: nil];
-   
-      for (i = 1; i <= 80; i++) {
-        [startAppWin updateProgressBy: 1.0];
-	      [[NSRunLoop currentRunLoop] runUntilDate:
-		                     [NSDate dateWithTimeIntervalSinceNow: 0.1]];
 
-        mdextractor = [NSConnection rootProxyForConnectionWithRegisteredName: @"mdextractor" 
-                                                                        host: @""];                  
-        if (mdextractor) {
-          [startAppWin updateProgressBy: 80.0 - (double)i];
-          break;
-        }
-      }
-
-      [[startAppWin win] close];
+      NSDictionary *info = [NSDictionary dictionaryWithObject:[NSDate dateWithTimeIntervalSinceNow: 8.0]
+                                                       forKey:@"deadline"];
+      [NSTimer scheduledTimerWithTimeInterval:0.2
+                                       target:self
+                                     selector:@selector(_probeMDExtractorTimer:)
+                                     userInfo:info
+                                      repeats:YES];
     }
     
     if (mdextractor) {
@@ -2177,12 +2125,97 @@ NSString *_pendingSystemActionTitle = nil;
 		                     name: NSConnectionDidDieNotification
 		                   object: [mdextractor connectionForProxy]];
     } else {
-      NSRunAlertPanel(nil,
-              NSLocalizedString(@"unable to contact mdextractor!", @""),
-              NSLocalizedString(@"Ok", @""),
-              nil,
-              nil);
+      NSLog(@"GWorkspace: unable to contact mdextractor");
     }
+  }
+}
+
+// MARK: - Async probe timers
+
+- (void)_probeFSWatcherTimer:(NSTimer *)timer
+{
+  NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
+  fswatcher = [NSConnection rootProxyForConnectionWithRegisteredName:@"fswatcher" host:@""];
+  if (fswatcher) {
+    [timer invalidate];
+    RETAIN(fswatcher);
+    [fswatcher setProtocolForProxy:@protocol(FSWatcherProtocol)];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(fswatcherConnectionDidDie:)
+                                                 name:NSConnectionDidDieNotification
+                                               object:[fswatcher connectionForProxy]];
+    [fswatcher registerClient:(id <FSWClientProtocol>)self isGlobalWatcher:NO];
+    return;
+  }
+  if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
+    [timer invalidate];
+    fswnotifications = NO;
+    NSLog(@"GWorkspace: fswatcher did not respond; notifications disabled");
+  }
+}
+
+- (void)_probeRecyclerTimer:(NSTimer *)timer
+{
+  NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
+  recyclerApp = [NSConnection rootProxyForConnectionWithRegisteredName:@"Recycler" host:@""];
+  if (recyclerApp) {
+    [timer invalidate];
+    NSMenu *menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"Tools", @"")] submenu];
+    id item = [menu itemWithTitle: NSLocalizedString(@"Show Recycler", @"")];
+    if (item != nil) {
+      [item setTitle: NSLocalizedString(@"Hide Recycler", @"")];
+    }
+    RETAIN(recyclerApp);
+    [recyclerApp setProtocolForProxy:@protocol(RecyclerAppProtocol)];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(recyclerConnectionDidDie:)
+                                                 name:NSConnectionDidDieNotification
+                                               object:[recyclerApp connectionForProxy]];
+    return;
+  }
+  if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
+    [timer invalidate];
+    NSLog(@"GWorkspace: Recycler did not respond");
+  }
+}
+
+- (void)_probeDDBdTimer:(NSTimer *)timer
+{
+  NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
+  ddbd = [NSConnection rootProxyForConnectionWithRegisteredName:@"ddbd" host:@""];
+  if (ddbd) {
+    [timer invalidate];
+    RETAIN(ddbd);
+    [ddbd setProtocolForProxy:@protocol(DDBdProtocol)];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(ddbdConnectionDidDie:)
+                                                 name:NSConnectionDidDieNotification
+                                               object:[ddbd connectionForProxy]];
+    return;
+  }
+  if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
+    [timer invalidate];
+    NSLog(@"GWorkspace: ddbd did not respond");
+  }
+}
+
+- (void)_probeMDExtractorTimer:(NSTimer *)timer
+{
+  NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
+  mdextractor = [NSConnection rootProxyForConnectionWithRegisteredName:@"mdextractor" host:@""];
+  if (mdextractor) {
+    [timer invalidate];
+    [mdextractor setProtocolForProxy:@protocol(MDExtractorProtocol)];
+    RETAIN(mdextractor);
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(mdextractorConnectionDidDie:)
+                                                 name:NSConnectionDidDieNotification
+                                               object:[mdextractor connectionForProxy]];
+    return;
+  }
+  if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
+    [timer invalidate];
+    NSLog(@"GWorkspace: mdextractor did not respond");
   }
 }
 
@@ -2881,7 +2914,7 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
 
   while ([task isRunning] && ([deadline timeIntervalSinceNow] > 0))
     {
-      [[NSRunLoop currentRunLoop] runUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.1]];
+      GWProcessStartupRunLoop(0.1);
     }
 
   return ![task isRunning];
