@@ -2875,6 +2875,18 @@ NSString *_pendingSystemActionTitle = nil;
   return terminating;
 }
 
+static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
+{
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: timeout];
+
+  while ([task isRunning] && ([deadline timeIntervalSinceNow] > 0))
+    {
+      [[NSRunLoop currentRunLoop] runUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.1]];
+    }
+
+  return ![task isRunning];
+}
+
 - (BOOL)trySystemAction:(NSString *)actionType 
 {
   // These arrays can be expanded with more commands if needed for other systems
@@ -2883,11 +2895,40 @@ NSString *_pendingSystemActionTitle = nil;
   NSArray *commands;
   if ([actionType isEqualToString:@"restart"]) {
     commands = [NSArray arrayWithObjects:
-      [NSArray arrayWithObjects:@"/sbin/shutdown", @"-r", @"now", nil], nil
+      // systemd-based Linux (Debian with systemd)
+      [NSArray arrayWithObjects:@"/bin/systemctl", @"reboot", nil],
+      [NSArray arrayWithObjects:@"/usr/bin/systemctl", @"reboot", nil],
+      // Traditional Unix commands (BSD and Linux)
+      [NSArray arrayWithObjects:@"/sbin/reboot", nil],
+      [NSArray arrayWithObjects:@"/usr/sbin/reboot", nil],
+      [NSArray arrayWithObjects:@"/sbin/shutdown", @"-r", @"now", nil],
+      [NSArray arrayWithObjects:@"/usr/sbin/shutdown", @"-r", @"now", nil],
+      // With sudo as fallback (if LoginWindow isn't running as root)
+      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/bin/systemctl", @"reboot", nil],
+      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/bin/systemctl", @"reboot", nil],
+      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/reboot", nil],
+      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/sbin/reboot", nil],
+      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-r", @"now", nil], nil
     ];
   } else if ([actionType isEqualToString:@"shutdown"]) {
     commands = [NSArray arrayWithObjects:
-      [NSArray arrayWithObjects:@"/sbin/shutdown", @"-p", @"now", nil], nil
+      // systemd-based Linux (Debian with systemd)
+      [NSArray arrayWithObjects:@"/bin/systemctl", @"poweroff", nil],
+      [NSArray arrayWithObjects:@"/usr/bin/systemctl", @"poweroff", nil],
+      // Traditional Unix commands (BSD and Linux)
+      [NSArray arrayWithObjects:@"/sbin/poweroff", nil],
+      [NSArray arrayWithObjects:@"/usr/sbin/poweroff", nil],
+      [NSArray arrayWithObjects:@"/sbin/shutdown", @"-h", @"now", nil],
+      [NSArray arrayWithObjects:@"/usr/sbin/shutdown", @"-h", @"now", nil],
+      [NSArray arrayWithObjects:@"/sbin/shutdown", @"-p", @"now", nil],  // BSD-style with poweroff
+      [NSArray arrayWithObjects:@"/sbin/halt", @"-p", nil],  // Another BSD option
+      // With sudo as fallback (if LoginWindow isn't running as root)
+      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/bin/systemctl", @"poweroff", nil],
+      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/bin/systemctl", @"poweroff", nil],
+      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/poweroff", nil],
+      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/sbin/poweroff", nil],
+      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-h", @"now", nil],
+      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-p", @"now", nil], nil
     ];
   } else {
     return NO;
@@ -2904,27 +2945,20 @@ NSString *_pendingSystemActionTitle = nil;
     
     @try {
       [task launch];
-      [task waitUntilExit];
-      
-      if ([task terminationStatus] == 0) {
-        NSLog(@"System action command launched successfully: %@", [cmd componentsJoinedByString:@" "]);
-        
-        // For restart/shutdown commands, if they succeed, the system should restart/shutdown
-        // and this application should never reach this point. If we reach here, it means
-        // the command succeeded but the system didn't restart/shutdown, which is an error.
-        
-        // Wait a bit to see if the system actually restarts/shuts down
-        NSLog(@"Waiting for system to %@...", actionType);
-        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:5.0]];
-        
-        // If we reach here, the system didn't restart/shutdown even though the command succeeded
-        // This is a failure case - the command succeeded but didn't work
-        NSLog(@"System action command succeeded but system did not %@", actionType);
-        // Continue to try next command
-      } else {
-        NSLog(@"System action failed with command: %@, exit status: %d", [cmd componentsJoinedByString:@" "], [task terminationStatus]);
-        // Try next command
+      BOOL finished = GWWaitForTaskExit(task, 3.0);
+
+      if (!finished) {
+        NSLog(@"System action command still running after timeout: %@. Assuming system will %@.", [cmd componentsJoinedByString:@" "], actionType);
+        return YES; // Don't block the UI waiting forever
       }
+
+      if ([task terminationStatus] == 0) {
+        NSLog(@"System action command launched successfully: %@", [cmd componentsJoinedByString:@" "]);        
+        return YES; // Command exited cleanly; system should now proceed
+      }
+
+      NSLog(@"System action failed with command: %@, exit status: %d", [cmd componentsJoinedByString:@" "], [task terminationStatus]);
+      // Try next command
     } @catch (NSException *e) {
       NSLog(@"System action failed with command: %@, error: %@", [cmd componentsJoinedByString:@" "], e);
       // Try next command
@@ -2938,27 +2972,66 @@ NSString *_pendingSystemActionTitle = nil;
 - (void)executeSystemCommandAndReset
 {
   if (_pendingSystemActionCommand) {
-    NSString *actionType = _pendingSystemActionCommand;
+    NSString *actionType = [_pendingSystemActionCommand copy];
+    NSString *actionTitle = [_pendingSystemActionTitle copy];
     NSLog(@"Executing system command for action: %@", actionType);
-    
-    BOOL success = [self trySystemAction:_pendingSystemActionCommand];
-    
-    if (!success) {
-      NSRunAlertPanel(NSLocalizedString(@"error", @""),
-                      [NSString stringWithFormat:@"Failed to execute %@ command. No suitable command found.", _pendingSystemActionCommand],
-                      NSLocalizedString(@"OK", @""),
-                      nil,
-                      nil);
-    }
-    
-    // IMPORTANT: Reset state regardless of success/failure
-    // The application should NEVER quit itself during restart/shutdown
-    DESTROY(_pendingSystemActionCommand);
-    DESTROY(_pendingSystemActionTitle);
-    loggingout = NO;
-    
-    NSLog(@"System action attempt completed. Application state reset. App will NOT quit.");
+
+    NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:
+      actionType, @"action",
+      actionTitle ? actionTitle : (id)[NSNull null], @"title",
+      nil];
+
+    [NSThread detachNewThreadSelector:@selector(_performSystemActionAsync:)
+                             toTarget:self
+                           withObject: payload];
+
+    RELEASE(actionType);
+    RELEASE(actionTitle);
   }
+}
+
+- (void)_performSystemActionAsync:(NSDictionary *)info
+{
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  NSString *actionType = [info objectForKey:@"action"];
+
+  BOOL success = [self trySystemAction: actionType];
+
+  NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
+    [NSNumber numberWithBool: success], @"success",
+    actionType, @"action",
+    [info objectForKey:@"title"], @"title",
+    nil];
+
+  [self performSelectorOnMainThread:@selector(_finalizeSystemAction:)
+                         withObject: result
+                      waitUntilDone: NO];
+
+  RELEASE(pool);
+}
+
+- (void)_finalizeSystemAction:(NSDictionary *)result
+{
+  BOOL success = [[result objectForKey:@"success"] boolValue];
+  NSString *actionType = [result objectForKey:@"action"];
+  id titleObj = [result objectForKey:@"title"];
+  NSString *title = ([titleObj isKindOfClass:[NSNull class]]) ? nil : titleObj;
+
+  (void)title; // title currently unused but kept for potential UI messaging
+
+  if (!success) {
+    NSRunAlertPanel(NSLocalizedString(@"error", @""),
+                    [NSString stringWithFormat:@"Failed to execute %@ command. No suitable command found.", actionType],
+                    NSLocalizedString(@"OK", @""),
+                    nil,
+                    nil);
+  }
+
+  DESTROY(_pendingSystemActionCommand);
+  DESTROY(_pendingSystemActionTitle);
+  loggingout = NO;
+
+  NSLog(@"System action attempt completed (success=%d). Application state reset. App will NOT quit.", success);
 }
 
 - (void)restart:(id)sender
