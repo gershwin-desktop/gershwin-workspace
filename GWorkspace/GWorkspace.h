@@ -171,6 +171,9 @@
   
   NSMutableArray *launchedApps;
   GWLaunchedApp *activeApplication;
+  // Fallback timers to show the dock dot for non-GNUstep apps
+  // Keyed by a composite "path\nname" string; values are NSTimer*
+  NSMutableDictionary *launchDotFallbacks;
   
   NSString *storedAppinfoPath;
   NSDistributedLock *storedAppinfoLock;

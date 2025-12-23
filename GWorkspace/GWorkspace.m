@@ -176,6 +176,17 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
   DESTROY (fileOpsManager);
   RELEASE (finder);
   RELEASE (launchedApps);
+  if (launchDotFallbacks) {
+    // Invalidate any pending timers and release the dictionary
+    NSEnumerator *enm = [[launchDotFallbacks allValues] objectEnumerator];
+    id t = nil;
+    while ((t = [enm nextObject])) {
+      if ([t isKindOfClass:[NSTimer class]] && [t isValid]) {
+        [(NSTimer *)t invalidate];
+      }
+    }
+    RELEASE(launchDotFallbacks);
+  }
   RELEASE (storedAppinfoPath);
   RELEASE (storedAppinfoLock);
     

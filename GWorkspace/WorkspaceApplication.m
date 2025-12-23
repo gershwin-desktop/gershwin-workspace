@@ -23,6 +23,7 @@
  */
 
 #include <math.h>
+#include <string.h>
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -38,6 +39,12 @@
 #import "GWViewersManager.h"
 #import "Operation.h"
 #import "StartAppWin.h"
+// For checking whether a process identifier still exists
+#include <signal.h>
+#include <errno.h>
+#include <limits.h>
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
 
 // Keep the UI painting while we wait for helper services to come up.
 static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
@@ -423,6 +430,9 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
   logoutTimer = nil;
   logoutDelay = 0;
   loggingout = NO;
+
+  // Init fallback timers dict for non-GNUstep apps' dock dot
+  launchDotFallbacks = [NSMutableDictionary new];
 }
 
 - (void)applicationName:(NSString **)appName
@@ -487,6 +497,34 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
       appPath = appname;
     }
   
+  /* Check if this app is already running (either tracked by GWorkspace or found via X11) */
+  if (appPath && appName) {
+    GWLaunchedApp *existing = [self launchedAppWithPath: appPath andName: appName];
+    if (existing && [existing isRunning]) {
+      /* Our tracked instance is running; don't launch again. */
+      GWDebugLog(@"App \"%@\" already running (tracked); skipping duplicate launch.", appName);
+      return YES;
+    }
+    
+    /* Also check if the app is running on the system via X11 (external launch) */
+    Display *dpy = XOpenDisplay(NULL);
+    if (dpy) {
+      Window root = DefaultRootWindow(dpy);
+      Window found = GWX11FindClientByName(dpy, root, [appName UTF8String]);
+      XCloseDisplay(dpy);
+      if (found) {
+        /* App is running somewhere on the system (possibly launched externally).
+           Notify the Dock so the icon's "running" dot appears, and activate the app
+           to raise/unminimize its window immediately. */
+        GWDebugLog(@"App \"%@\" already running (X11 window found); notifying Dock and activating.", appName);
+        [[dtopManager dock] appDidLaunch: appPath appName: appName];
+        /* Activate the app to raise/unminimize its window immediately */
+        [self activateAppWithPath: appPath andName: appName];
+        return YES;
+      }
+    }
+  }
+  
   userinfo = [NSDictionary dictionaryWithObjectsAndKeys: appName, 
 			                                                   @"NSApplicationName",
 	                                                       appPath, 
@@ -524,6 +562,9 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
   if (path && name) {
     [[dtopManager dock] appWillLaunch: path appName: name];
     GWDebugLog(@"appWillLaunch: \"%@\" %@", name, path);
+    // Schedule 10s fallback: if no window/connection appears but the
+    // process hasn't exited, show the dock dot anyway.
+    [self _scheduleLaunchDotFallbackForPath: path name: name];
   } else {
     GWDebugLog(@"appWillLaunch: unknown application!");
   }
@@ -554,18 +595,61 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
     }  
   }
 
+  /*
+   * For GNUstep apps (with NSConnection), notify dock at launch time.
+   * For non-GNUstep apps (no connection), defer dot until first activation
+   * (heuristic for "first window appeared"). Also keep the 10s fallback.
+   */
   if (app && [app application]) {
     [[dtopManager dock] appDidLaunch: path appName: name];
-    GWDebugLog(@"\"%@\" appDidLaunch (%@)", name, path);
+    GWDebugLog(@"\"%@\" appDidLaunch (%@) [dock notified]", name, path);
+    // No need for fallback if connection established
+    [self _cancelLaunchDotFallbackForPath: path name: name];
   }
 }
 
 - (void)appDidTerminate:(NSNotification *)notif
 {
+  NSDictionary *info = [notif userInfo];
+  NSString *name = [info objectForKey: @"NSApplicationName"];
+  NSString *path = [info objectForKey: @"NSApplicationPath"];
+  GWLaunchedApp *app = [self launchedAppWithPath: path andName: name];
+
   /*
-  * we do nothing here because we will know that the app has terminated 
-  * from the connection.
-  */
+   * Relying solely on the connection death notification misses apps that
+   * never establish a connection (e.g. wrappers or non-GNUstep apps). Use
+   * the workspace termination notification as a fallback to update the Dock
+   * and internal state.
+   */
+  if (app == nil && name)
+    {
+      NSUInteger i;
+
+      for (i = 0; i < [launchedApps count]; i++)
+        {
+          GWLaunchedApp *candidate = [launchedApps objectAtIndex: i];
+
+          if ([[candidate name] isEqual: name])
+            {
+              app = candidate;
+              break;
+            }
+        }
+    }
+
+  if (app)
+    {
+      // Cancel any pending fallback when termination is observed
+      [self _cancelLaunchDotFallbackForPath: [app path] name: [app name]];
+      [self applicationTerminated: app];
+    }
+  else if (name)
+    {
+      /* Ensure undocked icons are cleared even if we did not track the app. */
+      [self _cancelLaunchDotFallbackForPath: path name: name];
+      [[dtopManager dock] appTerminated: name];
+      GWDebugLog(@"appDidTerminate: \"%@\" not tracked; forcing dock cleanup.", name);
+    }
 }
 
 - (void)appDidBecomeActive:(NSNotification *)notif
@@ -586,10 +670,286 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
     activeApplication = app;
     GWDebugLog(@"\"%@\" appDidBecomeActive", name);
 
+    /* If this is a non-GNUstep app (no connection), show dock dot now. */
+    if ([app application] == nil && name && path) {
+      [[dtopManager dock] appDidLaunch: path appName: name];
+      GWDebugLog(@"\"%@\" appDidBecomeActive -> dock notified (non-GNUstep)", name);
+      [self _cancelLaunchDotFallbackForPath: path name: name];
+    }
+
   } else {
     activeApplication = nil;
     GWDebugLog(@"appDidBecomeActive: \"%@\" unknown running application.", name);
+
+    /* Heuristic: even if we don't track the app, activation implies a window
+       is present. Ensure the dock shows the running dot. */
+    if (name && path) {
+      [[dtopManager dock] appDidLaunch: path appName: name];
+      GWDebugLog(@"\"%@\" appDidBecomeActive (untracked) -> dock notified", name);
+      [self _cancelLaunchDotFallbackForPath: path name: name];
+    }
   }
+}
+
+#pragma mark - Non-GNUstep dock dot fallback helpers
+
+- (NSString *)_launchKeyForPath:(NSString *)path name:(NSString *)name
+{
+  if (!path || !name) return nil;
+  return [NSString stringWithFormat:@"%@\n%@", path, name];
+}
+
+- (BOOL)_pidExists:(pid_t)pid
+{
+  if (pid <= 0) return NO;
+  // kill(pid, 0) returns 0 if process exists and we have permission,
+  // or -1 with EPERM if it exists but we lack permission.
+  int r = kill(pid, 0);
+  if (r == 0) return YES;
+  return (errno == EPERM);
+}
+
+- (void)_scheduleLaunchDotFallbackForPath:(NSString *)path name:(NSString *)name
+{
+  NSString *key = [self _launchKeyForPath:path name:name];
+  if (!key) return;
+  // Avoid duplicating timers
+  if ([launchDotFallbacks objectForKey:key] != nil) return;
+
+  NSDictionary *ui = [NSDictionary dictionaryWithObjectsAndKeys:
+                      (path ? path : @""), @"path",
+                      (name ? name : @""), @"name",
+                      [NSNumber numberWithInt:0], @"retryCount",
+                      nil];
+  NSTimer *t = [NSTimer scheduledTimerWithTimeInterval:0.5
+                                                target:self
+                                              selector:@selector(_launchDotFallbackTimerFired:)
+                                              userInfo:ui
+                                               repeats:NO];
+  [launchDotFallbacks setObject:t forKey:key];
+}
+
+- (void)_cancelLaunchDotFallbackForPath:(NSString *)path name:(NSString *)name
+{
+  NSString *key = [self _launchKeyForPath:path name:name];
+  if (!key) return;
+  NSTimer *t = [launchDotFallbacks objectForKey:key];
+  if (t) {
+    if ([t isValid]) [t invalidate];
+    [launchDotFallbacks removeObjectForKey:key];
+  }
+}
+
+- (void)_launchDotFallbackTimerFired:(NSTimer *)timer
+{
+  NSDictionary *ui = [timer userInfo];
+  NSString *path = [ui objectForKey:@"path"];
+  NSString *name = [ui objectForKey:@"name"];
+  int retryCount = [[ui objectForKey:@"retryCount"] intValue];
+  NSString *key = [self _launchKeyForPath:path name:name];
+
+  if (!(path.length && name.length)) {
+    if (key) [launchDotFallbacks removeObjectForKey:key];
+    return;
+  }
+
+  GWLaunchedApp *app = [self launchedAppWithPath:path andName:name];
+  BOOL shouldShowDot = NO;
+  BOOL processRunning = NO;
+
+  /* Check if process is running */
+  if (app) {
+    NSTask *task = [app task];
+    if (task) {
+      processRunning = [task isRunning];
+    } else {
+      NSNumber *ident = [app identifier];
+      if (ident) {
+        processRunning = [self _pidExists:(pid_t)[ident intValue]];
+      }
+    }
+  }
+
+  /* Check if a window is visible on X11 (faster response for non-GNUstep apps) */
+  Display *dpy = XOpenDisplay(NULL);
+  if (dpy) {
+    Window root = DefaultRootWindow(dpy);
+    Window found = GWX11FindClientByName(dpy, root, [name UTF8String]);
+    XCloseDisplay(dpy);
+    if (found) {
+      shouldShowDot = YES;
+    }
+  }
+
+  /* If no window yet but process is running, retry (up to 20 times = 10s) */
+  if (!shouldShowDot && processRunning && retryCount < 20) {
+    NSDictionary *newUi = [NSDictionary dictionaryWithObjectsAndKeys:
+                           path, @"path",
+                           name, @"name",
+                           [NSNumber numberWithInt:retryCount + 1], @"retryCount",
+                           nil];
+    NSTimer *t = [NSTimer scheduledTimerWithTimeInterval:0.5
+                                                  target:self
+                                                selector:@selector(_launchDotFallbackTimerFired:)
+                                                userInfo:newUi
+                                                 repeats:NO];
+    [launchDotFallbacks setObject:t forKey:key];
+    return;
+  }
+
+  /* Show dot if window found or final timeout with running process */
+  if (shouldShowDot || (processRunning && retryCount >= 20)) {
+    [[dtopManager dock] appDidLaunch:path appName:name];
+    GWDebugLog(@"Fallback: showing dock dot for \"%@\" (retry %d)", name, retryCount);
+  }
+
+  /* Clean up */
+  if (key) {
+    [launchDotFallbacks removeObjectForKey:key];
+  }
+}
+
+#pragma mark - X11 Activation (non-GNUstep apps)
+
+static BOOL GWX11ActivateWindow(Display *dpy, Window root, Window win)
+{
+  if (!dpy || !win) return NO;
+  Atom net_active_window = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
+  XEvent e;
+  memset(&e, 0, sizeof(e));
+  e.xclient.type = ClientMessage;
+  e.xclient.window = win;
+  e.xclient.message_type = net_active_window;
+  e.xclient.format = 32;
+  e.xclient.data.l[0] = 1; /* source indication: application */
+  e.xclient.data.l[1] = CurrentTime;
+  e.xclient.data.l[2] = 0;
+  e.xclient.data.l[3] = 0;
+  e.xclient.data.l[4] = 0;
+  XSendEvent(dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &e);
+  XRaiseWindow(dpy, win);
+  XFlush(dpy);
+  return YES;
+}
+
+static BOOL GWX11IsViewable(Display *dpy, Window win)
+{
+  XWindowAttributes attr;
+  if (XGetWindowAttributes(dpy, win, &attr) == 0) return NO;
+  return (attr.map_state == IsViewable);
+}
+
+static Window GWX11FindClientByPID(Display *dpy, Window root, pid_t pid)
+{
+  if (!dpy || !root || pid <= 0) return (Window)0;
+  Atom net_client_list = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+  Atom net_wm_pid = XInternAtom(dpy, "_NET_WM_PID", False);
+  Atom actual_type;
+  int actual_format;
+  unsigned long nitems, bytes_after;
+  unsigned char *data = NULL;
+  Window found = 0;
+  if (XGetWindowProperty(dpy, root, net_client_list, 0, LONG_MAX, False,
+                         XA_WINDOW, &actual_type, &actual_format,
+                         &nitems, &bytes_after, &data) == Success && data) {
+    Window *wins = (Window *)data;
+    for (unsigned long i = 0; i < nitems; i++) {
+      Atom atype;
+      int aformat;
+      unsigned long anitems, abytes_after;
+      unsigned char *aprop = NULL;
+      if (XGetWindowProperty(dpy, wins[i], net_wm_pid, 0, 1, False, XA_CARDINAL,
+                             &atype, &aformat, &anitems, &abytes_after, &aprop) == Success && aprop) {
+        if (anitems >= 1) {
+          unsigned long *pidp = (unsigned long *)aprop;
+          if ((pid_t)*pidp == pid) {
+            found = wins[i];
+            XFree(aprop);
+            break;
+          }
+        }
+        XFree(aprop);
+      }
+    }
+    XFree(data);
+  }
+  return found;
+}
+
+static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
+{
+  if (!dpy || !root || !name || !*name) return (Window)0;
+  Atom net_client_list = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
+  Atom net_wm_name = XInternAtom(dpy, "_NET_WM_NAME", False);
+  Atom utf8 = XInternAtom(dpy, "UTF8_STRING", False);
+  Atom wm_name = XInternAtom(dpy, "WM_NAME", False);
+  Atom actual_type;
+  int actual_format;
+  unsigned long nitems, bytes_after;
+  unsigned char *data = NULL;
+  Window found = 0;
+  if (XGetWindowProperty(dpy, root, net_client_list, 0, LONG_MAX, False,
+                         XA_WINDOW, &actual_type, &actual_format,
+                         &nitems, &bytes_after, &data) == Success && data) {
+    Window *wins = (Window *)data;
+    for (unsigned long i = 0; i < nitems; i++) {
+      Atom atype;
+      int aformat;
+      unsigned long anitems, abytes_after;
+      unsigned char *aprop = NULL;
+      /* Try _NET_WM_NAME (UTF8) */
+      if (XGetWindowProperty(dpy, wins[i], net_wm_name, 0, 1024, False, utf8,
+                             &atype, &aformat, &anitems, &abytes_after, &aprop) == Success && aprop) {
+        if (aprop && strstr((const char *)aprop, name)) {
+          found = wins[i];
+          XFree(aprop);
+          break;
+        }
+        XFree(aprop);
+      }
+      /* Fallback: WM_NAME */
+      aprop = NULL;
+      if (XGetWindowProperty(dpy, wins[i], wm_name, 0, 1024, False, AnyPropertyType,
+                             &atype, &aformat, &anitems, &abytes_after, &aprop) == Success && aprop) {
+        if (aprop && strstr((const char *)aprop, name)) {
+          found = wins[i];
+          XFree(aprop);
+          break;
+        }
+        XFree(aprop);
+      }
+    }
+    XFree(data);
+  }
+  return found;
+}
+
+- (BOOL)_x11ActivateForApp:(GWLaunchedApp *)app name:(NSString *)name
+{
+  Display *dpy = XOpenDisplay(NULL);
+  if (!dpy) return NO;
+  Window root = DefaultRootWindow(dpy);
+  Window target = 0;
+  pid_t pid = 0;
+  if ([app identifier]) pid = (pid_t)[[app identifier] intValue];
+  if (pid <= 0 && [app task]) {
+    @try { pid = [[app task] processIdentifier]; } @catch (id ex) { pid = 0; }
+  }
+  if (pid > 0) {
+    target = GWX11FindClientByPID(dpy, root, pid);
+  }
+  if (!target && name) {
+    target = GWX11FindClientByName(dpy, root, [name UTF8String]);
+  }
+  BOOL result = NO;
+  if (target) {
+    if (!GWX11IsViewable(dpy, target)) {
+      XMapRaised(dpy, target);
+    }
+    result = GWX11ActivateWindow(dpy, root, target);
+  }
+  XCloseDisplay(dpy);
+  return result;
 }
 
 - (void)appDidResignActive:(NSNotification *)notif
@@ -616,9 +976,14 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 {
   GWLaunchedApp *app = [self launchedAppWithPath: path andName: name];
 
-//  if (app && ([app isActive] == NO)) {
   if (app) {
     [app activateApplication];
+    if ([app application] == nil) {
+      [self _x11ActivateForApp: app name: name];
+    }
+  } else {
+    // Fallback: attempt to activate any X11 client matching by name
+    [self _x11ActivateForApp: nil name: name];
   }
 }
 
@@ -662,6 +1027,12 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 
   if (app && [app isHidden]) {
     [app unhideApplication];
+    if ([app application] == nil) {
+      [self _x11ActivateForApp: app name: name];
+    }
+  } else if (!app) {
+    // Fallback for non-tracked non-GNUstep apps: try to raise their X11 windows
+    [self _x11ActivateForApp: nil name: name];
   }
 }
 
@@ -1173,7 +1544,20 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 
 - (void)setTask:(NSTask *)atask
 {
+  if (task && (task != atask)) {
+    [nc removeObserver: self
+                  name: NSTaskDidTerminateNotification
+                object: task];
+  }
+
   ASSIGN (task, atask);
+
+  if (task) {
+    [nc addObserver: self
+            selector: @selector(taskDidTerminate:)
+                name: NSTaskDidTerminateNotification
+              object: task];
+  }
 }
 
 - (NSTask *)task
@@ -1344,6 +1728,13 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 	                      [localException name], [localException reason]);
       }
     NS_ENDHANDLER
+  }
+}
+
+- (void)taskDidTerminate:(NSNotification *)notif
+{
+  if ([notif object] == task) {
+    [gw applicationTerminated: self];
   }
 }
 

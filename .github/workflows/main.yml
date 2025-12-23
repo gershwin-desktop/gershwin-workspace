@@ -24,6 +24,7 @@ on:
 
 env:
   APT_PACKAGES: >-
+    build-essential
     pkg-config
     libgnutls28-dev
     libffi-dev
@@ -44,7 +45,8 @@ env:
     libobjc-10-dev
     libxt-dev
     libfreetype-dev
-    libcairo2-dev
+    libx11-dev
+    libsqlite3-dev
 
 jobs:
   ########### Linux ###########
