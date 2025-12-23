@@ -94,24 +94,6 @@ NSString *_pendingSystemActionTitle = nil;
   #define TSHF_MAXF 999
 #endif
 
-// Keep the UI painting while we wait for helper services to come up.
-static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
-{
-  [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
-                           beforeDate: [NSDate dateWithTimeIntervalSinceNow: delay]];
-  [NSApp setWindowsNeedUpdate: YES];
-  [NSApp updateWindows];
-  NSArray *wins = [NSApp windows];
-  NSUInteger wc = [wins count];
-  for (NSUInteger wi = 0; wi < wc; wi++) {
-    NSWindow *w = [wins objectAtIndex: wi];
-    if ([w isVisible]) {
-      [w displayIfNeeded];
-      [w flushWindowIfNeeded];
-    }
-  }
-}
-
 
 + (void)initialize
 {
@@ -2145,6 +2127,10 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 
 - (void)_probeFSWatcherTimer:(NSTimer *)timer
 {
+  if (fswatcher) {
+    [timer invalidate];
+    return;
+  }
   NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
   fswatcher = [NSConnection rootProxyForConnectionWithRegisteredName:@"fswatcher" host:@""];
   if (fswatcher) {
@@ -2167,6 +2153,10 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 
 - (void)_probeRecyclerTimer:(NSTimer *)timer
 {
+  if (recyclerApp) {
+    [timer invalidate];
+    return;
+  }
   NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
   recyclerApp = [NSConnection rootProxyForConnectionWithRegisteredName:@"Recycler" host:@""];
   if (recyclerApp) {
@@ -2192,6 +2182,10 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 
 - (void)_probeDDBdTimer:(NSTimer *)timer
 {
+  if (ddbd) {
+    [timer invalidate];
+    return;
+  }
   NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
   ddbd = [NSConnection rootProxyForConnectionWithRegisteredName:@"ddbd" host:@""];
   if (ddbd) {
@@ -2212,6 +2206,10 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 
 - (void)_probeMDExtractorTimer:(NSTimer *)timer
 {
+  if (mdextractor) {
+    [timer invalidate];
+    return;
+  }
   NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
   mdextractor = [NSConnection rootProxyForConnectionWithRegisteredName:@"mdextractor" host:@""];
   if (mdextractor) {

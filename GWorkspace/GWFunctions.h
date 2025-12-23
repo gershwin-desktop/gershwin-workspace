@@ -89,4 +89,6 @@ NSString *commonPrefixInArray(NSArray *a);
 
 NSRect rectForWindow(NSArray *otherwins, NSRect proposedRect, BOOL checkKey);
 
+void GWProcessStartupRunLoop(NSTimeInterval delay);
+
 #endif

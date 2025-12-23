@@ -46,24 +46,6 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 
-// Keep the UI painting while we wait for helper services to come up.
-static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
-{
-  [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
-                           beforeDate: [NSDate dateWithTimeIntervalSinceNow: delay]];
-  [NSApp setWindowsNeedUpdate: YES];
-  [NSApp updateWindows];
-  NSArray *wins = [NSApp windows];
-  NSUInteger wc = [wins count];
-  for (NSUInteger wi = 0; wi < wc; wi++) {
-    NSWindow *w = [wins objectAtIndex: wi];
-    if ([w isVisible]) {
-      [w displayIfNeeded];
-      [w flushWindowIfNeeded];
-    }
-  }
-}
-
 @implementation GWorkspace (WorkspaceApplication)
 
 - (BOOL)performFileOperation:(NSString *)operation 
@@ -509,9 +491,16 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
     /* Also check if the app is running on the system via X11 (external launch) */
     Display *dpy = XOpenDisplay(NULL);
     if (dpy) {
-      Window root = DefaultRootWindow(dpy);
-      Window found = GWX11FindClientByName(dpy, root, [appName UTF8String]);
-      XCloseDisplay(dpy);
+      Window found = 0;
+      @try {
+        Window root = DefaultRootWindow(dpy);
+        if (root != 0) {
+          found = GWX11FindClientByName(dpy, root, [appName UTF8String]);
+        }
+      }
+      @finally {
+        XCloseDisplay(dpy);
+      }
       if (found) {
         /* App is running somewhere on the system (possibly launched externally).
            Notify the Dock so the icon's "running" dot appears, and activate the app
@@ -717,8 +706,8 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
   if ([launchDotFallbacks objectForKey:key] != nil) return;
 
   NSDictionary *ui = [NSDictionary dictionaryWithObjectsAndKeys:
-                      (path ? path : @""), @"path",
-                      (name ? name : @""), @"name",
+                      path, @"path",
+                      name, @"name",
                       [NSNumber numberWithInt:0], @"retryCount",
                       nil];
   NSTimer *t = [NSTimer scheduledTimerWithTimeInterval:0.5
@@ -772,13 +761,21 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
 
   /* Check if a window is visible on X11 (faster response for non-GNUstep apps) */
   Display *dpy = XOpenDisplay(NULL);
+  BOOL foundWindow = NO;
   if (dpy) {
-    Window root = DefaultRootWindow(dpy);
-    Window found = GWX11FindClientByName(dpy, root, [name UTF8String]);
-    XCloseDisplay(dpy);
-    if (found) {
-      shouldShowDot = YES;
+    @try {
+      Window root = DefaultRootWindow(dpy);
+      Window found = GWX11FindClientByName(dpy, root, [name UTF8String]);
+      if (found) {
+        foundWindow = YES;
+      }
     }
+    @finally {
+      XCloseDisplay(dpy);
+    }
+  }
+  if (foundWindow) {
+    shouldShowDot = YES;
   }
 
   /* If no window yet but process is running, retry (up to 20 times = 10s) */
@@ -793,6 +790,10 @@ static inline void GWProcessStartupRunLoop(NSTimeInterval delay)
                                                 selector:@selector(_launchDotFallbackTimerFired:)
                                                 userInfo:newUi
                                                  repeats:NO];
+    NSTimer *oldTimer = [launchDotFallbacks objectForKey:key];
+    if (oldTimer && [oldTimer isValid]) {
+      [oldTimer invalidate];
+    }
     [launchDotFallbacks setObject:t forKey:key];
     return;
   }
@@ -900,7 +901,7 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
       /* Try _NET_WM_NAME (UTF8) */
       if (XGetWindowProperty(dpy, wins[i], net_wm_name, 0, 1024, False, utf8,
                              &atype, &aformat, &anitems, &abytes_after, &aprop) == Success && aprop) {
-        if (aprop && strstr((const char *)aprop, name)) {
+        if (aprop && strcmp((const char *)aprop, name) == 0) {
           found = wins[i];
           XFree(aprop);
           break;
@@ -911,7 +912,7 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
       aprop = NULL;
       if (XGetWindowProperty(dpy, wins[i], wm_name, 0, 1024, False, AnyPropertyType,
                              &atype, &aformat, &anitems, &abytes_after, &aprop) == Success && aprop) {
-        if (aprop && strstr((const char *)aprop, name)) {
+        if (aprop && strcmp((const char *)aprop, name) == 0) {
           found = wins[i];
           XFree(aprop);
           break;
@@ -928,27 +929,31 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
 {
   Display *dpy = XOpenDisplay(NULL);
   if (!dpy) return NO;
-  Window root = DefaultRootWindow(dpy);
-  Window target = 0;
-  pid_t pid = 0;
-  if ([app identifier]) pid = (pid_t)[[app identifier] intValue];
-  if (pid <= 0 && [app task]) {
-    @try { pid = [[app task] processIdentifier]; } @catch (id ex) { pid = 0; }
-  }
-  if (pid > 0) {
-    target = GWX11FindClientByPID(dpy, root, pid);
-  }
-  if (!target && name) {
-    target = GWX11FindClientByName(dpy, root, [name UTF8String]);
-  }
   BOOL result = NO;
-  if (target) {
-    if (!GWX11IsViewable(dpy, target)) {
-      XMapRaised(dpy, target);
+  @try {
+    Window root = DefaultRootWindow(dpy);
+    Window target = 0;
+    pid_t pid = 0;
+    if ([app identifier]) pid = (pid_t)[[app identifier] intValue];
+    if (pid <= 0 && [app task]) {
+      @try { pid = [[app task] processIdentifier]; } @catch (id ex) { pid = 0; }
     }
-    result = GWX11ActivateWindow(dpy, root, target);
+    if (pid > 0) {
+      target = GWX11FindClientByPID(dpy, root, pid);
+    }
+    if (!target && name) {
+      target = GWX11FindClientByName(dpy, root, [name UTF8String]);
+    }
+    if (target) {
+      if (!GWX11IsViewable(dpy, target)) {
+        XMapRaised(dpy, target);
+      }
+      result = GWX11ActivateWindow(dpy, root, target);
+    }
   }
-  XCloseDisplay(dpy);
+  @finally {
+    XCloseDisplay(dpy);
+  }
   return result;
 }
 

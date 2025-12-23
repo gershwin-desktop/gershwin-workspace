@@ -273,3 +273,20 @@ NSRect rectForWindow(NSArray *otherwins, NSRect proposedRect, BOOL checkKey)
   
   return NSIntegralRect(wr);
 }
+
+void GWProcessStartupRunLoop(NSTimeInterval delay)
+{
+  [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+                           beforeDate: [NSDate dateWithTimeIntervalSinceNow: delay]];
+  [NSApp setWindowsNeedUpdate: YES];
+  [NSApp updateWindows];
+  NSArray *wins = [NSApp windows];
+  NSUInteger wc = [wins count];
+  for (NSUInteger wi = 0; wi < wc; wi++) {
+    NSWindow *w = [wins objectAtIndex: wi];
+    if ([w isVisible]) {
+      [w displayIfNeeded];
+      [w flushWindowIfNeeded];
+    }
+  }
+}
