@@ -425,12 +425,16 @@
 
   gridrect.origin.y += tshfr.size.height;
   gridrect.size.height -= tshfr.size.height;
-  gridrect.size.width -= dckr.size.width;
   gridrect.size.height -= mmfr.size.height;
 
   if ([manager dockPosition] == DockPositionLeft)
     {
+      gridrect.size.width -= dckr.size.width;
       gridrect.origin.x += dckr.size.width;
+    }
+  else if ([manager dockPosition] == DockPositionRight)
+    {
+      gridrect.size.width -= dckr.size.width;
     }
 
   if (infoType != FSNInfoNameType)
@@ -451,7 +455,7 @@
   gpnt.x = gridrect.size.width + gridrect.origin.x;
   gpnt.y = gridrect.size.height + gridrect.origin.y;
 
-  gpnt.x -= (gridSize.width + X_MARGIN);
+  gpnt.x -= gridSize.width + X_MARGIN;
 
   for (i = 0; i < gridItemsCount; i++)
     {
