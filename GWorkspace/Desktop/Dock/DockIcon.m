@@ -278,10 +278,13 @@
   if ([theEvent clickCount] >= minimumLaunchClicks) {
     if ([self isSpecialIcon] == NO) {
       if (launched == NO) {
-        [ws launchApplication: appName];
+        /* Launch the app if not already launched. Use the full path for proper resolution. */
+        [ws launchApplication: [node path]];
       } else if (apphidden) {
+        /* App is running but hidden; unhide and activate it */
         [[GWorkspace gworkspace] unhideAppWithPath: [node path] andName: appName];
       } else {
+        /* App is already running and visible; just activate/raise it */
         [[GWorkspace gworkspace] activateAppWithPath: [node path] andName: appName];
       }
     } else if (isWsIcon) {
