@@ -941,7 +941,6 @@ NSString *_pendingSystemActionTitle = nil;
   [vwrsManager updateDefaults];
 
   [dtopManager updateDefaults];
-  [defaults setBool: ![dtopManager isActive] forKey: @"no_desktop"];
 
   [finder updateDefaults];
 
