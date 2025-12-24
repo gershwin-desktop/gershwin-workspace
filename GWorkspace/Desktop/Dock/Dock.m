@@ -235,14 +235,26 @@
                                  withName:(NSString *)name
                                   atIndex:(int)index
 {
+  if (path == nil || [path length] == 0) {
+    return nil;
+  }
+  
   if ([fm fileExistsAtPath: path]) {
     FSNode *node = [FSNode nodeWithPath: path];
+    
+    if (node == nil) {
+      return nil;
+    }
     
     if ([node isApplication]) {
       int icnindex;
       DockIcon *icon = [[DockIcon alloc] initForNode: node 
                                              appName: name
                                             iconSize: iconSize];
+      
+      if (icon == nil) {
+        return nil;
+      }
 
       if (index == -1) {
         icnindex = ([icons count]) ? ([icons count] - 1) : 0;
@@ -366,6 +378,14 @@
 - (void)appWillLaunch:(NSString *)appPath
               appName:(NSString *)appName
 {
+  [self appWillLaunch: appPath appName: appName pid: 0];
+}
+
+- (void)appWillLaunch:(NSString *)appPath
+              appName:(NSString *)appName
+                  pid:(pid_t)pid
+{
+  if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationName: appName];
   
@@ -373,16 +393,30 @@
       icon = [self addIconForApplicationAtPath: appPath
                                       withName: appName
                                        atIndex: -1];
-    } 
+    }
+    
+    if (icon && pid > 0) {
+      [icon setAppPID: pid];
+    }
   
     [self tile];
-    [icon animateLaunch];
+    if (icon) {
+      [icon animateLaunch];
+    }
   }
 }
 
 - (void)appDidLaunch:(NSString *)appPath
              appName:(NSString *)appName
 {
+  [self appDidLaunch: appPath appName: appName pid: 0];
+}
+
+- (void)appDidLaunch:(NSString *)appPath
+             appName:(NSString *)appName
+                 pid:(pid_t)pid
+{
+  if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationName: appName];
 
@@ -391,18 +425,42 @@
                                       withName: appName
                                        atIndex: -1];
       [self tile];
-    } 
-  
-    [icon setLaunched: YES];
+    }
+    
+    if (icon) {
+      if (pid > 0) {
+        [icon setAppPID: pid];
+      }
+      [icon setLaunched: YES];
+    }
   }
+}
+
+- (DockIcon *)iconForApplicationPID:(pid_t)pid
+{
+  NSUInteger i;
+  
+  if (pid <= 0) return nil;
+  
+  for (i = 0; i < [icons count]; i++) {
+    DockIcon *icon = [icons objectAtIndex: i];
+    
+    if ([icon appPID] == pid) {
+      return icon;
+    }
+  }
+  
+  return nil;
 }
 
 - (void)appTerminated:(NSString *)appName
 {
+  if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationName: appName];
 
     if (icon) {
+      [icon setAppPID: 0]; /* Clear PID on termination */
       if (([icon isDocked] == NO) && ([icon isSpecialIcon] == NO)) {
         [self removeIcon: icon];
       } else {
@@ -415,6 +473,7 @@
 
 - (void)appDidHide:(NSString *)appName
 {
+  if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationName: appName];
 
@@ -426,6 +485,7 @@
 
 - (void)appDidUnhide:(NSString *)appName
 {
+  if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationName: appName];
 

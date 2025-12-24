@@ -36,6 +36,7 @@
 #import "GWorkspace.h"
 #import "GWDesktopManager.h"
 #import "Dock.h"
+#import "DockIcon.h"
 #import "GWViewersManager.h"
 #import "Operation.h"
 #import "StartAppWin.h"
@@ -202,6 +203,14 @@
     return [self launchApplication: appname arguments: args];
   
   } else {  
+    /* Check if app is still running before trying to use it */
+    if (![app isRunning]) {
+      /* App entry exists but process is not running - clean up and re-launch */
+      NSArray *args = [NSArray arrayWithObjects: @"-GSFilePath", fullPath, nil];
+      [self applicationTerminated: app];
+      return [self launchApplication: appname arguments: args];
+    }
+    
     /*
     * If we are opening many files together and our app is a non-GNUstep X11 app,
     * we must wait a little for the last launched task to terminate.
@@ -212,11 +221,10 @@
     application = [app application];
     
     if (application == nil) {
-      NSArray *args = [NSArray arrayWithObjects: @"-GSFilePath", fullPath, nil];
-      
-      [self applicationTerminated: app];
-      
-      return [self launchApplication: appname arguments: args];
+      /* Non-GNUstep/X11 app - it's running but has no DO connection.
+       * We can't open files in it via DO, so just activate it. */
+      [self activateAppWithPath: appPath andName: appName];
+      return YES;
 
     } else {
       NS_DURING
@@ -274,9 +282,21 @@
     return [self launchApplication: appname arguments: args];
   
   } else {
-    application = [app application];
- 
-    if (application == nil) {
+    /* Check if app is still running before trying to activate */
+    if ([app isRunning]) {
+      /* App is running - activate it instead of re-launching */
+      application = [app application];
+      
+      if (application != nil) {
+        /* GNUstep app with DO connection - activate normally */
+        [application activateIgnoringOtherApps: YES];
+      } else {
+        /* Non-GNUstep/X11 app - use X11 window activation */
+        [self activateAppWithPath: appPath andName: appName];
+      }
+      return YES;
+    } else {
+      /* App entry exists but process is not running - clean up and re-launch */
       [self applicationTerminated: app];
 
       if (autolaunch) {
@@ -284,9 +304,6 @@
 	    }
              
       return [self launchApplication: appname arguments: args];
-    
-    } else {
-      [application activateIgnoringOtherApps: YES];
     }
   }
 
@@ -325,14 +342,21 @@
     return [self launchApplication: name arguments: args];
   
   } else {
+    /* Check if app is still running before trying to use it */
+    if (![app isRunning]) {
+      /* App entry exists but process is not running - clean up and re-launch */
+      NSArray *args = [NSArray arrayWithObjects: @"-GSTempPath", fullPath, nil];
+      [self applicationTerminated: app];
+      return [self launchApplication: name arguments: args];
+    }
+    
     application = [app application];
     
     if (application == nil) {
-      NSArray *args = [NSArray arrayWithObjects: @"-GSTempPath", fullPath, nil];
-    
-      [self applicationTerminated: app];
-      
-      return [self launchApplication: name arguments: args];
+      /* Non-GNUstep/X11 app - it's running but has no DO connection.
+       * We can't open temp files in it via DO, so just activate it. */
+      [self activateAppWithPath: appPath andName: appName];
+      return YES;
       
     } else {
       NS_DURING
@@ -487,21 +511,38 @@
   if (appPath && appName) {
     GWLaunchedApp *existing = [self launchedAppWithPath: appPath andName: appName];
     if (existing && [existing isRunning]) {
-      /* Our tracked instance is running; don't launch again. */
-      GWDebugLog(@"App \"%@\" already running (tracked); skipping duplicate launch.", appName);
+      /* Our tracked instance is running; don't launch again. Activate instead. */
+      GWDebugLog(@"App \"%@\" already running (tracked); activating instead of launching.", appName);
+      [[dtopManager dock] appDidLaunch: appPath appName: appName];
+      [self activateAppWithPath: appPath andName: appName];
       return YES;
     }
     
     /* Also check if the app is running on the system via X11 (external launch) */
     GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
-    if ([wm hasWindowsMatchingName: appName]) {
+    
+    /* Priority 1: Check if there's a known PID from a previous dock icon */
+    DockIcon *dockIcon = [[dtopManager dock] iconForApplicationName: appName];
+    pid_t knownPID = dockIcon ? [dockIcon appPID] : 0;
+    BOOL hasWindows = NO;
+    
+    if (knownPID > 0) {
+      hasWindows = [wm hasWindowsForPID: knownPID];
+    }
+    
+    /* Priority 2: Fall back to name matching */
+    if (!hasWindows) {
+      hasWindows = [wm hasWindowsMatchingName: appName];
+    }
+    
+    if (hasWindows) {
       /* App is running somewhere on the system (possibly launched externally).
          Notify the Dock so the icon's "running" dot appears, and activate the app
          to raise/unminimize its window immediately. */
       GWDebugLog(@"App \"%@\" already running (X11 window found); notifying Dock and activating.", appName);
       [[dtopManager dock] appDidLaunch: appPath appName: appName];
       /* Activate the app to raise/unminimize its window immediately */
-      [self activateAppWithPath: appPath andName: appName];
+      [self activateAppWithPath: appPath andName: appName pid: knownPID];
       return YES;
     }
   }
@@ -582,7 +623,8 @@
    * for process monitoring and window management.
    */
   if (app && [app application]) {
-    [[dtopManager dock] appDidLaunch: path appName: name];
+    pid_t pid = ident ? (pid_t)[ident intValue] : 0;
+    [[dtopManager dock] appDidLaunch: path appName: name pid: pid];
     GWDebugLog(@"\"%@\" appDidLaunch (%@) [dock notified]", name, path);
     // No need for fallback if connection established
     [self _cancelLaunchDotFallbackForPath: path name: name];
@@ -665,7 +707,8 @@
 
     /* If this is a non-GNUstep app (no connection), show dock dot now. */
     if ([app application] == nil && name && path) {
-      [[dtopManager dock] appDidLaunch: path appName: name];
+      pid_t pid = [app identifier] ? (pid_t)[[app identifier] intValue] : 0;
+      [[dtopManager dock] appDidLaunch: path appName: name pid: pid];
       GWDebugLog(@"\"%@\" appDidBecomeActive -> dock notified (non-GNUstep)", name);
       [self _cancelLaunchDotFallbackForPath: path name: name];
     }
@@ -749,24 +792,33 @@
   GWLaunchedApp *app = [self launchedAppWithPath:path andName:name];
   BOOL shouldShowDot = NO;
   BOOL processRunning = NO;
+  pid_t appPID = 0;
 
-  /* Check if process is running */
+  /* Check if process is running and get the PID */
   if (app) {
     NSTask *task = [app task];
     if (task) {
       processRunning = [task isRunning];
+      @try { appPID = [task processIdentifier]; } @catch (id ex) { appPID = 0; }
     } else {
       NSNumber *ident = [app identifier];
       if (ident) {
-        processRunning = [self _pidExists:(pid_t)[ident intValue]];
+        appPID = (pid_t)[ident intValue];
+        processRunning = [self _pidExists:appPID];
       }
     }
   }
 
   /* Check if a window is visible on X11 (faster response for non-GNUstep apps) */
   GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
-  BOOL foundWindow = [wm hasWindowsMatchingName: name];
-  if (foundWindow) {
+  
+  /* Priority 1: Check by PID first */
+  if (appPID > 0 && [wm hasWindowsForPID:appPID]) {
+    shouldShowDot = YES;
+  }
+  
+  /* Priority 2: Fall back to name matching */
+  if (!shouldShowDot && [wm hasWindowsMatchingName: name]) {
     shouldShowDot = YES;
   }
 
@@ -792,8 +844,8 @@
 
   /* Show dot if window found or final timeout with running process */
   if (shouldShowDot || (processRunning && retryCount >= 20)) {
-    [[dtopManager dock] appDidLaunch:path appName:name];
-    GWDebugLog(@"Fallback: showing dock dot for \"%@\" (retry %d)", name, retryCount);
+    [[dtopManager dock] appDidLaunch:path appName:name pid:appPID];
+    GWDebugLog(@"Fallback: showing dock dot for \"%@\" (retry %d, pid=%d)", name, retryCount, appPID);
   }
 
   /* Clean up */
@@ -806,12 +858,14 @@
 
 - (void)x11AppDidLaunch:(NSString *)appName path:(NSString *)appPath pid:(pid_t)pid
 {
+  if (appName == nil || appPath == nil) return;
   GWDebugLog(@"X11 app launched: %@ (%@) pid=%d", appName, appPath, pid);
-  [[dtopManager dock] appWillLaunch:appPath appName:appName];
+  [[dtopManager dock] appWillLaunch:appPath appName:appName pid:pid];
 }
 
 - (void)x11AppDidTerminate:(NSString *)appName path:(NSString *)appPath
 {
+  if (appName == nil) return;
   GWDebugLog(@"X11 app terminated: %@ (%@)", appName, appPath);
   
   /* Find and clean up the GWLaunchedApp entry */
@@ -826,8 +880,13 @@
 
 - (void)x11AppWindowsDidAppear:(NSString *)appName path:(NSString *)appPath
 {
-  GWDebugLog(@"X11 app windows appeared: %@ (%@)", appName, appPath);
-  [[dtopManager dock] appDidLaunch:appPath appName:appName];
+  if (appName == nil || appPath == nil) return;
+  
+  /* Get the PID from X11AppManager for more reliable tracking */
+  pid_t pid = [[GWX11AppManager sharedManager] pidForX11App:appName];
+  
+  GWDebugLog(@"X11 app windows appeared: %@ (%@) pid=%d", appName, appPath, pid);
+  [[dtopManager dock] appDidLaunch:appPath appName:appName pid:pid];
   
   /* Cancel any pending fallback timer */
   [self _cancelLaunchDotFallbackForPath:appPath name:appName];
@@ -886,15 +945,34 @@
 - (void)activateAppWithPath:(NSString *)path
                     andName:(NSString *)name
 {
+  [self activateAppWithPath:path andName:name pid:0];
+}
+
+- (void)activateAppWithPath:(NSString *)path
+                    andName:(NSString *)name
+                        pid:(pid_t)pid
+{
   GWLaunchedApp *app = [self launchedAppWithPath: path andName: name];
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
 
   if (app) {
     [app activateApplication];
     if ([app application] == nil) {
+      /* For X11/non-GNUstep apps, try PID first, then name matching */
+      pid_t appPID = pid;
+      if (appPID <= 0 && [app identifier]) {
+        appPID = (pid_t)[[app identifier] intValue];
+      }
+      if (appPID > 0 && [wm activateWindowsForPID:appPID]) {
+        return;
+      }
       [self _x11ActivateForApp: app name: name];
     }
   } else {
-    // Fallback: attempt to activate any X11 client matching by name
+    /* Fallback: try PID first if provided, then by name */
+    if (pid > 0 && [wm activateWindowsForPID:pid]) {
+      return;
+    }
     [self _x11ActivateForApp: nil name: name];
   }
 }
@@ -1667,8 +1745,8 @@
 
 - (BOOL)isRunning
 {
+  /* For X11 apps, check if the process still exists by PID */
   if (isX11App) {
-    /* For X11 apps, check if the process still exists */
     if (identifier) {
       pid_t pid = (pid_t)[identifier intValue];
       if (pid > 0) {
@@ -1678,7 +1756,31 @@
     }
     return NO;
   }
-  return (application != nil);
+  
+  /* For GNUstep apps, check if we have a DO connection */
+  if (application != nil) {
+    return YES;
+  }
+  
+  /* Also check if we have a task that's still running */
+  if (task != nil) {
+    @try {
+      return [task isRunning];
+    } @catch (id ex) {
+      return NO;
+    }
+  }
+  
+  /* Check by PID as a last resort */
+  if (identifier) {
+    pid_t pid = (pid_t)[identifier intValue];
+    if (pid > 0) {
+      int result = kill(pid, 0);
+      return (result == 0 || errno == EPERM);
+    }
+  }
+  
+  return NO;
 }
 
 - (void)terminateApplication 

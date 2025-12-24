@@ -525,6 +525,10 @@
 - (void)activateAppWithPath:(NSString *)path
                     andName:(NSString *)name;
 
+- (void)activateAppWithPath:(NSString *)path
+                    andName:(NSString *)name
+                        pid:(pid_t)pid;
+
 - (void)appDidHide:(NSNotification *)notif;
 
 - (void)appDidUnhide:(NSNotification *)notif;

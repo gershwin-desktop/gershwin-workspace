@@ -54,6 +54,9 @@
   NSImage *dragIcon;
   BOOL isDndSourceIcon;
 
+  /* PID tracking for robust non-GNUstep app support */
+  pid_t appPID;
+
   NSFileManager *fm;
   NSNotificationCenter *nc; 
   id ws;
@@ -86,6 +89,10 @@
 - (void)setLaunched:(BOOL)value;
 
 - (BOOL)isLaunched;
+
+- (void)setAppPID:(pid_t)pid;
+
+- (pid_t)appPID;
 
 - (void)setAppHidden:(BOOL)value;
 

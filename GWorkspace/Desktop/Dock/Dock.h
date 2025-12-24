@@ -90,14 +90,24 @@ typedef enum DockStyle
 - (void)appWillLaunch:(NSString *)appPath
               appName:(NSString *)appName;
 
+- (void)appWillLaunch:(NSString *)appPath
+              appName:(NSString *)appName
+                  pid:(pid_t)pid;
+
 - (void)appDidLaunch:(NSString *)appPath
              appName:(NSString *)appName;
+
+- (void)appDidLaunch:(NSString *)appPath
+             appName:(NSString *)appName
+                 pid:(pid_t)pid;
 
 - (void)appTerminated:(NSString *)appName;
 
 - (void)appDidHide:(NSString *)appName;
 
 - (void)appDidUnhide:(NSString *)appName;
+
+- (DockIcon *)iconForApplicationPID:(pid_t)pid;
 
 - (void)iconMenuAction:(id)sender;
 

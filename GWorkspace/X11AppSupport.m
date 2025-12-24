@@ -18,6 +18,30 @@
 #include <string.h>
 #include <stdlib.h>
 
+#pragma mark - X11 Error Handler
+
+/* Custom X error handler to prevent crashes from BadWindow/BadMatch errors.
+ * These can occur when windows are destroyed between discovery and operation. */
+static int gwX11ErrorHandler(Display *dpy, XErrorEvent *event)
+{
+    char errorText[256];
+    XGetErrorText(dpy, event->error_code, errorText, sizeof(errorText));
+    NSLog(@"GWorkspace X11 error: %s (request %d, error %d)",
+          errorText, event->request_code, event->error_code);
+    /* Return 0 to continue; the error is logged but doesn't crash */
+    return 0;
+}
+
+static BOOL x11ErrorHandlerInstalled = NO;
+
+static void ensureX11ErrorHandler(void)
+{
+    if (!x11ErrorHandlerInstalled) {
+        XSetErrorHandler(gwX11ErrorHandler);
+        x11ErrorHandlerInstalled = YES;
+    }
+}
+
 #pragma mark - GWX11WindowInfo Implementation
 
 @implementation GWX11WindowInfo
@@ -77,7 +101,13 @@ static GWX11WindowManager *sharedWindowManager = nil;
 
 - (Display *)openDisplay
 {
-    return XOpenDisplay(NULL);
+    ensureX11ErrorHandler();
+    Display *dpy = XOpenDisplay(NULL);
+    if (dpy) {
+        /* Sync to catch any pending errors before returning */
+        XSync(dpy, False);
+    }
+    return dpy;
 }
 
 - (Window *)getClientList:(Display *)dpy count:(unsigned long *)count
@@ -750,7 +780,8 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (void)startMonitorTimer
 {
     if (monitorTimer == nil && [x11Apps count] > 0) {
-        monitorTimer = [NSTimer scheduledTimerWithTimeInterval:0.25
+        /* Use faster initial polling (100ms) for quicker window detection */
+        monitorTimer = [NSTimer scheduledTimerWithTimeInterval:0.1
                                                         target:self
                                                       selector:@selector(monitorTimerFired:)
                                                       userInfo:nil
@@ -770,9 +801,11 @@ static GWX11AppManager *sharedX11AppManager = nil;
 {
     GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
     NSMutableArray *terminatedApps = [NSMutableArray array];
+    BOOL allAppsHaveWindows = YES;
     
     for (NSString *appName in [x11Apps allKeys]) {
         GWX11AppInfo *info = [x11Apps objectForKey:appName];
+        if (info == nil) continue;
         
         /* Check if process still exists */
         if (![self processExists:info.pid]) {
@@ -782,9 +815,14 @@ static GWX11AppManager *sharedX11AppManager = nil;
         
         /* Check if windows have appeared for this app */
         if (!info.hasWindowAppeared) {
-            NSArray *windows = [wm windowsMatchingName:info.windowSearchString];
-            if ([windows count] == 0) {
-                windows = [wm windowsForPID:info.pid];
+            allAppsHaveWindows = NO;
+            
+            /* Priority 1: Try to find windows by PID (most reliable) */
+            NSArray *windows = [wm windowsForPID:info.pid];
+            
+            /* Priority 2: Fall back to name matching if PID fails */
+            if ([windows count] == 0 && info.windowSearchString) {
+                windows = [wm windowsMatchingName:info.windowSearchString];
             }
             
             if ([windows count] > 0) {
@@ -800,6 +838,7 @@ static GWX11AppManager *sharedX11AppManager = nil;
     /* Handle terminated apps */
     for (NSString *appName in terminatedApps) {
         GWX11AppInfo *info = [x11Apps objectForKey:appName];
+        if (info == nil) continue;
         NSString *appPath = [[info.appPath retain] autorelease];
         
         [x11Apps removeObjectForKey:appName];
