@@ -901,7 +901,7 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
       /* Try _NET_WM_NAME (UTF8) */
       if (XGetWindowProperty(dpy, wins[i], net_wm_name, 0, 1024, False, utf8,
                              &atype, &aformat, &anitems, &abytes_after, &aprop) == Success && aprop) {
-        if (aprop && strcmp((const char *)aprop, name) == 0) {
+        if (aprop && strstr((const char *)aprop, name)) {
           found = wins[i];
           XFree(aprop);
           break;
@@ -912,7 +912,7 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
       aprop = NULL;
       if (XGetWindowProperty(dpy, wins[i], wm_name, 0, 1024, False, AnyPropertyType,
                              &atype, &aformat, &anitems, &abytes_after, &aprop) == Success && aprop) {
-        if (aprop && strcmp((const char *)aprop, name) == 0) {
+        if (aprop && strstr((const char *)aprop, name)) {
           found = wins[i];
           XFree(aprop);
           break;
