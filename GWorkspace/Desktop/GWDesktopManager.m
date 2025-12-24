@@ -114,7 +114,17 @@ static GWDesktopManager *desktopManager = nil;
     RELEASE (window);
 
     hidedock = [defaults boolForKey: @"hidedock"];
-    dock = [[Dock alloc] initForManager: self];
+    
+    NS_DURING
+      {
+        dock = [[Dock alloc] initForManager: self];
+      }
+    NS_HANDLER
+      {
+        NSLog(@"GWDesktopManager: exception initializing Dock: %@", [localException reason]);
+        dock = [[Dock alloc] initForManager: self];
+      }
+    NS_ENDHANDLER
         
     [nc addObserver: self 
            selector: @selector(fileSystemWillChange:) 
@@ -154,17 +164,24 @@ static GWDesktopManager *desktopManager = nil;
 
 - (void)activateDesktop
 {
+  NSLog(@"DEBUG: GWDesktopManager activateDesktop called");
   [win activate];
+  NSLog(@"DEBUG: Desktop window activated");
   [desktopView showMountedVolumes];
   [desktopView showContentsOfNode: dskNode];
   [self addWatcherForPath: [dskNode path]];
     
   if ((hidedock == NO) && ([dock superview] == nil)) {
+    NSLog(@"DEBUG: Adding dock as subview (hidedock=%d)", hidedock);
     [desktopView addSubview: dock];
     [dock tile];
+    NSLog(@"DEBUG: Dock added to desktop view, frame: %@", NSStringFromRect([dock frame]));
+  } else {
+    NSLog(@"DEBUG: Dock NOT added (hidedock=%d, superview=%@)", hidedock, [dock superview]);
   }
   
   [mpointWatcher startWatching];  
+  NSLog(@"DEBUG: activateDesktop completed");
 }
 
 - (void)deactivateDesktop

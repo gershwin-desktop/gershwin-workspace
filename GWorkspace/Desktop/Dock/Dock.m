@@ -132,6 +132,12 @@
                 path = nil;
               }
               
+              /* Validate name exists */
+              if (name == nil || [name length] == 0) {
+                GWDebugLog(@"Dock: skipping invalid entry (no name)");
+                continue;
+              }
+              
               /* Try to get path from workspace first, then use saved path as fallback */
               if (path == nil || ![fm fileExistsAtPath: path]) {
                 path = [ws fullPathForApplication: name];
@@ -139,12 +145,24 @@
         
 	      if (path && [fm fileExistsAtPath: path])
 		{
-		  DockIcon *icon = [self addIconForApplicationAtPath: path
-						    withName: name
-						     atIndex: [index intValue]];
-		  [icon setDocked: YES];
-		  /* Keep this entry in the updated dict */
-		  [updatedDict setObject: appEntry forKey: index];
+		  NS_DURING
+		    {
+		      DockIcon *icon = [self addIconForApplicationAtPath: path
+						        withName: name
+						         atIndex: [index intValue]];
+		      if (icon) {
+		        [icon setDocked: YES];
+		        /* Keep this entry in the updated dict */
+		        [updatedDict setObject: appEntry forKey: index];
+		      } else {
+		        GWDebugLog(@"Dock: failed to create icon for app \"%@\" at path %@", name, path);
+		      }
+		    }
+		  NS_HANDLER
+		    {
+		      GWDebugLog(@"Dock: exception loading app \"%@\": %@", name, [localException reason]);
+		    }
+		  NS_ENDHANDLER
 		}
 	      else
 		{
@@ -566,6 +584,8 @@
       rect.origin.y = ceil((scrrect.size.height - rect.size.height) / 2);
     }
 
+  NSLog(@"DEBUG: Dock tile - setting frame: %@, icons count: %lu", NSStringFromRect(rect), (unsigned long)[icons count]);
+  
   if (view) {
     [view setNeedsDisplayInRect: [self frame]];
   }
@@ -682,6 +702,7 @@
 
 - (void)drawRect:(NSRect)rect
 {  
+  NSLog(@"DEBUG: Dock drawRect called, rect: %@, superview: %@", NSStringFromRect(rect), [self superview]);
   [super drawRect: rect];
   
   [backColor set];

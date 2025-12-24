@@ -54,7 +54,10 @@
 
 - (void)activate
 {
+  NSLog(@"DEBUG: GWDesktopWindow activate called - setting level and ordering front");
+  [self setLevel: NSDesktopWindowLevel];
   [self orderFront: nil];
+  NSLog(@"DEBUG: GWDesktopWindow is now visible: %d, level: %ld", [self isVisible], (long)[self level]);
 }
 
 - (void)deactivate

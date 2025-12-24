@@ -483,11 +483,14 @@ NSString *_pendingSystemActionTitle = nil;
 
   dtopManager = [GWDesktopManager desktopManager];
     
+  NSLog(@"DEBUG: GWorkspace init - no_desktop setting: %d", [defaults boolForKey: @"no_desktop"]);
   if ([defaults boolForKey: @"no_desktop"] == NO)
   { 
     id item;
    
+    NSLog(@"DEBUG: GWorkspace calling activateDesktop");
     [dtopManager activateDesktop];
+    NSLog(@"DEBUG: GWorkspace activateDesktop returned");
     menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"Tools", @"")] submenu];
     item = [menu itemWithTitle: NSLocalizedString(@"Show Desktop", @"")];
     [item setTitle: NSLocalizedString(@"Hide Desktop", @"")];
