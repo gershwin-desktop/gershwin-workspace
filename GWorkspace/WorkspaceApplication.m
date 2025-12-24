@@ -39,6 +39,7 @@
 #import "GWViewersManager.h"
 #import "Operation.h"
 #import "StartAppWin.h"
+#import "X11AppSupport.h"
 // For checking whether a process identifier still exists
 #include <signal.h>
 #include <errno.h>
@@ -202,7 +203,7 @@
   
   } else {  
     /*
-    * If we are opening many files together and our app is a wrapper,
+    * If we are opening many files together and our app is a non-GNUstep X11 app,
     * we must wait a little for the last launched task to terminate.
     * Else we'd end waiting two seconds in -connectApplication.
     */
@@ -415,6 +416,9 @@
 
   // Init fallback timers dict for non-GNUstep apps' dock dot
   launchDotFallbacks = [NSMutableDictionary new];
+  
+  // Set up X11 app manager delegate for non-GNUstep app lifecycle events
+  [[GWX11AppManager sharedManager] setDelegate: (id<GWX11AppManagerDelegate>)self];
 }
 
 - (void)applicationName:(NSString **)appName
@@ -489,28 +493,16 @@
     }
     
     /* Also check if the app is running on the system via X11 (external launch) */
-    Display *dpy = XOpenDisplay(NULL);
-    if (dpy) {
-      Window found = 0;
-      @try {
-        Window root = DefaultRootWindow(dpy);
-        if (root != 0) {
-          found = GWX11FindClientByName(dpy, root, [appName UTF8String]);
-        }
-      }
-      @finally {
-        XCloseDisplay(dpy);
-      }
-      if (found) {
-        /* App is running somewhere on the system (possibly launched externally).
-           Notify the Dock so the icon's "running" dot appears, and activate the app
-           to raise/unminimize its window immediately. */
-        GWDebugLog(@"App \"%@\" already running (X11 window found); notifying Dock and activating.", appName);
-        [[dtopManager dock] appDidLaunch: appPath appName: appName];
-        /* Activate the app to raise/unminimize its window immediately */
-        [self activateAppWithPath: appPath andName: appName];
-        return YES;
-      }
+    GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+    if ([wm hasWindowsMatchingName: appName]) {
+      /* App is running somewhere on the system (possibly launched externally).
+         Notify the Dock so the icon's "running" dot appears, and activate the app
+         to raise/unminimize its window immediately. */
+      GWDebugLog(@"App \"%@\" already running (X11 window found); notifying Dock and activating.", appName);
+      [[dtopManager dock] appDidLaunch: appPath appName: appName];
+      /* Activate the app to raise/unminimize its window immediately */
+      [self activateAppWithPath: appPath andName: appName];
+      return YES;
     }
   }
   
@@ -586,14 +578,26 @@
 
   /*
    * For GNUstep apps (with NSConnection), notify dock at launch time.
-   * For non-GNUstep apps (no connection), defer dot until first activation
-   * (heuristic for "first window appeared"). Also keep the 10s fallback.
+   * For non-GNUstep apps (no connection), register with X11AppManager
+   * for process monitoring and window management.
    */
   if (app && [app application]) {
     [[dtopManager dock] appDidLaunch: path appName: name];
     GWDebugLog(@"\"%@\" appDidLaunch (%@) [dock notified]", name, path);
     // No need for fallback if connection established
     [self _cancelLaunchDotFallbackForPath: path name: name];
+  } else if (app && ident) {
+    /* Non-GNUstep app: register with X11AppManager for monitoring */
+    pid_t pid = (pid_t)[ident intValue];
+    if (pid > 0) {
+      [app setIsX11App: YES];
+      [app setWindowSearchString: name];
+      [[GWX11AppManager sharedManager] registerX11App: name
+                                                 path: path
+                                                  pid: pid
+                                   windowSearchString: name];
+      GWDebugLog(@"\"%@\" appDidLaunch (%@) [registered as X11 app, pid=%d]", name, path, pid);
+    }
   }
 }
 
@@ -606,7 +610,7 @@
 
   /*
    * Relying solely on the connection death notification misses apps that
-   * never establish a connection (e.g. wrappers or non-GNUstep apps). Use
+   * never establish a connection (e.g. X11 or non-GNUstep apps). Use
    * the workspace termination notification as a fallback to update the Dock
    * and internal state.
    */
@@ -760,20 +764,8 @@
   }
 
   /* Check if a window is visible on X11 (faster response for non-GNUstep apps) */
-  Display *dpy = XOpenDisplay(NULL);
-  BOOL foundWindow = NO;
-  if (dpy) {
-    @try {
-      Window root = DefaultRootWindow(dpy);
-      Window found = GWX11FindClientByName(dpy, root, [name UTF8String]);
-      if (found) {
-        foundWindow = YES;
-      }
-    }
-    @finally {
-      XCloseDisplay(dpy);
-    }
-  }
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  BOOL foundWindow = [wm hasWindowsMatchingName: name];
   if (foundWindow) {
     shouldShowDot = YES;
   }
@@ -810,151 +802,66 @@
   }
 }
 
+#pragma mark - GWX11AppManagerDelegate
+
+- (void)x11AppDidLaunch:(NSString *)appName path:(NSString *)appPath pid:(pid_t)pid
+{
+  GWDebugLog(@"X11 app launched: %@ (%@) pid=%d", appName, appPath, pid);
+  [[dtopManager dock] appWillLaunch:appPath appName:appName];
+}
+
+- (void)x11AppDidTerminate:(NSString *)appName path:(NSString *)appPath
+{
+  GWDebugLog(@"X11 app terminated: %@ (%@)", appName, appPath);
+  
+  /* Find and clean up the GWLaunchedApp entry */
+  GWLaunchedApp *app = [self launchedAppWithPath:appPath andName:appName];
+  if (app) {
+    [self applicationTerminated:app];
+  } else {
+    /* Just update the dock directly if we don't have a tracked app */
+    [[dtopManager dock] appTerminated:appName];
+  }
+}
+
+- (void)x11AppWindowsDidAppear:(NSString *)appName path:(NSString *)appPath
+{
+  GWDebugLog(@"X11 app windows appeared: %@ (%@)", appName, appPath);
+  [[dtopManager dock] appDidLaunch:appPath appName:appName];
+  
+  /* Cancel any pending fallback timer */
+  [self _cancelLaunchDotFallbackForPath:appPath name:appName];
+}
+
 #pragma mark - X11 Activation (non-GNUstep apps)
-
-static BOOL GWX11ActivateWindow(Display *dpy, Window root, Window win)
-{
-  if (!dpy || !win) return NO;
-  Atom net_active_window = XInternAtom(dpy, "_NET_ACTIVE_WINDOW", False);
-  XEvent e;
-  memset(&e, 0, sizeof(e));
-  e.xclient.type = ClientMessage;
-  e.xclient.window = win;
-  e.xclient.message_type = net_active_window;
-  e.xclient.format = 32;
-  e.xclient.data.l[0] = 1; /* source indication: application */
-  e.xclient.data.l[1] = CurrentTime;
-  e.xclient.data.l[2] = 0;
-  e.xclient.data.l[3] = 0;
-  e.xclient.data.l[4] = 0;
-  XSendEvent(dpy, root, False, SubstructureRedirectMask | SubstructureNotifyMask, &e);
-  XRaiseWindow(dpy, win);
-  XFlush(dpy);
-  return YES;
-}
-
-static BOOL GWX11IsViewable(Display *dpy, Window win)
-{
-  XWindowAttributes attr;
-  if (XGetWindowAttributes(dpy, win, &attr) == 0) return NO;
-  return (attr.map_state == IsViewable);
-}
-
-static Window GWX11FindClientByPID(Display *dpy, Window root, pid_t pid)
-{
-  if (!dpy || !root || pid <= 0) return (Window)0;
-  Atom net_client_list = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
-  Atom net_wm_pid = XInternAtom(dpy, "_NET_WM_PID", False);
-  Atom actual_type;
-  int actual_format;
-  unsigned long nitems, bytes_after;
-  unsigned char *data = NULL;
-  Window found = 0;
-  if (XGetWindowProperty(dpy, root, net_client_list, 0, LONG_MAX, False,
-                         XA_WINDOW, &actual_type, &actual_format,
-                         &nitems, &bytes_after, &data) == Success && data) {
-    Window *wins = (Window *)data;
-    for (unsigned long i = 0; i < nitems; i++) {
-      Atom atype;
-      int aformat;
-      unsigned long anitems, abytes_after;
-      unsigned char *aprop = NULL;
-      if (XGetWindowProperty(dpy, wins[i], net_wm_pid, 0, 1, False, XA_CARDINAL,
-                             &atype, &aformat, &anitems, &abytes_after, &aprop) == Success && aprop) {
-        if (anitems >= 1) {
-          unsigned long *pidp = (unsigned long *)aprop;
-          if ((pid_t)*pidp == pid) {
-            found = wins[i];
-            XFree(aprop);
-            break;
-          }
-        }
-        XFree(aprop);
-      }
-    }
-    XFree(data);
-  }
-  return found;
-}
-
-static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
-{
-  if (!dpy || !root || !name || !*name) return (Window)0;
-  Atom net_client_list = XInternAtom(dpy, "_NET_CLIENT_LIST", False);
-  Atom net_wm_name = XInternAtom(dpy, "_NET_WM_NAME", False);
-  Atom utf8 = XInternAtom(dpy, "UTF8_STRING", False);
-  Atom wm_name = XInternAtom(dpy, "WM_NAME", False);
-  Atom actual_type;
-  int actual_format;
-  unsigned long nitems, bytes_after;
-  unsigned char *data = NULL;
-  Window found = 0;
-  if (XGetWindowProperty(dpy, root, net_client_list, 0, LONG_MAX, False,
-                         XA_WINDOW, &actual_type, &actual_format,
-                         &nitems, &bytes_after, &data) == Success && data) {
-    Window *wins = (Window *)data;
-    for (unsigned long i = 0; i < nitems; i++) {
-      Atom atype;
-      int aformat;
-      unsigned long anitems, abytes_after;
-      unsigned char *aprop = NULL;
-      /* Try _NET_WM_NAME (UTF8) */
-      if (XGetWindowProperty(dpy, wins[i], net_wm_name, 0, 1024, False, utf8,
-                             &atype, &aformat, &anitems, &abytes_after, &aprop) == Success && aprop) {
-        if (aprop && strstr((const char *)aprop, name)) {
-          found = wins[i];
-          XFree(aprop);
-          break;
-        }
-        XFree(aprop);
-      }
-      /* Fallback: WM_NAME */
-      aprop = NULL;
-      if (XGetWindowProperty(dpy, wins[i], wm_name, 0, 1024, False, AnyPropertyType,
-                             &atype, &aformat, &anitems, &abytes_after, &aprop) == Success && aprop) {
-        if (aprop && strstr((const char *)aprop, name)) {
-          found = wins[i];
-          XFree(aprop);
-          break;
-        }
-        XFree(aprop);
-      }
-    }
-    XFree(data);
-  }
-  return found;
-}
 
 - (BOOL)_x11ActivateForApp:(GWLaunchedApp *)app name:(NSString *)name
 {
-  Display *dpy = XOpenDisplay(NULL);
-  if (!dpy) return NO;
-  BOOL result = NO;
-  @try {
-    Window root = DefaultRootWindow(dpy);
-    Window target = 0;
-    pid_t pid = 0;
-    if ([app identifier]) pid = (pid_t)[[app identifier] intValue];
-    if (pid <= 0 && [app task]) {
-      @try { pid = [[app task] processIdentifier]; } @catch (id ex) { pid = 0; }
-    }
-    if (pid > 0) {
-      target = GWX11FindClientByPID(dpy, root, pid);
-    }
-    if (!target && name) {
-      target = GWX11FindClientByName(dpy, root, [name UTF8String]);
-    }
-    if (target) {
-      if (!GWX11IsViewable(dpy, target)) {
-        XMapRaised(dpy, target);
-      }
-      result = GWX11ActivateWindow(dpy, root, target);
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  
+  /* If app is registered with X11AppManager, use that */
+  if (app && [app isX11App]) {
+    return [[GWX11AppManager sharedManager] activateX11App: name];
+  }
+  
+  /* Fallback: try by PID first, then by name */
+  pid_t pid = 0;
+  if ([app identifier]) pid = (pid_t)[[app identifier] intValue];
+  if (pid <= 0 && [app task]) {
+    @try { pid = [[app task] processIdentifier]; } @catch (id ex) { pid = 0; }
+  }
+  
+  if (pid > 0) {
+    if ([wm activateWindowsForPID: pid]) {
+      return YES;
     }
   }
-  @finally {
-    XCloseDisplay(dpy);
+  
+  if (name) {
+    return [wm activateWindowsMatchingName: name];
   }
-  return result;
+  
+  return NO;
 }
 
 - (void)appDidResignActive:(NSNotification *)notif
@@ -1476,6 +1383,33 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
   return AUTORELEASE (app);  
 }
 
++ (id)x11AppWithPath:(NSString *)apath
+                name:(NSString *)aname
+                 pid:(pid_t)pid
+  windowSearchString:(NSString *)searchString
+{
+  GWLaunchedApp *app = [GWLaunchedApp new];
+  
+  [app setPath: apath];
+  [app setName: aname];
+  [app setIdentifier: [NSNumber numberWithInt: pid]];
+  [app setIsX11App: YES];
+  [app setWindowSearchString: searchString ? searchString : aname];
+  
+  if (([app name] == nil) || ([app path] == nil) || (pid <= 0)) {
+    DESTROY (app);
+    return nil;
+  }
+  
+  /* Register with the X11 app manager for process monitoring and window management */
+  [[GWX11AppManager sharedManager] registerX11App: aname
+                                             path: apath
+                                              pid: pid
+                               windowSearchString: searchString ? searchString : aname];
+  
+  return AUTORELEASE (app);
+}
+
 - (void)dealloc
 {
   [nc removeObserver: self];
@@ -1485,10 +1419,16 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
     RELEASE (conn);  
   }
   
+  /* Unregister from X11 app manager if needed */
+  if (isX11App && name) {
+    [[GWX11AppManager sharedManager] unregisterX11App: name];
+  }
+  
   RELEASE (name);
   RELEASE (path);
   RELEASE (identifier);
   RELEASE (task);
+  RELEASE (windowSearchString);
     
   [super dealloc];
 }
@@ -1506,6 +1446,8 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
     application = nil;
     active = NO;
     hidden = NO;
+    isX11App = NO;
+    windowSearchString = nil;
     
     gw = [GWorkspace gworkspace];
     nc = [NSNotificationCenter defaultCenter];      
@@ -1618,6 +1560,12 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
 
 - (void)activateApplication
 {
+  if (isX11App) {
+    /* Use X11 window manager for X11 apps */
+    [[GWX11AppManager sharedManager] activateX11App: name];
+    return;
+  }
+  
   NS_DURING
     {
       [application activateIgnoringOtherApps: YES];
@@ -1643,6 +1591,14 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
 
 - (void)hideApplication
 {
+  if (isX11App) {
+    /* Use X11 window manager for X11 apps */
+    if ([[GWX11AppManager sharedManager] hideX11App: name]) {
+      hidden = YES;
+    }
+    return;
+  }
+  
   NS_DURING
     {
       [application hide: nil];
@@ -1658,6 +1614,14 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
 
 - (void)unhideApplication
 {
+  if (isX11App) {
+    /* Use X11 window manager for X11 apps */
+    if ([[GWX11AppManager sharedManager] unhideX11App: name]) {
+      hidden = NO;
+    }
+    return;
+  }
+  
   NS_DURING
     {
   [application unhideWithoutActivation];
@@ -1673,6 +1637,11 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
 
 - (BOOL)isApplicationHidden
 {
+  if (isX11App) {
+    /* For X11 apps, check if they have visible windows */
+    return ![[GWX11AppManager sharedManager] x11AppHasVisibleWindows: name];
+  }
+  
   BOOL apphidden = NO;
   
   if (application != nil) {
@@ -1698,11 +1667,28 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
 
 - (BOOL)isRunning
 {
+  if (isX11App) {
+    /* For X11 apps, check if the process still exists */
+    if (identifier) {
+      pid_t pid = (pid_t)[identifier intValue];
+      if (pid > 0) {
+        int result = kill(pid, 0);
+        return (result == 0 || errno == EPERM);
+      }
+    }
+    return NO;
+  }
   return (application != nil);
 }
 
 - (void)terminateApplication 
 {  
+  if (isX11App) {
+    /* For X11 apps, use the X11 app manager to quit gracefully */
+    [[GWX11AppManager sharedManager] quitX11App: name timeout: 5.0];
+    return;
+  }
+  
   if (application) {
     NS_DURING
       {
@@ -1715,13 +1701,22 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
       }
     NS_ENDHANDLER
   } else { 
-    /* if the app is a wrapper */
+    /* if the app has no DO connection */
     [gw applicationTerminated: self];
   }
 }
 
 - (void)terminateTask 
 {
+  if (isX11App && identifier) {
+    /* For X11 apps, send SIGTERM to the process */
+    pid_t pid = (pid_t)[identifier intValue];
+    if (pid > 0) {
+      kill(pid, SIGTERM);
+    }
+    return;
+  }
+  
   if (task && [task isRunning]) {
     NS_DURING
       {
@@ -1812,6 +1807,28 @@ static Window GWX11FindClientByName(Display *dpy, Window root, const char *name)
 
     [gw applicationTerminated: self];
   }
+}
+
+#pragma mark - X11 App Accessors
+
+- (BOOL)isX11App
+{
+  return isX11App;
+}
+
+- (void)setIsX11App:(BOOL)value
+{
+  isX11App = value;
+}
+
+- (NSString *)windowSearchString
+{
+  return windowSearchString;
+}
+
+- (void)setWindowSearchString:(NSString *)searchString
+{
+  ASSIGN(windowSearchString, searchString);
 }
 
 @end
