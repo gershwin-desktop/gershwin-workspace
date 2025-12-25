@@ -45,10 +45,78 @@
 #include <signal.h>
 #include <errno.h>
 #include <limits.h>
+#include <unistd.h>
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 
 @implementation GWorkspace (WorkspaceApplication)
+
+/*
+ * Sever X client connections for all clients except this process.
+ * This is a last-resort action used during logout to ensure X11 clients
+ * cannot keep running by holding onto the display connection. We attempt
+ * to read the _NET_WM_PID property for windows and issue XKillClient()
+ * against windows owned by other processes. This is aggressive but useful
+ * during logout to avoid stubborn X clients persisting.
+ */
+- (void)severAllXClientsExceptSelf
+{
+  pid_t selfpid = getpid();
+  Display *dpy = XOpenDisplay(NULL);
+
+  if (dpy == NULL) {
+    NSLog(@"severAllXClientsExceptSelf: could not open X display");
+    return;
+  }
+
+  Atom pidAtom = XInternAtom(dpy, "_NET_WM_PID", False);
+  Window root = DefaultRootWindow(dpy);
+
+  /* Depth-first traversal of the window tree */
+  NSMutableArray *stack = [NSMutableArray arrayWithObject: @(root)];
+
+  while ([stack count]) {
+    unsigned long w = [[stack lastObject] unsignedLongValue];
+    [stack removeLastObject];
+
+    Window root_ret, parent_ret;
+    Window *children = NULL;
+    unsigned int nchildren = 0;
+
+    if (XQueryTree(dpy, (Window)w, &root_ret, &parent_ret, &children, &nchildren)) {
+      for (unsigned int i = 0; i < nchildren; i++) {
+        [stack addObject: @((unsigned long)children[i])];
+      }
+      if (children) XFree(children);
+    }
+
+    if (pidAtom == None)
+      continue;
+
+    Atom actualType;
+    int actualFormat;
+    unsigned long nitems, bytes_after;
+    unsigned char *prop = NULL;
+    int status = XGetWindowProperty(dpy, (Window)w, pidAtom, 0, 1, False, XA_CARDINAL,
+                                    &actualType, &actualFormat, &nitems, &bytes_after, &prop);
+
+    if (status == Success && prop != NULL && nitems >= 1) {
+      unsigned long winpid = 0;
+
+      /* The property is stored as 32-bit CARDINALs; copy safely */
+      memcpy(&winpid, prop, sizeof(unsigned long));
+      XFree(prop);
+
+      if ((pid_t)winpid != selfpid && winpid != 0) {
+        XKillClient(dpy, (Window)w);
+        NSLog(@"severAllXClientsExceptSelf: killed X client owning window 0x%lx (pid %lu)", w, winpid);
+      }
+    }
+  }
+
+  XFlush(dpy);
+  XCloseDisplay(dpy);
+}
 
 - (BOOL)performFileOperation:(NSString *)operation 
                       source:(NSString *)source 
@@ -1317,10 +1385,14 @@
   
   [launched addObjectsFromArray: launchedApps];
   [launched removeObject: gwapp];
-  
+
+  /* Sever X client connections now (except our own) so stubborn X11 apps
+     cannot keep the display connection alive and prevent logout. */
+  [self severAllXClientsExceptSelf];
+
   for (i = 0; i < [launched count]; i++)
     [[launched objectAtIndex: i] terminateApplication];
-  
+
   [launched removeAllObjects];
   [launched addObjectsFromArray: launchedApps];
   [launched removeObject: gwapp];
@@ -1385,11 +1457,14 @@
                           NSLocalizedString(@"Cancel", @""),
                           nil))
         {
+          /* First sever all X client connections so those apps cannot
+             keep the display connection and delay logout/termination. */
+          [self severAllXClientsExceptSelf];
+
           for (i = 0; i < [launched count]; i++)
             {
               [[launched objectAtIndex: i] terminateTask];      
             }    
-      
         }
       else
         {
