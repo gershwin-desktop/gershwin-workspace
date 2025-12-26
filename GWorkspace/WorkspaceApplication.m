@@ -23,6 +23,7 @@
  */
 
 #include <math.h>
+#include <string.h>
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -35,11 +36,87 @@
 #import "GWorkspace.h"
 #import "GWDesktopManager.h"
 #import "Dock.h"
+#import "DockIcon.h"
 #import "GWViewersManager.h"
 #import "Operation.h"
 #import "StartAppWin.h"
+#import "X11AppSupport.h"
+// For checking whether a process identifier still exists
+#include <signal.h>
+#include <errno.h>
+#include <limits.h>
+#include <unistd.h>
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
 
 @implementation GWorkspace (WorkspaceApplication)
+
+/*
+ * Sever X client connections for all clients except this process.
+ * This is a last-resort action used during logout to ensure X11 clients
+ * cannot keep running by holding onto the display connection. We attempt
+ * to read the _NET_WM_PID property for windows and issue XKillClient()
+ * against windows owned by other processes. This is aggressive but useful
+ * during logout to avoid stubborn X clients persisting.
+ */
+- (void)severAllXClientsExceptSelf
+{
+  pid_t selfpid = getpid();
+  Display *dpy = XOpenDisplay(NULL);
+
+  if (dpy == NULL) {
+    NSLog(@"severAllXClientsExceptSelf: could not open X display");
+    return;
+  }
+
+  Atom pidAtom = XInternAtom(dpy, "_NET_WM_PID", False);
+  Window root = DefaultRootWindow(dpy);
+
+  /* Depth-first traversal of the window tree */
+  NSMutableArray *stack = [NSMutableArray arrayWithObject: @(root)];
+
+  while ([stack count]) {
+    unsigned long w = [[stack lastObject] unsignedLongValue];
+    [stack removeLastObject];
+
+    Window root_ret, parent_ret;
+    Window *children = NULL;
+    unsigned int nchildren = 0;
+
+    if (XQueryTree(dpy, (Window)w, &root_ret, &parent_ret, &children, &nchildren)) {
+      for (unsigned int i = 0; i < nchildren; i++) {
+        [stack addObject: @((unsigned long)children[i])];
+      }
+      if (children) XFree(children);
+    }
+
+    if (pidAtom == None)
+      continue;
+
+    Atom actualType;
+    int actualFormat;
+    unsigned long nitems, bytes_after;
+    unsigned char *prop = NULL;
+    int status = XGetWindowProperty(dpy, (Window)w, pidAtom, 0, 1, False, XA_CARDINAL,
+                                    &actualType, &actualFormat, &nitems, &bytes_after, &prop);
+
+    if (status == Success && prop != NULL && nitems >= 1) {
+      unsigned long winpid = 0;
+
+      /* The property is stored as 32-bit CARDINALs; copy safely */
+      memcpy(&winpid, prop, sizeof(unsigned long));
+      XFree(prop);
+
+      if ((pid_t)winpid != selfpid && winpid != 0) {
+        XKillClient(dpy, (Window)w);
+        NSLog(@"severAllXClientsExceptSelf: killed X client owning window 0x%lx (pid %lu)", w, winpid);
+      }
+    }
+  }
+
+  XFlush(dpy);
+  XCloseDisplay(dpy);
+}
 
 - (BOOL)performFileOperation:(NSString *)operation 
                       source:(NSString *)source 
@@ -194,23 +271,28 @@
     return [self launchApplication: appname arguments: args];
   
   } else {  
-    NSDate *delay = [NSDate dateWithTimeIntervalSinceNow: 0.1];
+    /* Check if app is still running before trying to use it */
+    if (![app isRunning]) {
+      /* App entry exists but process is not running - clean up and re-launch */
+      NSArray *args = [NSArray arrayWithObjects: @"-GSFilePath", fullPath, nil];
+      [self applicationTerminated: app];
+      return [self launchApplication: appname arguments: args];
+    }
     
     /*
-    * If we are opening many files together and our app is a wrapper,
+    * If we are opening many files together and our app is a non-GNUstep X11 app,
     * we must wait a little for the last launched task to terminate.
     * Else we'd end waiting two seconds in -connectApplication.
     */
-    [[NSRunLoop currentRunLoop] runUntilDate: delay];
+    GWProcessStartupRunLoop(0.1);
     
     application = [app application];
     
     if (application == nil) {
-      NSArray *args = [NSArray arrayWithObjects: @"-GSFilePath", fullPath, nil];
-      
-      [self applicationTerminated: app];
-      
-      return [self launchApplication: appname arguments: args];
+      /* Non-GNUstep/X11 app - it's running but has no DO connection.
+       * We can't open files in it via DO, so just activate it. */
+      [self activateAppWithPath: appPath andName: appName];
+      return YES;
 
     } else {
       NS_DURING
@@ -268,9 +350,21 @@
     return [self launchApplication: appname arguments: args];
   
   } else {
-    application = [app application];
- 
-    if (application == nil) {
+    /* Check if app is still running before trying to activate */
+    if ([app isRunning]) {
+      /* App is running - activate it instead of re-launching */
+      application = [app application];
+      
+      if (application != nil) {
+        /* GNUstep app with DO connection - activate normally */
+        [application activateIgnoringOtherApps: YES];
+      } else {
+        /* Non-GNUstep/X11 app - use X11 window activation */
+        [self activateAppWithPath: appPath andName: appName];
+      }
+      return YES;
+    } else {
+      /* App entry exists but process is not running - clean up and re-launch */
       [self applicationTerminated: app];
 
       if (autolaunch) {
@@ -278,9 +372,6 @@
 	    }
              
       return [self launchApplication: appname arguments: args];
-    
-    } else {
-      [application activateIgnoringOtherApps: YES];
     }
   }
 
@@ -319,14 +410,21 @@
     return [self launchApplication: name arguments: args];
   
   } else {
+    /* Check if app is still running before trying to use it */
+    if (![app isRunning]) {
+      /* App entry exists but process is not running - clean up and re-launch */
+      NSArray *args = [NSArray arrayWithObjects: @"-GSTempPath", fullPath, nil];
+      [self applicationTerminated: app];
+      return [self launchApplication: name arguments: args];
+    }
+    
     application = [app application];
     
     if (application == nil) {
-      NSArray *args = [NSArray arrayWithObjects: @"-GSTempPath", fullPath, nil];
-    
-      [self applicationTerminated: app];
-      
-      return [self launchApplication: name arguments: args];
+      /* Non-GNUstep/X11 app - it's running but has no DO connection.
+       * We can't open temp files in it via DO, so just activate it. */
+      [self activateAppWithPath: appPath andName: appName];
+      return YES;
       
     } else {
       NS_DURING
@@ -407,6 +505,12 @@
   logoutTimer = nil;
   logoutDelay = 0;
   loggingout = NO;
+
+  // Init fallback timers dict for non-GNUstep apps' dock dot
+  launchDotFallbacks = [NSMutableDictionary new];
+  
+  // Set up X11 app manager delegate for non-GNUstep app lifecycle events
+  [[GWX11AppManager sharedManager] setDelegate: (id<GWX11AppManagerDelegate>)self];
 }
 
 - (void)applicationName:(NSString **)appName
@@ -471,6 +575,46 @@
       appPath = appname;
     }
   
+  /* Check if this app is already running (either tracked by GWorkspace or found via X11) */
+  if (appPath && appName) {
+    GWLaunchedApp *existing = [self launchedAppWithPath: appPath andName: appName];
+    if (existing && [existing isRunning]) {
+      /* Our tracked instance is running; don't launch again. Activate instead. */
+      GWDebugLog(@"App \"%@\" already running (tracked); activating instead of launching.", appName);
+      [[dtopManager dock] appDidLaunch: appPath appName: appName];
+      [self activateAppWithPath: appPath andName: appName];
+      return YES;
+    }
+    
+    /* Also check if the app is running on the system via X11 (external launch) */
+    GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+    
+    /* Priority 1: Check if there's a known PID from a previous dock icon */
+    DockIcon *dockIcon = [[dtopManager dock] iconForApplicationName: appName];
+    pid_t knownPID = dockIcon ? [dockIcon appPID] : 0;
+    BOOL hasWindows = NO;
+    
+    if (knownPID > 0) {
+      hasWindows = [wm hasWindowsForPID: knownPID];
+    }
+    
+    /* Priority 2: Fall back to name matching */
+    if (!hasWindows) {
+      hasWindows = [wm hasWindowsMatchingName: appName];
+    }
+    
+    if (hasWindows) {
+      /* App is running somewhere on the system (possibly launched externally).
+         Notify the Dock so the icon's "running" dot appears, and activate the app
+         to raise/unminimize its window immediately. */
+      GWDebugLog(@"App \"%@\" already running (X11 window found); notifying Dock and activating.", appName);
+      [[dtopManager dock] appDidLaunch: appPath appName: appName];
+      /* Activate the app to raise/unminimize its window immediately */
+      [self activateAppWithPath: appPath andName: appName pid: knownPID];
+      return YES;
+    }
+  }
+  
   userinfo = [NSDictionary dictionaryWithObjectsAndKeys: appName, 
 			                                                   @"NSApplicationName",
 	                                                       appPath, 
@@ -508,6 +652,9 @@
   if (path && name) {
     [[dtopManager dock] appWillLaunch: path appName: name];
     GWDebugLog(@"appWillLaunch: \"%@\" %@", name, path);
+    // Schedule 10s fallback: if no window/connection appears but the
+    // process hasn't exited, show the dock dot anyway.
+    [self _scheduleLaunchDotFallbackForPath: path name: name];
   } else {
     GWDebugLog(@"appWillLaunch: unknown application!");
   }
@@ -538,18 +685,74 @@
     }  
   }
 
+  /*
+   * For GNUstep apps (with NSConnection), notify dock at launch time.
+   * For non-GNUstep apps (no connection), register with X11AppManager
+   * for process monitoring and window management.
+   */
   if (app && [app application]) {
-    [[dtopManager dock] appDidLaunch: path appName: name];
-    GWDebugLog(@"\"%@\" appDidLaunch (%@)", name, path);
+    pid_t pid = ident ? (pid_t)[ident intValue] : 0;
+    [[dtopManager dock] appDidLaunch: path appName: name pid: pid];
+    GWDebugLog(@"\"%@\" appDidLaunch (%@) [dock notified]", name, path);
+    // No need for fallback if connection established
+    [self _cancelLaunchDotFallbackForPath: path name: name];
+  } else if (app && ident) {
+    /* Non-GNUstep app: register with X11AppManager for monitoring */
+    pid_t pid = (pid_t)[ident intValue];
+    if (pid > 0) {
+      [app setIsX11App: YES];
+      [app setWindowSearchString: name];
+      [[GWX11AppManager sharedManager] registerX11App: name
+                                                 path: path
+                                                  pid: pid
+                                   windowSearchString: name];
+      GWDebugLog(@"\"%@\" appDidLaunch (%@) [registered as X11 app, pid=%d]", name, path, pid);
+    }
   }
 }
 
 - (void)appDidTerminate:(NSNotification *)notif
 {
+  NSDictionary *info = [notif userInfo];
+  NSString *name = [info objectForKey: @"NSApplicationName"];
+  NSString *path = [info objectForKey: @"NSApplicationPath"];
+  GWLaunchedApp *app = [self launchedAppWithPath: path andName: name];
+
   /*
-  * we do nothing here because we will know that the app has terminated 
-  * from the connection.
-  */
+   * Relying solely on the connection death notification misses apps that
+   * never establish a connection (e.g. X11 or non-GNUstep apps). Use
+   * the workspace termination notification as a fallback to update the Dock
+   * and internal state.
+   */
+  if (app == nil && name)
+    {
+      NSUInteger i;
+
+      for (i = 0; i < [launchedApps count]; i++)
+        {
+          GWLaunchedApp *candidate = [launchedApps objectAtIndex: i];
+
+          if ([[candidate name] isEqual: name])
+            {
+              app = candidate;
+              break;
+            }
+        }
+    }
+
+  if (app)
+    {
+      // Cancel any pending fallback when termination is observed
+      [self _cancelLaunchDotFallbackForPath: [app path] name: [app name]];
+      [self applicationTerminated: app];
+    }
+  else if (name)
+    {
+      /* Ensure undocked icons are cleared even if we did not track the app. */
+      [self _cancelLaunchDotFallbackForPath: path name: name];
+      [[dtopManager dock] appTerminated: name];
+      GWDebugLog(@"appDidTerminate: \"%@\" not tracked; forcing dock cleanup.", name);
+    }
 }
 
 - (void)appDidBecomeActive:(NSNotification *)notif
@@ -570,10 +773,222 @@
     activeApplication = app;
     GWDebugLog(@"\"%@\" appDidBecomeActive", name);
 
+    /* If this is a non-GNUstep app (no connection), show dock dot now. */
+    if ([app application] == nil && name && path) {
+      pid_t pid = [app identifier] ? (pid_t)[[app identifier] intValue] : 0;
+      [[dtopManager dock] appDidLaunch: path appName: name pid: pid];
+      GWDebugLog(@"\"%@\" appDidBecomeActive -> dock notified (non-GNUstep)", name);
+      [self _cancelLaunchDotFallbackForPath: path name: name];
+    }
+
   } else {
     activeApplication = nil;
     GWDebugLog(@"appDidBecomeActive: \"%@\" unknown running application.", name);
+
+    /* Heuristic: even if we don't track the app, activation implies a window
+       is present. Ensure the dock shows the running dot. */
+    if (name && path) {
+      [[dtopManager dock] appDidLaunch: path appName: name];
+      GWDebugLog(@"\"%@\" appDidBecomeActive (untracked) -> dock notified", name);
+      [self _cancelLaunchDotFallbackForPath: path name: name];
+    }
   }
+}
+
+#pragma mark - Non-GNUstep dock dot fallback helpers
+
+- (NSString *)_launchKeyForPath:(NSString *)path name:(NSString *)name
+{
+  if (!path || !name) return nil;
+  return [NSString stringWithFormat:@"%@\n%@", path, name];
+}
+
+- (BOOL)_pidExists:(pid_t)pid
+{
+  if (pid <= 0) return NO;
+  // kill(pid, 0) returns 0 if process exists and we have permission,
+  // or -1 with EPERM if it exists but we lack permission.
+  int r = kill(pid, 0);
+  if (r == 0) return YES;
+  return (errno == EPERM);
+}
+
+- (void)_scheduleLaunchDotFallbackForPath:(NSString *)path name:(NSString *)name
+{
+  NSString *key = [self _launchKeyForPath:path name:name];
+  if (!key) return;
+  // Avoid duplicating timers
+  if ([launchDotFallbacks objectForKey:key] != nil) return;
+
+  NSDictionary *ui = [NSDictionary dictionaryWithObjectsAndKeys:
+                      path, @"path",
+                      name, @"name",
+                      [NSNumber numberWithInt:0], @"retryCount",
+                      nil];
+  NSTimer *t = [NSTimer scheduledTimerWithTimeInterval:0.5
+                                                target:self
+                                              selector:@selector(_launchDotFallbackTimerFired:)
+                                              userInfo:ui
+                                               repeats:NO];
+  [launchDotFallbacks setObject:t forKey:key];
+}
+
+- (void)_cancelLaunchDotFallbackForPath:(NSString *)path name:(NSString *)name
+{
+  NSString *key = [self _launchKeyForPath:path name:name];
+  if (!key) return;
+  NSTimer *t = [launchDotFallbacks objectForKey:key];
+  if (t) {
+    if ([t isValid]) [t invalidate];
+    [launchDotFallbacks removeObjectForKey:key];
+  }
+}
+
+- (void)_launchDotFallbackTimerFired:(NSTimer *)timer
+{
+  NSDictionary *ui = [timer userInfo];
+  NSString *path = [ui objectForKey:@"path"];
+  NSString *name = [ui objectForKey:@"name"];
+  int retryCount = [[ui objectForKey:@"retryCount"] intValue];
+  NSString *key = [self _launchKeyForPath:path name:name];
+
+  if (!(path.length && name.length)) {
+    if (key) [launchDotFallbacks removeObjectForKey:key];
+    return;
+  }
+
+  GWLaunchedApp *app = [self launchedAppWithPath:path andName:name];
+  BOOL shouldShowDot = NO;
+  BOOL processRunning = NO;
+  pid_t appPID = 0;
+
+  /* Check if process is running and get the PID */
+  if (app) {
+    NSTask *task = [app task];
+    if (task) {
+      processRunning = [task isRunning];
+      @try { appPID = [task processIdentifier]; } @catch (id ex) { appPID = 0; }
+    } else {
+      NSNumber *ident = [app identifier];
+      if (ident) {
+        appPID = (pid_t)[ident intValue];
+        processRunning = [self _pidExists:appPID];
+      }
+    }
+  }
+
+  /* Check if a window is visible on X11 (faster response for non-GNUstep apps) */
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  
+  /* Priority 1: Check by PID first */
+  if (appPID > 0 && [wm hasWindowsForPID:appPID]) {
+    shouldShowDot = YES;
+  }
+  
+  /* Priority 2: Fall back to name matching */
+  if (!shouldShowDot && [wm hasWindowsMatchingName: name]) {
+    shouldShowDot = YES;
+  }
+
+  /* If no window yet but process is running, retry (up to 20 times = 10s) */
+  if (!shouldShowDot && processRunning && retryCount < 20) {
+    NSDictionary *newUi = [NSDictionary dictionaryWithObjectsAndKeys:
+                           path, @"path",
+                           name, @"name",
+                           [NSNumber numberWithInt:retryCount + 1], @"retryCount",
+                           nil];
+    NSTimer *t = [NSTimer scheduledTimerWithTimeInterval:0.5
+                                                  target:self
+                                                selector:@selector(_launchDotFallbackTimerFired:)
+                                                userInfo:newUi
+                                                 repeats:NO];
+    NSTimer *oldTimer = [launchDotFallbacks objectForKey:key];
+    if (oldTimer && [oldTimer isValid]) {
+      [oldTimer invalidate];
+    }
+    [launchDotFallbacks setObject:t forKey:key];
+    return;
+  }
+
+  /* Show dot if window found or final timeout with running process */
+  if (shouldShowDot || (processRunning && retryCount >= 20)) {
+    [[dtopManager dock] appDidLaunch:path appName:name pid:appPID];
+    GWDebugLog(@"Fallback: showing dock dot for \"%@\" (retry %d, pid=%d)", name, retryCount, appPID);
+  }
+
+  /* Clean up */
+  if (key) {
+    [launchDotFallbacks removeObjectForKey:key];
+  }
+}
+
+#pragma mark - GWX11AppManagerDelegate
+
+- (void)x11AppDidLaunch:(NSString *)appName path:(NSString *)appPath pid:(pid_t)pid
+{
+  if (appName == nil || appPath == nil) return;
+  GWDebugLog(@"X11 app launched: %@ (%@) pid=%d", appName, appPath, pid);
+  [[dtopManager dock] appWillLaunch:appPath appName:appName pid:pid];
+}
+
+- (void)x11AppDidTerminate:(NSString *)appName path:(NSString *)appPath
+{
+  if (appName == nil) return;
+  GWDebugLog(@"X11 app terminated: %@ (%@)", appName, appPath);
+  
+  /* Find and clean up the GWLaunchedApp entry */
+  GWLaunchedApp *app = [self launchedAppWithPath:appPath andName:appName];
+  if (app) {
+    [self applicationTerminated:app];
+  } else {
+    /* Just update the dock directly if we don't have a tracked app */
+    [[dtopManager dock] appTerminated:appName];
+  }
+}
+
+- (void)x11AppWindowsDidAppear:(NSString *)appName path:(NSString *)appPath
+{
+  if (appName == nil || appPath == nil) return;
+  
+  /* Get the PID from X11AppManager for more reliable tracking */
+  pid_t pid = [[GWX11AppManager sharedManager] pidForX11App:appName];
+  
+  GWDebugLog(@"X11 app windows appeared: %@ (%@) pid=%d", appName, appPath, pid);
+  [[dtopManager dock] appDidLaunch:appPath appName:appName pid:pid];
+  
+  /* Cancel any pending fallback timer */
+  [self _cancelLaunchDotFallbackForPath:appPath name:appName];
+}
+
+#pragma mark - X11 Activation (non-GNUstep apps)
+
+- (BOOL)_x11ActivateForApp:(GWLaunchedApp *)app name:(NSString *)name
+{
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  
+  /* If app is registered with X11AppManager, use that */
+  if (app && [app isX11App]) {
+    return [[GWX11AppManager sharedManager] activateX11App: name];
+  }
+  
+  /* Fallback: try by PID first, then by name */
+  pid_t pid = 0;
+  if ([app identifier]) pid = (pid_t)[[app identifier] intValue];
+  if (pid <= 0 && [app task]) {
+    @try { pid = [[app task] processIdentifier]; } @catch (id ex) { pid = 0; }
+  }
+  
+  if (pid > 0) {
+    if ([wm activateWindowsForPID: pid]) {
+      return YES;
+    }
+  }
+  
+  if (name) {
+    return [wm activateWindowsMatchingName: name];
+  }
+  
+  return NO;
 }
 
 - (void)appDidResignActive:(NSNotification *)notif
@@ -598,11 +1013,35 @@
 - (void)activateAppWithPath:(NSString *)path
                     andName:(NSString *)name
 {
-  GWLaunchedApp *app = [self launchedAppWithPath: path andName: name];
+  [self activateAppWithPath:path andName:name pid:0];
+}
 
-//  if (app && ([app isActive] == NO)) {
+- (void)activateAppWithPath:(NSString *)path
+                    andName:(NSString *)name
+                        pid:(pid_t)pid
+{
+  GWLaunchedApp *app = [self launchedAppWithPath: path andName: name];
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+
   if (app) {
     [app activateApplication];
+    if ([app application] == nil) {
+      /* For X11/non-GNUstep apps, try PID first, then name matching */
+      pid_t appPID = pid;
+      if (appPID <= 0 && [app identifier]) {
+        appPID = (pid_t)[[app identifier] intValue];
+      }
+      if (appPID > 0 && [wm activateWindowsForPID:appPID]) {
+        return;
+      }
+      [self _x11ActivateForApp: app name: name];
+    }
+  } else {
+    /* Fallback: try PID first if provided, then by name */
+    if (pid > 0 && [wm activateWindowsForPID:pid]) {
+      return;
+    }
+    [self _x11ActivateForApp: nil name: name];
   }
 }
 
@@ -646,6 +1085,12 @@
 
   if (app && [app isHidden]) {
     [app unhideApplication];
+    if ([app application] == nil) {
+      [self _x11ActivateForApp: app name: name];
+    }
+  } else if (!app) {
+    // Fallback for non-tracked non-GNUstep apps: try to raise their X11 windows
+    [self _x11ActivateForApp: nil name: name];
   }
 }
 
@@ -940,10 +1385,14 @@
   
   [launched addObjectsFromArray: launchedApps];
   [launched removeObject: gwapp];
-  
+
+  /* Sever X client connections now (except our own) so stubborn X11 apps
+     cannot keep the display connection alive and prevent logout. */
+  [self severAllXClientsExceptSelf];
+
   for (i = 0; i < [launched count]; i++)
     [[launched objectAtIndex: i] terminateApplication];
-  
+
   [launched removeAllObjects];
   [launched addObjectsFromArray: launchedApps];
   [launched removeObject: gwapp];
@@ -1008,11 +1457,14 @@
                           NSLocalizedString(@"Cancel", @""),
                           nil))
         {
+          /* First sever all X client connections so those apps cannot
+             keep the display connection and delay logout/termination. */
+          [self severAllXClientsExceptSelf];
+
           for (i = 0; i < [launched count]; i++)
             {
               [[launched objectAtIndex: i] terminateTask];      
             }    
-      
         }
       else
         {
@@ -1078,10 +1530,37 @@
   if (([app name] == nil) || ([app path] == nil) || ([app identifier] == nil)) {
     DESTROY (app);
   } else if (check) {
-    [app connectApplication: YES];
+    [app connectApplication: NO];
   }
   
   return AUTORELEASE (app);  
+}
+
++ (id)x11AppWithPath:(NSString *)apath
+                name:(NSString *)aname
+                 pid:(pid_t)pid
+  windowSearchString:(NSString *)searchString
+{
+  GWLaunchedApp *app = [GWLaunchedApp new];
+  
+  [app setPath: apath];
+  [app setName: aname];
+  [app setIdentifier: [NSNumber numberWithInt: pid]];
+  [app setIsX11App: YES];
+  [app setWindowSearchString: searchString ? searchString : aname];
+  
+  if (([app name] == nil) || ([app path] == nil) || (pid <= 0)) {
+    DESTROY (app);
+    return nil;
+  }
+  
+  /* Register with the X11 app manager for process monitoring and window management */
+  [[GWX11AppManager sharedManager] registerX11App: aname
+                                             path: apath
+                                              pid: pid
+                               windowSearchString: searchString ? searchString : aname];
+  
+  return AUTORELEASE (app);
 }
 
 - (void)dealloc
@@ -1093,10 +1572,16 @@
     RELEASE (conn);  
   }
   
+  /* Unregister from X11 app manager if needed */
+  if (isX11App && name) {
+    [[GWX11AppManager sharedManager] unregisterX11App: name];
+  }
+  
   RELEASE (name);
   RELEASE (path);
   RELEASE (identifier);
   RELEASE (task);
+  RELEASE (windowSearchString);
     
   [super dealloc];
 }
@@ -1114,6 +1599,8 @@
     application = nil;
     active = NO;
     hidden = NO;
+    isX11App = NO;
+    windowSearchString = nil;
     
     gw = [GWorkspace gworkspace];
     nc = [NSNotificationCenter defaultCenter];      
@@ -1157,7 +1644,20 @@
 
 - (void)setTask:(NSTask *)atask
 {
+  if (task && (task != atask)) {
+    [nc removeObserver: self
+                  name: NSTaskDidTerminateNotification
+                object: task];
+  }
+
   ASSIGN (task, atask);
+
+  if (task) {
+    [nc addObserver: self
+            selector: @selector(taskDidTerminate:)
+                name: NSTaskDidTerminateNotification
+              object: task];
+  }
 }
 
 - (NSTask *)task
@@ -1213,6 +1713,12 @@
 
 - (void)activateApplication
 {
+  if (isX11App) {
+    /* Use X11 window manager for X11 apps */
+    [[GWX11AppManager sharedManager] activateX11App: name];
+    return;
+  }
+  
   NS_DURING
     {
       [application activateIgnoringOtherApps: YES];
@@ -1238,6 +1744,14 @@
 
 - (void)hideApplication
 {
+  if (isX11App) {
+    /* Use X11 window manager for X11 apps */
+    if ([[GWX11AppManager sharedManager] hideX11App: name]) {
+      hidden = YES;
+    }
+    return;
+  }
+  
   NS_DURING
     {
       [application hide: nil];
@@ -1253,6 +1767,14 @@
 
 - (void)unhideApplication
 {
+  if (isX11App) {
+    /* Use X11 window manager for X11 apps */
+    if ([[GWX11AppManager sharedManager] unhideX11App: name]) {
+      hidden = NO;
+    }
+    return;
+  }
+  
   NS_DURING
     {
   [application unhideWithoutActivation];
@@ -1268,6 +1790,11 @@
 
 - (BOOL)isApplicationHidden
 {
+  if (isX11App) {
+    /* For X11 apps, check if they have visible windows */
+    return ![[GWX11AppManager sharedManager] x11AppHasVisibleWindows: name];
+  }
+  
   BOOL apphidden = NO;
   
   if (application != nil) {
@@ -1293,11 +1820,52 @@
 
 - (BOOL)isRunning
 {
-  return (application != nil);
+  /* For X11 apps, check if the process still exists by PID */
+  if (isX11App) {
+    if (identifier) {
+      pid_t pid = (pid_t)[identifier intValue];
+      if (pid > 0) {
+        int result = kill(pid, 0);
+        return (result == 0 || errno == EPERM);
+      }
+    }
+    return NO;
+  }
+  
+  /* For GNUstep apps, check if we have a DO connection */
+  if (application != nil) {
+    return YES;
+  }
+  
+  /* Also check if we have a task that's still running */
+  if (task != nil) {
+    @try {
+      return [task isRunning];
+    } @catch (id ex) {
+      return NO;
+    }
+  }
+  
+  /* Check by PID as a last resort */
+  if (identifier) {
+    pid_t pid = (pid_t)[identifier intValue];
+    if (pid > 0) {
+      int result = kill(pid, 0);
+      return (result == 0 || errno == EPERM);
+    }
+  }
+  
+  return NO;
 }
 
 - (void)terminateApplication 
 {  
+  if (isX11App) {
+    /* For X11 apps, use the X11 app manager to quit gracefully */
+    [[GWX11AppManager sharedManager] quitX11App: name timeout: 5.0];
+    return;
+  }
+  
   if (application) {
     NS_DURING
       {
@@ -1310,13 +1878,22 @@
       }
     NS_ENDHANDLER
   } else { 
-    /* if the app is a wrapper */
+    /* if the app has no DO connection */
     [gw applicationTerminated: self];
   }
 }
 
 - (void)terminateTask 
 {
+  if (isX11App && identifier) {
+    /* For X11 apps, send SIGTERM to the process */
+    pid_t pid = (pid_t)[identifier intValue];
+    if (pid > 0) {
+      kill(pid, SIGTERM);
+    }
+    return;
+  }
+  
   if (task && [task isRunning]) {
     NS_DURING
       {
@@ -1328,6 +1905,13 @@
 	                      [localException name], [localException reason]);
       }
     NS_ENDHANDLER
+  }
+}
+
+- (void)taskDidTerminate:(NSNotification *)notif
+{
+  if ([notif object] == task) {
+    [gw applicationTerminated: self];
   }
 }
 
@@ -1363,68 +1947,26 @@
       RETAIN (application);
       ASSIGN (conn, c);
       
-	  } else {
-      StartAppWin *startAppWin = nil;
-      int i;
-
-	    if ((task == nil || [task isRunning] == NO) && (showProgress == NO)) {
+    } else {
+      if ((task == nil || [task isRunning] == NO)) {
         DESTROY (task);
         return;
-	    }
-
-      if (showProgress) {
-        startAppWin = [gw startAppWin];
-        [startAppWin showWindowWithTitle: @"GWorkspace"
-                                 appName: name
-                               operation: NSLocalizedString(@"contacting:", @"")         
-                            maxProgValue: 20.0];
       }
 
-      for (i = 0; i < 20; i++) {
-        if (showProgress) {
-          [startAppWin updateProgressBy: 1.0];
-        }
-
-	      [[NSRunLoop currentRunLoop] runUntilDate:
-		                     [NSDate dateWithTimeIntervalSinceNow: 0.1]];
-
-        app = [NSConnection rootProxyForConnectionWithRegisteredName: name
-                                                                host: host];                  
-        if (app) {
-          NSConnection *c = [app connectionForProxy];
-
-	        [nc addObserver: self
-	               selector: @selector(connectionDidDie:)
-		                 name: NSConnectionDidDieNotification
-		               object: c];
-
-          application = app;
-          RETAIN (application);
-          ASSIGN (conn, c);
-          break;
-        }
+      // Non-blocking: try once quickly without UI, then return.
+      GWProcessStartupRunLoop(0.05);
+      app = [NSConnection rootProxyForConnectionWithRegisteredName: name host: host];
+      if (app) {
+        NSConnection *c = [app connectionForProxy];
+        [nc addObserver: self
+               selector: @selector(connectionDidDie:)
+                   name: NSConnectionDidDieNotification
+                 object: c];
+        application = app;
+        RETAIN (application);
+        ASSIGN (conn, c);
       }
-
-      if (showProgress) {
-        [[startAppWin win] close];
-      }
-      
-      if (application == nil) {          
-        if (task && [task isRunning]) {
-          [task terminate];
-        }
-        DESTROY (task);
-          
-        if (showProgress == NO) {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""),
-                      [NSString stringWithFormat: @"%@ %@", 
-                          name, NSLocalizedString(@"seems to have hung", @"")], 
-		                                      NSLocalizedString(@"OK", @""), 
-                                          nil, 
-                                          nil);
-        }
-      }
-	  }
+    }
   }
 }
 
@@ -1442,6 +1984,28 @@
 
     [gw applicationTerminated: self];
   }
+}
+
+#pragma mark - X11 App Accessors
+
+- (BOOL)isX11App
+{
+  return isX11App;
+}
+
+- (void)setIsX11App:(BOOL)value
+{
+  isX11App = value;
+}
+
+- (NSString *)windowSearchString
+{
+  return windowSearchString;
+}
+
+- (void)setWindowSearchString:(NSString *)searchString
+{
+  ASSIGN(windowSearchString, searchString);
 }
 
 @end

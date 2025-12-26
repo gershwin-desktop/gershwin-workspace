@@ -31,6 +31,7 @@
 #import "DockIcon.h"
 #import "GWDesktopView.h"
 #import "GWorkspace.h"
+#import "GWFunctions.h"
 
 #define MAX_ICN_SIZE 48
 #define MIN_ICN_SIZE 16
@@ -111,23 +112,73 @@
       if (appsdict)
 	{
 	  NSArray *indexes = [appsdict allKeys];
+	  NSMutableDictionary *updatedDict = [NSMutableDictionary dictionary];
     
 	  indexes = [indexes sortedArrayUsingSelector: @selector(numericCompare:)];
     
 	  for (i = 0; i < [indexes count]; i++)
 	    {
 	      NSNumber *index = [indexes objectAtIndex: i];
-	      NSString *name = [[appsdict objectForKey: index] stringByDeletingPathExtension];
-	      NSString *path = [ws fullPathForApplication: name];
+	      id appEntry = [appsdict objectForKey: index];
+	      NSString *name = nil;
+	      NSString *path = nil;
+              
+              /* Handle both old format (string) and new format (dictionary) */
+              if ([appEntry isKindOfClass: [NSDictionary class]]) {
+                name = [appEntry objectForKey: @"name"];
+                path = [appEntry objectForKey: @"path"];
+              } else if ([appEntry isKindOfClass: [NSString class]]) {
+                name = [appEntry stringByDeletingPathExtension];
+                path = nil;
+              }
+              
+              /* Validate name exists */
+              if (name == nil || [name length] == 0) {
+                GWDebugLog(@"Dock: skipping invalid entry (no name)");
+                continue;
+              }
+              
+              /* Try to get path from workspace first, then use saved path as fallback */
+              if (path == nil || ![fm fileExistsAtPath: path]) {
+                path = [ws fullPathForApplication: name];
+              }
         
-	      if (path)
+	      if (path && [fm fileExistsAtPath: path])
 		{
-		  DockIcon *icon = [self addIconForApplicationAtPath: path
-							    withName: name
-							     atIndex: [index intValue]];
-		  [icon setDocked: YES];
+		  NS_DURING
+		    {
+		      DockIcon *icon = [self addIconForApplicationAtPath: path
+						        withName: name
+						         atIndex: [index intValue]];
+		      if (icon) {
+		        [icon setDocked: YES];
+		        /* Keep this entry in the updated dict */
+		        [updatedDict setObject: appEntry forKey: index];
+		      } else {
+		        GWDebugLog(@"Dock: failed to create icon for app \"%@\" at path %@", name, path);
+		      }
+		    }
+		  NS_HANDLER
+		    {
+		      GWDebugLog(@"Dock: exception loading app \"%@\": %@", name, [localException reason]);
+		    }
+		  NS_ENDHANDLER
+		}
+	      else
+		{
+		  /* Application no longer exists - remove it from preferences */
+		  if (name) {
+		    GWDebugLog(@"Dock: app \"%@\" no longer exists at saved path; removing from dock.", name);
+		  }
 		}
 	    }
+	  
+	  /* Update preferences with only the valid applications */
+	  if ([updatedDict count] > 0) {
+	    [defaults setObject: updatedDict forKey: @"applications"];
+	  } else {
+	    [defaults removeObjectForKey: @"applications"];
+	  }
 	}
 
       [self createTrashIcon];
@@ -184,14 +235,26 @@
                                  withName:(NSString *)name
                                   atIndex:(int)index
 {
+  if (path == nil || [path length] == 0) {
+    return nil;
+  }
+  
   if ([fm fileExistsAtPath: path]) {
     FSNode *node = [FSNode nodeWithPath: path];
+    
+    if (node == nil) {
+      return nil;
+    }
     
     if ([node isApplication]) {
       int icnindex;
       DockIcon *icon = [[DockIcon alloc] initForNode: node 
                                              appName: name
                                             iconSize: iconSize];
+      
+      if (icon == nil) {
+        return nil;
+      }
 
       if (index == -1) {
         icnindex = ([icons count]) ? ([icons count] - 1) : 0;
@@ -241,6 +304,9 @@
   }
   [icons removeObject: icon];
   [self tile];
+  
+  /* Persist the removal immediately */
+  [self saveDockConfiguration];
 }
 
 - (DockIcon *)iconForApplicationName:(NSString *)name
@@ -312,6 +378,14 @@
 - (void)appWillLaunch:(NSString *)appPath
               appName:(NSString *)appName
 {
+  [self appWillLaunch: appPath appName: appName pid: 0];
+}
+
+- (void)appWillLaunch:(NSString *)appPath
+              appName:(NSString *)appName
+                  pid:(pid_t)pid
+{
+  if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationName: appName];
   
@@ -319,16 +393,30 @@
       icon = [self addIconForApplicationAtPath: appPath
                                       withName: appName
                                        atIndex: -1];
-    } 
+    }
+    
+    if (icon && pid > 0) {
+      [icon setAppPID: pid];
+    }
   
     [self tile];
-    [icon animateLaunch];
+    if (icon) {
+      [icon animateLaunch];
+    }
   }
 }
 
 - (void)appDidLaunch:(NSString *)appPath
              appName:(NSString *)appName
 {
+  [self appDidLaunch: appPath appName: appName pid: 0];
+}
+
+- (void)appDidLaunch:(NSString *)appPath
+             appName:(NSString *)appName
+                 pid:(pid_t)pid
+{
+  if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationName: appName];
 
@@ -337,18 +425,42 @@
                                       withName: appName
                                        atIndex: -1];
       [self tile];
-    } 
-  
-    [icon setLaunched: YES];
+    }
+    
+    if (icon) {
+      if (pid > 0) {
+        [icon setAppPID: pid];
+      }
+      [icon setLaunched: YES];
+    }
   }
+}
+
+- (DockIcon *)iconForApplicationPID:(pid_t)pid
+{
+  NSUInteger i;
+  
+  if (pid <= 0) return nil;
+  
+  for (i = 0; i < [icons count]; i++) {
+    DockIcon *icon = [icons objectAtIndex: i];
+    
+    if ([icon appPID] == pid) {
+      return icon;
+    }
+  }
+  
+  return nil;
 }
 
 - (void)appTerminated:(NSString *)appName
 {
+  if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationName: appName];
 
     if (icon) {
+      [icon setAppPID: 0]; /* Clear PID on termination */
       if (([icon isDocked] == NO) && ([icon isSpecialIcon] == NO)) {
         [self removeIcon: icon];
       } else {
@@ -361,6 +473,7 @@
 
 - (void)appDidHide:(NSString *)appName
 {
+  if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationName: appName];
 
@@ -372,6 +485,7 @@
 
 - (void)appDidUnhide:(NSString *)appName
 {
+  if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationName: appName];
 
@@ -530,6 +644,8 @@
       rect.origin.y = ceil((scrrect.size.height - rect.size.height) / 2);
     }
 
+  NSLog(@"DEBUG: Dock tile - setting frame: %@, icons count: %lu", NSStringFromRect(rect), (unsigned long)[icons count]);
+  
   if (view) {
     [view setNeedsDisplayInRect: [self frame]];
   }
@@ -579,6 +695,30 @@
   }
 }
 
+- (void)saveDockConfiguration
+{
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
+  NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+  NSUInteger i;  
+
+  for (i = 0; i < [icons count]; i++)
+    {
+      DockIcon *icon = [icons objectAtIndex: i];    
+
+      if (([icon isSpecialIcon] == NO) && [icon isDocked])
+	{
+	  /* Save both name and path so non-GNUstep apps can be restored */
+	  NSMutableDictionary *appEntry = [NSMutableDictionary dictionary];
+	  [appEntry setObject: [icon appName] forKey: @"name"];
+	  [appEntry setObject: [[icon node] path] forKey: @"path"];
+	  [dict setObject: appEntry forKey: [[NSNumber numberWithInt: i] stringValue]];
+	}
+    }
+
+  [defaults setObject: dict forKey: @"applications"];
+  [defaults synchronize];
+}
+
 - (void)updateDefaults
 {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
@@ -595,7 +735,11 @@
 
       if (([icon isSpecialIcon] == NO) && [icon isDocked])
 	{
-	  [dict setObject: [icon appName] forKey: [[NSNumber numberWithInt: i] stringValue]];
+	  /* Save both name and path so non-GNUstep apps can be restored */
+	  NSMutableDictionary *appEntry = [NSMutableDictionary dictionary];
+	  [appEntry setObject: [icon appName] forKey: @"name"];
+	  [appEntry setObject: [[icon node] path] forKey: @"path"];
+	  [dict setObject: appEntry forKey: [[NSNumber numberWithInt: i] stringValue]];
 	  [manager removeWatcherForPath: [[icon node] path]];
 	}
 
@@ -618,6 +762,7 @@
 
 - (void)drawRect:(NSRect)rect
 {  
+  NSLog(@"DEBUG: Dock drawRect called, rect: %@, superview: %@", NSStringFromRect(rect), [self superview]);
   [super drawRect: rect];
   
   [backColor set];
@@ -1051,6 +1196,8 @@
     if ([[pb types] containsObject: @"DockIconPboardType"]) { 
       [self addDraggedIcon: [pb dataForType: @"DockIconPboardType"] 
                    atIndex: targetIndex];
+      /* Persist after adding a dragged icon from another dock */
+      [self saveDockConfiguration];
 
     } else if ([[pb types] containsObject: NSFilenamesPboardType]) {
       NSArray *sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
@@ -1093,6 +1240,8 @@
             }
 
             concluded = YES;
+            /* Persist after adding a new application icon */
+            [self saveDockConfiguration];
           }
         }
       } 

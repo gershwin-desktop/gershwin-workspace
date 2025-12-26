@@ -171,6 +171,9 @@
   
   NSMutableArray *launchedApps;
   GWLaunchedApp *activeApplication;
+  // Fallback timers to show the dock dot for non-GNUstep apps
+  // Keyed by a composite "path\nname" string; values are NSTimer*
+  NSMutableDictionary *launchDotFallbacks;
   
   NSString *storedAppinfoPath;
   NSDistributedLock *storedAppinfoLock;
@@ -522,6 +525,10 @@
 - (void)activateAppWithPath:(NSString *)path
                     andName:(NSString *)name;
 
+- (void)activateAppWithPath:(NSString *)path
+                    andName:(NSString *)name
+                        pid:(pid_t)pid;
+
 - (void)appDidHide:(NSNotification *)notif;
 
 - (void)appDidUnhide:(NSNotification *)notif;
@@ -562,6 +569,10 @@
   BOOL active;
   BOOL hidden;
   
+  /* X11 application support for non-GNUstep applications */
+  BOOL isX11App;
+  NSString *windowSearchString;
+  
   GWorkspace *gw;   
   NSNotificationCenter *nc;
 }
@@ -574,7 +585,16 @@
              applicationName:(NSString *)aname
            processIdentifier:(NSNumber *)ident
                 checkRunning:(BOOL)check;
-            
+
+/**
+ * Creates an X11 app entry for a non-GNUstep application.
+ * Uses timer-based monitoring and X11 for window management.
+ */
++ (id)x11AppWithPath:(NSString *)apath
+                name:(NSString *)aname
+                 pid:(pid_t)pid
+  windowSearchString:(NSString *)searchString;
+
 - (NSDictionary *)appInfo;
 
 - (void)setTask:(NSTask *)atask;
@@ -622,6 +642,12 @@
 - (void)connectApplication:(BOOL)showProgress;
 
 - (void)connectionDidDie:(NSNotification *)notif;
+
+/* X11 app specific methods */
+- (BOOL)isX11App;
+- (void)setIsX11App:(BOOL)value;
+- (NSString *)windowSearchString;
+- (void)setWindowSearchString:(NSString *)searchString;
 
 @end
 

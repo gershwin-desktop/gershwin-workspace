@@ -71,7 +71,10 @@
   XChangeProperty(dpy, win, atom, atom, 32, 
                         PropModeReplace, (unsigned char *)&data, 1);
 
+  NSLog(@"DEBUG: XDesktopWindow activate called - setting level and ordering front");
+  [self setLevel: NSDesktopWindowLevel];
   [self orderFront: nil];
+  NSLog(@"DEBUG: XDesktopWindow is now visible: %d, level: %ld", [self isVisible], (long)[self level]);
 }
 
 - (void)deactivate

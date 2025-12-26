@@ -52,6 +52,12 @@
           appName:(NSString *)aname
          iconSize:(int)isize
 {
+  /* Validate inputs to prevent crashes */
+  if (anode == nil) {
+    [self release];
+    return nil;
+  }
+  
   self = [super initForNode: anode
                nodeInfoType: FSNInfoNameType
                extendedType: nil
@@ -65,17 +71,22 @@
                   slideBack: NO];
 
   if (self) {
-    if (aname != nil) {
+    if (aname != nil && [aname length] > 0) {
       ASSIGN (appName, aname);
-    } else {
+    } else if (node != nil) {
       ASSIGN (appName, [[node name] stringByDeletingPathExtension]);
+    } else {
+      ASSIGN (appName, @"Unknown");
     }
         
-    dragIcon = [icon copy];
+    if (icon) {
+      dragIcon = [icon copy];
+    }
     
     docked = NO;
     launched = NO;
     apphidden = NO;
+    appPID = 0;
 
     minimumLaunchClicks = 2;
     
@@ -83,7 +94,9 @@
     fm = [NSFileManager defaultManager];
     ws = [NSWorkspace sharedWorkspace];
 
-    [self setToolTip: appName];  
+    if (appName) {
+      [self setToolTip: appName];
+    }
   }
 
   return self;
@@ -183,6 +196,16 @@
   return launched;
 }
 
+- (void)setAppPID:(pid_t)pid
+{
+  appPID = pid;
+}
+
+- (pid_t)appPID
+{
+  return appPID;
+}
+
 - (void)setAppHidden:(BOOL)value
 {
   apphidden = value;
@@ -275,21 +298,37 @@
 
 - (void)mouseUp:(NSEvent *)theEvent
 {
+  if (theEvent == nil) return;
+  
   if ([theEvent clickCount] >= minimumLaunchClicks) {
     if ([self isSpecialIcon] == NO) {
+      NSString *nodePath = [node path];
+      
+      /* Safety check: ensure we have a valid path and name */
+      if (nodePath == nil || appName == nil) {
+        NSLog(@"DockIcon mouseUp: missing path or appName");
+        return;
+      }
+      
       if (launched == NO) {
-        [ws launchApplication: appName];
+        /* Launch the app if not already launched. Use the full path for proper resolution. */
+        [ws launchApplication: nodePath];
       } else if (apphidden) {
-        [[GWorkspace gworkspace] unhideAppWithPath: [node path] andName: appName];
+        /* App is running but hidden; unhide and activate it */
+        [[GWorkspace gworkspace] unhideAppWithPath: nodePath andName: appName];
       } else {
-        [[GWorkspace gworkspace] activateAppWithPath: [node path] andName: appName];
+        /* App is already running and visible; just activate/raise it.
+         * Use PID if available for more robust window matching. */
+        [[GWorkspace gworkspace] activateAppWithPath: nodePath andName: appName pid: appPID];
       }
     } else if (isWsIcon) {
       [[GWDesktopManager desktopManager] showRootViewer];
     
     } else if (isTrashIcon) {
       NSString *path = [node path];
-      [[GWDesktopManager desktopManager] selectFile: path inFileViewerRootedAtPath: path];
+      if (path) {
+        [[GWDesktopManager desktopManager] selectFile: path inFileViewerRootedAtPath: path];
+      }
     }
   }
 }

@@ -26,7 +26,7 @@ ADDITIONAL_INCLUDE_DIRS += -I../Inspector -I../../Inspector
 ADDITIONAL_INCLUDE_DIRS += -I../Operation -I../../Operation
 
 # Additional LDFLAGS to pass to the linker
-ADDITIONAL_LDFLAGS +=  
+ADDITIONAL_LDFLAGS += -lX11 
 
 # Additional library directories the linker should search   
 ADDITIONAL_LIB_DIRS += -L../FSNode/FSNode.framework/Versions/Current/$(GNUSTEP_TARGET_LDIR)

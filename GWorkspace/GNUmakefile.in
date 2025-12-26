@@ -66,6 +66,7 @@ GWorkspace_LANGUAGES = \
 GWorkspace_OBJC_FILES = main.m \
 GWFunctions.m \
 GWorkspace.m \
+X11AppSupport.m \
 WorkspaceApplication.m \
 Desktop/GWDesktopManager.m \
 Desktop/GWDesktopWindow.m \
