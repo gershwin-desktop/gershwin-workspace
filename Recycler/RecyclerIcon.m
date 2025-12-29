@@ -256,6 +256,18 @@ static id <DesktopApplication> desktopApp = nil;
       
           if (![ws unmountAndEjectDeviceAtPath: umpath])
             {
+              // Try fallback with sudo eject
+              NSTask *task = [NSTask launchedTaskWithLaunchPath: @"sudo"
+                                                      arguments: [NSArray arrayWithObjects: @"-E", @"-A", @"eject", umpath, nil]];
+              if (task)
+                {
+                  [task waitUntilExit];
+                  if ([task terminationStatus] == 0)
+                    {
+                      continue;
+                    }
+                }
+              
               NSString *err = NSLocalizedString(@"Error", @"");
               NSString *msg = NSLocalizedString(@"You are not allowed to umount\n", @"");
               NSString *buttstr = NSLocalizedString(@"Continue", @"");
