@@ -1,4 +1,4 @@
-﻿/* GWorkspace German strings, updated by Ingolf Jandt 2006 */
+﻿/* Workspace German strings, updated by Ingolf Jandt 2006 */
 
 /* ----------------------- menu strings --------------------------- */
 /* main.m */
@@ -106,7 +106,7 @@
 
 "Author" = "Autor";
 "GNUstep Workspace Manager" = "GNUstep Workspace Manager";
-"See http://www.gnustep.it/enrico/gworkspace" = "Siehe https://www.gnustep.org/experience/Gworkspace.html";
+"See https://www.gnustep.org/experience/Workspace.html" = "Siehe https://www.gnustep.org/experience/Gworkspace.html";
 "Released under the GNU General Public License 2.0" = "Veröffentlicht unter der GNU General Public License 2.0";
 "Error" = "Fehler";
 "You have not write permission\nfor" = "Sie haben keine Schreibrechte\nfür";
@@ -115,7 +115,7 @@
 "File Viewer" = "Dateibetrachter";
 
 "Quit!" = "Beenden";
-"Do you really want to quit?" = "Wollen Sie GWorkspace wirklich beenden?";
+"Do you really want to quit?" = "Wollen Sie Workspace wirklich beenden?";
 "Yes" = "Ja";
 "No" = "Nein";
 
@@ -341,7 +341,7 @@ which ends in "kann <the file> nicht umbenennen"
 
 /* PreferencesWin.m */
 
-"Workspace Preferences" = "GWorkspace Grundeinstellungen";
+"Workspace Preferences" = "Workspace Grundeinstellungen";
 
 
 /* DefaultXTerm.m */             

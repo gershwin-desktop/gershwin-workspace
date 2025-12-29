@@ -16,7 +16,7 @@ SUBPROJECTS = Finder/Modules \
 # MAIN APP
 #
 APP_NAME = Workspace
-Workspace_PRINCIPAL_CLASS = GWorkspace
+Workspace_PRINCIPAL_CLASS = Workspace
 Workspace_APPLICATION_ICON=FileManager.tiff
 
 Workspace_HAS_RESOURCE_BUNDLE = yes
@@ -44,7 +44,7 @@ Workspace_RESOURCE_FILES = \
   Resources/Spanish.lproj \
   Resources/Japanese.lproj \
   Resources/Polish.lproj \
-  GWorkspaceInfo.plist
+  WorkspaceInfo.plist
 
 Workspace_LANGUAGES = \
   Resources/English \
@@ -65,7 +65,7 @@ Workspace_LANGUAGES = \
 # The Objective-C source files to be compiled
 Workspace_OBJC_FILES = main.m \
 GWFunctions.m \
-GWorkspace.m \
+Workspace.m \
 X11AppSupport.m \
 WorkspaceApplication.m \
 Desktop/GWDesktopManager.m \

@@ -68,7 +68,7 @@
 /* Workspace.m */
 
 "GNUstep Workspace Manager" = "GNUstep Workspace Manager";
-"See http://www.gnustep.it/enrico/gworkspace" = "Zie http://www.gnustep.it/enrico/gworkspace";
+"See https://www.gnustep.org/experience/Workspace.html" = "Zie https://www.gnustep.org/experience/Workspace.html";
 "Released under the GNU General Public License 2.0" = "Gepubliceerd onder de GNU General Public License 2.0";
 "Error" = "Fout";
 "You have not write permission\nfor" = "Je hebt geen schrijfrechten\nvoor";
@@ -253,7 +253,7 @@
 
 /* PreferencesWin.m */
 
-"Workspace Preferences" = "Configuratie van GWorkspace";
+"Workspace Preferences" = "Configuratie van Workspace";
 
 
 /* BackWinPreferences.m */       

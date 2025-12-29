@@ -156,7 +156,7 @@
   else
     {
       NSRunAlertPanel(nil, 
-		      NSLocalizedString(@"GWorkspace is logging out!", @""),
+		      NSLocalizedString(@"Workspace is logging out!", @""),
 		      NSLocalizedString(@"Ok", @""), 
 		      nil, 
 		      nil);  
@@ -244,7 +244,7 @@
 
   if (loggingout) {
     NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"GWorkspace is logging out!", @""),
+                  NSLocalizedString(@"Workspace is logging out!", @""),
 					        NSLocalizedString(@"Ok", @""), 
                   nil, 
                   nil);  
@@ -331,7 +331,7 @@
 
   if (loggingout) {
     NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"GWorkspace is logging out!", @""),
+                  NSLocalizedString(@"Workspace is logging out!", @""),
 					        NSLocalizedString(@"Ok", @""), 
                   nil, 
                   nil);  
@@ -388,7 +388,7 @@
 
   if (loggingout) {
     NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"GWorkspace is logging out!", @""),
+                  NSLocalizedString(@"Workspace is logging out!", @""),
 					        NSLocalizedString(@"Ok", @""), 
                   nil, 
                   nil);  
@@ -575,7 +575,7 @@
       appPath = appname;
     }
   
-  /* Check if this app is already running (either tracked by GWorkspace or found via X11) */
+  /* Check if this app is already running (either tracked by Workspace or found via X11) */
   if (appPath && appName) {
     GWLaunchedApp *existing = [self launchedAppWithPath: appPath andName: appName];
     if (existing && [existing isRunning]) {
@@ -1726,7 +1726,7 @@
   NS_HANDLER
     {
       NSLog(@"Unable to activate %@", name);
-      NSLog(@"GWorkspace caught exception %@: %@", 
+      NSLog(@"Workspace caught exception %@: %@", 
             [localException name], [localException reason]);
     }
   NS_ENDHANDLER
@@ -1759,7 +1759,7 @@
   NS_HANDLER
     {
       NSLog(@"Unable to hide %@", name);
-      NSLog(@"GWorkspace caught exception %@: %@", 
+      NSLog(@"Workspace caught exception %@: %@", 
             [localException name], [localException reason]);
     }
   NS_ENDHANDLER
@@ -1782,7 +1782,7 @@
   NS_HANDLER
     {
   NSLog(@"Unable to unhide %@", name);
-  NSLog(@"GWorkspace caught exception %@: %@", 
+  NSLog(@"Workspace caught exception %@: %@", 
 	        [localException name], [localException reason]);
     }
   NS_ENDHANDLER
@@ -1804,7 +1804,7 @@
       }
     NS_HANDLER
       {
-    NSLog(@"GWorkspace caught exception %@: %@", 
+    NSLog(@"Workspace caught exception %@: %@", 
 	                      [localException name], [localException reason]);
       }
     NS_ENDHANDLER
@@ -1873,7 +1873,7 @@
       }
     NS_HANDLER
       {
-    GWDebugLog(@"GWorkspace caught exception %@: %@", 
+    GWDebugLog(@"Workspace caught exception %@: %@", 
 	                      [localException name], [localException reason]);
       }
     NS_ENDHANDLER
@@ -1901,7 +1901,7 @@
       }
     NS_HANDLER
       {
-    GWDebugLog(@"GWorkspace caught exception %@: %@", 
+    GWDebugLog(@"Workspace caught exception %@: %@", 
 	                      [localException name], [localException reason]);
       }
     NS_ENDHANDLER

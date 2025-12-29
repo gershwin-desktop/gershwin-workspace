@@ -483,14 +483,14 @@ NSString *_pendingSystemActionTitle = nil;
 
   dtopManager = [GWDesktopManager desktopManager];
     
-  NSLog(@"DEBUG: GWorkspace init - no_desktop setting: %d", [defaults boolForKey: @"no_desktop"]);
+  NSLog(@"DEBUG: Workspace init - no_desktop setting: %d", [defaults boolForKey: @"no_desktop"]);
   if ([defaults boolForKey: @"no_desktop"] == NO)
   { 
     id item;
    
-    NSLog(@"DEBUG: GWorkspace calling activateDesktop");
+    NSLog(@"DEBUG: Workspace calling activateDesktop");
     [dtopManager activateDesktop];
-    NSLog(@"DEBUG: GWorkspace activateDesktop returned");
+    NSLog(@"DEBUG: Workspace activateDesktop returned");
     menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"Tools", @"")] submenu];
     item = [menu itemWithTitle: NSLocalizedString(@"Show Desktop", @"")];
     [item setTitle: NSLocalizedString(@"Hide Desktop", @"")];
@@ -674,7 +674,7 @@ NSString *_pendingSystemActionTitle = nil;
           NS_DURING
             [fswatcher unregisterClient: (id <FSWClientProtocol>)self];  
           NS_HANDLER
-            NSLog(@"[GWorkspace shouldTerminateApplication] unregister fswatcher: %@", [localException description]);
+            NSLog(@"[Workspace shouldTerminateApplication] unregister fswatcher: %@", [localException description]);
           NS_ENDHANDLER
           DESTROY (fswatcher);
         }
@@ -1111,7 +1111,7 @@ NSString *_pendingSystemActionTitle = nil;
 
   if (([fm fileExistsAtPath: basePath isDirectory: &isdir] && isdir) == NO) {
     if ([fm createDirectoryAtPath: basePath attributes: nil] == NO) {
-      NSLog(@"Can't create the GWorkspace directory! Quitting now.");
+      NSLog(@"Can't create the Workspace directory! Quitting now.");
       [NSApp terminate: self];
     }
   }

@@ -98,7 +98,7 @@ RELEASE (currentPref)
   [self activatePrefView: popUp];
 
   /*  Internationalization */
-  [win setTitle: NSLocalizedString(@"GWorkspace Preferences", @"")];
+  [win setTitle: NSLocalizedString(@"Workspace Preferences", @"")];
 }
 
 - (void)activate

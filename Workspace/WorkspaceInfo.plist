@@ -4,19 +4,19 @@
     ApplicationIcon = "FileManager.tiff";
     ApplicationRelease = "20250909";
     NSBuildVersion = "09 2025";
-    CFBundleIdentifier = "org.gnustep.GWorkspace";
+    CFBundleIdentifier = "org.gnustep.Workspace";
     Authors = (
       "Joseph Maloney",
       "Simon Peter",
       "",
-      "Based on GWorkspace by:",
+      "Based on Workspace by:",
       "Riccardo Mottola",
       "Enrico Sersale",
       "Documentation and Help contents by:",
       "Dennis Leeuw <dleeuw@made-it.com>"
     );
     URL = "https://www.github.com/gershwin-desktop/gershwin-desktop";
-    Copyright = "GWorkspace Copyright (C) 2003-2025 Free Software Foundation, Inc.";
+    Copyright = "Workspace Copyright (C) 2003-2025 Free Software Foundation, Inc.";
     CopyrightDescription = "Released under the GNU General Public License 2.0 or later";
     NSIcon = "FileManager.tiff";
     NSRole = "Viewer";
@@ -30,7 +30,7 @@
           default = "Open in Workspace";
         };
         NSMessage = openInWorkspace;
-        NSPortName = GWorkspace;
+        NSPortName = Workspace;
         NSSendTypes = ( NSStringPboardType );
       }
     );

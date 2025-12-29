@@ -73,7 +73,7 @@ int main(int argc, char** argv, char **env_c)
                                                                      host: @""];
       if (gworkspace == nil)
         {
-          NSLog(@"can't contact GWorkspace via %@. exiting now.", fpath);
+          NSLog(@"can't contact Workspace via %@. exiting now.", fpath);
           [pool release];
           exit(0);
         }

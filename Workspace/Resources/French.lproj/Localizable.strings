@@ -104,7 +104,7 @@
 /* Workspace.m */
 
 "GNUstep Workspace Manager" = "Gestionnaire de bureau de GNUstep";
-"See http://www.gnustep.it/enrico/gworkspace" = "http://www.gnustep.it/enrico/gworkspace";
+"See https://www.gnustep.org/experience/Workspace.html" = "https://www.gnustep.org/experience/Workspace.html";
 "Released under the GNU General Public License 2.0" = "Mise à disposition sous licence : GNU General Public License 2.0";
 "Error" = "Erreur";
 "You have not write permission\nfor" = "Vous n'avez pas les droits d'écrire\npour";
@@ -342,7 +342,7 @@
 
 /* PreferencesWin.m */
 
-"Workspace Preferences" = "Préférences de GWorkspace";
+"Workspace Preferences" = "Préférences de Workspace";
 
 
 /* XTermPref.m */    

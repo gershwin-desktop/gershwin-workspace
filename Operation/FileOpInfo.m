@@ -872,7 +872,7 @@ shouldMakeNewConnection:(NSConnection*)newConn
   if (([operation isEqual: @"WorkspaceRenameOperation"])
         || ([operation isEqual: @"WorkspaceCreateDirOperation"])
         || ([operation isEqual: @"WorkspaceCreateFileOperation"])) {
-    /* already checked by GWorkspace */
+    /* already checked by Workspace */
 	  return NO;
   }
   
