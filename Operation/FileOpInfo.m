@@ -6,7 +6,7 @@
  *         Riccardo Mottola <rm@gnu.org>
  * Date: March 2004
  *
- * This file is part of the GNUstep GWorkspace application
+ * This file is part of the GNUstep Workspace application
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -262,7 +262,7 @@ static NSString *nibName = @"FileOperationWin";
           msg2 = NSLocalizedString(@"\nto the Recycler", @"");
           msg = [NSString stringWithFormat: @"%@%@%@?", msg1, source, msg2];
         }
-      else if ([type isEqual: @"GWorkspaceRecycleOutOperation"])
+      else if ([type isEqual: @"WorkspaceRecycleOutOperation"])
         {
           title = NSLocalizedString(@"Recycler", @"");
           msg1 = [NSString stringWithFormat: @"%@ %@ %@ ", 
@@ -272,7 +272,7 @@ static NSString *nibName = @"FileOperationWin";
           msg2 = NSLocalizedString(@"\nto: ", @"");
           msg = [NSString stringWithFormat: @"%@%@%@?", msg1, msg2, destination];
         }
-      else if ([type isEqual: @"GWorkspaceEmptyRecyclerOperation"])
+      else if ([type isEqual: @"WorkspaceEmptyRecyclerOperation"])
         {
           title = NSLocalizedString(@"Recycler", @"");
           msg = NSLocalizedString(@"Empty the Recycler?", @"");
@@ -483,7 +483,7 @@ static NSString *nibName = @"FileOperationWin";
 	[toLabel setStringValue: NSLocalizedString(@"To:", @"")];
 	[toField setStringValue: NSLocalizedString(@"the Recycler", @"")];
       }
-    else if ([type isEqual: @"GWorkspaceRecycleOutOperation"])
+    else if ([type isEqual: @"WorkspaceRecycleOutOperation"])
       {
 	[win setTitle: NSLocalizedString(@"Move", @"")];
 	[fromLabel setStringValue: NSLocalizedString(@"From:", @"")];
@@ -491,7 +491,7 @@ static NSString *nibName = @"FileOperationWin";
 	[toLabel setStringValue: NSLocalizedString(@"To:", @"")];
 	[toField setStringValue: relativePathFittingInField(fromField, destination)];
       }
-    else if ([type isEqual: @"GWorkspaceEmptyRecyclerOperation"])
+    else if ([type isEqual: @"WorkspaceEmptyRecyclerOperation"])
       {
 	[win setTitle: NSLocalizedString(@"Destroy", @"")];
 	[fromLabel setStringValue: NSLocalizedString(@"In:", @"")];
@@ -647,7 +647,7 @@ static NSString *nibName = @"FileOperationWin";
               msg = @"Some items have the same name;\ndo you want to replace them?";
               title = @"Recycle";
             }
-          else if ([type isEqual: @"GWorkspaceRecycleOutOperation"])
+          else if ([type isEqual: @"WorkspaceRecycleOutOperation"])
             {
               msg = @"Some items have the same name;\ndo you want to replace them?";
               title = @"Recycle";
@@ -869,10 +869,10 @@ shouldMakeNewConnection:(NSConnection*)newConn
 
   samename = NO;
 
-  if (([operation isEqual: @"GWorkspaceRenameOperation"])
-        || ([operation isEqual: @"GWorkspaceCreateDirOperation"])
-        || ([operation isEqual: @"GWorkspaceCreateFileOperation"])) {
-    /* already checked by GWorkspace */
+  if (([operation isEqual: @"WorkspaceRenameOperation"])
+        || ([operation isEqual: @"WorkspaceCreateDirOperation"])
+        || ([operation isEqual: @"WorkspaceCreateFileOperation"])) {
+    /* already checked by Workspace */
 	  return NO;
   }
   
@@ -897,14 +897,14 @@ shouldMakeNewConnection:(NSConnection*)newConn
       if (([operation isEqual: NSWorkspaceMoveOperation]) 
           || ([operation isEqual: NSWorkspaceCopyOperation])
           || ([operation isEqual: NSWorkspaceLinkOperation])
-          || ([operation isEqual: @"GWorkspaceRecycleOutOperation"]))
+          || ([operation isEqual: @"WorkspaceRecycleOutOperation"]))
         {
           return YES;
         }
       else if (([operation isEqual: NSWorkspaceDestroyOperation]) 
                || ([operation isEqual: NSWorkspaceDuplicateOperation])
                || ([operation isEqual: NSWorkspaceRecycleOperation])
-               || ([operation isEqual: @"GWorkspaceEmptyRecyclerOperation"]))
+               || ([operation isEqual: @"WorkspaceEmptyRecyclerOperation"]))
         {
           return NO;
         } 
@@ -1006,7 +1006,7 @@ shouldMakeNewConnection:(NSConnection*)newConn
   canupdate = YES; 
 
   if ([operation isEqual: NSWorkspaceMoveOperation]
-      || [operation isEqual: @"GWorkspaceRecycleOutOperation"])
+      || [operation isEqual: @"WorkspaceRecycleOutOperation"])
     {
       [self doMove];
     }
@@ -1019,7 +1019,7 @@ shouldMakeNewConnection:(NSConnection*)newConn
       [self doLink];
     }
   else if ([operation isEqual: NSWorkspaceDestroyOperation]
-	   || [operation isEqual: @"GWorkspaceEmptyRecyclerOperation"])
+	   || [operation isEqual: @"WorkspaceEmptyRecyclerOperation"])
     {
       [self doRemove];
     }
@@ -1031,15 +1031,15 @@ shouldMakeNewConnection:(NSConnection*)newConn
     {
       [self doTrash];
     }
-  else if ([operation isEqual: @"GWorkspaceRenameOperation"])
+  else if ([operation isEqual: @"WorkspaceRenameOperation"])
     {
       [self doRename];
     }
-  else if ([operation isEqual: @"GWorkspaceCreateDirOperation"])
+  else if ([operation isEqual: @"WorkspaceCreateDirOperation"])
     {
       [self doNewFolder];
     }
-  else if ([operation isEqual: @"GWorkspaceCreateFileOperation"])
+  else if ([operation isEqual: @"WorkspaceCreateFileOperation"])
     {
       [self doNewFile];
     }

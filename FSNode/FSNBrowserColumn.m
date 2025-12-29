@@ -6,7 +6,7 @@
  *          Riccardo Mottola <rm@gnu.org>
  * Date: July 2004
  *
- * This file is part of the GNUstep GWorkspace application
+ * This file is part of the GNUstep Workspace application
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1471,7 +1471,7 @@ static id <DesktopApplication> desktopApp = nil;
 
   if ([source isEqual: trashPath])
     {
-      operation = @"GWorkspaceRecycleOutOperation";
+      operation = @"WorkspaceRecycleOutOperation";
     }
   else
     {
@@ -1718,7 +1718,7 @@ static id <DesktopApplication> desktopApp = nil;
 
       if ([source isEqual: trashPath])
 	{
-	  operation = @"GWorkspaceRecycleOutOperation";
+	  operation = @"WorkspaceRecycleOutOperation";
 	}
       else
 	{

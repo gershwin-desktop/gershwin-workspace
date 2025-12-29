@@ -894,7 +894,7 @@
   NSArray *files = [opinfo objectForKey: @"files"];
   NSUInteger i;
 
-  if ([operation isEqual: @"GWorkspaceRenameOperation"]) {      
+  if ([operation isEqual: @"WorkspaceRenameOperation"]) {      
     files = [NSArray arrayWithObject: [source lastPathComponent]]; 
     source = [source stringByDeletingLastPathComponent];            
   } 
@@ -902,10 +902,10 @@
   if ([self isSubnodeOfPath: source]) {
     if ([operation isEqual: NSWorkspaceMoveOperation]
         || [operation isEqual: NSWorkspaceDestroyOperation]
-        || [operation isEqual: @"GWorkspaceRenameOperation"]
+        || [operation isEqual: @"WorkspaceRenameOperation"]
 			  || [operation isEqual: NSWorkspaceRecycleOperation]
-			  || [operation isEqual: @"GWorkspaceRecycleOutOperation"]
-			  || [operation isEqual: @"GWorkspaceEmptyRecyclerOperation"]) { 
+			  || [operation isEqual: @"WorkspaceRecycleOutOperation"]
+			  || [operation isEqual: @"WorkspaceEmptyRecyclerOperation"]) { 
       for (i = 0; i < [files count]; i++) {
         NSString *fname = [files objectAtIndex: i];
         NSString *fpath = [source stringByAppendingPathComponent: fname];
@@ -922,7 +922,7 @@
           || [operation isEqual: NSWorkspaceCopyOperation]
           || [operation isEqual: NSWorkspaceLinkOperation]
 	|| [operation isEqual: NSWorkspaceRecycleOperation]
-	|| [operation isEqual: @"GWorkspaceRecycleOutOperation"]) { 
+	|| [operation isEqual: @"WorkspaceRecycleOutOperation"]) { 
       for (i = 0; i < [files count]; i++) {
         NSString *fname = [files objectAtIndex: i];
         NSString *fpath = [destination stringByAppendingPathComponent: fname];
@@ -968,7 +968,7 @@
   NSArray *files = [opinfo objectForKey: @"files"];    
   NSUInteger i;  	 
 
-  if ([operation isEqual: @"GWorkspaceRenameOperation"])
+  if ([operation isEqual: @"WorkspaceRenameOperation"])
     {
       files = [NSArray arrayWithObject: [source lastPathComponent]];
       source = [source stringByDeletingLastPathComponent];
@@ -994,7 +994,7 @@
         }
     }
 
-  if ([operation isEqual: @"GWorkspaceRenameOperation"])
+  if ([operation isEqual: @"WorkspaceRenameOperation"])
     {
       destination = [opinfo objectForKey: @"destination"];
       files = [NSArray arrayWithObject: [destination lastPathComponent]];

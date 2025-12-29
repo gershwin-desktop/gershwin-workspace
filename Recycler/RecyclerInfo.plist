@@ -7,7 +7,7 @@
     ApplicationName = "Recycler";
     ApplicationRelease = "1.1.0";
     NSBuildVersion = "02 2025";
-    CFBundleIdentifier = "org.gnustep.GWorkspace.Recycler";
+    CFBundleIdentifier = "org.gnustep.Workspace.Recycler";
     Authors = (
       "Riccardo Mottola",
       "Enrico Sersale"

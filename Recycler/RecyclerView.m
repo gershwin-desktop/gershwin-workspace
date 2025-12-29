@@ -198,15 +198,15 @@
     }
   }
 
-  if ([operation isEqual: @"GWorkspaceRecycleOutOperation"]
-			    || [operation isEqual: @"GWorkspaceEmptyRecyclerOperation"]
+  if ([operation isEqual: @"WorkspaceRecycleOutOperation"]
+			    || [operation isEqual: @"WorkspaceEmptyRecyclerOperation"]
           || [operation isEqual: NSWorkspaceMoveOperation]
           || [operation isEqual: NSWorkspaceDestroyOperation]) { 
     FSNode *node = [icon node];
     NSString *trashPath = [node path];
     NSString *basePath;
     
-    if ([operation isEqual: @"GWorkspaceEmptyRecyclerOperation"]
+    if ([operation isEqual: @"WorkspaceEmptyRecyclerOperation"]
                 || [operation isEqual: NSWorkspaceDestroyOperation]) { 
       basePath = destination;  
     } else {

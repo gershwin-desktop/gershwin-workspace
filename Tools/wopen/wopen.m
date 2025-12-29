@@ -1,6 +1,6 @@
 /*
  *  wopen.m: Implementation of the wopen tool 
- *  for the GNUstep GWorkspace application
+ *  for the GNUstep Workspace application
  *
  *  Copyright (C) 2002-2025 Free Software Foundation, Inc.
  *
@@ -69,11 +69,11 @@ int main(int argc, char** argv, char **env_c)
             }
         }
 
-      gworkspace = [NSConnection rootProxyForConnectionWithRegisteredName: @"GWorkspace"
+      gworkspace = [NSConnection rootProxyForConnectionWithRegisteredName: @"Workspace"
                                                                      host: @""];
       if (gworkspace == nil)
         {
-          NSLog(@"can't contact GWorkspace via %@. exiting now.", fpath);
+          NSLog(@"can't contact Workspace via %@. exiting now.", fpath);
           [pool release];
           exit(0);
         }

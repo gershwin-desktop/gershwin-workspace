@@ -35,3 +35,4 @@ derived_src
 *.finder
 *.framework
 *.extinfo
+autom4te.cache

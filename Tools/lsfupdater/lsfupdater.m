@@ -5,7 +5,7 @@
  * Author: Enrico Sersale <enrico@imago.ro>
  * Date: January 2005
  *
- * This file is part of the GNUstep GWorkspace application
+ * This file is part of the GNUstep Workspace application
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -285,7 +285,7 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
     }
 
   bundlesDir = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES) lastObject];
-  bundlesDir = [bundlesDir stringByAppendingPathComponent: @"GWorkspace"];
+  bundlesDir = [bundlesDir stringByAppendingPathComponent: @"Workspace"];
 
   if ([fm fileExistsAtPath: bundlesDir isDirectory: &isdir] && isdir) {
     [bundlesPaths addObjectsFromArray: [self bundlesWithExtension: @"finder" 
