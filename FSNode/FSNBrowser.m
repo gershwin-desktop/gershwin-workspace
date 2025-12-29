@@ -6,7 +6,7 @@
  *         Riccardo Mottola <rm@gnu.org>
  * Date: July 2004
  *
- * This file is part of the GNUstep GWorkspace application
+ * This file is part of the GNUstep Workspace application
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -1658,7 +1658,7 @@
 {
   NSString *operation = [info objectForKey: @"operation"];
   
-  if ([operation isEqual: @"GWorkspaceRenameOperation"] == NO) {
+  if ([operation isEqual: @"WorkspaceRenameOperation"] == NO) {
     [self checkLockedReps];
   }
 }
@@ -1670,7 +1670,7 @@
   NSString *destination = [info objectForKey: @"destination"];
   NSArray *files = [info objectForKey: @"files"];
   
-  if ([operation isEqual: @"GWorkspaceRenameOperation"]) {
+  if ([operation isEqual: @"WorkspaceRenameOperation"]) {
     files = [NSArray arrayWithObject: [destination lastPathComponent]];
     destination = [destination stringByDeletingLastPathComponent]; 
   }
@@ -1683,11 +1683,11 @@
         || [operation isEqual: NSWorkspaceCopyOperation]
         || [operation isEqual: NSWorkspaceLinkOperation]
         || [operation isEqual: NSWorkspaceDuplicateOperation]
-        || [operation isEqual: @"GWorkspaceCreateDirOperation"]
-        || [operation isEqual: @"GWorkspaceCreateFileOperation"]
+        || [operation isEqual: @"WorkspaceCreateDirOperation"]
+        || [operation isEqual: @"WorkspaceCreateFileOperation"]
         || [operation isEqual: NSWorkspaceRecycleOperation]
-        || [operation isEqual: @"GWorkspaceRenameOperation"]
-			  || [operation isEqual: @"GWorkspaceRecycleOutOperation"]) { 
+        || [operation isEqual: @"WorkspaceRenameOperation"]
+			  || [operation isEqual: @"WorkspaceRecycleOutOperation"]) { 
     FSNBrowserColumn *bc = [self columnWithPath: destination];        
    
     if (bc) {
@@ -1696,11 +1696,11 @@
       if ([[self window] isKeyWindow]) {
         BOOL selectCell = NO;
       
-        if ([operation isEqual: @"GWorkspaceCreateFileOperation"]
-                || [operation isEqual: @"GWorkspaceCreateDirOperation"]) {  
+        if ([operation isEqual: @"WorkspaceCreateFileOperation"]
+                || [operation isEqual: @"WorkspaceCreateDirOperation"]) {  
           selectCell = YES;
           
-        } else if ([operation isEqual: @"GWorkspaceRenameOperation"]) { 
+        } else if ([operation isEqual: @"WorkspaceRenameOperation"]) { 
           NSString *newname = [files objectAtIndex: 0];
           NSString *newpath = [destination stringByAppendingPathComponent: newname];
           
@@ -1719,8 +1719,8 @@
   if ([operation isEqual: NSWorkspaceMoveOperation]
         || [operation isEqual: NSWorkspaceDestroyOperation]
 				|| [operation isEqual: NSWorkspaceRecycleOperation]
-				|| [operation isEqual: @"GWorkspaceRecycleOutOperation"]
-				|| [operation isEqual: @"GWorkspaceEmptyRecyclerOperation"]) {
+				|| [operation isEqual: @"WorkspaceRecycleOutOperation"]
+				|| [operation isEqual: @"WorkspaceEmptyRecyclerOperation"]) {
     if ([self isShowingPath: source]) {
       [self reloadFromColumnWithPath: source]; 
     }
@@ -2329,7 +2329,7 @@
 	  }
       }
 
-      [opinfo setObject: @"GWorkspaceRenameOperation" forKey: @"operation"];	
+      [opinfo setObject: @"WorkspaceRenameOperation" forKey: @"operation"];	
       [opinfo setObject: [ednode path] forKey: @"source"];	
       [opinfo setObject: newpath forKey: @"destination"];	
       [opinfo setObject: [NSArray arrayWithObject: @""] forKey: @"files"];	

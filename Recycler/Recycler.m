@@ -216,7 +216,7 @@ static Recycler *recycler = nil;
     NSString *appName = [defaults stringForKey: @"GSWorkspaceApplication"];
 
     if (appName == nil) {
-      appName = @"GWorkspace";
+      appName = @"Workspace";
     }
   
     workspaceApplication = [NSConnection rootProxyForConnectionWithRegisteredName: appName
@@ -411,7 +411,7 @@ static Recycler *recycler = nil;
                            tag: &tag] == NO)
     {
       NSRunAlertPanel(nil, 
-                      NSLocalizedString(@"Unable to contact GWorkspace", @""), 
+                      NSLocalizedString(@"Unable to contact Workspace", @""), 
                       NSLocalizedString(@"OK", @""), nil, nil);                                     
     }
 }
@@ -489,7 +489,7 @@ static Recycler *recycler = nil;
       [files addObject: [(FSNode *)[subNodes objectAtIndex: i] name]];
     }
     
-    [self performFileOperation: @"GWorkspaceEmptyRecyclerOperation"
+    [self performFileOperation: @"WorkspaceEmptyRecyclerOperation"
 		                    source: trashPath
 		               destination: trashPath
 		                     files: files];
@@ -525,7 +525,7 @@ static Recycler *recycler = nil;
         
           if (cut) {
             if ([source isEqual: trashPath]) {
-              operation = @"GWorkspaceRecycleOutOperation";
+              operation = @"WorkspaceRecycleOutOperation";
             } else {
 		          operation = NSWorkspaceMoveOperation;
             }

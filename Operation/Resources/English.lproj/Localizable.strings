@@ -61,7 +61,7 @@
 	
 /* ----------------------- File Operations strings --------------------------- *\
 
-/* GWorkspace.m */
+/* Workspace.m */
 
 "GNUstep Workspace Manager" = "GNUstep Workspace Manager";
 "See http://www.gnustep.it/enrico/gworkspace" = "See http://www.gnustep.it/enrico/gworkspace";
@@ -254,7 +254,7 @@
 
 /* PreferencesWin.m */
 
-"GWorkspace Preferences" = "GWorkspace Preferences";
+"Workspace Preferences" = "Workspace Preferences";
 
 
 /* BackWinPreferences.m */       

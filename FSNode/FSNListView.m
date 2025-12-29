@@ -929,7 +929,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
   [self stopRepNameEditing];
 
-  if ([operation isEqual: @"GWorkspaceRenameOperation"])
+  if ([operation isEqual: @"WorkspaceRenameOperation"])
     {
       files = [NSArray arrayWithObject: [source lastPathComponent]];
       source = [source stringByDeletingLastPathComponent];
@@ -946,8 +946,8 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
       if ([operation isEqual: NSWorkspaceMoveOperation]
 	  || [operation isEqual: NSWorkspaceDestroyOperation]
 	  || [operation isEqual: NSWorkspaceRecycleOperation]
-	  || [operation isEqual: @"GWorkspaceRenameOperation"]
-	  || [operation isEqual: @"GWorkspaceRecycleOutOperation"]) {
+	  || [operation isEqual: @"WorkspaceRenameOperation"]
+	  || [operation isEqual: @"WorkspaceRecycleOutOperation"]) {
 
 	if ([operation isEqual: NSWorkspaceRecycleOperation]) {
 	  files = [info objectForKey: @"origfiles"];
@@ -963,7 +963,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
       }
     }
 
-  if ([operation isEqual: @"GWorkspaceRenameOperation"])
+  if ([operation isEqual: @"WorkspaceRenameOperation"])
     {
       files = [NSArray arrayWithObject: [destination lastPathComponent]];
       destination = [destination stringByDeletingLastPathComponent];
@@ -974,11 +974,11 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 	  || [operation isEqual: NSWorkspaceCopyOperation]
 	  || [operation isEqual: NSWorkspaceLinkOperation]
 	  || [operation isEqual: NSWorkspaceDuplicateOperation]
-	  || [operation isEqual: @"GWorkspaceCreateDirOperation"]
-	  || [operation isEqual: @"GWorkspaceCreateFileOperation"]
+	  || [operation isEqual: @"WorkspaceCreateDirOperation"]
+	  || [operation isEqual: @"WorkspaceCreateFileOperation"]
 	  || [operation isEqual: NSWorkspaceRecycleOperation]
-	  || [operation isEqual: @"GWorkspaceRenameOperation"]
-	  || [operation isEqual: @"GWorkspaceRecycleOutOperation"]))
+	  || [operation isEqual: @"WorkspaceRenameOperation"]
+	  || [operation isEqual: @"WorkspaceRecycleOutOperation"]))
     {
 
       if ([operation isEqual: NSWorkspaceRecycleOperation])
@@ -1013,9 +1013,9 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
       if ([[listView window] isKeyWindow])
 	{
-	  if ([operation isEqual: @"GWorkspaceRenameOperation"]
-	      || [operation isEqual: @"GWorkspaceCreateDirOperation"]
-	      || [operation isEqual: @"GWorkspaceCreateFileOperation"])
+	  if ([operation isEqual: @"WorkspaceRenameOperation"]
+	      || [operation isEqual: @"WorkspaceCreateDirOperation"]
+	      || [operation isEqual: @"WorkspaceCreateFileOperation"])
 	    {
 	      NSString *fname = [files objectAtIndex: 0];
 	      NSString *fpath = [destination stringByAppendingPathComponent: fname];
@@ -1628,7 +1628,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
           }
       }
 
-      [opinfo setObject: @"GWorkspaceRenameOperation" forKey: @"operation"];
+      [opinfo setObject: @"WorkspaceRenameOperation" forKey: @"operation"];
       [opinfo setObject: [ednode path] forKey: @"source"];
       [opinfo setObject: newpath forKey: @"destination"];
       [opinfo setObject: [NSArray arrayWithObject: @""] forKey: @"files"];
@@ -1981,7 +1981,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
       if ([source isEqual: trashPath])
         {
-          operation = @"GWorkspaceRecycleOutOperation";
+          operation = @"WorkspaceRecycleOutOperation";
         }
 
       else
@@ -2547,7 +2547,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
   if ([source isEqual: trashPath])
     {
-      operation = @"GWorkspaceRecycleOutOperation";
+      operation = @"WorkspaceRecycleOutOperation";
     }
   else
     {

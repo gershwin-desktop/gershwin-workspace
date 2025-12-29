@@ -6,7 +6,7 @@
  *         Riccardo Mottola <rm@gnu.org>
  * Date: February 2004
  *
- * This file is part of the GNUstep GWorkspace application
+ * This file is part of the GNUstep Workspace application
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -407,7 +407,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
   if ([operation isEqual: NSWorkspaceMoveOperation] 
                 || [operation isEqual: NSWorkspaceCopyOperation]
                 || [operation isEqual: NSWorkspaceDuplicateOperation]
-                || [operation isEqual: @"GWorkspaceRenameOperation"]) {
+                || [operation isEqual: @"WorkspaceRenameOperation"]) {
     CREATE_AUTORELEASE_POOL(arp);
     NSString *source = [updinfo objectForKey: @"source"];
     NSString *destination = [updinfo objectForKey: @"destination"];
@@ -417,7 +417,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
     NSMutableArray *dstpaths = [NSMutableArray array];
     NSUInteger i;
     
-    if ([operation isEqual: @"GWorkspaceRenameOperation"]) {
+    if ([operation isEqual: @"WorkspaceRenameOperation"]) {
       srcpaths = [NSMutableArray arrayWithObject: source];
       dstpaths = [NSMutableArray arrayWithObject: destination];
     } else {

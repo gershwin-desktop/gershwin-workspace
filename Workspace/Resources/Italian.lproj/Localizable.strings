@@ -1,0 +1,436 @@
+﻿/* ----------------------- menu strings --------------------------- */
+/* main.m */
+
+"Info" = "Info";
+	"Info Panel..." = "Pannello Informazioni...";
+	"Preferences..." = "Preferenze...";
+	"Help..." = "Aiuto...";
+        "Activate context help" = "Attiva guida contestuale";
+
+"File" = "Archivio";
+	"Open" = "Apri";
+        "Open With..." = "Apri con...";
+	"Open as Folder" = "Apri come Cartella";
+	"Edit File" = "Modifica File";
+	"New Folder" = "Nuova Cartella";
+	"New File" = "Nuovo File";
+	"Duplicate" = "Duplica";	
+	"Destroy" = "Distruggi";
+        "Move to Recycler" = "Sposta nel Cestino";
+	"Empty Recycler" = "Vuota il Cestino";
+
+"Edit" = "Modifica";
+	"Cut" = "Taglia";
+	"Copy" = "Copia";
+	"Paste" = "Incolla";
+	"Select All" = "Seleziona tutto";
+		
+"View" = "Vista";
+	"Browser" = "Browser";
+	"Icon" = "Icone";
+        "List" = "Lista";
+        "Show" = "Mostra";
+	        "Name only" = "Nome soltanto";
+		"Type" = "Tipo";
+		"Size" = "Dimensione";
+		"Modification date" = "Data modifica";
+                "Owner" = "Proprietario";
+        "Icon Size" = "Dimensione Icone";
+	"Icon Position" = "Posizione Icone";
+	      	"Up" = "Alto";
+		"Left" = "Sinistra";
+	"Label Size" = "Dimensione Etichette";
+        "Make thumbnail(s)" = "Crea miniature";
+        "Remove thumbnail(s)" = "Rimuovi miniature";
+ 
+"Tools" = "Strumenti";
+	"Viewer" = "Vista";
+	"Inspectors" = "Ispettori";
+		"Show Inspectors" = "Mostra gli Ispettori";
+		"Attributes" = "Attributi";
+		"Contents" = "Contenuto";
+                "Annotations" = "Annotazioni";
+	"Finder" = "Finder";
+	"Fiend" = "Folletto";
+		"Show Fiend" = "Mostra il Folletto";
+		"Hide Fiend" = "Nascondi il Folletto";
+		"Add Layer..." = "Aggiungi un Livello...";
+		"Remove Current Layer" = "Rimuovi il Livello corrente";
+		"Rename Current Layer" = "Rinomina il Livello corrente";
+		"Layers" = "Livelli";
+	"Tabbed Shelf" = "Scaffalatura";	
+		"Show Tabbed Shelf" = "Mostra Scaffalatura";
+                "Hide Tabbed Shelf" = "Nascondi Scaffalatura";
+		"Remove Current Tab" = "Rimuovi Scaffale Corrente";
+		"Rename Current Tab" = "Rinomina Scaffale Corrente";
+		"Add Tab..." = "Aggiungi Scaffale...";
+	"Terminal" = "Terminale";
+	"Run..." = "Esegui...";
+	"History" = "Cronologia";
+		"Show History" = "Mostra Cronologia";
+		"Go backward" = "Indietro";
+		"Go forward" = "Avanti";
+        "Show Desktop" = "Mostra Scrivania";
+        "Hide Desktop" = "Nascondi Scrivania";
+	"Show Recycler" = "Mostra Cestino";
+        "Hide Recycler" = "Nascondi Cestino";
+	"Check for disks" = "Verifica dischi";
+
+"Windows" = "Finestre";
+	"Arrange in Front" = "Porta davanti";
+	"Miniaturize Window" = "Miniaturizza la Finestra";
+	"Close Window" = "Chiudi Finestra";
+	
+"Services" = "Servizi";
+
+"Hide" = "Nascondi";
+"Hide Others" = "Nascondi Altri";
+"Show All" = "Mostra Tutti";
+
+"Print..." = "Stampa...";
+
+"Quit" = "Esci";
+
+"Logout" = "Termina Sessione";
+
+/* ----------------------- File Operations strings --------------------------- *\
+
+/* Workspace.m */
+
+"GNUstep Workspace Manager" = "Workspace Manager per GNUstep";
+"See http://www.gnustep.it/enrico/gworkspace" = "Vai a https://www.gnustep.org/experience/Gworkspace.html";
+"Released under the GNU General Public License 2.0" = "Rilasciato sotto la GNU General Public License 2.0";
+
+"Error" = "Errore";
+"You have not write permission\nfor" = "Non hai permesso di scrittura\nper";
+"Continue" = "Continua";
+
+"File Viewer" = "File Viewer";
+
+"Quit!" = "Termina!";
+"Do you really want to quit?" = "Terminare veramente?";
+"Yes" = "Sì";
+"No" = "No";
+
+"Log out" = "Log out";
+"Are you sure you want to quit\nall applications and log out now?" = "Terminare tutte le applicazioni ed\nall eseguire log out ora?";
+"If you do nothing, the system will log out\nautomatically in " = "Se non si esegue nulla, il sistema terminerà\nautomaticamente in ";
+"seconds." = "secondi.";
+
+/* FileOperation.m */
+
+"OK" = "OK";
+"Cancel" = "Annulla";
+"Move" = "Muovi";
+"Move from: " = "Spostare da: ";
+"\nto: " = "\na: ";
+"Copy" = "Copia";
+"Copy from: " = "Copiare da: ";
+"Link" = "Collega";
+"Link " = "Collega ";
+"Delete" = "Cancella";
+"Delete the selected objects?" = "Cancellare gli oggetti selezionati?";
+"Duplicate" = "Duplica";
+"Duplicate the selected objects?" = "Duplicare gli oggetti selezionati?";
+"From:" = "Da:";
+"To:" = "A:";
+"In:" = "In:";
+"Stop" = "Stop";
+"Pause" = "Pausa";
+"Moving" = "Sposta";
+"Linking" = "Collega";
+"Duplicating" = "Duplica";
+"Destroying" = "Cancellazione";
+"File Operation Completed" = "Operazione Terminata";
+"Backgrounder connection died!" = "La connessione con Backgrounder è terminata!";
+"Some items have the same name;\ndo you want to sobstitute them?" = "Alcuni elementi hanno lo stesso nome;\nSostituirli?";
+"File Operation Error!" = "Errore nell'operazione sui files!";
+
+
+/* ColumnIcon.m */
+
+"You have not write permission\nfor " = "Non hai permesso di scrittura\nper ";
+"The name " = "Il nome ";
+" is already in use!" = " e già in uso!";
+"Cannot rename " = "Non posso rinominare ";
+"Invalid char in name" = "Carattere non valido nel nome";
+
+/* ----------------------------- Viewers Strings ----------------------------- */
+
+/* GWViewer.m */
+"free" = "liberi";
+
+/* GWViewersManager.m */
+
+"Are you sure you want to open" = "Sicuri di aprire";
+"items?" = "elementi?";
+"error" = "errore";
+"Can't open " = "Impossibile aprire ";
+
+/* ----------------------- Inspectors strings --------------------------- */
+
+"Items" = "Elementi";
+
+/* Attributes.m */
+
+"Attributes Inspector" = "Ispettore Attributi";
+"Path:" = "Path:";
+"Link to:" = "Coll. a:";
+"Size:" = "Dimens.:";
+"Calculate" = "Calcola";
+"Owner:" = "Propr.:";
+"Group:" = "Gruppo:";
+"Changed" = "Modificato";
+"Revert" = "Annulla";
+"also apply to files inside selection" = "Applica a sottocartelle";
+"Permissions" = "Permessi";
+"Read" = "Lettura";
+"Write" = "Scrittura";
+"Execute" = "Esec.";
+"Owner_short" = "Propr.";
+"Group" = "Gruppo";
+"Other" = "Altri";
+
+/* ContentsPanel.m */
+
+"Contents Inspector" = "Ispettore Contenuti";
+"No Contents Inspector" = "Nessun Ispettore Contenuti";
+"No Contents Inspector\nFor Multiple Selection" = "Nessun Ispettore\nper selezione multipla";
+
+
+/* FolderViewer.m */
+
+"Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder"
+  = "L'ordinamento si applica al\ncontenuto della cartella selezionata,\nNON alla directory che la contiene";
+"Sort by" = "Ordinamento";
+"Name" = "Nome";
+"Date" = "Data";
+"Folder Inspector" = "Ispettore Cartelle";	
+
+
+/* ImageViewer.m */
+
+"Image Inspector" = "Ispettore Immagini";
+
+
+/* AppViewer.m */
+
+"Open these kinds of documents:" = "Apre questo tipo di documenti:";
+"Invalid Contents" = "Contenuto non valido";
+"App Inspector" = "Ispettore App";
+
+
+
+
+/* ToolsPanel.m */
+
+"Tools Inspector" = "Ispettore Strumenti";
+"No Tools Inspector" = "Nessun Ispettore Strumenti";
+"Set Default" = "Imp. Predefinito";
+
+
+
+/* ----------------------- Finder strings --------------------------- *\
+
+/* Finder.m */
+
+"Finder" = "Ricerca";
+"No selection!" = "Nessuna selezione!";
+"No arguments!" = "Nessun argomento!";
+"Search in:" = "Cerca in:";
+"Current selection" = "Selezione corrente";
+"Add" = "Aggiungi";
+"Remove" = "Rimuovi";
+"Search for items whose:" = "Cerca per elementi che:";
+"Specific places" = "Posti specifici";
+"Recursive" = "Ricorsivamente";
+"Search" = "Cerca";
+
+/* names */
+"contains" = "contiene";
+"is" = "è";
+"contains not" = "non contiene";
+"starts with" = "inizia con";
+"ends with" = "termina con";
+"name" = "Nome";
+
+/* size */
+"size"="Dimensione";
+"greater than"="maggiore di";
+"less than"="minore di";
+
+/* annotations */
+"annotations"="Annotazioni";
+"contains one of"="contiene uno di";
+"contains all of"="contiene tutti";
+"with exactly"="con esattamente";
+"without one of"="escludendo";
+
+/* owner */
+"owner"="Proprietario";
+
+/* date */
+"date created"="Data creazione";
+"date modified"="Data modifica";
+"is today" = "è oggi";
+"is within" = "è";
+"is before" = "è prima";
+"is after" = "è dopo";
+"is exactly" = "è esattamente";
+"the last day" = "Ieri";
+"the last 2 days" = "Ultimi 2 giorni";
+"the last 3 days" =  "Ultimi 3 giorni";
+"the last week" = "Ultima settimana";
+"the last 2 weeks" = "Ultime 2 settimane";
+"the last 3 weeks" = "Ultime 3 settimane";
+"the last month" = "Ultimo mese";
+"the last 2 months" = "Ultimi 2 mesi";
+"the last 3 months" = "Ultimi 3 mesi";
+"the last 6 months" = "Ultimi 6 mesi";
+
+
+/* type */
+"type"="Tipo";
+"is not" = "non è";
+"plain file" = "Archivio";
+"folder" = "Cartella";
+"tool" = "Strumento";
+"symbolic link" = "Collegamento simbolico";
+"application" = "Applicazione";
+
+/* contents */
+"contents"="Contenuto";
+"includes"="contiene";
+
+/* ----------------------- Fiend strings --------------------------- *\
+
+/* Fiend.m */
+
+"New Layer" = "Nuovo Livello";
+"A layer with this name is already present!" = "E' già presente un livello vcon lo stesso nome!";
+"You can't remove the last layer!" = "Non si può eliminare l'ultimo livello!";
+"Remove layer" = "Rimuovi livello";
+"Are you sure that you want to remove this layer?" = "Sei sicuro di voler rimuovere questo livello?";
+"Rename Layer" = "Rinomina Livello";
+"You can't dock multiple paths!" = "Non puoi aggiungere percorsi multipli!";
+"This object is already present in this layer!" = "Questo oggetto e già presente in questo layer!";
+
+
+/* ----------------------- Preferences strings --------------------------- *\
+
+/* PreferencesWin.m */
+
+"Workspace Preferences" = "Preferenze di GWorkspace";
+
+
+/* DefaultXTerm.m */             
+	
+"Terminal" = "Terminale";
+"Set" = "Scegli";
+"Use Terminal service" = "Utilizza il servizio Terminale";
+"arguments" = "argomenti";
+	
+	
+/* BrowserViewerPref.m */  
+	
+"Column Width" = "Larg. Colonne";
+"Use Default Settings" = "Usa i valori default";	
+	
+	
+/* DefaultEditor.m */            
+
+"Editor" = "Editore";
+"Default Editor" = "Editore Default";
+"No Default Editor" = "Nessun Editore Default";
+"Choose" = "Scegli";
+
+/* DefSortOrderPref.m */
+"Sorting Order" = "Ordinamento";
+"The method will apply to all the folders" = "Il metodo scelto si applicherà a tutte le cartelle";
+"that have no order specified" = "che non ne hanno uno specificato.";
+
+/* HiddenFilesPref.m */
+"Hidden Files" = "Archivi Nascosti";
+"Files" = "Archivi";
+"Folders" = "Cartelle";
+"Activate changes" = "Attiva modifiche";
+"Load" = "Carica";
+"Hidden files" = "File nascosti";
+"Shown files" = "File visualizzati";
+"Select and move the files to hide or to show" = "Seleziona e sposta gli archivi da mostrare o nascondere";
+"Hidden directories" = "Cartelle nascoste";
+
+/* IconsPrefs.m */
+
+"Icons" = "Icone";
+"Thumbnails" = "Miniature";
+"use thumbnails" = "Usa miniature";
+"Title Width" = "Larg. Titolo";
+
+
+/* DesktopPref.m */
+"Desktop" = "Scrivania";
+"Background"="Sfondo";
+"General"="Generale";
+"Color:" = "Colore:";
+"center" = "Centra";
+"fit" = "Adatta";
+"tile" = "Piastrella";
+"scale" = "Scala";
+"Use image"="Usa Immagine";
+"Choose"="Scegli";
+"Dock" = "Molo";
+"Show Dock"="Mostra Molo";
+"Position:"="Posizione:";
+"Style:"="Stile:";
+"Left"="Sinistra";
+"Right"="Destra";
+"Classic"="Classico";
+"Modern"="Moderno";
+
+"Omnipresent"="Onnipresente";
+"Autohide Tabbed Shelf"="Nascondi Scaffale Automaticamente";
+"Single Click Launch"="Avvio con click singolo";
+
+/* OperationPrefs.m */
+"File Operations" = "Operazioni Archivi";
+"Operation Preferences"="Preferenze Operazioni";
+"Status Window"="Finestra di Stato";
+"Confirmation"="Conferma";
+"Show status window"="Mostra finestra di stato";
+"Check this option to show a status window"="Spunta per mostrare una finestra di stato";
+"during the file operations"="durante le operazioni sugli archivi";
+"Uncheck the buttons to allow automatic confirmation"="Togliere la spunta per conferma automatica";
+"of file operations"="delle operazioni";
+
+/* HistoryPref.m */
+"Number of saved paths"="Numero di percorsi salvati";
+
+/* -------- */
+
+/* OpenWithController */
+"Open With" = "Apri Con";
+"Type the name or the path of the application" = "Digitare il comando o il percorso dell'applicazione";
+"to use to open the current selection" = "da usare per aprire la selezione corrente";
+
+/* RunExternalController.m */
+"Run" = "Esegui";
+"Type the command to execute:"="Digitare il comando da esegure";
+
+
+/* Recycler strings */
+
+"Recycle: " = "Cestinare: ";
+"Recycler: " = "Cestino: ";
+"Recycler" = "Cestino";
+"the Recycler" = "il Cestino";
+"\nto the Recycler" = "\nnel Cestino";
+"Move from the Recycler " = "Sposta dal Cestino ";
+"In" = "In";
+"Empty Recycler" = "Svuotare il Cestino";
+"Empty the Recycler?" = "Svuotare il Cestino?";
+"Put Away" = "Ripristina";
+
+
+
+

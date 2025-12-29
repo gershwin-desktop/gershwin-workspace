@@ -5,7 +5,7 @@
  * Author: Enrico Sersale <enrico@imago.ro>
  * Date: March 2004
  *
- * This file is part of the GNUstep GWorkspace application
+ * This file is part of the GNUstep Workspace application
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -89,9 +89,9 @@
 
   opfiles = files;
 
-  if ([operation isEqual: @"GWorkspaceRenameOperation"]
-      || [operation isEqual: @"GWorkspaceCreateDirOperation"]
-      || [operation isEqual: @"GWorkspaceCreateFileOperation"])
+  if ([operation isEqual: @"WorkspaceRenameOperation"]
+      || [operation isEqual: @"WorkspaceCreateDirOperation"]
+      || [operation isEqual: @"WorkspaceCreateFileOperation"])
     {    
       confirm = NO;
       usewin = NO;
@@ -103,7 +103,7 @@
       || [operation isEqual: NSWorkspaceDuplicateOperation]
       || [operation isEqual: NSWorkspaceRecycleOperation]
       || [operation isEqual: NSWorkspaceDestroyOperation] 
-      || [operation isEqual: @"GWorkspaceRecycleOutOperation"])
+      || [operation isEqual: @"WorkspaceRecycleOutOperation"])
     {
       opbase = source;
     }
@@ -112,7 +112,7 @@
       opbase = destination;
     }
 
-  if ([operation isEqual: @"GWorkspaceRenameOperation"])
+  if ([operation isEqual: @"WorkspaceRenameOperation"])
     {
       opfiles = [NSArray arrayWithObject: [source lastPathComponent]];
       opbase = [source stringByDeletingLastPathComponent];
@@ -121,11 +121,11 @@
   action = MOVE;
   if ([operation isEqual: NSWorkspaceMoveOperation]
       || [operation isEqual: NSWorkspaceRecycleOperation]
-      || [operation isEqual: @"GWorkspaceRecycleOutOperation"])
+      || [operation isEqual: @"WorkspaceRecycleOutOperation"])
     {    
       action = MOVE;
     } else if ([operation isEqual: NSWorkspaceDestroyOperation] 
-	       || [operation isEqual: @"GWorkspaceEmptyRecyclerOperation"])
+	       || [operation isEqual: @"WorkspaceEmptyRecyclerOperation"])
     {
       action = DESTROY;
     } else if ([operation isEqual: NSWorkspaceCopyOperation] 
@@ -133,11 +133,11 @@
 	       || [operation isEqual: NSWorkspaceDuplicateOperation]) 
     {
       action = COPY;
-    } else if ([operation isEqual: @"GWorkspaceRenameOperation"])
+    } else if ([operation isEqual: @"WorkspaceRenameOperation"])
     {
       action = RENAME;
-    } else if ([operation isEqual: @"GWorkspaceCreateDirOperation"] 
-	       || [operation isEqual: @"GWorkspaceCreateFileOperation"])
+    } else if ([operation isEqual: @"WorkspaceCreateDirOperation"] 
+	       || [operation isEqual: @"WorkspaceCreateFileOperation"])
     {
       action = CREATE;
     }
@@ -258,7 +258,7 @@
 
   if ([optype isEqual: NSWorkspaceMoveOperation]
                     || [optype isEqual: NSWorkspaceRecycleOperation]
-                    || [optype isEqual: @"GWorkspaceRecycleOutOperation"]) {
+                    || [optype isEqual: @"WorkspaceRecycleOutOperation"]) {
     //
     // source
     //
@@ -318,7 +318,7 @@
   }
 
   if ([optype isEqual: NSWorkspaceDestroyOperation]
-            || [optype isEqual: @"GWorkspaceEmptyRecyclerOperation"]) {
+            || [optype isEqual: @"WorkspaceEmptyRecyclerOperation"]) {
     //             
     // destination
     //
@@ -413,8 +413,8 @@
   BOOL valid;
   BOOL isDir;
   
-  if (operation && ([operation isEqual: @"GWorkspaceCreateDirOperation"]
-                  || [operation isEqual: @"GWorkspaceCreateFileOperation"]))
+  if (operation && ([operation isEqual: @"WorkspaceCreateDirOperation"]
+                  || [operation isEqual: @"WorkspaceCreateFileOperation"]))
     {    
       chpath = [path stringByDeletingLastPathComponent];
     }
@@ -458,8 +458,8 @@
       if ([operation isEqual: NSWorkspaceMoveOperation]
           || [operation isEqual: NSWorkspaceRecycleOperation]
           || [operation isEqual: NSWorkspaceDestroyOperation] 
-          || [operation isEqual: @"GWorkspaceRecycleOutOperation"]
-          || [operation isEqual: @"GWorkspaceRenameOperation"])
+          || [operation isEqual: @"WorkspaceRecycleOutOperation"]
+          || [operation isEqual: @"WorkspaceRenameOperation"])
         {
           if (isDir)
             {

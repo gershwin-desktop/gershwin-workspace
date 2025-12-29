@@ -5,7 +5,7 @@
  * Author: Enrico Sersale <enrico@fibernet.ro>
  * Date: January 2007
  *
- * This file is part of the GNUstep GWorkspace application
+ * This file is part of the GNUstep Workspace application
  *
  * This program is free software; you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -276,24 +276,24 @@ static MDFinder *mdfinder = nil;
 - (void)connectWorkspaceApp
 {
   if (workspaceApp == nil) {
-    workspaceApp = [NSConnection rootProxyForConnectionWithRegisteredName: @"GWorkspace" 
+    workspaceApp = [NSConnection rootProxyForConnectionWithRegisteredName: @"Workspace" 
                                                                      host: @""];
 
     if (workspaceApp == nil) {
       int i;
     
       [startAppWin showWindowWithTitle: @"MDFinder"
-                               appName: @"GWorkspace"
+                               appName: @"Workspace"
                              operation: NSLocalizedString(@"starting:", @"")
                           maxProgValue: 80.0];
 
-      [[NSWorkspace sharedWorkspace] launchApplication: @"GWorkspace"];
+      [[NSWorkspace sharedWorkspace] launchApplication: @"Workspace"];
    
       for (i = 1; i <= 80; i++) {
         [startAppWin updateProgressBy: 1.0];
 	      [[NSRunLoop currentRunLoop] runUntilDate:
 		                     [NSDate dateWithTimeIntervalSinceNow: 0.1]];
-        workspaceApp = [NSConnection rootProxyForConnectionWithRegisteredName: @"GWorkspace" 
+        workspaceApp = [NSConnection rootProxyForConnectionWithRegisteredName: @"Workspace" 
                                                                          host: @""];                  
         if (workspaceApp) {
           [startAppWin updateProgressBy: 80.0 - i];
@@ -314,7 +314,7 @@ static MDFinder *mdfinder = nil;
 		           object: [workspaceApp connectionForProxy]];
     } else {
       NSRunAlertPanel(nil,
-              NSLocalizedString(@"unable to contact GWorkspace!", @""),
+              NSLocalizedString(@"unable to contact Workspace!", @""),
               NSLocalizedString(@"Ok", @""),
               nil, 
               nil);  
@@ -332,7 +332,7 @@ static MDFinder *mdfinder = nil;
   workspaceApp = nil;
 
   NSRunAlertPanel(nil, 
-                NSLocalizedString(@"The GWorkspace connection died.", @""),
+                NSLocalizedString(@"The Workspace connection died.", @""),
 					      NSLocalizedString(@"Ok", @""), 
                 nil, 
                 nil);  
