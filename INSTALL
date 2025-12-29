@@ -1,7 +1,7 @@
-Installing GWorkspace
+Installing Workspace
 =========================
 
-GWorkspace requires GNUstep to be installed. Make sure that you have an
+Workspace requires GNUstep to be installed. Make sure that you have an
 up to date version installed on your system! 
 
   ./configure
@@ -15,9 +15,9 @@ To enable the new metadata indexing and searching system, cd into the GWMetadata
   make
   make install
 
-To enable all the GWorkspace features you need also:
+To enable all the Workspace features you need also:
 
-* The PDFKit framework (version >= 0.9) downloadable from the GWorkspace home page.
+* The PDFKit framework (version >= 0.9) downloadable from the Workspace home page.
 PDFKit is needed to build the pdf contents inspector and to extract metadata from pdf files.
 
 * System Preferences available from the GNUstep SVN repository.
