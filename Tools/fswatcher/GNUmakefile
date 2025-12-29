@@ -7,7 +7,7 @@ TOOL_NAME = fswatcher
 
 # The Objective-C source files to be compiled
 
-WITH_INOTIFY=no
+WITH_INOTIFY=yes
 WITH_FAM=@with_fam@
 
 ifeq ($(WITH_INOTIFY),yes)

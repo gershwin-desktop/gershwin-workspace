@@ -1,0 +1,7 @@
+include $(GNUSTEP_MAKEFILES)/common.make
+
+TOOL_NAME = fswatcher-test-client
+
+fswatcher-test-client_OBJC_FILES = fswatcher-test-client.m
+
+include $(GNUSTEP_MAKEFILES)/tool.make

@@ -1807,6 +1807,7 @@ NSString *_pendingSystemActionTitle = nil;
 {
   if (fswatcher == nil)
   {
+    NSLog(@"DEBUG: Attempting to connect to fswatcher...");
     fswatcher = [NSConnection rootProxyForConnectionWithRegisteredName: @"fswatcher" 
                                                                   host: @""];
 
@@ -1814,7 +1815,13 @@ NSString *_pendingSystemActionTitle = nil;
     {
       NSString *cmd;
       NSMutableArray *arguments;
-      cmd = [NSTask launchPathForTool: @"fswatcher"];    
+      NSLog(@"DEBUG: fswatcher not found, attempting to launch...");
+      cmd = [NSTask launchPathForTool: @"fswatcher"];
+      if (cmd) {
+        NSLog(@"DEBUG: Launching fswatcher from: %@", cmd);
+      } else {
+        NSLog(@"DEBUG: ERROR - Could not find fswatcher launch path!");
+      }
       arguments = [NSMutableArray arrayWithCapacity:2];
       [arguments addObject:@"--daemon"];
       [arguments addObject:@"--auto"];  
@@ -1831,6 +1838,7 @@ NSString *_pendingSystemActionTitle = nil;
     
     if (fswatcher)
     {
+      NSLog(@"DEBUG: fswatcher connection established!");
       RETAIN (fswatcher);
       [fswatcher setProtocolForProxy: @protocol(FSWatcherProtocol)];
     
@@ -1841,10 +1849,13 @@ NSString *_pendingSystemActionTitle = nil;
                        
 	    [fswatcher registerClient: (id <FSWClientProtocol>)self 
                 isGlobalWatcher: NO];
+      NSLog(@"DEBUG: Registered with fswatcher as client");
     } else {
       fswnotifications = NO;
       NSLog(@"Workspace: unable to contact fswatcher; notifications disabled");
     }
+  } else {
+    NSLog(@"DEBUG: Already connected to fswatcher");
   }
 }
 
@@ -2876,9 +2887,19 @@ NSString *_pendingSystemActionTitle = nil;
 {
   [watchedPaths addObject: path];
 
+  NSLog(@"DEBUG: addWatcherForPath called for: %@", path);
+  NSLog(@"DEBUG: fswnotifications = %@", fswnotifications ? @"YES" : @"NO");
+  
   if (fswnotifications) {
     [self connectFSWatcher];
-    [fswatcher client: (id <FSWClientProtocol>)self addWatcherForPath: path];
+    if (fswatcher) {
+      NSLog(@"DEBUG: Adding watcher to fswatcher for: %@", path);
+      [fswatcher client: (id <FSWClientProtocol>)self addWatcherForPath: path];
+    } else {
+      NSLog(@"DEBUG: ERROR - fswatcher is nil!");
+    }
+  } else {
+    NSLog(@"DEBUG: Not adding watcher - fswnotifications is NO");
   }
 }
 

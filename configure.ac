@@ -77,11 +77,16 @@ fi
 AC_DEFINE_UNQUOTED([GW_DEBUG_LOG], [$GW_DEBUG_LOG], [debug logging])
 
 #--------------------------------------------------------------------
-# fswatcher-inotify
+# fswatcher-inotify - automatically detect and use when available
 #--------------------------------------------------------------------
+with_inotify=no
+AC_CHECK_HEADERS([sys/inotify.h], [with_inotify=yes])
+
+# Allow manual override
 AC_ARG_WITH(inotify,
-  [  --with-inotify  Build fswatcher-inotify],
-  with_inotify=yes, with_inotify=no)
+  [  --with-inotify          Force enable fswatcher-inotify
+  --without-inotify       Force disable fswatcher-inotify],
+  [], [])
   
 AC_SUBST(with_inotify)
 
