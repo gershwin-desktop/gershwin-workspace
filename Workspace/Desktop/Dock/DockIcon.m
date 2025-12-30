@@ -375,7 +375,24 @@
 
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent
 {
-  if ([self isSpecialIcon] == NO) {
+  if (isTrashIcon) {
+    // Context menu for trash icon
+    CREATE_AUTORELEASE_POOL(arp);
+    NSMenu *menu = [[NSMenu alloc] initWithTitle: @""];
+    NSMenuItem *item;
+    
+    item = [NSMenuItem new];
+    [item setTitle: NSLocalizedString(@"Empty Trash", @"")];
+    [item setTarget: [Workspace gworkspace]];
+    [item setAction: @selector(emptyRecycler:)];
+    [menu addItem: item];
+    RELEASE (item);
+    
+    RELEASE (arp);
+    return AUTORELEASE (menu);
+  } else if (isWsIcon) {
+
+  } else if ([self isSpecialIcon] == NO) {
     NSString *appPath = [ws fullPathForApplication: appName];
     
     if (appPath) {
@@ -648,6 +665,15 @@ x += 6; \
     for (i = 0; i < [umountPaths count]; i++)
       {
         NSString *umpath = [umountPaths objectAtIndex: i];
+        
+        // Don't allow ejecting root filesystem
+        if ([umpath isEqualToString: @"/"]) {
+          NSString *err = NSLocalizedString(@"Error", @"");
+          NSString *msg = NSLocalizedString(@"You cannot eject the root filesystem", @"");
+          NSString *buttstr = NSLocalizedString(@"OK", @"");
+          NSRunAlertPanel(err, msg, buttstr, nil, nil);
+          continue;
+        }
         
         if (![ws unmountAndEjectDeviceAtPath: umpath])
           {

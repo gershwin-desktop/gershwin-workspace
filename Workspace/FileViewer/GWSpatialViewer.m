@@ -402,6 +402,9 @@
 
 - (void)activate
 {
+  if ([vwrwin isMiniaturized]) {
+    [vwrwin deminiaturize: nil];
+  }
   [vwrwin makeKeyAndOrderFront: nil];
   [manager viewer: self didShowNode: baseNode];
 }

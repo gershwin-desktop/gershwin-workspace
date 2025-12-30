@@ -1100,6 +1100,189 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
 }
 
+- (NSMenu *)menuForEvent:(NSEvent *)theEvent
+{
+  if ([theEvent type] == NSRightMouseDown) {
+    NSPoint location = [theEvent locationInWindow];
+    NSPoint selfloc = [self convertPoint: location fromView: nil];
+    GWDesktopIcon *clickedIcon = nil;
+    NSUInteger i;
+
+    // Find which icon was clicked
+    for (i = 0; i < [icons count]; i++) {
+      GWDesktopIcon *icon = [icons objectAtIndex: i];
+      if ([self mouse: selfloc inRect: [icon frame]]) {
+        clickedIcon = icon;
+        break;
+      }
+    }
+
+    if (clickedIcon) {
+      NSArray *selnodes = [self selectedNodes];
+      NSAutoreleasePool *pool;
+      NSMenu *menu;
+      NSMenuItem *menuItem;
+      BOOL isMountPoint = NO;
+      BOOL allMountPoints = YES;
+
+      // Check if clicked icon is part of selection
+      if (![selnodes containsObject: [clickedIcon node]]) {
+        return [super menuForEvent: theEvent];
+      }
+
+      // Check if any selected items are mount points
+      for (i = 0; i < [selnodes count]; i++) {
+        FSNode *snode = [selnodes objectAtIndex: i];
+        if ([snode isMountPoint]) {
+          isMountPoint = YES;
+        } else {
+          allMountPoints = NO;
+        }
+      }
+
+      menu = [[NSMenu alloc] initWithTitle: @""];
+      pool = [NSAutoreleasePool new];
+
+      // Open
+      menuItem = [NSMenuItem new];
+      [menuItem setTitle: NSLocalizedString(@"Open", @"")];
+      [menuItem setTarget: [self window]];
+      [menuItem setAction: @selector(openSelection:)];
+      [menu addItem: menuItem];
+      RELEASE (menuItem);
+
+      [menu addItem: [NSMenuItem separatorItem]];
+
+      // Get Info
+      menuItem = [NSMenuItem new];
+      [menuItem setTitle: NSLocalizedString(@"Get Info", @"")];
+      [menuItem setTarget: [Workspace gworkspace]];
+      [menuItem setAction: @selector(showAttributesInspector:)];
+      [menu addItem: menuItem];
+      RELEASE (menuItem);
+
+      // Only show Duplicate if not all mount points
+      if (!allMountPoints) {
+        [menu addItem: [NSMenuItem separatorItem]];
+
+        // Duplicate
+        menuItem = [NSMenuItem new];
+        [menuItem setTitle: NSLocalizedString(@"Duplicate", @"")];
+        [menuItem setTarget: [self window]];
+        [menuItem setAction: @selector(duplicateFiles:)];
+        [menu addItem: menuItem];
+        RELEASE (menuItem);
+      }
+
+      [menu addItem: [NSMenuItem separatorItem]];
+
+      // Show Eject for mount points, Move to Recycler for regular files
+      if (isMountPoint) {
+        BOOL hasRootFS = NO;
+        // Check if any selected item is the root filesystem
+        for (i = 0; i < [selnodes count]; i++) {
+          FSNode *snode = [selnodes objectAtIndex: i];
+          if ([[snode path] isEqualToString: @"/"]) {
+            hasRootFS = YES;
+            break;
+          }
+        }
+        
+        menuItem = [NSMenuItem new];
+        [menuItem setTitle: NSLocalizedString(@"Eject", @"")];
+        [menuItem setTarget: self];
+        [menuItem setAction: @selector(ejectSelection:)];
+        [menuItem setEnabled: !hasRootFS];
+        [menu addItem: menuItem];
+        RELEASE (menuItem);
+      } else {
+        menuItem = [NSMenuItem new];
+        [menuItem setTitle: NSLocalizedString(@"Move to Recycler", @"")];
+        [menuItem setTarget: [self window]];
+        [menuItem setAction: @selector(recycleFiles:)];
+        [menu addItem: menuItem];
+        RELEASE (menuItem);
+      }
+
+      RELEASE (pool);
+
+      return [menu autorelease];
+    } else {
+      // Right-clicked on empty desktop background
+      NSAutoreleasePool *pool;
+      NSMenu *menu;
+      NSMenuItem *menuItem;
+
+      menu = [[NSMenu alloc] initWithTitle: @""];
+      pool = [NSAutoreleasePool new];
+
+      // New Folder
+      menuItem = [NSMenuItem new];
+      [menuItem setTitle: NSLocalizedString(@"New Folder", @"")];
+      [menuItem setTarget: [self window]];
+      [menuItem setAction: @selector(newFolder:)];
+      [menu addItem: menuItem];
+      RELEASE (menuItem);
+
+      [menu addItem: [NSMenuItem separatorItem]];
+
+      // Paste (if applicable)
+      menuItem = [NSMenuItem new];
+      [menuItem setTitle: NSLocalizedString(@"Paste", @"")];
+      [menuItem setTarget: [Workspace gworkspace]];
+      [menuItem setAction: @selector(paste:)];
+      [menu addItem: menuItem];
+      RELEASE (menuItem);
+
+      [menu addItem: [NSMenuItem separatorItem]];
+
+      // Workspace Preferences
+      menuItem = [NSMenuItem new];
+      [menuItem setTitle: NSLocalizedString(@"Workspace Preferences", @"")];
+      [menuItem setTarget: [Workspace gworkspace]];
+      [menuItem setAction: @selector(showPreferences:)];
+      [menu addItem: menuItem];
+      RELEASE (menuItem);
+
+      RELEASE (pool);
+
+      return [menu autorelease];
+    }
+  }
+
+  return [super menuForEvent: theEvent];
+}
+
+- (void)ejectSelection:(id)sender
+{
+  NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+  NSArray *selnodes = [self selectedNodes];
+  NSUInteger i;
+
+  for (i = 0; i < [selnodes count]; i++) {
+    FSNode *node = [selnodes objectAtIndex: i];
+    if ([node isMountPoint]) {
+      NSString *path = [node path];
+      
+      // Don't allow ejecting root filesystem
+      if ([path isEqualToString: @"/"]) {
+        NSString *err = NSLocalizedString(@"Error", @"");
+        NSString *msg = NSLocalizedString(@"You cannot eject the root filesystem", @"");
+        NSString *buttstr = NSLocalizedString(@"OK", @"");
+        NSRunAlertPanel(err, msg, buttstr, nil, nil);
+        continue;
+      }
+      
+      // Try to unmount and eject
+      if (![ws unmountAndEjectDeviceAtPath: path]) {
+        // Fallback to sudo eject
+        [NSTask launchedTaskWithLaunchPath: @"/usr/bin/sudo"
+                                 arguments: [NSArray arrayWithObjects: @"-A", @"-E", @"eject", path, nil]];
+      }
+    }
+  }
+}
+
 @end
 
 
@@ -1457,6 +1640,12 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (id)addRepForSubnode:(FSNode *)anode
 {
   CREATE_AUTORELEASE_POOL(arp);
+  
+  // Mark root filesystem as a mount point
+  if ([[anode path] isEqualToString: @"/"]) {
+    [anode setMountPoint: YES];
+  }
+  
   GWDesktopIcon *icon = [[GWDesktopIcon alloc] initForNode: anode
                                         nodeInfoType: infoType
                                         extendedType: extInfoType

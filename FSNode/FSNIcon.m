@@ -613,8 +613,16 @@ static NSImage *branchImage;
 
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent
 {
-  if (([theEvent type] == NSRightMouseDown) && isSelected)
+  if ([theEvent type] == NSRightMouseDown)
     {
+      // Select the icon if it's not already selected so the context menu shows
+      if (!isSelected && selectable)
+        {
+          [container stopRepNameEditing];
+          [container setSelectionMask: NSSingleSelectionMask];
+          [self select];
+          [container selectionDidChange];
+        }
       return [container menuForEvent: theEvent];
     }
   return [super menuForEvent: theEvent];
