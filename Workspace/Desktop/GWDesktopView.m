@@ -1172,9 +1172,9 @@ static void GWHighlightFrameRect(NSRect aRect)
         [menuItem setAction: @selector(duplicateFiles:)];
         [menu addItem: menuItem];
         RELEASE (menuItem);
-      }
 
-      [menu addItem: [NSMenuItem separatorItem]];
+        [menu addItem: [NSMenuItem separatorItem]];
+      }
 
       // Show Eject for mount points, Move to Recycler for regular files
       if (isMountPoint) {

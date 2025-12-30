@@ -482,7 +482,7 @@
 
       // Only show Duplicate if not all mount points
       if (!allMountPoints) {
-        [menu addItem:[NSMenuItem separatorItem]];
+        [menu addItem: [NSMenuItem separatorItem]];
 
         // Duplicate
         menuItem = [NSMenuItem new];
@@ -491,9 +491,9 @@
         [menuItem setAction: @selector(duplicateFiles:)];
         [menu addItem: menuItem];
         RELEASE (menuItem);
-      }
 
-      [menu addItem:[NSMenuItem separatorItem]];
+        [menu addItem: [NSMenuItem separatorItem]];
+      }
 
       // Show Eject for mount points, Move to Recycler for regular files
       if (isMountPoint) {
