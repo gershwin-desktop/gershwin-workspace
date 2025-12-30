@@ -1265,7 +1265,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       NSString *path = [node path];
       
       // Don't allow ejecting root filesystem
-      if ([path isEqualToString: @"/"]) {
+      if ([[Workspace gworkspace] isRootFilesystem: path]) {
         NSString *err = NSLocalizedString(@"Error", @"");
         NSString *msg = NSLocalizedString(@"You cannot eject the root filesystem", @"");
         NSString *buttstr = NSLocalizedString(@"OK", @"");

@@ -1685,7 +1685,7 @@ NSString *_pendingSystemActionTitle = nil;
     NSString *umpath = [umountPaths objectAtIndex: i];
     
     // Don't allow ejecting root filesystem
-    if ([umpath isEqualToString: @"/"]) {
+    if ([self isRootFilesystem: umpath]) {
       NSString *err = NSLocalizedString(@"Error", @"");
       NSString *msg = NSLocalizedString(@"You cannot eject the root filesystem", @"");
       NSString *buttstr = NSLocalizedString(@"OK", @"");
@@ -3103,6 +3103,11 @@ NSString *_pendingSystemActionTitle = nil;
   }
   
   return tpath;
+}
+
+- (BOOL)isRootFilesystem:(NSString *)path
+{
+  return [path isEqualToString: @"/"];
 }
 
 - (id)workspaceApplication

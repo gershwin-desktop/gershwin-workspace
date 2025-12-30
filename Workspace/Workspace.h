@@ -457,6 +457,8 @@
 
 - (NSString *)trashPath;
 
+- (BOOL)isRootFilesystem:(NSString *)path;
+
 - (id)workspaceApplication;
 
 - (BOOL)terminating;

@@ -255,7 +255,7 @@ static id <DesktopApplication> desktopApp = nil;
           NSString *umpath = [umountPaths objectAtIndex: i];
       
           // Don't allow ejecting root filesystem
-          if ([umpath isEqualToString: @"/"])
+          if ([[Workspace gworkspace] isRootFilesystem: umpath])
             {
               NSString *err = NSLocalizedString(@"Error", @"");
               NSString *msg = NSLocalizedString(@"You cannot eject the root filesystem", @"");
