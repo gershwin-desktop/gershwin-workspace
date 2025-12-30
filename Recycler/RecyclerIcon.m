@@ -254,6 +254,16 @@ static id <DesktopApplication> desktopApp = nil;
         {
           NSString *umpath = [umountPaths objectAtIndex: i];
       
+          // Don't allow ejecting root filesystem
+          if ([[Workspace gworkspace] isRootFilesystem: umpath])
+            {
+              NSString *err = NSLocalizedString(@"Error", @"");
+              NSString *msg = NSLocalizedString(@"You cannot eject the root filesystem", @"");
+              NSString *buttstr = NSLocalizedString(@"OK", @"");
+              NSRunAlertPanel(err, msg, buttstr, nil, nil);
+              continue;
+            }
+      
           if (![ws unmountAndEjectDeviceAtPath: umpath])
             {
               // Try fallback with sudo eject

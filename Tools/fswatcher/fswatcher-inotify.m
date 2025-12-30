@@ -25,6 +25,7 @@
 #import "fswatcher-inotify.h"
 #include "config.h"
 #include <unistd.h>
+#include <stdint.h>
 
 #define GWDebugLog(format, args...) \
   do { if (GW_DEBUG_LOG) \
@@ -526,7 +527,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
                                        watchDescriptor: wd
                                              fswatcher: self];      
         NSMapInsert (watchers, path, watcher);
-        NSMapInsert (watchDescrMap, (void *)wd, (void *)watcher);      
+        NSMapInsert (watchDescrMap, (void *)(intptr_t)wd, (void *)watcher);      
         RELEASE (watcher);       
         
       } else {
@@ -536,7 +537,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
     }
   }
   
-  GWDebugLog(@"watchers: %i", NSCountMapTable(watchers));
+  GWDebugLog(@"watchers: %lu", (unsigned long)NSCountMapTable(watchers));
 }
 
 - (oneway void)client:(id <FSWClientProtocol>)client
@@ -562,7 +563,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
   	[watcher removeListener];  
   }
   
-  GWDebugLog(@"watchers: %i", NSCountMapTable(watchers));
+  GWDebugLog(@"watchers: %lu", (unsigned long)NSCountMapTable(watchers));
 }
 
 - (Watcher *)watcherForPath:(NSString *)path
@@ -572,7 +573,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
 
 - (Watcher *)watcherWithWatchDescriptor:(int)wd
 {
-  return (Watcher *)NSMapGet(watchDescrMap, (void *)wd);
+  return (Watcher *)NSMapGet(watchDescrMap, (void *)(intptr_t)wd);
 }
 
 - (void)removeWatcher:(Watcher *)watcher
@@ -584,7 +585,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
     if (inotify_rm_watch([inotifyHandle fileDescriptor], wd) != 0) {
       NSLog(@"error removing watch descriptor for: %@", path);
     }    
-    NSMapRemove(watchDescrMap, (void *)wd);      
+    NSMapRemove(watchDescrMap, (void *)(intptr_t)wd);      
   }
 
   GWDebugLog(@"removed watcher for: %@", path); 

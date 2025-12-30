@@ -376,13 +376,6 @@
 
   if (editIcon && [self mouse: selfloc inRect: [editIcon frame]]) {
     NSArray *selnodes;
-    NSMenu *menu;
-    NSMenuItem *menuItem;
-    NSString *firstext; 
-    NSDictionary *apps;
-    NSEnumerator *app_enum;
-    id key; 
-    int i;
 
     if ([theEvent modifierFlags] == NSControlKeyMask) {
       return [super menuForEvent: theEvent];
@@ -391,50 +384,18 @@
     selnodes = [self selectedNodes];
 
     if ([selnodes count]) {
-      NSAutoreleasePool *pool;
-
-      firstext = [[[selnodes objectAtIndex: 0] path] pathExtension];
-
-      for (i = 0; i < [selnodes count]; i++) {
-        FSNode *snode = [selnodes objectAtIndex: i];
-        NSString *selpath = [snode path];
-        NSString *ext = [selpath pathExtension];   
-
-        if ([ext isEqual: firstext] == NO) {
-          return [super menuForEvent: theEvent];  
-        }
-
-        if ([snode isDirectory] == NO) {
-          if ([snode isPlain] == NO) {
-            return [super menuForEvent: theEvent];
-          }
-        } else {
-          if (([snode isPackage] == NO) || [snode isApplication]) {
-            return [super menuForEvent: theEvent];
-          } 
-        }
-      }
-
-      menu = [[NSMenu alloc] initWithTitle: NSLocalizedString(@"Open with", @"")];
-      apps = [[NSWorkspace sharedWorkspace] infoForExtension: firstext];
-      app_enum = [[apps allKeys] objectEnumerator];
-
-      pool = [NSAutoreleasePool new];
-
-      while ((key = [app_enum nextObject])) {
-        menuItem = [NSMenuItem new];    
-        key = [key stringByDeletingPathExtension];
-        [menuItem setTitle: key];
-        [menuItem setTarget: [Workspace gworkspace]];      
-        [menuItem setAction: @selector(openSelectionWithApp:)];      
-        [menuItem setRepresentedObject: key];            
-        [menu addItem: menuItem];
-        RELEASE (menuItem);
-      }
-
-      RELEASE (pool);
-
-      return [menu autorelease];
+      return [[Workspace gworkspace] contextMenuForNodes: selnodes
+                                              openTarget: viewer
+                                           openWithTarget: [Workspace gworkspace]
+                                              infoTarget: [Workspace gworkspace]
+                                         duplicateTarget: viewer
+                                           recycleTarget: viewer
+                                             ejectTarget: viewer
+                                              openAction: @selector(openSelection:)
+                                         duplicateAction: @selector(duplicateFiles:)
+                                           recycleAction: @selector(recycleFiles:)
+                                             ejectAction: @selector(ejectVolumes:)
+                                        includeOpenWith: YES];
     }
   }
      

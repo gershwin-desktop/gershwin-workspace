@@ -476,6 +476,9 @@
 
 - (void)activate
 {
+  if ([vwrwin isMiniaturized]) {
+    [vwrwin deminiaturize: nil];
+  }
   [vwrwin makeKeyAndOrderFront: nil];
   [self tileViews];
   [self scrollToBeginning];    

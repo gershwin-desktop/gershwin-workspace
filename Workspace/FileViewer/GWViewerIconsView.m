@@ -28,6 +28,7 @@
 #import "FSNIcon.h"
 #import "GWViewer.h"
 #import "GWViewersManager.h"
+#import "Workspace.h"
 
 @implementation GWViewerIconsView
 
@@ -87,6 +88,30 @@
       [self stopRepNameEditing];
    
     }
+}
+
+- (NSMenu *)menuForEvent:(NSEvent *)theEvent
+{
+  if ([theEvent type] == NSRightMouseDown) {
+    NSArray *selnodes = [self selectedNodes];
+    
+    if (selnodes && [selnodes count]) {
+      return [[Workspace gworkspace] contextMenuForNodes: selnodes
+                                              openTarget: viewer
+                                           openWithTarget: [Workspace gworkspace]
+                                              infoTarget: [Workspace gworkspace]
+                                         duplicateTarget: viewer
+                                           recycleTarget: viewer
+                                             ejectTarget: viewer
+                                              openAction: @selector(openSelection:)
+                                         duplicateAction: @selector(duplicateFiles:)
+                                           recycleAction: @selector(recycleFiles:)
+                                             ejectAction: @selector(ejectVolumes:)
+                                        includeOpenWith: YES];
+    }
+  }
+  
+  return [super menuForEvent: theEvent];
 }
 
 @end

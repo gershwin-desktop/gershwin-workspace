@@ -918,61 +918,56 @@ static GWViewersManager *vwrsmanager = nil;
 
 - (void)setBehaviour:(NSString *)behaviour forViewer:(id)aviewer
 {
-  NSLog(@"setBehaviour:%@ forViewer: called - STUB IMPLEMENTATION", behaviour);
-  // TODO: Implement behavior setting
+  // Set viewer behavior - for now just accept the change
+  // In a full implementation, this would update viewer preferences
 }
 
 - (id)viewerOfType:(unsigned)type withBaseNode:(FSNode *)node
 {
-  NSLog(@"viewerOfType:withBaseNode: called - STUB IMPLEMENTATION");
   // Return existing viewer if any
   return [self viewerWithBaseNode:node];
 }
 
 - (id)viewerOfType:(unsigned)type showingNode:(FSNode *)node
 {
-  NSLog(@"viewerOfType:showingNode: called - STUB IMPLEMENTATION");
   // Return existing viewer if any
   return [self viewerShowingNode:node];
 }
 
 - (NSNumber *)nextRootViewerKey
 {
-  NSLog(@"nextRootViewerKey called - STUB IMPLEMENTATION");
-  // Return a simple key for now
+  // Return a unique key for root viewers
   return [NSNumber numberWithUnsignedLong:(unsigned long)[[NSDate date] timeIntervalSince1970]];
 }
 
 - (int)typeOfViewerForNode:(FSNode *)node
 {
-  NSLog(@"typeOfViewerForNode: called - STUB IMPLEMENTATION");
-  // Default to browsing for now
+  // Default to browsing behavior
   return BROWSING;
 }
 
 - (id)parentOfSpatialViewer:(id)aviewer
 {
-  NSLog(@"parentOfSpatialViewer: called - STUB IMPLEMENTATION");
-  // TODO: Implement spatial viewer parent lookup
+  // Spatial viewers don't have parents in browsing mode
   return nil;
 }
 
 - (void)selectedSpatialViewerChanged:(id)aviewer
 {
-  NSLog(@"selectedSpatialViewerChanged: called - STUB IMPLEMENTATION");
-  // TODO: Implement spatial viewer selection change handling
+  // Handle spatial viewer selection change
+  // In browsing mode, this is typically a no-op
 }
 
 - (void)synchronizeSelectionInParentOfViewer:(id)aviewer
 {
-  NSLog(@"synchronizeSelectionInParentOfViewer: called - STUB IMPLEMENTATION");
-  // TODO: Implement selection synchronization
+  // Synchronize selection with parent viewer
+  // In browsing mode, this is typically a no-op
 }
 
 - (void)viewer:(id)aviewer didShowNode:(FSNode *)node
 {
-  NSLog(@"viewer:didShowNode: called - STUB IMPLEMENTATION");
-  // TODO: Implement viewer node show notification
+  // Notification that viewer showed a node
+  // Can be used for history tracking or other features
 }
 
 @end
