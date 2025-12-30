@@ -642,6 +642,9 @@ ac_subst_vars='LTLIBOBJS
 LIBOBJS
 with_inotify
 BUILD_GWMETADATA
+DBUS_CFLAGS
+DBUS_LIBS
+with_dbus
 subdirs
 CXX
 CPP
@@ -694,6 +697,7 @@ SHELL'
 ac_subst_files=''
 ac_user_opts='
 enable_option_checking
+enable_dbus
 enable_gwmetadata
 enable_debug_log
 with_inotify
@@ -1326,6 +1330,8 @@ Optional Features:
   --disable-option-checking  ignore unrecognized --enable/--with options
   --disable-FEATURE       do not include FEATURE (same as --enable-FEATURE=no)
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
+  --enable-dbus           Force enable DBus support
+  --disable-dbus          Force disable DBus support
   --enable-gwmetadata     Enable GWMetadata
   --enable-debug-log      Enable debug logging
 
@@ -3632,6 +3638,33 @@ subdirs="$subdirs FSNode Inspector"
 
 
 
+#--------------------------------------------------------------------
+# DBus support - auto-detect, but allow manual override
+#--------------------------------------------------------------------
+with_dbus=no
+DBUS_LIBS=""
+DBUS_CFLAGS=""
+
+# Try to find DBus using pkg-config first
+pkg-config --exists dbus-1
+if test $? -eq 0; then
+  DBUS_CFLAGS=$(pkg-config --cflags dbus-1)
+  DBUS_LIBS=$(pkg-config --libs dbus-1)
+  with_dbus=yes
+fi
+
+# Allow manual override
+# Check whether --enable-dbus was given.
+if test ${enable_dbus+y}
+then :
+  enableval=$enable_dbus; with_dbus=$enableval
+fi
+
+
+
+
+
+
 # Check whether --enable-gwmetadata was given.
 if test ${enable_gwmetadata+y}
 then :
@@ -3653,6 +3686,16 @@ fi
 
 ac_config_headers="$ac_config_headers Workspace/config.h"
 
+
+if test "x$with_dbus" = "xyes"; then
+
+printf "%s\n" "#define HAVE_DBUS 1" >>confdefs.h
+
+else
+
+printf "%s\n" "#define HAVE_DBUS 0" >>confdefs.h
+
+fi
 
 
 #--------------------------------------------------------------------

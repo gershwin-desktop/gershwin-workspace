@@ -28,6 +28,7 @@
 /* the following for getrlimit */
 #include <sys/types.h>
 #include <sys/time.h>
+#include <unistd.h>
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif
@@ -59,6 +60,9 @@
 #import "TShelf/TShelfViewItem.h"
 #import "TShelf/TShelfIconsView.h"
 #import "History/History.h"
+#if HAVE_DBUS
+#import "DBusConnection.h"
+#endif
 
 
 static NSString *defaulteditor = @"nedit.app";
@@ -76,6 +80,9 @@ NSString *_pendingSystemActionTitle = nil;
 - (void)_probeRecyclerTimer:(NSTimer *)timer;
 - (void)_probeDDBdTimer:(NSTimer *)timer;
 - (void)_probeMDExtractorTimer:(NSTimer *)timer;
+#if HAVE_DBUS
+- (BOOL)waitForAppMenuRegistrarWithTimeoutMs:(int)timeoutMs;
+#endif
 @end
 
 @implementation Workspace
@@ -364,6 +371,48 @@ NSString *_pendingSystemActionTitle = nil;
   RELEASE (mainMenu);
 }
 
+#if HAVE_DBUS
+- (BOOL)waitForAppMenuRegistrarWithTimeoutMs:(int)timeoutMs
+{
+  const char *gtkModulesEnv = getenv("GTK_MODULES");
+  if (!gtkModulesEnv || strlen(gtkModulesEnv) == 0) {
+    return NO;
+  }
+  NSString *gtkModules = [NSString stringWithUTF8String:gtkModulesEnv];
+  if (![gtkModules containsString:@"appmenu"]) {
+    return NO;
+  }
+
+  GNUDBusConnection *tempConnection = [GNUDBusConnection sessionBus];
+  if (![tempConnection isConnected]) {
+    NSLog(@"Workspace: Cannot connect to DBus to wait for AppMenu registrar");
+    return NO;
+  }
+
+  int elapsed = 0;
+  const int intervalMs = 50;
+  while (elapsed < timeoutMs) {
+    @try {
+      NSLog(@"Workspace: Checking for AppMenu registrar on DBus...");
+      id result = [tempConnection callMethod:@"NameHasOwner"
+                                   onService:@"org.freedesktop.DBus"
+                                  objectPath:@"/org/freedesktop/DBus"
+                                   interface:@"org.freedesktop.DBus"
+                                   arguments:@[@"com.canonical.AppMenu.Registrar"]];
+      if (result && [result respondsToSelector:@selector(boolValue)] && [result boolValue]) {
+        return YES;
+      }
+    } @catch (NSException *ex) {
+      NSLog(@"Workspace: Exception while checking for AppMenu registrar: %@", ex);
+      return NO;
+    }
+    usleep(intervalMs * 1000);
+    elapsed += intervalMs;
+  }
+
+  return NO;
+}
+#endif
 - (void)applicationWillFinishLaunching:(NSNotification *)aNotification
 {
   NSUserDefaults *defaults;

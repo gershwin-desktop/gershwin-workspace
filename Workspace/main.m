@@ -22,9 +22,12 @@
  * Foundation, Inc., 31 Milk Street #960789 Boston, MA 02196 USA.
  */
 
+#include "config.h"
+
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
+#include <unistd.h>
 
 #include "Workspace.h"
   
@@ -32,6 +35,22 @@ int main(int argc, char **argv, char **env)
 {
 	CREATE_AUTORELEASE_POOL (pool);
   Workspace *gw = [Workspace gworkspace];
+  
+  // If GTK_MODULES indicates appmenu integration, wait up to 2sec for the
+  // Canonical AppMenu registrar to appear on the session bus so subsequent
+  // menu setup and scans can find dbusmenu-providing services.
+#if HAVE_DBUS
+  if ([gw waitForAppMenuRegistrarWithTimeoutMs:5000]) {
+    NSLog(@"Workspace: AppMenu registrar present");
+    // Wait for an additional 50ms
+    usleep(50 * 1000);
+  } else {
+    NSLog(@"Workspace: AppMenu registrar did not appear within 5000ms (or GTK_MODULES does not request appmenu)");
+  }
+#else
+  NSLog(@"Workspace: DBus support not available");
+#endif
+  
 	NSApplication *app = [NSApplication sharedApplication];
   
   [app setDelegate: gw];    
