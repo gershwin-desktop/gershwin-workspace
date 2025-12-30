@@ -416,7 +416,13 @@
              appName:(NSString *)appName
                  pid:(pid_t)pid
 {
-  if (appName == nil) return;
+  if (appName != nil) {
+    NSLog(@"DEBUG: Dock appDidLaunch for appName: %@", appName);
+  } else
+    {
+      NSLog(@"DEBUG: Dock appDidLaunch for nil appName");
+      return;
+    }
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationName: appName];
 
@@ -697,6 +703,7 @@
 
 - (void)saveDockConfiguration
 {
+  NSLog(@"DEBUG: Dock saveDockConfiguration");
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
   NSMutableDictionary *dict = [NSMutableDictionary dictionary];
   NSUInteger i;  
@@ -762,7 +769,7 @@
 
 - (void)drawRect:(NSRect)rect
 {  
-  NSLog(@"DEBUG: Dock drawRect called, rect: %@, superview: %@", NSStringFromRect(rect), [self superview]);
+  // NSLog(@"DEBUG: Dock drawRect called, rect: %@, superview: %@", NSStringFromRect(rect), [self superview]);
   [super drawRect: rect];
   
   [backColor set];
