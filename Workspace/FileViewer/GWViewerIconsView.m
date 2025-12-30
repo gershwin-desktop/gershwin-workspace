@@ -108,6 +108,9 @@
                                            recycleAction: @selector(recycleFiles:)
                                              ejectAction: @selector(ejectVolumes:)
                                         includeOpenWith: YES];
+    } else {
+      // Right-clicked on empty space
+      return [[Workspace gworkspace] emptySpaceContextMenuForViewer: [viewer win]];
     }
   }
   

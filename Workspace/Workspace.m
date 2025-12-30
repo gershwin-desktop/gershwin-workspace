@@ -1283,6 +1283,8 @@ NSString *_pendingSystemActionTitle = nil;
       } else {
         return NO;
       }               
+    } else if (sel_isEqual(action, @selector(paste:))) {
+      return [self pasteboardHasValidContent];
     }
   }
   
@@ -3101,6 +3103,42 @@ NSString *_pendingSystemActionTitle = nil;
   return [path isEqualToString: @"/"];
 }
 
+- (BOOL)pasteboardHasValidContent
+{
+  NSPasteboard *pb = [NSPasteboard generalPasteboard];
+  return ([[pb types] containsObject: NSFilenamesPboardType]);
+}
+
+- (NSMenu *)emptySpaceContextMenuForViewer:(id)viewer
+{
+  NSMenu *menu;
+  NSMenuItem *menuItem;
+
+  menu = [[NSMenu alloc] initWithTitle: @""];
+
+  // New Folder
+  menuItem = [NSMenuItem new];
+  [menuItem setTitle: NSLocalizedString(@"New Folder", @"")];
+  [menuItem setTarget: viewer];
+  [menuItem setAction: @selector(newFolder:)];
+  [menu addItem: menuItem];
+  RELEASE (menuItem);
+
+  [menu addItem: [NSMenuItem separatorItem]];
+
+  // Paste (if applicable)
+  menuItem = [NSMenuItem new];
+  [menuItem setTitle: NSLocalizedString(@"Paste", @"")];
+  [menuItem setTarget: self];
+  [menuItem setAction: @selector(paste:)];
+  NSPasteboard *pb = [NSPasteboard generalPasteboard];
+  [menuItem setEnabled: ([[pb types] containsObject: NSFilenamesPboardType])];
+  [menu addItem: menuItem];
+  RELEASE (menuItem);
+
+  return [menu autorelease];
+}
+
 - (NSMenu *)contextMenuForNodes:(NSArray *)nodes
                      openTarget:(id)openTarget
                   openWithTarget:(id)openWithTarget
@@ -3201,6 +3239,16 @@ NSString *_pendingSystemActionTitle = nil;
     }
   }
   
+  [menu addItem: [NSMenuItem separatorItem]];
+  
+  // Copy
+  menuItem = [NSMenuItem new];
+  [menuItem setTitle: NSLocalizedString(@"Copy", @"")];
+  [menuItem setTarget: [Workspace gworkspace]];
+  [menuItem setAction: @selector(copy:)];
+  [menu addItem: menuItem];
+  RELEASE (menuItem);
+
   [menu addItem: [NSMenuItem separatorItem]];
   
   // Get Info

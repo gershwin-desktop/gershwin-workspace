@@ -1139,44 +1139,19 @@ static void GWHighlightFrameRect(NSRect aRect)
                                         includeOpenWith: NO];
     } else {
       // Right-clicked on empty desktop background
-      NSAutoreleasePool *pool;
-      NSMenu *menu;
-      NSMenuItem *menuItem;
-
-      menu = [[NSMenu alloc] initWithTitle: @""];
-      pool = [NSAutoreleasePool new];
-
-      // New Folder
-      menuItem = [NSMenuItem new];
-      [menuItem setTitle: NSLocalizedString(@"New Folder", @"")];
-      [menuItem setTarget: [self window]];
-      [menuItem setAction: @selector(newFolder:)];
-      [menu addItem: menuItem];
-      RELEASE (menuItem);
-
+      NSMenu *menu = [[Workspace gworkspace] emptySpaceContextMenuForViewer: [self window]];
+      
+      // Add separator and Workspace Preferences (desktop-specific)
       [menu addItem: [NSMenuItem separatorItem]];
 
-      // Paste (if applicable)
-      menuItem = [NSMenuItem new];
-      [menuItem setTitle: NSLocalizedString(@"Paste", @"")];
-      [menuItem setTarget: [Workspace gworkspace]];
-      [menuItem setAction: @selector(paste:)];
-      [menu addItem: menuItem];
-      RELEASE (menuItem);
-
-      [menu addItem: [NSMenuItem separatorItem]];
-
-      // Workspace Preferences
-      menuItem = [NSMenuItem new];
+      NSMenuItem *menuItem = [NSMenuItem new];
       [menuItem setTitle: NSLocalizedString(@"Workspace Preferences", @"")];
       [menuItem setTarget: [Workspace gworkspace]];
       [menuItem setAction: @selector(showPreferences:)];
       [menu addItem: menuItem];
       RELEASE (menuItem);
 
-      RELEASE (pool);
-
-      return [menu autorelease];
+      return menu;
     }
   }
 

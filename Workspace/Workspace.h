@@ -459,6 +459,10 @@
 
 - (BOOL)isRootFilesystem:(NSString *)path;
 
+- (BOOL)pasteboardHasValidContent;
+
+- (NSMenu *)emptySpaceContextMenuForViewer:(id)viewer;
+
 - (NSMenu *)contextMenuForNodes:(NSArray *)nodes
                      openTarget:(id)openTarget
                   openWithTarget:(id)openWithTarget
