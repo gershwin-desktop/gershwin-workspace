@@ -23,6 +23,7 @@
  */
 
 #import <Foundation/Foundation.h>
+#import "GWViewer.h"
 
 @class GWViewersManager;
 @class GWViewerPathsPopUp;
@@ -84,7 +85,7 @@
 - (GWViewerWindow *)win;
 - (id)nodeView;
 - (id)shelf;
-- (NSString *)viewType;
+- (GWViewType)viewType;
 - (BOOL)isRootViewer;
 - (NSNumber *)rootViewerKey;
 - (BOOL)isSpatial;

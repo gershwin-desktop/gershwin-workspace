@@ -801,7 +801,6 @@ static GWX11AppManager *sharedX11AppManager = nil;
 {
     GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
     NSMutableArray *terminatedApps = [NSMutableArray array];
-    BOOL allAppsHaveWindows = YES;
     
     for (NSString *appName in [x11Apps allKeys]) {
         GWX11AppInfo *info = [x11Apps objectForKey:appName];
@@ -815,8 +814,6 @@ static GWX11AppManager *sharedX11AppManager = nil;
         
         /* Check if windows have appeared for this app */
         if (!info.hasWindowAppeared) {
-            allAppsHaveWindows = NO;
-            
             /* Priority 1: Try to find windows by PID (most reliable) */
             NSArray *windows = [wm windowsForPID:info.pid];
             

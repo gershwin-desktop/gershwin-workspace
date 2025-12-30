@@ -27,6 +27,7 @@
 
 @class NSImage;
 @class GWDesktopManager;
+@class Workspace;
 
 typedef enum BackImageStyle
 {

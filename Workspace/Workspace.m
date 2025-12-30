@@ -77,14 +77,6 @@ NSString *_pendingSystemActionTitle = nil;
 
 @interface Workspace (PrivateMethods)
 - (void)_updateTrashContents;
-// Async service connection probes
-- (void)_probeFSWatcherTimer:(NSTimer *)timer;
-- (void)_probeRecyclerTimer:(NSTimer *)timer;
-- (void)_probeDDBdTimer:(NSTimer *)timer;
-- (void)_probeMDExtractorTimer:(NSTimer *)timer;
-#if HAVE_DBUS
-- (BOOL)waitForAppMenuRegistrarWithTimeoutMs:(int)timeoutMs;
-#endif
 @end
 
 @implementation Workspace
@@ -593,8 +585,6 @@ NSString *_pendingSystemActionTitle = nil;
   NSLog(@"DEBUG: Workspace init - no_desktop setting: %d", [defaults boolForKey: @"no_desktop"]);
   if ([defaults boolForKey: @"no_desktop"] == NO)
   { 
-    id item;
-   
     NSLog(@"DEBUG: Workspace calling activateDesktop");
     [dtopManager activateDesktop];
     NSLog(@"DEBUG: Workspace activateDesktop returned");

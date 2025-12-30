@@ -35,6 +35,7 @@
 #import "GWViewerIconsView.h"
 #import "GWViewerListView.h"
 #import "GWViewerPathsPopUp.h"
+#import "GWViewer.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
 #import "FSNodeRep.h"
@@ -375,9 +376,16 @@
   return nil;
 }
 
-- (NSString *)viewType
+- (GWViewType)viewType
 {
-  return viewType;
+  if ([viewType isEqual: @"browser"]) {
+    return GWViewTypeBrowser;
+  } else if ([viewType isEqual: @"icon"]) {
+    return GWViewTypeIcon;
+  } else if ([viewType isEqual: @"list"]) {
+    return GWViewTypeList;
+  }
+  return GWViewTypeBrowser;
 }
 
 - (BOOL)isRootViewer
