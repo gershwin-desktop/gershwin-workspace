@@ -253,8 +253,8 @@
         [menu addItem: menuItem];
         RELEASE (menuItem);
       }
-        RELEASE (pool);
-        return [menu autorelease];
+      RELEASE (pool);
+      return [menu autorelease];
       }
     }
   }
