@@ -42,8 +42,6 @@ int main(int argc, char **argv, char **env)
 #if HAVE_DBUS
   if ([gw waitForAppMenuRegistrarWithTimeoutMs:5000]) {
     NSLog(@"Workspace: AppMenu registrar present");
-    // Wait for an additional 50ms
-    usleep(50 * 1000);
   } else {
     NSLog(@"Workspace: AppMenu registrar did not appear within 5000ms (or GTK_MODULES does not request appmenu)");
   }
