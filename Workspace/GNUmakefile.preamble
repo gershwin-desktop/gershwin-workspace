@@ -2,6 +2,11 @@
 # Additional flags to pass to the preprocessor
 ADDITIONAL_CPPFLAGS += 
 
+# Conditional DBus support - add DBus flags if available
+ifneq ($(with_dbus),no)
+  ADDITIONAL_CPPFLAGS += $(DBUS_CFLAGS)
+endif
+
 # Additional flags to pass to the Objective-C compiler
 ADDITIONAL_OBJCFLAGS += -Wall 
 
@@ -27,6 +32,11 @@ ADDITIONAL_INCLUDE_DIRS += -I../Operation -I../../Operation
 
 # Additional LDFLAGS to pass to the linker
 ADDITIONAL_LDFLAGS += -lX11 
+
+# Conditional DBus support
+ifneq ($(DBUS_LIBS),)
+  ADDITIONAL_GUI_LIBS += $(DBUS_LIBS)
+endif
 
 # Additional library directories the linker should search   
 ADDITIONAL_LIB_DIRS += -L../FSNode/FSNode.framework/Versions/Current/$(GNUSTEP_TARGET_LDIR)

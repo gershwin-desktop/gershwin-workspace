@@ -47,6 +47,31 @@ AC_CONFIG_AUX_DIR([$GNUSTEP_MAKEFILES])
 AC_CONFIG_SUBDIRS([FSNode Inspector])
 
 
+#--------------------------------------------------------------------
+# DBus support - auto-detect, but allow manual override
+#--------------------------------------------------------------------
+with_dbus=no
+DBUS_LIBS=""
+DBUS_CFLAGS=""
+
+# Try to find DBus using pkg-config first
+pkg-config --exists dbus-1
+if test $? -eq 0; then
+  DBUS_CFLAGS=$(pkg-config --cflags dbus-1)
+  DBUS_LIBS=$(pkg-config --libs dbus-1)
+  with_dbus=yes
+fi
+
+# Allow manual override
+AC_ARG_ENABLE(dbus,
+  [  --enable-dbus           Force enable DBus support
+  --disable-dbus          Force disable DBus support],
+  [with_dbus=$enableval], [])
+
+AC_SUBST(with_dbus)
+AC_SUBST(DBUS_LIBS)
+AC_SUBST(DBUS_CFLAGS)
+
 AC_ARG_ENABLE(gwmetadata,
   [  --enable-gwmetadata     Enable GWMetadata], , [enable_gwmetadata=no])
 
@@ -59,6 +84,12 @@ fi
 AC_SUBST(BUILD_GWMETADATA)
 
 AC_CONFIG_HEADER([Workspace/config.h])
+
+if test "x$with_dbus" = "xyes"; then
+  AC_DEFINE([HAVE_DBUS], [1], [Define if DBus support is available])
+else
+  AC_DEFINE([HAVE_DBUS], [0], [Define if DBus support is available])
+fi
 
 
 #--------------------------------------------------------------------

@@ -6,6 +6,11 @@ include $(GNUSTEP_MAKEFILES)/common.make
 
 VERSION = @PACKAGE_VERSION@
 
+# DBus support variables from configure
+with_dbus = @with_dbus@
+DBUS_CFLAGS = @DBUS_CFLAGS@
+DBUS_LIBS = @DBUS_LIBS@
+
 #
 # subprojects
 #
@@ -122,6 +127,10 @@ Fiend/Fiend.m \
 Fiend/FiendLeaf.m \
 Thumbnailer/GWThumbnailer.m \
 
+# Conditionally add DBusConnection.m if DBus is available
+ifeq ($(with_dbus), yes)
+  Workspace_OBJC_FILES += DBusConnection.m
+endif
 
 -include GNUmakefile.preamble
 

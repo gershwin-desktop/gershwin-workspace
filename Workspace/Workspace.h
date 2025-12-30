@@ -461,6 +461,10 @@
 
 - (BOOL)terminating;
 
+#if HAVE_DBUS
+- (BOOL)waitForAppMenuRegistrarWithTimeoutMs:(int)timeoutMs;
+#endif
+
 @end
 
 
