@@ -189,10 +189,10 @@
       [menu addItem: menuItem];
       RELEASE (menuItem);
 
-      [menu addItem: [NSMenuItem separatorItem]];
-
       // Only show Duplicate if not all mount points
       if (!allMountPoints) {
+        [menu addItem: [NSMenuItem separatorItem]];
+
         // Duplicate
         menuItem = [NSMenuItem new];
         [menuItem setTitle: NSLocalizedString(@"Duplicate", @"")];

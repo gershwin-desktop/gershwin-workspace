@@ -2532,6 +2532,8 @@ NSString *_pendingSystemActionTitle = nil;
     
     if (parentNode) {
       [self openSelectedPaths: [NSArray arrayWithObject: [parentNode path]] newViewer: YES];
+    } else {
+      NSRunAlertPanel(nil, _(@"Already at the root directory"), _(@"OK"), nil, nil);
     }
   }
 }

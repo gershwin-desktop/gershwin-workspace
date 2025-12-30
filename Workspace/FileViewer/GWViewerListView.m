@@ -118,7 +118,6 @@
       NSEnumerator *app_enum;
       id key; 
       int i;
-      BOOL singleSelection;
       BOOL isMountPoint = NO;
       BOOL allMountPoints = YES;
 
@@ -129,7 +128,6 @@
           return [super menuForEvent: theEvent];
         }
         
-        singleSelection = ([selnodes count] == 1);
         firstext = [[[selnodes objectAtIndex: 0] path] pathExtension];
         
         // Check if any selected items are mount points
@@ -223,9 +221,9 @@
         [menuItem setAction: @selector(duplicateFiles:)];
         [menu addItem: menuItem];
         RELEASE (menuItem);
-      }
 
-      [menu addItem: [NSMenuItem separatorItem]];
+        [menu addItem: [NSMenuItem separatorItem]];
+      }
 
       // Show Eject for mount points, Move to Recycler for regular files
       if (isMountPoint) {
@@ -255,7 +253,8 @@
         [menu addItem: menuItem];
         RELEASE (menuItem);
       }
-        return [menu autorelease];
+      RELEASE (pool);
+      return [menu autorelease];
       }
     }
   }
