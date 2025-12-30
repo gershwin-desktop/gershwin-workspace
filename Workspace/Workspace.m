@@ -2510,10 +2510,15 @@ NSString *_pendingSystemActionTitle = nil;
     NSString *path = [dialog getEditFieldText];
     if (path && [path length] > 0) {
       path = [path stringByExpandingTildeInPath];
-      if ([fm fileExistsAtPath: path]) {
-        [self openSelectedPaths: [NSArray arrayWithObject: path] newViewer: YES];
+      BOOL isDir = NO;
+      if ([fm fileExistsAtPath: path isDirectory: &isDir]) {
+        if (isDir) {
+          [self openSelectedPaths: [NSArray arrayWithObject: path] newViewer: YES];
+        } else {
+          NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Path is not a folder"), _(@"OK"), nil, nil);
+        }
       } else {
-        NSRunAlertPanel(nil, _(@"Folder does not exist"), _(@"OK"), nil, nil);
+        NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Folder does not exist"), _(@"OK"), nil, nil);
       }
     }
   }
@@ -2533,7 +2538,7 @@ NSString *_pendingSystemActionTitle = nil;
     if (parentNode) {
       [self openSelectedPaths: [NSArray arrayWithObject: [parentNode path]] newViewer: YES];
     } else {
-      NSRunAlertPanel(nil, _(@"Already at the root directory"), _(@"OK"), nil, nil);
+      NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Already at the root directory"), _(@"OK"), nil, nil);
     }
   }
 }

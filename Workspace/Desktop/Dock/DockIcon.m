@@ -391,7 +391,8 @@
     RELEASE (arp);
     return AUTORELEASE (menu);
   } else if (isWsIcon) {
-
+    /* Workspace icon: use default menu behavior from superclass. */
+    return [super menuForEvent: theEvent];
   } else if ([self isSpecialIcon] == NO) {
     NSString *appPath = [ws fullPathForApplication: appName];
     

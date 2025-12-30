@@ -383,7 +383,6 @@
     NSEnumerator *app_enum;
     id key; 
     int i;
-    BOOL singleSelection;
     BOOL isMountPoint = NO;
     BOOL allMountPoints = YES;
 
@@ -396,7 +395,6 @@
     if ([selnodes count]) {
       NSAutoreleasePool *pool;
 
-      singleSelection = ([selnodes count] == 1);
       firstext = [[[selnodes objectAtIndex: 0] path] pathExtension];
 
       // Check if any selected items are mount points
