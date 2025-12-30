@@ -457,6 +457,21 @@
 
 - (NSString *)trashPath;
 
+- (BOOL)isRootFilesystem:(NSString *)path;
+
+- (NSMenu *)contextMenuForNodes:(NSArray *)nodes
+                     openTarget:(id)openTarget
+                  openWithTarget:(id)openWithTarget
+                  infoTarget:(id)infoTarget
+             duplicateTarget:(id)duplicateTarget
+               recycleTarget:(id)recycleTarget
+                 ejectTarget:(id)ejectTarget
+                  openAction:(SEL)openAction
+             duplicateAction:(SEL)duplicateAction
+               recycleAction:(SEL)recycleAction
+                 ejectAction:(SEL)ejectAction
+            includeOpenWith:(BOOL)includeOpenWith;
+
 - (id)workspaceApplication;
 
 - (BOOL)terminating;

@@ -1685,7 +1685,7 @@ NSString *_pendingSystemActionTitle = nil;
     NSString *umpath = [umountPaths objectAtIndex: i];
     
     // Don't allow ejecting root filesystem
-    if ([umpath isEqualToString: @"/"]) {
+    if ([self isRootFilesystem: umpath]) {
       NSString *err = NSLocalizedString(@"Error", @"");
       NSString *msg = NSLocalizedString(@"You cannot eject the root filesystem", @"");
       NSString *buttstr = NSLocalizedString(@"OK", @"");
@@ -2510,10 +2510,15 @@ NSString *_pendingSystemActionTitle = nil;
     NSString *path = [dialog getEditFieldText];
     if (path && [path length] > 0) {
       path = [path stringByExpandingTildeInPath];
-      if ([fm fileExistsAtPath: path]) {
-        [self openSelectedPaths: [NSArray arrayWithObject: path] newViewer: YES];
+      BOOL isDir = NO;
+      if ([fm fileExistsAtPath: path isDirectory: &isDir]) {
+        if (isDir) {
+          [self openSelectedPaths: [NSArray arrayWithObject: path] newViewer: YES];
+        } else {
+          NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Path is not a folder"), _(@"OK"), nil, nil);
+        }
       } else {
-        NSRunAlertPanel(nil, _(@"Folder does not exist"), _(@"OK"), nil, nil);
+        NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Folder does not exist"), _(@"OK"), nil, nil);
       }
     }
   }
@@ -2533,7 +2538,7 @@ NSString *_pendingSystemActionTitle = nil;
     if (parentNode) {
       [self openSelectedPaths: [NSArray arrayWithObject: [parentNode path]] newViewer: YES];
     } else {
-      NSRunAlertPanel(nil, _(@"Already at the root directory"), _(@"OK"), nil, nil);
+      NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Already at the root directory"), _(@"OK"), nil, nil);
     }
   }
 }
@@ -3098,6 +3103,168 @@ NSString *_pendingSystemActionTitle = nil;
   }
   
   return tpath;
+}
+
+- (BOOL)isRootFilesystem:(NSString *)path
+{
+  return [path isEqualToString: @"/"];
+}
+
+- (NSMenu *)contextMenuForNodes:(NSArray *)nodes
+                     openTarget:(id)openTarget
+                  openWithTarget:(id)openWithTarget
+                     infoTarget:(id)infoTarget
+                duplicateTarget:(id)duplicateTarget
+                  recycleTarget:(id)recycleTarget
+                    ejectTarget:(id)ejectTarget
+                     openAction:(SEL)openAction
+                duplicateAction:(SEL)duplicateAction
+                  recycleAction:(SEL)recycleAction
+                    ejectAction:(SEL)ejectAction
+               includeOpenWith:(BOOL)includeOpenWith
+{
+  NSMenu *menu;
+  NSMenuItem *menuItem;
+  NSString *firstext;
+  NSDictionary *apps;
+  NSEnumerator *app_enum;
+  id key;
+  NSUInteger i;
+  BOOL isMountPoint = NO;
+  BOOL allMountPoints = YES;
+  
+  if (!nodes || [nodes count] == 0) {
+    return nil;
+  }
+  
+  firstext = [[[nodes objectAtIndex: 0] path] pathExtension];
+  
+  // Check if any selected items are mount points
+  for (i = 0; i < [nodes count]; i++) {
+    FSNode *node = [nodes objectAtIndex: i];
+    if ([node isMountPoint]) {
+      isMountPoint = YES;
+    } else {
+      allMountPoints = NO;
+    }
+  }
+  
+  menu = [[NSMenu alloc] initWithTitle: @""];
+  
+  // Open
+  menuItem = [NSMenuItem new];
+  [menuItem setTitle: NSLocalizedString(@"Open", @"")];
+  [menuItem setTarget: openTarget];
+  [menuItem setAction: openAction];
+  [menu addItem: menuItem];
+  RELEASE (menuItem);
+  
+  // Open With submenu - only for files with same extension
+  if (includeOpenWith) {
+    BOOL canShowOpenWith = YES;
+    for (i = 0; i < [nodes count]; i++) {
+      FSNode *node = [nodes objectAtIndex: i];
+      NSString *ext = [[node path] pathExtension];
+      
+      if ([ext isEqual: firstext] == NO) {
+        canShowOpenWith = NO;
+        break;
+      }
+      
+      if ([node isDirectory] == NO) {
+        if ([node isPlain] == NO) {
+          canShowOpenWith = NO;
+          break;
+        }
+      } else {
+        if (([node isPackage] == NO) || [node isApplication]) {
+          canShowOpenWith = NO;
+          break;
+        }
+      }
+    }
+    
+    if (canShowOpenWith) {
+      menuItem = [NSMenuItem new];
+      [menuItem setTitle: NSLocalizedString(@"Open With", @"")];
+      NSMenu *openWithMenu = [[NSMenu alloc] initWithTitle: @""];
+      
+      apps = [[NSWorkspace sharedWorkspace] infoForExtension: firstext];
+      app_enum = [[apps allKeys] objectEnumerator];
+      
+      while ((key = [app_enum nextObject])) {
+        NSMenuItem *appItem = [NSMenuItem new];
+        key = [key stringByDeletingPathExtension];
+        [appItem setTitle: key];
+        [appItem setTarget: openWithTarget];
+        [appItem setAction: @selector(openSelectionWithApp:)];
+        [appItem setRepresentedObject: key];
+        [openWithMenu addItem: appItem];
+        RELEASE (appItem);
+      }
+      
+      [menuItem setSubmenu: openWithMenu];
+      RELEASE (openWithMenu);
+      [menu addItem: menuItem];
+      RELEASE (menuItem);
+    }
+  }
+  
+  [menu addItem: [NSMenuItem separatorItem]];
+  
+  // Get Info
+  menuItem = [NSMenuItem new];
+  [menuItem setTitle: NSLocalizedString(@"Get Info", @"")];
+  [menuItem setTarget: infoTarget];
+  [menuItem setAction: @selector(showAttributesInspector:)];
+  [menu addItem: menuItem];
+  RELEASE (menuItem);
+  
+  // Only show Duplicate if not all mount points
+  if (!allMountPoints) {
+    [menu addItem: [NSMenuItem separatorItem]];
+    
+    // Duplicate
+    menuItem = [NSMenuItem new];
+    [menuItem setTitle: NSLocalizedString(@"Duplicate", @"")];
+    [menuItem setTarget: duplicateTarget];
+    [menuItem setAction: duplicateAction];
+    [menu addItem: menuItem];
+    RELEASE (menuItem);
+    
+    [menu addItem: [NSMenuItem separatorItem]];
+  }
+  
+  // Show Eject for mount points, Move to Recycler for regular files
+  if (isMountPoint) {
+    BOOL hasRootFS = NO;
+    // Check if any selected item is the root filesystem
+    for (i = 0; i < [nodes count]; i++) {
+      FSNode *node = [nodes objectAtIndex: i];
+      if ([self isRootFilesystem: [node path]]) {
+        hasRootFS = YES;
+        break;
+      }
+    }
+    
+    menuItem = [NSMenuItem new];
+    [menuItem setTitle: NSLocalizedString(@"Eject", @"")];
+    [menuItem setTarget: ejectTarget];
+    [menuItem setAction: ejectAction];
+    [menuItem setEnabled: !hasRootFS];
+    [menu addItem: menuItem];
+    RELEASE (menuItem);
+  } else {
+    // Move to Recycler
+    menuItem = [NSMenuItem new];
+    [menuItem setTitle: NSLocalizedString(@"Move to Recycler", @"")];
+    [menuItem setTarget: recycleTarget];
+    [menuItem setAction: recycleAction];
+    [menu addItem: menuItem];
+    RELEASE (menuItem);
+  }
+  
+  return AUTORELEASE (menu);
 }
 
 - (id)workspaceApplication
