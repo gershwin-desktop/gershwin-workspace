@@ -618,7 +618,8 @@ NSString *_pendingSystemActionTitle = nil;
     [self hideFiend: nil];
     
   vwrsManager = [GWViewersManager viewersManager];
-  [vwrsManager showViewers];
+  // Don't open viewer windows on startup - just show desktop
+  // [vwrsManager showViewers];
   
   inspector = [Inspector new];
   if ([defaults boolForKey: @"uses_inspector"]) {  
