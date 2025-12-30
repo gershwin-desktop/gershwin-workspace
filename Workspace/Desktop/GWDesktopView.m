@@ -1119,94 +1119,24 @@ static void GWHighlightFrameRect(NSRect aRect)
 
     if (clickedIcon) {
       NSArray *selnodes = [self selectedNodes];
-      NSAutoreleasePool *pool;
-      NSMenu *menu;
-      NSMenuItem *menuItem;
-      BOOL isMountPoint = NO;
-      BOOL allMountPoints = YES;
 
       // Check if clicked icon is part of selection
       if (![selnodes containsObject: [clickedIcon node]]) {
         return [super menuForEvent: theEvent];
       }
 
-      // Check if any selected items are mount points
-      for (i = 0; i < [selnodes count]; i++) {
-        FSNode *snode = [selnodes objectAtIndex: i];
-        if ([snode isMountPoint]) {
-          isMountPoint = YES;
-        } else {
-          allMountPoints = NO;
-        }
-      }
-
-      menu = [[NSMenu alloc] initWithTitle: @""];
-      pool = [NSAutoreleasePool new];
-
-      // Open
-      menuItem = [NSMenuItem new];
-      [menuItem setTitle: NSLocalizedString(@"Open", @"")];
-      [menuItem setTarget: [self window]];
-      [menuItem setAction: @selector(openSelection:)];
-      [menu addItem: menuItem];
-      RELEASE (menuItem);
-
-      [menu addItem: [NSMenuItem separatorItem]];
-
-      // Get Info
-      menuItem = [NSMenuItem new];
-      [menuItem setTitle: NSLocalizedString(@"Get Info", @"")];
-      [menuItem setTarget: [Workspace gworkspace]];
-      [menuItem setAction: @selector(showAttributesInspector:)];
-      [menu addItem: menuItem];
-      RELEASE (menuItem);
-
-      // Only show Duplicate if not all mount points
-      if (!allMountPoints) {
-        [menu addItem: [NSMenuItem separatorItem]];
-
-        // Duplicate
-        menuItem = [NSMenuItem new];
-        [menuItem setTitle: NSLocalizedString(@"Duplicate", @"")];
-        [menuItem setTarget: [self window]];
-        [menuItem setAction: @selector(duplicateFiles:)];
-        [menu addItem: menuItem];
-        RELEASE (menuItem);
-
-        [menu addItem: [NSMenuItem separatorItem]];
-      }
-
-      // Show Eject for mount points, Move to Recycler for regular files
-      if (isMountPoint) {
-        BOOL hasRootFS = NO;
-        // Check if any selected item is the root filesystem
-        for (i = 0; i < [selnodes count]; i++) {
-          FSNode *snode = [selnodes objectAtIndex: i];
-          if ([[snode path] isEqualToString: @"/"]) {
-            hasRootFS = YES;
-            break;
-          }
-        }
-        
-        menuItem = [NSMenuItem new];
-        [menuItem setTitle: NSLocalizedString(@"Eject", @"")];
-        [menuItem setTarget: self];
-        [menuItem setAction: @selector(ejectSelection:)];
-        [menuItem setEnabled: !hasRootFS];
-        [menu addItem: menuItem];
-        RELEASE (menuItem);
-      } else {
-        menuItem = [NSMenuItem new];
-        [menuItem setTitle: NSLocalizedString(@"Move to Recycler", @"")];
-        [menuItem setTarget: [self window]];
-        [menuItem setAction: @selector(recycleFiles:)];
-        [menu addItem: menuItem];
-        RELEASE (menuItem);
-      }
-
-      RELEASE (pool);
-
-      return [menu autorelease];
+      return [[Workspace gworkspace] contextMenuForNodes: selnodes
+                                              openTarget: [self window]
+                                           openWithTarget: [Workspace gworkspace]
+                                              infoTarget: [Workspace gworkspace]
+                                         duplicateTarget: [self window]
+                                           recycleTarget: [self window]
+                                             ejectTarget: self
+                                              openAction: @selector(openSelection:)
+                                         duplicateAction: @selector(duplicateFiles:)
+                                           recycleAction: @selector(recycleFiles:)
+                                             ejectAction: @selector(ejectSelection:)
+                                        includeOpenWith: NO];
     } else {
       // Right-clicked on empty desktop background
       NSAutoreleasePool *pool;
