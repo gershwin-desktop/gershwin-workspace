@@ -882,6 +882,31 @@
       }
     
     }
+  else if ([event isEqual: @"GWWatchedPathRenamed"])
+    {
+      /* A watched path was moved away */
+      NSString *oldpath = [info objectForKey: @"oldpath"];
+      NSUInteger i;
+
+      if (oldpath)
+        {
+          for (i = 0; i < [icons count]; i++) {
+            DockIcon *icon = [icons objectAtIndex: i];
+          
+            if ([icon isSpecialIcon] == NO) {
+              FSNode *node = [icon node];
+              
+              if ([oldpath isEqual: [node path]]) {
+                [NSTimer scheduledTimerWithTimeInterval: 1.0
+                                                 target: self
+                                               selector: @selector(checkRemovedApp:)
+                                               userInfo: icon
+                                                repeats: NO];
+              }
+            }
+          }
+        }
+    }
   else if ([event isEqual: @"GWFileDeletedInWatchedDirectory"])
     {
       NSArray *files = [info objectForKey: @"files"];

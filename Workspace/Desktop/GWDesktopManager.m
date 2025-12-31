@@ -556,8 +556,13 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   NSString *path = [info objectForKey: @"path"];
   NSString *event = [info objectForKey: @"event"];
   
+  NSLog(@"DEBUG: GWDesktopManager watcherNotification called");
+  NSLog(@"DEBUG: path = %@, event = %@", path, event);
+  NSLog(@"DEBUG: dskNode path = %@", [dskNode path]);
+  
   if ([path isEqual: [dskNode path]])
     {
+      NSLog(@"DEBUG: Path matches desktop node path");
       if ([event isEqual: @"GWWatchedPathDeleted"])
         {
           NSRunAlertPanel(nil, 
@@ -570,12 +575,24 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       /* update the desktop view, but only if active */
       else if ([self isActive]) 
         {
+          NSLog(@"DEBUG: Desktop is active, calling watchedPathChanged on desktop view");
           [[self desktopView] watchedPathChanged: info];
         }
+      else
+        {
+          NSLog(@"DEBUG: Desktop is NOT active, skipping update");
+        }
+    }
+  else
+    {
+      NSLog(@"DEBUG: Path does NOT match desktop node path");
     }
   /* update the dock, if active */
   if ([self dockActive])
-    [dock watchedPathChanged: info];  
+    {
+      NSLog(@"DEBUG: Dock is active, calling watchedPathChanged on dock");
+      [dock watchedPathChanged: info];
+    }
 }
 
 - (void)thumbnailsDidChangeInPaths:(NSArray *)paths

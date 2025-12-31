@@ -2017,15 +2017,22 @@ NSString *_pendingSystemActionTitle = nil;
   NSDictionary *info = [NSUnarchiver unarchiveObjectWithData: dirinfo];
   NSString *event = [info objectForKey: @"event"];
 
+  NSLog(@"DEBUG: Workspace watchedPathDidChange called");
+  NSLog(@"DEBUG: event = %@", event);
+  NSLog(@"DEBUG: path = %@", [info objectForKey: @"path"]);
+  NSLog(@"DEBUG: files = %@", [info objectForKey: @"files"]);
+
   if ([event isEqual: @"GWFileDeletedInWatchedDirectory"]
             || [event isEqual: @"GWFileCreatedInWatchedDirectory"]) {
     NSString *path = [info objectForKey: @"path"];
 
     if ([path isEqual: trashPath]) {
+      NSLog(@"DEBUG: Trash path changed, updating trash contents");
       [self _updateTrashContents];
     }
   }
   
+  NSLog(@"DEBUG: Posting GWFileWatcherFileDidChangeNotification");
 	[[NSNotificationCenter defaultCenter]
  				 postNotificationName: @"GWFileWatcherFileDidChangeNotification"
 	 								     object: info];  
@@ -2249,12 +2256,15 @@ NSString *_pendingSystemActionTitle = nil;
 - (void)_probeFSWatcherTimer:(NSTimer *)timer
 {
   if (fswatcher) {
+    NSLog(@"DEBUG: _probeFSWatcherTimer - fswatcher already connected, invalidating timer");
     [timer invalidate];
     return;
   }
   NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
+  NSLog(@"DEBUG: _probeFSWatcherTimer - attempting to connect to fswatcher...");
   fswatcher = [NSConnection rootProxyForConnectionWithRegisteredName:@"fswatcher" host:@""];
   if (fswatcher) {
+    NSLog(@"DEBUG: _probeFSWatcherTimer - SUCCESS! fswatcher connected");
     [timer invalidate];
     RETAIN(fswatcher);
     [fswatcher setProtocolForProxy:@protocol(FSWatcherProtocol)];
@@ -2263,12 +2273,33 @@ NSString *_pendingSystemActionTitle = nil;
                                                  name:NSConnectionDidDieNotification
                                                object:[fswatcher connectionForProxy]];
     [fswatcher registerClient:(id <FSWClientProtocol>)self isGlobalWatcher:NO];
+    fswnotifications = YES;
+    NSLog(@"DEBUG: _probeFSWatcherTimer - registered with fswatcher, fswnotifications = YES");
+    
+    // Re-add all the watchers that were requested before connection was established
+    NSLog(@"DEBUG: _probeFSWatcherTimer - re-adding %lu watched paths", [watchedPaths count]);
+    NSEnumerator *enumerator = [watchedPaths objectEnumerator];
+    NSString *path;
+    
+    while ((path = [enumerator nextObject])) {
+      unsigned count = [watchedPaths countForObject: path];
+      unsigned i;
+    
+      for (i = 0; i < count; i++) {
+        NSLog(@"DEBUG: _probeFSWatcherTimer - adding watcher for: %@", path);
+        [fswatcher client: (id <FSWClientProtocol>)self addWatcherForPath: path];
+      }
+    }
+    
     return;
   }
   if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
+    NSLog(@"DEBUG: _probeFSWatcherTimer - deadline reached, giving up");
     [timer invalidate];
     fswnotifications = NO;
     NSLog(@"Workspace: fswatcher did not respond; notifications disabled");
+  } else {
+    NSLog(@"DEBUG: _probeFSWatcherTimer - fswatcher not ready yet, will retry");
   }
 }
 

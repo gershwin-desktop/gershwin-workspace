@@ -1403,19 +1403,28 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSString *fpath;
   NSUInteger i;
 
+  NSLog(@"DEBUG: GWDesktopView watchedPathChanged called");
+  NSLog(@"DEBUG: event = %@", event);
+  NSLog(@"DEBUG: path = %@", [info objectForKey: @"path"]);
+  NSLog(@"DEBUG: files = %@", files);
+  NSLog(@"DEBUG: ndpath = %@", ndpath);
+
   if ([event isEqual: @"GWFileDeletedInWatchedDirectory"])
     {
+      NSLog(@"DEBUG: Handling GWFileDeletedInWatchedDirectory");
       for (i = 0; i < [files count]; i++)
 	{
 	  fname = [files objectAtIndex: i];
 	  fpath = [ndpath stringByAppendingPathComponent: fname];
 
+	  NSLog(@"DEBUG: Removing rep for: %@", fpath);
 	  [self removeRepOfSubnodePath: fpath];
 	  needupdate = YES;
 	}
     }
   else if ([event isEqual: @"GWFileCreatedInWatchedDirectory"])
     {
+      NSLog(@"DEBUG: Handling GWFileCreatedInWatchedDirectory");
       for (i = 0; i < [files count]; i++)
 	{
 	  fname = [files objectAtIndex: i];
@@ -1423,14 +1432,33 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 	  if ([self repOfSubnodePath: fpath] == nil)
 	    {
+	      NSLog(@"DEBUG: Adding rep for: %@", fpath);
 	      [self addRepForSubnodePath: fpath];
 	      needupdate = YES;
 	    }
 	}
     }
+  else if ([event isEqual: @"GWWatchedPathRenamed"])
+    {
+      /* A file/folder was moved away from this directory */
+      NSString *oldpath = [info objectForKey: @"oldpath"];
+      
+      NSLog(@"DEBUG: Handling GWWatchedPathRenamed, oldpath = %@", oldpath);
+      
+      if (oldpath)
+        {
+          fname = [oldpath lastPathComponent];
+          fpath = [ndpath stringByAppendingPathComponent: fname];
+          
+          NSLog(@"DEBUG: Removing rep for: %@", fpath);
+          [self removeRepOfSubnodePath: fpath];
+          needupdate = YES;
+        }
+    }
 
   if (needupdate)
     {
+      NSLog(@"DEBUG: Desktop view needs update, calling tile");
       [self tile];
       [self setNeedsDisplay: YES];
       [self selectionDidChange];
