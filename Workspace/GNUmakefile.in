@@ -74,6 +74,7 @@ GWFunctions.m \
 Workspace.m \
 X11AppSupport.m \
 WorkspaceApplication.m \
+GSGlobalShortcutsManager.m \
 Desktop/GWDesktopManager.m \
 Desktop/GWDesktopWindow.m \
 Desktop/GWDesktopView.m \
