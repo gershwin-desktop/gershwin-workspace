@@ -3210,12 +3210,14 @@ NSString *_pendingSystemActionTitle = nil;
   }
   
   menu = [[NSMenu alloc] initWithTitle: @""];
+  [menu setAutoenablesItems: NO];
   
   // Open
   menuItem = [NSMenuItem new];
   [menuItem setTitle: NSLocalizedString(@"Open", @"")];
   [menuItem setTarget: openTarget];
   [menuItem setAction: openAction];
+  [menuItem setEnabled: YES];
   [menu addItem: menuItem];
   RELEASE (menuItem);
   
@@ -3247,7 +3249,9 @@ NSString *_pendingSystemActionTitle = nil;
     if (canShowOpenWith) {
       menuItem = [NSMenuItem new];
       [menuItem setTitle: NSLocalizedString(@"Open With", @"")];
+      [menuItem setEnabled: YES];
       NSMenu *openWithMenu = [[NSMenu alloc] initWithTitle: @""];
+      [openWithMenu setAutoenablesItems: NO];
       
       apps = [[NSWorkspace sharedWorkspace] infoForExtension: firstext];
       app_enum = [[apps allKeys] objectEnumerator];
@@ -3259,6 +3263,7 @@ NSString *_pendingSystemActionTitle = nil;
         [appItem setTarget: openWithTarget];
         [appItem setAction: @selector(openSelectionWithApp:)];
         [appItem setRepresentedObject: key];
+        [appItem setEnabled: YES];
         [openWithMenu addItem: appItem];
         RELEASE (appItem);
       }
@@ -3277,6 +3282,7 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setTitle: NSLocalizedString(@"Copy", @"")];
   [menuItem setTarget: [Workspace gworkspace]];
   [menuItem setAction: @selector(copy:)];
+  [menuItem setEnabled: YES];
   [menu addItem: menuItem];
   RELEASE (menuItem);
 
@@ -3287,6 +3293,7 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setTitle: NSLocalizedString(@"Get Info", @"")];
   [menuItem setTarget: infoTarget];
   [menuItem setAction: @selector(showAttributesInspector:)];
+  [menuItem setEnabled: YES];
   [menu addItem: menuItem];
   RELEASE (menuItem);
   
@@ -3299,6 +3306,7 @@ NSString *_pendingSystemActionTitle = nil;
     [menuItem setTitle: NSLocalizedString(@"Duplicate", @"")];
     [menuItem setTarget: duplicateTarget];
     [menuItem setAction: duplicateAction];
+    [menuItem setEnabled: YES];
     [menu addItem: menuItem];
     RELEASE (menuItem);
     
@@ -3326,10 +3334,31 @@ NSString *_pendingSystemActionTitle = nil;
     RELEASE (menuItem);
   } else {
     // Move to Recycler
+    BOOL canRecycle = YES;
+    
+    // Check if items are in trash or not writable
+    for (i = 0; i < [nodes count]; i++) {
+      FSNode *node = [nodes objectAtIndex: i];
+      NSString *nodePath = [node path];
+      
+      // Disable if item is in trash
+      if ([nodePath hasPrefix: trashPath]) {
+        canRecycle = NO;
+        break;
+      }
+      
+      // Disable if item is not writable
+      if ([node isWritable] == NO) {
+        canRecycle = NO;
+        break;
+      }
+    }
+    
     menuItem = [NSMenuItem new];
     [menuItem setTitle: NSLocalizedString(@"Move to Recycler", @"")];
     [menuItem setTarget: recycleTarget];
     [menuItem setAction: recycleAction];
+    [menuItem setEnabled: canRecycle];
     [menu addItem: menuItem];
     RELEASE (menuItem);
   }

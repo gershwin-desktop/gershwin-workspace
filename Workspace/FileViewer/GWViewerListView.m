@@ -119,12 +119,12 @@
         }
         
         return [[Workspace gworkspace] contextMenuForNodes: selnodes
-                                                openTarget: viewer
+                                                openTarget: [viewer win]
                                              openWithTarget: [Workspace gworkspace]
                                                 infoTarget: [Workspace gworkspace]
-                                           duplicateTarget: viewer
-                                             recycleTarget: viewer
-                                               ejectTarget: viewer
+                                           duplicateTarget: [viewer win]
+                                             recycleTarget: [viewer win]
+                                               ejectTarget: [viewer win]
                                                 openAction: @selector(openSelection:)
                                            duplicateAction: @selector(duplicateFiles:)
                                              recycleAction: @selector(recycleFiles:)
