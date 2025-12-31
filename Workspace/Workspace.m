@@ -546,16 +546,16 @@ NSString *_pendingSystemActionTitle = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Recents") action:@selector(notImplemented:) keyEquivalent:@"F"];
+  menuItem = [menu addItemWithTitle:_(@"Recents") action:@selector(showHistory:) keyEquivalent:@"F"];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Documents") action:@selector(notImplemented:) keyEquivalent:@"O"];
+  menuItem = [menu addItemWithTitle:_(@"Documents") action:@selector(goToDocuments:) keyEquivalent:@"O"];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Desktop") action:@selector(notImplemented:) keyEquivalent:@"D"];
+  menuItem = [menu addItemWithTitle:_(@"Desktop") action:@selector(goToDesktop:) keyEquivalent:@"D"];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Downloads") action:@selector(notImplemented:) keyEquivalent:@"L"];
+  menuItem = [menu addItemWithTitle:_(@"Downloads") action:@selector(goToDownloads:) keyEquivalent:@"L"];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Home") action:@selector(goToHome:) keyEquivalent:@"H"];
@@ -564,36 +564,28 @@ NSString *_pendingSystemActionTitle = nil;
   menuItem = [menu addItemWithTitle:_(@"Computer") action:@selector(goToComputer:) keyEquivalent:@"C"];
   [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
-  menuItem = [menu addItemWithTitle:_(@"Transfer") action:@selector(notImplemented:) keyEquivalent:@"R"];
-  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
-  [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Network") action:@selector(notImplemented:) keyEquivalent:@"K"];
-  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
-  [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Cloud Drive") action:@selector(notImplemented:) keyEquivalent:@"I"];
-  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
-  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Transfer") action:NULL keyEquivalent:@""];
+  [menuItem setEnabled:NO];
+  menuItem = [menu addItemWithTitle:_(@"Network") action:NULL keyEquivalent:@""];
+  [menuItem setEnabled:NO];
+  menuItem = [menu addItemWithTitle:_(@"Cloud Drive") action:NULL keyEquivalent:@""];
+  [menuItem setEnabled:NO];
   menuItem = [menu addItemWithTitle:_(@"Applications") action:@selector(goToApplications:) keyEquivalent:@"A"];
   [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
-  menuItem = [menu addItemWithTitle:_(@"Utilities") action:@selector(notImplemented:) keyEquivalent:@"U"];
+  menuItem = [menu addItemWithTitle:_(@"Utilities") action:@selector(goToUtilities:) keyEquivalent:@"U"];
+  [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
-  [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
-  
-  [menu addItem:[NSMenuItem separatorItem]];
-  
-  menuItem = [menu addItemWithTitle:_(@"Recent Folders") action:@selector(showHistory:) keyEquivalent:@""];
-  [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
   
   menuItem = [menu addItemWithTitle:_(@"Go to Folder...") action:@selector(goToFolder:) keyEquivalent:@"G"];
   [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
-  menuItem = [menu addItemWithTitle:_(@"Connect to Server...") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Connect to Server...") action:NULL keyEquivalent:@""];
+  [menuItem setEnabled:NO];
 
   // Tools menu
   menuItem = [mainMenu addItemWithTitle:_(@"Tools") action:NULL keyEquivalent:@""];
@@ -658,9 +650,9 @@ NSString *_pendingSystemActionTitle = nil;
   menu = AUTORELEASE ([NSMenu new]);
   [mainMenu setSubmenu: menu forItem: menuItem];
   
-  menuItem = [menu addItemWithTitle:_(@"Workspace Help") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Workspace Help") action:@selector(workspaceHelp:) keyEquivalent:@""];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Gershwin Help") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Gershwin Help") action:@selector(openGershwinHelp:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
@@ -676,9 +668,9 @@ NSString *_pendingSystemActionTitle = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Feedback") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Feedback") action:@selector(openFeedback:) keyEquivalent:@""];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Legal & Regulatory") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Legal & Regulatory") action:@selector(openLegal:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
@@ -2808,6 +2800,64 @@ NSString *_pendingSystemActionTitle = nil;
   [history activate];
 }
 
+- (void)workspaceHelp:(id)sender
+{
+  NSAlert *alert = [NSAlert new];
+  [alert setMessageText: _(@"Workspace Help")];
+  [alert setInformativeText: _(@"You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element.")];
+  [alert addButtonWithTitle: _(@"OK")];
+  [alert runModal];
+  RELEASE (alert);
+}
+
+- (void)openGershwinHelp:(id)sender
+{
+  NSString *url = @"https://github.com/gershwin-desktop/gershwin-desktop/wiki";
+  NSTask *task = [NSTask new];
+  [task setLaunchPath: @"/usr/bin/xdg-open"];
+  [task setArguments: [NSArray arrayWithObject: url]];
+  
+  NSError *error = nil;
+  if (![task launchAndReturnError: &error]) {
+    NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
+                    [NSString stringWithFormat: _(@"Could not open URL:\n\n%@"), url], 
+                    _(@"OK"), nil, nil);
+  }
+  RELEASE (task);
+}
+
+- (void)openFeedback:(id)sender
+{
+  NSString *url = @"https://github.com/orgs/gershwin-desktop/discussions";
+  NSTask *task = [NSTask new];
+  [task setLaunchPath: @"/usr/bin/xdg-open"];
+  [task setArguments: [NSArray arrayWithObject: url]];
+  
+  NSError *error = nil;
+  if (![task launchAndReturnError: &error]) {
+    NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
+                    [NSString stringWithFormat: _(@"Could not open URL:\n\n%@"), url], 
+                    _(@"OK"), nil, nil);
+  }
+  RELEASE (task);
+}
+
+- (void)openLegal:(id)sender
+{
+  NSString *url = @"https://raw.githubusercontent.com/gershwin-desktop/gershwin-workspace/refs/heads/main/COPYING";
+  NSTask *task = [NSTask new];
+  [task setLaunchPath: @"/usr/bin/xdg-open"];
+  [task setArguments: [NSArray arrayWithObject: url]];
+  
+  NSError *error = nil;
+  if (![task launchAndReturnError: &error]) {
+    NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
+                    [NSString stringWithFormat: _(@"Could not open URL:\n\n%@"), url], 
+                    _(@"OK"), nil, nil);
+  }
+  RELEASE (task);
+}
+
 - (void)goToComputer:(id)sender
 {
   // Go to /
@@ -2827,6 +2877,63 @@ NSString *_pendingSystemActionTitle = nil;
     [self openSelectedPaths: [NSArray arrayWithObject: [appPaths objectAtIndex: 0]] newViewer: YES];
   }
 }
+
+- (void)navigateToDirectory:(NSString *)dirPath withLabel:(NSString *)label
+{
+  // Check if directory exists
+  BOOL isDir = NO;
+  if (![fm fileExistsAtPath: dirPath isDirectory: &isDir] || !isDir) {
+    // Try to create the directory if it doesn't exist
+    NSError *error = nil;
+    if (![fm createDirectoryAtPath: dirPath withIntermediateDirectories: YES attributes: nil error: &error]) {
+      NSAlert *alert = [NSAlert alertWithError: error];
+      [alert setMessageText: [NSString stringWithFormat: _(@"Cannot access %@"), label]];
+      [alert setInformativeText: [NSString stringWithFormat: _(@"Could not create or access the %@ folder"), label]];
+      [alert runModal];
+      return;
+    }
+  }
+  
+  // Navigate to the directory
+  [self openSelectedPaths: [NSArray arrayWithObject: dirPath] newViewer: YES];
+}
+
+- (void)goToDocuments:(id)sender
+{
+  NSString *documentsPath = [NSHomeDirectory() stringByAppendingPathComponent: @"/Documents"];
+  [self navigateToDirectory: documentsPath withLabel: _(@"Documents")];
+}
+
+- (void)goToDesktop:(id)sender
+{
+  NSString *desktopPath = [NSHomeDirectory() stringByAppendingPathComponent: @"/Desktop"];
+  [self navigateToDirectory: desktopPath withLabel: _(@"Desktop")];
+}
+
+- (void)goToDownloads:(id)sender
+{
+  NSString *downloadsPath = [NSHomeDirectory() stringByAppendingPathComponent: @"/Downloads"];
+  [self navigateToDirectory: downloadsPath withLabel: _(@"Downloads")];
+}
+
+- (void)goToMusic:(id)sender
+{
+  NSString *musicPath = [NSHomeDirectory() stringByAppendingPathComponent: @"/Music"];
+  [self navigateToDirectory: musicPath withLabel: _(@"Music")];
+}
+
+- (void)goToPictures:(id)sender
+{
+  NSString *picturesPath = [NSHomeDirectory() stringByAppendingPathComponent: @"/Pictures"];
+  [self navigateToDirectory: picturesPath withLabel: _(@"Pictures")];
+}
+
+- (void)goToVideos:(id)sender
+{
+  NSString *videosPath = [NSHomeDirectory() stringByAppendingPathComponent: @"/Videos"];
+  [self navigateToDirectory: videosPath withLabel: _(@"Videos")];
+}
+
 
 - (void)goToFolder:(id)sender
 {
@@ -2853,6 +2960,20 @@ NSString *_pendingSystemActionTitle = nil;
   }
   
   RELEASE (dialog);
+}
+
+- (void)goToUtilities:(id)sender
+{
+  NSString *utilitiesPath = @"/System/Applications/Utilities";
+  BOOL isDir = NO;
+  
+  if ([fm fileExistsAtPath: utilitiesPath isDirectory: &isDir] && isDir) {
+    [self openSelectedPaths: [NSArray arrayWithObject: utilitiesPath] newViewer: YES];
+  } else {
+    NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
+                    [NSString stringWithFormat: _(@"The Utilities folder could not be found at:\n\n%@"), utilitiesPath], 
+                    _(@"OK"), nil, nil);
+  }
 }
 
 - (void)goBackwardInHistory:(id)sender
