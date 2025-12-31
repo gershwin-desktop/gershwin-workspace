@@ -75,12 +75,35 @@ static KeySym keysymFromName(NSString *name)
         lastDefaultsModTime = 0;
         defaultsDomain = @"GlobalShortcuts";
         eventProcessingTimer = nil;
+        
+        // Register for distributed notifications for cross-application communication
+        [[NSDistributedNotificationCenter defaultCenter] 
+            addObserver:self
+               selector:@selector(globalShortcutsConfigurationChanged:)
+                   name:@"GSGlobalShortcutsConfigurationChanged"
+                 object:@"GlobalShortcuts"];
+        
+        // Register for temporary disable/enable notifications
+        [[NSDistributedNotificationCenter defaultCenter] 
+            addObserver:self
+               selector:@selector(temporarilyDisableAllShortcuts:)
+                   name:@"GSGlobalShortcutsTemporaryDisable"
+                 object:@"GlobalShortcuts"];
+        
+        [[NSDistributedNotificationCenter defaultCenter] 
+            addObserver:self
+               selector:@selector(reEnableAllShortcuts:)
+                   name:@"GSGlobalShortcutsReEnable"
+                 object:@"GlobalShortcuts"];
+        
+        NSLog(@"GSGlobalShortcutsManager: Registered for distributed GlobalShortcuts notifications");
     }
     return self;
 }
 
 - (void)dealloc
 {
+    [[NSDistributedNotificationCenter defaultCenter] removeObserver:self];
     [self stop];
     [shortcuts release];
     [defaultsDomain release];
@@ -187,33 +210,51 @@ static KeySym keysymFromName(NSString *name)
 
 - (BOOL)loadShortcuts
 {
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    // Create a completely fresh NSUserDefaults instance to avoid caching issues
+    NSUserDefaults *defaults = [[NSUserDefaults alloc] init];
+    [defaults addSuiteNamed:NSGlobalDomain];
     [defaults synchronize];
     
-    if (shortcuts) {
-        [defaults release];
-        defaults = [[NSUserDefaults alloc] init];
-        [defaults synchronize];
-    }
-    
     NSDictionary *config = [defaults persistentDomainForName:defaultsDomain];
-    
-    if (shortcuts && defaults != [NSUserDefaults standardUserDefaults]) {
-        [defaults release];
-    }
     
     if (!config) {
         NSLog(@"GSGlobalShortcutsManager: No configuration found");
         NSLog(@"  Create shortcuts using: defaults write %@ 'ctrl+shift+t' 'Terminal'", 
             defaultsDomain);
         [shortcuts release];
-        shortcuts = [[NSDictionary alloc] init];
+        shortcuts = [[NSMutableDictionary alloc] init];
         lastDefaultsModTime = time(NULL);
+        [defaults release];
         return YES;
     }
     
     [shortcuts release];
-    shortcuts = [config retain];
+    shortcuts = [[NSMutableDictionary alloc] init];
+    
+    // Convert old plist format (keyCombo -> command) to new internal format
+    NSEnumerator *enumerator = [config keyEnumerator];
+    NSString *keyCombo;
+    while ((keyCombo = [enumerator nextObject])) {
+        NSString *command = [config objectForKey:keyCombo];
+        
+        // Parse keyCombo to extract modifiers and key
+        NSArray *parts = [keyCombo componentsSeparatedByString:@"+"];
+        NSString *keyStr = [parts lastObject];
+        NSMutableArray *modifierParts = [NSMutableArray array];
+        for (NSUInteger i = 0; i < [parts count] - 1; i++) {
+            [modifierParts addObject:[parts objectAtIndex:i]];
+        }
+        NSString *modifiersStr = [modifierParts componentsJoinedByString:@"+"];
+        
+        // Create shortcut dictionary in the new internal format
+        NSDictionary *shortcut = @{
+            @"command": command,
+            @"modifiers": modifiersStr ?: @"",
+            @"keyStr": keyStr ?: @""
+        };
+        [shortcuts setObject:shortcut forKey:keyCombo];
+    }
+    
     lastDefaultsModTime = time(NULL);
     
     NSLog(@"GSGlobalShortcutsManager: Loaded %lu shortcuts", 
@@ -223,10 +264,13 @@ static KeySym keysymFromName(NSString *name)
         NSEnumerator *enumerator = [shortcuts keyEnumerator];
         NSString *key;
         while ((key = [enumerator nextObject])) {
-            NSLog(@"  %@ -> %@", key, [shortcuts objectForKey:key]);
+            NSDictionary *shortcut = [shortcuts objectForKey:key];
+            NSString *command = [shortcut objectForKey:@"command"];
+            NSLog(@"  %@ -> %@", key, command);
         }
     }
     
+    [defaults release];
     return YES;
 }
 
@@ -313,6 +357,88 @@ static KeySym keysymFromName(NSString *name)
     return YES;
 }
 
+- (void)ungrabKeyCombo:(NSString *)keyCombo
+{
+    NSArray *parts = parseKeyCombo(keyCombo);
+    if (!parts || [parts count] < 1) {
+        if (verbose) {
+            NSLog(@"GSGlobalShortcutsManager: Invalid key combo format: %@", keyCombo);
+        }
+        return;
+    }
+    
+    unsigned int modifier = 0;
+    NSString *keyString = nil;
+    
+    // Parse modifiers
+    for (int i = 0; i < [parts count] - 1; i++) {
+        NSString *part = [parts objectAtIndex:i];
+        if ([part isEqualToString:@"ctrl"]) {
+            modifier |= ControlMask;
+        } else if ([part isEqualToString:@"shift"]) {
+            modifier |= ShiftMask;
+        } else if ([part isEqualToString:@"alt"] || [part isEqualToString:@"mod1"]) {
+            modifier |= Mod1Mask;
+        } else if ([part isEqualToString:@"mod2"]) {
+            modifier |= Mod2Mask;
+        } else if ([part isEqualToString:@"mod3"]) {
+            modifier |= Mod3Mask;
+        } else if ([part isEqualToString:@"mod4"]) {
+            modifier |= Mod4Mask;
+        } else if ([part isEqualToString:@"mod5"]) {
+            modifier |= Mod5Mask;
+        }
+    }
+    
+    // Last part is the key
+    if ([parts count] > 0) {
+        keyString = [parts objectAtIndex:[parts count] - 1];
+    }
+    
+    if (!keyString) {
+        if (verbose) {
+            NSLog(@"GSGlobalShortcutsManager: No key name found in: %@", keyCombo);
+        }
+        return;
+    }
+    
+    KeySym keysym = keysymFromName(keyString);
+    if (keysym == NoSymbol) {
+        if (verbose) {
+            NSLog(@"GSGlobalShortcutsManager: Unknown key name: %@", keyString);
+        }
+        return;
+    }
+    
+    int keycode = XKeysymToKeycode(display, keysym);
+    if (keycode == 0) {
+        if (verbose) {
+            NSLog(@"GSGlobalShortcutsManager: No keycode for keysym: %s", XKeysymToString(keysym));
+        }
+        return;
+    }
+    
+    // Ungrab the key with all lock key variations
+    unsigned int modifiers[] = {
+        modifier,
+        modifier | numlock_mask,
+        modifier | capslock_mask,
+        modifier | numlock_mask | capslock_mask,
+        modifier | scrolllock_mask,
+        modifier | numlock_mask | scrolllock_mask,
+        modifier | capslock_mask | scrolllock_mask,
+        modifier | numlock_mask | capslock_mask | scrolllock_mask
+    };
+    
+    for (int i = 0; i < 8; i++) {
+        XUngrabKey(display, keycode, modifiers[i], rootWindow);
+    }
+    
+    if (verbose) {
+        NSLog(@"GSGlobalShortcutsManager: Ungrabbed key combo: %@", keyCombo);
+    }
+}
+
 - (BOOL)matchesEvent:(XKeyEvent *)keyEvent withKeyCombo:(NSString *)keyCombo
 {
     NSArray *parts = parseKeyCombo(keyCombo);
@@ -388,7 +514,8 @@ static KeySym keysymFromName(NSString *name)
             
             while ((keyCombo = [enumerator nextObject])) {
                 if ([self matchesEvent:&event.xkey withKeyCombo:keyCombo]) {
-                    NSString *command = [shortcuts objectForKey:keyCombo];
+                    NSDictionary *shortcutDict = [shortcuts objectForKey:keyCombo];
+                    NSString *command = [shortcutDict objectForKey:@"command"];
                     NSLog(@"GSGlobalShortcutsManager: Executing command for %@: %@",
                         keyCombo, command);
                     
@@ -442,9 +569,12 @@ static KeySym keysymFromName(NSString *name)
         NSLog(@"GSGlobalShortcutsManager: Found executable: %@ -> %@", executable, fullPath);
     }
     
+    NSLog(@"GSGlobalShortcutsManager: Attempting to execute command: %@", command);
+    
     pid_t pid = fork();
     if (pid == 0) {
         // Child process
+        NSLog(@"GSGlobalShortcutsManager: Child process created for command: %@", command);
         setsid();
         
         // Close file descriptors
@@ -468,11 +598,16 @@ static KeySym keysymFromName(NSString *name)
             const char *shell = getenv("SHELL");
             if (!shell) shell = "/bin/sh";
             
+            NSLog(@"GSGlobalShortcutsManager: Grandchild executing: %s -c '%@'", shell, command);
+            
             execl(shell, shell, "-c", [command UTF8String], (char *)NULL);
+            NSLog(@"GSGlobalShortcutsManager: ERROR: execl failed for command: %@", command);
             _exit(127);
         } else if (grandchild > 0) {
+            NSLog(@"GSGlobalShortcutsManager: Grandchild process %d started for command: %@", grandchild, command);
             _exit(0);
         } else {
+            NSLog(@"GSGlobalShortcutsManager: ERROR: Failed to create grandchild for command: %@", command);
             _exit(1);
         }
     } else if (pid > 0) {
@@ -497,6 +632,7 @@ static KeySym keysymFromName(NSString *name)
             return NO;
         }
         
+        NSLog(@"GSGlobalShortcutsManager: Command executed successfully: %@", command);
         return YES;
     } else {
         NSLog(@"GSGlobalShortcutsManager: Error: failed to fork process for command: %@", command);
@@ -541,6 +677,194 @@ static KeySym keysymFromName(NSString *name)
     return nil;
 }
 
+- (void)globalShortcutsConfigurationChanged:(NSNotification *)notification
+{
+    NSLog(@"GSGlobalShortcutsManager: Received GlobalShortcuts configuration changed notification");
+    
+    if (running) {
+        NSLog(@"GSGlobalShortcutsManager: Manager is running, processing new shortcuts data");
+        
+        // Extract shortcuts data directly from userInfo
+        NSDictionary *userInfo = [notification userInfo];
+        NSLog(@"GSGlobalShortcutsManager: Received userInfo: %@", userInfo);
+        
+        NSNumber *shortcutCount = [userInfo objectForKey:@"shortcutCount"];
+        NSArray *shortcutsArray = [userInfo objectForKey:@"shortcuts"];
+        
+        NSLog(@"GSGlobalShortcutsManager: shortcutCount = %@, shortcutsArray = %@", shortcutCount, shortcutsArray);
+        
+        if (shortcutCount) {
+            NSLog(@"GSGlobalShortcutsManager: New configuration has %@ shortcuts", shortcutCount);
+        }
+        
+        if (shortcutsArray) {
+            NSLog(@"GSGlobalShortcutsManager: Processing shortcuts data from IPC (no disk I/O needed)");
+            [self processShortcutsData:shortcutsArray];
+        } else {
+            NSLog(@"GSGlobalShortcutsManager: No shortcuts data in notification, falling back to plist read");
+            [self reloadShortcutsIfChanged];
+        }
+    } else {
+        NSLog(@"GSGlobalShortcutsManager: Manager not running, ignoring notification");
+    }
+}
+
+- (void)processShortcutsData:(NSArray *)shortcutsArray
+{
+    NSLog(@"GSGlobalShortcutsManager: Processing %lu shortcuts from IPC data", (unsigned long)[shortcutsArray count]);
+    NSLog(@"GSGlobalShortcutsManager: Raw shortcuts array: %@", shortcutsArray);
+    
+    // Ungrab current keys first
+    [self ungrabAllKeys];
+    
+    // Clear current shortcuts
+    [shortcuts removeAllObjects];
+    
+    // Process the new shortcuts data
+    NSLog(@"GSGlobalShortcutsManager: Starting to process shortcuts...");
+    NSUInteger processedCount = 0;
+    for (NSDictionary *shortcutDict in shortcutsArray) {
+        processedCount++;
+        NSLog(@"GSGlobalShortcutsManager: Processing shortcut %lu/%lu: %@", (unsigned long)processedCount, (unsigned long)[shortcutsArray count], shortcutDict);
+        
+        NSString *key = [shortcutDict objectForKey:@"key"];
+        NSString *command = [shortcutDict objectForKey:@"command"];
+        NSString *modifiersStr = [shortcutDict objectForKey:@"modifiers"];
+        NSString *keyStr = [shortcutDict objectForKey:@"keyStr"];
+        
+        NSLog(@"GSGlobalShortcutsManager: Extracted - key: '%@', command: '%@', modifiers: '%@', keyStr: '%@'", 
+              key, command, modifiersStr, keyStr);
+        
+        if (key && command && modifiersStr && keyStr) {
+            NSDictionary *shortcut = @{
+                @"command": command,
+                @"modifiers": modifiersStr,
+                @"keyStr": keyStr
+            };
+            [shortcuts setObject:shortcut forKey:key];
+            NSLog(@"GSGlobalShortcutsManager: Successfully added shortcut %@ -> %@", key, command);
+        } else {
+            NSLog(@"GSGlobalShortcutsManager: ERROR - Skipping incomplete shortcut data: %@", shortcutDict);
+            NSLog(@"GSGlobalShortcutsManager: key=%@, command=%@, modifiers=%@, keyStr=%@", key, command, modifiersStr, keyStr);
+        }
+    }
+    NSLog(@"GSGlobalShortcutsManager: Finished processing shortcuts. Processed %lu shortcuts.", (unsigned long)processedCount);
+    
+    NSLog(@"GSGlobalShortcutsManager: Loaded %lu shortcuts from IPC data", (unsigned long)[shortcuts count]);
+    
+    // Debug: show what shortcuts we have before grabbing keys
+    for (NSString *key in shortcuts) {
+        NSDictionary *shortcut = [shortcuts objectForKey:key];
+        NSLog(@"GSGlobalShortcutsManager: About to grab shortcut %@ (modifiers: %@, keyStr: %@) -> %@", 
+              key, [shortcut objectForKey:@"modifiers"], [shortcut objectForKey:@"keyStr"], [shortcut objectForKey:@"command"]);
+    }
+    
+    // Grab the new keys
+    NSLog(@"GSGlobalShortcutsManager: Calling grabKeys to register new shortcuts...");
+    [self grabKeys];
+}
+
+- (void)reloadShortcutsIfChanged
+{
+    NSLog(@"GSGlobalShortcutsManager: Checking if GlobalShortcuts configuration changed...");
+    
+    // Check if our GlobalShortcuts domain has changed
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+    [defaults synchronize];
+    
+    NSDictionary *newConfig = [defaults persistentDomainForName:defaultsDomain];
+    
+    NSLog(@"GSGlobalShortcutsManager: Current shortcuts count: %lu, New config count: %lu", 
+        (unsigned long)(shortcuts ? [shortcuts count] : 0), 
+        (unsigned long)(newConfig ? [newConfig count] : 0));
+    
+    // Compare with current shortcuts
+    BOOL needsReload = NO;
+    
+    if (!shortcuts && !newConfig) {
+        NSLog(@"GSGlobalShortcutsManager: Both old and new configs are nil, no change");
+        return;
+    }
+    
+    if (!shortcuts || !newConfig) {
+        needsReload = YES;
+        NSLog(@"GSGlobalShortcutsManager: Configuration changed (one is nil), reload needed");
+    } else if ([shortcuts count] != [newConfig count]) {
+        needsReload = YES;
+        NSLog(@"GSGlobalShortcutsManager: Shortcut count changed (%lu -> %lu), reload needed", 
+            (unsigned long)[shortcuts count], (unsigned long)[newConfig count]);
+    } else {
+        // Check if any key-command pairs have changed
+        NSEnumerator *keyEnum = [shortcuts keyEnumerator];
+        NSString *keyCombo;
+        while ((keyCombo = [keyEnum nextObject])) {
+            NSString *oldCommand = [shortcuts objectForKey:keyCombo];
+            NSString *newCommand = [newConfig objectForKey:keyCombo];
+            
+            if (!newCommand || ![oldCommand isEqualToString:newCommand]) {
+                needsReload = YES;
+                NSLog(@"GSGlobalShortcutsManager: Command changed for %@: '%@' -> '%@'", 
+                    keyCombo, oldCommand, newCommand ?: @"(removed)");
+                break;
+            }
+        }
+        
+        // Check for new shortcuts that weren't in the old config
+        if (!needsReload) {
+            keyEnum = [newConfig keyEnumerator];
+            while ((keyCombo = [keyEnum nextObject])) {
+                if (![shortcuts objectForKey:keyCombo]) {
+                    needsReload = YES;
+                    NSLog(@"GSGlobalShortcutsManager: New shortcut added: %@", keyCombo);
+                    break;
+                }
+            }
+        }
+        
+        if (!needsReload) {
+            NSLog(@"GSGlobalShortcutsManager: No changes detected in GlobalShortcuts");
+        }
+    }
+    
+    if (needsReload) {
+        NSLog(@"GSGlobalShortcutsManager: Global shortcuts configuration changed, reloading");
+        
+        // Ungrab all current keys
+        [self ungrabAllKeys];
+        
+        // Load new configuration
+        if ([self loadShortcuts]) {
+            // Grab new keys
+            if ([self grabKeys]) {
+                NSLog(@"GSGlobalShortcutsManager: Successfully reloaded %lu shortcuts", 
+                    (unsigned long)[shortcuts count]);
+            } else {
+                NSLog(@"GSGlobalShortcutsManager: Warning: Failed to grab some keys after reload");
+            }
+        } else {
+            NSLog(@"GSGlobalShortcutsManager: Error: Failed to reload shortcuts");
+        }
+    }
+}
+
+- (void)ungrabAllKeys
+{
+    if (!shortcuts || [shortcuts count] == 0) {
+        return;
+    }
+    
+    NSEnumerator *enumerator = [shortcuts keyEnumerator];
+    NSString *keyCombo;
+    
+    while ((keyCombo = [enumerator nextObject])) {
+        [self ungrabKeyCombo:keyCombo];
+    }
+    
+    if (verbose) {
+        NSLog(@"GSGlobalShortcutsManager: Ungrabbed all keys");
+    }
+}
+
 - (void)showCommandFailureAlert:(NSString *)command shortcut:(NSString *)shortcut
 {
     NSAlert *alert = [NSAlert alertWithMessageText:@"Global Shortcut Failed"
@@ -559,6 +883,41 @@ static KeySym keysymFromName(NSString *name)
                                 withObject:nil
                              waitUntilDone:NO];
     }
+}
+
+- (void)temporarilyDisableAllShortcuts:(NSNotification *)notification
+{
+    if (running && shortcuts && [shortcuts count] > 0) {
+        NSLog(@"GSGlobalShortcutsManager: Temporarily disabling all shortcuts for key capture");
+        [self ungrabAllKeys];
+    } else {
+        NSLog(@"GSGlobalShortcutsManager: Cannot disable shortcuts - not running or no shortcuts loaded");
+    }
+}
+
+- (void)reEnableAllShortcuts:(NSNotification *)notification
+{
+    if (running) {
+        NSLog(@"GSGlobalShortcutsManager: Re-enabling all shortcuts after key capture");
+        [self grabKeys];
+    } else {
+        NSLog(@"GSGlobalShortcutsManager: Cannot re-enable shortcuts - not running");
+    }
+}
+
+- (BOOL)isShortcutAlreadyTaken:(NSString *)keyCombo
+{
+    // Check if the key combination is already in use
+    for (NSString *key in shortcuts) {
+        NSDictionary *shortcut = [shortcuts objectForKey:key];
+        NSString *existingCombo = [NSString stringWithFormat:@"%@+%@", 
+                                  [shortcut objectForKey:@"modifiers"],
+                                  [shortcut objectForKey:@"keyStr"]];
+        if ([existingCombo isEqualToString:keyCombo]) {
+            return YES;
+        }
+    }
+    return NO;
 }
 
 @end

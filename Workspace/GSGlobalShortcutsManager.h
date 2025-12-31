@@ -13,7 +13,7 @@
 
 @interface GSGlobalShortcutsManager : NSObject
 {
-    NSDictionary *shortcuts;
+    NSMutableDictionary *shortcuts;
     Display *display;
     Window rootWindow;
     unsigned int numlock_mask;
@@ -51,6 +51,46 @@
  * Show alert when a global shortcut command fails to execute
  */
 - (void)showCommandFailureAlert:(NSString *)command shortcut:(NSString *)shortcut;
+
+/**
+ * Process shortcuts data directly from IPC notification
+ */
+- (void)processShortcutsData:(NSArray *)shortcutsArray;
+
+/**
+ * Reload shortcuts if the configuration has changed
+ */
+- (void)reloadShortcutsIfChanged;
+
+/**
+ * Notification handler for GlobalShortcuts configuration changes
+ */
+- (void)globalShortcutsConfigurationChanged:(NSNotification *)notification;
+
+/**
+ * Ungrab a specific key combination
+ */
+- (void)ungrabKeyCombo:(NSString *)keyCombo;
+
+/**
+ * Ungrab all currently grabbed keys
+ */
+- (void)ungrabAllKeys;
+
+/**
+ * Temporarily disable all shortcuts (for key capture)
+ */
+- (void)temporarilyDisableAllShortcuts:(NSNotification *)notification;
+
+/**
+ * Re-enable all shortcuts after key capture
+ */
+- (void)reEnableAllShortcuts:(NSNotification *)notification;
+
+/**
+ * Check if a shortcut is already taken
+ */
+- (BOOL)isShortcutAlreadyTaken:(NSString *)keyCombo;
 
 @end
 

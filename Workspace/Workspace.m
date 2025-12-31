@@ -716,9 +716,11 @@ NSString *_pendingSystemActionTitle = nil;
   // Initialize global shortcuts manager only if this instance is rendering the desktop
   if ([dtopManager isActive]) {
     globalShortcutsManager = [[GSGlobalShortcutsManager sharedManager] retain];
-    if (![globalShortcutsManager startWithVerbose:NO]) {
+    if (![globalShortcutsManager startWithVerbose:YES]) {  // Enable verbose for debugging
       NSLog(@"Workspace: Warning - Global shortcuts manager failed to start");
       DESTROY(globalShortcutsManager);
+    } else {
+      NSLog(@"Workspace: Global shortcuts manager started successfully");
     }
   } else {
     NSLog(@"Workspace: Not the desktop instance - global shortcuts disabled");
