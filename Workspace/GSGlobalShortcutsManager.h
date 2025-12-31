@@ -47,6 +47,11 @@
  */
 - (BOOL)loadShortcuts;
 
+/**
+ * Show alert when a global shortcut command fails to execute
+ */
+- (void)showCommandFailureAlert:(NSString *)command shortcut:(NSString *)shortcut;
+
 @end
 
 #endif

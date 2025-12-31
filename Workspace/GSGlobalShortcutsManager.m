@@ -7,6 +7,7 @@
 #import "GSGlobalShortcutsManager.h"
 #import <AppKit/NSApplication.h>
 #import <AppKit/NSEvent.h>
+#import <AppKit/NSAlert.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
@@ -394,6 +395,7 @@ static KeySym keysymFromName(NSString *name)
                     if (![self runCommand:command]) {
                         NSLog(@"GSGlobalShortcutsManager: Warning: Failed to execute command: %@",
                             command);
+                        [self showCommandFailureAlert:command shortcut:keyCombo];
                     }
                     break;
                 }
@@ -537,6 +539,26 @@ static KeySym keysymFromName(NSString *name)
     }
     
     return nil;
+}
+
+- (void)showCommandFailureAlert:(NSString *)command shortcut:(NSString *)shortcut
+{
+    NSAlert *alert = [NSAlert alertWithMessageText:@"Global Shortcut Failed"
+                                     defaultButton:@"OK"
+                                   alternateButton:nil
+                                       otherButton:nil
+                         informativeTextWithFormat:@"The command '%@' assigned to shortcut '%@' could not be executed.\n\nPossible reasons:\n• Command not found in PATH\n• Insufficient permissions\n• Command syntax error", command, shortcut];
+    
+    [alert setAlertStyle:NSWarningAlertStyle];
+    
+    // Run the alert on the main thread since X11 event processing may be on a background thread
+    if ([NSThread isMainThread]) {
+        [alert runModal];
+    } else {
+        [alert performSelectorOnMainThread:@selector(runModal)
+                                withObject:nil
+                             waitUntilDone:NO];
+    }
 }
 
 @end
