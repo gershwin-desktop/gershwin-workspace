@@ -281,6 +281,7 @@ NSString *_pendingSystemActionTitle = nil;
   [menu addItem:[NSMenuItem separatorItem]];
   
   menuItem = [menu addItemWithTitle:_(@"Move to Trash") action:@selector(recycleFiles:) keyEquivalent:@""];
+  [menuItem setKeyEquivalent:@"\x7f"]; // Backspace
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask];
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Destroy") action:@selector(deleteFiles:) keyEquivalent:@""];
