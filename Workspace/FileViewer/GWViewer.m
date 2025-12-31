@@ -325,8 +325,8 @@
   CGFloat w = r.size.width;
   CGFloat h = r.size.height;   
   CGFloat d = 0.0;
-  int xmargin = 8;
-  int ymargin = 6;
+  int xmargin = 0;
+  int ymargin = 0;
   int pathscrh = 98;
   NSUInteger resizeMask;
   BOOL hasScroller;

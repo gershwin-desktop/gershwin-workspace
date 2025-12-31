@@ -253,7 +253,7 @@
   int boxh = 32;  
   int labelw = 106;
   int labelh = 20;
-  int margin = 8;
+  int margin = 0;
   unsigned int resizeMask;
   BOOL hasScroller;
 
