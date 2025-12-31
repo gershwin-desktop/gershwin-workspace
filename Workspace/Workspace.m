@@ -713,11 +713,15 @@ NSString *_pendingSystemActionTitle = nil;
   
   [self initializeWorkspace];
   
-  // Initialize global shortcuts manager
-  globalShortcutsManager = [[GSGlobalShortcutsManager sharedManager] retain];
-  if (![globalShortcutsManager startWithVerbose:NO]) {
-    NSLog(@"Workspace: Warning - Global shortcuts manager failed to start");
-    DESTROY(globalShortcutsManager);
+  // Initialize global shortcuts manager only if this instance is rendering the desktop
+  if ([dtopManager isActive]) {
+    globalShortcutsManager = [[GSGlobalShortcutsManager sharedManager] retain];
+    if (![globalShortcutsManager startWithVerbose:NO]) {
+      NSLog(@"Workspace: Warning - Global shortcuts manager failed to start");
+      DESTROY(globalShortcutsManager);
+    }
+  } else {
+    NSLog(@"Workspace: Not the desktop instance - global shortcuts disabled");
   }
 }
 
@@ -750,6 +754,12 @@ NSString *_pendingSystemActionTitle = nil;
   if (logoutTimer && [logoutTimer isValid]) {
     [logoutTimer invalidate];
     DESTROY (logoutTimer);
+  }
+  
+  // Stop global shortcuts manager if it was started
+  if (globalShortcutsManager) {
+    [globalShortcutsManager stop];
+    DESTROY(globalShortcutsManager);
   }
   
   [wsnc removeObserver: self];
