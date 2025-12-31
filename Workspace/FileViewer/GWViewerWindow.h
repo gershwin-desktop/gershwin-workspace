@@ -61,6 +61,7 @@
 
 - (BOOL)validateItem:(id)menuItem;
 - (void)openSelectionInNewViewer:(BOOL)newv;
+- (void)openSelection:(id)sender;
 - (void)openSelectionAsFolder;
 - (void)openSelectionWith;
 - (void)newFolder;
@@ -71,6 +72,7 @@
 - (void)deleteFiles;
 - (void)goBackwardInHistory;
 - (void)goForwardInHistory;
+- (void)openParentFolder;
 - (void)setViewerBehaviour:(id)sender;
 - (void)setViewerType:(id)sender;
 - (void)setShownType:(id)sender;
@@ -82,5 +84,7 @@
 - (void)chooseBackColor:(id)sender;
 - (void)selectAllInViewer;
 - (void)showTerminal;
+- (void)toggleHiddenFiles;
+- (void)quickLook:(id)sender;
 
 @end

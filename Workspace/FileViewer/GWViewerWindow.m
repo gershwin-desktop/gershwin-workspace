@@ -179,14 +179,53 @@
 	} 
       return;
 
-    case NSBackspaceKey:
-      if (flags & NSShiftKeyMask)
+    case NSUpArrowFunctionKey:
+      if (flags & NSCommandKeyMask)
 	{
+	  [[self delegate] openParentFolder];
+	}
+      return;
+
+    case NSDownArrowFunctionKey:
+      if (flags & NSCommandKeyMask)
+	{
+	  [[self delegate] openSelection: nil];
+	}
+      return;
+
+    case NSDeleteCharacter:
+    case NSBackspaceCharacter:
+    case NSDeleteFunctionKey:
+      if (flags & (NSShiftKeyMask | NSCommandKeyMask))
+	{
+	  // Command + Delete or Shift + Delete = Empty Trash
 	  [[self delegate] emptyTrash];
 	}
-      else
+      else if (flags & NSCommandKeyMask)
 	{
+	  // Command + Delete = Move to Trash
 	  [[self delegate] recycleFiles];
+	}
+      else if (flags & NSAlternateKeyMask)
+	{
+	  // Option + Delete = Delete immediately
+	  [[self delegate] deleteFiles];
+	}
+      return;
+      
+    case '.':
+      if (flags & (NSShiftKeyMask | NSCommandKeyMask))
+	{
+	  // Command + Shift + . = Show hidden files
+	  [[self delegate] toggleHiddenFiles];
+	}
+      return;
+      
+    case ' ':
+      // Space = Quick Look
+      if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
+	{
+	  [[self delegate] quickLook: nil];
 	}
       return;
     }

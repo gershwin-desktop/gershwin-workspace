@@ -347,6 +347,18 @@
 
 - (void)setDefaultSpatialBehaviour:(id)sender;
 
+- (void)notImplemented:(id)sender;
+
+- (void)undo:(id)sender;
+
+- (void)redo:(id)sender;
+
+- (void)toggleHiddenFiles;
+
+- (void)quickLook:(id)sender;
+
+- (void)emptyTrash;
+
 //
 // NSServicesRequests protocol
 //

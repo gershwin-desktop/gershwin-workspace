@@ -185,21 +185,61 @@ NSString *_pendingSystemActionTitle = nil;
   NSMenu *windows, *services;  
   id<NSMenuItem> menuItem;
   
-  // File
+  // Workspace menu (main application menu)
+  [mainMenu addItemWithTitle:_(@"About Workspace") action:@selector(showInfo:) keyEquivalent:@""];
+  
+  [mainMenu addItem:[NSMenuItem separatorItem]];
+  
+  [mainMenu addItemWithTitle:_(@"Preferences...") action:@selector(showPreferences:) keyEquivalent:@","];
+  
+  [mainMenu addItem:[NSMenuItem separatorItem]];
+  
+  // Services submenu
+  menuItem = [mainMenu addItemWithTitle:_(@"Services") action:NULL keyEquivalent:@""];
+  services = AUTORELEASE ([NSMenu new]);
+  [mainMenu setSubmenu: services forItem: menuItem];
+  
+  [mainMenu addItem:[NSMenuItem separatorItem]];
+  
+  [mainMenu addItemWithTitle:_(@"Hide Workspace") action:@selector(hide:) keyEquivalent:@"h"];
+  [mainMenu addItemWithTitle:_(@"Hide Others") action:@selector(hideOtherApplications:) keyEquivalent:@"h"];
+  [[mainMenu itemWithTitle:_(@"Hide Others")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSAlternateKeyMask];
+  [mainMenu addItemWithTitle:_(@"Show All") action:@selector(unhideAllApplications:) keyEquivalent:@""];
+  
+  [mainMenu addItem:[NSMenuItem separatorItem]];
+  
+  [mainMenu addItemWithTitle:_(@"Quit Workspace") action:@selector(terminate:) keyEquivalent:@"q"];
+  
+  // File menu
   menuItem = [mainMenu addItemWithTitle:_(@"File") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
   [mainMenu setSubmenu: menu forItem: menuItem];
+  
+  [menu addItemWithTitle:_(@"New Workspace Window") action:@selector(showViewer:) keyEquivalent:@"n"];
+  
+  menuItem = [menu addItemWithTitle:_(@"New Tab") action:@selector(notImplemented:) keyEquivalent:@"t"];
+  [menuItem setTarget:self];
+  
   [menu addItemWithTitle:_(@"New Folder") action:@selector(newFolder:) keyEquivalent:@"N"];
-  [menu addItemWithTitle:_(@"New File")  action:@selector(newFile:) keyEquivalent:@""];
+  [[menu itemWithTitle:_(@"New Folder")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  
+  menuItem = [menu addItemWithTitle:_(@"New Folder with Selection") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"New Smart Folder") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"New Burn Folder") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
   
   [menu addItemWithTitle:_(@"Open") action:@selector(openSelection:) keyEquivalent:@"o"];
-  [menu addItemWithTitle:_(@"Open With...")  action:@selector(openWith:) keyEquivalent:@""];
-  [menu addItemWithTitle:_(@"Open as Folder") action:@selector(openSelectionAsFolder:) keyEquivalent:@"O"];
   
-  [menu addItem:[NSMenuItem separatorItem]];
+  // Open With submenu
+  menuItem = [menu addItemWithTitle:_(@"Open With") action:NULL keyEquivalent:@""];
+  subMenu = AUTORELEASE ([NSMenu new]);
+  [menu setSubmenu: subMenu forItem: menuItem];
   
+  [menu addItemWithTitle:_(@"Print") action:@selector(print:) keyEquivalent:@"p"];
   [menu addItemWithTitle:_(@"Close Window") action:@selector(performClose:) keyEquivalent:@"w"];
   
   [menu addItem:[NSMenuItem separatorItem]];
@@ -208,210 +248,261 @@ NSString *_pendingSystemActionTitle = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  [menu addItemWithTitle:_(@"Duplicate")  action:@selector(duplicateFiles:) keyEquivalent:@"d"];
+  menuItem = [menu addItemWithTitle:_(@"Compress \"item\"") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  [menu addItemWithTitle:_(@"Duplicate") action:@selector(duplicateFiles:) keyEquivalent:@"d"];
+  menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(notImplemented:) keyEquivalent:@"l"];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Quick Look \"item\"") action:@selector(notImplemented:) keyEquivalent:@" "];
+  [menuItem setKeyEquivalentModifierMask:0]; // Space bar only
+  [menuItem setTarget:self];
+  
+  // Share submenu
+  menuItem = [menu addItemWithTitle:_(@"Share") action:NULL keyEquivalent:@""];
+  subMenu = AUTORELEASE ([NSMenu new]);
+  [menu setSubmenu: subMenu forItem: menuItem];
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  [menu addItemWithTitle:_(@"Move to Recycler")  action:@selector(recycleFiles:) keyEquivalent:@"r"];
+  [menu addItemWithTitle:_(@"Move to Trash") action:@selector(recycleFiles:) keyEquivalent:@""];
+  [[menu itemWithTitle:_(@"Move to Trash")] setKeyEquivalentModifierMask:NSCommandKeyMask];
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  [menu addItemWithTitle:_(@"Destroy")  action:@selector(deleteFiles:) keyEquivalent:@""];
-  
-  [menu addItem:[NSMenuItem separatorItem]];
-  
-  [menu addItemWithTitle:_(@"Print...") action:@selector(print:) keyEquivalent:@"p"];
+  [menu addItemWithTitle:_(@"Find") action:@selector(showFinder:) keyEquivalent:@"f"];
+  menuItem = [menu addItemWithTitle:_(@"Tags...") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
 
-  // Edit
+  // Edit menu
   menuItem = [mainMenu addItemWithTitle:_(@"Edit") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
   [mainMenu setSubmenu: menu forItem: menuItem];
+  
+  [menu addItemWithTitle:_(@"Undo") action:@selector(undo:) keyEquivalent:@"z"];
+  [[menu itemWithTitle:_(@"Undo")] setTarget:self];
+  [menu addItemWithTitle:_(@"Redo") action:@selector(redo:) keyEquivalent:@"Z"];
+  [[menu itemWithTitle:_(@"Redo")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [[menu itemWithTitle:_(@"Redo")] setTarget:self];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+  
   [menu addItemWithTitle:_(@"Cut") action:@selector(cut:) keyEquivalent:@"x"];
   [menu addItemWithTitle:_(@"Copy") action:@selector(copy:) keyEquivalent:@"c"];
   [menu addItemWithTitle:_(@"Paste") action:@selector(paste:) keyEquivalent:@"v"];
   [menu addItemWithTitle:_(@"Select All") action:@selector(selectAllInViewer:) keyEquivalent:@"a"];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+  
+  menuItem = [menu addItemWithTitle:_(@"Show Clipboard") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+  
+  menuItem = [menu addItemWithTitle:_(@"Start Dictation") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Symbols") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
 
-  // View
+  // View menu
   menuItem = [mainMenu addItemWithTitle:_(@"View") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
   [mainMenu setSubmenu: menu forItem: menuItem];
-  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Icon") action:@selector(setViewerType:) keyEquivalent:@"1"];
+  
+  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"as Icons") action:@selector(setViewerType:) keyEquivalent:@"1"];
   [menuItem setTag:GWViewTypeIcon];
   [menuItem autorelease];
   [menu addItem:menuItem];
-  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"List") action:@selector(setViewerType:) keyEquivalent:@"2"];
+  
+  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"as List") action:@selector(setViewerType:) keyEquivalent:@"2"];
   [menuItem setTag:GWViewTypeList];
   [menuItem autorelease];
   [menu addItem:menuItem];
 
-  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Browser") action:@selector(setViewerType:) keyEquivalent:@"3"];
+  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"as Columns") action:@selector(setViewerType:) keyEquivalent:@"3"];
   [menuItem setTag:GWViewTypeBrowser];
   [menuItem autorelease];
   [menu addItem:menuItem];
-
-  [menu addItem:[NSMenuItem separatorItem]];
-
-  menuItem = [menu addItemWithTitle:_(@"View Behaviour") action:NULL keyEquivalent:@""];
-  subMenu = AUTORELEASE ([NSMenu new]);
-  [menu setSubmenu: subMenu forItem: menuItem];
-  NSLog(@"Created View Behaviour submenu");
-
-  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Browsing") action:@selector(setViewerBehaviour:) keyEquivalent:@"B"];
+  
+  menuItem = [menu addItemWithTitle:_(@"as Gallery") action:@selector(notImplemented:) keyEquivalent:@"4"];
   [menuItem setTarget:self];
-  [subMenu addItem:menuItem];
-  [menuItem release];
-  NSLog(@"Added Browsing menu item with target: %@", self);
-
-  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Spatial") action:@selector(setViewerBehaviour:) keyEquivalent:@"S"];
-  [menuItem setTarget:self];
-  [subMenu addItem:menuItem];
-  [menuItem release];
-  NSLog(@"Added Spatial menu item with target: %@", self);
-
-  [subMenu addItem:[NSMenuItem separatorItem]];
-
-  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Set Browsing as Default") action:@selector(setDefaultBrowsingBehaviour:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  [subMenu addItem:menuItem];
-  [menuItem release];
-
-  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Set Spatial as Default") action:@selector(setDefaultSpatialBehaviour:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  [subMenu addItem:menuItem];
-  [menuItem release];
-
-  menuItem = [menu addItemWithTitle:_(@"Show") action:NULL keyEquivalent:@""];
-  subMenu = AUTORELEASE ([NSMenu new]);
-  [menu setSubmenu: subMenu forItem: menuItem];
-  [subMenu addItemWithTitle:_(@"Name only") action:@selector(setShownType:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"Type") action:@selector(setShownType:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"Size") action:@selector(setShownType:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"Modification date") action:@selector(setShownType:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"Owner") action:@selector(setShownType:) keyEquivalent:@""];
-      
-  menuItem = [menu addItemWithTitle:_(@"Icon Size") action:NULL keyEquivalent:@""];
-  subMenu = AUTORELEASE ([NSMenu new]);
-  [menu setSubmenu: subMenu forItem: menuItem];	
-  [subMenu addItemWithTitle:_(@"24") action:@selector(setIconsSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"28") action:@selector(setIconsSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"32") action:@selector(setIconsSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"36") action:@selector(setIconsSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"40") action:@selector(setIconsSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"48") action:@selector(setIconsSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"64") action:@selector(setIconsSize:) keyEquivalent:@""];
   
   [menu addItem:[NSMenuItem separatorItem]];
-      
-  menuItem = [menu  addItemWithTitle:_(@"Icon Position") action:NULL keyEquivalent:@""];
-  subMenu = AUTORELEASE ([NSMenu new]);
-  [menu setSubmenu: subMenu forItem: menuItem];	
-  [subMenu addItemWithTitle:_(@"Up") action:@selector(setIconsPosition:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"Left") action:@selector(setIconsPosition:) keyEquivalent:@""];
-
-  [menu addItem:[NSMenuItem separatorItem]];
-
-  menuItem = [menu addItemWithTitle:_(@"Thumbnails") action:NULL keyEquivalent:@""];
-  subMenu = AUTORELEASE ([NSMenu new]);
-  [menu setSubmenu: subMenu forItem: menuItem];	
-  [subMenu addItemWithTitle:_(@"Make thumbnail(s)") action:@selector(makeThumbnails:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"Remove thumbnail(s)") action:@selector(removeThumbnails:) keyEquivalent:@""];
-
-  [menu addItem:[NSMenuItem separatorItem]];
-
-  menuItem = [menu addItemWithTitle:_(@"Label Size") action:NULL keyEquivalent:@""];
+  
+  menuItem = [menu addItemWithTitle:_(@"Use Stacks") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
+  // Sort By submenu
+  menuItem = [menu addItemWithTitle:_(@"Sort By") action:NULL keyEquivalent:@""];
   subMenu = AUTORELEASE ([NSMenu new]);
   [menu setSubmenu: subMenu forItem: menuItem];
-  [subMenu addItemWithTitle:_(@"10") action:@selector(setLabelSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"11") action:@selector(setLabelSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"12") action:@selector(setLabelSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"13") action:@selector(setLabelSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"14") action:@selector(setLabelSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"15") action:@selector(setLabelSize:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"16") action:@selector(setLabelSize:) keyEquivalent:@""];
-
+  menuItem = [subMenu addItemWithTitle:_(@"Name") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [subMenu addItemWithTitle:_(@"Kind") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [subMenu addItemWithTitle:_(@"Date Modified") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [subMenu addItemWithTitle:_(@"Date Created") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [subMenu addItemWithTitle:_(@"Size") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [subMenu addItemWithTitle:_(@"Tags") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
   [menu addItem:[NSMenuItem separatorItem]];
+  
+  menuItem = [menu addItemWithTitle:_(@"Clean Up") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
+  // Clean Up By submenu
+  menuItem = [menu addItemWithTitle:_(@"Clean Up By") action:NULL keyEquivalent:@""];
+  subMenu = AUTORELEASE ([NSMenu new]);
+  [menu setSubmenu: subMenu forItem: menuItem];
+  menuItem = [subMenu addItemWithTitle:_(@"Name") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [subMenu addItemWithTitle:_(@"Kind") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [subMenu addItemWithTitle:_(@"Date Modified") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [subMenu addItemWithTitle:_(@"Date Created") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [subMenu addItemWithTitle:_(@"Size") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [subMenu addItemWithTitle:_(@"Tags") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+  
+  menuItem = [menu addItemWithTitle:_(@"Hide Sidebar") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Show Preview") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+  
+  menuItem = [menu addItemWithTitle:_(@"Hide Toolbar") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Customize Toolbar...") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+  
+  menuItem = [menu addItemWithTitle:_(@"Show View Options") action:@selector(notImplemented:) keyEquivalent:@"j"];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Show Preview Options") action:@selector(notImplemented:) keyEquivalent:@"J"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+  
+  [menu addItemWithTitle:_(@"Enter Full Screen") action:@selector(toggleFullScreen:) keyEquivalent:@"f"];
+  [[menu itemWithTitle:_(@"Enter Full Screen")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSControlKeyMask];
 
-  [menu addItemWithTitle:_(@"Viewer") action:@selector(showViewer:) keyEquivalent:@"n"];	
-
-  // Go
+  // Go menu
   menuItem = [mainMenu addItemWithTitle:_(@"Go") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
   [mainMenu setSubmenu: menu forItem: menuItem];
+  
   [menu addItemWithTitle:_(@"Back") action:@selector(goBackwardInHistory:) keyEquivalent:@"["];
   [menu addItemWithTitle:_(@"Forward") action:@selector(goForwardInHistory:) keyEquivalent:@"]"];
+  
   [menu addItem:[NSMenuItem separatorItem]];
-  [menu addItemWithTitle:_(@"Enclosing Folder") action:@selector(openParentFolder:) keyEquivalent:@""];
+  
+  menuItem = [menu addItemWithTitle:_(@"Enclosing Folder") action:@selector(openParentFolder:) keyEquivalent:@""];
+  [menuItem setKeyEquivalent:@""];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask];
+  
   [menu addItem:[NSMenuItem separatorItem]];
-  [menu addItemWithTitle:_(@"Computer") action:@selector(goToComputer:) keyEquivalent:@""];
-  [menu addItemWithTitle:_(@"Home") action:@selector(goToHome:) keyEquivalent:@""];
-  [menu addItemWithTitle:_(@"Applications") action:@selector(goToApplications:) keyEquivalent:@""];
+  
+  menuItem = [menu addItemWithTitle:_(@"Recents") action:@selector(notImplemented:) keyEquivalent:@"F"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Documents") action:@selector(notImplemented:) keyEquivalent:@"O"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Desktop") action:@selector(notImplemented:) keyEquivalent:@"D"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Downloads") action:@selector(notImplemented:) keyEquivalent:@"L"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  [menu addItemWithTitle:_(@"Home") action:@selector(goToHome:) keyEquivalent:@"H"];
+  [[menu itemWithTitle:_(@"Home")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menu addItemWithTitle:_(@"Computer") action:@selector(goToComputer:) keyEquivalent:@"C"];
+  [[menu itemWithTitle:_(@"Computer")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  menuItem = [menu addItemWithTitle:_(@"Transfer") action:@selector(notImplemented:) keyEquivalent:@"R"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Network") action:@selector(notImplemented:) keyEquivalent:@"K"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Cloud Drive") action:@selector(notImplemented:) keyEquivalent:@"I"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  [menu addItemWithTitle:_(@"Applications") action:@selector(goToApplications:) keyEquivalent:@"A"];
+  [[menu itemWithTitle:_(@"Applications")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  menuItem = [menu addItemWithTitle:_(@"Utilities") action:@selector(notImplemented:) keyEquivalent:@"U"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  
   [menu addItem:[NSMenuItem separatorItem]];
-  [menu addItemWithTitle:_(@"Recent Folders") action:@selector(showHistory:) keyEquivalent:@""];
-  [menu addItem:[NSMenuItem separatorItem]];
+  
   [menu addItemWithTitle:_(@"Go to Folder...") action:@selector(goToFolder:) keyEquivalent:@"G"];
-            
-  // Tools
-  menuItem = [mainMenu addItemWithTitle:_(@"Tools") action:NULL keyEquivalent:@""];
-  menu = AUTORELEASE ([NSMenu new]);
-  [mainMenu setSubmenu: menu forItem: menuItem];	
-		
-  menuItem = [menu addItemWithTitle:_(@"Inspectors") action:NULL keyEquivalent:@""];
-  subMenu = AUTORELEASE ([NSMenu new]);
-  [menu setSubmenu: subMenu forItem: menuItem];	
-  [subMenu addItemWithTitle:_(@"Show Inspectors") action:NULL keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"Contents") action:@selector(showContentsInspector:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"Tools") action:@selector(showToolsInspector:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"Annotations") action:@selector(showAnnotationsInspector:) keyEquivalent:@""];
+  [[menu itemWithTitle:_(@"Go to Folder...")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  menuItem = [menu addItemWithTitle:_(@"Connect to Server...") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
 
-  [menu addItem:[NSMenuItem separatorItem]];
-
-  [menu addItemWithTitle:_(@"Finder") action:@selector(showFinder:) keyEquivalent:@"f"];
-
-  [menu addItem:[NSMenuItem separatorItem]];
-
-  [menu addItemWithTitle:_(@"Run...") action:@selector(runCommand:) keyEquivalent:@"0"];
-
-  [menu addItem:[NSMenuItem separatorItem]];  
-
-  menuItem = [menu addItemWithTitle:_(@"History") action:NULL keyEquivalent:@""];
-  subMenu = AUTORELEASE ([NSMenu new]);
-  [menu setSubmenu: subMenu forItem: menuItem];
-  [subMenu addItemWithTitle:_(@"Show History") action:@selector(showHistory:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"Go backward") action:@selector(goBackwardInHistory:) keyEquivalent:@""];
-  [subMenu addItemWithTitle:_(@"Go forward") action:@selector(goForwardInHistory:) keyEquivalent:@""];
-  
-  [menu addItem:[NSMenuItem separatorItem]];
-  
-  [menu addItemWithTitle:_(@"Check for disks") action:@selector(checkRemovableMedia:) keyEquivalent:@"E"];
-	
-  // Windows
-  menuItem = [mainMenu addItemWithTitle:_(@"Windows") action:NULL keyEquivalent:@""];
+  // Window menu
+  menuItem = [mainMenu addItemWithTitle:_(@"Window") action:NULL keyEquivalent:@""];
   windows = AUTORELEASE ([NSMenu new]);
-  [mainMenu setSubmenu: windows forItem: menuItem];		
-  [windows addItemWithTitle:_(@"Arrange in Front") action:@selector(arrangeInFront:) keyEquivalent:@""];
-  [windows addItemWithTitle:_(@"Miniaturize Window") action:@selector(performMiniaturize:) keyEquivalent:@"m"];
-
-  // About, Preferences
-  [mainMenu addItemWithTitle:_(@"About Workspace") action:@selector(showInfo:) keyEquivalent:@""];
-  [mainMenu addItemWithTitle:_(@"Preferences...") action:@selector(showPreferences:) keyEquivalent:@","];
-
-  // Services
-  menuItem = [mainMenu addItemWithTitle:_(@"Services") action:NULL keyEquivalent:@""];
-  services = AUTORELEASE ([NSMenu new]);
-  [mainMenu setSubmenu: services forItem: menuItem];		
-
-  // Trash
-  [mainMenu addItemWithTitle:_(@"Empty Recycler") action:@selector(emptyRecycler:) keyEquivalent:@""];
+  [mainMenu setSubmenu: windows forItem: menuItem];
   
-  // Hide
-  [mainMenu addItemWithTitle:_(@"Hide") action:@selector(hide:) keyEquivalent:@"h"];
-  [mainMenu addItemWithTitle:_(@"Hide Others") action:@selector(hideOtherApplications:)  keyEquivalent:@"H"];
-  [mainMenu addItemWithTitle:_(@"Show All") action:@selector(unhideAllApplications:) keyEquivalent:@""];
-
-  // Restart, Shut Down, Log Out
-  [mainMenu addItemWithTitle:_(@"Restart...") action:@selector(restart:) keyEquivalent:@""];
-  [mainMenu addItemWithTitle:_(@"Shut Down...") action:@selector(shutdown:) keyEquivalent:@""];
-  [mainMenu addItemWithTitle:_(@"Logout") action:@selector(logout:) keyEquivalent:@""];
+  [windows addItemWithTitle:_(@"Minimize") action:@selector(performMiniaturize:) keyEquivalent:@"m"];
+  [windows addItemWithTitle:_(@"Zoom") action:@selector(performZoom:) keyEquivalent:@""];
+  
+  [windows addItem:[NSMenuItem separatorItem]];
+  
+  menuItem = [windows addItemWithTitle:_(@"Cycle Through Windows") action:@selector(notImplemented:) keyEquivalent:@"`"];
+  [menuItem setTarget:self];
+  
+  [windows addItem:[NSMenuItem separatorItem]];
+  
+  [windows addItemWithTitle:_(@"Bring All to Front") action:@selector(arrangeInFront:) keyEquivalent:@""];
+  
+  [windows addItem:[NSMenuItem separatorItem]];
+  // Window list will be added here dynamically
+  
+  // Help menu
+  menuItem = [mainMenu addItemWithTitle:_(@"Help") action:NULL keyEquivalent:@""];
+  menu = AUTORELEASE ([NSMenu new]);
+  [mainMenu setSubmenu: menu forItem: menuItem];
+  
+  menuItem = [menu addItemWithTitle:_(@"Workspace Help") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Gershwin Help") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+  
+  menuItem = [menu addItemWithTitle:_(@"Keyboard Shortcuts") action:@selector(notImplemented:) keyEquivalent:@"/"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+  
+  menuItem = [menu addItemWithTitle:_(@"New to Gershwin? Get Started") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+  
+  menuItem = [menu addItemWithTitle:_(@"Feedback") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Legal & Regulatory") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+  
+  menuItem = [menu addItemWithTitle:_(@"About This Computer") action:@selector(notImplemented:) keyEquivalent:@""];
+  [menuItem setTarget:self];
 
   [mainMenu update];
 
@@ -3696,6 +3787,55 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   NSRunAlertPanel(@"Default Viewer Set",
                   @"Spatial mode is now the default for new viewer windows.",
                   @"OK", nil, nil);
+}
+
+- (void)notImplemented:(id)sender
+{
+  NSString *title = nil;
+  
+  if ([sender respondsToSelector:@selector(title)]) {
+    title = [sender title];
+  }
+  
+  if (title) {
+    NSRunAlertPanel(@"Not Implemented Yet",
+                    [NSString stringWithFormat:@"The \"%@\" feature is not yet implemented.", title],
+                    @"OK", nil, nil);
+  } else {
+    NSRunAlertPanel(@"Not Implemented Yet",
+                    @"This feature is not yet implemented.",
+                    @"OK", nil, nil);
+  }
+}
+
+- (void)undo:(id)sender
+{
+  [self notImplemented:sender];
+}
+
+- (void)redo:(id)sender
+{
+  [self notImplemented:sender];
+}
+
+- (void)toggleHiddenFiles
+{
+  // This would toggle the display of hidden files
+  NSRunAlertPanel(@"Not Implemented Yet",
+                  @"Toggle hidden files is not yet implemented.",
+                  @"OK", nil, nil);
+}
+
+- (void)quickLook:(id)sender
+{
+  NSRunAlertPanel(@"Not Implemented Yet",
+                  @"Quick Look is not yet implemented.",
+                  @"OK", nil, nil);
+}
+
+- (void)emptyTrash
+{
+  [self emptyRecycler:nil];
 }
 
 @end
