@@ -215,27 +215,40 @@ static KeySym keysymFromName(NSString *name)
     [defaults addSuiteNamed:NSGlobalDomain];
     [defaults synchronize];
     
-    NSDictionary *config = [defaults persistentDomainForName:defaultsDomain];
-    
-    if (!config) {
+    // Merge system and user GlobalShortcuts like the pref pane: system files are read first, then user overrides
+    NSMutableDictionary *merged = [NSMutableDictionary dictionary];
+    NSArray *systemPaths = @[@"/System/Library/Preferences/GlobalShortcuts.plist",
+                             @"/Library/Preferences/GlobalShortcuts.plist"];
+    for (NSString *p in systemPaths) {
+        NSDictionary *sys = [NSDictionary dictionaryWithContentsOfFile:p];
+        if (sys && [sys count] > 0) {
+            [merged addEntriesFromDictionary:sys];
+        }
+    }
+
+    NSDictionary *userConfig = [defaults persistentDomainForName:defaultsDomain];
+    if (userConfig && [userConfig count] > 0) {
+        [merged addEntriesFromDictionary:userConfig];
+    }
+
+    if (!merged || [merged count] == 0) {
         NSLog(@"GSGlobalShortcutsManager: No configuration found");
-        NSLog(@"  Create shortcuts using: defaults write %@ 'ctrl+shift+t' 'Terminal'", 
-            defaultsDomain);
+        NSLog(@"  Create shortcuts using: defaults write %@ 'ctrl+shift+t' 'Terminal'", defaultsDomain);
         [shortcuts release];
         shortcuts = [[NSMutableDictionary alloc] init];
         lastDefaultsModTime = time(NULL);
         [defaults release];
         return YES;
     }
-    
+
     [shortcuts release];
     shortcuts = [[NSMutableDictionary alloc] init];
     
     // Convert old plist format (keyCombo -> command) to new internal format
-    NSEnumerator *enumerator = [config keyEnumerator];
+    NSEnumerator *enumerator = [merged keyEnumerator];
     NSString *keyCombo;
     while ((keyCombo = [enumerator nextObject])) {
-        NSString *command = [config objectForKey:keyCombo];
+        NSString *command = [merged objectForKey:keyCombo];
         
         // Parse keyCombo to extract modifiers and key
         NSArray *parts = [keyCombo componentsSeparatedByString:@"+"];
