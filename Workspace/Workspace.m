@@ -236,14 +236,8 @@ NSString *_pendingSystemActionTitle = nil;
   [[menu itemWithTitle:_(@"New Folder")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
   [[menu itemWithTitle:_(@"New Folder")] setTarget:self];
   
-  menuItem = [menu addItemWithTitle:_(@"New Folder with Selection") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"New Smart Folder") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"New Burn Folder") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"New File") action:@selector(newFile:) keyEquivalent:@""];
-  [menuItem setTarget:self];
+  // menuItem = [menu addItemWithTitle:_(@"New File") action:@selector(newFile:) keyEquivalent:@""];
+  // [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
   
@@ -328,8 +322,8 @@ NSString *_pendingSystemActionTitle = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Start Dictation") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
+  // menuItem = [menu addItemWithTitle:_(@"Start Dictation") action:@selector(notImplemented:) keyEquivalent:@""];
+  // [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Symbols") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
 
@@ -609,7 +603,8 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
-  
+
+  /*
   menuItem = [menu addItemWithTitle:_(@"History") action:NULL keyEquivalent:@""];
   subMenu = AUTORELEASE ([NSMenu new]);
   [menu setSubmenu: subMenu forItem: menuItem];
@@ -621,9 +616,10 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
-  
+
   menuItem = [menu addItemWithTitle:_(@"Check for disks") action:@selector(checkRemovableMedia:) keyEquivalent:@"E"];
   [menuItem setTarget:self];
+  */
 
   // Window menu
   menuItem = [mainMenu addItemWithTitle:_(@"Window") action:NULL keyEquivalent:@""];
@@ -1951,6 +1947,44 @@ NSString *_pendingSystemActionTitle = nil;
 
   [self performFileOperation: NSWorkspaceDestroyOperation 
               source: basePath destination: basePath files: files tag: &tag];
+}
+
+- (void)openSelection:(id)sender
+{
+  [self openSelectionInNewViewer: NO];
+}
+
+- (void)openSelectionAsFolder:(id)sender
+{
+  if (selectedPaths && [selectedPaths count] == 1) {
+    NSString *path = [selectedPaths objectAtIndex: 0];
+    [self openSelectedPaths: [NSArray arrayWithObject: path] newViewer: YES];
+  }
+}
+
+- (void)print:(id)sender
+{
+  NSWindow *kwin = [NSApp keyWindow];
+  
+  if (kwin && [kwin respondsToSelector: @selector(print:)]) {
+    [kwin print: sender];
+  }
+}
+
+- (void)performClose:(id)sender
+{
+  NSWindow *kwin = [NSApp keyWindow];
+  
+  if (kwin) {
+    [kwin performClose: sender];
+  }
+}
+
+- (void)recycleFiles:(id)sender
+{
+  if (selectedPaths && [selectedPaths count] > 0) {
+    [self moveToTrash];
+  }
 }
 
 - (void)moveToTrash
