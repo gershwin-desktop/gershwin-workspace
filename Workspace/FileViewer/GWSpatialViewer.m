@@ -911,7 +911,7 @@
 
 - (void)emptyTrash
 {
-  [gworkspace emptyRecycler: nil];
+  [gworkspace emptyTrash: nil];
 }
 
 - (void)deleteFiles

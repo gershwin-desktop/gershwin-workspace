@@ -599,7 +599,7 @@
       || [operation isEqual: @"WorkspaceRenameOperation"]
       || [operation isEqual: NSWorkspaceRecycleOperation]
       || [operation isEqual: @"WorkspaceRecycleOutOperation"]
-      || [operation isEqual: @"WorkspaceEmptyRecyclerOperation"])
+      || [operation isEqual: @"WorkspaceemptyTrashOperation"])
     {
       NSMutableArray *paths = [NSMutableArray array];
       NSArray *iconpaths;
@@ -660,7 +660,7 @@
       || [operation isEqual: @"WorkspaceRenameOperation"]
       || [operation isEqual: NSWorkspaceRecycleOperation]
       || [operation isEqual: @"WorkspaceRecycleOutOperation"]
-      || [operation isEqual: @"WorkspaceEmptyRecyclerOperation"])
+      || [operation isEqual: @"WorkspaceemptyTrashOperation"])
     {
       NSMutableArray *paths = [NSMutableArray arrayWithCapacity: 1];
       TShelfIcon *icon;

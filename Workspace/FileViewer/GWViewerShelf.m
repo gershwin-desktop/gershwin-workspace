@@ -893,7 +893,7 @@
       || [operation isEqual: @"WorkspaceRenameOperation"]
       || [operation isEqual: NSWorkspaceRecycleOperation]
       || [operation isEqual: @"WorkspaceRecycleOutOperation"]
-      || [operation isEqual: @"WorkspaceEmptyRecyclerOperation"])
+      || [operation isEqual: @"WorkspaceemptyTrashOperation"])
     {
       NSMutableArray *oppaths = [NSMutableArray array];
       NSUInteger count = [icons count];

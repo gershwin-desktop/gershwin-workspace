@@ -272,7 +272,7 @@ static NSString *nibName = @"FileOperationWin";
           msg2 = NSLocalizedString(@"\nto: ", @"");
           msg = [NSString stringWithFormat: @"%@%@%@?", msg1, msg2, destination];
         }
-      else if ([type isEqual: @"WorkspaceEmptyRecyclerOperation"])
+      else if ([type isEqual: @"WorkspaceemptyTrashOperation"])
         {
           title = NSLocalizedString(@"Recycler", @"");
           msg = NSLocalizedString(@"Empty the Recycler?", @"");
@@ -491,7 +491,7 @@ static NSString *nibName = @"FileOperationWin";
 	[toLabel setStringValue: NSLocalizedString(@"To:", @"")];
 	[toField setStringValue: relativePathFittingInField(fromField, destination)];
       }
-    else if ([type isEqual: @"WorkspaceEmptyRecyclerOperation"])
+    else if ([type isEqual: @"WorkspaceemptyTrashOperation"])
       {
 	[win setTitle: NSLocalizedString(@"Destroy", @"")];
 	[fromLabel setStringValue: NSLocalizedString(@"In:", @"")];
@@ -904,7 +904,7 @@ shouldMakeNewConnection:(NSConnection*)newConn
       else if (([operation isEqual: NSWorkspaceDestroyOperation]) 
                || ([operation isEqual: NSWorkspaceDuplicateOperation])
                || ([operation isEqual: NSWorkspaceRecycleOperation])
-               || ([operation isEqual: @"WorkspaceEmptyRecyclerOperation"]))
+               || ([operation isEqual: @"WorkspaceemptyTrashOperation"]))
         {
           return NO;
         } 
@@ -1019,7 +1019,7 @@ shouldMakeNewConnection:(NSConnection*)newConn
       [self doLink];
     }
   else if ([operation isEqual: NSWorkspaceDestroyOperation]
-	   || [operation isEqual: @"WorkspaceEmptyRecyclerOperation"])
+	   || [operation isEqual: @"WorkspaceemptyTrashOperation"])
     {
       [self doRemove];
     }

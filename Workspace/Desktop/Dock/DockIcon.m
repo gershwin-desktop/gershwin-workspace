@@ -384,7 +384,7 @@
     item = [NSMenuItem new];
     [item setTitle: NSLocalizedString(@"Empty Trash", @"")];
     [item setTarget: [Workspace gworkspace]];
-    [item setAction: @selector(emptyRecycler:)];
+    [item setAction: @selector(emptyTrash:)];
     [menu addItem: item];
     RELEASE (item);
     

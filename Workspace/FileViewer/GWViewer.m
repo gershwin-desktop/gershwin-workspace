@@ -769,7 +769,7 @@
           || [operation isEqual: NSWorkspaceDestroyOperation]
 				  || [operation isEqual: NSWorkspaceRecycleOperation]
 				  || [operation isEqual: @"WorkspaceRecycleOutOperation"]
-				  || [operation isEqual: @"WorkspaceEmptyRecyclerOperation"]) {
+				  || [operation isEqual: @"WorkspaceemptyTrashOperation"]) {
       [nodeView reloadFromNode: [FSNode nodeWithPath: source]];
     }
     
@@ -1213,7 +1213,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
 
 - (void)emptyTrash
 {
-  [gworkspace emptyRecycler: nil];
+  [gworkspace emptyTrash: nil];
 }
 
 - (void)deleteFiles

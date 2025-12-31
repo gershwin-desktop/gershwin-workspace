@@ -1720,7 +1720,7 @@
         || [operation isEqual: NSWorkspaceDestroyOperation]
 				|| [operation isEqual: NSWorkspaceRecycleOperation]
 				|| [operation isEqual: @"WorkspaceRecycleOutOperation"]
-				|| [operation isEqual: @"WorkspaceEmptyRecyclerOperation"]) {
+				|| [operation isEqual: @"WorkspaceemptyTrashOperation"]) {
     if ([self isShowingPath: source]) {
       [self reloadFromColumnWithPath: source]; 
     }

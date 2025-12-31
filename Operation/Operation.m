@@ -125,7 +125,7 @@
     {    
       action = MOVE;
     } else if ([operation isEqual: NSWorkspaceDestroyOperation] 
-	       || [operation isEqual: @"WorkspaceEmptyRecyclerOperation"])
+	       || [operation isEqual: @"WorkspaceemptyTrashOperation"])
     {
       action = DESTROY;
     } else if ([operation isEqual: NSWorkspaceCopyOperation] 
@@ -318,7 +318,7 @@
   }
 
   if ([optype isEqual: NSWorkspaceDestroyOperation]
-            || [optype isEqual: @"WorkspaceEmptyRecyclerOperation"]) {
+            || [optype isEqual: @"WorkspaceemptyTrashOperation"]) {
     //             
     // destination
     //

@@ -489,7 +489,7 @@ static Recycler *recycler = nil;
       [files addObject: [(FSNode *)[subNodes objectAtIndex: i] name]];
     }
     
-    [self performFileOperation: @"WorkspaceEmptyRecyclerOperation"
+    [self performFileOperation: @"WorkspaceemptyTrashOperation"
 		                    source: trashPath
 		               destination: trashPath
 		                     files: files];

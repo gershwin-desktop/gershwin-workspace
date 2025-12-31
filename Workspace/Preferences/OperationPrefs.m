@@ -154,7 +154,7 @@ forKey: confirmString]
   CHECK_CONFIRM (LINKOP, NSWorkspaceLinkOperation);
   CHECK_CONFIRM (RECYCLEOP, NSWorkspaceRecycleOperation);
   CHECK_CONFIRM (RECYCLEOP, @"WorkspaceRecycleOutOperation");
-  CHECK_CONFIRM (RECYCLEOP, @"WorkspaceEmptyRecyclerOperation");
+  CHECK_CONFIRM (RECYCLEOP, @"WorkspaceemptyTrashOperation");
   CHECK_CONFIRM (DUPLICATEOP, NSWorkspaceDuplicateOperation);
   CHECK_CONFIRM (DESTROYOP, NSWorkspaceDestroyOperation);
 

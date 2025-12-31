@@ -437,7 +437,7 @@
 
 - (void)checkRemovableMedia:(id)sender;
 
-- (void)emptyRecycler:(id)sender;
+- (void)emptyTrash:(id)sender;
 
 - (void)restart:(id)sender;
 - (void)shutdown:(id)sender;
