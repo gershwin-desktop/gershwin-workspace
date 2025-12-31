@@ -62,6 +62,7 @@
 #import "TShelf/TShelfIconsView.h"
 #import "History/History.h"
 #import "X11AppSupport.h"
+#import "GSGlobalShortcutsManager.h"
 #if HAVE_DBUS
 #import "DBusConnection.h"
 #endif
@@ -710,7 +711,14 @@ NSString *_pendingSystemActionTitle = nil;
               name: @"GWAppForExtensionDidChangeNotification"
             object: nil];
   
-  [self initializeWorkspace]; 
+  [self initializeWorkspace];
+  
+  // Initialize global shortcuts manager
+  globalShortcutsManager = [[GSGlobalShortcutsManager sharedManager] retain];
+  if (![globalShortcutsManager startWithVerbose:NO]) {
+    NSLog(@"Workspace: Warning - Global shortcuts manager failed to start");
+    DESTROY(globalShortcutsManager);
+  }
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)aNotification

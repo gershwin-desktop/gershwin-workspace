@@ -53,6 +53,7 @@
 @class RunExternalController;
 @class StartAppWin;
 @class GWLaunchedApp;
+@class GSGlobalShortcutsManager;
 
 @protocol	FSWClientProtocol
 
@@ -153,6 +154,8 @@
   RunExternalController *runExtController;
   
   StartAppWin *startAppWin;
+  
+  GSGlobalShortcutsManager *globalShortcutsManager;
   
   NSString *gwProcessName;  	      
   NSString *gwBundlePath;  	      
