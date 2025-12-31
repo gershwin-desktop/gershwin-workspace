@@ -166,7 +166,12 @@
     }
 
     if (rootviewer) {
-      [vwrwin setTitle: NSLocalizedString(@"File Viewer", @"")];
+      NSString *path = [baseNode path];
+      if ([path isEqual: path_separator()]) {
+        [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
+      } else {
+        [vwrwin setTitle: [baseNode name]];
+      }
     } else {
       if (rootViewerKey == nil) {   
         [vwrwin setTitle: [NSString stringWithFormat: @"%@ - %@", [node name], [node parentPath]]];   

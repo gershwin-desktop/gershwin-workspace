@@ -217,12 +217,27 @@
     [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
 
     if (firstRootViewer) {
-      [vwrwin setTitle: NSLocalizedString(@"File Viewer", @"")];
-    } else {
-      if (rootViewer) {   
-        [vwrwin setTitle: NSLocalizedString(@"File Viewer", @"")];   
+      NSString *path = [baseNode path];
+      if ([path isEqual: path_separator()]) {
+        [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
       } else {
-        [vwrwin setTitle: NSLocalizedString(@"File Viewer", @"")];   
+        [vwrwin setTitle: [baseNode name]];
+      }
+    } else {
+      if (rootViewer) {
+        NSString *path = [baseNode path];
+        if ([path isEqual: path_separator()]) {
+          [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
+        } else {
+          [vwrwin setTitle: [baseNode name]];
+        }
+      } else {
+        NSString *path = [baseNode path];
+        if ([path isEqual: path_separator()]) {
+          [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
+        } else {
+          [vwrwin setTitle: [baseNode name]];
+        }
       }
     }
 

@@ -100,6 +100,7 @@ typedef enum
 - (void)reloadFromNode:(FSNode *)anode;
 - (void)unloadFromNode:(FSNode *)anode;
 - (void)updateShownSelection;
+- (void)updateWindowTitle;
 
 - (GWViewerWindow *)win;
 - (id)nodeView;

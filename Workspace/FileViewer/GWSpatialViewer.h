@@ -81,6 +81,7 @@
 - (void)reloadNodeContents;
 - (void)reloadFromNode:(FSNode *)anode;
 - (void)unloadFromNode:(FSNode *)anode;
+- (void)updateWindowTitle;
 
 - (GWViewerWindow *)win;
 - (id)nodeView;
