@@ -89,7 +89,7 @@ static NSString *nibName = @"InspectorWin";
 
     currentInspector = [[Attributes alloc] initForInspector: self];
     [inspectors insertObject: currentInspector atIndex: ATTRIBUTES]; 
-    [popUp insertItemWithTitle: NSLocalizedString(@"Attributes", @"") 
+    [popUp insertItemWithTitle: NSLocalizedString(@"Info", @"") 
                        atIndex: ATTRIBUTES];
     [[popUp itemAtIndex: ATTRIBUTES] setKeyEquivalent: @"1"];
     DESTROY (currentInspector);

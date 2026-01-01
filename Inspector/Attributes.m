@@ -176,7 +176,7 @@ static BOOL sizeStop = NO;
 
 - (NSString *)winname
 {
-  return NSLocalizedString(@"Attributes Inspector", @"");
+  return NSLocalizedString(@"Info", @"");
 }
 
 - (void)activateForPaths:(NSArray *)paths

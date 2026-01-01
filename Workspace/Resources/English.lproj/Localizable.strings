@@ -175,7 +175,7 @@
 
 /* Attributes.m */
 
-"Attributes Inspector" = "Attributes Inspector";
+"Info" = "Info";
 "Path:" = "Path:";
 "Link to:" = "Link To:";
 "Size:" = "Size:";
