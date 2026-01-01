@@ -1240,43 +1240,53 @@
       location = [self convertPoint: location fromView: nil];
       icon = [self iconContainingPoint: location];
 
-      if ([sourcePaths count] == 1) {
-        NSString *path = [sourcePaths objectAtIndex: 0];
-        FSNode *node = [FSNode nodeWithPath: path];
-        NSString *appName = [[node name] stringByDeletingPathExtension];
+      // Handle multiple applications being dropped
+      if ([sourcePaths count] >= 1) {
+        NSUInteger pathIndex;
+        NSUInteger addedCount = 0;
         
-        if ([node isApplication]) {
-          if ((icon == nil) || (icon && ([icon isTrashIcon] == NO))) {
-            BOOL duplicate = NO;
-            NSUInteger i;
+        for (pathIndex = 0; pathIndex < [sourcePaths count]; pathIndex++) {
+          NSString *path = [sourcePaths objectAtIndex: pathIndex];
+          FSNode *node = [FSNode nodeWithPath: path];
+          NSString *appName = [[node name] stringByDeletingPathExtension];
+          
+          if ([node isApplication]) {
+            if ((icon == nil) || (icon && ([icon isTrashIcon] == NO))) {
+              BOOL duplicate = NO;
+              NSUInteger i;
 
-            for (i = 0; i < [icons count]; i++) {
-              DockIcon *icon = [icons objectAtIndex: i];
+              for (i = 0; i < [icons count]; i++) {
+                DockIcon *checkIcon = [icons objectAtIndex: i];
 
-              if ([[icon node] isEqual: node] 
-                          && [[icon appName] isEqual: appName]) {
-                RETAIN (icon);
-                [icons removeObject: icon];
-                [icons insertObject: icon atIndex: targetIndex];
-                RELEASE (icon);
-                duplicate = YES;      
-                break;
+                if ([[checkIcon node] isEqual: node] 
+                            && [[checkIcon appName] isEqual: appName]) {
+                  RETAIN (checkIcon);
+                  [icons removeObject: checkIcon];
+                  [icons insertObject: checkIcon atIndex: targetIndex];
+                  RELEASE (checkIcon);
+                  duplicate = YES;      
+                  break;
+                }
               }
-            }
 
-            if (duplicate == NO) {
-              DockIcon *icon = [self addIconForApplicationAtPath: path
-                                                        withName: appName 
-                                                         atIndex: targetIndex];
-              [icon setDocked: YES];
-            }
+              if (duplicate == NO) {
+                DockIcon *newIcon = [self addIconForApplicationAtPath: path
+                                                          withName: appName 
+                                                           atIndex: targetIndex];
+                [newIcon setDocked: YES];
+                addedCount++;
+              }
 
-            concluded = YES;
-            /* Persist after adding a new application icon */
-            [self saveDockConfiguration];
+              concluded = YES;
+            }
           }
         }
-      } 
+        
+        /* Persist after adding new application icons */
+        if (addedCount > 0) {
+          [self saveDockConfiguration];
+        }
+      }
       
       if (concluded == NO) {
         if (icon) {
