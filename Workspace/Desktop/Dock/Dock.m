@@ -504,15 +504,34 @@
 - (void)iconMenuAction:(id)sender
 {
   NSString *title = [(NSMenuItem *)sender title];
+  id representedObject = [(NSMenuItem *)sender representedObject];
   
   if ([title isEqual: NSLocalizedString(@"Show In File Viewer", @"")]) {
-    NSString *path = [(NSMenuItem *)sender representedObject];
+    NSString *path = representedObject;
     NSString *basePath = [path stringByDeletingLastPathComponent];
   
     [gw selectFile: path inFileViewerRootedAtPath: basePath];
   
+  } else if ([title isEqual: NSLocalizedString(@"Keep in Dock", @"")]) {
+    DockIcon *icon = (DockIcon *)representedObject;
+    [icon setDocked: YES];
+    [self saveDockConfiguration];
+    [self tile];
+    
+  } else if ([title isEqual: NSLocalizedString(@"Remove from Dock", @"")]) {
+    DockIcon *icon = (DockIcon *)representedObject;
+    [icon setDocked: NO];
+    /* Save immediately - remove from plist right away */
+    [self saveDockConfiguration];
+    /* Only remove the icon if it's NOT currently showing a dot (not running) */
+    if (([icon isLaunched] == NO) && ([icon isSpecialIcon] == NO)) {
+      [self removeIcon: icon];
+    } else {
+      [self tile];
+    }
+    
   } else {
-    GWLaunchedApp *app = (GWLaunchedApp *)[(NSMenuItem *)sender representedObject];
+    GWLaunchedApp *app = (GWLaunchedApp *)representedObject;
   
     if ([app isRunning] == NO) {
       /* terminated while the icon menu is open */

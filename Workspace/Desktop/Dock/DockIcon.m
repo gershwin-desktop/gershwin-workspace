@@ -434,6 +434,33 @@
         [item setRepresentedObject: app];            
         [menu addItem: item];
         RELEASE (item);
+      }
+      
+      /* Add dock management options */
+      if (docked || (app && [app isRunning])) {
+        [menu addItem: [NSMenuItem separatorItem]];
+        
+        /* Show "Keep in Dock" only for running apps that are not docked */
+        if (app && [app isRunning] && !docked) {
+          item = [NSMenuItem new];
+          [item setTarget: (Dock *)container];
+          [item setAction: @selector(iconMenuAction:)];
+          [item setTitle: NSLocalizedString(@"Keep in Dock", @"")];
+          [item setRepresentedObject: self];
+          [menu addItem: item];
+          RELEASE (item);
+        }
+        
+        /* Show "Remove from Dock" for all docked apps (regardless of running status) */
+        if (docked) {
+          item = [NSMenuItem new];
+          [item setTarget: (Dock *)container];
+          [item setAction: @selector(iconMenuAction:)];
+          [item setTitle: NSLocalizedString(@"Remove from Dock", @"")];
+          [item setRepresentedObject: self];
+          [menu addItem: item];
+          RELEASE (item);
+        }
       } 
       
       RELEASE (arp);
