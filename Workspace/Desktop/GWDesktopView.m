@@ -34,6 +34,7 @@
 #import "GWDesktopIcon.h"
 #import "GWDesktopManager.h"
 #import "Dock.h"
+#import "Workspace.h"
 
 #define DEF_ICN_SIZE 48
 #define DEF_TEXT_SIZE 12
@@ -1165,9 +1166,9 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSUInteger i;
 
   for (i = 0; i < [selnodes count]; i++) {
-    FSNode *node = [selnodes objectAtIndex: i];
-    if ([node isMountPoint]) {
-      NSString *path = [node path];
+    FSNode *selnode = [selnodes objectAtIndex: i];
+    if ([selnode isMountPoint]) {
+      NSString *path = [selnode path];
       
       // Don't allow ejecting root filesystem
       if ([[Workspace gworkspace] isRootFilesystem: path]) {

@@ -221,8 +221,6 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setTarget:self];
   menuItem = [mainMenu addItemWithTitle:_(@"Logout") action:@selector(logout:) keyEquivalent:@""];
   [menuItem setTarget:self];
-  
-  [mainMenu addItem:[NSMenuItem separatorItem]];
 
   // File menu
   menuItem = [mainMenu addItemWithTitle:_(@"File") action:NULL keyEquivalent:@""];
@@ -571,8 +569,6 @@ NSString *_pendingSystemActionTitle = nil;
   menuItem = [menu addItemWithTitle:_(@"Utilities") action:@selector(goToUtilities:) keyEquivalent:@"U"];
   [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
-  
-  [menu addItem:[NSMenuItem separatorItem]];
   
   [menu addItem:[NSMenuItem separatorItem]];
   
@@ -1526,6 +1522,15 @@ NSString *_pendingSystemActionTitle = nil;
 - (BOOL)validateMenuItem:(id <NSMenuItem>)anItem
 {	
   SEL action = [anItem action];
+
+  // CRITICAL: Disable ALL menu items when a modal window is active
+  // This prevents menu key equivalents (like Spacebar for Quick Look) from
+  // stealing keyboard events that should go to the modal dialog
+  if ([NSApp modalWindow] != nil) {
+    // Allow certain essential menu items even during modal (like Help)
+    // but disable everything else to prevent key equivalent conflicts
+    return NO;
+  }
 
   if (sel_isEqual(action, @selector(showRecycler:))) {
     return (([dtopManager isActive] == NO) || ([dtopManager dockActive] == NO));

@@ -184,7 +184,7 @@ static KeySym keysymFromName(NSString *name)
     for (int i = 0; i < 8; i++) {
         for (int j = 0; j < modmap->max_keypermod; j++) {
             KeyCode keycode = modmap->modifiermap[i * modmap->max_keypermod + j];
-            KeySym keysym = XKeycodeToKeysym(display, keycode, 0);
+            KeySym keysym = XkbKeycodeToKeysym(display, keycode, 0, 0);
             
             if (keysym == XK_Num_Lock) {
                 numlock_mask = 1 << i;

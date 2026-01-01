@@ -223,6 +223,13 @@
       
     case ' ':
       // Space = Quick Look
+      // DO NOT trigger if a modal window is active (like an alert dialog)
+      if ([NSApp modalWindow] != nil)
+      {
+        // Modal window is active - let it handle the spacebar
+        [super keyDown: theEvent];
+        return;
+      }
       if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
 	{
 	  [[self delegate] quickLook: nil];

@@ -923,6 +923,10 @@
   }
 }
 
+- (void)updateWindowTitle
+{
+  /* Intentionally empty - declared in header but not used in this implementation */
+}
 
 //
 // splitView delegate methods
