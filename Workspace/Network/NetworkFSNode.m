@@ -83,18 +83,18 @@ NSString * const NetworkVirtualPath = @"/Network";
       ASSIGN(relativePath, path);
     }
     
-    /* Set flags - network services appear as directories (mountable) */
+    /* Set flags - network services appear as files, not directories */
     flags.readable = 1;
     flags.writable = 0;
-    flags.executable = 1;
+    flags.executable = 0;
     flags.deletable = 0;
-    flags.plain = 0;
-    flags.directory = 1;  /* Appear as directory so they can be "opened" */
+    flags.plain = 1;  /* Treat as plain file, not a directory */
+    flags.directory = 0;  /* Not a directory - cannot be opened/traversed */
     flags.link = 0;
     flags.socket = 0;
     flags.charspecial = 0;
     flags.blockspecial = 0;
-    flags.mountpoint = 1;  /* Mark as mount point */
+    flags.mountpoint = 0;  /* Not a mount point (TODO: implement mounting in future) */
     flags.application = 0;
     flags.package = 0;
     flags.unknown = 0;
@@ -193,7 +193,11 @@ NSString * const NetworkVirtualPath = @"/Network";
 
 - (BOOL)isDirectory
 {
-  return YES;
+  /* Network service items are not directories - they cannot be traversed */
+  if (isNetworkRoot) {
+    return YES;  /* The /Network root is a directory */
+  }
+  return NO;  /* Service items are treated as files */
 }
 
 - (BOOL)isReadable
@@ -208,7 +212,11 @@ NSString * const NetworkVirtualPath = @"/Network";
 
 - (BOOL)isExecutable
 {
-  return YES;
+  /* Service items are not executable files */
+  if (isNetworkRoot) {
+    return YES;  /* The network root is executable/traversable */
+  }
+  return NO;  /* Service items are treated as plain files */
 }
 
 - (BOOL)isDeletable
@@ -218,12 +226,17 @@ NSString * const NetworkVirtualPath = @"/Network";
 
 - (BOOL)isMountPoint
 {
-  return isNetworkRoot ? NO : YES;
+  /* Network service items are not mount points (yet) */
+  return NO;
 }
 
 - (BOOL)isPlain
 {
-  return NO;
+  /* Service items are now plain files, not traversable */
+  if (isNetworkRoot) {
+    return NO;  /* The root network location is a directory, not plain */
+  }
+  return YES;  /* Service items are treated as plain files */
 }
 
 - (BOOL)isLink
@@ -260,7 +273,11 @@ NSString * const NetworkVirtualPath = @"/Network";
 
 - (NSString *)fileType
 {
-  return NSFileTypeDirectory;
+  if (isNetworkRoot) {
+    return NSFileTypeDirectory;
+  }
+  /* Network service items are treated as regular files */
+  return NSFileTypeRegular;
 }
 
 - (unsigned long long)fileSize
@@ -291,6 +308,19 @@ NSString * const NetworkVirtualPath = @"/Network";
 - (unsigned long)permissions
 {
   return 0555; /* r-xr-xr-x */
+}
+
+- (NSString *)iconName
+{
+  if (isNetworkRoot) {
+    return @"Network";
+  }
+  
+  if (serviceItem) {
+    return [serviceItem iconName];
+  }
+  
+  return @"Network";
 }
 
 @end

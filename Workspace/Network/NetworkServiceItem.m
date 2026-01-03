@@ -86,12 +86,8 @@
 
 - (NSString *)iconName
 {
-  if ([self isSFTPService]) {
-    return @"Network_SFTP";
-  } else if ([self isAFPService]) {
-    return @"Network_AFP";
-  }
-  return @"Network_Generic";
+  /* Use the common Network icon for all network services */
+  return @"Network";
 }
 
 - (NSString *)description

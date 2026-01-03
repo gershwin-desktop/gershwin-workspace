@@ -129,6 +129,18 @@ static unsigned char darkerLUT[256] = {
   NSImage *baseIcon = nil;
   NSString *key = nil;
 
+  /* Check if this is a NetworkFSNode and handle it specially */
+  if ([node respondsToSelector:@selector(iconName)]) {
+    NSString *iconName = [node performSelector:@selector(iconName)];
+    if (iconName != nil) {
+      /* Try to load the icon from the bundle */
+      icon = [NSImage imageNamed:iconName];
+      if (icon != nil) {
+        return icon;
+      }
+    }
+  }
+
   if ([node isDirectory])
     {  
       if ([node isApplication])

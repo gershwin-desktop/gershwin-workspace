@@ -64,4 +64,9 @@ extern NSString * const NetworkVirtualPath;
  */
 + (BOOL)isNetworkPath:(NSString *)apath;
 
+/**
+ * Returns the icon name for this network node.
+ */
+- (NSString *)iconName;
+
 @end
