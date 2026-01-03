@@ -37,8 +37,10 @@
   BOOL isWsIcon;
   BOOL isTrashIcon;
   NSImage *trashFullIcon;
+  NSImage *ejectIcon;
   BOOL trashFull;
   BOOL docked;
+  BOOL isDragMountpointOnly;
   BOOL launched;
   BOOL launching;
   BOOL apphidden;  
@@ -122,5 +124,9 @@
 - (BOOL)acceptsDraggedPaths:(NSArray *)paths;
 
 - (void)setDraggedPaths:(NSArray *)paths;
+
+- (void)setIsDragMountpointOnly:(BOOL)value;
+
+- (BOOL)isDragMountpointOnly;
 
 @end

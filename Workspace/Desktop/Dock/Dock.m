@@ -54,6 +54,7 @@
 
 - (void)dealloc
 {
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
   RELEASE (icons);
   RELEASE (backColor);
   
@@ -182,6 +183,16 @@
 	}
 
       [self createTrashIcon];
+
+      /* Register for drag notifications */
+      [[NSNotificationCenter defaultCenter] addObserver: self
+                                               selector: @selector(dragMountpointStarted:)
+                                                   name: @"GWDragMountpointStarted"
+                                                 object: nil];
+      [[NSNotificationCenter defaultCenter] addObserver: self
+                                               selector: @selector(dragMountpointEnded:)
+                                                   name: @"GWDragMountpointEnded"
+                                                 object: nil];
     }
 
   return self;  
@@ -1046,6 +1057,60 @@
   return [NSColor disabledControlTextColor];
 }
 
+- (void)dragMountpointStarted:(NSNotification *)notification
+{
+  NSUInteger i;
+  BOOL allAreMountpoints = NO;
+  
+  if ([notification userInfo]) {
+    NSNumber *value = [[notification userInfo] objectForKey: @"allAreMountpoints"];
+    if (value) {
+      allAreMountpoints = [value boolValue];
+    }
+  }
+
+  /* Update all trash icons with the drag state */
+  for (i = 0; i < [icons count]; i++) {
+    DockIcon *icon = [icons objectAtIndex: i];
+    if ([icon isTrashIcon]) {
+      [icon setIsDragMountpointOnly: allAreMountpoints];
+    }
+  }
+}
+
+- (void)dragMountpointEnded:(NSNotification *)notification
+{
+  NSUInteger i;
+  
+  /* Reset the mountpoint flag on all trash icons */
+  for (i = 0; i < [icons count]; i++) {
+    DockIcon *icon = [icons objectAtIndex: i];
+    if ([icon isTrashIcon]) {
+      [icon setIsDragMountpointOnly: NO];
+    }
+  }
+}
+
+- (BOOL)allPathsAreMountpoints:(NSArray *)paths
+{
+  NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
+  NSArray *volumePaths = [workspace mountedLocalVolumePaths];
+  NSUInteger i;
+
+  if ([paths count] == 0) {
+    return NO;
+  }
+
+  for (i = 0; i < [paths count]; i++) {
+    NSString *path = [paths objectAtIndex: i];
+    if (![volumePaths containsObject: path]) {
+      return NO;
+    }
+  }
+
+  return YES;
+}
+
 @end
 
 
@@ -1055,11 +1120,20 @@
 {
   NSPoint location = [sender draggingLocation];
   DockIcon *icon;
+  NSUInteger i;
         
   isDragTarget = YES;  
   targetIndex = -1;
   targetRect = NSZeroRect;
-  dragdelay = 0;     
+  dragdelay = 0;
+  
+  /* Reset mountpoint flag on all trash icons at the start */
+  for (i = 0; i < [icons count]; i++) {
+    DockIcon *trashIcon = [icons objectAtIndex: i];
+    if ([trashIcon isTrashIcon]) {
+      [trashIcon setIsDragMountpointOnly: NO];
+    }
+  }
 
   location = [self convertPoint: location fromView: nil];
   icon = [self iconContainingPoint: location];
@@ -1106,8 +1180,20 @@
           
         } else {
           if ([icon acceptsDraggedPaths: sourcePaths]) {
+            /* If dragging over Trash icon with only mountpoints, mark it */
+            if ([icon isTrashIcon]) {
+              if ([self allPathsAreMountpoints: sourcePaths]) {
+                [icon setIsDragMountpointOnly: YES];
+              } else {
+                [icon setIsDragMountpointOnly: NO];
+              }
+            }
             return NSDragOperationMove;
           } else {
+            /* Reset flag if icon rejects the drag */
+            if ([icon isTrashIcon]) {
+              [icon setIsDragMountpointOnly: NO];
+            }
             [icon unselect];
           }
         }
@@ -1188,6 +1274,12 @@
         if (([node isApplication] == NO) 
                           || ([node isApplication] && [icon isTrashIcon])) {
           if ([icon acceptsDraggedPaths: sourcePaths]) {
+            /* If dragging over Trash icon with only mountpoints, mark it */
+            if ([icon isTrashIcon] && [self allPathsAreMountpoints: sourcePaths]) {
+              [icon setIsDragMountpointOnly: YES];
+            } else if ([icon isTrashIcon]) {
+              [icon setIsDragMountpointOnly: NO];
+            }
             return NSDragOperationMove;
           } else {
             [icon unselect];
@@ -1207,8 +1299,18 @@
 
 - (void)draggingExited:(id <NSDraggingInfo>)sender
 {
+  NSUInteger i;
+  
   isDragTarget = NO;  
   dragdelay = 0;
+  
+  /* Reset the mountpoint flag on all trash icons */
+  for (i = 0; i < [icons count]; i++) {
+    DockIcon *icon = [icons objectAtIndex: i];
+    if ([icon isTrashIcon]) {
+      [icon setIsDragMountpointOnly: NO];
+    }
+  }
   
   [self unselectOtherReps: nil];
       
@@ -1235,6 +1337,16 @@
 
 - (void)concludeDragOperation:(id <NSDraggingInfo>)sender
 {
+  NSUInteger i;
+  
+  /* Reset the mountpoint flag on all trash icons */
+  for (i = 0; i < [icons count]; i++) {
+    DockIcon *icon = [icons objectAtIndex: i];
+    if ([icon isTrashIcon]) {
+      [icon setIsDragMountpointOnly: NO];
+    }
+  }
+  
   [self unselectOtherReps: nil];
 
   if (dndSourceIcon && ([sender draggingSource] == dndSourceIcon)) {

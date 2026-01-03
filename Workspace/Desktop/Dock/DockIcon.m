@@ -49,6 +49,7 @@
   RELEASE (darkerColor);
   RELEASE (highlightImage);
   RELEASE (trashFullIcon);
+  RELEASE (ejectIcon);
   RELEASE (dragIcon);
   
   [super dealloc];
@@ -93,6 +94,8 @@
     launched = NO;
     apphidden = NO;
     appPID = 0;
+    isDragMountpointOnly = NO;
+    ejectIcon = nil;
 
     /* Initialize bounce animation variables */
     isBouncing = NO;
@@ -144,6 +147,12 @@
 
       ASSIGN (icon, [fsnodeRep trashIconOfSize: ceil(icnBounds.size.width)]);
       ASSIGN (trashFullIcon, [fsnodeRep trashFullIconOfSize: ceil(icnBounds.size.width)]);
+      
+      /* Load the Eject icon for use during mountpoint drags */
+      NSString *ejectPath = [[NSBundle mainBundle] pathForResource: @"Eject" ofType: @"icns"];
+      if (ejectPath) {
+        ASSIGN (ejectIcon, [[NSImage alloc] initWithContentsOfFile: ejectPath]);
+      }
       
       subNodes = [node subNodes];
       count = [subNodes count];
@@ -624,7 +633,10 @@ x += 6; \
     if (isTrashIcon == NO) {
       [icon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
     } else {
-      if (trashFull) {
+      /* When dragging mountpoints only, show Eject icon; otherwise show Trash icon */
+      if (isDragMountpointOnly && ejectIcon) {
+        [ejectIcon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
+      } else if (trashFull) {
         [trashFullIcon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
       } else {
         [icon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
@@ -806,6 +818,21 @@ x += 6; \
         [[GWDesktopManager desktopManager] performFileOperation: opinfo];
       }
     }
+}
+
+- (void)setIsDragMountpointOnly:(BOOL)value
+{
+  if (isDragMountpointOnly != value) {
+    isDragMountpointOnly = value;
+    if (isTrashIcon) {
+      [self setNeedsDisplay: YES];
+    }
+  }
+}
+
+- (BOOL)isDragMountpointOnly
+{
+  return isDragMountpointOnly;
 }
 
 @end

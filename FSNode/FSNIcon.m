@@ -1395,6 +1395,9 @@ static NSImage *branchImage;
 	      dragIcon = [fsnodeRep multipleSelectionIconOfSize: iconSize];
 	    }
 
+	  /* Check if all selected paths are mountpoints and notify the Dock */
+	  [self notifyDockAboutDragWithPaths: selectedPaths];
+
 	  [self dragImage: dragIcon
 		       at: icnPoint
 		   offset: offset
@@ -1418,6 +1421,9 @@ static NSImage *branchImage;
   dragdelay = 0;
   onSelf = NO;
 
+  /* Notify the Dock that the drag has ended */
+  [[NSNotificationCenter defaultCenter] postNotificationName: @"GWDragMountpointEnded" object: nil];
+
   if ([container respondsToSelector: @selector(restoreLastSelection)])
     {
       [container restoreLastSelection];
@@ -1430,6 +1436,33 @@ static NSImage *branchImage;
 	  [container removeUndepositedRep: self];
 	}
     }
+}
+
+- (void)notifyDockAboutDragWithPaths:(NSArray *)paths
+{
+  NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
+  NSArray *volumePaths = [workspace mountedLocalVolumePaths];
+  BOOL allAreMountpoints = YES;
+  NSUInteger i;
+
+  if ([paths count] == 0) {
+    allAreMountpoints = NO;
+  } else {
+    for (i = 0; i < [paths count]; i++) {
+      NSString *path = [paths objectAtIndex: i];
+      if (![volumePaths containsObject: path]) {
+        allAreMountpoints = NO;
+        break;
+      }
+    }
+  }
+
+  /* Post notification to update the Dock's Trash icon */
+  NSDictionary *userInfo = [NSDictionary dictionaryWithObject: [NSNumber numberWithBool: allAreMountpoints]
+                                                      forKey: @"allAreMountpoints"];
+  [[NSNotificationCenter defaultCenter] postNotificationName: @"GWDragMountpointStarted" 
+                                                      object: nil 
+                                                    userInfo: userInfo];
 }
 
 @end
