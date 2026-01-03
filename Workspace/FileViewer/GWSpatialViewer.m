@@ -564,7 +564,7 @@
 	freefs = [attributes objectForKey: NSFileSystemFreeSize];
 
 	if (freefs == nil) {  
-		labelstr = NSLocalizedString(@"unknown volume size", @"");    
+		labelstr = @"";
 	} else {
     unsigned long long freeSize = [freefs unsignedLongLongValue];
 
