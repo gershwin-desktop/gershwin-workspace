@@ -38,6 +38,12 @@
 
 - (void)dealloc
 {
+  /* Stop bouncing and clean up timer */
+  isBouncing = NO;
+  if (bounceTimer) {
+    [bounceTimer invalidate];
+    bounceTimer = nil;
+  }
   RELEASE (appName);
   RELEASE (highlightColor);
   RELEASE (darkerColor);
@@ -87,6 +93,13 @@
     launched = NO;
     apphidden = NO;
     appPID = 0;
+
+    /* Initialize bounce animation variables */
+    isBouncing = NO;
+    bounceTimer = nil;
+    bounceVelocity = 0.0;
+    bounceOffset = 0.0;
+    bounceGravity = 1.0;  /* Doubled gravity for twice as fast animation */
 
     minimumLaunchClicks = 2;
     
@@ -188,6 +201,9 @@
 - (void)setLaunched:(BOOL)value
 {
   launched = value;
+  if (value) {
+    [self stopBouncing];
+  }
   [self setNeedsDisplay: YES];
 }
 
@@ -220,24 +236,62 @@
 
 - (void)animateLaunch
 {
-  launching = YES;
-  dissFract = 0.2;
-    
-  while (1)
-    {
-      NSDate *date = [NSDate dateWithTimeIntervalSinceNow: 0.02];
-      [[NSRunLoop currentRunLoop] runUntilDate: date];
-      [self display];
-
-      dissFract += 0.05;
-      if (dissFract >= 1)
-	{
-	  launching = NO;
-	  break;
-	}
-    }
+  /* Start the bouncing animation */
+  isBouncing = YES;
+  bounceVelocity = 6.32;  /* Initial upward velocity for 20px bounce height */
+  bounceOffset = 0.0;
   
+  /* Create a timer to update the animation 30 times per second (half as fast) */
+  if (!bounceTimer) {
+    bounceTimer = [NSTimer scheduledTimerWithTimeInterval: 0.033333
+                                                   target: self
+                                                 selector: @selector(_bounceTimerFired:)
+                                                 userInfo: nil
+                                                  repeats: YES];
+  }
+}
+
+- (void)stopBouncing
+{
+  /* Just set the flag; let the timer callback check it */
+  isBouncing = NO;
+  bounceOffset = 0.0;
+  bounceVelocity = 0.0;
   [self setNeedsDisplay: YES];
+}
+
+- (void)_bounceTimerFired:(NSTimer *)timer
+{
+  /* Check if we should still be bouncing */
+  if (!isBouncing) {
+    return;
+  }
+  
+  /* Apply gravity to velocity */
+  bounceVelocity -= bounceGravity;
+  
+  /* Update position */
+  bounceOffset += bounceVelocity;
+  
+  /* Bounce off the ground (y = 0) - repeat bouncing with pause */
+  if (bounceOffset <= 0.0) {
+    bounceOffset = 0.0;
+    /* Add a pause before next bounce (3 frames at 30fps = ~0.1s pause) */
+    bounceVelocity = -0.1;  /* Negative velocity signals pause state */
+  } else if (bounceVelocity < -0.1 && bounceVelocity > -1.0) {
+    /* In pause state, wait a bit then restart */
+    bounceVelocity -= 0.05;
+    if (bounceVelocity < -1.0) {
+      /* Pause over, reset for next bounce */
+      bounceVelocity = 6.32;
+    }
+  }
+  
+  /* Request redraw */
+  [self setNeedsDisplay: YES];
+  if (container) {
+    [container setNeedsDisplayInRect: [self frame]];
+  }
 }
 
 - (void)setHighlightColor:(NSColor *)color
@@ -561,13 +615,19 @@ x += 6; \
   }
   
   if (isDndSourceIcon == NO) {
+    /* Adjust icon position when bouncing */
+    NSPoint drawPoint = icnPoint;
+    if (isBouncing && bounceOffset != 0.0) {
+      drawPoint.y += bounceOffset;  /* Add to Y to move upward in Cocoa coords */
+    }
+    
     if (isTrashIcon == NO) {
-      [icon compositeToPoint: icnPoint operation: NSCompositeSourceOver];
+      [icon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
     } else {
       if (trashFull) {
-        [trashFullIcon compositeToPoint: icnPoint operation: NSCompositeSourceOver];
+        [trashFullIcon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
       } else {
-        [icon compositeToPoint: icnPoint operation: NSCompositeSourceOver];
+        [icon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
       }
     }
 

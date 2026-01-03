@@ -57,6 +57,13 @@
   /* PID tracking for robust non-GNUstep app support */
   pid_t appPID;
 
+  /* Bounce animation tracking */
+  BOOL isBouncing;
+  NSTimer *bounceTimer;
+  float bounceVelocity;
+  float bounceOffset;
+  float bounceGravity;
+
   NSFileManager *fm;
   NSNotificationCenter *nc; 
   id ws;
@@ -99,6 +106,10 @@
 - (BOOL)isAppHidden;
 
 - (void)animateLaunch;
+
+- (void)stopBouncing;
+
+- (void)_bounceTimerFired:(NSTimer *)timer;
 
 - (void)setHighlightColor:(NSColor *)color;
 
