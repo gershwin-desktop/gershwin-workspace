@@ -101,8 +101,6 @@
 
 - (IBAction)setDockStyle:(id)sender;
 
-- (IBAction)setTShelfAutohide:(id)sender;
-
 - (IBAction)setSingleClickLaunch:(id)sender;
 
 @end

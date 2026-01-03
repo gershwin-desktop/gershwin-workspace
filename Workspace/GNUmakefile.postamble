@@ -8,7 +8,6 @@ before-all::
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/Finder/SearchResults
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/Finder/LiveSearch
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/FileViewer
-	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/TShelf
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/Preferences
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/Dialogs
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/Fiend
@@ -27,10 +26,8 @@ before-all::
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/Finder  
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/Finder/SearchResults
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/Finder/LiveSearch
-	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/TShelf
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/Preferences
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/Dialogs
-	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/Fiend
 	$(MKDIRS) ./$(GNUSTEP_OBJ_DIR)/History
   
 # Things to do after installing

@@ -104,16 +104,6 @@ typedef enum {
 
 - (NSRect)dockReservedFrame;
 
-- (NSRect)tshelfReservedFrame;
-
-- (NSRect)tshelfActivateFrame;
-
-- (NSImage *)tabbedShelfBackground;
-
-- (void)mouseEnteredTShelfActivateFrame;
-
-- (void)mouseExitedTShelfActiveFrame;
-
 - (void)deselectAllIcons;
 
 - (void)deselectInSpatialViewers;

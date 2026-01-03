@@ -30,7 +30,6 @@
 #import "Workspace.h"
 #import "GWDesktopView.h"
 #import "Dock.h"
-#import "TShelf/TShelfWin.h"
 
 static NSString *nibName = @"DesktopPref";
 
@@ -113,7 +112,6 @@ static NSString *nibName = @"DesktopPref";
 	  [dockPosMatrix selectCellAtRow: dockpos column: 0];
 	  dockstyle = [[manager dock] style];
 	  [dockStyleMatrix selectCellAtRow: dockstyle column: 0];
-	  [hideTShelfCheck setState: (([[gworkspace tabbedShelf] autohide]) ? NSOnState : NSOffState)];
 
 	  /* Internationalization */
 	  [[tabView tabViewItemAtIndex: 0] setLabel: NSLocalizedString(@"Background", @"")];
@@ -145,7 +143,6 @@ static NSString *nibName = @"DesktopPref";
 	  [cell setTitle: NSLocalizedString(@"Modern", @"")];
 
 	  [omnipresentCheck setTitle: _(@"Omnipresent")];
-	  [hideTShelfCheck setTitle: NSLocalizedString(@"Autohide Tabbed Shelf", @"")];
 	  [launchSingleClick setTitle: NSLocalizedString(@"Single Click Launch", @"")];
 	}
     }
@@ -167,7 +164,6 @@ static NSString *nibName = @"DesktopPref";
 - (IBAction)setColor:(id)sender
 {
   [[manager desktopView] setCurrentColor: [colorWell color]];
-  [gworkspace tshelfBackgroundDidChange];
 }
 
 
@@ -210,7 +206,6 @@ static NSString *nibName = @"DesktopPref";
     [[manager desktopView] setBackImageAtPath: imagePath];
     [imagePosMatrix selectCellAtRow: [[manager desktopView] backImageStyle] 
                              column: 0];
-    [gworkspace tshelfBackgroundDidChange];
   }
 }
 
@@ -226,14 +221,12 @@ static NSString *nibName = @"DesktopPref";
   
   [imagePosMatrix getRow: &row column: &col ofCell: cell];
   [[manager desktopView] setBackImageStyle: row];  
-  [gworkspace tshelfBackgroundDidChange];
 }
 
 - (IBAction)setUseImage:(id)sender
 {
   BOOL useImage = ([sender state] == NSOnState);
   [[manager desktopView] setUseBackImage: useImage];
-  [gworkspace tshelfBackgroundDidChange];
   [imageView setEnabled: useImage];
   [chooseImageButt setEnabled: useImage];
   [imagePosMatrix setEnabled: useImage];
@@ -271,15 +264,10 @@ static NSString *nibName = @"DesktopPref";
   [dockStyleMatrix getRow: &row column: &col ofCell: cell];
   [[manager dock] setStyle: (row == 0) ? DockStyleClassic : DockStyleModern];
 }
-- (IBAction)setTShelfAutohide:(id)sender
-{
-  [[gworkspace tabbedShelf] setAutohide: ([sender state] == NSOnState)];
-}
 
 - (IBAction)setSingleClickLaunch:(id)sender
 {
   [manager setSingleClickLaunch: ([sender state] == NSOnState)];
-  [[gworkspace tabbedShelf] setSingleClickLaunch: ([sender state] == NSOnState)];
 }
 
 @end

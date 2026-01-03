@@ -2,12 +2,13 @@
     ApplicationName = "Workspace";
     ApplicationDescription = "The Gershwin Desktop Experience";
     ApplicationIcon = "FileManager.tiff";
-    ApplicationRelease = "20250909";
-    NSBuildVersion = "09 2025";
+    ApplicationRelease = "20260103";
+    NSBuildVersion = "01 2026";
     CFBundleIdentifier = "org.gnustep.Workspace";
     Authors = (
-      "Joseph Maloney",
       "Simon Peter",
+      "Joseph Maloney",
+      
       "",
       "Based on Workspace by:",
       "Riccardo Mottola",
@@ -16,7 +17,7 @@
       "Dennis Leeuw <dleeuw@made-it.com>"
     );
     URL = "https://www.github.com/gershwin-desktop/gershwin-desktop";
-    Copyright = "Workspace Copyright (C) 2003-2025 Free Software Foundation, Inc.";
+    Copyright = "Workspace Copyright (C) 2003-2026 Free Software Foundation, Inc.";
     CopyrightDescription = "Released under the GNU General Public License 2.0 or later";
     NSIcon = "FileManager.tiff";
     NSRole = "Viewer";

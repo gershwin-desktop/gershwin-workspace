@@ -47,7 +47,6 @@
 #import "RunExternalController.h"
 #import "StartAppWin.h"
 #import "Preferences/PrefController.h"
-#import "Fiend/Fiend.h"
 #import "GWDesktopManager.h"
 #import "GWDesktopWindow.h"
 #import "Dock.h"
@@ -56,10 +55,6 @@
 #import "Finder.h"
 #import "Inspector.h"
 #import "Operation.h"
-#import "TShelf/TShelfWin.h"
-#import "TShelf/TShelfView.h"
-#import "TShelf/TShelfViewItem.h"
-#import "TShelf/TShelfIconsView.h"
 #import "History/History.h"
 #import "X11AppSupport.h"
 #import "GSGlobalShortcutsManager.h"
@@ -135,7 +130,6 @@ NSString *_pendingSystemActionTitle = nil;
     [logoutTimer invalidate];
     DESTROY (logoutTimer);
   }
-  DESTROY (recyclerApp);
   DESTROY (ddbd);
   DESTROY (mdextractor);
   RELEASE (gwProcessName);
@@ -147,13 +141,8 @@ NSString *_pendingSystemActionTitle = nil;
   RELEASE (trashContents);
   RELEASE (trashPath);
   RELEASE (watchedPaths);
-  RELEASE (fiend);
   RELEASE (history);
   RELEASE (openWithController);
-  RELEASE (runExtController);
-  RELEASE (startAppWin);
-  RELEASE (tshelfWin);
-  RELEASE (tshelfPBDir);
   RELEASE (vwrsManager);
   RELEASE (dtopManager);
   DESTROY (inspector);
@@ -561,8 +550,8 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setEnabled:NO];
   menuItem = [menu addItemWithTitle:_(@"Network") action:NULL keyEquivalent:@""];
   [menuItem setEnabled:NO];
-  menuItem = [menu addItemWithTitle:_(@"Cloud Drive") action:NULL keyEquivalent:@""];
-  [menuItem setEnabled:NO];
+  // menuItem = [menu addItemWithTitle:_(@"Cloud Drive") action:NULL keyEquivalent:@""];
+  // [menuItem setEnabled:NO];
   menuItem = [menu addItemWithTitle:_(@"Applications") action:@selector(goToApplications:) keyEquivalent:@"A"];
   [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
@@ -650,6 +639,9 @@ NSString *_pendingSystemActionTitle = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
+  // NOTE: Instead of implementing this in Workspace, we should implement this in Menu.app
+  // so that it works system-wide. Menu.app can inspect the frontmost application and show
+  // its keyboard shortcuts, and insert them into the Help menu dynamically or create one if needed.
   menuItem = [menu addItemWithTitle:_(@"Keyboard Shortcuts") action:@selector(notImplemented:) keyEquivalent:@"/"];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
   [menuItem setTarget:self];
@@ -838,8 +830,6 @@ NSString *_pendingSystemActionTitle = nil;
   fswnotifications = YES;
   [self connectFSWatcher];
     
-  recyclerApp = nil;
-
   dtopManager = [GWDesktopManager desktopManager];
     
   NSLog(@"DEBUG: Workspace init - no_desktop setting: %d", [defaults boolForKey: @"no_desktop"]);
@@ -849,17 +839,7 @@ NSString *_pendingSystemActionTitle = nil;
     [dtopManager activateDesktop];
     NSLog(@"DEBUG: Workspace activateDesktop returned");
 
-  } else if ([defaults boolForKey: @"uses_recycler"])
-  { 
-    [self connectRecycler];
-  }  
-
-  tshelfPBFileNum = 0;
-  [self createTabbedShelf];
-  if ([defaults boolForKey: @"tshelf"])
-    [self showTShelf: nil];
-  else
-    [self hideTShelf: nil];
+  }
 
   prefController = [PrefController new];  
   
@@ -870,13 +850,6 @@ NSString *_pendingSystemActionTitle = nil;
   	    
   finder = [Finder finder];
   
-  fiend = [[Fiend alloc] init];
-  
-  if ([defaults boolForKey: @"usefiend"])
-    [self showFiend: nil];
-  else
-    [self hideFiend: nil];
-    
   vwrsManager = [GWViewersManager viewersManager];
   // Don't open viewer windows on startup - just show desktop
   // [vwrsManager showViewers];
@@ -1031,9 +1004,7 @@ NSString *_pendingSystemActionTitle = nil;
   [self updateDefaults];
   
   TEST_CLOSE (prefController, [prefController myWin]);
-  TEST_CLOSE (fiend, [fiend myWin]);
   TEST_CLOSE (history, [history myWin]); 
-  TEST_CLOSE (tshelfWin, tshelfWin);
   TEST_CLOSE (startAppWin, [startAppWin win]);
 
   if (fswatcher)
@@ -1057,22 +1028,6 @@ NSString *_pendingSystemActionTitle = nil;
   [inspector updateDefaults];
 
   [finder stopAllSearchs];
-  
-  if (recyclerApp)
-    {
-      NSConnection *conn;
-
-      conn = [(NSDistantObject *)recyclerApp connectionForProxy];
-  
-      if (conn && [conn isValid])
-        {
-          [nc removeObserver: self
-                        name: NSConnectionDidDieNotification
-                      object: conn];
-          [recyclerApp terminateApplication];
-          DESTROY (recyclerApp);
-        }
-    }
   
   if (ddbd)
     {
@@ -1205,41 +1160,6 @@ NSString *_pendingSystemActionTitle = nil;
   }
 }
 
-- (NSImage *)tshelfBackground
-{
-  if ([dtopManager isActive]) {
-    return [dtopManager tabbedShelfBackground];
-  }
-  return nil;
-}
-
-- (void)tshelfBackgroundDidChange
-{
-  if ([tshelfWin isVisible]) {
-    [[tshelfWin shelfView] setNeedsDisplay: YES];
-  }  
-}
-
-- (NSString *)tshelfPBDir
-{
-  return tshelfPBDir;
-}
-
-- (NSString *)tshelfPBFilePath
-{
-  NSString *tshelfPBFileNName;
-
-  tshelfPBFileNum++;
-  if (tshelfPBFileNum >= TSHF_MAXF)
-    {
-      tshelfPBFileNum = 0;
-    }
-  
-  tshelfPBFileNName = [NSString stringWithFormat: @"%i", tshelfPBFileNum];
-  
-  return [tshelfPBDir stringByAppendingPathComponent: tshelfPBFileNName];
-}
-
 - (void)changeDefaultEditor:(NSNotification *)notif
 {
   NSString *editor = [notif object];
@@ -1276,34 +1196,11 @@ NSString *_pendingSystemActionTitle = nil;
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   id entry;
 
-  [tshelfWin saveDefaults];  
-   
-  if ([tshelfWin isVisible])
-    {
-    [defaults setBool: YES forKey: @"tshelf"];
-    }
-  else
-    {
-      [defaults setBool: NO forKey: @"tshelf"];
-    }
-  [defaults setObject: [NSString stringWithFormat: @"%i", tshelfPBFileNum]
-               forKey: @"tshelfpbfnum"];
-
   if ([[prefController myWin] isVisible])
     {
       [prefController updateDefaults]; 
     }
 	
-  if ((fiend != nil) && ([[fiend myWin] isVisible]))
-    {
-      [fiend updateDefaults]; 
-      [defaults setBool: YES forKey: @"usefiend"];
-    }
-  else
-    {
-      [defaults setBool: NO forKey: @"usefiend"];
-    }
-
   [history updateDefaults];
 
   [defaults setObject: [fsnodeRep hiddenPaths] 
@@ -1335,8 +1232,6 @@ NSString *_pendingSystemActionTitle = nil;
 
   [defaults setBool: [[inspector win] isVisible] forKey: @"uses_inspector"];
 
-  [defaults setBool: (recyclerApp != nil) forKey: @"uses_recycler"];
-
 	[defaults synchronize];
 }
 
@@ -1345,17 +1240,9 @@ NSString *_pendingSystemActionTitle = nil;
   NSHelpManager *manager = [NSHelpManager sharedHelpManager];
   NSString *help;
 
-  help = @"TabbedShelf.rtfd";
-  [manager setContextHelp: (NSAttributedString *)help 
-                forObject: [tshelfWin shelfView]];
-
   help = @"History.rtfd";
   [manager setContextHelp: (NSAttributedString *)help 
                 forObject: [[history myWin] contentView]];
-
-  help = @"Fiend.rtfd";
-  [manager setContextHelp: (NSAttributedString *)help 
-                forObject: [[fiend myWin] contentView]];
 
   help = @"RunExternal.rtfd";
   [manager setContextHelp: (NSAttributedString *)help 
@@ -1466,54 +1353,6 @@ NSString *_pendingSystemActionTitle = nil;
         (type == SPATIAL) ? @"Spatial" : @"Browsing");
 }
 
-- (void)createTabbedShelf
-{
-  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-  id entry;
-  NSString *basePath;
-  BOOL isdir;
-
-  entry = [defaults objectForKey: @"tshelfpbfnum"];
-  if (entry) {
-    tshelfPBFileNum = [entry intValue];
-  } else {
-    tshelfPBFileNum = 0;
-  }      
-       
-  basePath = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES) lastObject];
-  basePath = [basePath stringByAppendingPathComponent: @"Workspace"];
-
-  if (([fm fileExistsAtPath: basePath isDirectory: &isdir] && isdir) == NO) {
-    if ([fm createDirectoryAtPath: basePath attributes: nil] == NO) {
-      NSLog(@"Can't create the Workspace directory! Quitting now.");
-      [NSApp terminate: self];
-    }
-  }
-
-	tshelfPBDir = [basePath stringByAppendingPathComponent: @"PBData"];
-
-	if ([fm fileExistsAtPath: tshelfPBDir isDirectory: &isdir] == NO) {
-    if ([fm createDirectoryAtPath: tshelfPBDir attributes: nil] == NO) {
-      NSLog(@"Can't create the TShelf directory! Quitting now.");
-      [NSApp terminate: self];
-    }
-	} else {
-		if (isdir == NO) {
-			NSLog (@"Warning - %@ is not a directory - quitting now!", tshelfPBDir);			
-			[NSApp terminate: self];
-		}
-  }
-  
-  RETAIN (tshelfPBDir);
-
-  tshelfWin = [[TShelfWin alloc] init];
-}
-
-- (TShelfWin *)tabbedShelf
-{
-  return tshelfWin;
-}
-
 - (StartAppWin *)startAppWin
 {
   return startAppWin;
@@ -1532,16 +1371,8 @@ NSString *_pendingSystemActionTitle = nil;
     return NO;
   }
 
-  if (sel_isEqual(action, @selector(showRecycler:))) {
-    return (([dtopManager isActive] == NO) || ([dtopManager dockActive] == NO));
-  
-  } else if (sel_isEqual(action, @selector(emptyTrash:))) {
+  if (sel_isEqual(action, @selector(emptyTrash:))) {
     return ([trashContents count] != 0);
-  } else if (sel_isEqual(action, @selector(removeTShelfTab:))
-              || sel_isEqual(action, @selector(renameTShelfTab:))
-                      || sel_isEqual(action, @selector(addTShelfTab:))) {
-    return [tshelfWin isVisible];
-
   } else if (sel_isEqual(action, @selector(activateContextHelp:))) {
     return ([NSHelpManager isContextHelpModeActive] == NO);
 
@@ -1551,27 +1382,7 @@ NSString *_pendingSystemActionTitle = nil;
   } else if (sel_isEqual(action, @selector(cut:))
                 || sel_isEqual(action, @selector(copy:))
                   || sel_isEqual(action, @selector(paste:))) {
-    NSWindow *kwin = [NSApp keyWindow];
-
-    if (kwin && [kwin isKindOfClass: [TShelfWin class]]) {
-      TShelfViewItem *item = [[tshelfWin shelfView] selectedTabItem];
-
-      if (item) {
-        TShelfIconsView *iview = (TShelfIconsView *)[item view];
-
-        if ([iview iconsType] == DATA_TAB) {
-          if (sel_isEqual(action, @selector(paste:))) {
-            return YES;
-          } else {
-            return [iview hasSelectedIcon];
-          }
-        } else {
-          return NO;
-        }
-      } else {
-        return NO;
-      }               
-    } else if (sel_isEqual(action, @selector(paste:))) {
+    if (sel_isEqual(action, @selector(paste:))) {
       return [self pasteboardHasValidContent];
     }
   }
@@ -2086,10 +1897,6 @@ NSString *_pendingSystemActionTitle = nil;
   
   [vwrsManager thumbnailsDidChangeInPaths: nil];
   [dtopManager thumbnailsDidChangeInPaths: nil];
-  
-  if ([tshelfWin isVisible]) {
-    [tshelfWin updateIcons]; 
-	}
 }
 
 - (void)thumbnailsDidChange:(NSNotification *)notif
@@ -2123,9 +1930,6 @@ NSString *_pendingSystemActionTitle = nil;
       [vwrsManager thumbnailsDidChangeInPaths: tmbdirs];
       [dtopManager thumbnailsDidChangeInPaths: tmbdirs];
 
-      if ([tshelfWin isVisible])
-        [tshelfWin updateIcons]; 
-
       [tmbdirs removeAllObjects];
     }
 
@@ -2152,10 +1956,6 @@ NSString *_pendingSystemActionTitle = nil;
       
       [vwrsManager thumbnailsDidChangeInPaths: tmbdirs];
       [dtopManager thumbnailsDidChangeInPaths: tmbdirs];
-      
-      if ([tshelfWin isVisible]) {
-        [tshelfWin updateIcons]; 
-		  }
     }
 }
 
@@ -2182,23 +1982,12 @@ NSString *_pendingSystemActionTitle = nil;
   [fsnodeRep setHideSysFiles: hide];
   [vwrsManager hideDotsFileDidChange: hide];
   [dtopManager hideDotsFileDidChange: hide];
-
-  [tshelfWin checkIconsAfterDotsFilesChange];
-  
-  if (fiend != nil) {
-    [fiend checkIconsAfterDotsFilesChange];
-  }
 }
 
 - (void)hiddenFilesDidChange:(NSArray *)paths
 {
   [vwrsManager hiddenFilesDidChange: paths];
   [dtopManager hiddenFilesDidChange: paths];
-  [tshelfWin checkIconsAfterHidingOfPaths: paths]; 
-
-  if (fiend != nil) {
-    [fiend checkIconsAfterHidingOfPaths: paths];
-  }
 }
 
 - (void)customDirectoryIconDidChange:(NSNotification *)notif
@@ -2218,10 +2007,6 @@ NSString *_pendingSystemActionTitle = nil;
   
   [vwrsManager thumbnailsDidChangeInPaths: paths];
   [dtopManager thumbnailsDidChangeInPaths: paths];
-
-  if ([tshelfWin isVisible]) {
-    [tshelfWin updateIcons]; 
-	}
 }
 
 - (void)applicationForExtensionsDidChange:(NSNotification *)notif
@@ -2378,80 +2163,6 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (oneway void)globalWatchedPathDidChange:(NSDictionary *)dirinfo
 {
-}
-
-- (void)connectRecycler
-{
-  if (recyclerApp == nil)
-    {
-      recyclerApp = [NSConnection rootProxyForConnectionWithRegisteredName: @"Recycler" 
-                                                                      host: @""];
-      
-      if (recyclerApp == nil)
-        {
-          [ws launchApplication: @"Recycler"];
-
-          NSDictionary *info = [NSDictionary dictionaryWithObject:[NSDate dateWithTimeIntervalSinceNow: 8.0]
-                                                           forKey:@"deadline"];
-          [NSTimer scheduledTimerWithTimeInterval:0.2
-                                           target:self
-                                         selector:@selector(_probeRecyclerTimer:)
-                                         userInfo:info
-                                          repeats:YES];
-        }
-    
-      if (recyclerApp)
-        {
-          NSMenu *menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"Tools", @"")] submenu];
-          id item = [menu itemWithTitle: NSLocalizedString(@"Show Recycler", @"")];
-
-          if (item != nil) {
-            [item setTitle: NSLocalizedString(@"Hide Recycler", @"")];
-          }
-    
-          RETAIN (recyclerApp);
-          [recyclerApp setProtocolForProxy: @protocol(RecyclerAppProtocol)];
-    
-          [[NSNotificationCenter defaultCenter] addObserver: self
-                                                   selector: @selector(recyclerConnectionDidDie:)
-                                                       name: NSConnectionDidDieNotification
-                                                     object: [recyclerApp connectionForProxy]];
-        } 
-      else
-        {
-          NSLog(@"Workspace: unable to contact Recycler");
-        }
-    }
-}
-
-- (void)recyclerConnectionDidDie:(NSNotification *)notif
-{
-  id connection = [notif object];
-  NSMenu *menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"Tools", @"")] submenu];
-  id item = [menu itemWithTitle: NSLocalizedString(@"Hide Recycler", @"")];
-
-  [[NSNotificationCenter defaultCenter] removeObserver: self
-	                    name: NSConnectionDidDieNotification
-	                  object: connection];
-
-  NSAssert(connection == [recyclerApp connectionForProxy],
-		                                  NSInternalInconsistencyException);
-  RELEASE (recyclerApp);
-  recyclerApp = nil;
-
-  if (item != nil) {
-    [item setTitle: NSLocalizedString(@"Show Recycler", @"")];
-  }
-    
-  if (recyclerCanQuit == NO) {  
-    if (NSRunAlertPanel(nil,
-                      NSLocalizedString(@"The Recycler connection died.\nDo you want to restart it?", @""),
-                      NSLocalizedString(@"Yes", @""),
-                      NSLocalizedString(@"No", @""),
-                      nil)) {
-      [self connectRecycler]; 
-    }    
-  }
 }
 
 - (void)connectDDBd
@@ -2637,35 +2348,6 @@ NSString *_pendingSystemActionTitle = nil;
     NSLog(@"Workspace: fswatcher did not respond; notifications disabled");
   } else {
     NSLog(@"DEBUG: _probeFSWatcherTimer - fswatcher not ready yet, will retry");
-  }
-}
-
-- (void)_probeRecyclerTimer:(NSTimer *)timer
-{
-  if (recyclerApp) {
-    [timer invalidate];
-    return;
-  }
-  NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
-  recyclerApp = [NSConnection rootProxyForConnectionWithRegisteredName:@"Recycler" host:@""];
-  if (recyclerApp) {
-    [timer invalidate];
-    NSMenu *menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"Tools", @"")] submenu];
-    id item = [menu itemWithTitle: NSLocalizedString(@"Show Recycler", @"")];
-    if (item != nil) {
-      [item setTitle: NSLocalizedString(@"Hide Recycler", @"")];
-    }
-    RETAIN(recyclerApp);
-    [recyclerApp setProtocolForProxy:@protocol(RecyclerAppProtocol)];
-    [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:@selector(recyclerConnectionDidDie:)
-                                                 name:NSConnectionDidDieNotification
-                                               object:[recyclerApp connectionForProxy]];
-    return;
-  }
-  if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
-    [timer invalidate];
-    NSLog(@"Workspace: Recycler did not respond");
   }
 }
 
@@ -3112,142 +2794,9 @@ NSString *_pendingSystemActionTitle = nil;
   [inspector showAnnotations];
 }
 
-- (void)showRecycler:(id)sender
-{
-  NSMenu *menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"Tools", @"")] submenu];
-  id item;
-
-  if (recyclerApp == nil)
-    {
-      recyclerCanQuit = NO; 
-      [self connectRecycler];
-      item = [menu itemWithTitle: NSLocalizedString(@"Show Recycler", @"")];
-      [item setTitle: NSLocalizedString(@"Hide Recycler", @"")];
-    }
-  else
-    {
-      recyclerCanQuit = YES;
-      [recyclerApp terminateApplication];
-      item = [menu itemWithTitle: NSLocalizedString(@"Hide Recycler", @"")];
-      [item setTitle: NSLocalizedString(@"Show Recycler", @"")];
-    }
-}
-
 - (void)showFinder:(id)sender
 {
   [finder activate];   
-}
-
-- (void)showFiend:(id)sender
-{
-  NSMenu *menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"Tools", @"")] submenu];
-  menu = [[menu itemWithTitle: NSLocalizedString(@"Fiend", @"")] submenu];
-
-  while (1)
-    {
-      if ([menu numberOfItems] == 0)
-        break;
-
-      [menu removeItemAtIndex: 0];
-    }
-
-  [menu addItemWithTitle: NSLocalizedString(@"Hide Fiend", @"")
-                  action: @selector(hideFiend:) keyEquivalent: @""];
-  [menu addItemWithTitle: NSLocalizedString(@"Remove Current Layer", @"")
-                  action: @selector(removeFiendLayer:) keyEquivalent: @""];
-  [menu addItemWithTitle: NSLocalizedString(@"Rename Current Layer", @"")
-                  action: @selector(renameFiendLayer:) keyEquivalent: @""];	
-  [menu addItemWithTitle: NSLocalizedString(@"Add Layer...", @"")
-                  action: @selector(addFiendLayer:) keyEquivalent: @""];
-
-  [fiend activate];
-}
-
-- (void)hideFiend:(id)sender
-{
-  NSMenu *menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"Tools", @"")] submenu];
-  menu = [[menu itemWithTitle: NSLocalizedString(@"Fiend", @"")] submenu];
-
-  while (1)
-    {
-      if ([menu numberOfItems] == 0)
-	{
-	  break;
-	}
-      [menu removeItemAtIndex: 0];
-    }
-
-  [menu addItemWithTitle: NSLocalizedString(@"Show Fiend", @"")
-		  action: @selector(showFiend:) keyEquivalent: @""];
-
-  if (fiend != nil)
-    {
-      [fiend hide];
-    }
-}
-
-- (void)addFiendLayer:(id)sender
-{
-  [fiend addLayer];
-}
-
-- (void)removeFiendLayer:(id)sender
-{
-  [fiend removeCurrentLayer];
-}
-
-- (void)renameFiendLayer:(id)sender
-{
-  [fiend renameCurrentLayer];
-}
-
-- (void)showTShelf:(id)sender
-{
-  NSMenu *menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"Tools", @"")] submenu];
-  menu = [[menu itemWithTitle: NSLocalizedString(@"Tabbed Shelf", @"")] submenu];
-
-  [[menu itemAtIndex: 0] setTitle: NSLocalizedString(@"Hide Tabbed Shelf", @"")];
-  [[menu itemAtIndex: 0] setAction: @selector(hideTShelf:)];
-
-  [tshelfWin activate];
-}
-
-- (void)hideTShelf:(id)sender
-{
-  NSMenu *menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"Tools", @"")] submenu];
-  menu = [[menu itemWithTitle: NSLocalizedString(@"Tabbed Shelf", @"")] submenu];
-
-  [[menu itemAtIndex: 0] setTitle: NSLocalizedString(@"Show Tabbed Shelf", @"")];
-  [[menu itemAtIndex: 0] setAction: @selector(showTShelf:)];
-
-  if ([tshelfWin isVisible])
-    {
-      [tshelfWin deactivate];
-    }
-}
-
-- (void)selectSpecialTShelfTab:(id)sender
-{
-  if ([tshelfWin isVisible] == NO)
-    {
-      [tshelfWin activate];
-    }
-  [[tshelfWin shelfView] selectLastItem];
-}
-
-- (void)addTShelfTab:(id)sender
-{
-  [tshelfWin addTab]; 
-}
-
-- (void)removeTShelfTab:(id)sender
-{
-  [tshelfWin removeTab]; 
-}
-
-- (void)renameTShelfTab:(id)sender
-{
-  [tshelfWin renameTab]; 
 }
 
 - (void)cut:(id)sender
@@ -3256,17 +2805,7 @@ NSString *_pendingSystemActionTitle = nil;
 
   if (kwin)
     {
-      if ([kwin isKindOfClass: [TShelfWin class]])
-	{
-	  TShelfViewItem *item = [[tshelfWin shelfView] selectedTabItem];
-
-	  if (item)
-	    {
-	      TShelfIconsView *iview = (TShelfIconsView *)[item view];
-	      [iview doCut];
-	    }
-	}
-      else if ([vwrsManager hasViewerWithWindow: kwin]
+      if ([vwrsManager hasViewerWithWindow: kwin]
                                   || [dtopManager hasWindow: kwin])
 	{
 	  id nodeView;
@@ -3306,15 +2845,7 @@ NSString *_pendingSystemActionTitle = nil;
   NSWindow *kwin = [NSApp keyWindow];
 
   if (kwin) {
-    if ([kwin isKindOfClass: [TShelfWin class]]) {
-      TShelfViewItem *item = [[tshelfWin shelfView] selectedTabItem];
-
-      if (item) {
-        TShelfIconsView *iview = (TShelfIconsView *)[item view];
-        [iview doCopy];    
-      }
-      
-    } else if ([vwrsManager hasViewerWithWindow: kwin]
+    if ([vwrsManager hasViewerWithWindow: kwin]
                                   || [dtopManager hasWindow: kwin]) {
       id nodeView;
       NSArray *selection;
@@ -3348,15 +2879,7 @@ NSString *_pendingSystemActionTitle = nil;
   NSWindow *kwin = [NSApp keyWindow];
 
   if (kwin) {
-    if ([kwin isKindOfClass: [TShelfWin class]]) {
-      TShelfViewItem *item = [[tshelfWin shelfView] selectedTabItem];
-
-      if (item) {
-        TShelfIconsView *iview = (TShelfIconsView *)[item view];
-        [iview doPaste];    
-      }
-      
-    } else if ([vwrsManager hasViewerWithWindow: kwin]
+    if ([vwrsManager hasViewerWithWindow: kwin]
                                   || [dtopManager hasWindow: kwin]) {
       NSPasteboard *pb = [NSPasteboard generalPasteboard];
 
@@ -4195,20 +3718,20 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
 - (void)notImplemented:(id)sender
 {
   NSString *title = nil;
+  NSString *message;
   
   if ([sender respondsToSelector:@selector(title)]) {
     title = [sender title];
   }
   
   if (title) {
-    NSRunAlertPanel(@"Not Implemented Yet",
-                    [NSString stringWithFormat:@"The \"%@\" feature is not yet implemented.", title],
-                    @"OK", nil, nil);
+    message = [NSString stringWithFormat:@"The \"%@\" feature is not yet implemented.", title];
   } else {
-    NSRunAlertPanel(@"Not Implemented Yet",
-                    @"This feature is not yet implemented.",
-                    @"OK", nil, nil);
+    message = @"This feature is not yet implemented.";
   }
+  
+  NSRunAlertPanel(@"Not Implemented Yet", message, @"OK", nil, nil);
+  return;  // Explicit return to avoid noreturn inference
 }
 
 - (void)undo:(id)sender
