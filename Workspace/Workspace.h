@@ -376,6 +376,8 @@
 
 - (void)showFinder:(id)sender;
 
+- (void)goToNetwork:(id)sender;
+
 
 - (void)runCommand:(id)sender;
 

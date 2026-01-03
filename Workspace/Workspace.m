@@ -58,6 +58,8 @@
 #import "History/History.h"
 #import "X11AppSupport.h"
 #import "GSGlobalShortcutsManager.h"
+#import "Network/GWNetworkViewer.h"
+#import "Network/NetworkServiceManager.h"
 #if HAVE_DBUS
 #import "DBusConnection.h"
 #endif
@@ -548,8 +550,9 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
   menuItem = [menu addItemWithTitle:_(@"Transfer") action:NULL keyEquivalent:@""];
   [menuItem setEnabled:NO];
-  menuItem = [menu addItemWithTitle:_(@"Network") action:NULL keyEquivalent:@""];
-  [menuItem setEnabled:NO];
+  menuItem = [menu addItemWithTitle:_(@"Network") action:@selector(goToNetwork:) keyEquivalent:@"K"];
+  [menuItem setTarget:self];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
   // menuItem = [menu addItemWithTitle:_(@"Cloud Drive") action:NULL keyEquivalent:@""];
   // [menuItem setEnabled:NO];
   menuItem = [menu addItemWithTitle:_(@"Applications") action:@selector(goToApplications:) keyEquivalent:@"A"];
@@ -2654,6 +2657,13 @@ NSString *_pendingSystemActionTitle = nil;
 {
   NSString *videosPath = [NSHomeDirectory() stringByAppendingPathComponent: @"/Videos"];
   [self navigateToDirectory: videosPath withLabel: _(@"Videos")];
+}
+
+- (void)goToNetwork:(id)sender
+{
+  NSLog(@"Workspace: Opening Network viewer");
+  GWNetworkViewer *viewer = [GWNetworkViewer sharedViewer];
+  [viewer showWindow];
 }
 
 
