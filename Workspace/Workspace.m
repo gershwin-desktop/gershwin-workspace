@@ -58,7 +58,7 @@
 #import "History/History.h"
 #import "X11AppSupport.h"
 #import "GSGlobalShortcutsManager.h"
-#import "Network/GWNetworkViewer.h"
+#import "Network/NetworkFSNode.h"
 #import "Network/NetworkServiceManager.h"
 #if HAVE_DBUS
 #import "DBusConnection.h"
@@ -2661,9 +2661,23 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)goToNetwork:(id)sender
 {
-  NSLog(@"Workspace: Opening Network viewer");
-  GWNetworkViewer *viewer = [GWNetworkViewer sharedViewer];
-  [viewer showWindow];
+  NSLog(@"Workspace: Opening Network browser");
+  
+  /* Start network service discovery if not already running */
+  NetworkServiceManager *manager = [NetworkServiceManager sharedManager];
+  if (![manager isBrowsing]) {
+    [manager startBrowsing];
+  }
+  
+  /* Create a NetworkFSNode for the /Network virtual location */
+  NetworkFSNode *networkNode = [NetworkFSNode networkRootNode];
+  
+  /* Open a viewer for the network node */
+  [vwrsManager viewerForNode:networkNode
+                    showType:GWViewTypeIcon
+               showSelection:NO
+                    forceNew:YES
+                     withKey:@"network_viewer"];
 }
 
 
