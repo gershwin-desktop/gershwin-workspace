@@ -238,7 +238,7 @@ NSString *_pendingSystemActionTitle = nil;
   subMenu = AUTORELEASE ([NSMenu new]);
   [menu setSubmenu: subMenu forItem: menuItem];
   menuItem = [menu addItemWithTitle:_(@"Open as Folder") action:@selector(openSelectionAsFolder:) keyEquivalent:@"O"];
-  [menuItem setTarget:self];
+  [[menu itemWithTitle:_(@"Open as Folder")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
   
   menuItem = [menu addItemWithTitle:_(@"Print") action:@selector(print:) keyEquivalent:@"p"];
   [menuItem setTarget:self];
@@ -324,19 +324,16 @@ NSString *_pendingSystemActionTitle = nil;
   
   menuItem = [[NSMenuItem alloc] initWithTitle:_(@"as Icons") action:@selector(setViewerType:) keyEquivalent:@"1"];
   [menuItem setTag:GWViewTypeIcon];
-  [menuItem setTarget:self];
   [menuItem autorelease];
   [menu addItem:menuItem];
   
   menuItem = [[NSMenuItem alloc] initWithTitle:_(@"as List") action:@selector(setViewerType:) keyEquivalent:@"2"];
   [menuItem setTag:GWViewTypeList];
-  [menuItem setTarget:self];
   [menuItem autorelease];
   [menu addItem:menuItem];
 
   menuItem = [[NSMenuItem alloc] initWithTitle:_(@"as Columns") action:@selector(setViewerType:) keyEquivalent:@"3"];
   [menuItem setTag:GWViewTypeBrowser];
-  [menuItem setTarget:self];
   [menuItem autorelease];
   [menu addItem:menuItem];
   
