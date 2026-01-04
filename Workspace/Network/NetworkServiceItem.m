@@ -66,7 +66,13 @@
 
 - (NSString *)displayName
 {
-  return name ? name : @"Unknown Service";
+  NSString *base = name ? name : @"Unknown Service";
+  if ([self isSFTPService]) {
+    return [base stringByAppendingString:@" (sftp)"];
+  } else if ([self isAFPService]) {
+    return [base stringByAppendingString:@" (afp)"];
+  }
+  return base;
 }
 
 - (NSString *)identifier

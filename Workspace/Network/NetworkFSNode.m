@@ -154,8 +154,47 @@ NSString * const NetworkVirtualPath = @"/Network";
   NSLog(@"NetworkFSNode: Getting subnodes, %lu services available", 
         (unsigned long)[services count]);
   
+  /* Ensure unique visible names by appending -2, -3, ... for duplicates */
+  NSMutableDictionary *nameCounts = [NSMutableDictionary dictionaryWithCapacity:[services count]];
   for (NetworkServiceItem *item in services) {
+    NSString *baseName = [item displayName];
+    NSNumber *count = [nameCounts objectForKey:baseName];
+    NSString *uniqueName = nil;
+    if (!count) {
+      [nameCounts setObject:@1 forKey:baseName];
+      uniqueName = baseName;
+    } else {
+      NSUInteger newCount = [count unsignedIntegerValue] + 1;
+      [nameCounts setObject:[NSNumber numberWithUnsignedInteger:newCount] forKey:baseName];
+      /* Insert numbering before known suffixes like " (sftp)" and " (afp)" */
+      NSString *suffix = nil;
+      NSString *namePart = baseName;
+      NSRange suffixRange = [baseName rangeOfString:@" (" options:NSBackwardsSearch];
+      if (suffixRange.location != NSNotFound) {
+        suffix = [baseName substringFromIndex:suffixRange.location];
+        namePart = [baseName substringToIndex:suffixRange.location];
+      }
+      if (suffix && ([suffix isEqualToString:@" (sftp)"] || [suffix isEqualToString:@" (afp)"])) {
+        uniqueName = [NSString stringWithFormat:@"%@-%lu%@", namePart, (unsigned long)newCount, suffix];
+      } else {
+        uniqueName = [NSString stringWithFormat:@"%@-%lu", baseName, (unsigned long)newCount];
+      }
+    }
+
     NetworkFSNode *node = [[NetworkFSNode alloc] initWithServiceItem:item parent:self];
+    /* Override the node's visible name/path to use the unique name */
+    ASSIGN(node->lastPathComponent, uniqueName);
+    ASSIGN(node->name, uniqueName);
+    if (parent) {
+      NSString *fullPath = [NSString stringWithFormat:@"%@/%@", [self path], uniqueName];
+      ASSIGN(node->path, fullPath);
+      ASSIGN(node->relativePath, uniqueName);
+    } else {
+      NSString *fullPath = [NSString stringWithFormat:@"%@/%@", NetworkVirtualPath, uniqueName];
+      ASSIGN(node->path, fullPath);
+      ASSIGN(node->relativePath, fullPath);
+    }
+
     [nodes addObject:node];
     RELEASE(node);
   }
@@ -173,8 +212,33 @@ NSString * const NetworkVirtualPath = @"/Network";
   NSArray *services = [manager allServices];
   NSMutableArray *names = [NSMutableArray arrayWithCapacity:[services count]];
   
+  /* Use the same uniqueness logic as -subNodes so names match nodes */
+  NSMutableDictionary *nameCounts = [NSMutableDictionary dictionaryWithCapacity:[services count]];
   for (NetworkServiceItem *item in services) {
-    [names addObject:[item displayName]];
+    NSString *baseName = [item displayName];
+    NSNumber *count = [nameCounts objectForKey:baseName];
+    NSString *uniqueName = nil;
+    if (!count) {
+      [nameCounts setObject:@1 forKey:baseName];
+      uniqueName = baseName;
+    } else {
+      NSUInteger newCount = [count unsignedIntegerValue] + 1;
+      [nameCounts setObject:[NSNumber numberWithUnsignedInteger:newCount] forKey:baseName];
+      /* Insert numbering before known suffixes like " (sftp)" and " (afp)" */
+      NSString *suffix = nil;
+      NSString *namePart = baseName;
+      NSRange suffixRange = [baseName rangeOfString:@" (" options:NSBackwardsSearch];
+      if (suffixRange.location != NSNotFound) {
+        suffix = [baseName substringFromIndex:suffixRange.location];
+        namePart = [baseName substringToIndex:suffixRange.location];
+      }
+      if (suffix && ([suffix isEqualToString:@" (sftp)"] || [suffix isEqualToString:@" (afp)"])) {
+        uniqueName = [NSString stringWithFormat:@"%@-%lu%@", namePart, (unsigned long)newCount, suffix];
+      } else {
+        uniqueName = [NSString stringWithFormat:@"%@-%lu", baseName, (unsigned long)newCount];
+      }
+    }
+    [names addObject:uniqueName];
   }
   
   return names;
