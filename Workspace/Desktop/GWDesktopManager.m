@@ -589,33 +589,59 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
 - (void)newVolumeMounted:(NSNotification *)notif
 {
+  NSLog(@"GWDesktopManager: newVolumeMounted notification received: %@", [notif userInfo]);
   if (win && [win isVisible]) {
     NSDictionary *dict = [notif userInfo];  
     NSString *volpath = [dict objectForKey: @"NSDevicePath"];
 
+    NSLog(@"GWDesktopManager: Calling newVolumeMountedAtPath for %@", volpath);
     [[self desktopView] newVolumeMountedAtPath: volpath];
+  } else {
+    NSLog(@"GWDesktopManager: Desktop window not visible, skipping mount display");
   }
 }
 
 - (void)mountedVolumeWillUnmount:(NSNotification *)notif
 {
+  NSLog(@"GWDesktopManager: mountedVolumeWillUnmount notification received: %@", [notif userInfo]);
   if (win && [win isVisible]) {
     NSDictionary *dict = [notif userInfo];  
     NSString *volpath = [dict objectForKey: @"NSDevicePath"];
 
+    NSLog(@"GWDesktopManager: Processing will unmount for %@", volpath);
     [fsnodeRep lockPaths: [NSArray arrayWithObject: volpath]];
     [[self desktopView] workspaceWillUnmountVolumeAtPath: volpath];
+  } else {
+    NSLog(@"GWDesktopManager: Desktop window not visible, skipping will unmount processing");
   }
 }
 
 - (void)mountedVolumeDidUnmount:(NSNotification *)notif
 {
+  NSLog(@"GWDesktopManager: mountedVolumeDidUnmount notification received: %@", [notif userInfo]);
   if (win && [win isVisible]) {
     NSDictionary *dict = [notif userInfo];  
     NSString *volpath = [dict objectForKey: @"NSDevicePath"];
 
+    NSLog(@"GWDesktopManager: Processing did unmount for %@", volpath);
     [fsnodeRep unlockPaths: [NSArray arrayWithObject: volpath]];
     [[self desktopView] workspaceDidUnmountVolumeAtPath: volpath];
+    
+    /* Also send unmount notification to viewers so they can close windows */
+    if (volpath) {
+      NSString *parent = [volpath stringByDeletingLastPathComponent];
+      NSString *name = [volpath lastPathComponent];
+      NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
+                                @"source": parent,
+                                @"destination": parent,
+                                @"files": @[name],
+                                @"unmounted": volpath };
+      
+      NSLog(@"GWDesktopManager: Posting GWFileSystemDidChangeNotification for unmount of %@", volpath);
+      [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemDidChangeNotification" object:opinfo];
+    }
+  } else {
+    NSLog(@"GWDesktopManager: Desktop window not visible, skipping did unmount processing");
   }
 }
 

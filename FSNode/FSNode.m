@@ -979,6 +979,17 @@
   NSArray *files = [opinfo objectForKey: @"files"];    
   NSUInteger i;  	 
 
+  /* Special handling for unmount operations */
+  if ([operation isEqual: @"UnmountOperation"]) {
+    NSString *unmountedPath = [opinfo objectForKey: @"unmounted"];
+    if (unmountedPath) {
+      /* Check if this node is the unmounted path or a subpath */
+      if ([path isEqual: unmountedPath] || isSubpathOfPath(unmountedPath, path)) {
+        return YES;
+      }
+    }
+  }
+
   if ([operation isEqual: @"WorkspaceRenameOperation"])
     {
       files = [NSArray arrayWithObject: [source lastPathComponent]];

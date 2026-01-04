@@ -35,6 +35,7 @@
 #import "GWDesktopManager.h"
 #import "Dock.h"
 #import "Workspace.h"
+#import "../Network/NetworkVolumeManager.h"
 
 #define DEF_ICN_SIZE 48
 #define DEF_TEXT_SIZE 12
@@ -127,12 +128,14 @@
 
 - (void)newVolumeMountedAtPath:(NSString *)vpath
 {
+  NSLog(@"GWDesktopView: newVolumeMountedAtPath called for %@", vpath);
   FSNode *vnode = [FSNode nodeWithPath: vpath];
 
   [vnode setMountPoint: YES];
   [self removeRepOfSubnode: vnode];
   [self addRepForSubnode: vnode];
   [self tile];
+  NSLog(@"GWDesktopView: Added desktop icon for mount %@", vpath);
 }
 
 - (void)workspaceWillUnmountVolumeAtPath:(NSString *)vpath
@@ -149,6 +152,19 @@
       [self removeRep: icon];
       [self tile];
     }
+    
+  /* Send unmount notification to viewers so they can close windows */
+  if (vpath) {
+    NSString *parent = [vpath stringByDeletingLastPathComponent];
+    NSString *name = [vpath lastPathComponent];
+    NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
+                              @"source": parent,
+                              @"destination": parent,
+                              @"files": @[name],
+                              @"unmounted": vpath };
+    
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemDidChangeNotification" object:opinfo];
+  }
 }
 
 - (void)unlockVolumeAtPath:(NSString *)path
@@ -1130,7 +1146,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)ejectSelection:(id)sender
 {
-  NSWorkspace *ws = [NSWorkspace sharedWorkspace];
   NSArray *selnodes = [self selectedNodes];
   NSUInteger i;
 
@@ -1148,12 +1163,8 @@ static void GWHighlightFrameRect(NSRect aRect)
         continue;
       }
       
-      // Try to unmount and eject
-      if (![ws unmountAndEjectDeviceAtPath: path]) {
-        // Fallback to sudo eject
-        [NSTask launchedTaskWithLaunchPath: @"/usr/bin/sudo"
-                                 arguments: [NSArray arrayWithObjects: @"-A", @"-E", @"eject", path, nil]];
-      }
+      // Use unified unmount method
+      [[Workspace gworkspace] unmountVolumeAtPath: path];
     }
   }
 }

@@ -760,8 +760,22 @@
 
 - (void)nodeContentsDidChange:(NSDictionary *)info
 {
+  NSString *operation = [info objectForKey: @"operation"];
+  
+  /* Handle unmount operations by closing viewers for unmounted paths */
+  if ([operation isEqual: @"UnmountOperation"]) {
+    NSString *unmountedPath = [info objectForKey: @"unmounted"];
+    if (unmountedPath) {
+      NSString *viewerPath = [baseNode path];
+      /* Close this viewer if it's viewing the unmounted path or any subpath */
+      if ([viewerPath isEqual: unmountedPath] || isSubpathOfPath(unmountedPath, viewerPath)) {
+        [self deactivate];
+        return;
+      }
+    }
+  }
+
   if ([nodeView isSingleNode]) {  
-    NSString *operation = [info objectForKey: @"operation"];
     NSString *source = [info objectForKey: @"source"];
     NSString *destination = [info objectForKey: @"destination"];
   

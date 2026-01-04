@@ -324,6 +324,8 @@
 
 - (void)quickLook:(id)sender;
 
+- (BOOL)unmountVolumeAtPath:(NSString *)path;
+
 - (void)emptyTrash;
 
 //

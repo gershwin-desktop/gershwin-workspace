@@ -16,6 +16,8 @@
 #import "../Workspace.h"
 #import "../FSNode/FSNode.h"
 #import "../FSNode/FSNodeRep.h"
+#import "../Desktop/GWDesktopManager.h"
+#import "../Desktop/GWDesktopView.h"
 
 static NetworkVolumeManager *sharedInstance = nil;
 
@@ -191,11 +193,11 @@ static NetworkVolumeManager *sharedInstance = nil;
 
 - (NSString *)createMountPointForService:(NetworkServiceItem *)serviceItem
 {
-  /* Create mount point in user's home directory under ~/Network */
-  NSString *homeDir = NSHomeDirectory();
-  NSString *networkDir = [homeDir stringByAppendingPathComponent:@"Network"];
+  /* Create mount point in /media/$USER directory */
+  NSString *userName = NSUserName();
+  NSString *networkDir = [@"/media" stringByAppendingPathComponent:userName];
   
-  /* Create ~/Network directory if it doesn't exist */
+  /* Create /media/$USER directory if it doesn't exist */
   BOOL isDir;
   if (![fm fileExistsAtPath:networkDir isDirectory:&isDir]) {
     NSError *error = nil;
@@ -207,7 +209,7 @@ static NetworkVolumeManager *sharedInstance = nil;
       return nil;
     }
   } else if (!isDir) {
-    NSLog(@"NetworkVolumeManager: ~/Network exists but is not a directory");
+    NSLog(@"NetworkVolumeManager: /media/%@ exists but is not a directory", userName);
     return nil;
   }
   
@@ -325,6 +327,16 @@ static NetworkVolumeManager *sharedInstance = nil;
       [[NSNotificationCenter defaultCenter] 
         postNotificationName:@"GWFileSystemDidChangeNotification"
                       object:opinfo];
+      
+      /* Also notify desktop manager directly so the volume appears on the desktop */
+      NSLog(@"NetworkVolumeManager: Notifying desktop manager directly for existing mount %@", existingSystemMount);
+      id gworkspace = [Workspace gworkspace];
+      if (gworkspace) {
+        id desktopManager = [gworkspace desktopManager];
+        if (desktopManager && [[desktopManager desktopView] respondsToSelector:@selector(newVolumeMountedAtPath:)]) {
+          [[desktopManager desktopView] newVolumeMountedAtPath: existingSystemMount];
+        }
+      }
 
       return existingSystemMount;
     } else {
@@ -572,6 +584,16 @@ static NetworkVolumeManager *sharedInstance = nil;
     [[NSNotificationCenter defaultCenter]
       postNotificationName:@"GWFileSystemDidChangeNotification"
                     object:opinfo];
+    
+    /* Also notify desktop manager directly so the volume appears on the desktop */
+    NSLog(@"NetworkVolumeManager: Notifying desktop manager directly for mount %@", mountPoint);
+    id gworkspace = [Workspace gworkspace];
+    if (gworkspace) {
+      id desktopManager = [gworkspace desktopManager];
+      if (desktopManager && [[desktopManager desktopView] respondsToSelector:@selector(newVolumeMountedAtPath:)]) {
+        [[desktopManager desktopView] newVolumeMountedAtPath: mountPoint];
+      }
+    }
 
     return mountPoint;
   } else {
@@ -654,6 +676,12 @@ static NetworkVolumeManager *sharedInstance = nil;
   [[NSNotificationCenter defaultCenter]
     postNotificationName:@"GWFileSystemWillChangeNotification"
                   object:willInfo];
+  
+  /* Notify viewers and desktop that an unmount is about to occur */
+
+  /* Wait for viewers to close and watchers to be removed to prevent "target is busy" */
+  NSLog(@"NetworkVolumeManager: Waiting for viewers and watchers to close...");
+  [NSThread sleepForTimeInterval:2.0];
 
   BOOL unmountSuccess = NO;
   
@@ -798,15 +826,28 @@ static NetworkVolumeManager *sharedInstance = nil;
       NSLog(@"NetworkVolumeManager: Exception checking/removing mount point %@: %@", path, e);
     }
 
-    /* Notify parent directory so viewers refresh and show removal */
+    /* Notify viewers to close and refresh parent directory */
     NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
                               @"source": parent,
                               @"destination": parent,
-                              @"files": @[name] };
+                              @"files": @[name],
+                              @"unmounted": path };
 
     [[NSNotificationCenter defaultCenter]
       postNotificationName:@"GWFileSystemDidChangeNotification"
                     object:opinfo];
+                    
+    /* Also notify desktop manager directly so volume disappears from desktop */
+    NSLog(@"NetworkVolumeManager: Notifying desktop manager directly for unmount %@", path);
+    id gworkspace = [Workspace gworkspace];
+    if (gworkspace) {
+      id desktopManager = [gworkspace desktopManager];
+      if (desktopManager && [[desktopManager desktopView] respondsToSelector:@selector(workspaceDidUnmountVolumeAtPath:)]) {
+        [[desktopManager desktopView] workspaceDidUnmountVolumeAtPath: path];
+      }
+    }
+                    
+    NSLog(@"NetworkVolumeManager: Sent completion notification for unmount of %@", path);
 
     return YES;
   } else {

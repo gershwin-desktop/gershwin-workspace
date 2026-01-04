@@ -4178,6 +4178,64 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
                   @"OK", nil, nil);
 }
 
+- (BOOL)unmountVolumeAtPath:(NSString *)path
+{
+  NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+  
+  if (!path) {
+    return NO;
+  }
+  
+  NSLog(@"Workspace: Attempting to unmount volume at path: %@", path);
+  
+  // Check if this is a network volume managed by NetworkVolumeManager
+  BOOL isNetworkVolume = NO;
+  id networkVolumeManager = nil;
+  
+  Class NetworkVolumeManagerClass = NSClassFromString(@"NetworkVolumeManager");
+  if (NetworkVolumeManagerClass) {
+    networkVolumeManager = [NetworkVolumeManagerClass sharedManager];
+    if (networkVolumeManager && [networkVolumeManager respondsToSelector:@selector(unmountPath:)]) {
+      // Check if this looks like a network mount (simple heuristic)
+      if ([path hasPrefix:@"/media/"] && ([path rangeOfString:@" "].location != NSNotFound)) {
+        isNetworkVolume = YES;
+        NSLog(@"Workspace: Detected network volume, using NetworkVolumeManager");
+      }
+    }
+  }
+  
+  if (isNetworkVolume && networkVolumeManager) {
+    // Use NetworkVolumeManager for network volumes
+    NSLog(@"Workspace: Calling NetworkVolumeManager unmountPath for %@", path);
+    return [networkVolumeManager unmountPath: path];
+  } else {
+    // Use standard system unmount for regular volumes
+    NSLog(@"Workspace: Using standard system unmount for %@", path);
+    if ([ws unmountAndEjectDeviceAtPath: path]) {
+      return YES;
+    } else {
+      // Try fallback with sudo eject
+      NSTask *task = [NSTask launchedTaskWithLaunchPath: @"sudo"
+                                              arguments: [NSArray arrayWithObjects: @"-E", @"-A", @"eject", path, nil]];
+      if (task) {
+        [task waitUntilExit];
+        if ([task terminationStatus] == 0) {
+          [dtopManager unlockVolumeAtPath: path];
+          return YES;
+        }
+      }
+      
+      // Show error message
+      NSString *err = NSLocalizedString(@"Error", @"");
+      NSString *msg = NSLocalizedString(@"You are not allowed to umount\n", @"");
+      NSString *buttstr = NSLocalizedString(@"Continue", @"");
+      NSRunAlertPanel(err, [NSString stringWithFormat: @"%@ \"%@\"!\n", msg, path], buttstr, nil, nil);
+      [dtopManager unlockVolumeAtPath: path];
+      return NO;
+    }
+  }
+}
+
 - (void)emptyTrash
 {
   [self emptyTrash:nil];

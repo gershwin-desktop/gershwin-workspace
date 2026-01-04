@@ -852,13 +852,14 @@ static GWViewersManager *vwrsmanager = nil;
     return;
   }
 
-  /* Notify viewers that an unmount is about to occur so they can close */
+  /* Notify viewers that an unmount is about to occur so they can prepare */
   NSString *parent = [volpath stringByDeletingLastPathComponent];
   NSString *name = [volpath lastPathComponent];
   NSDictionary *willInfo = @{ @"operation": @"UnmountOperation",
                               @"source": parent,
                               @"destination": parent,
-                              @"files": @[name] };
+                              @"files": @[name],
+                              @"unmounted": volpath };
 
   /* Post a GWFileSystemWillChangeNotification which viewers already listen to */
   [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemWillChangeNotification" object:willInfo];
@@ -869,10 +870,22 @@ static GWViewersManager *vwrsmanager = nil;
   NSString *volpath = [dict objectForKey: @"NSDevicePath"];
   FSNodeRep *fnr = [FSNodeRep sharedInstance];
 
-  if (volpath)
+  if (volpath) {
     [fnr removeVolumeAt:volpath];
-  else
+    
+    /* Send final unmount notification to complete the operation */
+    NSString *parent = [volpath stringByDeletingLastPathComponent];
+    NSString *name = [volpath lastPathComponent];
+    NSDictionary *didInfo = @{ @"operation": @"UnmountOperation",
+                               @"source": parent,
+                               @"destination": parent,
+                               @"files": @[name],
+                               @"unmounted": volpath };
+    
+    [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemDidChangeNotification" object:didInfo];
+  } else {
     NSLog(@"mountedVolumeDidUnmount notification received with empty NSDevicePath");
+  }
 }
 
 // Stub implementations for missing methods to prevent build warnings and crashes
