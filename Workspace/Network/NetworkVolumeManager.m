@@ -9,6 +9,7 @@
 #import <AppKit/AppKit.h>
 #import "NetworkVolumeManager.h"
 #import "NetworkServiceItem.h"
+#import "SFTPMount.h"
 
 static NetworkVolumeManager *sharedInstance = nil;
 
@@ -247,7 +248,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   int port = [serviceItem port];
   NSString *username = [serviceItem username];
   NSString *password = nil;
-  NSMutableDictionary *mountInfo = [NSMutableDictionary dictionary];
   
   if (!hostName || [hostName length] == 0) {
     NSLog(@"NetworkVolumeManager: Service has no hostname, cannot mount");
@@ -385,323 +385,34 @@ static NetworkVolumeManager *sharedInstance = nil;
   NSLog(@"NetworkVolumeManager: Will use username: %@, hostname: %@, port: %d", 
         username, hostName, port);
   
-  /* Prepare sshfs command - format is: sshfs [user@]host:[dir] mountpoint [options] */
-  NSMutableArray *args = [NSMutableArray array];
+  /* Use SFTPMount class to perform the mount */
+  SFTPMount *mounter = [[SFTPMount alloc] init];
+  SFTPMountResult *result = [mounter mountService:serviceItem 
+                                         username:username 
+                                         password:password 
+                                        mountPath:mountPoint];
+  [mounter release];
   
-  /* First argument: [user@]host:[remote_path] */
-  NSString *remotePath = [serviceItem remotePath];
-  NSString *sshfsSource;
-  
-  /* Build connection string with username */
-  NSString *connectionHost = [NSString stringWithFormat:@"%@@%@", username, hostName];
-  
-  if (remotePath && [remotePath length] > 0) {
-    NSLog(@"NetworkVolumeManager: Using remote path from TXT record: %@", remotePath);
-    sshfsSource = [NSString stringWithFormat:@"%@:%@", connectionHost, remotePath];
-  } else {
-    NSLog(@"NetworkVolumeManager: No remote path in TXT record, using home directory");
-    sshfsSource = [NSString stringWithFormat:@"%@:", connectionHost];
-  }
-  
-  [args addObject:sshfsSource];
-  
-  /* Second argument: local mount point */
-  [args addObject:mountPoint];
-  
-  /* Add port if non-standard */
-  if (port > 0 && port != 22) {
-    [args addObject:@"-p"];
-    [args addObject:[NSString stringWithFormat:@"%d", port]];
-  }
-  
-  /* Keep sshfs in foreground mode (don't daemonize) so NSTask can monitor it */
-  [args addObject:@"-f"];
-  
-  /* Add verbose flags for debugging */
-  [args addObject:@"-v"];
-  [args addObject:@"-v"];
-  [args addObject:@"-v"];
-  
-  /* Add common sshfs options */
-  [args addObject:@"-o"];
-  [args addObject:@"ServerAliveInterval=15,ServerAliveCountMax=3,StrictHostKeyChecking=no,HostKeyAlgorithms=+ssh-rsa"];
-
-  NSLog(@"NetworkVolumeManager: Mounting SFTP with command: sshfs %@", 
-        [args componentsJoinedByString:@" "]);
-  NSLog(@"NetworkVolumeManager: Mount point: %@", mountPoint);
-  
-  /* Execute sshfs command */
-  NSTask *task = [[NSTask alloc] init];
-  
-  /* If we have a password, use sshpass */
-  if (password && [password length] > 0) {
-    /* Check if sshpass is available */
-    if (![self isSshpassAvailable]) {
-      NSLog(@"NetworkVolumeManager: sshpass not available, cannot use password authentication");
-      [self showSshpassNotInstalledAlert];
-      [task release];
-      [fm removeItemAtPath:mountPoint error:nil];
-      return nil;
-    }
+  if ([result success]) {
+    /* Mount successful */
+    NSString *identifier = [serviceItem identifier];
+    [mountedVolumes setObject:mountPoint forKey:identifier];
     
-    NSLog(@"NetworkVolumeManager: Using sshpass for password authentication");
+    NSLog(@"NetworkVolumeManager: Successfully mounted %@ at %@", 
+          [serviceItem name], mountPoint);
     
-    /* Create temporary password file */
-    NSString *tempPasswordFile = [NSTemporaryDirectory() stringByAppendingPathComponent:
-                                  [[NSProcessInfo processInfo] globallyUniqueString]];
-    NSError *writeError = nil;
-    [password writeToFile:tempPasswordFile 
-               atomically:YES 
-                 encoding:NSUTF8StringEncoding 
-                    error:&writeError];
+    /* Post notification that filesystem changed */
+    [[NSNotificationCenter defaultCenter] 
+      postNotificationName:@"GWFileSystemDidChangeNotification"
+                    object:nil];
     
-    if (writeError) {
-      NSLog(@"NetworkVolumeManager: Failed to write password file: %@", writeError);
-      [task release];
-      return nil;
-    }
-    
-    /* Set permissions on password file */
-    [[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions: @0600}
-                                     ofItemAtPath:tempPasswordFile
-                                            error:nil];
-    
-    /* Use sshpass to provide password */
-    [task setLaunchPath:@"/usr/bin/sshpass"];
-    NSMutableArray *sshpassArgs = [NSMutableArray arrayWithObjects:
-                                   @"-f", tempPasswordFile,
-                                   @"sshfs", nil];
-    [sshpassArgs addObjectsFromArray:args];
-    [task setArguments:sshpassArgs];
-    
-    /* Store temp file path for cleanup */
-    [mountInfo setObject:tempPasswordFile forKey:@"tempPasswordFile"];
-  } else {
-    /* No password, run sshfs directly (will prompt or use SSH keys) */
-    [task setLaunchPath:@"/usr/bin/sshfs"];
-    [task setArguments:args];
-  }
-  
-  /* Create a log file for sshfs output */
-  NSString *logFileName = [NSString stringWithFormat:@"sshfs_mount_%@.log", 
-                                                     [[NSProcessInfo processInfo] globallyUniqueString]];
-  NSString *sshfsLogPath = [NSTemporaryDirectory() stringByAppendingPathComponent:logFileName];
-  NSFileManager *fm_local = [NSFileManager defaultManager];
-  [fm_local createFileAtPath:sshfsLogPath contents:nil attributes:nil];
-  
-  NSFileHandle *logHandle = [NSFileHandle fileHandleForWritingAtPath:sshfsLogPath];
-  if (logHandle) {
-    [task setStandardError:logHandle];
-    [task setStandardOutput:logHandle];
-    NSLog(@"NetworkVolumeManager: Logging sshfs output to: %@", sshfsLogPath);
-    [mountInfo setObject:sshfsLogPath forKey:@"sshfsLogPath"];
-  } else {
-    NSLog(@"NetworkVolumeManager: Warning - could not open log file for sshfs output");
-  }
-  
-  int status = -1;
-  NSString *errorString = nil;
-  
-  NS_DURING
-    {
-      NSLog(@"NetworkVolumeManager: Launching sshfs task in background...");
-      [task launch];
-      NSLog(@"NetworkVolumeManager: Task launched with PID: %d", [task processIdentifier]);
-      
-      /* Don't wait for sshfs to exit - it needs to keep running in background to maintain the mount */
-      /* Instead, wait for the mount point to become accessible */
-      NSLog(@"NetworkVolumeManager: Waiting for mount to become accessible...");
-      
-      /* Wait up to 10 seconds for the mount to become accessible */
-      int maxAttempts = 20;  /* 20 * 0.5 seconds = 10 seconds */
-      int attempt = 0;
-      BOOL mounted = NO;
-      
-      while (attempt < maxAttempts && !mounted) {
-        [NSThread sleepForTimeInterval:0.5];
-        attempt++;
-        
-        /* Check if process is still running */
-        if (![task isRunning]) {
-          NSLog(@"NetworkVolumeManager: sshfs process exited unexpectedly!");
-          status = [task terminationStatus];
-          NSLog(@"NetworkVolumeManager: Process exit status: %d", status);
-          
-          /* Close the log file handle to ensure all data is flushed */
-          [logHandle closeFile];
-          
-          /* Read error output from log file */
-          NSString *sshfsLogPath = [mountInfo objectForKey:@"sshfsLogPath"];
-          if (sshfsLogPath) {
-            NSError *readError = nil;
-            errorString = [NSString stringWithContentsOfFile:sshfsLogPath 
-                                                    encoding:NSUTF8StringEncoding 
-                                                       error:&readError];
-            if (readError) {
-              NSLog(@"NetworkVolumeManager: Could not read sshfs log: %@", readError);
-            } else if (errorString && [errorString length] > 0) {
-              NSLog(@"NetworkVolumeManager: sshfs output:\n%@", errorString);
-            } else {
-              NSLog(@"NetworkVolumeManager: sshfs log file is empty");
-            }
-          }
-          break;
-        }
-        
-        /* Try to list the directory to see if mount is accessible */
-        NSError *listError = nil;
-        NSArray *contents = [fm contentsOfDirectoryAtPath:mountPoint error:&listError];
-        
-        if (!listError) {
-          NSLog(@"NetworkVolumeManager: Mount point is accessible after %d attempts", attempt);
-          mounted = YES;
-          status = 0;
-        } else {
-          NSLog(@"NetworkVolumeManager: Mount not ready (attempt %d/%d): %@", 
-                attempt, maxAttempts, [listError localizedDescription]);
-        }
-      }
-      
-      /* Close the log file handle to ensure all data is flushed */
-      if (logHandle) {
-        [logHandle closeFile];
-      }
-      
-      if (!mounted && [task isRunning]) {
-        NSLog(@"NetworkVolumeManager: Mount did not become accessible after %d attempts, but sshfs is still running", 
-              maxAttempts);
-        status = 0;  /* Consider it a success if the process is running */
-      }
-    }
-  NS_HANDLER
-    {
-      NSLog(@"NetworkVolumeManager: Exception during sshfs launch: %@", localException);
-      [task release];
-      [fm removeItemAtPath:mountPoint error:nil];
-      
-      NSAlert *alert = [[NSAlert alloc] init];
-      [alert setMessageText:NSLocalizedString(@"Mount Failed", @"")];
-      [alert setInformativeText:[NSString stringWithFormat:
-        NSLocalizedString(@"Failed to launch sshfs: %@", @""), 
-        [localException reason]]];
-      [alert setAlertStyle:NSWarningAlertStyle];
-      [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
-      [alert runModal];
-      [alert release];
-      
-      return nil;
-    }
-  NS_ENDHANDLER
-  
-  if (status == 0) {
-    /* sshfs is running in background, verify it's still running */
-    NSLog(@"NetworkVolumeManager: Verifying sshfs is still running...");
-    
-    if ([task isRunning]) {
-      NSLog(@"NetworkVolumeManager: sshfs process (PID: %d) is still running", [task processIdentifier]);
-      
-      /* Mount successful and verified */
-      NSString *identifier = [serviceItem identifier];
-      [mountedVolumes setObject:mountPoint forKey:identifier];
-      
-      NSLog(@"NetworkVolumeManager: Successfully mounted %@ at %@", 
-            [serviceItem name], mountPoint);
-      
-      /* Clean up temporary password file if it exists */
-      NSString *tempPasswordFile = [mountInfo objectForKey:@"tempPasswordFile"];
-      if (tempPasswordFile) {
-        [[NSFileManager defaultManager] removeItemAtPath:tempPasswordFile error:nil];
-      }
-      
-      /* Clean up sshfs log file if it exists */
-      NSString *sshfsLogPath = [mountInfo objectForKey:@"sshfsLogPath"];
-      if (sshfsLogPath) {
-        [[NSFileManager defaultManager] removeItemAtPath:sshfsLogPath error:nil];
-      }
-      
-      /* Post notification that filesystem changed */
-      [[NSNotificationCenter defaultCenter] 
-        postNotificationName:@"GWFileSystemDidChangeNotification"
-                      object:nil];
-      
-      [task release];
-      return mountPoint;
-    } else {
-      /* sshfs process exited unexpectedly */
-      NSLog(@"NetworkVolumeManager: sshfs process exited unexpectedly!");
-      
-      /* Build detailed error message */
-      NSString *errorMsg;
-      if (errorString && [errorString length] > 0) {
-        errorMsg = [NSString stringWithFormat:
-          NSLocalizedString(@"Failed to mount %@. The sshfs process exited unexpectedly.\n\n"
-                           @"sshfs output:\n%@", @""),
-          [serviceItem name], errorString];
-      } else {
-        errorMsg = [NSString stringWithFormat:
-          NSLocalizedString(@"Failed to mount %@. The sshfs process exited unexpectedly.\n\n"
-                           @"This may be due to:\n"
-                           @"• Incorrect username or password\n"
-                           @"• SSH server not accepting the connection\n"
-                           @"• Network connectivity issues\n"
-                           @"• SSH host key verification problems", @""),
-          [serviceItem name]];
-      }
-      
-      /* Clean up */
-      NSString *tempPasswordFile = [mountInfo objectForKey:@"tempPasswordFile"];
-      if (tempPasswordFile) {
-        [[NSFileManager defaultManager] removeItemAtPath:tempPasswordFile error:nil];
-      }
-      
-      /* Also clean up sshfs log file */
-      NSString *sshfsLogPath = [mountInfo objectForKey:@"sshfsLogPath"];
-      if (sshfsLogPath) {
-        [[NSFileManager defaultManager] removeItemAtPath:sshfsLogPath error:nil];
-      }
-      
-      /* Try to unmount in case it's partially mounted */
-      NSTask *umountTask = [[NSTask alloc] init];
-      [umountTask setLaunchPath:@"/usr/bin/fusermount"];
-      [umountTask setArguments:@[@"-u", mountPoint]];
-      @try {
-        [umountTask launch];
-        [umountTask waitUntilExit];
-      } @catch (NSException *e) {
-        NSLog(@"NetworkVolumeManager: Exception during cleanup: %@", e);
-      }
-      [umountTask release];
-      
-      [fm removeItemAtPath:mountPoint error:nil];
-      [task release];
-      
-      NSAlert *alert = [[NSAlert alloc] init];
-      [alert setMessageText:NSLocalizedString(@"Mount Failed", @"")];
-      [alert setInformativeText:errorMsg];
-      [alert setAlertStyle:NSWarningAlertStyle];
-      [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
-      [alert runModal];
-      [alert release];
-      
-      return nil;
-    }
+    return mountPoint;
   } else {
     /* Mount failed */
-    NSLog(@"NetworkVolumeManager: sshfs failed with status %d: %@", status, errorString);
+    NSString *errorMsg = [result errorMessage];
+    NSLog(@"NetworkVolumeManager: Mount failed: %@", errorMsg);
     
-    /* Clean up temporary password file if it exists */
-    NSString *tempPasswordFile = [mountInfo objectForKey:@"tempPasswordFile"];
-    if (tempPasswordFile) {
-      [[NSFileManager defaultManager] removeItemAtPath:tempPasswordFile error:nil];
-    }
-    
-    /* Clean up sshfs log file if it exists */
-    NSString *sshfsLogPath = [mountInfo objectForKey:@"sshfsLogPath"];
-    if (sshfsLogPath) {
-      [[NSFileManager defaultManager] removeItemAtPath:sshfsLogPath error:nil];
-    }
-    
-    /* Remove the empty mount point directory */
+    /* Remove the mount point directory on failure */
     [fm removeItemAtPath:mountPoint error:nil];
     
     /* Show error to user */
@@ -709,13 +420,12 @@ static NetworkVolumeManager *sharedInstance = nil;
     [alert setMessageText:NSLocalizedString(@"Mount Failed", @"")];
     [alert setInformativeText:[NSString stringWithFormat:
       NSLocalizedString(@"Failed to mount SFTP volume:\n\n%@", @""), 
-      errorString ? errorString : @"Unknown error"]];
+      errorMsg ? errorMsg : @"Unknown error"]];
     [alert setAlertStyle:NSWarningAlertStyle];
     [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
     [alert runModal];
     [alert release];
     
-    [task release];
     return nil;
   }
 }

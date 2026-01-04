@@ -1,4 +1,4 @@
-tail -f /tmp/workspace_malloc.logtail -f /tmp/workspace_malloc.log/*
+/*
  * SFTPMount.m
  * 
  * Encapsulates all SFTP mounting functionality
@@ -34,6 +34,18 @@ tail -f /tmp/workspace_malloc.logtail -f /tmp/workspace_malloc.log/*
   return [result autorelease];
 }
 
+- (id)init
+{
+  self = [super init];
+  if (self) {
+    success = NO;
+    mountPath = nil;
+    errorMessage = nil;
+    pid = 0;
+  }
+  return self;
+}
+
 - (void)dealloc
 {
   RELEASE(mountPath);
@@ -50,7 +62,14 @@ tail -f /tmp/workspace_malloc.logtail -f /tmp/workspace_malloc.log/*
 {
   self = [super init];
   if (self) {
+    username = nil;
+    password = nil;
+    hostname = nil;
+    port = 0;
+    remotePath = nil;
+    mountPoint = nil;
     sshfsTask = nil;
+    logHandle = nil;  /* Not owned by us - owned by NSTask */
     sshfsLogPath = nil;
     tempPasswordFile = nil;
   }
