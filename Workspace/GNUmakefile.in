@@ -119,6 +119,10 @@ Dialogs/RunExternalController.m \
 Dialogs/CompletionField.m \
 Dialogs/StartAppWin.m \
 Thumbnailer/GWThumbnailer.m \
+Network/NetworkServiceItem.m \
+Network/NetworkServiceManager.m \
+Network/NetworkFSNode.m \
+Network/NetworkVolumeManager.m \
 
 # Conditionally add DBusConnection.m if DBus is available
 ifeq ($(with_dbus), yes)
