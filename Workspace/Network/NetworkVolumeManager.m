@@ -7,9 +7,13 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <signal.h>
+#import <errno.h>
+#import <unistd.h>
 #import "NetworkVolumeManager.h"
 #import "NetworkServiceItem.h"
 #import "SFTPMount.h"
+#import "../Workspace.h"
 #import "../FSNode/FSNode.h"
 #import "../FSNode/FSNodeRep.h"
 
@@ -30,6 +34,7 @@ static NetworkVolumeManager *sharedInstance = nil;
   self = [super init];
   if (self) {
     mountedVolumes = [[NSMutableDictionary alloc] init];
+    mountedVolumesPIDs = [[NSMutableDictionary alloc] init];
     fm = [NSFileManager defaultManager];
     
     NSLog(@"NetworkVolumeManager: Initialized");
@@ -41,6 +46,7 @@ static NetworkVolumeManager *sharedInstance = nil;
 {
   [self unmountAll];
   [mountedVolumes release];
+  [mountedVolumesPIDs release];
   [super dealloc];
 }
 
@@ -295,6 +301,7 @@ static NetworkVolumeManager *sharedInstance = nil;
       NSLog(@"NetworkVolumeManager: Reusing existing working mount at %@", existingSystemMount);
       NSString *identifier = [serviceItem identifier];
       [mountedVolumes setObject:existingSystemMount forKey:identifier];
+      /* Note: We don't store PID for existing mounts since we didn't start the process */
 
       /* Mark as volume in FSNodeRep for icon updates and notify parent directory */
       @try {
@@ -531,6 +538,13 @@ static NetworkVolumeManager *sharedInstance = nil;
     /* Mount successful */
     NSString *identifier = [serviceItem identifier];
     [mountedVolumes setObject:mountPoint forKey:identifier];
+    
+    /* Store the sshfs process ID for proper unmounting */
+    int pid = [result pid];
+    if (pid > 0) {
+      [mountedVolumesPIDs setObject:[NSNumber numberWithInt:pid] forKey:identifier];
+      NSLog(@"NetworkVolumeManager: Stored sshfs PID %d for service %@", pid, identifier);
+    }
 
     NSLog(@"NetworkVolumeManager: Successfully mounted %@ at %@", 
           [serviceItem name], mountPoint);
@@ -590,62 +604,213 @@ static NetworkVolumeManager *sharedInstance = nil;
     NSLog(@"NetworkVolumeManager: Service %@ is not mounted", [serviceItem name]);
     return NO;
   }
-  
+
   NSLog(@"NetworkVolumeManager: Unmounting %@ from %@", [serviceItem name], mountPoint);
-  
-  /* Execute fusermount -u to unmount */
-  NSTask *task = [[NSTask alloc] init];
-  [task setLaunchPath:@"/usr/bin/fusermount"];
-  [task setArguments:@[@"-u", mountPoint]];
-  
-  @try {
-    [task launch];
-    [task waitUntilExit];
-    
-    int status = [task terminationStatus];
-    [task release];
-    
-    if (status == 0) {
-      /* Unmount successful */
-      NSString *identifier = [serviceItem identifier];
-      [mountedVolumes removeObjectForKey:identifier];
+  return [self unmountPath:mountPoint];
+}
 
-      /* Clear mountpoint marking and remove from FSNodeRep volumes */
-      @try {
-        FSNode *vnode = [FSNode nodeWithPath: mountPoint];
-        if (vnode) {
-          [vnode setMountPoint: NO];
-        }
-        [[FSNodeRep sharedInstance] removeVolumeAt: mountPoint];
-      } @catch (NSException *e) {
-        NSLog(@"NetworkVolumeManager: Error clearing volume info: %@", e);
-      }
+- (BOOL)unmountPath:(NSString *)path
+{
+  if (!path) return NO;
 
-      /* Remove the mount point directory */
-      [fm removeItemAtPath:mountPoint error:nil];
-
-      NSLog(@"NetworkVolumeManager: Successfully unmounted %@", [serviceItem name]);
-
-      /* Notify parent directory so viewers refresh and show removal */
-      NSString *parent = [mountPoint stringByDeletingLastPathComponent];
-      NSString *name = [mountPoint lastPathComponent];
-      NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
-                                @"source": parent,
-                                @"destination": parent,
-                                @"files": @[name] };
-
-      [[NSNotificationCenter defaultCenter] 
-        postNotificationName:@"GWFileSystemDidChangeNotification"
-                      object:opinfo];
-
-      return YES;
-    } else {
-      NSLog(@"NetworkVolumeManager: fusermount failed with status %d", status);
-      return NO;
+  /* Find the service identifier for this path to get the PID */
+  NSString *foundId = nil;
+  for (NSString *ident in [mountedVolumes allKeys]) {
+    NSString *mp = [mountedVolumes objectForKey:ident];
+    if ([mp isEqualToString:path]) {
+      foundId = ident;
+      break;
     }
-  } @catch (NSException *exception) {
-    NSLog(@"NetworkVolumeManager: Exception while unmounting: %@", exception);
-    [task release];
+  }
+
+  /* Remove filesystem watchers to prevent "target is busy" errors */
+  id gworkspace = [Workspace gworkspace];
+  if (gworkspace) {
+    NSLog(@"NetworkVolumeManager: Removing filesystem watchers for %@", path);
+    [gworkspace removeWatcherForPath:path];
+    
+    /* Also try to remove watchers for any subdirectories that might be watched */
+    NSFileManager *fileManager = [NSFileManager defaultManager];
+    NSArray *contents = [fileManager contentsOfDirectoryAtPath:path error:nil];
+    if (contents) {
+      for (NSString *item in contents) {
+        NSString *itemPath = [path stringByAppendingPathComponent:item];
+        BOOL isDirectory;
+        if ([fileManager fileExistsAtPath:itemPath isDirectory:&isDirectory] && isDirectory) {
+          [gworkspace removeWatcherForPath:itemPath];
+        }
+      }
+    }
+  }
+
+  /* Notify viewers that an unmount is about to occur so they can close windows */
+  NSString *parent = [path stringByDeletingLastPathComponent];
+  NSString *name = [path lastPathComponent];
+  NSDictionary *willInfo = @{ @"operation": @"UnmountOperation",
+                              @"source": parent,
+                              @"destination": parent,
+                              @"files": @[name] };
+
+  [[NSNotificationCenter defaultCenter]
+    postNotificationName:@"GWFileSystemWillChangeNotification"
+                  object:willInfo];
+
+  BOOL unmountSuccess = NO;
+  
+  /* First try to kill the sshfs process if we have its PID */
+  if (foundId) {
+    NSNumber *pidNumber = [mountedVolumesPIDs objectForKey:foundId];
+    if (pidNumber) {
+      int pid = [pidNumber intValue];
+      NSLog(@"NetworkVolumeManager: Killing sshfs process %d for %@", pid, path);
+      
+      /* Send SIGTERM first, then SIGKILL if needed */
+      if (kill(pid, SIGTERM) == 0) {
+        NSLog(@"NetworkVolumeManager: Sent SIGTERM to process %d", pid);
+        /* Wait briefly for graceful shutdown */
+        usleep(500000); /* 0.5 seconds */
+        
+        /* Check if process is still running */
+        if (kill(pid, 0) == 0) {
+          /* Process still exists, force kill */
+          NSLog(@"NetworkVolumeManager: Process %d still running, sending SIGKILL", pid);
+          if (kill(pid, SIGKILL) == 0) {
+            NSLog(@"NetworkVolumeManager: Sent SIGKILL to process %d", pid);
+          }
+        } else {
+          NSLog(@"NetworkVolumeManager: Process %d terminated after SIGTERM", pid);
+        }
+        
+        /* Wait a bit more for the FUSE filesystem to clean up */
+        usleep(1000000); /* 1 second */
+        
+        unmountSuccess = YES;
+        NSLog(@"NetworkVolumeManager: Successfully killed sshfs process %d", pid);
+      } else {
+        NSLog(@"NetworkVolumeManager: Failed to kill process %d: %s", pid, strerror(errno));
+        /* Process may already be dead or we don't have permission */
+        if (errno == ESRCH) {
+          NSLog(@"NetworkVolumeManager: Process %d no longer exists", pid);
+          unmountSuccess = YES; /* Process is gone, that's what we wanted */
+        }
+      }
+    }
+  }
+  
+  /* Also try fusermount as fallback/cleanup */
+  if (!unmountSuccess) {
+    NSLog(@"NetworkVolumeManager: Trying fusermount -u as fallback");
+    NSTask *task = [[NSTask alloc] init];
+    [task setLaunchPath:@"/usr/bin/fusermount"];
+    [task setArguments:@[@"-u", path]];
+
+    @try {
+      [task launch];
+      [task waitUntilExit];
+
+      int status = [task terminationStatus];
+      [task release];
+
+      if (status == 0) {
+        NSLog(@"NetworkVolumeManager: fusermount succeeded");
+        unmountSuccess = YES;
+      } else {
+        NSLog(@"NetworkVolumeManager: fusermount failed with status %d, trying alternative approaches", status);
+        
+        /* Try umount as alternative */
+        NSTask *umountTask = [[NSTask alloc] init];
+        [umountTask setLaunchPath:@"/usr/bin/umount"];
+        [umountTask setArguments:@[path]];
+        
+        @try {
+          [umountTask launch];
+          [umountTask waitUntilExit];
+          
+          if ([umountTask terminationStatus] == 0) {
+            NSLog(@"NetworkVolumeManager: umount succeeded");
+            unmountSuccess = YES;
+          } else {
+            NSLog(@"NetworkVolumeManager: umount failed with status %d", [umountTask terminationStatus]);
+          }
+        } @catch (NSException *e) {
+          NSLog(@"NetworkVolumeManager: umount exception: %@", e);
+        }
+        [umountTask release];
+      }
+    } @catch (NSException *exception) {
+      NSLog(@"NetworkVolumeManager: Exception while running fusermount: %@", exception);
+      [task release];
+    }
+  } else {
+    NSLog(@"NetworkVolumeManager: Process kill succeeded, attempting cleanup with fusermount");
+    /* Even if kill succeeded, try fusermount for cleanup */
+    NSTask *cleanupTask = [[NSTask alloc] init];
+    [cleanupTask setLaunchPath:@"/usr/bin/fusermount"];
+    [cleanupTask setArguments:@[@"-u", path]];
+    
+    @try {
+      [cleanupTask launch];
+      [cleanupTask waitUntilExit];
+      
+      if ([cleanupTask terminationStatus] != 0) {
+        NSLog(@"NetworkVolumeManager: Cleanup fusermount failed (but process kill succeeded)");
+      }
+    } @catch (NSException *e) {
+      NSLog(@"NetworkVolumeManager: Cleanup fusermount exception: %@", e);
+    }
+    [cleanupTask release];
+  }
+
+  if (unmountSuccess) {
+    /* Clean up our tracking data */
+    if (foundId) {
+      [mountedVolumes removeObjectForKey:foundId];
+      [mountedVolumesPIDs removeObjectForKey:foundId];
+    }
+
+    /* Clear FSNode/FSNodeRep state */
+    @try {
+      FSNode *vnode = [FSNode nodeWithPath:path];
+      if (vnode) {
+        [vnode setMountPoint:NO];
+      }
+      [[FSNodeRep sharedInstance] removeVolumeAt:path];
+    } @catch (NSException *e) {
+      NSLog(@"NetworkVolumeManager: Error clearing volume info: %@", e);
+    }
+
+    /* Attempt to remove empty mountpoint directory */
+    @try {
+      NSError *contentsErr = nil;
+      NSArray *contents = [fm contentsOfDirectoryAtPath:path error:&contentsErr];
+      if (contents && ([contents count] == 0)) {
+        if ([fm removeItemAtPath:path error:&contentsErr]) {
+          NSLog(@"NetworkVolumeManager: Removed empty mount point %@", path);
+        } else {
+          NSLog(@"NetworkVolumeManager: Failed to remove mount point %@: %@", path, contentsErr);
+        }
+      } else if (contentsErr) {
+        NSLog(@"NetworkVolumeManager: Could not read mount point contents %@: %@", path, contentsErr);
+      } else {
+        NSLog(@"NetworkVolumeManager: Mount point %@ not empty, leaving in place", path);
+      }
+    } @catch (NSException *e) {
+      NSLog(@"NetworkVolumeManager: Exception checking/removing mount point %@: %@", path, e);
+    }
+
+    /* Notify parent directory so viewers refresh and show removal */
+    NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
+                              @"source": parent,
+                              @"destination": parent,
+                              @"files": @[name] };
+
+    [[NSNotificationCenter defaultCenter]
+      postNotificationName:@"GWFileSystemDidChangeNotification"
+                    object:opinfo];
+
+    return YES;
+  } else {
+    NSLog(@"NetworkVolumeManager: All unmount attempts failed for %@", path);
     return NO;
   }
 }

@@ -20,6 +20,7 @@
 @interface NetworkVolumeManager : NSObject
 {
   NSMutableDictionary *mountedVolumes;  /* Maps service identifier to mount point */
+  NSMutableDictionary *mountedVolumesPIDs;  /* Maps service identifier to NSNumber(pid) */
   NSFileManager *fm;
 }
 
@@ -60,6 +61,11 @@
  * @return YES if unmounted successfully, NO otherwise
  */
 - (BOOL)unmountService:(NetworkServiceItem *)serviceItem;
+
+/**
+ * Unmounts a mount by its mount point path. Returns YES if successful.
+ */
+- (BOOL)unmountPath:(NSString *)path;
 
 /**
  * Returns the mount point for a given service, if currently mounted.

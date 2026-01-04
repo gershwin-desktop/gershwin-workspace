@@ -790,7 +790,18 @@
   if (flags.mountpoint == -1) {
     [self setTypeFlags];
   }
-  return (flags.mountpoint ? YES : NO);
+
+  if (flags.mountpoint) {
+    return YES;
+  }
+
+  /* Also consult FSNodeRep global volumes (for e.g. FUSE mounts tracked by NetworkVolumeManager) */
+  NSSet *vols = [[FSNodeRep sharedInstance] volumes];
+  if (vols && [vols containsObject: path]) {
+    return YES;
+  }
+
+  return NO;
 }
 
 - (void)setMountPoint:(BOOL)value

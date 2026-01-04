@@ -103,6 +103,11 @@ static GWViewersManager *vwrsmanager = nil;
       
       
       [wsnc addObserver: self 
+               selector: @selector(mountedVolumeWillUnmount:) 
+                   name: NSWorkspaceWillUnmountNotification
+                 object: nil];
+
+      [wsnc addObserver: self 
                selector: @selector(mountedVolumeDidUnmount:) 
                    name: NSWorkspaceDidUnmountNotification
                  object: nil];
@@ -837,7 +842,27 @@ static GWViewersManager *vwrsmanager = nil;
   else
     NSLog(@"newVolumeMounted notification received with empty NSDevicePath");
 }
+- (void)mountedVolumeWillUnmount:(NSNotification *)notif
+{
+  NSDictionary *dict = [notif userInfo];
+  NSString *volpath = [dict objectForKey:@"NSDevicePath"];
 
+  if (!volpath) {
+    NSLog(@"mountedVolumeWillUnmount notification received with empty NSDevicePath");
+    return;
+  }
+
+  /* Notify viewers that an unmount is about to occur so they can close */
+  NSString *parent = [volpath stringByDeletingLastPathComponent];
+  NSString *name = [volpath lastPathComponent];
+  NSDictionary *willInfo = @{ @"operation": @"UnmountOperation",
+                              @"source": parent,
+                              @"destination": parent,
+                              @"files": @[name] };
+
+  /* Post a GWFileSystemWillChangeNotification which viewers already listen to */
+  [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemWillChangeNotification" object:willInfo];
+}
 - (void)mountedVolumeDidUnmount:(NSNotification *)notif
 {
   NSDictionary *dict = [notif userInfo];  
