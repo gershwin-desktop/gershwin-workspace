@@ -968,10 +968,13 @@ NSString *_pendingSystemActionTitle = nil;
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)app 
 {
   // Only allow termination for logout actions
+  // Disable this during development so that we can kill the app normally
+  /*
   if (!loggingout) {
     // Not a logout action, do not quit
     return NSTerminateCancel;
   }
+  */
 
   NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
   
