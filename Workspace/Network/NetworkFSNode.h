@@ -69,4 +69,11 @@ extern NSString * const NetworkVirtualPath;
  */
 - (NSString *)iconName;
 
+/**
+ * Opens the network service. For SFTP services, this mounts the volume.
+ * Returns the path to open (mount point for SFTP, or original path otherwise).
+ * Returns nil if the operation failed.
+ */
+- (NSString *)openNetworkService;
+
 @end

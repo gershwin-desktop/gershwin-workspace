@@ -1111,8 +1111,17 @@ constrainMinCoordinate:(CGFloat)proposedMin
             [dirs addObject: node];
           }
         } else if ([node isPlain]) {
+          NSLog(@"GWViewer: opening plain file: %@", [node path]);
           [gworkspace openFile: [node path]];
-        }      
+        } else if ([node isExecutable]) {
+          /* Handle executable items that aren't directories or plain files (e.g., network services) */
+          NSLog(@"GWViewer: opening executable item: %@ (isDirectory: %d, isPlain: %d, isExecutable: %d)",
+                [node path], [node isDirectory], [node isPlain], [node isExecutable]);
+          [gworkspace openFile: [node path]];
+        } else {
+          NSLog(@"GWViewer: node does not match any open condition (isDirectory: %d, isPlain: %d, isExecutable: %d): %@",
+                [node isDirectory], [node isPlain], [node isExecutable], [node path]);
+        }
           }
         NS_HANDLER
           {

@@ -96,6 +96,70 @@
   return @"Network";
 }
 
+- (NSString *)remotePath
+{
+  if (!netService) {
+    return nil;
+  }
+  
+  /* Get TXT record data from the service */
+  NSData *txtData = [netService TXTRecordData];
+  if (!txtData || [txtData length] == 0) {
+    return nil;
+  }
+  
+  /* Parse TXT record dictionary */
+  NSDictionary *txtDict = [NSNetService dictionaryFromTXTRecordData:txtData];
+  if (!txtDict) {
+    return nil;
+  }
+  
+  /* Look for 'path' key in TXT record */
+  NSData *pathData = [txtDict objectForKey:@"path"];
+  if (pathData && [pathData length] > 0) {
+    NSString *path = [[[NSString alloc] initWithData:pathData 
+                                             encoding:NSUTF8StringEncoding] autorelease];
+    if (path && [path length] > 0) {
+      NSLog(@"NetworkServiceItem: Found path in TXT record: %@", path);
+      return path;
+    }
+  }
+  
+  return nil;
+}
+
+- (NSString *)username
+{
+  if (!netService) {
+    return nil;
+  }
+  
+  /* Get TXT record data from the service */
+  NSData *txtData = [netService TXTRecordData];
+  if (!txtData || [txtData length] == 0) {
+    return nil;
+  }
+  
+  /* Parse TXT record dictionary */
+  NSDictionary *txtDict = [NSNetService dictionaryFromTXTRecordData:txtData];
+  if (!txtDict) {
+    return nil;
+  }
+  
+  /* Look for username in TXT record - try 'u' key (common for SSH/SFTP) */
+  NSData *userData = [txtDict objectForKey:@"u"];
+  if (userData && [userData length] > 0) {
+    NSString *username = [[[NSString alloc] initWithData:userData 
+                                                 encoding:NSUTF8StringEncoding] autorelease];
+    if (username && [username length] > 0) {
+      NSLog(@"NetworkServiceItem: Found username in TXT record: %@", username);
+      return username;
+    }
+  }
+  
+  return nil;
+}
+
 - (NSString *)description
 {
   return [NSString stringWithFormat:@"<NetworkServiceItem: %@ (%@) at %@:%d>", 

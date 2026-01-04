@@ -61,4 +61,18 @@
  */
 - (NSString *)iconName;
 
+/**
+ * Returns the remote path from the TXT record, if available.
+ * For SFTP services, this is often in the 'path' key.
+ * Returns nil if no path is specified.
+ */
+- (NSString *)remotePath;
+
+/**
+ * Returns the username from the TXT record, if available.
+ * For SFTP services, this is often in the 'u' key.
+ * Returns nil if no username is specified.
+ */
+- (NSString *)username;
+
 @end

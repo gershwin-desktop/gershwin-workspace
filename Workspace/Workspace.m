@@ -60,6 +60,7 @@
 #import "GSGlobalShortcutsManager.h"
 #import "Network/NetworkFSNode.h"
 #import "Network/NetworkServiceManager.h"
+#import "Network/NetworkVolumeManager.h"
 #if HAVE_DBUS
 #import "DBusConnection.h"
 #endif
@@ -1054,6 +1055,9 @@ NSString *_pendingSystemActionTitle = nil;
           DESTROY (mdextractor);
         }
   }
+  
+  /* Unmount all network volumes */
+  [[NetworkVolumeManager sharedManager] unmountAll];
   		
   // This is a logout - allow termination
   return NSTerminateNow; 
@@ -1507,6 +1511,35 @@ NSString *_pendingSystemActionTitle = nil;
   for (i = 0; i < count; i++) {
     NSString *apath = [paths objectAtIndex: i];
     
+    /* Check if this is a network virtual path */
+    if ([NetworkFSNode isNetworkPath:apath]) {
+      FSNode *node = [FSNode nodeWithPath:apath];
+      
+      if ([node isKindOfClass:[NetworkFSNode class]]) {
+        NetworkFSNode *networkNode = (NetworkFSNode *)node;
+        
+        if ([networkNode isNetworkService]) {
+          /* This is a network service item - try to open/mount it */
+          NSString *mountPoint = [networkNode openNetworkService];
+          
+          if (mountPoint) {
+            /* Successfully mounted or opened - show viewer at mount point */
+            if (newv) {
+              [self newViewerAtPath:mountPoint];
+            }
+          }
+          /* If mount failed, openNetworkService already showed an error */
+          continue;
+        } else if ([networkNode isNetworkRoot]) {
+          /* This is the /Network root - just open a viewer */
+          if (newv) {
+            [self newViewerAtPath:apath];
+          }
+          continue;
+        }
+      }
+    }
+    
     if ([fm fileExistsAtPath: apath]) {
       NSString *defApp = nil, *type = nil;
 
@@ -1571,6 +1604,87 @@ NSString *_pendingSystemActionTitle = nil;
   NSString *type = nil;
   BOOL success;
   NSURL *aURL;
+
+  NSLog(@"Workspace openFile: called with path: %@", fullPath);
+
+  /* Check if this is a network virtual path first */
+  if ([NetworkFSNode isNetworkPath:fullPath]) {
+    NSLog(@"Workspace openFile: detected network path");
+    
+    /* For network paths, we need to create the appropriate NetworkFSNode */
+    NetworkFSNode *networkNode = nil;
+    
+    if ([fullPath isEqualToString:NetworkVirtualPath]) {
+      /* This is the /Network root */
+      networkNode = [NetworkFSNode networkRootNode];
+      NSLog(@"Workspace openFile: created network root node");
+    } else {
+      /* This is a service under /Network - need to find the service item */
+      NSString *serviceName = [fullPath lastPathComponent];
+      NSLog(@"Workspace openFile: looking for service: %@", serviceName);
+      
+      NetworkServiceManager *manager = [NetworkServiceManager sharedManager];
+      NSArray *services = [manager allServices];
+      
+      for (NetworkServiceItem *item in services) {
+        if ([[item displayName] isEqualToString:serviceName]) {
+          networkNode = [NetworkFSNode nodeWithServiceItem:item];
+          NSLog(@"Workspace openFile: found matching service, created node");
+          break;
+        }
+      }
+      
+      if (!networkNode) {
+        NSLog(@"Workspace openFile: could not find service item for: %@", serviceName);
+        return NO;
+      }
+    }
+    
+    NSLog(@"Workspace openFile: networkNode: %@ (class: %@)", networkNode, [networkNode class]);
+    NSLog(@"Workspace openFile: networkNode: %@ (class: %@)", networkNode, [networkNode class]);
+    
+    if ([networkNode isNetworkService]) {
+      NSLog(@"Workspace openFile: node is a network service, attempting to open/mount");
+      /* This is a network service item - try to open/mount it */
+      NSString *mountPoint = nil;
+      
+      NS_DURING
+        {
+          mountPoint = [networkNode openNetworkService];
+        }
+      NS_HANDLER
+        {
+          NSLog(@"Workspace openFile: Exception during openNetworkService: %@", localException);
+          NSRunAlertPanel(NSLocalizedString(@"error", @""), 
+              [NSString stringWithFormat: @"Error mounting network service: %@", 
+               [localException reason]],
+                                            NSLocalizedString(@"OK", @""), 
+                                            nil, 
+                                            nil);
+          return NO;
+        }
+      NS_ENDHANDLER
+      
+      NSLog(@"Workspace openFile: openNetworkService returned: %@", mountPoint);
+        
+        if (mountPoint) {
+          /* Successfully mounted - show viewer at mount point */
+          [self newViewerAtPath:mountPoint];
+          return YES;
+        }
+        /* If mount failed, openNetworkService already showed an error */
+        return NO;
+      } else if ([networkNode isNetworkRoot]) {
+        NSLog(@"Workspace openFile: node is network root, opening viewer");
+        /* This is the /Network root - just open a viewer */
+        [self newViewerAtPath:fullPath];
+        return YES;
+      } else {
+        NSLog(@"Workspace openFile: NetworkFSNode but not service or root");
+      }
+  } else {
+    NSLog(@"Workspace openFile: NOT a network path");
+  }
 
   aURL = nil;
   [ws getInfoForFile: fullPath application: &appName type: &type];

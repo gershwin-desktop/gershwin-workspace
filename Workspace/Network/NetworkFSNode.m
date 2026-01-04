@@ -11,6 +11,7 @@
 #import "NetworkFSNode.h"
 #import "NetworkServiceItem.h"
 #import "NetworkServiceManager.h"
+#import "NetworkVolumeManager.h"
 #import "FSNodeRep.h"
 
 NSString * const NetworkVirtualPath = @"/Network";
@@ -83,19 +84,19 @@ NSString * const NetworkVirtualPath = @"/Network";
       ASSIGN(relativePath, path);
     }
     
-    /* Set flags - network services appear as files, not directories */
+    /* Set flags - network services are openable/executable like applications */
     flags.readable = 1;
     flags.writable = 0;
-    flags.executable = 0;
+    flags.executable = 1;  /* Mark as executable so they can be opened */
     flags.deletable = 0;
-    flags.plain = 1;  /* Treat as plain file, not a directory */
-    flags.directory = 0;  /* Not a directory - cannot be opened/traversed */
+    flags.plain = 0;  /* Not a plain file - it's an openable item */
+    flags.directory = 0;  /* Not a directory */
     flags.link = 0;
     flags.socket = 0;
     flags.charspecial = 0;
     flags.blockspecial = 0;
-    flags.mountpoint = 0;  /* Not a mount point (TODO: implement mounting in future) */
-    flags.application = 0;
+    flags.mountpoint = 0;
+    flags.application = 0;  /* Not an application, but openable like one */
     flags.package = 0;
     flags.unknown = 0;
     
@@ -276,11 +277,11 @@ NSString * const NetworkVirtualPath = @"/Network";
 
 - (BOOL)isExecutable
 {
-  /* Service items are not executable files */
+  /* Network root is traversable, service items are openable/executable */
   if (isNetworkRoot) {
     return YES;  /* The network root is executable/traversable */
   }
-  return NO;  /* Service items are treated as plain files */
+  return YES;  /* Service items are executable/openable */
 }
 
 - (BOOL)isDeletable
@@ -296,11 +297,11 @@ NSString * const NetworkVirtualPath = @"/Network";
 
 - (BOOL)isPlain
 {
-  /* Service items are now plain files, not traversable */
+  /* Service items are openable, not plain files */
   if (isNetworkRoot) {
     return NO;  /* The root network location is a directory, not plain */
   }
-  return YES;  /* Service items are treated as plain files */
+  return NO;  /* Service items are openable items, not plain files */
 }
 
 - (BOOL)isLink
@@ -385,6 +386,52 @@ NSString * const NetworkVirtualPath = @"/Network";
   }
   
   return @"Network";
+}
+
+- (NSString *)openNetworkService
+{
+  NSLog(@"NetworkFSNode openNetworkService: called for path: %@", path);
+  NSLog(@"NetworkFSNode openNetworkService: serviceItem: %@", serviceItem);
+  
+  if (!serviceItem) {
+    /* This is the network root, just return the path */
+    NSLog(@"NetworkFSNode openNetworkService: no serviceItem, returning path");
+    return path;
+  }
+  
+  NSLog(@"NetworkFSNode openNetworkService: isSFTPService: %d, isAFPService: %d", 
+        [serviceItem isSFTPService], [serviceItem isAFPService]);
+  
+  if ([serviceItem isSFTPService]) {
+    /* Attempt to mount the SFTP service */
+    NSLog(@"NetworkFSNode: Attempting to mount SFTP service: %@", [serviceItem name]);
+    
+    NetworkVolumeManager *volumeManager = [NetworkVolumeManager sharedManager];
+    NSString *mountPoint = [volumeManager mountSFTPService:serviceItem];
+    
+    if (mountPoint) {
+      NSLog(@"NetworkFSNode: SFTP service mounted at: %@", mountPoint);
+      return mountPoint;
+    } else {
+      NSLog(@"NetworkFSNode: Failed to mount SFTP service");
+      return nil;
+    }
+  } else if ([serviceItem isAFPService]) {
+    /* AFP mounting not yet implemented */
+    NSLog(@"NetworkFSNode: AFP mounting not yet implemented");
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:NSLocalizedString(@"Not Implemented", @"")];
+    [alert setInformativeText:NSLocalizedString(
+      @"AFP volume mounting is not yet implemented.", @"")];
+    [alert setAlertStyle:NSInformationalAlertStyle];
+    [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
+    [alert runModal];
+    [alert release];
+    return nil;
+  }
+  
+  /* Unknown service type */
+  return path;
 }
 
 @end
