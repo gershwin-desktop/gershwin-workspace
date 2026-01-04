@@ -668,7 +668,7 @@
 
   if (date) {
     if (modDateDescription == nil) {
-      NSString *descr = [date descriptionWithCalendarFormat: @"%b %d %Y" 
+      NSString *descr = [date descriptionWithCalendarFormat: @"%b %d %Y %H:%M" 
                             timeZone: [NSTimeZone localTimeZone] locale: nil];
       ASSIGN (modDateDescription, descr);   
     }

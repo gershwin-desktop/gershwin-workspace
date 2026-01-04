@@ -43,25 +43,25 @@ static NSString *defaultColumns = @"{ \
   <*I0> = { \
     position = <*I0>; \
     identifier = <*I0>; \
-    width = <*R140>; \
-    minwidth = <*R80>; \
+    width = <*R280>; \
+    minwidth = <*R100>; \
   }; \
   <*I2> = { \
     position = <*I1>; \
     identifier = <*I2>; \
-    width = <*R90>; \
-    minwidth = <*R80>; \
+    width = <*R130>; \
+    minwidth = <*R130>; \
   }; \
   <*I3> = { \
     position = <*I2>; \
     identifier = <*I3>; \
-    width = <*R50>; \
-    minwidth = <*R50>; \
+    width = <*R80>; \
+    minwidth = <*R80>; \
   }; \
   <*I1> = { \
     position = <*I3>; \
     identifier = <*I1>; \
-    width = <*R90>; \
+    width = <*R100>; \
     minwidth = <*R80>; \
   }; \
 }";
