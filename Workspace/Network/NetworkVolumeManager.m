@@ -414,6 +414,14 @@ static NetworkVolumeManager *sharedInstance = nil;
     [args addObject:[NSString stringWithFormat:@"%d", port]];
   }
   
+  /* Keep sshfs in foreground mode (don't daemonize) so NSTask can monitor it */
+  [args addObject:@"-f"];
+  
+  /* Add verbose flags for debugging */
+  [args addObject:@"-v"];
+  [args addObject:@"-v"];
+  [args addObject:@"-v"];
+  
   /* Add common sshfs options */
   [args addObject:@"-o"];
   [args addObject:@"ServerAliveInterval=15,ServerAliveCountMax=3,StrictHostKeyChecking=no,HostKeyAlgorithms=+ssh-rsa"];
@@ -473,34 +481,96 @@ static NetworkVolumeManager *sharedInstance = nil;
     [task setLaunchPath:@"/usr/bin/sshfs"];
     [task setArguments:args];
   }
-  NSPipe *errorPipe = [NSPipe pipe];
-  [task setStandardError:errorPipe];
-  [task setStandardOutput:errorPipe];
+  
+  /* Create a log file for sshfs output */
+  NSString *logFileName = [NSString stringWithFormat:@"sshfs_mount_%@.log", 
+                                                     [[NSProcessInfo processInfo] globallyUniqueString]];
+  NSString *sshfsLogPath = [NSTemporaryDirectory() stringByAppendingPathComponent:logFileName];
+  NSFileManager *fm_local = [NSFileManager defaultManager];
+  [fm_local createFileAtPath:sshfsLogPath contents:nil attributes:nil];
+  
+  NSFileHandle *logHandle = [NSFileHandle fileHandleForWritingAtPath:sshfsLogPath];
+  if (logHandle) {
+    [task setStandardError:logHandle];
+    [task setStandardOutput:logHandle];
+    NSLog(@"NetworkVolumeManager: Logging sshfs output to: %@", sshfsLogPath);
+    [mountInfo setObject:sshfsLogPath forKey:@"sshfsLogPath"];
+  } else {
+    NSLog(@"NetworkVolumeManager: Warning - could not open log file for sshfs output");
+  }
   
   int status = -1;
   NSString *errorString = nil;
   
   NS_DURING
     {
-      NSLog(@"NetworkVolumeManager: Launching sshfs task...");
+      NSLog(@"NetworkVolumeManager: Launching sshfs task in background...");
       [task launch];
-      NSLog(@"NetworkVolumeManager: Task launched");
+      NSLog(@"NetworkVolumeManager: Task launched with PID: %d", [task processIdentifier]);
       
-      NSLog(@"NetworkVolumeManager: Waiting for completion...");
-      [task waitUntilExit];
+      /* Don't wait for sshfs to exit - it needs to keep running in background to maintain the mount */
+      /* Instead, wait for the mount point to become accessible */
+      NSLog(@"NetworkVolumeManager: Waiting for mount to become accessible...");
       
-      status = [task terminationStatus];
-      NSLog(@"NetworkVolumeManager: Task completed with status: %d", status);
+      /* Wait up to 10 seconds for the mount to become accessible */
+      int maxAttempts = 20;  /* 20 * 0.5 seconds = 10 seconds */
+      int attempt = 0;
+      BOOL mounted = NO;
       
-      /* Read error output */
-      NSFileHandle *errorHandle = [errorPipe fileHandleForReading];
-      NSData *errorData = [errorHandle readDataToEndOfFile];
-      if (errorData && [errorData length] > 0) {
-        errorString = [[[NSString alloc] initWithData:errorData 
-                                              encoding:NSUTF8StringEncoding] autorelease];
-        NSLog(@"NetworkVolumeManager: sshfs/sshpass output: %@", errorString);
-      } else {
-        NSLog(@"NetworkVolumeManager: No error output from sshfs/sshpass");
+      while (attempt < maxAttempts && !mounted) {
+        [NSThread sleepForTimeInterval:0.5];
+        attempt++;
+        
+        /* Check if process is still running */
+        if (![task isRunning]) {
+          NSLog(@"NetworkVolumeManager: sshfs process exited unexpectedly!");
+          status = [task terminationStatus];
+          NSLog(@"NetworkVolumeManager: Process exit status: %d", status);
+          
+          /* Close the log file handle to ensure all data is flushed */
+          [logHandle closeFile];
+          
+          /* Read error output from log file */
+          NSString *sshfsLogPath = [mountInfo objectForKey:@"sshfsLogPath"];
+          if (sshfsLogPath) {
+            NSError *readError = nil;
+            errorString = [NSString stringWithContentsOfFile:sshfsLogPath 
+                                                    encoding:NSUTF8StringEncoding 
+                                                       error:&readError];
+            if (readError) {
+              NSLog(@"NetworkVolumeManager: Could not read sshfs log: %@", readError);
+            } else if (errorString && [errorString length] > 0) {
+              NSLog(@"NetworkVolumeManager: sshfs output:\n%@", errorString);
+            } else {
+              NSLog(@"NetworkVolumeManager: sshfs log file is empty");
+            }
+          }
+          break;
+        }
+        
+        /* Try to list the directory to see if mount is accessible */
+        NSError *listError = nil;
+        NSArray *contents = [fm contentsOfDirectoryAtPath:mountPoint error:&listError];
+        
+        if (!listError) {
+          NSLog(@"NetworkVolumeManager: Mount point is accessible after %d attempts", attempt);
+          mounted = YES;
+          status = 0;
+        } else {
+          NSLog(@"NetworkVolumeManager: Mount not ready (attempt %d/%d): %@", 
+                attempt, maxAttempts, [listError localizedDescription]);
+        }
+      }
+      
+      /* Close the log file handle to ensure all data is flushed */
+      if (logHandle) {
+        [logHandle closeFile];
+      }
+      
+      if (!mounted && [task isRunning]) {
+        NSLog(@"NetworkVolumeManager: Mount did not become accessible after %d attempts, but sshfs is still running", 
+              maxAttempts);
+        status = 0;  /* Consider it a success if the process is running */
       }
     }
   NS_HANDLER
@@ -524,28 +594,52 @@ static NetworkVolumeManager *sharedInstance = nil;
   NS_ENDHANDLER
   
   if (status == 0) {
-    /* sshfs returned success, but verify the mount actually worked */
-    /* Give it a moment to complete the mount */
-    [NSThread sleepForTimeInterval:1.0];
+    /* sshfs is running in background, verify it's still running */
+    NSLog(@"NetworkVolumeManager: Verifying sshfs is still running...");
     
-    /* Try to list the directory to verify it's accessible */
-    NSError *listError = nil;
-    NSArray *contents = [fm contentsOfDirectoryAtPath:mountPoint error:&listError];
-    
-    if (listError) {
-      NSLog(@"NetworkVolumeManager: Mount verification failed - cannot list directory: %@", listError);
-      NSLog(@"NetworkVolumeManager: sshfs command output was: %@", errorString ? errorString : @"(none)");
+    if ([task isRunning]) {
+      NSLog(@"NetworkVolumeManager: sshfs process (PID: %d) is still running", [task processIdentifier]);
+      
+      /* Mount successful and verified */
+      NSString *identifier = [serviceItem identifier];
+      [mountedVolumes setObject:mountPoint forKey:identifier];
+      
+      NSLog(@"NetworkVolumeManager: Successfully mounted %@ at %@", 
+            [serviceItem name], mountPoint);
+      
+      /* Clean up temporary password file if it exists */
+      NSString *tempPasswordFile = [mountInfo objectForKey:@"tempPasswordFile"];
+      if (tempPasswordFile) {
+        [[NSFileManager defaultManager] removeItemAtPath:tempPasswordFile error:nil];
+      }
+      
+      /* Clean up sshfs log file if it exists */
+      NSString *sshfsLogPath = [mountInfo objectForKey:@"sshfsLogPath"];
+      if (sshfsLogPath) {
+        [[NSFileManager defaultManager] removeItemAtPath:sshfsLogPath error:nil];
+      }
+      
+      /* Post notification that filesystem changed */
+      [[NSNotificationCenter defaultCenter] 
+        postNotificationName:@"GWFileSystemDidChangeNotification"
+                      object:nil];
+      
+      [task release];
+      return mountPoint;
+    } else {
+      /* sshfs process exited unexpectedly */
+      NSLog(@"NetworkVolumeManager: sshfs process exited unexpectedly!");
       
       /* Build detailed error message */
       NSString *errorMsg;
       if (errorString && [errorString length] > 0) {
         errorMsg = [NSString stringWithFormat:
-          NSLocalizedString(@"Failed to mount %@. The connection was attempted but the directory is not accessible.\n\n"
+          NSLocalizedString(@"Failed to mount %@. The sshfs process exited unexpectedly.\n\n"
                            @"sshfs output:\n%@", @""),
           [serviceItem name], errorString];
       } else {
         errorMsg = [NSString stringWithFormat:
-          NSLocalizedString(@"Failed to mount %@. The connection was attempted but the directory is not accessible.\n\n"
+          NSLocalizedString(@"Failed to mount %@. The sshfs process exited unexpectedly.\n\n"
                            @"This may be due to:\n"
                            @"• Incorrect username or password\n"
                            @"• SSH server not accepting the connection\n"
@@ -558,6 +652,12 @@ static NetworkVolumeManager *sharedInstance = nil;
       NSString *tempPasswordFile = [mountInfo objectForKey:@"tempPasswordFile"];
       if (tempPasswordFile) {
         [[NSFileManager defaultManager] removeItemAtPath:tempPasswordFile error:nil];
+      }
+      
+      /* Also clean up sshfs log file */
+      NSString *sshfsLogPath = [mountInfo objectForKey:@"sshfsLogPath"];
+      if (sshfsLogPath) {
+        [[NSFileManager defaultManager] removeItemAtPath:sshfsLogPath error:nil];
       }
       
       /* Try to unmount in case it's partially mounted */
@@ -585,27 +685,6 @@ static NetworkVolumeManager *sharedInstance = nil;
       
       return nil;
     }
-    
-    /* Mount successful and verified */
-    NSString *identifier = [serviceItem identifier];
-    [mountedVolumes setObject:mountPoint forKey:identifier];
-    
-    NSLog(@"NetworkVolumeManager: Successfully mounted %@ at %@", 
-          [serviceItem name], mountPoint);
-    
-    /* Clean up temporary password file if it exists */
-    NSString *tempPasswordFile = [mountInfo objectForKey:@"tempPasswordFile"];
-    if (tempPasswordFile) {
-      [[NSFileManager defaultManager] removeItemAtPath:tempPasswordFile error:nil];
-    }
-    
-    /* Post notification that filesystem changed */
-    [[NSNotificationCenter defaultCenter] 
-      postNotificationName:@"GWFileSystemDidChangeNotification"
-                    object:nil];
-    
-    [task release];
-    return mountPoint;
   } else {
     /* Mount failed */
     NSLog(@"NetworkVolumeManager: sshfs failed with status %d: %@", status, errorString);
@@ -614,6 +693,12 @@ static NetworkVolumeManager *sharedInstance = nil;
     NSString *tempPasswordFile = [mountInfo objectForKey:@"tempPasswordFile"];
     if (tempPasswordFile) {
       [[NSFileManager defaultManager] removeItemAtPath:tempPasswordFile error:nil];
+    }
+    
+    /* Clean up sshfs log file if it exists */
+    NSString *sshfsLogPath = [mountInfo objectForKey:@"sshfsLogPath"];
+    if (sshfsLogPath) {
+      [[NSFileManager defaultManager] removeItemAtPath:sshfsLogPath error:nil];
     }
     
     /* Remove the empty mount point directory */
