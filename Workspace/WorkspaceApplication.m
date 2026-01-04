@@ -157,7 +157,7 @@
     {
       NSRunAlertPanel(nil, 
 		      NSLocalizedString(@"Workspace is logging out!", @""),
-		      NSLocalizedString(@"Ok", @""), 
+		      NSLocalizedString(@"OK", @""), 
 		      nil, 
 		      nil);  
     }
@@ -245,7 +245,7 @@
   if (loggingout) {
     NSRunAlertPanel(nil, 
                   NSLocalizedString(@"Workspace is logging out!", @""),
-					        NSLocalizedString(@"Ok", @""), 
+					        NSLocalizedString(@"OK", @""), 
                   nil, 
                   nil);  
     return NO;
@@ -332,7 +332,7 @@
   if (loggingout) {
     NSRunAlertPanel(nil, 
                   NSLocalizedString(@"Workspace is logging out!", @""),
-					        NSLocalizedString(@"Ok", @""), 
+					        NSLocalizedString(@"OK", @""), 
                   nil, 
                   nil);  
     return NO;
@@ -389,7 +389,7 @@
   if (loggingout) {
     NSRunAlertPanel(nil, 
                   NSLocalizedString(@"Workspace is logging out!", @""),
-					        NSLocalizedString(@"Ok", @""), 
+					        NSLocalizedString(@"OK", @""), 
                   nil, 
                   nil);  
     return NO;

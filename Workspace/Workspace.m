@@ -983,7 +983,7 @@ NSString *_pendingSystemActionTitle = nil;
   if ([fileOpsManager operationsPending]) {
     NSRunAlertPanel(nil, 
                   NSLocalizedString(@"Wait the operations to terminate!", @""),
-					        NSLocalizedString(@"Ok", @""), 
+					        NSLocalizedString(@"OK", @""), 
                   nil, 
                   nil);  
     return NSTerminateCancel;  
@@ -2244,7 +2244,7 @@ NSString *_pendingSystemActionTitle = nil;
     fswnotifications = NO;
     NSRunAlertPanel(nil,
                     NSLocalizedString(@"fswatcher notifications disabled!", @""),
-                    NSLocalizedString(@"Ok", @""),
+                    NSLocalizedString(@"OK", @""),
                     nil, 
                     nil);  
   }
@@ -2341,7 +2341,7 @@ NSString *_pendingSystemActionTitle = nil;
   
   NSRunAlertPanel(nil,
                   NSLocalizedString(@"ddbd connection died.", @""),
-                  NSLocalizedString(@"Ok", @""),
+                  NSLocalizedString(@"OK", @""),
                   nil,
                   nil);                
 }

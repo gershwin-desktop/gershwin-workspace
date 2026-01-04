@@ -851,7 +851,7 @@ static NSString *nibName = @"MDKWindow";
         } else {
           NSRunAlertPanel(nil, 
                 NSLocalizedString(@"This path is already in the menu!", @""),
-					      NSLocalizedString(@"Ok", @""), 
+					      NSLocalizedString(@"OK", @""), 
                 nil, 
                 nil);  
         }
@@ -859,7 +859,7 @@ static NSString *nibName = @"MDKWindow";
       } else {
         NSRunAlertPanel(nil, 
               NSLocalizedString(@"This path is not searchable!", @""),
-					    NSLocalizedString(@"Ok", @""), 
+					    NSLocalizedString(@"OK", @""), 
               nil, 
               nil);  
       }      

@@ -168,7 +168,7 @@ static MDFinder *mdfinder = nil;
       NSString *msg = NSLocalizedString(@"Invalid query description.", @"");    
       NSRunAlertPanel(nil, 
                     [NSString stringWithFormat: @"%@: %@", fileName, msg],
-					          NSLocalizedString(@"Ok", @""), 
+					          NSLocalizedString(@"OK", @""), 
                     nil, 
                     nil);  
       return NO;
@@ -315,7 +315,7 @@ static MDFinder *mdfinder = nil;
     } else {
       NSRunAlertPanel(nil,
               NSLocalizedString(@"unable to contact Workspace!", @""),
-              NSLocalizedString(@"Ok", @""),
+              NSLocalizedString(@"OK", @""),
               nil, 
               nil);  
     }
@@ -333,7 +333,7 @@ static MDFinder *mdfinder = nil;
 
   NSRunAlertPanel(nil, 
                 NSLocalizedString(@"The Workspace connection died.", @""),
-					      NSLocalizedString(@"Ok", @""), 
+					      NSLocalizedString(@"OK", @""), 
                 nil, 
                 nil);  
     
@@ -384,7 +384,7 @@ static MDFinder *mdfinder = nil;
         NSString *msg = NSLocalizedString(@"Invalid query description.", @"");    
         NSRunAlertPanel(nil, 
                       [NSString stringWithFormat: @"%@: %@", wpath, msg],
-					            NSLocalizedString(@"Ok", @""), 
+					            NSLocalizedString(@"OK", @""), 
                       nil, 
                       nil);  
       }
@@ -411,7 +411,7 @@ static MDFinder *mdfinder = nil;
       } else {
         NSRunAlertPanel(nil, 
                     NSLocalizedString(@"Error saving the query!", @""),
-					          NSLocalizedString(@"Ok", @""), 
+					          NSLocalizedString(@"OK", @""), 
                     nil, 
                     nil);  
       }

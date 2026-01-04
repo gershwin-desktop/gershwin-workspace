@@ -360,7 +360,7 @@ static NSString *nibName = @"FileOperationWin";
 {  
   return NSRunAlertPanel(NSLocalizedString(title, @""),
 			 NSLocalizedString(message, @""),
-			 NSLocalizedString(@"Ok", @""), 
+			 NSLocalizedString(@"OK", @""), 
 			 NSLocalizedString(@"Cancel", @""), 
                          nil);       
 }
@@ -369,7 +369,7 @@ static NSString *nibName = @"FileOperationWin";
 {  
   return NSRunAlertPanel(nil, 
                          NSLocalizedString(message, @""), 
-			 NSLocalizedString(@"Ok", @""), 
+			 NSLocalizedString(@"OK", @""), 
                          nil, 
                          nil);
 }

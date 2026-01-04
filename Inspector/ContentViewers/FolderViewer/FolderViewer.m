@@ -112,7 +112,7 @@
       [okButt setButtonType: NSMomentaryLight];
       [okButt setImage: [NSImage imageNamed: @"common_ret.tiff"]];
       [okButt setImagePosition: NSImageRight];
-      [okButt setTitle: NSLocalizedString(@"Ok", @"")];
+      [okButt setTitle: NSLocalizedString(@"OK", @"")];
       [okButt setEnabled: NO];
       [self addSubview: okButt];
       RELEASE (okButt);

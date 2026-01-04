@@ -298,7 +298,7 @@ BOOL isDotFile(NSString *path);
 do { \
 NSRunAlertPanel(nil, \
 NSLocalizedString(x, @""), \
-NSLocalizedString(@"Ok", @""), \
+NSLocalizedString(@"OK", @""), \
 nil, \
 nil); \
 pathsUnselReply = oldReply; \
@@ -393,7 +393,7 @@ return; \
 do { \
 NSRunAlertPanel(nil, \
 NSLocalizedString(x, @""), \
-NSLocalizedString(@"Ok", @""), \
+NSLocalizedString(@"OK", @""), \
 nil, \
 nil); \
 pathsUnselReply = oldReply; \
@@ -500,7 +500,7 @@ return; \
 do { \
 NSRunAlertPanel(nil, \
 NSLocalizedString(x, @""), \
-NSLocalizedString(@"Ok", @""), \
+NSLocalizedString(@"OK", @""), \
 nil, \
 nil); \
 pathsUnselReply = oldReply; \
@@ -723,7 +723,7 @@ return; \
     if ([fm createDirectoryAtPath: dbdir attributes: nil] == NO) { 
       NSRunAlertPanel(nil, 
                       NSLocalizedString(@"unable to create the db directory.", @""), 
-                      NSLocalizedString(@"Ok", @""), 
+                      NSLocalizedString(@"OK", @""), 
                       nil, 
                       nil); 
       return;
@@ -736,7 +736,7 @@ return; \
     if ([fm createDirectoryAtPath: dbdir attributes: nil] == NO) { 
       NSRunAlertPanel(nil, 
                       NSLocalizedString(@"unable to create the db directory.", @""), 
-                      NSLocalizedString(@"Ok", @""), 
+                      NSLocalizedString(@"OK", @""), 
                       nil, 
                       nil); 
       return;
@@ -797,7 +797,7 @@ return; \
     } else {
       NSRunAlertPanel(nil,
               NSLocalizedString(@"unable to contact mdextractor!", @""),
-              NSLocalizedString(@"Ok", @""),
+              NSLocalizedString(@"OK", @""),
               nil, 
               nil);  
     }

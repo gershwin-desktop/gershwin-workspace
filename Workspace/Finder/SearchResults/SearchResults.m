@@ -681,7 +681,7 @@ static NSString *lsfname = @"LiveSearch.lsf";
       [finder addLiveSearchFolderWithPath: lsfpath createIndex: YES];
     } else {
       NSString *msg = NSLocalizedString(@"can't create the Live Search folder", @"");
-      NSRunAlertPanel(NULL, msg, NSLocalizedString(@"Ok", @""), NULL, NULL);  
+      NSRunAlertPanel(NULL, msg, NSLocalizedString(@"OK", @""), NULL, NULL);  
     } 
 
 	  [dnc postNotificationName: @"GWFileSystemDidChangeNotification"
@@ -689,7 +689,7 @@ static NSString *lsfname = @"LiveSearch.lsf";
                      userInfo: notifDict];  
   } else {
     NSString *msg = [NSString stringWithFormat: @"a file named \"%@\" already exists.\nPlease rename it.", folderName];
-    NSRunAlertPanel(NULL, msg, NSLocalizedString(@"Ok", @""), NULL, NULL);  
+    NSRunAlertPanel(NULL, msg, NSLocalizedString(@"OK", @""), NULL, NULL);  
   }
 }
 

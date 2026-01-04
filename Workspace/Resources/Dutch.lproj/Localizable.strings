@@ -77,7 +77,7 @@
 
 /* FileOperation.m */
 
-"OK" = "Ok";
+"OK" = "OK";
 "Cancel" = "Annuleren";
 "Move" = "Verplaats";
 "Move from: " = "Verplaats van: ";
@@ -139,7 +139,7 @@
 "Group:" = "Groep :";
 "Changed" = "Verandert";
 "Revert" = "Terug";
-"OK" = "Ok";
+"OK" = "OK";
 
 
 /* ContentsPanel.m */
