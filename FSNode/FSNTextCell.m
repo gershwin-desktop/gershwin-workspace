@@ -205,11 +205,12 @@
   CGFloat textlength;
   NSString *cutTitle;  
 
-#define MARGIN (2.0)
+#define LEFT_MARGIN (2.0)
+#define ICON_TEXT_SPACING (8.0)
  
-  textlength = title_rect.size.width - MARGIN;
+  textlength = title_rect.size.width - LEFT_MARGIN;
   if (icon)
-    textlength -= ([icon size].width + (MARGIN * 2));
+    textlength -= ([icon size].width + ICON_TEXT_SPACING);
 
   ASSIGN (uncutTitle, [self stringValue]);
   /* we calculate the reduced title only if necessary */
@@ -237,14 +238,14 @@
 
     icon_rect.origin = cellFrame.origin;
     icon_rect.size = [icon size];
-    icon_rect.origin.x += MARGIN;
+    icon_rect.origin.x += LEFT_MARGIN;
     icon_rect.origin.y += ((cellFrame.size.height - icon_rect.size.height) / 2.0);
     if ([controlView isFlipped]) {
       icon_rect.origin.y += icon_rect.size.height;
     }
 
-    title_rect.origin.x += (icon_rect.size.width + (MARGIN * 2));	
-    title_rect.size.width -= (icon_rect.size.width + (MARGIN * 2));	
+    title_rect.origin.x += (icon_rect.size.width + ICON_TEXT_SPACING);
+    title_rect.size.width -= (icon_rect.size.width + ICON_TEXT_SPACING);
     title_rect = NSIntegralRect(title_rect);
 
     [super drawInteriorWithFrame: title_rect inView: controlView];

@@ -43,14 +43,14 @@ static NSString *defaultColumns = @"{ \
   <*I0> = { \
     position = <*I0>; \
     identifier = <*I0>; \
-    width = <*R280>; \
+    width = <*R260>; \
     minwidth = <*R100>; \
   }; \
   <*I2> = { \
     position = <*I1>; \
     identifier = <*I2>; \
-    width = <*R130>; \
-    minwidth = <*R130>; \
+    width = <*R120>; \
+    minwidth = <*R120>; \
   }; \
   <*I3> = { \
     position = <*I2>; \
@@ -61,7 +61,7 @@ static NSString *defaultColumns = @"{ \
   <*I1> = { \
     position = <*I3>; \
     identifier = <*I1>; \
-    width = <*R100>; \
+    width = <*R90>; \
     minwidth = <*R80>; \
   }; \
 }";
@@ -2675,6 +2675,9 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
       [self setAllowsMultipleSelection: YES];
       [self setRowHeight: CELLS_HEIGHT];
       [self setIntercellSpacing: NSZeroSize];
+
+      // Enable alternating row background colors for list views by default
+      [self setUsesAlternatingRowBackgroundColors: YES];
 
       dsource = [[dsclass alloc] initForListView: self];
 
