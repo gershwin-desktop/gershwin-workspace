@@ -166,6 +166,9 @@
   [task setLaunchPath:sshKeyscan];
 
   NSMutableArray *args = [NSMutableArray array];
+  /* Add timeout to prevent hanging on unreachable hosts */
+  [args addObject:@"-T"];
+  [args addObject:@"5"];  /* 5 second timeout */
   if (p > 0 && p != 22) {
     [args addObject:@"-p"];
     [args addObject:[NSString stringWithFormat:@"%d", p]];

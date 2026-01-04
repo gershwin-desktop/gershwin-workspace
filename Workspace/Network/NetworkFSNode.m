@@ -258,12 +258,16 @@ NSString * const NetworkVirtualPath = @"/Network";
 
 - (BOOL)isDirectory
 {
-  /* Network service items are not directories - they cannot be traversed */
+  /* Network service items are directories when mounted so they are shown as mount points */
   if (isNetworkRoot) {
     return YES;  /* The /Network root is a directory */
   }
-  return NO;  /* Service items are treated as files */
-}
+  /* If this service is currently mounted, treat it as a directory */
+  if ([self isMountPoint]) {
+    return YES;
+  }
+  return NO;  /* Service items are treated as files when not mounted */
+} 
 
 - (BOOL)isReadable
 {
@@ -291,9 +295,12 @@ NSString * const NetworkVirtualPath = @"/Network";
 
 - (BOOL)isMountPoint
 {
-  /* Network service items are not mount points (yet) */
-  return NO;
-}
+  if (isNetworkRoot) {
+    return NO;
+  }
+  NetworkVolumeManager *mgr = [NetworkVolumeManager sharedManager];
+  return [mgr isServiceMounted: serviceItem];
+} 
 
 - (BOOL)isPlain
 {
@@ -339,6 +346,10 @@ NSString * const NetworkVirtualPath = @"/Network";
 - (NSString *)fileType
 {
   if (isNetworkRoot) {
+    return NSFileTypeDirectory;
+  }
+  /* If the service is mounted, expose it as a directory */
+  if ([self isMountPoint]) {
     return NSFileTypeDirectory;
   }
   /* Network service items are treated as regular files */

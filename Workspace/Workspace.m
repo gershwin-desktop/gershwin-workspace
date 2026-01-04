@@ -60,6 +60,7 @@
 #import "GSGlobalShortcutsManager.h"
 #import "Network/NetworkFSNode.h"
 #import "Network/NetworkServiceManager.h"
+#import "Network/NetworkServiceItem.h"
 #import "Network/NetworkVolumeManager.h"
 #if HAVE_DBUS
 #import "DBusConnection.h"
@@ -565,8 +566,9 @@ NSString *_pendingSystemActionTitle = nil;
   menuItem = [menu addItemWithTitle:_(@"Go to Folder...") action:@selector(goToFolder:) keyEquivalent:@"G"];
   [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
-  menuItem = [menu addItemWithTitle:_(@"Connect to Server...") action:NULL keyEquivalent:@""];
-  [menuItem setEnabled:NO];
+  menuItem = [menu addItemWithTitle:_(@"Connect to Server...") action:@selector(connectToServer:) keyEquivalent:@"K"];
+  [menuItem setTarget:self];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask];
 
   // Tools menu
   menuItem = [mainMenu addItemWithTitle:_(@"Tools") action:NULL keyEquivalent:@""];
@@ -2816,6 +2818,285 @@ NSString *_pendingSystemActionTitle = nil;
       } else {
         NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Folder does not exist"), _(@"OK"), nil, nil);
       }
+    }
+  }
+  
+  RELEASE (dialog);
+}
+
+- (void)performMountInBackground:(NSDictionary *)mountInfo
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  
+  NetworkServiceItem *serviceItem = [mountInfo objectForKey:@"serviceItem"];
+  NSPanel *progressPanel = [mountInfo objectForKey:@"progressPanel"];
+  NSString *hostname = [mountInfo objectForKey:@"hostname"];
+  id passwordObj = [mountInfo objectForKey:@"password"];
+  NSString *password = (passwordObj != [NSNull null]) ? passwordObj : nil;
+  NSString *username = [serviceItem username];
+  
+  /* Perform the mount operation with provided credentials */
+  NetworkVolumeManager *volumeManager = [NetworkVolumeManager sharedManager];
+  NSString *mountPoint = [volumeManager mountSFTPService:serviceItem
+                                                username:username
+                                                password:password];
+  
+  /* Return to main thread to update UI */
+  [self performSelectorOnMainThread:@selector(finishMountOperation:)
+                         withObject:[NSDictionary dictionaryWithObjectsAndKeys:
+                                     mountPoint ? mountPoint : [NSNull null], @"mountPoint",
+                                     progressPanel, @"progressPanel",
+                                     hostname, @"hostname",
+                                     nil]
+                      waitUntilDone:NO];
+  
+  [mountInfo release];
+  [pool release];
+}
+
+- (void)finishMountOperation:(NSDictionary *)result
+{
+  NSPanel *progressPanel = [result objectForKey:@"progressPanel"];
+  id mountPointObj = [result objectForKey:@"mountPoint"];
+  NSString *hostname = [result objectForKey:@"hostname"];
+  NSString *mountPoint = (mountPointObj != [NSNull null]) ? mountPointObj : nil;
+  
+  [progressPanel close];
+  [progressPanel release];
+  
+  if (mountPoint) {
+    /* Successfully mounted - open it in a viewer */
+    NSLog(@"Workspace: Successfully mounted at %@, opening viewer", mountPoint);
+    [self openSelectedPaths:[NSArray arrayWithObject:mountPoint] newViewer:YES];
+  } else {
+    NSLog(@"Workspace: Mount failed");
+    /* Error dialog should have been shown by NetworkVolumeManager */
+    /* But show a generic error if somehow it wasn't */
+    NSRunAlertPanel(NSLocalizedString(@"Connection Failed", @""),
+                    [NSString stringWithFormat:
+                     NSLocalizedString(@"Could not connect to %@\n\nCheck the hostname and try again.", @""),
+                     hostname],
+                    _(@"OK"), nil, nil);
+  }
+}
+
+- (void)connectToServer:(id)sender
+{
+  GWDialog *dialog = [[GWDialog alloc] initWithTitle: _(@"Connect to Server:") 
+                                             editText: @"sftp://"
+                                          switchTitle: nil];
+  NSModalResponse response = [dialog runModal];
+  
+  if (response == NSAlertDefaultReturn) {
+    NSString *urlString = [dialog getEditFieldText];
+    if (urlString && [urlString length] > 0) {
+      /* Parse the URL */
+      NSURL *url = [NSURL URLWithString:urlString];
+      if (!url) {
+        NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
+                        _(@"Invalid URL format"), 
+                        _(@"OK"), nil, nil);
+        RELEASE(dialog);
+        return;
+      }
+      
+      NSString *scheme = [url scheme];
+      if (!scheme || ![scheme isEqualToString:@"sftp"]) {
+        NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
+                        _(@"Only sftp:// URLs are currently supported"), 
+                        _(@"OK"), nil, nil);
+        RELEASE(dialog);
+        return;
+      }
+      
+      NSString *hostname = [url host];
+      if (!hostname || [hostname length] == 0) {
+        NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
+                        _(@"URL must include a hostname"), 
+                        _(@"OK"), nil, nil);
+        RELEASE(dialog);
+        return;
+      }
+      
+      /* Extract components */
+      NSString *username = [url user];
+      NSNumber *portNum = [url port];
+      int port = portNum ? [portNum intValue] : 22;
+      NSString *remotePath = [url path];
+      NSString *password = nil;
+      
+      /* If no username in URL, prompt for credentials NOW (on main thread) */
+      if (!username || [username length] == 0) {
+        NSLog(@"Workspace: No username in URL, prompting user");
+        
+        /* Create a custom panel for username/password input */
+        NSPanel *panel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 400, 200)
+                                                    styleMask:(NSTitledWindowMask | NSClosableWindowMask)
+                                                      backing:NSBackingStoreBuffered
+                                                        defer:NO];
+        [panel setTitle:NSLocalizedString(@"Connect to SFTP Server", @"")];
+        [panel center];
+        
+        /* Create main label */
+        NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 140, 360, 40)];
+        [label setStringValue:[NSString stringWithFormat:
+          NSLocalizedString(@"Enter credentials for %@:", @""), hostname]];
+        [label setBezeled:NO];
+        [label setDrawsBackground:NO];
+        [label setEditable:NO];
+        [label setSelectable:NO];
+        [[panel contentView] addSubview:label];
+        [label release];
+        
+        /* Create username label */
+        NSTextField *usernameLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 110, 100, 17)];
+        [usernameLabel setStringValue:NSLocalizedString(@"Username:", @"")];
+        [usernameLabel setBezeled:NO];
+        [usernameLabel setDrawsBackground:NO];
+        [usernameLabel setEditable:NO];
+        [usernameLabel setSelectable:NO];
+        [usernameLabel setAlignment:NSRightTextAlignment];
+        [[panel contentView] addSubview:usernameLabel];
+        [usernameLabel release];
+        
+        /* Create username field */
+        NSTextField *usernameField = [[NSTextField alloc] initWithFrame:NSMakeRect(130, 108, 250, 24)];
+        [usernameField setStringValue:NSUserName()];
+        [[panel contentView] addSubview:usernameField];
+        [panel makeFirstResponder:usernameField];
+        
+        /* Create password label */
+        NSTextField *passwordLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 75, 100, 17)];
+        [passwordLabel setStringValue:NSLocalizedString(@"Password:", @"")];
+        [passwordLabel setBezeled:NO];
+        [passwordLabel setDrawsBackground:NO];
+        [passwordLabel setEditable:NO];
+        [passwordLabel setSelectable:NO];
+        [passwordLabel setAlignment:NSRightTextAlignment];
+        [[panel contentView] addSubview:passwordLabel];
+        [passwordLabel release];
+        
+        /* Create password field */
+        NSSecureTextField *passwordField = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(130, 73, 250, 24)];
+        [[panel contentView] addSubview:passwordField];
+        
+        /* Create buttons */
+        NSButton *connectButton = [[NSButton alloc] initWithFrame:NSMakeRect(290, 20, 90, 24)];
+        [connectButton setTitle:NSLocalizedString(@"Connect", @"")];
+        [connectButton setTarget:NSApp];
+        [connectButton setAction:@selector(stopModal)];
+        [connectButton setKeyEquivalent:@"\\r"];
+        [[panel contentView] addSubview:connectButton];
+        [connectButton release];
+        
+        NSButton *cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(190, 20, 90, 24)];
+        [cancelButton setTitle:NSLocalizedString(@"Cancel", @"")];
+        [cancelButton setTarget:NSApp];
+        [cancelButton setAction:@selector(abortModal)];
+        [cancelButton setKeyEquivalent:@"\\e"];
+        [[panel contentView] addSubview:cancelButton];
+        [cancelButton release];
+        
+        NSLog(@"Workspace: Showing username/password prompt dialog");
+        NSInteger credResult = [NSApp runModalForWindow:panel];
+        NSLog(@"Workspace: Dialog result: %ld", (long)credResult);
+        
+        if (credResult == NSRunStoppedResponse) {
+          username = [[usernameField stringValue] retain];
+          password = [[passwordField stringValue] retain];
+          NSLog(@"Workspace: User entered username: %@", username);
+        } else {
+          NSLog(@"Workspace: User cancelled connection");
+          [usernameField release];
+          [passwordField release];
+          [panel close];
+          [panel release];
+          RELEASE(dialog);
+          return;
+        }
+        
+        [usernameField release];
+        [passwordField release];
+        [panel close];
+        [panel release];
+        
+        if (!username || [username length] == 0) {
+          NSLog(@"Workspace: No username provided");
+          [password release];
+          RELEASE(dialog);
+          return;
+        }
+        
+        [username autorelease];
+        
+        /* Keep password for mount (will autorelease later) */
+        if (password && [password length] > 0) {
+          [password autorelease];
+        } else {
+          [password release];
+          password = nil;
+        }
+      }
+      
+      /* Create a NetworkServiceItem for manual SFTP connection */
+      NetworkServiceItem *serviceItem = [[NetworkServiceItem alloc] init];
+      serviceItem.hostName = hostname;
+      serviceItem.port = port;
+      serviceItem.name = [NSString stringWithFormat:@"%@", hostname];
+      serviceItem.type = @"_sftp-ssh._tcp.";  /* SFTP service type */
+      serviceItem.domain = @"local.";          /* Default domain */
+      if (username && [username length] > 0) {
+        [serviceItem setUsername:username];
+      }
+      if (remotePath && [remotePath length] > 0) {
+        [serviceItem setRemotePath:remotePath];
+      }
+      
+      NSLog(@"Workspace: Connecting to SFTP server: %@:%d (user: %@, path: %@)", 
+            hostname, port, username ?: @"(prompt)", remotePath ?: @"~");
+      
+      /* Show a connecting dialog */
+      NSPanel *progressPanel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 300, 100)
+                                                          styleMask:NSTitledWindowMask
+                                                            backing:NSBackingStoreBuffered
+                                                              defer:NO];
+      [progressPanel setTitle:@"Connecting..."];
+      [progressPanel center];
+      
+      NSTextField *progressLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 40, 260, 40)];
+      [progressLabel setStringValue:[NSString stringWithFormat:@"Connecting to %@...", hostname]];
+      [progressLabel setBezeled:NO];
+      [progressLabel setDrawsBackground:NO];
+      [progressLabel setEditable:NO];
+      [progressLabel setSelectable:NO];
+      [progressLabel setAlignment:NSCenterTextAlignment];
+      [[progressPanel contentView] addSubview:progressLabel];
+      [progressLabel release];
+      
+      NSProgressIndicator *spinner = [[NSProgressIndicator alloc] initWithFrame:NSMakeRect(130, 15, 40, 40)];
+      [spinner setStyle:NSProgressIndicatorSpinningStyle];
+      [spinner setDisplayedWhenStopped:NO];
+      [spinner startAnimation:nil];
+      [[progressPanel contentView] addSubview:spinner];
+      [spinner release];
+      
+      [progressPanel orderFront:nil];
+      
+      /* Create a dictionary to pass data to the background thread */
+      NSDictionary *mountInfo = [NSDictionary dictionaryWithObjectsAndKeys:
+                                 serviceItem, @"serviceItem",
+                                 progressPanel, @"progressPanel",
+                                 hostname, @"hostname",
+                                 password ? password : [NSNull null], @"password",
+                                 nil];
+      [mountInfo retain];
+      
+      /* Mount on a background thread to keep UI responsive */
+      [NSThread detachNewThreadSelector:@selector(performMountInBackground:)
+                               toTarget:self
+                             withObject:mountInfo];
+      
+      [serviceItem release];
     }
   }
   

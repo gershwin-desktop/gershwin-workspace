@@ -40,6 +40,20 @@
 - (NSString *)mountSFTPService:(NetworkServiceItem *)serviceItem;
 
 /**
+ * Attempts to mount an SFTP service with provided credentials.
+ * Returns the mount point path on success, nil on failure.
+ * This version does not prompt the user for credentials.
+ *
+ * @param serviceItem The SFTP service to mount
+ * @param user The username to use (required)
+ * @param pass The password to use (optional, uses SSH keys if nil)
+ * @return The path where the service was mounted, or nil on failure
+ */
+- (NSString *)mountSFTPService:(NetworkServiceItem *)serviceItem
+                      username:(NSString *)user
+                      password:(NSString *)pass;
+
+/**
  * Unmounts a previously mounted network service.
  *
  * @param serviceItem The service to unmount

@@ -1097,10 +1097,13 @@
   }
 }
 
+#import "../../FSNode/FSNodeRep.h"
+
 - (BOOL)allPathsAreMountpoints:(NSArray *)paths
 {
   NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
   NSArray *volumePaths = [workspace mountedLocalVolumePaths];
+  NSSet *extraVolumes = [[FSNodeRep sharedInstance] volumes];
   NSUInteger i;
 
   if ([paths count] == 0) {
@@ -1109,7 +1112,7 @@
 
   for (i = 0; i < [paths count]; i++) {
     NSString *path = [paths objectAtIndex: i];
-    if (![volumePaths containsObject: path]) {
+    if ((![volumePaths containsObject: path]) && (![extraVolumes containsObject: path])) {
       return NO;
     }
   }

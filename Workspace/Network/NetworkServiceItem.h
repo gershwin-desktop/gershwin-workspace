@@ -21,12 +21,16 @@
   NSArray *addresses;
   NSNetService *netService;
   BOOL resolved;
+  
+  /* Manual connection support - these override TXT record values if set */
+  NSString *manualUsername;
+  NSString *manualRemotePath;
 }
 
-@property (nonatomic, retain) NSString *name;
-@property (nonatomic, retain) NSString *type;
-@property (nonatomic, retain) NSString *domain;
-@property (nonatomic, retain) NSString *hostName;
+@property (nonatomic, copy) NSString *name;
+@property (nonatomic, copy) NSString *type;
+@property (nonatomic, copy) NSString *domain;
+@property (nonatomic, copy) NSString *hostName;
 @property (nonatomic, assign) int port;
 @property (nonatomic, retain) NSArray *addresses;
 @property (nonatomic, retain) NSNetService *netService;
@@ -65,14 +69,18 @@
  * Returns the remote path from the TXT record, if available.
  * For SFTP services, this is often in the 'path' key.
  * Returns nil if no path is specified.
+ * Can be set manually for non-discovered services.
  */
 - (NSString *)remotePath;
+- (void)setRemotePath:(NSString *)path;
 
 /**
  * Returns the username from the TXT record, if available.
  * For SFTP services, this is often in the 'u' key.
  * Returns nil if no username is specified.
+ * Can be set manually for non-discovered services.
  */
 - (NSString *)username;
+- (void)setUsername:(NSString *)user;
 
 @end

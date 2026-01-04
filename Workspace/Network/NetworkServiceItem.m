@@ -35,6 +35,8 @@
     self.port = [service port];
     self.addresses = [service addresses];
     self.resolved = ([service hostName] != nil && [[service hostName] length] > 0);
+    manualUsername = nil;
+    manualRemotePath = nil;
   }
   return self;
 }
@@ -47,6 +49,8 @@
   [hostName release];
   [addresses release];
   [netService release];
+  [manualUsername release];
+  [manualRemotePath release];
   [super dealloc];
 }
 
@@ -61,6 +65,8 @@
   copy.addresses = [[self.addresses copy] autorelease];
   copy.netService = self.netService;
   copy.resolved = self.resolved;
+  [copy setUsername:manualUsername];
+  [copy setRemotePath:manualRemotePath];
   return copy;
 }
 
@@ -98,6 +104,11 @@
 
 - (NSString *)remotePath
 {
+  /* Check if manually set first */
+  if (manualRemotePath) {
+    return manualRemotePath;
+  }
+  
   if (!netService) {
     return nil;
   }
@@ -130,6 +141,11 @@
 
 - (NSString *)username
 {
+  /* Check if manually set first */
+  if (manualUsername) {
+    return manualUsername;
+  }
+  
   if (!netService) {
     return nil;
   }
@@ -164,6 +180,22 @@
 {
   return [NSString stringWithFormat:@"<NetworkServiceItem: %@ (%@) at %@:%d>", 
           name, type, hostName, port];
+}
+
+- (void)setUsername:(NSString *)user
+{
+  if (manualUsername != user) {
+    [manualUsername release];
+    manualUsername = [user copy];
+  }
+}
+
+- (void)setRemotePath:(NSString *)path
+{
+  if (manualRemotePath != path) {
+    [manualRemotePath release];
+    manualRemotePath = [path copy];
+  }
 }
 
 - (BOOL)isEqual:(id)object

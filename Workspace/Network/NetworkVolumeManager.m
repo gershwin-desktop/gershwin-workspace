@@ -10,6 +10,8 @@
 #import "NetworkVolumeManager.h"
 #import "NetworkServiceItem.h"
 #import "SFTPMount.h"
+#import "../FSNode/FSNode.h"
+#import "../FSNode/FSNodeRep.h"
 
 static NetworkVolumeManager *sharedInstance = nil;
 
@@ -144,6 +146,43 @@ static NetworkVolumeManager *sharedInstance = nil;
   return [self mountPointForService:serviceItem] != nil;
 }
 
+- (NSString *)findExistingMountForHost:(NSString *)hostname username:(NSString *)username
+{
+  /* Check /proc/mounts to see if this server is already mounted */
+  NSString *procMounts = @"/proc/mounts";
+  NSError *readError = nil;
+  NSString *mountsContent = [NSString stringWithContentsOfFile:procMounts 
+                                                      encoding:NSUTF8StringEncoding 
+                                                         error:&readError];
+  if (!mountsContent) {
+    NSLog(@"NetworkVolumeManager: Could not read /proc/mounts: %@", readError);
+    return nil;
+  }
+  
+  /* Look for a line that matches: user@hostname:... on <mountpoint> type fuse.sshfs */
+  NSArray *lines = [mountsContent componentsSeparatedByString:@"\n"];
+  NSString *expectedPrefix = [NSString stringWithFormat:@"%@@%@:", username, hostname];
+  
+  for (NSString *line in lines) {
+    if ([line length] == 0) continue;
+    
+    NSArray *parts = [line componentsSeparatedByString:@" "];
+    if ([parts count] < 3) continue;
+    
+    NSString *source = [parts objectAtIndex:0];  /* e.g., user@hostname:/path */
+    NSString *target = [parts objectAtIndex:1];  /* mount point */
+    NSString *fstype = [parts objectAtIndex:2];  /* filesystem type */
+    
+    /* Check if this is an sshfs mount to our target server */
+    if ([fstype isEqual:@"fuse.sshfs"] && [source hasPrefix:expectedPrefix]) {
+      NSLog(@"NetworkVolumeManager: Found existing mount of %@ at %@", source, target);
+      return target;
+    }
+  }
+  
+  return nil;
+}
+
 - (NSString *)createMountPointForService:(NetworkServiceItem *)serviceItem
 {
   /* Create mount point in user's home directory under ~/Network */
@@ -202,17 +241,110 @@ static NetworkVolumeManager *sharedInstance = nil;
 
 - (NSString *)mountSFTPService:(NetworkServiceItem *)serviceItem
 {
-  /* Check if already mounted */
+  return [self mountSFTPService:serviceItem username:nil password:nil];
+}
+
+- (NSString *)mountSFTPService:(NetworkServiceItem *)serviceItem
+                      username:(NSString *)providedUsername
+                      password:(NSString *)providedPassword
+{
+  /* Check if already mounted in our tracked mounts */
   NSString *existingMount = [self mountPointForService:serviceItem];
   if (existingMount) {
-    NSLog(@"NetworkVolumeManager: Service %@ already mounted at %@", 
+    NSLog(@"NetworkVolumeManager: Service %@ already mounted at %@ (tracked)", 
           [serviceItem name], existingMount);
     return existingMount;
   }
   
+  /* Get details early to check for existing system mounts */
+  NSString *hostName = [serviceItem hostName];
+  int port = [serviceItem port];
+  NSString *username = nil;
+  
+  /* First try to get username from TXT record */
+  NSNetService *netService = [serviceItem netService];
+  if (netService) {
+    NSData *txtData = [netService TXTRecordData];
+    if (txtData && [txtData length] > 0) {
+      NSDictionary *txtDict = [NSNetService dictionaryFromTXTRecordData:txtData];
+      if (txtDict) {
+        NSData *usernameData = [txtDict objectForKey:@"u"];
+        if (usernameData) {
+          username = [[[NSString alloc] initWithData:usernameData 
+                                            encoding:NSUTF8StringEncoding] autorelease];
+        }
+      }
+    }
+  }
+  
+  /* For duplicate mount check, use username from TXT or current user as default */
+  NSString *checkUsername = (username && [username length] > 0) ? username : NSUserName();
+  
+  /* Check if this server is already mounted in the system (from previous session/crash) */
+  NSString *existingSystemMount = [self findExistingMountForHost:hostName username:checkUsername];
+  if (existingSystemMount) {
+    NSLog(@"NetworkVolumeManager: Found existing system mount of %@ at %@", 
+          hostName, existingSystemMount);
+    
+    /* Verify the mount is still working */
+    NSError *testError = nil;
+    [fm contentsOfDirectoryAtPath:existingSystemMount error:&testError];
+    
+    if (!testError) {
+      /* Mount is working - reuse it */
+      NSLog(@"NetworkVolumeManager: Reusing existing working mount at %@", existingSystemMount);
+      NSString *identifier = [serviceItem identifier];
+      [mountedVolumes setObject:existingSystemMount forKey:identifier];
+
+      /* Mark as volume in FSNodeRep for icon updates and notify parent directory */
+      @try {
+        FSNode *vnode = [FSNode nodeWithPath: existingSystemMount];
+        if (vnode) {
+          [vnode setMountPoint: YES];
+        }
+        [[FSNodeRep sharedInstance] addVolumeAt: existingSystemMount];
+        NSLog(@"NetworkVolumeManager: FSNodeRep volumes now: %@", [[FSNodeRep sharedInstance] volumes]);
+      } @catch (NSException *e) {
+        NSLog(@"NetworkVolumeManager: Error marking existing mount: %@", e);
+      }
+
+      NSString *parent = [existingSystemMount stringByDeletingLastPathComponent];
+      NSString *name = [existingSystemMount lastPathComponent];
+      NSDictionary *opinfo = @{ @"operation": @"MountOperation",
+                                @"source": parent,
+                                @"destination": parent,
+                                @"files": @[name] };
+
+      [[NSNotificationCenter defaultCenter] 
+        postNotificationName:@"GWFileSystemDidChangeNotification"
+                      object:opinfo];
+
+      return existingSystemMount;
+    } else {
+      /* Mount exists but is not working - clean it up */
+      NSLog(@"NetworkVolumeManager: Existing mount at %@ is stale, cleaning up", existingSystemMount);
+      NSTask *umountTask = [[NSTask alloc] init];
+      [umountTask setLaunchPath:@"/usr/bin/fusermount"];
+      [umountTask setArguments:@[@"-u", existingSystemMount]];
+      @try {
+        [umountTask launch];
+        [umountTask waitUntilExit];
+        if ([umountTask terminationStatus] == 0) {
+          NSLog(@"NetworkVolumeManager: Successfully unmounted stale mount");
+          /* Also try to remove the directory */
+          [fm removeItemAtPath:existingSystemMount error:nil];
+        }
+      } @catch (NSException *e) {
+        NSLog(@"NetworkVolumeManager: Exception while cleaning up stale mount: %@", e);
+      }
+      [umountTask release];
+      /* Wait a moment for cleanup to complete */
+      [NSThread sleepForTimeInterval:0.5];
+    }
+  }
+  
   /* Log TXT record data for debugging */
   NSLog(@"NetworkVolumeManager: === TXT Record Data for %@ ===", [serviceItem name]);
-  NSNetService *netService = [serviceItem netService];
   if (netService) {
     NSData *txtData = [netService TXTRecordData];
     if (txtData && [txtData length] > 0) {
@@ -243,11 +375,13 @@ static NetworkVolumeManager *sharedInstance = nil;
     return nil;
   }
   
-  /* Get service details */
-  NSString *hostName = [serviceItem hostName];
-  int port = [serviceItem port];
-  NSString *username = [serviceItem username];
-  NSString *password = nil;
+  /* Service details already obtained above */
+  NSString *password = providedPassword;
+  
+  /* Use provided username if available, otherwise check TXT record */
+  if (providedUsername && [providedUsername length] > 0) {
+    username = providedUsername;
+  }
   
   if (!hostName || [hostName length] == 0) {
     NSLog(@"NetworkVolumeManager: Service has no hostname, cannot mount");
@@ -262,7 +396,7 @@ static NetworkVolumeManager *sharedInstance = nil;
     return nil;
   }
   
-  /* If no username in TXT record, prompt for it */
+  /* If no username provided AND no username in TXT record, prompt for it */
   if (!username || [username length] == 0) {
     NSLog(@"NetworkVolumeManager: No username in TXT record, prompting user");
     
@@ -397,15 +531,34 @@ static NetworkVolumeManager *sharedInstance = nil;
     /* Mount successful */
     NSString *identifier = [serviceItem identifier];
     [mountedVolumes setObject:mountPoint forKey:identifier];
-    
+
     NSLog(@"NetworkVolumeManager: Successfully mounted %@ at %@", 
           [serviceItem name], mountPoint);
-    
-    /* Post notification that filesystem changed */
-    [[NSNotificationCenter defaultCenter] 
+
+    /* Mark the mount point in the FSNode cache so UI displays mountpoint icons */
+    @try {
+      FSNode *vnode = [FSNode nodeWithPath: mountPoint];
+      if (vnode) {
+        [vnode setMountPoint: YES];
+      }
+      [[FSNodeRep sharedInstance] addVolumeAt: mountPoint];
+      NSLog(@"NetworkVolumeManager: FSNodeRep volumes now: %@", [[FSNodeRep sharedInstance] volumes]);
+    } @catch (NSException *e) {
+      NSLog(@"NetworkVolumeManager: Error marking volume: %@", e);
+    }
+
+    /* Notify parent directory that a new entry has appeared so viewers refresh */
+    NSString *parent = [mountPoint stringByDeletingLastPathComponent];
+    NSString *name = [mountPoint lastPathComponent];
+    NSDictionary *opinfo = @{ @"operation": @"MountOperation",
+                              @"source": parent,
+                              @"destination": parent,
+                              @"files": @[name] };
+
+    [[NSNotificationCenter defaultCenter]
       postNotificationName:@"GWFileSystemDidChangeNotification"
-                    object:nil];
-    
+                    object:opinfo];
+
     return mountPoint;
   } else {
     /* Mount failed */
@@ -456,17 +609,35 @@ static NetworkVolumeManager *sharedInstance = nil;
       /* Unmount successful */
       NSString *identifier = [serviceItem identifier];
       [mountedVolumes removeObjectForKey:identifier];
-      
+
+      /* Clear mountpoint marking and remove from FSNodeRep volumes */
+      @try {
+        FSNode *vnode = [FSNode nodeWithPath: mountPoint];
+        if (vnode) {
+          [vnode setMountPoint: NO];
+        }
+        [[FSNodeRep sharedInstance] removeVolumeAt: mountPoint];
+      } @catch (NSException *e) {
+        NSLog(@"NetworkVolumeManager: Error clearing volume info: %@", e);
+      }
+
       /* Remove the mount point directory */
       [fm removeItemAtPath:mountPoint error:nil];
-      
+
       NSLog(@"NetworkVolumeManager: Successfully unmounted %@", [serviceItem name]);
-      
-      /* Post notification that filesystem changed */
+
+      /* Notify parent directory so viewers refresh and show removal */
+      NSString *parent = [mountPoint stringByDeletingLastPathComponent];
+      NSString *name = [mountPoint lastPathComponent];
+      NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
+                                @"source": parent,
+                                @"destination": parent,
+                                @"files": @[name] };
+
       [[NSNotificationCenter defaultCenter] 
         postNotificationName:@"GWFileSystemDidChangeNotification"
-                      object:nil];
-      
+                      object:opinfo];
+
       return YES;
     } else {
       NSLog(@"NetworkVolumeManager: fusermount failed with status %d", status);
