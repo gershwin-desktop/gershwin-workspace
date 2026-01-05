@@ -34,6 +34,9 @@ ADDITIONAL_GUI_LIBS += -lFSNode
 ADDITIONAL_GUI_LIBS += -lInspector
 ADDITIONAL_GUI_LIBS += -lOperation
 
+# Include path for DSStore headers (sibling subproject)
+ADDITIONAL_INCLUDE_DIRS += -I../DSStore
+
 Workspace_RESOURCE_FILES = \
   Resources/Icons/* \
   Resources/Network.icns \
@@ -95,6 +98,11 @@ FileViewer/GWViewerScrollView.m \
 FileViewer/GWViewerIconsPath.m \
 FileViewer/GWViewerPathsPopUp.m \
 FileViewer/DSStoreInfo.m \
+../DSStore/DSStore.m \
+../DSStore/DSBuddyAllocator.m \
+../DSStore/DSStoreEntry.m \
+../DSStore/DSStoreCodecs.m \
+../DSStore/SimpleColor.m \
 Finder/Finder.m \
 Finder/FindModuleView.m \
 Finder/SearchPlacesBox.m \

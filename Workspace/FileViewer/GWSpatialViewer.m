@@ -346,15 +346,27 @@
         NSLog(@"║ Icons with custom positions: %lu", 
               (unsigned long)[[dsInfo filenamesWithPositions] count]);
         
-        // Build positions dictionary for FSNIconsView
+        // Get view dimensions for coordinate conversion
+        // .DS_Store uses top-left origin with icon centers, GNUstep uses bottom-left origin
+        CGFloat viewHeight = [nodeView frame].size.height;
+        CGFloat iconHeight = dsInfo.hasIconSize ? (CGFloat)dsInfo.iconSize : 64.0;
+        
+        NSLog(@"║ View height: %.0f, Icon height: %.0f", viewHeight, iconHeight);
+        
+        // Build positions dictionary for FSNIconsView with coordinate conversion
         NSMutableDictionary *iconPositions = [NSMutableDictionary dictionary];
         for (NSString *filename in [dsInfo filenamesWithPositions]) {
           DSStoreIconInfo *iconInfo = [dsInfo iconInfoForFilename:filename];
           if (iconInfo && iconInfo.hasPosition) {
-            [iconPositions setObject:[NSValue valueWithPoint:iconInfo.position] 
+            // Convert from .DS_Store coordinates to GNUstep coordinates
+            NSPoint gnustepPos = [iconInfo gnustepPositionForViewHeight:viewHeight 
+                                                             iconHeight:iconHeight];
+            [iconPositions setObject:[NSValue valueWithPoint:gnustepPos] 
                               forKey:filename];
-            NSLog(@"║   '%@': (%.0f, %.0f)", filename, 
-                  iconInfo.position.x, iconInfo.position.y);
+            NSLog(@"║   '%@': DS_Store(%.0f, %.0f) → GNUstep(%.0f, %.0f)", 
+                  filename, 
+                  iconInfo.position.x, iconInfo.position.y,
+                  gnustepPos.x, gnustepPos.y);
           }
         }
         

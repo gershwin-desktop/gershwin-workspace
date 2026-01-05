@@ -36,3 +36,5 @@ derived_src
 *.extinfo
 autom4te.cache
 *_scrot.png
+*.d
+*.o
