@@ -12,7 +12,7 @@ MAN1_PAGES = dsutil.1
 
 # Link against libDSStore library
 dsutil_TOOL_LIBS += -lDSStore
-dsutil_LIB_DIRS += -L../../DSStore/obj
+dsutil_LIB_DIRS += -L../../DSStore/$(GNUSTEP_OBJ_DIR)
 
 # Include path for DSStore headers (sibling subproject)
 dsutil_INCLUDE_DIRS += -I../../DSStore

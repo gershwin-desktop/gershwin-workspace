@@ -39,7 +39,7 @@ ADDITIONAL_GUI_LIBS += -lDSStore
 ADDITIONAL_INCLUDE_DIRS += -I../DSStore
 
 # Library path for DSStore (built as sibling subproject)
-ADDITIONAL_LIB_DIRS += -L../DSStore/obj
+ADDITIONAL_LIB_DIRS += -L../DSStore/$(GNUSTEP_OBJ_DIR)
 
 Workspace_RESOURCE_FILES = \
   Resources/Icons/* \
