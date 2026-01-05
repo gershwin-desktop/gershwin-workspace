@@ -224,23 +224,62 @@ static NetworkVolumeManager *sharedInstance = nil;
   NSArray *components = [baseName componentsSeparatedByCharactersInSet:invalidChars];
   NSString *sanitizedName = [components componentsJoinedByString:@"-"];
   
-  /* Find an unused mount point name */
-  NSString *mountPoint = [networkDir stringByAppendingPathComponent:sanitizedName];
-  int counter = 2;
-  while ([fm fileExistsAtPath:mountPoint]) {
-    mountPoint = [networkDir stringByAppendingPathComponent:
-                  [NSString stringWithFormat:@"%@-%d", sanitizedName, counter]];
-    counter++;
+  /* Find an unused mount point name, preferring to reuse empty directories */
+  NSString *mountPoint = nil;
+  
+  /* First, check if base name exists and is empty */
+  NSString *baseMountPoint = [networkDir stringByAppendingPathComponent:sanitizedName];
+  if ([fm fileExistsAtPath:baseMountPoint isDirectory:&isDir] && isDir) {
+    NSError *contentsError = nil;
+    NSArray *contents = [fm contentsOfDirectoryAtPath:baseMountPoint error:&contentsError];
+    if (!contentsError && [contents count] == 0) {
+      NSLog(@"NetworkVolumeManager: Reusing empty directory at %@", baseMountPoint);
+      mountPoint = baseMountPoint;
+    }
   }
   
-  /* Create the mount point directory */
+  /* If base name wasn't empty, look for the first empty numbered directory */
+  if (!mountPoint) {
+    int counter = 2;
+    BOOL foundEmpty = NO;
+    while (counter <= 100 && !foundEmpty) {  /* Limit search to avoid infinite loop */
+      NSString *numberedMountPoint = [networkDir stringByAppendingPathComponent:
+                                      [NSString stringWithFormat:@"%@-%d", sanitizedName, counter]];
+      if ([fm fileExistsAtPath:numberedMountPoint isDirectory:&isDir] && isDir) {
+        NSError *contentsError = nil;
+        NSArray *contents = [fm contentsOfDirectoryAtPath:numberedMountPoint error:&contentsError];
+        if (!contentsError && [contents count] == 0) {
+          NSLog(@"NetworkVolumeManager: Reusing empty directory at %@", numberedMountPoint);
+          mountPoint = numberedMountPoint;
+          foundEmpty = YES;
+        }
+      }
+      counter++;
+    }
+  }
+  
+  /* If no empty directories found, create a new one */
+  if (!mountPoint) {
+    int counter = 2;
+    mountPoint = [networkDir stringByAppendingPathComponent:sanitizedName];
+    while ([fm fileExistsAtPath:mountPoint]) {
+      mountPoint = [networkDir stringByAppendingPathComponent:
+                    [NSString stringWithFormat:@"%@-%d", sanitizedName, counter]];
+      counter++;
+    }
+    NSLog(@"NetworkVolumeManager: Creating new mount point at %@", mountPoint);
+  }
+  
+  /* Create the mount point directory if it doesn't exist */
   NSError *error = nil;
-  if (![fm createDirectoryAtPath:mountPoint 
-     withIntermediateDirectories:YES 
-                      attributes:nil 
-                           error:&error]) {
-    NSLog(@"NetworkVolumeManager: Failed to create mount point %@: %@", mountPoint, error);
-    return nil;
+  if (![fm fileExistsAtPath:mountPoint]) {
+    if (![fm createDirectoryAtPath:mountPoint 
+       withIntermediateDirectories:YES 
+                        attributes:nil 
+                             error:&error]) {
+      NSLog(@"NetworkVolumeManager: Failed to create mount point %@: %@", mountPoint, error);
+      return nil;
+    }
   }
   
   NSLog(@"NetworkVolumeManager: Created mount point at %@", mountPoint);
