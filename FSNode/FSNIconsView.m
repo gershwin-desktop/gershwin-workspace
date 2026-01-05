@@ -94,6 +94,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   RELEASE (backColor);
   RELEASE (textColor);
   RELEASE (disabledTextColor);
+  RELEASE (backgroundImage);
   RELEASE (customIconPositions);
 
   [super dealloc];
@@ -305,17 +306,17 @@ static void GWHighlightFrameRect(NSRect aRect)
           if (posValue)
             {
               // Use custom position from DS_Store
-              NSPoint macPos = [posValue pointValue];
+              NSPoint dsStorePos = [posValue pointValue];
               
-              // Convert from Mac coordinates (origin top-left, Y increases downward)
+              // Convert from .DS_Store coordinates (origin top-left, Y increases downward)
               // to GNUstep coordinates (origin bottom-left, Y increases upward)
-              // Mac position is the top-left corner of the icon
-              float gnustepY = svr.size.height - macPos.y - gridSize.height;
+              // .DS_Store position is the top-left corner of the icon
+              float gnustepY = svr.size.height - dsStorePos.y - gridSize.height;
               
-              irects[i] = NSMakeRect(macPos.x, gnustepY, gridSize.width, gridSize.height);
+              irects[i] = NSMakeRect(dsStorePos.x, gnustepY, gridSize.width, gridSize.height);
               
-              NSLog(@"║ ✓ '%@': Mac(%.0f,%.0f) → GNUstep(%.0f,%.0f)", 
-                    filename, macPos.x, macPos.y, macPos.x, gnustepY);
+              NSLog(@"║ ✓ '%@': DS_Store(%.0f,%.0f) → GNUstep(%.0f,%.0f)", 
+                    filename, dsStorePos.x, dsStorePos.y, dsStorePos.x, gnustepY);
               
               // Track bounds for view sizing
               if (gnustepY + gridSize.height > maxY) maxY = gnustepY + gridSize.height;
@@ -1039,8 +1040,38 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (void)drawRect:(NSRect)rect
 {
   [super drawRect: rect];
-  [backColor set];
-  NSRectFill(rect);
+  
+  // Draw background image if set, otherwise use solid color
+  if (backgroundImage)
+    {
+      // Get the bounds and image size
+      NSRect bounds = [self bounds];
+      NSSize imageSize = [backgroundImage size];
+      
+      // Spatial view backgrounds are positioned from bottom-left in our coordinate system
+      // (which corresponds to top-left in .DS_Store screen coordinates)
+      // The image is drawn at its natural size, positioned at the bottom-left corner
+      NSRect imageRect;
+      imageRect.origin = bounds.origin;
+      imageRect.size = imageSize;
+      
+      // In GNUstep, y=0 is at the bottom, but we want the image to appear
+      // as if it's positioned from the "top" visually (standard spatial view behavior)
+      // So we position it at the top of the view
+      imageRect.origin.y = bounds.size.height - imageSize.height;
+      
+      // Draw the background image
+      [backgroundImage drawInRect:imageRect
+                         fromRect:NSZeroRect
+                        operation:NSCompositeSourceOver
+                         fraction:1.0];
+    }
+  else
+    {
+      // Fall back to solid color background
+      [backColor set];
+      NSRectFill(rect);
+    }
 }
 
 - (BOOL)acceptsFirstMouse:(NSEvent *)theEvent
@@ -2085,6 +2116,17 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (NSColor *)backgroundColor
 {
   return backColor;
+}
+
+- (void)setBackgroundImage:(NSImage *)image
+{
+  ASSIGN (backgroundImage, image);
+  [self setNeedsDisplay: YES];
+}
+
+- (NSImage *)backgroundImage
+{
+  return backgroundImage;
 }
 
 - (void)setTextColor:(NSColor *)acolor

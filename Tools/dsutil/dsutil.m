@@ -431,28 +431,38 @@ int getBackground(NSString *storePath) {
         return 1;
     }
     
-    // Try to get background color entry directly
-    DSStoreEntry *colorEntry = [store entryForFilename:@"." code:@"BKGD"];
-    if (colorEntry && [[colorEntry type] isEqualToString:@"blob"]) {
-        NSData *data = [colorEntry value];
-        if ([data length] >= 6) {
-            const unsigned char *bytes = [data bytes];
-            uint16_t red = (bytes[0] << 8) | bytes[1];
-            uint16_t green = (bytes[2] << 8) | bytes[3];
-            uint16_t blue = (bytes[4] << 8) | bytes[5];
-            printf("Background: color %.3f %.3f %.3f\n", 
-                   red/65535.0, green/65535.0, blue/65535.0);
-            return 0;
+    // Check BKGD entry to determine background type
+    DSStoreEntry *bkgdEntry = [store entryForFilename:@"." code:@"BKGD"];
+    if (bkgdEntry && [[bkgdEntry type] isEqualToString:@"blob"]) {
+        NSData *data = [bkgdEntry value];
+        if ([data length] >= 4) {
+            const char *bytes = [data bytes];
+            
+            // Check background type (first 4 bytes)
+            if (strncmp(bytes, "DefB", 4) == 0) {
+                printf("Background: default\n");
+                return 0;
+            } else if (strncmp(bytes, "ClrB", 4) == 0 && [data length] >= 10) {
+                // Color background
+                const unsigned char *colorBytes = (const unsigned char *)bytes;
+                uint16_t red = (colorBytes[4] << 8) | colorBytes[5];
+                uint16_t green = (colorBytes[6] << 8) | colorBytes[7];
+                uint16_t blue = (colorBytes[8] << 8) | colorBytes[9];
+                printf("Background: color %.3f %.3f %.3f\n", 
+                       red/65535.0, green/65535.0, blue/65535.0);
+                return 0;
+            } else if (strncmp(bytes, "PctB", 4) == 0) {
+                // Picture background - get path from pict entry
+                NSString *imagePath = [store backgroundImagePathForDirectory];
+                if (imagePath) {
+                    printf("Background: image %s\n", [imagePath UTF8String]);
+                    return 0;
+                }
+            }
         }
     }
     
-    NSString *imagePath = [store backgroundImagePathForDirectory];
-    if (imagePath) {
-        printf("Background: image %s\n", [imagePath UTF8String]);
-    } else {
-        printf("Background: default\n");
-    }
-    
+    printf("Background: default\n");
     return 0;
 }
 

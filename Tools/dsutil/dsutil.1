@@ -63,16 +63,20 @@ Set icon position in .DS_Store coordinates (pixels from top-left).
 .SH BACKGROUND COMMANDS
 .TP
 .BI "get-bg " file
-Get background settings for a directory.
+Get background settings for a directory. Shows background type (default, color, or image) and details.
+For image backgrounds, displays the resolved image path.
 .TP
 .BI "set-bg-color " "file r g b"
 Set solid color background. Colors are specified as floating-point values 0.0-1.0.
+Stores background in modern binary plist format (icvp) for best interoperability.
 .TP
 .BI "set-bg-image " "file path"
-Set background image.
+Set background image. The path should be an absolute path to an image file (PNG, JPEG, etc.).
+For maximum interoperability, the image is referenced using a simplified path storage format.
+Modern .DS_Store files store this in the icvp plist's backgroundImageAlias field.
 .TP
 .BI "remove-bg " file
-Remove background settings.
+Remove background settings from the directory metadata.
 .SH VIEW COMMANDS
 .TP
 .BI "get-view " file
@@ -172,6 +176,50 @@ Remove field.
 .TP
 .BI "fields " "file filename"
 List all fields for a filename.
+.SH .DS_STORE FORMAT AND INTEROPERABILITY
+The .DS_Store format has evolved over time, with modern files using binary plist formats
+that provide richer metadata and better extensibility. This tool supports both legacy and
+modern formats for maximum interoperability.
+.PP
+.B Format Preferences (Reading):
+.RS
+The tool automatically detects and reads from both modern and legacy formats:
+.TP
+.B Icon View Settings
+Prefers
+.I icvp
+(binary plist) over legacy
+.I icvo
+(18-26 byte binary). The icvp format includes comprehensive settings including background images
+stored in the backgroundImageAlias key.
+.TP
+.B Window Settings
+Prefers
+.I bwsp
+(binary plist) over legacy
+.I fwi0
+(16 byte binary). The bwsp format includes WindowBounds, sidebar width, and toolbar visibility.
+.TP
+.B List View Settings
+Prefers
+.I lsvp
+or
+.I lsvP
+(binary plist) over legacy
+.I lsvo
+(76 byte binary).
+.TP
+.B Background Images
+Modern files store background images in the icvp plist's backgroundImageAlias field.
+Legacy files use separate BKGD and pict entries. Both formats are supported.
+.RE
+.PP
+.B Format Preferences (Writing):
+.RS
+For maximum interoperability, this tool writes using modern binary plist formats.
+When setting backgrounds, view options, or window settings, the tool creates or updates
+the appropriate plist entries (icvp, bwsp, lsvp) rather than legacy binary formats.
+.RE
 .SH FIELD CODES
 Common four-character field codes used in .DS_Store files:
 .TP
@@ -210,7 +258,7 @@ Background settings (12 bytes: 4-byte type code DefB/ClrB/PctB followed by type-
 ClrB: 6 bytes RGB as 2-byte big-endian unsigned integers per channel.
 .TP
 .B cmmt
-File comments (UTF-16 big-endian string, also stored in com.apple.metadata:kMDItemFinderComment xattr).
+File comments (UTF-16 big-endian string, also stored in extended attributes on some systems).
 .TP
 .B icgo
 Icon grid options (8 bytes: two 4-byte big-endian integers, purpose partially understood).
@@ -361,7 +409,7 @@ Per-directory metadata file storing icon positions, view settings, and file meta
 was written by Simon Peter for the Gershwin project to provide .DS_Store interoperability
 with other operating systems that use .DS_Store files.
 This implementation is based on documentation provided by third-party sources and is intended
-to enable cross-platform compatibility with macOS and other systems that create and use .DS_Store metadata files.
+to enable cross-platform compatibility and interoperability with systems that create and use .DS_Store metadata files.
 .SH AUTHOR
 Simon Peter
 .SH COPYRIGHT

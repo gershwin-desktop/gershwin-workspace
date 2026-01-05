@@ -69,6 +69,8 @@
   NSColor *textColor;
   NSColor *disabledTextColor;
   BOOL transparentSelection;
+  
+  NSImage *backgroundImage;  // Background image for spatial views
 
   FSNodeRep *fsnodeRep;
 
@@ -167,6 +169,8 @@
                        wasCut:(BOOL)cut;
 - (void)setBackgroundColor:(NSColor *)acolor;
 - (NSColor *)backgroundColor;
+- (void)setBackgroundImage:(NSImage *)image;
+- (NSImage *)backgroundImage;
 - (void)setTextColor:(NSColor *)acolor;
 - (NSColor *)textColor;
 - (NSColor *)disabledTextColor;

@@ -227,6 +227,78 @@
     return [self load];
 }
 
+#pragma mark - Alias Resolution
+
+/**
+ * Resolve an alias record to a file path.
+ * This is a simplified implementation that looks for common path patterns.
+ * Native alias records are complex and contain multiple fallback strategies.
+ */
+- (NSString *)resolveAliasData:(NSData *)aliasData relativeTo:(NSString *)baseDir
+{
+    if (!aliasData || [aliasData length] < 150) {
+        return nil;
+    }
+    
+    // Alias records are complex, but typically contain:
+    // - Volume name
+    // - Directory IDs
+    // - Full path as UTF-16 or UTF-8 string
+    // For now, we'll try to find ASCII/UTF-8 path strings in the data
+    
+    const unsigned char *bytes = [aliasData bytes];
+    NSUInteger len = [aliasData length];
+    
+    // Look for path-like strings in the alias data
+    // Common patterns: starts with '/' or contains '.bg/' etc.
+    NSString *dataString = [[NSString alloc] initWithData:aliasData 
+                                                  encoding:NSUTF8StringEncoding];
+    if (dataString) {
+        // Try to extract paths using regex
+        NSRegularExpression *regex = [NSRegularExpression 
+            regularExpressionWithPattern:@"(/[^\\x00-\\x1F]+\\.(png|jpg|jpeg|tiff|gif|bmp))"
+            options:NSRegularExpressionCaseInsensitive
+            error:nil];
+        
+        NSArray *matches = [regex matchesInString:dataString
+                                          options:0
+                                            range:NSMakeRange(0, [dataString length])];
+        
+        if ([matches count] > 0) {
+            NSTextCheckingResult *match = [matches objectAtIndex:0];
+            NSString *path = [dataString substringWithRange:[match range]];
+            [dataString release];
+            
+            // Check if file exists
+            if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
+                return path;
+            }
+            
+            // Try relative to base directory
+            NSString *relativePath = [baseDir stringByAppendingPathComponent:path];
+            if ([[NSFileManager defaultManager] fileExistsAtPath:relativePath]) {
+                return relativePath;
+            }
+        }
+        [dataString release];
+    }
+    
+    // Fallback: Look for common .bg folder pattern
+    NSString *bgPath = [baseDir stringByAppendingPathComponent:@".bg"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath:bgPath]) {
+        NSArray *contents = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:bgPath error:nil];
+        for (NSString *file in contents) {
+            if ([[file pathExtension] isEqualToString:@"png"] ||
+                [[file pathExtension] isEqualToString:@"jpg"] ||
+                [[file pathExtension] isEqualToString:@"jpeg"]) {
+                return [bgPath stringByAppendingPathComponent:file];
+            }
+        }
+    }
+    
+    return nil;
+}
+
 #pragma mark - Private Loading Methods
 
 - (void)loadDirectoryEntriesFromStore:(DSStore *)store
@@ -236,18 +308,25 @@
     NSArray *dirCodes = [store allCodesForFilename:@"."];
     NSLog(@"║ Available codes for directory: %@", dirCodes);
     
-    // Load window geometry - prefer new format (bwsp) over old (fwi0)
-    // bwsp: Modern binary plist with WindowBounds string (10.6+)
-    // fwi0: Legacy 16-byte binary format with window rect
-    [self loadBrowserWindowSettingsFromStore:store];  // New format (includes geometry)
-    [self loadWindowGeometryFromStore:store];          // Old format (fallback)
+    // IMPORTANT: Format Preferences for Interoperability
+    // Modern .DS_Store files use binary plist formats which are preferred:
+    //   - bwsp: Window settings (preferred over legacy fwi0)
+    //   - icvp: Icon view settings (preferred over legacy icvo)
+    //   - lsvp/lsvP: List view settings (preferred over legacy lsvo)
+    // Background images are stored in icvp's backgroundImageAlias for modern files
+    
+    // Load window geometry - prefer modern format (bwsp) over legacy (fwi0)
+    // bwsp: Modern binary plist with WindowBounds string and sidebar settings
+    // fwi0: Legacy 16-byte binary format with window rect only
+    [self loadBrowserWindowSettingsFromStore:store];  // Modern format (includes geometry)
+    [self loadWindowGeometryFromStore:store];          // Legacy format (fallback)
     
     // Load view style (vstl)
     [self loadViewStyleFromStore:store];
     
-    // Load icon view options - prefer new format (icvp) over old (icvo)
-    // icvp: Modern binary plist with comprehensive settings (10.6+)
-    // icvo: Legacy 18-26 byte binary format
+    // Load icon view options - prefer modern format (icvp) over legacy (icvo)
+    // icvp: Modern binary plist with comprehensive settings including backgrounds
+    // icvo: Legacy 18-26 byte binary format with limited settings
     [self loadIconViewPlistFromStore:store];   // New format (try first)
     [self loadIconViewOptionsFromStore:store]; // Old format (fallback)
     
@@ -561,15 +640,44 @@
                       _labelPosition == DSStoreLabelPositionBottom ? @"bottom" : @"right");
             }
             
-            // Extract background color
-            id bgColorObj = [plist objectForKey:@"backgroundColorRed"];
-            if (bgColorObj) {
-                CGFloat r = [[plist objectForKey:@"backgroundColorRed"] floatValue];
-                CGFloat g = [[plist objectForKey:@"backgroundColorGreen"] floatValue];
-                CGFloat b = [[plist objectForKey:@"backgroundColorBlue"] floatValue];
-                _backgroundColor = [[NSColor colorWithCalibratedRed:r green:g blue:b alpha:1.0] retain];
-                _backgroundType = DSStoreBackgroundColor;
-                NSLog(@"║   Background color from plist: R=%.2f G=%.2f B=%.2f", r, g, b);
+            // Extract background settings
+            // Check background type first
+            id bgTypeObj = [plist objectForKey:@"backgroundType"];
+            int bgType = bgTypeObj ? [bgTypeObj intValue] : 0;
+            
+            if (bgType == 2) {
+                // Picture background
+                _backgroundType = DSStoreBackgroundPicture;
+                NSLog(@"║   Background type from plist: picture (2)");
+                
+                // Try to extract background image alias
+                id bgImageAlias = [plist objectForKey:@"backgroundImageAlias"];
+                if (bgImageAlias && [bgImageAlias isKindOfClass:[NSData class]]) {
+                    // This is an alias record - try to resolve it to a path
+                    NSData *aliasData = (NSData *)bgImageAlias;
+                    NSString *resolvedPath = [self resolveAliasData:aliasData relativeTo:_directoryPath];
+                    if (resolvedPath) {
+                        [_backgroundImagePath release];
+                        _backgroundImagePath = [resolvedPath copy];
+                        NSLog(@"║   Background image from alias: %@", _backgroundImagePath);
+                    } else {
+                        NSLog(@"║   ⚠ Could not resolve background image alias (%lu bytes)", 
+                              (unsigned long)[aliasData length]);
+                    }
+                }
+            } else if (bgType == 1) {
+                // Color background
+                id bgColorObj = [plist objectForKey:@"backgroundColorRed"];
+                if (bgColorObj) {
+                    CGFloat r = [[plist objectForKey:@"backgroundColorRed"] floatValue];
+                    CGFloat g = [[plist objectForKey:@"backgroundColorGreen"] floatValue];
+                    CGFloat b = [[plist objectForKey:@"backgroundColorBlue"] floatValue];
+                    _backgroundColor = [[NSColor colorWithCalibratedRed:r green:g blue:b alpha:1.0] retain];
+                    _backgroundType = DSStoreBackgroundColor;
+                    NSLog(@"║   Background type from plist: color (1) R=%.2f G=%.2f B=%.2f", r, g, b);
+                }
+            } else {
+                NSLog(@"║   Background type from plist: default (0)");
             }
             
         } else {
@@ -611,18 +719,20 @@
             } else if (strncmp(bytes, "PctB", 4) == 0) {
                 _backgroundType = DSStoreBackgroundPicture;
                 NSLog(@"║ ✓ BKGD: Picture background (PctB)");
-                // Picture path stored in 'pict' entry as Alias record
+                
+                // Use DSStore's method to resolve the background image path
+                NSString *imagePath = [store backgroundImagePathForDirectory];
+                if (imagePath && [imagePath length] > 0) {
+                    [_backgroundImagePath release];
+                    _backgroundImagePath = [imagePath copy];
+                    NSLog(@"║   Background image path: %@", _backgroundImagePath);
+                } else {
+                    NSLog(@"║   ⚠ Could not resolve background image path");
+                }
             }
         }
     } else {
         NSLog(@"║ ○ No BKGD (background) entry");
-    }
-    
-    // Check for background picture path
-    entry = [store entryForFilename:@"." code:@"pict"];
-    if (entry && [[entry type] isEqualToString:@"blob"]) {
-        // This is an alias record - for now just log it
-        NSLog(@"║ ✓ pict (Background Picture): alias data present");
     }
 }
 

@@ -14,7 +14,7 @@ DSStore provides .DS_Store interoperability through a pure GNUstep/Objective-C i
 
 **Architecture**: Built as an internal gworkspace subproject with companion command-line tool in `Tools/dsutil/`.
 
-**Interoperability**: This library is designed to enable cross-platform compatibility with .DS_Store files created by macOS and other systems. The implementation is based on documentation provided by third-party sources and enables reading and writing of .DS_Store metadata for better interoperability with other operating systems.
+**Interoperability**: This library is designed to enable cross-platform compatibility with .DS_Store files created by various systems. The implementation is based on documentation provided by third-party sources and enables reading and writing of .DS_Store metadata for better interoperability across operating systems.
 
 ## Features
 
@@ -25,7 +25,8 @@ DSStore provides .DS_Store interoperability through a pure GNUstep/Objective-C i
 - **Command-Line Tool**: Complete CLI interface for inspection and modification
 - **GNUstep Integration**: Native Objective-C with full Foundation compatibility
 - **.DS_Store Interoperability**: Coordinate conversion between .DS_Store and GNUstep coordinate systems
-- **Cross-Platform Compatibility**: Works with .DS_Store files from macOS and other systems
+- **Cross-Platform Compatibility**: Works with .DS_Store files from various systems
+- **Modern Format Support**: Prefers modern binary plist formats (icvp, bwsp, lsvp) for reading and writing
 
 ## Entry Types and Field Codes
 
@@ -397,13 +398,20 @@ Additional documentation: [DSStore/fields.md](fields.md) - Complete .DS_Store fi
 
 ## About This Implementation
 
-**Based On**: This library is built on documentation provided by third-party sources and research into the .DS_Store file format. It is designed to enable interoperability with .DS_Store files created by macOS and other operating systems, allowing GNUstep and Unix-like systems to read, understand, and manipulate the metadata stored in these files.
+**Based On**: This library is built on documentation provided by third-party sources and research into the .DS_Store file format. It is designed to enable interoperability with .DS_Store files created by various operating systems, allowing GNUstep and Unix-like systems to read, understand, and manipulate the metadata stored in these files.
 
-**Interoperability Goal**: To provide seamless cross-platform compatibility, enabling users on Unix-like systems to work with .DS_Store metadata without losing formatting or layout information when exchanging files with macOS systems.
+**Interoperability Goal**: To provide seamless cross-platform compatibility, enabling users on Unix-like systems to work with .DS_Store metadata without losing formatting or layout information when exchanging files with other systems.
+
+**Format Preferences**: For best interoperability, this library prefers modern binary plist formats:
+- **Icon view settings**: `icvp` (binary plist) over legacy `icvo` (18-26 byte binary)
+- **Window settings**: `bwsp` (binary plist) over legacy `fwi0` (16 byte binary)
+- **List view settings**: `lsvp`/`lsvP` (binary plist) over legacy `lsvo` (76 byte binary)
+- **Background images**: Stored in `icvp` plist's `backgroundImageAlias` key for modern files, with fallback to `BKGD`/`pict` entries for legacy files
+
+The library automatically detects and reads from both modern and legacy formats, but writes using the modern formats for maximum compatibility.
 
 **Resources**: 
 - [DSStoreParser documentation](https://github.com/forensiclunch/DSStoreParser/blob/495485b263adfb56f13bca0c68d640b2e462948b/README.md#L35)
-- [DSStoreView application](https://github.com/macmade/DSStoreView)
 
 ## License
 

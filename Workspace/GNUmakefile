@@ -38,6 +38,9 @@ ADDITIONAL_GUI_LIBS += -lDSStore
 # Include path for DSStore headers (library built as sibling subproject)
 ADDITIONAL_INCLUDE_DIRS += -I../DSStore
 
+# Library path for DSStore (built as sibling subproject)
+ADDITIONAL_LIB_DIRS += -L../DSStore/obj
+
 Workspace_RESOURCE_FILES = \
   Resources/Icons/* \
   Resources/Network.icns \

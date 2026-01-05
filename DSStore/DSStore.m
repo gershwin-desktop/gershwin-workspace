@@ -700,16 +700,34 @@ static uint32_t swapBytes32(uint32_t x) {
 }
 
 - (NSString *)backgroundImagePathForDirectory {
-    DSStoreEntry *entry = [self entryForFilename:@"." code:@"BKGD"];
-    if (entry) {
+    // Check for pict entry with ustr type (our simplified format)
+    DSStoreEntry *entry = [self entryForFilename:@"." code:@"pict"];
+    if (entry && [[entry type] isEqualToString:@"ustr"]) {
+        return (NSString *)[entry value];
+    }
+    
+    // Check for pict entry with blob type (alias record - native format)
+    if (entry && [[entry type] isEqualToString:@"blob"]) {
+        // For .DS_Store files with alias records, try to extract path
+        // This is a simplified extraction - real alias parsing is complex
         return [entry backgroundImagePath];
     }
+    
     return nil;
 }
 
 - (void)setBackgroundImagePathForDirectory:(NSString *)imagePath {
-    DSStoreEntry *entry = [DSStoreEntry backgroundImageEntryForFile:@"." imagePath:imagePath];
-    [self setEntry:entry];
+    // Set BKGD entry to indicate picture background
+    DSStoreEntry *bkgdEntry = [DSStoreEntry backgroundImageEntryForFile:@"." imagePath:imagePath];
+    [self setEntry:bkgdEntry];
+    
+    // Store the actual path in a "pict" entry as ustr for simplicity
+    // (For full interoperability, native systems use alias records which are more complex)
+    DSStoreEntry *pictEntry = [[[DSStoreEntry alloc] initWithFilename:@"." 
+                                                                 code:@"pict" 
+                                                                 type:@"ustr" 
+                                                                value:imagePath] autorelease];
+    [self setEntry:pictEntry];
 }
 
 - (NSString *)viewStyleForDirectory {

@@ -144,7 +144,7 @@
     }
 
     // ================================================================
-    // DS_Store Integration - Load comprehensive Mac metadata
+    // DS_Store Integration - Load comprehensive metadata
     // ================================================================
     DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path]];
     
@@ -195,7 +195,7 @@
     [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
 
     // ================================================================
-    // Apply window geometry from DS_Store (Mac-compatible)
+    // Apply window geometry from DS_Store (interoperability)
     // ================================================================
     BOOL geometryApplied = NO;
     NSRect dsGeometry = NSZeroRect;  // Declare outside if block for later reference
@@ -208,7 +208,7 @@
         NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
         NSLog(@"║      APPLYING DS_STORE WINDOW GEOMETRY                           ║");
         NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
-        NSLog(@"║ Mac frame: %@", NSStringFromRect(dsInfo.windowFrame));
+        NSLog(@"║ DS_Store frame: %@", NSStringFromRect(dsInfo.windowFrame));
         NSLog(@"║ GNUstep frame: %@", NSStringFromRect(dsGeometry));
         NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
         
@@ -319,6 +319,24 @@
         NSLog(@"║ Setting background color: %@", dsInfo.backgroundColor);
         if ([nodeView respondsToSelector:@selector(setBackgroundColor:)]) {
           [(FSNIconsView *)nodeView setBackgroundColor:dsInfo.backgroundColor];
+        }
+      }
+      
+      // Apply background image if available
+      if (dsInfo.backgroundType == DSStoreBackgroundPicture && dsInfo.backgroundImagePath) {
+        NSLog(@"║ Setting background image: %@", dsInfo.backgroundImagePath);
+        
+        // Try to load the image
+        NSImage *bgImage = [[NSImage alloc] initWithContentsOfFile:dsInfo.backgroundImagePath];
+        if (bgImage) {
+          NSLog(@"║   ✓ Background image loaded: %.0fx%.0f", 
+                [bgImage size].width, [bgImage size].height);
+          if ([nodeView respondsToSelector:@selector(setBackgroundImage:)]) {
+            [(FSNIconsView *)nodeView setBackgroundImage:bgImage];
+          }
+          [bgImage release];
+        } else {
+          NSLog(@"║   ✗ Failed to load background image from: %@", dsInfo.backgroundImagePath);
         }
       }
       
