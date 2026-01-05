@@ -27,6 +27,7 @@
 #include <math.h>
 
 #import <AppKit/AppKit.h>
+#import "DSStoreInfo.h"
 #import "GWSpatialViewer.h"
 #import "GWViewersManager.h"
 #import "GWViewerWindow.h"
@@ -40,17 +41,18 @@
 #import "GWFunctions.h"
 #import "FSNodeRep.h"
 #import "FSNIcon.h"
+#import "FSNIconsView.h"
 #import "FSNFunctions.h"
  
 #define DEFAULT_INCR 150
 #define MIN_W_HEIGHT 180
-
 
 @implementation GWSpatialViewer
 
 - (void)dealloc
 {
   [nc removeObserver: self];
+  [self teardownDSStoreWatcher];
   
   RELEASE (baseNode);
   RELEASE (baseNodeArray);
@@ -60,6 +62,8 @@
   RELEASE (vwrwin);
   RELEASE (viewType);
   RELEASE (viewerPrefs);
+  RELEASE (dsStoreInfo);
+  RELEASE (dsStorePath);
   
   [super dealloc];
 }
@@ -84,6 +88,10 @@
     manager = [GWViewersManager viewersManager];
     gworkspace = [Workspace gworkspace];
     nc = [NSNotificationCenter defaultCenter];
+
+    // Initialize DS_Store watching
+    dsStoreInfo = nil;
+    dsStorePath = nil;
 
     defEntry = [defaults objectForKey: @"browserColsWidth"];
     if (defEntry) {
@@ -135,7 +143,39 @@
       }
     }
 
+    // ================================================================
+    // DS_Store Integration - Load comprehensive Mac metadata
+    // ================================================================
+    DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path]];
+    
+    // Determine view type from DS_Store if available, otherwise use viewerPrefs
     viewType = [viewerPrefs objectForKey: @"viewtype"];
+    
+    if (dsInfo.loaded && dsInfo.hasViewStyle) {
+      NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+      NSLog(@"║      APPLYING DS_STORE VIEW STYLE                                ║");
+      NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+      
+      switch (dsInfo.viewStyle) {
+        case DSStoreViewStyleIcon:
+          viewType = @"Icon";
+          NSLog(@"║ View style from DS_Store: Icon");
+          break;
+        case DSStoreViewStyleList:
+          viewType = @"List";
+          NSLog(@"║ View style from DS_Store: List");
+          break;
+        case DSStoreViewStyleColumn:
+          viewType = @"Browser";
+          NSLog(@"║ View style from DS_Store: Browser (column)");
+          break;
+        default:
+          viewType = @"Icon";
+          NSLog(@"║ View style from DS_Store: defaulting to Icon");
+          break;
+      }
+      NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+    }
 
     if (viewType == nil) {
       viewType = @"Icon";
@@ -154,16 +194,57 @@
     [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_W_HEIGHT)];    
     [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
 
-    defEntry = [viewerPrefs objectForKey: @"geometry"];
-
-    if (defEntry) {
-      [vwrwin setFrameFromString: defEntry];
-    } else {
-      NSRect r = NSMakeRect(200, 200, resizeIncrement * 3, 300);
+    // ================================================================
+    // Apply window geometry from DS_Store (Mac-compatible)
+    // ================================================================
+    BOOL geometryApplied = NO;
+    NSRect dsGeometry = NSZeroRect;  // Declare outside if block for later reference
     
-      [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
-               display: NO];
+    if (dsInfo.loaded && dsInfo.hasWindowFrame) {
+      dsGeometry = [dsInfo gnustepWindowFrameForScreen:[NSScreen mainScreen]];
+      
+      // Validate geometry
+      if (dsGeometry.size.width > 0 && dsGeometry.size.height > 0) {
+        NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+        NSLog(@"║      APPLYING DS_STORE WINDOW GEOMETRY                           ║");
+        NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+        NSLog(@"║ Mac frame: %@", NSStringFromRect(dsInfo.windowFrame));
+        NSLog(@"║ GNUstep frame: %@", NSStringFromRect(dsGeometry));
+        NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+        
+        [vwrwin setFrame:dsGeometry display:YES];
+        [vwrwin makeKeyAndOrderFront:nil];
+        geometryApplied = YES;
+      }
     }
+    
+    if (!geometryApplied) {
+      NSLog(@"No valid DS_Store geometry, using fallback methods");
+      defEntry = [viewerPrefs objectForKey: @"geometry"];
+      if (defEntry) {
+        [vwrwin setFrameFromString: defEntry];
+      } else {
+        NSRect r = NSMakeRect(200, 200, resizeIncrement * 3, 300);
+        [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
+                 display: NO];
+      }
+    }
+    
+    // Log final window frame for verification
+    NSRect finalFrame = [vwrwin frame];
+    NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+    NSLog(@"║      FINAL WINDOW FRAME VERIFICATION                          ║");
+    NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+    if (geometryApplied) {
+      NSLog(@"║ Source: DS_Store geometry");
+      NSLog(@"║ DS_Store frame: %@", NSStringFromRect(dsInfo.windowFrame));
+      NSLog(@"║ Final window frame: %@", NSStringFromRect(finalFrame));
+      NSLog(@"║ Match: %@", NSEqualRects(dsGeometry, finalFrame) ? @"✓ YES" : @"⚠ NO (may differ due to screen constraints)");
+    } else {
+      NSLog(@"║ Source: Fallback (preferences or default)");
+      NSLog(@"║ Final window frame: %@", NSStringFromRect(finalFrame));
+    }
+    NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
 
     if (rootviewer) {
       NSString *path = [baseNode path];
@@ -173,11 +254,9 @@
         [vwrwin setTitle: [baseNode name]];
       }
     } else {
-      if (rootViewerKey == nil) {   
-        [vwrwin setTitle: [NSString stringWithFormat: @"%@ - %@", [node name], [node parentPath]]];   
-      } else {
-        [vwrwin setTitle: [NSString stringWithFormat: @"%@", [node name]]];   
-      }
+      /* In spatial mode show only the last path component (node name),
+         to be consistent with non-spatial modes. */
+      [vwrwin setTitle: [node name]];   
     }
 
     [self createSubviews];
@@ -203,6 +282,84 @@
 	  [scroll setDocumentView: nodeView];	
     RELEASE (nodeView);                 
     [nodeView showContentsOfNode: baseNode]; 
+
+    // ================================================================
+    // Apply DS_Store icon settings AFTER showContentsOfNode loads prefs
+    // (This ensures DS_Store settings override loaded preferences)
+    // ================================================================
+    if ([viewType isEqual: @"Icon"] && dsInfo.loaded) {
+      NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+      NSLog(@"║      APPLYING DS_STORE ICON VIEW SETTINGS                        ║");
+      NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+      
+      // Apply icon size if available
+      if (dsInfo.hasIconSize && dsInfo.iconSize > 0 && dsInfo.iconSize <= 512) {
+        NSLog(@"║ Setting icon size: %d", dsInfo.iconSize);
+        if ([nodeView respondsToSelector:@selector(setIconSize:)]) {
+          [(FSNIconsView *)nodeView setIconSize:dsInfo.iconSize];
+          NSLog(@"║ Icon size applied. Current: %d", [(FSNIconsView *)nodeView iconSize]);
+        } else {
+          NSLog(@"║ ✗ nodeView does not respond to setIconSize:");
+        }
+      }
+      
+      // Apply label position if available
+      if (dsInfo.hasLabelPosition) {
+        NSLog(@"║ Setting label position: %@", 
+              dsInfo.labelPosition == DSStoreLabelPositionBottom ? @"bottom" : @"right");
+        if ([nodeView respondsToSelector:@selector(setIconPosition:)]) {
+          NSCellImagePosition pos = (dsInfo.labelPosition == DSStoreLabelPositionBottom) 
+                                    ? NSImageAbove : NSImageLeft;
+          [(FSNIconsView *)nodeView setIconPosition:pos];
+        }
+      }
+      
+      // Apply background color if available
+      if (dsInfo.backgroundType == DSStoreBackgroundColor && dsInfo.backgroundColor) {
+        NSLog(@"║ Setting background color: %@", dsInfo.backgroundColor);
+        if ([nodeView respondsToSelector:@selector(setBackgroundColor:)]) {
+          [(FSNIconsView *)nodeView setBackgroundColor:dsInfo.backgroundColor];
+        }
+      }
+      
+      // Check for free icon positioning (DS_Store icon locations)
+      if ([dsInfo hasAnyIconPositions]) {
+        NSLog(@"║ Free positioning mode: ENABLED");
+        NSLog(@"║ Icons with custom positions: %lu", 
+              (unsigned long)[[dsInfo filenamesWithPositions] count]);
+        
+        // Build positions dictionary for FSNIconsView
+        NSMutableDictionary *iconPositions = [NSMutableDictionary dictionary];
+        for (NSString *filename in [dsInfo filenamesWithPositions]) {
+          DSStoreIconInfo *iconInfo = [dsInfo iconInfoForFilename:filename];
+          if (iconInfo && iconInfo.hasPosition) {
+            [iconPositions setObject:[NSValue valueWithPoint:iconInfo.position] 
+                              forKey:filename];
+            NSLog(@"║   '%@': (%.0f, %.0f)", filename, 
+                  iconInfo.position.x, iconInfo.position.y);
+          }
+        }
+        
+        // Enable free positioning mode on the icon view
+        if ([nodeView respondsToSelector:@selector(setFreePositioningEnabled:)]) {
+          [(FSNIconsView *)nodeView setCustomIconPositions:iconPositions];
+          [(FSNIconsView *)nodeView setFreePositioningEnabled:YES];
+        }
+      } else {
+        NSLog(@"║ Free positioning mode: disabled (no custom icon positions)");
+        
+        // Check icon arrangement setting
+        if (dsInfo.hasIconArrangement) {
+          if (dsInfo.iconArrangement == DSStoreIconArrangementNone) {
+            NSLog(@"║ Arrangement: none (but no custom positions available)");
+          } else {
+            NSLog(@"║ Arrangement: grid");
+          }
+        }
+      }
+      
+      NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+    } 
 
     /*
     * Beeing "spatial", we always set the selection in the browser
@@ -237,6 +394,9 @@
     [self updeateInfoLabels];
 
     [self scrollToBeginning];
+    
+    // Setup DS_Store file watcher for interoperability
+    [self setupDSStoreWatcher];
         
     [nc addObserver: self 
            selector: @selector(columnsWidthChanged:) 
@@ -244,7 +404,18 @@
              object: nil];
     
     invalidated = NO;
-    closing = NO;    
+    closing = NO;
+    
+    NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+    NSLog(@"║      GWSpatialViewer INITIALIZATION COMPLETE                     ║");
+    NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+    NSLog(@"║ Final window frame: %@", NSStringFromRect([vwrwin frame]));
+    NSLog(@"║ View type: %@", viewType);
+    NSLog(@"║ DS_Store loaded: %@", dsInfo.loaded ? @"YES" : @"NO");
+    if (dsInfo.loaded) {
+      NSLog(@"║ DS_Store icon positions: %lu", (unsigned long)[[dsInfo filenamesWithPositions] count]);
+    }
+    NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
   }
   
   return self;
@@ -437,6 +608,7 @@
 - (void)invalidate
 {
   invalidated = YES;
+  [self teardownDSStoreWatcher];
 }
 
 - (BOOL)invalidated
@@ -644,7 +816,12 @@
   if (invalidated == NO) {
     NSString *path = [info objectForKey: @"path"];
   
-    if ([nodeView isShowingPath: path]) {
+    // Check if this is a .DS_Store change
+    if (dsStorePath && [path isEqualToString: dsStorePath]) {
+      NSLog(@"║ DS_Store watcher: File changed, reloading settings");
+      [self reapplyDSStoreSettings];
+    }
+    else if ([nodeView isShowingPath: path]) {
       [nodeView watchedPathChanged: info];
       [self updeateInfoLabels];
     }
@@ -753,6 +930,113 @@
   /* Intentionally empty - declared in header but not used in this implementation */
 }
 
+//
+// DS_Store File Watching Methods
+//
+- (void)setupDSStoreWatcher
+{
+  NSString *path = [[baseNode path] stringByAppendingPathComponent:@".DS_Store"];
+  
+  // Only set up watcher for icon view
+  if ([viewType isEqual: @"Icon"] == NO) {
+    return;
+  }
+  
+  ASSIGN (dsStorePath, path);
+  
+  // Check if .DS_Store exists and load initial state
+  if ([[NSFileManager defaultManager] fileExistsAtPath: dsStorePath]) {
+    NSLog(@"║ DS_Store watcher: Monitoring %@", dsStorePath);
+    dsStoreInfo = [[DSStoreInfo infoForDirectoryPath: [baseNode path]] retain];
+    
+    // Add filesystem watcher for the .DS_Store file
+    [gworkspace addWatcherForPath: dsStorePath];
+  }
+}
+
+- (void)teardownDSStoreWatcher
+{
+  if (dsStorePath) {
+    NSLog(@"║ DS_Store watcher: Stopped monitoring");
+    [gworkspace removeWatcherForPath: dsStorePath];
+  }
+  
+  RELEASE (dsStoreInfo);
+  dsStoreInfo = nil;
+  RELEASE (dsStorePath);
+  dsStorePath = nil;
+}
+
+- (void)reapplyDSStoreSettings
+{
+  if (!nodeView) {
+    return;
+  }
+  
+  // Reload the DS_Store data
+  if (!dsStoreInfo) {
+    dsStoreInfo = [[DSStoreInfo infoForDirectoryPath: [baseNode path]] retain];
+  } else if (![dsStoreInfo reload]) {
+    NSLog(@"║ DS_Store watcher: Failed to reload DS_Store");
+    return;
+  }
+  
+  NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+  NSLog(@"║      DS_STORE WATCHER: UPDATING VIEW WITH NEW SETTINGS           ║");
+  NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+  
+  // Reapply icon size
+  if (dsStoreInfo.hasIconSize && dsStoreInfo.iconSize > 0 && dsStoreInfo.iconSize <= 512) {
+    NSLog(@"║ Updating icon size: %d", dsStoreInfo.iconSize);
+    if ([nodeView respondsToSelector:@selector(setIconSize:)]) {
+      [(FSNIconsView *)nodeView setIconSize:dsStoreInfo.iconSize];
+    }
+  }
+  
+  // Reapply label position
+  if (dsStoreInfo.hasLabelPosition) {
+    NSLog(@"║ Updating label position: %@", 
+          dsStoreInfo.labelPosition == DSStoreLabelPositionBottom ? @"bottom" : @"right");
+    if ([nodeView respondsToSelector:@selector(setIconPosition:)]) {
+      NSCellImagePosition pos = (dsStoreInfo.labelPosition == DSStoreLabelPositionBottom) 
+                                ? NSImageAbove : NSImageLeft;
+      [(FSNIconsView *)nodeView setIconPosition:pos];
+    }
+  }
+  
+  // Reapply background color
+  if (dsStoreInfo.backgroundType == DSStoreBackgroundColor && dsStoreInfo.backgroundColor) {
+    NSLog(@"║ Updating background color: %@", dsStoreInfo.backgroundColor);
+    if ([nodeView respondsToSelector:@selector(setBackgroundColor:)]) {
+      [(FSNIconsView *)nodeView setBackgroundColor:dsStoreInfo.backgroundColor];
+    }
+  }
+  
+  // Reapply free positioning if available
+  if ([dsStoreInfo hasAnyIconPositions]) {
+    NSLog(@"║ Updating icon positions: %lu items", 
+          (unsigned long)[[dsStoreInfo filenamesWithPositions] count]);
+    
+    NSMutableDictionary *iconPositions = [NSMutableDictionary dictionary];
+    for (NSString *filename in [dsStoreInfo filenamesWithPositions]) {
+      DSStoreIconInfo *iconInfo = [dsStoreInfo iconInfoForFilename:filename];
+      if (iconInfo && iconInfo.hasPosition) {
+        [iconPositions setObject:[NSValue valueWithPoint:iconInfo.position] 
+                          forKey:filename];
+      }
+    }
+    
+    if ([nodeView respondsToSelector:@selector(setFreePositioningEnabled:)]) {
+      [(FSNIconsView *)nodeView setCustomIconPositions:iconPositions];
+      [(FSNIconsView *)nodeView setFreePositioningEnabled:YES];
+    }
+  } else {
+    NSLog(@"║ Free positioning: disabled");
+  }
+  
+  NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+}
+
 @end
 
 
@@ -802,6 +1086,7 @@
 {
   if (invalidated == NO) {
     closing = YES;
+    [self teardownDSStoreWatcher];
     [self updateDefaults];
     [vwrwin setDelegate: nil];
     [manager viewerWillClose: self]; 

@@ -94,6 +94,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   RELEASE (backColor);
   RELEASE (textColor);
   RELEASE (disabledTextColor);
+  RELEASE (customIconPositions);
 
   [super dealloc];
 }
@@ -179,6 +180,11 @@ static void GWHighlightFrameRect(NSRect aRect)
       lastKeyPressedTime = 0.0;
       charBuffer = nil;
       selectionMask = NSSingleSelectionMask;
+      
+      // DS_Store free positioning support
+      freePositioningEnabled = NO;
+      customIconPositions = nil;
+      dsStoreIconHeight = 64.0; // Default icon height for coordinate conversion
 
       [self calculateGridSize];
 
@@ -269,28 +275,105 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSCachedImageRep *rep = nil;
   NSArray *selection;
   NSUInteger i;
+  
+  // Track maximum Y position for view height calculation in free positioning mode
+  float maxY = svr.size.height;
 
   colItemsCount = 0;
 
-  for (i = 0; i < count; i++)
+  // Check if we're using DS_Store free positioning mode
+  if (freePositioningEnabled && customIconPositions && [customIconPositions count] > 0)
     {
-      px += (gridSize.width + X_MARGIN);
+      NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+      NSLog(@"║           FREE POSITIONING MODE (DS_Store)                       ║");
+      NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+      NSLog(@"║ Icons to position: %lu", (unsigned long)count);
+      NSLog(@"║ Custom positions available: %lu", (unsigned long)[customIconPositions count]);
+      NSLog(@"║ View height: %.0f", svr.size.height);
+      
+      // Free positioning: use DS_Store coordinates, fall back to grid for unknown icons
+      float gridX = X_MARGIN;
+      float gridY = gridSize.height + Y_MARGIN;
+      NSUInteger gridCount = 0;
+      
+      for (i = 0; i < count; i++)
+        {
+          FSNIcon *icon = [icons objectAtIndex: i];
+          NSString *filename = [[icon node] name];
+          NSValue *posValue = [customIconPositions objectForKey:filename];
+          
+          if (posValue)
+            {
+              // Use custom position from DS_Store
+              NSPoint macPos = [posValue pointValue];
+              
+              // Convert from Mac coordinates (origin top-left, Y increases downward)
+              // to GNUstep coordinates (origin bottom-left, Y increases upward)
+              // Mac position is the top-left corner of the icon
+              float gnustepY = svr.size.height - macPos.y - gridSize.height;
+              
+              irects[i] = NSMakeRect(macPos.x, gnustepY, gridSize.width, gridSize.height);
+              
+              NSLog(@"║ ✓ '%@': Mac(%.0f,%.0f) → GNUstep(%.0f,%.0f)", 
+                    filename, macPos.x, macPos.y, macPos.x, gnustepY);
+              
+              // Track bounds for view sizing
+              if (gnustepY + gridSize.height > maxY) maxY = gnustepY + gridSize.height;
+              if (gnustepY < 0)
+                {
+                  // Icon is above the view - need to extend view upward
+                  maxY = maxY - gnustepY;
+                }
+            }
+          else
+            {
+              // No custom position - use grid layout for this icon
+              gridX += (gridSize.width + X_MARGIN);
+              
+              if (gridX >= (svr.size.width - gridSize.width))
+                {
+                  gridX = X_MARGIN;
+                  gridY += (gridSize.height + Y_MARGIN);
+                }
+              
+              irects[i] = NSMakeRect(gridX, gridY, gridSize.width, gridSize.height);
+              gridCount++;
+              
+              NSLog(@"║ ○ '%@': Grid position (no DS_Store data)", filename);
+            }
+        }
+      
+      // Use maximum of grid height and free-positioned icons
+      py = (gridY > maxY) ? gridY : maxY;
+      py += Y_MARGIN;
+      
+      NSLog(@"║ Grid-positioned icons: %lu", (unsigned long)gridCount);
+      NSLog(@"║ Final view height: %.0f", py);
+      NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+    }
+  else
+    {
+      // Standard grid-based layout
+      for (i = 0; i < count; i++)
+        {
+          px += (gridSize.width + X_MARGIN);
 
-      if (px >= (svr.size.width - gridSize.width))
-	{
-	  px = X_MARGIN;
-	  py += (gridSize.height + Y_MARGIN);
+          if (px >= (svr.size.width - gridSize.width))
+            {
+              px = X_MARGIN;
+              py += (gridSize.height + Y_MARGIN);
 
-	  if (colItemsCount < poscount)
-	    {
-	      colItemsCount = poscount;
-	    }
-	  poscount = 0;
-	}
+              if (colItemsCount < poscount)
+                {
+                  colItemsCount = poscount;
+                }
+              poscount = 0;
+            }
 
-      poscount++;
+          poscount++;
 
-      irects[i] = NSMakeRect(px, py, gridSize.width, gridSize.height);
+          irects[i] = NSMakeRect(px, py, gridSize.width, gridSize.height);
+        }
     }
 
   py += Y_MARGIN;
@@ -301,8 +384,14 @@ static void GWHighlightFrameRect(NSRect aRect)
   for (i = 0; i < count; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-
-      irects[i].origin.y = py - irects[i].origin.y;
+      
+      // For free positioning mode, coordinates are already in GNUstep space
+      // For grid mode, we need to flip Y
+      if (!(freePositioningEnabled && customIconPositions && [customIconPositions count] > 0))
+        {
+          irects[i].origin.y = py - irects[i].origin.y;
+        }
+      
       irects[i] = NSIntegralRect(irects[i]);
 
       if (NSEqualRects(irects[i], [icon frame]) == NO)
@@ -481,6 +570,72 @@ static void GWHighlightFrameRect(NSRect aRect)
 	  break;
 	}
     }
+}
+
+#pragma mark - DS_Store Free Positioning Support
+
+- (void)setFreePositioningEnabled:(BOOL)enabled
+{
+  if (freePositioningEnabled != enabled)
+    {
+      freePositioningEnabled = enabled;
+      NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+      NSLog(@"║ FREE POSITIONING MODE: %@", enabled ? @"ENABLED" : @"DISABLED");
+      NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+      
+      if (enabled && customIconPositions && [customIconPositions count] > 0)
+        {
+          [self tile];
+        }
+    }
+}
+
+- (BOOL)freePositioningEnabled
+{
+  return freePositioningEnabled;
+}
+
+- (void)setCustomIconPositions:(NSDictionary *)positions
+{
+  if (positions != customIconPositions)
+    {
+      [customIconPositions release];
+      customIconPositions = [positions mutableCopy];
+      
+      NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+      NSLog(@"║        CUSTOM ICON POSITIONS SET (DS_Store)                      ║");
+      NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+      NSLog(@"║ Positions for %lu icons:", (unsigned long)[positions count]);
+      
+      for (NSString *filename in positions)
+        {
+          NSValue *posValue = [positions objectForKey:filename];
+          NSPoint pos = [posValue pointValue];
+          NSLog(@"║   '%@' -> (%.0f, %.0f)", filename, pos.x, pos.y);
+        }
+      
+      NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+    }
+}
+
+- (NSDictionary *)customIconPositions
+{
+  return customIconPositions;
+}
+
+- (void)applyFreePositioning
+{
+  if (freePositioningEnabled && customIconPositions && [customIconPositions count] > 0)
+    {
+      NSLog(@"Applying free positioning - calling tile");
+      [self tile];
+      [self setNeedsDisplay:YES];
+    }
+}
+
+- (NSArray *)icons
+{
+  return icons;
 }
 
 - (void)mouseUp:(NSEvent *)theEvent

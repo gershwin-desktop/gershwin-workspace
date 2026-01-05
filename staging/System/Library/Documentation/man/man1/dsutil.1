@@ -1,0 +1,308 @@
+." dsutil - .DS_Store file manipulation and utility tool
+." Copyright (c) 2025-26 Simon Peter
+." SPDX-License-Identifier: BSD-2-Clause
+.TH DSUTIL 1 "January 2026" "Gershwin" "User Commands"
+.SH NAME
+dsutil \- manipulate .DS_Store files for .DS_Store interoperability
+.SH SYNOPSIS
+.B dsutil
+.RI [ -v | --verbose ]
+.I command
+.RI [ options ]
+.RI [ arguments ]
+.br
+.B dsutil
+.RI [ -v | --verbose ]
+.I directory
+.SH DESCRIPTION
+.B dsutil
+is a command-line utility for reading and writing .DS_Store files.
+It provides .DS_Store interoperability by allowing manipulation of icon positions,
+view settings, backgrounds, file labels, and other metadata stored in .DS_Store files.
+.PP
+When invoked with just a directory path,
+.B dsutil
+displays a comprehensive summary of the directory's .DS_Store contents
+with automatic coordinate conversions between .DS_Store format (top-left origin)
+and GNUstep format (bottom-left origin).
+.SH GLOBAL FLAGS
+.TP
+.B -v, --verbose
+Show debug output with internal structure information including B-tree nodes,
+block offsets, and entry parsing details. Useful for troubleshooting.
+.SH FILE COMMANDS
+.TP
+.BI "create " path
+Create an empty .DS_Store file at the specified path.
+.TP
+.BI "list " [path]
+List all entries in a .DS_Store file. Defaults to .DS_Store in current directory.
+.TP
+.BI "dump " [path]
+Dump complete file contents with detailed information about each entry.
+.TP
+.BI "info " path
+Show file information and statistics.
+.TP
+.BI "validate " path
+Validate .DS_Store file structure.
+.TP
+.BI "files " path
+List all files that have metadata entries.
+.TP
+.BI "summary " directory
+Show comprehensive summary of a directory's .DS_Store with coordinate conversions.
+.SH ICON POSITION COMMANDS
+.TP
+.BI "get-pos " "file filename"
+Get icon position coordinates for a file.
+Shows both .DS_Store coordinates (top-left origin) and GNUstep equivalent.
+.TP
+.BI "set-pos " "file filename x y"
+Set icon position in .DS_Store coordinates (pixels from top-left).
+.SH BACKGROUND COMMANDS
+.TP
+.BI "get-bg " file
+Get background settings for a directory.
+.TP
+.BI "set-bg-color " "file r g b"
+Set solid color background. Colors are specified as floating-point values 0.0-1.0.
+.TP
+.BI "set-bg-image " "file path"
+Set background image.
+.TP
+.BI "remove-bg " file
+Remove background settings.
+.SH VIEW COMMANDS
+.TP
+.BI "get-view " file
+Get view style and settings.
+.TP
+.BI "set-view " "file style"
+Set view style. Valid styles: icon, list, column, gallery, flow.
+.TP
+.BI "set-iconsize " "file size"
+Set icon size in pixels (16-512).
+.TP
+.BI "set-gridspacing " "file pixels"
+Set icon grid spacing.
+.TP
+.BI "set-textsize " "file size"
+Set label text size.
+.TP
+.BI "set-labelpos " "file position"
+Set label position. Valid positions: bottom, right.
+.TP
+.BI "set-arrangement " "file arrangement"
+Set icon arrangement. Valid values: none, grid.
+.TP
+.BI "set-sortby " "file key"
+Set sort by key. Valid keys: name, date, size, kind, label, none.
+.TP
+.BI "set-showinfo " "file 0|1"
+Enable/disable showing item info.
+.TP
+.BI "set-preview " "file 0|1"
+Enable/disable showing icon previews.
+.SH WINDOW CHROME COMMANDS
+.TP
+.BI "set-sidebar-width " "file pixels"
+Set sidebar width in pixels.
+.TP
+.BI "set-toolbar " "file 0|1"
+Show/hide toolbar.
+.TP
+.BI "set-sidebar " "file 0|1"
+Show/hide sidebar.
+.TP
+.BI "set-pathbar " "file 0|1"
+Show/hide path bar.
+.TP
+.BI "set-statusbar " "file 0|1"
+Show/hide status bar.
+.SH LABEL COLOR COMMANDS
+.TP
+.BI "get-label " "file filename"
+Get file label color.
+.TP
+.BI "set-label " "file filename color"
+Set file label color. Valid colors: none, red, orange, yellow, green, blue, purple, grey.
+.SH COLUMN VIEW COMMANDS
+.PP
+.I NOTE:
+Column view commands are only supported for directories with spatial/icon view mode enabled
+(view style = icon). These commands will fail if the directory is configured for list, column,
+or other non-spatial view modes. This limitation ensures proper coordination with native
+.DS_Store column view implementations.
+.TP
+.BI "get-column-width " "file column"
+Get column width in pixels. Columns: name, date, size, kind, label, version, comments.
+.TP
+.BI "set-column-width " "file column pixels"
+Set column width in pixels.
+.TP
+.BI "get-column-visible " "file column"
+Get column visibility status. Returns "visible" or "hidden".
+.TP
+.BI "set-column-visible " "file column 0|1"
+Show or hide a column (1 = visible, 0 = hidden).
+.TP
+.BI "get-relative-dates " "file"
+Get relative dates setting for column view (e.g., "today" instead of "1/5/26").
+.TP
+.BI "set-relative-dates " "file 0|1"
+Enable/disable relative date display in columns (1 = enabled, 0 = disabled).
+.SH METADATA COMMANDS
+.TP
+.BI "get-comment " "file filename"
+Get file comment.
+.TP
+.BI "set-comment " "file filename text"
+Set file comment.
+.SH GENERIC FIELD COMMANDS
+.TP
+.BI "get " "file filename code"
+Get field value by four-character code.
+.TP
+.BI "set " "file filename code type value"
+Set field value. Type must be one of: bool, long, shor, ustr, type, blob, comp, dutc.
+.TP
+.BI "remove " "file filename code"
+Remove field.
+.TP
+.BI "fields " "file filename"
+List all fields for a filename.
+.SH FIELD CODES
+Common four-character field codes:
+.TP
+.B Iloc
+Icon location (x, y coordinates)
+.TP
+.B vstl
+View style (icon, list, column, etc.)
+.TP
+.B BKGD
+Background settings
+.TP
+.B cmmt
+File comments
+.TP
+.B icvo
+Icon view options
+.TP
+.B lsvt
+List view text size
+.TP
+.B fwsw
+Sidebar width
+.TP
+.B GRP0
+Sort/group settings
+.SH COORDINATE SYSTEMS
+.B dsutil
+handles coordinate conversion between two systems:
+.PP
+.B .DS_Store format:
+.RS
+Origin at top-left corner of window content area.
+X increases rightward, Y increases downward.
+.RE
+.PP
+.B GNUstep format:
+.RS
+Origin at bottom-left corner of view.
+X increases rightward, Y increases upward.
+.RE
+.PP
+When displaying icon positions, both coordinate systems are shown
+to facilitate .DS_Store interoperability.
+.SH EXAMPLES
+Create a new .DS_Store file:
+.RS
+.nf
+dsutil create /path/to/.DS_Store
+.fi
+.RE
+.PP
+Set icon position:
+.RS
+.nf
+dsutil set-pos .DS_Store image.jpg 100 200
+.fi
+.RE
+.PP
+Set background color (light blue):
+.RS
+.nf
+dsutil set-bg-color .DS_Store 0.9 0.9 1.0
+.fi
+.RE
+.PP
+Set view to icon mode:
+.RS
+.nf
+dsutil set-view .DS_Store icon
+.fi
+.RE
+.PP
+Set file label to red:
+.RS
+.nf
+dsutil set-label .DS_Store important.txt red
+.fi
+.RE
+.PP
+Sort icons by name:
+.RS
+.nf
+dsutil set-sortby .DS_Store name
+.fi
+.RE
+.PP
+Configure column view (spatial mode only):
+.RS
+.nf
+# Set column widths
+dsutil set-column-width .DS_Store name 200
+dsutil set-column-width .DS_Store date 100
+.PP
+# Hide the version column, show the size column
+dsutil set-column-visible .DS_Store version 0
+dsutil set-column-visible .DS_Store size 1
+.PP
+# Enable relative date display in columns
+dsutil set-relative-dates .DS_Store 1
+.fi
+.RE
+.PP
+Show summary of a directory:
+.RS
+.nf
+dsutil /path/to/directory
+.fi
+.RE
+.PP
+Show summary with verbose debug output:
+.RS
+.nf
+dsutil -v /path/to/directory
+dsutil --verbose /path/to/directory
+.fi
+.RE
+.SH FILES
+.TP
+.I .DS_Store
+Per-directory metadata file storing icon positions, view settings, and file metadata.
+.SH SEE ALSO
+.BR gworkspace (1)
+.SH HISTORY
+.B dsutil
+was written by Simon Peter for the Gershwin project to provide .DS_Store interoperability
+with other operating systems that use .DS_Store files.
+This implementation is based on documentation provided by third-party sources and is intended
+to enable cross-platform compatibility with macOS and other systems that create and use .DS_Store metadata files.
+.SH AUTHOR
+Simon Peter
+.SH COPYRIGHT
+Copyright (c) 2025-26 Simon Peter.
+Licensed under BSD-2-Clause.

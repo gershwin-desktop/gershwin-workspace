@@ -1,0 +1,149 @@
+/* DSStoreInfo.h
+ *  
+ * Copyright (C) 2025 Free Software Foundation, Inc.
+ *
+ * Date: January 2025
+ *
+ * DS_Store information model for .DS_Store interoperability in Spatial mode.
+ * This class encapsulates all available DS_Store metadata for a directory,
+ * enabling spatial behavior with free icon positioning.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation; either version 2 of the License, or
+ * (at your option) any later version.
+ */
+
+#import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
+#import "../DSStore/DSStore.h"
+
+/**
+ * DSStoreIconInfo - Icon-specific information from DS_Store
+ */
+@interface DSStoreIconInfo : NSObject <NSCopying>
+{
+    NSString *_filename;
+    NSPoint _position;      // Iloc - icon position (.DS_Store coordinates, origin top-left)
+    BOOL _hasPosition;
+    NSString *_comments;    // cmmt - Spotlight comments
+}
+
+@property (nonatomic, copy) NSString *filename;
+@property (nonatomic, assign) NSPoint position;
+@property (nonatomic, assign) BOOL hasPosition;
+@property (nonatomic, copy) NSString *comments;
+
++ (instancetype)infoForFilename:(NSString *)filename;
+- (NSPoint)gnustepPositionForViewHeight:(CGFloat)viewHeight iconHeight:(CGFloat)iconHeight;
+
+@end
+
+/**
+ * DSStoreInfo - Complete DS_Store information for a directory
+ *
+ * This class reads and holds all available DS_Store metadata:
+ * - Window geometry (fwi0)
+ * - View style (vstl)
+ * - Icon size (icvo/icvp)
+ * - Icon arrangement (icvo/icvp)
+ * - Label position (icvo/icvp)
+ * - Background settings (BKGD/bwsp)
+ * - Per-file icon positions (Iloc)
+ * - Sidebar width (fwsw)
+ */
+@interface DSStoreInfo : NSObject
+{
+    NSString *_directoryPath;
+    BOOL _loaded;
+    
+    // Window geometry (fwi0)
+    NSRect _windowFrame;
+    BOOL _hasWindowFrame;
+    
+    // View settings
+    DSStoreViewStyle _viewStyle;
+    BOOL _hasViewStyle;
+    
+    // Icon view settings (icvo/icvp)
+    int _iconSize;
+    BOOL _hasIconSize;
+    DSStoreIconArrangement _iconArrangement;
+    BOOL _hasIconArrangement;
+    DSStoreLabelPosition _labelPosition;
+    BOOL _hasLabelPosition;
+    CGFloat _gridSpacing;
+    BOOL _hasGridSpacing;
+    
+    // Background (BKGD/bwsp)
+    DSStoreBackgroundType _backgroundType;
+    NSColor *_backgroundColor;
+    NSString *_backgroundImagePath;
+    
+    // Sidebar (fwsw)
+    int _sidebarWidth;
+    BOOL _hasSidebarWidth;
+    
+    // Icon positions (Iloc)
+    NSMutableDictionary *_iconInfoDict;  // filename -> DSStoreIconInfo
+}
+
+// Directory info
+@property (nonatomic, copy, readonly) NSString *directoryPath;
+@property (nonatomic, assign, readonly) BOOL loaded;
+
+// Window geometry
+@property (nonatomic, assign) NSRect windowFrame;
+@property (nonatomic, assign) BOOL hasWindowFrame;
+
+// View style
+@property (nonatomic, assign) DSStoreViewStyle viewStyle;
+@property (nonatomic, assign) BOOL hasViewStyle;
+
+// Icon view settings
+@property (nonatomic, assign) int iconSize;
+@property (nonatomic, assign) BOOL hasIconSize;
+@property (nonatomic, assign) DSStoreIconArrangement iconArrangement;
+@property (nonatomic, assign) BOOL hasIconArrangement;
+@property (nonatomic, assign) DSStoreLabelPosition labelPosition;
+@property (nonatomic, assign) BOOL hasLabelPosition;
+@property (nonatomic, assign) CGFloat gridSpacing;
+@property (nonatomic, assign) BOOL hasGridSpacing;
+
+// Background
+@property (nonatomic, assign) DSStoreBackgroundType backgroundType;
+@property (nonatomic, retain) NSColor *backgroundColor;
+@property (nonatomic, copy) NSString *backgroundImagePath;
+
+// Sidebar
+@property (nonatomic, assign) int sidebarWidth;
+@property (nonatomic, assign) BOOL hasSidebarWidth;
+
+// Factory methods
++ (instancetype)infoForDirectoryPath:(NSString *)path;
++ (instancetype)infoForDirectoryPath:(NSString *)path loadImmediately:(BOOL)load;
+
+// Initialization
+- (instancetype)initWithDirectoryPath:(NSString *)path;
+
+// Loading
+- (BOOL)load;
+- (BOOL)reload;
+
+// Icon position access
+- (DSStoreIconInfo *)iconInfoForFilename:(NSString *)filename;
+- (NSDictionary *)allIconInfo;
+- (BOOL)hasAnyIconPositions;
+- (NSArray *)filenamesWithPositions;
+
+// Coordinate conversion utilities for .DS_Store interoperability
+- (NSRect)gnustepWindowFrameForScreen:(NSScreen *)screen;
+- (NSPoint)gnustepPositionForDSStorePoint:(NSPoint)dsPoint 
+                           viewHeight:(CGFloat)viewHeight 
+                           iconHeight:(CGFloat)iconHeight;
+
+// Debugging
+- (NSString *)debugDescription;
+- (void)logAllInfo;
+
+@end

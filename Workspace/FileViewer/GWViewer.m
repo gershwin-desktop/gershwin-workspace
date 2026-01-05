@@ -46,6 +46,7 @@
 #import "Thumbnailer/GWThumbnailer.h"
 #import "NetworkServiceManager.h"
 #import "NetworkFSNode.h"
+#import "DSStoreInfo.h"
 
 #define DEFAULT_INCR 150
 #define MIN_WIN_H 300
@@ -199,13 +200,38 @@
     ASSIGN (vwrwin, win);
     [vwrwin setDelegate: self];
 
-    defEntry = [viewerPrefs objectForKey: @"geometry"];
-    if (defEntry) {
-      [vwrwin setFrameFromString: defEntry];
-    } else {
-      r = NSMakeRect(200, 200, resizeIncrement * 5, 600);
-      [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
-               display: NO];
+    // ================================================================
+    // DS_Store Integration - Load comprehensive Mac metadata
+    // ================================================================
+    DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path]];
+    BOOL geometryApplied = NO;
+    
+    if (dsInfo.loaded && dsInfo.hasWindowFrame) {
+      NSRect dsGeometry = [dsInfo gnustepWindowFrameForScreen:[NSScreen mainScreen]];
+      
+      if (dsGeometry.size.width > 0 && dsGeometry.size.height > 0) {
+        NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+        NSLog(@"║      APPLYING DS_STORE WINDOW GEOMETRY (GWViewer)                ║");
+        NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+        NSLog(@"║ Mac frame: %@", NSStringFromRect(dsInfo.windowFrame));
+        NSLog(@"║ GNUstep frame: %@", NSStringFromRect(dsGeometry));
+        NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+        
+        [vwrwin setFrame:dsGeometry display:NO];
+        geometryApplied = YES;
+      }
+    }
+    
+    if (!geometryApplied) {
+      NSLog(@"No valid DS_Store geometry, using fallback methods");
+      defEntry = [viewerPrefs objectForKey: @"geometry"];
+      if (defEntry) {
+        [vwrwin setFrameFromString: defEntry];
+      } else {
+        r = NSMakeRect(200, 200, resizeIncrement * 5, 600);
+        [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
+                 display: NO];
+      }
     }
     
     r = [vwrwin frame];
@@ -945,6 +971,9 @@
     
     [updatedprefs setObject: [vwrwin stringWithSavedFrame] 
                      forKey: @"geometry"];
+
+    // TODO: Save geometry to .DS_Store for Mac compatibility (writing not yet implemented)
+    // DSStoreInfo currently only supports reading
 
     [baseNode checkWritable];
 

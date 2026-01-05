@@ -1,0 +1,9 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Workspace
+Comment=GershWin Workspace Manager
+Exec=Workspace
+Icon=FileManager
+Categories=System;FileManager;
+StartupNotify=true

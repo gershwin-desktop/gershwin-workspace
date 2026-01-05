@@ -73,6 +73,11 @@
   FSNodeRep *fsnodeRep;
 
   id <DesktopApplication> desktopApp;
+  
+  // DS_Store free positioning support for Mac interoperability
+  BOOL freePositioningEnabled;              // If YES, bypasses grid-based tile
+  NSMutableDictionary *customIconPositions; // filename -> NSValue(NSPoint) in Mac coords
+  CGFloat dsStoreIconHeight;                // Icon height for coordinate conversion
 }
 
 - (void)sortIcons;
@@ -92,6 +97,14 @@
 - (void)selectPrevIcon;
 
 - (void)selectNextIcon;
+
+// DS_Store free positioning support for Mac interoperability
+- (void)setFreePositioningEnabled:(BOOL)enabled;
+- (BOOL)freePositioningEnabled;
+- (void)setCustomIconPositions:(NSDictionary *)positions;
+- (NSDictionary *)customIconPositions;
+- (void)applyFreePositioning;
+- (NSArray *)icons;
 
 @end
 

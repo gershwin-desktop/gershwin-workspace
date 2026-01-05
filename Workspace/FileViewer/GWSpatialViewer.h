@@ -34,6 +34,7 @@
 @class NSView;
 @class NSTextField;
 @class GWViewerScrollView;
+@class DSStoreInfo;
 
 @interface GWSpatialViewer : NSObject
 {
@@ -60,6 +61,10 @@
   NSMutableArray *watchedNodes;
 
   FSNodeRep *fsnodeRep;
+
+  // DS_Store file monitoring for interoperability
+  DSStoreInfo *dsStoreInfo;                 // Current DSStoreInfo object
+  NSString *dsStorePath;                    // Path to .DS_Store file being watched
 
   BOOL invalidated;
   BOOL closing;
@@ -121,6 +126,11 @@
 - (void)columnsWidthChanged:(NSNotification *)notification;
 
 - (void)updateDefaults;
+
+// DS_Store file watching for interoperability
+- (void)setupDSStoreWatcher;
+- (void)teardownDSStoreWatcher;
+- (void)reapplyDSStoreSettings;
 
 @end
 

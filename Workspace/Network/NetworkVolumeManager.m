@@ -677,7 +677,14 @@ static NetworkVolumeManager *sharedInstance = nil;
     postNotificationName:@"GWFileSystemWillChangeNotification"
                   object:willInfo];
   
-  /* Notify viewers and desktop that an unmount is about to occur */
+  /* Also send NSWorkspaceWillUnmountNotification to grey out desktop icon */
+  NSDictionary *unmountInfo = @{ @"NSDevicePath": path };
+  [[NSNotificationCenter defaultCenter]
+    postNotificationName:NSWorkspaceWillUnmountNotification
+                  object:[NSWorkspace sharedWorkspace]
+                userInfo:unmountInfo];
+  
+  NSLog(@"NetworkVolumeManager: Sent will unmount notifications for %@", path);
 
   /* Wait for viewers to close and watchers to be removed to prevent "target is busy" */
   NSLog(@"NetworkVolumeManager: Waiting for viewers and watchers to close...");
@@ -807,44 +814,55 @@ static NetworkVolumeManager *sharedInstance = nil;
       NSLog(@"NetworkVolumeManager: Error clearing volume info: %@", e);
     }
 
-    /* Attempt to remove empty mountpoint directory */
+    /* Attempt to remove empty mountpoint directory (non-recursively) */
+    BOOL directoryRemoved = NO;
     @try {
       NSError *contentsErr = nil;
       NSArray *contents = [fm contentsOfDirectoryAtPath:path error:&contentsErr];
       if (contents && ([contents count] == 0)) {
-        if ([fm removeItemAtPath:path error:&contentsErr]) {
+        // Use rmdir (non-recursive) instead of removeItemAtPath
+        if (rmdir([path fileSystemRepresentation]) == 0) {
           NSLog(@"NetworkVolumeManager: Removed empty mount point %@", path);
+          directoryRemoved = YES;
         } else {
-          NSLog(@"NetworkVolumeManager: Failed to remove mount point %@: %@", path, contentsErr);
+          NSLog(@"NetworkVolumeManager: Failed to remove mount point %@ (rmdir): %s", path, strerror(errno));
         }
       } else if (contentsErr) {
         NSLog(@"NetworkVolumeManager: Could not read mount point contents %@: %@", path, contentsErr);
       } else {
-        NSLog(@"NetworkVolumeManager: Mount point %@ not empty, leaving in place", path);
+        NSLog(@"NetworkVolumeManager: Mount point %@ not empty (%lu items), leaving in place", 
+              path, (unsigned long)[contents count]);
       }
     } @catch (NSException *e) {
       NSLog(@"NetworkVolumeManager: Exception checking/removing mount point %@: %@", path, e);
     }
 
-    /* Notify viewers to close and refresh parent directory */
-    NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
-                              @"source": parent,
-                              @"destination": parent,
-                              @"files": @[name],
-                              @"unmounted": path };
+    /* Only remove desktop icon AFTER directory has been successfully removed */
+    if (directoryRemoved) {
+      NSLog(@"NetworkVolumeManager: Directory removed successfully, notifying desktop to remove icon for %@", path);
+      
+      /* Notify viewers to close and refresh parent directory */
+      NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
+                                @"source": parent,
+                                @"destination": parent,
+                                @"files": @[name],
+                                @"unmounted": path };
 
-    [[NSNotificationCenter defaultCenter]
-      postNotificationName:@"GWFileSystemDidChangeNotification"
-                    object:opinfo];
-                    
-    /* Also notify desktop manager directly so volume disappears from desktop */
-    NSLog(@"NetworkVolumeManager: Notifying desktop manager directly for unmount %@", path);
-    id gworkspace = [Workspace gworkspace];
-    if (gworkspace) {
-      id desktopManager = [gworkspace desktopManager];
-      if (desktopManager && [[desktopManager desktopView] respondsToSelector:@selector(workspaceDidUnmountVolumeAtPath:)]) {
-        [[desktopManager desktopView] workspaceDidUnmountVolumeAtPath: path];
+      [[NSNotificationCenter defaultCenter]
+        postNotificationName:@"GWFileSystemDidChangeNotification"
+                      object:opinfo];
+                      
+      /* Also notify desktop manager directly so volume disappears from desktop */
+      NSLog(@"NetworkVolumeManager: Notifying desktop manager directly for unmount %@", path);
+      id gworkspace = [Workspace gworkspace];
+      if (gworkspace) {
+        id desktopManager = [gworkspace desktopManager];
+        if (desktopManager && [[desktopManager desktopView] respondsToSelector:@selector(workspaceDidUnmountVolumeAtPath:)]) {
+          [[desktopManager desktopView] workspaceDidUnmountVolumeAtPath: path];
+        }
       }
+    } else {
+      NSLog(@"NetworkVolumeManager: Mount point not removed, keeping desktop icon for %@", path);
     }
                     
     NSLog(@"NetworkVolumeManager: Sent completion notification for unmount of %@", path);
