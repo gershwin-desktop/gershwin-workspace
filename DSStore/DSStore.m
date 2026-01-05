@@ -1238,18 +1238,19 @@ static uint32_t swapBytes32(uint32_t x) {
 + (NSPoint)gnustepPointFromDSStorePoint:(NSPoint)dsPoint viewHeight:(CGFloat)viewHeight iconHeight:(CGFloat)iconHeight {
     // .DS_Store format: origin top-left, y increases downward (coordinates = icon center)
     // GNUstep format: origin bottom-left, y increases upward
-    // dsPoint is center of icon, convert accounting for coordinate system difference
-    // NOTE: The iconHeight adjustment assumes GNUstep uses a different reference point
-    // This conversion logic may need verification based on actual GNUstep icon positioning behavior
-    CGFloat gnustepY = viewHeight - dsPoint.y - iconHeight;
+    // dsPoint is center of icon, convert by flipping Y coordinate
+    // The iconHeight parameter is provided for API compatibility but icon centers
+    // don't need iconHeight adjustment - just coordinate system flip
+    CGFloat gnustepY = viewHeight - dsPoint.y;
     return NSMakePoint(dsPoint.x, gnustepY);
 }
 
 + (NSPoint)dsStorePointFromGNUstepPoint:(NSPoint)gnustepPoint viewHeight:(CGFloat)viewHeight iconHeight:(CGFloat)iconHeight {
     // Reverse conversion for .DS_Store interoperability
-    // Convert GNUstep coordinates to .DS_Store center-based coordinates
-    // NOTE: This conversion assumes specific GNUstep icon positioning behavior that may need verification
-    CGFloat dsY = viewHeight - gnustepPoint.y - iconHeight;
+    // Convert GNUstep coordinates (icon center, bottom-origin) to .DS_Store center-based coordinates (top-origin)
+    // The iconHeight parameter is provided for API compatibility but icon centers
+    // don't need iconHeight adjustment - just coordinate system flip
+    CGFloat dsY = viewHeight - gnustepPoint.y;
     return NSMakePoint(gnustepPoint.x, dsY);
 }
 

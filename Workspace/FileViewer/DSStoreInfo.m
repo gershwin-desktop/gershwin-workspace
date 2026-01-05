@@ -935,32 +935,37 @@
         return NSZeroRect;
     }
     
-    // .DS_Store fwi0 stores window geometry with origin at TOP-LEFT of screen:
-    // - _windowFrame.origin.y is the TOP edge (distance from top of screen downward)
+    // IMPORTANT: .DS_Store fwi0 stores the CONTENT AREA rect (excluding titlebar/chrome)
+    // 
+    // .DS_Store format: origin at TOP-LEFT of screen
+    // - _windowFrame.origin.y is the TOP edge of CONTENT area (distance from top of screen downward)
     // - Smaller y values = closer to top of screen
     // 
-    // GNUstep uses origin at BOTTOM-LEFT of screen:
+    // GNUstep format: origin at BOTTOM-LEFT of screen
     // - y is distance from bottom of screen upward
     // - Larger y values = closer to top of screen
     //
-    // Conversion: gnustep_y = screenHeight - dsstore_top - window_height
+    // This method returns the CONTENT AREA rect in GNUstep coordinates.
+    // The caller must convert to full window frame using [NSWindow frameRectForContentRect:]
+    //
+    // Conversion: gnustep_y = screenHeight - dsstore_top - content_height
     CGFloat screenHeight = [screen frame].size.height;
     
-    // _windowFrame.origin.y contains the TOP edge from .DS_Store
+    // _windowFrame.origin.y contains the TOP edge of content area from .DS_Store
     CGFloat dsStoreTop = _windowFrame.origin.y;
-    CGFloat windowHeight = _windowFrame.size.height;
+    CGFloat contentHeight = _windowFrame.size.height;
     
-    // Calculate bottom edge position in GNUstep coordinates
-    CGFloat gnustepY = screenHeight - dsStoreTop - windowHeight;
+    // Calculate bottom edge position of content area in GNUstep coordinates
+    CGFloat gnustepY = screenHeight - dsStoreTop - contentHeight;
     
     NSRect result = NSMakeRect(_windowFrame.origin.x, gnustepY, 
-                               _windowFrame.size.width, windowHeight);
+                               _windowFrame.size.width, contentHeight);
     
     NSLog(@"Coordinate conversion:");
-    NSLog(@"  .DS_Store: top=%.0f left=%.0f width=%.0f height=%.0f", 
-          dsStoreTop, _windowFrame.origin.x, _windowFrame.size.width, windowHeight);
+    NSLog(@"  .DS_Store content area: top=%.0f left=%.0f width=%.0f height=%.0f", 
+          dsStoreTop, _windowFrame.origin.x, _windowFrame.size.width, contentHeight);
     NSLog(@"  Screen height: %.0f", screenHeight);
-    NSLog(@"  GNUstep frame: %@", NSStringFromRect(result));
+    NSLog(@"  GNUstep content rect: %@", NSStringFromRect(result));
     
     return result;
 }

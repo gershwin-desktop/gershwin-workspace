@@ -277,7 +277,8 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSArray *selection;
   NSUInteger i;
   
-  // Track maximum Y position for view height calculation in free positioning mode
+  // Track maximum X and Y positions for view size calculation in free positioning mode
+  float maxX = svr.size.width;
   float maxY = svr.size.height;
 
   colItemsCount = 0;
@@ -290,12 +291,16 @@ static void GWHighlightFrameRect(NSRect aRect)
       NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
       NSLog(@"║ Icons to position: %lu", (unsigned long)count);
       NSLog(@"║ Custom positions available: %lu", (unsigned long)[customIconPositions count]);
-      NSLog(@"║ View height: %.0f", svr.size.height);
+      NSLog(@"║ View dimensions: %.0fx%.0f", svr.size.width, svr.size.height);
       
       // Free positioning: use DS_Store coordinates, fall back to grid for unknown icons
       float gridX = X_MARGIN;
       float gridY = gridSize.height + Y_MARGIN;
       NSUInteger gridCount = 0;
+      
+      // Reset max tracking to find actual required size
+      maxX = 0;
+      maxY = 0;
       
       for (i = 0; i < count; i++)
         {
@@ -305,26 +310,27 @@ static void GWHighlightFrameRect(NSRect aRect)
           
           if (posValue)
             {
-              // Use custom position from DS_Store
-              NSPoint dsStorePos = [posValue pointValue];
+              // Use custom position from DS_Store (already converted to GNUstep coords by DSStore.m)
+              NSPoint iconCenterPos = [posValue pointValue];
               
-              // Convert from .DS_Store coordinates (origin top-left, Y increases downward)
-              // to GNUstep coordinates (origin bottom-left, Y increases upward)
-              // .DS_Store position is the top-left corner of the icon
-              float gnustepY = svr.size.height - dsStorePos.y - gridSize.height;
+              // iconCenterPos is the icon center in GNUstep coordinates (bottom-left origin)
+              // We need to calculate the grid cell position such that when the icon is
+              // drawn centered within its grid cell, it ends up at iconCenterPos
               
-              irects[i] = NSMakeRect(dsStorePos.x, gnustepY, gridSize.width, gridSize.height);
+              // Calculate grid cell bottom-left corner from icon center
+              float gnustepX = iconCenterPos.x - (gridSize.width / 2);
+              float gnustepY = iconCenterPos.y - (gridSize.height / 2);
               
-              NSLog(@"║ ✓ '%@': DS_Store(%.0f,%.0f) → GNUstep(%.0f,%.0f)", 
-                    filename, dsStorePos.x, dsStorePos.y, dsStorePos.x, gnustepY);
+              irects[i] = NSMakeRect(gnustepX, gnustepY, gridSize.width, gridSize.height);
+              
+              NSLog(@"║ ✓ '%@': Icon center(%.0f,%.0f) → Grid cell(%.0f,%.0f)", 
+                    filename, iconCenterPos.x, iconCenterPos.y, gnustepX, gnustepY);
               
               // Track bounds for view sizing
-              if (gnustepY + gridSize.height > maxY) maxY = gnustepY + gridSize.height;
-              if (gnustepY < 0)
-                {
-                  // Icon is above the view - need to extend view upward
-                  maxY = maxY - gnustepY;
-                }
+              float rightEdge = gnustepX + gridSize.width;
+              float topEdge = gnustepY + gridSize.height;
+              if (rightEdge > maxX) maxX = rightEdge;
+              if (topEdge > maxY) maxY = topEdge;
             }
           else
             {
@@ -338,18 +344,31 @@ static void GWHighlightFrameRect(NSRect aRect)
                 }
               
               irects[i] = NSMakeRect(gridX, gridY, gridSize.width, gridSize.height);
+              
+              // Track bounds for grid-positioned icons too
+              float rightEdge = gridX + gridSize.width;
+              float topEdge = gridY + gridSize.height;
+              if (rightEdge > maxX) maxX = rightEdge;
+              if (topEdge > maxY) maxY = topEdge;
+              
               gridCount++;
               
               NSLog(@"║ ○ '%@': Grid position (no DS_Store data)", filename);
             }
         }
       
-      // Use maximum of grid height and free-positioned icons
-      py = (gridY > maxY) ? gridY : maxY;
-      py += Y_MARGIN;
+      // Add margins to final size
+      maxX += X_MARGIN;
+      // Note: In free positioning mode, icons have exact coordinates from DS_Store
+      // Don't add vertical margin - it's only needed for grid-based layouts
+      // maxY += Y_MARGIN;
+      
+      // Use calculated dimensions (don't use py/gridY for free positioning)
+      py = maxY;
       
       NSLog(@"║ Grid-positioned icons: %lu", (unsigned long)gridCount);
-      NSLog(@"║ Final view height: %.0f", py);
+      NSLog(@"║ Icon bounds - maxX: %.0f, maxY: %.0f", maxX - X_MARGIN, py);
+      NSLog(@"║ Final view size: %.0fx%.0f (exact fit for positioned icons)", maxX, py);
       NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
     }
   else
@@ -377,10 +396,30 @@ static void GWHighlightFrameRect(NSRect aRect)
         }
     }
 
-  py += Y_MARGIN;
-  py = (py < svr.size.height) ? svr.size.height : py;
+  // For free positioning mode, py already includes margins
+  // For grid mode, add margin and ensure minimum size
+  if (!(freePositioningEnabled && customIconPositions && [customIconPositions count] > 0))
+    {
+      py += Y_MARGIN;
+      py = (py < svr.size.height) ? svr.size.height : py;
+    }
 
-  SETRECT (self, r.origin.x, r.origin.y, svr.size.width, py);
+  // Set view frame - use calculated maxX for free positioning, svr.size.width for grid
+  float viewWidth = (freePositioningEnabled && customIconPositions && [customIconPositions count] > 0) 
+                    ? maxX : svr.size.width;
+  
+  // In free positioning mode, always use origin (0, 0) for the view
+  // The scroll view handles positioning within the scroll area
+  if (freePositioningEnabled && customIconPositions && [customIconPositions count] > 0)
+    {
+      // View height is set to fit all icons
+      // Scroll view's autohidesScrollers will handle showing/hiding scrollbars appropriately
+      SETRECT (self, 0, 0, viewWidth, py);
+    }
+  else
+    {
+      SETRECT (self, r.origin.x, r.origin.y, viewWidth, py);
+    }
 
   for (i = 0; i < count; i++)
     {

@@ -208,11 +208,16 @@
         NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
         NSLog(@"║      APPLYING DS_STORE WINDOW GEOMETRY                           ║");
         NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
-        NSLog(@"║ DS_Store frame: %@", NSStringFromRect(dsInfo.windowFrame));
-        NSLog(@"║ GNUstep frame: %@", NSStringFromRect(dsGeometry));
+        NSLog(@"║ DS_Store content rect: %@", NSStringFromRect(dsInfo.windowFrame));
+        NSLog(@"║ GNUstep content rect: %@", NSStringFromRect(dsGeometry));
+        
+        // IMPORTANT: DS_Store stores CONTENT area (excluding titlebar)
+        // Convert content rect to full window frame rect
+        NSRect windowFrame = [vwrwin frameRectForContentRect:dsGeometry];
+        NSLog(@"║ Full window frame: %@", NSStringFromRect(windowFrame));
         NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
         
-        [vwrwin setFrame:dsGeometry display:YES];
+        [vwrwin setFrame:windowFrame display:YES];
         [vwrwin makeKeyAndOrderFront:nil];
         geometryApplied = YES;
       }
@@ -348,10 +353,12 @@
         
         // Get view dimensions for coordinate conversion
         // .DS_Store uses top-left origin with icon centers, GNUstep uses bottom-left origin
-        CGFloat viewHeight = [nodeView frame].size.height;
+        // IMPORTANT: Use the CONTENT VIEW height from DS_Store, not the current frame
+        // DS_Store positions are relative to the content area (what's stored in windowFrame)
+        CGFloat viewHeight = dsInfo.windowFrame.size.height;
         CGFloat iconHeight = dsInfo.hasIconSize ? (CGFloat)dsInfo.iconSize : 64.0;
         
-        NSLog(@"║ View height: %.0f, Icon height: %.0f", viewHeight, iconHeight);
+        NSLog(@"║ DS_Store content height: %.0f, Icon height: %.0f", viewHeight, iconHeight);
         
         // Build positions dictionary for FSNIconsView with coordinate conversion
         NSMutableDictionary *iconPositions = [NSMutableDictionary dictionary];
@@ -519,6 +526,7 @@
   hasScroller = ([viewType isEqual: @"Icon"] || [viewType isEqual: @"List"]);
   [scroll setHasHorizontalScroller: YES];
   [scroll setHasVerticalScroller: hasScroller];
+  [scroll setAutohidesScrollers: YES];  // Automatically hide scrollbars when not needed
   resizeMask = NSViewNotSizable | NSViewWidthSizable | NSViewHeightSizable;
   [scroll setAutoresizingMask: resizeMask];
   [mainView addSubview: scroll];

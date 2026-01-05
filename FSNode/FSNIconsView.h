@@ -78,7 +78,7 @@
   
   // DS_Store free positioning support for Mac interoperability
   BOOL freePositioningEnabled;              // If YES, bypasses grid-based tile
-  NSMutableDictionary *customIconPositions; // filename -> NSValue(NSPoint) in Mac coords
+  NSMutableDictionary *customIconPositions; // filename -> NSValue(NSPoint) icon center in GNUstep coords
   CGFloat dsStoreIconHeight;                // Icon height for coordinate conversion
 }
 
