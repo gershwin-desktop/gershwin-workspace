@@ -22,8 +22,7 @@ config.log
 config.status
 config.h
 GNUmakefile
-!/GNUmakefile
-!DSStore/GNUmakefile
+!**/GNUmakefile
 
 # Build directories
 obj
