@@ -40,6 +40,7 @@ ADDITIONAL_INCLUDE_DIRS += -I../DSStore
 
 Workspace_RESOURCE_FILES = \
   Resources/Icons/* \
+  Resources/Network.icns \
   Resources/English.lproj \
   Resources/BrasilPortuguese.lproj \
   Resources/Dutch.lproj \
