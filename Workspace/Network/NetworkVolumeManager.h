@@ -3,7 +3,7 @@
  * Author: Simon Peter
  * Date: January 2026
  *
- * Manages mounting and unmounting of network volumes (SFTP, AFP, etc.)
+ * Manages mounting and unmounting of network volumes (SFTP, WebDAV, AFP, etc.)
  */
 
 #import <Foundation/Foundation.h>
@@ -12,7 +12,8 @@
 
 /**
  * NetworkVolumeManager handles the mounting and unmounting of network
- * volumes using platform-specific tools like FUSE sshfs on Linux/BSD.
+ * volumes using platform-specific tools like FUSE sshfs on Linux/BSD,
+ * and AVFS for WebDAV, FTP, HTTP access.
  *
  * This class provides an abstraction layer over different mounting mechanisms
  * and handles error conditions gracefully.
@@ -21,6 +22,7 @@
 {
   NSMutableDictionary *mountedVolumes;  /* Maps service identifier to mount point */
   NSMutableDictionary *mountedVolumesPIDs;  /* Maps service identifier to NSNumber(pid) */
+  NSMutableDictionary *webdavMounts;    /* Maps service identifier to AVFS virtual path */
   NSFileManager *fm;
 }
 
@@ -86,6 +88,31 @@
  * @return YES if sshfs is available, NO otherwise
  */
 - (BOOL)isSshfsAvailable;
+
+/**
+ * Attempts to mount a WebDAV service using AVFS.
+ * Returns the virtual path on success, nil on failure.
+ *
+ * This method checks if AVFS is available and prompts the user if it's not.
+ * Will prompt for credentials if needed.
+ *
+ * @param serviceItem The WebDAV service to mount
+ * @return The AVFS virtual path, or nil on failure
+ */
+- (NSString *)mountWebDAVService:(NetworkServiceItem *)serviceItem;
+
+/**
+ * Attempts to mount a WebDAV service with provided credentials.
+ * Returns the virtual path on success, nil on failure.
+ *
+ * @param serviceItem The WebDAV service to mount
+ * @param user The username to use (optional)
+ * @param pass The password to use (optional)
+ * @return The AVFS virtual path, or nil on failure
+ */
+- (NSString *)mountWebDAVService:(NetworkServiceItem *)serviceItem
+                        username:(NSString *)user
+                        password:(NSString *)pass;
 
 /**
  * Unmounts all currently mounted network volumes.

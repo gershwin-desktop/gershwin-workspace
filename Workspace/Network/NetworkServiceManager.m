@@ -69,7 +69,7 @@ static NetworkServiceManager *sharedManager = nil;
     return;
   }
   
-  NSLog(@"NetworkServiceManager: Starting to browse for SFTP and AFP services...");
+  NSLog(@"NetworkServiceManager: Starting to browse for SFTP, AFP, and WebDAV services...");
   isSearching = YES;
   
   /* Start browsing for SFTP-SSH services */
@@ -83,6 +83,18 @@ static NetworkServiceManager *sharedManager = nil;
   [afpBrowser setDelegate:self];
   [afpBrowser searchForServicesOfType:@"_afpovertcp._tcp." inDomain:@"local."];
   NSLog(@"NetworkServiceManager: Started searching for _afpovertcp._tcp. services");
+  
+  /* Start browsing for WebDAV services (HTTP) */
+  webdavBrowser = [[NSNetServiceBrowser alloc] init];
+  [webdavBrowser setDelegate:self];
+  [webdavBrowser searchForServicesOfType:@"_webdav._tcp." inDomain:@"local."];
+  NSLog(@"NetworkServiceManager: Started searching for _webdav._tcp. services");
+  
+  /* Start browsing for WebDAV services (HTTPS) */
+  webdavsBrowser = [[NSNetServiceBrowser alloc] init];
+  [webdavsBrowser setDelegate:self];
+  [webdavsBrowser searchForServicesOfType:@"_webdavs._tcp." inDomain:@"local."];
+  NSLog(@"NetworkServiceManager: Started searching for _webdavs._tcp. services");
 }
 
 - (void)stopBrowsing
@@ -104,6 +116,18 @@ static NetworkServiceManager *sharedManager = nil;
     [afpBrowser stop];
     [afpBrowser release];
     afpBrowser = nil;
+  }
+  
+  if (webdavBrowser) {
+    [webdavBrowser stop];
+    [webdavBrowser release];
+    webdavBrowser = nil;
+  }
+  
+  if (webdavsBrowser) {
+    [webdavsBrowser stop];
+    [webdavsBrowser release];
+    webdavsBrowser = nil;
   }
   
   /* Stop any pending resolutions */
@@ -144,6 +168,19 @@ static NetworkServiceManager *sharedManager = nil;
     NSMutableArray *result = [NSMutableArray array];
     for (NetworkServiceItem *item in services) {
       if ([item isAFPService]) {
+        [result addObject:item];
+      }
+    }
+    return result;
+  }
+}
+
+- (NSArray *)webdavServices
+{
+  @synchronized(services) {
+    NSMutableArray *result = [NSMutableArray array];
+    for (NetworkServiceItem *item in services) {
+      if ([item isWebDAVService]) {
         [result addObject:item];
       }
     }
@@ -278,13 +315,23 @@ static NetworkServiceManager *sharedManager = nil;
 
 - (void)netServiceBrowserWillSearch:(NSNetServiceBrowser *)browser
 {
-  NSString *browserType = (browser == sftpBrowser) ? @"SFTP" : @"AFP";
+  NSString *browserType;
+  if (browser == sftpBrowser) browserType = @"SFTP";
+  else if (browser == afpBrowser) browserType = @"AFP";
+  else if (browser == webdavBrowser) browserType = @"WebDAV";
+  else if (browser == webdavsBrowser) browserType = @"WebDAVS";
+  else browserType = @"Unknown";
   NSLog(@"NetworkServiceManager: %@ browser will search", browserType);
 }
 
 - (void)netServiceBrowserDidStopSearch:(NSNetServiceBrowser *)browser
 {
-  NSString *browserType = (browser == sftpBrowser) ? @"SFTP" : @"AFP";
+  NSString *browserType;
+  if (browser == sftpBrowser) browserType = @"SFTP";
+  else if (browser == afpBrowser) browserType = @"AFP";
+  else if (browser == webdavBrowser) browserType = @"WebDAV";
+  else if (browser == webdavsBrowser) browserType = @"WebDAVS";
+  else browserType = @"Unknown";
   NSLog(@"NetworkServiceManager: %@ browser stopped searching", browserType);
 }
 
@@ -292,7 +339,12 @@ static NetworkServiceManager *sharedManager = nil;
            didFindService:(NSNetService *)netService
                moreComing:(BOOL)moreComing
 {
-  NSString *browserType = (browser == sftpBrowser) ? @"SFTP" : @"AFP";
+  NSString *browserType;
+  if (browser == sftpBrowser) browserType = @"SFTP";
+  else if (browser == afpBrowser) browserType = @"AFP";
+  else if (browser == webdavBrowser) browserType = @"WebDAV";
+  else if (browser == webdavsBrowser) browserType = @"WebDAVS";
+  else browserType = @"Unknown";
   NSLog(@"NetworkServiceManager: %@ browser found service: %@ (type: %@, domain: %@)", 
         browserType, [netService name], [netService type], [netService domain]);
   
@@ -311,7 +363,12 @@ static NetworkServiceManager *sharedManager = nil;
          didRemoveService:(NSNetService *)netService
                moreComing:(BOOL)moreComing
 {
-  NSString *browserType = (browser == sftpBrowser) ? @"SFTP" : @"AFP";
+  NSString *browserType;
+  if (browser == sftpBrowser) browserType = @"SFTP";
+  else if (browser == afpBrowser) browserType = @"AFP";
+  else if (browser == webdavBrowser) browserType = @"WebDAV";
+  else if (browser == webdavsBrowser) browserType = @"WebDAVS";
+  else browserType = @"Unknown";
   NSLog(@"NetworkServiceManager: %@ browser removed service: %@", 
         browserType, [netService name]);
   
@@ -322,7 +379,12 @@ static NetworkServiceManager *sharedManager = nil;
 - (void)netServiceBrowser:(NSNetServiceBrowser *)browser
              didNotSearch:(NSDictionary *)errorDict
 {
-  NSString *browserType = (browser == sftpBrowser) ? @"SFTP" : @"AFP";
+  NSString *browserType;
+  if (browser == sftpBrowser) browserType = @"SFTP";
+  else if (browser == afpBrowser) browserType = @"AFP";
+  else if (browser == webdavBrowser) browserType = @"WebDAV";
+  else if (browser == webdavsBrowser) browserType = @"WebDAVS";
+  else browserType = @"Unknown";
   NSLog(@"NetworkServiceManager: %@ browser failed to search: %@", 
         browserType, errorDict);
 }

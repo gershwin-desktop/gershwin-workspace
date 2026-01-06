@@ -61,6 +61,16 @@
 - (BOOL)isAFPService;
 
 /**
+ * Returns YES if this is a WebDAV service (HTTP or HTTPS).
+ */
+- (BOOL)isWebDAVService;
+
+/**
+ * Returns YES if this is a secure WebDAV service (HTTPS).
+ */
+- (BOOL)isSecureWebDAV;
+
+/**
  * Returns the icon name for this service type.
  */
 - (NSString *)iconName;

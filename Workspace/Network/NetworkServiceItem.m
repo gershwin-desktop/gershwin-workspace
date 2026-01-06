@@ -77,6 +77,11 @@
     return [base stringByAppendingString:@" (sftp)"];
   } else if ([self isAFPService]) {
     return [base stringByAppendingString:@" (afp)"];
+  } else if ([self isWebDAVService]) {
+    if ([self isSecureWebDAV]) {
+      return [base stringByAppendingString:@" (webdavs)"];
+    }
+    return [base stringByAppendingString:@" (webdav)"];
   }
   return base;
 }
@@ -94,6 +99,16 @@
 - (BOOL)isAFPService
 {
   return [type hasPrefix:@"_afpovertcp."];
+}
+
+- (BOOL)isWebDAVService
+{
+  return [type hasPrefix:@"_webdav."] || [type hasPrefix:@"_webdavs."];
+}
+
+- (BOOL)isSecureWebDAV
+{
+  return [type hasPrefix:@"_webdavs."];
 }
 
 - (NSString *)iconName

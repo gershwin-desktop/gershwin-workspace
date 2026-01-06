@@ -133,6 +133,7 @@ Network/NetworkServiceManager.m \
 Network/NetworkFSNode.m \
 Network/NetworkVolumeManager.m \
 Network/SFTPMount.m \
+AVFSMount.m \
 VolumeManager.m \
 
 # Conditionally add DBusConnection.m if DBus is available

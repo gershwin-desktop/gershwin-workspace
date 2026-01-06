@@ -1,10 +1,18 @@
 /* VolumeManager.h
  *
  * Manages mounting and unmounting of disk image files (DMG, ISO, BIN, NRG, IMG, MDF)
- * using darling-dmg and fuseiso tools
+ * using darling-dmg and fuseiso tools.
+ *
+ * Also supports AVFS (A Virtual File System) for browsing archives and compressed
+ * files (tar, tar.gz, tar.bz2, zip, rar, 7z, etc.) via FUSE.
+ *
+ * Note: For SSH/SFTP, sshfs is given precedence as it provides better user experience.
+ * AVFS ssh/sftp handlers are not used.
  */
 
 #import <Foundation/Foundation.h>
+
+@class AVFSMount;
 
 /**
  * Result object for mount operations
@@ -28,13 +36,14 @@
 @end
 
 /**
- * VolumeManager handles mounting and unmounting of disk images
+ * VolumeManager handles mounting and unmounting of disk images and archives
  */
 @interface VolumeManager : NSObject
 {
   NSMutableDictionary *mountedVolumes;       /* Maps image path to mount point */
   NSMutableDictionary *mountedVolumesPIDs;   /* Maps image path to NSNumber(pid) */
   NSMutableSet *diskImageMountPoints;        /* Set of mount points that are disk images (DMG/ISO) */
+  NSMutableSet *avfsVirtualPaths;            /* Set of active AVFS virtual paths */
   NSFileManager *fm;
 }
 
@@ -82,6 +91,33 @@
  * Returns YES if fuseiso is available
  */
 - (BOOL)isFuseisoAvailable;
+
+/**
+ * Returns YES if AVFS is available
+ */
+- (BOOL)isAvfsAvailable;
+
+/**
+ * Check if a file can be opened via AVFS (archives, compressed files)
+ * This does NOT include disk images (ISO, DMG) or SSH/SFTP (handled by sshfs)
+ */
+- (BOOL)isAvfsSupportedFile:(NSString *)path;
+
+/**
+ * Open an archive or compressed file via AVFS
+ * Returns the virtual path that can be browsed like a directory
+ * 
+ * Supported formats include:
+ * - Archives: tar, zip, rar, 7z, ar, cpio, lha, zoo, rpm, deb
+ * - Compressed: gz, bz2, xz, lzma, zstd, lzip
+ * - Combined: tar.gz, tar.bz2, tar.xz, tgz, tbz2, txz, etc.
+ */
+- (NSString *)openAvfsArchive:(NSString *)archivePath;
+
+/**
+ * Get an array of all file extensions supported by AVFS
+ */
+- (NSArray *)avfsSupportedExtensions;
 
 /**
  * Unmount all mounted images on shutdown

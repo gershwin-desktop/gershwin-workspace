@@ -26,7 +26,7 @@ extern NSString * const NetworkServiceDidResolveNotification;
 
 /**
  * NetworkServiceManager is a singleton that manages mDNS service discovery
- * for network file sharing services (_sftp-ssh and _afpovertcp).
+ * for network file sharing services (_sftp-ssh, _afpovertcp, and _webdav).
  *
  * This class can be used throughout Workspace to access the current list
  * of available network services.
@@ -35,6 +35,8 @@ extern NSString * const NetworkServiceDidResolveNotification;
 {
   NSNetServiceBrowser *sftpBrowser;
   NSNetServiceBrowser *afpBrowser;
+  NSNetServiceBrowser *webdavBrowser;
+  NSNetServiceBrowser *webdavsBrowser;  /* WebDAV over HTTPS */
   NSMutableArray *services;           // Array of NetworkServiceItem
   NSMutableArray *pendingResolutions; // Array of NSNetService being resolved
   BOOL isSearching;
@@ -81,6 +83,11 @@ extern NSString * const NetworkServiceDidResolveNotification;
  * Returns an array of AFP service items only.
  */
 - (NSArray *)afpServices;
+
+/**
+ * Returns an array of WebDAV service items only.
+ */
+- (NSArray *)webdavServices;
 
 /**
  * Returns the number of discovered services.

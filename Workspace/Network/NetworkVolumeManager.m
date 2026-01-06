@@ -13,6 +13,7 @@
 #import "NetworkVolumeManager.h"
 #import "NetworkServiceItem.h"
 #import "SFTPMount.h"
+#import "../AVFSMount.h"
 #import "../Workspace.h"
 #import "../FSNode/FSNode.h"
 #import "../FSNode/FSNodeRep.h"
@@ -37,6 +38,7 @@ static NetworkVolumeManager *sharedInstance = nil;
   if (self) {
     mountedVolumes = [[NSMutableDictionary alloc] init];
     mountedVolumesPIDs = [[NSMutableDictionary alloc] init];
+    webdavMounts = [[NSMutableDictionary alloc] init];
     fm = [NSFileManager defaultManager];
     
     NSLog(@"NetworkVolumeManager: Initialized");
@@ -49,6 +51,7 @@ static NetworkVolumeManager *sharedInstance = nil;
   [self unmountAll];
   [mountedVolumes release];
   [mountedVolumesPIDs release];
+  [webdavMounts release];
   [super dealloc];
 }
 
@@ -913,6 +916,215 @@ static NetworkVolumeManager *sharedInstance = nil;
   }
 }
 
+#pragma mark - WebDAV Mounting via AVFS
+
+- (NSString *)mountWebDAVService:(NetworkServiceItem *)serviceItem
+{
+  return [self mountWebDAVService:serviceItem username:nil password:nil];
+}
+
+- (NSString *)mountWebDAVService:(NetworkServiceItem *)serviceItem
+                        username:(NSString *)user
+                        password:(NSString *)pass
+{
+  if (!serviceItem) {
+    NSLog(@"NetworkVolumeManager: No service item provided for WebDAV mount");
+    return nil;
+  }
+  
+  NSString *identifier = [serviceItem identifier];
+  
+  /* Check if already mounted */
+  NSString *existingPath = [webdavMounts objectForKey:identifier];
+  if (existingPath) {
+    NSLog(@"NetworkVolumeManager: WebDAV service already accessible at %@", existingPath);
+    return existingPath;
+  }
+  
+  /* Check if AVFS is available */
+  AVFSMount *avfs = [AVFSMount sharedInstance];
+  if (![avfs isAvfsAvailable]) {
+    [avfs showAvfsNotInstalledAlert];
+    return nil;
+  }
+  
+  /* Ensure AVFS daemon is running */
+  if (![avfs ensureAvfsDaemonRunning]) {
+    NSLog(@"NetworkVolumeManager: Failed to start AVFS daemon for WebDAV");
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:NSLocalizedString(@"AVFS Error", @"")];
+    [alert setInformativeText:NSLocalizedString(
+      @"Failed to start the AVFS daemon. Please check that AVFS is properly installed.", @"")];
+    [alert setAlertStyle:NSWarningAlertStyle];
+    [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
+    [alert runModal];
+    [alert release];
+    return nil;
+  }
+  
+  /* Get hostname and port */
+  NSString *hostname = [serviceItem hostName];
+  int port = [serviceItem port];
+  NSString *remotePath = [serviceItem remotePath];
+  BOOL isSecure = [serviceItem isSecureWebDAV];
+  
+  if (!hostname || [hostname length] == 0) {
+    NSLog(@"NetworkVolumeManager: No hostname for WebDAV service");
+    return nil;
+  }
+  
+  /* Prompt for credentials if not provided */
+  NSString *username = user ? user : [serviceItem username];
+  NSString *password = pass;
+  
+  /* If we don't have credentials, prompt the user */
+  if (!username || [username length] == 0) {
+    /* Create a credentials dialog */
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:[NSString stringWithFormat:@"Connect to %@", [serviceItem displayName]]];
+    [alert setInformativeText:@"Enter your WebDAV credentials:"];
+    [alert addButtonWithTitle:@"Connect"];
+    [alert addButtonWithTitle:@"Cancel"];
+    
+    /* Create accessory view with username and password fields */
+    NSView *accessory = [[NSView alloc] initWithFrame:NSMakeRect(0, 0, 300, 60)];
+    
+    NSTextField *userLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 35, 80, 22)];
+    [userLabel setStringValue:@"Username:"];
+    [userLabel setBezeled:NO];
+    [userLabel setDrawsBackground:NO];
+    [userLabel setEditable:NO];
+    [userLabel setSelectable:NO];
+    [accessory addSubview:userLabel];
+    [userLabel release];
+    
+    NSTextField *userField = [[NSTextField alloc] initWithFrame:NSMakeRect(85, 35, 210, 22)];
+    [userField setStringValue:NSUserName()];  /* Default to current user */
+    [accessory addSubview:userField];
+    
+    NSTextField *passLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(0, 5, 80, 22)];
+    [passLabel setStringValue:@"Password:"];
+    [passLabel setBezeled:NO];
+    [passLabel setDrawsBackground:NO];
+    [passLabel setEditable:NO];
+    [passLabel setSelectable:NO];
+    [accessory addSubview:passLabel];
+    [passLabel release];
+    
+    NSSecureTextField *passField = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(85, 5, 210, 22)];
+    [accessory addSubview:passField];
+    
+    [alert setAccessoryView:accessory];
+    [accessory release];
+    
+    NSInteger result = [alert runModal];
+    
+    if (result == NSAlertSecondButtonReturn) {
+      /* User cancelled */
+      [userField release];
+      [passField release];
+      [alert release];
+      return nil;
+    }
+    
+    username = [[userField stringValue] copy];
+    password = [[passField stringValue] copy];
+    
+    [userField release];
+    [passField release];
+    [alert release];
+    
+    [username autorelease];
+    [password autorelease];
+  }
+  
+  /* Build the AVFS WebDAV path
+   * AVFS format: ~/.avfs/#dav:http:host|port|path or ~/.avfs/#dav:https:host|port|path
+   * 
+   * If we have credentials, we need to write them to the dav_ctl file first
+   */
+  
+  NSString *avfsBase = [avfs avfsBasePath];
+  NSString *protocol = isSecure ? @"https" : @"http";
+  
+  /* Build the host part with port if non-standard */
+  NSString *hostPart = hostname;
+  if (port > 0 && ((isSecure && port != 443) || (!isSecure && port != 80))) {
+    hostPart = [NSString stringWithFormat:@"%@:%d", hostname, port];
+  }
+  
+  /* Replace / with | in the host (AVFS URL encoding) */
+  hostPart = [hostPart stringByReplacingOccurrencesOfString:@"/" withString:@"|"];
+  
+  /* Add path if specified */
+  NSString *pathPart = @"";
+  if (remotePath && [remotePath length] > 0) {
+    /* Replace / with | for AVFS */
+    pathPart = [remotePath stringByReplacingOccurrencesOfString:@"/" withString:@"|"];
+    if (![pathPart hasPrefix:@"|"]) {
+      pathPart = [@"|" stringByAppendingString:pathPart];
+    }
+  }
+  
+  /* Construct the full AVFS path */
+  NSString *davPath = [NSString stringWithFormat:@"%@/#dav:%@:%@%@",
+                       avfsBase, protocol, hostPart, pathPart];
+  
+  NSLog(@"NetworkVolumeManager: WebDAV AVFS path: %@", davPath);
+  
+  /* If we have credentials, write them to the dav_ctl file */
+  if (username && [username length] > 0 && password && [password length] > 0) {
+    /* AVFS uses /#dav_ctl:host/realm to set passwords
+     * Format: write "username\npassword" to the control file
+     */
+    NSString *davCtlPath = [NSString stringWithFormat:@"%@/#dav_ctl:%@%@/password",
+                            avfsBase, hostPart, pathPart];
+    
+    NSString *credentials = [NSString stringWithFormat:@"%@\n%@", username, password];
+    NSError *writeError = nil;
+    
+    /* First try to access the dav_ctl directory to make sure it exists */
+    NSString *davCtlDir = [davCtlPath stringByDeletingLastPathComponent];
+    if ([fm fileExistsAtPath:davCtlDir]) {
+      [credentials writeToFile:davCtlPath atomically:NO encoding:NSUTF8StringEncoding error:&writeError];
+      if (writeError) {
+        NSLog(@"NetworkVolumeManager: Warning - could not write WebDAV credentials: %@", writeError);
+      } else {
+        NSLog(@"NetworkVolumeManager: Wrote WebDAV credentials to control file");
+      }
+    } else {
+      NSLog(@"NetworkVolumeManager: dav_ctl directory not available, credentials will be requested by AVFS");
+    }
+  }
+  
+  /* Verify the path is accessible */
+  NSError *accessError = nil;
+  NSArray *contents = [fm contentsOfDirectoryAtPath:davPath error:&accessError];
+  
+  if (!contents && accessError) {
+    NSLog(@"NetworkVolumeManager: WebDAV path not accessible: %@", accessError);
+    
+    /* Show error to user */
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:NSLocalizedString(@"WebDAV Connection Failed", @"")];
+    [alert setInformativeText:[NSString stringWithFormat:
+      NSLocalizedString(@"Could not connect to %@.\n\nError: %@", @""),
+      [serviceItem displayName], [accessError localizedDescription]]];
+    [alert setAlertStyle:NSWarningAlertStyle];
+    [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
+    [alert runModal];
+    [alert release];
+    return nil;
+  }
+  
+  NSLog(@"NetworkVolumeManager: WebDAV service accessible at %@", davPath);
+  
+  /* Track this mount */
+  [webdavMounts setObject:davPath forKey:identifier];
+  
+  return davPath;
+}
+
 - (void)unmountAll
 {
   NSArray *identifiers = [mountedVolumes allKeys];
@@ -941,6 +1153,10 @@ static NetworkVolumeManager *sharedInstance = nil;
   }
   
   [mountedVolumes removeAllObjects];
+  [mountedVolumesPIDs removeAllObjects];
+  
+  /* Clear WebDAV mounts (AVFS handles cleanup automatically) */
+  [webdavMounts removeAllObjects];
 }
 
 @end

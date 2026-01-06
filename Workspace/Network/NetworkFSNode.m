@@ -337,6 +337,11 @@ NSString * const NetworkVirtualPath = @"/Network";
       return NSLocalizedString(@"SFTP Server", @"Type for SFTP services");
     } else if ([serviceItem isAFPService]) {
       return NSLocalizedString(@"AFP Server", @"Type for AFP services");
+    } else if ([serviceItem isWebDAVService]) {
+      if ([serviceItem isSecureWebDAV]) {
+        return NSLocalizedString(@"WebDAV Server (Secure)", @"Type for WebDAVS services");
+      }
+      return NSLocalizedString(@"WebDAV Server", @"Type for WebDAV services");
     }
   }
   
@@ -410,11 +415,11 @@ NSString * const NetworkVirtualPath = @"/Network";
     return path;
   }
   
-  NSLog(@"NetworkFSNode openNetworkService: isSFTPService: %d, isAFPService: %d", 
-        [serviceItem isSFTPService], [serviceItem isAFPService]);
+  NSLog(@"NetworkFSNode openNetworkService: isSFTPService: %d, isAFPService: %d, isWebDAVService: %d", 
+        [serviceItem isSFTPService], [serviceItem isAFPService], [serviceItem isWebDAVService]);
   
   if ([serviceItem isSFTPService]) {
-    /* Attempt to mount the SFTP service */
+    /* Attempt to mount the SFTP service using sshfs (takes precedence) */
     NSLog(@"NetworkFSNode: Attempting to mount SFTP service: %@", [serviceItem name]);
     
     NetworkVolumeManager *volumeManager = [NetworkVolumeManager sharedManager];
@@ -425,6 +430,20 @@ NSString * const NetworkVirtualPath = @"/Network";
       return mountPoint;
     } else {
       NSLog(@"NetworkFSNode: Failed to mount SFTP service");
+      return nil;
+    }
+  } else if ([serviceItem isWebDAVService]) {
+    /* Attempt to mount WebDAV service using AVFS */
+    NSLog(@"NetworkFSNode: Attempting to mount WebDAV service: %@", [serviceItem name]);
+    
+    NetworkVolumeManager *volumeManager = [NetworkVolumeManager sharedManager];
+    NSString *mountPoint = [volumeManager mountWebDAVService:serviceItem];
+    
+    if (mountPoint) {
+      NSLog(@"NetworkFSNode: WebDAV service mounted at: %@", mountPoint);
+      return mountPoint;
+    } else {
+      NSLog(@"NetworkFSNode: Failed to mount WebDAV service");
       return nil;
     }
   } else if ([serviceItem isAFPService]) {

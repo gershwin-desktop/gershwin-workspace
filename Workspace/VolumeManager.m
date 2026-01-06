@@ -10,6 +10,7 @@
 #import <unistd.h>
 #import <sys/statfs.h>
 #import "VolumeManager.h"
+#import "AVFSMount.h"
 #import "Workspace.h"
 #import "FSNode.h"
 #import "FSNodeRep.h"
@@ -74,6 +75,7 @@ static VolumeManager *sharedInstance = nil;
     mountedVolumes = [[NSMutableDictionary alloc] init];
     mountedVolumesPIDs = [[NSMutableDictionary alloc] init];
     diskImageMountPoints = [[NSMutableSet alloc] init];
+    avfsVirtualPaths = [[NSMutableSet alloc] init];
     fm = [NSFileManager defaultManager];
     NSLog(@"VolumeManager: Initialized");
   }
@@ -86,6 +88,7 @@ static VolumeManager *sharedInstance = nil;
   [mountedVolumes release];
   [mountedVolumesPIDs release];
   [diskImageMountPoints release];
+  [avfsVirtualPaths release];
   [super dealloc];
 }
 
@@ -1016,6 +1019,76 @@ static VolumeManager *sharedInstance = nil;
   return NO;
 }
 
+#pragma mark - AVFS Support
+
+- (BOOL)isAvfsAvailable
+{
+  return [[AVFSMount sharedInstance] isAvfsAvailable];
+}
+
+- (BOOL)isAvfsSupportedFile:(NSString *)path
+{
+  if (!path || [path length] == 0) {
+    return NO;
+  }
+  return [[AVFSMount sharedInstance] canHandleFile:path];
+}
+
+- (NSArray *)avfsSupportedExtensions
+{
+  return [[AVFSMount sharedInstance] supportedExtensions];
+}
+
+- (NSString *)openAvfsArchive:(NSString *)archivePath
+{
+  if (!archivePath || [archivePath length] == 0) {
+    NSLog(@"VolumeManager: No archive path provided");
+    return nil;
+  }
+  
+  /* Check if file exists */
+  if (![fm fileExistsAtPath:archivePath]) {
+    NSLog(@"VolumeManager: Archive file not found: %@", archivePath);
+    [self showErrorAlert:[NSString stringWithFormat:@"File not found: %@", archivePath]];
+    return nil;
+  }
+  
+  AVFSMount *avfs = [AVFSMount sharedInstance];
+  
+  /* Check if AVFS can handle this file type */
+  if (![avfs canHandleFile:archivePath]) {
+    NSLog(@"VolumeManager: File type not supported by AVFS: %@", archivePath);
+    return nil;
+  }
+  
+  /* Check if AVFS is available */
+  if (![avfs isAvfsAvailable]) {
+    [avfs showAvfsNotInstalledAlert];
+    return nil;
+  }
+  
+  NSLog(@"VolumeManager: Opening archive via AVFS: %@", archivePath);
+  
+  /* Get the virtual path for the archive */
+  AVFSMountResult *result = [avfs virtualPathForFile:archivePath];
+  
+  if (!result.success) {
+    NSLog(@"VolumeManager: AVFS failed to open archive: %@", result.errorMessage);
+    [self showErrorAlert:[NSString stringWithFormat:@"Failed to open archive:\n%@", result.errorMessage]];
+    return nil;
+  }
+  
+  NSString *virtualPath = result.virtualPath;
+  NSLog(@"VolumeManager: AVFS virtual path: %@", virtualPath);
+  
+  /* Track this virtual path */
+  @synchronized(self) {
+    [avfsVirtualPaths addObject:virtualPath];
+  }
+  
+  return virtualPath;
+}
+
 - (void)unmountAll
 {
   NSArray *imagePaths = [[mountedVolumes allKeys] copy];
@@ -1023,6 +1096,9 @@ static VolumeManager *sharedInstance = nil;
     [self unmountImageFile:imagePath];
   }
   [imagePaths release];
+  
+  /* Note: We don't stop AVFS daemon here as it may be used by other applications.
+   * The daemon will be stopped when user logs out or explicitly unmounts ~/.avfs */
 }
 
 @end

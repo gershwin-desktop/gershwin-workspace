@@ -63,6 +63,7 @@
 #import "Network/NetworkServiceManager.h"
 #import "Network/NetworkServiceItem.h"
 #import "Network/NetworkVolumeManager.h"
+#import "AVFSMount.h"
 #if HAVE_DBUS
 #import "DBusConnection.h"
 #endif
@@ -1719,6 +1720,27 @@ NSString *_pendingSystemActionTitle = nil;
     }
     return NO;
   }
+  
+  /* Check if this is an archive file that AVFS can handle.
+   * Note: sshfs is given precedence for SSH/SFTP - those are handled
+   * by the Network subsystem above. AVFS handles:
+   * - Archives: tar, zip, rar, 7z, ar, cpio, lha, zoo, rpm, deb, jar, etc.
+   * - Compressed: gz, bz2, xz, lzma, zstd, lzip
+   * - Compressed archives: tar.gz, tar.bz2, tar.xz, tgz, tbz2, etc.
+   */
+  VolumeManager *volMgr = [VolumeManager sharedManager];
+  if ([volMgr isAvfsSupportedFile:fullPath]) {
+    NSLog(@"Workspace: Opening archive via AVFS: %@", fullPath);
+    NSString *virtualPath = [volMgr openAvfsArchive:fullPath];
+    if (virtualPath) {
+      /* Wait briefly for AVFS to process the archive */
+      usleep(300000);  /* 0.3 second delay */
+      [self newViewerAtPath:virtualPath];
+      return YES;
+    }
+    /* If AVFS failed, fall through to try opening with an application */
+    NSLog(@"Workspace: AVFS failed, falling through to application handler");
+  }
 
   aURL = nil;
   [ws getInfoForFile: fullPath application: &appName type: &type];
@@ -2863,12 +2885,21 @@ NSString *_pendingSystemActionTitle = nil;
   id passwordObj = [mountInfo objectForKey:@"password"];
   NSString *password = (passwordObj != [NSNull null]) ? passwordObj : nil;
   NSString *username = [serviceItem username];
+  NSString *scheme = [mountInfo objectForKey:@"scheme"];
   
-  /* Perform the mount operation with provided credentials */
+  /* Perform the mount operation based on scheme */
   NetworkVolumeManager *volumeManager = [NetworkVolumeManager sharedManager];
-  NSString *mountPoint = [volumeManager mountSFTPService:serviceItem
-                                                username:username
-                                                password:password];
+  NSString *mountPoint = nil;
+  
+  if ([scheme isEqualToString:@"sftp"]) {
+    mountPoint = [volumeManager mountSFTPService:serviceItem
+                                        username:username
+                                        password:password];
+  } else if ([scheme isEqualToString:@"webdav"] || [scheme isEqualToString:@"webdavs"]) {
+    mountPoint = [volumeManager mountWebDAVService:serviceItem
+                                          username:username
+                                          password:password];
+  }
   
   /* Return to main thread to update UI */
   [self performSelectorOnMainThread:@selector(finishMountOperation:)
@@ -2929,10 +2960,23 @@ NSString *_pendingSystemActionTitle = nil;
         return;
       }
       
-      NSString *scheme = [url scheme];
-      if (!scheme || ![scheme isEqualToString:@"sftp"]) {
+      NSString *scheme = [[url scheme] lowercaseString];
+      if (!scheme) {
         NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
-                        _(@"Only sftp:// URLs are currently supported"), 
+                        _(@"URL must include a scheme (sftp://, webdav://, webdavs://)"), 
+                        _(@"OK"), nil, nil);
+        RELEASE(dialog);
+        return;
+      }
+      
+      /* Check for supported schemes */
+      BOOL isSFTP = [scheme isEqualToString:@"sftp"];
+      BOOL isWebDAV = [scheme isEqualToString:@"webdav"];
+      BOOL isWebDAVS = [scheme isEqualToString:@"webdavs"];
+      
+      if (!isSFTP && !isWebDAV && !isWebDAVS) {
+        NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
+                        _(@"Supported URL schemes: sftp://, webdav://, webdavs://"), 
                         _(@"OK"), nil, nil);
         RELEASE(dialog);
         return;
@@ -2950,7 +2994,9 @@ NSString *_pendingSystemActionTitle = nil;
       /* Extract components */
       NSString *username = [url user];
       NSNumber *portNum = [url port];
-      int port = portNum ? [portNum intValue] : 22;
+      /* Default port: 22 for SFTP, 80 for WebDAV, 443 for WebDAVS */
+      int defaultPort = isSFTP ? 22 : (isWebDAVS ? 443 : 80);
+      int port = portNum ? [portNum intValue] : defaultPort;
       NSString *remotePath = [url path];
       NSString *password = nil;
       
@@ -2963,7 +3009,9 @@ NSString *_pendingSystemActionTitle = nil;
                                                     styleMask:(NSTitledWindowMask | NSClosableWindowMask)
                                                       backing:NSBackingStoreBuffered
                                                         defer:NO];
-        [panel setTitle:NSLocalizedString(@"Connect to SFTP Server", @"")];
+        NSString *dialogTitle = isSFTP ? NSLocalizedString(@"Connect to SFTP Server", @"")
+                                       : NSLocalizedString(@"Connect to WebDAV Server", @"");
+        [panel setTitle:dialogTitle];
         [panel center];
         
         /* Create main label */
@@ -3067,12 +3115,20 @@ NSString *_pendingSystemActionTitle = nil;
         }
       }
       
-      /* Create a NetworkServiceItem for manual SFTP connection */
+      /* Create a NetworkServiceItem for manual connection */
       NetworkServiceItem *serviceItem = [[NetworkServiceItem alloc] init];
       serviceItem.hostName = hostname;
       serviceItem.port = port;
       serviceItem.name = [NSString stringWithFormat:@"%@", hostname];
-      serviceItem.type = @"_sftp-ssh._tcp.";  /* SFTP service type */
+      
+      /* Set the appropriate service type based on URL scheme */
+      if (isSFTP) {
+        serviceItem.type = @"_sftp-ssh._tcp.";
+      } else if (isWebDAVS) {
+        serviceItem.type = @"_webdavs._tcp.";
+      } else {
+        serviceItem.type = @"_webdav._tcp.";
+      }
       serviceItem.domain = @"local.";          /* Default domain */
       if (username && [username length] > 0) {
         [serviceItem setUsername:username];
@@ -3081,8 +3137,9 @@ NSString *_pendingSystemActionTitle = nil;
         [serviceItem setRemotePath:remotePath];
       }
       
-      NSLog(@"Workspace: Connecting to SFTP server: %@:%d (user: %@, path: %@)", 
-            hostname, port, username ?: @"(prompt)", remotePath ?: @"~");
+      NSString *protocolName = isSFTP ? @"SFTP" : @"WebDAV";
+      NSLog(@"Workspace: Connecting to %@ server: %@:%d (user: %@, path: %@)", 
+            protocolName, hostname, port, username ?: @"(prompt)", remotePath ?: @"/");
       
       /* Show a connecting dialog */
       NSPanel *progressPanel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 300, 100)
@@ -3117,6 +3174,7 @@ NSString *_pendingSystemActionTitle = nil;
                                  progressPanel, @"progressPanel",
                                  hostname, @"hostname",
                                  password ? password : [NSNull null], @"password",
+                                 scheme, @"scheme",
                                  nil];
       [mountInfo retain];
       
