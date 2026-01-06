@@ -11,8 +11,8 @@
 #import <sys/statfs.h>
 #import "VolumeManager.h"
 #import "Workspace.h"
-#import "FSNode/FSNode.h"
-#import "FSNode/FSNodeRep.h"
+#import "FSNode.h"
+#import "FSNodeRep.h"
 #import "Desktop/GWDesktopManager.h"
 #import "Desktop/GWDesktopView.h"
 
