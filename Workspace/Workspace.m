@@ -48,6 +48,7 @@
 #import "StartAppWin.h"
 #import "Preferences/PrefController.h"
 #import "GWDesktopManager.h"
+#import "VolumeManager.h"
 #import "GWDesktopWindow.h"
 #import "Dock.h"
 #import "GWViewersManager.h"
@@ -1689,6 +1690,34 @@ NSString *_pendingSystemActionTitle = nil;
       }
   } else {
     NSLog(@"Workspace openFile: NOT a network path");
+  }
+
+  /* Check if this is a disk image file */
+  NSString *ext = [[fullPath pathExtension] lowercaseString];
+  if ([ext isEqualToString:@"dmg"]) {
+    NSLog(@"Workspace: Mounting DMG file: %@", fullPath);
+    VolumeManager *volMgr = [VolumeManager sharedManager];
+    NSString *mountPoint = [volMgr mountDMGFile:fullPath];
+    if (mountPoint) {
+      /* Wait for filesystem to populate before opening viewer */
+      usleep(500000);  /* 0.5 second delay */
+      [self newViewerAtPath:mountPoint];
+      return YES;
+    }
+    return NO;
+  } else if ([ext isEqualToString:@"iso"] || [ext isEqualToString:@"bin"] || 
+             [ext isEqualToString:@"nrg"] || [ext isEqualToString:@"img"] ||
+             [ext isEqualToString:@"mdf"]) {
+    NSLog(@"Workspace: Mounting disk image file: %@", fullPath);
+    VolumeManager *volMgr = [VolumeManager sharedManager];
+    NSString *mountPoint = [volMgr mountFuseisoImage:fullPath];
+    if (mountPoint) {
+      /* Wait for filesystem to populate before opening viewer */
+      usleep(500000);  /* 0.5 second delay */
+      [self newViewerAtPath:mountPoint];
+      return YES;
+    }
+    return NO;
   }
 
   aURL = nil;
@@ -4187,6 +4216,28 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   }
   
   NSLog(@"Workspace: Attempting to unmount volume at path: %@", path);
+  
+  // Check if this is a disk image mount managed by VolumeManager
+  BOOL isDiskImageVolume = NO;
+  id volumeManager = nil;
+  
+  Class VolumeManagerClass = NSClassFromString(@"VolumeManager");
+  if (VolumeManagerClass) {
+    volumeManager = [VolumeManagerClass sharedManager];
+    if (volumeManager && [volumeManager respondsToSelector:@selector(unmountPath:)]) {
+      // Check if this looks like a disk image mount (in /media/$USER with simple names)
+      if ([path hasPrefix:@"/media/"]) {
+        isDiskImageVolume = YES;
+        NSLog(@"Workspace: Detected disk image volume, using VolumeManager");
+      }
+    }
+  }
+  
+  if (isDiskImageVolume && volumeManager) {
+    // Use VolumeManager for disk image volumes
+    NSLog(@"Workspace: Calling VolumeManager unmountPath for %@", path);
+    return [volumeManager unmountPath: path];
+  }
   
   // Check if this is a network volume managed by NetworkVolumeManager
   BOOL isNetworkVolume = NO;

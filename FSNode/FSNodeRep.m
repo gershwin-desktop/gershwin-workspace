@@ -163,6 +163,7 @@ static FSNodeRep *shared = nil;
     hiddenPaths = [NSArray new];
     volumes = [[NSMutableSet alloc] initWithCapacity: 1];
     [self setVolumes:[[NSWorkspace sharedWorkspace] mountedRemovableMedia]];
+    diskImageVolumes = [[NSMutableSet alloc] initWithCapacity: 1];
     reservedNames = [[NSMutableSet alloc] initWithCapacity: 1];
     
     [self loadExtendedInfoModules];
@@ -269,6 +270,7 @@ static FSNodeRep *shared = nil;
   RELEASE (extInfoModules);
   RELEASE (lockedPaths);
   RELEASE (volumes);
+  RELEASE (diskImageVolumes);
   RELEASE (reservedNames);
   RELEASE (rootPath);
   RELEASE (hiddenPaths);
@@ -611,9 +613,23 @@ static FSNodeRep *shared = nil;
   [volumes addObject: path];
 }
 
+- (void)addVolumeAt:(NSString *)path isDiskImage:(BOOL)isDiskImage
+{
+  [volumes addObject: path];
+  if (isDiskImage) {
+    [diskImageVolumes addObject: path];
+  }
+}
+
 - (void)removeVolumeAt:(NSString *)path
 {
   [volumes removeObject: path];
+  [diskImageVolumes removeObject: path];
+}
+
+- (BOOL)isDiskImageVolume:(NSString *)path
+{
+  return [diskImageVolumes containsObject: path];
 }
 
 - (NSSet *)volumes

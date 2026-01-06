@@ -356,6 +356,7 @@ typedef enum FSNSelectionMask {
   NSArray *hiddenPaths;
   NSMutableSet *reservedNames;
   NSMutableSet *volumes;
+  NSMutableSet *diskImageVolumes;  /* Tracks which volumes are disk images (DMG/ISO) */
   NSString *rootPath;
     
   NSMutableDictionary *iconsCache;
@@ -431,7 +432,11 @@ typedef enum FSNSelectionMask {
 
 - (void)addVolumeAt:(NSString *)path;
 
+- (void)addVolumeAt:(NSString *)path isDiskImage:(BOOL)isDiskImage;
+
 - (void)removeVolumeAt:(NSString *)path;
+
+- (BOOL)isDiskImageVolume:(NSString *)path;
 
 - (NSSet *)volumes;
 

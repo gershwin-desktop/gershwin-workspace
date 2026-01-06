@@ -39,7 +39,6 @@ ADDITIONAL_INCLUDE_DIRS += -I../DSStore
 
 Workspace_RESOURCE_FILES = \
   Resources/Icons/* \
-  Resources/Network.icns \
   Resources/English.lproj \
   Resources/BrasilPortuguese.lproj \
   Resources/Dutch.lproj \
@@ -134,6 +133,7 @@ Network/NetworkServiceManager.m \
 Network/NetworkFSNode.m \
 Network/NetworkVolumeManager.m \
 Network/SFTPMount.m \
+VolumeManager.m \
 
 # Conditionally add DBusConnection.m if DBus is available
 ifeq ($(with_dbus), yes)

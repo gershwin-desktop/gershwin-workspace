@@ -149,8 +149,45 @@ static unsigned char darkerLUT[256] = {
 	}
       else if ([node isMountPoint] || [volumes containsObject: nodepath])
 	{
-	  key = @"disk";
-	  baseIcon = hardDiskIcon;
+	  /* Check if the mounted volume has a custom .VolumeIcon.icns */
+	  NSString *volumeIconPath = [nodepath stringByAppendingPathComponent: @".VolumeIcon.icns"];
+	  if ([fm isReadableFileAtPath: volumeIconPath])
+	    {
+	      /* Use the custom volume icon from the mounted image */
+	      key = volumeIconPath;
+	    }
+	  else if ([[FSNodeRep sharedInstance] isDiskImageVolume: nodepath])
+	    {
+	      /* Use CD icon for disk image mounts (DMG, ISO, etc.) */
+	      NSString *cdIconPath = [[NSBundle mainBundle] pathForImageResource: @"CD"];
+	      if (cdIconPath != nil)
+		{
+		  key = cdIconPath;
+		  /* Load the CD icon and cache it for later use */
+		  icon = [[[NSImage alloc] initWithContentsOfFile: cdIconPath] autorelease];
+		  if (icon == nil)
+		    {
+		      NSLog(@"FSNodeRepIcons: Failed to load CD icon from %@", cdIconPath);
+		      /* Fallback to generic disk icon */
+		      key = @"disk";
+		      baseIcon = hardDiskIcon;
+		      icon = nil;  /* Reset icon so cache lookup happens below */
+		    }
+		}
+	      else
+		{
+		  /* No CD.icns found, use generic disk icon */
+		  NSLog(@"FSNodeRepIcons: CD.icns not found in bundle");
+		  key = @"disk";
+		  baseIcon = hardDiskIcon;
+		}
+	    }
+	  else
+	    {
+	      /* Regular disk mount (physical disk, SSHFS, etc.) - use disk icon */
+	      key = @"disk";
+	      baseIcon = hardDiskIcon;
+	    }
 	}
       else if ([node isPackage] == NO)
 	{
