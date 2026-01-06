@@ -629,7 +629,29 @@ static FSNodeRep *shared = nil;
 
 - (BOOL)isDiskImageVolume:(NSString *)path
 {
-  return [diskImageVolumes containsObject: path];
+  if ([diskImageVolumes containsObject: path]) {
+    return YES;
+  }
+
+  /* Be robust about path representation: compare resolved and standardized forms */
+  NSString *resolved = [path stringByResolvingSymlinksInPath];
+  if (resolved && [diskImageVolumes containsObject: resolved]) {
+    return YES;
+  }
+
+  NSString *standard = [path stringByStandardizingPath];
+  if (standard && [diskImageVolumes containsObject: standard]) {
+    return YES;
+  }
+
+  for (NSString *dv in diskImageVolumes) {
+    if ([[dv stringByResolvingSymlinksInPath] isEqualToString: resolved]
+        || [[dv stringByStandardizingPath] isEqualToString: standard]) {
+      return YES;
+    }
+  }
+
+  return NO;
 }
 
 - (NSSet *)volumes

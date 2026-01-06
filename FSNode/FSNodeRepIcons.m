@@ -159,11 +159,12 @@ static unsigned char darkerLUT[256] = {
 	  else if ([[FSNodeRep sharedInstance] isDiskImageVolume: nodepath])
 	    {
 	      /* Use CD icon for disk image mounts (DMG, ISO, etc.) */
+	      NSLog(@"FSNodeRepIcons: isDiskImageVolume=YES for %@, using CD icon", nodepath);
 	      NSString *cdIconPath = [[NSBundle mainBundle] pathForImageResource: @"CD"];
 	      if (cdIconPath != nil)
 		{
 		  key = cdIconPath;
-		  /* Load the CD icon and cache it for later use */
+		  /* Load the CD icon */
 		  icon = [[[NSImage alloc] initWithContentsOfFile: cdIconPath] autorelease];
 		  if (icon == nil)
 		    {
@@ -172,6 +173,15 @@ static unsigned char darkerLUT[256] = {
 		      key = @"disk";
 		      baseIcon = hardDiskIcon;
 		      icon = nil;  /* Reset icon so cache lookup happens below */
+		    }
+		  else
+		    {
+		      /* Cache the base CD icon so cached lookups return it and we use it as base */
+		      NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+		      [dict setObject: icon forKey: [NSNumber numberWithInt: 48]];
+		      [iconsCache setObject: dict forKey: key];
+		      /* Use cached/resized icon immediately for the requested size */
+		      icon = [self cachedIconOfSize: size forKey: key];
 		    }
 		}
 	      else
@@ -185,6 +195,7 @@ static unsigned char darkerLUT[256] = {
 	  else
 	    {
 	      /* Regular disk mount (physical disk, SSHFS, etc.) - use disk icon */
+	      NSLog(@"FSNodeRepIcons: isDiskImageVolume=NO for %@, using hard disk icon", nodepath);
 	      key = @"disk";
 	      baseIcon = hardDiskIcon;
 	    }
