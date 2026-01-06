@@ -91,59 +91,55 @@ static VolumeManager *sharedInstance = nil;
 
 - (NSString *)findToolInPath:(NSString *)toolName alternativeNames:(NSArray *)altNames
 {
-  /* First try the tool name directly in standard locations */
-  NSArray *searchPaths = @[@"/usr/bin", @"/bin", @"/usr/local/bin", @"/opt/local/bin"];
-  
-  for (NSString *path in searchPaths) {
-    NSString *toolPath = [path stringByAppendingPathComponent:toolName];
-    if ([fm fileExistsAtPath:toolPath]) {
-      NSLog(@"VolumeManager: Found %@ at %@", toolName, toolPath);
-      return toolPath;
-    }
+  /* Build list of all names to try */
+  NSMutableArray *allNames = [NSMutableArray arrayWithObject:toolName];
+  if (altNames) {
+    [allNames addObjectsFromArray:altNames];
   }
   
-  /* Try alternative names */
-  if (altNames) {
-    for (NSString *altName in altNames) {
-      for (NSString *path in searchPaths) {
-        NSString *toolPath = [path stringByAppendingPathComponent:altName];
-        if ([fm fileExistsAtPath:toolPath]) {
-          NSLog(@"VolumeManager: Found %@ (alternative) at %@", altName, toolPath);
-          return toolPath;
+  /* Try each name using 'which' to search actual PATH */
+  for (NSString *name in allNames) {
+    @try {
+      NSTask *whichTask = [[NSTask alloc] init];
+      [whichTask setLaunchPath:@"/usr/bin/which"];
+      [whichTask setArguments:@[name]];
+      
+      NSPipe *outPipe = [NSPipe pipe];
+      [whichTask setStandardOutput:outPipe];
+      [whichTask setStandardError:[NSPipe pipe]];
+      
+      [whichTask launch];
+      [whichTask waitUntilExit];
+      
+      if ([whichTask terminationStatus] == 0) {
+        NSData *data = [[outPipe fileHandleForReading] availableData];
+        NSString *result = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+        result = [result stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        [whichTask release];
+        if ([result length] > 0 && [fm fileExistsAtPath:result]) {
+          NSLog(@"VolumeManager: Found %@ at %@", name, result);
+          return result;
         }
       }
+      [whichTask release];
+    } @catch (NSException *e) {
+      NSLog(@"VolumeManager: Exception searching for %@: %@", name, e);
     }
   }
   
-  /* Try to find via 'which' command */
-  @try {
-    NSTask *whichTask = [[NSTask alloc] init];
-    [whichTask setLaunchPath:@"/usr/bin/which"];
-    [whichTask setArguments:@[toolName]];
-    
-    NSPipe *outPipe = [NSPipe pipe];
-    [whichTask setStandardOutput:outPipe];
-    [whichTask setStandardError:[NSPipe pipe]];
-    
-    [whichTask launch];
-    [whichTask waitUntilExit];
-    
-    if ([whichTask terminationStatus] == 0) {
-      NSData *data = [[outPipe fileHandleForReading] availableData];
-      NSString *result = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
-      result = [result stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-      [whichTask release];
-      if ([result length] > 0) {
-        NSLog(@"VolumeManager: Found %@ via which: %@", toolName, result);
-        return result;
+  /* Fallback: try standard locations if which failed */
+  NSArray *searchPaths = @[@"/usr/bin", @"/bin", @"/usr/local/bin", @"/opt/local/bin"];
+  for (NSString *name in allNames) {
+    for (NSString *path in searchPaths) {
+      NSString *toolPath = [path stringByAppendingPathComponent:name];
+      if ([fm fileExistsAtPath:toolPath]) {
+        NSLog(@"VolumeManager: Found %@ at %@ (fallback search)", name, toolPath);
+        return toolPath;
       }
     }
-    [whichTask release];
-  } @catch (NSException *e) {
-    NSLog(@"VolumeManager: Exception in findToolInPath: %@", e);
   }
   
-  NSLog(@"VolumeManager: Tool %@ not found", toolName);
+  NSLog(@"VolumeManager: Tool %@ not found in PATH or standard locations", toolName);
   return nil;
 }
 
@@ -782,7 +778,15 @@ static VolumeManager *sharedInstance = nil;
 
 - (BOOL)unmountPath:(NSString *)mountPath
 {
-  if (!mountPath) return NO;
+  NSLog(@"VolumeManager: ===== BEGIN UNMOUNT ATTEMPT for %@ =====", mountPath);
+  
+  if (!mountPath) {
+    NSLog(@"VolumeManager: ERROR - mountPath is nil");
+    return NO;
+  }
+  
+  NSLog(@"VolumeManager: Current mounted volumes: %@", mountedVolumes);
+  NSLog(@"VolumeManager: Current PIDs: %@", mountedVolumesPIDs);
   
   /* Send will-unmount notification to grey out desktop icon */
   NSString *parent = [mountPath stringByDeletingLastPathComponent];
@@ -797,89 +801,134 @@ static VolumeManager *sharedInstance = nil;
   
   BOOL unmountSuccess = NO;
   
-  /* Try to kill the FUSE process if we have its PID */
+  /* Try fusermount FIRST - this is the proper way to unmount FUSE filesystems */
+  NSLog(@"VolumeManager: Attempting fusermount as primary unmount method...");
+  /* Try many variations: fusermount, fusermount3, fusermount2, etc. */
+  NSString *fusermountPath = [self findToolInPath:@"fusermount" 
+                                 alternativeNames:@[@"fusermount3", @"fusermount2", 
+                                                    @"fusermount99", @"fusermount-3", 
+                                                    @"fusermount-2"]];
+  if (fusermountPath) {
+    NSLog(@"VolumeManager: Found fusermount at %@, executing...", fusermountPath);
+    NSTask *unmountTask = [[NSTask alloc] init];
+    [unmountTask setLaunchPath:fusermountPath];
+    [unmountTask setArguments:@[@"-u", mountPath]];
+    
+    @try {
+      [unmountTask launch];
+      [unmountTask waitUntilExit];
+      int status = [unmountTask terminationStatus];
+      NSLog(@"VolumeManager: fusermount exited with status %d", status);
+      if (status == 0) {
+        unmountSuccess = YES;
+        NSLog(@"VolumeManager: fusermount succeeded");
+      } else {
+        NSLog(@"VolumeManager: fusermount failed with status %d", status);
+      }
+      [unmountTask release];
+    } @catch (NSException *e) {
+      NSLog(@"VolumeManager: fusermount exception: %@", e);
+      [unmountTask release];
+    }
+  } else {
+    NSLog(@"VolumeManager: fusermount not found in PATH");
+  }
+  
+  /* Try umount if fusermount failed or wasn't available */
+  if (!unmountSuccess) {
+    NSLog(@"VolumeManager: Trying umount...");
+    NSString *umountPath = [self findToolInPath:@"umount" alternativeNames:nil];
+    if (umountPath) {
+      NSTask *umountTask = [[NSTask alloc] init];
+      [umountTask setLaunchPath:umountPath];
+      [umountTask setArguments:@[mountPath]];
+      
+      @try {
+        [umountTask launch];
+        [umountTask waitUntilExit];
+        int status = [umountTask terminationStatus];
+        NSLog(@"VolumeManager: umount exited with status %d", status);
+        if (status == 0) {
+          unmountSuccess = YES;
+          NSLog(@"VolumeManager: umount succeeded");
+        } else {
+          NSLog(@"VolumeManager: umount failed with status %d", status);
+        }
+        [umountTask release];
+      } @catch (NSException *e) {
+        NSLog(@"VolumeManager: umount exception: %@", e);
+        [umountTask release];
+      }
+    } else {
+      NSLog(@"VolumeManager: umount not found in PATH");
+    }
+  }
+  
+  /* Find the tracked volume for cleanup */
+  NSLog(@"VolumeManager: Searching for mount point in tracked volumes...");
   NSString *foundKey = nil;
   for (NSString *key in [mountedVolumes allKeys]) {
     if ([[mountedVolumes objectForKey:key] isEqualToString:mountPath]) {
       foundKey = key;
+      NSLog(@"VolumeManager: Found tracked volume: %@", key);
       break;
     }
   }
   
-  if (foundKey) {
+  /* Kill process as last resort if proper unmount failed */
+  if (!unmountSuccess && foundKey) {
+    NSLog(@"VolumeManager: Proper unmount failed, attempting to kill FUSE process as fallback...");
     NSNumber *pidNumber = [mountedVolumesPIDs objectForKey:foundKey];
     if (pidNumber) {
       int pid = [pidNumber intValue];
-      NSLog(@"VolumeManager: Killing FUSE process %d for %@", pid, mountPath);
+      NSLog(@"VolumeManager: Found PID %d for mount, sending SIGKILL", pid);
       
-      if (kill(pid, SIGTERM) == 0) {
-        NSLog(@"VolumeManager: Sent SIGTERM to process %d", pid);
-        usleep(500000); /* 0.5 seconds */
-        
-        if (kill(pid, 0) == 0) {
-          NSLog(@"VolumeManager: Process %d still running, sending SIGKILL", pid);
-          kill(pid, SIGKILL);
+      if (kill(pid, SIGKILL) == 0) {
+        NSLog(@"VolumeManager: Successfully sent SIGKILL to process %d, waiting for cleanup...", pid);
+        /* Brief wait for process to die, but non-blocking approach */
+        int waitCount = 0;
+        while (waitCount < 20 && kill(pid, 0) == 0) {
+          usleep(100000); /* 0.1 seconds */
+          waitCount++;
         }
-        usleep(1000000); /* 1 second for cleanup */
-        unmountSuccess = YES;
-      } else if (errno == ESRCH) {
-        NSLog(@"VolumeManager: Process %d no longer exists", pid);
-        unmountSuccess = YES;
-      }
-    }
-  }
-  
-  /* Try fusermount as fallback/cleanup */
-  if (!unmountSuccess) {
-    NSString *fusermountPath = [self findToolInPath:@"fusermount" alternativeNames:@[@"fusermount3"]];
-    if (fusermountPath) {
-      NSTask *unmountTask = [[NSTask alloc] init];
-      [unmountTask setLaunchPath:fusermountPath];
-      [unmountTask setArguments:@[@"-u", mountPath]];
-      
-      @try {
-        [unmountTask launch];
-        [unmountTask waitUntilExit];
-        if ([unmountTask terminationStatus] == 0) {
+        if (kill(pid, 0) != 0) {
+          NSLog(@"VolumeManager: Process %d terminated after %d attempts", pid, waitCount);
           unmountSuccess = YES;
-          NSLog(@"VolumeManager: fusermount succeeded");
+        } else {
+          NSLog(@"VolumeManager: WARNING - Process %d still alive after SIGKILL", pid);
         }
-        [unmountTask release];
-      } @catch (NSException *e) {
-        NSLog(@"VolumeManager: fusermount exception: %@", e);
-        [unmountTask release];
+      } else {
+        int killError = errno;
+        if (killError == ESRCH) {
+          NSLog(@"VolumeManager: Process %d no longer exists (ESRCH)", pid);
+          unmountSuccess = YES;
+        } else {
+          NSLog(@"VolumeManager: ERROR - Failed to send SIGKILL to process %d: %s", pid, strerror(killError));
+        }
       }
+    } else {
+      NSLog(@"VolumeManager: WARNING - No PID found for tracked volume %@", foundKey);
     }
+  } else if (!foundKey) {
+    NSLog(@"VolumeManager: WARNING - Mount point %@ not found in tracked volumes", mountPath);
   }
   
-  /* Try umount as final fallback */
   if (!unmountSuccess) {
-    NSTask *umountTask = [[NSTask alloc] init];
-    [umountTask setLaunchPath:@"/bin/umount"];
-    [umountTask setArguments:@[mountPath]];
-    
-    @try {
-      [umountTask launch];
-      [umountTask waitUntilExit];
-      if ([umountTask terminationStatus] == 0) {
-        unmountSuccess = YES;
-        NSLog(@"VolumeManager: umount succeeded");
-      }
-      [umountTask release];
-    } @catch (NSException *e) {
-      [umountTask release];
-    }
+    NSLog(@"VolumeManager: All unmount attempts failed");
   }
   
   if (unmountSuccess) {
+    NSLog(@"VolumeManager: Unmount successful, cleaning up tracking data...");
     /* Clean up tracking data */
     if (foundKey) {
+      NSLog(@"VolumeManager: Removing tracking for key: %@", foundKey);
       [mountedVolumes removeObjectForKey:foundKey];
       [mountedVolumesPIDs removeObjectForKey:foundKey];
     }
     @synchronized(self) {
       [diskImageMountPoints removeObject:mountPath];
     }
+    NSLog(@"VolumeManager: Tracking data cleaned up");
     
     /* Clear FSNode/FSNodeRep state */
     @try {
@@ -897,17 +946,23 @@ static VolumeManager *sharedInstance = nil;
     @try {
       NSError *contentsErr = nil;
       NSArray *contents = [fm contentsOfDirectoryAtPath:mountPath error:&contentsErr];
-      if (contents && [contents count] == 0) {
+      
+      if (contentsErr) {
+        NSLog(@"VolumeManager: Could not read mount point contents %@: %@", mountPath, contentsErr);
+        /* Try to remove anyway - might be already unmounted */
+        if (rmdir([mountPath fileSystemRepresentation]) == 0) {
+          NSLog(@"VolumeManager: Successfully removed mount point");
+          directoryRemoved = YES;
+        }
+      } else if (contents && [contents count] == 0) {
         if (rmdir([mountPath fileSystemRepresentation]) == 0) {
           NSLog(@"VolumeManager: Removed empty mount point %@", mountPath);
           directoryRemoved = YES;
         } else {
           NSLog(@"VolumeManager: Failed to remove mount point %@ (rmdir): %s", mountPath, strerror(errno));
         }
-      } else if (contentsErr) {
-        NSLog(@"VolumeManager: Could not read mount point contents %@: %@", mountPath, contentsErr);
       } else {
-        NSLog(@"VolumeManager: Mount point %@ not empty (%lu items), leaving in place",
+        NSLog(@"VolumeManager: Mount point %@ not empty (%lu items), unmount may have failed",
               mountPath, (unsigned long)[contents count]);
       }
     } @catch (NSException *e) {
@@ -947,7 +1002,15 @@ static VolumeManager *sharedInstance = nil;
       NSLog(@"VolumeManager: Mount point not removed, keeping desktop icon for %@", mountPath);
     }
     
-    return YES;
+    if (directoryRemoved) {
+      NSLog(@"VolumeManager: ===== UNMOUNT COMPLETED SUCCESSFULLY for %@ =====", mountPath);
+      return YES;
+    } else {
+      NSLog(@"VolumeManager: ===== UNMOUNT FAILED - directory not removed for %@ =====", mountPath);
+      return NO;
+    }
+  } else {
+    NSLog(@"VolumeManager: ===== UNMOUNT FAILED for %@ =====", mountPath);
   }
   
   return NO;
