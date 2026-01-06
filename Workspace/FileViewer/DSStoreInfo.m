@@ -23,6 +23,8 @@
 @synthesize position = _position;
 @synthesize hasPosition = _hasPosition;
 @synthesize comments = _comments;
+@synthesize labelColor = _labelColor;
+@synthesize hasLabelColor = _hasLabelColor;
 
 + (instancetype)infoForFilename:(NSString *)filename
 {
@@ -37,6 +39,8 @@
         _position = NSZeroPoint;
         _hasPosition = NO;
         _comments = nil;
+        _labelColor = DSStoreLabelColorNone;
+        _hasLabelColor = NO;
     }
     return self;
 }
@@ -54,6 +58,8 @@
     copy.position = _position;
     copy.hasPosition = _hasPosition;
     copy.comments = _comments;
+    copy.labelColor = _labelColor;
+    copy.hasLabelColor = _hasLabelColor;
     return copy;
 }
 
@@ -63,10 +69,34 @@
     return [DSStore gnustepPointFromDSStorePoint:_position viewHeight:viewHeight iconHeight:iconHeight];
 }
 
++ (NSColor *)colorForLabelColor:(DSStoreLabelColor)labelColor
+{
+    // macOS Finder label colors (approximate values)
+    switch (labelColor) {
+        case DSStoreLabelColorRed:
+            return [NSColor colorWithCalibratedRed:1.0 green:0.23 blue:0.19 alpha:1.0];
+        case DSStoreLabelColorOrange:
+            return [NSColor colorWithCalibratedRed:1.0 green:0.58 blue:0.0 alpha:1.0];
+        case DSStoreLabelColorYellow:
+            return [NSColor colorWithCalibratedRed:1.0 green:0.87 blue:0.0 alpha:1.0];
+        case DSStoreLabelColorGreen:
+            return [NSColor colorWithCalibratedRed:0.3 green:0.85 blue:0.39 alpha:1.0];
+        case DSStoreLabelColorBlue:
+            return [NSColor colorWithCalibratedRed:0.25 green:0.61 blue:0.98 alpha:1.0];
+        case DSStoreLabelColorPurple:
+            return [NSColor colorWithCalibratedRed:0.69 green:0.32 blue:0.87 alpha:1.0];
+        case DSStoreLabelColorGrey:
+            return [NSColor colorWithCalibratedRed:0.6 green:0.6 blue:0.6 alpha:1.0];
+        case DSStoreLabelColorNone:
+        default:
+            return nil;
+    }
+}
+
 - (NSString *)description
 {
-    return [NSString stringWithFormat:@"<DSStoreIconInfo: %@ pos:(%.0f,%.0f) hasPos:%@>",
-            _filename, _position.x, _position.y, _hasPosition ? @"YES" : @"NO"];
+    return [NSString stringWithFormat:@"<DSStoreIconInfo: %@ pos:(%.0f,%.0f) hasPos:%@ labelColor:%ld>",
+            _filename, _position.x, _position.y, _hasPosition ? @"YES" : @"NO", (long)_labelColor];
 }
 
 @end
@@ -94,6 +124,15 @@
 @synthesize backgroundImagePath = _backgroundImagePath;
 @synthesize sidebarWidth = _sidebarWidth;
 @synthesize hasSidebarWidth = _hasSidebarWidth;
+@synthesize listTextSize = _listTextSize;
+@synthesize hasListTextSize = _hasListTextSize;
+@synthesize listIconSize = _listIconSize;
+@synthesize hasListIconSize = _hasListIconSize;
+@synthesize sortColumn = _sortColumn;
+@synthesize hasSortColumn = _hasSortColumn;
+@synthesize sortAscending = _sortAscending;
+@synthesize columnWidths = _columnWidths;
+@synthesize columnVisible = _columnVisible;
 
 #pragma mark - Factory Methods
 
@@ -109,6 +148,66 @@
         [info load];
     }
     return info;
+}
+
+#pragma mark - Sort Column Conversion
+
++ (int)infoTypeForSortColumnName:(NSString *)columnName
+{
+    // DS_Store column names to FSNInfoType mapping
+    // These are the standard macOS Finder column identifiers
+    if (!columnName) return -1;
+    
+    if ([columnName isEqualToString:@"name"] || 
+        [columnName isEqualToString:@"Name"]) {
+        return 0;  // FSNInfoNameType
+    }
+    if ([columnName isEqualToString:@"kind"] || 
+        [columnName isEqualToString:@"Kind"]) {
+        return 1;  // FSNInfoKindType
+    }
+    if ([columnName isEqualToString:@"dateModified"] ||
+        [columnName isEqualToString:@"Date Modified"] ||
+        [columnName isEqualToString:@"modificationDate"]) {
+        return 2;  // FSNInfoDateType
+    }
+    if ([columnName isEqualToString:@"size"] || 
+        [columnName isEqualToString:@"Size"]) {
+        return 3;  // FSNInfoSizeType
+    }
+    if ([columnName isEqualToString:@"owner"] || 
+        [columnName isEqualToString:@"Owner"]) {
+        return 4;  // FSNInfoOwnerType
+    }
+    if ([columnName isEqualToString:@"dateCreated"] ||
+        [columnName isEqualToString:@"Date Created"] ||
+        [columnName isEqualToString:@"creationDate"]) {
+        return 2;  // Map to FSNInfoDateType (we don't have separate creation date)
+    }
+    if ([columnName isEqualToString:@"dateAdded"] ||
+        [columnName isEqualToString:@"Date Added"]) {
+        return 2;  // Map to FSNInfoDateType
+    }
+    
+    return -1;  // Unknown column
+}
+
++ (NSString *)sortColumnNameForInfoType:(int)infoType
+{
+    switch (infoType) {
+        case 0:  // FSNInfoNameType
+            return @"name";
+        case 1:  // FSNInfoKindType
+            return @"kind";
+        case 2:  // FSNInfoDateType
+            return @"dateModified";
+        case 3:  // FSNInfoSizeType
+            return @"size";
+        case 4:  // FSNInfoOwnerType
+            return @"owner";
+        default:
+            return @"name";
+    }
 }
 
 #pragma mark - Initialization
@@ -154,6 +253,9 @@
     [_backgroundColor release];
     [_backgroundImagePath release];
     [_iconInfoDict release];
+    [_sortColumn release];
+    [_columnWidths release];
+    [_columnVisible release];
     [super dealloc];
 }
 
@@ -791,19 +893,80 @@
         if (plist && [plist isKindOfClass:[NSDictionary class]]) {
             NSLog(@"║   Parsed plist keys: %@", [plist allKeys]);
             
+            // Text size (font size for list entries)
             id textSizeObj = [plist objectForKey:@"textSize"];
-            if (textSizeObj) {
-                NSLog(@"║   Text size: %@", textSizeObj);
+            if (textSizeObj && [textSizeObj respondsToSelector:@selector(intValue)]) {
+                _listTextSize = [textSizeObj intValue];
+                _hasListTextSize = YES;
+                NSLog(@"║   Text size: %d", _listTextSize);
             }
             
+            // Icon size (small icon size in list view)
             id iconSizeObj = [plist objectForKey:@"iconSize"];
-            if (iconSizeObj) {
-                NSLog(@"║   Icon size: %@", iconSizeObj);
+            if (iconSizeObj && [iconSizeObj respondsToSelector:@selector(intValue)]) {
+                _listIconSize = [iconSizeObj intValue];
+                _hasListIconSize = YES;
+                NSLog(@"║   Icon size: %d", _listIconSize);
             }
             
+            // Sort column - the column used for sorting
             id sortColumnObj = [plist objectForKey:@"sortColumn"];
-            if (sortColumnObj) {
-                NSLog(@"║   Sort column: %@", sortColumnObj);
+            if (sortColumnObj && [sortColumnObj isKindOfClass:[NSString class]]) {
+                [_sortColumn release];
+                _sortColumn = [(NSString *)sortColumnObj copy];
+                _hasSortColumn = YES;
+                NSLog(@"║   Sort column: %@", _sortColumn);
+            }
+            
+            // Sort ascending
+            id ascendingObj = [plist objectForKey:@"ascending"];
+            if (ascendingObj && [ascendingObj respondsToSelector:@selector(boolValue)]) {
+                _sortAscending = [ascendingObj boolValue];
+                NSLog(@"║   Sort ascending: %@", _sortAscending ? @"YES" : @"NO");
+            } else {
+                _sortAscending = YES;  // Default to ascending
+            }
+            
+            // Column widths dictionary
+            id columnsObj = [plist objectForKey:@"columns"];
+            if (columnsObj && [columnsObj isKindOfClass:[NSArray class]]) {
+                NSMutableDictionary *widths = [NSMutableDictionary dictionary];
+                NSMutableDictionary *visible = [NSMutableDictionary dictionary];
+                
+                for (NSDictionary *col in (NSArray *)columnsObj) {
+                    if ([col isKindOfClass:[NSDictionary class]]) {
+                        NSString *identifier = [col objectForKey:@"identifier"];
+                        if (identifier) {
+                            // Column width
+                            id widthObj = [col objectForKey:@"width"];
+                            if (widthObj && [widthObj respondsToSelector:@selector(floatValue)]) {
+                                [widths setObject:[NSNumber numberWithFloat:[widthObj floatValue]]
+                                           forKey:identifier];
+                            }
+                            
+                            // Column visibility
+                            id visibleObj = [col objectForKey:@"visible"];
+                            if (visibleObj && [visibleObj respondsToSelector:@selector(boolValue)]) {
+                                [visible setObject:[NSNumber numberWithBool:[visibleObj boolValue]]
+                                            forKey:identifier];
+                            } else {
+                                // Assume visible if not specified
+                                [visible setObject:[NSNumber numberWithBool:YES] forKey:identifier];
+                            }
+                        }
+                    }
+                }
+                
+                if ([widths count] > 0) {
+                    [_columnWidths release];
+                    _columnWidths = [widths copy];
+                    NSLog(@"║   Column widths: %@", _columnWidths);
+                }
+                if ([visible count] > 0) {
+                    [_columnVisible release];
+                    _columnVisible = [visible copy];
+                    NSLog(@"║   Column visibility: %@", _columnVisible);
+                }
             }
         } else {
             NSLog(@"║   ⚠ Failed to parse as plist: %@", error);
@@ -817,6 +980,7 @@
     if (entry && [[entry type] isEqualToString:@"blob"]) {
         NSData *data = (NSData *)[entry value];
         NSLog(@"║ ✓ lsvo (List View Options - Legacy): %lu bytes", (unsigned long)[data length]);
+        // TODO: Parse legacy format if needed for older DS_Store files
     }
 }
 
@@ -835,10 +999,11 @@
 
 - (void)loadIconEntriesFromStore:(DSStore *)store filenames:(NSArray *)filenames
 {
-    NSLog(@"║ --- Per-file entries (icon positions, comments) ---");
+    NSLog(@"║ --- Per-file entries (icon positions, comments, labels) ---");
     
     NSUInteger positionCount = 0;
     NSUInteger commentCount = 0;
+    NSUInteger labelCount = 0;
     
     for (NSString *filename in filenames) {
         // Skip directory entry
@@ -883,6 +1048,30 @@
             NSLog(@"║   cmmt '%@': \"%@\"", filename, info.comments);
         }
         
+        // Check for lclr (label color)
+        DSStoreEntry *lclrEntry = [store entryForFilename:filename code:@"lclr"];
+        if (lclrEntry && [[lclrEntry type] isEqualToString:@"long"]) {
+            if (!info) {
+                info = [DSStoreIconInfo infoForFilename:filename];
+            }
+            int32_t colorValue = [[lclrEntry value] intValue];
+            info.labelColor = (DSStoreLabelColor)colorValue;
+            info.hasLabelColor = YES;
+            labelCount++;
+            
+            NSString *colorName = @"none";
+            switch (colorValue) {
+                case 1: colorName = @"red"; break;
+                case 2: colorName = @"orange"; break;
+                case 3: colorName = @"yellow"; break;
+                case 4: colorName = @"green"; break;
+                case 5: colorName = @"blue"; break;
+                case 6: colorName = @"purple"; break;
+                case 7: colorName = @"grey"; break;
+            }
+            NSLog(@"║   lclr '%@': %d (%@)", filename, colorValue, colorName);
+        }
+        
         // Store the info if we have any data
         if (info) {
             [_iconInfoDict setObject:info forKey:filename];
@@ -891,6 +1080,7 @@
     
     NSLog(@"║ Total icon positions found: %lu", (unsigned long)positionCount);
     NSLog(@"║ Total comments found: %lu", (unsigned long)commentCount);
+    NSLog(@"║ Total label colors found: %lu", (unsigned long)labelCount);
 }
 
 #pragma mark - Icon Position Access

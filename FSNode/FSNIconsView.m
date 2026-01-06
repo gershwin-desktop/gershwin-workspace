@@ -259,6 +259,13 @@ static void GWHighlightFrameRect(NSRect aRect)
 	  gridSize.width = highlightSize.width + labelSize.width + lblmargin;
 	}
     }
+    
+  // Apply DS_Store grid spacing if set (adds extra space between icons)
+  if (dsStoreGridSpacing > 0)
+    {
+      gridSize.width += dsStoreGridSpacing;
+      gridSize.height += dsStoreGridSpacing;
+    }
 }
 
 - (void)tile
@@ -676,6 +683,77 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (NSArray *)icons
 {
   return icons;
+}
+
+#pragma mark - DS_Store Tag Colors and Comments Support
+
+- (void)setTagColorsFromDictionary:(NSDictionary *)tagDict
+{
+  if (!tagDict || [tagDict count] == 0)
+    return;
+    
+  NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+  NSLog(@"║        APPLYING TAG COLORS FROM DS_Store                         ║");
+  NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+  
+  for (FSNIcon *icon in icons)
+    {
+      FSNode *iconNode = [icon node];
+      if (iconNode)
+        {
+          NSString *filename = [iconNode name];
+          NSColor *tagColor = [tagDict objectForKey:filename];
+          if (tagColor)
+            {
+              [icon setTagColor:tagColor];
+              NSLog(@"║   '%@' -> tag color set", filename);
+            }
+        }
+    }
+  
+  NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+}
+
+- (void)setCommentsFromDictionary:(NSDictionary *)commentsDict
+{
+  if (!commentsDict || [commentsDict count] == 0)
+    return;
+    
+  NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+  NSLog(@"║        APPLYING SPOTLIGHT COMMENTS FROM DS_Store                 ║");
+  NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+  
+  for (FSNIcon *icon in icons)
+    {
+      FSNode *iconNode = [icon node];
+      if (iconNode)
+        {
+          NSString *filename = [iconNode name];
+          NSString *comment = [commentsDict objectForKey:filename];
+          if (comment)
+            {
+              [icon setSpotlightComment:comment];
+              NSLog(@"║   '%@' -> comment: '%@'", filename, comment);
+            }
+        }
+    }
+  
+  NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+}
+
+#pragma mark - Grid Spacing Support
+
+- (void)setGridSpacing:(CGFloat)spacing
+{
+  dsStoreGridSpacing = spacing;
+  // Recalculate grid and re-tile
+  [self calculateGridSize];
+  [self tile];
+}
+
+- (CGFloat)gridSpacing
+{
+  return dsStoreGridSpacing;
 }
 
 - (void)mouseUp:(NSEvent *)theEvent

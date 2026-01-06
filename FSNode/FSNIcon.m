@@ -70,6 +70,8 @@ static NSImage *branchImage;
   RELEASE (label);
   RELEASE (infolabel);
   RELEASE (labelFrameColor);
+  RELEASE (tagColor);
+  RELEASE (spotlightComment);
   [super dealloc];
 }
 
@@ -611,6 +613,32 @@ static NSImage *branchImage;
   [self setNeedsDisplay: YES];
 }
 
+// DS_Store tag/label color support
+- (void)setTagColor:(NSColor *)color
+{
+  ASSIGN(tagColor, color);
+  [self setNeedsDisplay: YES];
+}
+
+- (NSColor *)tagColor
+{
+  return tagColor;
+}
+
+- (void)setSpotlightComment:(NSString *)comment
+{
+  ASSIGN(spotlightComment, comment);
+  // Could update tooltip here if desired
+  if (comment && [comment length] > 0) {
+    [self setToolTip:comment];
+  }
+}
+
+- (NSString *)spotlightComment
+{
+  return spotlightComment;
+}
+
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent
 {
   if ([theEvent type] == NSRightMouseDown)
@@ -907,6 +935,32 @@ static NSImage *branchImage;
   else
     {
       [drawicon dissolveToPoint: icnPoint fraction: 0.3];
+    }
+
+  // Draw tag color indicator (DS_Store label color support)
+  if (tagColor)
+    {
+      // Draw a small colored dot in the bottom-right corner of the icon
+      CGFloat dotSize = 10.0;
+      CGFloat dotMargin = 2.0;
+      NSRect dotRect = NSMakeRect(icnBounds.origin.x + icnBounds.size.width - dotSize - dotMargin,
+                                  icnBounds.origin.y + dotMargin,
+                                  dotSize, dotSize);
+      
+      // Draw shadow
+      [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
+      NSBezierPath *shadowPath = [NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)];
+      [shadowPath fill];
+      
+      // Draw tag dot
+      [tagColor set];
+      NSBezierPath *dotPath = [NSBezierPath bezierPathWithOvalInRect:dotRect];
+      [dotPath fill];
+      
+      // Draw border
+      [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
+      [dotPath setLineWidth:0.5];
+      [dotPath stroke];
     }
 
   if (isLeaf == NO)

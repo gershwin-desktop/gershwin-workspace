@@ -68,6 +68,12 @@
 
 - (BOOL)keepsColumnsInfo;
 
+// DS_Store support - set sort column and column widths
+- (void)setSortColumn:(FSNInfoType)sortType;
+- (FSNInfoType)sortColumn;
+- (void)setColumnWidth:(float)width forIdentifier:(FSNInfoType)identifier;
+- (float)columnWidthForIdentifier:(FSNInfoType)identifier;
+
 - (void)createColumns:(NSDictionary *)info;
 
 - (void)addColumn:(NSDictionary *)info;

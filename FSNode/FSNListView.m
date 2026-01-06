@@ -143,6 +143,58 @@ static NSString *defaultColumns = @"{ \
   return NO;
 }
 
+#pragma mark - DS_Store Support
+
+- (void)setSortColumn:(FSNInfoType)sortType
+{
+  if (sortType != hlighColId) {
+    NSArray *selected = [self selectedReps];
+    
+    [listView deselectAll: self];
+    hlighColId = sortType;
+    [self sortNodeReps];
+    [listView reloadData];
+    
+    if ([selected count]) {
+      id rep = [selected objectAtIndex: 0];
+      NSUInteger index = [nodeReps indexOfObjectIdenticalTo: rep];
+      
+      [self selectReps: selected];
+      
+      if (index != NSNotFound) {
+        [listView scrollRowToVisible: index];
+      }
+    }
+    
+    NSTableColumn *column = [listView tableColumnWithIdentifier: [NSNumber numberWithInt: hlighColId]];
+    if (column) {
+      [listView setHighlightedTableColumn: column];
+    }
+  }
+}
+
+- (FSNInfoType)sortColumn
+{
+  return hlighColId;
+}
+
+- (void)setColumnWidth:(float)width forIdentifier:(FSNInfoType)identifier
+{
+  NSTableColumn *column = [listView tableColumnWithIdentifier: [NSNumber numberWithInt: identifier]];
+  if (column && width > 0) {
+    [column setWidth: width];
+  }
+}
+
+- (float)columnWidthForIdentifier:(FSNInfoType)identifier
+{
+  NSTableColumn *column = [listView tableColumnWithIdentifier: [NSNumber numberWithInt: identifier]];
+  if (column) {
+    return [column width];
+  }
+  return 0;
+}
+
 - (void)createColumns:(NSDictionary *)info
 {
   NSArray *keys = [info keysSortedByValueUsingSelector: @selector(compareTableColumnInfo:)];

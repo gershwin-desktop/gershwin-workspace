@@ -80,6 +80,9 @@
   BOOL freePositioningEnabled;              // If YES, bypasses grid-based tile
   NSMutableDictionary *customIconPositions; // filename -> NSValue(NSPoint) icon center in GNUstep coords
   CGFloat dsStoreIconHeight;                // Icon height for coordinate conversion
+  
+  // DS_Store grid spacing support (additional spacing between icons beyond calculated gridSize)
+  CGFloat dsStoreGridSpacing;               // Additional spacing from DS_Store (0 = default)
 }
 
 - (void)sortIcons;
@@ -107,6 +110,14 @@
 - (NSDictionary *)customIconPositions;
 - (void)applyFreePositioning;
 - (NSArray *)icons;
+
+// DS_Store tag colors and comments support
+- (void)setTagColorsFromDictionary:(NSDictionary *)tagDict;
+- (void)setCommentsFromDictionary:(NSDictionary *)commentsDict;
+
+// DS_Store grid spacing support
+- (void)setGridSpacing:(CGFloat)spacing;
+- (CGFloat)gridSpacing;
 
 @end
 

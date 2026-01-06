@@ -93,6 +93,10 @@
   NSView <FSNodeRepContainer> *container;
   
   FSNodeRep *fsnodeRep;
+  
+  // DS_Store label color support
+  NSColor *tagColor;        // Label/tag color from DS_Store (lclr)
+  NSString *spotlightComment;  // Spotlight comment from DS_Store (cmmt)
 }
 
 + (NSImage *)branchImage;
@@ -114,6 +118,12 @@
 - (NSRect)iconBounds;
 
 - (void)tile;
+
+// DS_Store tag/label color support
+- (void)setTagColor:(NSColor *)color;
+- (NSColor *)tagColor;
+- (void)setSpotlightComment:(NSString *)comment;
+- (NSString *)spotlightComment;
 
 @end
 

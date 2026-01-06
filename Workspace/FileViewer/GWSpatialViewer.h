@@ -59,6 +59,10 @@
   NSArray *baseNodeArray;
   NSArray *lastSelection;
   NSMutableArray *watchedNodes;
+  
+  // History support (required by GWViewersManager)
+  NSMutableArray *history;
+  int historyPosition;
 
   FSNodeRep *fsnodeRep;
 
@@ -131,6 +135,15 @@
 - (void)setupDSStoreWatcher;
 - (void)teardownDSStoreWatcher;
 - (void)reapplyDSStoreSettings;
+- (void)applyDSStoreSettingsToIconView:(id)iconView;
+- (void)applyDSStoreSettingsToListView:(id)listView;
+- (void)applyDSStoreSettingsToBrowserView:(id)browserView;
+- (DSStoreInfo *)dsStoreInfo;
+
+// History support (required by GWViewersManager)
+- (NSMutableArray *)history;
+- (int)historyPosition;
+- (void)setHistoryPosition:(int)pos;
 
 @end
 

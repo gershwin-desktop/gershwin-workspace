@@ -27,15 +27,20 @@
     NSPoint _position;      // Iloc - icon position (.DS_Store coordinates, origin top-left)
     BOOL _hasPosition;
     NSString *_comments;    // cmmt - Spotlight comments
+    DSStoreLabelColor _labelColor;  // lclr - Label color (0-7)
+    BOOL _hasLabelColor;
 }
 
 @property (nonatomic, copy) NSString *filename;
 @property (nonatomic, assign) NSPoint position;
 @property (nonatomic, assign) BOOL hasPosition;
 @property (nonatomic, copy) NSString *comments;
+@property (nonatomic, assign) DSStoreLabelColor labelColor;
+@property (nonatomic, assign) BOOL hasLabelColor;
 
 + (instancetype)infoForFilename:(NSString *)filename;
 - (NSPoint)gnustepPositionForViewHeight:(CGFloat)viewHeight iconHeight:(CGFloat)iconHeight;
++ (NSColor *)colorForLabelColor:(DSStoreLabelColor)labelColor;
 
 @end
 
@@ -84,6 +89,17 @@
     int _sidebarWidth;
     BOOL _hasSidebarWidth;
     
+    // List view settings (lsvp/lsvP)
+    int _listTextSize;
+    BOOL _hasListTextSize;
+    int _listIconSize;
+    BOOL _hasListIconSize;
+    NSString *_sortColumn;
+    BOOL _hasSortColumn;
+    BOOL _sortAscending;
+    NSDictionary *_columnWidths;  // column name -> width
+    NSDictionary *_columnVisible;  // column name -> BOOL
+    
     // Icon positions (Iloc)
     NSMutableDictionary *_iconInfoDict;  // filename -> DSStoreIconInfo
 }
@@ -119,6 +135,17 @@
 @property (nonatomic, assign) int sidebarWidth;
 @property (nonatomic, assign) BOOL hasSidebarWidth;
 
+// List view settings
+@property (nonatomic, assign) int listTextSize;
+@property (nonatomic, assign) BOOL hasListTextSize;
+@property (nonatomic, assign) int listIconSize;
+@property (nonatomic, assign) BOOL hasListIconSize;
+@property (nonatomic, copy) NSString *sortColumn;
+@property (nonatomic, assign) BOOL hasSortColumn;
+@property (nonatomic, assign) BOOL sortAscending;
+@property (nonatomic, retain) NSDictionary *columnWidths;
+@property (nonatomic, retain) NSDictionary *columnVisible;
+
 // Factory methods
 + (instancetype)infoForDirectoryPath:(NSString *)path;
 + (instancetype)infoForDirectoryPath:(NSString *)path loadImmediately:(BOOL)load;
@@ -141,6 +168,11 @@
 - (NSPoint)gnustepPositionForDSStorePoint:(NSPoint)dsPoint 
                            viewHeight:(CGFloat)viewHeight 
                            iconHeight:(CGFloat)iconHeight;
+
+// Sort column conversion (DS_Store column name -> FSNInfoType)
+// Returns -1 if column name not recognized
++ (int)infoTypeForSortColumnName:(NSString *)columnName;
++ (NSString *)sortColumnNameForInfoType:(int)infoType;
 
 // Debugging
 - (NSString *)debugDescription;

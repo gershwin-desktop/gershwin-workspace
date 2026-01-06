@@ -42,6 +42,7 @@
 #import "FSNodeRep.h"
 #import "FSNIcon.h"
 #import "FSNIconsView.h"
+#import "FSNListView.h"
 #import "FSNFunctions.h"
  
 #define DEFAULT_INCR 150
@@ -59,6 +60,7 @@
   RELEASE (lastSelection);
   RELEASE (rootViewerKey);
   RELEASE (watchedNodes);
+  RELEASE (history);
   RELEASE (vwrwin);
   RELEASE (viewType);
   RELEASE (viewerPrefs);
@@ -85,6 +87,8 @@
     fsnodeRep = [FSNodeRep sharedInstance];
     lastSelection = nil;
     watchedNodes = [NSMutableArray new];
+    history = [NSMutableArray new];
+    historyPosition = 0;
     manager = [GWViewersManager viewersManager];
     gworkspace = [Workspace gworkspace];
     nc = [NSNotificationCenter defaultCenter];
@@ -146,17 +150,18 @@
     // ================================================================
     // DS_Store Integration - Load comprehensive metadata
     // ================================================================
-    DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path]];
+    // Store in ivar for later use (view switching, etc.)
+    ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath:[baseNode path]]);
     
     // Determine view type from DS_Store if available, otherwise use viewerPrefs
     viewType = [viewerPrefs objectForKey: @"viewtype"];
     
-    if (dsInfo.loaded && dsInfo.hasViewStyle) {
+    if (dsStoreInfo.loaded && dsStoreInfo.hasViewStyle) {
       NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
       NSLog(@"║      APPLYING DS_STORE VIEW STYLE                                ║");
       NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
       
-      switch (dsInfo.viewStyle) {
+      switch (dsStoreInfo.viewStyle) {
         case DSStoreViewStyleIcon:
           viewType = @"Icon";
           NSLog(@"║ View style from DS_Store: Icon");
@@ -168,7 +173,6 @@
         case DSStoreViewStyleColumn:
           viewType = @"Browser";
           NSLog(@"║ View style from DS_Store: Browser (column)");
-          break;
         default:
           viewType = @"Icon";
           NSLog(@"║ View style from DS_Store: defaulting to Icon");
@@ -200,15 +204,15 @@
     BOOL geometryApplied = NO;
     NSRect dsGeometry = NSZeroRect;  // Declare outside if block for later reference
     
-    if (dsInfo.loaded && dsInfo.hasWindowFrame) {
-      dsGeometry = [dsInfo gnustepWindowFrameForScreen:[NSScreen mainScreen]];
+    if (dsStoreInfo.loaded && dsStoreInfo.hasWindowFrame) {
+      dsGeometry = [dsStoreInfo gnustepWindowFrameForScreen:[NSScreen mainScreen]];
       
       // Validate geometry
       if (dsGeometry.size.width > 0 && dsGeometry.size.height > 0) {
         NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
         NSLog(@"║      APPLYING DS_STORE WINDOW GEOMETRY                           ║");
         NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
-        NSLog(@"║ DS_Store content rect: %@", NSStringFromRect(dsInfo.windowFrame));
+        NSLog(@"║ DS_Store content rect: %@", NSStringFromRect(dsStoreInfo.windowFrame));
         NSLog(@"║ GNUstep content rect: %@", NSStringFromRect(dsGeometry));
         
         // IMPORTANT: DS_Store stores CONTENT area (excluding titlebar)
@@ -242,7 +246,7 @@
     NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
     if (geometryApplied) {
       NSLog(@"║ Source: DS_Store geometry");
-      NSLog(@"║ DS_Store frame: %@", NSStringFromRect(dsInfo.windowFrame));
+      NSLog(@"║ DS_Store frame: %@", NSStringFromRect(dsStoreInfo.windowFrame));
       NSLog(@"║ Final window frame: %@", NSStringFromRect(finalFrame));
       NSLog(@"║ Match: %@", NSEqualRects(dsGeometry, finalFrame) ? @"✓ YES" : @"⚠ NO (may differ due to screen constraints)");
     } else {
@@ -289,114 +293,16 @@
     [nodeView showContentsOfNode: baseNode]; 
 
     // ================================================================
-    // Apply DS_Store icon settings AFTER showContentsOfNode loads prefs
+    // Apply DS_Store settings AFTER showContentsOfNode loads prefs
     // (This ensures DS_Store settings override loaded preferences)
     // ================================================================
-    if ([viewType isEqual: @"Icon"] && dsInfo.loaded) {
-      NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
-      NSLog(@"║      APPLYING DS_STORE ICON VIEW SETTINGS                        ║");
-      NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
-      
-      // Apply icon size if available
-      if (dsInfo.hasIconSize && dsInfo.iconSize > 0 && dsInfo.iconSize <= 512) {
-        NSLog(@"║ Setting icon size: %d", dsInfo.iconSize);
-        if ([nodeView respondsToSelector:@selector(setIconSize:)]) {
-          [(FSNIconsView *)nodeView setIconSize:dsInfo.iconSize];
-          NSLog(@"║ Icon size applied. Current: %d", [(FSNIconsView *)nodeView iconSize]);
-        } else {
-          NSLog(@"║ ✗ nodeView does not respond to setIconSize:");
-        }
-      }
-      
-      // Apply label position if available
-      if (dsInfo.hasLabelPosition) {
-        NSLog(@"║ Setting label position: %@", 
-              dsInfo.labelPosition == DSStoreLabelPositionBottom ? @"bottom" : @"right");
-        if ([nodeView respondsToSelector:@selector(setIconPosition:)]) {
-          NSCellImagePosition pos = (dsInfo.labelPosition == DSStoreLabelPositionBottom) 
-                                    ? NSImageAbove : NSImageLeft;
-          [(FSNIconsView *)nodeView setIconPosition:pos];
-        }
-      }
-      
-      // Apply background color if available
-      if (dsInfo.backgroundType == DSStoreBackgroundColor && dsInfo.backgroundColor) {
-        NSLog(@"║ Setting background color: %@", dsInfo.backgroundColor);
-        if ([nodeView respondsToSelector:@selector(setBackgroundColor:)]) {
-          [(FSNIconsView *)nodeView setBackgroundColor:dsInfo.backgroundColor];
-        }
-      }
-      
-      // Apply background image if available
-      if (dsInfo.backgroundType == DSStoreBackgroundPicture && dsInfo.backgroundImagePath) {
-        NSLog(@"║ Setting background image: %@", dsInfo.backgroundImagePath);
-        
-        // Try to load the image
-        NSImage *bgImage = [[NSImage alloc] initWithContentsOfFile:dsInfo.backgroundImagePath];
-        if (bgImage) {
-          NSLog(@"║   ✓ Background image loaded: %.0fx%.0f", 
-                [bgImage size].width, [bgImage size].height);
-          if ([nodeView respondsToSelector:@selector(setBackgroundImage:)]) {
-            [(FSNIconsView *)nodeView setBackgroundImage:bgImage];
-          }
-          [bgImage release];
-        } else {
-          NSLog(@"║   ✗ Failed to load background image from: %@", dsInfo.backgroundImagePath);
-        }
-      }
-      
-      // Check for free icon positioning (DS_Store icon locations)
-      if ([dsInfo hasAnyIconPositions]) {
-        NSLog(@"║ Free positioning mode: ENABLED");
-        NSLog(@"║ Icons with custom positions: %lu", 
-              (unsigned long)[[dsInfo filenamesWithPositions] count]);
-        
-        // Get view dimensions for coordinate conversion
-        // .DS_Store uses top-left origin with icon centers, GNUstep uses bottom-left origin
-        // IMPORTANT: Use the CONTENT VIEW height from DS_Store, not the current frame
-        // DS_Store positions are relative to the content area (what's stored in windowFrame)
-        CGFloat viewHeight = dsInfo.windowFrame.size.height;
-        CGFloat iconHeight = dsInfo.hasIconSize ? (CGFloat)dsInfo.iconSize : 64.0;
-        
-        NSLog(@"║ DS_Store content height: %.0f, Icon height: %.0f", viewHeight, iconHeight);
-        
-        // Build positions dictionary for FSNIconsView with coordinate conversion
-        NSMutableDictionary *iconPositions = [NSMutableDictionary dictionary];
-        for (NSString *filename in [dsInfo filenamesWithPositions]) {
-          DSStoreIconInfo *iconInfo = [dsInfo iconInfoForFilename:filename];
-          if (iconInfo && iconInfo.hasPosition) {
-            // Convert from .DS_Store coordinates to GNUstep coordinates
-            NSPoint gnustepPos = [iconInfo gnustepPositionForViewHeight:viewHeight 
-                                                             iconHeight:iconHeight];
-            [iconPositions setObject:[NSValue valueWithPoint:gnustepPos] 
-                              forKey:filename];
-            NSLog(@"║   '%@': DS_Store(%.0f, %.0f) → GNUstep(%.0f, %.0f)", 
-                  filename, 
-                  iconInfo.position.x, iconInfo.position.y,
-                  gnustepPos.x, gnustepPos.y);
-          }
-        }
-        
-        // Enable free positioning mode on the icon view
-        if ([nodeView respondsToSelector:@selector(setFreePositioningEnabled:)]) {
-          [(FSNIconsView *)nodeView setCustomIconPositions:iconPositions];
-          [(FSNIconsView *)nodeView setFreePositioningEnabled:YES];
-        }
-      } else {
-        NSLog(@"║ Free positioning mode: disabled (no custom icon positions)");
-        
-        // Check icon arrangement setting
-        if (dsInfo.hasIconArrangement) {
-          if (dsInfo.iconArrangement == DSStoreIconArrangementNone) {
-            NSLog(@"║ Arrangement: none (but no custom positions available)");
-          } else {
-            NSLog(@"║ Arrangement: grid");
-          }
-        }
-      }
-      
-      NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
-    } 
+    if ([viewType isEqual: @"Icon"]) {
+      [self applyDSStoreSettingsToIconView:nodeView];
+    } else if ([viewType isEqual: @"List"]) {
+      [self applyDSStoreSettingsToListView:nodeView];
+    } else if ([viewType isEqual: @"Browser"]) {
+      [self applyDSStoreSettingsToBrowserView:nodeView];
+    }
 
     /*
     * Beeing "spatial", we always set the selection in the browser
@@ -448,9 +354,9 @@
     NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
     NSLog(@"║ Final window frame: %@", NSStringFromRect([vwrwin frame]));
     NSLog(@"║ View type: %@", viewType);
-    NSLog(@"║ DS_Store loaded: %@", dsInfo.loaded ? @"YES" : @"NO");
-    if (dsInfo.loaded) {
-      NSLog(@"║ DS_Store icon positions: %lu", (unsigned long)[[dsInfo filenamesWithPositions] count]);
+    NSLog(@"║ DS_Store loaded: %@", dsStoreInfo.loaded ? @"YES" : @"NO");
+    if (dsStoreInfo.loaded) {
+      NSLog(@"║ DS_Store icon positions: %lu", (unsigned long)[[dsStoreInfo filenamesWithPositions] count]);
     }
     NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
   }
@@ -592,11 +498,11 @@
 
 - (GWViewType)viewType
 {
-  if ([viewType isEqual: @"browser"]) {
+  if ([viewType isEqualToString: @"Browser"]) {
     return GWViewTypeBrowser;
-  } else if ([viewType isEqual: @"icon"]) {
+  } else if ([viewType isEqualToString: @"Icon"]) {
     return GWViewTypeIcon;
-  } else if ([viewType isEqual: @"list"]) {
+  } else if ([viewType isEqualToString: @"List"]) {
     return GWViewTypeList;
   }
   return GWViewTypeBrowser;
@@ -1075,6 +981,298 @@
   NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
 }
 
+- (DSStoreInfo *)dsStoreInfo
+{
+  return dsStoreInfo;
+}
+
+/**
+ * Apply DS_Store settings to an icon view.
+ * This handles icon size, label position, background, and free icon positioning.
+ */
+- (void)applyDSStoreSettingsToIconView:(id)iconView
+{
+  if (!iconView || !dsStoreInfo || !dsStoreInfo.loaded) {
+    return;
+  }
+  
+  NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+  NSLog(@"║      APPLYING DS_STORE ICON VIEW SETTINGS                        ║");
+  NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+  
+  // Apply icon size if available
+  if (dsStoreInfo.hasIconSize && dsStoreInfo.iconSize > 0 && dsStoreInfo.iconSize <= 512) {
+    NSLog(@"║ Setting icon size: %d", dsStoreInfo.iconSize);
+    if ([iconView respondsToSelector:@selector(setIconSize:)]) {
+      [(FSNIconsView *)iconView setIconSize:dsStoreInfo.iconSize];
+      NSLog(@"║ Icon size applied. Current: %d", [(FSNIconsView *)iconView iconSize]);
+    }
+  }
+  
+  // Apply label position if available
+  if (dsStoreInfo.hasLabelPosition) {
+    NSLog(@"║ Setting label position: %@", 
+          dsStoreInfo.labelPosition == DSStoreLabelPositionBottom ? @"bottom" : @"right");
+    if ([iconView respondsToSelector:@selector(setIconPosition:)]) {
+      NSCellImagePosition pos = (dsStoreInfo.labelPosition == DSStoreLabelPositionBottom) 
+                                ? NSImageAbove : NSImageLeft;
+      [(FSNIconsView *)iconView setIconPosition:pos];
+    }
+  }
+  
+  // Apply grid spacing if available
+  if (dsStoreInfo.hasGridSpacing && dsStoreInfo.gridSpacing > 0) {
+    NSLog(@"║ Setting grid spacing: %.1f", dsStoreInfo.gridSpacing);
+    if ([iconView respondsToSelector:@selector(setGridSpacing:)]) {
+      [(FSNIconsView *)iconView setGridSpacing:dsStoreInfo.gridSpacing];
+    }
+  }
+  
+  // Apply background color if available
+  if (dsStoreInfo.backgroundType == DSStoreBackgroundColor && dsStoreInfo.backgroundColor) {
+    NSLog(@"║ Setting background color: %@", dsStoreInfo.backgroundColor);
+    if ([iconView respondsToSelector:@selector(setBackgroundColor:)]) {
+      [(FSNIconsView *)iconView setBackgroundColor:dsStoreInfo.backgroundColor];
+    }
+  }
+  
+  // Apply background image if available
+  if (dsStoreInfo.backgroundType == DSStoreBackgroundPicture && dsStoreInfo.backgroundImagePath) {
+    NSLog(@"║ Setting background image: %@", dsStoreInfo.backgroundImagePath);
+    
+    NSImage *bgImage = [[NSImage alloc] initWithContentsOfFile:dsStoreInfo.backgroundImagePath];
+    if (bgImage) {
+      NSLog(@"║   ✓ Background image loaded: %.0fx%.0f", 
+            [bgImage size].width, [bgImage size].height);
+      if ([iconView respondsToSelector:@selector(setBackgroundImage:)]) {
+        [(FSNIconsView *)iconView setBackgroundImage:bgImage];
+      }
+      [bgImage release];
+    } else {
+      NSLog(@"║   ✗ Failed to load background image from: %@", dsStoreInfo.backgroundImagePath);
+    }
+  }
+  
+  // Check for free icon positioning (DS_Store icon locations)
+  if ([dsStoreInfo hasAnyIconPositions]) {
+    NSLog(@"║ Free positioning mode: ENABLED");
+    NSLog(@"║ Icons with custom positions: %lu", 
+          (unsigned long)[[dsStoreInfo filenamesWithPositions] count]);
+    
+    // Get view dimensions for coordinate conversion
+    CGFloat viewHeight = dsStoreInfo.windowFrame.size.height;
+    CGFloat iconHeight = dsStoreInfo.hasIconSize ? (CGFloat)dsStoreInfo.iconSize : 64.0;
+    
+    NSLog(@"║ DS_Store content height: %.0f, Icon height: %.0f", viewHeight, iconHeight);
+    
+    // Build positions dictionary with coordinate conversion
+    NSMutableDictionary *iconPositions = [NSMutableDictionary dictionary];
+    for (NSString *filename in [dsStoreInfo filenamesWithPositions]) {
+      DSStoreIconInfo *iconInfo = [dsStoreInfo iconInfoForFilename:filename];
+      if (iconInfo && iconInfo.hasPosition) {
+        NSPoint gnustepPos = [iconInfo gnustepPositionForViewHeight:viewHeight 
+                                                         iconHeight:iconHeight];
+        [iconPositions setObject:[NSValue valueWithPoint:gnustepPos] 
+                          forKey:filename];
+        NSLog(@"║   '%@': DS_Store(%.0f, %.0f) → GNUstep(%.0f, %.0f)", 
+              filename, 
+              iconInfo.position.x, iconInfo.position.y,
+              gnustepPos.x, gnustepPos.y);
+      }
+    }
+    
+    // Enable free positioning mode
+    if ([iconView respondsToSelector:@selector(setFreePositioningEnabled:)]) {
+      [(FSNIconsView *)iconView setCustomIconPositions:iconPositions];
+      [(FSNIconsView *)iconView setFreePositioningEnabled:YES];
+    }
+  } else {
+    NSLog(@"║ Free positioning mode: disabled (no custom icon positions)");
+    
+    // Disable free positioning if it was previously enabled
+    if ([iconView respondsToSelector:@selector(setFreePositioningEnabled:)]) {
+      [(FSNIconsView *)iconView setFreePositioningEnabled:NO];
+    }
+    
+    if (dsStoreInfo.hasIconArrangement) {
+      NSLog(@"║ Arrangement: %@", 
+            dsStoreInfo.iconArrangement == DSStoreIconArrangementNone ? @"none" : @"grid");
+    }
+  }
+  
+  // Apply tag colors (lclr) and comments (cmmt) from DS_Store
+  NSDictionary *allIconInfo = [dsStoreInfo allIconInfo];
+  if (allIconInfo && [allIconInfo count] > 0) {
+    NSMutableDictionary *tagColors = [NSMutableDictionary dictionary];
+    NSMutableDictionary *comments = [NSMutableDictionary dictionary];
+    
+    for (NSString *filename in allIconInfo) {
+      DSStoreIconInfo *iconInfo = [allIconInfo objectForKey:filename];
+      
+      // Collect tag colors
+      if (iconInfo.hasLabelColor && iconInfo.labelColor != DSStoreLabelColorNone) {
+        NSColor *color = [DSStoreIconInfo colorForLabelColor:iconInfo.labelColor];
+        if (color) {
+          [tagColors setObject:color forKey:filename];
+        }
+      }
+      
+      // Collect comments
+      if (iconInfo.comments && [iconInfo.comments length] > 0) {
+        [comments setObject:iconInfo.comments forKey:filename];
+      }
+    }
+    
+    // Apply tag colors
+    if ([tagColors count] > 0) {
+      NSLog(@"║ Applying %lu tag colors", (unsigned long)[tagColors count]);
+      if ([iconView respondsToSelector:@selector(setTagColorsFromDictionary:)]) {
+        [(FSNIconsView *)iconView setTagColorsFromDictionary:tagColors];
+      }
+    }
+    
+    // Apply comments (shown as tooltips)
+    if ([comments count] > 0) {
+      NSLog(@"║ Applying %lu Spotlight comments", (unsigned long)[comments count]);
+      if ([iconView respondsToSelector:@selector(setCommentsFromDictionary:)]) {
+        [(FSNIconsView *)iconView setCommentsFromDictionary:comments];
+      }
+    }
+  }
+  
+  NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+}
+
+/**
+ * Apply DS_Store settings to a list view.
+ * This handles text size, icon size, sort column, and column visibility.
+ */
+- (void)applyDSStoreSettingsToListView:(id)listView
+{
+  if (!listView || !dsStoreInfo || !dsStoreInfo.loaded) {
+    return;
+  }
+  
+  NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+  NSLog(@"║      APPLYING DS_STORE LIST VIEW SETTINGS                        ║");
+  NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+  
+  // List view settings from lsvp/lsvP plist:
+  // - textSize: Font size for list text
+  // - iconSize: Icon size in list rows  
+  // - sortColumn: Which column to sort by
+  // - columns: Column visibility and widths
+  
+  // Get the data source which manages the list
+  id dataSource = nil;
+  if ([listView respondsToSelector:@selector(dataSource)]) {
+    dataSource = [listView dataSource];
+  }
+  
+  // Apply sort column if available
+  if (dsStoreInfo.hasSortColumn && dsStoreInfo.sortColumn) {
+    int infoType = [DSStoreInfo infoTypeForSortColumnName:dsStoreInfo.sortColumn];
+    if (infoType >= 0) {
+      NSLog(@"║ Sort column: %@ -> FSNInfoType %d", dsStoreInfo.sortColumn, infoType);
+      if ([dataSource respondsToSelector:@selector(setSortColumn:)]) {
+        [(FSNListViewDataSource *)dataSource setSortColumn:(FSNInfoType)infoType];
+      }
+    } else {
+      NSLog(@"║ Sort column: %@ (unknown, not applied)", dsStoreInfo.sortColumn);
+    }
+  }
+  
+  // Apply list text size if available
+  if (dsStoreInfo.hasListTextSize) {
+    NSLog(@"║ List text size: %d", dsStoreInfo.listTextSize);
+    // The list view uses the system font, so we would need to customize the table cells
+    // This would require additional FSNListView modifications
+  }
+  
+  // Apply list icon size if available
+  if (dsStoreInfo.hasListIconSize) {
+    NSLog(@"║ List icon size: %d", dsStoreInfo.listIconSize);
+    // FSNListView uses fixed-size icons, would need row height adjustment
+  }
+  
+  // Apply column widths if available
+  if (dsStoreInfo.columnWidths && [dsStoreInfo.columnWidths count] > 0) {
+    NSLog(@"║ Column widths from DS_Store:");
+    for (NSString *columnName in dsStoreInfo.columnWidths) {
+      NSNumber *widthNum = [dsStoreInfo.columnWidths objectForKey:columnName];
+      float width = [widthNum floatValue];
+      int infoType = [DSStoreInfo infoTypeForSortColumnName:columnName];
+      if (infoType >= 0 && [dataSource respondsToSelector:@selector(setColumnWidth:forIdentifier:)]) {
+        [dataSource setColumnWidth:width forIdentifier:(FSNInfoType)infoType];
+        NSLog(@"║   %@ -> width %.0f", columnName, width);
+      }
+    }
+  }
+  
+  // Apply tag colors and comments to list view items
+  NSDictionary *iconInfoDict = [dsStoreInfo allIconInfo];
+  if (iconInfoDict && [iconInfoDict count] > 0) {
+    NSLog(@"║ Applying tag colors/comments to %lu list items", 
+          (unsigned long)[iconInfoDict count]);
+    // FSNListViewNodeRep doesn't have tagColor/comment support yet
+    // This would require additional FSNListViewNodeRep modifications
+  }
+  
+  NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+}
+
+/**
+ * Apply DS_Store settings to a browser (column) view.
+ * This handles column widths and visibility.
+ */
+- (void)applyDSStoreSettingsToBrowserView:(id)browserView
+{
+  if (!browserView || !dsStoreInfo || !dsStoreInfo.loaded) {
+    return;
+  }
+  
+  NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+  NSLog(@"║      APPLYING DS_STORE BROWSER VIEW SETTINGS                     ║");
+  NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+  
+  // Browser view settings from DS_Store:
+  // - clw{name}: Column width for named columns
+  // - cv{name}: Column visibility
+  // - cvlc: Column visibility list
+  
+  // Apply sidebar width if available (for split view scenarios)
+  if (dsStoreInfo.hasSidebarWidth && dsStoreInfo.sidebarWidth > 0) {
+    NSLog(@"║ Sidebar width from DS_Store: %d", dsStoreInfo.sidebarWidth);
+    // Browser view in spatial mode doesn't have a sidebar, but log for reference
+  }
+  
+  // TODO: Apply column widths when we add clw* parsing
+  // TODO: Apply column visibility when we add cv* parsing
+  
+  NSLog(@"║ Browser view DS_Store settings: (not yet fully implemented)");
+  NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+}
+
+#pragma mark - History Support
+
+- (NSMutableArray *)history
+{
+  if (!history) {
+    history = [NSMutableArray new];
+  }
+  return history;
+}
+
+- (int)historyPosition
+{
+  return historyPosition;
+}
+
+- (void)setHistoryPosition:(int)pos
+{
+  historyPosition = pos;
+}
+
 @end
 
 
@@ -1288,9 +1486,39 @@
 
 - (void)setViewerType:(id)sender
 {
-  NSString *title = [sender title];
+  NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+  NSLog(@"║ setViewerType: CALLED");
   
-	if ([title isEqual: NSLocalizedString(viewType, @"")] == NO) {
+  NSString *title = [sender title];
+  NSLog(@"║ menu title: %@", title);
+  NSLog(@"║ current viewType: %@", viewType);
+  
+  // Extract view type from title - handles various localizations
+  // Common patterns: "as List", "as Icon", "as Columns", etc.
+  // We check for the English keywords anywhere in the string
+  NSString *requestedType = nil;
+  NSString *upperTitle = [title uppercaseString];
+  
+  if ([upperTitle rangeOfString:@"BROWSER"].location != NSNotFound ||
+      [upperTitle rangeOfString:@"COLUMN"].location != NSNotFound) {
+    requestedType = @"Browser";
+  } else if ([upperTitle rangeOfString:@"ICON"].location != NSNotFound) {
+    requestedType = @"Icon";
+  } else if ([upperTitle rangeOfString:@"LIST"].location != NSNotFound) {
+    requestedType = @"List";
+  }
+  
+  NSLog(@"║ extracted type: %@", requestedType);
+  
+  if (!requestedType) {
+    NSLog(@"║ ERROR: Could not determine view type from title!");
+    NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+    return;
+  }
+  
+  if (![requestedType isEqualToString:viewType]) {
+    NSLog(@"║ Switching: %@ -> %@", viewType, requestedType);
+    NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
     NSArray *selection = [nodeView selectedNodes];
     NSArray *reps = [nodeView reps];
     NSMutableArray *opennodes = [NSMutableArray array];
@@ -1314,7 +1542,7 @@
     
     [scroll setDocumentView: nil];	
     
-    if ([title isEqual: NSLocalizedString(@"Browser", @"")]) {
+    if ([requestedType isEqualToString:@"Browser"]) {
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
 		                            visibleColumns: visibleCols
@@ -1326,12 +1554,12 @@
       [scroll setHasVerticalScroller: NO];
       ASSIGN (viewType, @"Browser");
       
-    } else if ([title isEqual: NSLocalizedString(@"Icon", @"")]) {
+    } else if ([requestedType isEqualToString:@"Icon"]) {
       nodeView = [[GWViewerIconsView alloc] initForViewer: self];
       [scroll setHasVerticalScroller: YES];
       ASSIGN (viewType, @"Icon");
       
-    } else if ([title isEqual: NSLocalizedString(@"List", @"")]) {
+    } else if ([requestedType isEqualToString:@"List"]) {
       NSRect r = [[scroll contentView] bounds];
 
       nodeView = [[GWViewerListView alloc] initWithFrame: r forViewer: self];
@@ -1341,7 +1569,19 @@
     
     [scroll setDocumentView: nodeView];	
     RELEASE (nodeView);                 
-    [nodeView showContentsOfNode: baseNode]; 
+    
+    if (nodeView && baseNode) {
+      [nodeView showContentsOfNode: baseNode]; 
+      
+      // Apply DS_Store settings for the new view type
+      if ([viewType isEqual: @"Icon"]) {
+        [self applyDSStoreSettingsToIconView:nodeView];
+      } else if ([viewType isEqual: @"List"]) {
+        [self applyDSStoreSettingsToListView:nodeView];
+      } else if ([viewType isEqual: @"Browser"]) {
+        [self applyDSStoreSettingsToBrowserView:nodeView];
+      }
+    }
         
     for (i = 0; i < [opennodes count]; i++) {
       id rep = [nodeView repOfSubnode: [opennodes objectAtIndex: i]];
@@ -1378,6 +1618,13 @@
     [self selectionChanged: selection];
     
     [self updateDefaults];
+    
+    NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
+    NSLog(@"║ setViewerType: COMPLETED SUCCESSFULLY -> %@", viewType);
+    NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+  } else {
+    NSLog(@"║ Already in %@ view - no switch needed", viewType);
+    NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
   }
 }
 
@@ -1497,6 +1744,10 @@
 
 - (BOOL)validateItem:(id)menuItem
 {
+  SEL action = [menuItem action];
+  NSString *actionName = NSStringFromSelector(action);
+  NSLog(@"validateItem called: action=%@, menuItem=%@", actionName, menuItem);
+  
   if ([NSApp keyWindow] == vwrwin) {
     SEL action = [menuItem action];
     NSString *itemTitle = [menuItem title];
