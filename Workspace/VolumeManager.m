@@ -211,6 +211,81 @@ static VolumeManager *sharedInstance = nil;
   return NO;
 }
 
+/* Verify that the mount point has at least one entry and that the FUSE PID is running */
+- (BOOL)verifyMountPoint:(NSString *)mountPoint pid:(int)pid error:(NSString **)errorOut
+{
+  /* Retry briefly to allow mounts that populate contents asynchronously to settle */
+  const int maxRetries = 20; /* up to ~10 seconds with 500ms sleep */
+  const useconds_t sleepUs = 500000; /* 0.5s */
+  int attempt = 0;
+  int lastErrno = 0;
+  NSError *contentsError = nil;
+
+  for (attempt = 0; attempt < maxRetries; attempt++) {
+    /* Check pid if provided */
+    if (pid > 0) {
+      if (kill(pid, 0) != 0) {
+        lastErrno = errno;
+        if (lastErrno == ESRCH) {
+          if (errorOut) {
+            *errorOut = [NSString stringWithFormat:@"FUSE process %d is not running (ESRCH)", pid];
+          }
+          return NO;
+        }
+        /* For other errno values, continue and retry briefly */
+      }
+    }
+
+    contentsError = nil;
+    NSArray *contents = [fm contentsOfDirectoryAtPath:mountPoint error:&contentsError];
+    if (!contentsError && contents && [contents count] > 0) {
+      /* Success: PID is either valid or not required, and we have contents */
+      return YES;
+    }
+
+    /* If there is a contents error like EACCES, abort early */
+    if (contentsError) {
+      lastErrno = errno;
+      if (errorOut) {
+        *errorOut = [NSString stringWithFormat:@"Mount point validation failed: %@", [contentsError localizedDescription]];
+      }
+      return NO;
+    }
+
+    /* Sleep a short while before retrying */
+    usleep(sleepUs);
+  }
+
+  /* If the PID died during wait, prefer that message */
+  if (pid > 0 && kill(pid, 0) != 0) {
+    if (errorOut) {
+      int kerr = errno;
+      *errorOut = [NSString stringWithFormat:@"FUSE process %d is not running: %s", pid, strerror(kerr)];
+    }
+    return NO;
+  }
+
+  /* Final attempt: read directory one more time to capture state for diagnostics */
+  NSError *finalErr = nil;
+  NSArray *finalContents = [fm contentsOfDirectoryAtPath:mountPoint error:&finalErr];
+  if (finalContents && [finalContents count] > 0) {
+    /* Rare race: contents appeared right after retries; consider success */
+    return YES;
+  }
+
+  /* Otherwise, report no files found after retries, include listing/error when available (do not mention wait duration) */
+  if (errorOut) {
+    NSString *detail = @"";
+    if (finalErr) {
+      detail = [NSString stringWithFormat:@" (%@)", [finalErr localizedDescription]];
+    } else if (finalContents) {
+      detail = [NSString stringWithFormat:@" (dir listing: %@)", finalContents];
+    }
+    *errorOut = [NSString stringWithFormat:@"Mount point validation failed: No files or directories found%@", detail];
+  }
+  return NO;
+}
+
 - (NSString *)createMountPointForDMG:(NSString *)dmgPath
 {
   NSString *userName = NSUserName();
@@ -431,10 +506,26 @@ static VolumeManager *sharedInstance = nil;
       waitCount++;
     }
     
+    int taskPid = [dmgTask processIdentifier];
     if ([self isMountPointActive:mountPoint]) {
-      NSLog(@"VolumeManager: Successfully mounted DMG at %@", mountPoint);
+      NSString *verifyError = nil;
+      if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
+        NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+        if ([dmgTask isRunning]) {
+          [dmgTask terminate];
+          sleep(1);
+          if ([dmgTask isRunning]) {
+            kill([dmgTask processIdentifier], SIGKILL);
+          }
+        }
+        [dmgTask release];
+        [fm removeItemAtPath:mountPoint error:nil];
+        [self showErrorAlert:[NSString stringWithFormat:@"Failed to mount DMG:\n%@", verifyError]];
+        return nil;
+      }
+
+      NSLog(@"VolumeManager: Successfully mounted DMG at %@ (verified)", mountPoint);
       
-      int taskPid = [dmgTask processIdentifier];
       [mountedVolumes setObject:mountPoint forKey:dmgPath];
       [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:dmgPath];
       [diskImageMountPoints addObject:mountPoint];
@@ -469,11 +560,27 @@ static VolumeManager *sharedInstance = nil;
       NSString *allOutput = [NSString stringWithFormat:@"%@ %@", outString, errString];
       
       if ([allOutput containsString:@"Everything looks OK, disk mounted"] || [self isMountPointActive:mountPoint]) {
+        NSString *verifyError = nil;
+        if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
+          NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+          if ([dmgTask isRunning]) {
+            [dmgTask terminate];
+            sleep(1);
+            if ([dmgTask isRunning]) {
+              kill([dmgTask processIdentifier], SIGKILL);
+            }
+          }
+          [dmgTask release];
+          [fm removeItemAtPath:mountPoint error:nil];
+          [self showErrorAlert:[NSString stringWithFormat:@"Failed to mount DMG:\n%@", verifyError]];
+          return nil;
+        }
+
         NSLog(@"VolumeManager: Successfully mounted DMG at %@ (verified)", mountPoint);
         
-        int taskPid = [dmgTask processIdentifier];
         [mountedVolumes setObject:mountPoint forKey:dmgPath];
-        [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:dmgPath];        [diskImageMountPoints addObject:mountPoint];        
+        [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:dmgPath];
+        [diskImageMountPoints addObject:mountPoint];
         [self registerVolumeWithDesktop:mountPoint isDiskImage:YES];
         
         NSString *parent = [mountPoint stringByDeletingLastPathComponent];
@@ -570,10 +677,26 @@ static VolumeManager *sharedInstance = nil;
       waitCount++;
     }
     
+    int taskPid = [isoTask processIdentifier];
     if ([self isMountPointActive:mountPoint]) {
-      NSLog(@"VolumeManager: Successfully mounted ISO at %@", mountPoint);
+      NSString *verifyError = nil;
+      if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
+        NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+        if ([isoTask isRunning]) {
+          [isoTask terminate];
+          sleep(1);
+          if ([isoTask isRunning]) {
+            kill([isoTask processIdentifier], SIGKILL);
+          }
+        }
+        [isoTask release];
+        [fm removeItemAtPath:mountPoint error:nil];
+        [self showErrorAlert:[NSString stringWithFormat:@"Failed to mount ISO:\n%@", verifyError]];
+        return nil;
+      }
+
+      NSLog(@"VolumeManager: Successfully mounted ISO at %@ (verified)", mountPoint);
       
-      int taskPid = [isoTask processIdentifier];
       [mountedVolumes setObject:mountPoint forKey:isoPath];
       [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:isoPath];
       [diskImageMountPoints addObject:mountPoint];
@@ -598,9 +721,24 @@ static VolumeManager *sharedInstance = nil;
       }
       
       if ([self isMountPointActive:mountPoint]) {
+        NSString *verifyError = nil;
+        if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
+          NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+          if ([isoTask isRunning]) {
+            [isoTask terminate];
+            sleep(1);
+            if ([isoTask isRunning]) {
+              kill([isoTask processIdentifier], SIGKILL);
+            }
+          }
+          [isoTask release];
+          [fm removeItemAtPath:mountPoint error:nil];
+          [self showErrorAlert:[NSString stringWithFormat:@"Failed to mount ISO:\n%@", verifyError]];
+          return nil;
+        }
+
         NSLog(@"VolumeManager: Successfully mounted ISO at %@ (verified)", mountPoint);
         
-        int taskPid = [isoTask processIdentifier];
         [mountedVolumes setObject:mountPoint forKey:isoPath];
         [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:isoPath];
         [diskImageMountPoints addObject:mountPoint];
@@ -697,10 +835,26 @@ static VolumeManager *sharedInstance = nil;
       waitCount++;
     }
     
+    int taskPid = [fuseTask processIdentifier];
     if ([self isMountPointActive:mountPoint]) {
-      NSLog(@"VolumeManager: Successfully mounted at %@", mountPoint);
+      NSString *verifyError = nil;
+      if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
+        NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+        if ([fuseTask isRunning]) {
+          [fuseTask terminate];
+          sleep(1);
+          if ([fuseTask isRunning]) {
+            kill([fuseTask processIdentifier], SIGKILL);
+          }
+        }
+        [fuseTask release];
+        [fm removeItemAtPath:mountPoint error:nil];
+        [self showErrorAlert:[NSString stringWithFormat:@"Failed to mount:\n%@", verifyError]];
+        return nil;
+      }
+
+      NSLog(@"VolumeManager: Successfully mounted at %@ (verified)", mountPoint);
       
-      int taskPid = [fuseTask processIdentifier];
       [mountedVolumes setObject:mountPoint forKey:imagePath];
       [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:imagePath];
       [diskImageMountPoints addObject:mountPoint];
@@ -727,9 +881,24 @@ static VolumeManager *sharedInstance = nil;
     }
     
     if ([self isMountPointActive:mountPoint]) {
+      NSString *verifyError = nil;
+      if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
+        NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+        if ([fuseTask isRunning]) {
+          [fuseTask terminate];
+          sleep(1);
+          if ([fuseTask isRunning]) {
+            kill([fuseTask processIdentifier], SIGKILL);
+          }
+        }
+        [fuseTask release];
+        [fm removeItemAtPath:mountPoint error:nil];
+        [self showErrorAlert:[NSString stringWithFormat:@"Failed to mount:\n%@", verifyError]];
+        return nil;
+      }
+
       NSLog(@"VolumeManager: Mounted (verified)");
       
-      int taskPid = [fuseTask processIdentifier];
       [mountedVolumes setObject:mountPoint forKey:imagePath];
       [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:imagePath];
       [diskImageMountPoints addObject:mountPoint];
