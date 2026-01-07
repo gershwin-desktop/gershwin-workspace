@@ -103,6 +103,7 @@
     bounceVelocity = 0.0;
     bounceOffset = 0.0;
     bounceGravity = 1.0;  /* Doubled gravity for twice as fast animation */
+    pauseCounter = 0;  /* No pause initially */
 
     minimumLaunchClicks = 2;
     
@@ -266,6 +267,7 @@
   isBouncing = NO;
   bounceOffset = 0.0;
   bounceVelocity = 0.0;
+  pauseCounter = 0;
   [self setNeedsDisplay: YES];
 }
 
@@ -273,6 +275,17 @@
 {
   /* Check if we should still be bouncing */
   if (!isBouncing) {
+    return;
+  }
+  
+  /* Handle pause between bounces (500ms pause between iterations) */
+  /* At 30fps (0.033s per frame), 500ms = ~15 frames */
+  if (pauseCounter > 0) {
+    pauseCounter--;
+    [self setNeedsDisplay: YES];
+    if (container) {
+      [container setNeedsDisplayInRect: [self frame]];
+    }
     return;
   }
   
@@ -285,15 +298,11 @@
   /* Bounce off the ground (y = 0) - repeat bouncing with pause */
   if (bounceOffset <= 0.0) {
     bounceOffset = 0.0;
-    /* Add a pause before next bounce (3 frames at 30fps = ~0.1s pause) */
-    bounceVelocity = -0.1;  /* Negative velocity signals pause state */
-  } else if (bounceVelocity < -0.1 && bounceVelocity > -1.0) {
-    /* In pause state, wait a bit then restart */
-    bounceVelocity -= 0.05;
-    if (bounceVelocity < -1.0) {
-      /* Pause over, reset for next bounce */
-      bounceVelocity = 6.32;
-    }
+    /* Bounce completed - set pause counter for 500ms pause */
+    /* 500ms / 33.333ms per frame ≈ 15 frames */
+    pauseCounter = 15;
+    /* Reset velocity for next bounce cycle */
+    bounceVelocity = 6.32;  /* Initial upward velocity for 20px bounce height */
   }
   
   /* Request redraw */

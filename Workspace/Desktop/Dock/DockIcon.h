@@ -65,6 +65,7 @@
   float bounceVelocity;
   float bounceOffset;
   float bounceGravity;
+  int pauseCounter;  /* Tracks pause between bounces (counts down in timer frames) */
 
   NSFileManager *fm;
   NSNotificationCenter *nc; 
