@@ -25,6 +25,7 @@
  */
 
 #import <AppKit/AppKit.h>
+#include <GNUstepGUI/GSDisplayServer.h>
 #import "GWDesktopManager.h"
 #import "GWDesktopWindow.h"
 #import "GWDesktopView.h"
@@ -33,6 +34,8 @@
 #import "Workspace.h"
 #import "GWViewersManager.h"
 #import "Thumbnailer/GWThumbnailer.h"
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
 
 #define RESV_MARGIN 10
 
@@ -166,6 +169,37 @@ static GWDesktopManager *desktopManager = nil;
   NSLog(@"DEBUG: GWDesktopManager activateDesktop called");
   [win activate];
   NSLog(@"DEBUG: Desktop window activated");
+  
+  // Set the menu for the desktop window so it gets exported via DBus/AppMenu
+  // This ensures Menu.app can find the menus when the desktop is active
+  // We do this after activation to avoid triggering the Menu.app scan loop
+  [win setMenu: [NSApp mainMenu]];
+  
+  // Set the desktop window as the X11 active window so Menu.app shows its menus
+  // This is needed because the desktop is the first window and should show menus on startup
+  Display *display = XOpenDisplay(NULL);
+  if (display)
+    {
+      Window root = DefaultRootWindow(display);
+      Atom netActiveWindow = XInternAtom(display, "_NET_ACTIVE_WINDOW", False);
+      
+      // Get the X11 window ID for the desktop window
+      GSDisplayServer *srv = GSServerForWindow(win);
+      if (srv)
+        {
+          Window desktopXWindow = (Window)(uintptr_t)[srv windowDevice: [win windowNumber]];
+          
+          if (desktopXWindow)
+            {
+              XChangeProperty(display, root, netActiveWindow, XA_WINDOW, 32,
+                             PropModeReplace, (unsigned char*)&desktopXWindow, 1);
+              XFlush(display);
+              NSLog(@"DEBUG: Set _NET_ACTIVE_WINDOW to desktop window 0x%lx", desktopXWindow);
+            }
+        }
+      XCloseDisplay(display);
+    }
+  
   [desktopView showMountedVolumes];
   [desktopView showContentsOfNode: dskNode];
   [self addWatcherForPath: [dskNode path]];
