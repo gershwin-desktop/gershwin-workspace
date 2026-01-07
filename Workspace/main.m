@@ -30,11 +30,30 @@
 #include <unistd.h>
 
 #include "Workspace.h"
-  
+
+/* Forward declaration of UI testing enable function */
+extern void WorkspaceUITestingSetEnabled(BOOL enabled);
+
 int main(int argc, char **argv, char **env)
 {
 	CREATE_AUTORELEASE_POOL (pool);
+  
+  /* Check for debug/UI testing flag */
+  BOOL debugMode = NO;
+  for (int i = 1; i < argc; i++) {
+    if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
+      debugMode = YES;
+      NSLog(@"Workspace: Debug mode enabled");
+      break;
+    }
+  }
+  
   Workspace *gw = [Workspace gworkspace];
+  
+  /* Enable UI testing if debug mode is enabled */
+  if (debugMode) {
+    WorkspaceUITestingSetEnabled(YES);
+  }
   
   // If GTK_MODULES indicates appmenu integration, wait up to 2sec for the
   // Canonical AppMenu registrar to appear on the session bus so subsequent

@@ -283,8 +283,6 @@ static VolumeManager *sharedInstance = nil;
     NSString *detail = @"";
     if (finalErr) {
       detail = [NSString stringWithFormat:@" (%@)", [finalErr localizedDescription]];
-    } else if (finalContents) {
-      detail = [NSString stringWithFormat:@" (dir listing: %@)", finalContents];
     }
     *errorOut = [NSString stringWithFormat:@"Mount point validation failed: No files or directories found%@", detail];
   }

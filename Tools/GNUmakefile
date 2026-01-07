@@ -7,7 +7,8 @@ SUBPROJECTS = \
         searchtool \
         lsfupdater \
         ddbd \
-        wopen 
+        wopen \
+        uitest 
 
 -include GNUmakefile.preamble
 

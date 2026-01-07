@@ -75,6 +75,7 @@ Workspace_LANGUAGES = \
 Workspace_OBJC_FILES = main.m \
 GWFunctions.m \
 Workspace.m \
+Workspace+UITesting.m \
 X11AppSupport.m \
 WorkspaceApplication.m \
 GSGlobalShortcutsManager.m \

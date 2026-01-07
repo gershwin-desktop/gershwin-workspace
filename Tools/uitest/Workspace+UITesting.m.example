@@ -1,0 +1,191 @@
+/*
+ *  Workspace+UITesting.m - GUI Testing support for Workspace
+ *
+ *  Copyright (C) 2025 Free Software Foundation, Inc.
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; either version 2 of the License, or
+ *  (at your option) any later version.
+ *
+ *  To use this in Workspace:
+ *  1. Add this file to the Workspace build
+ *  2. Import WorkspaceUITesting.h in the main Workspace class
+ *  3. Add <WorkspaceUITesting> to the class declaration
+ *  4. The uitest tool will automatically detect and use these methods
+ */
+
+#import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
+#import "WorkspaceUITesting.h"
+
+@interface Workspace (UITesting) <WorkspaceUITesting>
+@end
+
+@implementation Workspace (UITesting)
+
+/**
+ * Recursively build a dictionary representation of a view and its children
+ */
+- (NSMutableDictionary *)_buildViewDict:(NSView *)view
+{
+  NSMutableDictionary *viewDict = [NSMutableDictionary dictionary];
+  NSString *className = NSStringFromClass([view class]);
+  
+  [viewDict setObject:className forKey:@"class"];
+  
+  /* Visibility state */
+  [viewDict setObject:([view isHidden] ? @"hidden" : @"visible") 
+              forKey:@"visibility"];
+  
+  /* Enabled state (for controls) */
+  if ([view respondsToSelector:@selector(isEnabled)]) {
+    BOOL isEnabled = [view isEnabled];
+    [viewDict setObject:(isEnabled ? @"enabled" : @"disabled") 
+                forKey:@"state"];
+  }
+  
+  /* Checked state (for buttons, checkboxes) */
+  if ([view respondsToSelector:@selector(state)]) {
+    NSInteger buttonState = [view state];
+    NSString *stateStr;
+    switch (buttonState) {
+      case NSControlStateValueOff:
+        stateStr = @"unchecked";
+        break;
+      case NSControlStateValueOn:
+        stateStr = @"checked";
+        break;
+      case NSControlStateValueMixed:
+        stateStr = @"mixed";
+        break;
+      default:
+        stateStr = @"unknown";
+    }
+    [viewDict setObject:stateStr forKey:@"checkState"];
+  }
+  
+  /* Text content - try various properties */
+  NSString *textContent = nil;
+  
+  if ([view respondsToSelector:@selector(stringValue)]) {
+    NSString *value = [view stringValue];
+    if (value && [value length] > 0) {
+      textContent = value;
+    }
+  }
+  
+  if (!textContent && [view respondsToSelector:@selector(title)]) {
+    NSString *title = [view title];
+    if (title && [title length] > 0) {
+      textContent = title;
+    }
+  }
+  
+  if (!textContent && [view respondsToSelector:@selector(string)]) {
+    NSString *string = [view string];
+    if (string && [string length] > 0) {
+      textContent = string;
+    }
+  }
+  
+  if (!textContent && [view respondsToSelector:@selector(attributedStringValue)]) {
+    NSAttributedString *attrStr = [view attributedStringValue];
+    if (attrStr && [attrStr length] > 0) {
+      textContent = [attrStr string];
+    }
+  }
+  
+  if (textContent) {
+    [viewDict setObject:textContent forKey:@"text"];
+  }
+  
+  /* Frame/bounds information */
+  NSRect frame = [view frame];
+  NSDictionary *frameDic = [NSDictionary dictionaryWithObjectsAndKeys:
+    [NSNumber numberWithDouble:frame.origin.x], @"x",
+    [NSNumber numberWithDouble:frame.origin.y], @"y",
+    [NSNumber numberWithDouble:frame.size.width], @"width",
+    [NSNumber numberWithDouble:frame.size.height], @"height",
+    nil];
+  [viewDict setObject:frameDic forKey:@"frame"];
+  
+  /* Recursively process child views */
+  NSArray *subviews = [view subviews];
+  if ([subviews count] > 0) {
+    NSMutableArray *childrenArray = [NSMutableArray array];
+    for (NSView *subview in subviews) {
+      [childrenArray addObject:[self _buildViewDict:subview]];
+    }
+    [viewDict setObject:childrenArray forKey:@"children"];
+  }
+  
+  return viewDict;
+}
+
+/**
+ * Recursively build a dictionary representation of a window
+ */
+- (NSMutableDictionary *)_buildWindowDict:(NSWindow *)window
+{
+  NSMutableDictionary *windowDict = [NSMutableDictionary dictionary];
+  
+  [windowDict setObject:[window title] forKey:@"title"];
+  [windowDict setObject:NSStringFromClass([window class]) forKey:@"class"];
+  [windowDict setObject:([window isVisible] ? @"visible" : @"hidden") 
+                forKey:@"visibility"];
+  [windowDict setObject:([window isKeyWindow] ? @"yes" : @"no") 
+                forKey:@"isKeyWindow"];
+  
+  /* Window frame */
+  NSRect windowFrame = [window frame];
+  NSDictionary *frameDic = [NSDictionary dictionaryWithObjectsAndKeys:
+    [NSNumber numberWithDouble:windowFrame.origin.x], @"x",
+    [NSNumber numberWithDouble:windowFrame.origin.y], @"y",
+    [NSNumber numberWithDouble:windowFrame.size.width], @"width",
+    [NSNumber numberWithDouble:windowFrame.size.height], @"height",
+    nil];
+  [windowDict setObject:frameDic forKey:@"frame"];
+  
+  /* Content view hierarchy */
+  NSView *contentView = [window contentView];
+  if (contentView) {
+    [windowDict setObject:[self _buildViewDict:contentView] forKey:@"contentView"];
+  }
+  
+  return windowDict;
+}
+
+/**
+ * Returns the current window and view hierarchy as JSON-serializable data
+ */
+- (NSDictionary *)currentWindowHierarchyAsJSON
+{
+  NSMutableArray *windowsArray = [NSMutableArray array];
+  
+  /* Get all windows from the application */
+  NSArray *windows = [[NSApplication sharedApplication] windows];
+  
+  for (NSWindow *window in windows) {
+    NSMutableDictionary *windowDict = [self _buildWindowDict:window];
+    [windowsArray addObject:windowDict];
+  }
+  
+  /* Return JSON-serializable dictionary */
+  return [NSDictionary dictionaryWithObjectsAndKeys:
+    windowsArray, @"windows",
+    [NSDate date], @"timestamp",
+    @"Workspace", @"application",
+    nil];
+}
+
+/**
+ * Returns all window titles currently visible
+ */
+- (NSArray *)allWindowTitles
+{
+  NSArray *windows = [[NSApplication sharedApplication] windows];
+  return [windows valueForKey:@"title"];
+}
+
+@end
