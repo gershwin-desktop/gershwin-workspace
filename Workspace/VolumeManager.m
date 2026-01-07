@@ -8,7 +8,12 @@
 #import <signal.h>
 #import <errno.h>
 #import <unistd.h>
-#import <sys/statfs.h>
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__)
+# include <sys/param.h>
+# include <sys/mount.h>
+#else
+# include <sys/statfs.h>
+#endif
 #import "VolumeManager.h"
 #import "AVFSMount.h"
 #import "Workspace.h"

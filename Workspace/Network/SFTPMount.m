@@ -7,7 +7,12 @@
 #import "SFTPMount.h"
 #import "NetworkServiceItem.h"
 #import <GNUstepBase/GNUstep.h>
-#import <sys/statfs.h>
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__)
+# include <sys/param.h>
+# include <sys/mount.h>
+#else
+# include <sys/statfs.h>
+#endif
 
 /* SFTPMountResult implementation */
 @implementation SFTPMountResult
