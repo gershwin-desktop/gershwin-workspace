@@ -27,6 +27,9 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/statvfs.h>
+#include <string.h>
+#include <errno.h>
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -52,6 +55,33 @@
 static NSString *nibName = @"Attributes";
 
 static BOOL sizeStop = NO;
+
+/* Helper function to get volume information using statvfs */
+static BOOL getVolumeInfo(const char *path, unsigned long long *total, 
+                          unsigned long long *free_space, 
+                          unsigned long long *available_space)
+{
+  struct statvfs buf;
+  
+  // NSLog(@"Attributes: getVolumeInfo() called for path: %s", path);
+  
+  if (statvfs(path, &buf) == 0) {
+    if (total) {
+      *total = (unsigned long long)buf.f_blocks * (unsigned long long)buf.f_frsize;
+    }
+    if (free_space) {
+      *free_space = (unsigned long long)buf.f_bfree * (unsigned long long)buf.f_frsize;
+    }
+    if (available_space) {
+      *available_space = (unsigned long long)buf.f_bavail * (unsigned long long)buf.f_frsize;
+    }
+    // NSLog(@"Attributes: statvfs SUCCESS - total=%llu, free=%llu, available=%llu", 
+    //       *total, *free_space, *available_space);
+    return YES;
+  }
+  // NSLog(@"Attributes: statvfs FAILED - errno=%d", errno);
+  return NO;
+}
 
 @implementation Attributes
 
@@ -97,7 +127,9 @@ static BOOL sizeStop = NO;
       attributes = nil;    
       currentPath = nil;
       sizer = nil;
-    
+      
+      // NSLog(@"Attributes: Initialized");
+      
       fm = [NSFileManager defaultManager];	
       nc = [NSNotificationCenter defaultCenter];
     
@@ -191,6 +223,8 @@ static BOOL sizeStop = NO;
   BOOL sameOwner, sameGroup;
   NSUInteger i;
 
+  // NSLog(@"Attributes: activateForPaths called with %lu paths", (unsigned long)[paths count]);
+
   sizeStop = YES;
 
   if (paths == nil) {
@@ -238,21 +272,58 @@ static BOOL sizeStop = NO;
           [sizeField setStringValue: fsize]; 
           [calculateButt setEnabled: NO];
           [insideButt	setEnabled: NO];
+          // NSLog(@"Attributes: Single selection - FILE (not a directory)");
         }
       else
         {
-          [sizeField setStringValue: @"--"]; 
+          // NSLog(@"Attributes: Single selection - DIRECTORY: %@", currentPath);
           
-          if (autocalculate)
+          /* For directories, try to get volume information */
+          const char *path = [currentPath UTF8String];
+          unsigned long long totalSize = 0;
+          unsigned long long freeSize = 0;
+          unsigned long long availableSize = 0;
+          
+          if (getVolumeInfo(path, &totalSize, &freeSize, &availableSize)) {
+            /* Successfully got volume info - hide Calculate button and show volume stats */
+            NSUInteger systemType = [[NSProcessInfo processInfo] operatingSystem];
+            
+            // NSLog(@"Attributes: Volume info retrieved successfully");
+            
+            /* Adjust for MACH systems if needed */
+            if (systemType == NSMACHOperatingSystem) {
+              totalSize = (totalSize >> 8);
+              freeSize = (freeSize >> 8);
+              availableSize = (availableSize >> 8);
+            }
+            
+            /* Calculate used size */
+            unsigned long long usedSize = totalSize > freeSize ? (totalSize - freeSize) : 0;
+            
+            /* Format volume info: "Total | Used | Free" and display in sizeField */
+            NSString *volumeInfo = [NSString stringWithFormat: @"%@ | %@ | %@",
+                                   sizeDescription(totalSize),
+                                   sizeDescription(usedSize),
+                                   sizeDescription(freeSize)];
+            // NSLog(@"Attributes: Setting sizeField to: %@", volumeInfo);
+            [sizeField setStringValue: volumeInfo];
+            [calculateButt setEnabled: NO];
+            [calculateButt setHidden: YES];
+            // NSLog(@"Attributes: Calculate button HIDDEN");
+          } else {
+            /* Failed to get volume info - keep Calculate button visible */
+            // NSLog(@"Attributes: Volume info retrieval FAILED - showing Calculate button");
+            [sizeField setStringValue: @"--"]; 
+            [calculateButt setHidden: NO];
+            [calculateButt setEnabled: YES];
+          }
+          
+          if (autocalculate && [calculateButt isHidden] == NO)
             {
               if (sizer == nil)
                 [self startSizer];
               else
                 [sizer computeSizeOfPaths: insppaths];
-            }
-          else
-            {
-              [calculateButt setEnabled: YES];
             }
           
           [insideButt	setEnabled: YES];
@@ -296,18 +367,54 @@ static BOOL sizeStop = NO;
   
       [attributes objectForKey: NSFileType];
       
-      [sizeField setStringValue: @"--"]; 
+      // NSLog(@"Attributes: Multiple selection (%lu items)", (unsigned long)[paths count]);
       
-      if (autocalculate)
+      /* For multiple selection, try to show volume info from first path */
+      const char *firstPath = [[paths objectAtIndex: 0] UTF8String];
+      unsigned long long totalSize = 0;
+      unsigned long long freeSize = 0;
+      unsigned long long availableSize = 0;
+      
+      if (getVolumeInfo(firstPath, &totalSize, &freeSize, &availableSize)) {
+        /* Successfully got volume info - hide Calculate button and show volume stats */
+        NSUInteger systemType = [[NSProcessInfo processInfo] operatingSystem];
+        
+        // NSLog(@"Attributes: Volume info retrieved for multiple selection");
+        
+        /* Adjust for MACH systems if needed */
+        if (systemType == NSMACHOperatingSystem) {
+          totalSize = (totalSize >> 8);
+          freeSize = (freeSize >> 8);
+          availableSize = (availableSize >> 8);
+        }
+        
+        /* Calculate used size */
+        unsigned long long usedSize = totalSize > freeSize ? (totalSize - freeSize) : 0;
+        
+        /* Format volume info: "Total | Used | Free" and display in sizeField */
+        NSString *volumeInfo = [NSString stringWithFormat: @"%@ | %@ | %@",
+                               sizeDescription(totalSize),
+                               sizeDescription(usedSize),
+                               sizeDescription(freeSize)];
+        // NSLog(@"Attributes: Setting sizeField to: %@", volumeInfo);
+        [sizeField setStringValue: volumeInfo];
+        [calculateButt setEnabled: NO];
+        [calculateButt setHidden: YES];
+        // NSLog(@"Attributes: Calculate button HIDDEN");
+      } else {
+        /* Failed to get volume info - keep Calculate button visible */
+        // NSLog(@"Attributes: Volume info retrieval FAILED for multiple selection");
+        [sizeField setStringValue: @"--"]; 
+        [calculateButt setHidden: NO];
+        [calculateButt setEnabled: YES];
+      }
+      
+      if (autocalculate && [calculateButt isHidden] == NO)
         {
           if (sizer == nil)
             [self startSizer];
           else
             [sizer computeSizeOfPaths: insppaths];
-        }
-      else
-        {
-          [calculateButt setEnabled: YES];
         }
     
       usr = [attributes objectForKey: NSFileOwnerAccountName];
