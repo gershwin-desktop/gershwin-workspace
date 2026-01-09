@@ -367,14 +367,14 @@
 - (void)createSubviews
 {
   NSRect r = [[vwrwin contentView] bounds];
-  float w = r.size.width;
-	float h = r.size.height; 
-  int boxh = 32;  
-  int labelw = 106;
-  int labelh = 20;
-  int margin = 0;
-  unsigned int resizeMask;
-  BOOL hasScroller;
+  float w = r.size.width;  // Width of the window's content view bounds, used for calculating subview positions and sizes
+  float h = r.size.height; // Height of the window's content view bounds, used for layout calculations
+  int boxh = 32;           // Height of the top box containing labels and popup, affects vertical spacing
+  int labelw = 106;        // Width of the elements and space labels, determines their horizontal extent
+  int labelh = 20;         // Height of the labels, sets their vertical size
+  int margin = 0;          // Margin spacing around elements (currently zero), controls padding
+  unsigned int resizeMask; // Bitmask for autoresizing behavior of subviews, controls how they resize with the window
+  BOOL hasScroller;        // Flag indicating if the scroll view should have a vertical scroller, based on view type (Icon/List have it, Browser does not)
 
   mainView = [[NSView alloc] initWithFrame: r];
   [mainView setAutoresizingMask: (NSViewWidthSizable | NSViewHeightSizable)];
@@ -387,7 +387,8 @@
   [mainView addSubview: topBox];
   RELEASE (topBox);
 
-  r = NSMakeRect(margin, margin - 2, labelw, labelh);
+  // Elements label on the left
+  r = NSMakeRect(margin + 4, margin + 2, labelw, labelh);
   elementsLabel = [[NSTextField alloc] initWithFrame: r];
   [elementsLabel setFont: [NSFont systemFontOfSize: 10]];
   [elementsLabel setAlignment: NSLeftTextAlignment];
@@ -401,7 +402,8 @@
   [topBox addSubview: elementsLabel];
   RELEASE (elementsLabel);
 
-  r = NSMakeRect(0, margin - 2, labelw, labelh);
+  // Paths popup in the center
+  r = NSMakeRect(0, margin + 5, labelw, labelh);
   r.origin.x = (w / 2) - (labelw / 2);
   pathsPopUp = [[GWViewerPathsPopUp alloc] initWithFrame: r pullsDown: NO];
   resizeMask = NSViewNotSizable | NSViewMinXMargin | NSViewMaxXMargin;
@@ -412,7 +414,8 @@
   [topBox addSubview: pathsPopUp];
   RELEASE (pathsPopUp);
 
-  r = NSMakeRect(w - labelw - margin, margin - 2, labelw, labelh);
+  // Space label on the right
+  r = NSMakeRect(w - labelw - margin - 2 - 4, margin + 2, labelw, labelh);
   spaceLabel = [[NSTextField alloc] initWithFrame: r];
   [spaceLabel setFont: [NSFont systemFontOfSize: 10]];
   [spaceLabel setAlignment: NSRightTextAlignment];
