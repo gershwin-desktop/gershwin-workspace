@@ -66,6 +66,7 @@
 #import "AVFSMount.h"
 #if HAVE_DBUS
 #import "DBusConnection.h"
+#import "FileManagerDBusInterface.h"
 #endif
 
 
@@ -168,6 +169,10 @@ NSString *_pendingSystemActionTitle = nil;
   }
   RELEASE (storedAppinfoPath);
   RELEASE (storedAppinfoLock);
+  
+#if HAVE_DBUS
+  DESTROY (fileManagerDBusInterface);
+#endif
     
   [super dealloc];
 }
@@ -962,6 +967,17 @@ NSString *_pendingSystemActionTitle = nil;
   } else {
     NSLog(@"Workspace: Not the desktop instance - global shortcuts disabled");
   }
+  
+#if HAVE_DBUS
+  // Initialize and register the FileManager DBus interface
+  fileManagerDBusInterface = [[FileManagerDBusInterface alloc] initWithWorkspace:self];
+  if (![fileManagerDBusInterface registerOnDBus]) {
+    NSLog(@"Workspace: Warning - Failed to register FileManager DBus interface");
+    DESTROY(fileManagerDBusInterface);
+  } else {
+    NSLog(@"Workspace: FileManager DBus interface registered successfully");
+  }
+#endif
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)aNotification

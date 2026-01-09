@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2025 Simon Peter
+ * Copyright (c) 2026 Simon Peter
  *
  * SPDX-License-Identifier: BSD-2-Clause
  */
@@ -12,6 +12,70 @@
 
 // Use typedef to avoid naming conflicts
 typedef struct DBusConnection DBusConnectionStruct;
+
+// C callback for libdbus message filter
+static DBusHandlerResult dbusMessageFilterHandler(DBusConnection *connection,
+                                                   DBusMessage *message,
+                                                   void *user_data)
+{
+    @autoreleasepool {
+        GNUDBusConnection *self = (__bridge GNUDBusConnection *)user_data;
+        if (self) {
+            int msgType = dbus_message_get_type(message);
+            
+            // Only handle method calls
+            if (msgType == DBUS_MESSAGE_TYPE_METHOD_CALL) {
+                const char *path = dbus_message_get_path(message);
+                const char *interface = dbus_message_get_interface(message);
+                const char *member = dbus_message_get_member(message);
+                NSLog(@"DBusConnection: Filter handler invoked for %s.%s on %s", 
+                      interface ? interface : "(null)", 
+                      member ? member : "(null)", 
+                      path ? path : "(null)");
+                
+                // Check if we have a handler for this path/interface
+                if (path && interface) {
+                    NSString *pathStr = [NSString stringWithUTF8String:path];
+                    NSString *interfaceStr = [NSString stringWithUTF8String:interface];
+                    NSString *key = [NSString stringWithFormat:@"%@:%@", pathStr, interfaceStr];
+                    
+                    id handler = [self.messageHandlers objectForKey:key];
+                    if (handler) {
+                        NSLog(@"DBusConnection: Found handler for %@, calling handleIncomingMessage", key);
+                        [self handleIncomingMessage:message];
+                        return DBUS_HANDLER_RESULT_HANDLED;
+                    }
+                }
+            }
+        }
+    }
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
+
+// C callback for libdbus object path message handler (not currently used)
+static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection,
+                                                       DBusMessage *message,
+                                                       void *user_data)
+{
+    @autoreleasepool {
+        GNUDBusConnection *self = (__bridge GNUDBusConnection *)user_data;
+        if (self) {
+            const char *path = dbus_message_get_path(message);
+            const char *interface = dbus_message_get_interface(message);
+            const char *member = dbus_message_get_member(message);
+            NSLog(@"DBusConnection: C callback invoked for %s.%s on %s", 
+                  interface ? interface : "(null)", 
+                  member ? member : "(null)", 
+                  path ? path : "(null)");
+            
+            [self handleIncomingMessage:message];
+            // Return HANDLED to prevent the default handler from sending UnknownObject error
+            return DBUS_HANDLER_RESULT_HANDLED;
+        }
+        NSLog(@"DBusConnection: C callback invoked but self is NULL!");
+    }
+    return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
+}
 
 // Forward declaration for internal method
 @interface GNUDBusConnection (Private)
@@ -59,6 +123,19 @@ typedef struct DBusConnection DBusConnectionStruct;
         NSLog(@"DBusConnection: Failed to get session bus connection");
         return NO;
     }
+    
+    // Add a message filter to intercept incoming method calls
+    if (!dbus_connection_add_filter((DBusConnectionStruct *)self.connection,
+                                    dbusMessageFilterHandler,
+                                    (__bridge void *)self,
+                                    NULL)) {
+        NSLog(@"DBusConnection: Failed to add message filter");
+        dbus_connection_unref((DBusConnectionStruct *)self.connection);
+        self.connection = NULL;
+        return NO;
+    }
+    
+    NSLog(@"DBusConnection: Added message filter");
     
     self.connected = YES;
     // NSLog(@"DBusConnection: Successfully connected to session bus");
@@ -141,7 +218,31 @@ typedef struct DBusConnection DBusConnectionStruct;
     NSString *key = [NSString stringWithFormat:@"%@:%@", objectPath, interfaceName];
     [self.messageHandlers setObject:handler forKey:key];
     
-    // NSLog(@"DBusConnection: Registered handler for %@ on %@", interfaceName, objectPath);
+    // Register with libdbus so it knows to route messages to us
+    // We use a C callback function that will call our handleIncomingMessage
+    DBusObjectPathVTable vtable = {
+        .unregister_function = NULL,
+        .message_function = dbusObjectPathMessageHandler
+    };
+    
+    DBusError error;
+    dbus_error_init(&error);
+    
+    if (!dbus_connection_try_register_object_path((DBusConnectionStruct *)self.connection,
+                                                   [objectPath UTF8String],
+                                                   &vtable,
+                                                   (__bridge void *)self,
+                                                   &error)) {
+        if (dbus_error_is_set(&error)) {
+            NSLog(@"DBusConnection: Failed to register object path %@: %s", objectPath, error.message);
+            dbus_error_free(&error);
+        } else {
+            NSLog(@"DBusConnection: Failed to register object path %@ (unknown error)", objectPath);
+        }
+        return NO;
+    }
+    
+    NSLog(@"DBusConnection: Registered handler for %@ on %@", interfaceName, objectPath);
     return YES;
 }
 
@@ -763,7 +864,7 @@ typedef struct DBusConnection DBusConnectionStruct;
     NSString *interfaceStr = [NSString stringWithUTF8String:interface];
     NSString *methodStr = [NSString stringWithUTF8String:method];
     
-    // NSLog(@"DBusConnection: Received method call: %@.%@ on %@", interfaceStr, methodStr, pathStr);
+    NSLog(@"DBusConnection: Received method call: %@.%@ on %@", interfaceStr, methodStr, pathStr);
     
     // Handle introspection requests
     if ([interfaceStr isEqualToString:@"org.freedesktop.DBus.Introspectable"] && 
@@ -792,7 +893,11 @@ typedef struct DBusConnection DBusConnectionStruct;
 - (void)handleIntrospectRequest:(DBusMessage*)message
 {
     const char *path = dbus_message_get_path(message);
-    NSString *introspectionXML = [self getIntrospectionXMLForPath:[NSString stringWithUTF8String:path]];
+    NSString *pathStr = [NSString stringWithUTF8String:path];
+    NSLog(@"DBusConnection: Introspect request for path: %@", pathStr);
+    
+    NSString *introspectionXML = [self getIntrospectionXMLForPath:pathStr];
+    NSLog(@"DBusConnection: Returning introspection XML:\n%@", introspectionXML);
     
     DBusMessage *reply = dbus_message_new_method_return(message);
     if (reply) {
@@ -838,6 +943,33 @@ typedef struct DBusConnection DBusConnectionStruct;
                @"    <signal name=\"WindowUnregistered\">\n"
                @"      <arg name=\"windowId\" type=\"u\" direction=\"out\"/>\n"
                @"    </signal>\n"
+               @"  </interface>\n"
+               @"</node>";
+    }
+
+    // This is needed so that applications know we implement the FileManager1 interface
+    if ([path isEqualToString:@"/org/freedesktop/FileManager1"]) {
+        return @"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
+               @"\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
+               @"<node name=\"/org/freedesktop/FileManager1\">\n"
+               @"  <interface name=\"org.freedesktop.DBus.Introspectable\">\n"
+               @"    <method name=\"Introspect\">\n"
+               @"      <arg name=\"xml_data\" type=\"s\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"  </interface>\n"
+               @"  <interface name=\"org.freedesktop.FileManager1\">\n"
+               @"    <method name=\"ShowFolders\">\n"
+               @"      <arg name=\"URIs\" type=\"as\" direction=\"in\"/>\n"
+               @"      <arg name=\"StartupId\" type=\"s\" direction=\"in\"/>\n"
+               @"    </method>\n"
+               @"    <method name=\"ShowItems\">\n"
+               @"      <arg name=\"URIs\" type=\"as\" direction=\"in\"/>\n"
+               @"      <arg name=\"StartupId\" type=\"s\" direction=\"in\"/>\n"
+               @"    </method>\n"
+               @"    <method name=\"ShowItemProperties\">\n"
+               @"      <arg name=\"URIs\" type=\"as\" direction=\"in\"/>\n"
+               @"      <arg name=\"StartupId\" type=\"s\" direction=\"in\"/>\n"
+               @"    </method>\n"
                @"  </interface>\n"
                @"</node>";
     }

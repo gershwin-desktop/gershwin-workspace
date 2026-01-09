@@ -137,9 +137,10 @@ Network/SFTPMount.m \
 AVFSMount.m \
 VolumeManager.m \
 
-# Conditionally add DBusConnection.m if DBus is available
+# Conditionally add DBusConnection.m and FileManagerDBusInterface.m if DBus is available
 ifeq ($(with_dbus), yes)
   Workspace_OBJC_FILES += DBusConnection.m
+  Workspace_OBJC_FILES += FileManagerDBusInterface.m
 endif
 
 -include GNUmakefile.preamble

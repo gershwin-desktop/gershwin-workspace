@@ -140,6 +140,10 @@
   
   GSGlobalShortcutsManager *globalShortcutsManager;
   
+#if HAVE_DBUS
+  id fileManagerDBusInterface;
+#endif
+  
   NSString *gwProcessName;  	      
   NSString *gwBundlePath;  	      
   NSString *defEditor;
