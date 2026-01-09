@@ -24,6 +24,8 @@
  */
 
 #include <math.h>
+#include <sys/statvfs.h>
+#include <string.h>
 
 #import <AppKit/AppKit.h>
 #import "GWViewer.h"
@@ -56,6 +58,28 @@
 #define MAX_SHELF_HEIGHT 150.0
 #define COLLAPSE_LIMIT 35
 #define MID_LIMIT 110
+
+/* Helper function to get volume information using statvfs */
+static BOOL getVolumeInfo(const char *path, unsigned long long *total, 
+                          unsigned long long *free_space, 
+                          unsigned long long *available_space)
+{
+  struct statvfs buf;
+  
+  if (statvfs(path, &buf) == 0) {
+    if (total) {
+      *total = (unsigned long long)buf.f_blocks * (unsigned long long)buf.f_frsize;
+    }
+    if (free_space) {
+      *free_space = (unsigned long long)buf.f_bfree * (unsigned long long)buf.f_frsize;
+    }
+    if (available_space) {
+      *available_space = (unsigned long long)buf.f_bavail * (unsigned long long)buf.f_frsize;
+    }
+    return YES;
+  }
+  return NO;
+}
 
 
 @implementation GWViewer
@@ -740,33 +764,53 @@
 
 - (void)updeateInfoLabels
 {
-  NSFileManager *fm = [NSFileManager defaultManager];
-  NSDictionary *attributes = [fm fileSystemAttributesAtPath: [[nodeView shownNode] path]];
-  NSNumber *freefs = [attributes objectForKey: NSFileSystemFreeSize];
+  FSNode *shownNode = [nodeView shownNode];
+  const char *path = [[shownNode path] UTF8String];
+  unsigned long long totalSize = 0;
+  unsigned long long freeSize = 0;
+  unsigned long long availableSize = 0;
   NSString *labelstr;
   
-  if (freefs == nil)
-    {
+  /* Try to get volume information using statvfs */
+  if (getVolumeInfo(path, &totalSize, &freeSize, &availableSize)) {
+    NSUInteger systemType = [[NSProcessInfo processInfo] operatingSystem];
+    
+    /* Adjust for MACH systems if needed */
+    if (systemType == NSMACHOperatingSystem) {
+      totalSize = (totalSize >> 8);
+      freeSize = (freeSize >> 8);
+      availableSize = (availableSize >> 8);
+    }
+    
+    /* Format the label with total, available, and free space */
+    labelstr = [NSString stringWithFormat: @"%@ %@ | %@ %@ | %@ %@",
+               sizeDescription(totalSize),
+               NSLocalizedString(@"total", @""),
+               sizeDescription(availableSize),
+               NSLocalizedString(@"available", @""),
+               sizeDescription(freeSize),
+               NSLocalizedString(@"free", @"")];
+  } else {
+    /* Fallback to the old method if statvfs fails */
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSDictionary *attributes = [fm fileSystemAttributesAtPath: [shownNode path]];
+    NSNumber *freefs = [attributes objectForKey: NSFileSystemFreeSize];
+    
+    if (freefs == nil) {
       labelstr = NSLocalizedString(@"unknown volume size", @"");
-    }
-  else
-    {
-      unsigned long long freeSize = [freefs unsignedLongLongValue];
+    } else {
+      unsigned long long fallbackFreeSize = [freefs unsignedLongLongValue];
       NSUInteger systemType = [[NSProcessInfo processInfo] operatingSystem];
-
-      switch (systemType)
-	{
-	case NSMACHOperatingSystem:
-	  freeSize = (freeSize >> 8);
-	  break;
-	default:
-	  break;
-	}
+      
+      if (systemType == NSMACHOperatingSystem) {
+        fallbackFreeSize = (fallbackFreeSize >> 8);
+      }
       labelstr = [NSString stringWithFormat: @"%@ %@",
-			   sizeDescription(freeSize),
-			   NSLocalizedString(@"free", @"")];
+                 sizeDescription(fallbackFreeSize),
+                 NSLocalizedString(@"free", @"")];
     }
-
+  }
+  
   [split updateDiskSpaceInfo: labelstr];
 }
 
