@@ -1217,10 +1217,32 @@
     dragPoint = NSZeroPoint;
     DESTROY (dragIcon);
     insertIndex = -1;
+    forceCopy = NO;
 
-    return NSDragOperationMove;
+    sourceDragMask = [sender draggingSourceOperationMask];
+
+    if (sourceDragMask & NSDragOperationMove)
+      {
+        if ([[NSFileManager defaultManager] isWritableFileAtPath: basePath])
+          {
+            return NSDragOperationMove;
+          }
+        forceCopy = YES;
+        return NSDragOperationCopy;
+      }
+    if (sourceDragMask & NSDragOperationCopy)
+      {
+        return NSDragOperationCopy;
+      }
+    if (sourceDragMask & NSDragOperationLink)
+      {
+        return NSDragOperationLink;
+      }
+
+    forceCopy = NO;
+    return NSDragOperationNone;
   }
-
+  
   return NSDragOperationNone;
 }
 
@@ -1294,7 +1316,28 @@
       return NSDragOperationNone;
     }
 
-  return NSDragOperationEvery;
+  /* Decide suggested operation based on source mask and forceCopy flag */
+  sourceDragMask = [sender draggingSourceOperationMask];
+
+  if ((sourceDragMask & NSDragOperationMove) ||
+      (sourceDragMask & NSDragOperationLink) ||
+      (sourceDragMask & NSDragOperationCopy))
+    {
+      if (sourceDragMask & NSDragOperationMove)
+        {
+          return forceCopy ? NSDragOperationCopy : NSDragOperationMove;
+        }
+      if (sourceDragMask & NSDragOperationCopy)
+        {
+          return NSDragOperationCopy;
+        }
+      if (sourceDragMask & NSDragOperationLink)
+        {
+          return NSDragOperationLink;
+        }
+    }
+
+  return NSDragOperationNone;
 }
 
 - (void)draggingExited:(id <NSDraggingInfo>)sender

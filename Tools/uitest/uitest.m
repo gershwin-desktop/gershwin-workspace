@@ -23,6 +23,9 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <X11/Xlib.h>
+#import <X11/cursorfont.h>
+#import <X11/Xutil.h>
 
 /* Protocol for UI testing support - can be implemented by Workspace */
 @protocol WorkspaceUITesting
@@ -35,6 +38,7 @@ typedef enum {
   TestActionAbout,
   TestActionShowHelp,
   TestActionAtCoordinate,
+  TestActionInspect,
   TestActionRunScript,
   TestActionQuery,
   TestActionClick,
@@ -51,12 +55,17 @@ typedef enum {
 /* Forward declarations */
 void printUIElementInfo(NSArray *elements);
 void printUIElementInfoWithIndent(NSArray *elements, int indent);
+void printElementHierarchy(NSDictionary *element, int indent);
+NSDictionary* findElementAtCoordinate(NSDictionary *element, CGFloat x, CGFloat y, CGFloat offsetX, CGFloat offsetY, NSMutableArray *path);
+int selectPointInteractive(CGFloat *x, CGFloat *y);
+int queryUIAtCoordinate(CGFloat x, CGFloat y);
 
 void printUsage(const char *programName) {
   fprintf(stderr, "Usage: %s [command] [options]\n\n", programName);
   fprintf(stderr, "Commands:\n");
   fprintf(stderr, "  about                Open the Workspace About box and extract text from it\n");
   fprintf(stderr, "  at-coordinate X Y    Show all UI elements at screen coordinates X, Y\n");
+  fprintf(stderr, "  inspect              Interactively click on screen to inspect UI elements\n");
   fprintf(stderr, "  query [options]      Query UI state in various formats\n");
   fprintf(stderr, "                       --json (default) | --tree | --text\n");
   fprintf(stderr, "  list-menus           List all menus and items with enabled/disabled state\n");
@@ -364,6 +373,74 @@ int openAboutBoxAndExtractText(void) {
   return result;
 }
 
+/* Recursively find the deepest element at the given coordinate */
+NSDictionary* findElementAtCoordinate(NSDictionary *element, CGFloat x, CGFloat y, CGFloat offsetX, CGFloat offsetY, NSMutableArray *path) {
+  NSDictionary *frame = [element objectForKey:@"frame"];
+  if (!frame) return nil;
+  
+  CGFloat ex = [[frame objectForKey:@"x"] doubleValue] + offsetX;
+  CGFloat ey = [[frame objectForKey:@"y"] doubleValue] + offsetY;
+  CGFloat ew = [[frame objectForKey:@"width"] doubleValue];
+  CGFloat eh = [[frame objectForKey:@"height"] doubleValue];
+  
+  /* Check if point is within this element's bounds */
+  if (x >= ex && x <= (ex + ew) && y >= ey && y <= (ey + eh)) {
+    /* Add this element to the path */
+    if (path) {
+      [path addObject:element];
+    }
+    
+    /* Check children to find the most specific element */
+    NSArray *children = [element objectForKey:@"children"];
+    if (children && [children count] > 0) {
+      for (NSDictionary *child in children) {
+        /* Children are positioned relative to parent */
+        NSDictionary *found = findElementAtCoordinate(child, x, y, ex, ey, path);
+        if (found) {
+          return found;
+        }
+      }
+    }
+    
+    /* No child contains the point, so this is the deepest element */
+    return element;
+  }
+  
+  return nil;
+}
+
+/* Print a single element with its children hierarchy */
+void printElementHierarchy(NSDictionary *element, int indent) {
+  NSString *className = [element objectForKey:@"class"];
+  NSString *text = [element objectForKey:@"text"];
+  NSString *indentStr = [@"" stringByPaddingToLength:(indent * 2) withString:@" " startingAtIndex:0];
+  
+  fprintf(stdout, "%s├─ %s", [indentStr UTF8String], [className UTF8String]);
+  if (text && [text length] > 0) {
+    fprintf(stdout, " \"%s\"", [text UTF8String]);
+  }
+  
+  /* Show frame info */
+  NSDictionary *frame = [element objectForKey:@"frame"];
+  if (frame) {
+    fprintf(stdout, " [%.0f, %.0f, %.0f×%.0f]",
+      [[frame objectForKey:@"x"] doubleValue],
+      [[frame objectForKey:@"y"] doubleValue],
+      [[frame objectForKey:@"width"] doubleValue],
+      [[frame objectForKey:@"height"] doubleValue]);
+  }
+  
+  fprintf(stdout, "\n");
+  
+  /* Recursively print children */
+  NSArray *children = [element objectForKey:@"children"];
+  if (children && [children count] > 0) {
+    for (NSDictionary *child in children) {
+      printElementHierarchy(child, indent + 1);
+    }
+  }
+}
+
 int queryUIAtCoordinate(CGFloat x, CGFloat y) {
   NSAutoreleasePool *pool = [NSAutoreleasePool new];
   NSConnection *connection = nil;
@@ -371,7 +448,7 @@ int queryUIAtCoordinate(CGFloat x, CGFloat y) {
   int result = 0;
   
   @try {
-    fprintf(stdout, "=== UI Elements at Coordinate (%.0f, %.0f) ===\n\n", x, y);
+    fprintf(stdout, "=== UI Element at Coordinate (%.0f, %.0f) ===\n\n", x, y);
     
     /* Connect to Workspace to get window information */
     connection = [NSConnection connectionWithRegisteredName:@"Workspace" host:@""];
@@ -396,7 +473,12 @@ int queryUIAtCoordinate(CGFloat x, CGFloat y) {
             
             if (data) {
               NSArray *windows = [data objectForKey:@"windows"];
-              BOOL foundElements = NO;
+              BOOL foundElement = NO;
+              
+              /* Find all windows that contain the coordinate, pick the smallest (topmost) */
+              NSDictionary *bestWindow = nil;
+              CGFloat smallestArea = CGFLOAT_MAX;
+              int windowCount = 0;
               
               for (NSDictionary *window in windows) {
                 NSDictionary *frame = [window objectForKey:@"frame"];
@@ -413,36 +495,78 @@ int queryUIAtCoordinate(CGFloat x, CGFloat y) {
                   
                   /* Check if coordinate is within window bounds */
                   if (x >= wx && x <= (wx + ww) && y >= wy && y <= (wy + wh)) {
-                    NSString *windowTitle = [window objectForKey:@"title"];
-                    if (!windowTitle) {
-                      windowTitle = [window objectForKey:@"windowTitle"];
-                    }
-                    if (!windowTitle) {
-                      windowTitle = @"(Unknown)";
-                    }
+                    CGFloat area = ww * wh;
+                    windowCount++;
                     
-                    fprintf(stdout, "Window: %s\n", [windowTitle UTF8String]);
-                    fprintf(stdout, "─────────────────────────────────\n");
-                    
-                    /* Print window elements */
-                    NSArray *views = [window objectForKey:@"views"];
-                    NSMutableDictionary *contentView = [window objectForKey:@"contentView"];
-                    
-                    if (views && [views count] > 0) {
-                      printUIElementInfo(views);
-                      foundElements = YES;
-                    } else if (contentView && [contentView objectForKey:@"children"]) {
-                      NSArray *children = [contentView objectForKey:@"children"];
-                      printUIElementInfo(children);
-                      foundElements = YES;
+                    /* Prefer smaller windows (they're on top of larger ones) */
+                    if (area < smallestArea) {
+                      smallestArea = area;
+                      bestWindow = window;
                     }
-                    fprintf(stdout, "\n");
                   }
                 }
               }
               
-              if (!foundElements) {
-                fprintf(stdout, "No UI elements found at coordinate (%.0f, %.0f)\n", x, y);
+              /* Debug: show how many windows contained the coordinate */
+              if (windowCount > 1) {
+                fprintf(stdout, "Found %d windows at this coordinate, selecting topmost (smallest area: %.0f)\n\n", 
+                  windowCount, smallestArea);
+              }
+              
+              /* Process the best (topmost/smallest) window found */
+              if (bestWindow) {
+                NSDictionary *frame = [bestWindow objectForKey:@"frame"];
+                CGFloat wx = [[frame objectForKey:@"x"] doubleValue];
+                CGFloat wy = [[frame objectForKey:@"y"] doubleValue];
+                CGFloat ww = [[frame objectForKey:@"width"] doubleValue];
+                CGFloat wh = [[frame objectForKey:@"height"] doubleValue];
+                
+                NSString *windowTitle = [bestWindow objectForKey:@"title"];
+                if (!windowTitle) {
+                  windowTitle = [bestWindow objectForKey:@"windowTitle"];
+                }
+                if (!windowTitle) {
+                  windowTitle = @"(Unknown)";
+                }
+                
+                fprintf(stdout, "Window: %s [%.0f, %.0f, %.0f×%.0f]\n", 
+                  [windowTitle UTF8String], wx, wy, ww, wh);
+                fprintf(stdout, "─────────────────────────────────\n");
+                
+                /* Find the specific element at the coordinate */
+                NSDictionary *contentView = [bestWindow objectForKey:@"contentView"];
+                if (contentView) {
+                  NSMutableArray *path = [NSMutableArray array];
+                  NSDictionary *element = findElementAtCoordinate(contentView, x, y, wx, wy, path);
+                  
+                  if (element) {
+                    foundElement = YES;
+                    
+                    /* Print the ancestry path */
+                    fprintf(stdout, "\nAncestry Path:\n");
+                    for (int i = 0; i < [path count]; i++) {
+                      NSDictionary *ancestor = [path objectAtIndex:i];
+                      NSString *className = [ancestor objectForKey:@"class"];
+                      NSString *text = [ancestor objectForKey:@"text"];
+                      
+                      fprintf(stdout, "  %d. %s", i, [className UTF8String]);
+                      if (text && [text length] > 0) {
+                        fprintf(stdout, " \"%s\"", [text UTF8String]);
+                      }
+                      fprintf(stdout, "\n");
+                    }
+                    
+                    /* Print the element and its children */
+                    fprintf(stdout, "\nElement Hierarchy:\n");
+                    printElementHierarchy(element, 0);
+                  }
+                }
+                
+                fprintf(stdout, "\n");
+              }
+              
+              if (!foundElement) {
+                fprintf(stdout, "No UI element found at coordinate (%.0f, %.0f)\n", x, y);
               }
             }
           }
@@ -890,6 +1014,67 @@ int doFindElement(const char *windowTitle, const char *text) {
   return result;
 }
 
+/* Interactive point selection using X11 */
+int selectPointInteractive(CGFloat *x, CGFloat *y) {
+  Display *display = XOpenDisplay(NULL);
+  if (!display) {
+    fprintf(stderr, "Error: Cannot open X display\n");
+    return 0;
+  }
+  
+  Window root = DefaultRootWindow(display);
+  Cursor cursor = XCreateFontCursor(display, XC_crosshair);
+  
+  fprintf(stdout, "Click on any point to inspect UI elements at that location...\n");
+  fprintf(stdout, "(Press Escape to cancel)\n");
+  
+  /* Grab the pointer with the crosshair cursor */
+  int grab_result = XGrabPointer(display, root, False,
+                                  ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+                                  GrabModeAsync, GrabModeAsync, root, cursor, CurrentTime);
+  
+  if (grab_result != GrabSuccess) {
+    fprintf(stderr, "Error: Failed to grab pointer\n");
+    XFreeCursor(display, cursor);
+    XCloseDisplay(display);
+    return 0;
+  }
+  
+  /* Also grab keyboard to detect Escape */
+  XGrabKeyboard(display, root, False, GrabModeAsync, GrabModeAsync, CurrentTime);
+  
+  int cancelled = 0;
+  int clicked = 0;
+  XEvent event;
+  
+  while (!clicked && !cancelled) {
+    XNextEvent(display, &event);
+    
+    if (event.type == ButtonPress && event.xbutton.button == Button1) {
+      /* Left mouse button clicked */
+      *x = event.xbutton.x_root;
+      *y = event.xbutton.y_root;
+      clicked = 1;
+    } else if (event.type == KeyPress) {
+      /* Check for Escape key */
+      KeySym keysym = XLookupKeysym(&event.xkey, 0);
+      if (keysym == XK_Escape) {
+        fprintf(stdout, "Selection cancelled.\n");
+        cancelled = 1;
+      }
+    }
+  }
+  
+  /* Release grabs and cleanup */
+  XUngrabKeyboard(display, CurrentTime);
+  XUngrabPointer(display, CurrentTime);
+  XFreeCursor(display, cursor);
+  XSync(display, False);
+  XCloseDisplay(display);
+  
+  return clicked;
+}
+
 int main(int argc, char** argv) {
   NSAutoreleasePool *pool = [NSAutoreleasePool new];
   TestAction action = TestActionNone;
@@ -903,6 +1088,8 @@ int main(int argc, char** argv) {
       action = TestActionAbout;
     } else if ([command isEqualToString:@"at-coordinate"] || [command isEqualToString:@"at"]) {
       action = TestActionAtCoordinate;
+    } else if ([command isEqualToString:@"inspect"]) {
+      action = TestActionInspect;
     } else if ([command isEqualToString:@"query"]) {
       action = TestActionQuery;
     } else if ([command isEqualToString:@"run-script"] || [command isEqualToString:@"run"]) {
@@ -956,6 +1143,19 @@ int main(int argc, char** argv) {
         CGFloat x = atof(argv[2]);
         CGFloat y = atof(argv[3]);
         result = queryUIAtCoordinate(x, y);
+      }
+      break;
+      
+    case TestActionInspect:
+      {
+        CGFloat x, y;
+        if (selectPointInteractive(&x, &y)) {
+          fprintf(stdout, "\nSelected point: (%.0f, %.0f)\n\n", x, y);
+          result = queryUIAtCoordinate(x, y);
+        } else {
+          fprintf(stderr, "Point selection cancelled or failed.\n");
+          result = 1;
+        }
       }
       break;
       

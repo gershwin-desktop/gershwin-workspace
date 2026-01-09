@@ -891,10 +891,10 @@
   
   ASSIGN (dsStorePath, path);
   
-  // Check if .DS_Store exists and load initial state
+  // Check if .DS_Store exists and add filesystem watcher
+  // Note: dsStoreInfo was already created in init, don't create it again
   if ([[NSFileManager defaultManager] fileExistsAtPath: dsStorePath]) {
     NSLog(@"║ DS_Store watcher: Monitoring %@", dsStorePath);
-    dsStoreInfo = [[DSStoreInfo infoForDirectoryPath: [baseNode path]] retain];
     
     // Add filesystem watcher for the .DS_Store file
     [gworkspace addWatcherForPath: dsStorePath];
@@ -906,12 +906,9 @@
   if (dsStorePath) {
     NSLog(@"║ DS_Store watcher: Stopped monitoring");
     [gworkspace removeWatcherForPath: dsStorePath];
+    RELEASE (dsStorePath);
+    dsStorePath = nil;
   }
-  
-  RELEASE (dsStoreInfo);
-  dsStoreInfo = nil;
-  RELEASE (dsStorePath);
-  dsStorePath = nil;
 }
 
 - (void)reapplyDSStoreSettings

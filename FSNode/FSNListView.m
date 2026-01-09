@@ -2727,8 +2727,6 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
       [self setAllowsMultipleSelection: YES];
       [self setRowHeight: CELLS_HEIGHT];
       [self setIntercellSpacing: NSZeroSize];
-
-      // Enable alternating row background colors for list views by default
       [self setUsesAlternatingRowBackgroundColors: YES];
 
       dsource = [[dsclass alloc] initForListView: self];

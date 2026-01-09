@@ -883,8 +883,8 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
 	              name: NSConnectionDidDieNotification
 	            object: connection];
 
-  NSAssert(connection == [ddbd connectionForProxy],
-		                                  NSInternalInconsistencyException);
+  // Don't access [ddbd connectionForProxy] here - the connection is already dead
+  // and accessing the proxy can cause a segfault
   RELEASE (ddbd);
   ddbd = nil;
 

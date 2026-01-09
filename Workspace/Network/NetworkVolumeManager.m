@@ -20,6 +20,11 @@
 #import "../Desktop/GWDesktopManager.h"
 #import "../Desktop/GWDesktopView.h"
 
+// Forward declare setAccessoryView for NSAlert (available in newer GNUstep)
+@interface NSAlert (AccessoryView)
+- (void)setAccessoryView:(NSView *)view;
+@end
+
 static NetworkVolumeManager *sharedInstance = nil;
 
 @implementation NetworkVolumeManager

@@ -52,6 +52,7 @@ typedef enum DockStyle
   
   DockIcon *dndSourceIcon;
   BOOL isDragTarget;
+  BOOL forceCopy;
   int dragdelay;
   int targetIndex;
   NSRect targetRect;

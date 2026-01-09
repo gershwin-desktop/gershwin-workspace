@@ -8,7 +8,8 @@ TOOL_NAME = uitest
 # The Objective-C source files to be compiled
 uitest_OBJC_FILES = uitest.m
 
-# Link with AppKit and Foundation
+# Link with AppKit, Foundation and X11
+uitest_LDFLAGS += -lX11
 uitest_LIBS_DEPEND_UPON += -lgnustep-gui -lgnustep-base
 
 -include GNUmakefile.preamble

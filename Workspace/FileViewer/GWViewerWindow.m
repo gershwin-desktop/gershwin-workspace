@@ -26,6 +26,11 @@
 #import <GNUstepBase/GNUstep.h>
 #import "GWViewerWindow.h"
 
+// Forward declare methods to avoid warnings
+@interface NSObject (ViewerDelegateMethods)
+- (NSArray *)lastSelection;
+@end
+
 
 @implementation GWViewerWindow
 
@@ -223,17 +228,24 @@
       
     case ' ':
       // Space = Quick Look
-      // DO NOT trigger if a modal window is active (like an alert dialog)
-      if ([NSApp modalWindow] != nil)
-      {
-        // Modal window is active - let it handle the spacebar
-        [super keyDown: theEvent];
-        return;
-      }
       if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
-	{
-	  [[self delegate] quickLook: nil];
-	}
+        {
+          id del = [self delegate];
+          BOOL allowQuickLook = YES;
+
+          // If the delegate can report a last selection, require a non-empty selection
+          if ([del respondsToSelector: @selector(lastSelection)])
+            {
+              NSArray *sel = [del lastSelection];
+              if (!sel || ([sel count] == 0))
+                allowQuickLook = NO;
+            }
+
+          if (allowQuickLook && [del respondsToSelector: @selector(quickLook:)])
+            {
+              [del quickLook: nil];
+            }
+        }
       return;
     }
 	

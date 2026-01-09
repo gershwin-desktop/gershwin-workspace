@@ -340,8 +340,9 @@
     // - Full path as UTF-16 or UTF-8 string
     // For now, we'll try to find ASCII/UTF-8 path strings in the data
     
-    const unsigned char *bytes = [aliasData bytes];
-    NSUInteger len = [aliasData length];
+    // TS: unused variables
+    // const unsigned char *bytes = [aliasData bytes];
+    // NSUInteger len = [aliasData length];
     
     // Look for path-like strings in the alias data
     // Common patterns: starts with '/' or contains '.bg/' etc.

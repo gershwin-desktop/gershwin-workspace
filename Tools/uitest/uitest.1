@@ -1,0 +1,173 @@
+.\" uitest - GUI testing tool for Workspace
+.TH UITEST 1 "January 2025" "Gershwin" "User Commands"
+.SH NAME
+uitest \- GUI testing command-line tool for Workspace
+.SH SYNOPSIS
+.B uitest
+.RI [ command ]
+.RI [ arguments... ]
+.SH DESCRIPTION
+.B uitest
+is a command-line utility for testing the graphical user interface of the Workspace
+file manager application. It communicates with a running Workspace instance via
+distributed objects to trigger various UI actions and verify application behavior.
+.PP
+This tool supports both passive observation (querying UI state) and interactive
+testing (clicking, menu navigation, keyboard shortcuts). Failed elements can be
+highlighted in RED on the actual UI for visual debugging.
+.PP
+This tool is designed for automated testing, continuous integration pipelines, and
+quality assurance of the Workspace GUI without requiring manual interaction.
+.SH COMMANDS
+.SS Passive Commands
+.TP
+.B about
+Open the Workspace About box. This demonstrates basic UI interaction with the
+running Workspace application.
+.TP
+.B state
+Query the complete UI state as JSON. Returns information about all windows,
+views, and their properties.
+.TP
+.B text \fItext\fR
+Check if the specified text is visible anywhere in the UI. Exits 0 if found, 1 if not.
+.TP
+.B window \fItitle\fR
+Check if a window with the specified title exists. Exits 0 if found, 1 if not.
+.SS Interactive Commands
+.TP
+.B click \fIx\fR \fIy\fR
+Click at the specified screen coordinates. Returns JSON with click result.
+.TP
+.B menu \fImenu_path\fR
+Open a menu item by path, e.g., "Info > About" or "File > Open". Menu components
+are separated by " > " (space-arrow-space).
+.TP
+.B shortcut \fIkeys\fR
+Send a keyboard shortcut, e.g., "Cmd+w" or "Cmd+Shift+n". Modifier keys: Cmd, Ctrl, Alt, Shift.
+.TP
+.B highlight \fIwindow_title\fR \fIelement_text\fR [\fIduration\fR]
+Highlight an element containing the specified text in RED. Duration is in seconds
+(0 = permanent until cleared). Used to mark test failures visually.
+.TP
+.B clear-highlights
+Remove all red highlight overlays from the UI.
+.TP
+.B find \fIwindow_title\fR \fItext\fR
+Find an element in the specified window that contains the given text.
+Returns JSON with element info if found.
+.TP
+.B wait-window \fItitle\fR [\fItimeout\fR]
+Wait for a window with the specified title to appear. Timeout is in seconds (default 5).
+.TP
+.B close-window \fItitle\fR
+Close the window with the specified title.
+.TP
+.B help
+Display usage information and list all available commands.
+.SH OPTIONS
+.TP
+.B -h, --help
+Display help message and exit.
+.SH EXAMPLES
+.PP
+Open the Workspace About box:
+.RS
+.nf
+uitest about
+.fi
+.RE
+.PP
+Query UI state:
+.RS
+.nf
+uitest state
+.fi
+.RE
+.PP
+Open About via menu:
+.RS
+.nf
+uitest menu "Info > About"
+.fi
+.RE
+.PP
+Close a window with Cmd+W shortcut:
+.RS
+.nf
+uitest shortcut "Cmd+w"
+.fi
+.RE
+.PP
+Highlight a failed element in red:
+.RS
+.nf
+uitest highlight "About" "Current Theme" 5.0
+.fi
+.RE
+.PP
+Wait for a window to appear:
+.RS
+.nf
+uitest wait-window "About" 3.0
+.fi
+.RE
+.PP
+Display help information:
+.RS
+.nf
+uitest help
+.fi
+.RE
+.SH DIAGNOSTICS
+.B uitest
+returns the following exit codes:
+.TP
+.B 0
+Success. The requested action completed successfully.
+.TP
+.B 1
+Failure. The requested action could not be completed. This typically occurs
+if Workspace is not running, if the distributed object connection fails,
+or if a search command (text, window, find) does not find a match.
+.SH JSON OUTPUT
+Most commands return JSON output for programmatic use. Example state query output:
+.RS
+.nf
+{
+  "uiTestingEnabled": true,
+  "windows": [
+    {
+      "title": "About",
+      "frame": {"x": 100, "y": 100, "width": 400, "height": 300},
+      "viewHierarchy": {...}
+    }
+  ]
+}
+.fi
+.RE
+.SH PYTHON LIBRARY
+A Python library is available at Tools/uitest/python/uitest.py that provides
+a high-level API for writing test scripts:
+.RS
+.nf
+from uitest import WorkspaceTestClient, run_interactive_tests
+
+client = WorkspaceTestClient()
+result = run_interactive_tests(
+    ("Open About", lambda: client.menu("Info > About")),
+    ("Check visible", lambda: client.text_visible("Workspace")),
+    client=client,
+    stop_on_failure=True
+)
+.fi
+.RE
+.SH REQUIREMENTS
+.B uitest
+requires a running instance of the Workspace file manager. The tool communicates
+with Workspace via GNUstep's distributed objects (NSConnection) mechanism.
+If Workspace is not running, the tool will report an error and exit with code 1.
+.SH SEE ALSO
+.BR Workspace(1),
+.BR wopen(1),
+.BR dsutil(1)

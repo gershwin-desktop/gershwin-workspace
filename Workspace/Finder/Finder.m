@@ -525,7 +525,25 @@ static Finder *finder = nil;
 
           splacesDndTarget = YES;    
 
-          return [sender draggingSourceOperationMask];
+          {
+            NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+            NSString *fromPath = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
+
+            if (sourceDragMask & NSDragOperationMove)
+              {
+                if ([[NSFileManager defaultManager] isWritableFileAtPath: fromPath])
+                  return NSDragOperationMove;
+                return NSDragOperationCopy;
+              }
+
+            if (sourceDragMask & NSDragOperationCopy)
+              return NSDragOperationCopy;
+
+            if (sourceDragMask & NSDragOperationLink)
+              return NSDragOperationLink;
+
+            return NSDragOperationNone;
+          }
         }
     }
     
@@ -535,7 +553,23 @@ static Finder *finder = nil;
 - (NSDragOperation)draggingUpdatedInSearchPlaces:(id <NSDraggingInfo>)sender
 {
   if (splacesDndTarget && usesSearchPlaces) {
-    return [sender draggingSourceOperationMask];
+    NSPasteboard *pb = [sender draggingPasteboard];
+
+    if ([[pb types] containsObject: NSFilenamesPboardType]) {
+      NSArray *sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
+      NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+      NSString *fromPath = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
+
+      if (sourceDragMask & NSDragOperationMove) {
+        if ([[NSFileManager defaultManager] isWritableFileAtPath: fromPath])
+          return NSDragOperationMove;
+        return NSDragOperationCopy;
+      }
+      if (sourceDragMask & NSDragOperationCopy)
+        return NSDragOperationCopy;
+      if (sourceDragMask & NSDragOperationLink)
+        return NSDragOperationLink;
+    }
   }
   return NSDragOperationNone;
 }

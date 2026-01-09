@@ -1185,7 +1185,30 @@
           }
           
           targetIndex = index;
-          return NSDragOperationMove;
+          /* Decide operation based on source writability */
+          {
+            NSString *fromPath = [path stringByDeletingLastPathComponent];
+            NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+            forceCopy = NO;
+
+            if (sourceDragMask & NSDragOperationMove)
+              {
+                if ([[NSFileManager defaultManager] isWritableFileAtPath: fromPath])
+                  {
+                    return NSDragOperationMove;
+                  }
+                forceCopy = YES;
+                return NSDragOperationCopy;
+              }
+            if (sourceDragMask & NSDragOperationCopy)
+              {
+                return NSDragOperationCopy;
+              }
+            if (sourceDragMask & NSDragOperationLink)
+              {
+                return NSDragOperationLink;
+              }
+          }
           
         } else {
           if ([icon acceptsDraggedPaths: sourcePaths]) {
@@ -1197,7 +1220,29 @@
                 [icon setIsDragMountpointOnly: NO];
               }
             }
-            return NSDragOperationMove;
+            {
+              NSString *fromPath = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
+              NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+              forceCopy = NO;
+
+              if (sourceDragMask & NSDragOperationMove)
+                {
+                  if ([[NSFileManager defaultManager] isWritableFileAtPath: fromPath])
+                    {
+                      return NSDragOperationMove;
+                    }
+                  forceCopy = YES;
+                  return NSDragOperationCopy;
+                }
+              if (sourceDragMask & NSDragOperationCopy)
+                {
+                  return NSDragOperationCopy;
+                }
+              if (sourceDragMask & NSDragOperationLink)
+                {
+                  return NSDragOperationLink;
+                }
+            }
           } else {
             /* Reset flag if icon rejects the drag */
             if ([icon isTrashIcon]) {
@@ -1211,6 +1256,7 @@
   }
 
   isDragTarget = NO;    
+  forceCopy = NO;
   return NSDragOperationNone;
 }
 
@@ -1289,7 +1335,32 @@
             } else if ([icon isTrashIcon]) {
               [icon setIsDragMountpointOnly: NO];
             }
-            return NSDragOperationMove;
+
+            if (forceCopy) {
+              return NSDragOperationCopy;
+            }
+
+            /* Fallback: compute based on source writability if forceCopy not set */
+            {
+              NSString *fromPath = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
+              NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+
+              if (sourceDragMask & NSDragOperationMove) {
+                if ([[NSFileManager defaultManager] isWritableFileAtPath: fromPath]) {
+                  return NSDragOperationMove;
+                }
+                forceCopy = YES;
+                return NSDragOperationCopy;
+              }
+              if (sourceDragMask & NSDragOperationCopy) {
+                return NSDragOperationCopy;
+              }
+              if (sourceDragMask & NSDragOperationLink) {
+                return NSDragOperationLink;
+              }
+
+              return NSDragOperationNone;
+            }
           } else {
             [icon unselect];
           }
@@ -1312,6 +1383,7 @@
   
   isDragTarget = NO;  
   dragdelay = 0;
+  forceCopy = NO;
   
   /* Reset the mountpoint flag on all trash icons */
   for (i = 0; i < [icons count]; i++) {

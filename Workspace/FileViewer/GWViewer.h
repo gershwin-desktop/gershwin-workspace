@@ -139,7 +139,8 @@ typedef enum
 
 - (void)watchedPathChanged:(NSDictionary *)info;
 - (NSArray *)watchedNodes;
-
+/* Return the last selection in the viewer (may be nil) */
+- (NSArray *)lastSelection;
 - (void)hideDotsFileChanged:(BOOL)hide;
 - (void)hiddenFilesChanged:(NSArray *)paths;
 

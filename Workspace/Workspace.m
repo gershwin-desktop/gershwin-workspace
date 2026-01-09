@@ -697,10 +697,10 @@ NSString *_pendingSystemActionTitle = nil;
   }
 
   int elapsed = 0;
-  const int intervalMs = 50;
+  const int intervalMs = 150;
   while (elapsed < timeoutMs) {
     @try {
-      NSLog(@"Workspace: Checking for AppMenu registrar on DBus...");
+      NSLog(@"Workspace: Waiting for AppMenu registrar on DBus...");
       id result = [tempConnection callMethod:@"NameHasOwner"
                                    onService:@"org.freedesktop.DBus"
                                   objectPath:@"/org/freedesktop/DBus"
@@ -1829,6 +1829,39 @@ NSString *_pendingSystemActionTitle = nil;
   }
 }
 
+- (void)newFolder:(id)sender
+{
+  NSString *basePath = nil;
+  NSWindow *keyWindow = [NSApp keyWindow];
+  
+  // Try to get the path from the active viewer
+  if (keyWindow && [keyWindow respondsToSelector: @selector(delegate)]) {
+    id delegate = [(NSWindow *)keyWindow delegate];
+    if (delegate && [delegate respondsToSelector: @selector(newFolder)]) {
+      [delegate newFolder];
+      return;
+    }
+  }
+  
+  // Fall back to using selected paths
+  if (selectedPaths && [selectedPaths count] > 0) {
+    basePath = [selectedPaths objectAtIndex: 0];
+    
+    // If it's a file, use its parent directory
+    BOOL isDir = NO;
+    if ([fm fileExistsAtPath: basePath isDirectory: &isDir] && !isDir) {
+      basePath = [basePath stringByDeletingLastPathComponent];
+    }
+  }
+  
+  // If no path was determined, use home directory
+  if (!basePath) {
+    basePath = NSHomeDirectory();
+  }
+  
+  [self newObjectAtPath: basePath isDirectory: YES];
+}
+
 - (void)newObjectAtPath:(NSString *)basePath 
             isDirectory:(BOOL)directory
 {
@@ -1851,7 +1884,7 @@ NSString *_pendingSystemActionTitle = nil;
 	}
 
   if (directory) {
-    fileName = @"NewFolder";
+    fileName = @"New Folder";
     operation = @"WorkspaceCreateDirOperation";
   } else {
     fileName = @"NewFile";
@@ -1863,7 +1896,7 @@ NSString *_pendingSystemActionTitle = nil;
   if ([fm fileExistsAtPath: fullPath]) {    
     suff = 1;
     while (1) {    
-      NSString *s = [fileName stringByAppendingFormat: @"%i", suff];
+      NSString *s = [fileName stringByAppendingFormat: @"-%i", suff];
       fullPath = [basePath stringByAppendingPathComponent: s];
       if ([fm fileExistsAtPath: fullPath] == NO) {
         fileName = [NSString stringWithString: s];
@@ -2207,7 +2240,6 @@ NSString *_pendingSystemActionTitle = nil;
 {
   if (fswatcher == nil)
   {
-    NSLog(@"DEBUG: Attempting to connect to fswatcher...");
     fswatcher = [NSConnection rootProxyForConnectionWithRegisteredName: @"fswatcher" 
                                                                   host: @""];
 
@@ -2215,18 +2247,14 @@ NSString *_pendingSystemActionTitle = nil;
     {
       NSString *cmd;
       NSMutableArray *arguments;
-      NSLog(@"DEBUG: fswatcher not found, attempting to launch...");
+      
       cmd = [NSTask launchPathForTool: @"fswatcher"];
-      if (cmd) {
-        NSLog(@"DEBUG: Launching fswatcher from: %@", cmd);
-      } else {
-        NSLog(@"DEBUG: ERROR - Could not find fswatcher launch path!");
-      }
       arguments = [NSMutableArray arrayWithCapacity:2];
       [arguments addObject:@"--daemon"];
       [arguments addObject:@"--auto"];  
       [NSTask launchedTaskWithLaunchPath: cmd arguments: arguments];
 
+      // Start a timer to poll for fswatcher availability
       NSDictionary *info = [NSDictionary dictionaryWithObject:[NSDate dateWithTimeIntervalSinceNow: 6.0]
                                                        forKey:@"deadline"];
       [NSTimer scheduledTimerWithTimeInterval:0.2
@@ -2238,7 +2266,6 @@ NSString *_pendingSystemActionTitle = nil;
     
     if (fswatcher)
     {
-      NSLog(@"DEBUG: fswatcher connection established!");
       RETAIN (fswatcher);
       [fswatcher setProtocolForProxy: @protocol(FSWatcherProtocol)];
     
@@ -2249,13 +2276,10 @@ NSString *_pendingSystemActionTitle = nil;
                        
 	    [fswatcher registerClient: (id <FSWClientProtocol>)self 
                 isGlobalWatcher: NO];
-      NSLog(@"DEBUG: Registered with fswatcher as client");
     } else {
       fswnotifications = NO;
       NSLog(@"Workspace: unable to contact fswatcher; notifications disabled");
     }
-  } else {
-    NSLog(@"DEBUG: Already connected to fswatcher");
   }
 }
 
@@ -2387,8 +2411,8 @@ NSString *_pendingSystemActionTitle = nil;
 						  name: NSConnectionDidDieNotification
 						object: connection];
 
-  NSAssert(connection == [ddbd connectionForProxy],
-		                                  NSInternalInconsistencyException);
+  // Don't access [ddbd connectionForProxy] here - the connection is already dead
+  // and accessing the proxy can cause a segfault
   RELEASE (ddbd);
   ddbd = nil;
   
@@ -2474,15 +2498,14 @@ NSString *_pendingSystemActionTitle = nil;
 - (void)_probeFSWatcherTimer:(NSTimer *)timer
 {
   if (fswatcher) {
-    NSLog(@"DEBUG: _probeFSWatcherTimer - fswatcher already connected, invalidating timer");
     [timer invalidate];
     return;
   }
+  
   NSDate *deadline = [[timer userInfo] objectForKey:@"deadline"];
-  NSLog(@"DEBUG: _probeFSWatcherTimer - attempting to connect to fswatcher...");
   fswatcher = [NSConnection rootProxyForConnectionWithRegisteredName:@"fswatcher" host:@""];
+  
   if (fswatcher) {
-    NSLog(@"DEBUG: _probeFSWatcherTimer - SUCCESS! fswatcher connected");
     [timer invalidate];
     RETAIN(fswatcher);
     [fswatcher setProtocolForProxy:@protocol(FSWatcherProtocol)];
@@ -2492,32 +2515,30 @@ NSString *_pendingSystemActionTitle = nil;
                                                object:[fswatcher connectionForProxy]];
     [fswatcher registerClient:(id <FSWClientProtocol>)self isGlobalWatcher:NO];
     fswnotifications = YES;
-    NSLog(@"DEBUG: _probeFSWatcherTimer - registered with fswatcher, fswnotifications = YES");
     
-    // Re-add all the watchers that were requested before connection was established
-    NSLog(@"DEBUG: _probeFSWatcherTimer - re-adding %lu watched paths", [watchedPaths count]);
-    NSEnumerator *enumerator = [watchedPaths objectEnumerator];
-    NSString *path;
-    
-    while ((path = [enumerator nextObject])) {
-      unsigned count = [watchedPaths countForObject: path];
-      unsigned i;
-    
-      for (i = 0; i < count; i++) {
-        NSLog(@"DEBUG: _probeFSWatcherTimer - adding watcher for: %@", path);
-        [fswatcher client: (id <FSWClientProtocol>)self addWatcherForPath: path];
+    // Register all queued watchers
+    if ([watchedPaths count] > 0) {
+      NSLog(@"Workspace: fswatcher connected, registering %lu queued path watchers", [watchedPaths count]);
+      NSEnumerator *enumerator = [watchedPaths objectEnumerator];
+      NSString *path;
+      
+      while ((path = [enumerator nextObject])) {
+        unsigned count = [watchedPaths countForObject: path];
+        unsigned i;
+      
+        for (i = 0; i < count; i++) {
+          [fswatcher client: (id <FSWClientProtocol>)self addWatcherForPath: path];
+        }
       }
     }
     
     return;
   }
+  
   if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
-    NSLog(@"DEBUG: _probeFSWatcherTimer - deadline reached, giving up");
     [timer invalidate];
     fswnotifications = NO;
     NSLog(@"Workspace: fswatcher did not respond; notifications disabled");
-  } else {
-    NSLog(@"DEBUG: _probeFSWatcherTimer - fswatcher not ready yet, will retry");
   }
 }
 
@@ -3632,22 +3653,18 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)addWatcherForPath:(NSString *)path
 {
+  // Always add to watchedPaths first - this queues it for later registration if fswatcher isn't available yet
   [watchedPaths addObject: path];
-
-  NSLog(@"DEBUG: addWatcherForPath called for: %@", path);
-  NSLog(@"DEBUG: fswnotifications = %@", fswnotifications ? @"YES" : @"NO");
   
+  // Only attempt to register with fswatcher if notifications are enabled
   if (fswnotifications) {
     [self connectFSWatcher];
     if (fswatcher) {
-      NSLog(@"DEBUG: Adding watcher to fswatcher for: %@", path);
       [fswatcher client: (id <FSWClientProtocol>)self addWatcherForPath: path];
-    } else {
-      NSLog(@"DEBUG: ERROR - fswatcher is nil!");
     }
-  } else {
-    NSLog(@"DEBUG: Not adding watcher - fswnotifications is NO");
   }
+  // If fswnotifications is NO, the path is queued in watchedPaths and will be 
+  // registered when fswatcher becomes available via _probeFSWatcherTimer
 }
 
 - (void)removeWatcherForPath:(NSString *)path
@@ -4267,8 +4284,6 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
 
 - (BOOL)unmountVolumeAtPath:(NSString *)path
 {
-  NSWorkspace *ws = [NSWorkspace sharedWorkspace];
-  
   if (!path) {
     return NO;
   }
@@ -4320,7 +4335,8 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   } else {
     // Use standard system unmount for regular volumes
     NSLog(@"Workspace: Using standard system unmount for %@", path);
-    if ([ws unmountAndEjectDeviceAtPath: path]) {
+    NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
+    if ([workspace unmountAndEjectDeviceAtPath: path]) {
       return YES;
     } else {
       // Try fallback with sudo eject

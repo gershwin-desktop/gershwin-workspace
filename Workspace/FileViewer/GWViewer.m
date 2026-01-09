@@ -60,6 +60,12 @@
 
 @implementation GWViewer
 
+/* Accessor for lastSelection used by GWViewerWindow quicklook guard */
+- (NSArray *)lastSelection
+{
+  return lastSelection;
+}
+
 - (void)dealloc
 {
   [nc removeObserver: self];

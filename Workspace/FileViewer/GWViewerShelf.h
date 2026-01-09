@@ -58,6 +58,7 @@
   NSInteger insertIndex;
   BOOL dragLocalIcon;
   BOOL isDragTarget;
+  BOOL forceCopy;
 
   NSColor *backColor;
   NSColor *textColor;
