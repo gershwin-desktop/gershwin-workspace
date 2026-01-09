@@ -47,6 +47,7 @@
       [self setExcludedFromWindowsMenu: YES];
       [self setAcceptsMouseMovedEvents: YES];
       [self setCanHide: NO];
+      [self setTitle: @"Desktop"];
     }
 
   return self;
