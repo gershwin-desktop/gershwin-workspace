@@ -36,5 +36,6 @@
 - (void)processMessages;
 - (void *)rawConnection;
 - (int)getFileDescriptor;
+- (void)handleIncomingMessage:(void *)message;
 
 @end

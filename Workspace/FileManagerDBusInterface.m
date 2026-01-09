@@ -8,7 +8,7 @@
 #import "DBusConnection.h"
 #import "Workspace.h"
 #import <dbus/dbus.h>
-#import <FSNode/FSNode.h>
+#import "../FSNode/FSNode.h"
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
