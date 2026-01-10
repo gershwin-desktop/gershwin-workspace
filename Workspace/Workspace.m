@@ -249,7 +249,8 @@ NSString *_pendingSystemActionTitle = nil;
   [menu setSubmenu: subMenu forItem: menuItem];
   menuItem = [menu addItemWithTitle:_(@"Open as Folder") action:@selector(openSelectionAsFolder:) keyEquivalent:@"O"];
   [[menu itemWithTitle:_(@"Open as Folder")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
-  
+
+
   menuItem = [menu addItemWithTitle:_(@"Print") action:@selector(print:) keyEquivalent:@"p"];
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Close Window") action:@selector(performClose:) keyEquivalent:@"w"];

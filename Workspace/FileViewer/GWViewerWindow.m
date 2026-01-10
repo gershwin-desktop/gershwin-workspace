@@ -25,6 +25,8 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
 #import "GWViewerWindow.h"
+#import "FSNode.h"
+#import "GWViewersManager.h"
 
 // Forward declare methods to avoid warnings
 @interface NSObject (ViewerDelegateMethods)
@@ -185,6 +187,38 @@
       return;
 
     case NSUpArrowFunctionKey:
+      NSLog(@"GWViewerWindow: NSUpArrowFunctionKey pressed, flags=0x%x", flags);
+      if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
+	{
+	  NSLog(@"GWViewerWindow: Shift-Up detected");
+	  // Shift-Up = Open parent folder in new viewer
+	  id delegate = [self delegate];
+	  if ([delegate respondsToSelector: @selector(baseNode)])
+	    {
+	      FSNode *baseNode = [delegate baseNode];
+	      if (baseNode)
+		{
+		  NSString *parentPath = [[baseNode path] stringByDeletingLastPathComponent];
+		  if (parentPath && ![parentPath isEqual: [baseNode path]])
+		    {
+		      FSNode *parentNode = [FSNode nodeWithPath: parentPath];
+		      if (parentNode)
+			{
+			  GWViewersManager *manager = [GWViewersManager viewersManager];
+			  if (manager)
+			    {
+			      [manager viewerForNode: parentNode
+					   showType: 0
+				      showSelection: NO
+					   forceNew: NO
+					   withKey: nil];
+			    }
+			}
+		    }
+		}
+	    }
+	  return;
+	}
       if (flags & NSCommandKeyMask)
 	{
 	  [[self delegate] openParentFolder];
@@ -192,8 +226,23 @@
       return;
 
     case NSDownArrowFunctionKey:
+      NSLog(@"GWViewerWindow: NSDownArrowFunctionKey pressed, flags=0x%x", flags);
+      if ((flags & NSCommandKeyMask) && (flags & NSShiftKeyMask))
+	{
+	  NSLog(@"GWViewerWindow: Command-Shift-Down detected");
+	  // Command-Shift-Down = Open as Folder (alternative shortcut)
+	  [[self delegate] openSelectionAsFolder];
+	  return;
+	}
+      if (flags & NSShiftKeyMask)
+	{
+	  // Shift-Down = Open Selection
+	  [[self delegate] openSelectionInNewViewer: NO];
+	  return;
+	}
       if (flags & NSCommandKeyMask)
 	{
+    // Command-Down = Open Selection
 	  [[self delegate] openSelection: nil];
 	}
       return;

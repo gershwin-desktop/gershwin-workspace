@@ -864,7 +864,7 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
     NSString *interfaceStr = [NSString stringWithUTF8String:interface];
     NSString *methodStr = [NSString stringWithUTF8String:method];
     
-    NSLog(@"DBusConnection: Received method call: %@.%@ on %@", interfaceStr, methodStr, pathStr);
+    // NSLog(@"DBusConnection: Received method call: %@.%@ on %@", interfaceStr, methodStr, pathStr);
     
     // Handle introspection requests
     if ([interfaceStr isEqualToString:@"org.freedesktop.DBus.Introspectable"] && 
@@ -886,7 +886,10 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
         };
         [handler performSelector:@selector(handleDBusMethodCall:) withObject:callInfo];
     } else {
-        NSLog(@"DBusConnection: No handler found for %@.%@ on %@", interfaceStr, methodStr, pathStr);
+        // Only log unhandled methods for debugging rare cases
+        if (![interfaceStr isEqualToString:@"org.freedesktop.DBus.Properties"]) {
+            // NSLog(@"DBusConnection: No handler found for %@.%@ on %@", interfaceStr, methodStr, pathStr);
+        }
     }
 }
 
@@ -921,28 +924,6 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
                @"    <method name=\"Introspect\">\n"
                @"      <arg name=\"xml_data\" type=\"s\" direction=\"out\"/>\n"
                @"    </method>\n"
-               @"  </interface>\n"
-               @"  <interface name=\"com.canonical.AppMenu.Registrar\">\n"
-               @"    <method name=\"RegisterWindow\">\n"
-               @"      <arg name=\"windowId\" type=\"u\" direction=\"in\"/>\n"
-               @"      <arg name=\"menuObjectPath\" type=\"o\" direction=\"in\"/>\n"
-               @"    </method>\n"
-               @"    <method name=\"UnregisterWindow\">\n"
-               @"      <arg name=\"windowId\" type=\"u\" direction=\"in\"/>\n"
-               @"    </method>\n"
-               @"    <method name=\"GetMenuForWindow\">\n"
-               @"      <arg name=\"windowId\" type=\"u\" direction=\"in\"/>\n"
-               @"      <arg name=\"service\" type=\"s\" direction=\"out\"/>\n"
-               @"      <arg name=\"menuObjectPath\" type=\"o\" direction=\"out\"/>\n"
-               @"    </method>\n"
-               @"    <signal name=\"WindowRegistered\">\n"
-               @"      <arg name=\"windowId\" type=\"u\" direction=\"out\"/>\n"
-               @"      <arg name=\"service\" type=\"s\" direction=\"out\"/>\n"
-               @"      <arg name=\"menuObjectPath\" type=\"o\" direction=\"out\"/>\n"
-               @"    </signal>\n"
-               @"    <signal name=\"WindowUnregistered\">\n"
-               @"      <arg name=\"windowId\" type=\"u\" direction=\"out\"/>\n"
-               @"    </signal>\n"
                @"  </interface>\n"
                @"</node>";
     }

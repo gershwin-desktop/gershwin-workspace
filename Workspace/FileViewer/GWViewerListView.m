@@ -24,6 +24,7 @@
 
 #import <AppKit/AppKit.h>
 #import "GWViewerListView.h"
+#import "FSNode.h"
 #import "GWViewer.h"
 #import "GWViewersManager.h"
 #import "Workspace.h"
@@ -100,6 +101,101 @@
   }
   
   return self;
+}
+
+- (void)keyDown:(NSEvent *)theEvent
+{
+  unsigned flags = [theEvent modifierFlags];
+  NSString *characters = [theEvent characters];
+  unichar character = 0;
+
+  if ([characters length] > 0)
+    {
+      character = [characters characterAtIndex: 0];
+    }
+  NSLog(@"GWViewerListView.keyDown: character=0x%x, flags=0x%x", character, flags);
+  // Handle Shift-Down = Open Selection
+  if (character == NSDownArrowFunctionKey && (flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
+    {
+      [viewer openSelectionInNewViewer: NO];
+      return;
+    }
+
+  // Handle Shift-Up = Open parent folder in new viewer
+  if (character == NSUpArrowFunctionKey && (flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
+    {
+      id delegate = viewer;
+      if ([delegate respondsToSelector: @selector(baseNode)])
+        {
+          FSNode *baseNode = [delegate baseNode];
+          if (baseNode)
+            {
+              NSString *parentPath = [[baseNode path] stringByDeletingLastPathComponent];
+              if (parentPath && ![parentPath isEqual: [baseNode path]])
+                {
+                  FSNode *parentNode = [FSNode nodeWithPath: parentPath];
+                  if (parentNode)
+                    {
+                      GWViewersManager *mgr = [GWViewersManager viewersManager];
+                      if (mgr)
+                        {
+                          [mgr viewerForNode: parentNode
+                               showType: 0
+                          showSelection: NO
+                               forceNew: NO
+                               withKey: nil];
+                        }
+                    }
+                }
+            }
+        }
+      return;
+    }
+
+  // Handle Command-Shift-Down = Open as Folder
+  if (character == NSDownArrowFunctionKey && (flags & NSCommandKeyMask) && (flags & NSShiftKeyMask))
+    {
+      [viewer openSelectionAsFolder];
+      return;
+    }
+
+  // Handle Command-Down = Open Selection
+  if (character == NSDownArrowFunctionKey && (flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
+    {
+      [viewer openSelectionInNewViewer: NO];
+      return;
+    }
+
+  // Handle Command-Up = Open Parent Folder
+  if (character == NSUpArrowFunctionKey && (flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
+    {
+      NSLog(@"GWViewerListView: Command-Up - opening parent folder in viewer");
+      [[viewer win] openParentFolder];
+      return;
+    }
+
+  // Handle Shift-Enter and Tab to select first item if nothing selected
+  if ((character == '\r' && (flags & NSShiftKeyMask)) || character == '\t')
+    {
+      NSArray *selection = [self selectedNodes];
+      if (selection == nil || [selection count] == 0)
+        {
+          NSLog(@"GWViewerListView: No selection, selecting first item");
+          // Let parent handle selection of first item
+          [super keyDown: theEvent];
+          return;
+        }
+
+      if (character == '\r' && (flags & NSShiftKeyMask))
+        {
+          NSLog(@"GWViewerListView: Shift-Enter - opening as folder");
+          [viewer openSelectionAsFolder];
+          return;
+        }
+    }
+
+  // Pass other keys to parent
+  [super keyDown: theEvent];
 }
 
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent

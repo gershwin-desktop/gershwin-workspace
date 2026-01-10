@@ -969,6 +969,32 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       unichar character = [characters characterAtIndex: 0];
 
+      NSLog(@"GWDesktopView.keyDown: character=0x%x, flags=0x%x", character, flags);
+
+      // Handle arrow keys with modifiers
+      if (character == NSDownArrowFunctionKey)
+        {
+          NSLog(@"GWDesktopView: NSDownArrowFunctionKey pressed, flags=0x%x", flags);
+          if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
+            {
+              NSLog(@"GWDesktopView: Shift-Down detected - opening selection");
+              [manager openSelectionInNewViewer: NO];
+              return;
+            }
+          if ((flags & NSCommandKeyMask) && (flags & NSShiftKeyMask))
+            {
+              NSLog(@"GWDesktopView: Command-Shift-Down detected - opening as folder");
+              [manager openSelectionAsFolder];
+              return;
+            }
+          if ((flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
+            {
+              NSLog(@"GWDesktopView: Command-Down detected - opening selection");
+              [manager openSelectionInNewViewer: NO];
+              return;
+            }
+        }
+
       if (character == NSCarriageReturnCharacter)
 	{
 	  [manager openSelectionInNewViewer: NO];
