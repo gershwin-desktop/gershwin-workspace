@@ -64,6 +64,7 @@
 #import "Network/NetworkServiceItem.h"
 #import "Network/NetworkVolumeManager.h"
 #import "AVFSMount.h"
+#import "BootableInstaller/BootableInstallController.h"
 #if HAVE_DBUS
 #import "DBusConnection.h"
 #import "FileManagerDBusInterface.h"
@@ -3598,6 +3599,29 @@ NSString *_pendingSystemActionTitle = nil;
 
   if (destination == nil && [operation isEqualToString:NSWorkspaceRecycleOperation])
     destination = [self trashPath];
+
+  // Check if this is a bootable copy operation (copying "/" to a mount point)
+  // When dragging "/" icon, source is "/" and files contains "" (empty - lastPathComponent of "/" is empty)
+  if ([operation isEqualToString:NSWorkspaceCopyOperation] &&
+      [source isEqualToString:@"/"] &&
+      [files count] == 1 &&
+      ([[files objectAtIndex:0] length] == 0 || [[files objectAtIndex:0] isEqualToString:@"/"])) {
+    
+    // Check if destination is a mount point
+    FSNode *destNode = [FSNode nodeWithPath:destination];
+    FSNode *srcNode = [FSNode nodeWithPath:@"/"];
+    
+    if ([destNode isMountPoint]) {
+      // This is a bootable copy - use BootableInstallController
+      BootableInstallController *controller = [BootableInstallController sharedController];
+      
+      if ([controller canAcceptDragOfSource:srcNode toTarget:destNode]) {
+        // Perform bootable installation instead of normal copy
+        [controller performInstallFromSource:srcNode toTarget:destNode];
+        return;
+      }
+    }
+  }
 
   [self performFileOperation: operation source: source 
 		 destination: destination files: files tag: &tag];

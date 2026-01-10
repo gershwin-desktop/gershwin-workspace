@@ -16,7 +16,8 @@ DBUS_LIBS = -ldbus-1
 # subprojects
 #
 SUBPROJECTS = Finder/Modules \
-	Thumbnailer
+	Thumbnailer \
+	BootableInstaller
 
 #
 # MAIN APP
@@ -36,6 +37,9 @@ ADDITIONAL_GUI_LIBS += -lOperation
 
 # Include path for DSStore headers (sibling subproject)
 ADDITIONAL_INCLUDE_DIRS += -I../DSStore
+
+# Include path for BootableInstaller headers
+ADDITIONAL_INCLUDE_DIRS += -IBootableInstaller
 
 Workspace_RESOURCE_FILES = \
   Resources/Icons/* \
@@ -136,6 +140,11 @@ Network/NetworkVolumeManager.m \
 Network/SFTPMount.m \
 AVFSMount.m \
 VolumeManager.m \
+BootableInstaller/BootEnvironmentDetector.m \
+BootableInstaller/BootPartitionValidator.m \
+BootableInstaller/BootableFileCopier.m \
+BootableInstaller/BootloaderInstaller.m \
+BootableInstaller/BootableInstallController.m \
 
 # Conditionally add DBusConnection.m and FileManagerDBusInterface.m if DBus is available
 ifeq ($(with_dbus), yes)
