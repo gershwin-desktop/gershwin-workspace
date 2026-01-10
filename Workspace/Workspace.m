@@ -29,6 +29,7 @@
 #include <sys/types.h>
 #include <sys/time.h>
 #include <unistd.h>
+#include <sys/stat.h>
 #ifdef HAVE_SYS_RESOURCE_H
 #include <sys/resource.h>
 #endif
@@ -1630,6 +1631,69 @@ NSString *_pendingSystemActionTitle = nil;
 
   NSLog(@"Workspace openFile: called with path: %@", fullPath);
 
+  /* Early ELF detection: catch executables regardless of the reported type
+     so we can prompt the user before any external app (like TextEdit)
+     opens the file. This mirrors the later ELF handling but runs first. */
+  {
+    NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
+    NSLog(@"Workspace openFile: ELF detection - trying to open file handle");
+    if (fh) {
+      NSData *hdr = [fh readDataOfLength:4];
+      NSLog(@"Workspace openFile: ELF detection - read %lu bytes", (unsigned long)[hdr length]);
+      [fh closeFile];
+      const unsigned char *bytes = (const unsigned char *)[hdr bytes];
+      if ([hdr length] >= 4 && bytes[0] == 0x7f && bytes[1] == 'E' && bytes[2] == 'L' && bytes[3] == 'F') {
+        NSLog(@"Workspace openFile: ELF magic detected!");
+        NSError *err = nil;
+        NSDictionary *attrs = [fm attributesOfItemAtPath: fullPath error: &err];
+        if (attrs) {
+          NSNumber *permNum = [attrs objectForKey: NSFilePosixPermissions];
+          unsigned short perms = [permNum unsignedShortValue];
+          NSLog(@"Workspace openFile: File permissions: 0o%o, owner-exec bit set: %s", perms, (perms & S_IXUSR) ? "YES" : "NO");
+          if ((perms & S_IXUSR) != 0) {
+            /* Already executable - launch directly without prompting */
+            NSLog(@"Workspace openFile: ELF is already executable, launching directly");
+            [self launchElfAndMonitor: fullPath];
+            return YES;
+          } else {
+            /* Not executable - ask user to trust */
+            NSLog(@"Workspace openFile: Owner-exec bit not set, showing trust prompt");
+            NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+            [alert setMessageText: @"Trust This Application?"];
+            [alert setInformativeText: [NSString stringWithFormat: @"Do you want to trust and run the application \"%@\"?", [fullPath lastPathComponent]]];
+            [alert addButtonWithTitle: @"Cancel"];
+            [alert addButtonWithTitle: @"Trust and Run"];
+            NSInteger resp = [alert runModal];
+            NSLog(@"Workspace openFile: User response to trust prompt: %ld (2=Trust, 1=Cancel)", (long)resp);
+            if (resp == NSAlertSecondButtonReturn) {
+              unsigned short newPerms = perms | S_IXUSR | S_IXGRP | S_IXOTH;
+              NSDictionary *newAttrs = [NSDictionary dictionaryWithObject: [NSNumber numberWithUnsignedShort: newPerms]
+                                                                   forKey: NSFilePosixPermissions];
+              NSError *err2 = nil;
+              BOOL ok = [fm setAttributes: newAttrs ofItemAtPath: fullPath error: &err2];
+              NSLog(@"Workspace openFile: Set permissions result: %s", ok ? "success" : "failed");
+              if (!ok) {
+                NSAlert *errAlert = [[[NSAlert alloc] init] autorelease];
+                [errAlert setMessageText: @"Error"];
+                [errAlert setInformativeText: [NSString stringWithFormat: @"Could not set executable permissions on \"%@\": %@", [fullPath lastPathComponent], [err2 localizedDescription]]];
+                [errAlert addButtonWithTitle: @"OK"];
+                [errAlert runModal];
+                return NO;
+              }
+
+              NSLog(@"Workspace openFile: Launching ELF and monitoring");
+              [self launchElfAndMonitor: fullPath];
+              return YES;
+            } else {
+              NSLog(@"Workspace openFile: User declined to trust executable");
+              return NO;
+            }
+          }
+        }
+      }
+    }
+  }
+
   /* Check if this is a network virtual path first */
   if ([NetworkFSNode isNetworkPath:fullPath]) {
     NSLog(@"Workspace openFile: detected network path");
@@ -1761,6 +1825,63 @@ NSString *_pendingSystemActionTitle = nil;
   aURL = nil;
   [ws getInfoForFile: fullPath application: &appName type: &type];
 
+  /* If file is a plain file, check for ELF magic and handle executable prompting.
+   * This mirrors how archives are intercepted earlier: special-case before
+   * falling through to the generic "open with application" handler.
+   */
+  if (type == NSPlainFileType) {
+    NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
+    if (fh) {
+      NSData *hdr = [fh readDataOfLength:4];
+      [fh closeFile];
+      const unsigned char *bytes = (const unsigned char *)[hdr bytes];
+      if ([hdr length] >= 4 && bytes[0] == 0x7f && bytes[1] == 'E' && bytes[2] == 'L' && bytes[3] == 'F') {
+        /* Looks like an ELF binary. Check executable bit. */
+        NSError *err = nil;
+        NSDictionary *attrs = [fm attributesOfItemAtPath: fullPath error: &err];
+        if (attrs) {
+          NSNumber *permNum = [attrs objectForKey: NSFilePosixPermissions];
+          unsigned short perms = [permNum unsignedShortValue];
+          /* If owner execute is set, launch directly without prompting. */
+          if ((perms & S_IXUSR) != 0) {
+            [self launchElfAndMonitor: fullPath];
+            return YES;
+          } else {
+            /* Owner execute not set, ask the user whether to trust and set it. */
+            NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+            [alert setMessageText: @"Trust This Application?"];
+            [alert setInformativeText: [NSString stringWithFormat: @"Do you want to trust and run the application \"%@\"?", [fullPath lastPathComponent]]];
+            [alert addButtonWithTitle: @"Cancel"];
+            [alert addButtonWithTitle: @"Trust and Run"];
+            NSInteger resp = [alert runModal];
+            if (resp == NSAlertSecondButtonReturn) {
+              unsigned short newPerms = perms | S_IXUSR | S_IXGRP | S_IXOTH;
+              NSDictionary *newAttrs = [NSDictionary dictionaryWithObject: [NSNumber numberWithUnsignedShort: newPerms]
+                                                                   forKey: NSFilePosixPermissions];
+              NSError *err2 = nil;
+              BOOL ok = [fm setAttributes: newAttrs ofItemAtPath: fullPath error: &err2];
+              if (!ok) {
+                NSAlert *errAlert = [[[NSAlert alloc] init] autorelease];
+                [errAlert setMessageText: @"Error"];
+                [errAlert setInformativeText: [NSString stringWithFormat: @"Could not set executable permissions on \"%@\": %@", [fullPath lastPathComponent], [err2 localizedDescription]]];
+                [errAlert addButtonWithTitle: @"OK"];
+                [errAlert runModal];
+                return NO;
+              }
+
+              /* Launch and monitor the program in background; return YES since we handled it. */
+              [self launchElfAndMonitor: fullPath];
+              return YES;
+            } else {
+              /* User declined - do not open */
+              return NO;
+            }
+          }
+        }
+      }
+    }
+  }
+
   if (type == NSDirectoryFileType)
     {
       [self newViewerAtPath: fullPath];
@@ -1827,6 +1948,124 @@ NSString *_pendingSystemActionTitle = nil;
   } 
 
   return NO;
+}
+
+
+- (void)launchElfAndMonitor:(NSString *)path
+{
+  /* Launch and monitor in background thread to avoid blocking UI. */
+  [NSThread detachNewThreadSelector:@selector(_monitorElfLaunchThread:) toTarget:self withObject:path];
+}
+
+
+- (void)_monitorElfLaunchThread:(id)anObject
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  NSString *path = (NSString *)anObject;
+  @try {
+    NSTask *task = [[NSTask alloc] init];
+    NSPipe *errPipe = [NSPipe pipe];
+    [task setLaunchPath: path];
+    [task setArguments: [NSArray array]];
+    [task setStandardError: errPipe];
+
+    @try {
+      [task launch];
+    } @catch (NSException *ex) {
+      NSString *reason = [ex reason] ? [ex reason] : NSLocalizedString(@"(failed to launch)", @"launcher exception fallback");
+      NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:
+                            path, @"path",
+                            [NSNumber numberWithInt: -1], @"status",
+                            reason, @"stderr",
+                            nil];
+      [self performSelectorOnMainThread:@selector(_showElfExitAlert:) withObject:info waitUntilDone:NO];
+      [pool drain];
+      return;
+    }
+
+    /* Wait up to 10s for the process to exit; if it exits within that time with
+       non-zero status, show an alert with stderr */
+    int checks = 100; /* 100 * 0.1s = 10s */
+    for (int i = 0; i < checks; i++) {
+      usleep(100000);
+      if (![task isRunning]) break;
+    }
+
+    if (![task isRunning]) {
+      int status = [task terminationStatus];
+      if (status != 0) {
+        NSData *d = [[[errPipe fileHandleForReading] readDataToEndOfFile] retain];
+        NSString *s = nil;
+        if (d) s = [[[NSString alloc] initWithData: d encoding: NSUTF8StringEncoding] autorelease];
+        if (!s) s = @"(no stderr output)";
+        NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:
+                              path, @"path",
+                              [NSNumber numberWithInt: status], @"status",
+                              s, @"stderr",
+                              nil];
+        [self performSelectorOnMainThread:@selector(_showElfExitAlert:) withObject:info waitUntilDone:NO];
+        [d release];
+      }
+    }
+
+  } @finally {
+    [pool drain];
+  }
+}
+
+
+- (void)_showElfExitAlert:(NSDictionary *)info
+{
+  NSString *path = [info objectForKey:@"path"];
+  NSNumber *status = [info objectForKey:@"status"];
+  NSString *stderrOut = [info objectForKey:@"stderr"];
+
+  NSString *title = nil;
+  NSString *msg = nil;
+  if ([status intValue] < 0) {
+    title = @"Application Failed to Launch";
+    msg = [NSString stringWithFormat: @"The application \"%@\" could not be launched.", [path lastPathComponent]];
+  } else {
+    title = @"Application Error";
+    msg = [NSString stringWithFormat: @"The application \"%@\" exited with status %d.", [path lastPathComponent], [status intValue]];
+  }
+
+  /* Truncate stderr: show first 5 and last 10 lines if long */
+  NSString *detail = stderrOut ? stderrOut : @"";
+  NSArray *lines = [detail componentsSeparatedByCharactersInSet: [NSCharacterSet newlineCharacterSet]];
+  NSUInteger total = [lines count];
+  NSString *displayText = detail;
+  if (total > 15) {
+    NSMutableArray *parts = [NSMutableArray array];
+    for (NSUInteger i = 0; i < 5; i++) [parts addObject: [lines objectAtIndex: i]];
+    NSUInteger omitted = total - 15;
+    [parts addObject: [NSString stringWithFormat: @"... %lu lines omitted ...", (unsigned long)omitted]];
+    for (NSUInteger i = total - 10; i < total; i++) [parts addObject: [lines objectAtIndex: i]];
+    displayText = [parts componentsJoinedByString: @"\n"];
+  }
+
+  NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+  [alert setMessageText: title];
+  [alert setInformativeText: msg];
+  [alert addButtonWithTitle: @"OK"];
+  if ([displayText length] > 0) {
+    NSTextView *tv = [[[NSTextView alloc] initWithFrame: NSMakeRect(0,0,400,200)] autorelease];
+    [tv setString: displayText];
+    [tv setEditable: NO];
+    [tv setSelectable: YES];
+    NSScrollView *sv = [[[NSScrollView alloc] initWithFrame: NSMakeRect(0,0,400,200)] autorelease];
+    [sv setHasVerticalScroller: YES];
+    [sv setDocumentView: tv];
+    if ([alert respondsToSelector: @selector(setAccessoryView:)]) {
+      [(id)alert setAccessoryView: sv];
+    } else {
+      /* Fallback: append truncated stderr to informative text if accessory
+         view isn't available on this platform/SDK. */
+      NSString *oldInfo = [alert informativeText] ? [alert informativeText] : @"";
+      [alert setInformativeText: [NSString stringWithFormat: @"%@\n\n%@", oldInfo, displayText]];
+    }
+  }
+  [alert runModal];
 }
 
 - (NSArray *)getSelectedPaths

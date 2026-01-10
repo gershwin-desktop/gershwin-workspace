@@ -33,6 +33,7 @@
 #import "FSNTextCell.h"
 #import "FSNode.h"
 #import "FSNFunctions.h"
+#import "../Workspace/Workspace.h"
 
 #define BRANCH_SIZE 7
 #define ARROW_ORIGIN_X (BRANCH_SIZE + 4)
@@ -1944,21 +1945,24 @@ static NSImage *branchImage;
 	{
 	  NSString *path = [sourcePaths objectAtIndex: i];
 
-	  NS_DURING
-	    {
-	      [[NSWorkspace sharedWorkspace] openFile: path
-				      withApplication: [node name]];
-	    }
-	  NS_HANDLER
-	    {
-	      NSRunAlertPanel(NSLocalizedString(@"error", @""),
-			      [NSString stringWithFormat: @"%@ %@!",
-					NSLocalizedString(@"Can't open ", @""), [node name]],
-			      NSLocalizedString(@"OK", @""),
-			      nil,
-			      nil);
-	    }
-	  NS_ENDHANDLER
+      NS_DURING
+        {
+          id gw = [Workspace gworkspace];
+          if (gw)
+            [gw openFile: path withApplication: [node name]];
+          else
+            [[NSWorkspace sharedWorkspace] openFile: path withApplication: [node name]];
+        }
+      NS_HANDLER
+        {
+          NSRunAlertPanel(NSLocalizedString(@"error", @""),
+                  [NSString stringWithFormat: @"%@ %@!",
+                    NSLocalizedString(@"Can't open ", @""), [node name]],
+                  NSLocalizedString(@"OK", @""),
+                  nil,
+                  nil);
+        }
+      NS_ENDHANDLER
 	}
     }
 }
