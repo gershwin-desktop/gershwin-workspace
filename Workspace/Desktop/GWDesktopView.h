@@ -57,6 +57,7 @@ typedef enum BackImageStyle
 
   NSMutableArray *mountedVolumes;
   NSMutableDictionary *desktopInfo;
+  NSMutableSet *expectedUnmountPaths; // Tracks volumes being properly ejected
       
   GWDesktopManager *manager;
 }

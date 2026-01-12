@@ -66,6 +66,7 @@
       NSZoneFree (NSDefaultMallocZone(), grid);
     }
   RELEASE (mountedVolumes);
+  RELEASE (expectedUnmountPaths);
   RELEASE (desktopInfo);
   RELEASE (backImage);
   RELEASE (imagePath);
@@ -118,6 +119,7 @@
 
       backImageStyle = BackImageCenterStyle;
       mountedVolumes = [NSMutableArray new];
+      expectedUnmountPaths = [NSMutableSet new];
       [self getDesktopInfo];
       [self makeIconsGrid];
       dragIcon = nil;
@@ -140,31 +142,60 @@
 
 - (void)workspaceWillUnmountVolumeAtPath:(NSString *)vpath
 {
+  if (vpath)
+    {
+      [expectedUnmountPaths addObject:vpath];
+    }
   [self checkLockedReps];
 }
 
 - (void)workspaceDidUnmountVolumeAtPath:(NSString *)vpath
 {
-  FSNIcon *icon = [self repOfSubnodePath: vpath];
+  FSNIcon *icon;
+  
+  if (!vpath)
+    {
+      NSLog(@"GWDesktopView: workspaceDidUnmountVolumeAtPath called with nil path");
+      return;
+    }
+  
+  // Remove from expected unmounts if it was there
+  [expectedUnmountPaths removeObject:vpath];
+    
+  icon = [self repOfSubnodePath: vpath];
 
   if (icon)
     {
-      [self removeRep: icon];
-      [self tile];
+      @try
+        {
+          // Retain the icon to prevent premature deallocation
+          [[icon retain] autorelease];
+          [self removeRep: icon];
+          [self tile];
+        }
+      @catch (NSException *exception)
+        {
+          NSLog(@"Exception while removing icon for volume %@: %@", vpath, exception);
+        }
     }
     
   /* Send unmount notification to viewers so they can close windows */
-  if (vpath) {
-    NSString *parent = [vpath stringByDeletingLastPathComponent];
-    NSString *name = [vpath lastPathComponent];
-    NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
-                              @"source": parent,
-                              @"destination": parent,
-                              @"files": @[name],
-                              @"unmounted": vpath };
-    
-    [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemDidChangeNotification" object:opinfo];
-  }
+  if (vpath)
+    {
+      NSString *parent = [vpath stringByDeletingLastPathComponent];
+      NSString *name = [vpath lastPathComponent];
+      
+      if (parent && name)
+        {
+          NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
+                                    @"source": parent,
+                                    @"destination": parent,
+                                    @"files": @[name],
+                                    @"unmounted": vpath };
+          
+          [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemDidChangeNotification" object:opinfo];
+        }
+    }
 }
 
 - (void)unlockVolumeAtPath:(NSString *)path
@@ -176,6 +207,7 @@
 {
   NSArray *rvPaths;
   NSMutableArray *newVolumes;
+  NSMutableArray *volumesToRemove;
   NSUInteger i;
   BOOL added;
 
@@ -184,7 +216,9 @@
   rvPaths = [[NSWorkspace sharedWorkspace] mountedRemovableMedia];
   rvPaths = [rvPaths arrayByAddingObject: @"/"];
   newVolumes = [NSMutableArray arrayWithCapacity:1];
+  volumesToRemove = [NSMutableArray arrayWithCapacity:1];
 
+  // First pass: identify volumes that need to be removed
   for (i = 0; i < [mountedVolumes count]; i++)
     {
       NSString *v;
@@ -193,9 +227,65 @@
       if ([rvPaths indexOfObject:v] == NSNotFound)
 	{
 	  NSLog(@"removing: %@", v);
-	  [mountedVolumes removeObjectAtIndex:i];
-	  [self workspaceDidUnmountVolumeAtPath: v];
+	  [volumesToRemove addObject:v];
 	}
+    }
+  
+  // Check if any volumes were forcibly removed (not in expected unmounts)
+  if ([volumesToRemove count] > 0)
+    {
+      NSMutableArray *unexpectedRemovals = [NSMutableArray arrayWithCapacity:1];
+      
+      for (i = 0; i < [volumesToRemove count]; i++)
+        {
+          NSString *v = [volumesToRemove objectAtIndex:i];
+          if (![expectedUnmountPaths containsObject:v] && ![v isEqualToString:@"/"])
+            {
+              [unexpectedRemovals addObject:v];
+            }
+        }
+      
+      // Show alert for unexpected removals
+      if ([unexpectedRemovals count] > 0)
+        {
+          NSString *volumeList = [unexpectedRemovals componentsJoinedByString:@"\n"];
+          NSString *message;
+          
+          if ([unexpectedRemovals count] == 1)
+            {
+              message = [NSString stringWithFormat:
+                @"The volume at the following path was removed without being properly ejected:\n\n%@\n\n"
+                @"Always eject removable volumes before unplugging them to prevent data loss and avoid crashes.", 
+                volumeList];
+            }
+          else
+            {
+              message = [NSString stringWithFormat:
+                @"The following volumes were removed without being properly ejected:\n\n%@\n\n"
+                @"Always eject removable volumes before unplugging them to prevent data loss and avoid crashes.", 
+                volumeList];
+            }
+          
+          NSRunAlertPanel(@"Volume Removed Unexpectedly", 
+                         message,
+                         @"OK", nil, nil);
+        }
+    }
+  
+  // Remove volumes and notify (done separately to avoid iteration issues)
+  for (i = 0; i < [volumesToRemove count]; i++)
+    {
+      NSString *v = [volumesToRemove objectAtIndex:i];
+      [mountedVolumes removeObject:v];
+      
+      @try
+        {
+          [self workspaceDidUnmountVolumeAtPath: v];
+        }
+      @catch (NSException *exception)
+        {
+          NSLog(@"Exception while unmounting volume at %@: %@", v, exception);
+        }
     }
 
   for (i = 0; i < [rvPaths count]; i++)
