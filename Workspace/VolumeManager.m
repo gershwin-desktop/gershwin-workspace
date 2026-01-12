@@ -21,6 +21,7 @@
 #import "FSNodeRep.h"
 #import "Desktop/GWDesktopManager.h"
 #import "Desktop/GWDesktopView.h"
+#import "GWUnmountHelper.h"
 
 static VolumeManager *sharedInstance = nil;
 
@@ -974,69 +975,14 @@ static VolumeManager *sharedInstance = nil;
   
   NSLog(@"VolumeManager: Sent will unmount notification for %@", mountPath);
   
-  BOOL unmountSuccess = NO;
+  /* Use GWUnmountHelper which properly handles sudo for unmounting */
+  NSLog(@"VolumeManager: Using GWUnmountHelper to unmount with proper permissions...");
+  BOOL unmountSuccess = [GWUnmountHelper unmountPath:mountPath eject:NO];
   
-  /* Try fusermount FIRST - this is the proper way to unmount FUSE filesystems */
-  NSLog(@"VolumeManager: Attempting fusermount as primary unmount method...");
-  /* Try many variations: fusermount, fusermount3, fusermount2, etc. */
-  NSString *fusermountPath = [self findToolInPath:@"fusermount" 
-                                 alternativeNames:@[@"fusermount3", @"fusermount2", 
-                                                    @"fusermount99", @"fusermount-3", 
-                                                    @"fusermount-2"]];
-  if (fusermountPath) {
-    NSLog(@"VolumeManager: Found fusermount at %@, executing...", fusermountPath);
-    NSTask *unmountTask = [[NSTask alloc] init];
-    [unmountTask setLaunchPath:fusermountPath];
-    [unmountTask setArguments:@[@"-u", mountPath]];
-    
-    @try {
-      [unmountTask launch];
-      [unmountTask waitUntilExit];
-      int status = [unmountTask terminationStatus];
-      NSLog(@"VolumeManager: fusermount exited with status %d", status);
-      if (status == 0) {
-        unmountSuccess = YES;
-        NSLog(@"VolumeManager: fusermount succeeded");
-      } else {
-        NSLog(@"VolumeManager: fusermount failed with status %d", status);
-      }
-      [unmountTask release];
-    } @catch (NSException *e) {
-      NSLog(@"VolumeManager: fusermount exception: %@", e);
-      [unmountTask release];
-    }
+  if (unmountSuccess) {
+    NSLog(@"VolumeManager: GWUnmountHelper successfully unmounted %@", mountPath);
   } else {
-    NSLog(@"VolumeManager: fusermount not found in PATH");
-  }
-  
-  /* Try umount if fusermount failed or wasn't available */
-  if (!unmountSuccess) {
-    NSLog(@"VolumeManager: Trying umount...");
-    NSString *umountPath = [self findToolInPath:@"umount" alternativeNames:nil];
-    if (umountPath) {
-      NSTask *umountTask = [[NSTask alloc] init];
-      [umountTask setLaunchPath:umountPath];
-      [umountTask setArguments:@[mountPath]];
-      
-      @try {
-        [umountTask launch];
-        [umountTask waitUntilExit];
-        int status = [umountTask terminationStatus];
-        NSLog(@"VolumeManager: umount exited with status %d", status);
-        if (status == 0) {
-          unmountSuccess = YES;
-          NSLog(@"VolumeManager: umount succeeded");
-        } else {
-          NSLog(@"VolumeManager: umount failed with status %d", status);
-        }
-        [umountTask release];
-      } @catch (NSException *e) {
-        NSLog(@"VolumeManager: umount exception: %@", e);
-        [umountTask release];
-      }
-    } else {
-      NSLog(@"VolumeManager: umount not found in PATH");
-    }
+    NSLog(@"VolumeManager: GWUnmountHelper failed to unmount %@", mountPath);
   }
   
   /* Find the tracked volume for cleanup */
@@ -1147,6 +1093,14 @@ static VolumeManager *sharedInstance = nil;
     /* Only remove desktop icon AFTER directory successfully removed */
     if (directoryRemoved) {
       NSLog(@"VolumeManager: Directory removed successfully, notifying desktop to remove icon for %@", mountPath);
+      
+      /* Post NSWorkspaceDidUnmountNotification so other components can react */
+      NSDictionary *unmountedInfo = @{ @"NSDevicePath": mountPath };
+      [[NSNotificationCenter defaultCenter]
+        postNotificationName:NSWorkspaceDidUnmountNotification
+                      object:[NSWorkspace sharedWorkspace]
+                    userInfo:unmountedInfo];
+      NSLog(@"VolumeManager: Posted NSWorkspaceDidUnmountNotification for %@", mountPath);
       
       NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
                                 @"source": parent,

@@ -1170,7 +1170,13 @@
         }
         
       } else if ([[pb types] containsObject: NSFilenamesPboardType]) {
-        NSArray *sourcePaths = [pb propertyListForType: NSFilenamesPboardType]; 
+        NSArray *sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
+        
+        if (!sourcePaths || [sourcePaths count] == 0) {
+          NSLog(@"Dock: Drag rejected - empty filename pasteboard");
+          return NSDragOperationNone;
+        }
+        
         NSString *path = [sourcePaths objectAtIndex: 0];
         FSNode *node = [FSNode nodeWithPath: path];
       

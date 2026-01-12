@@ -35,6 +35,12 @@
 #import "FSNFunctions.h"
 #import "../Workspace/Workspace.h"
 
+/* Forward declaration to expose class methods used for ISO drop handling */
+@interface ISOWriteHandler : NSObject
++ (BOOL)canHandleISODrop:(NSString *)path ontoNode:(FSNode *)node;
++ (BOOL)handleISODrop:(NSString *)path ontoNode:(FSNode *)node;
+@end
+
 #define BRANCH_SIZE 7
 #define ARROW_ORIGIN_X (BRANCH_SIZE + 4)
 
@@ -1538,9 +1544,42 @@ static NSImage *branchImage;
   isDragTarget = NO;
   onSelf = NO;
 
+  pb = [sender draggingPasteboard];
+  sourcePaths = nil;
+
+  if ([[pb types] containsObject: NSFilenamesPboardType])
+    {
+      sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
+    }
+  
+  /* Check for ISO drop onto mount point BEFORE general writability checks */
+  if (sourcePaths && [sourcePaths count] == 1 && [node isMountPoint])
+    {
+      NSString *droppedPath = [sourcePaths objectAtIndex: 0];
+      Class handlerClass = NSClassFromString(@"ISOWriteHandler");
+      
+      NSLog(@"FSNIcon: Checking ISO drop: file=%@ onto mountpoint=%@", droppedPath, [node path]);
+      
+      if (handlerClass && 
+          [handlerClass respondsToSelector: @selector(canHandleISODrop:ontoNode:)] &&
+          [handlerClass canHandleISODrop: droppedPath ontoNode: node])
+        {
+          /* ISO write handler can deal with this - allow the drag */
+          NSLog(@"FSNIcon: ISO handler accepted drag - allowing drop");
+          isDragTarget = YES;
+          return NSDragOperationCopy;
+        }
+      else
+        {
+          NSLog(@"FSNIcon: ISO handler rejected or unavailable");
+        }
+    }
+
   if (selection || isLocked || ([node isDirectory] == NO)
       || (([node isWritable] == NO) && ([node isApplication] == NO)))
     {
+      NSLog(@"FSNIcon: Drag rejected - selection=%d isLocked=%d isDirectory=%d isWritable=%d isApp=%d [node=%@]",
+            selection != nil, isLocked, [node isDirectory], [node isWritable], [node isApplication], [node path]);
       return NSDragOperationNone;
     }
 
@@ -1548,6 +1587,7 @@ static NSImage *branchImage;
     {
       if ([node isSubnodeOfPath: [desktopApp trashPath]])
 	{
+	  NSLog(@"FSNIcon: Drag rejected - target is in trash [node=%@]", [node path]);
 	  return NSDragOperationNone;
 	}
     }
@@ -1558,19 +1598,18 @@ static NSImage *branchImage;
 	{
 	  if ([node isEqual: [container baseNode]] == NO)
 	    {
+	      NSLog(@"FSNIcon: Drag rejected - package not base node [node=%@]", [node path]);
 	      return NSDragOperationNone;
 	    }
 	}
       else
 	{
+	  NSLog(@"FSNIcon: Drag rejected - package without base node [node=%@]", [node path]);
 	  return NSDragOperationNone;
 	}
     }
 
-  pb = [sender draggingPasteboard];
-  sourcePaths = nil;
-
-  if ([[pb types] containsObject: NSFilenamesPboardType])
+  if (sourcePaths == nil && [[pb types] containsObject: NSFilenamesPboardType])
     {
       sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
     }
@@ -1597,12 +1636,14 @@ static NSImage *branchImage;
 
   if (sourcePaths == nil)
     {
+    NSLog(@"FSNIcon: Drag rejected - no source paths in pasteboard [node=%@]", [node path]);
     return NSDragOperationNone;
     }
 
   count = [sourcePaths count];
   if (count == 0)
     {
+      NSLog(@"FSNIcon: Drag rejected - empty source paths [node=%@]", [node path]);
       return NSDragOperationNone;
     }
 
@@ -1633,11 +1674,13 @@ static NSImage *branchImage;
 
   if ([nodePath isEqual: fromPath])
     {
+      NSLog(@"FSNIcon: Drag rejected - source and destination are same [node=%@]", [node path]);
       return NSDragOperationNone;
     }
 
   if ([sourcePaths containsObject: nodePath])
     {
+      NSLog(@"FSNIcon: Drag rejected - would create circular reference [node=%@]", [node path]);
       return NSDragOperationNone;
     }
 
@@ -1891,6 +1934,25 @@ static NSImage *branchImage;
     }
 
   sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
+
+  /* Check for ISO file drop onto physical device mount point */
+  if ([sourcePaths count] == 1 && [node isMountPoint])
+    {
+      NSString *droppedPath = [sourcePaths objectAtIndex: 0];
+      Class handlerClass = NSClassFromString(@"ISOWriteHandler");
+      
+      if (handlerClass && 
+          [handlerClass respondsToSelector: @selector(canHandleISODrop:ontoNode:)] &&
+          [handlerClass canHandleISODrop: droppedPath ontoNode: node])
+        {
+          /* Let ISOWriteHandler handle this - it will show confirmation dialog */
+          if ([handlerClass handleISODrop: droppedPath ontoNode: node])
+            {
+              return; /* ISO write flow handled it */
+            }
+          /* If handleISODrop returns NO, user chose to copy file normally */
+        }
+    }
 
   if (([node isApplication] == NO) || onApplication)
     {

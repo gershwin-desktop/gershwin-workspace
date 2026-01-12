@@ -48,6 +48,7 @@
 #import "RunExternalController.h"
 #import "StartAppWin.h"
 #import "Preferences/PrefController.h"
+#import "GWUnmountHelper.h"
 #import "GWDesktopManager.h"
 #import "VolumeManager.h"
 #import "GWDesktopWindow.h"
@@ -705,25 +706,30 @@ NSString *_pendingSystemActionTitle = nil;
 
   int elapsed = 0;
   const int intervalMs = 150;
+  NSLog(@"Workspace: Waiting for AppMenu registrar on DBus...");
   while (elapsed < timeoutMs) {
     @try {
-      NSLog(@"Workspace: Waiting for AppMenu registrar on DBus...");
+      printf(".");
+      fflush(stdout);
       id result = [tempConnection callMethod:@"NameHasOwner"
                                    onService:@"org.freedesktop.DBus"
                                   objectPath:@"/org/freedesktop/DBus"
                                    interface:@"org.freedesktop.DBus"
                                    arguments:@[@"com.canonical.AppMenu.Registrar"]];
       if (result && [result respondsToSelector:@selector(boolValue)] && [result boolValue]) {
+        printf("\n");
+        NSLog(@"Workspace: AppMenu registrar is available on DBus");
         return YES;
       }
     } @catch (NSException *ex) {
+      printf("\n");
       NSLog(@"Workspace: Exception while checking for AppMenu registrar: %@", ex);
       return NO;
     }
     usleep(intervalMs * 1000);
     elapsed += intervalMs;
   }
-
+  printf("\n");
   return NO;
 }
 #endif
@@ -4589,31 +4595,20 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
     NSLog(@"Workspace: Calling NetworkVolumeManager unmountPath for %@", path);
     return [networkVolumeManager unmountPath: path];
   } else {
-    // Use standard system unmount for regular volumes
-    NSLog(@"Workspace: Using standard system unmount for %@", path);
-    NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
-    if ([workspace unmountAndEjectDeviceAtPath: path]) {
-      return YES;
-    } else {
-      // Try fallback with sudo eject
-      NSTask *task = [NSTask launchedTaskWithLaunchPath: @"sudo"
-                                              arguments: [NSArray arrayWithObjects: @"-E", @"-A", @"eject", path, nil]];
-      if (task) {
-        [task waitUntilExit];
-        if ([task terminationStatus] == 0) {
-          [dtopManager unlockVolumeAtPath: path];
-          return YES;
-        }
-      }
-      
+    // Use standard system unmount+eject for regular volumes (drag to trash)
+    NSLog(@"Workspace: Using standard system unmount+eject for %@", path);
+    BOOL result = [GWUnmountHelper unmountAndEjectPath:path];
+    
+    if (!result) {
       // Show error message
       NSString *err = NSLocalizedString(@"Error", @"");
       NSString *msg = NSLocalizedString(@"You are not allowed to umount\n", @"");
       NSString *buttstr = NSLocalizedString(@"Continue", @"");
       NSRunAlertPanel(err, [NSString stringWithFormat: @"%@ \"%@\"!\n", msg, path], buttstr, nil, nil);
-      [dtopManager unlockVolumeAtPath: path];
-      return NO;
     }
+    
+    [dtopManager unlockVolumeAtPath: path];
+    return result;
   }
 }
 

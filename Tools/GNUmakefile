@@ -8,7 +8,8 @@ SUBPROJECTS = \
         lsfupdater \
         ddbd \
         wopen \
-        uitest 
+        uitest \
+        isowrite-helper 
 
 -include GNUmakefile.preamble
 

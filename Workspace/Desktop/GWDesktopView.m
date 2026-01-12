@@ -1785,12 +1785,14 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
   else
     {
+      NSLog(@"GWDesktopView: Drag rejected - no supported pasteboard type");
       return NSDragOperationNone;
     }
 
   count = [sourcePaths count];
   if (count == 0)
     {
+      NSLog(@"GWDesktopView: Drag rejected - empty source paths");
       return NSDragOperationNone;
     }
 
@@ -1808,6 +1810,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   if (dragLocalIcon)
     {
+      NSLog(@"GWDesktopView: Drag accepted - local icon reposition");
       isDragTarget = YES;
       dragPoint = NSZeroPoint;
       DESTROY (dragIcon);
@@ -1817,6 +1820,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   if ([node isWritable] == NO)
     {
+      NSLog(@"GWDesktopView: Drag rejected - desktop node %@ is not writable", [node path]);
       return NSDragOperationNone;
     }
 
@@ -1825,11 +1829,13 @@ static void GWHighlightFrameRect(NSRect aRect)
   basePath = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
   if ([basePath isEqual: nodePath])
     {
+      NSLog(@"GWDesktopView: Drag rejected - source and destination are the same (%@)", nodePath);
       return NSDragOperationNone;
     }
 
   if ([sourcePaths containsObject: nodePath])
     {
+      NSLog(@"GWDesktopView: Drag rejected - would create circular reference (desktop in %@)", nodePath);
       return NSDragOperationNone;
     }
 

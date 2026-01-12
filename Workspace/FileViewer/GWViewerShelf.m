@@ -1194,6 +1194,7 @@
           
           if ([baseNode isParentOfPath: path] == NO)
             {
+              NSLog(@"GWViewerShelf: Drag rejected - path %@ not in base node %@", path, [baseNode path]);
               return NSDragOperationNone;
             } 
         }
@@ -1201,6 +1202,7 @@
       basePath = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
       if ([basePath isEqual: [gworkspace trashPath]])
         {
+          NSLog(@"GWViewerShelf: Drag rejected - source is in trash");
           return NSDragOperationNone;
         }
       

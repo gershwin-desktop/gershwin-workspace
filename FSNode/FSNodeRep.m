@@ -651,6 +651,28 @@ static FSNodeRep *shared = nil;
     }
   }
 
+  /* Check if this is an optical media filesystem (CD/DVD/Blu-ray)
+   * These should use the CD icon even if not mounted through VolumeManager */
+  NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+  BOOL isRemovable = NO, isWritable = NO, isUnmountable = NO;
+  NSString *description = nil;
+  NSString *fsType = nil;
+  
+  if ([ws getFileSystemInfoForPath: path
+                       isRemovable: &isRemovable
+                        isWritable: &isWritable
+                     isUnmountable: &isUnmountable
+                       description: &description
+                              type: &fsType]) {
+    /* Optical media filesystem types that should show CD icon */
+    if ([fsType isEqualToString: @"ISO9660"] ||
+        [fsType isEqualToString: @"UDF"] ||
+        [fsType isEqualToString: @"CD9660"] ||
+        [fsType isEqualToString: @"ISOFS"]) {
+      return YES;
+    }
+  }
+
   return NO;
 }
 
