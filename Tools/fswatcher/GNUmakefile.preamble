@@ -26,3 +26,11 @@ ifneq ($(wildcard /usr/pkg/lib),)
   ADDITIONAL_LIB_DIRS += -L/usr/pkg/lib
 endif
 
+# Link against libinotify on systems that need it (NetBSD, older FreeBSD)
+# Linux and newer FreeBSD have inotify in libc
+ifeq ($(WITH_INOTIFY),yes)
+  ifneq ($(wildcard /usr/pkg/lib/libinotify.*),)
+    ADDITIONAL_TOOL_LIBS += -linotify
+  endif
+endif
+
