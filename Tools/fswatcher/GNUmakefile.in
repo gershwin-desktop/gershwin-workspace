@@ -12,6 +12,7 @@ WITH_FAM=@with_fam@
 
 ifeq ($(WITH_INOTIFY),yes)
   fswatcher_OBJC_FILES = fswatcher-inotify.m
+  fswatcher_TOOL_LIBS += @INOTIFY_LIBS@
 else
   ifeq ($(WITH_FAM),yes)
     fswatcher_OBJC_FILES = fswatcher-fam.m
