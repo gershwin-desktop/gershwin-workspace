@@ -41,6 +41,7 @@
 #import "Operation.h"
 #import "StartAppWin.h"
 #import "X11AppSupport.h"
+#import "GWApplicationLauncher.h"
 // For checking whether a process identifier still exists
 #include <signal.h>
 #include <errno.h>
@@ -526,7 +527,6 @@
 {
   NSString *appPath, *appName;
   NSTask *task;
-  GWLaunchedApp *app;
   NSString *path;
   NSDictionary *userinfo;
   NSString *host;
@@ -625,22 +625,17 @@
 	                    object: ws
 	                  userInfo: userinfo];
 
-  task = [NSTask launchedTaskWithLaunchPath: path arguments: args];
+  /* Use GWApplicationLauncher to get same error handling as ELF binaries */
+  task = [[NSTask alloc] init];
+  [task setLaunchPath:path];
+  [task setArguments:args];
+  [GWApplicationLauncher launchAndMonitorTask:task];
+  [task release];
   
-  if (task == nil) {
-	  return NO;
-	}
-  
-  app = [GWLaunchedApp appWithApplicationPath: appPath
-                              applicationName: appName
-                                 launchedTask: task];
-  
-  if (app) {
-    [launchedApps addObject: app];
-    return YES;
-  }
-  
-  return NO;    
+  /* Note: Don't create GWLaunchedApp here when using GWApplicationLauncher.
+   * For GNUstep apps, the appDidLaunch notification will create it with the PID.
+   * For non-GNUstep apps, the X11AppManager will handle tracking. */
+  return YES;    
 }
 
 - (void)appWillLaunch:(NSNotification *)notif

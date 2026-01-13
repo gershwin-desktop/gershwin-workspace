@@ -78,6 +78,7 @@ Workspace.m \
 Workspace+UITesting.m \
 X11AppSupport.m \
 WorkspaceApplication.m \
+GWApplicationLauncher.m \
 GSGlobalShortcutsManager.m \
 Desktop/GWDesktopManager.m \
 Desktop/GWDesktopWindow.m \
@@ -137,11 +138,6 @@ Network/SFTPMount.m \
 AVFSMount.m \
 VolumeManager.m \
 GWUnmountHelper.m \
-ISOWrite/BlockDeviceInfo.m \
-ISOWrite/ISOWriteOperation.m \
-ISOWrite/ISOWriteConfirmation.m \
-ISOWrite/ISOWriteProgressWindow.m \
-ISOWrite/ISOWriteHandler.m \
 
 # Conditionally add DBusConnection.m and FileManagerDBusInterface.m if DBus is available
 ifeq ($(with_dbus), yes)
