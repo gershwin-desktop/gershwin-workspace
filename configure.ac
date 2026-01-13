@@ -111,7 +111,17 @@ AC_DEFINE_UNQUOTED([GW_DEBUG_LOG], [$GW_DEBUG_LOG], [debug logging])
 # fswatcher-inotify - automatically detect and use when available
 #--------------------------------------------------------------------
 with_inotify=no
+INOTIFY_LIBS=""
+
 AC_CHECK_HEADERS([sys/inotify.h], [with_inotify=yes])
+
+# Check if we need to link against libinotify (NetBSD, FreeBSD)
+if test "x$with_inotify" = "xyes"; then
+  AC_CHECK_FUNC(inotify_init, [],
+    [AC_CHECK_LIB(inotify, inotify_init, 
+      [INOTIFY_LIBS="-linotify"],
+      [with_inotify=no])])
+fi
 
 # Allow manual override
 AC_ARG_WITH(inotify,
@@ -120,6 +130,7 @@ AC_ARG_WITH(inotify,
   [], [])
   
 AC_SUBST(with_inotify)
+AC_SUBST(INOTIFY_LIBS)
 
 AC_CONFIG_FILES([
   GNUmakefile

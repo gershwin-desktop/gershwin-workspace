@@ -11,8 +11,26 @@ ADDITIONAL_CFLAGS += -Wall
 ADDITIONAL_INCLUDE_DIRS += -I../../DBKit
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace
 
+# Add pkgsrc paths for NetBSD/FreeBSD (inotify)
+ifneq ($(wildcard /usr/pkg/include),)
+  ADDITIONAL_INCLUDE_DIRS += -I/usr/pkg/include
+endif
+
 # Additional LDFLAGS to pass to the linker
 # ADDITIONAL_LDFLAGS += 
 
 ADDITIONAL_LIB_DIRS += -L../../DBKit/$(GNUSTEP_OBJ_DIR)
+
+# Add pkgsrc library paths for NetBSD/FreeBSD
+ifneq ($(wildcard /usr/pkg/lib),)
+  ADDITIONAL_LIB_DIRS += -L/usr/pkg/lib
+endif
+
+# Link against libinotify on systems that need it (NetBSD, older FreeBSD)
+# Linux and newer FreeBSD have inotify in libc
+ifeq ($(WITH_INOTIFY),yes)
+  ifneq ($(wildcard /usr/pkg/lib/libinotify.*),)
+    ADDITIONAL_TOOL_LIBS += -linotify
+  endif
+endif
 
