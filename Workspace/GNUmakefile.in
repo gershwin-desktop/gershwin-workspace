@@ -78,6 +78,7 @@ Workspace.m \
 Workspace+UITesting.m \
 X11AppSupport.m \
 WorkspaceApplication.m \
+GWApplicationLauncher.m \
 GSGlobalShortcutsManager.m \
 Desktop/GWDesktopManager.m \
 Desktop/GWDesktopWindow.m \
