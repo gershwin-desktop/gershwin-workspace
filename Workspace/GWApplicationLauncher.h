@@ -29,7 +29,8 @@
  * with non-zero status during that time.
  * 
  * @param task A configured NSTask (already set launch path and arguments)
+ * @return YES if the task was successfully launched, NO otherwise
  */
-+ (void)launchAndMonitorTask:(NSTask *)task;
++ (BOOL)launchAndMonitorTask:(NSTask *)task;
 
 @end

@@ -527,6 +527,7 @@
 {
   NSString *appPath, *appName;
   NSTask *task;
+  GWLaunchedApp *app;
   NSString *path;
   NSDictionary *userinfo;
   NSString *host;
@@ -629,12 +630,46 @@
   task = [[NSTask alloc] init];
   [task setLaunchPath:path];
   [task setArguments:args];
-  [GWApplicationLauncher launchAndMonitorTask:task];
-  [task release];
   
-  /* Note: Don't create GWLaunchedApp here when using GWApplicationLauncher.
-   * For GNUstep apps, the appDidLaunch notification will create it with the PID.
-   * For non-GNUstep apps, the X11AppManager will handle tracking. */
+  BOOL launched = [GWApplicationLauncher launchAndMonitorTask:task];
+  
+  if (!launched) {
+    [task release];
+    return NO;
+  }
+  
+  /* Create GWLaunchedApp immediately with the PID from the task.
+   * For GNUstep apps, the appDidLaunch notification will update this entry.
+   * For non-GNUstep apps, we need this entry for X11AppManager registration. */
+  pid_t pid = 0;
+  @try {
+    pid = [task processIdentifier];
+  } @catch (NSException *ex) {
+    pid = 0;
+  }
+  
+  NSNumber *pidNumber = [NSNumber numberWithInt:(int)pid];
+  app = [GWLaunchedApp appWithApplicationPath:appPath
+                              applicationName:appName
+                            processIdentifier:pidNumber
+                                 checkRunning:NO];
+  
+  if (app) {
+    [launchedApps addObject:app];
+    
+    /* For non-GNUstep apps (no NSConnection), register with X11AppManager immediately */
+    if (![app application] && pid > 0) {
+      [app setIsX11App:YES];
+      [app setWindowSearchString:appName];
+      [[GWX11AppManager sharedManager] registerX11App:appName
+                                                 path:appPath
+                                                  pid:pid
+                                   windowSearchString:appName];
+      GWDebugLog(@"\"%@\" registered as X11 app immediately after launch (pid=%d)", appName, pid);
+    }
+  }
+  
+  [task release];
   return YES;    
 }
 
@@ -682,17 +717,22 @@
 
   /*
    * For GNUstep apps (with NSConnection), notify dock at launch time.
-   * For non-GNUstep apps (no connection), register with X11AppManager
-   * for process monitoring and window management.
+   * Non-GNUstep apps are already registered with X11AppManager in launchApplication,
+   * so we skip duplicate registration here.
    */
   if (app && [app application]) {
     pid_t pid = ident ? (pid_t)[ident intValue] : 0;
     [[dtopManager dock] appDidLaunch: path appName: name pid: pid];
-    GWDebugLog(@"\"%@\" appDidLaunch (%@) [dock notified]", name, path);
+    GWDebugLog(@"\"%@\" appDidLaunch (%@) [dock notified - GNUstep app]", name, path);
     // No need for fallback if connection established
     [self _cancelLaunchDotFallbackForPath: path name: name];
+  } else if (app && [app isX11App]) {
+    /* X11 app that was already registered in launchApplication.
+     * The X11AppManager will notify the dock when windows appear. */
+    GWDebugLog(@"\"%@\" appDidLaunch (%@) [X11 app - already registered]", name, path);
   } else if (app && ident) {
-    /* Non-GNUstep app: register with X11AppManager for monitoring */
+    /* Fallback: GNUstep app launched externally without going through our launcher.
+     * Register as X11 app for monitoring. */
     pid_t pid = (pid_t)[ident intValue];
     if (pid > 0) {
       [app setIsX11App: YES];
@@ -701,7 +741,7 @@
                                                  path: path
                                                   pid: pid
                                    windowSearchString: name];
-      GWDebugLog(@"\"%@\" appDidLaunch (%@) [registered as X11 app, pid=%d]", name, path, pid);
+      GWDebugLog(@"\"%@\" appDidLaunch (%@) [registered as X11 app (external launch), pid=%d]", name, path, pid);
     }
   }
 }

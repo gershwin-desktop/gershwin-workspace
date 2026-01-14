@@ -21,16 +21,37 @@
   [task release];
 }
 
-+ (void)launchAndMonitorTask:(NSTask *)task
++ (BOOL)launchAndMonitorTask:(NSTask *)task
 {
-  /* Launch and monitor in background thread to avoid blocking UI. */
-  NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:
-                        task, @"task",
-                        [task launchPath], @"path",
-                        nil];
-  [NSThread detachNewThreadSelector:@selector(_monitorLaunchThread:)
-                           toTarget:self
-                         withObject:info];
+  @try {
+    /* Launch the task synchronously so we can capture the PID */
+    NSPipe *errPipe = [NSPipe pipe];
+    [task setStandardError:errPipe];
+    [task launch];
+    
+    /* Now monitor in background thread */
+    NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:
+                          task, @"task",
+                          [task launchPath], @"path",
+                          errPipe, @"errPipe",
+                          nil];
+    [NSThread detachNewThreadSelector:@selector(_monitorLaunchThread:)
+                             toTarget:self
+                           withObject:info];
+    return YES;
+  } @catch (NSException *ex) {
+    NSString *path = [task launchPath];
+    NSString *reason = [ex reason] ? [ex reason] : NSLocalizedString(@"(failed to launch)", @"launcher exception fallback");
+    NSDictionary *errorInfo = [NSDictionary dictionaryWithObjectsAndKeys:
+                               path, @"path",
+                               [NSNumber numberWithInt:-1], @"status",
+                               reason, @"stderr",
+                               nil];
+    [self performSelectorOnMainThread:@selector(_showErrorAlert:)
+                           withObject:errorInfo
+                        waitUntilDone:NO];
+    return NO;
+  }
 }
 
 + (void)_monitorLaunchThread:(id)anObject
@@ -39,27 +60,10 @@
   NSDictionary *info = (NSDictionary *)anObject;
   NSTask *task = [info objectForKey:@"task"];
   NSString *path = [info objectForKey:@"path"];
+  NSPipe *errPipe = [info objectForKey:@"errPipe"];
   
   @try {
-    NSPipe *errPipe = [NSPipe pipe];
-    [task setStandardError:errPipe];
-
-    @try {
-      [task launch];
-    } @catch (NSException *ex) {
-      NSString *reason = [ex reason] ? [ex reason] : NSLocalizedString(@"(failed to launch)", @"launcher exception fallback");
-      NSDictionary *errorInfo = [NSDictionary dictionaryWithObjectsAndKeys:
-                                 path, @"path",
-                                 [NSNumber numberWithInt:-1], @"status",
-                                 reason, @"stderr",
-                                 nil];
-      [self performSelectorOnMainThread:@selector(_showErrorAlert:)
-                             withObject:errorInfo
-                          waitUntilDone:NO];
-      [pool drain];
-      return;
-    }
-
+    /* Task is already launched; just monitor it */
     /* Wait up to 10s for the process to exit; if it exits within that time with
        non-zero status, show an alert with stderr */
     int checks = 100; /* 100 * 0.1s = 10s */
