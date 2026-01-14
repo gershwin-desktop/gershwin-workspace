@@ -293,6 +293,9 @@ NSString *_pendingSystemActionTitle = nil;
   
   menuItem = [menu addItemWithTitle:_(@"Find") action:@selector(showFinder:) keyEquivalent:@"f"];
   [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Search...") action:@selector(showFinder:) keyEquivalent:@"F"];
+  [[menu itemWithTitle:_(@"Search...")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Tags...") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
 

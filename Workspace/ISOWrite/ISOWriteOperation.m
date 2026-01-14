@@ -295,7 +295,7 @@
     case ISOWriteStateUnmounting:
       return @"Unmounting partitions";
     case ISOWriteStateWriting:
-      return @"Writing ISO";
+      return @"Writing image";
     case ISOWriteStateVerifying:
       return @"Verifying";
     case ISOWriteStateCompleted:
@@ -911,7 +911,7 @@
     [_delegate isoWriteOperationDidStart:self];
   }
   
-  [_progressWindow setStatus:NSLocalizedString(@"Writing ISO to device...", @"")];
+  [_progressWindow setStatus:NSLocalizedString(@"Writing image to device...", @"")];
   [_progressWindow setSourcePath:_isoPath];
   [_progressWindow setDestinationPath:_devicePath];
   [_progressWindow setIndeterminate:NO];

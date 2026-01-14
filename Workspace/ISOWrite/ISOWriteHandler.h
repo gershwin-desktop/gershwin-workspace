@@ -62,6 +62,13 @@
 + (BOOL)canHandleISODrop:(NSString *)isoPath ontoNode:(FSNode *)targetNode;
 
 /**
+ * Return nil if the drop is valid and will be handled, otherwise an explanatory
+ * message describing why the ISO drop would be rejected. This is intended for
+ * diagnostics and more informative logging from callers such as UI drag code.
+ */
++ (NSString *)validationMessageForISODrop:(NSString *)isoPath ontoNode:(FSNode *)targetNode;
+
+/**
  * Handle an ISO drop by starting the confirmation and write flow.
  * This method runs asynchronously and will show the confirmation dialog.
  *

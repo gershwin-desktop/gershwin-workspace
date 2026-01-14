@@ -129,29 +129,37 @@ static NSMutableArray *activeOperations = nil;
 + (BOOL)canHandleISODrop:(NSString *)isoPath ontoNode:(FSNode *)targetNode
 {
   NSLog(@"ISOWriteHandler: Validating drop of %@ onto %@", [isoPath lastPathComponent], [targetNode path]);
-  
+
+  NSString *reason = [self validationMessageForISODrop:isoPath ontoNode:targetNode];
+  if (reason) {
+    NSLog(@"ISOWriteHandler: Rejected - %@", reason);
+    return NO;
+  }
+
+  NSLog(@"ISOWriteHandler: Validation passed - can handle this drop");
+  return YES;
+}
+
++ (NSString *)validationMessageForISODrop:(NSString *)isoPath ontoNode:(FSNode *)targetNode
+{
   /* Check if it's an ISO file */
   if (![self isISOFile:isoPath]) {
-    NSLog(@"ISOWriteHandler: Rejected - not an ISO file");
-    return NO;
+    return NSLocalizedString(@"Not an ISO or supported disk image file.", "");
   }
-  
+
   /* Check if target is a physical device mount point */
   if (![self isPhysicalDeviceNode:targetNode]) {
-    NSLog(@"ISOWriteHandler: Rejected - target is not a physical device mount point");
-    return NO;
+    return NSLocalizedString(@"Target is not a physical device mount point.", "");
   }
-  
+
   /* Check if we can validate the operation */
   NSString *error = [ISOWriteOperation validateISOPath:isoPath
                                          forMountPoint:[targetNode path]];
   if (error) {
-    NSLog(@"ISOWriteHandler: Cannot handle drop: %@", error);
-    return NO;
+    return error; /* return the validation error produced by ISOWriteOperation */
   }
-  
-  NSLog(@"ISOWriteHandler: Validation passed - can handle this drop");
-  return YES;
+
+  return nil; /* Valid */
 }
 
 + (BOOL)handleISODrop:(NSString *)isoPath ontoNode:(FSNode *)targetNode

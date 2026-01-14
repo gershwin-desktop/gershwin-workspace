@@ -39,6 +39,9 @@
 @interface ISOWriteHandler : NSObject
 + (BOOL)canHandleISODrop:(NSString *)path ontoNode:(FSNode *)node;
 + (BOOL)handleISODrop:(NSString *)path ontoNode:(FSNode *)node;
+/* Return nil if the drop is valid and will be handled, otherwise an explanatory
+   message describing why the ISO drop would be rejected. */
++ (NSString *)validationMessageForISODrop:(NSString *)path ontoNode:(FSNode *)node;
 @end
 
 #define BRANCH_SIZE 7
@@ -1557,22 +1560,31 @@ static NSImage *branchImage;
     {
       NSString *droppedPath = [sourcePaths objectAtIndex: 0];
       Class handlerClass = NSClassFromString(@"ISOWriteHandler");
-      
+
       NSLog(@"FSNIcon: Checking ISO drop: file=%@ onto mountpoint=%@", droppedPath, [node path]);
-      
-      if (handlerClass && 
-          [handlerClass respondsToSelector: @selector(canHandleISODrop:ontoNode:)] &&
-          [handlerClass canHandleISODrop: droppedPath ontoNode: node])
-        {
-          /* ISO write handler can deal with this - allow the drag */
+
+      if (!handlerClass) {
+        NSLog(@"FSNIcon: ISO handler class not available");
+      } else if ([handlerClass respondsToSelector:@selector(validationMessageForISODrop:ontoNode:)]) {
+        NSString *diag = [handlerClass validationMessageForISODrop:droppedPath ontoNode:node];
+        if (diag == nil) {
           NSLog(@"FSNIcon: ISO handler accepted drag - allowing drop");
           isDragTarget = YES;
           return NSDragOperationCopy;
+        } else {
+          NSLog(@"FSNIcon: ISO handler rejected drop: %@", diag);
         }
-      else
-        {
-          NSLog(@"FSNIcon: ISO handler rejected or unavailable");
+      } else if ([handlerClass respondsToSelector: @selector(canHandleISODrop:ontoNode:)]) {
+        if ([handlerClass canHandleISODrop: droppedPath ontoNode: node]) {
+          NSLog(@"FSNIcon: ISO handler accepted drag - allowing drop");
+          isDragTarget = YES;
+          return NSDragOperationCopy;
+        } else {
+          NSLog(@"FSNIcon: ISO handler rejected drop (no diagnostic available)");
         }
+      } else {
+        NSLog(@"FSNIcon: ISO handler present but missing required selectors");
+      }
     }
 
   if (selection || isLocked || ([node isDirectory] == NO)

@@ -64,7 +64,7 @@
                                           backing:NSBackingStoreBuffered
                                             defer:NO];
   
-  [_window setTitle:NSLocalizedString(@"Writing ISO", @"")];
+  [_window setTitle:NSLocalizedString(@"Writing image", @"")];
   [_window setReleasedWhenClosed:NO];
   [_window setLevel:NSFloatingWindowLevel];
   

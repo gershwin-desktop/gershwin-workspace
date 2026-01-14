@@ -138,6 +138,11 @@ Network/SFTPMount.m \
 AVFSMount.m \
 VolumeManager.m \
 GWUnmountHelper.m \
+ISOWrite/ISOWriteHandler.m \
+ISOWrite/ISOWriteOperation.m \
+ISOWrite/BlockDeviceInfo.m \
+ISOWrite/ISOWriteConfirmation.m \
+ISOWrite/ISOWriteProgressWindow.m \
 
 # Conditionally add DBusConnection.m and FileManagerDBusInterface.m if DBus is available
 ifeq ($(with_dbus), yes)

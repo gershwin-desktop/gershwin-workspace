@@ -108,7 +108,7 @@ int main(int argc, const char *argv[]) {
   unsigned long long last_report = 0;
   ssize_t bytes_read;
   
-  fprintf(stderr, "INFO: Writing ISO to device...\n");
+  fprintf(stderr, "INFO: Writing image to device...\n");
   fprintf(stderr, "INFO: ISO size: %lld bytes\n", (long long)iso_stat.st_size);
   
   while ((bytes_read = read(iso_fd, buffer, BUFFER_SIZE)) > 0) {
