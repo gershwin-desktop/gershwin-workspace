@@ -9,7 +9,8 @@ SUBPROJECTS = \
         ddbd \
         wopen \
         uitest \
-        isowrite-helper 
+        isowrite-helper \
+        appimage-icon-test
 
 -include GNUmakefile.preamble
 

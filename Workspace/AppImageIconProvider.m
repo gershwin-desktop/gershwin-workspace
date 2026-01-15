@@ -1,4 +1,6 @@
 /*
+ * AppImageIconProvider.m
+ *
  * Copyright (c) 2026 Simon Peter
  *
  * SPDX-License-Identifier: BSD-2-Clause
@@ -6,6 +8,7 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <objc/runtime.h>
 #import <fcntl.h>
 #import <unistd.h>
 #import <sys/stat.h>
@@ -25,9 +28,9 @@
 #import <sqfs/data_reader.h>
 #import <sqfs/block.h>
 
-#import "AppImageThumbnailer.h"
+#import "FSNodeRep.h"
 
-#define APPIMAGE_THUMBNAILER_LOG_PREFIX @"AppImageThumbnailer"
+#define APPIMAGE_ICON_LOG_PREFIX @"AppImageIconProvider"
 
 #define APPIMAGE_EI_NIDENT 16
 #define APPIMAGE_ELFCLASS32 1
@@ -59,7 +62,7 @@ static int AppImageSqfsFileReadAt(sqfs_file_t *file,
   sqfs_u64 end = offset + size;
 
   if (offset >= self->physical_size) {
-    NSLog(@"%@: read out of bounds: offset=%llu size=%zu limit=%llu", APPIMAGE_THUMBNAILER_LOG_PREFIX,
+    NSLog(@"%@: read out of bounds: offset=%llu size=%zu limit=%llu", APPIMAGE_ICON_LOG_PREFIX,
           (unsigned long long)offset, size, (unsigned long long)self->physical_size);
     return SQFS_ERROR_OUT_OF_BOUNDS;
   }
@@ -330,24 +333,33 @@ static off_t AppImageElfFileSize(const char *path)
     uint32_t e_shoff = AppImageElf32ToHost(ehdr32.e_shoff, elfData);
     uint16_t e_shentsize = AppImageElf16ToHost(ehdr32.e_shentsize, elfData);
     uint16_t e_shnum = AppImageElf16ToHost(ehdr32.e_shnum, elfData);
-    if (e_shnum == 0 || e_shentsize == 0) {
+
+    if (e_shoff == 0 || e_shentsize == 0 || e_shnum == 0) {
       fclose(fd);
       return -1;
     }
 
-    off_t last_shdr_offset = (off_t)e_shoff + (off_t)e_shentsize * (off_t)(e_shnum - 1);
-    fseeko(fd, last_shdr_offset, SEEK_SET);
-    rd = fread(&shdr32, 1, sizeof(shdr32), fd);
-    if (rd != sizeof(shdr32)) {
+    sht_end = (off_t)e_shoff + ((off_t)e_shentsize * (off_t)e_shnum);
+
+    if (fseeko(fd, e_shoff, SEEK_SET) != 0) {
       fclose(fd);
       return -1;
     }
 
-    sht_end = (off_t)e_shoff + (off_t)e_shentsize * (off_t)e_shnum;
-    last_section_end = (off_t)AppImageElf32ToHost(shdr32.sh_offset, elfData)
-                       + (off_t)AppImageElf32ToHost(shdr32.sh_size, elfData);
+    last_section_end = 0;
+    for (uint16_t i = 0; i < e_shnum; i++) {
+      rd = fread(&shdr32, 1, sizeof(shdr32), fd);
+      if (rd != sizeof(shdr32)) {
+        fclose(fd);
+        return -1;
+      }
+
+      last_section_end = (off_t)AppImageElf32ToHost(shdr32.sh_offset, elfData)
+                         + (off_t)AppImageElf32ToHost(shdr32.sh_size, elfData);
+    }
+
     fclose(fd);
-    return (sht_end > last_section_end) ? sht_end : last_section_end;
+    return (last_section_end > sht_end) ? last_section_end : sht_end;
   }
 
   if (elfClass == APPIMAGE_ELFCLASS64) {
@@ -366,24 +378,33 @@ static off_t AppImageElfFileSize(const char *path)
     uint64_t e_shoff = AppImageElf64ToHost(ehdr64.e_shoff, elfData);
     uint16_t e_shentsize = AppImageElf16ToHost(ehdr64.e_shentsize, elfData);
     uint16_t e_shnum = AppImageElf16ToHost(ehdr64.e_shnum, elfData);
-    if (e_shnum == 0 || e_shentsize == 0) {
+
+    if (e_shoff == 0 || e_shentsize == 0 || e_shnum == 0) {
       fclose(fd);
       return -1;
     }
 
-    off_t last_shdr_offset = (off_t)e_shoff + (off_t)e_shentsize * (off_t)(e_shnum - 1);
-    fseeko(fd, last_shdr_offset, SEEK_SET);
-    rd = fread(&shdr64, 1, sizeof(shdr64), fd);
-    if (rd != sizeof(shdr64)) {
+    sht_end = (off_t)e_shoff + ((off_t)e_shentsize * (off_t)e_shnum);
+
+    if (fseeko(fd, (off_t)e_shoff, SEEK_SET) != 0) {
       fclose(fd);
       return -1;
     }
 
-    sht_end = (off_t)e_shoff + (off_t)e_shentsize * (off_t)e_shnum;
-    last_section_end = (off_t)AppImageElf64ToHost(shdr64.sh_offset, elfData)
-                       + (off_t)AppImageElf64ToHost(shdr64.sh_size, elfData);
+    last_section_end = 0;
+    for (uint16_t i = 0; i < e_shnum; i++) {
+      rd = fread(&shdr64, 1, sizeof(shdr64), fd);
+      if (rd != sizeof(shdr64)) {
+        fclose(fd);
+        return -1;
+      }
+
+      last_section_end = (off_t)AppImageElf64ToHost(shdr64.sh_offset, elfData)
+                         + (off_t)AppImageElf64ToHost(shdr64.sh_size, elfData);
+    }
+
     fclose(fd);
-    return (sht_end > last_section_end) ? sht_end : last_section_end;
+    return (last_section_end > sht_end) ? last_section_end : sht_end;
   }
 
   fclose(fd);
@@ -393,17 +414,9 @@ static off_t AppImageElfFileSize(const char *path)
 static off_t AppImageFindSquashfsOffsetViaElfSize(NSString *path)
 {
   struct stat st;
-  int fd = open([path fileSystemRepresentation], O_RDONLY);
-  if (fd < 0) {
-    return 0;
-  }
-  if (fstat(fd, &st) != 0) {
-    close(fd);
-    return 0;
-  }
-  close(fd);
-
+  int fd;
   off_t elfSize = AppImageElfFileSize([path fileSystemRepresentation]);
+
   if (elfSize <= 0) {
     return 0;
   }
@@ -413,8 +426,13 @@ static off_t AppImageFindSquashfsOffsetViaElfSize(NSString *path)
     return 0;
   }
 
+  if (fstat(fd, &st) != 0) {
+    close(fd);
+    return 0;
+  }
+
   if (AppImageValidateSquashfsOffset(fd, elfSize, (off_t)st.st_size)) {
-    NSLog(@"%@: found squashfs offset via ELF size at %lld", APPIMAGE_THUMBNAILER_LOG_PREFIX, (long long)elfSize);
+    NSLog(@"%@: found squashfs offset via ELF size at %lld", APPIMAGE_ICON_LOG_PREFIX, (long long)elfSize);
     close(fd);
     return elfSize;
   }
@@ -499,92 +517,84 @@ static BOOL AppImageSuperblockLooksValid(const unsigned char *buf,
 
 static NSString *AppImageCopySquashfsToTemp(NSString *appImagePath,
                                             off_t offset,
-                                            sqfs_u64 copySize)
+                                            sqfs_u64 size)
 {
-  if (copySize == 0) {
-    return nil;
-  }
-
   NSString *tempDir = NSTemporaryDirectory();
-  if (tempDir == nil) {
-    tempDir = @"/tmp";
-  }
-
   NSString *templatePath = [tempDir stringByAppendingPathComponent: @"appimage-sqfs-XXXXXX"];
-  char *tmpl = strdup([templatePath fileSystemRepresentation]);
-  if (tmpl == NULL) {
+  const char *tmpl = [templatePath fileSystemRepresentation];
+  char *tmpPath = strdup(tmpl);
+  int outfd = -1;
+  int infd = -1;
+  NSString *result = nil;
+
+  if (tmpPath == NULL) {
     return nil;
   }
 
-  int outfd = mkstemp(tmpl);
+  outfd = mkstemp(tmpPath);
   if (outfd < 0) {
-    free(tmpl);
+    free(tmpPath);
     return nil;
   }
 
-  int infd = open([appImagePath fileSystemRepresentation], O_RDONLY);
+  infd = open([appImagePath fileSystemRepresentation], O_RDONLY);
   if (infd < 0) {
     close(outfd);
-    unlink(tmpl);
-    free(tmpl);
+    unlink(tmpPath);
+    free(tmpPath);
     return nil;
   }
 
-  const size_t bufferSize = 1024 * 1024;
-  unsigned char *buffer = malloc(bufferSize);
-  if (buffer == NULL) {
+  if (lseek(infd, offset, SEEK_SET) < 0) {
     close(infd);
     close(outfd);
-    unlink(tmpl);
-    free(tmpl);
+    unlink(tmpPath);
+    free(tmpPath);
     return nil;
   }
 
-  sqfs_u64 remaining = copySize;
-  off_t inOffset = offset;
-  BOOL ok = YES;
-
+  sqfs_u64 remaining = size;
+  unsigned char buffer[8192];
   while (remaining > 0) {
-    size_t chunk = (remaining > bufferSize) ? bufferSize : (size_t)remaining;
-    ssize_t rd = pread(infd, buffer, chunk, inOffset);
-    if (rd != (ssize_t)chunk) {
-      ok = NO;
+    size_t toRead = (remaining > sizeof(buffer)) ? sizeof(buffer) : (size_t)remaining;
+    ssize_t rd = read(infd, buffer, toRead);
+    if (rd <= 0) {
       break;
     }
-    ssize_t wr = write(outfd, buffer, chunk);
-    if (wr != (ssize_t)chunk) {
-      ok = NO;
+    ssize_t wr = write(outfd, buffer, (size_t)rd);
+    if (wr != rd) {
       break;
     }
-    inOffset += chunk;
-    remaining -= chunk;
+    remaining -= (sqfs_u64)rd;
   }
 
-  free(buffer);
   close(infd);
   close(outfd);
 
-  if (!ok) {
-    unlink(tmpl);
-    free(tmpl);
+  if (remaining != 0) {
+    unlink(tmpPath);
+    free(tmpPath);
     return nil;
   }
 
-  NSString *result = [NSString stringWithUTF8String: tmpl];
-  free(tmpl);
+  result = [NSString stringWithUTF8String: tmpPath];
+  free(tmpPath);
   return result;
 }
 
 static BOOL AppImageValidateSquashfsOffset(int fd, off_t offset, off_t fileSize)
 {
   unsigned char buffer[sizeof(sqfs_super_t)];
-  ssize_t rd;
 
   if (offset < 0 || offset + (off_t)sizeof(buffer) > fileSize) {
     return NO;
   }
 
-  rd = pread(fd, buffer, sizeof(buffer), offset);
+  if (lseek(fd, offset, SEEK_SET) < 0) {
+    return NO;
+  }
+
+  ssize_t rd = read(fd, buffer, sizeof(buffer));
   if (rd != (ssize_t)sizeof(buffer)) {
     return NO;
   }
@@ -594,64 +604,38 @@ static BOOL AppImageValidateSquashfsOffset(int fd, off_t offset, off_t fileSize)
 
 static off_t AppImageFindSquashfsOffsetByScan(NSString *path)
 {
-  int fd = open([path fileSystemRepresentation], O_RDONLY);
-  off_t offset = 0;
-  const size_t chunkSize = 1024 * 1024;
-  unsigned char *buffer = NULL;
-  ssize_t bytesRead;
-  off_t fileOffset = 0;
-  size_t prevLen = 0;
   struct stat st;
-  off_t fileSize = 0;
-
+  int fd = open([path fileSystemRepresentation], O_RDONLY);
   if (fd < 0) {
     return 0;
   }
 
-  if (fstat(fd, &st) == 0) {
-    fileSize = (off_t)st.st_size;
-  }
-
-  buffer = malloc(chunkSize + 3);
-  if (buffer == NULL) {
+  if (fstat(fd, &st) != 0) {
     close(fd);
     return 0;
   }
 
-  while ((bytesRead = read(fd, buffer + prevLen, chunkSize)) > 0) {
-    size_t total = prevLen + (size_t)bytesRead;
-    size_t i;
-    off_t baseOffset = fileOffset - (off_t)prevLen;
+  off_t fileSize = (off_t)st.st_size;
+  const off_t step = 4096;
+  unsigned char buffer[sizeof(sqfs_super_t)];
+  off_t offset = 0;
 
-    for (i = 0; i + 4 <= total; i++) {
-      if (buffer[i] == 'h' && buffer[i + 1] == 's' &&
-          buffer[i + 2] == 'q' && buffer[i + 3] == 's') {
-        off_t candidate = baseOffset + (off_t)i;
-        if (fileSize > 0 && AppImageValidateSquashfsOffset(fd, candidate, fileSize)) {
-          offset = candidate;
-          goto done;
-        }
-      }
+  for (off_t candidate = 0; candidate + (off_t)sizeof(buffer) <= fileSize; candidate += step) {
+    if (lseek(fd, candidate, SEEK_SET) < 0) {
+      break;
     }
-
-    fileOffset += bytesRead;
-    if (total >= 3) {
-      prevLen = 3;
-      memmove(buffer, buffer + total - prevLen, prevLen);
-    } else {
-      prevLen = total;
-      memmove(buffer, buffer, prevLen);
+    ssize_t rd = read(fd, buffer, sizeof(buffer));
+    if (rd != (ssize_t)sizeof(buffer)) {
+      break;
+    }
+    if (AppImageSuperblockLooksValid(buffer, sizeof(buffer), fileSize, candidate)) {
+      offset = candidate;
+      NSLog(@"%@: found squashfs magic by scan at %lld", APPIMAGE_ICON_LOG_PREFIX, (long long)offset);
+      break;
     }
   }
 
-done:
-  free(buffer);
   close(fd);
-
-  if (offset > 0) {
-    NSLog(@"%@: found squashfs magic by scan at %lld", APPIMAGE_THUMBNAILER_LOG_PREFIX, (long long)offset);
-  }
-
   return offset;
 }
 
@@ -680,19 +664,19 @@ static NSData *AppImageReadFileDataFromInode(sqfs_data_reader_t *data_reader,
   }
 
   if (inode->base.type == SQFS_INODE_FILE) {
-    NSLog(@"%@: inode file: size=%u fragment_index=%u", APPIMAGE_THUMBNAILER_LOG_PREFIX,
+    NSLog(@"%@: inode file: size=%u fragment_index=%u", APPIMAGE_ICON_LOG_PREFIX,
           inode->data.file.file_size, inode->data.file.fragment_index);
-    if (inode->data.file.fragment_index != 0xFFFFFFFF && !fragmentTableReady) {
-      NSLog(@"%@: skipping fragment-backed file without fragment table", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+    if (inode->data.file.fragment_index != 0xffffffff && !fragmentTableReady) {
+      NSLog(@"%@: skipping fragment-backed file without fragment table", APPIMAGE_ICON_LOG_PREFIX);
       return nil;
     }
     size = inode->data.file.file_size;
   } else if (inode->base.type == SQFS_INODE_EXT_FILE) {
-    NSLog(@"%@: inode ext file: size=%llu fragment_index=%u", APPIMAGE_THUMBNAILER_LOG_PREFIX,
+    NSLog(@"%@: inode ext file: size=%llu fragment_index=%u", APPIMAGE_ICON_LOG_PREFIX,
           (unsigned long long)inode->data.file_ext.file_size,
           inode->data.file_ext.fragment_idx);
-    if (inode->data.file_ext.fragment_idx != 0xFFFFFFFF && !fragmentTableReady) {
-      NSLog(@"%@: skipping fragment-backed file without fragment table", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+    if (inode->data.file_ext.fragment_idx != 0xffffffff && !fragmentTableReady) {
+      NSLog(@"%@: skipping fragment-backed file without fragment table", APPIMAGE_ICON_LOG_PREFIX);
       return nil;
     }
     size = inode->data.file_ext.file_size;
@@ -712,6 +696,7 @@ static NSData *AppImageReadFileDataFromInode(sqfs_data_reader_t *data_reader,
                                                        NULL,
                                                        [targetPath UTF8String],
                                                        &resolved) == 0) {
+          NSLog(@"%@: resolving symlink to %@", APPIMAGE_ICON_LOG_PREFIX, targetPath);
           NSData *resolvedData = AppImageReadFileDataFromInode(data_reader,
                                                                dir_reader,
                                                                resolved,
@@ -755,15 +740,15 @@ static BOOL AppImageInodeNeedsFragmentTable(const sqfs_inode_generic_t *inode)
   if (inode == NULL) {
     return NO;
   }
+
   if (inode->base.type == SQFS_INODE_FILE) {
-    return inode->data.file.fragment_index != 0xFFFFFFFF;
+    return inode->data.file.fragment_index != 0xffffffff;
   }
   if (inode->base.type == SQFS_INODE_EXT_FILE) {
-    return inode->data.file_ext.fragment_idx != 0xFFFFFFFF;
+    return inode->data.file_ext.fragment_idx != 0xffffffff;
   }
   return NO;
 }
-
 
 static uint32_t AppImagePngReadBE32(const unsigned char *ptr)
 {
@@ -773,50 +758,39 @@ static uint32_t AppImagePngReadBE32(const unsigned char *ptr)
 
 static BOOL AppImagePngLooksValid(NSData *data)
 {
-  const unsigned char *bytes = (const unsigned char *)[data bytes];
-  size_t len = [data length];
-  size_t offset = 8;
-  BOOL sawIHDR = NO;
-
-  if (len < 8) {
+  if (data == nil || [data length] < 24) {
     return NO;
   }
 
-  while (offset + 12 <= len) {
-    uint32_t chunkLen = AppImagePngReadBE32(bytes + offset);
-    const unsigned char *type = bytes + offset + 4;
-    size_t chunkDataOffset = offset + 8;
-    size_t chunkEnd = chunkDataOffset + (size_t)chunkLen + 4;
+  const unsigned char *bytes = [data bytes];
+  if (memcmp(bytes, "\x89PNG\r\n\x1a\n", 8) != 0) {
+    return NO;
+  }
 
-    if (chunkEnd < chunkDataOffset || chunkEnd > len) {
+  size_t offset = 8;
+  while (offset + 8 <= [data length]) {
+    uint32_t chunkLen = AppImagePngReadBE32(bytes + offset);
+    if (offset + 8 + chunkLen > [data length]) {
       return NO;
     }
 
-    if (memcmp(type, "IHDR", 4) == 0) {
-      if (chunkLen != 13 || chunkDataOffset + 13 > len) {
+    if (memcmp(bytes + offset + 4, "IHDR", 4) == 0) {
+      if (chunkLen < 8) {
         return NO;
       }
-      uint32_t width = AppImagePngReadBE32(bytes + chunkDataOffset);
-      uint32_t height = AppImagePngReadBE32(bytes + chunkDataOffset + 4);
+      uint32_t width = AppImagePngReadBE32(bytes + offset + 8);
+      uint32_t height = AppImagePngReadBE32(bytes + offset + 12);
       if (width == 0 || height == 0) {
-        return NO;
-      }
-      sawIHDR = YES;
-    }
-
-    if (memcmp(type, "IEND", 4) == 0) {
-      if (!sawIHDR || chunkLen != 0) {
         return NO;
       }
       return YES;
     }
 
-    offset = chunkEnd;
+    offset += 12 + chunkLen;
   }
 
   return NO;
 }
-
 
 static BOOL AppImageDataIsUsableImage(NSData *data)
 {
@@ -826,16 +800,16 @@ static BOOL AppImageDataIsUsableImage(NSData *data)
 
   const unsigned char *bytes = [data bytes];
   if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
-    return AppImagePngLooksValid(data); /* PNG */
+    return AppImagePngLooksValid(data);
   }
 
   if (bytes[0] == 'i' && bytes[1] == 'c' && bytes[2] == 'n' && bytes[3] == 's') {
-    return YES; /* ICNS */
+    return YES;
   }
 
   if ((bytes[0] == 'I' && bytes[1] == 'I' && bytes[2] == 0x2A) ||
       (bytes[0] == 'M' && bytes[1] == 'M' && bytes[3] == 0x2A)) {
-    return YES; /* TIFF */
+    return YES;
   }
 
   return NO;
@@ -847,42 +821,16 @@ static void AppImageLogMagic(NSData *data, NSString *label)
     return;
   }
   const unsigned char *bytes = [data bytes];
-  NSLog(@"%@: %@ magic: %02x %02x %02x %02x", APPIMAGE_THUMBNAILER_LOG_PREFIX,
+  NSLog(@"%@: %@ magic: %02x %02x %02x %02x", APPIMAGE_ICON_LOG_PREFIX,
         label,
         bytes[0], bytes[1], bytes[2], bytes[3]);
-}
-
-static NSString *AppImageExtensionForData(NSData *data)
-{
-  if (data == nil || [data length] < 4) {
-    return nil;
-  }
-
-  const unsigned char *bytes = [data bytes];
-  if (bytes[0] == 0x89 && bytes[1] == 0x50 && bytes[2] == 0x4E && bytes[3] == 0x47) {
-    return @"png";
-  }
-
-  if (bytes[0] == 'i' && bytes[1] == 'c' && bytes[2] == 'n' && bytes[3] == 's') {
-    return @"icns";
-  }
-
-  if ((bytes[0] == 'I' && bytes[1] == 'I' && bytes[2] == 0x2A) ||
-      (bytes[0] == 'M' && bytes[1] == 'M' && bytes[3] == 0x2A)) {
-    return @"tiff";
-  }
-
-  return nil;
 }
 
 
 static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
 {
-  int fd = -1;
-  struct stat st;
   AppImageSqfsFile *fallbackFile = NULL;
-  sqfs_file_t *file = NULL;
-  NSString *tempSqfsPath = nil;
+  int fd = -1;
   sqfs_super_t super;
   sqfs_compressor_config_t meta_cfg;
   sqfs_compressor_config_t data_cfg;
@@ -891,12 +839,16 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
   sqfs_dir_reader_t *dir_reader = NULL;
   sqfs_data_reader_t *data_reader = NULL;
   sqfs_inode_generic_t *inode = NULL;
+  sqfs_file_t *file = NULL;
   NSData *iconData = nil;
+  NSString *tempSqfsPath = nil;
   BOOL fragmentTableReady = NO;
+  struct stat st;
+  sqfs_u64 copySize = 0;
 
   fd = open([appImagePath fileSystemRepresentation], O_RDONLY);
   if (fd < 0) {
-    NSLog(@"%@: failed to open %@", APPIMAGE_THUMBNAILER_LOG_PREFIX, appImagePath);
+    NSLog(@"%@: failed to open %@", APPIMAGE_ICON_LOG_PREFIX, appImagePath);
     return nil;
   }
 
@@ -910,42 +862,38 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
     return nil;
   }
 
-  sqfs_u64 copySize = (sqfs_u64)(st.st_size - offset);
+  copySize = (sqfs_u64)(st.st_size - offset);
   tempSqfsPath = AppImageCopySquashfsToTemp(appImagePath, offset, copySize);
-
-  if (tempSqfsPath != nil) {
-    file = sqfs_open_file([tempSqfsPath fileSystemRepresentation], SQFS_FILE_OPEN_READ_ONLY);
-    if (file == NULL) {
-      NSLog(@"%@: failed to open temp squashfs image", APPIMAGE_THUMBNAILER_LOG_PREFIX);
-    }
-  }
-
-  if (file == NULL) {
+  if (tempSqfsPath == nil) {
     fallbackFile = AppImageSqfsFileCreate(fd, offset, (sqfs_u64)(st.st_size - offset));
     if (fallbackFile == NULL) {
       close(fd);
-      if (tempSqfsPath) {
-        [[NSFileManager defaultManager] removeFileAtPath: tempSqfsPath handler: nil];
-      }
       return nil;
     }
     file = (sqfs_file_t *)fallbackFile;
+  } else {
+    file = sqfs_open_file([tempSqfsPath fileSystemRepresentation], SQFS_FILE_OPEN_READ_ONLY);
+    if (file == NULL) {
+      NSLog(@"%@: failed to open temp squashfs image", APPIMAGE_ICON_LOG_PREFIX);
+      close(fd);
+      return nil;
+    }
   }
 
   if (sqfs_super_read(&super, file) != 0) {
-    NSLog(@"%@: failed to read squashfs superblock", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+    NSLog(@"%@: failed to read squashfs superblock", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
-  NSLog(@"%@: superblock: compression=%u block=%u flags=0x%04x fragments=%u", APPIMAGE_THUMBNAILER_LOG_PREFIX,
+  NSLog(@"%@: superblock: compression=%u block=%u flags=0x%04x fragments=%u", APPIMAGE_ICON_LOG_PREFIX,
         (unsigned)super.compression_id, (unsigned)super.block_size,
         (unsigned)super.flags, (unsigned)super.fragment_entry_count);
-    NSLog(@"%@: superblock: bytes_used=%llu inode_table=%llu dir_table=%llu frag_table=%llu", APPIMAGE_THUMBNAILER_LOG_PREFIX,
-      (unsigned long long)super.bytes_used,
-      (unsigned long long)super.inode_table_start,
-      (unsigned long long)super.directory_table_start,
-      (unsigned long long)super.fragment_table_start);
-      NSLog(@"%@: superblock: root_inode_ref=%llu", APPIMAGE_THUMBNAILER_LOG_PREFIX,
+  NSLog(@"%@: superblock: bytes_used=%llu inode_table=%llu dir_table=%llu frag_table=%llu", APPIMAGE_ICON_LOG_PREFIX,
+        (unsigned long long)super.bytes_used,
+        (unsigned long long)super.inode_table_start,
+        (unsigned long long)super.directory_table_start,
+        (unsigned long long)super.fragment_table_start);
+  NSLog(@"%@: superblock: root_inode_ref=%llu", APPIMAGE_ICON_LOG_PREFIX,
         (unsigned long long)super.root_inode_ref);
 
   memset(&meta_cfg, 0, sizeof(meta_cfg));
@@ -953,13 +901,13 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
                                   (SQFS_COMPRESSOR)super.compression_id,
                                   SQFS_META_BLOCK_SIZE,
                                   0) != 0) {
-    NSLog(@"%@: failed to init meta compressor config", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+    NSLog(@"%@: failed to init meta compressor config", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
   meta_cfg.flags |= SQFS_COMP_FLAG_UNCOMPRESS;
   if (sqfs_compressor_create(&meta_cfg, &meta_compressor) != 0) {
-    NSLog(@"%@: failed to create meta compressor", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+    NSLog(@"%@: failed to create meta compressor", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
@@ -968,13 +916,13 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
                                   (SQFS_COMPRESSOR)super.compression_id,
                                   super.block_size,
                                   0) != 0) {
-    NSLog(@"%@: failed to init data compressor config", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+    NSLog(@"%@: failed to init data compressor config", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
   data_cfg.flags |= SQFS_COMP_FLAG_UNCOMPRESS;
   if (sqfs_compressor_create(&data_cfg, &data_compressor) != 0) {
-    NSLog(@"%@: failed to create data compressor", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+    NSLog(@"%@: failed to create data compressor", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
@@ -982,20 +930,20 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
     if (meta_compressor->read_options != NULL) {
       int opt_status = meta_compressor->read_options(meta_compressor, file);
       if (opt_status != 0) {
-        NSLog(@"%@: failed to read meta compressor options (continuing)", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+        NSLog(@"%@: failed to read meta compressor options (continuing)", APPIMAGE_ICON_LOG_PREFIX);
       }
     }
     if (data_compressor->read_options != NULL) {
       int opt_status = data_compressor->read_options(data_compressor, file);
       if (opt_status != 0) {
-        NSLog(@"%@: failed to read data compressor options (continuing)", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+        NSLog(@"%@: failed to read data compressor options (continuing)", APPIMAGE_ICON_LOG_PREFIX);
       }
     }
   }
 
   dir_reader = sqfs_dir_reader_create(&super, meta_compressor, file, 0);
   if (dir_reader == NULL) {
-    NSLog(@"%@: failed to create dir reader", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+    NSLog(@"%@: failed to create dir reader", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
@@ -1004,7 +952,7 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
                                         data_compressor,
                                         0);
   if (data_reader == NULL) {
-    NSLog(@"%@: failed to create data reader", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+    NSLog(@"%@: failed to create data reader", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
@@ -1012,7 +960,7 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
     int frag_status = sqfs_data_reader_load_fragment_table(data_reader, &super);
     if (frag_status != 0) {
       NSLog(@"%@: failed to load fragment table (err=%d); will skip fragment-backed files",
-            APPIMAGE_THUMBNAILER_LOG_PREFIX, frag_status);
+            APPIMAGE_ICON_LOG_PREFIX, frag_status);
     } else {
       fragmentTableReady = YES;
     }
@@ -1023,7 +971,7 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
       int frag_status = sqfs_data_reader_load_fragment_table(data_reader, &super);
       if (frag_status != 0) {
         NSLog(@"%@: failed to load fragment table (err=%d); skipping fragment-backed file",
-              APPIMAGE_THUMBNAILER_LOG_PREFIX, frag_status);
+              APPIMAGE_ICON_LOG_PREFIX, frag_status);
       } else {
         fragmentTableReady = YES;
       }
@@ -1034,10 +982,10 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
     if (iconData != nil) {
       AppImageLogMagic(iconData, @".DirIcon");
       if (AppImageDataIsUsableImage(iconData)) {
-        NSLog(@"%@: using .DirIcon from AppImage", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+        NSLog(@"%@: using .DirIcon from AppImage", APPIMAGE_ICON_LOG_PREFIX);
         goto cleanup;
       }
-      NSLog(@"%@: .DirIcon is not a supported image; falling back", APPIMAGE_THUMBNAILER_LOG_PREFIX);
+      NSLog(@"%@: .DirIcon is not a supported image; falling back", APPIMAGE_ICON_LOG_PREFIX);
       iconData = nil;
     }
   }
@@ -1071,84 +1019,190 @@ cleanup:
   return iconData;
 }
 
-@implementation AppImageThumbnailer
-
-- (void)dealloc
+static NSData *AppImageCopyIconData(NSString *path)
 {
-  [_lastExtension release];
-  [super dealloc];
-}
-
-- (BOOL)canProvideThumbnailForPath:(NSString *)path
-{
-  if (path == nil) {
-    return NO;
-  }
-
-  if (!AppImageHasType2Magic([path fileSystemRepresentation])) {
-    return NO;
-  }
-
-  return YES;
-}
-
-- (NSData *)makeThumbnailForPath:(NSString *)path
-{
-  CREATE_AUTORELEASE_POOL(arp);
   off_t offset = 0;
   NSData *iconData = nil;
-  NSString *extension = nil;
 
   if (!AppImageHasType2Magic([path fileSystemRepresentation])) {
-    RELEASE(arp);
     return nil;
   }
 
   offset = AppImageFindSquashfsOffsetViaElfSize(path);
-
   if (offset == 0) {
     offset = AppImageFindSquashfsOffsetByScan(path);
   }
 
   if (offset == 0) {
-    NSLog(@"%@: unable to locate squashfs offset in %@", APPIMAGE_THUMBNAILER_LOG_PREFIX, path);
-    RELEASE(arp);
+    NSLog(@"%@: unable to locate squashfs offset in %@", APPIMAGE_ICON_LOG_PREFIX, path);
     return nil;
   }
 
   iconData = AppImageExtractIconData(path, offset);
   if (iconData == nil) {
-    NSLog(@"%@: no icon extracted from %@", APPIMAGE_THUMBNAILER_LOG_PREFIX, path);
-    RELEASE(arp);
+    NSLog(@"%@: no icon extracted from %@", APPIMAGE_ICON_LOG_PREFIX, path);
     return nil;
   }
 
-  extension = AppImageExtensionForData(iconData);
-  if (extension == nil) {
-    NSLog(@"%@: .DirIcon is not a supported image format", APPIMAGE_THUMBNAILER_LOG_PREFIX);
-    RELEASE(arp);
+  if (!AppImageDataIsUsableImage(iconData)) {
+    NSLog(@"%@: extracted icon is not a supported image format", APPIMAGE_ICON_LOG_PREFIX);
     return nil;
   }
 
-  [_lastExtension release];
-  _lastExtension = [extension copy];
-
-  [iconData retain];
-  RELEASE(arp);
-  return [iconData autorelease];
+  return iconData;
 }
 
-- (NSString *)fileNameExtension
+static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 {
-  if (_lastExtension != nil) {
-    return _lastExtension;
+  NSString *lower = [path lowercaseString];
+  if ([lower hasSuffix: @".appimage"]) {
+    return YES;
   }
-  return @"png";
+  return NO;
 }
 
-- (NSString *)description
+@interface NSWorkspace (GWAppImageIconProvider)
++ (void)gw_installAppImageIconProvider;
+- (NSImage *)gw_appImage_iconForFile: (NSString *)fullPath;
+@end
+
+@interface FSNodeRep (GWAppImageIconProvider)
++ (void)gw_installAppImageFSNodeSwizzle;
+- (NSImage *)gw_appImage_iconOfSize:(int)size forNode:(FSNode *)node;
+@end
+
+@implementation FSNodeRep (GWAppImageIconProvider)
+
++ (void)gw_installAppImageFSNodeSwizzle
 {
-  return @"AppImage Thumbnailer";
+  static BOOL installed = NO;
+
+  if (installed) {
+    return;
+  }
+  installed = YES;
+
+  Class cls = NSClassFromString(@"FSNodeRep");
+  if (cls == Nil) {
+    NSLog(@"%@: FSNodeRep not available for swizzle", APPIMAGE_ICON_LOG_PREFIX);
+    return;
+  }
+
+  Method original = class_getInstanceMethod(cls, @selector(iconOfSize:forNode:));
+  Method swizzled = class_getInstanceMethod(cls, @selector(gw_appImage_iconOfSize:forNode:));
+
+  if (original && swizzled) {
+    method_exchangeImplementations(original, swizzled);
+    NSLog(@"%@: installed FSNodeRep iconOfSize swizzle", APPIMAGE_ICON_LOG_PREFIX);
+  } else {
+    NSLog(@"%@: failed to install FSNodeRep swizzle", APPIMAGE_ICON_LOG_PREFIX);
+  }
+}
+
+- (NSImage *)gw_appImage_iconOfSize:(int)size forNode:(FSNode *)node
+{
+  if (node != nil && [node isDirectory] == NO) {
+    NSString *nodepath = [node path];
+    NSString *realPath = [nodepath stringByResolvingSymlinksInPath];
+
+    if (AppImageHasType2Magic([realPath fileSystemRepresentation])) {
+      NSImage *icon = [[NSWorkspace sharedWorkspace] iconForFile: realPath];
+      if (icon != nil) {
+        if ([node isLink]) {
+          NSImage *linkIcon = [NSImage imageNamed:@"common_linkCursor"];
+          icon = [icon copy];
+          [icon lockFocus];
+          [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
+          [icon unlockFocus];
+          [icon autorelease];
+        }
+
+        NSSize icnsize = [icon size];
+        if ((icnsize.width > size) || (icnsize.height > size)) {
+          return [self resizedIcon: icon ofSize: size];
+        }
+        return icon;
+      }
+    }
+  }
+
+  return [self gw_appImage_iconOfSize: size forNode: node];
+}
+
+@end
+
+@implementation NSWorkspace (GWAppImageIconProvider)
+
++ (void)load
+{
+  [self gw_installAppImageIconProvider];
+  [FSNodeRep gw_installAppImageFSNodeSwizzle];
+}
+
++ (void)gw_installAppImageIconProvider
+{
+  static BOOL installed = NO;
+
+  if (installed) {
+    return;
+  }
+  installed = YES;
+
+  Method original = class_getInstanceMethod(self, @selector(iconForFile:));
+  Method swizzled = class_getInstanceMethod(self, @selector(gw_appImage_iconForFile:));
+
+  if (original && swizzled) {
+    method_exchangeImplementations(original, swizzled);
+    NSLog(@"%@: installed NSWorkspace iconForFile swizzle", APPIMAGE_ICON_LOG_PREFIX);
+  } else {
+    NSLog(@"%@: failed to install swizzle (methods missing)", APPIMAGE_ICON_LOG_PREFIX);
+  }
+}
+
+- (NSImage *)gw_appImage_iconForFile: (NSString *)fullPath
+{
+  if (fullPath != nil) {
+    NSString *resolvedPath = [fullPath stringByResolvingSymlinksInPath];
+    NSDictionary *attributes = [[NSFileManager defaultManager]
+      fileAttributesAtPath: resolvedPath traverseLink: NO];
+
+    if (attributes != nil) {
+      NSString *fileType = [attributes fileType];
+      NSString *probePath = resolvedPath;
+
+      if ([fileType isEqual: NSFileTypeSymbolicLink] == YES) {
+        NSString *targetPath = [resolvedPath stringByResolvingSymlinksInPath];
+        if (targetPath != nil && [targetPath isEqualToString: resolvedPath] == NO) {
+          NSLog(@"%@: following symlink %@ -> %@", APPIMAGE_ICON_LOG_PREFIX, resolvedPath, targetPath);
+          probePath = targetPath;
+        }
+      }
+
+      if ([fileType isEqual: NSFileTypeRegular] == YES
+          || [fileType isEqual: NSFileTypeSymbolicLink] == YES) {
+        if (AppImageHasType2Magic([probePath fileSystemRepresentation])) {
+          NSLog(@"%@: AppImage detected at %@", APPIMAGE_ICON_LOG_PREFIX, probePath);
+          NSData *iconData = AppImageCopyIconData(probePath);
+          if (iconData != nil) {
+            NSImage *image = [[[NSImage alloc] initWithData: iconData] autorelease];
+            if (image != nil) {
+              NSLog(@"%@: returning AppImage icon for %@", APPIMAGE_ICON_LOG_PREFIX, probePath);
+              return image;
+            }
+            NSLog(@"%@: icon data decoded but image was nil for %@", APPIMAGE_ICON_LOG_PREFIX, probePath);
+          }
+        } else if (GWAppImagePathLooksLikeAppImage(resolvedPath)) {
+          NSLog(@"%@: not detected as AppImage by magic: %@", APPIMAGE_ICON_LOG_PREFIX, resolvedPath);
+        }
+      } else if (GWAppImagePathLooksLikeAppImage(resolvedPath)) {
+        NSLog(@"%@: path is not a regular file: %@", APPIMAGE_ICON_LOG_PREFIX, resolvedPath);
+      }
+    } else if (GWAppImagePathLooksLikeAppImage(resolvedPath)) {
+      NSLog(@"%@: missing file attributes for %@", APPIMAGE_ICON_LOG_PREFIX, resolvedPath);
+    }
+  }
+
+  return [self gw_appImage_iconForFile: fullPath];
 }
 
 @end

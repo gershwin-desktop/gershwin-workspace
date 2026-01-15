@@ -6,7 +6,7 @@ include $(GNUSTEP_MAKEFILES)/common.make
 #
 # subprojects
 #
-SUBPROJECTS = ImageThumbnailer AppImageThumbnailer
+SUBPROJECTS = ImageThumbnailer
 
 -include GNUmakefile.preamble
 -include GNUmakefile.local

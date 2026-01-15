@@ -27,6 +27,8 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <fcntl.h>
+#import <unistd.h>
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
 
@@ -120,6 +122,36 @@ static unsigned char darkerLUT[256] = {
 
 
 @implementation FSNodeRep (Icons)
+
+static BOOL FSNodeRepHasAppImageMagic(NSString *path)
+{
+  unsigned char ident[16];
+  int fd = open([path fileSystemRepresentation], O_RDONLY);
+  if (fd < 0)
+    {
+      return NO;
+    }
+
+  ssize_t rd = read(fd, ident, sizeof(ident));
+  close(fd);
+
+  if (rd < (ssize_t)sizeof(ident))
+    {
+      return NO;
+    }
+
+  if (ident[0] != 0x7f || ident[1] != 'E' || ident[2] != 'L' || ident[3] != 'F')
+    {
+      return NO;
+    }
+
+  if (ident[8] == 'A' && ident[9] == 'I' && ident[10] == 0x02)
+    {
+      return YES;
+    }
+
+  return NO;
+}
 
 - (NSImage *)iconOfSize:(int)size 
                 forNode:(FSNode *)node
@@ -310,16 +342,30 @@ static unsigned char darkerLUT[256] = {
       if (icon == nil)
 	{
           NSString *linkKey;
-	  NSString *ext = [[realPath pathExtension] lowercaseString];
+          NSString *ext = [[realPath pathExtension] lowercaseString];
       
-	  if (ext && [ext length])
-	    {
-	      key = ext;
-	    }
-	  else
-	    {
-	      key = @"unknown";
-	    }
+    if (ext && [ext length])
+      {
+        if ([ext isEqualToString: @"appimage"] || FSNodeRepHasAppImageMagic(realPath))
+          {
+            key = realPath;
+          }
+        else
+          {
+            key = ext;
+          }
+      }
+    else
+      {
+        if (FSNodeRepHasAppImageMagic(realPath))
+          {
+            key = realPath;
+          }
+        else
+          {
+            key = @"unknown";
+          }
+      }
           linkKey = nil;
           if ([node isLink])
             {
