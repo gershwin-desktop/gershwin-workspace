@@ -6,7 +6,17 @@
 
 #import "BlockDeviceInfo.h"
 #import <sys/stat.h>
-#import <sys/sysmacros.h>
+#if defined(__has_include)
+# if __has_include(<sys/sysmacros.h>)
+#  import <sys/sysmacros.h>
+# else
+#  import <sys/types.h>
+#  import <sys/param.h>
+# endif
+#else
+# import <sys/types.h>
+# import <sys/param.h>
+#endif
 #import <sys/ioctl.h>
 #ifdef __linux__
 #import <linux/fs.h>
