@@ -17,7 +17,9 @@
 #import <sys/ioctl.h>
 #import <sys/select.h>
 #import <sys/time.h>
+#ifdef __linux__
 #import <linux/fs.h>
+#endif
 #import <fcntl.h>
 #ifndef O_DIRECT
 #define O_DIRECT 0

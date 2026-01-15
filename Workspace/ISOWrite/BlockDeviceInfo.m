@@ -8,7 +8,9 @@
 #import <sys/stat.h>
 #import <sys/sysmacros.h>
 #import <sys/ioctl.h>
+#ifdef __linux__
 #import <linux/fs.h>
+#endif
 #import <fcntl.h>
 #import <unistd.h>
 #import <errno.h>
