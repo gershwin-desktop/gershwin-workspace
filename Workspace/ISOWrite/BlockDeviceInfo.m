@@ -465,7 +465,7 @@
   }
 #else
   /* BSD: Would need to use gpart or fdisk to read partition table */
-  NSLog(@"BlockDeviceInfo: Partition table reading not yet implemented for BSD\");
+  NSLog(@"BlockDeviceInfo: Partition table reading not yet implemented for BSD");
 #endif
 }
 
