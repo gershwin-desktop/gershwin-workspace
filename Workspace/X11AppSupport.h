@@ -162,6 +162,24 @@
  */
 - (BOOL)restoreWindowsMatchingName:(NSString *)name;
 
+#pragma mark Window Icon Geometry
+
+/**
+ * Updates _NET_WM_ICON_GEOMETRY for all windows owned by a process.
+ * @param rect The icon rectangle in root window coordinates
+ * @param pid The process ID
+ * @return YES if at least one window was updated
+ */
+- (BOOL)setIconGeometry:(NSRect)rect forPID:(pid_t)pid;
+
+/**
+ * Updates _NET_WM_ICON_GEOMETRY for windows matching a name substring.
+ * @param rect The icon rectangle in root window coordinates
+ * @param name The substring to match
+ * @return YES if at least one window was updated
+ */
+- (BOOL)setIconGeometry:(NSRect)rect forName:(NSString *)name;
+
 #pragma mark Window State Queries
 
 /**

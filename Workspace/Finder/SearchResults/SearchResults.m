@@ -122,8 +122,7 @@ static NSString *lsfname = @"LiveSearch.lsf";
     [resultsView setAllowsMultipleSelection: YES];
     [resultsView setRowHeight: CELLS_HEIGHT];
     [resultsView setIntercellSpacing: NSZeroSize];
-    [resultsView setUsesAlternatingRowBackgroundColors: NO];
-    NSLog(@"SearchResults: Disabled alternating row colors");
+    [resultsView setUsesAlternatingRowBackgroundColors: YES];
     [resultsView sizeLastColumnToFit];
         
     nameColumn = [[NSTableColumn alloc] initWithIdentifier: @"name"];

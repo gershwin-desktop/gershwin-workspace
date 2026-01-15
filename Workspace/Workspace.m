@@ -293,9 +293,6 @@ NSString *_pendingSystemActionTitle = nil;
   
   menuItem = [menu addItemWithTitle:_(@"Find") action:@selector(showFinder:) keyEquivalent:@"f"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Search...") action:@selector(showFinder:) keyEquivalent:@"F"];
-  [[menu itemWithTitle:_(@"Search...")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
-  [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Tags...") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
 
@@ -1586,8 +1583,34 @@ NSString *_pendingSystemActionTitle = nil;
 	    {
 	      if ((type == NSDirectoryFileType) || (type == NSFilesystemFileType))
 		{
-		  if (newv)
-		    [self newViewerAtPath: apath];    
+      if (newv)
+        {
+          NSWindow *kwin = [NSApp keyWindow];
+          id nodeView = nil;
+
+          if (kwin && [vwrsManager hasViewerWithWindow: kwin])
+            {
+              nodeView = [[vwrsManager viewerWithWindow: kwin] nodeView];
+            }
+          else if (kwin && [dtopManager hasWindow: kwin])
+            {
+              nodeView = [dtopManager desktopView];
+            }
+
+          if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)])
+            {
+              id icon = [nodeView repOfSubnodePath: apath];
+              if (icon && [icon respondsToSelector: @selector(window)])
+                {
+                  NSRect iconBounds = [icon bounds];
+                  NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
+                  NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
+                  [vwrsManager setPendingOpenAnimationRect: rectOnScreen];
+                }
+            }
+
+          [self newViewerAtPath: apath];
+        }
 		}
 	      else if ((type == NSPlainFileType) || ([type isEqual: NSShellCommandFileType]))
 		{

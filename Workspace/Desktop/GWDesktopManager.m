@@ -804,6 +804,15 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
             [ws launchApplication: [node path]];
           }
         } else {
+          // Set animation rect from the desktop icon
+          id icon = [desktopView repOfSubnodePath: [node path]];
+          if (icon && [icon respondsToSelector: @selector(window)])
+            {
+              NSRect iconBounds = [icon bounds];
+              NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
+              NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
+              [[gworkspace viewersManager] setPendingOpenAnimationRect: rectOnScreen];
+            }
           [gworkspace newViewerAtPath: [node path]];
         } 
       } else if ([node isPlain]) {        
@@ -841,6 +850,15 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
     FSNode *node = [selnodes objectAtIndex: i];
         
     if ([node isDirectory]) {
+      // Set animation rect from the desktop icon
+      id icon = [desktopView repOfSubnodePath: [node path]];
+      if (icon && [icon respondsToSelector: @selector(window)])
+        {
+          NSRect iconBounds = [icon bounds];
+          NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
+          NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
+          [[gworkspace viewersManager] setPendingOpenAnimationRect: rectOnScreen];
+        }
       [gworkspace newViewerAtPath: [node path]];
     } else if ([node isPlain]) {        
       [gworkspace openFile: [node path]];

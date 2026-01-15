@@ -32,6 +32,7 @@
 #import "GWDesktopView.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
+#import "X11AppSupport.h"
 
 #define MAX_ICN_SIZE 48
 #define MIN_ICN_SIZE 16
@@ -409,6 +410,7 @@
     
     if (icon && pid > 0) {
       [icon setAppPID: pid];
+      [self updateIconGeometryForDockIcon: icon];
     }
   
     [self tile];
@@ -448,6 +450,7 @@
     if (icon) {
       if (pid > 0) {
         [icon setAppPID: pid];
+        [self updateIconGeometryForDockIcon: icon];
       }
       [icon setLaunched: YES];
     }
@@ -734,6 +737,53 @@
   [self setNeedsDisplay: YES];
   if (view) {
     [view setNeedsDisplayInRect: [self frame]];
+  }
+
+  [self updateIconGeometries];
+}
+
+- (NSRect)x11IconRectForDockIcon:(DockIcon *)icon
+{
+  if (!icon || ![icon window]) {
+    return NSZeroRect;
+  }
+
+  NSRect iconBounds = [icon bounds];
+  NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
+  NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
+  NSScreen *screen = [[icon window] screen] ?: [NSScreen mainScreen];
+  CGFloat screenHeight = [screen frame].size.height;
+
+  NSRect x11Rect = rectOnScreen;
+  x11Rect.origin.y = screenHeight - (rectOnScreen.origin.y + rectOnScreen.size.height);
+
+  return x11Rect;
+}
+
+- (void)updateIconGeometryForDockIcon:(DockIcon *)icon
+{
+  if (!icon) return;
+
+  pid_t pid = [icon appPID];
+  NSRect x11Rect = [self x11IconRectForDockIcon: icon];
+  if (NSEqualRects(x11Rect, NSZeroRect)) return;
+
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  if (pid > 0) {
+    [wm setIconGeometry: x11Rect forPID: pid];
+  } else if ([icon appName] && [[icon appName] length] > 0) {
+    [wm setIconGeometry: x11Rect forName: [icon appName]];
+  }
+}
+
+- (void)updateIconGeometries
+{
+  NSUInteger i;
+  for (i = 0; i < [icons count]; i++) {
+    DockIcon *icon = [icons objectAtIndex: i];
+    if ([icon isSpecialIcon]) continue;
+    if ([icon appPID] <= 0) continue;
+    [self updateIconGeometryForDockIcon: icon];
   }
 }
 

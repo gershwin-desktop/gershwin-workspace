@@ -382,16 +382,21 @@
         return;
       }
       
-      if (launched == NO) {
-        /* Launch the app if not already launched. Use the full path for proper resolution. */
-        [ws launchApplication: nodePath];
-      } else if (apphidden) {
-        /* App is running but hidden; unhide and activate it */
-        [[Workspace gworkspace] unhideAppWithPath: nodePath andName: appName];
-      } else {
-        /* App is already running and visible; just activate/raise it.
-         * Use PID if available for more robust window matching. */
-        [[Workspace gworkspace] activateAppWithPath: nodePath andName: appName pid: appPID];
+      if ([node isApplication]) {
+        if (launched == NO) {
+          /* Launch the app if not already launched. Use the full path for proper resolution. */
+          [ws launchApplication: nodePath];
+        } else if (apphidden) {
+          /* App is running but hidden; unhide and activate it */
+          [[Workspace gworkspace] unhideAppWithPath: nodePath andName: appName];
+        } else {
+          /* App is already running and visible; just activate/raise it.
+           * Use PID if available for more robust window matching. */
+          [[Workspace gworkspace] activateAppWithPath: nodePath andName: appName pid: appPID];
+        }
+      } else if ([node isDirectory]) {
+        /* This is a folder icon in the Dock. Open it explicitly in a new viewer. */
+        [[Workspace gworkspace] newViewerAtPath: nodePath];
       }
     } else if (isWsIcon) {
       [[GWDesktopManager desktopManager] showRootViewer];
@@ -536,7 +541,51 @@
       } 
       
       RELEASE (arp);
+      return AUTORELEASE (menu);
+    } else if ([node isDirectory]) {
+      /* Folder context menu */
+      CREATE_AUTORELEASE_POOL(arp);
+      NSMenu *menu = [[NSMenu alloc] initWithTitle: [node name]];
+      NSMenuItem *item;
+      NSString *path = [node path];
 
+      item = [NSMenuItem new];
+      [item setTitle: NSLocalizedString(@"Open", @"")];
+      [item setTarget: [Workspace gworkspace]];
+      [item setAction: @selector(newViewerAtPath:)];
+      [item setRepresentedObject: path];
+      [menu addItem: item];
+      RELEASE (item);
+
+      item = [NSMenuItem new];
+      [item setTitle: NSLocalizedString(@"New Viewer", @"")];
+      [item setTarget: [Workspace gworkspace]];
+      [item setAction: @selector(newViewerAtPath:)];
+      [item setRepresentedObject: path];
+      [menu addItem: item];
+      RELEASE (item);
+
+      item = [NSMenuItem new];
+      [item setTitle: NSLocalizedString(@"Open in Terminal", @"")];
+      [item setTarget: [Workspace gworkspace]];
+      [item setAction: @selector(openTerminal:)];
+      [item setRepresentedObject: path];
+      [menu addItem: item];
+      RELEASE (item);
+
+      [menu addItem: [NSMenuItem separatorItem]];
+
+      if (docked) {
+        item = [NSMenuItem new];
+        [item setTarget: (Dock *)container];
+        [item setAction: @selector(iconMenuAction:)];
+        [item setTitle: NSLocalizedString(@"Remove from Dock", @"")];
+        [item setRepresentedObject: self];
+        [menu addItem: item];
+        RELEASE (item);
+      }
+
+      RELEASE (arp);
       return AUTORELEASE (menu);
     }
   }
@@ -680,7 +729,7 @@ x += 6; \
       NSString *path = [paths objectAtIndex: i];
       FSNode *nod = [FSNode nodeWithPath: path];
 
-      if (([nod isPlain] || ([nod isPackage] && ([nod isApplication] == NO))) == NO) {
+      if (([nod isPlain] || [nod isDirectory] || ([nod isPackage] && ([nod isApplication] == NO))) == NO) {
         return NO;
       }
     }

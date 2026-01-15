@@ -36,6 +36,10 @@
 static GWViewersManager *vwrsmanager = nil;
 
 @implementation GWViewersManager
+{
+  NSRect pendingOpenAnimationRect;
+  BOOL hasPendingOpenAnimationRect;
+}
 
 + (GWViewersManager *)viewersManager
 {
@@ -242,6 +246,18 @@ static GWViewersManager *vwrsmanager = nil;
 			     showType: stype
 			showSelection: showsel
 			      withKey: key]; 
+
+      if (hasPendingOpenAnimationRect)
+        {
+          NSRect endFrame = [win frame];
+          NSRect startFrame = pendingOpenAnimationRect;
+          hasPendingOpenAnimationRect = NO;
+
+          if (startFrame.size.width < 16) startFrame.size.width = 16;
+          if (startFrame.size.height < 16) startFrame.size.height = 16;
+          [win setFrame: startFrame display: NO];
+          [win setFrame: endFrame display: YES animate: YES];
+        }
       
       [viewers addObject: viewer];
       RELEASE (win);
@@ -255,6 +271,12 @@ static GWViewersManager *vwrsmanager = nil;
                     forObject: [[viewer win] contentView]];
        
   return viewer;
+}
+
+- (void)setPendingOpenAnimationRect:(NSRect)rect
+{
+  pendingOpenAnimationRect = rect;
+  hasPendingOpenAnimationRect = !NSEqualRects(rect, NSZeroRect);
 }
 
 - (NSArray *)viewersForBaseNode:(FSNode *)node

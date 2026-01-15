@@ -9,6 +9,8 @@
 #import "Workspace.h"
 #import <dbus/dbus.h>
 #import "../FSNode/FSNode.h"
+#import "FileViewer/GWViewersManager.h"
+#import "Desktop/GWDesktopManager.h"
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
@@ -281,6 +283,96 @@ typedef struct DBusConnection DBusConnectionStruct;
 - (void)openFolderOnMainThread:(NSString *)path
 {
     @try {
+        // Try to find the folder icon in the desktop, viewer, or Dock to animate from it
+        GWViewersManager *vwrsManager = [self.workspace viewersManager];
+        GWDesktopManager *dtopManager = [self.workspace desktopManager];
+        BOOL foundIcon = NO;
+        // Check if any viewer window has an icon for this path
+        NSArray *viewerWindows = [vwrsManager viewerWindows];
+        for (NSWindow *win in viewerWindows)
+          {
+            id viewer = [vwrsManager viewerWithWindow: win];
+            if (viewer)
+              {
+                id vnodeView = [viewer nodeView];
+                if (vnodeView && [vnodeView respondsToSelector: @selector(repOfSubnodePath:)])
+                  {
+                    id icon = [vnodeView repOfSubnodePath: path];
+                    if (icon && [icon respondsToSelector: @selector(window)])
+                      {
+                        NSRect iconBounds = [icon bounds];
+                        NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
+                        NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
+                        [vwrsManager setPendingOpenAnimationRect: rectOnScreen];
+                        foundIcon = YES;
+                        NSLog(@"FileManagerDBusInterface: Setting animation rect from viewer icon in window %@ at %@", 
+                              [win title], NSStringFromRect(rectOnScreen));
+                        break;
+                      }
+                  }
+              }
+          }
+        
+        // If not found in viewers, check the desktop
+        if (!foundIcon && [dtopManager desktopView])
+          {
+            id desktopView = [dtopManager desktopView];
+            if ([desktopView respondsToSelector: @selector(repOfSubnodePath:)])
+              {
+                id icon = [desktopView repOfSubnodePath: path];
+                if (icon && [icon respondsToSelector: @selector(window)])
+                  {
+                    NSRect iconBounds = [icon bounds];
+                    NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
+                    NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
+                    [vwrsManager setPendingOpenAnimationRect: rectOnScreen];
+                    foundIcon = YES;
+                    NSLog(@"FileManagerDBusInterface: Setting animation rect from desktop icon at %@", 
+                          NSStringFromRect(rectOnScreen));
+                  }
+              }
+          }
+        
+        // If we didn't find it in a viewer/desktop, check the Dock
+        if (!foundIcon)
+          {
+            // Try to get the Dock
+            id dock = [dtopManager valueForKey:@"dock"];
+            if (dock)
+              {
+                // Get the icons array from the dock
+                NSArray *dockIcons = [dock valueForKey:@"icons"];
+                if (dockIcons)
+                  {
+                    for (id dockIcon in dockIcons)
+                      {
+                        // Get the node from the dock icon
+                        id node = [dockIcon valueForKey:@"node"];
+                        if (node)
+                          {
+                            NSString *nodePath = [node path];
+                            if (nodePath && [nodePath isEqualToString:path])
+                              {
+                                // Found a matching dock icon!
+                                if ([dockIcon respondsToSelector:@selector(bounds)] &&
+                                    [dockIcon respondsToSelector:@selector(window)])
+                                  {
+                                    NSRect iconBounds = [dockIcon bounds];
+                                    NSRect rectInWindow = [dockIcon convertRect:iconBounds toView:nil];
+                                    NSRect rectOnScreen = [[dockIcon window] convertRectToScreen:rectInWindow];
+                                    [vwrsManager setPendingOpenAnimationRect: rectOnScreen];
+                                    foundIcon = YES;
+                                    NSLog(@"FileManagerDBusInterface: Setting animation rect from Dock icon at %@",
+                                          NSStringFromRect(rectOnScreen));
+                                    break;
+                                  }
+                              }
+                          }
+                      }
+                  }
+              }
+          }
+        
         [self.workspace newViewerAtPath:path];
     } @catch (NSException *exception) {
         NSLog(@"FileManagerDBusInterface: Exception opening folder %@: %@", path, exception);

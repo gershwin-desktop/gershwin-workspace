@@ -17,6 +17,7 @@
 #include <errno.h>
 #include <string.h>
 #include <stdlib.h>
+#include <math.h>
 
 #pragma mark - X11 Error Handler
 
@@ -561,6 +562,101 @@ static GWX11WindowManager *sharedWindowManager = nil;
         }
     }
     
+    return success;
+}
+
+- (BOOL)setIconGeometry:(NSRect)rect forPID:(pid_t)pid
+{
+    if (pid <= 0) return NO;
+
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+
+    BOOL success = NO;
+
+    @try {
+        Atom iconGeometry = XInternAtom(dpy, "_NET_WM_ICON_GEOMETRY", False);
+        unsigned long count = 0;
+        Window *clients = [self getClientList:dpy count:&count];
+
+        if (clients) {
+            for (unsigned long i = 0; i < count; i++) {
+                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
+                if (winPID != pid) {
+                    continue;
+                }
+
+                long data[4];
+                data[0] = (long)llround(rect.origin.x);
+                data[1] = (long)llround(rect.origin.y);
+                data[2] = (long)llround(rect.size.width);
+                data[3] = (long)llround(rect.size.height);
+
+                XChangeProperty(dpy, clients[i], iconGeometry, XA_CARDINAL, 32,
+                                PropModeReplace, (unsigned char *)data, 4);
+                success = YES;
+            }
+            XFree(clients);
+        }
+
+        XFlush(dpy);
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+
+    return success;
+}
+
+- (BOOL)setIconGeometry:(NSRect)rect forName:(NSString *)name
+{
+    if (!name || [name length] == 0) return NO;
+
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+
+    BOOL success = NO;
+
+    @try {
+        Atom iconGeometry = XInternAtom(dpy, "_NET_WM_ICON_GEOMETRY", False);
+        unsigned long count = 0;
+        Window *clients = [self getClientList:dpy count:&count];
+
+        if (clients) {
+            for (unsigned long i = 0; i < count; i++) {
+                NSString *winName = [self getWindowName:dpy window:clients[i]];
+                NSString *winClass = [self getWindowClass:dpy window:clients[i]];
+
+                BOOL matches = NO;
+                if (winName && [winName rangeOfString:name options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                    matches = YES;
+                } else if (winClass && [winClass rangeOfString:name options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                    matches = YES;
+                }
+
+                if (!matches) {
+                    continue;
+                }
+
+                long data[4];
+                data[0] = (long)llround(rect.origin.x);
+                data[1] = (long)llround(rect.origin.y);
+                data[2] = (long)llround(rect.size.width);
+                data[3] = (long)llround(rect.size.height);
+
+                XChangeProperty(dpy, clients[i], iconGeometry, XA_CARDINAL, 32,
+                                PropModeReplace, (unsigned char *)data, 4);
+                success = YES;
+            }
+            XFree(clients);
+        }
+
+        XFlush(dpy);
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+
     return success;
 }
 

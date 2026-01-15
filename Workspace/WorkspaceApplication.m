@@ -1058,6 +1058,53 @@
   GWLaunchedApp *app = [self launchedAppWithPath: path andName: name];
   GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
 
+  if (app && [app isActive] && ![app isHidden]) {
+    pid_t appPID = pid;
+    if (appPID <= 0 && [app identifier]) {
+      appPID = (pid_t)[[app identifier] intValue];
+    }
+    if (appPID <= 0 && [app task]) {
+      @try { appPID = [[app task] processIdentifier]; } @catch (id ex) { appPID = 0; }
+    }
+
+    BOOL anyMinimized = NO;
+    BOOL hasWindows = NO;
+
+    if (appPID > 0) {
+      NSArray *windows = [wm windowsForPID: appPID];
+      hasWindows = ([windows count] > 0);
+      for (GWX11WindowInfo *info in windows) {
+        if ([info isIconified]) {
+          anyMinimized = YES;
+          break;
+        }
+      }
+    }
+
+    if (!hasWindows && name) {
+      NSArray *windows = [wm windowsMatchingName: name];
+      hasWindows = ([windows count] > 0);
+      for (GWX11WindowInfo *info in windows) {
+        if ([info isIconified]) {
+          anyMinimized = YES;
+          break;
+        }
+      }
+    }
+
+    if (hasWindows && !anyMinimized) {
+      if (appPID > 0) {
+        if ([wm iconifyWindowsForPID: appPID]) {
+          return;
+        }
+      } else if (name && [name length] > 0) {
+        if ([wm iconifyWindowsMatchingName: name]) {
+          return;
+        }
+      }
+    }
+  }
+
   if (app) {
     [app activateApplication];
     if ([app application] == nil) {

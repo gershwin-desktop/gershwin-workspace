@@ -917,8 +917,7 @@
 {
   NSWindow *win = [self window];
 
-  [win makeMainWindow];
-  [win makeKeyWindow];
+
 
   if ([theEvent modifierFlags] != NSShiftKeyMask)
     {

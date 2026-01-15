@@ -111,6 +111,9 @@
 
 - (void)openSelectionInViewer:(id)viewer
                   closeSender:(BOOL)close;
+
+// Window open animation support
+- (void)setPendingOpenAnimationRect:(NSRect)rect;
                   
 - (void)openAsFolderSelectionInViewer:(id)viewer;
 
