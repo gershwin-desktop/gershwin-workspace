@@ -47,6 +47,7 @@ env:
     libfreetype-dev
     libx11-dev
     libsqlite3-dev
+    libsquashfs-dev
 
 jobs:
   ########### Linux ###########
