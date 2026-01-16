@@ -78,7 +78,6 @@ Workspace_LANGUAGES = \
 # The Objective-C source files to be compiled
 Workspace_OBJC_FILES = main.m \
 GWFunctions.m \
-AppImageIconProvider.m \
 Workspace.m \
 Workspace+UITesting.m \
 X11AppSupport.m \

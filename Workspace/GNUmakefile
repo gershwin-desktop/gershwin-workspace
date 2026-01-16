@@ -32,10 +32,11 @@ ifeq ($(DBUS_LIBS),)
   DBUS_LIBS := -ldbus-1
 endif
 
-# libsquashfs support variables from configure
-with_squashfs = yes
-SQUASHFS_CFLAGS = 
-SQUASHFS_LIBS = -lsquashfs
+# libsquashfs support variables from configure or autodetect
+# default to disabled; ./configure or environment should set these when available
+with_squashfs ?= no
+SQUASHFS_CFLAGS ?=
+SQUASHFS_LIBS ?=
 
 #
 # subprojects
@@ -99,7 +100,6 @@ Workspace_LANGUAGES = \
 # The Objective-C source files to be compiled
 Workspace_OBJC_FILES = main.m \
 GWFunctions.m \
-AppImageIconProvider.m \
 Workspace.m \
 Workspace+UITesting.m \
 X11AppSupport.m \

@@ -6,6 +6,9 @@
 /* Define if DBus support is available */
 #undef HAVE_DBUS
 
+/* Define to 1 if you have the <dbus/dbus.h> header file. */
+#undef HAVE_DBUS_DBUS_H
+
 /* Define to 1 if you have the <dir.h> header file. */
 #undef HAVE_DIR_H
 
