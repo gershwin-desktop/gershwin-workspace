@@ -6,10 +6,31 @@ include $(GNUSTEP_MAKEFILES)/common.make
 
 VERSION = 1.1.0
 
-# DBus support variables from configure
-with_dbus = yes
-DBUS_CFLAGS = -I/usr/include/dbus-1.0 -I/usr/lib/aarch64-linux-gnu/dbus-1.0/include 
-DBUS_LIBS = -ldbus-1 
+# DBus support - autodetect via pkg-config or fallback include dirs
+DBUS_CFLAGS ?= $(shell pkg-config --cflags dbus-1 2>/dev/null)
+DBUS_LIBS ?= $(shell pkg-config --libs dbus-1 2>/dev/null)
+
+# If pkg-config didn't provide the necessary include path, try common locations
+ifneq ($(DBUS_CFLAGS),)
+  with_dbus ?= yes
+else
+  DBUS_CFLAGS := $(shell \
+    if [ -d "/usr/lib/x86_64-linux-gnu/dbus-1.0/include" ]; then echo -I/usr/lib/x86_64-linux-gnu/dbus-1.0/include; \
+    elif [ -d "/usr/lib/aarch64-linux-gnu/dbus-1.0/include" ]; then echo -I/usr/lib/aarch64-linux-gnu/dbus-1.0/include; \
+    elif [ -d "/usr/lib/dbus-1.0/include" ]; then echo -I/usr/lib/dbus-1.0/include; \
+    elif [ -d "/usr/local/lib/dbus-1.0/include" ]; then echo -I/usr/local/lib/dbus-1.0/include; \
+    else echo ""; fi)
+
+  ifneq ($(DBUS_CFLAGS),)
+    with_dbus ?= yes
+  else
+    with_dbus ?= no
+  endif
+endif
+
+ifeq ($(DBUS_LIBS),)
+  DBUS_LIBS := -ldbus-1
+endif
 
 # libsquashfs support variables from configure
 with_squashfs = yes
