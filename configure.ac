@@ -179,8 +179,6 @@ AC_SUBST(INOTIFY_LIBS)
 
 AC_CONFIG_FILES([
   GNUmakefile
-  Workspace/GNUmakefile
-  Tools/fswatcher/GNUmakefile
   ])
 
 AC_OUTPUT

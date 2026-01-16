@@ -26,29 +26,10 @@ SVN_MODULE_NAME = gworkspace
 
 BUILD_GWMETADATA = 0
 
-# libsquashfs support (AppImage icons) - autodetect via pkg-config or link test
-SQUASHFS_CFLAGS ?= $(shell pkg-config --cflags libsquashfs 2>/dev/null)
-SQUASHFS_LIBS ?= $(shell pkg-config --libs libsquashfs 2>/dev/null)
-
-ifeq ($(SQUASHFS_LIBS),)
-  SQUASHFS_CFLAGS := $(shell pkg-config --cflags squashfs 2>/dev/null)
-  SQUASHFS_LIBS := $(shell pkg-config --libs squashfs 2>/dev/null)
-endif
-
-ifeq ($(SQUASHFS_LIBS),)
-  ifneq ($(shell TMP=$$(mktemp -t sqfstest.XXXXXX 2>/dev/null) && \
-    printf 'int main(void){return 0;}\n' | $(CC) -x c - -lsquashfs -o $$TMP >/dev/null 2>&1 && \
-    rm -f $$TMP && echo yes),)
-    SQUASHFS_LIBS := -lsquashfs
-  endif
-endif
-
-ifneq ($(SQUASHFS_LIBS),)
-  with_squashfs = yes
-else
-  with_squashfs = no
-endif
-
+# libsquashfs support variables from configure
+with_squashfs = yes
+SQUASHFS_CFLAGS = 
+SQUASHFS_LIBS = -lsquashfs
 export with_squashfs SQUASHFS_CFLAGS SQUASHFS_LIBS
 
 #

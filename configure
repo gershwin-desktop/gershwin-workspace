@@ -640,8 +640,12 @@ ac_header_c_list=
 enable_option_checking=no
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+INOTIFY_LIBS
 with_inotify
 BUILD_GWMETADATA
+SQUASHFS_CFLAGS
+SQUASHFS_LIBS
+with_squashfs
 DBUS_CFLAGS
 DBUS_LIBS
 with_dbus
@@ -698,6 +702,7 @@ ac_subst_files=''
 ac_user_opts='
 enable_option_checking
 enable_dbus
+enable_squashfs
 enable_gwmetadata
 enable_debug_log
 with_inotify
@@ -1332,6 +1337,8 @@ Optional Features:
   --enable-FEATURE[=ARG]  include FEATURE [ARG=yes]
   --enable-dbus           Force enable DBus support
   --disable-dbus          Force disable DBus support
+  --enable-squashfs        Force enable AppImage icon support
+  --disable-squashfs       Force disable AppImage icon support
   --enable-gwmetadata     Enable GWMetadata
   --enable-debug-log      Enable debug logging
 
@@ -3665,6 +3672,102 @@ fi
 
 
 
+#--------------------------------------------------------------------
+# libsquashfs support (AppImage icons) - auto-detect, allow manual override
+#--------------------------------------------------------------------
+with_squashfs=no
+SQUASHFS_LIBS=""
+SQUASHFS_CFLAGS=""
+
+# Try to find libsquashfs using pkg-config first
+pkg-config --exists libsquashfs
+if test $? -eq 0; then
+  SQUASHFS_CFLAGS=$(pkg-config --cflags libsquashfs)
+  SQUASHFS_LIBS=$(pkg-config --libs libsquashfs)
+  with_squashfs=yes
+else
+  # Fallback to alternate pkg-config name
+  pkg-config --exists squashfs
+  if test $? -eq 0; then
+    SQUASHFS_CFLAGS=$(pkg-config --cflags squashfs)
+    SQUASHFS_LIBS=$(pkg-config --libs squashfs)
+    with_squashfs=yes
+  else
+    # Last resort: check for headers and library without pkg-config
+           for ac_header in sqfs/predef.h
+do :
+  ac_fn_c_check_header_compile "$LINENO" "sqfs/predef.h" "ac_cv_header_sqfs_predef_h" "$ac_includes_default"
+if test "x$ac_cv_header_sqfs_predef_h" = xyes
+then :
+  printf "%s\n" "#define HAVE_SQFS_PREDEF_H 1" >>confdefs.h
+
+      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for sqfs_dir_reader_create in -lsquashfs" >&5
+printf %s "checking for sqfs_dir_reader_create in -lsquashfs... " >&6; }
+if test ${ac_cv_lib_squashfs_sqfs_dir_reader_create+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) ac_check_lib_save_LIBS=$LIBS
+LIBS="-lsquashfs  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.
+   The 'extern "C"' is for builds by C++ compilers;
+   although this is not generally supported in C code supporting it here
+   has little cost and some practical benefit (sr 110532).  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char sqfs_dir_reader_create (void);
+int
+main (void)
+{
+return sqfs_dir_reader_create ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  ac_cv_lib_squashfs_sqfs_dir_reader_create=yes
+else case e in #(
+  e) ac_cv_lib_squashfs_sqfs_dir_reader_create=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_squashfs_sqfs_dir_reader_create" >&5
+printf "%s\n" "$ac_cv_lib_squashfs_sqfs_dir_reader_create" >&6; }
+if test "x$ac_cv_lib_squashfs_sqfs_dir_reader_create" = xyes
+then :
+  SQUASHFS_LIBS="-lsquashfs"; with_squashfs=yes
+fi
+
+
+fi
+
+done
+  fi
+fi
+
+# Allow manual override
+# Check whether --enable-squashfs was given.
+if test ${enable_squashfs+y}
+then :
+  enableval=$enable_squashfs; with_squashfs=$enableval
+fi
+
+
+
+
+
+
 # Check whether --enable-gwmetadata was given.
 if test ${enable_gwmetadata+y}
 then :
@@ -3697,6 +3800,16 @@ printf "%s\n" "#define HAVE_DBUS 0" >>confdefs.h
 
 fi
 
+if test "x$with_squashfs" = "xyes"; then
+
+printf "%s\n" "#define HAVE_SQUASHFS 1" >>confdefs.h
+
+else
+
+printf "%s\n" "#define HAVE_SQUASHFS 0" >>confdefs.h
+
+fi
+
 
 #--------------------------------------------------------------------
 # Debug logging
@@ -3725,6 +3838,8 @@ printf "%s\n" "#define GW_DEBUG_LOG $GW_DEBUG_LOG" >>confdefs.h
 # fswatcher-inotify - automatically detect and use when available
 #--------------------------------------------------------------------
 with_inotify=no
+INOTIFY_LIBS=""
+
        for ac_header in sys/inotify.h
 do :
   ac_fn_c_check_header_compile "$LINENO" "sys/inotify.h" "ac_cv_header_sys_inotify_h" "$ac_includes_default"
@@ -3735,6 +3850,69 @@ then :
 fi
 
 done
+
+# Check if we need to link against libinotify (NetBSD, FreeBSD)
+if test "x$with_inotify" = "xyes"; then
+  ac_fn_c_check_func "$LINENO" "inotify_init" "ac_cv_func_inotify_init"
+if test "x$ac_cv_func_inotify_init" = xyes
+then :
+
+else case e in #(
+  e) { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for inotify_init in -linotify" >&5
+printf %s "checking for inotify_init in -linotify... " >&6; }
+if test ${ac_cv_lib_inotify_inotify_init+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) ac_check_lib_save_LIBS=$LIBS
+LIBS="-linotify  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.
+   The 'extern "C"' is for builds by C++ compilers;
+   although this is not generally supported in C code supporting it here
+   has little cost and some practical benefit (sr 110532).  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char inotify_init (void);
+int
+main (void)
+{
+return inotify_init ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  ac_cv_lib_inotify_inotify_init=yes
+else case e in #(
+  e) ac_cv_lib_inotify_inotify_init=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_inotify_inotify_init" >&5
+printf "%s\n" "$ac_cv_lib_inotify_inotify_init" >&6; }
+if test "x$ac_cv_lib_inotify_inotify_init" = xyes
+then :
+  INOTIFY_LIBS="-linotify"
+else case e in #(
+  e) with_inotify=no ;;
+esac
+fi
+ ;;
+esac
+fi
+
+fi
 
 # Allow manual override
 
@@ -3747,7 +3925,8 @@ fi
 
 
 
-ac_config_files="$ac_config_files GNUmakefile Workspace/GNUmakefile Tools/fswatcher/GNUmakefile"
+
+ac_config_files="$ac_config_files GNUmakefile"
 
 
 cat >confcache <<\_ACEOF
@@ -4439,8 +4618,6 @@ do
   case $ac_config_target in
     "Workspace/config.h") CONFIG_HEADERS="$CONFIG_HEADERS Workspace/config.h" ;;
     "GNUmakefile") CONFIG_FILES="$CONFIG_FILES GNUmakefile" ;;
-    "Workspace/GNUmakefile") CONFIG_FILES="$CONFIG_FILES Workspace/GNUmakefile" ;;
-    "Tools/fswatcher/GNUmakefile") CONFIG_FILES="$CONFIG_FILES Tools/fswatcher/GNUmakefile" ;;
 
   *) as_fn_error $? "invalid argument: '$ac_config_target'" "$LINENO" 5;;
   esac
