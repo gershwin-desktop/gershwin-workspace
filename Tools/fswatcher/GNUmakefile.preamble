@@ -27,10 +27,12 @@ ifneq ($(wildcard /usr/pkg/lib),)
 endif
 
 # Link against libinotify on systems that need it (NetBSD, older FreeBSD)
-# Linux and newer FreeBSD have inotify in libc
+# Prefer configure-provided INOTIFY_LIBS when present, otherwise assume symbols are in libc
 ifeq ($(WITH_INOTIFY),yes)
-  ifneq ($(wildcard /usr/pkg/lib/libinotify.*),)
-    ADDITIONAL_TOOL_LIBS += -linotify
+  ifneq ($(INOTIFY_LIBS),)
+    ADDITIONAL_TOOL_LIBS += $(INOTIFY_LIBS)
+  else
+    # No extra libs provided by configure; assume inotify is available in libc (Linux/newer FreeBSD)
   endif
 endif
 
