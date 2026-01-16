@@ -1,16 +1,42 @@
 
-PACKAGE_NEEDS_CONFIGURE = YES
-
 PACKAGE_NAME = gworkspace
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 include $(GNUSTEP_MAKEFILES)/common.make
 
 VERSION = 1.1.0
 
-# DBus support variables from configure
-with_dbus = yes
-DBUS_CFLAGS = -I/usr/include/dbus-1.0 -I/usr/lib/aarch64-linux-gnu/dbus-1.0/include 
-DBUS_LIBS = -ldbus-1 
+# DBus support - autodetect via pkg-config unless provided by environment
+DBUS_CFLAGS ?= $(shell pkg-config --cflags dbus-1 2>/dev/null)
+DBUS_LIBS ?= $(shell pkg-config --libs dbus-1 2>/dev/null)
+
+ifneq ($(DBUS_LIBS),)
+  with_dbus ?= yes
+else
+  with_dbus ?= no
+endif
+
+# libsquashfs support (AppImage icons) - autodetect via pkg-config or link test
+SQUASHFS_CFLAGS ?= $(shell pkg-config --cflags libsquashfs 2>/dev/null)
+SQUASHFS_LIBS ?= $(shell pkg-config --libs libsquashfs 2>/dev/null)
+
+ifeq ($(SQUASHFS_LIBS),)
+  SQUASHFS_CFLAGS := $(shell pkg-config --cflags squashfs 2>/dev/null)
+  SQUASHFS_LIBS := $(shell pkg-config --libs squashfs 2>/dev/null)
+endif
+
+ifeq ($(SQUASHFS_LIBS),)
+  ifneq ($(shell TMP=$$(mktemp -t sqfstest.XXXXXX 2>/dev/null) && \
+    printf 'int main(void){return 0;}\n' | $(CC) -x c - -lsquashfs -o $$TMP >/dev/null 2>&1 && \
+    rm -f $$TMP && echo yes),)
+    SQUASHFS_LIBS := -lsquashfs
+  endif
+endif
+
+ifneq ($(SQUASHFS_LIBS),)
+  with_squashfs ?= yes
+else
+  with_squashfs ?= no
+endif
 
 #
 # subprojects
@@ -33,7 +59,6 @@ Workspace_HAS_RESOURCE_BUNDLE = yes
 ADDITIONAL_GUI_LIBS += -lFSNode
 ADDITIONAL_GUI_LIBS += -lInspector
 ADDITIONAL_GUI_LIBS += -lOperation
-ADDITIONAL_GUI_LIBS += -lsquashfs
 
 # Include path for DSStore headers (sibling subproject)
 ADDITIONAL_INCLUDE_DIRS += -I../DSStore
@@ -75,7 +100,6 @@ Workspace_LANGUAGES = \
 # The Objective-C source files to be compiled
 Workspace_OBJC_FILES = main.m \
 GWFunctions.m \
-AppImageIconProvider.m \
 Workspace.m \
 Workspace+UITesting.m \
 X11AppSupport.m \
@@ -150,6 +174,11 @@ ISOWrite/ISOWriteProgressWindow.m \
 ifeq ($(with_dbus), yes)
   Workspace_OBJC_FILES += DBusConnection.m
   Workspace_OBJC_FILES += FileManagerDBusInterface.m
+endif
+
+# Conditionally add AppImageIconProvider.m if libsquashfs is available
+ifeq ($(with_squashfs), yes)
+  Workspace_OBJC_FILES += AppImageIconProvider.m
 endif
 
 -include GNUmakefile.preamble

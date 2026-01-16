@@ -72,6 +72,45 @@ AC_SUBST(with_dbus)
 AC_SUBST(DBUS_LIBS)
 AC_SUBST(DBUS_CFLAGS)
 
+#--------------------------------------------------------------------
+# libsquashfs support (AppImage icons) - auto-detect, allow manual override
+#--------------------------------------------------------------------
+with_squashfs=no
+SQUASHFS_LIBS=""
+SQUASHFS_CFLAGS=""
+
+# Try to find libsquashfs using pkg-config first
+pkg-config --exists libsquashfs
+if test $? -eq 0; then
+  SQUASHFS_CFLAGS=$(pkg-config --cflags libsquashfs)
+  SQUASHFS_LIBS=$(pkg-config --libs libsquashfs)
+  with_squashfs=yes
+else
+  # Fallback to alternate pkg-config name
+  pkg-config --exists squashfs
+  if test $? -eq 0; then
+    SQUASHFS_CFLAGS=$(pkg-config --cflags squashfs)
+    SQUASHFS_LIBS=$(pkg-config --libs squashfs)
+    with_squashfs=yes
+  else
+    # Last resort: check for headers and library without pkg-config
+    AC_CHECK_HEADERS([sqfs/predef.h], [
+      AC_CHECK_LIB(squashfs, sqfs_dir_reader_create,
+        [SQUASHFS_LIBS="-lsquashfs"; with_squashfs=yes])
+    ])
+  fi
+fi
+
+# Allow manual override
+AC_ARG_ENABLE(squashfs,
+  [  --enable-squashfs        Force enable AppImage icon support
+  --disable-squashfs       Force disable AppImage icon support],
+  [with_squashfs=$enableval], [])
+
+AC_SUBST(with_squashfs)
+AC_SUBST(SQUASHFS_LIBS)
+AC_SUBST(SQUASHFS_CFLAGS)
+
 AC_ARG_ENABLE(gwmetadata,
   [  --enable-gwmetadata     Enable GWMetadata], , [enable_gwmetadata=no])
 
@@ -89,6 +128,12 @@ if test "x$with_dbus" = "xyes"; then
   AC_DEFINE([HAVE_DBUS], [1], [Define if DBus support is available])
 else
   AC_DEFINE([HAVE_DBUS], [0], [Define if DBus support is available])
+fi
+
+if test "x$with_squashfs" = "xyes"; then
+  AC_DEFINE([HAVE_SQUASHFS], [1], [Define if libsquashfs support is available])
+else
+  AC_DEFINE([HAVE_SQUASHFS], [0], [Define if libsquashfs support is available])
 fi
 
 

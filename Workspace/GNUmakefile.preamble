@@ -7,6 +7,11 @@ ifneq ($(with_dbus),no)
   ADDITIONAL_CPPFLAGS += $(DBUS_CFLAGS)
 endif
 
+# Conditional libsquashfs support - add flags if available
+ifneq ($(with_squashfs),no)
+  ADDITIONAL_CPPFLAGS += $(SQUASHFS_CFLAGS)
+endif
+
 # Additional flags to pass to the Objective-C compiler
 ADDITIONAL_OBJCFLAGS += -Wall 
 
@@ -37,6 +42,11 @@ ADDITIONAL_LDFLAGS += -lX11
 # Conditional DBus support
 ifneq ($(DBUS_LIBS),)
   ADDITIONAL_GUI_LIBS += $(DBUS_LIBS)
+endif
+
+# Conditional libsquashfs support
+ifneq ($(SQUASHFS_LIBS),)
+  ADDITIONAL_GUI_LIBS += $(SQUASHFS_LIBS)
 endif
 
 # Additional library directories the linker should search   

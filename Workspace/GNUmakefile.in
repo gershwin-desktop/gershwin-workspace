@@ -1,4 +1,3 @@
-
 PACKAGE_NEEDS_CONFIGURE = YES
 
 PACKAGE_NAME = gworkspace
@@ -11,6 +10,11 @@ VERSION = @PACKAGE_VERSION@
 with_dbus = @with_dbus@
 DBUS_CFLAGS = @DBUS_CFLAGS@
 DBUS_LIBS = @DBUS_LIBS@
+
+# libsquashfs support variables from configure
+with_squashfs = @with_squashfs@
+SQUASHFS_CFLAGS = @SQUASHFS_CFLAGS@
+SQUASHFS_LIBS = @SQUASHFS_LIBS@
 
 #
 # subprojects
@@ -33,7 +37,6 @@ Workspace_HAS_RESOURCE_BUNDLE = yes
 ADDITIONAL_GUI_LIBS += -lFSNode
 ADDITIONAL_GUI_LIBS += -lInspector
 ADDITIONAL_GUI_LIBS += -lOperation
-ADDITIONAL_GUI_LIBS += -lsquashfs
 
 # Include path for DSStore headers (sibling subproject)
 ADDITIONAL_INCLUDE_DIRS += -I../DSStore
@@ -150,6 +153,11 @@ ISOWrite/ISOWriteProgressWindow.m \
 ifeq ($(with_dbus), yes)
   Workspace_OBJC_FILES += DBusConnection.m
   Workspace_OBJC_FILES += FileManagerDBusInterface.m
+endif
+
+# Conditionally add AppImageIconProvider.m if libsquashfs is available
+ifeq ($(with_squashfs), yes)
+  Workspace_OBJC_FILES += AppImageIconProvider.m
 endif
 
 -include GNUmakefile.preamble

@@ -5,8 +5,8 @@ PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
 
 PDFKIT=no
-SH_PATH=/usr/bin/sh
-FILE_PATH=/usr/bin/file
+SH_PATH=/bin/sh
+FILE_PATH=/bin/file
 
 SUBPROJECTS = ContentViewers
 

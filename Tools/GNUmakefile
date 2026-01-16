@@ -9,8 +9,11 @@ SUBPROJECTS = \
         ddbd \
         wopen \
         uitest \
-        isowrite-helper \
-        appimage-icon-test
+        isowrite-helper
+
+ifeq ($(with_squashfs),yes)
+SUBPROJECTS += appimage-icon-test
+endif
 
 -include GNUmakefile.preamble
 
