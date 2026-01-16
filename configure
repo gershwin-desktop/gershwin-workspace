@@ -3660,6 +3660,36 @@ if test $? -eq 0; then
   with_dbus=yes
 fi
 
+# Fallback detection if pkg-config didn't find it
+if test "$with_dbus" != "yes"; then
+         for ac_header in dbus/dbus.h
+do :
+  ac_fn_c_check_header_compile "$LINENO" "dbus/dbus.h" "ac_cv_header_dbus_dbus_h" "$ac_includes_default"
+if test "x$ac_cv_header_dbus_dbus_h" = xyes
+then :
+  printf "%s\n" "#define HAVE_DBUS_DBUS_H 1" >>confdefs.h
+
+    DBUS_CFLAGS="-I/usr/include/dbus-1.0"
+    DBUS_LIBS="-ldbus-1"
+    with_dbus=yes
+
+fi
+
+done
+fi
+
+if test "$with_dbus" != "yes"; then
+  # Try common arch-specific include locations (Debian/Ubuntu, etc.)
+  for d in /usr/lib/x86_64-linux-gnu/dbus-1.0/include /usr/lib/aarch64-linux-gnu/dbus-1.0/include /usr/lib/dbus-1.0/include /usr/local/lib/dbus-1.0/include; do
+    if test -d "$d"; then
+      DBUS_CFLAGS="-I$d -I/usr/include/dbus-1.0"
+      DBUS_LIBS="-ldbus-1"
+      with_dbus=yes
+      break
+    fi
+  done
+fi
+
 # Allow manual override
 # Check whether --enable-dbus was given.
 if test ${enable_dbus+y}

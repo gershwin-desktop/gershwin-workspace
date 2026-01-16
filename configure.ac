@@ -62,6 +62,27 @@ if test $? -eq 0; then
   with_dbus=yes
 fi
 
+# Fallback detection if pkg-config didn't find it
+if test "$with_dbus" != "yes"; then
+  AC_CHECK_HEADERS([dbus/dbus.h], [
+    DBUS_CFLAGS="-I/usr/include/dbus-1.0"
+    DBUS_LIBS="-ldbus-1"
+    with_dbus=yes
+  ])
+fi
+
+if test "$with_dbus" != "yes"; then
+  # Try common arch-specific include locations (Debian/Ubuntu, etc.)
+  for d in /usr/lib/x86_64-linux-gnu/dbus-1.0/include /usr/lib/aarch64-linux-gnu/dbus-1.0/include /usr/lib/dbus-1.0/include /usr/local/lib/dbus-1.0/include; do
+    if test -d "$d"; then
+      DBUS_CFLAGS="-I$d -I/usr/include/dbus-1.0"
+      DBUS_LIBS="-ldbus-1"
+      with_dbus=yes
+      break
+    fi
+  done
+fi
+
 # Allow manual override
 AC_ARG_ENABLE(dbus,
   [  --enable-dbus           Force enable DBus support
