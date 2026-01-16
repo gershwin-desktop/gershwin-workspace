@@ -33,6 +33,7 @@ Workspace_HAS_RESOURCE_BUNDLE = yes
 ADDITIONAL_GUI_LIBS += -lFSNode
 ADDITIONAL_GUI_LIBS += -lInspector
 ADDITIONAL_GUI_LIBS += -lOperation
+ADDITIONAL_GUI_LIBS += -lsquashfs
 
 # Include path for DSStore headers (sibling subproject)
 ADDITIONAL_INCLUDE_DIRS += -I../DSStore
@@ -74,6 +75,7 @@ Workspace_LANGUAGES = \
 # The Objective-C source files to be compiled
 Workspace_OBJC_FILES = main.m \
 GWFunctions.m \
+AppImageIconProvider.m \
 Workspace.m \
 Workspace+UITesting.m \
 X11AppSupport.m \
