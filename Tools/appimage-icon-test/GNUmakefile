@@ -13,7 +13,8 @@ else
 	appimage-icon-test_OBJCFLAGS += $(SQUASHFS_CFLAGS)
 	appimage-icon-test_LDFLAGS += $(SQUASHFS_LIBS)
 	appimage-icon-test_TOOL_LIBS += -lgnustep-gui
-	appimage-icon-test_TOOL_LIBS += -lFSNode
+	# Ensure the linker can find our FSNode framework built in-tree
+	appimage-icon-test_TOOL_LIBS += -L../../FSNode/FSNode.framework -lFSNode
 
 	include $(GNUSTEP_MAKEFILES)/tool.make
 endif
