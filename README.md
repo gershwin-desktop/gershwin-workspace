@@ -1,12 +1,10 @@
 # Workspace
 
 Workspace is Gershwin's Workspace Manager and offers a File Manager and an optional Desktop with associated services and tools.
-Inspired by the Finder, it incorporates modern features and offers many conveniencies.
 
-File Manager:
-     * Classical column browser view
-     * List view
-     * Icons view with possibility of Thumbnails
+* Classical column browser view
+* List view
+* Icons view with possibility of Thumbnails
 
 Trash (stand-alone or integrated in Desktop's Dock)
 
@@ -20,3 +18,4 @@ Optional search (database backed) and live folders.
 
 Workspace implements NSWorkspace, so it offers to GNUstep applications services to open files through it as well as copy and recycle operations.
 
+Workspace implements a [Spatial](https://arstechnica.com/gadgets/2003/04/finder/) mode.
