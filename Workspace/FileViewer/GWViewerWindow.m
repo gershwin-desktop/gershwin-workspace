@@ -274,7 +274,7 @@
 	  [[self delegate] toggleHiddenFiles];
 	}
       return;
-      
+    /*
     case ' ':
       // Space = Quick Look
       if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
@@ -296,6 +296,7 @@
             }
         }
       return;
+    */
     }
 	
   [super keyDown: theEvent];

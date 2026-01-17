@@ -271,8 +271,7 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(notImplemented:) keyEquivalent:@"l"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Quick Look \"item\"") action:@selector(notImplemented:) keyEquivalent:@" "];
-  [menuItem setKeyEquivalentModifierMask:0]; // Space bar only
+  menuItem = [menu addItemWithTitle:_(@"Quick Look \"item\"") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
   // Share submenu
@@ -720,6 +719,7 @@ NSString *_pendingSystemActionTitle = nil;
       if (result && [result respondsToSelector:@selector(boolValue)] && [result boolValue]) {
         printf("\n");
         NSLog(@"Workspace: AppMenu registrar is available on DBus");
+        usleep(intervalMs * 10000);
         return YES;
       }
     } @catch (NSException *ex) {
