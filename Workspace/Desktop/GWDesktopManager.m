@@ -36,6 +36,8 @@
 #import "Thumbnailer/GWThumbnailer.h"
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
+#include <math.h>
+#include <unistd.h>
 
 #define RESV_MARGIN 10
 
@@ -565,6 +567,14 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   NSLog(@"DEBUG: path = %@, event = %@", path, event);
   NSLog(@"DEBUG: dskNode path = %@", [dskNode path]);
   
+  /* Check if this is a change in one of our watched mount root directories */
+  if ([mpointWatcher isWatchingPath: path]) {
+    NSLog(@"DEBUG: Change detected in mount root directory: %@", path);
+    /* Verify the mount is ready before showing it on desktop */
+    [self verifyAndShowVolumeAtPath: path];
+    return;
+  }
+  
   if ([path isEqual: [dskNode path]])
     {
       NSLog(@"DEBUG: Path matches desktop node path");
@@ -609,6 +619,72 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 {
   [[self desktopView] showMountedVolumes];
   [mpointWatcher startWatching];
+}
+
+- (void)verifyAndShowVolumeAtPath:(NSString *)mountRootPath
+{
+  /* Spawn a background worker thread to perform verification so we don't block the main thread */
+  [NSThread detachNewThreadSelector:@selector(verifyAndShowVolumeWorker:) toTarget:self withObject:mountRootPath];
+}
+
+- (void)verifyAndShowVolumeWorker:(NSString *)mountRootPath
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  NSFileManager *localFM = [NSFileManager defaultManager];
+  NSWorkspace *workspace = [NSWorkspace sharedWorkspace];
+  int maxAttempts = 5;
+  int attempt = 0;
+  BOOL verified = NO;
+
+  /* Try to verify the mount with exponential backoff */
+  while (attempt < maxAttempts && !verified) {
+    attempt++;
+
+    /* Wait with exponential backoff: 0.1s, 0.2s, 0.4s, 0.8s, 1.6s */
+    if (attempt > 1) {
+      usleep((useconds_t)(100000 * pow(2, attempt - 2)));
+    }
+
+    NSLog(@"MountVerification: Attempt %d/%d to verify mount root: %@", attempt, maxAttempts, mountRootPath);
+
+    @autoreleasepool {
+      NSError *contentsError = nil;
+      NSArray *contents = [localFM contentsOfDirectoryAtPath:mountRootPath error:&contentsError];
+
+      if (contents && [contents count] > 0) {
+        for (NSString *item in contents) {
+          NSString *itemPath = [mountRootPath stringByAppendingPathComponent:item];
+          BOOL isDir = NO;
+
+          if ([localFM fileExistsAtPath:itemPath isDirectory:&isDir] && isDir) {
+            NSArray *mountedPaths = [workspace mountedLocalVolumePaths];
+            if ([mountedPaths containsObject:itemPath]) {
+              NSLog(@"MountVerification: Verified mounted volume at: %@", itemPath);
+              verified = YES;
+              break;
+            }
+
+            NSError *readError = nil;
+            NSArray *subContents = [localFM contentsOfDirectoryAtPath:itemPath error:&readError];
+            if (subContents) {
+              NSLog(@"MountVerification: Directory is accessible: %@", itemPath);
+              verified = YES;
+              break;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (verified) {
+    NSLog(@"MountVerification: Mount verified after %d attempt(s), updating desktop", attempt);
+    [self performSelectorOnMainThread:@selector(removableMediaPathsDidChange) withObject:nil waitUntilDone:NO];
+  } else {
+    NSLog(@"MountVerification: Could not verify mount at %@ after %d attempts, skipping desktop update", mountRootPath, maxAttempts);
+  }
+
+  [pool release];
 }
 
 - (void)hideDotsFileDidChange:(BOOL)hide
@@ -978,6 +1054,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
     }
 
   RELEASE (mountedRemovableVolumes);
+  RELEASE (watchedMountRoots);
   [super dealloc];
 }
 
@@ -990,6 +1067,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       manager = mngr;
       active = NO;
       fm = [NSFileManager defaultManager];
+      watchedMountRoots = [[NSMutableSet alloc] init];
 
       timer = [NSTimer scheduledTimerWithTimeInterval: 1.5
 					       target: self
@@ -1003,6 +1081,48 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
 - (void)startWatching
 {
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  NSArray *configuredPaths = [[defaults persistentDomainForName: NSGlobalDomain] objectForKey: @"GSRemovableMediaPaths"];
+  NSMutableSet *pathsToWatch = [NSMutableSet set];
+  
+  /* Add configured removable media paths from preferences */
+  if (configuredPaths && [configuredPaths count] > 0) {
+    for (NSString *path in configuredPaths) {
+      [pathsToWatch addObject: path];
+      /* Also watch the parent directory to catch siblings */
+      NSString *parent = [path stringByDeletingLastPathComponent];
+      if (parent && [parent length] > 1) {
+        [pathsToWatch addObject: parent];
+      }
+    }
+  }
+  
+  /* Add common mount root directories as fallbacks */
+  [pathsToWatch addObject: @"/media"];
+  [pathsToWatch addObject: @"/Volumes"];
+  
+  /* Add per-user media directory */
+  NSString *userName = NSUserName();
+  NSString *userMediaDir = [@"/media" stringByAppendingPathComponent: userName];
+  [pathsToWatch addObject: userMediaDir];
+  
+  NSString *runMediaUser = [[@"/run/media" stringByAppendingPathComponent: userName] stringByStandardizingPath];
+  if ([fm fileExistsAtPath: runMediaUser]) {
+    [pathsToWatch addObject: runMediaUser];
+  }
+  
+  /* Register watchers for paths that aren't already watched */
+  for (NSString *path in pathsToWatch) {
+    BOOL isDir = NO;
+    if ([fm fileExistsAtPath: path isDirectory: &isDir] && isDir) {
+      if (![watchedMountRoots containsObject: path]) {
+        [manager addWatcherForPath: path];
+        [watchedMountRoots addObject: path];
+        NSLog(@"MPointWatcher: Started watching mount root: %@", path);
+      }
+    }
+  }
+  
   [mountedRemovableVolumes release];
   mountedRemovableVolumes = [[NSWorkspace sharedWorkspace] mountedRemovableMedia];
   [mountedRemovableVolumes retain];
@@ -1011,6 +1131,13 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
 - (void)stopWatching
 {
+  /* Remove all watchers we registered */
+  for (NSString *path in watchedMountRoots) {
+    [manager removeWatcherForPath: path];
+    NSLog(@"MPointWatcher: Stopped watching mount root: %@", path);
+  }
+  [watchedMountRoots removeAllObjects];
+  
   active = NO;
   [mountedRemovableVolumes release];
   mountedRemovableVolumes = nil;
@@ -1050,6 +1177,11 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       mountedRemovableVolumes = newVolumes;
       [mountedRemovableVolumes retain];
     }
+}
+
+- (BOOL)isWatchingPath:(NSString *)path
+{
+  return [watchedMountRoots containsObject: path];
 }
 
 @end

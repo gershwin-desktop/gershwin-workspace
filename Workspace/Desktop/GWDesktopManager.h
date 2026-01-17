@@ -185,6 +185,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath;
 @interface MPointWatcher : NSObject
 {
   NSArray *mountedRemovableVolumes;
+  NSMutableSet *watchedMountRoots;  /* Tracks paths being watched for mount changes */
   NSTimer *timer;
   BOOL active;
   GWDesktopManager *manager;
@@ -198,6 +199,8 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath;
 - (void)stopWatching;
 
 - (void)watchMountPoints:(id)sender;
+
+- (BOOL)isWatchingPath:(NSString *)path;
 
 @end
 
