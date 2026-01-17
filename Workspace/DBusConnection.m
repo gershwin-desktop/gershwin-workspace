@@ -28,7 +28,7 @@ static DBusHandlerResult dbusMessageFilterHandler(DBusConnection *connection,
                 const char *path = dbus_message_get_path(message);
                 const char *interface = dbus_message_get_interface(message);
                 const char *member = dbus_message_get_member(message);
-                NSLog(@"DBusConnection: Filter handler invoked for %s.%s on %s", 
+                NSDebugLog(@"DBusConnection: Filter handler invoked for %s.%s on %s", 
                       interface ? interface : "(null)", 
                       member ? member : "(null)", 
                       path ? path : "(null)");

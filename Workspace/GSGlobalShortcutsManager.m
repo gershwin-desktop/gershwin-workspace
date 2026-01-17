@@ -51,6 +51,27 @@ static KeySym keysymFromName(NSString *name)
     return XStringToKeysym([name UTF8String]);
 }
 
+// Return YES if the given key combo represents Alt (or Mod1) + Space
+static BOOL isAltSpaceCombo(NSString *keyCombo)
+{
+    if (!keyCombo || [keyCombo length] == 0) return NO;
+    NSArray *parts = parseKeyCombo(keyCombo);
+    if (!parts || [parts count] < 1) return NO;
+
+    NSString *keyStr = [[parts lastObject] lowercaseString];
+    // Accept "space" as the key name
+    if (![keyStr isEqualToString:@"space"] && ![keyStr isEqualToString:@" "]) return NO;
+
+    // Check for alt or mod1 in the modifier list
+    for (NSUInteger i = 0; i < [parts count] - 1; i++) {
+        NSString *p = [parts objectAtIndex:i];
+        if ([p isEqualToString:@"alt"] || [p isEqualToString:@"mod1"]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
 @implementation GSGlobalShortcutsManager
 
 + (GSGlobalShortcutsManager *)sharedManager
@@ -210,6 +231,22 @@ static KeySym keysymFromName(NSString *name)
 
 - (BOOL)loadShortcuts
 {
+    // Preserve any existing Alt-Space shortcut so it survives a reload
+    NSString *protectedKey = nil;
+    NSDictionary *protectedShortcut = nil;
+    if (shortcuts && [shortcuts count] > 0) {
+        NSEnumerator *ke = [shortcuts keyEnumerator];
+        NSString *k;
+        while ((k = [ke nextObject])) {
+            if (isAltSpaceCombo(k)) {
+                protectedKey = [k retain];
+                protectedShortcut = [[shortcuts objectForKey:k] retain];
+                if (verbose) NSLog(@"GSGlobalShortcutsManager: Preserving existing Alt-Space shortcut during load: %@", k);
+                break;
+            }
+        }
+    }
+
     // Create a completely fresh NSUserDefaults instance to avoid caching issues
     NSUserDefaults *defaults = [[NSUserDefaults alloc] init];
     [defaults addSuiteNamed:NSGlobalDomain];
@@ -236,6 +273,15 @@ static KeySym keysymFromName(NSString *name)
         NSLog(@"  Create shortcuts using: defaults write %@ 'ctrl+shift+t' 'Terminal'", defaultsDomain);
         [shortcuts release];
         shortcuts = [[NSMutableDictionary alloc] init];
+
+        // Restore protected Alt-Space if it existed
+        if (protectedKey && protectedShortcut) {
+            [shortcuts setObject:protectedShortcut forKey:protectedKey];
+            if (verbose) NSLog(@"GSGlobalShortcutsManager: Restored protected Alt-Space shortcut: %@", protectedKey);
+            [protectedKey release];
+            [protectedShortcut release];
+        }
+
         lastDefaultsModTime = time(NULL);
         [defaults release];
         return YES;
@@ -268,6 +314,14 @@ static KeySym keysymFromName(NSString *name)
         [shortcuts setObject:shortcut forKey:keyCombo];
     }
     
+    // Re-add protected Alt-Space if it existed and isn't in the newly loaded config
+    if (protectedKey && protectedShortcut && ![shortcuts objectForKey:protectedKey]) {
+        [shortcuts setObject:protectedShortcut forKey:protectedKey];
+        if (verbose) NSLog(@"GSGlobalShortcutsManager: Restored protected Alt-Space shortcut: %@", protectedKey);
+        [protectedKey release];
+        [protectedShortcut release];
+    }
+
     lastDefaultsModTime = time(NULL);
     
     NSLog(@"GSGlobalShortcutsManager: Loaded %lu shortcuts", 
@@ -309,7 +363,20 @@ static KeySym keysymFromName(NSString *name)
 
 - (void)ungrabKeys
 {
-    XUngrabKey(display, AnyKey, AnyModifier, rootWindow);
+    // Ungrab keys individually so we can preserve protected shortcuts (e.g., Alt-Space)
+    if (!shortcuts || [shortcuts count] == 0) return;
+
+    NSEnumerator *enumerator = [shortcuts keyEnumerator];
+    NSString *keyCombo;
+    while ((keyCombo = [enumerator nextObject])) {
+        if (isAltSpaceCombo(keyCombo)) {
+            if (verbose) {
+                NSLog(@"GSGlobalShortcutsManager: Preserving protected Alt-Space shortcut; not ungrabbing %@", keyCombo);
+            }
+            continue;
+        }
+        [self ungrabKeyCombo:keyCombo];
+    }
 }
 
 - (BOOL)grabKeyCombo:(NSString *)keyCombo
@@ -372,6 +439,14 @@ static KeySym keysymFromName(NSString *name)
 
 - (void)ungrabKeyCombo:(NSString *)keyCombo
 {
+    // Never ungrab the Alt-Space global shortcut once it has been registered
+    if (isAltSpaceCombo(keyCombo)) {
+        if (verbose) {
+            NSLog(@"GSGlobalShortcutsManager: Not ungrabbing protected Alt-Space shortcut: %@", keyCombo);
+        }
+        return;
+    }
+
     NSArray *parts = parseKeyCombo(keyCombo);
     if (!parts || [parts count] < 1) {
         if (verbose) {
@@ -726,12 +801,36 @@ static KeySym keysymFromName(NSString *name)
 {
     NSLog(@"GSGlobalShortcutsManager: Processing %lu shortcuts from IPC data", (unsigned long)[shortcutsArray count]);
     NSLog(@"GSGlobalShortcutsManager: Raw shortcuts array: %@", shortcutsArray);
-    
-    // Ungrab current keys first
+
+    // Preserve any existing Alt-Space shortcut so it is not lost during reconfiguration
+    NSString *protectedKey = nil;
+    NSDictionary *protectedShortcut = nil;
+    if (shortcuts && [shortcuts count] > 0) {
+        NSEnumerator *ke = [shortcuts keyEnumerator];
+        NSString *k;
+        while ((k = [ke nextObject])) {
+            if (isAltSpaceCombo(k)) {
+                protectedKey = [k retain];
+                protectedShortcut = [[shortcuts objectForKey:k] retain];
+                if (verbose) NSLog(@"GSGlobalShortcutsManager: Found protected Alt-Space shortcut in current config: %@", k);
+                break;
+            }
+        }
+    }
+
+    // Ungrab current keys first (we will skip actually ungrabbing Alt-Space in ungrabAllKeys)
     [self ungrabAllKeys];
-    
+
     // Clear current shortcuts
     [shortcuts removeAllObjects];
+
+    // Re-add the preserved Alt-Space shortcut if we found one
+    if (protectedKey && protectedShortcut) {
+        [shortcuts setObject:protectedShortcut forKey:protectedKey];
+        if (verbose) NSLog(@"GSGlobalShortcutsManager: Preserved protected shortcut %@", protectedKey);
+        [protectedKey release];
+        [protectedShortcut release];
+    }
     
     // Process the new shortcuts data
     NSLog(@"GSGlobalShortcutsManager: Starting to process shortcuts...");
@@ -865,16 +964,22 @@ static KeySym keysymFromName(NSString *name)
     if (!shortcuts || [shortcuts count] == 0) {
         return;
     }
-    
+
     NSEnumerator *enumerator = [shortcuts keyEnumerator];
     NSString *keyCombo;
-    
+
     while ((keyCombo = [enumerator nextObject])) {
+        if (isAltSpaceCombo(keyCombo)) {
+            if (verbose) {
+                NSLog(@"GSGlobalShortcutsManager: Preserving protected Alt-Space key (%@) while ungrabbing other keys", keyCombo);
+            }
+            continue;
+        }
         [self ungrabKeyCombo:keyCombo];
     }
-    
+
     if (verbose) {
-        NSLog(@"GSGlobalShortcutsManager: Ungrabbed all keys");
+        NSLog(@"GSGlobalShortcutsManager: Ungrabbed all non-protected keys");
     }
 }
 
