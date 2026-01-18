@@ -630,6 +630,17 @@
   task = [[NSTask alloc] init];
   [task setLaunchPath:path];
   [task setArguments:args];
+#if HAVE_DBUS
+  NSMutableDictionary *environment = [[[NSProcessInfo processInfo] environment] mutableCopy];
+  if (![environment objectForKey:@"GTK_USE_PORTAL"]) {
+    [environment setObject:@"1" forKey:@"GTK_USE_PORTAL"];
+  }
+  if (![environment objectForKey:@"GIO_USE_PORTAL"]) {
+    [environment setObject:@"1" forKey:@"GIO_USE_PORTAL"];
+  }
+  [task setEnvironment:environment];
+  [environment release];
+#endif
   
   BOOL launched = [GWApplicationLauncher launchAndMonitorTask:task];
   
@@ -2101,4 +2112,3 @@
 }
 
 @end
-

@@ -174,6 +174,7 @@ ISOWrite/ISOWriteProgressWindow.m \
 ifeq ($(with_dbus), yes)
   Workspace_OBJC_FILES += DBusConnection.m
   Workspace_OBJC_FILES += FileManagerDBusInterface.m
+  Workspace_OBJC_FILES += FileChooserDBusInterface.m
 endif
 
 # Conditionally add AppImageIconProvider.m if libsquashfs is available

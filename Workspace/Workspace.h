@@ -142,6 +142,7 @@
   
 #if HAVE_DBUS
   id fileManagerDBusInterface;
+  id fileChooserDBusInterface;
 #endif
   
   NSString *gwProcessName;  	      

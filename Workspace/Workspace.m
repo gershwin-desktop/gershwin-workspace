@@ -70,6 +70,7 @@
 #if HAVE_DBUS
 #import "DBusConnection.h"
 #import "FileManagerDBusInterface.h"
+#import "FileChooserDBusInterface.h"
 #endif
 
 
@@ -175,6 +176,7 @@ NSString *_pendingSystemActionTitle = nil;
   
 #if HAVE_DBUS
   DESTROY (fileManagerDBusInterface);
+  DESTROY (fileChooserDBusInterface);
 #endif
     
   [super dealloc];
@@ -985,6 +987,15 @@ NSString *_pendingSystemActionTitle = nil;
     DESTROY(fileManagerDBusInterface);
   } else {
     NSLog(@"Workspace: FileManager DBus interface registered successfully");
+  }
+
+  // Initialize and register the FileChooser portal interface
+  fileChooserDBusInterface = [[FileChooserDBusInterface alloc] initWithWorkspace:self];
+  if (![fileChooserDBusInterface registerOnDBus]) {
+    NSLog(@"Workspace: Warning - Failed to register FileChooser portal interface");
+    DESTROY(fileChooserDBusInterface);
+  } else {
+    NSLog(@"Workspace: FileChooser portal interface registered successfully");
   }
 #endif
 }
@@ -4580,4 +4591,3 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
 }
 
 @end
-
