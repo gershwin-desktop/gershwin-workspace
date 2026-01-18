@@ -101,7 +101,6 @@ NSString *_pendingSystemActionTitle = nil;
   #define TSHF_MAXF 999
 #endif
 
-
 + (void)initialize
 {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
@@ -686,75 +685,6 @@ NSString *_pendingSystemActionTitle = nil;
   RELEASE (mainMenu);
 }
 
-#if HAVE_DBUS
-- (BOOL)waitForAppMenuRegistrarWithTimeoutMs:(int)timeoutMs
-{
-  NSLog(@"[Menu Detection] Starting AppMenu.Registrar detection (timeout: %dms)", timeoutMs);
-  
-  const char *gtkModulesEnv = getenv("GTK_MODULES");
-  if (!gtkModulesEnv || strlen(gtkModulesEnv) == 0) {
-    NSLog(@"[Menu Detection] GTK_MODULES not set, skipping AppMenu.Registrar wait");
-    return NO;
-  }
-  NSString *gtkModules = [NSString stringWithUTF8String:gtkModulesEnv];
-  NSLog(@"[Menu Detection] GTK_MODULES='%@'", gtkModules);
-  if (![gtkModules containsString:@"appmenu"]) {
-    NSLog(@"[Menu Detection] GTK_MODULES does not contain 'appmenu', skipping wait");
-    return NO;
-  }
-
-  NSLog(@"[Menu Detection] Connecting to D-Bus session bus...");
-  GNUDBusConnection *tempConnection = [GNUDBusConnection sessionBus];
-  if (![tempConnection isConnected]) {
-    NSLog(@"[Menu Detection] ERROR: Cannot connect to D-Bus session bus");
-    return NO;
-  }
-  NSLog(@"[Menu Detection] Connected to D-Bus session bus successfully");
-
-  int elapsed = 0;
-  const int intervalMs = 200;
-  int attemptCount = 0;
-  
-  // Wait for the service to appear on the bus
-  // Menu will only register after it's fully initialized and ready
-  NSLog(@"[Menu Detection] Polling for 'com.canonical.AppMenu.Registrar' service...");
-  while (elapsed < timeoutMs) {
-    @try {
-      attemptCount++;
-      printf(".");
-      fflush(stdout);
-      
-      // Process any pending D-Bus messages before checking
-      [tempConnection processMessages];
-      
-      id result = [tempConnection callMethod:@"NameHasOwner"
-                                   onService:@"org.freedesktop.DBus"
-                                  objectPath:@"/org/freedesktop/DBus"
-                                   interface:@"org.freedesktop.DBus"
-                                   arguments:@[@"com.canonical.AppMenu.Registrar"]];
-      if (result && [result respondsToSelector:@selector(boolValue)] && [result boolValue]) {
-        printf("\n");
-        NSLog(@"[Menu Detection] SUCCESS: AppMenu.Registrar service found after %d attempts (%dms)", 
-              attemptCount, elapsed);
-        NSLog(@"[Menu Detection] Menu is ready (service only registers when fully initialized)");
-        return YES;
-      }
-    } @catch (NSException *ex) {
-      printf("\n");
-      NSLog(@"[Menu Detection] EXCEPTION while checking for AppMenu.Registrar: %@", ex);
-      NSLog(@"[Menu Detection] Exception name: %@, reason: %@", [ex name], [ex reason]);
-      return NO;
-    }
-    usleep(intervalMs * 1000);
-    elapsed += intervalMs;
-  }
-  
-  printf("\n");
-  NSLog(@"[Menu Detection] TIMEOUT: AppMenu.Registrar not found after %d attempts (%dms)", 
-        attemptCount, timeoutMs);
-  return NO;
-}
-#endif
 - (void)applicationWillFinishLaunching:(NSNotification *)aNotification
 {
   NSUserDefaults *defaults;
