@@ -22,7 +22,7 @@
 @interface FileChooserDBusInterface : NSObject
 
 @property (nonatomic, assign) Workspace *workspace;
-@property (nonatomic, strong) GNUDBusConnection *dbusConnection;
+@property (nonatomic, retain) GNUDBusConnection *dbusConnection;
 
 - (id)initWithWorkspace:(Workspace *)workspace;
 - (BOOL)registerOnDBus;

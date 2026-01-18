@@ -26,8 +26,9 @@ typedef struct DBusConnection DBusConnectionStruct;
 
 - (void)dealloc
 {
-    self.workspace = nil;
-    self.dbusConnection = nil;
+    _workspace = nil;
+    [_dbusConnection release];
+    _dbusConnection = nil;
     [super dealloc];
 }
 
