@@ -954,6 +954,56 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
                @"  </interface>\n"
                @"</node>";
     }
+
+    if ([path isEqualToString:@"/org/freedesktop/portal/desktop"]) {
+        return @"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
+               @"\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
+               @"<node name=\"/org/freedesktop/portal/desktop\">\n"
+               @"  <interface name=\"org.freedesktop.DBus.Introspectable\">\n"
+               @"    <method name=\"Introspect\">\n"
+               @"      <arg name=\"xml_data\" type=\"s\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"  </interface>\n"
+               @"  <interface name=\"org.freedesktop.portal.FileChooser\">\n"
+               @"    <method name=\"OpenFile\">\n"
+               @"      <arg name=\"parent_window\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"title\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"options\" type=\"a{sv}\" direction=\"in\"/>\n"
+               @"      <arg name=\"handle\" type=\"o\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"    <method name=\"SaveFile\">\n"
+               @"      <arg name=\"parent_window\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"title\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"options\" type=\"a{sv}\" direction=\"in\"/>\n"
+               @"      <arg name=\"handle\" type=\"o\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"    <method name=\"SaveFiles\">\n"
+               @"      <arg name=\"parent_window\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"title\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"options\" type=\"a{sv}\" direction=\"in\"/>\n"
+               @"      <arg name=\"handle\" type=\"o\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"  </interface>\n"
+               @"</node>";
+    }
+
+    if ([path hasPrefix:@"/org/freedesktop/portal/desktop/request/"]) {
+        return @"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
+               @"\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
+               @"<node>\n"
+               @"  <interface name=\"org.freedesktop.DBus.Introspectable\">\n"
+               @"    <method name=\"Introspect\">\n"
+               @"      <arg name=\"xml_data\" type=\"s\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"  </interface>\n"
+               @"  <interface name=\"org.freedesktop.portal.Request\">\n"
+               @"    <signal name=\"Response\">\n"
+               @"      <arg name=\"response\" type=\"u\"/>\n"
+               @"      <arg name=\"results\" type=\"a{sv}\"/>\n"
+               @"    </signal>\n"
+               @"  </interface>\n"
+               @"</node>";
+    }
     
     return @"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
            @"\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
