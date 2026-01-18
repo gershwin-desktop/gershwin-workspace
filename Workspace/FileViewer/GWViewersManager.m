@@ -23,6 +23,11 @@
  */
 
 #import <AppKit/AppKit.h>
+#include <GNUstepGUI/GSDisplayServer.h>
+#ifdef __linux__
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
+#endif
 #import "GWViewersManager.h"
 #import "GWViewer.h"
 #import "GWSpatialViewer.h"
@@ -253,10 +258,29 @@ static GWViewersManager *vwrsmanager = nil;
           NSRect startFrame = pendingOpenAnimationRect;
           hasPendingOpenAnimationRect = NO;
 
+          NSLog(@"[Animation] Pending animation rect detected: origin={%.0f,%.0f} size={%.0fx%.0f}",
+                startFrame.origin.x, startFrame.origin.y, startFrame.size.width, startFrame.size.height);
+
           if (startFrame.size.width < 16) startFrame.size.width = 16;
           if (startFrame.size.height < 16) startFrame.size.height = 16;
-          [win setFrame: startFrame display: NO];
-          [win setFrame: endFrame display: YES animate: YES];
+          
+          // Set the window to its final position
+          [win setFrame: endFrame display: NO];
+          
+          NSLog(@"[Animation] About to call setWindowAnimationRect for window %@", win);
+          
+          // Set X window property with animation rectangle
+          // WindowManager will read this and perform appropriate animation
+          [self setWindowAnimationRect:startFrame forWindow:win];
+          
+          NSLog(@"[Animation] Animation rect set, now showing window");
+          
+          // Now show the window - WindowManager will animate it
+          [win makeKeyAndOrderFront: nil];
+        }
+      else
+        {
+          NSLog(@"[Animation] No pending animation rect for new window");
         }
       
       [viewers addObject: viewer];
@@ -275,8 +299,11 @@ static GWViewersManager *vwrsmanager = nil;
 
 - (void)setPendingOpenAnimationRect:(NSRect)rect
 {
+  NSLog(@"[Animation] setPendingOpenAnimationRect called: origin={%.0f,%.0f} size={%.0fx%.0f}",
+        rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
   pendingOpenAnimationRect = rect;
   hasPendingOpenAnimationRect = !NSEqualRects(rect, NSZeroRect);
+  NSLog(@"[Animation] hasPendingOpenAnimationRect = %d", hasPendingOpenAnimationRect);
 }
 
 - (NSArray *)viewersForBaseNode:(FSNode *)node
@@ -1028,6 +1055,64 @@ static GWViewersManager *vwrsmanager = nil;
 {
   // Notification that viewer showed a node
   // Can be used for history tracking or other features
+}
+
+#pragma mark - Window Animation Support
+
+- (void)setWindowAnimationRect:(NSRect)rect forWindow:(NSWindow *)window {
+  // Set X11 window property _GERSHWIN_WINDOW_OPEN_ANIMATION_RECT
+  // This will be read by WindowManager to perform the animation
+  // Format: 4 32-bit integers (x, y, width, height)
+  
+#ifdef __linux__
+  GSDisplayServer *server = GSServerForWindow(window);
+  if (!server) {
+    server = GSCurrentServer();
+  }
+  if (!server) {
+    NSLog(@"[Animation] No display server available for window animation");
+    return;
+  }
+  
+  Display *display = (Display *)[server serverDevice];
+  if (!display) {
+    NSLog(@"[Animation] No X11 display available for animation property");
+    return;
+  }
+  
+  void *winptr = [server windowDevice:[window windowNumber]];
+  if (!winptr) {
+    NSLog(@"[Animation] No X11 window device for animation property");
+    return;
+  }
+  Window xwindow = *(Window *)winptr;
+  if (xwindow == 0) {
+    NSLog(@"[Animation] Invalid X11 window id for animation property");
+    return;
+  }
+  
+  // Convert NSRect to screen coordinates (X11 has origin at top-left)
+  NSScreen *screen = [window screen];
+  if (!screen) screen = [NSScreen mainScreen];
+  NSRect screenFrame = [screen frame];
+  
+  // Compute absolute X11 screen coordinates (account for screen origin and flip Y)
+  int32_t x = (int32_t)(rect.origin.x + screenFrame.origin.x);
+  int32_t y = (int32_t)(screenFrame.origin.y + screenFrame.size.height - rect.origin.y - rect.size.height);
+  int32_t width = (int32_t)rect.size.width;
+  int32_t height = (int32_t)rect.size.height;
+  
+  int32_t data[4] = {x, y, width, height};
+  
+  Atom animAtom = XInternAtom(display, "_GERSHWIN_WINDOW_OPEN_ANIMATION_RECT", False);
+  XChangeProperty(display, xwindow, animAtom, XA_CARDINAL, 32,
+                  PropModeReplace, (unsigned char *)data, 4);
+  
+  XFlush(display);
+  
+  NSLog(@"[Animation] Set rect on window %lu (screen origin {%.0f,%.0f}): {%d, %d, %d, %d}", 
+        (unsigned long)xwindow, screenFrame.origin.x, screenFrame.origin.y, x, y, width, height);
+#endif
 }
 
 @end

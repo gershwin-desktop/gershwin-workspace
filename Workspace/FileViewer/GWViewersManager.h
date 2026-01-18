@@ -114,6 +114,7 @@
 
 // Window open animation support
 - (void)setPendingOpenAnimationRect:(NSRect)rect;
+- (void)setWindowAnimationRect:(NSRect)rect forWindow:(NSWindow *)window;
                   
 - (void)openAsFolderSelectionInViewer:(id)viewer;
 
