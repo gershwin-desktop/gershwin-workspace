@@ -27,6 +27,7 @@
 #ifdef __linux__
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
+#include <stdint.h>
 #endif
 #import "GWViewersManager.h"
 #import "GWViewer.h"
@@ -1085,12 +1086,13 @@ static GWViewersManager *vwrsmanager = nil;
     return;
   }
   
+  // windowDevice returns a Window ID (cast to void*), not a pointer to Window
   void *winptr = [server windowDevice:[window windowNumber]];
   if (!winptr) {
     NSLog(@"[Animation] No X11 window device for animation property");
     return;
   }
-  Window xwindow = *(Window *)winptr;
+  Window xwindow = (Window)(uintptr_t)winptr;  // Cast directly, don't dereference
   if (xwindow == 0) {
     NSLog(@"[Animation] Invalid X11 window id for animation property");
     return;
@@ -1113,11 +1115,32 @@ static GWViewersManager *vwrsmanager = nil;
   
   int32_t data[4] = {x, y, width, height};
   
+  // Error checking: validate parameters before calling X11
+  if (!display || xwindow == 0) {
+    NSLog(@"[Animation] Invalid display or X window for setting animation rect");
+    return;
+  }
+  
+  // Set error handler to catch X11 errors gracefully
+  int (*oldHandler)(Display *, XErrorEvent *) = XSetErrorHandler(NULL);
+  
   Atom animAtom = XInternAtom(display, "_GERSHWIN_WINDOW_OPEN_ANIMATION_RECT", False);
-  XChangeProperty(display, xwindow, animAtom, XA_CARDINAL, 32,
-                  PropModeReplace, (unsigned char *)data, 4);
+  if (animAtom == None) {
+    NSLog(@"[Animation] Failed to intern animation atom");
+    XSetErrorHandler(oldHandler);
+    return;
+  }
+  
+  int status = XChangeProperty(display, xwindow, animAtom, XA_CARDINAL, 32,
+                               PropModeReplace, (unsigned char *)data, 4);
+  if (status == BadWindow) {
+    NSLog(@"[Animation] XChangeProperty failed: window %lu is invalid", (unsigned long)xwindow);
+    XSetErrorHandler(oldHandler);
+    return;
+  }
   
   XFlush(display);
+  XSetErrorHandler(oldHandler);
   
   NSLog(@"[Animation] Set rect on window %lu (screen origin {%.0f,%.0f}): {%d, %d, %d, %d}", 
         (unsigned long)xwindow, screenFrame.origin.x, screenFrame.origin.y, x, y, width, height);
