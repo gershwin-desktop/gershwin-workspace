@@ -936,6 +936,25 @@ NSString *_pendingSystemActionTitle = nil;
     DESTROY(fileManagerDBusInterface);
   } else {
     NSLog(@"Workspace: FileManager DBus interface registered successfully");
+    
+    // Set up D-Bus file descriptor monitoring for asynchronous message handling
+    // This ensures FileManager1 receives messages immediately without blocking
+    int dbusFd = [[fileManagerDBusInterface dbusConnection] getFileDescriptor];
+    if (dbusFd >= 0) {
+      NSFileHandle *dbusFileHandle = [[NSFileHandle alloc] initWithFileDescriptor:dbusFd closeOnDealloc:NO];
+      if (dbusFileHandle) {
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                               selector:@selector(processDBusMessages:)
+                                                   name:NSFileHandleDataAvailableNotification
+                                                 object:dbusFileHandle];
+        [dbusFileHandle waitForDataInBackgroundAndNotify];
+        NSLog(@"Workspace: D-Bus file descriptor monitoring enabled (fd: %d)", dbusFd);
+      } else {
+        NSLog(@"Workspace: Warning - Failed to create NSFileHandle for D-Bus fd");
+      }
+    } else {
+      NSLog(@"Workspace: Warning - Failed to get D-Bus file descriptor");
+    }
   }
 #endif
 }
@@ -4486,6 +4505,23 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
 {
   [self emptyTrash:nil];
 }
+
+#if HAVE_DBUS
+- (void)processDBusMessages:(NSNotification *)notification
+{
+  // Process D-Bus messages for FileManager1 service
+  // This is called automatically when data is available on the D-Bus file descriptor
+  if (fileManagerDBusInterface && [fileManagerDBusInterface dbusConnection]) {
+    [[fileManagerDBusInterface dbusConnection] processMessages];
+  }
+  
+  // Re-arm the notification for next message
+  NSFileHandle *fileHandle = [notification object];
+  if (fileHandle) {
+    [fileHandle waitForDataInBackgroundAndNotify];
+  }
+}
+#endif
 
 @end
 
