@@ -1064,6 +1064,11 @@ static GWViewersManager *vwrsmanager = nil;
   // This will be read by WindowManager to perform the animation
   // Format: 4 32-bit integers (x, y, width, height)
   
+  if (!window) {
+    NSLog(@"[Animation] NULL window passed to setWindowAnimationRect");
+    return;
+  }
+  
 #ifdef __linux__
   GSDisplayServer *server = GSServerForWindow(window);
   if (!server) {
@@ -1094,6 +1099,10 @@ static GWViewersManager *vwrsmanager = nil;
   // Convert NSRect to screen coordinates (X11 has origin at top-left)
   NSScreen *screen = [window screen];
   if (!screen) screen = [NSScreen mainScreen];
+  if (!screen) {
+    NSLog(@"[Animation] No screen available for window animation coordinate conversion");
+    return;
+  }
   NSRect screenFrame = [screen frame];
   
   // Compute absolute X11 screen coordinates (account for screen origin and flip Y)
