@@ -45,11 +45,19 @@ typedef struct DBusConnection DBusConnectionStruct;
         return NO;
     }
 
-    BOOL objectRegistered = [self.dbusConnection registerObjectPath:@"/org/freedesktop/portal/desktop"
-                                                          interface:@"org.freedesktop.portal.FileChooser"
-                                                            handler:self];
-    if (!objectRegistered) {
+    BOOL fileChooserRegistered = [self.dbusConnection registerObjectPath:@"/org/freedesktop/portal/desktop"
+                                                               interface:@"org.freedesktop.portal.FileChooser"
+                                                                 handler:self];
+    if (!fileChooserRegistered) {
         NSLog(@"FileChooserDBusInterface: Failed to register file chooser object path");
+        return NO;
+    }
+
+    BOOL propertiesRegistered = [self.dbusConnection registerObjectPath:@"/org/freedesktop/portal/desktop"
+                                                               interface:@"org.freedesktop.DBus.Properties"
+                                                                 handler:self];
+    if (!propertiesRegistered) {
+        NSLog(@"FileChooserDBusInterface: Failed to register properties object path");
         return NO;
     }
 
@@ -61,6 +69,7 @@ typedef struct DBusConnection DBusConnectionStruct;
 {
     NSValue *messageValue = [callInfo objectForKey:@"message"];
     NSString *method = [callInfo objectForKey:@"method"];
+    NSString *interface = [callInfo objectForKey:@"interface"];
 
     if (!messageValue || !method) {
         NSLog(@"FileChooserDBusInterface: Invalid method call info");
@@ -68,6 +77,25 @@ typedef struct DBusConnection DBusConnectionStruct;
     }
 
     DBusMessage *message = (DBusMessage *)[messageValue pointerValue];
+
+    NSLog(@"FileChooserDBusInterface: Received %@.%@", interface, method);
+
+    // Handle Properties.Get for Version
+    if ([interface isEqualToString:@"org.freedesktop.DBus.Properties"] && [method isEqualToString:@"Get"]) {
+        DBusMessageIter iter;
+        if (dbus_message_iter_init(message, &iter)) {
+            NSString *propInterface = [self stringFromIterator:&iter];
+            if (dbus_message_iter_next(&iter)) {
+                NSString *propName = [self stringFromIterator:&iter];
+                if ([propInterface isEqualToString:@"org.freedesktop.portal.Desktop"] && [propName isEqualToString:@"Version"]) {
+                    [self sendVersionReply:message];
+                    return;
+                }
+            }
+        }
+        [self sendErrorReply:message errorName:"org.freedesktop.DBus.Error.UnknownProperty" errorMessage:"Unknown property"];
+        return;
+    }
 
     NSString *parentWindow = nil;
     NSString *title = nil;
@@ -406,6 +434,31 @@ typedef struct DBusConnection DBusConnectionStruct;
 
     dbus_message_unref(reply);
     return YES;
+}
+
+- (void)sendVersionReply:(DBusMessage *)message
+{
+    DBusMessage *reply = dbus_message_new_method_return(message);
+    if (!reply) {
+        return;
+    }
+
+    DBusMessageIter iter;
+    dbus_message_iter_init_append(reply, &iter);
+
+    DBusMessageIter variantIter;
+    dbus_message_iter_open_container(&iter, DBUS_TYPE_VARIANT, "u", &variantIter);
+    uint32_t version = 3;
+    dbus_message_iter_append_basic(&variantIter, DBUS_TYPE_UINT32, &version);
+    dbus_message_iter_close_container(&iter, &variantIter);
+
+    void *conn = [self.dbusConnection rawConnection];
+    if (conn) {
+        dbus_connection_send((DBusConnectionStruct *)conn, reply, NULL);
+        dbus_connection_flush((DBusConnectionStruct *)conn);
+    }
+
+    dbus_message_unref(reply);
 }
 
 - (void)sendResponseForRequestPath:(NSString *)requestPath

@@ -103,6 +103,7 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
         self.connection = NULL;
         self.connected = NO;
         self.messageHandlers = [[NSMutableDictionary alloc] init];
+        self.registeredObjectPaths = [[NSMutableSet alloc] init];
     }
     return self;
 }
@@ -213,33 +214,42 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
     if (!self.connected || !self.connection) {
         return NO;
     }
+
+    if (!objectPath || !interfaceName) {
+        NSLog(@"DBusConnection: registerObjectPath called with nil objectPath or interfaceName");
+        return NO;
+    }
     
     // Store the handler for this object path
     NSString *key = [NSString stringWithFormat:@"%@:%@", objectPath, interfaceName];
     [self.messageHandlers setObject:handler forKey:key];
     
-    // Register with libdbus so it knows to route messages to us
-    // We use a C callback function that will call our handleIncomingMessage
-    DBusObjectPathVTable vtable = {
-        .unregister_function = NULL,
-        .message_function = dbusObjectPathMessageHandler
-    };
-    
-    DBusError error;
-    dbus_error_init(&error);
-    
-    if (!dbus_connection_try_register_object_path((DBusConnectionStruct *)self.connection,
-                                                   [objectPath UTF8String],
-                                                   &vtable,
-                                                   (__bridge void *)self,
-                                                   &error)) {
-        if (dbus_error_is_set(&error)) {
-            NSLog(@"DBusConnection: Failed to register object path %@: %s", objectPath, error.message);
-            dbus_error_free(&error);
-        } else {
-            NSLog(@"DBusConnection: Failed to register object path %@ (unknown error)", objectPath);
+    if (![self.registeredObjectPaths containsObject:objectPath]) {
+        // Register with libdbus so it knows to route messages to us
+        // We use a C callback function that will call our handleIncomingMessage
+        DBusObjectPathVTable vtable = {
+            .unregister_function = NULL,
+            .message_function = dbusObjectPathMessageHandler
+        };
+
+        DBusError error;
+        dbus_error_init(&error);
+
+        if (!dbus_connection_try_register_object_path((DBusConnectionStruct *)self.connection,
+                                                       [objectPath UTF8String],
+                                                       &vtable,
+                                                       (__bridge void *)self,
+                                                       &error)) {
+            if (dbus_error_is_set(&error)) {
+                NSLog(@"DBusConnection: Failed to register object path %@: %s", objectPath, error.message);
+                dbus_error_free(&error);
+            } else {
+                NSLog(@"DBusConnection: Failed to register object path %@ (unknown error)", objectPath);
+            }
+            return NO;
         }
-        return NO;
+
+        [self.registeredObjectPaths addObject:objectPath];
     }
     
     NSLog(@"DBusConnection: Registered handler for %@ on %@", interfaceName, objectPath);
@@ -963,6 +973,16 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
                @"    <method name=\"Introspect\">\n"
                @"      <arg name=\"xml_data\" type=\"s\" direction=\"out\"/>\n"
                @"    </method>\n"
+               @"  </interface>\n"
+               @"  <interface name=\"org.freedesktop.DBus.Properties\">\n"
+               @"    <method name=\"Get\">\n"
+               @"      <arg name=\"interface_name\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"property_name\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"value\" type=\"v\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"  </interface>\n"
+               @"  <interface name=\"org.freedesktop.portal.Desktop\">\n"
+               @"    <property name=\"Version\" type=\"u\" access=\"read\"/>\n"
                @"  </interface>\n"
                @"  <interface name=\"org.freedesktop.portal.FileChooser\">\n"
                @"    <method name=\"OpenFile\">\n"

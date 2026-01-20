@@ -8,7 +8,6 @@ SUBPROJECTS = \
         lsfupdater \
         ddbd \
         wopen \
-        kdialog \
         uitest \
         isowrite-helper
 
