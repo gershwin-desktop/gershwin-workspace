@@ -103,6 +103,7 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
         self.connection = NULL;
         self.connected = NO;
         self.messageHandlers = [[NSMutableDictionary alloc] init];
+        self.registeredObjectPaths = [[NSMutableSet alloc] init];
     }
     return self;
 }
@@ -213,33 +214,42 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
     if (!self.connected || !self.connection) {
         return NO;
     }
+
+    if (!objectPath || !interfaceName) {
+        NSLog(@"DBusConnection: registerObjectPath called with nil objectPath or interfaceName");
+        return NO;
+    }
     
     // Store the handler for this object path
     NSString *key = [NSString stringWithFormat:@"%@:%@", objectPath, interfaceName];
     [self.messageHandlers setObject:handler forKey:key];
     
-    // Register with libdbus so it knows to route messages to us
-    // We use a C callback function that will call our handleIncomingMessage
-    DBusObjectPathVTable vtable = {
-        .unregister_function = NULL,
-        .message_function = dbusObjectPathMessageHandler
-    };
-    
-    DBusError error;
-    dbus_error_init(&error);
-    
-    if (!dbus_connection_try_register_object_path((DBusConnectionStruct *)self.connection,
-                                                   [objectPath UTF8String],
-                                                   &vtable,
-                                                   (__bridge void *)self,
-                                                   &error)) {
-        if (dbus_error_is_set(&error)) {
-            NSLog(@"DBusConnection: Failed to register object path %@: %s", objectPath, error.message);
-            dbus_error_free(&error);
-        } else {
-            NSLog(@"DBusConnection: Failed to register object path %@ (unknown error)", objectPath);
+    if (![self.registeredObjectPaths containsObject:objectPath]) {
+        // Register with libdbus so it knows to route messages to us
+        // We use a C callback function that will call our handleIncomingMessage
+        DBusObjectPathVTable vtable = {
+            .unregister_function = NULL,
+            .message_function = dbusObjectPathMessageHandler
+        };
+
+        DBusError error;
+        dbus_error_init(&error);
+
+        if (!dbus_connection_try_register_object_path((DBusConnectionStruct *)self.connection,
+                                                       [objectPath UTF8String],
+                                                       &vtable,
+                                                       (__bridge void *)self,
+                                                       &error)) {
+            if (dbus_error_is_set(&error)) {
+                NSLog(@"DBusConnection: Failed to register object path %@: %s", objectPath, error.message);
+                dbus_error_free(&error);
+            } else {
+                NSLog(@"DBusConnection: Failed to register object path %@ (unknown error)", objectPath);
+            }
+            return NO;
         }
-        return NO;
+
+        [self.registeredObjectPaths addObject:objectPath];
     }
     
     NSLog(@"DBusConnection: Registered handler for %@ on %@", interfaceName, objectPath);
@@ -951,6 +961,66 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
                @"      <arg name=\"URIs\" type=\"as\" direction=\"in\"/>\n"
                @"      <arg name=\"StartupId\" type=\"s\" direction=\"in\"/>\n"
                @"    </method>\n"
+               @"  </interface>\n"
+               @"</node>";
+    }
+
+    if ([path isEqualToString:@"/org/freedesktop/portal/desktop"]) {
+        return @"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
+               @"\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
+               @"<node name=\"/org/freedesktop/portal/desktop\">\n"
+               @"  <interface name=\"org.freedesktop.DBus.Introspectable\">\n"
+               @"    <method name=\"Introspect\">\n"
+               @"      <arg name=\"xml_data\" type=\"s\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"  </interface>\n"
+               @"  <interface name=\"org.freedesktop.DBus.Properties\">\n"
+               @"    <method name=\"Get\">\n"
+               @"      <arg name=\"interface_name\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"property_name\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"value\" type=\"v\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"  </interface>\n"
+               @"  <interface name=\"org.freedesktop.portal.Desktop\">\n"
+               @"    <property name=\"Version\" type=\"u\" access=\"read\"/>\n"
+               @"  </interface>\n"
+               @"  <interface name=\"org.freedesktop.portal.FileChooser\">\n"
+               @"    <method name=\"OpenFile\">\n"
+               @"      <arg name=\"parent_window\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"title\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"options\" type=\"a{sv}\" direction=\"in\"/>\n"
+               @"      <arg name=\"handle\" type=\"o\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"    <method name=\"SaveFile\">\n"
+               @"      <arg name=\"parent_window\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"title\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"options\" type=\"a{sv}\" direction=\"in\"/>\n"
+               @"      <arg name=\"handle\" type=\"o\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"    <method name=\"SaveFiles\">\n"
+               @"      <arg name=\"parent_window\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"title\" type=\"s\" direction=\"in\"/>\n"
+               @"      <arg name=\"options\" type=\"a{sv}\" direction=\"in\"/>\n"
+               @"      <arg name=\"handle\" type=\"o\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"  </interface>\n"
+               @"</node>";
+    }
+
+    if ([path hasPrefix:@"/org/freedesktop/portal/desktop/request/"]) {
+        return @"<!DOCTYPE node PUBLIC \"-//freedesktop//DTD D-BUS Object Introspection 1.0//EN\"\n"
+               @"\"http://www.freedesktop.org/standards/dbus/1.0/introspect.dtd\">\n"
+               @"<node>\n"
+               @"  <interface name=\"org.freedesktop.DBus.Introspectable\">\n"
+               @"    <method name=\"Introspect\">\n"
+               @"      <arg name=\"xml_data\" type=\"s\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"  </interface>\n"
+               @"  <interface name=\"org.freedesktop.portal.Request\">\n"
+               @"    <signal name=\"Response\">\n"
+               @"      <arg name=\"response\" type=\"u\"/>\n"
+               @"      <arg name=\"results\" type=\"a{sv}\"/>\n"
+               @"    </signal>\n"
                @"  </interface>\n"
                @"</node>";
     }

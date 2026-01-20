@@ -28,4 +28,3 @@ install-dsutil:
 	@$(MAKE) -C dsutil install TOOL_INSTALL_DIR=$(GNUSTEP_SYSTEM_LIBRARY)/Tools GNUSTEP_SYSTEM_LIBRARY=$(GNUSTEP_SYSTEM_LIBRARY) --no-print-directory
 
 -include GNUmakefile.postamble
-

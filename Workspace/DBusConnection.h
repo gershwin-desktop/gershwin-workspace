@@ -17,6 +17,7 @@ typedef struct DBusMessage DBusMessage;
 @property (nonatomic, assign) void *connection; // DBusConnection pointer (opaque)
 @property (nonatomic, assign) BOOL connected;
 @property (nonatomic, strong) NSMutableDictionary *messageHandlers;
+@property (nonatomic, strong) NSMutableSet *registeredObjectPaths;
 
 + (GNUDBusConnection *)sessionBus;
 - (BOOL)connect;
