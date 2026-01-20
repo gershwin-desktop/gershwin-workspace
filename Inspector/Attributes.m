@@ -33,6 +33,7 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <dispatch/dispatch.h>
 #import "FSNFunctions.h"
 #import "Attributes.h"
 #import "Inspector.h"
@@ -836,13 +837,13 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
   NS_DURING
   {
-    [NSThread detachNewThreadSelector: @selector(createSizerWithPorts:)
-                             toTarget: [Sizer class]
-                           withObject: portArray];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+      [Sizer createSizerWithPorts:portArray];
+    });
   }
   NS_HANDLER
   {
-    NSLog(@"Error! A fatal error occurred while detaching the thread.");
+    NSLog(@"Error! A fatal error occurred while dispatching the task.");
   }
   NS_ENDHANDLER
 }

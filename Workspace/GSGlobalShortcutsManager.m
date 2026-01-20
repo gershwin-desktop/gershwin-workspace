@@ -8,6 +8,7 @@
 #import <AppKit/NSApplication.h>
 #import <AppKit/NSEvent.h>
 #import <AppKit/NSAlert.h>
+#import <dispatch/dispatch.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/XKBlib.h>
@@ -994,13 +995,9 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     [alert setAlertStyle:NSWarningAlertStyle];
     
     // Run the alert on the main thread since X11 event processing may be on a background thread
-    if ([NSThread isMainThread]) {
+    dispatch_async(dispatch_get_main_queue(), ^{
         [alert runModal];
-    } else {
-        [alert performSelectorOnMainThread:@selector(runModal)
-                                withObject:nil
-                             waitUntilDone:NO];
-    }
+    });
 }
 
 - (void)temporarilyDisableAllShortcuts:(NSNotification *)notification

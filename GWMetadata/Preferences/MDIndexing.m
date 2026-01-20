@@ -23,6 +23,7 @@
  */
 
 #import <AppKit/AppKit.h>
+#include <unistd.h>
 #import "MDIndexing.h"
 #import "CategoriesEditor.h"
 #import "StartAppWin.h"
@@ -901,7 +902,7 @@ return; \
 	      }
 
         sleeps++;
-	      [NSThread sleepUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.1]];
+	      usleep(100000); // 0.1 seconds
 	    }
 
       if (sleeps >= 10) {

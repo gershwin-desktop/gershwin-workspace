@@ -63,6 +63,12 @@ ADDITIONAL_GUI_LIBS += -lOperation
 # Include path for DSStore headers (sibling subproject)
 ADDITIONAL_INCLUDE_DIRS += -I../DSStore
 
+# Add libdispatch if available
+HAVE_LIBDISPATCH = 1
+ifeq ($(HAVE_LIBDISPATCH), 1)
+ADDITIONAL_GUI_LIBS += -ldispatch
+endif
+
 Workspace_RESOURCE_FILES = \
   Resources/Icons/* \
   Resources/English.lproj \

@@ -6,6 +6,7 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <dispatch/dispatch.h>
 #import "GWApplicationLauncher.h"
 #import <unistd.h>
 
@@ -35,9 +36,9 @@
                           [task launchPath], @"path",
                           errPipe, @"errPipe",
                           nil];
-    [NSThread detachNewThreadSelector:@selector(_monitorLaunchThread:)
-                             toTarget:self
-                           withObject:info];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+      [self _monitorLaunchThread:info];
+    });
     return YES;
   } @catch (NSException *ex) {
     NSString *path = [task launchPath];
@@ -47,9 +48,9 @@
                                [NSNumber numberWithInt:-1], @"status",
                                reason, @"stderr",
                                nil];
-    [self performSelectorOnMainThread:@selector(_showErrorAlert:)
-                           withObject:errorInfo
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self _showErrorAlert:errorInfo];
+    });
     return NO;
   }
 }
@@ -84,9 +85,9 @@
                                    [NSNumber numberWithInt:status], @"status",
                                    s, @"stderr",
                                    nil];
-        [self performSelectorOnMainThread:@selector(_showErrorAlert:)
-                               withObject:errorInfo
-                            waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+          [self _showErrorAlert:errorInfo];
+        });
         [d release];
       }
     }

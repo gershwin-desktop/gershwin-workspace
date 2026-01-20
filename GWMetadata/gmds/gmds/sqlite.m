@@ -160,9 +160,7 @@ BOOL performWriteQuery(sqlite3 *db, NSString *query)
       
     } else if (err == SQLITE_BUSY) {
       CREATE_AUTORELEASE_POOL(arp); 
-      NSDate *when = [NSDate dateWithTimeIntervalSinceNow: 0.1];
-
-      [NSThread sleepUntilDate: when];
+      usleep(100000); // 0.1 seconds
       NSLog(@"retry %i", retry);
       RELEASE (arp);
 
@@ -201,11 +199,9 @@ char **resultsForQuery(sqlite3 *db, NSString *query, int *rows, int *cols)
 
     } else if ((err == SQLITE_BUSY) || (err == SQLITE_LOCKED)) {
       CREATE_AUTORELEASE_POOL(arp); 
-      NSDate *when = [NSDate dateWithTimeIntervalSinceNow: 0.1];
-
+      usleep(100000); // 0.1 seconds
       sqlite3_free_table(results);
       results = NULL;
-      [NSThread sleepUntilDate: when];
       NSLog(@"retry %i", retry);
       RELEASE (arp);
 

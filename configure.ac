@@ -1,6 +1,8 @@
 AC_PREREQ(2.52)
 AC_INIT(gworkspace, 1.1.0)
 
+builtin(include, config/addlibrarypath.m4)dnl
+
 if test -z "$GNUSTEP_MAKEFILES"; then
   AC_MSG_ERROR([You must run the GNUstep initialization script first!])
 fi
@@ -197,6 +199,67 @@ AC_ARG_WITH(inotify,
   
 AC_SUBST(with_inotify)
 AC_SUBST(INOTIFY_LIBS)
+
+# Check for libdispatch
+#--------------------------------------------------------------------
+
+HAVE_LIBDISPATCH=0
+AC_ARG_ENABLE(libdispatch,
+  [  --disable-libdispatch		Disable dispatching blocks via libdispatch],
+  enable_libdispatch=$enableval,
+  enable_libdispatch=yes)
+
+if test $enable_libdispatch = yes; then
+  AC_ARG_WITH(dispatch-include,
+  [  --with-dispatch-include=PATH       Include path for dispatch header],
+      dispatch_incdir="$withval", dispatch_incdir="/System/Library/Headers")
+  if test ${dispatch_incdir} != "no"; then
+      CPPFLAGS="$CPPFLAGS -I${dispatch_incdir}"
+      INCLUDE_FLAGS="$INCLUDE_FLAGS -I${dispatch_incdir}"
+  fi
+
+  AC_ARG_WITH(dispatch-library,
+  [  --with-dispatch-library=PATH       Library path for dispatch lib],
+      dispatch_libdir="$withval", dispatch_libdir="/System/Library/Libraries")
+  if test ${dispatch_libdir} != "no"; then
+    GS_ADD_LIBRARY_PATH([${dispatch_libdir}])
+  fi
+
+  AC_CHECK_HEADERS(dispatch/dispatch.h, have_dispatch=yes, have_dispatch=no)
+  if test "$have_dispatch" = "yes"; then
+    # check for private header which includes runloop integration functions in
+    # the Swift corelibs libdispatch release
+    AC_CHECK_HEADERS(dispatch/private.h)
+  else
+    AC_CHECK_HEADERS(dispatch.h, have_dispatch=yes, have_dispatch=no)
+  fi
+  if test "$have_dispatch" = "yes"; then
+    AC_CHECK_LIB(dispatch, dispatch_queue_create, have_dispatch=yes, have_dispatch=no)
+    if test "$have_dispatch" = "yes"; then
+      saveLIBS="$LIBS"
+      LIBS="-lobjc -ldispatch";
+      # This check is needed because libdispatch might be linked against a
+      # version of libBlocksRuntime that defines symbols conflicting with libobjc
+      AC_MSG_CHECKING(whether we can link libdispatch and libobjc at the same time)
+      AC_LINK_IFELSE(
+	[AC_LANG_PROGRAM(,)],
+	[have_dispatch=yes],
+	[have_dispatch=no])
+      if test "$have_dispatch" = "yes"; then
+	LIBS="$saveLIBS -ldispatch";
+	AC_MSG_RESULT(yes);
+	HAVE_LIBDISPATCH=1;
+      else
+	LIBS="$saveLIBS";
+	AC_MSG_RESULT(no);
+      fi
+    fi
+  else
+    HAVE_LIBDISPATCH=0;
+    # just ignore libdispatch if it's not there
+  fi
+fi
+AC_SUBST(HAVE_LIBDISPATCH)
 
 AC_CONFIG_FILES([
   GNUmakefile

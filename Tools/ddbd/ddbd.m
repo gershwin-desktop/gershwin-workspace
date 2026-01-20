@@ -24,6 +24,7 @@
  */
 
 #import <AppKit/AppKit.h>
+#import <dispatch/dispatch.h>
 #import "DBKBTreeNode.h"
 #import "DBKVarLenRecordsFile.h"
 #import "ddbd.h"
@@ -103,12 +104,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
     [nc addObserver: self
            selector: @selector(connectionBecameInvalid:)
 	             name: NSConnectionDidDieNotification
-	           object: conn];
-
-    [nc addObserver: self
-       selector: @selector(threadWillExit:)
-           name: NSThreadWillExitNotification
-         object: nil];    
+	           object: conn];    
     
     pathsManager = [[DDBPathsManager alloc] initWithBasePath: dbdir];
     pathslock = [NSRecursiveLock new];
@@ -167,13 +163,13 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 
   NS_DURING
     {
-      [NSThread detachNewThreadSelector: @selector(updaterForTask:)
-		                           toTarget: [DBUpdater class]
-		                         withObject: updaterInfo];
+      dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [DBUpdater updaterForTask:updaterInfo];
+      });
     }
   NS_HANDLER
     {
-      NSLog(@"A fatal error occurred while detaching the thread!");
+      NSLog(@"A fatal error occurred while dispatching the task!");
     }
   NS_ENDHANDLER
 }
@@ -191,13 +187,13 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 
   NS_DURING
     {
-      [NSThread detachNewThreadSelector: @selector(updaterForTask:)
-		                           toTarget: [DBUpdater class]
-		                         withObject: updaterInfo];
+      dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [DBUpdater updaterForTask:updaterInfo];
+      });
     }
   NS_HANDLER
     {
-      NSLog(@"A fatal error occurred while detaching the thread!");
+      NSLog(@"A fatal error occurred while dispatching the task!");
     }
   NS_ENDHANDLER
 }
@@ -273,13 +269,13 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 
   NS_DURING
     {
-      [NSThread detachNewThreadSelector: @selector(updaterForTask:)
-		                           toTarget: [DBUpdater class]
-		                         withObject: updaterInfo];
+      dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [DBUpdater updaterForTask:updaterInfo];
+      });
     }
   NS_HANDLER
     {
-      NSLog(@"A fatal error occurred while detaching the thread!");
+      NSLog(@"A fatal error occurred while dispatching the task!");
     }
   NS_ENDHANDLER
 }

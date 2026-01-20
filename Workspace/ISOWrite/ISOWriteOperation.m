@@ -12,6 +12,7 @@
 
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
+#import <dispatch/dispatch.h>
 
 #import <sys/stat.h>
 #import <sys/ioctl.h>
@@ -316,42 +317,37 @@
 - (void)failWithError:(NSString *)error
 {
   /* Ensure we're on main thread for UI operations */
-  if (![NSThread isMainThread]) {
-    [self performSelectorOnMainThread:@selector(failWithError:)
-                           withObject:error
-                        waitUntilDone:NO];
-    return;
-  }
-  
-  _state = ISOWriteStateFailed;
-  
-  /* Close progress window FIRST before showing error */
-  if (_progressWindow) {
-    @try {
-      [_progressWindow close];
-      DESTROY(_progressWindow);
-    } @catch (NSException *e) {
-      NSLog(@"ISOWriteOperation: Exception closing progress window: %@", e);
+  dispatch_async(dispatch_get_main_queue(), ^{
+    _state = ISOWriteStateFailed;
+    
+    /* Close progress window FIRST before showing error */
+    if (_progressWindow) {
+      @try {
+        [_progressWindow close];
+        DESTROY(_progressWindow);
+      } @catch (NSException *e) {
+        NSLog(@"ISOWriteOperation: Exception closing progress window: %@", e);
+      }
     }
-  }
-  
-  @try {
-    NSRunAlertPanel(
-      NSLocalizedString(@"ISO Write Error", @""),
-      @"%@",
-      NSLocalizedString(@"OK", @""),
-      nil, nil, error ? error : @"Unknown error");
-  } @catch (NSException *e) {
-    NSLog(@"ISOWriteOperation: Exception showing alert: %@", e);
-  }
-  
-  if ([_delegate respondsToSelector:@selector(isoWriteOperation:didFailWithError:)]) {
+    
     @try {
-      [_delegate isoWriteOperation:self didFailWithError:error];
+      NSRunAlertPanel(
+        NSLocalizedString(@"ISO Write Error", @""),
+        @"%@",
+        NSLocalizedString(@"OK", @""),
+        nil, nil, error ? error : @"Unknown error");
     } @catch (NSException *e) {
-      NSLog(@"ISOWriteOperation: Exception calling delegate: %@", e);
+      NSLog(@"ISOWriteOperation: Exception showing alert: %@", e);
     }
-  }
+    
+    if ([_delegate respondsToSelector:@selector(isoWriteOperation:didFailWithError:)]) {
+      @try {
+        [_delegate isoWriteOperation:self didFailWithError:error];
+      } @catch (NSException *e) {
+        NSLog(@"ISOWriteOperation: Exception calling delegate: %@", e);
+      }
+    }
+  });
 }
 
 - (void)performUnmountAndWrite
@@ -379,9 +375,9 @@
   
   /* Start writing in background thread */
   NSLog(@"ISOWriteOperation: Starting write thread");
-  [NSThread detachNewThreadSelector:@selector(writeThread)
-                           toTarget:self
-                         withObject:nil];
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    [self writeThread];
+  });
 }
 
 - (BOOL)unmountAllPartitions
@@ -417,14 +413,14 @@
   _startTime = [[NSDate date] retain];
   
   /* Update UI on main thread */
-  [self performSelectorOnMainThread:@selector(writeDidStart)
-                         withObject:nil
-                      waitUntilDone:NO];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self writeDidStart];
+  });
   
   /* Start progress timer - don't wait to avoid deadlock if main thread is busy */
-  [self performSelectorOnMainThread:@selector(startProgressTimer)
-                         withObject:nil
-                      waitUntilDone:NO];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self startProgressTimer];
+  });
   
   /* Use helper tool with sudo -A -E for privileged device access */
   NSString *helperPath = [[NSBundle mainBundle] pathForResource:@"isowrite-helper" 
@@ -442,9 +438,9 @@
         if (![[NSFileManager defaultManager] fileExistsAtPath:helperPath]) {
           NSLog(@"ISOWriteOperation: ERROR - isowrite-helper not found in any expected location");
           NSString *errorMsg = @"Could not find isowrite-helper tool. Please reinstall Workspace.";
-          [self performSelectorOnMainThread:@selector(writeDidFailWithError:)
-                                 withObject:errorMsg
-                              waitUntilDone:NO];
+          dispatch_async(dispatch_get_main_queue(), ^{
+            [self writeDidFailWithError:errorMsg];
+          });
           DESTROY(pool);
           return;
         }
@@ -455,9 +451,9 @@
   if (!helperPath) {
     NSLog(@"ISOWriteOperation: ERROR - helperPath is nil after search");
     NSString *errorMsg = @"Internal error: helper path is nil";
-    [self performSelectorOnMainThread:@selector(writeDidFailWithError:)
-                           withObject:errorMsg
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self writeDidFailWithError:errorMsg];
+    });
     DESTROY(pool);
     return;
   }
@@ -492,9 +488,9 @@
   if (!outputPipe || !errorPipe) {
     NSLog(@"ISOWriteOperation: ERROR - Failed to create pipes");
     NSString *errorMsg = @"Failed to create communication pipes for write operation";
-    [self performSelectorOnMainThread:@selector(writeDidFailWithError:)
-                           withObject:errorMsg
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self writeDidFailWithError:errorMsg];
+    });
     DESTROY(outputPipe);
     DESTROY(errorPipe);
     DESTROY(task);
@@ -510,9 +506,9 @@
   if (!errorHandle) {
     NSLog(@"ISOWriteOperation: ERROR - Failed to get error pipe handle");
     NSString *errorMsg = @"Failed to create pipe for monitoring write progress";
-    [self performSelectorOnMainThread:@selector(writeDidFailWithError:)
-                           withObject:errorMsg
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self writeDidFailWithError:errorMsg];
+    });
     DESTROY(outputPipe);
     DESTROY(errorPipe);
     DESTROY(task);
@@ -695,22 +691,22 @@
   NSLog(@"ISOWriteOperation: Write operation completed. Success: %@", success ? @"YES" : @"NO");
   
   /* Stop progress timer */
-  [self performSelectorOnMainThread:@selector(stopProgressTimer)
-                         withObject:nil
-                      waitUntilDone:YES];
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    [self stopProgressTimer];
+  });
   
   if (_cancelled) {
     NSLog(@"ISOWriteOperation: Write was cancelled by user");
     _state = ISOWriteStateCancelled;
-    [self performSelectorOnMainThread:@selector(writeWasCancelled)
-                           withObject:nil
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self writeWasCancelled];
+    });
   } else if (!success) {
     NSLog(@"ISOWriteOperation: Write failed");
     NSString *errorMsg = errorMessage ? errorMessage : @"Error writing to device.";
-    [self performSelectorOnMainThread:@selector(failWithError:)
-                           withObject:errorMsg
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self failWithError:errorMsg];
+    });
     DESTROY(errorMessage);
   } else {
     /* Trigger partition table rescan before verification/completion */
@@ -724,9 +720,9 @@
     } else {
       _state = ISOWriteStateCompleted;
       NSLog(@"ISOWriteOperation: Write completed successfully");
-      [self performSelectorOnMainThread:@selector(writeDidComplete)
-                             withObject:nil
-                          waitUntilDone:NO];
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [self writeDidComplete];
+      });
     }
   }
   
@@ -778,9 +774,9 @@
   NSLog(@"ISOWriteOperation: Beginning verification");
   _state = ISOWriteStateVerifying;
   
-  [self performSelectorOnMainThread:@selector(verifyDidStart)
-                         withObject:nil
-                      waitUntilDone:YES];
+  dispatch_sync(dispatch_get_main_queue(), ^{
+    [self verifyDidStart];
+  });
   
   /* Verify by reading first 10MB, middle 10MB, and last 10MB for balance of speed vs thoroughness */
   NSLog(@"ISOWriteOperation: Opening files for verification");
@@ -798,9 +794,9 @@
       NSLog(@"ISOWriteOperation: WARNING - Cannot open files for verification (isoHandle=%p, devFd=%d, errno=%d)", 
             isoHandle, devFd, errno);
       _state = ISOWriteStateCompleted;
-      [self performSelectorOnMainThread:@selector(writeDidComplete)
-                             withObject:nil
-                          waitUntilDone:NO];
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [self writeDidComplete];
+      });
       if (devFd >= 0) close(devFd);
       return;
     }
@@ -815,9 +811,9 @@
     NSLog(@"ISOWriteOperation: ERROR - Failed to allocate verification buffer");
     close(devFd);
     [isoHandle closeFile];
-    [self performSelectorOnMainThread:@selector(failWithError:)
-                           withObject:@"Memory allocation failed during verification"
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self failWithError:@"Memory allocation failed during verification"];
+    });
     return;
   }
   
@@ -892,17 +888,17 @@
     NSString *errorMsg = [NSString stringWithFormat:
                           @"Verification failed at %@ of image!\n\nThe written data does not match the ISO file. The device may be defective.",
                           failureLocation];
-    [self performSelectorOnMainThread:@selector(failWithError:)
-                           withObject:errorMsg
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self failWithError:errorMsg];
+    });
     return;
   }
   
   NSLog(@"ISOWriteOperation: Verification successful");
   _state = ISOWriteStateCompleted;
-  [self performSelectorOnMainThread:@selector(writeDidComplete)
-                         withObject:nil
-                      waitUntilDone:NO];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self writeDidComplete];
+  });
 }
 
 #pragma mark - UI Updates (Main Thread)
@@ -929,13 +925,13 @@
 
 - (void)updateVerificationProgress:(double)progress status:(NSString *)status
 {
-  [_progressWindow performSelectorOnMainThread:@selector(setProgress:)
-                                    withObject:[NSNumber numberWithDouble:progress]
-                                 waitUntilDone:NO];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [_progressWindow setProgress:progress];
+  });
   if (status) {
-    [_progressWindow performSelectorOnMainThread:@selector(setStatus:)
-                                      withObject:status
-                                   waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [_progressWindow setStatus:status];
+    });
   }
 }
 

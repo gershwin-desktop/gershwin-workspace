@@ -54,7 +54,6 @@
       [[NSRunLoop currentRunLoop] run];
     }
   [pool release];
-  [NSThread exit];
 }
 
 

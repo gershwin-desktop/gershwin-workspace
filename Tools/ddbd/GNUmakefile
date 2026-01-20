@@ -16,6 +16,7 @@ DDBMDStorage.m
 
 ddbd_TOOL_LIBS += -lDBKit
 ddbd_TOOL_LIBS += -lgnustep-gui $(SYSTEM_LIBS)
+ddbd_TOOL_LIBS += -ldispatch
 
 -include GNUmakefile.preamble
 

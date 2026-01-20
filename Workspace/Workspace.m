@@ -38,6 +38,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
+#import <dispatch/dispatch.h>
 
 #import "GWFunctions.h"
 #import "FSNodeRep.h"
@@ -3074,13 +3075,13 @@ NSString *_pendingSystemActionTitle = nil;
   }
   
   /* Return to main thread to update UI */
-  [self performSelectorOnMainThread:@selector(finishMountOperation:)
-                         withObject:[NSDictionary dictionaryWithObjectsAndKeys:
-                                     mountPoint ? mountPoint : [NSNull null], @"mountPoint",
-                                     progressPanel, @"progressPanel",
-                                     hostname, @"hostname",
-                                     nil]
-                      waitUntilDone:NO];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self finishMountOperation:[NSDictionary dictionaryWithObjectsAndKeys:
+                                 mountPoint ? mountPoint : [NSNull null], @"mountPoint",
+                                 progressPanel, @"progressPanel",
+                                 hostname, @"hostname",
+                                 nil]];
+  });
   
   [mountInfo release];
   [pool release];
@@ -3351,9 +3352,9 @@ NSString *_pendingSystemActionTitle = nil;
       [mountInfo retain];
       
       /* Mount on a background thread to keep UI responsive */
-      [NSThread detachNewThreadSelector:@selector(performMountInBackground:)
-                               toTarget:self
-                             withObject:mountInfo];
+      dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [self performMountInBackground:mountInfo];
+      });
       
       [serviceItem release];
     }
@@ -4198,9 +4199,9 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
       actionTitle ? actionTitle : (id)[NSNull null], @"title",
       nil];
 
-    [NSThread detachNewThreadSelector:@selector(_performSystemActionAsync:)
-                             toTarget:self
-                           withObject: payload];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+      [self _performSystemActionAsync:payload];
+    });
 
     RELEASE(actionType);
     RELEASE(actionTitle);
@@ -4220,9 +4221,9 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
     [info objectForKey:@"title"], @"title",
     nil];
 
-  [self performSelectorOnMainThread:@selector(_finalizeSystemAction:)
-                         withObject: result
-                      waitUntilDone: NO];
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self _finalizeSystemAction:result];
+  });
 
   RELEASE(pool);
 }

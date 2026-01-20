@@ -26,6 +26,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
+#import <dispatch/dispatch.h>
 
 #import "FileOpInfo.h"
 #import "Operation.h"
@@ -301,10 +302,6 @@ static NSString *nibName = @"FileOperationWin";
 
 - (void) threadWillExit: (NSNotification *)notification
 {
-  [nc removeObserver:self
-                name:NSThreadWillExitNotification
-              object:nil];
-  
   [nc removeObserver: self
                 name: NSConnectionDidDieNotification 
               object: execconn];
@@ -330,23 +327,18 @@ static NSString *nibName = @"FileOperationWin";
   [nc addObserver: self
          selector: @selector(connectionDidDie:)
              name: NSConnectionDidDieNotification
-           object: execconn];      
-
-  [nc addObserver: self
-         selector: @selector(threadWillExit:)
-             name: NSThreadWillExitNotification
-           object: nil];  
+           object: execconn];  
 
   NS_DURING
     {
-      [NSThread detachNewThreadSelector: @selector(setPorts:)
-		                           toTarget: [FileOpExecutor class]
-		                         withObject: ports];
+      dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        [FileOpExecutor setPorts:ports];
+      });
     }
   NS_HANDLER
     {
       NSRunAlertPanel(nil, 
-                      NSLocalizedString(@"A fatal error occurred while detaching the thread!", @""),
+                      NSLocalizedString(@"A fatal error occurred while dispatching the task!", @""),
                       NSLocalizedString(@"Continue", @""), 
                       nil, 
                       nil);

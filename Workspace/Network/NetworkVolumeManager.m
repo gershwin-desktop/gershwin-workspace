@@ -405,7 +405,7 @@ static NetworkVolumeManager *sharedInstance = nil;
       }
       [umountTask release];
       /* Wait a moment for cleanup to complete */
-      [NSThread sleepForTimeInterval:0.5];
+      usleep(500000); // 0.5 seconds
     }
   }
   
@@ -735,7 +735,7 @@ static NetworkVolumeManager *sharedInstance = nil;
 
   /* Wait for viewers to close and watchers to be removed to prevent "target is busy" */
   NSLog(@"NetworkVolumeManager: Waiting for viewers and watchers to close...");
-  [NSThread sleepForTimeInterval:2.0];
+  usleep(2000000); // 2.0 seconds
 
   BOOL unmountSuccess = NO;
   

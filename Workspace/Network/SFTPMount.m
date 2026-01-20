@@ -7,6 +7,7 @@
 #import "SFTPMount.h"
 #import "NetworkServiceItem.h"
 #import <GNUstepBase/GNUstep.h>
+#include <unistd.h>
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__)
 # include <sys/param.h>
 # include <sys/mount.h>
@@ -628,7 +629,7 @@
             }
             [umountTask release];
             /* Wait a moment for unmount to complete */
-            [NSThread sleepForTimeInterval:0.5];
+            usleep(500000); // 0.5 seconds
           }
         }
       }
@@ -645,7 +646,7 @@
       BOOL mounted = NO;
       
       while (attempt < maxAttempts && !mounted) {
-        [NSThread sleepForTimeInterval:0.5];
+        usleep(500000); // 0.5 seconds
         attempt++;
         
         /* Check if process is still running */

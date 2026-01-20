@@ -11,6 +11,7 @@
 #import "../FSNode/FSNode.h"
 #import "FileViewer/GWViewersManager.h"
 #import "Desktop/GWDesktopManager.h"
+#import <dispatch/dispatch.h>
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h>
@@ -274,9 +275,9 @@ typedef struct DBusConnection DBusConnectionStruct;
         
         // Open the folder in Workspace
         // Use the main thread to interact with the UI
-        [self performSelectorOnMainThread:@selector(openFolderOnMainThread:)
-                               withObject:path
-                            waitUntilDone:NO];
+        dispatch_async(dispatch_get_main_queue(), ^{
+          [self openFolderOnMainThread:path];
+        });
     }
 }
 
@@ -423,9 +424,9 @@ typedef struct DBusConnection DBusConnectionStruct;
     }
     
     // Open parent directories and select items
-    [self performSelectorOnMainThread:@selector(showItemsOnMainThread:)
-                           withObject:itemsByParent
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self showItemsOnMainThread:itemsByParent];
+    });
 }
 
 - (void)showItemsOnMainThread:(NSDictionary *)itemsByParent
@@ -479,9 +480,9 @@ typedef struct DBusConnection DBusConnectionStruct;
     }
     
     // Show properties for the items using the Inspector
-    [self performSelectorOnMainThread:@selector(showPropertiesOnMainThread:)
-                           withObject:paths
-                        waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self showPropertiesOnMainThread:paths];
+    });
 }
 
 - (void)showPropertiesOnMainThread:(NSArray *)paths

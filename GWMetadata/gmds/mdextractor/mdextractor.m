@@ -26,6 +26,7 @@
 #include <sys/stat.h>
 #include <limits.h>
 #include <float.h>
+#include <unistd.h>
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -555,7 +556,7 @@ static void time_stamp(sqlite3_context *context, int argc, sqlite3_value **argv)
 	      }
 
         sleeps++;
-	      [NSThread sleepUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.1]];
+	      usleep(100000); // 0.1 seconds
 	    }
 
       if (sleeps >= 10) {
@@ -603,7 +604,7 @@ static void time_stamp(sqlite3_context *context, int argc, sqlite3_value **argv)
 	      }
 
         sleeps++;
-	      [NSThread sleepUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.1]];
+	      usleep(100000); // 0.1 seconds
 	    }
 
       if (sleeps >= 10) {

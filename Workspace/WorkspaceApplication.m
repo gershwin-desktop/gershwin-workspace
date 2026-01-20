@@ -24,6 +24,7 @@
 
 #include <math.h>
 #include <string.h>
+#include <unistd.h>
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -1243,7 +1244,7 @@
 	    }
 	    
       sleeps++;
-	    [NSThread sleepUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.1]];
+	    usleep(100000); // 0.1 seconds
 	  }
     
     if (sleeps >= 10) {
@@ -1303,7 +1304,7 @@
 	    }
 	    
       sleeps++;
-	    [NSThread sleepUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.1]];
+	    usleep(100000); // 0.1 seconds
 	  }
     
     if (sleeps >= 10) {

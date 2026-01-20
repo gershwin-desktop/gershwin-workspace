@@ -28,6 +28,7 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <dispatch/dispatch.h>
 #import "GWThumbnailer.h"
 
 static Thumbnailer *sharedThumbnailerInstance = nil;
@@ -367,7 +368,9 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   if ([pathsInProcessing containsObject:path])
     return;
   [pathsInProcessing addObject:path];
-  [NSThread detachNewThreadSelector:@selector(_makeThumbnails:) toTarget:self withObject:path];
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    [self _makeThumbnails:path];
+  });
 }
 
 - (void)_removeThumbnails:(NSString *)path
@@ -431,7 +434,9 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   if ([pathsInProcessing containsObject:path])
     return;
   [pathsInProcessing addObject:path];
-  [NSThread detachNewThreadSelector:@selector(_removeThumbnails:) toTarget:self withObject:path];
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    [self _removeThumbnails:path];
+  });
 }
 
 - (BOOL)registerThumbnailData:(NSData *)data 

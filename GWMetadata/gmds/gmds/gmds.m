@@ -24,6 +24,7 @@
 
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include "gmds.h"
 #include "dbschema.h"
 #include "config.h"
@@ -424,9 +425,7 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
 
       } else if (err == SQLITE_BUSY) {
         CREATE_AUTORELEASE_POOL(arp); 
-        NSDate *when = [NSDate dateWithTimeIntervalSinceNow: 0.1];
-
-        [NSThread sleepUntilDate: when];
+        usleep(100000); // 0.1 seconds
         GWDebugLog(@"retry %i", retry);
         RELEASE (arp);
 
@@ -561,9 +560,7 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
 
         } else if (err == SQLITE_BUSY) {
           CREATE_AUTORELEASE_POOL(arp); 
-          NSDate *when = [NSDate dateWithTimeIntervalSinceNow: 0.1];
-
-          [NSThread sleepUntilDate: when];
+          usleep(100000); // 0.1 seconds
           GWDebugLog(@"retry %i", retry);
           RELEASE (arp);
 

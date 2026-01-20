@@ -640,6 +640,7 @@ ac_header_c_list=
 enable_option_checking=no
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
+HAVE_LIBDISPATCH
 INOTIFY_LIBS
 with_inotify
 BUILD_GWMETADATA
@@ -706,6 +707,9 @@ enable_squashfs
 enable_gwmetadata
 enable_debug_log
 with_inotify
+enable_libdispatch
+with_dispatch_include
+with_dispatch_library
 '
       ac_precious_vars='build_alias
 host_alias
@@ -1341,12 +1345,15 @@ Optional Features:
   --disable-squashfs       Force disable AppImage icon support
   --enable-gwmetadata     Enable GWMetadata
   --enable-debug-log      Enable debug logging
+  --disable-libdispatch		Disable dispatching blocks via libdispatch
 
 Optional Packages:
   --with-PACKAGE[=ARG]    use PACKAGE [ARG=yes]
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-inotify          Force enable fswatcher-inotify
   --without-inotify       Force disable fswatcher-inotify
+  --with-dispatch-include=PATH       Include path for dispatch header
+  --with-dispatch-library=PATH       Library path for dispatch lib
 
 Some influential environment variables:
   CC          C compiler command
@@ -2360,6 +2367,9 @@ ac_cpp='$CPP $CPPFLAGS'
 ac_compile='$CC -c $CFLAGS $CPPFLAGS conftest.$ac_ext >&5'
 ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $LIBS >&5'
 ac_compiler_gnu=$ac_cv_c_compiler_gnu
+
+
+
 
 
 
@@ -3954,6 +3964,194 @@ fi
 
 
 
+
+
+# Check for libdispatch
+#--------------------------------------------------------------------
+
+HAVE_LIBDISPATCH=0
+# Check whether --enable-libdispatch was given.
+if test ${enable_libdispatch+y}
+then :
+  enableval=$enable_libdispatch; enable_libdispatch=$enableval
+else case e in #(
+  e) enable_libdispatch=yes ;;
+esac
+fi
+
+
+if test $enable_libdispatch = yes; then
+
+# Check whether --with-dispatch-include was given.
+if test ${with_dispatch_include+y}
+then :
+  withval=$with_dispatch_include; dispatch_incdir="$withval"
+else case e in #(
+  e) dispatch_incdir="/System/Library/Headers" ;;
+esac
+fi
+
+  if test ${dispatch_incdir} != "no"; then
+      CPPFLAGS="$CPPFLAGS -I${dispatch_incdir}"
+      INCLUDE_FLAGS="$INCLUDE_FLAGS -I${dispatch_incdir}"
+  fi
+
+
+# Check whether --with-dispatch-library was given.
+if test ${with_dispatch_library+y}
+then :
+  withval=$with_dispatch_library; dispatch_libdir="$withval"
+else case e in #(
+  e) dispatch_libdir="/System/Library/Libraries" ;;
+esac
+fi
+
+  if test ${dispatch_libdir} != "no"; then
+
+case "$target_os" in
+	netbsd*)
+		LDFLAGS="$LDFLAGS -L${dispatch_libdir} -Wl,-R${dispatch_libdir}"
+		LDIR_FLAGS="$LDIR_FLAGS -Wl,-R${dispatch_libdir} -L${dispatch_libdir}";;
+	*)
+		LDFLAGS="$LDFLAGS -Wl,-rpath,${dispatch_libdir} -L${dispatch_libdir}"
+		LDIR_FLAGS="$LDIR_FLAGS -Wl,-rpath,${dispatch_libdir} -L${dispatch_libdir}";;
+esac
+
+  fi
+
+         for ac_header in dispatch/dispatch.h
+do :
+  ac_fn_c_check_header_compile "$LINENO" "dispatch/dispatch.h" "ac_cv_header_dispatch_dispatch_h" "$ac_includes_default"
+if test "x$ac_cv_header_dispatch_dispatch_h" = xyes
+then :
+  printf "%s\n" "#define HAVE_DISPATCH_DISPATCH_H 1" >>confdefs.h
+ have_dispatch=yes
+else case e in #(
+  e) have_dispatch=no ;;
+esac
+fi
+
+done
+  if test "$have_dispatch" = "yes"; then
+    # check for private header which includes runloop integration functions in
+    # the Swift corelibs libdispatch release
+    ac_fn_c_check_header_compile "$LINENO" "dispatch/private.h" "ac_cv_header_dispatch_private_h" "$ac_includes_default"
+if test "x$ac_cv_header_dispatch_private_h" = xyes
+then :
+  printf "%s\n" "#define HAVE_DISPATCH_PRIVATE_H 1" >>confdefs.h
+
+fi
+
+  else
+           for ac_header in dispatch.h
+do :
+  ac_fn_c_check_header_compile "$LINENO" "dispatch.h" "ac_cv_header_dispatch_h" "$ac_includes_default"
+if test "x$ac_cv_header_dispatch_h" = xyes
+then :
+  printf "%s\n" "#define HAVE_DISPATCH_H 1" >>confdefs.h
+ have_dispatch=yes
+else case e in #(
+  e) have_dispatch=no ;;
+esac
+fi
+
+done
+  fi
+  if test "$have_dispatch" = "yes"; then
+    { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking for dispatch_queue_create in -ldispatch" >&5
+printf %s "checking for dispatch_queue_create in -ldispatch... " >&6; }
+if test ${ac_cv_lib_dispatch_dispatch_queue_create+y}
+then :
+  printf %s "(cached) " >&6
+else case e in #(
+  e) ac_check_lib_save_LIBS=$LIBS
+LIBS="-ldispatch  $LIBS"
+cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+/* Override any GCC internal prototype to avoid an error.
+   Use char because int might match the return type of a GCC
+   builtin and then its argument prototype would still apply.
+   The 'extern "C"' is for builds by C++ compilers;
+   although this is not generally supported in C code supporting it here
+   has little cost and some practical benefit (sr 110532).  */
+#ifdef __cplusplus
+extern "C"
+#endif
+char dispatch_queue_create (void);
+int
+main (void)
+{
+return dispatch_queue_create ();
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  ac_cv_lib_dispatch_dispatch_queue_create=yes
+else case e in #(
+  e) ac_cv_lib_dispatch_dispatch_queue_create=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+LIBS=$ac_check_lib_save_LIBS ;;
+esac
+fi
+{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: $ac_cv_lib_dispatch_dispatch_queue_create" >&5
+printf "%s\n" "$ac_cv_lib_dispatch_dispatch_queue_create" >&6; }
+if test "x$ac_cv_lib_dispatch_dispatch_queue_create" = xyes
+then :
+  have_dispatch=yes
+else case e in #(
+  e) have_dispatch=no ;;
+esac
+fi
+
+    if test "$have_dispatch" = "yes"; then
+      saveLIBS="$LIBS"
+      LIBS="-lobjc -ldispatch";
+      # This check is needed because libdispatch might be linked against a
+      # version of libBlocksRuntime that defines symbols conflicting with libobjc
+      { printf "%s\n" "$as_me:${as_lineno-$LINENO}: checking whether we can link libdispatch and libobjc at the same time" >&5
+printf %s "checking whether we can link libdispatch and libobjc at the same time... " >&6; }
+      cat confdefs.h - <<_ACEOF >conftest.$ac_ext
+/* end confdefs.h.  */
+
+int
+main (void)
+{
+
+  ;
+  return 0;
+}
+_ACEOF
+if ac_fn_c_try_link "$LINENO"
+then :
+  have_dispatch=yes
+else case e in #(
+  e) have_dispatch=no ;;
+esac
+fi
+rm -f core conftest.err conftest.$ac_objext conftest.beam \
+    conftest$ac_exeext conftest.$ac_ext
+      if test "$have_dispatch" = "yes"; then
+	LIBS="$saveLIBS -ldispatch";
+	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: yes" >&5
+printf "%s\n" "yes" >&6; };
+	HAVE_LIBDISPATCH=1;
+      else
+	LIBS="$saveLIBS";
+	{ printf "%s\n" "$as_me:${as_lineno-$LINENO}: result: no" >&5
+printf "%s\n" "no" >&6; };
+      fi
+    fi
+  else
+    HAVE_LIBDISPATCH=0;
+    # just ignore libdispatch if it's not there
+  fi
+fi
 
 
 ac_config_files="$ac_config_files GNUmakefile"

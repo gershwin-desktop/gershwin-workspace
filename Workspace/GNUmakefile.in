@@ -37,6 +37,7 @@ Workspace_HAS_RESOURCE_BUNDLE = yes
 ADDITIONAL_GUI_LIBS += -lFSNode
 ADDITIONAL_GUI_LIBS += -lInspector
 ADDITIONAL_GUI_LIBS += -lOperation
+ADDITIONAL_GUI_LIBS += -ldispatch
 
 # Include path for DSStore headers (sibling subproject)
 ADDITIONAL_INCLUDE_DIRS += -I../DSStore

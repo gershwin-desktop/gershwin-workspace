@@ -26,6 +26,7 @@
 
 #import <AppKit/AppKit.h>
 #include <GNUstepGUI/GSDisplayServer.h>
+#import <dispatch/dispatch.h>
 #import "GWDesktopManager.h"
 #import "GWDesktopWindow.h"
 #import "GWDesktopView.h"
@@ -480,13 +481,13 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 {
   NS_DURING
   {
-    [NSThread detachNewThreadSelector: @selector(mountRemovableMedia)
-                             toTarget: [GWMounter class]
-                           withObject: nil];
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+      [GWMounter mountRemovableMedia];
+    });
   }
   NS_HANDLER
   {
-    NSLog(@"Error! A fatal error occurred while detaching the thread.");
+    NSLog(@"Error! A fatal error occurred while dispatching the task.");
   }
   NS_ENDHANDLER
 }
@@ -623,8 +624,10 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
 - (void)verifyAndShowVolumeAtPath:(NSString *)mountRootPath
 {
-  /* Spawn a background worker thread to perform verification so we don't block the main thread */
-  [NSThread detachNewThreadSelector:@selector(verifyAndShowVolumeWorker:) toTarget:self withObject:mountRootPath];
+  /* Spawn a background task to perform verification so we don't block the main thread */
+  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+    [self verifyAndShowVolumeWorker:mountRootPath];
+  });
 }
 
 - (void)verifyAndShowVolumeWorker:(NSString *)mountRootPath
@@ -679,7 +682,9 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
   if (verified) {
     NSLog(@"MountVerification: Mount verified after %d attempt(s), updating desktop", attempt);
-    [self performSelectorOnMainThread:@selector(removableMediaPathsDidChange) withObject:nil waitUntilDone:NO];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self removableMediaPathsDidChange];
+    });
   } else {
     NSLog(@"MountVerification: Could not verify mount at %@ after %d attempts, skipping desktop update", mountRootPath, maxAttempts);
   }

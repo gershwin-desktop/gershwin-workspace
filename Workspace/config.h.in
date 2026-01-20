@@ -12,6 +12,15 @@
 /* Define to 1 if you have the <dir.h> header file. */
 #undef HAVE_DIR_H
 
+/* Define to 1 if you have the <dispatch/dispatch.h> header file. */
+#undef HAVE_DISPATCH_DISPATCH_H
+
+/* Define to 1 if you have the <dispatch.h> header file. */
+#undef HAVE_DISPATCH_H
+
+/* Define to 1 if you have the <dispatch/private.h> header file. */
+#undef HAVE_DISPATCH_PRIVATE_H
+
 /* Define to 1 if you have the 'geteuid' function. */
 #undef HAVE_GETEUID
 
