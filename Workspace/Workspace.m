@@ -102,7 +102,6 @@ NSString *_pendingSystemActionTitle = nil;
   #define TSHF_MAXF 999
 #endif
 
-
 + (void)initialize
 {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
@@ -688,54 +687,6 @@ NSString *_pendingSystemActionTitle = nil;
   RELEASE (mainMenu);
 }
 
-#if HAVE_DBUS
-- (BOOL)waitForAppMenuRegistrarWithTimeoutMs:(int)timeoutMs
-{
-  const char *gtkModulesEnv = getenv("GTK_MODULES");
-  if (!gtkModulesEnv || strlen(gtkModulesEnv) == 0) {
-    return NO;
-  }
-  NSString *gtkModules = [NSString stringWithUTF8String:gtkModulesEnv];
-  if (![gtkModules containsString:@"appmenu"]) {
-    return NO;
-  }
-
-  GNUDBusConnection *tempConnection = [GNUDBusConnection sessionBus];
-  if (![tempConnection isConnected]) {
-    NSLog(@"Workspace: Cannot connect to DBus to wait for AppMenu registrar");
-    return NO;
-  }
-
-  int elapsed = 0;
-  const int intervalMs = 150;
-  NSLog(@"Workspace: Waiting for AppMenu registrar on DBus...");
-  while (elapsed < timeoutMs) {
-    @try {
-      printf(".");
-      fflush(stdout);
-      id result = [tempConnection callMethod:@"NameHasOwner"
-                                   onService:@"org.freedesktop.DBus"
-                                  objectPath:@"/org/freedesktop/DBus"
-                                   interface:@"org.freedesktop.DBus"
-                                   arguments:@[@"com.canonical.AppMenu.Registrar"]];
-      if (result && [result respondsToSelector:@selector(boolValue)] && [result boolValue]) {
-        printf("\n");
-        NSLog(@"Workspace: AppMenu registrar is available on DBus");
-        usleep(intervalMs * 10000);
-        return YES;
-      }
-    } @catch (NSException *ex) {
-      printf("\n");
-      NSLog(@"Workspace: Exception while checking for AppMenu registrar: %@", ex);
-      return NO;
-    }
-    usleep(intervalMs * 1000);
-    elapsed += intervalMs;
-  }
-  printf("\n");
-  return NO;
-}
-#endif
 - (void)applicationWillFinishLaunching:(NSNotification *)aNotification
 {
   NSUserDefaults *defaults;
@@ -987,6 +938,25 @@ NSString *_pendingSystemActionTitle = nil;
     DESTROY(fileManagerDBusInterface);
   } else {
     NSLog(@"Workspace: FileManager DBus interface registered successfully");
+    
+    // Set up D-Bus file descriptor monitoring for asynchronous message handling
+    // This ensures FileManager1 receives messages immediately without blocking
+    int dbusFd = [[fileManagerDBusInterface dbusConnection] getFileDescriptor];
+    if (dbusFd >= 0) {
+      NSFileHandle *dbusFileHandle = [[NSFileHandle alloc] initWithFileDescriptor:dbusFd closeOnDealloc:NO];
+      if (dbusFileHandle) {
+        [[NSNotificationCenter defaultCenter] addObserver:self
+                                               selector:@selector(processDBusMessages:)
+                                                   name:NSFileHandleDataAvailableNotification
+                                                 object:dbusFileHandle];
+        [dbusFileHandle waitForDataInBackgroundAndNotify];
+        NSLog(@"Workspace: D-Bus file descriptor monitoring enabled (fd: %d)", dbusFd);
+      } else {
+        NSLog(@"Workspace: Warning - Failed to create NSFileHandle for D-Bus fd");
+      }
+    } else {
+      NSLog(@"Workspace: Warning - Failed to get D-Bus file descriptor");
+    }
   }
 
   // Initialize and register the FileChooser portal interface
@@ -4546,6 +4516,23 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
 {
   [self emptyTrash:nil];
 }
+
+#if HAVE_DBUS
+- (void)processDBusMessages:(NSNotification *)notification
+{
+  // Process D-Bus messages for FileManager1 service
+  // This is called automatically when data is available on the D-Bus file descriptor
+  if (fileManagerDBusInterface && [fileManagerDBusInterface dbusConnection]) {
+    [[fileManagerDBusInterface dbusConnection] processMessages];
+  }
+  
+  // Re-arm the notification for next message
+  NSFileHandle *fileHandle = [notification object];
+  if (fileHandle) {
+    [fileHandle waitForDataInBackgroundAndNotify];
+  }
+}
+#endif
 
 @end
 

@@ -31,6 +31,16 @@
 @protocol WorkspaceUITesting
 - (NSDictionary *)currentWindowHierarchyAsJSON;
 - (NSArray *)allWindowTitles;
+- (NSDictionary *)clickAtX:(CGFloat)x y:(CGFloat)y;
+- (NSString *)allMenuItemsWithStateAsJSON;
+- (NSDictionary *)openMenu:(NSString *)path;
+- (NSDictionary *)sendShortcut:(NSString *)keys;
+- (void)showFailureHighlightInWindow:(NSString *)window withText:(NSString *)text duration:(NSTimeInterval)duration;
+- (NSDictionary *)highlightFailedElementInWindow:(NSString *)window withText:(NSString *)text duration:(NSTimeInterval)duration;
+- (NSDictionary *)clearAllHighlights;
+- (NSDictionary *)waitForWindow:(NSString *)title timeout:(NSTimeInterval)timeout;
+- (NSDictionary *)closeWindow:(NSString *)title;
+- (NSDictionary *)findElementInWindow:(NSString *)window withText:(NSString *)elementText;
 @end
 
 typedef enum {

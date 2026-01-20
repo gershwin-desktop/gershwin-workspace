@@ -147,19 +147,6 @@ int main(int argc, char **argv, char **env)
     WorkspaceUITestingSetEnabled(YES);
   }
   
-  // If GTK_MODULES indicates appmenu integration, wait up to 2sec for the
-  // Canonical AppMenu registrar to appear on the session bus so subsequent
-  // menu setup and scans can find dbusmenu-providing services.
-#if HAVE_DBUS
-  if ([gw waitForAppMenuRegistrarWithTimeoutMs:5000]) {
-    NSLog(@"Workspace: AppMenu registrar present");
-  } else {
-    NSLog(@"Workspace: AppMenu registrar did not appear within 5000ms (or GTK_MODULES does not request appmenu)");
-  }
-#else
-  NSLog(@"Workspace: DBus support not available");
-#endif
-  
 	NSApplication *app = [NSApplication sharedApplication];
   
   [app setDelegate: gw];    

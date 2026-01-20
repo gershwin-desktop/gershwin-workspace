@@ -530,6 +530,10 @@
   [self calculateGridSize];
 
   gridrect.size.height -= mmfr.size.height;
+  
+  // Reserve 15px at top and bottom of screen where no icons should be placed
+  gridrect.origin.y += 25;
+  gridrect.size.height -= 50;  // 25px top + 25px bottom
 
   if ([manager dockPosition] == DockPositionLeft)
     {
