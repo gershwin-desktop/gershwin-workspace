@@ -585,8 +585,12 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     if (!display || !rootWindow) return;
     
     XEvent event;
-    while (XPending(display) > 0) {
+    int eventsProcessed = 0;
+    const int maxEventsPerCall = 10; // Limit to prevent CPU hogging
+    
+    while (XPending(display) > 0 && eventsProcessed < maxEventsPerCall) {
         XNextEvent(display, &event);
+        eventsProcessed++;
         
         if (event.type == KeyPress) {
             if (verbose) {

@@ -11,7 +11,7 @@ else
 	appimage-icon-test_OBJCFLAGS += -I../../Workspace
 	appimage-icon-test_OBJCFLAGS += -I../../FSNode
 	appimage-icon-test_OBJCFLAGS += $(SQUASHFS_CFLAGS)
-	appimage-icon-test_LDFLAGS += $(SQUASHFS_LIBS)
+	appimage-icon-test_LDFLAGS += $(SQUASHFS_LIBS) -ldispatch
 	appimage-icon-test_TOOL_LIBS += -lgnustep-gui
 	# Ensure the linker can find our FSNode framework built in-tree
 	appimage-icon-test_TOOL_LIBS += -L../../FSNode/FSNode.framework -lFSNode

@@ -8,6 +8,7 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <dispatch/dispatch.h>
 #import <objc/runtime.h>
 #import <fcntl.h>
 #import <unistd.h>
@@ -29,6 +30,7 @@
 #import <sqfs/block.h>
 
 #import "FSNodeRep.h"
+#import "FSNIcon.h"
 
 #define APPIMAGE_ICON_LOG_PREFIX @"AppImageIconProvider"
 
@@ -48,6 +50,8 @@ typedef struct {
   sqfs_u64 physical_size;
 } AppImageSqfsFile;
 
+
+static NSMutableDictionary *appImageLoadingState = nil;
 
 static AppImageSqfsFile *AppImageSqfsFileCreate(int fd,
                                                 off_t base_offset,
@@ -1071,6 +1075,61 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 - (NSImage *)gw_appImage_iconOfSize:(int)size forNode:(FSNode *)node;
 @end
 
+@implementation FSNIcon (GWAppImageIconProvider)
+
++ (void)gw_installAppImageFSNIconSwizzle
+{
+  static BOOL installed = NO;
+
+  if (installed) {
+    return;
+  }
+  installed = YES;
+
+  Class cls = NSClassFromString(@"FSNIcon");
+  if (cls == Nil) {
+    NSLog(@"%@: FSNIcon not available for swizzle", APPIMAGE_ICON_LOG_PREFIX);
+    return;
+  }
+
+  Method original = class_getInstanceMethod(cls, @selector(drawRect:));
+  Method swizzled = class_getInstanceMethod(cls, @selector(gw_appImage_drawRect:));
+
+  if (original && swizzled) {
+    method_exchangeImplementations(original, swizzled);
+    NSLog(@"%@: installed FSNIcon drawRect swizzle", APPIMAGE_ICON_LOG_PREFIX);
+  } else {
+    NSLog(@"%@: failed to install FSNIcon swizzle", APPIMAGE_ICON_LOG_PREFIX);
+  }
+}
+
+- (void)gw_appImage_drawRect:(NSRect)rect
+{
+  // Check if this is an AppImage and if we need to update the icon
+  if (node != nil && [node isDirectory] == NO) {
+    NSString *nodepath = [node path];
+    NSString *realPath = [nodepath stringByResolvingSymlinksInPath];
+
+    if (AppImageHasType2Magic([realPath fileSystemRepresentation])) {
+      // Check if the proper icon is now available
+      FSNodeRep *fsnodeRep = [FSNodeRep sharedInstance];
+      NSImage *currentIcon = [fsnodeRep iconOfSize: iconSize forNode: node];
+      
+      if (currentIcon != icon && [[currentIcon name] isEqualToString: @"AppImageGeneric"] == NO) {
+        // Icon has been updated, refresh our cached icon
+        ASSIGN (icon, currentIcon);
+        drawicon = icon;
+        DESTROY (selectedicon);  // Invalidate selected icon cache too
+      }
+    }
+  }
+
+  // Call the original drawRect
+  [self gw_appImage_drawRect: rect];
+}
+
+@end
+
 @implementation FSNodeRep (GWAppImageIconProvider)
 
 + (void)gw_installAppImageFSNodeSwizzle
@@ -1081,6 +1140,8 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
     return;
   }
   installed = YES;
+
+  appImageLoadingState = [[NSMutableDictionary alloc] init];
 
   Class cls = NSClassFromString(@"FSNodeRep");
   if (cls == Nil) {
@@ -1099,6 +1160,32 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
   }
 }
 
++ (void)gw_installAppImageFSNIconSwizzle
+{
+  static BOOL installed = NO;
+
+  if (installed) {
+    return;
+  }
+  installed = YES;
+
+  Class cls = NSClassFromString(@"FSNIcon");
+  if (cls == Nil) {
+    NSLog(@"%@: FSNIcon not available for swizzle", APPIMAGE_ICON_LOG_PREFIX);
+    return;
+  }
+
+  Method original = class_getInstanceMethod(cls, @selector(drawRect:));
+  Method swizzled = class_getInstanceMethod(cls, @selector(gw_appImage_drawRect:));
+
+  if (original && swizzled) {
+    method_exchangeImplementations(original, swizzled);
+    NSLog(@"%@: installed FSNIcon drawRect swizzle", APPIMAGE_ICON_LOG_PREFIX);
+  } else {
+    NSLog(@"%@: failed to install FSNIcon swizzle", APPIMAGE_ICON_LOG_PREFIX);
+  }
+}
+
 - (NSImage *)gw_appImage_iconOfSize:(int)size forNode:(FSNode *)node
 {
   if (node != nil && [node isDirectory] == NO) {
@@ -1106,8 +1193,40 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
     NSString *realPath = [nodepath stringByResolvingSymlinksInPath];
 
     if (AppImageHasType2Magic([realPath fileSystemRepresentation])) {
-      NSImage *icon = [[NSWorkspace sharedWorkspace] iconForFile: realPath];
-      if (icon != nil) {
+      // Check if we have the proper icon cached
+      NSString *key = realPath;
+      NSMutableDictionary *iconDict = [iconsCache objectForKey: key];
+      
+      if (iconDict != nil) {
+        NSNumber *sizeKey = [NSNumber numberWithInt: 48];
+        NSImage *cachedIcon = [iconDict objectForKey: sizeKey];
+        if (cachedIcon != nil && ![[cachedIcon name] isEqualToString: @"AppImageGeneric"]) {
+          // Proper icon is cached
+          NSImage *icon = cachedIcon;
+          if ([node isLink]) {
+            NSImage *linkIcon = [NSImage imageNamed:@"common_linkCursor"];
+            icon = [icon copy];
+            [icon lockFocus];
+            [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
+            [icon unlockFocus];
+            [icon autorelease];
+          }
+          NSSize icnsize = [icon size];
+          if ((icnsize.width > size) || (icnsize.height > size)) {
+            return [self resizedIcon: icon ofSize: size];
+          }
+          return icon;
+        }
+      }
+      
+      // Check if we're already loading this AppImage
+      NSNumber *loading = [appImageLoadingState objectForKey: key];
+      if (loading != nil && [loading boolValue]) {
+        // Still loading, return generic icon
+        NSImage *icon = [NSImage imageNamed: @"UnknownTool"];
+        if (icon == nil) {
+          icon = [NSImage imageNamed: @"Unknown"];
+        }
         if ([node isLink]) {
           NSImage *linkIcon = [NSImage imageNamed:@"common_linkCursor"];
           icon = [icon copy];
@@ -1116,13 +1235,53 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
           [icon unlockFocus];
           [icon autorelease];
         }
-
         NSSize icnsize = [icon size];
         if ((icnsize.width > size) || (icnsize.height > size)) {
           return [self resizedIcon: icon ofSize: size];
         }
         return icon;
       }
+      
+      // Start loading
+      [appImageLoadingState setObject: [NSNumber numberWithBool: YES] forKey: key];
+      
+      // Start async loading
+      dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        NSImage *properIcon = [[NSWorkspace sharedWorkspace] iconForFile: realPath];
+        if (properIcon != nil) {
+          // Update cache with proper icon on main thread
+          dispatch_async(dispatch_get_main_queue(), ^{
+            NSMutableDictionary *updateDict = [NSMutableDictionary dictionary];
+            [updateDict setObject: properIcon forKey: [NSNumber numberWithInt: 48]];
+            [iconsCache setObject: updateDict forKey: key];
+            [appImageLoadingState removeObjectForKey: key];
+          });
+        } else {
+          // Loading failed, remove loading state
+          dispatch_async(dispatch_get_main_queue(), ^{
+            [appImageLoadingState removeObjectForKey: key];
+          });
+        }
+      });
+      
+      // Return generic icon while loading
+      NSImage *icon = [NSImage imageNamed: @"UnknownTool"];
+      if (icon == nil) {
+        icon = [NSImage imageNamed: @"Unknown"];
+      }
+      if ([node isLink]) {
+        NSImage *linkIcon = [NSImage imageNamed:@"common_linkCursor"];
+        icon = [icon copy];
+        [icon lockFocus];
+        [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
+        [icon unlockFocus];
+        [icon autorelease];
+      }
+      NSSize icnsize = [icon size];
+      if ((icnsize.width > size) || (icnsize.height > size)) {
+        return [self resizedIcon: icon ofSize: size];
+      }
+      return icon;
     }
   }
 
@@ -1137,6 +1296,7 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 {
   [self gw_installAppImageIconProvider];
   [FSNodeRep gw_installAppImageFSNodeSwizzle];
+  [FSNIcon gw_installAppImageFSNIconSwizzle];
 }
 
 + (void)gw_installAppImageIconProvider
