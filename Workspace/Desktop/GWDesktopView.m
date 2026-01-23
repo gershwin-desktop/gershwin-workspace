@@ -43,6 +43,7 @@
 
 #define X_MARGIN (10)
 #define Y_MARGIN (12)
+#define TOP_BOTTOM_SPACING (10)
 
 #define EDIT_MARGIN (4)
 
@@ -531,9 +532,9 @@
 
   gridrect.size.height -= mmfr.size.height;
   
-  // Reserve 15px at top and bottom of screen where no icons should be placed
-  gridrect.origin.y += 25;
-  gridrect.size.height -= 50;  // 25px top + 25px bottom
+  // Reserve TOP_BOTTOM_SPACING px at top and bottom of screen where no icons should be placed
+  gridrect.origin.y += TOP_BOTTOM_SPACING;
+  gridrect.size.height -= (TOP_BOTTOM_SPACING * 2);  // TOP_BOTTOM_SPACING px top + TOP_BOTTOM_SPACING px bottom
 
   if ([manager dockPosition] == DockPositionLeft)
     {
