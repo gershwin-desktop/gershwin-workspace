@@ -27,9 +27,9 @@ SVN_MODULE_NAME = gworkspace
 BUILD_GWMETADATA = 0
 
 # libsquashfs support variables from configure
-with_squashfs = yes
+with_squashfs = no
 SQUASHFS_CFLAGS = 
-SQUASHFS_LIBS = -lsquashfs
+SQUASHFS_LIBS = 
 export with_squashfs SQUASHFS_CFLAGS SQUASHFS_LIBS
 
 #

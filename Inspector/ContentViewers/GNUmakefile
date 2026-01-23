@@ -4,7 +4,8 @@ include $(GNUSTEP_MAKEFILES)/common.make
 
 PDFKIT=no
 SH_PATH=/bin/sh
-FILE_PATH=/bin/file
+# Prefer configure-provided value or environment; otherwise detect at make time:
+FILE_PATH ?= $(shell command -v file 2>/dev/null || echo file)
 
 
 ifneq ($(PDFKIT),no)
