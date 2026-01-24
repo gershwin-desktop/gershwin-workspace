@@ -25,6 +25,7 @@
 
 #import <AppKit/AppKit.h>
 #import "GWViewerIconsView.h"
+#import "GWViewerWindow.h"
 #import "FSNIcon.h"
 #import "FSNode.h"
 #import "GWViewer.h"

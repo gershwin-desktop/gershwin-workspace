@@ -439,7 +439,7 @@
           NSLog(@"ISOWriteOperation: ERROR - isowrite-helper not found in any expected location");
           NSString *errorMsg = @"Could not find isowrite-helper tool. Please reinstall Workspace.";
           dispatch_async(dispatch_get_main_queue(), ^{
-            [self writeDidFailWithError:errorMsg];
+            [self failWithError:errorMsg];
           });
           DESTROY(pool);
           return;
@@ -452,7 +452,7 @@
     NSLog(@"ISOWriteOperation: ERROR - helperPath is nil after search");
     NSString *errorMsg = @"Internal error: helper path is nil";
     dispatch_async(dispatch_get_main_queue(), ^{
-      [self writeDidFailWithError:errorMsg];
+      [self failWithError:errorMsg];
     });
     DESTROY(pool);
     return;
@@ -489,7 +489,7 @@
     NSLog(@"ISOWriteOperation: ERROR - Failed to create pipes");
     NSString *errorMsg = @"Failed to create communication pipes for write operation";
     dispatch_async(dispatch_get_main_queue(), ^{
-      [self writeDidFailWithError:errorMsg];
+      [self failWithError:errorMsg];
     });
     DESTROY(outputPipe);
     DESTROY(errorPipe);
@@ -507,7 +507,7 @@
     NSLog(@"ISOWriteOperation: ERROR - Failed to get error pipe handle");
     NSString *errorMsg = @"Failed to create pipe for monitoring write progress";
     dispatch_async(dispatch_get_main_queue(), ^{
-      [self writeDidFailWithError:errorMsg];
+      [self failWithError:errorMsg];
     });
     DESTROY(outputPipe);
     DESTROY(errorPipe);

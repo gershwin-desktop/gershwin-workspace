@@ -109,6 +109,8 @@
 - (void)reloadFromColumnWithPath:(NSString *)cpath;
 - (void)setLastColumn:(int)column;
 
+- (void)selectRow:(NSInteger)row inColumn:(NSInteger)column;
+
 - (void)tile;
 - (void)scrollViaScroller:(NSScroller *)sender;
 - (void)updateScroller;

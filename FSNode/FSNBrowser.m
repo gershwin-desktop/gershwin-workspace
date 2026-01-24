@@ -696,6 +696,19 @@
   [self unloadFromColumn: column + 1];
 }
 
+- (void)selectRow:(NSInteger)row inColumn:(NSInteger)column
+{
+  if (column >= 0 && column < [columns count])
+    {
+      FSNBrowserColumn *bc = [columns objectAtIndex: column];
+      NSMatrix *matrix = [bc cmatrix];
+      if (row >= 0 && row < [matrix numberOfRows])
+        {
+          [bc selectCell: [matrix cellAtRow: row column: 0] sendAction: YES];
+        }
+    }
+}
+
 
 - (void)tile
 {

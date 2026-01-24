@@ -159,6 +159,16 @@
   [[self delegate] showTerminal];
 }
 
+- (void)openParentFolder:(id)sender
+{
+  [[self delegate] openParentFolder];
+}
+
+- (void)openParentFolder
+{
+  [self openParentFolder: nil];
+}
+
 - (void)keyDown:(NSEvent *)theEvent 
 {
   unsigned flags = [theEvent modifierFlags];

@@ -53,6 +53,8 @@
 - (void)chooseBackColor:(id)sender;
 - (void)selectAllInViewer:(id)sender;
 - (void)showTerminal:(id)sender;
+- (void)openParentFolder:(id)sender;
+- (void)openParentFolder;
 
 @end
 

@@ -31,6 +31,8 @@ h
   id <ImageViewerProtocol> imageViewerProxy;
 }
 
++ (void)connectWithPorts:(NSArray *)portArray;
+
 - (void)setProxy:(id <ImageViewerProtocol>)ivp;
 
 - (void)readImageAtPath:(NSString *)path

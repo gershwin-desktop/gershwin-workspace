@@ -285,13 +285,13 @@ static NSView* _findViewWithText(NSView *view, NSString *text)
   NSString *viewText = nil;
   
   if ([view respondsToSelector:@selector(stringValue)]) {
-    viewText = [view stringValue];
+    viewText = [(id)view stringValue];
   } else if ([view respondsToSelector:@selector(title)]) {
-    viewText = [view title];
+    viewText = [(id)view title];
   } else if ([view respondsToSelector:@selector(string)]) {
-    viewText = [view string];
+    viewText = [(id)view string];
   } else if ([view respondsToSelector:@selector(attributedStringValue)]) {
-    viewText = [[view attributedStringValue] string];
+    viewText = [[(id)view attributedStringValue] string];
   }
   
   if (viewText && [viewText containsString:text]) {
@@ -325,14 +325,14 @@ static NSMutableDictionary* _buildViewDict(NSView *view)
   
   /* Enabled state (for controls) */
   if ([view respondsToSelector:@selector(isEnabled)]) {
-    BOOL isEnabled = [view isEnabled];
+    BOOL isEnabled = [(id)view isEnabled];
     [viewDict setObject:(isEnabled ? @"enabled" : @"disabled") 
                 forKey:@"state"];
   }
   
   /* Checked state (for buttons, checkboxes) */
   if ([view respondsToSelector:@selector(state)]) {
-    NSInteger buttonState = [view state];
+    NSInteger buttonState = [(id)view state];
     NSString *stateStr;
     switch (buttonState) {
       case NSControlStateValueOff:
@@ -354,28 +354,28 @@ static NSMutableDictionary* _buildViewDict(NSView *view)
   NSString *textContent = nil;
   
   if ([view respondsToSelector:@selector(stringValue)]) {
-    NSString *value = [view stringValue];
+    NSString *value = [(id)view stringValue];
     if (value && [value length] > 0) {
       textContent = value;
     }
   }
   
   if (!textContent && [view respondsToSelector:@selector(title)]) {
-    NSString *title = [view title];
+    NSString *title = [(id)view title];
     if (title && [title length] > 0) {
       textContent = title;
     }
   }
   
   if (!textContent && [view respondsToSelector:@selector(string)]) {
-    NSString *string = [view string];
+    NSString *string = [(id)view string];
     if (string && [string length] > 0) {
       textContent = string;
     }
   }
   
   if (!textContent && [view respondsToSelector:@selector(attributedStringValue)]) {
-    NSAttributedString *attrStr = [view attributedStringValue];
+    NSAttributedString *attrStr = [(id)view attributedStringValue];
     if (attrStr && [attrStr length] > 0) {
       textContent = [attrStr string];
     }

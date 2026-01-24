@@ -24,6 +24,7 @@
 
 #import <AppKit/AppKit.h>
 #import "GWViewerBrowser.h"
+#import "GWViewerWindow.h"
 #import "FSNode.h"
 #import "FSNBrowserColumn.h"
 #import "FSNBrowserMatrix.h"
@@ -119,11 +120,11 @@
           id delegate = viewer;
           if ([delegate respondsToSelector: @selector(baseNode)])
             {
-              FSNode *baseNode = [delegate baseNode];
-              if (baseNode)
+              FSNode *targetNode = [delegate baseNode];
+              if (targetNode)
                 {
-                  NSString *parentPath = [[baseNode path] stringByDeletingLastPathComponent];
-                  if (parentPath && ![parentPath isEqual: [baseNode path]])
+                  NSString *parentPath = [[targetNode path] stringByDeletingLastPathComponent];
+                  if (parentPath && ![parentPath isEqual: [targetNode path]])
                     {
                       FSNode *parentNode = [FSNode nodeWithPath: parentPath];
                       if (parentNode)
