@@ -780,6 +780,7 @@
   [desktopInfo setObject: indexes forKey: @"indexes"];
 
   [defaults setObject: desktopInfo forKey: @"desktopinfo"];
+  [defaults synchronize];
 }
 
 - (void)selectIconInPrevLine
@@ -2349,6 +2350,7 @@ NSComparisonResult sortDragged(id icn1, id icn2, void *context)
       [self createBackImage: image];
       RELEASE (image);
       [self setNeedsDisplay: YES];
+      [self updateDefaults];
     }
   RELEASE (pool);
 }
@@ -2362,6 +2364,7 @@ NSComparisonResult sortDragged(id icn1, id icn2, void *context)
 {
   useBackImage = value;
   [self setNeedsDisplay: YES];
+  [self updateDefaults];
 }
 
 - (BackImageStyle)backImageStyle
@@ -2379,6 +2382,11 @@ NSComparisonResult sortDragged(id icn1, id icn2, void *context)
 	  [self setBackImageAtPath: imagePath];
 	  [self setNeedsDisplay: YES];
 	}
+      else
+        {
+          // No image set, just save the style preference
+          [self updateDefaults];
+        }
     }
 }
 
