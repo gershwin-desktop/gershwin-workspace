@@ -6,8 +6,11 @@ include $(GNUSTEP_MAKEFILES)/common.make
 
 PDFKIT=no
 SH_PATH=/bin/sh
-# Prefer configure-provided value or environment; otherwise detect at make time:
-FILE_PATH ?= $(shell command -v file 2>/dev/null || echo file)
+# Prefer configure-provided value, otherwise detect at make time:
+FILE_PATH ?= /usr/bin/file
+ifeq ($(FILE_PATH),/usr/bin/file)
+FILE_PATH := $(shell command -v file 2>/dev/null || echo file)
+endif
 
 SUBPROJECTS = ContentViewers
 

@@ -49,7 +49,7 @@ SUBPROJECTS = Finder/Modules \
 #
 APP_NAME = Workspace
 Workspace_PRINCIPAL_CLASS = Workspace
-Workspace_APPLICATION_ICON=FileManager.tiff
+Workspace_APPLICATION_ICON=Workspace.png
 
 Workspace_HAS_RESOURCE_BUNDLE = yes
 
