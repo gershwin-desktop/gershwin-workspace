@@ -362,6 +362,8 @@
 
 - (void)executeSystemCommandAndReset;
 
+- (void)showAboutThisComputer:(id)sender;
+
 - (void)showInfo:(id)sender;
 
 - (void)showPreferences:(id)sender;

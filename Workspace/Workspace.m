@@ -45,6 +45,7 @@
 #import "FSNFunctions.h"
 #import "Workspace.h"
 #import "Dialogs.h"
+#import "AboutController.h"
 #import "OpenWithController.h"
 #import "RunExternalController.h"
 #import "StartAppWin.h"
@@ -189,6 +190,9 @@ NSString *_pendingSystemActionTitle = nil;
   id<NSMenuItem> menuItem;
   
   // Workspace menu (main application menu)
+  menuItem = [mainMenu addItemWithTitle:_(@"About This Computer") action:@selector(showAboutThisComputer:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+
   menuItem = [mainMenu addItemWithTitle:_(@"About Workspace") action:@selector(showInfo:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
@@ -671,10 +675,6 @@ NSString *_pendingSystemActionTitle = nil;
   menuItem = [menu addItemWithTitle:_(@"Legal & Regulatory") action:@selector(openLegal:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
-  [menu addItem:[NSMenuItem separatorItem]];
-  
-  menuItem = [menu addItemWithTitle:_(@"About This Computer") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
 
   [mainMenu update];
   [mainMenu setDelegate: self];
@@ -2835,6 +2835,11 @@ NSString *_pendingSystemActionTitle = nil;
 - (void)logout:(id)sender
 {
   [self startLogout];
+}
+
+- (void)showAboutThisComputer:(id)sender
+{
+  [[AboutController sharedController] showAboutWindow:sender];
 }
 
 - (void)showInfo:(id)sender

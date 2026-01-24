@@ -156,6 +156,7 @@ Preferences/OperationPrefs.m \
 Preferences/DesktopPref.m \
 History/History.m \
 Dialogs/Dialogs.m \
+Dialogs/AboutController.m \
 Dialogs/ExecuteController.m \
 Dialogs/OpenWithController.m \
 Dialogs/RunExternalController.m \
