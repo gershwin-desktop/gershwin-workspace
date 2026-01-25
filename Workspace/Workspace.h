@@ -142,6 +142,7 @@
   
 #if HAVE_DBUS
   id fileManagerDBusInterface;
+  NSFileHandle *dbusFileHandle;
 #endif
   
   NSString *gwProcessName;  	      
@@ -468,6 +469,9 @@
                          tag:(NSInteger *)tag;
 
 - (BOOL)selectFile:(NSString *)fullPath
+							inFileViewerRootedAtPath:(NSString *)rootFullpath;
+
+- (BOOL)selectFiles:(NSArray *)fullPaths
 							inFileViewerRootedAtPath:(NSString *)rootFullpath;
 
 - (int)extendPowerOffBy:(int)requested;

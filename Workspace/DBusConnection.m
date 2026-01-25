@@ -112,6 +112,9 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
     DBusError error;
     dbus_error_init(&error);
     
+    // Initialize threads for libdbus to be safe when multiple threads access the same connection
+    dbus_threads_init_default();
+    
     self.connection = dbus_bus_get(DBUS_BUS_SESSION, &error);
     if (dbus_error_is_set(&error)) {
         NSLog(@"DBusConnection: Failed to connect to session bus: %s", error.message);
@@ -873,6 +876,30 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
         return;
     }
     
+    // Handle Peer interface requests
+    if ([interfaceStr isEqualToString:@"org.freedesktop.DBus.Peer"]) {
+        if ([methodStr isEqualToString:@"Ping"]) {
+            DBusMessage *reply = dbus_message_new_method_return(message);
+            if (reply) {
+                dbus_connection_send((DBusConnectionStruct *)self.connection, reply, NULL);
+                dbus_message_unref(reply);
+            }
+            return;
+        } else if ([methodStr isEqualToString:@"GetMachineId"]) {
+            char *uuid = dbus_get_local_machine_id();
+            if (uuid) {
+                DBusMessage *reply = dbus_message_new_method_return(message);
+                if (reply) {
+                    dbus_message_append_args(reply, DBUS_TYPE_STRING, &uuid, DBUS_TYPE_INVALID);
+                    dbus_connection_send((DBusConnectionStruct *)self.connection, reply, NULL);
+                    dbus_message_unref(reply);
+                }
+                dbus_free(uuid);
+            }
+            return;
+        }
+    }
+    
     // Find and call the appropriate handler
     NSString *key = [NSString stringWithFormat:@"%@:%@", pathStr, interfaceStr];
     id handler = [self.messageHandlers objectForKey:key];
@@ -936,6 +963,12 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
                @"  <interface name=\"org.freedesktop.DBus.Introspectable\">\n"
                @"    <method name=\"Introspect\">\n"
                @"      <arg name=\"xml_data\" type=\"s\" direction=\"out\"/>\n"
+               @"    </method>\n"
+               @"  </interface>\n"
+               @"  <interface name=\"org.freedesktop.DBus.Peer\">\n"
+               @"    <method name=\"Ping\"/>\n"
+               @"    <method name=\"GetMachineId\">\n"
+               @"      <arg name=\"machine_uuid\" type=\"s\" direction=\"out\"/>\n"
                @"    </method>\n"
                @"  </interface>\n"
                @"  <interface name=\"org.freedesktop.FileManager1\">\n"

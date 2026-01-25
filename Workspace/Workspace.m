@@ -106,6 +106,30 @@ NSString *_pendingSystemActionTitle = nil;
 + (void)initialize
 {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *userPrefs = [@"~/Library/Preferences/org.gnustep.Workspace.plist" stringByExpandingTildeInPath];
+
+  if (![fm fileExistsAtPath: userPrefs])
+    {
+      NSString *localPrefs = @"/Local/Library/Preferences/GlobalDefaults/org.gnustep.Workspace.plist";
+      NSString *systemPrefs = @"/System/Library/Preferences/GlobalDefaults/org.gnustep.Workspace.plist";
+      NSDictionary *d = nil;
+
+      if ([fm fileExistsAtPath: localPrefs])
+        {
+          d = [NSDictionary dictionaryWithContentsOfFile: localPrefs];
+        }
+      else if ([fm fileExistsAtPath: systemPrefs])
+        {
+          d = [NSDictionary dictionaryWithContentsOfFile: systemPrefs];
+        }
+
+      if (d != nil)
+        {
+          [defaults registerDefaults: d];
+        }
+    }
+
   [defaults setObject: @"Workspace" 
                forKey: @"DesktopApplicationName"];
   [defaults setObject: @"gworkspace" 
@@ -176,6 +200,7 @@ NSString *_pendingSystemActionTitle = nil;
   
 #if HAVE_DBUS
   DESTROY (fileManagerDBusInterface);
+  DESTROY (dbusFileHandle);
 #endif
     
   [super dealloc];
@@ -942,7 +967,7 @@ NSString *_pendingSystemActionTitle = nil;
     // This ensures FileManager1 receives messages immediately without blocking
     int dbusFd = [[fileManagerDBusInterface dbusConnection] getFileDescriptor];
     if (dbusFd >= 0) {
-      NSFileHandle *dbusFileHandle = [[NSFileHandle alloc] initWithFileDescriptor:dbusFd closeOnDealloc:NO];
+      dbusFileHandle = [[NSFileHandle alloc] initWithFileDescriptor:dbusFd closeOnDealloc:NO];
       if (dbusFileHandle) {
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                selector:@selector(processDBusMessages:)

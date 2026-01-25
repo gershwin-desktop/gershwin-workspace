@@ -58,6 +58,9 @@
 
 - (void)selectRepOfNode:(FSNode *)node
           inViewerWithBaseNode:(FSNode *)base;
+
+- (void)selectRepsOfNodes:(NSArray *)nodes
+          inViewerWithBaseNode:(FSNode *)base;
             
 
 - (id)viewerOfType:(unsigned)vtype

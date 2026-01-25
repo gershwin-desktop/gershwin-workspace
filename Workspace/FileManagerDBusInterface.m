@@ -236,13 +236,12 @@ typedef struct DBusConnection DBusConnectionStruct;
         [data appendBytes:&b length:1];
     }
     
-    // Create NSString from raw bytes using default file system encoding
-    // This matches how UNIX filenames are handled on this system
-    NSString *path = [[NSString alloc] initWithData:data 
-                                           encoding:[NSString defaultCStringEncoding]];
+    // Create NSString from raw bytes using UTF-8 first (recommended for DBus)
+    // Fallback to default C string encoding
+    NSString *path = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
     if (!path) {
-        // Fallback to UTF-8 if default encoding fails
-        path = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+        path = [[NSString alloc] initWithData:data 
+                                       encoding:[NSString defaultCStringEncoding]];
     }
     
     return [path autorelease];
@@ -434,15 +433,40 @@ typedef struct DBusConnection DBusConnectionStruct;
     for (NSString *parentPath in itemsByParent) {
         NSArray *items = [itemsByParent objectForKey:parentPath];
         @try {
-            // For each item, use the Workspace selectFile:inFileViewerRootedAtPath: method
-            // This opens the parent directory and selects the specific file
-            for (NSString *itemPath in items) {
-                NSLog(@"FileManagerDBusInterface: Selecting file %@ in viewer rooted at %@", 
-                      itemPath, parentPath);
-                BOOL success = [self.workspace selectFile:itemPath inFileViewerRootedAtPath:parentPath];
-                if (!success) {
-                    NSLog(@"FileManagerDBusInterface: Failed to select file %@", itemPath);
+            // For each item, try to select them in an existing viewer; if that fails,
+            // open the parent folder and retry, then fall back to root viewer selection
+            NSLog(@"FileManagerDBusInterface: Selecting %lu files in viewer rooted at %@", 
+                  (unsigned long)[items count], parentPath);
+
+            // Verify parent exists and is a directory
+            BOOL isDir = NO;
+            if (![[NSFileManager defaultManager] fileExistsAtPath:parentPath isDirectory:&isDir] || !isDir) {
+                NSLog(@"FileManagerDBusInterface: Parent path does not exist or is not a directory: %@", parentPath);
+                continue;
+            }
+
+            BOOL success = [self.workspace selectFiles:items inFileViewerRootedAtPath:parentPath];
+            if (!success) {
+                NSLog(@"FileManagerDBusInterface: Initial select failed for %@, attempting to open viewer and retry", parentPath);
+
+                // Open the parent folder in a new viewer and try again
+                [self.workspace newViewerAtPath:parentPath];
+
+                // Retry the selection
+                success = [self.workspace selectFiles:items inFileViewerRootedAtPath:parentPath];
+                if (success) {
+                    NSLog(@"FileManagerDBusInterface: Selection succeeded after opening viewer at %@", parentPath);
+                    continue;
                 }
+
+                // Try selecting in the root viewer as a further fallback
+                NSLog(@"FileManagerDBusInterface: Retry select failed for %@; attempting root viewer selection", parentPath);
+                [self.workspace rootViewerSelectFiles:items];
+
+                // As a last resort set the selected paths directly (inspector/selection based fallbacks)
+                [self.workspace setSelectedPaths:items];
+
+                NSLog(@"FileManagerDBusInterface: Finished fallback sequence for %@", parentPath);
             }
         } @catch (NSException *exception) {
             NSLog(@"FileManagerDBusInterface: Exception showing items in %@: %@", 

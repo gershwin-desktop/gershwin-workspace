@@ -219,20 +219,39 @@ def test_click_help_menu():
 # ============== Menu Action Tests ==============
 
 def test_open_about_via_menu():
-    """Open About Workspace via menu click."""
+    """Open About Workspace via menu click (second item now)."""
     activate_workspace()
     
-    # Click Workspace menu, then About (first item)
+    # Click Workspace menu, then About Workspace (now second item)
     click_menu('Workspace', smooth=True)
     time.sleep(0.3)
     
-    # About Workspace is first item
+    # About Workspace is second item
     x = MENU_POSITIONS['Workspace']
-    user.click_smooth(x, 38)  # First menu item
+    user.click_smooth(x, 60)  # Second menu item
     time.sleep(0.5)
     
     # Verify Info panel opened
     result = client.window_exists('Info')
+    if result:
+        close_current_window()
+    return result
+
+
+def test_open_about_computer_via_menu():
+    """Open About This Computer via menu click (first item)."""
+    activate_workspace()
+
+    # Click Workspace menu, then About This Computer (first item)
+    click_menu('Workspace', smooth=True)
+    time.sleep(0.3)
+
+    x = MENU_POSITIONS['Workspace']
+    user.click_smooth(x, 38)  # First menu item (About This Computer)
+    time.sleep(0.5)
+
+    # Verify About window opened
+    result = client.window_exists('About This Computer')
     if result:
         close_current_window()
     return result

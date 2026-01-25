@@ -199,14 +199,25 @@ static GWViewersManager *vwrsmanager = nil;
 - (void)selectRepOfNode:(FSNode *)node
    inViewerWithBaseNode:(FSNode *)base
 {
+  [self selectRepsOfNodes: [NSArray arrayWithObject: node]
+     inViewerWithBaseNode: base];
+}
+
+- (void)selectRepsOfNodes:(NSArray *)nodes
+   inViewerWithBaseNode:(FSNode *)base
+{
   BOOL inRootViewer = [[base path] isEqual: path_separator()];
-  NSArray *selection = [NSArray arrayWithObject: node];
   id viewer = nil;
+  NSMutableArray *selection = [NSMutableArray array];
+  NSUInteger i;
   
-  if ([base isEqual: node] || ([node isSubnodeOfNode: base] == NO))
-    {
-      selection = nil;      
+  for (i = 0; i < [nodes count]; i++) {
+    FSNode *node = [nodes objectAtIndex: i];
+    if ([base isEqual: node] || ([node isSubnodeOfNode: base] == NO)) {
+      continue;
     }
+    [selection addObject: node];
+  }
   
   if (inRootViewer)
     {  
@@ -226,7 +237,7 @@ static GWViewersManager *vwrsmanager = nil;
 		            withKey: nil];
     } 
   
-  if (selection)
+  if ([selection count] > 0)
     {
       [[viewer nodeView] selectRepsOfSubnodes: selection];  
     }

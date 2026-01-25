@@ -170,9 +170,24 @@
 - (BOOL)selectFile:(NSString *)fullPath
 											inFileViewerRootedAtPath:(NSString *)rootFullpath
 {
-  FSNode *node = [FSNode nodeWithPath: fullPath];
+  return [self selectFiles: [NSArray arrayWithObject: fullPath]
+             inFileViewerRootedAtPath: rootFullpath];
+}
+
+- (BOOL)selectFiles:(NSArray *)fullPaths
+											inFileViewerRootedAtPath:(NSString *)rootFullpath
+{
+  NSMutableArray *nodes = [NSMutableArray arrayWithCapacity: [fullPaths count]];
+  NSUInteger i;
   
-  if (node && [node isValid]) {
+  for (i = 0; i < [fullPaths count]; i++) {
+    FSNode *node = [FSNode nodeWithPath: [fullPaths objectAtIndex: i]];
+    if (node && [node isValid]) {
+      [nodes addObject: node];
+    }
+  }
+  
+  if ([nodes count] > 0) {
     FSNode *base;
   
     if ((rootFullpath == nil) || ([rootFullpath length] == 0)) {
@@ -186,7 +201,7 @@
         return NO;
       }
     
-      [vwrsManager selectRepOfNode: node inViewerWithBaseNode: base];
+      [vwrsManager selectRepsOfNodes: nodes inViewerWithBaseNode: base];
       return YES;
     }
   }
