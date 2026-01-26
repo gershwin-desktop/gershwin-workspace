@@ -308,7 +308,23 @@
   /* Request redraw */
   [self setNeedsDisplay: YES];
   if (container) {
-    [container setNeedsDisplayInRect: [self frame]];
+    NSRect f = [self frame];
+    DockPosition pos = DockPositionBottom;
+    
+    if ([container respondsToSelector: @selector(position)]) {
+      pos = [(Dock *)container position];
+    }
+    
+    if (pos == DockPositionLeft) {
+      f.size.width += 25;
+    } else if (pos == DockPositionRight) {
+      f.origin.x -= 25;
+      f.size.width += 25;
+    } else {
+      f.size.height += 25;
+    }
+    
+    [container setNeedsDisplayInRect: f];
   }
 }
 
@@ -685,7 +701,19 @@ x += 6; \
     /* Adjust icon position when bouncing */
     NSPoint drawPoint = icnPoint;
     if (isBouncing && bounceOffset != 0.0) {
-      drawPoint.y += bounceOffset;  /* Add to Y to move upward in Cocoa coords */
+      DockPosition pos = DockPositionBottom;
+      
+      if ([container respondsToSelector: @selector(position)]) {
+        pos = [(Dock *)container position];
+      }
+      
+      if (pos == DockPositionLeft) {
+        drawPoint.x += bounceOffset;
+      } else if (pos == DockPositionRight) {
+        drawPoint.x -= bounceOffset;
+      } else {
+        drawPoint.y += bounceOffset;  /* Add to Y to move upward in Cocoa coords */
+      }
     }
     
     if (isTrashIcon == NO) {

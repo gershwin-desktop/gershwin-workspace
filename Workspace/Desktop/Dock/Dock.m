@@ -587,6 +587,11 @@
   [self tile];
 }
 
+- (DockPosition)position
+{
+  return position;
+}
+
 - (void)setStyle:(DockStyle)s
 {
   if(style != s)

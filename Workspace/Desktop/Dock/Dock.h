@@ -116,6 +116,8 @@ typedef enum DockStyle
 
 - (void)setPosition:(DockPosition)pos;
 
+- (DockPosition)position;
+
 - (DockStyle)style;
 
 - (void)setStyle:(DockStyle)s;
