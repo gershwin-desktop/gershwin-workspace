@@ -86,7 +86,7 @@ static AboutController *sharedController = nil;
   float rowHeight = 18;
 
   // Labels for system info
-  NSArray *labels = @[_(@"Processor"), _(@"Memory"), _(@"Kernel"), _(@"X11 Server"), _(@"Product"), _(@"Serial Number")];
+  NSArray *labels = @[_(@"Processor"), _(@"Memory"), _(@"Kernel"), _(@"X11 Server"), _(@"Model"), _(@"Manufacturer"), _(@"Serial Number")];
   NSMutableArray *fields = [NSMutableArray array];
 
   for (NSString *labelText in labels) {
@@ -121,8 +121,9 @@ static AboutController *sharedController = nil;
   memoryField = [fields objectAtIndex:1];
   kernelField = [fields objectAtIndex:2];
   x11Field = [fields objectAtIndex:3];
-  computerNameField = [fields objectAtIndex:4];
-  serialNumberField = [fields objectAtIndex:5];
+  modelField = [fields objectAtIndex:4];
+  manufacturerField = [fields objectAtIndex:5];
+  serialNumberField = [fields objectAtIndex:6];
 
   // More Info button calls Workspace "notImplemented:" so behavior is consistent
   NSButton *moreInfo = [[NSButton alloc] initWithFrame:NSMakeRect(110, 20, 100, 24)];
@@ -148,17 +149,19 @@ static AboutController *sharedController = nil;
   [kernelField setStringValue:[self kernelInfo]];
   [x11Field setStringValue:[self x11VersionInfo]];
   
-  NSString *prod = [self smbiosValueForKey:@"product_name" bsdSysctl:@"hw.smbios.product"];
-  NSString *vendor = [self smbiosValueForKey:@"sys_vendor" bsdSysctl:@"hw.smbios.maker"];
-  if (prod && vendor) {
-    [computerNameField setStringValue:[NSString stringWithFormat:@"%@ (%@)", prod, vendor]];
-  } else if (prod) {
-    [computerNameField setStringValue:prod];
-  } else {
-    [computerNameField setStringValue:@"Unknown"];
-  }
+  NSString *prod = [self smbiosValueForLinux:@"product_name" 
+                                   bsdSysctl:@"hw.smbios.product" 
+                                     bsdKenv:@"smbios.system.product"];
+  NSString *vendor = [self smbiosValueForLinux:@"sys_vendor" 
+                                     bsdSysctl:@"hw.smbios.maker" 
+                                       bsdKenv:@"smbios.system.maker"];
 
-  [serialNumberField setStringValue:[self smbiosValueForKey:@"product_serial" bsdSysctl:@"hw.smbios.serial"] ?: @"Unknown"];
+  [modelField setStringValue:prod ?: @"Unknown"];
+  [manufacturerField setStringValue:vendor ?: @"Unknown"];
+
+  [serialNumberField setStringValue:[self smbiosValueForLinux:@"product_serial" 
+                                                    bsdSysctl:@"hw.smbios.serial" 
+                                                      bsdKenv:@"smbios.system.serial"] ?: @"Unknown"];
 
   // Processor info
   [processorField setStringValue:[self getProcessorInfo]];
@@ -201,6 +204,31 @@ static AboutController *sharedController = nil;
 
 // Helpers
 
+- (NSString *)runCommand:(NSString *)command withArguments:(NSArray *)args
+{
+  NSTask *task = [[NSTask alloc] init];
+  [task setLaunchPath:command];
+  [task setArguments:args];
+  NSPipe *pipe = [NSPipe pipe];
+  [task setStandardOutput:pipe];
+  [task setStandardError:[NSPipe pipe]]; // Silence errors
+
+  @try {
+    [task launch];
+    NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
+    [task waitUntilExit];
+    if ([task terminationStatus] == 0) {
+      NSString *val = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+      return [val stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    }
+  } @catch (NSException *e) {
+    // Command might not exist
+  } @finally {
+    RELEASE(task);
+  }
+  return nil;
+}
+
 - (NSDictionary *)parseOSRelease 
 {
   NSMutableDictionary *dict = [NSMutableDictionary dictionary];
@@ -222,32 +250,28 @@ static AboutController *sharedController = nil;
   return dict;
 }
 
-- (NSString *)smbiosValueForKey:(NSString *)linuxFile bsdSysctl:(NSString *)bsdSysctl 
+- (NSString *)smbiosValueForLinux:(NSString *)linuxFile 
+                        bsdSysctl:(NSString *)bsdSysctl 
+                          bsdKenv:(NSString *)bsdKenv 
 {
 #ifdef __linux__
   NSString *path = [@"/sys/class/dmi/id/" stringByAppendingString:linuxFile];
   NSString *val = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:NULL];
-  if (val) return [val stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  if (val) {
+    val = [val stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+    if ([val length] > 0) return val;
+  }
 #else
-  // Try sysctl using NSTask
-  NSTask *task = [[NSTask alloc] init];
-  [task setLaunchPath:@"/sbin/sysctl"];
-  [task setArguments:[NSArray arrayWithObjects:@"-n", bsdSysctl, nil]];
-  NSPipe *pipe = [NSPipe pipe];
-  [task setStandardOutput:pipe];
-  
-  @try {
-    [task launch];
-    NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
-    [task waitUntilExit];
-    if ([task terminationStatus] == 0) {
-      NSString *val = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
-      return [val stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    }
-  } @catch (NSException *e) {
-    // sysctl might not exist or fail
-  } @finally {
-    RELEASE(task);
+  NSString *val = nil;
+  // Try kenv first as it's often more descriptive on some BSDs
+  if (bsdKenv) {
+    val = [self runCommand:@"/bin/kenv" withArguments:@[@"-q", bsdKenv]];
+    if (val && [val length] > 0) return val;
+  }
+  // Fallback to sysctl
+  if (bsdSysctl) {
+    val = [self runCommand:@"/sbin/sysctl" withArguments:@[@"-n", bsdSysctl]];
+    if (val && [val length] > 0) return val;
   }
 #endif
   return nil;
@@ -297,22 +321,8 @@ static AboutController *sharedController = nil;
     }
   }
 #else
-  // Try sysctl hw.model
-  NSTask *task = [[NSTask alloc] init];
-  [task setLaunchPath:@"/sbin/sysctl"];
-  [task setArguments:[NSArray arrayWithObjects:@"-n", @"hw.model", nil]];
-  NSPipe *pipe = [NSPipe pipe];
-  [task setStandardOutput:pipe];
-  @try {
-    [task launch];
-    NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
-    [task waitUntilExit];
-    if ([task terminationStatus] == 0) {
-      NSString *val = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
-      return [val stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    }
-  } @catch (NSException *e) {}
-  @finally { RELEASE(task); }
+  NSString *val = [self runCommand:@"/sbin/sysctl" withArguments:@[@"-n", @"hw.model"]];
+  if (val) return val;
 #endif
   return @"Unknown";
 }

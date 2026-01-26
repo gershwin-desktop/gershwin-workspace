@@ -10,7 +10,8 @@
     NSWindow *aboutWindow;
     NSTextField *osNameField;
     NSTextField *osVersionField;
-    NSTextField *computerNameField;
+    NSTextField *manufacturerField;
+    NSTextField *modelField;
     NSTextField *processorField;
     NSTextField *memoryField;
     NSTextField *kernelField;
