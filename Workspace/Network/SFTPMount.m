@@ -575,18 +575,21 @@
                                      ofItemAtPath:tempPasswordFile
                                             error:nil];
     
-    /* Build sshpass command */
-    [sshfsTask setLaunchPath:@"/usr/bin/sshpass"];
+    /* Build sshpass command and use /usr/bin/env so sshpass and sshfs are resolved from $PATH */
+    [sshfsTask setLaunchPath:@"/usr/bin/env"];
     NSMutableArray *sshpassArgs = [NSMutableArray arrayWithObjects:
-                                   @"-f", tempPasswordFile,
+                                   @"sshpass", @"-f", tempPasswordFile,
                                    @"sshfs", nil];
     [sshpassArgs addObjectsFromArray:args];
     [sshfsTask setArguments:sshpassArgs];
   } else {
     /* No password - use SSH key authentication */
     NSLog(@"SFTPMount: Using SSH key authentication");
-    [sshfsTask setLaunchPath:@"/usr/bin/sshfs"];
-    [sshfsTask setArguments:args];
+    /* Use /usr/bin/env so sshfs is resolved from $PATH */
+    [sshfsTask setLaunchPath:@"/usr/bin/env"];
+    NSMutableArray *envArgs = [NSMutableArray arrayWithObject:@"sshfs"];
+    [envArgs addObjectsFromArray:args];
+    [sshfsTask setArguments:envArgs];
   }
   
   /* Launch and monitor */
