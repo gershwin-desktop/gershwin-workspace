@@ -3035,6 +3035,18 @@ NSString *_pendingSystemActionTitle = nil;
   
   /* Start network service discovery if not already running */
   NetworkServiceManager *manager = [NetworkServiceManager sharedManager];
+
+  /* If mDNS/DNS-SD support is not available, show a helpful alert and avoid
+     opening the network viewer to prevent crashes on systems without dns-sd. */
+  if (![manager isMDNSAvailable]) {
+    NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+    [alert setMessageText:@"Service Discovery: Not Available"];
+    [alert setInformativeText:@"mDNS/DNS-SD support is not available on this system.\nBuild GNUstep with libdns_sd to enable network service discovery."];
+    [alert addButtonWithTitle:@"OK"];
+    [alert runModal];
+    return;
+  }
+
   if (![manager isBrowsing]) {
     [manager startBrowsing];
   }
