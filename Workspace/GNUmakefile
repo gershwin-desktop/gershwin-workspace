@@ -4,6 +4,8 @@ PACKAGE_NAME = gworkspace
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 include $(GNUSTEP_MAKEFILES)/common.make
 
+GNUSTEP_APPS = $(GNUSTEP_CORE_SERVICES_APPS)
+
 VERSION = 1.1.0
 
 # DBus support - autodetect via pkg-config or fallback include dirs
