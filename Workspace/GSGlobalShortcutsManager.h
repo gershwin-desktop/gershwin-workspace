@@ -24,6 +24,16 @@
     time_t lastDefaultsModTime;
     NSString *defaultsDomain;
     NSTimer *eventProcessingTimer;
+
+    // Power key handling
+    // Keycode for XF86PowerOff (0 if not available)
+    int powerKeyCode;
+    // Is the power key currently pressed?
+    BOOL powerKeyDown;
+    // Has the long-press action already triggered during this press?
+    BOOL powerKeyTriggered;
+    // Timer used to detect long-press (>5s)
+    NSTimer *powerKeyTimer;
 }
 
 /**

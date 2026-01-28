@@ -22,6 +22,11 @@
 #include <errno.h>
 #include <string.h>
 
+#import "Workspace.h"
+
+// Long-press threshold (seconds) for power key to trigger automatic shutdown
+#define POWER_KEY_LONG_PRESS 5.0
+
 static GSGlobalShortcutsManager *sharedManager = nil;
 
 typedef struct {
@@ -97,6 +102,12 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         lastDefaultsModTime = 0;
         defaultsDomain = @"GlobalShortcuts";
         eventProcessingTimer = nil;
+
+        // Power key initial state
+        powerKeyCode = 0;
+        powerKeyDown = NO;
+        powerKeyTriggered = NO;
+        powerKeyTimer = nil;
         
         // Register for distributed notifications for cross-application communication
         [[NSDistributedNotificationCenter defaultCenter] 
@@ -174,6 +185,14 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         if (eventProcessingTimer) {
             [eventProcessingTimer invalidate];
             DESTROY(eventProcessingTimer);
+        }
+
+        if (powerKeyTimer) {
+            [powerKeyTimer invalidate];
+            RELEASE(powerKeyTimer);
+            powerKeyTimer = nil;
+            powerKeyTriggered = NO;
+            powerKeyDown = NO;
         }
         
         [self ungrabKeys];
@@ -358,8 +377,13 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     
     NSLog(@"GSGlobalShortcutsManager: Successfully grabbed %d of %d shortcuts",
         successCount, totalShortcuts);
-    
-    return successCount > 0;
+
+    // Ensure the hardware power key is grabbed at all times
+    [self grabPowerKey];
+
+    // Consider the manager started if either we grabbed any user shortcuts
+    // or we successfully grabbed the power key (so Workspace can always handle power presses)
+    return (successCount > 0) || (powerKeyCode != 0);
 }
 
 - (void)ungrabKeys
@@ -597,8 +621,28 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
                 NSLog(@"GSGlobalShortcutsManager: Key press: keycode=%d, state=0x%x",
                     event.xkey.keycode, event.xkey.state);
             }
-            
-            // Mask out lock keys
+
+            // Check for power key press first
+            if (powerKeyCode != 0 && event.xkey.keycode == powerKeyCode) {
+                // Start long-press timer; short press will be handled on KeyRelease
+                if (powerKeyTimer) {
+                    [powerKeyTimer invalidate];
+                    RELEASE(powerKeyTimer);
+                }
+                powerKeyDown = YES;
+                powerKeyTriggered = NO;
+                powerKeyTimer = [[NSTimer scheduledTimerWithTimeInterval:POWER_KEY_LONG_PRESS
+                                                                   target:self
+                                                                 selector:@selector(powerKeyLongPressTimerFired:)
+                                                                 userInfo:nil
+                                                                  repeats:NO] retain];
+                if (verbose) {
+                    NSLog(@"GSGlobalShortcutsManager: Power key pressed, started long-press timer (%.1fs)", POWER_KEY_LONG_PRESS);
+                }
+                continue; // Don't process as a normal shortcut
+            }
+
+            // Mask out lock keys for normal shortcuts
             event.xkey.state &= ~(numlock_mask | capslock_mask | scrolllock_mask);
             
             // Find matching shortcut
@@ -619,6 +663,38 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
                     }
                     break;
                 }
+            }
+        } else if (event.type == KeyRelease) {
+            // Handle power key release (short press -> show shutdown dialog)
+            if (powerKeyCode != 0 && event.xkey.keycode == powerKeyCode) {
+                if (verbose) {
+                    NSLog(@"GSGlobalShortcutsManager: Power key released (keycode=%d)", event.xkey.keycode);
+                }
+
+                if (powerKeyTimer) {
+                    // Short press (< long-press threshold) - cancel timer and show shutdown dialog
+                    [powerKeyTimer invalidate];
+                    RELEASE(powerKeyTimer);
+                    powerKeyTimer = nil;
+                    powerKeyDown = NO;
+                    powerKeyTriggered = NO;
+
+                    // Show shutdown dialog on main thread
+                    dispatch_async(dispatch_get_main_queue(), ^{
+                        if (verbose) NSLog(@"GSGlobalShortcutsManager: Showing shutdown dialog (short press)");
+                        [[Workspace gworkspace] shutdown:nil];
+                    });
+                } else {
+                    // No active timer - either long-press already triggered, or timer fired and cleared
+                    if (powerKeyTriggered) {
+                        if (verbose) NSLog(@"GSGlobalShortcutsManager: Power key long-press had already triggered shutdown");
+                        // reset state
+                        powerKeyDown = NO;
+                        powerKeyTriggered = NO;
+                    }
+                }
+
+                continue;
             }
         }
     }
@@ -986,6 +1062,75 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     if (verbose) {
         NSLog(@"GSGlobalShortcutsManager: Ungrabbed all non-protected keys");
     }
+}
+
+// Grab the hardware power key (XF86PowerOff) unconditionally so Workspace
+// always receives power button events. Use owner_events = False to prevent
+// the key press from being delivered to other X clients (so it doesn't
+// trigger external shutdown handlers within X11). Returns YES if the key was grabbed.
+- (BOOL)grabPowerKey
+{
+    if (!display || rootWindow == None) return NO;
+
+    if (powerKeyCode == 0) {
+        KeySym keysym = XStringToKeysym("XF86PowerOff");
+        if (keysym == NoSymbol) keysym = XStringToKeysym("XF86_PowerOff");
+        if (keysym == NoSymbol) keysym = XStringToKeysym("PowerOff");
+
+        if (keysym == NoSymbol) {
+            if (verbose) NSLog(@"GSGlobalShortcutsManager: No keysym found for power key");
+            return NO;
+        }
+
+        powerKeyCode = XKeysymToKeycode(display, keysym);
+        if (powerKeyCode == 0) {
+            if (verbose) NSLog(@"GSGlobalShortcutsManager: Could not map power keysym to keycode");
+            return NO;
+        }
+    }
+
+    unsigned int modifiers[] = {
+        0,
+        numlock_mask,
+        capslock_mask,
+        numlock_mask | capslock_mask,
+        scrolllock_mask,
+        numlock_mask | scrolllock_mask,
+        capslock_mask | scrolllock_mask,
+        numlock_mask | capslock_mask | scrolllock_mask
+    };
+
+    for (int i = 0; i < 8; i++) {
+        XGrabKey(display, powerKeyCode, modifiers[i], rootWindow, False, GrabModeAsync, GrabModeAsync);
+    }
+
+    if (verbose) NSLog(@"GSGlobalShortcutsManager: Grabbed power key keycode=%d", powerKeyCode);
+    return YES;
+}
+
+// Called when the power key long-press timer fires (user held the button > POWER_KEY_LONG_PRESS).
+// Triggers an immediate shutdown via Workspace trySystemAction in a background queue.
+- (void)powerKeyLongPressTimerFired:(NSTimer *)timer
+{
+    powerKeyTimer = nil;
+    powerKeyTriggered = YES;
+
+    if (verbose) NSLog(@"GSGlobalShortcutsManager: Power key long-press detected: triggering immediate shutdown");
+
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        BOOL success = [[Workspace gworkspace] trySystemAction:@"shutdown"];
+        if (!success) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                NSAlert *alert = [NSAlert alertWithMessageText:NSLocalizedString(@"error", @"")
+                                                 defaultButton:NSLocalizedString(@"OK", @"")
+                                               alternateButton:nil
+                                                   otherButton:nil
+                                     informativeTextWithFormat:NSLocalizedString(@"Failed to execute shutdown command.", @"")];
+                [alert setAlertStyle:NSWarningAlertStyle];
+                [alert runModal];
+            });
+        }
+    });
 }
 
 - (void)showCommandFailureAlert:(NSString *)command shortcut:(NSString *)shortcut
