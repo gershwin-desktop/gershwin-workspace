@@ -1065,9 +1065,7 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
 }
 
 // Grab the hardware power key (XF86PowerOff) unconditionally so Workspace
-// always receives power button events. Use owner_events = False to prevent
-// the key press from being delivered to other X clients (so it doesn't
-// trigger external shutdown handlers within X11). Returns YES if the key was grabbed.
+// always receives power button events. Returns YES if the key was grabbed.
 - (BOOL)grabPowerKey
 {
     if (!display || rootWindow == None) return NO;
@@ -1101,7 +1099,7 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     };
 
     for (int i = 0; i < 8; i++) {
-        XGrabKey(display, powerKeyCode, modifiers[i], rootWindow, False, GrabModeAsync, GrabModeAsync);
+        XGrabKey(display, powerKeyCode, modifiers[i], rootWindow, True, GrabModeAsync, GrabModeAsync);
     }
 
     if (verbose) NSLog(@"GSGlobalShortcutsManager: Grabbed power key keycode=%d", powerKeyCode);
