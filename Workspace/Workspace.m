@@ -4315,8 +4315,9 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   NSFileManager *fileManager = [NSFileManager defaultManager];
   NSString *homeDirectory = NSHomeDirectory();
   NSArray *standardDirectories = @[
+    @"Applications",
     @"Desktop",
-    @"Documents", 
+    @"Documents",
     @"Downloads",
     @"Music",
     @"Pictures",
