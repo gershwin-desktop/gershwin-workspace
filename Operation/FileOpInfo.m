@@ -56,6 +56,7 @@ static NSString *nibName = @"FileOperationWin";
   RELEASE (destination);
   RELEASE (files);
   RELEASE (procFiles);
+  RELEASE (cachedProcessedFilesData);
   RELEASE (dupfiles);
   RELEASE (notifNames);
   RELEASE (win);
@@ -390,13 +391,23 @@ static NSString *nibName = @"FileOperationWin";
   stopped = YES;   
 }
 
+- (void)cacheProcessedFiles:(NSData *)data
+{
+  ASSIGN(cachedProcessedFilesData, data);
+}
+
 - (void)removeProcessedFiles
 {
   NSData *pFData;
   NSArray *pFiles;
   NSUInteger i;
 
-  pFData = [executor processedFiles];
+  pFData = cachedProcessedFilesData;
+  if (pFData == nil)
+    {
+      NSLog(@"removeProcessedFiles: no cached data available");
+      return;
+    }
   pFiles = [NSUnarchiver unarchiveObjectWithData: pFData];
 
   for (i = 0; i < [pFiles count]; i++)
@@ -579,8 +590,8 @@ static NSString *nibName = @"FileOperationWin";
   if (destination != nil)
     [notifObj setObject: destination forKey: @"destination"];	
   
-  if (executor) {
-    NSData *data = [executor processedFiles];
+  if (cachedProcessedFilesData) {
+    NSData *data = cachedProcessedFilesData;
     NSArray *processedFiles = [NSUnarchiver unarchiveObjectWithData: data];
     
     [notifObj setObject: processedFiles forKey: @"files"];	
@@ -1085,6 +1096,7 @@ filename = [fileinfo objectForKey: @"name"];
       RELEASE (fileinfo);
     }
 
+  [fileOp cacheProcessedFiles: [self processedFiles]];
   [fileOp sendDidChangeNotification];
   if (([files count] == 0) || stopped)
     {
@@ -1117,6 +1129,7 @@ filename = [fileinfo objectForKey: @"name"];
       RELEASE (fileinfo); 
     }
   
+  [fileOp cacheProcessedFiles: [self processedFiles]];
   [fileOp sendDidChangeNotification];
   if (([files count] == 0) || stopped)
     {
@@ -1150,6 +1163,7 @@ filename = [fileinfo objectForKey: @"name"];
       RELEASE (fileinfo);     
     }
   
+  [fileOp cacheProcessedFiles: [self processedFiles]];
   [fileOp sendDidChangeNotification];
   if (([files count] == 0) || stopped)
     {
@@ -1178,6 +1192,7 @@ filename = [fileinfo objectForKey: @"name"];
       RELEASE (fileinfo);   
     }
 
+  [fileOp cacheProcessedFiles: [self processedFiles]];
   [fileOp sendDidChangeNotification];
   if (([files count] == 0) || stopped)
     {
@@ -1241,6 +1256,7 @@ filename = [fileinfo objectForKey: @"name"];
     RELEASE (fileinfo);	       
   }
 
+  [fileOp cacheProcessedFiles: [self processedFiles]];
   [fileOp sendDidChangeNotification];
   if (([files count] == 0) || stopped)
     {
@@ -1279,6 +1295,7 @@ filename = [fileinfo objectForKey: @"name"];
   [files removeObject: fileinfo];
   RELEASE (fileinfo);	
 
+  [fileOp cacheProcessedFiles: [self processedFiles]];
   [fileOp sendDidChangeNotification];
   [fileOp endOperation];
   [fileOp cleanUpExecutor];
@@ -1295,6 +1312,7 @@ filename = [fileinfo objectForKey: @"name"];
   [files removeObject: fileinfo];	
   RELEASE (fileinfo);
 
+  [fileOp cacheProcessedFiles: [self processedFiles]];
   [fileOp sendDidChangeNotification];
   [fileOp endOperation];
   [fileOp cleanUpExecutor];
@@ -1312,6 +1330,7 @@ filename = [fileinfo objectForKey: @"name"];
   [files removeObject: fileinfo];	
   RELEASE (fileinfo);
   
+  [fileOp cacheProcessedFiles: [self processedFiles]];
   [fileOp sendDidChangeNotification];
   [fileOp endOperation];
   [fileOp cleanUpExecutor];
@@ -1383,6 +1402,7 @@ filename = [fileinfo objectForKey: @"name"];
     RELEASE (fileinfo);  
   }
 
+  [fileOp cacheProcessedFiles: [self processedFiles]];
   [fileOp sendDidChangeNotification];
   if (([files count] == 0) || stopped)
     {

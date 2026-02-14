@@ -49,6 +49,8 @@
 
 - (void)removeProcessedFiles;
 
+- (void)cacheProcessedFiles:(NSData *)data;
+
 - (void)cleanUpExecutor;
 
 - (void)endOperation;
@@ -91,6 +93,7 @@
   NSMutableArray *files;
   NSMutableArray *dupfiles;
   NSMutableArray *procFiles;
+  NSData *cachedProcessedFilesData;
   int ref;
   
   NSMutableDictionary *operationDict;
@@ -158,6 +161,8 @@
 - (void)setProgIndicatorValue:(int)n;
 
 - (void)removeProcessedFiles;
+
+- (void)cacheProcessedFiles:(NSData *)data;
 
 - (void)cleanUpExecutor;
 
