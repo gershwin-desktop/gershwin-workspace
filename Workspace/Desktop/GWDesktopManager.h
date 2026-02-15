@@ -36,6 +36,7 @@ typedef enum {
 @class Workspace;
 @class GWDesktopView;
 @class Dock;
+@class DockWindow;
 @class MPointWatcher;
 
 @interface GWDesktopManager : NSObject
@@ -48,6 +49,7 @@ typedef enum {
 
   BOOL singleClickLaunch;
   Dock *dock;
+  DockWindow *dockWindow;
   BOOL hidedock;
   DockPosition dockPosition;
   
