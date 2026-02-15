@@ -57,7 +57,7 @@ typedef enum BackImageStyle
 
   NSMutableArray *mountedVolumes;
   NSMutableDictionary *desktopInfo;
-  NSMutableSet *expectedUnmountPaths; // Tracks volumes being properly ejected
+  NSMutableDictionary *expectedUnmountPaths; // path -> NSDate, tracks expected unmounts
       
   GWDesktopManager *manager;
 }
@@ -69,6 +69,8 @@ typedef enum BackImageStyle
 - (void)workspaceWillUnmountVolumeAtPath:(NSString *)vpath;
 
 - (void)workspaceDidUnmountVolumeAtPath:(NSString *)vpath;
+
+- (void)markExpectedUnmountForPath:(NSString *)vpath;
 
 - (void)unlockVolumeAtPath:(NSString *)path;
 

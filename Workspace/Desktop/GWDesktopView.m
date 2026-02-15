@@ -120,7 +120,7 @@
 
       backImageStyle = BackImageCenterStyle;
       mountedVolumes = [NSMutableArray new];
-      expectedUnmountPaths = [NSMutableSet new];
+      expectedUnmountPaths = [NSMutableDictionary new];
       [self getDesktopInfo];
       [self makeIconsGrid];
       dragIcon = nil;
@@ -145,7 +145,8 @@
 {
   if (vpath)
     {
-      [expectedUnmountPaths addObject:vpath];
+      [expectedUnmountPaths setObject:[NSDate date] forKey:vpath];
+      NSLog(@"GWDesktopView: Marked path as expected unmount: %@", vpath);
     }
   [self checkLockedReps];
 }
@@ -160,8 +161,10 @@
       return;
     }
   
-  // Remove from expected unmounts if it was there
-  [expectedUnmountPaths removeObject:vpath];
+  /* Do NOT remove from expectedUnmountPaths here.
+   * The polling timer in showMountedVolumes needs to see it
+   * to avoid a false "unexpected unmount" warning.
+   * showMountedVolumes cleans up after the check. */
     
   icon = [self repOfSubnodePath: vpath];
 
@@ -196,6 +199,15 @@
           
           [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemDidChangeNotification" object:opinfo];
         }
+    }
+}
+
+- (void)markExpectedUnmountForPath:(NSString *)vpath
+{
+  if (vpath)
+    {
+      [expectedUnmountPaths setObject:[NSDate date] forKey:vpath];
+      NSLog(@"GWDesktopView: Externally marked path as expected unmount: %@", vpath);
     }
 }
 
@@ -263,16 +275,46 @@
   if ([volumesToRemove count] > 0)
     {
       NSMutableArray *unexpectedRemovals = [NSMutableArray arrayWithCapacity:1];
+      NSTimeInterval expectedUnmountTimeout = 60.0; // seconds
+      NSDate *now = [NSDate date];
       
       for (i = 0; i < [volumesToRemove count]; i++)
         {
           NSString *v = [volumesToRemove objectAtIndex:i];
-          if (![expectedUnmountPaths containsObject:v] && ![v isEqualToString:@"/"])
+          if ([v isEqualToString:@"/"])
+            continue;
+
+          NSDate *markedDate = [expectedUnmountPaths objectForKey:v];
+          if (markedDate != nil
+              && [now timeIntervalSinceDate:markedDate] < expectedUnmountTimeout)
+            {
+              /* This unmount was expected — suppress the warning. */
+              NSLog(@"GWDesktopView: Suppressing unexpected-unmount warning for %@ (expected)", v);
+            }
+          else
             {
               [unexpectedRemovals addObject:v];
             }
         }
       
+      /* Clean up expected-unmount entries for volumes that are now gone. */
+      for (i = 0; i < [volumesToRemove count]; i++)
+        {
+          [expectedUnmountPaths removeObjectForKey:[volumesToRemove objectAtIndex:i]];
+        }
+
+      /* Also purge any stale entries older than the timeout. */
+      NSMutableArray *staleKeys = [NSMutableArray arrayWithCapacity:1];
+      for (NSString *key in expectedUnmountPaths)
+        {
+          NSDate *d = [expectedUnmountPaths objectForKey:key];
+          if ([now timeIntervalSinceDate:d] >= expectedUnmountTimeout)
+            {
+              [staleKeys addObject:key];
+            }
+        }
+      [expectedUnmountPaths removeObjectsForKeys:staleKeys];
+
       // Show alert for unexpected removals
       if ([unexpectedRemovals count] > 0)
         {
@@ -282,21 +324,21 @@
           if ([unexpectedRemovals count] == 1)
             {
               message = [NSString stringWithFormat:
-                @"The volume at the following path was removed without being properly ejected:\n\n%@\n\n"
-                @"Always eject removable volumes before unplugging them to prevent data loss and avoid crashes.", 
+                NSLocalizedString(@"The volume at the following path was removed without being properly ejected:\n\n%@\n\n"
+                @"Always eject removable volumes before unplugging them to prevent data loss and avoid crashes.", @""), 
                 volumeList];
             }
           else
             {
               message = [NSString stringWithFormat:
-                @"The following volumes were removed without being properly ejected:\n\n%@\n\n"
-                @"Always eject removable volumes before unplugging them to prevent data loss and avoid crashes.", 
+                NSLocalizedString(@"The following volumes were removed without being properly ejected:\n\n%@\n\n"
+                @"Always eject removable volumes before unplugging them to prevent data loss and avoid crashes.", @""), 
                 volumeList];
             }
           
-          NSRunAlertPanel(@"Volume Removed Unexpectedly", 
+          NSRunAlertPanel(NSLocalizedString(@"Volume Removed Unexpectedly", @""), 
                          message,
-                         @"OK", nil, nil);
+                         NSLocalizedString(@"OK", @""), nil, nil);
         }
     }
   

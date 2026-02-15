@@ -2217,6 +2217,13 @@ NSString *_pendingSystemActionTitle = nil;
       continue;
     }
     
+    /* Mark as expected unmount so the desktop does not show a spurious
+       "Volume Removed Unexpectedly" warning. */
+    NSDictionary *unmountInfo = @{ @"NSDevicePath": umpath };
+    [[NSNotificationCenter defaultCenter]
+      postNotificationName:NSWorkspaceWillUnmountNotification
+                    object:ws
+                  userInfo:unmountInfo];
     [ws unmountAndEjectDeviceAtPath: umpath];
   }
 
@@ -4538,18 +4545,18 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   
   Class VolumeManagerClass = NSClassFromString(@"VolumeManager");
   if (VolumeManagerClass) {
-    volumeManager = [VolumeManagerClass sharedManager];
-    if (volumeManager && [volumeManager respondsToSelector:@selector(unmountPath:)]) {
-      // Check if this looks like a disk image mount (in /media/$USER with simple names)
-      if ([path hasPrefix:@"/media/"]) {
-        isDiskImageVolume = YES;
-        NSLog(@"Workspace: Detected disk image volume, using VolumeManager");
+    // Use the class method to check if VolumeManager actually manages this mount
+    if ([VolumeManagerClass respondsToSelector:@selector(isDiskImageMount:)]) {
+      isDiskImageVolume = [VolumeManagerClass isDiskImageMount:path];
+      if (isDiskImageVolume) {
+        volumeManager = [VolumeManagerClass sharedManager];
+        NSLog(@"Workspace: Volume is managed by VolumeManager (disk image)");
       }
     }
   }
   
   if (isDiskImageVolume && volumeManager) {
-    // Use VolumeManager for disk image volumes
+    // Use VolumeManager for disk image volumes it mounted
     NSLog(@"Workspace: Calling VolumeManager unmountPath for %@", path);
     return [volumeManager unmountPath: path];
   }
