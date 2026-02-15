@@ -288,6 +288,7 @@ NSString *_pendingSystemActionTitle = nil;
   menuItem = [menu addItemWithTitle:_(@"Print") action:@selector(print:) keyEquivalent:@"p"];
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Close Window") action:@selector(performClose:) keyEquivalent:@"w"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask];
   [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
@@ -2175,8 +2176,14 @@ NSString *_pendingSystemActionTitle = nil;
 {
   NSWindow *kwin = [NSApp keyWindow];
   
+  NSLog(@"Workspace performClose: called, keyWindow=%@", kwin);
+  
   if (kwin) {
+    NSLog(@"Workspace performClose: calling performClose on window: %@ (class=%@)", 
+          [kwin title], [kwin className]);
     [kwin performClose: sender];
+  } else {
+    NSLog(@"Workspace performClose: no key window!");
   }
 }
 

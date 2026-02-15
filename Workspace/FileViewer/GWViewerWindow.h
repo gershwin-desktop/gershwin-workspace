@@ -55,6 +55,8 @@
 - (void)showTerminal:(id)sender;
 - (void)openParentFolder:(id)sender;
 - (void)openParentFolder;
+- (void)performClose:(id)sender;
+- (BOOL)performKeyEquivalent:(NSEvent *)theEvent;
 
 @end
 
