@@ -220,6 +220,7 @@
   [icon setHighlightColor: backColor];
   [icon setWsIcon: YES];   
   [icon setDocked: YES];   
+  [icon setSingleClickLaunch: singleClickLaunch];
   [icons insertObject: icon atIndex: 0];
   [self addSubview: icon];
   RELEASE (icon);
@@ -235,7 +236,7 @@
 
   [icon setHighlightColor: backColor];
   [icon setTrashIcon: YES];  
-  [icon setSingleClickLaunch: YES]; /* Trash should open on single click */
+  [icon setSingleClickLaunch: singleClickLaunch];
   [icon setDocked: YES];                         
   [icons insertObject: icon atIndex: [icons count]];
   [self addSubview: icon];
@@ -571,13 +572,7 @@
   for (i = 0; i < [icons count]; i++)
     {
       DockIcon *icon = [icons objectAtIndex: i];
-
-      /* Keep Trash always single-click: it should open immediately */
-      if ([icon isTrashIcon]) {
-        [icon setSingleClickLaunch: YES];
-      } else {
-        [icon setSingleClickLaunch: singleClickLaunch];
-      }
+      [icon setSingleClickLaunch: singleClickLaunch];
     }
 }
 
