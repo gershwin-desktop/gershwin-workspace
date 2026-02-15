@@ -132,15 +132,7 @@
           compositorActive = getCompActive ? getCompActive(cm, @selector(compositingActive)) : NO;
         }
       }
-#ifdef __linux__
-      if (!compositorActive) {
-        Display *dpy = XOpenDisplay(NULL);
-        if (dpy) {
-          int ev, er;
-          if (XCompositeQueryExtension(dpy, &ev, &er)) {
-            Atom sel = XInternAtom(dpy, "_NET_WM_CM_S0", False);
-            Window owner = XGetSelectionOwner(dpy, sel);
-            if (owner != None) compositorActive = YES;
+#if defined(__linux__) && HAVE_XCOMPOSITE
           }
           XCloseDisplay(dpy);
         }
@@ -921,7 +913,7 @@
       compositorActive = getCompActive ? getCompActive(cm, @selector(compositingActive)) : NO;
     }
   }
-#if defined(__linux__) && HAVE_XCOMPOSITEnux__) && HAVE_XCOMPOSITE
+#if defined(__linux__) && HAVE_XCOMPOSITE
   if (!compositorActive) {
     Display *dpy = XOpenDisplay(NULL);
     if (dpy) {
