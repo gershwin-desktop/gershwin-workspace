@@ -173,7 +173,9 @@ VolumeManager.m \
 GWUnmountHelper.m \
 ISOWrite/ISOWriteHandler.m \
 ISOWrite/ISOWriteOperation.m \
+ISOWrite/DiskFormatOperation.m \
 ISOWrite/BlockDeviceInfo.m \
+ISOWrite/DeviceEraseConfirmation.m \
 ISOWrite/ISOWriteConfirmation.m \
 ISOWrite/ISOWriteProgressWindow.m \
 

@@ -97,6 +97,7 @@
   NSMapTable *watchDescrMap;
   
   NSFileHandle *inotifyHandle;
+  NSMutableData *inotifyPendingData;
   uint32_t filemask;
   uint32_t dirmask;
   NSString *lastMovedPath;

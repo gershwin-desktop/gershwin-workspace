@@ -6,6 +6,10 @@
 
 #import "BlockDeviceInfo.h"
 #import <sys/stat.h>
+#import <sys/param.h>
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+#import <sys/mount.h>
+#endif
 #if defined(__has_include)
 # if __has_include(<sys/sysmacros.h>)
 #  import <sys/sysmacros.h>
@@ -20,6 +24,10 @@
 #import <sys/ioctl.h>
 #ifdef __linux__
 #import <linux/fs.h>
+#endif
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+#import <sys/disk.h>
+#import <sys/sysctl.h>
 #endif
 #import <fcntl.h>
 #import <unistd.h>
@@ -58,10 +66,63 @@
   return [NSString stringWithFormat:@"%llu bytes", _size];
 }
 
+- (NSComparisonResult)gw_partitionSortCompare:(PartitionInfo *)other
+{
+  if (!other) {
+    return NSOrderedDescending;
+  }
+
+  if (_partitionNumber < other.partitionNumber) {
+    return NSOrderedAscending;
+  }
+  if (_partitionNumber > other.partitionNumber) {
+    return NSOrderedDescending;
+  }
+
+  if (_devicePath && other.devicePath) {
+    return [_devicePath compare:other.devicePath];
+  }
+  if (_devicePath) {
+    return NSOrderedDescending;
+  }
+  if (other.devicePath) {
+    return NSOrderedAscending;
+  }
+
+  return NSOrderedSame;
+}
+
 @end
 
 
 @implementation BlockDeviceInfo
+
++ (NSString *)normalizedMountPath:(NSString *)path
+{
+  if (!path || [path length] == 0) {
+    return nil;
+  }
+
+  NSString *normalized = [path stringByStandardizingPath];
+  if ([normalized length] > 1 && [normalized hasSuffix:@"/"]) {
+    normalized = [normalized substringToIndex:([normalized length] - 1)];
+  }
+
+  return normalized;
+}
+
++ (NSString *)unescapeMountPathField:(NSString *)mountField
+{
+  if (!mountField) {
+    return nil;
+  }
+
+  NSString *value = [mountField stringByReplacingOccurrencesOfString:@"\\040" withString:@" "];
+  value = [value stringByReplacingOccurrencesOfString:@"\\011" withString:@"\t"];
+  value = [value stringByReplacingOccurrencesOfString:@"\\012" withString:@"\n"];
+  value = [value stringByReplacingOccurrencesOfString:@"\\134" withString:@"\\"];
+  return value;
+}
 
 @synthesize devicePath = _devicePath;
 @synthesize deviceName = _deviceName;
@@ -123,31 +184,92 @@
 
 + (NSString *)devicePathForMountPoint:(NSString *)mountPoint
 {
-  NSError *error = nil;
-  NSString *mounts = [NSString stringWithContentsOfFile:@"/proc/mounts"
-                                               encoding:NSUTF8StringEncoding
-                                                  error:&error];
-  if (error || !mounts) {
-    NSLog(@"BlockDeviceInfo: Failed to read /proc/mounts: %@", error);
+  NSString *normalizedMountPoint = [self normalizedMountPath:mountPoint];
+  if (!normalizedMountPoint) {
     return nil;
   }
-  
-  NSArray *lines = [mounts componentsSeparatedByString:@"\n"];
-  for (NSString *line in lines) {
-    NSArray *parts = [line componentsSeparatedByString:@" "];
-    if ([parts count] >= 2) {
-      NSString *device = [parts objectAtIndex:0];
-      NSString *mount = [parts objectAtIndex:1];
-      
-      /* Handle escaped spaces in mount points */
-      mount = [mount stringByReplacingOccurrencesOfString:@"\\040" withString:@" "];
-      
-      if ([mount isEqualToString:mountPoint]) {
-        return device;
+
+  /* Linux: prefer /proc/self/mountinfo (more reliable than /proc/mounts). */
+  NSError *error = nil;
+  NSString *mountInfo = [NSString stringWithContentsOfFile:@"/proc/self/mountinfo"
+                                                  encoding:NSUTF8StringEncoding
+                                                     error:&error];
+  if (mountInfo && [mountInfo length] > 0) {
+    NSArray *lines = [mountInfo componentsSeparatedByString:@"\n"];
+    for (NSString *line in lines) {
+      if ([line length] == 0) {
+        continue;
+      }
+
+      NSRange sep = [line rangeOfString:@" - "];
+      if (sep.location == NSNotFound) {
+        continue;
+      }
+
+      NSString *left = [line substringToIndex:sep.location];
+      NSString *right = [line substringFromIndex:(sep.location + 3)];
+
+      NSArray *leftParts = [left componentsSeparatedByString:@" "];
+      NSArray *rightParts = [right componentsSeparatedByString:@" "];
+      if ([leftParts count] < 5 || [rightParts count] < 2) {
+        continue;
+      }
+
+      NSString *mount = [self unescapeMountPathField:[leftParts objectAtIndex:4]];
+      mount = [self normalizedMountPath:mount];
+      if (![mount isEqualToString:normalizedMountPoint]) {
+        continue;
+      }
+
+      NSString *source = [rightParts objectAtIndex:1];
+      if ([source hasPrefix:@"/dev/"]) {
+        return source;
       }
     }
   }
-  
+
+  /* Linux fallback: /proc/mounts */
+  NSString *mounts = [NSString stringWithContentsOfFile:@"/proc/mounts"
+                                               encoding:NSUTF8StringEncoding
+                                                  error:&error];
+  if (mounts && [mounts length] > 0) {
+    NSArray *lines = [mounts componentsSeparatedByString:@"\n"];
+    for (NSString *line in lines) {
+      NSArray *parts = [line componentsSeparatedByString:@" "];
+      if ([parts count] >= 2) {
+        NSString *device = [parts objectAtIndex:0];
+        NSString *mount = [self unescapeMountPathField:[parts objectAtIndex:1]];
+        mount = [self normalizedMountPath:mount];
+
+        if ([device hasPrefix:@"/dev/"] && [mount isEqualToString:normalizedMountPoint]) {
+          return device;
+        }
+      }
+    }
+  }
+
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__) || defined(__DragonFly__)
+  {
+    struct statfs *mntbuf = NULL;
+    int mountsCount = getmntinfo(&mntbuf, MNT_NOWAIT);
+    if (mountsCount > 0 && mntbuf != NULL) {
+      NSFileManager *fm = [NSFileManager defaultManager];
+      int i;
+      for (i = 0; i < mountsCount; i++) {
+        NSString *mount = [fm stringWithFileSystemRepresentation:mntbuf[i].f_mntonname
+                                                          length:strlen(mntbuf[i].f_mntonname)];
+        NSString *from = [fm stringWithFileSystemRepresentation:mntbuf[i].f_mntfromname
+                                                         length:strlen(mntbuf[i].f_mntfromname)];
+        mount = [self normalizedMountPath:mount];
+        if ([mount isEqualToString:normalizedMountPoint] && [from hasPrefix:@"/dev/"]) {
+          return from;
+        }
+      }
+    }
+  }
+#endif
+
+  NSLog(@"BlockDeviceInfo: Could not resolve device for mount point %@", normalizedMountPoint);
   return nil;
 }
 
@@ -158,6 +280,53 @@
   }
   
   NSString *deviceName = [partitionPath lastPathComponent];
+
+  /* FreeBSD/DragonFly style slices: da0s1 -> da0, mmcsd0s1 -> mmcsd0
+     Also handle BSD disklabel partitions like da0s1a -> da0 */
+  NSRange sRange = [deviceName rangeOfString:@"s" options:NSBackwardsSearch];
+  if (sRange.location != NSNotFound && sRange.location > 0) {
+    NSString *afterS = [deviceName substringFromIndex:(sRange.location + 1)];
+    if ([afterS length] > 0) {
+      NSCharacterSet *digits = [NSCharacterSet decimalDigitCharacterSet];
+      NSUInteger idx = 0;
+      while (idx < [afterS length] && [digits characterIsMember:[afterS characterAtIndex:idx]]) {
+        idx++;
+      }
+
+      BOOL hasDigits = (idx > 0);
+      BOOL suffixOK = NO;
+      if (hasDigits) {
+        if (idx == [afterS length]) {
+          suffixOK = YES;
+        } else if (idx + 1 == [afterS length]) {
+          unichar c = [afterS characterAtIndex:idx];
+          if (c >= 'a' && c <= 'h') {
+            suffixOK = YES;
+          }
+        }
+      }
+
+      if (suffixOK) {
+        NSString *parent = [deviceName substringToIndex:sRange.location];
+        if ([parent length] > 0) {
+          return [@"/dev/" stringByAppendingString:parent];
+        }
+      }
+    }
+  }
+
+  /* BSD partition style: ada0p2 -> ada0 */
+  NSRange bsdPRange = [deviceName rangeOfString:@"p" options:NSBackwardsSearch];
+  if (bsdPRange.location != NSNotFound && bsdPRange.location > 0) {
+    NSString *afterP = [deviceName substringFromIndex:(bsdPRange.location + 1)];
+    NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+    if ([afterP length] > 0 && [afterP rangeOfCharacterFromSet:nonDigits].location == NSNotFound) {
+      NSString *parent = [deviceName substringToIndex:bsdPRange.location];
+      if ([parent length] > 0) {
+        return [@"/dev/" stringByAppendingString:parent];
+      }
+    }
+  }
   
   /* Handle NVMe, MMC, and pmem devices: nvme0n1p1 -> nvme0n1, mmcblk0p1 -> mmcblk0 */
   if ([deviceName hasPrefix:@"nvme"] || [deviceName hasPrefix:@"mmcblk"] || [deviceName hasPrefix:@"pmem"]) {
@@ -186,7 +355,19 @@
   }
   
   if ([parent length] < [deviceName length]) {
-    return [@"/dev/" stringByAppendingString:parent];
+    NSString *candidate = [@"/dev/" stringByAppendingString:parent];
+    struct stat st;
+    if (stat([candidate UTF8String], &st) == 0) {
+#ifdef __linux__
+      if (S_ISBLK(st.st_mode)) {
+        return candidate;
+      }
+#else
+      if (S_ISBLK(st.st_mode) || S_ISCHR(st.st_mode)) {
+        return candidate;
+      }
+#endif
+    }
   }
   
   return nil; /* Already a raw device */
@@ -203,9 +384,15 @@
     return NO;
   }
   
+  #ifdef __linux__
   if (!S_ISBLK(st.st_mode)) {
     return NO;
   }
+  #else
+  if (!S_ISBLK(st.st_mode) && !S_ISCHR(st.st_mode)) {
+    return NO;
+  }
+  #endif
   
   /* Check if this is a partition or raw device */
   return [self parentDeviceForPartition:devicePath] == nil;
@@ -222,9 +409,15 @@
     return NO;
   }
   
+  #ifdef __linux__
   if (!S_ISBLK(st.st_mode)) {
     return NO;
   }
+  #else
+  if (!S_ISBLK(st.st_mode) && !S_ISCHR(st.st_mode)) {
+    return NO;
+  }
+  #endif
   
   return [self parentDeviceForPartition:devicePath] != nil;
 }
@@ -279,11 +472,38 @@
   int fd = open([_devicePath UTF8String], O_RDONLY);
   if (fd < 0) {
     NSLog(@"BlockDeviceInfo: Cannot open %@ for size query: %s", _devicePath, strerror(errno));
+    /* On BSD, users may not have direct device node access; try sysctl fallback. */
+#if defined(__FreeBSD__) || defined(__DragonFly__)
+    NSString *devName = _deviceName;
+    if (devName && [devName length] > 0) {
+      NSUInteger idx = 0;
+      while (idx < [devName length]) {
+        unichar c = [devName characterAtIndex:idx];
+        if (c >= '0' && c <= '9') {
+          break;
+        }
+        idx++;
+      }
+      if (idx > 0 && idx < [devName length]) {
+        NSString *prefix = [devName substringToIndex:idx];
+        NSString *unit = [devName substringFromIndex:idx];
+        NSString *oid = [NSString stringWithFormat:@"dev.%@.%@.mediasize", prefix, unit];
+        uint64_t mediasize = 0;
+        size_t len = sizeof(mediasize);
+        if (sysctlbyname([oid UTF8String], &mediasize, &len, NULL, 0) == 0 && len == sizeof(mediasize)) {
+          _size = (unsigned long long)mediasize;
+          NSLog(@"BlockDeviceInfo: Size via sysctl %@ = %llu", oid, _size);
+        } else {
+          NSLog(@"BlockDeviceInfo: sysctl size fallback failed for %@: %s", oid, strerror(errno));
+        }
+      }
+    }
+#endif
     return;
   }
   
-  unsigned long long size = 0;
 #ifdef __linux__
+  unsigned long long size = 0;
   if (ioctl(fd, BLKGETSIZE64, &size) == 0) {
     _size = size;
   } else {
@@ -292,6 +512,7 @@
 #else
   /* BSD: Use DIOCGMEDIASIZE or fall back to stat */
   #ifdef DIOCGMEDIASIZE
+  unsigned long long size = 0;
   if (ioctl(fd, DIOCGMEDIASIZE, &size) == 0) {
     _size = size;
   } else {
@@ -464,10 +685,144 @@
     }
   }
 #else
-  /* BSD: Would need to use gpart or fdisk to read partition table */
-  NSLog(@"BlockDeviceInfo: Partition table reading not yet implemented for BSD");
+  /* BSD: Populate partitions from /dev scan and mount table.
+     We avoid requiring raw device reads (which may need privileges). */
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSMutableDictionary *byPath = [NSMutableDictionary dictionary];
+  BOOL sawSliceStyle = NO;
+  BOOL sawGPTStyle = NO;
+
+  NSArray *devEntries = [fm contentsOfDirectoryAtPath:@"/dev" error:nil];
+  for (NSString *name in devEntries) {
+    if (![name hasPrefix:_deviceName]) {
+      continue;
+    }
+
+    NSString *fullPath = [@"/dev" stringByAppendingPathComponent:name];
+    NSString *parent = [[self class] parentDeviceForPartition:fullPath];
+    if (!parent || ![parent isEqualToString:_devicePath]) {
+      continue;
+    }
+
+    struct stat st;
+    if (stat([fullPath UTF8String], &st) != 0) {
+      continue;
+    }
+    if (!S_ISBLK(st.st_mode) && !S_ISCHR(st.st_mode)) {
+      continue;
+    }
+
+    PartitionInfo *part = [[PartitionInfo alloc] init];
+    part.devicePath = fullPath;
+    part.partitionNumber = [[self class] bsdPartitionNumberForDeviceName:name];
+
+    if ([name rangeOfString:@"p"].location != NSNotFound) {
+      sawGPTStyle = YES;
+    }
+    if ([name rangeOfString:@"s"].location != NSNotFound) {
+      sawSliceStyle = YES;
+    }
+
+    [byPath setObject:part forKey:fullPath];
+    [part release];
+  }
+
+  /* Add mounted partitions that match this device but were not found in /dev scan. */
+  struct statfs *mntbuf = NULL;
+  int mntCount = getmntinfo(&mntbuf, MNT_NOWAIT);
+  if (mntCount > 0 && mntbuf) {
+    for (int i = 0; i < mntCount; i++) {
+      const char *fromC = mntbuf[i].f_mntfromname;
+      const char *toC = mntbuf[i].f_mntonname;
+      if (!fromC || !toC) {
+        continue;
+      }
+
+      NSString *from = [NSString stringWithUTF8String:fromC];
+      if (!from || ![from hasPrefix:@"/dev/"]) {
+        continue;
+      }
+
+      NSString *parent = [[self class] parentDeviceForPartition:from];
+      if (!parent || ![parent isEqualToString:_devicePath]) {
+        continue;
+      }
+
+      PartitionInfo *part = [byPath objectForKey:from];
+      if (!part) {
+        part = [[PartitionInfo alloc] init];
+        part.devicePath = from;
+        part.partitionNumber = [[self class] bsdPartitionNumberForDeviceName:[from lastPathComponent]];
+        [byPath setObject:part forKey:from];
+        [part release];
+      }
+
+      NSString *mountPoint = [NSString stringWithUTF8String:toC];
+      if (mountPoint && [mountPoint length] > 0) {
+        part.mountPoint = mountPoint;
+        part.isMounted = YES;
+      }
+    }
+  }
+
+  /* Partition table heuristic based on naming */
+  if (sawGPTStyle && !sawSliceStyle) {
+    _partitionTableType = PartitionTableTypeGPT;
+  } else if (sawSliceStyle && !sawGPTStyle) {
+    _partitionTableType = PartitionTableTypeMBR;
+  } else if ([byPath count] == 0) {
+    _partitionTableType = PartitionTableTypeNone;
+  } else {
+    _partitionTableType = PartitionTableTypeUnknown;
+  }
+
+  /* Sort partitions by partitionNumber then devicePath (avoid blocks for compatibility) */
+  NSMutableArray *sorted = [NSMutableArray arrayWithArray:[byPath allValues]];
+  [sorted sortUsingSelector:@selector(gw_partitionSortCompare:)];
+
+  [_partitions removeAllObjects];
+  [_partitions addObjectsFromArray:sorted];
 #endif
 }
+
+#ifndef __linux__
++ (NSUInteger)bsdPartitionNumberForDeviceName:(NSString *)name
+{
+  if (!name || [name length] == 0) {
+    return 0;
+  }
+
+  /* Look for last 's' or 'p' and parse digits following it. */
+  NSRange sRange = [name rangeOfString:@"s" options:NSBackwardsSearch];
+  NSRange pRange = [name rangeOfString:@"p" options:NSBackwardsSearch];
+  NSUInteger start = NSNotFound;
+  if (sRange.location != NSNotFound && sRange.location + 1 < [name length]) {
+    start = sRange.location + 1;
+  }
+  if (pRange.location != NSNotFound && pRange.location + 1 < [name length]) {
+    if (start == NSNotFound || pRange.location > sRange.location) {
+      start = pRange.location + 1;
+    }
+  }
+
+  if (start == NSNotFound) {
+    return 0;
+  }
+
+  NSUInteger idx = start;
+  NSCharacterSet *digits = [NSCharacterSet decimalDigitCharacterSet];
+  while (idx < [name length] && [digits characterIsMember:[name characterAtIndex:idx]]) {
+    idx++;
+  }
+
+  if (idx == start) {
+    return 0;
+  }
+
+  NSString *numStr = [name substringWithRange:NSMakeRange(start, idx - start)];
+  return (NSUInteger)[numStr integerValue];
+}
+#endif
 
 - (unsigned long long)parseSizeString:(NSString *)sizeStr
 {
@@ -497,6 +852,7 @@
 
 - (void)readMountedPartitions
 {
+#ifdef __linux__
   /* Update mount status from /proc/mounts */
   NSError *error = nil;
   NSString *mounts = [NSString stringWithContentsOfFile:@"/proc/mounts"
@@ -505,9 +861,9 @@
   if (error || !mounts) {
     return;
   }
-  
+
   NSArray *lines = [mounts componentsSeparatedByString:@"\n"];
-  
+
   for (PartitionInfo *part in _partitions) {
     for (NSString *line in lines) {
       NSArray *parts = [line componentsSeparatedByString:@" "];
@@ -515,7 +871,7 @@
         NSString *device = [parts objectAtIndex:0];
         NSString *mount = [parts objectAtIndex:1];
         mount = [mount stringByReplacingOccurrencesOfString:@"\\040" withString:@" "];
-        
+
         if ([device isEqualToString:part.devicePath]) {
           part.mountPoint = mount;
           part.isMounted = YES;
@@ -524,13 +880,38 @@
       }
     }
   }
+#else
+  struct statfs *mntbuf = NULL;
+  int mntCount = getmntinfo(&mntbuf, MNT_NOWAIT);
+  if (mntCount <= 0 || !mntbuf) {
+    return;
+  }
+
+  for (PartitionInfo *part in _partitions) {
+    for (int i = 0; i < mntCount; i++) {
+      const char *fromC = mntbuf[i].f_mntfromname;
+      const char *toC = mntbuf[i].f_mntonname;
+      if (!fromC || !toC) {
+        continue;
+      }
+      NSString *from = [NSString stringWithUTF8String:fromC];
+      if (from && [from isEqualToString:part.devicePath]) {
+        NSString *to = [NSString stringWithUTF8String:toC];
+        part.mountPoint = to;
+        part.isMounted = YES;
+        break;
+      }
+    }
+  }
+#endif
 }
 
 - (void)checkSystemDisk
 {
   /* Check if this device contains / or /boot */
   _isSystemDisk = NO;
-  
+
+#ifdef __linux__
   NSError *error = nil;
   NSString *mounts = [NSString stringWithContentsOfFile:@"/proc/mounts"
                                                encoding:NSUTF8StringEncoding
@@ -538,17 +919,17 @@
   if (error || !mounts) {
     return;
   }
-  
+
   NSArray *lines = [mounts componentsSeparatedByString:@"\n"];
-  
+
   for (NSString *line in lines) {
     NSArray *parts = [line componentsSeparatedByString:@" "];
     if ([parts count] >= 2) {
       NSString *device = [parts objectAtIndex:0];
       NSString *mount = [parts objectAtIndex:1];
-      
+
       /* Check if device belongs to this block device */
-      if ([device hasPrefix:_devicePath] || 
+      if ([device hasPrefix:_devicePath] ||
           [device hasPrefix:[NSString stringWithFormat:@"/dev/%@", _deviceName]]) {
         if ([mount isEqualToString:@"/"] || [mount isEqualToString:@"/boot"] ||
             [mount hasPrefix:@"/boot/"]) {
@@ -558,7 +939,7 @@
       }
     }
   }
-  
+
   /* Also check /proc/swaps for swap partitions on this device */
   NSString *swaps = [NSString stringWithContentsOfFile:@"/proc/swaps"
                                               encoding:NSUTF8StringEncoding
@@ -573,6 +954,41 @@
       }
     }
   }
+#else
+  struct statfs *mntbuf = NULL;
+  int mntCount = getmntinfo(&mntbuf, MNT_NOWAIT);
+  if (mntCount <= 0 || !mntbuf) {
+    return;
+  }
+
+  for (int i = 0; i < mntCount; i++) {
+    const char *fromC = mntbuf[i].f_mntfromname;
+    const char *toC = mntbuf[i].f_mntonname;
+    if (!fromC || !toC) {
+      continue;
+    }
+
+    NSString *device = [NSString stringWithUTF8String:fromC];
+    NSString *mount = [NSString stringWithUTF8String:toC];
+    if (!device || !mount) {
+      continue;
+    }
+
+    NSString *parent = [[self class] parentDeviceForPartition:device];
+    BOOL belongs = (parent && [parent isEqualToString:_devicePath]);
+    if (!belongs) {
+      /* Some mounts may already be on the raw device (unusual), accept prefix match too. */
+      belongs = ([device hasPrefix:_devicePath] || [device hasPrefix:[NSString stringWithFormat:@"/dev/%@", _deviceName]]);
+    }
+
+    if (belongs) {
+      if ([mount isEqualToString:@"/"] || [mount isEqualToString:@"/boot"] || [mount hasPrefix:@"/boot/"]) {
+        _isSystemDisk = YES;
+        return;
+      }
+    }
+  }
+#endif
 }
 
 - (NSArray *)mountedPartitions

@@ -331,6 +331,8 @@
 
 - (BOOL)unmountVolumeAtPath:(NSString *)path;
 
+- (void)formatSelectedMountPoints:(id)sender;
+
 - (void)emptyTrash;
 
 //

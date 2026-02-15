@@ -214,8 +214,35 @@
 
   added = NO;
 
-  rvPaths = [[NSWorkspace sharedWorkspace] mountedRemovableMedia];
-  rvPaths = [rvPaths arrayByAddingObject: @"/"];
+  /*
+   * mountedRemovableMedia relies on getmntent + sysfs which is Linux-only.
+   * On FreeBSD (and other BSDs) removability detection does not work, so
+   * mountedRemovableMedia returns an empty array.  We augment it with any
+   * volumes from mountedLocalVolumePaths that live under well-known mount
+   * root directories (/media, /Volumes, /run/media/<user>).
+   */
+  NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+  NSMutableSet *volumeSet = [NSMutableSet setWithArray:[ws mountedRemovableMedia]];
+
+  NSArray *mountRoots = [NSArray arrayWithObjects:
+    @"/media",
+    @"/Volumes",
+    [@"/run/media" stringByAppendingPathComponent: NSUserName()],
+    [@"/media" stringByAppendingPathComponent: NSUserName()],
+    nil];
+
+  NSArray *allLocal = [ws mountedLocalVolumePaths];
+  for (NSString *vol in allLocal) {
+    for (NSString *root in mountRoots) {
+      if ([vol hasPrefix: [root stringByAppendingString: @"/"]]
+          && ![vol isEqualToString: @"/"]) {
+        [volumeSet addObject: vol];
+        break;
+      }
+    }
+  }
+
+  rvPaths = [[volumeSet allObjects] arrayByAddingObject: @"/"];
   newVolumes = [NSMutableArray arrayWithCapacity:1];
   volumesToRemove = [NSMutableArray arrayWithCapacity:1];
 

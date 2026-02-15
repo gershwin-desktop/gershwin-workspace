@@ -54,6 +54,9 @@
 #import "GWUnmountHelper.h"
 #import "GWDesktopManager.h"
 #import "VolumeManager.h"
+#import "ISOWrite/DiskFormatOperation.h"
+#import "ISOWrite/BlockDeviceInfo.h"
+#import "ISOWrite/DeviceEraseConfirmation.h"
 #import "GWDesktopWindow.h"
 #import "Dock.h"
 #import "GWViewersManager.h"
@@ -2468,10 +2471,20 @@ NSString *_pendingSystemActionTitle = nil;
 	                    name: NSConnectionDidDieNotification
 	                  object: connection];
 
-  NSAssert(connection == [fswatcher connectionForProxy],
-		                                  NSInternalInconsistencyException);
-  RELEASE (fswatcher);
-  fswatcher = nil;
+  /* Defensive: only assert match if fswatcher is still valid */
+  if (fswatcher && [fswatcher connectionForProxy] == connection) {
+    RELEASE (fswatcher);
+    fswatcher = nil;
+  } else if (fswatcher) {
+    /* Mismatch or fswatcher already released; clean up anyway */
+    NSLog(@"fswatcherConnectionDidDie: connection mismatch or stale proxy");
+    RELEASE (fswatcher);
+    fswatcher = nil;
+  } else {
+    /* fswatcher already nil; connection died notification is stale */
+    NSLog(@"fswatcherConnectionDidDie: fswatcher already nil, ignoring stale notification");
+    return;
+  }
 
   if (NSRunAlertPanel(nil,
                     NSLocalizedString(@"The fswatcher connection died.\nDo you want to restart it?", @""),
@@ -2607,21 +2620,21 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)ddbdInsertPath:(NSString *)path
 {
-  if (ddbd != nil) {
+  if (ddbd != nil && [[(NSDistantObject *)ddbd connectionForProxy] isValid]) {
     [ddbd insertPath: path];
   }
 }
 
 - (void)ddbdRemovePath:(NSString *)path
 {
-  if (ddbd != nil) {
+  if (ddbd != nil && [[(NSDistantObject *)ddbd connectionForProxy] isValid]) {
     [ddbd removePath: path];
   }
 }
 
 - (NSString *)ddbdGetAnnotationsForPath:(NSString *)path
 {
-  if (ddbd != nil) {
+  if (ddbd != nil && [[(NSDistantObject *)ddbd connectionForProxy] isValid]) {
     return [ddbd annotationsForPath: path];
   }
   
@@ -2631,7 +2644,7 @@ NSString *_pendingSystemActionTitle = nil;
 - (void)ddbdSetAnnotations:(NSString *)annotations
                    forPath:(NSString *)path
 {
-  if (ddbd != nil) {
+  if (ddbd != nil && [[(NSDistantObject *)ddbd connectionForProxy] isValid]) {
     [ddbd setAnnotations: annotations forPath: path];
   }
 }
@@ -3867,7 +3880,7 @@ NSString *_pendingSystemActionTitle = nil;
   // Only attempt to register with fswatcher if notifications are enabled
   if (fswnotifications) {
     [self connectFSWatcher];
-    if (fswatcher) {
+    if (fswatcher && [[(NSDistantObject *)fswatcher connectionForProxy] isValid]) {
       [fswatcher client: (id <FSWClientProtocol>)self addWatcherForPath: path];
     }
   }
@@ -3881,7 +3894,9 @@ NSString *_pendingSystemActionTitle = nil;
 
   if (fswnotifications) {
     [self connectFSWatcher];
-    [fswatcher client: (id <FSWClientProtocol>)self removeWatcherForPath: path];
+    if (fswatcher && [[(NSDistantObject *)fswatcher connectionForProxy] isValid]) {
+      [fswatcher client: (id <FSWClientProtocol>)self removeWatcherForPath: path];
+    }
   }
 }
 
@@ -4084,12 +4099,17 @@ NSString *_pendingSystemActionTitle = nil;
   // Show Eject for mount points, Move to Recycler for regular files
   if (isMountPoint) {
     BOOL hasRootFS = NO;
+    NSMutableArray *formatCandidates = [NSMutableArray array];
     // Check if any selected item is the root filesystem
     for (i = 0; i < [nodes count]; i++) {
       FSNode *node = [nodes objectAtIndex: i];
       if ([self isRootFilesystem: [node path]]) {
         hasRootFS = YES;
         break;
+      }
+
+      if (allMountPoints && [node isMountPoint]) {
+        [formatCandidates addObject:[node path]];
       }
     }
     
@@ -4100,6 +4120,19 @@ NSString *_pendingSystemActionTitle = nil;
     [menuItem setEnabled: !hasRootFS];
     [menu addItem: menuItem];
     RELEASE (menuItem);
+
+    if ([formatCandidates count] > 0) {
+      [menu addItem: [NSMenuItem separatorItem]];
+
+      menuItem = [NSMenuItem new];
+      [menuItem setTitle: NSLocalizedString(@"Format Disk...", @"")];
+      [menuItem setTarget: self];
+      [menuItem setAction: @selector(formatSelectedMountPoints:)];
+      [menuItem setRepresentedObject: formatCandidates];
+      [menuItem setEnabled: !hasRootFS];
+      [menu addItem: menuItem];
+      RELEASE (menuItem);
+    }
   } else {
     // Move to Recycler
     BOOL canRecycle = YES;
@@ -4556,6 +4589,94 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
     
     [dtopManager unlockVolumeAtPath: path];
     return result;
+  }
+}
+
+- (void)formatSelectedMountPoints:(id)sender
+{
+  id representedObject = nil;
+  NSArray *mountPoints = nil;
+
+  if (sender && [sender respondsToSelector:@selector(representedObject)]) {
+    representedObject = [sender representedObject];
+  }
+
+  if ([representedObject isKindOfClass:[NSArray class]]) {
+    mountPoints = representedObject;
+  } else if ([selectedPaths count] > 0) {
+    mountPoints = selectedPaths;
+  }
+
+  if (!mountPoints || [mountPoints count] == 0) {
+    return;
+  }
+
+  for (NSString *mountPoint in mountPoints) {
+    if ([self isRootFilesystem:mountPoint]) {
+      NSRunAlertPanel(NSLocalizedString(@"Error", @""),
+                      NSLocalizedString(@"You cannot format the root filesystem.", @""),
+                      NSLocalizedString(@"OK", @""),
+                      nil,
+                      nil);
+      continue;
+    }
+
+    NSString *resolveError = nil;
+    BlockDeviceInfo *info = [DiskFormatOperation deviceInfoForMountPoint:mountPoint error:&resolveError];
+    if (!info || !info.isValid) {
+      NSString *errText = resolveError;
+      if (!errText || [errText length] == 0) {
+        errText = NSLocalizedString(@"Cannot determine device information for the selected mount point.", @"");
+      }
+      NSRunAlertPanel(NSLocalizedString(@"Format Failed", @""),
+                      @"%@",
+                      NSLocalizedString(@"OK", @""),
+                      nil,
+                      nil,
+                      errText);
+      continue;
+    }
+
+    NSString *safetyError = [info safetyCheckForWriting];
+    if (safetyError) {
+      NSRunAlertPanel(NSLocalizedString(@"Format Failed", @""),
+                      @"%@",
+                      NSLocalizedString(@"OK", @""),
+                      nil,
+                      nil,
+                      safetyError);
+      continue;
+    }
+
+    DeviceEraseConfirmation *confirmation = [DeviceEraseConfirmation confirmationForDiskFormatWithMountPoint:mountPoint
+                                                                                                   deviceInfo:info];
+    NSInteger result = [confirmation runModal];
+    if (result != NSModalResponseOK) {
+      continue;
+    }
+
+    NSString *errorMessage = nil;
+    BOOL ok = [DiskFormatOperation formatMountPoint:mountPoint error:&errorMessage];
+    if (!ok) {
+      NSString *errorText = errorMessage;
+      if (!errorText || [errorText length] == 0) {
+        errorText = NSLocalizedString(@"Formatting failed.", @"");
+      }
+
+      NSRunAlertPanel(NSLocalizedString(@"Format Failed", @""),
+                      @"%@",
+                      NSLocalizedString(@"OK", @""),
+                      nil,
+                      nil,
+                      errorText);
+      continue;
+    }
+
+    NSRunAlertPanel(NSLocalizedString(@"Format Complete", @""),
+                    NSLocalizedString(@"The disk was formatted as FAT32.", @""),
+                    NSLocalizedString(@"OK", @""),
+                    nil,
+                    nil);
   }
 }
 

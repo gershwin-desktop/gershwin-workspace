@@ -1129,8 +1129,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   }
   
   [mountedRemovableVolumes release];
-  mountedRemovableVolumes = [[NSWorkspace sharedWorkspace] mountedRemovableMedia];
-  [mountedRemovableVolumes retain];
+  mountedRemovableVolumes = [[self effectiveDesktopVolumes] retain];
   active = YES;
 }
 
@@ -1155,7 +1154,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       BOOL removed = NO;
       BOOL added = NO;
       NSUInteger i;
-      NSArray *newVolumes = [[NSWorkspace sharedWorkspace] mountedRemovableMedia];
+      NSArray *newVolumes = [self effectiveDesktopVolumes];
 
       for (i = 0; i < [mountedRemovableVolumes count]; i++)
 	{
@@ -1187,6 +1186,38 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 - (BOOL)isWatchingPath:(NSString *)path
 {
   return [watchedMountRoots containsObject: path];
+}
+
+/**
+ * Returns the effective list of desktop volumes by combining mountedRemovableMedia
+ * (which works on Linux via sysfs) with any volumes from mountedLocalVolumePaths
+ * that are under well-known mount root directories.  This makes volume detection
+ * work on FreeBSD where the sysfs removability check is unavailable.
+ */
+- (NSArray *)effectiveDesktopVolumes
+{
+  NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+  NSMutableSet *volumeSet = [NSMutableSet setWithArray:[ws mountedRemovableMedia]];
+
+  NSArray *mountRoots = [NSArray arrayWithObjects:
+    @"/media",
+    @"/Volumes",
+    [@"/run/media" stringByAppendingPathComponent: NSUserName()],
+    [@"/media" stringByAppendingPathComponent: NSUserName()],
+    nil];
+
+  NSArray *allLocal = [ws mountedLocalVolumePaths];
+  for (NSString *vol in allLocal) {
+    for (NSString *root in mountRoots) {
+      if ([vol hasPrefix: [root stringByAppendingString: @"/"]]
+          && ![vol isEqualToString: @"/"]) {
+        [volumeSet addObject: vol];
+        break;
+      }
+    }
+  }
+
+  return [volumeSet allObjects];
 }
 
 @end

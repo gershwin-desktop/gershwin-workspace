@@ -12,9 +12,8 @@
 @interface GWUnmountHelper : NSObject
 
 /**
- * Find the sudo executable path (varies by OS).
- * Checks common locations: /usr/bin/sudo, /usr/local/bin/sudo, /opt/local/bin/sudo
- * @return Path to sudo executable
+ * Returns the sudo executable name to be resolved via $PATH.
+ * We intentionally avoid hardcoding absolute binary paths.
  */
 + (NSString *)findSudoPath;
 
@@ -22,9 +21,10 @@
  * Robustly unmount a volume at the given path.
  * Tries multiple methods with increasing force:
  * 1. NSWorkspace unmountAndEjectDeviceAtPath (only if shouldEject=YES)
- * 2. sudo -A -E umount <path>
- * 3. sudo -A -E umount -f <path>  (force)
- * 4. sudo -A -E umount -l <path>  (lazy)
+ * 2. umount <path>
+ * 3. sudo -A -E umount <path>
+ * 4. sudo -A -E umount -f <path>  (force)
+ * 5. sudo -A -E umount -l <path>  (lazy; Linux only)
  *
  * @param mountPoint The path to unmount (e.g., "/media/user/VOLUME")
  * @param shouldEject YES to eject physical media (CD/DVD/USB), NO to only unmount filesystem
@@ -42,6 +42,15 @@
  * @return YES if unmount succeeded, NO if all attempts failed
  */
 + (BOOL)unmountPath:(NSString *)mountPoint devicePath:(NSString *)devicePath eject:(BOOL)shouldEject;
+
+/**
+ * Like unmountPath:devicePath:eject: but returns a best-effort error string
+ * (captured stdout/stderr) describing the last failed attempt.
+ */
++ (BOOL)unmountPath:(NSString *)mountPoint
+		devicePath:(NSString *)devicePath
+			eject:(BOOL)shouldEject
+			error:(NSString **)errorString;
 
 /**
  * Convenience method: unmount and eject (default behavior for Workspace)

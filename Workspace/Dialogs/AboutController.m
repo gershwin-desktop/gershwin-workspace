@@ -86,7 +86,7 @@ static AboutController *sharedController = nil;
   float rowHeight = 18;
 
   // Labels for system info
-  NSArray *labels = @[_(@"Processor"), _(@"Memory"), _(@"Kernel"), _(@"X11 Server"), _(@"Model"), _(@"Manufacturer"), _(@"Serial Number")];
+  NSArray *labels = @[_(@"Processor"), _(@"Memory"), _(@"Kernel"), _(@"X11 Server"), _(@"Product"), _(@"Manufacturer"), _(@"Serial Number")];
   NSMutableArray *fields = [NSMutableArray array];
 
   for (NSString *labelText in labels) {
@@ -148,23 +148,56 @@ static AboutController *sharedController = nil;
 
   [kernelField setStringValue:[self kernelInfo]];
   [x11Field setStringValue:[self x11VersionInfo]];
-  
-  NSString *prod = [self smbiosValueForLinux:@"product_name" 
-                                   bsdSysctl:@"hw.smbios.product" 
-                                     bsdKenv:@"smbios.system.product"];
-  NSString *vendor = [self smbiosValueForLinux:@"sys_vendor" 
-                                     bsdSysctl:@"hw.smbios.maker" 
-                                       bsdKenv:@"smbios.system.maker"];
 
-  [modelField setStringValue:prod ?: @"Unknown"];
-  [manufacturerField setStringValue:vendor ?: @"Unknown"];
+  NSString *product = nil;
+  NSString *manufacturer = nil;
+  NSString *serial = nil;
+  NSString *processor = nil;
 
-  [serialNumberField setStringValue:[self smbiosValueForLinux:@"product_serial" 
-                                                    bsdSysctl:@"hw.smbios.serial" 
-                                                      bsdKenv:@"smbios.system.serial"] ?: @"Unknown"];
+#ifdef __linux__
+  if (![self isX86Architecture] && [self isDeviceTreeSystem]) {
+    product = [self readTextFileTrimmingNulls:@"/sys/firmware/devicetree/base/model"];
+    NSString *compatible = [self readTextFileTrimmingNulls:@"/sys/firmware/devicetree/base/compatible"];
+    processor = [self processorNameFromCompatibleString:compatible];
+    serial = [self cpuInfoValueForKey:@"Serial"];
+  } else {
+    product = [self smbiosValueForLinux:@"product_name"
+                              bsdSysctl:@"hw.smbios.product"
+                                bsdKenv:@"smbios.system.product"];
+    manufacturer = [self smbiosValueForLinux:@"sys_vendor"
+                                   bsdSysctl:@"hw.smbios.maker"
+                                     bsdKenv:@"smbios.system.maker"];
+    serial = [self smbiosValueForLinux:@"product_serial"
+                             bsdSysctl:@"hw.smbios.serial"
+                               bsdKenv:@"smbios.system.serial"];
+  }
+#else
+  if (![self isX86Architecture]) {
+    product = [self runCommand:@"sysctl" withArguments:@[@"-n", @"hw.model"]];
+    NSString *compatible = [self runCommand:@"sysctl" withArguments:@[@"-n", @"hw.compatible"]];
+    processor = [self processorNameFromCompatibleString:compatible];
+    serial = [self runCommand:@"sysctl" withArguments:@[@"-n", @"hw.serialno"]];
+  } else {
+    product = [self smbiosValueForLinux:nil
+                              bsdSysctl:@"hw.smbios.product"
+                                bsdKenv:@"smbios.system.product"];
+    manufacturer = [self smbiosValueForLinux:nil
+                                   bsdSysctl:@"hw.smbios.maker"
+                                     bsdKenv:@"smbios.system.maker"];
+    serial = [self smbiosValueForLinux:nil
+                             bsdSysctl:@"hw.smbios.serial"
+                               bsdKenv:@"smbios.system.serial"];
+  }
+#endif
 
-  // Processor info
-  [processorField setStringValue:[self getProcessorInfo]];
+  if (!processor) {
+    processor = [self getProcessorInfo];
+  }
+
+  [processorField setStringValue:processor ?: @"Unknown"];
+  [modelField setStringValue:product ?: @"Unknown"];
+  [manufacturerField setStringValue:manufacturer ?: @"Unknown"];
+  [serialNumberField setStringValue:serial ?: @""];
   
   // Memory info
   unsigned long long mem = [[NSProcessInfo processInfo] physicalMemory];
@@ -229,6 +262,129 @@ static AboutController *sharedController = nil;
   return nil;
 }
 
+- (BOOL)isX86Architecture
+{
+  struct utsname name;
+  if (uname(&name) != 0) {
+    return NO;
+  }
+
+  NSString *machine = [NSString stringWithUTF8String:name.machine];
+  if (!machine) {
+    return NO;
+  }
+
+  return [machine hasPrefix:@"x86"] || [machine hasPrefix:@"i386"] || [machine hasPrefix:@"i486"] ||
+         [machine hasPrefix:@"i586"] || [machine hasPrefix:@"i686"] || [machine hasPrefix:@"amd64"];
+}
+
+- (BOOL)isDeviceTreeSystem
+{
+  return [[NSFileManager defaultManager] fileExistsAtPath:@"/sys/firmware/devicetree/base"];
+}
+
+- (NSString *)readTextFileTrimmingNulls:(NSString *)path
+{
+  NSData *data = [NSData dataWithContentsOfFile:path];
+  if (!data || [data length] == 0) {
+    return nil;
+  }
+
+  NSString *value = [[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease];
+  if (!value) {
+    return nil;
+  }
+
+  value = [value stringByReplacingOccurrencesOfString:@"\0" withString:@""];
+  value = [value stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  return [value length] > 0 ? value : nil;
+}
+
+- (NSString *)cpuInfoValueForKey:(NSString *)key
+{
+  if (!key || [key length] == 0) {
+    return nil;
+  }
+
+  NSString *cpuinfo = [NSString stringWithContentsOfFile:@"/proc/cpuinfo"
+                                                 encoding:NSUTF8StringEncoding
+                                                    error:NULL];
+  if (!cpuinfo) {
+    return nil;
+  }
+
+  NSString *prefix = [key stringByAppendingString:@":"];
+  NSArray *lines = [cpuinfo componentsSeparatedByString:@"\n"];
+  for (NSString *line in lines) {
+    if ([line hasPrefix:prefix]) {
+      NSArray *parts = [line componentsSeparatedByString:@":"];
+      if ([parts count] > 1) {
+        NSString *value = [[parts objectAtIndex:1] stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+        return [value length] > 0 ? value : nil;
+      }
+    }
+  }
+
+  return nil;
+}
+
+- (NSString *)vendorNameForCompatiblePrefix:(NSString *)prefix
+{
+  NSDictionary *map = @{
+    @"brcm": @"Broadcom",
+    @"qcom": @"Qualcomm",
+    @"rockchip": @"Rockchip",
+    @"amlogic": @"Amlogic"
+  };
+  return [map objectForKey:[prefix lowercaseString]];
+}
+
+- (NSString *)processorNameFromCompatibleString:(NSString *)compatible
+{
+  if (!compatible || [compatible length] == 0) {
+    return nil;
+  }
+
+  NSCharacterSet *splitSet = [NSCharacterSet characterSetWithCharactersInString:@", \t\n"];
+  NSArray *tokens = [compatible componentsSeparatedByCharactersInSet:splitSet];
+
+  NSArray *preferredPrefixes = @[@"brcm", @"qcom", @"rockchip", @"amlogic"];
+  for (NSString *prefix in preferredPrefixes) {
+    NSString *needle = [prefix stringByAppendingString:@","];
+    NSRange range = [compatible rangeOfString:needle options:NSCaseInsensitiveSearch];
+    if (range.location != NSNotFound) {
+      NSString *tail = [compatible substringFromIndex:(range.location + range.length)];
+      NSArray *tailParts = [tail componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+      if ([tailParts count] > 0) {
+        NSString *soc = [[tailParts objectAtIndex:0] uppercaseString];
+        NSString *vendor = [self vendorNameForCompatiblePrefix:prefix];
+        if (vendor && [soc length] > 0) {
+          return [NSString stringWithFormat:@"%@ %@", vendor, soc];
+        }
+      }
+    }
+  }
+
+  for (NSString *token in tokens) {
+    if ([token length] == 0) {
+      continue;
+    }
+    NSRange commaRange = [token rangeOfString:@","];
+    if (commaRange.location == NSNotFound) {
+      continue;
+    }
+
+    NSString *prefix = [token substringToIndex:commaRange.location];
+    NSString *soc = [[token substringFromIndex:(commaRange.location + 1)] uppercaseString];
+    NSString *vendor = [self vendorNameForCompatiblePrefix:prefix];
+    if (vendor && [soc length] > 0) {
+      return [NSString stringWithFormat:@"%@ %@", vendor, soc];
+    }
+  }
+
+  return nil;
+}
+
 - (NSDictionary *)parseOSRelease 
 {
   NSMutableDictionary *dict = [NSMutableDictionary dictionary];
@@ -255,22 +411,24 @@ static AboutController *sharedController = nil;
                           bsdKenv:(NSString *)bsdKenv 
 {
 #ifdef __linux__
-  NSString *path = [@"/sys/class/dmi/id/" stringByAppendingString:linuxFile];
-  NSString *val = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:NULL];
-  if (val) {
-    val = [val stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if ([val length] > 0) return val;
+  if (linuxFile) {
+    NSString *path = [@"/sys/class/dmi/id/" stringByAppendingString:linuxFile];
+    NSString *val = [NSString stringWithContentsOfFile:path encoding:NSUTF8StringEncoding error:NULL];
+    if (val) {
+      val = [val stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+      if ([val length] > 0) return val;
+    }
   }
 #else
   NSString *val = nil;
   // Try kenv first as it's often more descriptive on some BSDs
   if (bsdKenv) {
-    val = [self runCommand:@"/bin/kenv" withArguments:@[@"-q", bsdKenv]];
+    val = [self runCommand:@"kenv" withArguments:@[@"-q", bsdKenv]];
     if (val && [val length] > 0) return val;
   }
   // Fallback to sysctl
   if (bsdSysctl) {
-    val = [self runCommand:@"/sbin/sysctl" withArguments:@[@"-n", bsdSysctl]];
+    val = [self runCommand:@"sysctl" withArguments:@[@"-n", bsdSysctl]];
     if (val && [val length] > 0) return val;
   }
 #endif
@@ -321,7 +479,7 @@ static AboutController *sharedController = nil;
     }
   }
 #else
-  NSString *val = [self runCommand:@"/sbin/sysctl" withArguments:@[@"-n", @"hw.model"]];
+  NSString *val = [self runCommand:@"sysctl" withArguments:@[@"-n", @"hw.model"]];
   if (val) return val;
 #endif
   return @"Unknown";

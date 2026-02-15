@@ -151,6 +151,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
   freeTree(excludePathsTree);
   RELEASE (excludedSuffixes);
   RELEASE (inotifyHandle);  
+  RELEASE (inotifyPendingData);
   RELEASE (lastMovedPath);
   
   [super dealloc];
@@ -203,6 +204,8 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
     filemask = (IN_CLOSE_WRITE | IN_MODIFY | IN_DELETE_SELF | IN_MOVE_SELF);    
     lastMovedPath = nil;
     moveCookie = 0;
+
+    inotifyPendingData = [[NSMutableData alloc] initWithCapacity: 4096];
   
     clientsInfo = [NSMutableArray new];    
     watchers = NSCreateMapTable(NSObjectMapKeyCallBacks,
@@ -862,12 +865,30 @@ static inline BOOL isDotFile(NSString *path)
 {
   NSDictionary *info = [notif userInfo];
   NSData *data = [info objectForKey: NSFileHandleNotificationDataItem];
-  const void *bytes = [data bytes];
-  void *limit = ((void *)bytes + [data length]);  
   unsigned evsize = sizeof(struct inotify_event);
-  
-  while (bytes < limit) {  
-    struct inotify_event *eventp = (struct inotify_event *)bytes;
+
+  if (data && [data length] > 0) {
+    [inotifyPendingData appendData: data];
+  }
+
+  const uint8_t *bytes = (const uint8_t *)[inotifyPendingData bytes];
+  const uint8_t *limit = bytes + [inotifyPendingData length];
+
+  while ((size_t)(limit - bytes) >= (size_t)evsize) {
+    const struct inotify_event *eventp = (const struct inotify_event *)(const void *)bytes;
+    size_t recordSize = (size_t)evsize + (size_t)eventp->len;
+
+    if (recordSize < (size_t)evsize) {
+      /* Overflow or corrupt input; drop buffer contents to avoid looping forever. */
+      [inotifyPendingData setLength: 0];
+      break;
+    }
+
+    /* NSFileHandle can deliver partial reads; keep incomplete tail for next notification. */
+    if ((size_t)(limit - bytes) < recordSize) {
+      break;
+    }
+
     uint32_t type = eventType(eventp->mask);
     
     if (type != IN_IGNORED && eventp->len) {
@@ -998,7 +1019,15 @@ static inline BOOL isDotFile(NSString *path)
       }    
     }
     
-    bytes += (evsize + eventp->len);
+    bytes += recordSize;
+  }
+
+  /* Remove processed bytes from the pending buffer, keep incomplete tail. */
+  {
+    NSUInteger processed = (NSUInteger)(bytes - (const uint8_t *)[inotifyPendingData bytes]);
+    if (processed > 0) {
+      [inotifyPendingData replaceBytesInRange: NSMakeRange(0, processed) withBytes: NULL length: 0];
+    }
   }
       
   [inotifyHandle readInBackgroundAndNotify];

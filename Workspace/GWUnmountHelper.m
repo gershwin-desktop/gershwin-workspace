@@ -8,25 +8,19 @@
 #import "GWUnmountHelper.h"
 #import <AppKit/AppKit.h>
 
+static NSString *GWTrimmedString(NSString *s)
+{
+  if (!s) {
+    return nil;
+  }
+  return [s stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
+}
+
 @implementation GWUnmountHelper
 
 + (NSString *)findSudoPath
 {
-  /* Try common sudo locations (varies by OS) */
-  NSArray *sudoPaths = @[
-    @"/usr/bin/sudo",           // Linux, most BSD
-    @"/usr/local/bin/sudo",     // FreeBSD, pkgsrc
-    @"/opt/local/bin/sudo"      // MacPorts
-  ];
-  
-  NSFileManager *fm = [NSFileManager defaultManager];
-  for (NSString *path in sudoPaths) {
-    if ([fm isExecutableFileAtPath:path]) {
-      return path;
-    }
-  }
-  
-  /* Fallback: assume in PATH */
+  /* Resolve via PATH; do not hardcode absolute paths to binaries. */
   return @"sudo";
 }
 
@@ -47,8 +41,19 @@
 
 + (BOOL)unmountPath:(NSString *)mountPoint devicePath:(NSString *)devicePath eject:(BOOL)shouldEject
 {
+  return [self unmountPath:mountPoint devicePath:devicePath eject:shouldEject error:NULL];
+}
+
++ (BOOL)unmountPath:(NSString *)mountPoint
+          devicePath:(NSString *)devicePath
+               eject:(BOOL)shouldEject
+               error:(NSString **)errorString
+{
   if (!mountPoint || [mountPoint length] == 0) {
     NSLog(@"GWUnmountHelper: Invalid mount point");
+    if (errorString) {
+      *errorString = NSLocalizedString(@"Invalid mount point.", @"");
+    }
     return NO;
   }
   
@@ -57,6 +62,13 @@
   } else {
     NSLog(@"GWUnmountHelper: Unmounting %@ (eject=%d)", mountPoint, shouldEject);
   }
+
+  /* Tell interested views (Desktop) that this unmount is expected. */
+  NSDictionary *unmountInfo = [NSDictionary dictionaryWithObject:mountPoint forKey:@"NSDevicePath"];
+  [[NSNotificationCenter defaultCenter]
+    postNotificationName:NSWorkspaceWillUnmountNotification
+                  object:[NSWorkspace sharedWorkspace]
+                userInfo:unmountInfo];
   
   BOOL unmounted = NO;
   
@@ -74,10 +86,21 @@
   } else {
     NSLog(@"GWUnmountHelper: Unmount-only mode (no eject), using umount command");
   }
-  
-  /* Try with sudo umount command */
+
+  /* First try unmount without sudo (works for user-mounted volumes). */
+  NSString *lastOutput = nil;
+  unmounted = [self runCommand:@"umount" arguments:@[mountPoint] output:&lastOutput];
+  if (unmounted) {
+    NSLog(@"GWUnmountHelper: umount succeeded (no sudo)");
+    return YES;
+  }
+  if (GWTrimmedString(lastOutput)) {
+    NSLog(@"GWUnmountHelper: umount (no sudo) failed: %@", GWTrimmedString(lastOutput));
+  }
+
+  /* Try with sudo umount command (askpass if configured via env). */
   NSString *sudoPath = [self findSudoPath];
-  unmounted = [self runUnmountCommand:sudoPath arguments:@[@"-A", @"-E", @"/bin/umount", mountPoint]];
+  unmounted = [self runCommand:sudoPath arguments:@[@"-A", @"-E", @"umount", mountPoint] output:&lastOutput];
   
   if (unmounted) {
     NSLog(@"GWUnmountHelper: sudo umount succeeded");
@@ -86,53 +109,90 @@
   
   /* Try force unmount */
   NSLog(@"GWUnmountHelper: Normal unmount failed, trying force unmount (sudo umount -f)");
-  unmounted = [self runUnmountCommand:sudoPath arguments:@[@"-A", @"-E", @"/bin/umount", @"-f", mountPoint]];
+  unmounted = [self runCommand:sudoPath arguments:@[@"-A", @"-E", @"umount", @"-f", mountPoint] output:&lastOutput];
   
   if (unmounted) {
     NSLog(@"GWUnmountHelper: Force unmount succeeded");
     return YES;
   }
   
-  /* Last resort: lazy unmount */
+
+#if defined(__linux__)
+  /* Last resort: lazy unmount (Linux only) */
   NSLog(@"GWUnmountHelper: Force unmount failed, trying lazy unmount (sudo umount -l)");
-  unmounted = [self runUnmountCommand:sudoPath arguments:@[@"-A", @"-E", @"/bin/umount", @"-l", mountPoint]];
-  
+  unmounted = [self runCommand:sudoPath arguments:@[@"-A", @"-E", @"umount", @"-l", mountPoint] output:&lastOutput];
+
   if (unmounted) {
     NSLog(@"GWUnmountHelper: Lazy unmount succeeded");
     return YES;
   }
+#endif
   
-  NSLog(@"GWUnmountHelper: ERROR - All unmount attempts failed for %@", mountPoint);
+  if (GWTrimmedString(lastOutput)) {
+    NSLog(@"GWUnmountHelper: ERROR - All unmount attempts failed for %@: %@", mountPoint, GWTrimmedString(lastOutput));
+  } else {
+    NSLog(@"GWUnmountHelper: ERROR - All unmount attempts failed for %@", mountPoint);
+  }
+  if (errorString) {
+    if (GWTrimmedString(lastOutput)) {
+      *errorString = lastOutput;
+    } else {
+      *errorString = NSLocalizedString(@"Unmount failed.", @"");
+    }
+  }
   return NO;
 }
 
-+ (BOOL)runUnmountCommand:(NSString *)sudoPath arguments:(NSArray *)arguments
++ (BOOL)runCommand:(NSString *)launchPath arguments:(NSArray *)arguments output:(NSString **)output
 {
-  if (!sudoPath || !arguments) {
-    NSLog(@"GWUnmountHelper: ERROR - Invalid parameters to runUnmountCommand");
+  if (output) {
+    *output = nil;
+  }
+  if (!launchPath || [launchPath length] == 0 || !arguments) {
+    NSLog(@"GWUnmountHelper: ERROR - Invalid parameters to runCommand");
     return NO;
   }
   
   NSTask *task = [[NSTask alloc] init];
-  [task setLaunchPath:sudoPath];
+  [task setLaunchPath:launchPath];
   [task setArguments:arguments];
-  
-  /* Suppress output */
-  [task setStandardOutput:[NSFileHandle fileHandleWithNullDevice]];
-  [task setStandardError:[NSFileHandle fileHandleWithNullDevice]];
+
+  /* Capture combined stdout/stderr for diagnostics and UI error strings. */
+  NSPipe *pipe = [NSPipe pipe];
+  [task setStandardOutput:pipe];
+  [task setStandardError:pipe];
+
+  /* Ensure askpass works if configured by the session environment. */
+  NSDictionary *env = [[NSProcessInfo processInfo] environment];
+  if (env) {
+    [task setEnvironment:env];
+  }
   
   BOOL success = NO;
+  NSData *data = nil;
   
   @try {
     [task launch];
     [task waitUntilExit];
+    data = [[pipe fileHandleForReading] readDataToEndOfFile];
     success = ([task terminationStatus] == 0);
   } @catch (NSException *e) {
-    NSLog(@"GWUnmountHelper: Exception running sudo umount: %@", e);
+    NSLog(@"GWUnmountHelper: Exception running command %@: %@", launchPath, e);
     success = NO;
   } @finally {
     /* Ensure task is always released to prevent segfault */
     DESTROY(task);
+  }
+
+  if (output && data && [data length] > 0) {
+    NSString *s = [[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding];
+    if (!s) {
+      s = [[NSString alloc] initWithData:data encoding:NSISOLatin1StringEncoding];
+    }
+    if (s) {
+      *output = GWTrimmedString(s);
+    }
+    DESTROY(s);
   }
   
   return success;

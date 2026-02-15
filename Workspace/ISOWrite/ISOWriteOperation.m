@@ -6,7 +6,7 @@
 
 #import "ISOWriteOperation.h"
 #import "BlockDeviceInfo.h"
-#import "ISOWriteConfirmation.h"
+#import "DeviceEraseConfirmation.h"
 #import "ISOWriteProgressWindow.h"
 #import "../GWUnmountHelper.h"
 
@@ -242,13 +242,10 @@
   
   /* Show confirmation dialog */
   NSLog(@"ISOWriteOperation: Showing confirmation dialog to user");
-  ISOWriteConfirmation *confirmation = [[ISOWriteConfirmation alloc]
-                                        initWithISOPath:_isoPath
-                                        deviceInfo:_deviceInfo
-                                        isoSize:_isoSize];
-  
+  DeviceEraseConfirmation *confirmation = [DeviceEraseConfirmation confirmationForISOWriteWithISOPath:_isoPath
+                                                                                             deviceInfo:_deviceInfo
+                                                                                                isoSize:_isoSize];
   NSInteger result = [confirmation runModal];
-  RELEASE(confirmation);
   
   if (result != NSModalResponseOK) {
     NSLog(@"ISOWriteOperation: User cancelled at confirmation dialog");
@@ -392,10 +389,26 @@
    * 4. Eject only after burn completes (in writeDidFinish or burnDidFinish)
    */
   for (PartitionInfo *part in mountedParts) {
-    BOOL unmounted = [GWUnmountHelper unmountPath:part.mountPoint 
-                                        devicePath:part.devicePath
-                                             eject:NO];  /* NO eject - keep device accessible */
+    if (!part.mountPoint || [part.mountPoint length] == 0) {
+      continue;
+    }
+
+    /* Skip if already unmounted (race / previous step). */
+    NSString *stillMountedDevice = [BlockDeviceInfo devicePathForMountPoint:part.mountPoint];
+    if (!stillMountedDevice || [stillMountedDevice length] == 0) {
+      continue;
+    }
+
+    NSString *unmountError = nil;
+    BOOL unmounted = [GWUnmountHelper unmountPath:part.mountPoint
+                                       devicePath:part.devicePath
+                                            eject:NO
+                                            error:&unmountError];  /* NO eject - keep device accessible */
     if (!unmounted) {
+      NSString *afterDevice = [BlockDeviceInfo devicePathForMountPoint:part.mountPoint];
+      if (!afterDevice || [afterDevice length] == 0) {
+        continue;
+      }
       return NO;
     }
   }
@@ -479,7 +492,7 @@
   
   NSTask *task = [[NSTask alloc] init];
   [task setLaunchPath:sudoPath];
-  [task setArguments:@[@"-A", @"-E", @"/bin/bash", @"-c", helperCommand]];
+  [task setArguments:@[@"-A", @"-E", @"sh", @"-c", helperCommand]];
   
   /* Set up pipes for monitoring output - explicitly retain to prevent premature deallocation */
   NSPipe *outputPipe = [[NSPipe pipe] retain];

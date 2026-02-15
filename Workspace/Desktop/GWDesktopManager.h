@@ -200,6 +200,8 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath;
 
 - (void)watchMountPoints:(id)sender;
 
+- (NSArray *)effectiveDesktopVolumes;
+
 - (BOOL)isWatchingPath:(NSString *)path;
 
 @end

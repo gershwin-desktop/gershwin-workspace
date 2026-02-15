@@ -9,7 +9,8 @@ SUBPROJECTS = \
         ddbd \
         wopen \
         uitest \
-        isowrite-helper
+        isowrite-helper \
+        formatdisk-helper
 
 ifeq ($(with_squashfs),yes)
 SUBPROJECTS += appimage-icon-test
