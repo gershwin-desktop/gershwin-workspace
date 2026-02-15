@@ -78,6 +78,7 @@
     logHandle = nil;  /* Not owned by us - owned by NSTask */
     sshfsLogPath = nil;
     tempPasswordFile = nil;
+    tempSSHConfigFile = nil;
   }
   return self;
 }
@@ -98,6 +99,12 @@
   if (tempPasswordFile) {
     [[NSFileManager defaultManager] removeItemAtPath:tempPasswordFile error:nil];
     RELEASE(tempPasswordFile);
+  }
+  
+  /* Clean up temp SSH config file if it exists */
+  if (tempSSHConfigFile) {
+    [[NSFileManager defaultManager] removeItemAtPath:tempSSHConfigFile error:nil];
+    RELEASE(tempSSHConfigFile);
   }
   
   [super dealloc];
@@ -179,9 +186,9 @@
     [args addObject:@"-p"];
     [args addObject:[NSString stringWithFormat:@"%d", p]];
   }
-  /* Ask for a broad set of key types */
+  /* Ask for a broad set of key types (exclude dsa, removed in OpenSSH 10+) */
   [args addObject:@"-t"];
-  [args addObject:@"rsa,dsa,ecdsa,ed25519"]; 
+  [args addObject:@"rsa,ecdsa,ed25519"]; 
   [args addObject:host];
   [task setArguments:args];
 
@@ -442,6 +449,10 @@
   logHandle = nil;
   RELEASE(sshfsLogPath);
   RELEASE(tempPasswordFile);
+  if (tempSSHConfigFile) {
+    [[NSFileManager defaultManager] removeItemAtPath:tempSSHConfigFile error:nil];
+    RELEASE(tempSSHConfigFile);
+  }
   
   username = [user copy];
   password = [pass copy];
@@ -496,38 +507,77 @@
   [args addObject:@"-v"];
   [args addObject:@"-v"];
   
-  /* Add common sshfs options for better compatibility */
-  [args addObject:@"-o"];
-  /* Build options string - note: sshfs options differ from ssh options
-     - ServerAliveInterval: keep connection alive
-     - StrictHostKeyChecking: auto-accept new host keys
-     - ConnectTimeout: prevent hanging on unreachable hosts
-     - HostKeyAlgorithms: detect server-supported host key algorithms and prefer those
-  */
+  /* Build SSH options via a temporary SSH config file.
+     sshfs splits ALL -o values on commas, which breaks SSH options that
+     contain comma-separated lists (PreferredAuthentications, Ciphers,
+     KexAlgorithms, MACs, HostKeyAlgorithms, etc.).
+     The reliable solution is to write options to a temp SSH config file
+     and use ssh_command to point ssh at it. */
+
+  /* Detect server host key algorithms */
   NSString *detectedAlgs = [self detectHostKeyAlgorithmsForHost:hostname port:port];
-  NSString *hostKeyAlgorithmsFragment = nil;
-  NSString *pubkeyAcceptedFragment = nil;
+  NSString *hostKeyAlgs;
   if (detectedAlgs && [detectedAlgs length] > 0) {
-    /* Prefer the first detected algorithm to avoid comma-parsing issues with sshfs -o */
-    NSArray *parts = [detectedAlgs componentsSeparatedByString:@","];
-    NSString *firstAlg = [parts objectAtIndex:0];
-    if (!firstAlg || [firstAlg length] == 0) firstAlg = @"ssh-rsa";
-    hostKeyAlgorithmsFragment = [NSString stringWithFormat:@"HostKeyAlgorithms=%@", firstAlg];
-    pubkeyAcceptedFragment = [NSString stringWithFormat:@"PubkeyAcceptedKeyTypes=+%@", firstAlg];
+    hostKeyAlgs = [NSString stringWithFormat:@"+%@", detectedAlgs];
   } else {
-    /* Fallback to a single legacy algorithm */
-    hostKeyAlgorithmsFragment = @"HostKeyAlgorithms=ssh-rsa";
-    pubkeyAcceptedFragment = @"PubkeyAcceptedKeyTypes=+ssh-rsa";
+    hostKeyAlgs = @"+ssh-ed25519,ecdsa-sha2-nistp256,ecdsa-sha2-nistp384,ecdsa-sha2-nistp521,rsa-sha2-512,rsa-sha2-256,ssh-rsa";
   }
 
-  /* Build primary options (excluding host key / pubkey options which we pass as separate -o flags) */
-  NSString *primaryOptions = @"ServerAliveInterval=15,ServerAliveCountMax=3,StrictHostKeyChecking=no,ConnectTimeout=10";
-  [args addObject:primaryOptions];
-  /* Add HostKeyAlgorithms and PubkeyAcceptedKeyTypes as separate -o entries to avoid parsing issues */
-  [args addObject:@"-o"];
-  [args addObject:hostKeyAlgorithmsFragment];
-  [args addObject:@"-o"];
-  [args addObject:pubkeyAcceptedFragment];
+  /* Create temp SSH config file */
+  NSString *sshConfigFileName = [NSString stringWithFormat:@"sshfs_config_%@",
+                                 [[NSProcessInfo processInfo] globallyUniqueString]];
+  tempSSHConfigFile = [[NSTemporaryDirectory() stringByAppendingPathComponent:sshConfigFileName] copy];
+
+  NSMutableString *sshConfig = [NSMutableString string];
+  [sshConfig appendString:@"Host *\n"];
+  [sshConfig appendString:@"    StrictHostKeyChecking no\n"];
+  [sshConfig appendString:@"    ConnectTimeout 10\n"];
+  [sshConfig appendString:@"    ServerAliveInterval 15\n"];
+  [sshConfig appendString:@"    ServerAliveCountMax 3\n"];
+  /* Support keyboard-interactive (FreeBSD etc.), password, and publickey auth */
+  [sshConfig appendString:@"    PreferredAuthentications keyboard-interactive,password,publickey\n"];
+  /* Host key algorithms */
+  [sshConfig appendFormat:@"    HostKeyAlgorithms %@\n", hostKeyAlgs];
+  [sshConfig appendFormat:@"    PubkeyAcceptedAlgorithms %@\n", hostKeyAlgs];
+  /* Enable ALL ciphers for maximum compatibility with any server */
+  [sshConfig appendString:@"    Ciphers +aes128-ctr,aes192-ctr,aes256-ctr,"
+    @"aes128-gcm@openssh.com,aes256-gcm@openssh.com,chacha20-poly1305@openssh.com,"
+    @"aes128-cbc,aes192-cbc,aes256-cbc,3des-cbc\n"];
+  /* Enable ALL key exchange methods */
+  [sshConfig appendString:@"    KexAlgorithms +curve25519-sha256,curve25519-sha256@libssh.org,"
+    @"ecdh-sha2-nistp256,ecdh-sha2-nistp384,ecdh-sha2-nistp521,"
+    @"diffie-hellman-group-exchange-sha256,diffie-hellman-group14-sha256,"
+    @"diffie-hellman-group16-sha512,diffie-hellman-group18-sha512,"
+    @"diffie-hellman-group14-sha1,diffie-hellman-group-exchange-sha1,"
+    @"diffie-hellman-group1-sha1\n"];
+  /* Enable ALL MAC algorithms */
+  [sshConfig appendString:@"    MACs +hmac-sha2-256-etm@openssh.com,hmac-sha2-512-etm@openssh.com,"
+    @"umac-128-etm@openssh.com,hmac-sha2-256,hmac-sha2-512,umac-128@openssh.com,"
+    @"hmac-sha1,hmac-sha1-etm@openssh.com,umac-64-etm@openssh.com,"
+    @"umac-64@openssh.com,hmac-md5,hmac-md5-etm@openssh.com\n"];
+
+  NSError *configWriteError = nil;
+  [sshConfig writeToFile:tempSSHConfigFile
+              atomically:YES
+                encoding:NSUTF8StringEncoding
+                   error:&configWriteError];
+  if (configWriteError) {
+    NSLog(@"SFTPMount: Failed to write SSH config file: %@", configWriteError);
+    /* Fall back to basic options without comma-containing values */
+    [args addObject:@"-o"];
+    [args addObject:@"StrictHostKeyChecking=no"];
+    [args addObject:@"-o"];
+    [args addObject:@"ConnectTimeout=10"];
+  } else {
+    /* Set permissions on config file */
+    [[NSFileManager defaultManager] setAttributes:@{NSFilePosixPermissions: @0600}
+                                     ofItemAtPath:tempSSHConfigFile
+                                            error:nil];
+    /* Use ssh_command to pass the config file to ssh */
+    [args addObject:@"-o"];
+    [args addObject:[NSString stringWithFormat:@"ssh_command=ssh -F %@", tempSSHConfigFile]];
+    NSLog(@"SFTPMount: Using SSH config: %@", tempSSHConfigFile);
+  }
   
   NSLog(@"SFTPMount: sshfs command: sshfs %@", [args componentsJoinedByString:@" "]);
   

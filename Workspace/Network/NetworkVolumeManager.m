@@ -45,10 +45,16 @@ static NetworkVolumeManager *sharedInstance = nil;
     mountedVolumesPIDs = [[NSMutableDictionary alloc] init];
     webdavMounts = [[NSMutableDictionary alloc] init];
     fm = [NSFileManager defaultManager];
+    lastErrorMessage = nil;
     
     NSLog(@"NetworkVolumeManager: Initialized");
   }
   return self;
+}
+
+- (NSString *)lastErrorMessage
+{
+  return lastErrorMessage;
 }
 
 - (void)dealloc
@@ -57,6 +63,7 @@ static NetworkVolumeManager *sharedInstance = nil;
   [mountedVolumes release];
   [mountedVolumesPIDs release];
   [webdavMounts release];
+  RELEASE(lastErrorMessage);
   [super dealloc];
 }
 
@@ -651,16 +658,25 @@ static NetworkVolumeManager *sharedInstance = nil;
     /* Remove the mount point directory on failure */
     [fm removeItemAtPath:mountPoint error:nil];
     
-    /* Show error to user */
-    NSAlert *alert = [[NSAlert alloc] init];
-    [alert setMessageText:NSLocalizedString(@"Mount Failed", @"")];
-    [alert setInformativeText:[NSString stringWithFormat:
-      NSLocalizedString(@"Failed to mount SFTP volume:\n\n%@", @""), 
-      errorMsg ? errorMsg : @"Unknown error"]];
-    [alert setAlertStyle:NSWarningAlertStyle];
-    [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
-    [alert runModal];
-    [alert release];
+    /* Store error message for callers to retrieve */
+    RELEASE(lastErrorMessage);
+    lastErrorMessage = [errorMsg ? errorMsg : @"Unknown error" copy];
+    
+    /* Only show alert if we are on the main thread.
+       When called from a background thread (e.g., performMountInBackground:),
+       showing a modal alert would crash. The caller will read lastErrorMessage
+       and show the error on the main thread instead. */
+    if ([NSThread isMainThread]) {
+      NSAlert *alert = [[NSAlert alloc] init];
+      [alert setMessageText:NSLocalizedString(@"Mount Failed", @"")];
+      [alert setInformativeText:[NSString stringWithFormat:
+        NSLocalizedString(@"Failed to mount SFTP volume:\n\n%@", @""), 
+        lastErrorMessage]];
+      [alert setAlertStyle:NSWarningAlertStyle];
+      [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
+      [alert runModal];
+      [alert release];
+    }
     
     return nil;
   }

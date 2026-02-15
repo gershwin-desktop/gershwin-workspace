@@ -24,7 +24,14 @@
   NSMutableDictionary *mountedVolumesPIDs;  /* Maps service identifier to NSNumber(pid) */
   NSMutableDictionary *webdavMounts;    /* Maps service identifier to AVFS virtual path */
   NSFileManager *fm;
+  NSString *lastErrorMessage;  /* Last mount error for callers to retrieve */
 }
+
+/**
+ * Returns the last error message from a failed mount operation.
+ * Callers on the main thread can use this to show a proper error dialog.
+ */
+- (NSString *)lastErrorMessage;
 
 /**
  * Returns the shared singleton instance.

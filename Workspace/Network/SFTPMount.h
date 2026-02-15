@@ -47,6 +47,7 @@
   NSFileHandle *logHandle;
   NSString *sshfsLogPath;
   NSString *tempPasswordFile;
+  NSString *tempSSHConfigFile;
 }
 
 /**
