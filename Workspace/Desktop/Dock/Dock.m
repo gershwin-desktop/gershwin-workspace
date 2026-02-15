@@ -34,9 +34,22 @@
 #import "Workspace.h"
 #import "GWFunctions.h"
 #import "X11AppSupport.h"
-#ifdef __linux__
+
+/* XComposite is optional; only include if available to avoid build failures */
+#if defined(__linux__)
 #include <X11/Xlib.h>
-#include <X11/extensions/Xcomposite.h>
+# if defined(__has_include)
+#  if __has_include(<X11/extensions/Xcomposite.h>)
+#   include <X11/extensions/Xcomposite.h>
+#   define HAVE_XCOMPOSITE 1
+#  else
+#   define HAVE_XCOMPOSITE 0
+#  endif
+# else
+#  define HAVE_XCOMPOSITE 0
+# endif
+#else
+# define HAVE_XCOMPOSITE 0
 #endif
 
 #define MAX_ICN_SIZE 48
@@ -908,7 +921,7 @@
       compositorActive = getCompActive ? getCompActive(cm, @selector(compositingActive)) : NO;
     }
   }
-#ifdef __linux__
+#if defined(__linux__) && HAVE_XCOMPOSITEnux__) && HAVE_XCOMPOSITE
   if (!compositorActive) {
     Display *dpy = XOpenDisplay(NULL);
     if (dpy) {

@@ -24,8 +24,17 @@
 #include <GNUstepGUI/GSDisplayServer.h>
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
-#ifdef __linux__
-#include <X11/extensions/Xcomposite.h>
+
+/* Make Xcomposite optional at compile time */
+#if defined(__has_include)
+# if __has_include(<X11/extensions/Xcomposite.h>)
+#  include <X11/extensions/Xcomposite.h>
+#  define HAVE_XCOMPOSITE 1
+# else
+#  define HAVE_XCOMPOSITE 0
+# endif
+#else
+# define HAVE_XCOMPOSITE 0
 #endif
 
 #import "DockWindow.h"
@@ -67,7 +76,7 @@
           compositorActive = getCompActive ? getCompActive(cm, @selector(compositingActive)) : NO;
         }
       }
-#ifdef __linux__
+#if defined(__linux__) && HAVE_XCOMPOSITE
       if (!compositorActive) {
         Display *dpy = XOpenDisplay(NULL);
         if (dpy) {
