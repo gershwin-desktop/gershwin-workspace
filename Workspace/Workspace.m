@@ -3116,13 +3116,20 @@ NSString *_pendingSystemActionTitle = nil;
                                           password:password];
   }
   
+  /* Get any detailed error message from the volume manager */
+  NSString *errorMessage = mountPoint ? nil : [volumeManager lastErrorMessage];
+  
   /* Return to main thread to update UI */
   dispatch_async(dispatch_get_main_queue(), ^{
-    [self finishMountOperation:[NSDictionary dictionaryWithObjectsAndKeys:
+    NSMutableDictionary *resultDict = [NSMutableDictionary dictionaryWithObjectsAndKeys:
                                  mountPoint ? mountPoint : [NSNull null], @"mountPoint",
                                  progressPanel, @"progressPanel",
                                  hostname, @"hostname",
-                                 nil]];
+                                 nil];
+    if (errorMessage) {
+      [resultDict setObject:errorMessage forKey:@"errorMessage"];
+    }
+    [self finishMountOperation:resultDict];
   });
   
   [mountInfo release];
@@ -3145,13 +3152,20 @@ NSString *_pendingSystemActionTitle = nil;
     [self openSelectedPaths:[NSArray arrayWithObject:mountPoint] newViewer:YES];
   } else {
     NSLog(@"Workspace: Mount failed");
-    /* Error dialog should have been shown by NetworkVolumeManager */
-    /* But show a generic error if somehow it wasn't */
-    NSRunAlertPanel(NSLocalizedString(@"Connection Failed", @""),
-                    [NSString stringWithFormat:
-                     NSLocalizedString(@"Could not connect to %@\n\nCheck the hostname and try again.", @""),
-                     hostname],
-                    _(@"OK"), nil, nil);
+    /* Show a detailed error from the mount operation, or a generic fallback */
+    NSString *errorMessage = [result objectForKey:@"errorMessage"];
+    if (errorMessage && [errorMessage length] > 0) {
+      NSRunAlertPanel(NSLocalizedString(@"Connection Failed", @""),
+                      @"%@",
+                      _(@"OK"), nil, nil,
+                      errorMessage);
+    } else {
+      NSRunAlertPanel(NSLocalizedString(@"Connection Failed", @""),
+                      [NSString stringWithFormat:
+                       NSLocalizedString(@"Could not connect to %@\n\nCheck the hostname and try again.", @""),
+                       hostname],
+                      _(@"OK"), nil, nil);
+    }
   }
 }
 
