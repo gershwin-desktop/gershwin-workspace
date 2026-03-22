@@ -5,7 +5,7 @@ PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
 
 PDFKIT=no
-SH_PATH=/bin/sh
+SH_PATH=/usr/bin/sh
 # Prefer configure-provided value, otherwise detect at make time:
 FILE_PATH ?= /usr/bin/file
 ifeq ($(FILE_PATH),/usr/bin/file)

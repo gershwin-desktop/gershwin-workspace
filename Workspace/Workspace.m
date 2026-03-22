@@ -66,6 +66,7 @@
 #import "Operation.h"
 #import "History/History.h"
 #import "X11AppSupport.h"
+#import "Thumbnailer/GWThumbnailer.h"
 #import "GSGlobalShortcutsManager.h"
 #import "Network/NetworkFSNode.h"
 #import "Network/NetworkServiceManager.h"
@@ -2549,6 +2550,13 @@ NSString *_pendingSystemActionTitle = nil;
     if ([path isEqual: trashPath]) {
       NSLog(@"DEBUG: Trash path changed, updating trash contents");
       [self _updateTrashContents];
+    }
+
+    if ([event isEqual: @"GWFileCreatedInWatchedDirectory"]
+        && [fsnodeRep usesThumbnails]) {
+      Thumbnailer *t = [Thumbnailer sharedThumbnailer];
+      [t makeThumbnails: path];
+      [t release];
     }
   }
   

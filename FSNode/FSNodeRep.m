@@ -157,7 +157,7 @@ static FSNodeRep *shared = nil;
     
     defSortOrder = FSNInfoNameType;
     hideSysFiles = NO;
-    usesThumbnails = NO;
+    usesThumbnails = YES;
       
     lockedPaths = [NSMutableArray new];	
     hiddenPaths = [NSArray new];
