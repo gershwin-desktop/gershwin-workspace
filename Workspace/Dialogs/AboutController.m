@@ -453,12 +453,18 @@ static AboutController *sharedController = nil;
   XCloseDisplay(dpy);
   
   NSString *vendorStr = [NSString stringWithUTF8String:vendor];
-  if ([vendorStr rangeOfString:@"X.Org"].location != NSNotFound || 
-      [vendorStr rangeOfString:@"The X.Org Foundation"].location != NSNotFound) {
+  NSString *displayName = nil;
+  if ([vendorStr rangeOfString:@"XLibre"].location != NSNotFound) {
+    displayName = @"XLibre";
+  } else if ([vendorStr rangeOfString:@"X.Org"].location != NSNotFound ||
+             [vendorStr rangeOfString:@"The X.Org Foundation"].location != NSNotFound) {
+    displayName = @"X.Org";
+  }
+  if (displayName) {
     int major = release / 10000000;
     int minor = (release % 10000000) / 100000;
     int patch = (release % 100000) / 1000;
-    return [NSString stringWithFormat:@"X.Org %d.%d.%d", major, minor, patch];
+    return [NSString stringWithFormat:@"%@ %d.%d.%d", displayName, major, minor, patch];
   }
   return [NSString stringWithFormat:@"%@ %d", vendorStr, release];
 }
