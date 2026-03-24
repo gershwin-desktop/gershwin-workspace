@@ -118,6 +118,7 @@ Desktop/GWDesktopView.m \
 Desktop/GWDesktopIcon.m \
 Desktop/Dock/Dock.m \
 Desktop/Dock/DockIcon.m \
+Desktop/Dock/DockWindow.m \
 FileViewer/GWViewersManager.m \
 FileViewer/GWViewer.m \
 FileViewer/GWSpatialViewer.m \

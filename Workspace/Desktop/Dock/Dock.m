@@ -29,10 +29,28 @@
 #import <AppKit/AppKit.h>
 #import "Dock.h"
 #import "DockIcon.h"
+#import "DockWindow.h"
 #import "GWDesktopView.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
 #import "X11AppSupport.h"
+
+/* XComposite is optional; only include if available to avoid build failures */
+#if defined(__linux__)
+#include <X11/Xlib.h>
+# if defined(__has_include)
+#  if __has_include(<X11/extensions/Xcomposite.h>)
+#   include <X11/extensions/Xcomposite.h>
+#   define HAVE_XCOMPOSITE 1
+#  else
+#   define HAVE_XCOMPOSITE 0
+#  endif
+# else
+#  define HAVE_XCOMPOSITE 0
+# endif
+#else
+# define HAVE_XCOMPOSITE 0
+#endif
 
 #define MAX_ICN_SIZE 48
 #define MIN_ICN_SIZE 16
@@ -102,10 +120,30 @@
 			 nil];
       [self registerForDraggedTypes: pbTypes];
 
-      if (style == DockStyleModern)
-	[self setBackColor: [[NSColor grayColor] colorWithAlphaComponent: 0.33]];
+      /* If a compositing manager is present we want true transparency
+         (50% alpha). Otherwise use an opaque background (remove the old
+         "fake" transparency blend). */
+      BOOL compositorActive = NO;
+      Class compCls = NSClassFromString(@"URSCompositingManager");
+      if (compCls) {
+        id cm = [compCls performSelector:@selector(sharedManager)];
+        if (cm && [cm respondsToSelector:@selector(compositingActive)]) {
+          BOOL (*getCompActive)(id, SEL) = (BOOL (*)(id, SEL))[cm methodForSelector:@selector(compositingActive)];
+          compositorActive = getCompActive ? getCompActive(cm, @selector(compositingActive)) : NO;
+        }
+      }
+#if defined(__linux__) && HAVE_XCOMPOSITE
+          }
+          XCloseDisplay(dpy);
+        }
+      }
+#endif
+
+      if (compositorActive)
+        [self setBackColor: [[NSColor grayColor] colorWithAlphaComponent: 0.5]];
       else
-	[self setBackColor: [NSColor grayColor]];
+        /* Non-composited: opaque background (no fake blending). */
+        [self setBackColor: [[NSColor grayColor] colorWithAlphaComponent: 1.0]];
       
       [self createWorkspaceIcon];
 
@@ -618,14 +656,13 @@
   }
   
   ASSIGN (backColor, hlgtcolor);
-  if ([self superview]) {
+  if ([self window]) {
     [self tile];
   }
 }
 
 - (void)tile
 {
-  NSView *view = [self superview];
   NSRect scrrect = [[NSScreen mainScreen] frame];
   int oldIcnSize = iconSize;
   CGFloat maxheight = scrrect.size.height;
@@ -675,25 +712,22 @@
 
   if (position == DockPositionBottom)
     {
-      rect.origin.x = ceil((scrrect.size.width - rect.size.width) / 2);
+      rect.origin.x = 0;
       rect.origin.y = 0;
     }
   else if (position == DockPositionLeft)
     {
       rect.origin.x = 0;
-      rect.origin.y = ceil((scrrect.size.height - rect.size.height) / 2);
+      rect.origin.y = 0;
     }
   else // DockPositionRight
     {
-      rect.origin.x = scrrect.size.width - rect.size.width;
-      rect.origin.y = ceil((scrrect.size.height - rect.size.height) / 2);
+      rect.origin.x = 0;
+      rect.origin.y = 0;
     }
 
   NSLog(@"DEBUG: Dock tile - setting frame: %@, icons count: %lu", NSStringFromRect(rect), (unsigned long)[icons count]);
   
-  if (view) {
-    [view setNeedsDisplayInRect: [self frame]];
-  }
   [self setFrame: rect];
 
   if (position == DockPositionBottom)
@@ -735,8 +769,11 @@
   }
 
   [self setNeedsDisplay: YES];
-  if (view) {
-    [view setNeedsDisplayInRect: [self frame]];
+
+  /* If the dock lives in its own DockWindow, tell the window
+     to resize/reposition to match the dock view's computed frame. */
+  if ([[self window] isKindOfClass: [DockWindow class]]) {
+    [(DockWindow *)[self window] updateFrameForDock];
   }
 
   [self updateIconGeometries];
@@ -855,11 +892,50 @@
 
 - (void)drawRect:(NSRect)rect
 {  
-  // NSLog(@"DEBUG: Dock drawRect called, rect: %@, superview: %@", NSStringFromRect(rect), [self superview]);
   [super drawRect: rect];
   
-  [backColor set];
+  /* Draw background directly. We no longer do the old "fake"
+     blending. If a compositor is present we draw the view with a
+     50% alpha so true transparency shows through the compositor; if
+     no compositor is available we draw an opaque background. */
+
+  BOOL compositorActive = NO;
+  Class compCls = NSClassFromString(@"URSCompositingManager");
+  if (compCls) {
+    id cm = [compCls performSelector:@selector(sharedManager)];
+    if (cm && [cm respondsToSelector:@selector(compositingActive)]) {
+      BOOL (*getCompActive)(id, SEL) = (BOOL (*)(id, SEL))[cm methodForSelector:@selector(compositingActive)];
+      compositorActive = getCompActive ? getCompActive(cm, @selector(compositingActive)) : NO;
+    }
+  }
+#if defined(__linux__) && HAVE_XCOMPOSITE
+  if (!compositorActive) {
+    Display *dpy = XOpenDisplay(NULL);
+    if (dpy) {
+      int ev, er;
+      if (XCompositeQueryExtension(dpy, &ev, &er)) {
+        Atom sel = XInternAtom(dpy, "_NET_WM_CM_S0", False);
+        Window owner = XGetSelectionOwner(dpy, sel);
+        if (owner != None) compositorActive = YES;
+      }
+      XCloseDisplay(dpy);
+    }
+  }
+#endif
+
+  NSColor *fillColor = backColor;
+  if (compositorActive)
+    fillColor = [backColor colorWithAlphaComponent:0.5];
+  else
+    fillColor = [backColor colorWithAlphaComponent:1.0];
+
+  [fillColor setFill];
   NSRectFill(rect);
+}
+
+- (BOOL)isOpaque
+{
+  return NO;
 }
 
 @end
@@ -1093,7 +1169,7 @@
     [[icons objectAtIndex: i] setHighlightColor: hlgtcolor];
   
   ASSIGN (backColor, hlgtcolor);
-  if ([self superview]) {
+  if ([self window]) {
     [self tile];
   }
 }

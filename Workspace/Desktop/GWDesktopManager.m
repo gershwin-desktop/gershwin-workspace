@@ -31,6 +31,7 @@
 #import "GWDesktopWindow.h"
 #import "GWDesktopView.h"
 #import "Dock.h"
+#import "DockWindow.h"
 #import "FSNFunctions.h"
 #import "Workspace.h"
 #import "GWViewersManager.h"
@@ -62,6 +63,7 @@ static GWDesktopManager *desktopManager = nil;
   RELEASE (dskNode);
   RELEASE (win);
   RELEASE (dock);
+  RELEASE (dockWindow);
   RELEASE (mpointWatcher);
 
   [super dealloc];
@@ -130,6 +132,10 @@ static GWDesktopManager *desktopManager = nil;
         dock = [[Dock alloc] initForManager: self];
       }
     NS_ENDHANDLER
+
+    /* Dock lives in its own top-level X11 window now. */
+    dockWindow = [[DockWindow alloc] initWithPosition: dockPosition];
+    [(NSWindow *)dockWindow setContentView: dock];
         
     [nc addObserver: self 
            selector: @selector(fileSystemWillChange:) 
@@ -207,13 +213,14 @@ static GWDesktopManager *desktopManager = nil;
   [desktopView showContentsOfNode: dskNode];
   [self addWatcherForPath: [dskNode path]];
     
-  if ((hidedock == NO) && ([dock superview] == nil)) {
-    NSLog(@"DEBUG: Adding dock as subview (hidedock=%d)", hidedock);
-    [desktopView addSubview: dock];
+  if (hidedock == NO) {
+    NSLog(@"DEBUG: Activating dock window (hidedock=%d)", hidedock);
     [dock tile];
-    NSLog(@"DEBUG: Dock added to desktop view, frame: %@", NSStringFromRect([dock frame]));
+    [dockWindow updateFrameForDock];
+    [dockWindow activate];
+    NSLog(@"DEBUG: Dock window activated, frame: %@", NSStringFromRect([dockWindow frame]));
   } else {
-    NSLog(@"DEBUG: Dock NOT added (hidedock=%d, superview=%@)", hidedock, [dock superview]);
+    NSLog(@"DEBUG: Dock hidden (hidedock=%d)", hidedock);
   }
   
   [mpointWatcher startWatching];  
@@ -222,6 +229,7 @@ static GWDesktopManager *desktopManager = nil;
 
 - (void)deactivateDesktop
 {
+  [dockWindow deactivate];
   [win deactivate];
   [self removeWatcherForPath: [dskNode path]];  
   [mpointWatcher stopWatching];
@@ -336,7 +344,7 @@ static GWDesktopManager *desktopManager = nil;
 
 - (BOOL)hasWindow:(id)awindow
 {
-  return (win && (win == awindow));
+  return (win && (win == awindow)) || (dockWindow && (dockWindow == awindow));
 }
 
 - (id)desktopView
@@ -371,6 +379,7 @@ static GWDesktopManager *desktopManager = nil;
   dockPosition = pos;
   [dock setPosition: pos];
   [self setReservedFrames];
+  [dockWindow setDockPosition: pos];
   [desktopView dockPositionDidChange];
 }
 
@@ -378,13 +387,13 @@ static GWDesktopManager *desktopManager = nil;
 {
   hidedock = !value;
   
-  if (hidedock && [dock superview]) {
-    [dock removeFromSuperview];
+  if (hidedock) {
+    [dockWindow deactivate];
     [desktopView setNeedsDisplayInRect: dockReservedFrame];
-    
-  } else if ([dock superview] == nil) {
-    [desktopView addSubview: dock];
+  } else {
     [dock tile];
+    [dockWindow updateFrameForDock];
+    [dockWindow activate];
     [desktopView setNeedsDisplayInRect: dockReservedFrame];
   }
 }
