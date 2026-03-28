@@ -17,14 +17,19 @@ fi
 if test "$CXX" = ""; then
   CXX=`gnustep-config --variable=CXX`
 fi
+MAKECC=`gnustep-config --variable=CC`
 AC_PROG_CC
 AC_PROG_CPP
 
-MAKECC=`gnustep-config --variable=CC`
-if test "$CC" != "$MAKECC"; then
+# Compare just the base compiler name, ignoring standard flags that
+# newer autoconf (2.72+) may append (e.g. -std=gnu23)
+BASECC=`echo "$CC" | awk '{print $1}'`
+if test "$BASECC" != "$MAKECC"; then
   AC_MSG_ERROR([You are running configure with the compiler ($CC) set to a different value from that used by gnustep-make ($MAKECC).  Please run configure again with your environment set to match your gnustep-make])
   exit 1
 fi
+# Reset CC to match gnustep-make so downstream builds are consistent
+CC="$MAKECC"
 
 #--------------------------------------------------------------------
 # Use config.guess, config.sub and install-sh provided by gnustep-make
