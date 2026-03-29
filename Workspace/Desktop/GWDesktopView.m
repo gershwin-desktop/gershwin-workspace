@@ -87,7 +87,7 @@
 
       manager = mngr;
 
-      screenFrame = [[NSScreen mainScreen] frame];
+      screenFrame = [[[NSScreen screens] objectAtIndex:0] frame];
       [self setFrame: screenFrame];
 
       size = NSMakeSize(screenFrame.size.width, 2);

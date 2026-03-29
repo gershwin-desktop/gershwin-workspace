@@ -626,7 +626,7 @@
 - (void)tile
 {
   NSView *view = [self superview];
-  NSRect scrrect = [[NSScreen mainScreen] frame];
+  NSRect scrrect = [[[NSScreen screens] objectAtIndex:0] frame];
   int oldIcnSize = iconSize;
   CGFloat maxheight = scrrect.size.height;
   NSRect icnrect = NSZeroRect;  

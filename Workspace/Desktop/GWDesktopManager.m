@@ -396,7 +396,7 @@ static GWDesktopManager *desktopManager = nil;
 
 - (void)setReservedFrames
 {
-  NSRect screenFrame = [[NSScreen mainScreen] frame];
+  NSRect screenFrame = [[[NSScreen screens] objectAtIndex:0] frame];
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
   NSString *menuStyle = [defaults objectForKey: @"NSMenuInterfaceStyle"];
   
