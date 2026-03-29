@@ -673,20 +673,25 @@
     rect.size.height = [icons count] * icnrect.size.height;
   }
 
+  // Offset by the primary screen's origin so the dock lands on the correct
+  // monitor when the desktop window spans the full virtual desktop.
+  CGFloat scrOriginX = scrrect.origin.x;
+  CGFloat scrOriginY = scrrect.origin.y;
+
   if (position == DockPositionBottom)
     {
-      rect.origin.x = ceil((scrrect.size.width - rect.size.width) / 2);
-      rect.origin.y = 0;
+      rect.origin.x = scrOriginX + ceil((scrrect.size.width - rect.size.width) / 2);
+      rect.origin.y = scrOriginY;
     }
   else if (position == DockPositionLeft)
     {
-      rect.origin.x = 0;
-      rect.origin.y = ceil((scrrect.size.height - rect.size.height) / 2);
+      rect.origin.x = scrOriginX;
+      rect.origin.y = scrOriginY + ceil((scrrect.size.height - rect.size.height) / 2);
     }
   else // DockPositionRight
     {
-      rect.origin.x = scrrect.size.width - rect.size.width;
-      rect.origin.y = ceil((scrrect.size.height - rect.size.height) / 2);
+      rect.origin.x = scrOriginX + scrrect.size.width - rect.size.width;
+      rect.origin.y = scrOriginY + ceil((scrrect.size.height - rect.size.height) / 2);
     }
 
   NSLog(@"DEBUG: Dock tile - setting frame: %@, icons count: %lu", NSStringFromRect(rect), (unsigned long)[icons count]);

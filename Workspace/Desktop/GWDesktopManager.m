@@ -405,17 +405,17 @@ static GWDesktopManager *desktopManager = nil;
   if (menuStyle && [menuStyle isEqual: @"NSMacintoshInterfaceStyle"]) {
     macmenuReservedFrame.size.width = screenFrame.size.width;
     macmenuReservedFrame.size.height = 25;
-    macmenuReservedFrame.origin.x = 0;
-    macmenuReservedFrame.origin.y = screenFrame.size.height - 25;    
+    macmenuReservedFrame.origin.x = screenFrame.origin.x;
+    macmenuReservedFrame.origin.y = screenFrame.origin.y + screenFrame.size.height - 25;
   }
 
   dockReservedFrame.size.height = screenFrame.size.height;
   dockReservedFrame.size.width = 64 + RESV_MARGIN;
-  dockReservedFrame.origin.x = 0;
-  dockReservedFrame.origin.y = 0;
-  
+  dockReservedFrame.origin.x = screenFrame.origin.x;
+  dockReservedFrame.origin.y = screenFrame.origin.y;
+
   if (dockPosition == DockPositionRight) {
-    dockReservedFrame.origin.x = screenFrame.size.width - 64 - RESV_MARGIN;
+    dockReservedFrame.origin.x = screenFrame.origin.x + screenFrame.size.width - 64 - RESV_MARGIN;
   }
 }
 
