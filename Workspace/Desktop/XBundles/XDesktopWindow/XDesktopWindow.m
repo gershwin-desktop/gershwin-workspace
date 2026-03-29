@@ -38,7 +38,13 @@
 
 - (id)init
 {	
-	self = [super initWithContentRect: [[[NSScreen screens] objectAtIndex:0] frame]
+	// Compute the union of all screen frames so the desktop covers every monitor
+	NSArray *screens = [NSScreen screens];
+	NSRect fullFrame = [[screens objectAtIndex:0] frame];
+	for (NSUInteger i = 1; i < [screens count]; i++) {
+	  fullFrame = NSUnionRect(fullFrame, [[screens objectAtIndex:i] frame]);
+	}
+	self = [super initWithContentRect: fullFrame
                           styleMask: NSBorderlessWindowMask
 				  						      backing: NSBackingStoreBuffered
                               defer: NO];

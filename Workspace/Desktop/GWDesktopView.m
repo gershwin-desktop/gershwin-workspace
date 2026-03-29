@@ -87,7 +87,12 @@
 
       manager = mngr;
 
-      screenFrame = [[[NSScreen screens] objectAtIndex:0] frame];
+      // Span the full virtual desktop (union of all screens)
+      NSArray *screens = [NSScreen screens];
+      screenFrame = [[screens objectAtIndex:0] frame];
+      for (NSUInteger si = 1; si < [screens count]; si++) {
+        screenFrame = NSUnionRect(screenFrame, [[screens objectAtIndex:si] frame]);
+      }
       [self setFrame: screenFrame];
 
       size = NSMakeSize(screenFrame.size.width, 2);
@@ -1192,78 +1197,104 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   if (backImage && useBackImage)
     {
-      NSSize imsize = [backImage size];
+      // Draw the wallpaper independently for each monitor so it repeats
+      // properly rather than being stretched across the virtual desktop.
+      NSArray *screens = [NSScreen screens];
 
-      if ((imsize.width >= screenFrame.size.width) || (imsize.height >= screenFrame.size.height))
-	{
-	  if (backImageStyle == BackImageTileStyle)
-	    backImageStyle = BackImageCenterStyle;
-	}
+      for (NSUInteger si = 0; si < [screens count]; si++)
+        {
+          NSRect monFrame = [[screens objectAtIndex:si] frame];
+          // Convert from screen coordinates to view-local coordinates
+          // (screenFrame.origin is the view's origin in screen coords)
+          NSRect localRect = NSMakeRect(monFrame.origin.x - screenFrame.origin.x,
+                                        monFrame.origin.y - screenFrame.origin.y,
+                                        monFrame.size.width,
+                                        monFrame.size.height);
 
-      if (backImageStyle == BackImageFitStyle)
-	{
-	  [backImage drawInRect: NSMakeRect(0, 0, screenFrame.size.width, screenFrame.size.height)
-		       fromRect: NSZeroRect
-		      operation: NSCompositeSourceOver
-		       fraction: 1.0
-		 respectFlipped: YES
-			  hints: nil];
-	}
-      else if (backImageStyle == BackImageTileStyle)
-	{
-	  CGFloat x = 0;
-	  CGFloat y = screenFrame.size.width - imsize.width;
+          // Only draw if this monitor intersects the dirty rect
+          if (!NSIntersectsRect(localRect, rect))
+            continue;
 
-	  while (y > (0 - imsize.height))
-	    {
-	      [backImage compositeToPoint: NSMakePoint(x, y)
-				operation: NSCompositeSourceOver];
-	      x += imsize.width;
-	      if (x >= screenFrame.size.width)
-		{
-		  y -= imsize.height;
-		  x = 0;
-		}
-	    }
-	}
-      else if (backImageStyle == BackImageScaleStyle)
-	{
-	  float imRatio;
-	  float screenRatio;
-	  float scale;
-	  NSPoint imagePoint;
+          NSSize imsize = [backImage size];
+          BackImageStyle style = backImageStyle;
 
-	  imRatio = imsize.width / imsize.height;
-	  screenRatio = screenFrame.size.width / screenFrame.size.height;
+          if ((imsize.width >= localRect.size.width) || (imsize.height >= localRect.size.height))
+            {
+              if (style == BackImageTileStyle)
+                style = BackImageCenterStyle;
+            }
 
-	  if (imRatio > screenRatio)
-	    {
-	      /* image is wider in aspect than screen */
-	      scale = imsize.width / screenFrame.size.width;
-	      imagePoint = NSMakePoint(0, (screenFrame.size.height - imsize.height/scale) / 2);
-	    }
-	  else
-	    {
-	      /* image is taller in aspect than screen */
-	      scale = imsize.height / screenFrame.size.height;
-	      imagePoint = NSMakePoint((screenFrame.size.width - imsize.width/scale) / 2, 0);
-	    }
-	  [backImage drawInRect: NSMakeRect(imagePoint.x, imagePoint.y, imsize.width / scale, imsize.height / scale)
-		       fromRect: NSZeroRect
-		      operation: NSCompositeSourceOver
-		       fraction: 1.0
-		 respectFlipped: YES
-			  hints: nil];
+          [NSGraphicsContext saveGraphicsState];
+          NSBezierPath *clipPath = [NSBezierPath bezierPathWithRect:localRect];
+          [clipPath addClip];
 
-	}
-      else
-	{
-	  NSPoint imagePoint;
-	  imagePoint = NSMakePoint((screenFrame.size.width - imsize.width) / 2, (screenFrame.size.height - imsize.height) / 2);
+          if (style == BackImageFitStyle)
+            {
+              [backImage drawInRect: localRect
+                           fromRect: NSZeroRect
+                          operation: NSCompositeSourceOver
+                           fraction: 1.0
+                     respectFlipped: YES
+                              hints: nil];
+            }
+          else if (style == BackImageTileStyle)
+            {
+              CGFloat x = localRect.origin.x;
+              CGFloat y = NSMaxY(localRect) - imsize.height;
 
-	  [backImage compositeToPoint: imagePoint
-			    operation: NSCompositeSourceOver];
-	}
+              while (y > (localRect.origin.y - imsize.height))
+                {
+                  [backImage compositeToPoint: NSMakePoint(x, y)
+                                    operation: NSCompositeSourceOver];
+                  x += imsize.width;
+                  if (x >= NSMaxX(localRect))
+                    {
+                      y -= imsize.height;
+                      x = localRect.origin.x;
+                    }
+                }
+            }
+          else if (style == BackImageScaleStyle)
+            {
+              float imRatio = imsize.width / imsize.height;
+              float monRatio = localRect.size.width / localRect.size.height;
+              float scale;
+              NSPoint imagePoint;
+
+              if (imRatio > monRatio)
+                {
+                  scale = imsize.width / localRect.size.width;
+                  imagePoint = NSMakePoint(localRect.origin.x,
+                    localRect.origin.y + (localRect.size.height - imsize.height/scale) / 2);
+                }
+              else
+                {
+                  scale = imsize.height / localRect.size.height;
+                  imagePoint = NSMakePoint(
+                    localRect.origin.x + (localRect.size.width - imsize.width/scale) / 2,
+                    localRect.origin.y);
+                }
+              [backImage drawInRect: NSMakeRect(imagePoint.x, imagePoint.y,
+                                                imsize.width / scale, imsize.height / scale)
+                           fromRect: NSZeroRect
+                          operation: NSCompositeSourceOver
+                           fraction: 1.0
+                     respectFlipped: YES
+                              hints: nil];
+            }
+          else
+            {
+              /* Center style */
+              NSPoint imagePoint;
+              imagePoint = NSMakePoint(
+                localRect.origin.x + (localRect.size.width - imsize.width) / 2,
+                localRect.origin.y + (localRect.size.height - imsize.height) / 2);
+              [backImage compositeToPoint: imagePoint
+                                operation: NSCompositeSourceOver];
+            }
+
+          [NSGraphicsContext restoreGraphicsState];
+        }
     }
 
   if (dragIcon)
