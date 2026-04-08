@@ -1821,9 +1821,11 @@ NSString *_pendingSystemActionTitle = nil;
       return YES;
     }
     return NO;
-  } else if ([ext isEqualToString:@"iso"] || [ext isEqualToString:@"bin"] || 
+  } else if ([ext isEqualToString:@"iso"] || [ext isEqualToString:@"bin"] ||
              [ext isEqualToString:@"nrg"] || [ext isEqualToString:@"img"] ||
-             [ext isEqualToString:@"mdf"]) {
+             [ext isEqualToString:@"mdf"] ||
+             [ext isEqualToString:@"squashfs"] || [ext isEqualToString:@"sqsh"] ||
+             [ext isEqualToString:@"sfs"]) {
     NSLog(@"Workspace: Mounting disk image file: %@", fullPath);
     VolumeManager *volMgr = [VolumeManager sharedManager];
     NSString *mountPoint = [volMgr mountFuseisoImage:fullPath];

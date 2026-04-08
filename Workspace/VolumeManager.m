@@ -764,39 +764,52 @@ static VolumeManager *sharedInstance = nil;
 - (NSString *)mountFuseisoImage:(NSString *)imagePath
 {
   NSString *extension = [[imagePath pathExtension] lowercaseString];
-  
+
   if ([extension isEqualToString:@"iso"]) {
     return [self mountISOFile:imagePath];
   }
-  
+
+  BOOL isSquashFS = ([extension isEqualToString:@"squashfs"] ||
+                     [extension isEqualToString:@"sqsh"] ||
+                     [extension isEqualToString:@"sfs"]);
+
   NSString *existingMount = [self mountPointForImageFile:imagePath];
   if (existingMount && [self isMountPointActive:existingMount]) {
     NSLog(@"VolumeManager: Image already mounted at %@", existingMount);
     return existingMount;
   }
-  
-  if (![self isFuseisoAvailable]) {
-    [self showFuseisoNotInstalledAlert];
-    return nil;
+
+  if (isSquashFS) {
+    if (![self findToolInPath:@"squashfuse" alternativeNames:nil]) {
+      [self showErrorAlert:@"squashfuse is not installed.\n\nInstall it with:\n  apt install squashfuse"];
+      return nil;
+    }
+  } else {
+    if (![self isFuseisoAvailable]) {
+      [self showFuseisoNotInstalledAlert];
+      return nil;
+    }
   }
-  
+
   NSString *mountPoint = [self createMountPointForISO:imagePath];
   if (!mountPoint) {
     [self showErrorAlert:@"Failed to create mount point"];
     return nil;
   }
-  
+
   NSLog(@"VolumeManager: Mounting %@ image at %@", extension, mountPoint);
-  
+
   NSTask *fuseTask = [[NSTask alloc] init];
-  NSString *fuseisoPath = [self findToolInPath:@"fuseiso" alternativeNames:nil];
-  if (!fuseisoPath) {
+  NSString *toolPath = isSquashFS
+    ? [self findToolInPath:@"squashfuse" alternativeNames:nil]
+    : [self findToolInPath:@"fuseiso" alternativeNames:nil];
+  if (!toolPath) {
     [fuseTask release];
-    [self showErrorAlert:@"fuseiso tool not found"];
+    [self showErrorAlert:isSquashFS ? @"squashfuse not found" : @"fuseiso not found"];
     return nil;
   }
-  
-  [fuseTask setLaunchPath:fuseisoPath];
+
+  [fuseTask setLaunchPath:toolPath];
   [fuseTask setArguments:@[imagePath, mountPoint]];
   
   NSPipe *outPipe = [NSPipe pipe];
