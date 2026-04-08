@@ -268,6 +268,7 @@ AC_SUBST(HAVE_LIBDISPATCH)
 
 AC_CONFIG_FILES([
   GNUmakefile
+  Workspace/GNUmakefile
   ])
 
 AC_OUTPUT

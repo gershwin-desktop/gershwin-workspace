@@ -2360,6 +2360,7 @@ fi
 if test "$CXX" = ""; then
   CXX=`gnustep-config --variable=CXX`
 fi
+MAKECC=`gnustep-config --variable=CC`
 
 
 
@@ -3524,11 +3525,15 @@ ac_link='$CC -o conftest$ac_exeext $CFLAGS $CPPFLAGS $LDFLAGS conftest.$ac_ext $
 ac_compiler_gnu=$ac_cv_c_compiler_gnu
 
 
-MAKECC=`gnustep-config --variable=CC`
-if test "$CC" != "$MAKECC"; then
+# Compare just the base compiler name, ignoring standard flags that
+# newer autoconf (2.72+) may append (e.g. -std=gnu23)
+BASECC=`echo "$CC" | awk '{print $1}'`
+if test "$BASECC" != "$MAKECC"; then
   as_fn_error $? "You are running configure with the compiler ($CC) set to a different value from that used by gnustep-make ($MAKECC).  Please run configure again with your environment set to match your gnustep-make" "$LINENO" 5
   exit 1
 fi
+# Reset CC to match gnustep-make so downstream builds are consistent
+CC="$MAKECC"
 
 #--------------------------------------------------------------------
 # Use config.guess, config.sub and install-sh provided by gnustep-make
