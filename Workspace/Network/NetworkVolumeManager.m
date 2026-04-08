@@ -208,23 +208,12 @@ static NetworkVolumeManager *sharedInstance = nil;
 
 - (NSString *)createMountPointForService:(NetworkServiceItem *)serviceItem
 {
-  /* Create mount point in /media/$USER directory */
-  NSString *userName = NSUserName();
-  NSString *networkDir = [@"/media" stringByAppendingPathComponent:userName];
-  
-  /* Create /media/$USER directory if it doesn't exist */
+  /* Create mount point in /Volumes directory (created by dscli init) */
+  NSString *networkDir = @"/Volumes";
+
   BOOL isDir;
-  if (![fm fileExistsAtPath:networkDir isDirectory:&isDir]) {
-    NSError *error = nil;
-    if (![fm createDirectoryAtPath:networkDir 
-       withIntermediateDirectories:YES 
-                        attributes:nil 
-                             error:&error]) {
-      NSLog(@"NetworkVolumeManager: Failed to create Network directory: %@", error);
-      return nil;
-    }
-  } else if (!isDir) {
-    NSLog(@"NetworkVolumeManager: /media/%@ exists but is not a directory", userName);
+  if (![fm fileExistsAtPath:networkDir isDirectory:&isDir] || !isDir) {
+    NSLog(@"NetworkVolumeManager: /Volumes does not exist or is not a directory");
     return nil;
   }
   

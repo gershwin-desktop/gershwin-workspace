@@ -292,21 +292,8 @@ static VolumeManager *sharedInstance = nil;
 
 - (NSString *)createMountPointForDMG:(NSString *)dmgPath
 {
-  NSString *userName = NSUserName();
-  NSString *mediaDir = [@"/media" stringByAppendingPathComponent:userName];
-  
-  BOOL isDir;
-  if (![fm fileExistsAtPath:mediaDir isDirectory:&isDir]) {
-    NSError *error = nil;
-    if (![fm createDirectoryAtPath:mediaDir 
-       withIntermediateDirectories:YES 
-                        attributes:nil 
-                             error:&error]) {
-      NSLog(@"VolumeManager: Failed to create media directory: %@", error);
-      return nil;
-    }
-  }
-  
+  NSString *mediaDir = @"/Volumes";
+
   NSString *dmgName = [[dmgPath lastPathComponent] stringByDeletingPathExtension];
   NSCharacterSet *invalidChars = [NSCharacterSet characterSetWithCharactersInString:@"/\\:*?\"<>|"];
   NSArray *components = [dmgName componentsSeparatedByCharactersInSet:invalidChars];
@@ -353,21 +340,8 @@ static VolumeManager *sharedInstance = nil;
 
 - (NSString *)createMountPointForISO:(NSString *)isoPath
 {
-  NSString *userName = NSUserName();
-  NSString *mediaDir = [@"/media" stringByAppendingPathComponent:userName];
-  
-  BOOL isDir;
-  if (![fm fileExistsAtPath:mediaDir isDirectory:&isDir]) {
-    NSError *error = nil;
-    if (![fm createDirectoryAtPath:mediaDir 
-       withIntermediateDirectories:YES 
-                        attributes:nil 
-                             error:&error]) {
-      NSLog(@"VolumeManager: Failed to create media directory: %@", error);
-      return nil;
-    }
-  }
-  
+  NSString *mediaDir = @"/Volumes";
+
   NSString *isoName = [[isoPath lastPathComponent] stringByDeletingPathExtension];
   NSCharacterSet *invalidChars = [NSCharacterSet characterSetWithCharactersInString:@"/\\:*?\"<>|"];
   NSArray *components = [isoName componentsSeparatedByCharactersInSet:invalidChars];
