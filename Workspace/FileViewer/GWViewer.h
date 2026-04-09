@@ -101,6 +101,7 @@ typedef enum
 - (void)unloadFromNode:(FSNode *)anode;
 - (void)updateShownSelection;
 - (void)updateWindowTitle;
+- (void)navigateToNode:(FSNode *)node;
 
 - (GWViewerWindow *)win;
 - (id)nodeView;

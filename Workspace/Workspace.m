@@ -1174,26 +1174,32 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)newViewerAtPath:(NSString *)path
 {
-  FSNode *node = [FSNode nodeWithPath: path];
+  FSNode *targetNode = [FSNode nodeWithPath: path];
   int defaultType = [self defaultViewerType];
 
   NSLog(@"newViewerAtPath: %@ using default viewer type: %d", path, defaultType);
 
   if (defaultType == SPATIAL) {
-    // Create spatial viewer
     [vwrsManager viewerOfType: SPATIAL
                      showType: nil
-                      forNode: node
+                      forNode: targetNode
                 showSelection: NO
                closeOldViewer: nil
                      forceNew: NO];
   } else {
-    // Create browsing viewer (original behavior)
-    [vwrsManager viewerForNode: node
-                      showType: 0
-                 showSelection: NO
-                      forceNew: NO
-                       withKey: nil];
+    /* Always create a root-based viewer so that all windows have the
+     * same capabilities: full shelf support, consistent app launching,
+     * and unrestricted navigation.  Then navigate to the target path. */
+    FSNode *rootNode = [FSNode nodeWithPath: path_separator()];
+    id viewer = [vwrsManager viewerForNode: rootNode
+                                  showType: 0
+                             showSelection: NO
+                                  forceNew: YES
+                                   withKey: nil];
+
+    if (viewer && ![path isEqual: path_separator()]) {
+      [viewer navigateToNode: targetNode];
+    }
   }
 }
 

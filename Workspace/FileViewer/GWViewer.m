@@ -1046,6 +1046,26 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   /* Intentionally empty - declared in header but not used in this implementation */
 }
 
+- (void)navigateToNode:(FSNode *)node
+{
+  if (node == nil || [node isValid] == NO)
+    return;
+
+  [nodeView showContentsOfNode: node];
+  [self scrollToBeginning];
+  [self selectionChanged: [NSArray arrayWithObject: node]];
+
+  /* Update the window title to reflect the navigated location */
+  NSString *path = [node path];
+  if ([path isEqual: path_separator()]) {
+    [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
+  } else {
+    [vwrwin setTitle: [node name]];
+  }
+
+  [manager addNode: node toHistoryOfViewer: self];
+}
+
 //
 // splitView delegate methods
 //
