@@ -664,13 +664,21 @@ static FSNodeRep *shared = nil;
                      isUnmountable: &isUnmountable
                        description: &description
                               type: &fsType]) {
-    /* Optical media filesystem types that should show CD icon */
+    /* Optical media and disk image filesystem types that should show CD icon */
     if ([fsType isEqualToString: @"ISO9660"] ||
         [fsType isEqualToString: @"UDF"] ||
         [fsType isEqualToString: @"CD9660"] ||
-        [fsType isEqualToString: @"ISOFS"]) {
+        [fsType isEqualToString: @"ISOFS"] ||
+        [fsType isEqualToString: @"squashfs"] ||
+        [fsType isEqualToString: @"fuse.squashfuse"]) {
       return YES;
     }
+  }
+
+  /* Check if the path is under /Volumes — these are always disk image
+   * or removable media mounts and should use the CD icon. */
+  if ([path hasPrefix: @"/Volumes/"]) {
+    return YES;
   }
 
   return NO;
