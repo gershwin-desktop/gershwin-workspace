@@ -269,6 +269,7 @@ AC_SUBST(HAVE_LIBDISPATCH)
 AC_CONFIG_FILES([
   GNUmakefile
   Workspace/GNUmakefile
+  Tools/fswatcher/GNUmakefile
   ])
 
 AC_OUTPUT

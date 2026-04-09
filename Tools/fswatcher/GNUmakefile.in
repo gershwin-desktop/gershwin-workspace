@@ -1,0 +1,22 @@
+PACKAGE_NAME = gworkspace
+include $(GNUSTEP_MAKEFILES)/common.make
+
+TOOL_NAME = fswatcher
+
+WITH_INOTIFY=@with_inotify@
+
+ifeq ($(WITH_INOTIFY),yes)
+  fswatcher_OBJC_FILES = fswatcher-inotify.m
+else
+  fswatcher_OBJC_FILES = fswatcher.m
+endif
+
+fswatcher_TOOL_LIBS += -lDBKit
+
+-include GNUmakefile.preamble
+
+-include GNUmakefile.local
+
+include $(GNUSTEP_MAKEFILES)/tool.make
+
+-include GNUmakefile.postamble

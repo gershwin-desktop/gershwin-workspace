@@ -4159,7 +4159,7 @@ printf "%s\n" "no" >&6; };
 fi
 
 
-ac_config_files="$ac_config_files GNUmakefile Workspace/GNUmakefile"
+ac_config_files="$ac_config_files GNUmakefile Workspace/GNUmakefile Tools/fswatcher/GNUmakefile"
 
 
 cat >confcache <<\_ACEOF
@@ -4852,6 +4852,7 @@ do
     "Workspace/config.h") CONFIG_HEADERS="$CONFIG_HEADERS Workspace/config.h" ;;
     "GNUmakefile") CONFIG_FILES="$CONFIG_FILES GNUmakefile" ;;
     "Workspace/GNUmakefile") CONFIG_FILES="$CONFIG_FILES Workspace/GNUmakefile" ;;
+    "Tools/fswatcher/GNUmakefile") CONFIG_FILES="$CONFIG_FILES Tools/fswatcher/GNUmakefile" ;;
 
   *) as_fn_error $? "invalid argument: '$ac_config_target'" "$LINENO" 5;;
   esac

@@ -293,6 +293,7 @@ static VolumeManager *sharedInstance = nil;
 - (NSString *)createMountPointForDMG:(NSString *)dmgPath
 {
   NSString *mediaDir = @"/Volumes";
+  BOOL isDir;
 
   NSString *dmgName = [[dmgPath lastPathComponent] stringByDeletingPathExtension];
   NSCharacterSet *invalidChars = [NSCharacterSet characterSetWithCharactersInString:@"/\\:*?\"<>|"];
@@ -341,6 +342,7 @@ static VolumeManager *sharedInstance = nil;
 - (NSString *)createMountPointForISO:(NSString *)isoPath
 {
   NSString *mediaDir = @"/Volumes";
+  BOOL isDir;
 
   NSString *isoName = [[isoPath lastPathComponent] stringByDeletingPathExtension];
   NSCharacterSet *invalidChars = [NSCharacterSet characterSetWithCharactersInString:@"/\\:*?\"<>|"];
