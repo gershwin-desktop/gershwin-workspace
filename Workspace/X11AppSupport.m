@@ -346,17 +346,34 @@ static GWX11WindowManager *sharedWindowManager = nil;
         Window *clients = [self getClientList:dpy count:&count];
         
         if (clients) {
+            pid_t myPID = getpid();
+
             for (unsigned long i = 0; i < count; i++) {
+                /* Skip our own windows — the Workspace file viewer titles
+                 * can match app names (e.g., a viewer browsing "xpdf" volume
+                 * would falsely match an app named "xpdf").
+                 * Check both _NET_WM_PID and WM_CLASS since GNUstep apps
+                 * may not set _NET_WM_PID. */
+                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
+                if (winPID == myPID) {
+                    continue;
+                }
+
                 NSString *winName = [self getWindowName:dpy window:clients[i]];
                 NSString *winClass = [self getWindowClass:dpy window:clients[i]];
-                
+
+                /* Skip windows belonging to Workspace (by WM_CLASS) */
+                if (winClass && [winClass isEqualToString:@"Workspace"]) {
+                    continue;
+                }
+
                 BOOL matches = NO;
                 if (winName && [winName rangeOfString:name options:NSCaseInsensitiveSearch].location != NSNotFound) {
                     matches = YES;
                 } else if (winClass && [winClass rangeOfString:name options:NSCaseInsensitiveSearch].location != NSNotFound) {
                     matches = YES;
                 }
-                
+
                 if (matches) {
                     GWX11WindowInfo *info = [self infoForWindow:dpy window:clients[i]];
                     [windows addObject:info];

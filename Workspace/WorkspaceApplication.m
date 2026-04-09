@@ -549,8 +549,10 @@
   NSString *host;
 
   path = [ws locateApplicationBinary: appname];
-  
+  NSLog(@"launchApplication:arguments: appname=%@ binary=%@ args=%@", appname, path, args);
+
   if (path == nil) {
+	  NSLog(@"launchApplication: locateApplicationBinary returned nil for %@", appname);
 	  return NO;
 	}
 
@@ -620,11 +622,12 @@
       hasWindows = [wm hasWindowsMatchingName: appName];
     }
     
+    NSLog(@"launchApplication: X11 check for '%@': knownPID=%d hasWindows=%d", appName, knownPID, hasWindows);
     if (hasWindows) {
       /* App is running somewhere on the system (possibly launched externally).
          Notify the Dock so the icon's "running" dot appears, and activate the app
          to raise/unminimize its window immediately. */
-      GWDebugLog(@"App \"%@\" already running (X11 window found); notifying Dock and activating.", appName);
+      NSLog(@"launchApplication: BLOCKED — X11 thinks '%@' is already running (knownPID=%d)", appName, knownPID);
       [[dtopManager dock] appDidLaunch: appPath appName: appName];
       /* Activate the app to raise/unminimize its window immediately */
       [self activateAppWithPath: appPath andName: appName pid: knownPID];
@@ -643,13 +646,16 @@
 	                  userInfo: userinfo];
 
   /* Use GWApplicationLauncher to get same error handling as ELF binaries */
+  NSLog(@"launchApplication: launching binary: %@ with args: %@", path, args);
   task = [[NSTask alloc] init];
   [task setLaunchPath:path];
   [task setArguments:args];
-  
+
   BOOL launched = [GWApplicationLauncher launchAndMonitorTask:task];
-  
+  NSLog(@"launchApplication: launched=%d", launched);
+
   if (!launched) {
+    NSLog(@"launchApplication: GWApplicationLauncher failed for %@", path);
     [task release];
     return NO;
   }
