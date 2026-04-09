@@ -22,6 +22,13 @@ config.log
 config.status
 config.h
 
+# Generated GNUmakefiles (created by ./configure from .in templates)
+GNUmakefile
+Inspector/ContentViewers/GNUmakefile
+Inspector/GNUmakefile
+Tools/fswatcher/GNUmakefile
+Workspace/GNUmakefile
+
 # Build directories
 obj
 derived_src
