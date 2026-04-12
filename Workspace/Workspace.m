@@ -1735,13 +1735,41 @@ NSString *_pendingSystemActionTitle = nil;
     }
   }
 
-  /* Check if this is a network virtual path first */
+  /* Check if this is a network virtual path first.
+   *
+   * The network branch should only handle (a) the /Network root itself, or
+   * (b) a direct child of /Network that matches a known, unmounted network
+   * service.  Deeper paths — i.e. real files and directories on an
+   * already-mounted share — must fall through to regular file handling
+   * (disk images, AVFS archives, application dispatch, etc.).  Otherwise
+   * double-clicking e.g. /Network/host/images/foo.squashfs would dead-end
+   * here instead of reaching the squashfs mounter below. */
+  BOOL handleAsNetwork = NO;
   if ([NetworkFSNode isNetworkPath:fullPath]) {
+    if ([fullPath isEqualToString:NetworkVirtualPath]) {
+      handleAsNetwork = YES;
+    } else {
+      /* Only direct children of /Network are candidates for service dispatch. */
+      NSArray *comps = [fullPath pathComponents];
+      if ([comps count] == 3) {
+        NSString *directChild = [fullPath lastPathComponent];
+        NetworkServiceManager *mgr = [NetworkServiceManager sharedManager];
+        for (NetworkServiceItem *it in [mgr allServices]) {
+          if ([[it displayName] isEqualToString:directChild]) {
+            handleAsNetwork = YES;
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  if (handleAsNetwork) {
     NSLog(@"Workspace openFile: detected network path");
-    
+
     /* For network paths, we need to create the appropriate NetworkFSNode */
     NetworkFSNode *networkNode = nil;
-    
+
     if ([fullPath isEqualToString:NetworkVirtualPath]) {
       /* This is the /Network root */
       networkNode = [NetworkFSNode networkRootNode];
