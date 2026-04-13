@@ -270,7 +270,7 @@ static GWViewersManager *vwrsmanager = nil;
           NSRect startFrame = pendingOpenAnimationRect;
           hasPendingOpenAnimationRect = NO;
 
-          NSLog(@"[Animation] Pending animation rect detected: origin={%.0f,%.0f} size={%.0fx%.0f}",
+          NSDebugLLog(@"gwspace", @"[Animation] Pending animation rect detected: origin={%.0f,%.0f} size={%.0fx%.0f}",
                 startFrame.origin.x, startFrame.origin.y, startFrame.size.width, startFrame.size.height);
 
           if (startFrame.size.width < 16) startFrame.size.width = 16;
@@ -279,20 +279,20 @@ static GWViewersManager *vwrsmanager = nil;
           // Set the window to its final position
           [win setFrame: endFrame display: NO];
           
-          NSLog(@"[Animation] About to call setWindowAnimationRect for window %@", win);
+          NSDebugLLog(@"gwspace", @"[Animation] About to call setWindowAnimationRect for window %@", win);
           
           // Set X window property with animation rectangle
           // WindowManager will read this and perform appropriate animation
           [self setWindowAnimationRect:startFrame forWindow:win];
           
-          NSLog(@"[Animation] Animation rect set, now showing window");
+          NSDebugLLog(@"gwspace", @"[Animation] Animation rect set, now showing window");
           
           // Now show the window - WindowManager will animate it
           [win makeKeyAndOrderFront: nil];
         }
       else
         {
-          NSLog(@"[Animation] No pending animation rect for new window");
+          NSDebugLLog(@"gwspace", @"[Animation] No pending animation rect for new window");
         }
       
       [viewers addObject: viewer];
@@ -311,11 +311,11 @@ static GWViewersManager *vwrsmanager = nil;
 
 - (void)setPendingOpenAnimationRect:(NSRect)rect
 {
-  NSLog(@"[Animation] setPendingOpenAnimationRect called: origin={%.0f,%.0f} size={%.0fx%.0f}",
+  NSDebugLLog(@"gwspace", @"[Animation] setPendingOpenAnimationRect called: origin={%.0f,%.0f} size={%.0fx%.0f}",
         rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
   pendingOpenAnimationRect = rect;
   hasPendingOpenAnimationRect = !NSEqualRects(rect, NSZeroRect);
-  NSLog(@"[Animation] hasPendingOpenAnimationRect = %d", hasPendingOpenAnimationRect);
+  NSDebugLLog(@"gwspace", @"[Animation] hasPendingOpenAnimationRect = %d", hasPendingOpenAnimationRect);
 }
 
 - (NSArray *)viewersForBaseNode:(FSNode *)node
@@ -508,7 +508,7 @@ static GWViewersManager *vwrsmanager = nil;
                     {
                       // Use the default viewer type preference
                       int defaultType = [gworkspace defaultViewerType];
-                      NSLog(@"openSelectionInViewer: using default viewer type %d for folder %@", defaultType, [node path]);
+                      NSDebugLLog(@"gwspace", @"openSelectionInViewer: using default viewer type %d for folder %@", defaultType, [node path]);
 
                       if (defaultType == SPATIAL) {
                         [self viewerOfType: SPATIAL
@@ -579,7 +579,7 @@ static GWViewersManager *vwrsmanager = nil;
       if ([node isDirectory])
         {
           int defaultType = [gworkspace defaultViewerType];
-          NSLog(@"openAsFolderSelectionInViewer: using default viewer type %d for folder %@", defaultType, [node path]);
+          NSDebugLLog(@"gwspace", @"openAsFolderSelectionInViewer: using default viewer type %d for folder %@", defaultType, [node path]);
 
           if (defaultType == SPATIAL) {
             [self viewerOfType: SPATIAL
@@ -901,7 +901,7 @@ static GWViewersManager *vwrsmanager = nil;
   if (volpath)
     [fnr addVolumeAt:volpath];
   else
-    NSLog(@"newVolumeMounted notification received with empty NSDevicePath");
+    NSDebugLLog(@"gwspace", @"newVolumeMounted notification received with empty NSDevicePath");
 }
 - (void)mountedVolumeWillUnmount:(NSNotification *)notif
 {
@@ -909,7 +909,7 @@ static GWViewersManager *vwrsmanager = nil;
   NSString *volpath = [dict objectForKey:@"NSDevicePath"];
 
   if (!volpath) {
-    NSLog(@"mountedVolumeWillUnmount notification received with empty NSDevicePath");
+    NSDebugLLog(@"gwspace", @"mountedVolumeWillUnmount notification received with empty NSDevicePath");
     return;
   }
 
@@ -945,7 +945,7 @@ static GWViewersManager *vwrsmanager = nil;
     
     [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemDidChangeNotification" object:didInfo];
   } else {
-    NSLog(@"mountedVolumeDidUnmount notification received with empty NSDevicePath");
+    NSDebugLLog(@"gwspace", @"mountedVolumeDidUnmount notification received with empty NSDevicePath");
   }
 }
 
@@ -958,25 +958,25 @@ static GWViewersManager *vwrsmanager = nil;
     closeOldViewer:(id)oldvwr
           forceNew:(BOOL)force
 {
-  NSLog(@"viewerOfType:showType:forNode:showSelection:closeOldViewer:forceNew: called");
-  NSLog(@"vtype=%u, node=%@, showsel=%d, force=%d", vtype, [node path], showsel, force);
+  NSDebugLLog(@"gwspace", @"viewerOfType:showType:forNode:showSelection:closeOldViewer:forceNew: called");
+  NSDebugLLog(@"gwspace", @"vtype=%u, node=%@, showsel=%d, force=%d", vtype, [node path], showsel, force);
 
   id viewer = nil;
 
   // Close old viewer if requested
   if (oldvwr) {
-    NSLog(@"Closing old viewer");
+    NSDebugLLog(@"gwspace", @"Closing old viewer");
     [oldvwr deactivate];
   }
 
   if (vtype == SPATIAL) {
-    NSLog(@"Creating spatial viewer");
+    NSDebugLLog(@"gwspace", @"Creating spatial viewer");
 
     // Check if we already have a spatial viewer for this node (unless forcing new)
     if (!force) {
       viewer = [self viewerOfType:SPATIAL withBaseNode:node];
       if (viewer) {
-        NSLog(@"Found existing spatial viewer, activating it");
+        NSDebugLLog(@"gwspace", @"Found existing spatial viewer, activating it");
         [viewer activate];
         return viewer;
       }
@@ -996,19 +996,19 @@ static GWViewersManager *vwrsmanager = nil;
       [win release];
       [viewer release]; // viewers array retains it
 
-      NSLog(@"Successfully created spatial viewer for %@", [node path]);
+      NSDebugLLog(@"gwspace", @"Successfully created spatial viewer for %@", [node path]);
       [viewer activate];
     } else {
-      NSLog(@"Failed to create spatial viewer");
+      NSDebugLLog(@"gwspace", @"Failed to create spatial viewer");
       [win release];
     }
 
   } else {
-    NSLog(@"Creating browsing viewer");
+    NSDebugLLog(@"gwspace", @"Creating browsing viewer");
     // For browsing mode, use the existing method
     viewer = [self viewerForNode:node showType:GWViewTypeBrowser showSelection:showsel forceNew:force withKey:nil];
     if (viewer) {
-      NSLog(@"Successfully created browsing viewer for %@", [node path]);
+      NSDebugLLog(@"gwspace", @"Successfully created browsing viewer for %@", [node path]);
     }
   }
 
@@ -1077,7 +1077,7 @@ static GWViewersManager *vwrsmanager = nil;
   // Format: 4 32-bit integers (x, y, width, height)
   
   if (!window) {
-    NSLog(@"[Animation] NULL window passed to setWindowAnimationRect");
+    NSDebugLLog(@"gwspace", @"[Animation] NULL window passed to setWindowAnimationRect");
     return;
   }
   
@@ -1087,25 +1087,25 @@ static GWViewersManager *vwrsmanager = nil;
     server = GSCurrentServer();
   }
   if (!server) {
-    NSLog(@"[Animation] No display server available for window animation");
+    NSDebugLLog(@"gwspace", @"[Animation] No display server available for window animation");
     return;
   }
   
   Display *display = (Display *)[server serverDevice];
   if (!display) {
-    NSLog(@"[Animation] No X11 display available for animation property");
+    NSDebugLLog(@"gwspace", @"[Animation] No X11 display available for animation property");
     return;
   }
   
   // windowDevice returns a Window ID (cast to void*), not a pointer to Window
   void *winptr = [server windowDevice:[window windowNumber]];
   if (!winptr) {
-    NSLog(@"[Animation] No X11 window device for animation property");
+    NSDebugLLog(@"gwspace", @"[Animation] No X11 window device for animation property");
     return;
   }
   Window xwindow = (Window)(uintptr_t)winptr;  // Cast directly, don't dereference
   if (xwindow == 0) {
-    NSLog(@"[Animation] Invalid X11 window id for animation property");
+    NSDebugLLog(@"gwspace", @"[Animation] Invalid X11 window id for animation property");
     return;
   }
   
@@ -1113,7 +1113,7 @@ static GWViewersManager *vwrsmanager = nil;
   NSScreen *screen = [window screen];
   if (!screen) screen = [NSScreen mainScreen];
   if (!screen) {
-    NSLog(@"[Animation] No screen available for window animation coordinate conversion");
+    NSDebugLLog(@"gwspace", @"[Animation] No screen available for window animation coordinate conversion");
     return;
   }
   NSRect screenFrame = [screen frame];
@@ -1128,7 +1128,7 @@ static GWViewersManager *vwrsmanager = nil;
   
   // Error checking: validate parameters before calling X11
   if (!display || xwindow == 0) {
-    NSLog(@"[Animation] Invalid display or X window for setting animation rect");
+    NSDebugLLog(@"gwspace", @"[Animation] Invalid display or X window for setting animation rect");
     return;
   }
   
@@ -1137,7 +1137,7 @@ static GWViewersManager *vwrsmanager = nil;
   
   Atom animAtom = XInternAtom(display, "_GERSHWIN_WINDOW_OPEN_ANIMATION_RECT", False);
   if (animAtom == None) {
-    NSLog(@"[Animation] Failed to intern animation atom");
+    NSDebugLLog(@"gwspace", @"[Animation] Failed to intern animation atom");
     XSetErrorHandler(oldHandler);
     return;
   }
@@ -1145,7 +1145,7 @@ static GWViewersManager *vwrsmanager = nil;
   int status = XChangeProperty(display, xwindow, animAtom, XA_CARDINAL, 32,
                                PropModeReplace, (unsigned char *)data, 4);
   if (status == BadWindow) {
-    NSLog(@"[Animation] XChangeProperty failed: window %lu is invalid", (unsigned long)xwindow);
+    NSDebugLLog(@"gwspace", @"[Animation] XChangeProperty failed: window %lu is invalid", (unsigned long)xwindow);
     XSetErrorHandler(oldHandler);
     return;
   }
@@ -1153,7 +1153,7 @@ static GWViewersManager *vwrsmanager = nil;
   XFlush(display);
   XSetErrorHandler(oldHandler);
   
-  NSLog(@"[Animation] Set rect on window %lu (screen origin {%.0f,%.0f}): {%d, %d, %d, %d}", 
+  NSDebugLLog(@"gwspace", @"[Animation] Set rect on window %lu (screen origin {%.0f,%.0f}): {%d, %d, %d, %d}", 
         (unsigned long)xwindow, screenFrame.origin.x, screenFrame.origin.y, x, y, width, height);
 #endif
 }

@@ -83,7 +83,7 @@ static VolumeManager *sharedInstance = nil;
     diskImageMountPoints = [[NSMutableSet alloc] init];
     avfsVirtualPaths = [[NSMutableSet alloc] init];
     fm = [NSFileManager defaultManager];
-    NSLog(@"VolumeManager: Initialized");
+    NSDebugLLog(@"gwspace", @"VolumeManager: Initialized");
   }
   return self;
 }
@@ -126,13 +126,13 @@ static VolumeManager *sharedInstance = nil;
         result = [result stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
         [whichTask release];
         if ([result length] > 0 && [fm fileExistsAtPath:result]) {
-          NSLog(@"VolumeManager: Found %@ at %@", name, result);
+          NSDebugLLog(@"gwspace", @"VolumeManager: Found %@ at %@", name, result);
           return result;
         }
       }
       [whichTask release];
     } @catch (NSException *e) {
-      NSLog(@"VolumeManager: Exception searching for %@: %@", name, e);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Exception searching for %@: %@", name, e);
     }
   }
   
@@ -142,13 +142,13 @@ static VolumeManager *sharedInstance = nil;
     for (NSString *path in searchPaths) {
       NSString *toolPath = [path stringByAppendingPathComponent:name];
       if ([fm fileExistsAtPath:toolPath]) {
-        NSLog(@"VolumeManager: Found %@ at %@ (fallback search)", name, toolPath);
+        NSDebugLLog(@"gwspace", @"VolumeManager: Found %@ at %@ (fallback search)", name, toolPath);
         return toolPath;
       }
     }
   }
   
-  NSLog(@"VolumeManager: Tool %@ not found in PATH or standard locations", toolName);
+  NSDebugLLog(@"gwspace", @"VolumeManager: Tool %@ not found in PATH or standard locations", toolName);
   return nil;
 }
 
@@ -312,7 +312,7 @@ static VolumeManager *sharedInstance = nil;
       NSError *contentsError = nil;
       NSArray *contents = [fm contentsOfDirectoryAtPath:mountPoint error:&contentsError];
       if (!contentsError && [contents count] == 0) {
-        NSLog(@"VolumeManager: Reusing empty directory at %@", mountPoint);
+        NSDebugLLog(@"gwspace", @"VolumeManager: Reusing empty directory at %@", mountPoint);
         return mountPoint;
       }
     }
@@ -322,7 +322,7 @@ static VolumeManager *sharedInstance = nil;
     counter++;
     
     if (counter > 100) {
-      NSLog(@"VolumeManager: Too many mount point attempts");
+      NSDebugLLog(@"gwspace", @"VolumeManager: Too many mount point attempts");
       return nil;
     }
   }
@@ -332,7 +332,7 @@ static VolumeManager *sharedInstance = nil;
      withIntermediateDirectories:YES 
                       attributes:nil 
                            error:&error]) {
-    NSLog(@"VolumeManager: Failed to create mount point: %@", error);
+    NSDebugLLog(@"gwspace", @"VolumeManager: Failed to create mount point: %@", error);
     return nil;
   }
   
@@ -361,7 +361,7 @@ static VolumeManager *sharedInstance = nil;
       NSError *contentsError = nil;
       NSArray *contents = [fm contentsOfDirectoryAtPath:mountPoint error:&contentsError];
       if (!contentsError && [contents count] == 0) {
-        NSLog(@"VolumeManager: Reusing empty directory at %@", mountPoint);
+        NSDebugLLog(@"gwspace", @"VolumeManager: Reusing empty directory at %@", mountPoint);
         return mountPoint;
       }
     }
@@ -380,7 +380,7 @@ static VolumeManager *sharedInstance = nil;
      withIntermediateDirectories:YES 
                       attributes:nil 
                            error:&error]) {
-    NSLog(@"VolumeManager: Failed to create mount point: %@", error);
+    NSDebugLLog(@"gwspace", @"VolumeManager: Failed to create mount point: %@", error);
     return nil;
   }
   
@@ -399,34 +399,34 @@ static VolumeManager *sharedInstance = nil;
     FSNode *vnode = [FSNode nodeWithPath:mountPoint];
     if (vnode) {
       [vnode setMountPoint:YES];
-      NSLog(@"VolumeManager: Marked %@ as mount point", mountPoint);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Marked %@ as mount point", mountPoint);
     }
     
     [[FSNodeRep sharedInstance] addVolumeAt:mountPoint isDiskImage:isDiskImage];
-    NSLog(@"VolumeManager: Registered volume with FSNodeRep (isDiskImage=%d)", isDiskImage);
+    NSDebugLLog(@"gwspace", @"VolumeManager: Registered volume with FSNodeRep (isDiskImage=%d)", isDiskImage);
     
     /* Notify the desktop view directly (critical for volume to appear on desktop) */
     id gworkspace = [Workspace gworkspace];
     if (!gworkspace) {
-      NSLog(@"VolumeManager: WARNING - gworkspace is nil, cannot notify desktop");
+      NSDebugLLog(@"gwspace", @"VolumeManager: WARNING - gworkspace is nil, cannot notify desktop");
     } else {
       id desktopManager = [gworkspace desktopManager];
       if (!desktopManager) {
-        NSLog(@"VolumeManager: WARNING - desktopManager is nil, cannot notify desktop");
+        NSDebugLLog(@"gwspace", @"VolumeManager: WARNING - desktopManager is nil, cannot notify desktop");
       } else {
         id desktopView = [desktopManager desktopView];
         if (!desktopView) {
-          NSLog(@"VolumeManager: WARNING - desktopView is nil");
+          NSDebugLLog(@"gwspace", @"VolumeManager: WARNING - desktopView is nil");
         } else if (![desktopView respondsToSelector:@selector(newVolumeMountedAtPath:)]) {
-          NSLog(@"VolumeManager: WARNING - desktopView does not respond to newVolumeMountedAtPath:");
+          NSDebugLLog(@"gwspace", @"VolumeManager: WARNING - desktopView does not respond to newVolumeMountedAtPath:");
         } else {
           [desktopView newVolumeMountedAtPath: mountPoint];
-          NSLog(@"VolumeManager: Notified desktop view to show mount at %@", mountPoint);
+          NSDebugLLog(@"gwspace", @"VolumeManager: Notified desktop view to show mount at %@", mountPoint);
         }
       }
     }
   } @catch (NSException *e) {
-    NSLog(@"VolumeManager: Error registering volume: %@", e);
+    NSDebugLLog(@"gwspace", @"VolumeManager: Error registering volume: %@", e);
   }
 }
 
@@ -435,7 +435,7 @@ static VolumeManager *sharedInstance = nil;
   NSString *existingMount = [self mountPointForImageFile:dmgPath];
   if (existingMount) {
     if ([self isMountPointActive:existingMount]) {
-      NSLog(@"VolumeManager: DMG already mounted at %@", existingMount);
+      NSDebugLLog(@"gwspace", @"VolumeManager: DMG already mounted at %@", existingMount);
       return existingMount;
     } else {
       [mountedVolumes removeObjectForKey:dmgPath];
@@ -459,7 +459,7 @@ static VolumeManager *sharedInstance = nil;
     return nil;
   }
   
-  NSLog(@"VolumeManager: Mounting DMG %@ at %@", dmgPath, mountPoint);
+  NSDebugLLog(@"gwspace", @"VolumeManager: Mounting DMG %@ at %@", dmgPath, mountPoint);
   
   NSTask *dmgTask = [[NSTask alloc] init];
   NSString *darlingDmgPath = [self findToolInPath:@"darling-dmg" alternativeNames:nil];
@@ -490,7 +490,7 @@ static VolumeManager *sharedInstance = nil;
     if ([self isMountPointActive:mountPoint]) {
       NSString *verifyError = nil;
       if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
-        NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+        NSDebugLLog(@"gwspace", @"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
         if ([dmgTask isRunning]) {
           [dmgTask terminate];
           sleep(1);
@@ -504,7 +504,7 @@ static VolumeManager *sharedInstance = nil;
         return nil;
       }
 
-      NSLog(@"VolumeManager: Successfully mounted DMG at %@ (verified)", mountPoint);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Successfully mounted DMG at %@ (verified)", mountPoint);
       
       [mountedVolumes setObject:mountPoint forKey:dmgPath];
       [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:dmgPath];
@@ -542,7 +542,7 @@ static VolumeManager *sharedInstance = nil;
       if ([allOutput containsString:@"Everything looks OK, disk mounted"] || [self isMountPointActive:mountPoint]) {
         NSString *verifyError = nil;
         if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
-          NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+          NSDebugLLog(@"gwspace", @"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
           if ([dmgTask isRunning]) {
             [dmgTask terminate];
             sleep(1);
@@ -556,7 +556,7 @@ static VolumeManager *sharedInstance = nil;
           return nil;
         }
 
-        NSLog(@"VolumeManager: Successfully mounted DMG at %@ (verified)", mountPoint);
+        NSDebugLLog(@"gwspace", @"VolumeManager: Successfully mounted DMG at %@ (verified)", mountPoint);
         
         [mountedVolumes setObject:mountPoint forKey:dmgPath];
         [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:dmgPath];
@@ -576,7 +576,7 @@ static VolumeManager *sharedInstance = nil;
         return mountPoint;
       }
       
-      NSLog(@"VolumeManager: Failed to mount DMG: %@", allOutput);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Failed to mount DMG: %@", allOutput);
       
       if ([dmgTask isRunning]) {
         [dmgTask terminate];
@@ -593,7 +593,7 @@ static VolumeManager *sharedInstance = nil;
     }
   }
   @catch (NSException *exception) {
-    NSLog(@"VolumeManager: Exception during mount: %@", exception);
+    NSDebugLLog(@"gwspace", @"VolumeManager: Exception during mount: %@", exception);
     [dmgTask release];
     [fm removeItemAtPath:mountPoint error:nil];
     [self showErrorAlert:[NSString stringWithFormat:@"Exception: %@", [exception reason]]];
@@ -606,7 +606,7 @@ static VolumeManager *sharedInstance = nil;
   NSString *existingMount = [self mountPointForImageFile:isoPath];
   if (existingMount) {
     if ([self isMountPointActive:existingMount]) {
-      NSLog(@"VolumeManager: ISO already mounted at %@", existingMount);
+      NSDebugLLog(@"gwspace", @"VolumeManager: ISO already mounted at %@", existingMount);
       return existingMount;
     } else {
       [mountedVolumes removeObjectForKey:isoPath];
@@ -630,7 +630,7 @@ static VolumeManager *sharedInstance = nil;
     return nil;
   }
   
-  NSLog(@"VolumeManager: Mounting ISO %@ at %@", isoPath, mountPoint);
+  NSDebugLLog(@"gwspace", @"VolumeManager: Mounting ISO %@ at %@", isoPath, mountPoint);
   
   NSTask *isoTask = [[NSTask alloc] init];
   NSString *fuseisoPath = [self findToolInPath:@"fuseiso" alternativeNames:nil];
@@ -661,7 +661,7 @@ static VolumeManager *sharedInstance = nil;
     if ([self isMountPointActive:mountPoint]) {
       NSString *verifyError = nil;
       if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
-        NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+        NSDebugLLog(@"gwspace", @"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
         if ([isoTask isRunning]) {
           [isoTask terminate];
           sleep(1);
@@ -675,7 +675,7 @@ static VolumeManager *sharedInstance = nil;
         return nil;
       }
 
-      NSLog(@"VolumeManager: Successfully mounted ISO at %@ (verified)", mountPoint);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Successfully mounted ISO at %@ (verified)", mountPoint);
       
       [mountedVolumes setObject:mountPoint forKey:isoPath];
       [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:isoPath];
@@ -703,7 +703,7 @@ static VolumeManager *sharedInstance = nil;
       if ([self isMountPointActive:mountPoint]) {
         NSString *verifyError = nil;
         if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
-          NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+          NSDebugLLog(@"gwspace", @"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
           if ([isoTask isRunning]) {
             [isoTask terminate];
             sleep(1);
@@ -717,7 +717,7 @@ static VolumeManager *sharedInstance = nil;
           return nil;
         }
 
-        NSLog(@"VolumeManager: Successfully mounted ISO at %@ (verified)", mountPoint);
+        NSDebugLLog(@"gwspace", @"VolumeManager: Successfully mounted ISO at %@ (verified)", mountPoint);
         
         [mountedVolumes setObject:mountPoint forKey:isoPath];
         [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:isoPath];
@@ -738,7 +738,7 @@ static VolumeManager *sharedInstance = nil;
         return mountPoint;
       }
       
-      NSLog(@"VolumeManager: Failed to mount ISO: %@", errString);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Failed to mount ISO: %@", errString);
       
       if ([isoTask isRunning]) {
         [isoTask terminate];
@@ -755,7 +755,7 @@ static VolumeManager *sharedInstance = nil;
     }
   }
   @catch (NSException *exception) {
-    NSLog(@"VolumeManager: Exception: %@", exception);
+    NSDebugLLog(@"gwspace", @"VolumeManager: Exception: %@", exception);
     [isoTask release];
     [fm removeItemAtPath:mountPoint error:nil];
     [self showErrorAlert:[NSString stringWithFormat:@"Exception: %@", [exception reason]]];
@@ -777,7 +777,7 @@ static VolumeManager *sharedInstance = nil;
 
   NSString *existingMount = [self mountPointForImageFile:imagePath];
   if (existingMount && [self isMountPointActive:existingMount]) {
-    NSLog(@"VolumeManager: Image already mounted at %@", existingMount);
+    NSDebugLLog(@"gwspace", @"VolumeManager: Image already mounted at %@", existingMount);
     return existingMount;
   }
 
@@ -799,7 +799,7 @@ static VolumeManager *sharedInstance = nil;
     return nil;
   }
 
-  NSLog(@"VolumeManager: Mounting %@ image at %@", extension, mountPoint);
+  NSDebugLLog(@"gwspace", @"VolumeManager: Mounting %@ image at %@", extension, mountPoint);
 
   NSTask *fuseTask = [[NSTask alloc] init];
   NSString *toolPath = isSquashFS
@@ -832,7 +832,7 @@ static VolumeManager *sharedInstance = nil;
     if ([self isMountPointActive:mountPoint]) {
       NSString *verifyError = nil;
       if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
-        NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+        NSDebugLLog(@"gwspace", @"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
         if ([fuseTask isRunning]) {
           [fuseTask terminate];
           sleep(1);
@@ -846,7 +846,7 @@ static VolumeManager *sharedInstance = nil;
         return nil;
       }
 
-      NSLog(@"VolumeManager: Successfully mounted at %@ (verified)", mountPoint);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Successfully mounted at %@ (verified)", mountPoint);
       
       [mountedVolumes setObject:mountPoint forKey:imagePath];
       [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:imagePath];
@@ -876,7 +876,7 @@ static VolumeManager *sharedInstance = nil;
     if ([self isMountPointActive:mountPoint]) {
       NSString *verifyError = nil;
       if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
-        NSLog(@"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+        NSDebugLLog(@"gwspace", @"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
         if ([fuseTask isRunning]) {
           [fuseTask terminate];
           sleep(1);
@@ -890,7 +890,7 @@ static VolumeManager *sharedInstance = nil;
         return nil;
       }
 
-      NSLog(@"VolumeManager: Mounted (verified)");
+      NSDebugLLog(@"gwspace", @"VolumeManager: Mounted (verified)");
       
       [mountedVolumes setObject:mountPoint forKey:imagePath];
       [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:imagePath];
@@ -943,15 +943,15 @@ static VolumeManager *sharedInstance = nil;
 
 - (BOOL)unmountPath:(NSString *)mountPath
 {
-  NSLog(@"VolumeManager: ===== BEGIN UNMOUNT ATTEMPT for %@ =====", mountPath);
+  NSDebugLLog(@"gwspace", @"VolumeManager: ===== BEGIN UNMOUNT ATTEMPT for %@ =====", mountPath);
   
   if (!mountPath) {
-    NSLog(@"VolumeManager: ERROR - mountPath is nil");
+    NSDebugLLog(@"gwspace", @"VolumeManager: ERROR - mountPath is nil");
     return NO;
   }
   
-  NSLog(@"VolumeManager: Current mounted volumes: %@", mountedVolumes);
-  NSLog(@"VolumeManager: Current PIDs: %@", mountedVolumesPIDs);
+  NSDebugLLog(@"gwspace", @"VolumeManager: Current mounted volumes: %@", mountedVolumes);
+  NSDebugLLog(@"gwspace", @"VolumeManager: Current PIDs: %@", mountedVolumesPIDs);
   
   /* Send will-unmount notification to grey out desktop icon */
   NSString *parent = [mountPath stringByDeletingLastPathComponent];
@@ -962,39 +962,39 @@ static VolumeManager *sharedInstance = nil;
                   object:[NSWorkspace sharedWorkspace]
                 userInfo:unmountInfo];
   
-  NSLog(@"VolumeManager: Sent will unmount notification for %@", mountPath);
+  NSDebugLLog(@"gwspace", @"VolumeManager: Sent will unmount notification for %@", mountPath);
   
   /* Use GWUnmountHelper which properly handles sudo for unmounting */
-  NSLog(@"VolumeManager: Using GWUnmountHelper to unmount with proper permissions...");
+  NSDebugLLog(@"gwspace", @"VolumeManager: Using GWUnmountHelper to unmount with proper permissions...");
   BOOL unmountSuccess = [GWUnmountHelper unmountPath:mountPath eject:NO];
   
   if (unmountSuccess) {
-    NSLog(@"VolumeManager: GWUnmountHelper successfully unmounted %@", mountPath);
+    NSDebugLLog(@"gwspace", @"VolumeManager: GWUnmountHelper successfully unmounted %@", mountPath);
   } else {
-    NSLog(@"VolumeManager: GWUnmountHelper failed to unmount %@", mountPath);
+    NSDebugLLog(@"gwspace", @"VolumeManager: GWUnmountHelper failed to unmount %@", mountPath);
   }
   
   /* Find the tracked volume for cleanup */
-  NSLog(@"VolumeManager: Searching for mount point in tracked volumes...");
+  NSDebugLLog(@"gwspace", @"VolumeManager: Searching for mount point in tracked volumes...");
   NSString *foundKey = nil;
   for (NSString *key in [mountedVolumes allKeys]) {
     if ([[mountedVolumes objectForKey:key] isEqualToString:mountPath]) {
       foundKey = key;
-      NSLog(@"VolumeManager: Found tracked volume: %@", key);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Found tracked volume: %@", key);
       break;
     }
   }
   
   /* Kill process as last resort if proper unmount failed */
   if (!unmountSuccess && foundKey) {
-    NSLog(@"VolumeManager: Proper unmount failed, attempting to kill FUSE process as fallback...");
+    NSDebugLLog(@"gwspace", @"VolumeManager: Proper unmount failed, attempting to kill FUSE process as fallback...");
     NSNumber *pidNumber = [mountedVolumesPIDs objectForKey:foundKey];
     if (pidNumber) {
       int pid = [pidNumber intValue];
-      NSLog(@"VolumeManager: Found PID %d for mount, sending SIGKILL", pid);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Found PID %d for mount, sending SIGKILL", pid);
       
       if (kill(pid, SIGKILL) == 0) {
-        NSLog(@"VolumeManager: Successfully sent SIGKILL to process %d, waiting for cleanup...", pid);
+        NSDebugLLog(@"gwspace", @"VolumeManager: Successfully sent SIGKILL to process %d, waiting for cleanup...", pid);
         /* Brief wait for process to die, but non-blocking approach */
         int waitCount = 0;
         while (waitCount < 20 && kill(pid, 0) == 0) {
@@ -1002,43 +1002,43 @@ static VolumeManager *sharedInstance = nil;
           waitCount++;
         }
         if (kill(pid, 0) != 0) {
-          NSLog(@"VolumeManager: Process %d terminated after %d attempts", pid, waitCount);
+          NSDebugLLog(@"gwspace", @"VolumeManager: Process %d terminated after %d attempts", pid, waitCount);
           unmountSuccess = YES;
         } else {
-          NSLog(@"VolumeManager: WARNING - Process %d still alive after SIGKILL", pid);
+          NSDebugLLog(@"gwspace", @"VolumeManager: WARNING - Process %d still alive after SIGKILL", pid);
         }
       } else {
         int killError = errno;
         if (killError == ESRCH) {
-          NSLog(@"VolumeManager: Process %d no longer exists (ESRCH)", pid);
+          NSDebugLLog(@"gwspace", @"VolumeManager: Process %d no longer exists (ESRCH)", pid);
           unmountSuccess = YES;
         } else {
-          NSLog(@"VolumeManager: ERROR - Failed to send SIGKILL to process %d: %s", pid, strerror(killError));
+          NSDebugLLog(@"gwspace", @"VolumeManager: ERROR - Failed to send SIGKILL to process %d: %s", pid, strerror(killError));
         }
       }
     } else {
-      NSLog(@"VolumeManager: WARNING - No PID found for tracked volume %@", foundKey);
+      NSDebugLLog(@"gwspace", @"VolumeManager: WARNING - No PID found for tracked volume %@", foundKey);
     }
   } else if (!foundKey) {
-    NSLog(@"VolumeManager: WARNING - Mount point %@ not found in tracked volumes", mountPath);
+    NSDebugLLog(@"gwspace", @"VolumeManager: WARNING - Mount point %@ not found in tracked volumes", mountPath);
   }
   
   if (!unmountSuccess) {
-    NSLog(@"VolumeManager: All unmount attempts failed");
+    NSDebugLLog(@"gwspace", @"VolumeManager: All unmount attempts failed");
   }
   
   if (unmountSuccess) {
-    NSLog(@"VolumeManager: Unmount successful, cleaning up tracking data...");
+    NSDebugLLog(@"gwspace", @"VolumeManager: Unmount successful, cleaning up tracking data...");
     /* Clean up tracking data */
     if (foundKey) {
-      NSLog(@"VolumeManager: Removing tracking for key: %@", foundKey);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Removing tracking for key: %@", foundKey);
       [mountedVolumes removeObjectForKey:foundKey];
       [mountedVolumesPIDs removeObjectForKey:foundKey];
     }
     @synchronized(self) {
       [diskImageMountPoints removeObject:mountPath];
     }
-    NSLog(@"VolumeManager: Tracking data cleaned up");
+    NSDebugLLog(@"gwspace", @"VolumeManager: Tracking data cleaned up");
     
     /* Clear FSNode/FSNodeRep state */
     @try {
@@ -1048,7 +1048,7 @@ static VolumeManager *sharedInstance = nil;
       }
       [[FSNodeRep sharedInstance] removeVolumeAt:mountPath];
     } @catch (NSException *e) {
-      NSLog(@"VolumeManager: Error clearing volume info: %@", e);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Error clearing volume info: %@", e);
     }
     
     /* Attempt to remove empty mount directory (non-recursively) */
@@ -1058,30 +1058,30 @@ static VolumeManager *sharedInstance = nil;
       NSArray *contents = [fm contentsOfDirectoryAtPath:mountPath error:&contentsErr];
       
       if (contentsErr) {
-        NSLog(@"VolumeManager: Could not read mount point contents %@: %@", mountPath, contentsErr);
+        NSDebugLLog(@"gwspace", @"VolumeManager: Could not read mount point contents %@: %@", mountPath, contentsErr);
         /* Try to remove anyway - might be already unmounted */
         if (rmdir([mountPath fileSystemRepresentation]) == 0) {
-          NSLog(@"VolumeManager: Successfully removed mount point");
+          NSDebugLLog(@"gwspace", @"VolumeManager: Successfully removed mount point");
           directoryRemoved = YES;
         }
       } else if (contents && [contents count] == 0) {
         if (rmdir([mountPath fileSystemRepresentation]) == 0) {
-          NSLog(@"VolumeManager: Removed empty mount point %@", mountPath);
+          NSDebugLLog(@"gwspace", @"VolumeManager: Removed empty mount point %@", mountPath);
           directoryRemoved = YES;
         } else {
-          NSLog(@"VolumeManager: Failed to remove mount point %@ (rmdir): %s", mountPath, strerror(errno));
+          NSDebugLLog(@"gwspace", @"VolumeManager: Failed to remove mount point %@ (rmdir): %s", mountPath, strerror(errno));
         }
       } else {
-        NSLog(@"VolumeManager: Mount point %@ not empty (%lu items), unmount may have failed",
+        NSDebugLLog(@"gwspace", @"VolumeManager: Mount point %@ not empty (%lu items), unmount may have failed",
               mountPath, (unsigned long)[contents count]);
       }
     } @catch (NSException *e) {
-      NSLog(@"VolumeManager: Exception checking/removing mount point %@: %@", mountPath, e);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Exception checking/removing mount point %@: %@", mountPath, e);
     }
     
     /* Only remove desktop icon AFTER directory successfully removed */
     if (directoryRemoved) {
-      NSLog(@"VolumeManager: Directory removed successfully, notifying desktop to remove icon for %@", mountPath);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Directory removed successfully, notifying desktop to remove icon for %@", mountPath);
       
       /* Post NSWorkspaceDidUnmountNotification so other components can react */
       NSDictionary *unmountedInfo = @{ @"NSDevicePath": mountPath };
@@ -1089,7 +1089,7 @@ static VolumeManager *sharedInstance = nil;
         postNotificationName:NSWorkspaceDidUnmountNotification
                       object:[NSWorkspace sharedWorkspace]
                     userInfo:unmountedInfo];
-      NSLog(@"VolumeManager: Posted NSWorkspaceDidUnmountNotification for %@", mountPath);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Posted NSWorkspaceDidUnmountNotification for %@", mountPath);
       
       NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
                                 @"source": parent,
@@ -1109,26 +1109,26 @@ static VolumeManager *sharedInstance = nil;
           if (desktopView && [desktopView respondsToSelector:@selector(workspaceDidUnmountVolumeAtPath:)]) {
             @try {
               [desktopView workspaceDidUnmountVolumeAtPath:mountPath];
-              NSLog(@"VolumeManager: Notified desktop view to remove mount at %@", mountPath);
+              NSDebugLLog(@"gwspace", @"VolumeManager: Notified desktop view to remove mount at %@", mountPath);
             } @catch (NSException *e) {
-              NSLog(@"VolumeManager: Exception notifying desktop: %@", e);
+              NSDebugLLog(@"gwspace", @"VolumeManager: Exception notifying desktop: %@", e);
             }
           }
         }
       }
     } else {
-      NSLog(@"VolumeManager: Mount point not removed, keeping desktop icon for %@", mountPath);
+      NSDebugLLog(@"gwspace", @"VolumeManager: Mount point not removed, keeping desktop icon for %@", mountPath);
     }
     
     if (directoryRemoved) {
-      NSLog(@"VolumeManager: ===== UNMOUNT COMPLETED SUCCESSFULLY for %@ =====", mountPath);
+      NSDebugLLog(@"gwspace", @"VolumeManager: ===== UNMOUNT COMPLETED SUCCESSFULLY for %@ =====", mountPath);
       return YES;
     } else {
-      NSLog(@"VolumeManager: ===== UNMOUNT FAILED - directory not removed for %@ =====", mountPath);
+      NSDebugLLog(@"gwspace", @"VolumeManager: ===== UNMOUNT FAILED - directory not removed for %@ =====", mountPath);
       return NO;
     }
   } else {
-    NSLog(@"VolumeManager: ===== UNMOUNT FAILED for %@ =====", mountPath);
+    NSDebugLLog(@"gwspace", @"VolumeManager: ===== UNMOUNT FAILED for %@ =====", mountPath);
   }
   
   return NO;
@@ -1157,13 +1157,13 @@ static VolumeManager *sharedInstance = nil;
 - (NSString *)openAvfsArchive:(NSString *)archivePath
 {
   if (!archivePath || [archivePath length] == 0) {
-    NSLog(@"VolumeManager: No archive path provided");
+    NSDebugLLog(@"gwspace", @"VolumeManager: No archive path provided");
     return nil;
   }
   
   /* Check if file exists */
   if (![fm fileExistsAtPath:archivePath]) {
-    NSLog(@"VolumeManager: Archive file not found: %@", archivePath);
+    NSDebugLLog(@"gwspace", @"VolumeManager: Archive file not found: %@", archivePath);
     [self showErrorAlert:[NSString stringWithFormat:@"File not found: %@", archivePath]];
     return nil;
   }
@@ -1172,7 +1172,7 @@ static VolumeManager *sharedInstance = nil;
   
   /* Check if AVFS can handle this file type */
   if (![avfs canHandleFile:archivePath]) {
-    NSLog(@"VolumeManager: File type not supported by AVFS: %@", archivePath);
+    NSDebugLLog(@"gwspace", @"VolumeManager: File type not supported by AVFS: %@", archivePath);
     return nil;
   }
   
@@ -1182,19 +1182,19 @@ static VolumeManager *sharedInstance = nil;
     return nil;
   }
   
-  NSLog(@"VolumeManager: Opening archive via AVFS: %@", archivePath);
+  NSDebugLLog(@"gwspace", @"VolumeManager: Opening archive via AVFS: %@", archivePath);
   
   /* Get the virtual path for the archive */
   AVFSMountResult *result = [avfs virtualPathForFile:archivePath];
   
   if (!result.success) {
-    NSLog(@"VolumeManager: AVFS failed to open archive: %@", result.errorMessage);
+    NSDebugLLog(@"gwspace", @"VolumeManager: AVFS failed to open archive: %@", result.errorMessage);
     [self showErrorAlert:[NSString stringWithFormat:@"Failed to open archive:\n%@", result.errorMessage]];
     return nil;
   }
   
   NSString *virtualPath = result.virtualPath;
-  NSLog(@"VolumeManager: AVFS virtual path: %@", virtualPath);
+  NSDebugLLog(@"gwspace", @"VolumeManager: AVFS virtual path: %@", virtualPath);
   
   /* Track this virtual path */
   @synchronized(self) {

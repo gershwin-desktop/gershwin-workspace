@@ -833,12 +833,12 @@ NSString *_pendingSystemActionTitle = nil;
     
   dtopManager = [GWDesktopManager desktopManager];
     
-  NSLog(@"DEBUG: Workspace init - no_desktop setting: %d", [defaults boolForKey: @"no_desktop"]);
+  NSDebugLLog(@"gwspace", @"DEBUG: Workspace init - no_desktop setting: %d", [defaults boolForKey: @"no_desktop"]);
   if ([defaults boolForKey: @"no_desktop"] == NO)
   { 
-    NSLog(@"DEBUG: Workspace calling activateDesktop");
+    NSDebugLLog(@"gwspace", @"DEBUG: Workspace calling activateDesktop");
     [dtopManager activateDesktop];
-    NSLog(@"DEBUG: Workspace activateDesktop returned");
+    NSDebugLLog(@"gwspace", @"DEBUG: Workspace activateDesktop returned");
 
   }
 
@@ -895,7 +895,7 @@ NSString *_pendingSystemActionTitle = nil;
     }
   NS_HANDLER
     {
-      NSLog(@"setServicesProvider: %@", localException);
+      NSDebugLLog(@"gwspace", @"setServicesProvider: %@", localException);
     }
   NS_ENDHANDLER
 
@@ -950,23 +950,23 @@ NSString *_pendingSystemActionTitle = nil;
   if ([dtopManager isActive]) {
     globalShortcutsManager = [[GSGlobalShortcutsManager sharedManager] retain];
     if (![globalShortcutsManager startWithVerbose:YES]) {  // Enable verbose for debugging
-      NSLog(@"Workspace: Warning - Global shortcuts manager failed to start");
+      NSDebugLLog(@"gwspace", @"Workspace: Warning - Global shortcuts manager failed to start");
       DESTROY(globalShortcutsManager);
     } else {
-      NSLog(@"Workspace: Global shortcuts manager started successfully");
+      NSDebugLLog(@"gwspace", @"Workspace: Global shortcuts manager started successfully");
     }
   } else {
-    NSLog(@"Workspace: Not the desktop instance - global shortcuts disabled");
+    NSDebugLLog(@"gwspace", @"Workspace: Not the desktop instance - global shortcuts disabled");
   }
   
 #if HAVE_DBUS
   // Initialize and register the FileManager DBus interface
   fileManagerDBusInterface = [[FileManagerDBusInterface alloc] initWithWorkspace:self];
   if (![fileManagerDBusInterface registerOnDBus]) {
-    NSLog(@"Workspace: Warning - Failed to register FileManager DBus interface");
+    NSDebugLLog(@"gwspace", @"Workspace: Warning - Failed to register FileManager DBus interface");
     DESTROY(fileManagerDBusInterface);
   } else {
-    NSLog(@"Workspace: FileManager DBus interface registered successfully");
+    NSDebugLLog(@"gwspace", @"Workspace: FileManager DBus interface registered successfully");
     
     // Set up D-Bus file descriptor monitoring for asynchronous message handling
     // This ensures FileManager1 receives messages immediately without blocking
@@ -979,12 +979,12 @@ NSString *_pendingSystemActionTitle = nil;
                                                    name:NSFileHandleDataAvailableNotification
                                                  object:dbusFileHandle];
         [dbusFileHandle waitForDataInBackgroundAndNotify];
-        NSLog(@"Workspace: D-Bus file descriptor monitoring enabled (fd: %d)", dbusFd);
+        NSDebugLLog(@"gwspace", @"Workspace: D-Bus file descriptor monitoring enabled (fd: %d)", dbusFd);
       } else {
-        NSLog(@"Workspace: Warning - Failed to create NSFileHandle for D-Bus fd");
+        NSDebugLLog(@"gwspace", @"Workspace: Warning - Failed to create NSFileHandle for D-Bus fd");
       }
     } else {
-      NSLog(@"Workspace: Warning - Failed to get D-Bus file descriptor");
+      NSDebugLLog(@"gwspace", @"Workspace: Warning - Failed to get D-Bus file descriptor");
     }
   }
 #endif
@@ -1053,7 +1053,7 @@ NSString *_pendingSystemActionTitle = nil;
           NS_DURING
             [fswatcher unregisterClient: (id <FSWClientProtocol>)self];  
           NS_HANDLER
-            NSLog(@"[Workspace shouldTerminateApplication] unregister fswatcher: %@", [localException description]);
+            NSDebugLLog(@"gwspace", @"[Workspace shouldTerminateApplication] unregister fswatcher: %@", [localException description]);
           NS_ENDHANDLER
           DESTROY (fswatcher);
         }
@@ -1177,7 +1177,7 @@ NSString *_pendingSystemActionTitle = nil;
   FSNode *targetNode = [FSNode nodeWithPath: path];
   int defaultType = [self defaultViewerType];
 
-  NSLog(@"newViewerAtPath: %@ using default viewer type: %d", path, defaultType);
+  NSDebugLLog(@"gwspace", @"newViewerAtPath: %@ using default viewer type: %d", path, defaultType);
 
   if (defaultType == SPATIAL) {
     [vwrsManager viewerOfType: SPATIAL
@@ -1392,7 +1392,7 @@ NSString *_pendingSystemActionTitle = nil;
   [defaults setObject: [NSNumber numberWithInt: type] forKey: @"defaultViewerType"];
   [defaults synchronize];
 
-  NSLog(@"Default viewer type set to: %d (%@)", type,
+  NSDebugLLog(@"gwspace", @"Default viewer type set to: %d (%@)", type,
         (type == SPATIAL) ? @"Spatial" : @"Browsing");
 }
 
@@ -1670,49 +1670,49 @@ NSString *_pendingSystemActionTitle = nil;
   BOOL success;
   NSURL *aURL;
 
-  NSLog(@"Workspace openFile: called with path: %@", fullPath);
+  NSDebugLLog(@"gwspace", @"Workspace openFile: called with path: %@", fullPath);
 
   /* Early ELF detection: catch executables regardless of the reported type
      so we can prompt the user before any external app (like TextEdit)
      opens the file. This mirrors the later ELF handling but runs first. */
   {
     NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
-    NSLog(@"Workspace openFile: ELF detection - trying to open file handle");
+    NSDebugLLog(@"gwspace", @"Workspace openFile: ELF detection - trying to open file handle");
     if (fh) {
       NSData *hdr = [fh readDataOfLength:4];
-      NSLog(@"Workspace openFile: ELF detection - read %lu bytes", (unsigned long)[hdr length]);
+      NSDebugLLog(@"gwspace", @"Workspace openFile: ELF detection - read %lu bytes", (unsigned long)[hdr length]);
       [fh closeFile];
       const unsigned char *bytes = (const unsigned char *)[hdr bytes];
       if ([hdr length] >= 4 && bytes[0] == 0x7f && bytes[1] == 'E' && bytes[2] == 'L' && bytes[3] == 'F') {
-        NSLog(@"Workspace openFile: ELF magic detected!");
+        NSDebugLLog(@"gwspace", @"Workspace openFile: ELF magic detected!");
         NSError *err = nil;
         NSDictionary *attrs = [fm attributesOfItemAtPath: fullPath error: &err];
         if (attrs) {
           NSNumber *permNum = [attrs objectForKey: NSFilePosixPermissions];
           unsigned short perms = [permNum unsignedShortValue];
-          NSLog(@"Workspace openFile: File permissions: 0o%o, owner-exec bit set: %s", perms, (perms & S_IXUSR) ? "YES" : "NO");
+          NSDebugLLog(@"gwspace", @"Workspace openFile: File permissions: 0o%o, owner-exec bit set: %s", perms, (perms & S_IXUSR) ? "YES" : "NO");
           if ((perms & S_IXUSR) != 0) {
             /* Already executable - launch directly without prompting */
-            NSLog(@"Workspace openFile: ELF is already executable, launching directly");
+            NSDebugLLog(@"gwspace", @"Workspace openFile: ELF is already executable, launching directly");
             [self launchElfAndMonitor: fullPath];
             return YES;
           } else {
             /* Not executable - ask user to trust */
-            NSLog(@"Workspace openFile: Owner-exec bit not set, showing trust prompt");
+            NSDebugLLog(@"gwspace", @"Workspace openFile: Owner-exec bit not set, showing trust prompt");
             NSAlert *alert = [[[NSAlert alloc] init] autorelease];
             [alert setMessageText: @"Trust This Application?"];
             [alert setInformativeText: [NSString stringWithFormat: @"Do you want to trust and run the application \"%@\"?", [fullPath lastPathComponent]]];
             [alert addButtonWithTitle: @"Cancel"];
             [alert addButtonWithTitle: @"Trust and Run"];
             NSInteger resp = [alert runModal];
-            NSLog(@"Workspace openFile: User response to trust prompt: %ld (2=Trust, 1=Cancel)", (long)resp);
+            NSDebugLLog(@"gwspace", @"Workspace openFile: User response to trust prompt: %ld (2=Trust, 1=Cancel)", (long)resp);
             if (resp == NSAlertSecondButtonReturn) {
               unsigned short newPerms = perms | S_IXUSR | S_IXGRP | S_IXOTH;
               NSDictionary *newAttrs = [NSDictionary dictionaryWithObject: [NSNumber numberWithUnsignedShort: newPerms]
                                                                    forKey: NSFilePosixPermissions];
               NSError *err2 = nil;
               BOOL ok = [fm setAttributes: newAttrs ofItemAtPath: fullPath error: &err2];
-              NSLog(@"Workspace openFile: Set permissions result: %s", ok ? "success" : "failed");
+              NSDebugLLog(@"gwspace", @"Workspace openFile: Set permissions result: %s", ok ? "success" : "failed");
               if (!ok) {
                 NSAlert *errAlert = [[[NSAlert alloc] init] autorelease];
                 [errAlert setMessageText: @"Error"];
@@ -1722,11 +1722,11 @@ NSString *_pendingSystemActionTitle = nil;
                 return NO;
               }
 
-              NSLog(@"Workspace openFile: Launching ELF and monitoring");
+              NSDebugLLog(@"gwspace", @"Workspace openFile: Launching ELF and monitoring");
               [self launchElfAndMonitor: fullPath];
               return YES;
             } else {
-              NSLog(@"Workspace openFile: User declined to trust executable");
+              NSDebugLLog(@"gwspace", @"Workspace openFile: User declined to trust executable");
               return NO;
             }
           }
@@ -1765,7 +1765,7 @@ NSString *_pendingSystemActionTitle = nil;
   }
 
   if (handleAsNetwork) {
-    NSLog(@"Workspace openFile: detected network path");
+    NSDebugLLog(@"gwspace", @"Workspace openFile: detected network path");
 
     /* For network paths, we need to create the appropriate NetworkFSNode */
     NetworkFSNode *networkNode = nil;
@@ -1773,11 +1773,11 @@ NSString *_pendingSystemActionTitle = nil;
     if ([fullPath isEqualToString:NetworkVirtualPath]) {
       /* This is the /Network root */
       networkNode = [NetworkFSNode networkRootNode];
-      NSLog(@"Workspace openFile: created network root node");
+      NSDebugLLog(@"gwspace", @"Workspace openFile: created network root node");
     } else {
       /* This is a service under /Network - need to find the service item */
       NSString *serviceName = [fullPath lastPathComponent];
-      NSLog(@"Workspace openFile: looking for service: %@", serviceName);
+      NSDebugLLog(@"gwspace", @"Workspace openFile: looking for service: %@", serviceName);
       
       NetworkServiceManager *manager = [NetworkServiceManager sharedManager];
       NSArray *services = [manager allServices];
@@ -1785,22 +1785,22 @@ NSString *_pendingSystemActionTitle = nil;
       for (NetworkServiceItem *item in services) {
         if ([[item displayName] isEqualToString:serviceName]) {
           networkNode = [NetworkFSNode nodeWithServiceItem:item];
-          NSLog(@"Workspace openFile: found matching service, created node");
+          NSDebugLLog(@"gwspace", @"Workspace openFile: found matching service, created node");
           break;
         }
       }
       
       if (!networkNode) {
-        NSLog(@"Workspace openFile: could not find service item for: %@", serviceName);
+        NSDebugLLog(@"gwspace", @"Workspace openFile: could not find service item for: %@", serviceName);
         return NO;
       }
     }
     
-    NSLog(@"Workspace openFile: networkNode: %@ (class: %@)", networkNode, [networkNode class]);
-    NSLog(@"Workspace openFile: networkNode: %@ (class: %@)", networkNode, [networkNode class]);
+    NSDebugLLog(@"gwspace", @"Workspace openFile: networkNode: %@ (class: %@)", networkNode, [networkNode class]);
+    NSDebugLLog(@"gwspace", @"Workspace openFile: networkNode: %@ (class: %@)", networkNode, [networkNode class]);
     
     if ([networkNode isNetworkService]) {
-      NSLog(@"Workspace openFile: node is a network service, attempting to open/mount");
+      NSDebugLLog(@"gwspace", @"Workspace openFile: node is a network service, attempting to open/mount");
       /* This is a network service item - try to open/mount it */
       NSString *mountPoint = nil;
       
@@ -1810,7 +1810,7 @@ NSString *_pendingSystemActionTitle = nil;
         }
       NS_HANDLER
         {
-          NSLog(@"Workspace openFile: Exception during openNetworkService: %@", localException);
+          NSDebugLLog(@"gwspace", @"Workspace openFile: Exception during openNetworkService: %@", localException);
           NSRunAlertPanel(NSLocalizedString(@"error", @""), 
               [NSString stringWithFormat: @"Error mounting network service: %@", 
                [localException reason]],
@@ -1821,7 +1821,7 @@ NSString *_pendingSystemActionTitle = nil;
         }
       NS_ENDHANDLER
       
-      NSLog(@"Workspace openFile: openNetworkService returned: %@", mountPoint);
+      NSDebugLLog(@"gwspace", @"Workspace openFile: openNetworkService returned: %@", mountPoint);
         
         if (mountPoint) {
           /* Successfully mounted - show viewer at mount point */
@@ -1831,21 +1831,21 @@ NSString *_pendingSystemActionTitle = nil;
         /* If mount failed, openNetworkService already showed an error */
         return NO;
       } else if ([networkNode isNetworkRoot]) {
-        NSLog(@"Workspace openFile: node is network root, opening viewer");
+        NSDebugLLog(@"gwspace", @"Workspace openFile: node is network root, opening viewer");
         /* This is the /Network root - just open a viewer */
         [self newViewerAtPath:fullPath];
         return YES;
       } else {
-        NSLog(@"Workspace openFile: NetworkFSNode but not service or root");
+        NSDebugLLog(@"gwspace", @"Workspace openFile: NetworkFSNode but not service or root");
       }
   } else {
-    NSLog(@"Workspace openFile: NOT a network path");
+    NSDebugLLog(@"gwspace", @"Workspace openFile: NOT a network path");
   }
 
   /* Check if this is a disk image file */
   NSString *ext = [[fullPath pathExtension] lowercaseString];
   if ([ext isEqualToString:@"dmg"]) {
-    NSLog(@"Workspace: Mounting DMG file: %@", fullPath);
+    NSDebugLLog(@"gwspace", @"Workspace: Mounting DMG file: %@", fullPath);
     VolumeManager *volMgr = [VolumeManager sharedManager];
     NSString *mountPoint = [volMgr mountDMGFile:fullPath];
     if (mountPoint) {
@@ -1860,7 +1860,7 @@ NSString *_pendingSystemActionTitle = nil;
              [ext isEqualToString:@"mdf"] ||
              [ext isEqualToString:@"squashfs"] || [ext isEqualToString:@"sqsh"] ||
              [ext isEqualToString:@"sfs"]) {
-    NSLog(@"Workspace: Mounting disk image file: %@", fullPath);
+    NSDebugLLog(@"gwspace", @"Workspace: Mounting disk image file: %@", fullPath);
     VolumeManager *volMgr = [VolumeManager sharedManager];
     NSString *mountPoint = [volMgr mountFuseisoImage:fullPath];
     if (mountPoint) {
@@ -1881,7 +1881,7 @@ NSString *_pendingSystemActionTitle = nil;
    */
   VolumeManager *volMgr = [VolumeManager sharedManager];
   if ([volMgr isAvfsSupportedFile:fullPath]) {
-    NSLog(@"Workspace: Opening archive via AVFS: %@", fullPath);
+    NSDebugLLog(@"gwspace", @"Workspace: Opening archive via AVFS: %@", fullPath);
     NSString *virtualPath = [volMgr openAvfsArchive:fullPath];
     if (virtualPath) {
       /* Wait briefly for AVFS to process the archive */
@@ -1890,7 +1890,7 @@ NSString *_pendingSystemActionTitle = nil;
       return YES;
     }
     /* If AVFS failed, fall through to try opening with an application */
-    NSLog(@"Workspace: AVFS failed, falling through to application handler");
+    NSDebugLLog(@"gwspace", @"Workspace: AVFS failed, falling through to application handler");
   }
 
   aURL = nil;
@@ -2213,14 +2213,14 @@ NSString *_pendingSystemActionTitle = nil;
 {
   NSWindow *kwin = [NSApp keyWindow];
   
-  NSLog(@"Workspace performClose: called, keyWindow=%@", kwin);
+  NSDebugLLog(@"gwspace", @"Workspace performClose: called, keyWindow=%@", kwin);
   
   if (kwin) {
-    NSLog(@"Workspace performClose: calling performClose on window: %@ (class=%@)", 
+    NSDebugLLog(@"gwspace", @"Workspace performClose: calling performClose on window: %@ (class=%@)", 
           [kwin title], [kwin className]);
     [kwin performClose: sender];
   } else {
-    NSLog(@"Workspace performClose: no key window!");
+    NSDebugLLog(@"gwspace", @"Workspace performClose: no key window!");
   }
 }
 
@@ -2509,7 +2509,7 @@ NSString *_pendingSystemActionTitle = nil;
                 isGlobalWatcher: NO];
     } else {
       fswnotifications = NO;
-      NSLog(@"Workspace: unable to contact fswatcher; notifications disabled");
+      NSDebugLLog(@"gwspace", @"Workspace: unable to contact fswatcher; notifications disabled");
     }
   }
 }
@@ -2528,12 +2528,12 @@ NSString *_pendingSystemActionTitle = nil;
     fswatcher = nil;
   } else if (fswatcher) {
     /* Mismatch or fswatcher already released; clean up anyway */
-    NSLog(@"fswatcherConnectionDidDie: connection mismatch or stale proxy");
+    NSDebugLLog(@"gwspace", @"fswatcherConnectionDidDie: connection mismatch or stale proxy");
     RELEASE (fswatcher);
     fswatcher = nil;
   } else {
     /* fswatcher already nil; connection died notification is stale */
-    NSLog(@"fswatcherConnectionDidDie: fswatcher already nil, ignoring stale notification");
+    NSDebugLLog(@"gwspace", @"fswatcherConnectionDidDie: fswatcher already nil, ignoring stale notification");
     return;
   }
 
@@ -2574,17 +2574,17 @@ NSString *_pendingSystemActionTitle = nil;
   NSDictionary *info = [NSUnarchiver unarchiveObjectWithData: dirinfo];
   NSString *event = [info objectForKey: @"event"];
 
-  NSLog(@"DEBUG: Workspace watchedPathDidChange called");
-  NSLog(@"DEBUG: event = %@", event);
-  NSLog(@"DEBUG: path = %@", [info objectForKey: @"path"]);
-  NSLog(@"DEBUG: files = %@", [info objectForKey: @"files"]);
+  NSDebugLLog(@"gwspace", @"DEBUG: Workspace watchedPathDidChange called");
+  NSDebugLLog(@"gwspace", @"DEBUG: event = %@", event);
+  NSDebugLLog(@"gwspace", @"DEBUG: path = %@", [info objectForKey: @"path"]);
+  NSDebugLLog(@"gwspace", @"DEBUG: files = %@", [info objectForKey: @"files"]);
 
   if ([event isEqual: @"GWFileDeletedInWatchedDirectory"]
             || [event isEqual: @"GWFileCreatedInWatchedDirectory"]) {
     NSString *path = [info objectForKey: @"path"];
 
     if ([path isEqual: trashPath]) {
-      NSLog(@"DEBUG: Trash path changed, updating trash contents");
+      NSDebugLLog(@"gwspace", @"DEBUG: Trash path changed, updating trash contents");
       [self _updateTrashContents];
     }
 
@@ -2596,7 +2596,7 @@ NSString *_pendingSystemActionTitle = nil;
     }
   }
   
-  NSLog(@"DEBUG: Posting GWFileWatcherFileDidChangeNotification");
+  NSDebugLLog(@"gwspace", @"DEBUG: Posting GWFileWatcherFileDidChangeNotification");
 	[[NSNotificationCenter defaultCenter]
  				 postNotificationName: @"GWFileWatcherFileDidChangeNotification"
 	 								     object: info];  
@@ -2646,7 +2646,7 @@ NSString *_pendingSystemActionTitle = nil;
 	}
       else
 	{
-    NSLog(@"Workspace: unable to contact ddbd");
+    NSDebugLLog(@"gwspace", @"Workspace: unable to contact ddbd");
 	}
     }
 }  
@@ -2736,7 +2736,7 @@ NSString *_pendingSystemActionTitle = nil;
 		                     name: NSConnectionDidDieNotification
 		                   object: [mdextractor connectionForProxy]];
     } else {
-      NSLog(@"Workspace: unable to contact mdextractor");
+      NSDebugLLog(@"gwspace", @"Workspace: unable to contact mdextractor");
     }
   }
 }
@@ -2766,7 +2766,7 @@ NSString *_pendingSystemActionTitle = nil;
     
     // Register all queued watchers
     if ([watchedPaths count] > 0) {
-      NSLog(@"Workspace: fswatcher connected, registering %lu queued path watchers", [watchedPaths count]);
+      NSDebugLLog(@"gwspace", @"Workspace: fswatcher connected, registering %lu queued path watchers", [watchedPaths count]);
       NSEnumerator *enumerator = [watchedPaths objectEnumerator];
       NSString *path;
       
@@ -2786,7 +2786,7 @@ NSString *_pendingSystemActionTitle = nil;
   if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
     [timer invalidate];
     fswnotifications = NO;
-    NSLog(@"Workspace: fswatcher did not respond; notifications disabled");
+    NSDebugLLog(@"gwspace", @"Workspace: fswatcher did not respond; notifications disabled");
   }
 }
 
@@ -2810,7 +2810,7 @@ NSString *_pendingSystemActionTitle = nil;
   }
   if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
     [timer invalidate];
-    NSLog(@"Workspace: ddbd did not respond");
+    NSDebugLLog(@"gwspace", @"Workspace: ddbd did not respond");
   }
 }
 
@@ -2834,7 +2834,7 @@ NSString *_pendingSystemActionTitle = nil;
   }
   if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
     [timer invalidate];
-    NSLog(@"Workspace: mdextractor did not respond");
+    NSDebugLLog(@"gwspace", @"Workspace: mdextractor did not respond");
   }
 }
 
@@ -3102,7 +3102,7 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)goToNetwork:(id)sender
 {
-  NSLog(@"Workspace: Opening Network browser");
+  NSDebugLLog(@"gwspace", @"Workspace: Opening Network browser");
   
   /* Start network service discovery if not already running */
   NetworkServiceManager *manager = [NetworkServiceManager sharedManager];
@@ -3219,10 +3219,10 @@ NSString *_pendingSystemActionTitle = nil;
   
   if (mountPoint) {
     /* Successfully mounted - open it in a viewer */
-    NSLog(@"Workspace: Successfully mounted at %@, opening viewer", mountPoint);
+    NSDebugLLog(@"gwspace", @"Workspace: Successfully mounted at %@, opening viewer", mountPoint);
     [self openSelectedPaths:[NSArray arrayWithObject:mountPoint] newViewer:YES];
   } else {
-    NSLog(@"Workspace: Mount failed");
+    NSDebugLLog(@"gwspace", @"Workspace: Mount failed");
     /* Show a detailed error from the mount operation, or a generic fallback */
     NSString *errorMessage = [result objectForKey:@"errorMessage"];
     if (errorMessage && [errorMessage length] > 0) {
@@ -3302,7 +3302,7 @@ NSString *_pendingSystemActionTitle = nil;
       
       /* If no username in URL, prompt for credentials NOW (on main thread) */
       if (!username || [username length] == 0) {
-        NSLog(@"Workspace: No username in URL, prompting user");
+        NSDebugLLog(@"gwspace", @"Workspace: No username in URL, prompting user");
         
         /* Create a custom panel for username/password input */
         NSPanel *panel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 400, 200)
@@ -3374,16 +3374,16 @@ NSString *_pendingSystemActionTitle = nil;
         [[panel contentView] addSubview:cancelButton];
         [cancelButton release];
         
-        NSLog(@"Workspace: Showing username/password prompt dialog");
+        NSDebugLLog(@"gwspace", @"Workspace: Showing username/password prompt dialog");
         NSInteger credResult = [NSApp runModalForWindow:panel];
-        NSLog(@"Workspace: Dialog result: %ld", (long)credResult);
+        NSDebugLLog(@"gwspace", @"Workspace: Dialog result: %ld", (long)credResult);
         
         if (credResult == NSRunStoppedResponse) {
           username = [[usernameField stringValue] retain];
           password = [[passwordField stringValue] retain];
-          NSLog(@"Workspace: User entered username: %@", username);
+          NSDebugLLog(@"gwspace", @"Workspace: User entered username: %@", username);
         } else {
-          NSLog(@"Workspace: User cancelled connection");
+          NSDebugLLog(@"gwspace", @"Workspace: User cancelled connection");
           [usernameField release];
           [passwordField release];
           [panel close];
@@ -3398,7 +3398,7 @@ NSString *_pendingSystemActionTitle = nil;
         [panel release];
         
         if (!username || [username length] == 0) {
-          NSLog(@"Workspace: No username provided");
+          NSDebugLLog(@"gwspace", @"Workspace: No username provided");
           [password release];
           RELEASE(dialog);
           return;
@@ -3438,7 +3438,7 @@ NSString *_pendingSystemActionTitle = nil;
       }
       
       NSString *protocolName = isSFTP ? @"SFTP" : @"WebDAV";
-      NSLog(@"Workspace: Connecting to %@ server: %@:%d (user: %@, path: %@)", 
+      NSDebugLLog(@"gwspace", @"Workspace: Connecting to %@ server: %@:%d (user: %@, path: %@)", 
             protocolName, hostname, port, username ?: @"(prompt)", remotePath ?: @"/");
       
       /* Show a connecting dialog */
@@ -4300,7 +4300,7 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   }
     
   for (NSArray *cmd in commands) {
-    NSLog(@"Attempting system action with command: %@", [cmd componentsJoinedByString:@" "]);
+    NSDebugLLog(@"gwspace", @"Attempting system action with command: %@", [cmd componentsJoinedByString:@" "]);
     NSTask *task = [NSTask new];
     AUTORELEASE(task);
     [task setLaunchPath:[cmd objectAtIndex:0]];
@@ -4313,24 +4313,24 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
       BOOL finished = GWWaitForTaskExit(task, 3.0);
 
       if (!finished) {
-        NSLog(@"System action command still running after timeout: %@. Assuming system will %@.", [cmd componentsJoinedByString:@" "], actionType);
+        NSDebugLLog(@"gwspace", @"System action command still running after timeout: %@. Assuming system will %@.", [cmd componentsJoinedByString:@" "], actionType);
         return YES; // Don't block the UI waiting forever
       }
 
       if ([task terminationStatus] == 0) {
-        NSLog(@"System action command launched successfully: %@", [cmd componentsJoinedByString:@" "]);        
+        NSDebugLLog(@"gwspace", @"System action command launched successfully: %@", [cmd componentsJoinedByString:@" "]);        
         return YES; // Command exited cleanly; system should now proceed
       }
 
-      NSLog(@"System action failed with command: %@, exit status: %d", [cmd componentsJoinedByString:@" "], [task terminationStatus]);
+      NSDebugLLog(@"gwspace", @"System action failed with command: %@, exit status: %d", [cmd componentsJoinedByString:@" "], [task terminationStatus]);
       // Try next command
     } @catch (NSException *e) {
-      NSLog(@"System action failed with command: %@, error: %@", [cmd componentsJoinedByString:@" "], e);
+      NSDebugLLog(@"gwspace", @"System action failed with command: %@, error: %@", [cmd componentsJoinedByString:@" "], e);
       // Try next command
     }
   }
   
-  NSLog(@"All system action commands failed for action type: %@", actionType);
+  NSDebugLLog(@"gwspace", @"All system action commands failed for action type: %@", actionType);
   return NO; // All failed
 }
 
@@ -4339,7 +4339,7 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   if (_pendingSystemActionCommand) {
     NSString *actionType = [_pendingSystemActionCommand copy];
     NSString *actionTitle = [_pendingSystemActionTitle copy];
-    NSLog(@"Executing system command for action: %@", actionType);
+    NSDebugLLog(@"gwspace", @"Executing system command for action: %@", actionType);
 
     NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:
       actionType, @"action",
@@ -4396,7 +4396,7 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   DESTROY(_pendingSystemActionTitle);
   loggingout = NO;
 
-  NSLog(@"System action attempt completed (success=%d). Application state reset. App will NOT quit.", success);
+  NSDebugLLog(@"gwspace", @"System action attempt completed (success=%d). Application state reset. App will NOT quit.", success);
 }
 
 - (void)restart:(id)sender
@@ -4440,66 +4440,66 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
         {
           if ([fileManager createDirectoryAtPath:dirPath 
                                        attributes:nil]) {
-            NSLog(@"Created standard directory: %@", dirPath);
+            NSDebugLLog(@"gwspace", @"Created standard directory: %@", dirPath);
           } else {
-            NSLog(@"Failed to create directory: %@", dirPath);
+            NSDebugLLog(@"gwspace", @"Failed to create directory: %@", dirPath);
           }
         }
       NS_HANDLER
         {
-          NSLog(@"Error creating directory %@: %@", dirPath, [localException reason]);
+          NSDebugLLog(@"gwspace", @"Error creating directory %@: %@", dirPath, [localException reason]);
         }
       NS_ENDHANDLER
     } else if (!isDirectory) {
-      NSLog(@"Warning: %@ exists but is not a directory", dirPath);
+      NSDebugLLog(@"gwspace", @"Warning: %@ exists but is not a directory", dirPath);
     }
   }
 }
 
 - (void)setViewerBehaviour:(id)sender
 {
-  NSLog(@"*** setViewerBehaviour method called! ***");
+  NSDebugLLog(@"gwspace", @"*** setViewerBehaviour method called! ***");
   NSString *title = [sender title];
-  NSLog(@"setViewerBehaviour called with title: %@", title);
+  NSDebugLLog(@"gwspace", @"setViewerBehaviour called with title: %@", title);
 
   // Get current key window to determine what path we're working with
   NSWindow *keyWindow = [NSApp keyWindow];
   if (!keyWindow) {
-    NSLog(@"No key window found");
+    NSDebugLLog(@"gwspace", @"No key window found");
     return;
   }
 
   // Try to get viewer from the key window
   id viewer = [vwrsManager viewerWithWindow: keyWindow];
   if (!viewer) {
-    NSLog(@"No viewer found for key window");
+    NSDebugLLog(@"gwspace", @"No viewer found for key window");
     return;
   }
 
   // Get the base node (current path) from the viewer
   FSNode *currentNode = [viewer baseNode];
   if (!currentNode) {
-    NSLog(@"No base node found in viewer");
+    NSDebugLLog(@"gwspace", @"No base node found in viewer");
     return;
   }
 
-  NSLog(@"Current path: %@", [currentNode path]);
+  NSDebugLLog(@"gwspace", @"Current path: %@", [currentNode path]);
 
   // Determine viewer type based on menu item title
   unsigned int viewerType;
   if ([title isEqualToString: @"Browsing"]) {
     viewerType = BROWSING;
-    NSLog(@"Setting viewer to BROWSING mode");
+    NSDebugLLog(@"gwspace", @"Setting viewer to BROWSING mode");
   } else if ([title isEqualToString: @"Spatial"]) {
     viewerType = SPATIAL;
-    NSLog(@"Setting viewer to SPATIAL mode");
+    NSDebugLLog(@"gwspace", @"Setting viewer to SPATIAL mode");
   } else {
-    NSLog(@"Unknown viewer behaviour: %@", title);
+    NSDebugLLog(@"gwspace", @"Unknown viewer behaviour: %@", title);
     return;
   }
 
   // Create new viewer with the selected behavior
-  NSLog(@"Attempting to create new viewer with type %u", viewerType);
+  NSDebugLLog(@"gwspace", @"Attempting to create new viewer with type %u", viewerType);
 
   id newViewer = [vwrsManager viewerOfType: viewerType
                                   showType: nil
@@ -4509,18 +4509,18 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
                                   forceNew: YES];
 
   if (newViewer) {
-    NSLog(@"Successfully created new viewer for path %@", [currentNode path]);
+    NSDebugLLog(@"gwspace", @"Successfully created new viewer for path %@", [currentNode path]);
     [newViewer activate];
   } else {
-    NSLog(@"Failed to create new viewer");
+    NSDebugLLog(@"gwspace", @"Failed to create new viewer");
   }
 
-  NSLog(@"Finished processing viewer behavior change");
+  NSDebugLLog(@"gwspace", @"Finished processing viewer behavior change");
 }
 
 - (void)setDefaultBrowsingBehaviour:(id)sender
 {
-  NSLog(@"Setting default viewer behavior to Browsing");
+  NSDebugLLog(@"gwspace", @"Setting default viewer behavior to Browsing");
   [self setDefaultViewerType: BROWSING];
 
   NSRunAlertPanel(@"Default Viewer Set",
@@ -4530,7 +4530,7 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
 
 - (void)setDefaultSpatialBehaviour:(id)sender
 {
-  NSLog(@"Setting default viewer behavior to Spatial");
+  NSDebugLLog(@"gwspace", @"Setting default viewer behavior to Spatial");
   [self setDefaultViewerType: SPATIAL];
 
   NSRunAlertPanel(@"Default Viewer Set",
@@ -4588,7 +4588,7 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
     return NO;
   }
   
-  NSLog(@"Workspace: Attempting to unmount volume at path: %@", path);
+  NSDebugLLog(@"gwspace", @"Workspace: Attempting to unmount volume at path: %@", path);
   
   // Check if this is a disk image mount managed by VolumeManager
   BOOL isDiskImageVolume = NO;
@@ -4601,14 +4601,14 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
       isDiskImageVolume = [VolumeManagerClass isDiskImageMount:path];
       if (isDiskImageVolume) {
         volumeManager = [VolumeManagerClass sharedManager];
-        NSLog(@"Workspace: Volume is managed by VolumeManager (disk image)");
+        NSDebugLLog(@"gwspace", @"Workspace: Volume is managed by VolumeManager (disk image)");
       }
     }
   }
   
   if (isDiskImageVolume && volumeManager) {
     // Use VolumeManager for disk image volumes it mounted
-    NSLog(@"Workspace: Calling VolumeManager unmountPath for %@", path);
+    NSDebugLLog(@"gwspace", @"Workspace: Calling VolumeManager unmountPath for %@", path);
     return [volumeManager unmountPath: path];
   }
   
@@ -4623,18 +4623,18 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
       // Check if this looks like a network mount (simple heuristic)
       if ([path hasPrefix:@"/media/"] && ([path rangeOfString:@" "].location != NSNotFound)) {
         isNetworkVolume = YES;
-        NSLog(@"Workspace: Detected network volume, using NetworkVolumeManager");
+        NSDebugLLog(@"gwspace", @"Workspace: Detected network volume, using NetworkVolumeManager");
       }
     }
   }
   
   if (isNetworkVolume && networkVolumeManager) {
     // Use NetworkVolumeManager for network volumes
-    NSLog(@"Workspace: Calling NetworkVolumeManager unmountPath for %@", path);
+    NSDebugLLog(@"gwspace", @"Workspace: Calling NetworkVolumeManager unmountPath for %@", path);
     return [networkVolumeManager unmountPath: path];
   } else {
     // Use standard system unmount+eject for regular volumes (drag to trash)
-    NSLog(@"Workspace: Using standard system unmount+eject for %@", path);
+    NSDebugLLog(@"gwspace", @"Workspace: Using standard system unmount+eject for %@", path);
     BOOL result = [GWUnmountHelper unmountAndEjectPath:path];
     
     if (!result) {

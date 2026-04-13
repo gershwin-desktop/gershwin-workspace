@@ -31,7 +31,7 @@
 
 #define GWDebugLog(format, args...) \
   do { if (GW_DEBUG_LOG) \
-    NSLog(format , ## args); } while (0)
+    NSDebugLLog(@"gwspace", format , ## args); } while (0)
 
 @implementation ImageResizer
 
@@ -225,7 +225,7 @@
 	    }
 	  else
 	    {
-	      NSLog(@"(not resized) no valid image representation for %@", path);
+	      NSDebugLLog(@"gwspace", @"(not resized) no valid image representation for %@", path);
 	    }
         }
       
@@ -233,7 +233,7 @@
     }
   else
     {
-      NSLog(@"No image or not valid for %@", path);
+      NSDebugLLog(@"gwspace", @"No image or not valid for %@", path);
     }
   [imageViewerProxy imageReady: info];
   RELEASE (arp);

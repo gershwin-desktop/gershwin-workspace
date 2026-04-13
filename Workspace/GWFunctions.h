@@ -36,7 +36,7 @@
 
 #define GWDebugLog(format, args...) \
   do { if (GW_DEBUG_LOG) \
-    NSLog(format , ## args); } while (0)
+    NSDebugLLog(@"gwspace", format , ## args); } while (0)
 
 #ifndef MAKE_LABEL
 #define MAKE_LABEL(label, rect, str, align, release, view) { \

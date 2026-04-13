@@ -1143,7 +1143,7 @@ static id <DesktopApplication> desktopApp = nil;
 {
   if (scroll == nil)
     {
-      NSLog(@"FSNBrowserColumn adjustMatrix: scroll is nil");
+      NSDebugLLog(@"gwspace", @"FSNBrowserColumn adjustMatrix: scroll is nil");
       return;
     }
 

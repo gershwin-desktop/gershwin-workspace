@@ -34,7 +34,7 @@
 
 #define GWDebugLog(format, args...) \
   do { if (GW_DEBUG_LOG) \
-    NSLog(format , ## args); } while (0)
+    NSDebugLLog(@"gwspace", format , ## args); } while (0)
     
 enum {   
   DDBdInsertTreeUpdate,
@@ -83,7 +83,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 
     if (([fm fileExistsAtPath: dbdir isDirectory: &isdir] &isdir) == NO) {
       if ([fm createDirectoryAtPath: dbdir attributes: nil] == NO) { 
-        NSLog(@"unable to create: %@", dbdir);
+        NSDebugLLog(@"gwspace", @"unable to create: %@", dbdir);
         DESTROY (self);
         return self;
       }
@@ -96,7 +96,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
     [conn setDelegate: self];
 
     if ([conn registerName: @"ddbd"] == NO) {
-	    NSLog(@"unable to register with name server - quitting.");
+	    NSDebugLLog(@"gwspace", @"unable to register with name server - quitting.");
 	    DESTROY (self);
 	    return self;
 	  }
@@ -111,7 +111,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
     dirsManager = [[DDBDirsManager alloc] initWithBasePath: dbdir];
     dirslock = [NSRecursiveLock new];
         
-    NSLog(@"ddbd started");    
+    NSDebugLLog(@"gwspace", @"ddbd started");    
   }
   
   return self;    
@@ -169,7 +169,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
     }
   NS_HANDLER
     {
-      NSLog(@"A fatal error occurred while dispatching the task!");
+      NSDebugLLog(@"gwspace", @"A fatal error occurred while dispatching the task!");
     }
   NS_ENDHANDLER
 }
@@ -193,7 +193,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
     }
   NS_HANDLER
     {
-      NSLog(@"A fatal error occurred while dispatching the task!");
+      NSDebugLLog(@"gwspace", @"A fatal error occurred while dispatching the task!");
     }
   NS_ENDHANDLER
 }
@@ -275,7 +275,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
     }
   NS_HANDLER
     {
-      NSLog(@"A fatal error occurred while dispatching the task!");
+      NSDebugLLog(@"gwspace", @"A fatal error occurred while dispatching the task!");
     }
   NS_ENDHANDLER
 }
@@ -301,12 +301,12 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 
   if (connection == conn)
     {
-      NSLog(@"argh - ddbd root connection has been destroyed.");
+      NSDebugLLog(@"gwspace", @"argh - ddbd root connection has been destroyed.");
       exit(EXIT_FAILURE);
     }
   else if (auto_stop == YES)
     {
-      NSLog(@"ddbd: connection became invalid, shutting down");
+      NSDebugLLog(@"gwspace", @"ddbd: connection became invalid, shutting down");
       exit(EXIT_SUCCESS);
     }
 }

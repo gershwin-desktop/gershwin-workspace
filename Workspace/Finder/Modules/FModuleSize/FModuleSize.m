@@ -65,7 +65,7 @@ static NSString *nibName = @"FModuleSize";
 
   if (self) {
 		if ([NSBundle loadNibNamed: nibName owner: self] == NO) {
-      NSLog(@"failed to load %@!", nibName);
+      NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
       DESTROY (self);
       return self;
     }

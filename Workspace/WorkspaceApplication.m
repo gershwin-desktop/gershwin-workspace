@@ -67,7 +67,7 @@
   Display *dpy = XOpenDisplay(NULL);
 
   if (dpy == NULL) {
-    NSLog(@"severAllXClientsExceptSelf: could not open X display");
+    NSDebugLLog(@"gwspace", @"severAllXClientsExceptSelf: could not open X display");
     return;
   }
 
@@ -111,7 +111,7 @@
 
       if ((pid_t)winpid != selfpid && winpid != 0) {
         XKillClient(dpy, (Window)w);
-        NSLog(@"severAllXClientsExceptSelf: killed X client owning window 0x%lx (pid %lu)", w, winpid);
+        NSDebugLLog(@"gwspace", @"severAllXClientsExceptSelf: killed X client owning window 0x%lx (pid %lu)", w, winpid);
       }
     }
   }
@@ -133,12 +133,12 @@
       if (operation != nil)
 	[opdict setObject: operation forKey: @"operation"];
       else
-	NSLog(@"performFileOperation: operation can't be nil");
+	NSDebugLLog(@"gwspace", @"performFileOperation: operation can't be nil");
  
       if (operation != nil)
 	[opdict setObject: source forKey: @"source"];
       else
-	NSLog(@"performFileOperation: source is nil");
+	NSDebugLLog(@"gwspace", @"performFileOperation: source is nil");
 
       if (destination == nil && [operation isEqualToString:NSWorkspaceRecycleOperation])
 	destination = [self trashPath];
@@ -549,10 +549,10 @@
   NSString *host;
 
   path = [ws locateApplicationBinary: appname];
-  NSLog(@"launchApplication:arguments: appname=%@ binary=%@ args=%@", appname, path, args);
+  NSDebugLLog(@"gwspace", @"launchApplication:arguments: appname=%@ binary=%@ args=%@", appname, path, args);
 
   if (path == nil) {
-	  NSLog(@"launchApplication: locateApplicationBinary returned nil for %@", appname);
+	  NSDebugLLog(@"gwspace", @"launchApplication: locateApplicationBinary returned nil for %@", appname);
 	  return NO;
 	}
 
@@ -622,12 +622,12 @@
       hasWindows = [wm hasWindowsMatchingName: appName];
     }
     
-    NSLog(@"launchApplication: X11 check for '%@': knownPID=%d hasWindows=%d", appName, knownPID, hasWindows);
+    NSDebugLLog(@"gwspace", @"launchApplication: X11 check for '%@': knownPID=%d hasWindows=%d", appName, knownPID, hasWindows);
     if (hasWindows) {
       /* App is running somewhere on the system (possibly launched externally).
          Notify the Dock so the icon's "running" dot appears, and activate the app
          to raise/unminimize its window immediately. */
-      NSLog(@"launchApplication: BLOCKED — X11 thinks '%@' is already running (knownPID=%d)", appName, knownPID);
+      NSDebugLLog(@"gwspace", @"launchApplication: BLOCKED — X11 thinks '%@' is already running (knownPID=%d)", appName, knownPID);
       [[dtopManager dock] appDidLaunch: appPath appName: appName];
       /* Activate the app to raise/unminimize its window immediately */
       [self activateAppWithPath: appPath andName: appName pid: knownPID];
@@ -646,16 +646,16 @@
 	                  userInfo: userinfo];
 
   /* Use GWApplicationLauncher to get same error handling as ELF binaries */
-  NSLog(@"launchApplication: launching binary: %@ with args: %@", path, args);
+  NSDebugLLog(@"gwspace", @"launchApplication: launching binary: %@ with args: %@", path, args);
   task = [[NSTask alloc] init];
   [task setLaunchPath:path];
   [task setArguments:args];
 
   BOOL launched = [GWApplicationLauncher launchAndMonitorTask:task];
-  NSLog(@"launchApplication: launched=%d", launched);
+  NSDebugLLog(@"gwspace", @"launchApplication: launched=%d", launched);
 
   if (!launched) {
-    NSLog(@"launchApplication: GWApplicationLauncher failed for %@", path);
+    NSDebugLLog(@"gwspace", @"launchApplication: GWApplicationLauncher failed for %@", path);
     [task release];
     return NO;
   }
@@ -1200,7 +1200,7 @@
 
 - (void)applicationTerminated:(GWLaunchedApp *)app
 {
-  NSLog(@"WorkspaceApplication applicationTerminated: %@", [app name]);
+  NSDebugLLog(@"gwspace", @"WorkspaceApplication applicationTerminated: %@", [app name]);
   if (app == activeApplication) {
     activeApplication = nil;
   }
@@ -1254,7 +1254,7 @@
 	      }
 	    NS_HANDLER
 	      {
-      NSLog(@"Unable to break lock %@ ... %@", storedAppinfoLock, localException);
+      NSDebugLLog(@"gwspace", @"Unable to break lock %@ ... %@", storedAppinfoLock, localException);
 	      }
 	    NS_ENDHANDLER
     }
@@ -1269,7 +1269,7 @@
 	  }
     
     if (sleeps >= 10) {
-      NSLog(@"Unable to obtain lock %@", storedAppinfoLock);
+      NSDebugLLog(@"gwspace", @"Unable to obtain lock %@", storedAppinfoLock);
       return nil;
 	  }
   }
@@ -1314,7 +1314,7 @@
             }
           NS_HANDLER
             {
-              NSLog(@"Unable to break lock %@ ... %@", storedAppinfoLock, localException);
+              NSDebugLLog(@"gwspace", @"Unable to break lock %@ ... %@", storedAppinfoLock, localException);
             }
           NS_ENDHANDLER
             }
@@ -1329,7 +1329,7 @@
 	  }
     
     if (sleeps >= 10) {
-      NSLog(@"Unable to obtain lock %@", storedAppinfoLock);
+      NSDebugLLog(@"gwspace", @"Unable to obtain lock %@", storedAppinfoLock);
       return;
 	  }
   }
@@ -1829,8 +1829,8 @@
     }
   NS_HANDLER
     {
-      NSLog(@"Unable to activate %@", name);
-      NSLog(@"Workspace caught exception %@: %@", 
+      NSDebugLLog(@"gwspace", @"Unable to activate %@", name);
+      NSDebugLLog(@"gwspace", @"Workspace caught exception %@: %@", 
             [localException name], [localException reason]);
     }
   NS_ENDHANDLER
@@ -1862,8 +1862,8 @@
     }
   NS_HANDLER
     {
-      NSLog(@"Unable to hide %@", name);
-      NSLog(@"Workspace caught exception %@: %@", 
+      NSDebugLLog(@"gwspace", @"Unable to hide %@", name);
+      NSDebugLLog(@"gwspace", @"Workspace caught exception %@: %@", 
             [localException name], [localException reason]);
     }
   NS_ENDHANDLER
@@ -1885,8 +1885,8 @@
     }
   NS_HANDLER
     {
-  NSLog(@"Unable to unhide %@", name);
-  NSLog(@"Workspace caught exception %@: %@", 
+  NSDebugLLog(@"gwspace", @"Unable to unhide %@", name);
+  NSDebugLLog(@"gwspace", @"Workspace caught exception %@: %@", 
 	        [localException name], [localException reason]);
     }
   NS_ENDHANDLER
@@ -1908,7 +1908,7 @@
       }
     NS_HANDLER
       {
-    NSLog(@"Workspace caught exception %@: %@", 
+    NSDebugLLog(@"gwspace", @"Workspace caught exception %@: %@", 
 	                      [localException name], [localException reason]);
       }
     NS_ENDHANDLER

@@ -114,7 +114,7 @@
     {
       character = [characters characterAtIndex: 0];
     }
-  NSLog(@"GWViewerListView.keyDown: character=0x%x, flags=0x%x", character, flags);
+  NSDebugLLog(@"gwspace", @"GWViewerListView.keyDown: character=0x%x, flags=0x%x", character, flags);
   // Handle Shift-Down = Open Selection
   if (character == NSDownArrowFunctionKey && (flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
     {
@@ -170,7 +170,7 @@
   // Handle Command-Up = Open Parent Folder
   if (character == NSUpArrowFunctionKey && (flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
     {
-      NSLog(@"GWViewerListView: Command-Up - opening parent folder in viewer");
+      NSDebugLLog(@"gwspace", @"GWViewerListView: Command-Up - opening parent folder in viewer");
       [[viewer win] openParentFolder];
       return;
     }
@@ -181,7 +181,7 @@
       NSArray *selection = [self selectedNodes];
       if (selection == nil || [selection count] == 0)
         {
-          NSLog(@"GWViewerListView: No selection, selecting first item");
+          NSDebugLLog(@"gwspace", @"GWViewerListView: No selection, selecting first item");
           // Let parent handle selection of first item
           [super keyDown: theEvent];
           return;
@@ -189,7 +189,7 @@
 
       if (character == '\r' && (flags & NSShiftKeyMask))
         {
-          NSLog(@"GWViewerListView: Shift-Enter - opening as folder");
+          NSDebugLLog(@"gwspace", @"GWViewerListView: Shift-Enter - opening as folder");
           [viewer openSelectionAsFolder];
           return;
         }

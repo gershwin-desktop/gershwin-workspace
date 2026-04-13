@@ -27,7 +27,7 @@ static int gwX11ErrorHandler(Display *dpy, XErrorEvent *event)
 {
     char errorText[256];
     XGetErrorText(dpy, event->error_code, errorText, sizeof(errorText));
-    NSLog(@"Workspace X11 error: %s (request %d, error %d)",
+    NSDebugLLog(@"gwspace", @"Workspace X11 error: %s (request %d, error %d)",
           errorText, event->request_code, event->error_code);
     /* Return 0 to continue; the error is logged but doesn't crash */
     return 0;

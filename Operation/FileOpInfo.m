@@ -104,7 +104,7 @@ static NSString *nibName = @"FileOperationWin";
 	{
 	  if ([NSBundle loadNibNamed: nibName owner: self] == NO)
 	    {
-	      NSLog(@"failed to load %@!", nibName);
+	      NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
 	      DESTROY (self);
 	      return self;
 	    }
@@ -405,7 +405,7 @@ static NSString *nibName = @"FileOperationWin";
   pFData = cachedProcessedFilesData;
   if (pFData == nil)
     {
-      NSLog(@"removeProcessedFiles: no cached data available");
+      NSDebugLLog(@"gwspace", @"removeProcessedFiles: no cached data available");
       return;
     }
   pFiles = [NSUnarchiver unarchiveObjectWithData: pFData];

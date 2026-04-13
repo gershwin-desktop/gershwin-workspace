@@ -50,7 +50,7 @@
     {
       if ([NSBundle loadNibNamed: nibName owner: self] == NO)
         {
-          NSLog(@"failed to load %@!", nibName);
+          NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
           [self release];
           return nil;
         }
@@ -98,7 +98,7 @@
       // check if we suppose an application
       if ([comm hasSuffix:@".app"])
         {
-          NSLog(@"assume app name");
+          NSDebugLLog(@"gwspace", @"assume app name");
           return comm;
         }
       else

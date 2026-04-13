@@ -307,7 +307,7 @@
         break;
       }
     } else {
-      NSLog(@"Browser: unable to find cell '%@' in column %ld\n", [nd name], (long int)(column + i));
+      NSDebugLLog(@"gwspace", @"Browser: unable to find cell '%@' in column %ld\n", [nd name], (long int)(column + i));
       break;
     }
     

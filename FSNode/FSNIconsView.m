@@ -293,12 +293,12 @@ static void GWHighlightFrameRect(NSRect aRect)
   // Check if we're using DS_Store free positioning mode
   if (freePositioningEnabled && customIconPositions && [customIconPositions count] > 0)
     {
-      NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
-      NSLog(@"║           FREE POSITIONING MODE (DS_Store)                       ║");
-      NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
-      NSLog(@"║ Icons to position: %lu", (unsigned long)count);
-      NSLog(@"║ Custom positions available: %lu", (unsigned long)[customIconPositions count]);
-      NSLog(@"║ View dimensions: %.0fx%.0f", svr.size.width, svr.size.height);
+      NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
+      NSDebugLLog(@"gwspace", @"║           FREE POSITIONING MODE (DS_Store)                       ║");
+      NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
+      NSDebugLLog(@"gwspace", @"║ Icons to position: %lu", (unsigned long)count);
+      NSDebugLLog(@"gwspace", @"║ Custom positions available: %lu", (unsigned long)[customIconPositions count]);
+      NSDebugLLog(@"gwspace", @"║ View dimensions: %.0fx%.0f", svr.size.width, svr.size.height);
       
       // Free positioning: use DS_Store coordinates, fall back to grid for unknown icons
       float gridX = X_MARGIN;
@@ -330,7 +330,7 @@ static void GWHighlightFrameRect(NSRect aRect)
               
               irects[i] = NSMakeRect(gnustepX, gnustepY, gridSize.width, gridSize.height);
               
-              NSLog(@"║ ✓ '%@': Icon center(%.0f,%.0f) → Grid cell(%.0f,%.0f)", 
+              NSDebugLLog(@"gwspace", @"║ ✓ '%@': Icon center(%.0f,%.0f) → Grid cell(%.0f,%.0f)", 
                     filename, iconCenterPos.x, iconCenterPos.y, gnustepX, gnustepY);
               
               // Track bounds for view sizing
@@ -360,7 +360,7 @@ static void GWHighlightFrameRect(NSRect aRect)
               
               gridCount++;
               
-              NSLog(@"║ ○ '%@': Grid position (no DS_Store data)", filename);
+              NSDebugLLog(@"gwspace", @"║ ○ '%@': Grid position (no DS_Store data)", filename);
             }
         }
       
@@ -373,10 +373,10 @@ static void GWHighlightFrameRect(NSRect aRect)
       // Use calculated dimensions (don't use py/gridY for free positioning)
       py = maxY;
       
-      NSLog(@"║ Grid-positioned icons: %lu", (unsigned long)gridCount);
-      NSLog(@"║ Icon bounds - maxX: %.0f, maxY: %.0f", maxX - X_MARGIN, py);
-      NSLog(@"║ Final view size: %.0fx%.0f (exact fit for positioned icons)", maxX, py);
-      NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+      NSDebugLLog(@"gwspace", @"║ Grid-positioned icons: %lu", (unsigned long)gridCount);
+      NSDebugLLog(@"gwspace", @"║ Icon bounds - maxX: %.0f, maxY: %.0f", maxX - X_MARGIN, py);
+      NSDebugLLog(@"gwspace", @"║ Final view size: %.0fx%.0f (exact fit for positioned icons)", maxX, py);
+      NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
     }
   else
     {
@@ -626,9 +626,9 @@ static void GWHighlightFrameRect(NSRect aRect)
   if (freePositioningEnabled != enabled)
     {
       freePositioningEnabled = enabled;
-      NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
-      NSLog(@"║ FREE POSITIONING MODE: %@", enabled ? @"ENABLED" : @"DISABLED");
-      NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+      NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
+      NSDebugLLog(@"gwspace", @"║ FREE POSITIONING MODE: %@", enabled ? @"ENABLED" : @"DISABLED");
+      NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
       
       if (enabled && customIconPositions && [customIconPositions count] > 0)
         {
@@ -649,19 +649,19 @@ static void GWHighlightFrameRect(NSRect aRect)
       [customIconPositions release];
       customIconPositions = [positions mutableCopy];
       
-      NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
-      NSLog(@"║        CUSTOM ICON POSITIONS SET (DS_Store)                      ║");
-      NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
-      NSLog(@"║ Positions for %lu icons:", (unsigned long)[positions count]);
+      NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
+      NSDebugLLog(@"gwspace", @"║        CUSTOM ICON POSITIONS SET (DS_Store)                      ║");
+      NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
+      NSDebugLLog(@"gwspace", @"║ Positions for %lu icons:", (unsigned long)[positions count]);
       
       for (NSString *filename in positions)
         {
           NSValue *posValue = [positions objectForKey:filename];
           NSPoint pos = [posValue pointValue];
-          NSLog(@"║   '%@' -> (%.0f, %.0f)", filename, pos.x, pos.y);
+          NSDebugLLog(@"gwspace", @"║   '%@' -> (%.0f, %.0f)", filename, pos.x, pos.y);
         }
       
-      NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+      NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
     }
 }
 
@@ -674,7 +674,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 {
   if (freePositioningEnabled && customIconPositions && [customIconPositions count] > 0)
     {
-      NSLog(@"Applying free positioning - calling tile");
+      NSDebugLLog(@"gwspace", @"Applying free positioning - calling tile");
       [self tile];
       [self setNeedsDisplay:YES];
     }
@@ -692,9 +692,9 @@ static void GWHighlightFrameRect(NSRect aRect)
   if (!tagDict || [tagDict count] == 0)
     return;
     
-  NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
-  NSLog(@"║        APPLYING TAG COLORS FROM DS_Store                         ║");
-  NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
+  NSDebugLLog(@"gwspace", @"║        APPLYING TAG COLORS FROM DS_Store                         ║");
+  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
   
   for (FSNIcon *icon in icons)
     {
@@ -706,12 +706,12 @@ static void GWHighlightFrameRect(NSRect aRect)
           if (tagColor)
             {
               [icon setTagColor:tagColor];
-              NSLog(@"║   '%@' -> tag color set", filename);
+              NSDebugLLog(@"gwspace", @"║   '%@' -> tag color set", filename);
             }
         }
     }
   
-  NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 - (void)setCommentsFromDictionary:(NSDictionary *)commentsDict
@@ -719,9 +719,9 @@ static void GWHighlightFrameRect(NSRect aRect)
   if (!commentsDict || [commentsDict count] == 0)
     return;
     
-  NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
-  NSLog(@"║        APPLYING SPOTLIGHT COMMENTS FROM DS_Store                 ║");
-  NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
+  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
+  NSDebugLLog(@"gwspace", @"║        APPLYING SPOTLIGHT COMMENTS FROM DS_Store                 ║");
+  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
   
   for (FSNIcon *icon in icons)
     {
@@ -733,12 +733,12 @@ static void GWHighlightFrameRect(NSRect aRect)
           if (comment)
             {
               [icon setSpotlightComment:comment];
-              NSLog(@"║   '%@' -> comment: '%@'", filename, comment);
+              NSDebugLLog(@"gwspace", @"║   '%@' -> comment: '%@'", filename, comment);
             }
         }
     }
   
-  NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 #pragma mark - Grid Spacing Support
@@ -2651,7 +2651,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 	}
       else
 	{
-	  NSLog(@"Unexpected icon position in [FSNIconsView updateNameEditor]");
+	  NSDebugLLog(@"gwspace", @"Unexpected icon position in [FSNIconsView updateNameEditor]");
 	  return;
 	}
 

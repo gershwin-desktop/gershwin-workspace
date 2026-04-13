@@ -126,7 +126,7 @@ static GWDesktopManager *desktopManager = nil;
       }
     NS_HANDLER
       {
-        NSLog(@"GWDesktopManager: exception initializing Dock: %@", [localException reason]);
+        NSDebugLLog(@"gwspace", @"GWDesktopManager: exception initializing Dock: %@", [localException reason]);
         dock = [[Dock alloc] initForManager: self];
       }
     NS_ENDHANDLER
@@ -169,9 +169,9 @@ static GWDesktopManager *desktopManager = nil;
 
 - (void)activateDesktop
 {
-  NSLog(@"DEBUG: GWDesktopManager activateDesktop called");
+  NSDebugLLog(@"gwspace", @"DEBUG: GWDesktopManager activateDesktop called");
   [win activate];
-  NSLog(@"DEBUG: Desktop window activated");
+  NSDebugLLog(@"gwspace", @"DEBUG: Desktop window activated");
   
   // Set the menu for the desktop window so it gets exported via DBus/AppMenu
   // This ensures Menu.app can find the menus when the desktop is active
@@ -197,7 +197,7 @@ static GWDesktopManager *desktopManager = nil;
               XChangeProperty(display, root, netActiveWindow, XA_WINDOW, 32,
                              PropModeReplace, (unsigned char*)&desktopXWindow, 1);
               XFlush(display);
-              NSLog(@"DEBUG: Set _NET_ACTIVE_WINDOW to desktop window 0x%lx", desktopXWindow);
+              NSDebugLLog(@"gwspace", @"DEBUG: Set _NET_ACTIVE_WINDOW to desktop window 0x%lx", desktopXWindow);
             }
         }
       XCloseDisplay(display);
@@ -208,16 +208,16 @@ static GWDesktopManager *desktopManager = nil;
   [self addWatcherForPath: [dskNode path]];
     
   if ((hidedock == NO) && ([dock superview] == nil)) {
-    NSLog(@"DEBUG: Adding dock as subview (hidedock=%d)", hidedock);
+    NSDebugLLog(@"gwspace", @"DEBUG: Adding dock as subview (hidedock=%d)", hidedock);
     [desktopView addSubview: dock];
     [dock tile];
-    NSLog(@"DEBUG: Dock added to desktop view, frame: %@", NSStringFromRect([dock frame]));
+    NSDebugLLog(@"gwspace", @"DEBUG: Dock added to desktop view, frame: %@", NSStringFromRect([dock frame]));
   } else {
-    NSLog(@"DEBUG: Dock NOT added (hidedock=%d, superview=%@)", hidedock, [dock superview]);
+    NSDebugLLog(@"gwspace", @"DEBUG: Dock NOT added (hidedock=%d, superview=%@)", hidedock, [dock superview]);
   }
   
   [mpointWatcher startWatching];  
-  NSLog(@"DEBUG: activateDesktop completed");
+  NSDebugLLog(@"gwspace", @"DEBUG: activateDesktop completed");
 }
 
 - (void)deactivateDesktop
@@ -257,7 +257,7 @@ static GWDesktopManager *desktopManager = nil;
 
   if ([fm fileExistsAtPath: path isDirectory: &isdir] == NO) {
     if ([fm createDirectoryAtPath: path attributes: nil] == NO) {
-      NSLog(@"Can't create the Recycler directory! Quitting now.");
+      NSDebugLLog(@"gwspace", @"Can't create the Recycler directory! Quitting now.");
       [NSApp terminate: self];
     }
   }
@@ -487,7 +487,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   }
   NS_HANDLER
   {
-    NSLog(@"Error! A fatal error occurred while dispatching the task.");
+    NSDebugLLog(@"gwspace", @"Error! A fatal error occurred while dispatching the task.");
   }
   NS_ENDHANDLER
 }
@@ -564,13 +564,13 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   NSString *path = [info objectForKey: @"path"];
   NSString *event = [info objectForKey: @"event"];
   
-  NSLog(@"DEBUG: GWDesktopManager watcherNotification called");
-  NSLog(@"DEBUG: path = %@, event = %@", path, event);
-  NSLog(@"DEBUG: dskNode path = %@", [dskNode path]);
+  NSDebugLLog(@"gwspace", @"DEBUG: GWDesktopManager watcherNotification called");
+  NSDebugLLog(@"gwspace", @"DEBUG: path = %@, event = %@", path, event);
+  NSDebugLLog(@"gwspace", @"DEBUG: dskNode path = %@", [dskNode path]);
   
   /* Check if this is a change in one of our watched mount root directories */
   if ([mpointWatcher isWatchingPath: path]) {
-    NSLog(@"DEBUG: Change detected in mount root directory: %@", path);
+    NSDebugLLog(@"gwspace", @"DEBUG: Change detected in mount root directory: %@", path);
     /* Verify the mount is ready before showing it on desktop */
     [self verifyAndShowVolumeAtPath: path];
     return;
@@ -578,7 +578,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   
   if ([path isEqual: [dskNode path]])
     {
-      NSLog(@"DEBUG: Path matches desktop node path");
+      NSDebugLLog(@"gwspace", @"DEBUG: Path matches desktop node path");
       if ([event isEqual: @"GWWatchedPathDeleted"])
         {
           NSRunAlertPanel(nil, 
@@ -591,22 +591,22 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       /* update the desktop view, but only if active */
       else if ([self isActive]) 
         {
-          NSLog(@"DEBUG: Desktop is active, calling watchedPathChanged on desktop view");
+          NSDebugLLog(@"gwspace", @"DEBUG: Desktop is active, calling watchedPathChanged on desktop view");
           [[self desktopView] watchedPathChanged: info];
         }
       else
         {
-          NSLog(@"DEBUG: Desktop is NOT active, skipping update");
+          NSDebugLLog(@"gwspace", @"DEBUG: Desktop is NOT active, skipping update");
         }
     }
   else
     {
-      NSLog(@"DEBUG: Path does NOT match desktop node path");
+      NSDebugLLog(@"gwspace", @"DEBUG: Path does NOT match desktop node path");
     }
   /* update the dock, if active */
   if ([self dockActive])
     {
-      NSLog(@"DEBUG: Dock is active, calling watchedPathChanged on dock");
+      NSDebugLLog(@"gwspace", @"DEBUG: Dock is active, calling watchedPathChanged on dock");
       [dock watchedPathChanged: info];
     }
 }
@@ -648,7 +648,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       usleep((useconds_t)(100000 * pow(2, attempt - 2)));
     }
 
-    NSLog(@"MountVerification: Attempt %d/%d to verify mount root: %@", attempt, maxAttempts, mountRootPath);
+    NSDebugLLog(@"gwspace", @"MountVerification: Attempt %d/%d to verify mount root: %@", attempt, maxAttempts, mountRootPath);
 
     @autoreleasepool {
       NSError *contentsError = nil;
@@ -662,7 +662,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
           if ([localFM fileExistsAtPath:itemPath isDirectory:&isDir] && isDir) {
             NSArray *mountedPaths = [workspace mountedLocalVolumePaths];
             if ([mountedPaths containsObject:itemPath]) {
-              NSLog(@"MountVerification: Verified mounted volume at: %@", itemPath);
+              NSDebugLLog(@"gwspace", @"MountVerification: Verified mounted volume at: %@", itemPath);
               verified = YES;
               break;
             }
@@ -670,7 +670,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
             NSError *readError = nil;
             NSArray *subContents = [localFM contentsOfDirectoryAtPath:itemPath error:&readError];
             if (subContents) {
-              NSLog(@"MountVerification: Directory is accessible: %@", itemPath);
+              NSDebugLLog(@"gwspace", @"MountVerification: Directory is accessible: %@", itemPath);
               verified = YES;
               break;
             }
@@ -681,12 +681,12 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   }
 
   if (verified) {
-    NSLog(@"MountVerification: Mount verified after %d attempt(s), updating desktop", attempt);
+    NSDebugLLog(@"gwspace", @"MountVerification: Mount verified after %d attempt(s), updating desktop", attempt);
     dispatch_async(dispatch_get_main_queue(), ^{
       [self removableMediaPathsDidChange];
     });
   } else {
-    NSLog(@"MountVerification: Could not verify mount at %@ after %d attempts, skipping desktop update", mountRootPath, maxAttempts);
+    NSDebugLLog(@"gwspace", @"MountVerification: Could not verify mount at %@ after %d attempts, skipping desktop update", mountRootPath, maxAttempts);
   }
 
   [pool release];
@@ -704,41 +704,41 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
 - (void)newVolumeMounted:(NSNotification *)notif
 {
-  NSLog(@"GWDesktopManager: newVolumeMounted notification received: %@", [notif userInfo]);
+  NSDebugLLog(@"gwspace", @"GWDesktopManager: newVolumeMounted notification received: %@", [notif userInfo]);
   if (win && [win isVisible]) {
     NSDictionary *dict = [notif userInfo];  
     NSString *volpath = [dict objectForKey: @"NSDevicePath"];
 
-    NSLog(@"GWDesktopManager: Calling newVolumeMountedAtPath for %@", volpath);
+    NSDebugLLog(@"gwspace", @"GWDesktopManager: Calling newVolumeMountedAtPath for %@", volpath);
     [[self desktopView] newVolumeMountedAtPath: volpath];
   } else {
-    NSLog(@"GWDesktopManager: Desktop window not visible, skipping mount display");
+    NSDebugLLog(@"gwspace", @"GWDesktopManager: Desktop window not visible, skipping mount display");
   }
 }
 
 - (void)mountedVolumeWillUnmount:(NSNotification *)notif
 {
-  NSLog(@"GWDesktopManager: mountedVolumeWillUnmount notification received: %@", [notif userInfo]);
+  NSDebugLLog(@"gwspace", @"GWDesktopManager: mountedVolumeWillUnmount notification received: %@", [notif userInfo]);
   if (win && [win isVisible]) {
     NSDictionary *dict = [notif userInfo];  
     NSString *volpath = [dict objectForKey: @"NSDevicePath"];
 
-    NSLog(@"GWDesktopManager: Processing will unmount for %@", volpath);
+    NSDebugLLog(@"gwspace", @"GWDesktopManager: Processing will unmount for %@", volpath);
     [fsnodeRep lockPaths: [NSArray arrayWithObject: volpath]];
     [[self desktopView] workspaceWillUnmountVolumeAtPath: volpath];
   } else {
-    NSLog(@"GWDesktopManager: Desktop window not visible, skipping will unmount processing");
+    NSDebugLLog(@"gwspace", @"GWDesktopManager: Desktop window not visible, skipping will unmount processing");
   }
 }
 
 - (void)mountedVolumeDidUnmount:(NSNotification *)notif
 {
-  NSLog(@"GWDesktopManager: mountedVolumeDidUnmount notification received: %@", [notif userInfo]);
+  NSDebugLLog(@"gwspace", @"GWDesktopManager: mountedVolumeDidUnmount notification received: %@", [notif userInfo]);
   if (win && [win isVisible]) {
     NSDictionary *dict = [notif userInfo];  
     NSString *volpath = [dict objectForKey: @"NSDevicePath"];
 
-    NSLog(@"GWDesktopManager: Processing did unmount for %@", volpath);
+    NSDebugLLog(@"gwspace", @"GWDesktopManager: Processing did unmount for %@", volpath);
     [fsnodeRep unlockPaths: [NSArray arrayWithObject: volpath]];
     [[self desktopView] workspaceDidUnmountVolumeAtPath: volpath];
     
@@ -752,11 +752,11 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
                                 @"files": @[name],
                                 @"unmounted": volpath };
       
-      NSLog(@"GWDesktopManager: Posting GWFileSystemDidChangeNotification for unmount of %@", volpath);
+      NSDebugLLog(@"gwspace", @"GWDesktopManager: Posting GWFileSystemDidChangeNotification for unmount of %@", volpath);
       [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemDidChangeNotification" object:opinfo];
     }
   } else {
-    NSLog(@"GWDesktopManager: Desktop window not visible, skipping did unmount processing");
+    NSDebugLLog(@"gwspace", @"GWDesktopManager: Desktop window not visible, skipping did unmount processing");
   }
 }
 
@@ -1123,7 +1123,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       if (![watchedMountRoots containsObject: path]) {
         [manager addWatcherForPath: path];
         [watchedMountRoots addObject: path];
-        NSLog(@"MPointWatcher: Started watching mount root: %@", path);
+        NSDebugLLog(@"gwspace", @"MPointWatcher: Started watching mount root: %@", path);
       }
     }
   }
@@ -1138,7 +1138,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   /* Remove all watchers we registered */
   for (NSString *path in watchedMountRoots) {
     [manager removeWatcherForPath: path];
-    NSLog(@"MPointWatcher: Stopped watching mount root: %@", path);
+    NSDebugLLog(@"gwspace", @"MPointWatcher: Stopped watching mount root: %@", path);
   }
   [watchedMountRoots removeAllObjects];
   

@@ -136,14 +136,14 @@
 
 - (void)newVolumeMountedAtPath:(NSString *)vpath
 {
-  NSLog(@"GWDesktopView: newVolumeMountedAtPath called for %@", vpath);
+  NSDebugLLog(@"gwspace", @"GWDesktopView: newVolumeMountedAtPath called for %@", vpath);
   FSNode *vnode = [FSNode nodeWithPath: vpath];
 
   [vnode setMountPoint: YES];
   [self removeRepOfSubnode: vnode];
   [self addRepForSubnode: vnode];
   [self tile];
-  NSLog(@"GWDesktopView: Added desktop icon for mount %@", vpath);
+  NSDebugLLog(@"gwspace", @"GWDesktopView: Added desktop icon for mount %@", vpath);
 }
 
 - (void)workspaceWillUnmountVolumeAtPath:(NSString *)vpath
@@ -151,7 +151,7 @@
   if (vpath)
     {
       [expectedUnmountPaths setObject:[NSDate date] forKey:vpath];
-      NSLog(@"GWDesktopView: Marked path as expected unmount: %@", vpath);
+      NSDebugLLog(@"gwspace", @"GWDesktopView: Marked path as expected unmount: %@", vpath);
     }
   [self checkLockedReps];
 }
@@ -162,7 +162,7 @@
   
   if (!vpath)
     {
-      NSLog(@"GWDesktopView: workspaceDidUnmountVolumeAtPath called with nil path");
+      NSDebugLLog(@"gwspace", @"GWDesktopView: workspaceDidUnmountVolumeAtPath called with nil path");
       return;
     }
   
@@ -184,7 +184,7 @@
         }
       @catch (NSException *exception)
         {
-          NSLog(@"Exception while removing icon for volume %@: %@", vpath, exception);
+          NSDebugLLog(@"gwspace", @"Exception while removing icon for volume %@: %@", vpath, exception);
         }
     }
     
@@ -212,7 +212,7 @@
   if (vpath)
     {
       [expectedUnmountPaths setObject:[NSDate date] forKey:vpath];
-      NSLog(@"GWDesktopView: Externally marked path as expected unmount: %@", vpath);
+      NSDebugLLog(@"gwspace", @"GWDesktopView: Externally marked path as expected unmount: %@", vpath);
     }
 }
 
@@ -271,7 +271,7 @@
       v = [mountedVolumes objectAtIndex:i];
       if ([rvPaths indexOfObject:v] == NSNotFound)
 	{
-	  NSLog(@"removing: %@", v);
+	  NSDebugLLog(@"gwspace", @"removing: %@", v);
 	  [volumesToRemove addObject:v];
 	}
     }
@@ -294,7 +294,7 @@
               && [now timeIntervalSinceDate:markedDate] < expectedUnmountTimeout)
             {
               /* This unmount was expected — suppress the warning. */
-              NSLog(@"GWDesktopView: Suppressing unexpected-unmount warning for %@ (expected)", v);
+              NSDebugLLog(@"gwspace", @"GWDesktopView: Suppressing unexpected-unmount warning for %@ (expected)", v);
             }
           else
             {
@@ -359,7 +359,7 @@
         }
       @catch (NSException *exception)
         {
-          NSLog(@"Exception while unmounting volume at %@: %@", v, exception);
+          NSDebugLLog(@"gwspace", @"Exception while unmounting volume at %@: %@", v, exception);
         }
     }
 
@@ -1134,27 +1134,27 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       unichar character = [characters characterAtIndex: 0];
 
-      NSLog(@"GWDesktopView.keyDown: character=0x%x, flags=0x%x", character, flags);
+      NSDebugLLog(@"gwspace", @"GWDesktopView.keyDown: character=0x%x, flags=0x%x", character, flags);
 
       // Handle arrow keys with modifiers
       if (character == NSDownArrowFunctionKey)
         {
-          NSLog(@"GWDesktopView: NSDownArrowFunctionKey pressed, flags=0x%x", flags);
+          NSDebugLLog(@"gwspace", @"GWDesktopView: NSDownArrowFunctionKey pressed, flags=0x%x", flags);
           if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
             {
-              NSLog(@"GWDesktopView: Shift-Down detected - opening selection");
+              NSDebugLLog(@"gwspace", @"GWDesktopView: Shift-Down detected - opening selection");
               [manager openSelectionInNewViewer: NO];
               return;
             }
           if ((flags & NSCommandKeyMask) && (flags & NSShiftKeyMask))
             {
-              NSLog(@"GWDesktopView: Command-Shift-Down detected - opening as folder");
+              NSDebugLLog(@"gwspace", @"GWDesktopView: Command-Shift-Down detected - opening as folder");
               [manager openSelectionAsFolder];
               return;
             }
           if ((flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
             {
-              NSLog(@"GWDesktopView: Command-Down detected - opening selection");
+              NSDebugLLog(@"gwspace", @"GWDesktopView: Command-Down detected - opening selection");
               [manager openSelectionInNewViewer: NO];
               return;
             }
@@ -1601,28 +1601,28 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSString *fpath;
   NSUInteger i;
 
-  NSLog(@"DEBUG: GWDesktopView watchedPathChanged called");
-  NSLog(@"DEBUG: event = %@", event);
-  NSLog(@"DEBUG: path = %@", [info objectForKey: @"path"]);
-  NSLog(@"DEBUG: files = %@", files);
-  NSLog(@"DEBUG: ndpath = %@", ndpath);
+  NSDebugLLog(@"gwspace", @"DEBUG: GWDesktopView watchedPathChanged called");
+  NSDebugLLog(@"gwspace", @"DEBUG: event = %@", event);
+  NSDebugLLog(@"gwspace", @"DEBUG: path = %@", [info objectForKey: @"path"]);
+  NSDebugLLog(@"gwspace", @"DEBUG: files = %@", files);
+  NSDebugLLog(@"gwspace", @"DEBUG: ndpath = %@", ndpath);
 
   if ([event isEqual: @"GWFileDeletedInWatchedDirectory"])
     {
-      NSLog(@"DEBUG: Handling GWFileDeletedInWatchedDirectory");
+      NSDebugLLog(@"gwspace", @"DEBUG: Handling GWFileDeletedInWatchedDirectory");
       for (i = 0; i < [files count]; i++)
 	{
 	  fname = [files objectAtIndex: i];
 	  fpath = [ndpath stringByAppendingPathComponent: fname];
 
-	  NSLog(@"DEBUG: Removing rep for: %@", fpath);
+	  NSDebugLLog(@"gwspace", @"DEBUG: Removing rep for: %@", fpath);
 	  [self removeRepOfSubnodePath: fpath];
 	  needupdate = YES;
 	}
     }
   else if ([event isEqual: @"GWFileCreatedInWatchedDirectory"])
     {
-      NSLog(@"DEBUG: Handling GWFileCreatedInWatchedDirectory");
+      NSDebugLLog(@"gwspace", @"DEBUG: Handling GWFileCreatedInWatchedDirectory");
       for (i = 0; i < [files count]; i++)
 	{
 	  fname = [files objectAtIndex: i];
@@ -1630,7 +1630,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 	  if ([self repOfSubnodePath: fpath] == nil)
 	    {
-	      NSLog(@"DEBUG: Adding rep for: %@", fpath);
+	      NSDebugLLog(@"gwspace", @"DEBUG: Adding rep for: %@", fpath);
 	      [self addRepForSubnodePath: fpath];
 	      needupdate = YES;
 	    }
@@ -1641,14 +1641,14 @@ static void GWHighlightFrameRect(NSRect aRect)
       /* A file/folder was moved away from this directory */
       NSString *oldpath = [info objectForKey: @"oldpath"];
       
-      NSLog(@"DEBUG: Handling GWWatchedPathRenamed, oldpath = %@", oldpath);
+      NSDebugLLog(@"gwspace", @"DEBUG: Handling GWWatchedPathRenamed, oldpath = %@", oldpath);
       
       if (oldpath)
         {
           fname = [oldpath lastPathComponent];
           fpath = [ndpath stringByAppendingPathComponent: fname];
           
-          NSLog(@"DEBUG: Removing rep for: %@", fpath);
+          NSDebugLLog(@"gwspace", @"DEBUG: Removing rep for: %@", fpath);
           [self removeRepOfSubnodePath: fpath];
           needupdate = YES;
         }
@@ -1656,7 +1656,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   if (needupdate)
     {
-      NSLog(@"DEBUG: Desktop view needs update, calling tile");
+      NSDebugLLog(@"gwspace", @"DEBUG: Desktop view needs update, calling tile");
       [self tile];
       [self setNeedsDisplay: YES];
       [self selectionDidChange];
@@ -1976,14 +1976,14 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
   else
     {
-      NSLog(@"GWDesktopView: Drag rejected - no supported pasteboard type");
+      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag rejected - no supported pasteboard type");
       return NSDragOperationNone;
     }
 
   count = [sourcePaths count];
   if (count == 0)
     {
-      NSLog(@"GWDesktopView: Drag rejected - empty source paths");
+      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag rejected - empty source paths");
       return NSDragOperationNone;
     }
 
@@ -2001,7 +2001,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   if (dragLocalIcon)
     {
-      NSLog(@"GWDesktopView: Drag accepted - local icon reposition");
+      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag accepted - local icon reposition");
       isDragTarget = YES;
       dragPoint = NSZeroPoint;
       DESTROY (dragIcon);
@@ -2011,7 +2011,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   if ([node isWritable] == NO)
     {
-      NSLog(@"GWDesktopView: Drag rejected - desktop node %@ is not writable", [node path]);
+      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag rejected - desktop node %@ is not writable", [node path]);
       return NSDragOperationNone;
     }
 
@@ -2020,13 +2020,13 @@ static void GWHighlightFrameRect(NSRect aRect)
   basePath = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
   if ([basePath isEqual: nodePath])
     {
-      NSLog(@"GWDesktopView: Drag rejected - source and destination are the same (%@)", nodePath);
+      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag rejected - source and destination are the same (%@)", nodePath);
       return NSDragOperationNone;
     }
 
   if ([sourcePaths containsObject: nodePath])
     {
-      NSLog(@"GWDesktopView: Drag rejected - would create circular reference (desktop in %@)", nodePath);
+      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag rejected - would create circular reference (desktop in %@)", nodePath);
       return NSDragOperationNone;
     }
 

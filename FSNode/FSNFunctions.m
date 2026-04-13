@@ -159,7 +159,7 @@ void showAlertInRecycler(Class c)
 
 void showAlertInvalidName(Class c)
 {
-  NSLog(@"Class %@ Bundle %@", c, [NSBundle bundleForClass:c]);
+  NSDebugLLog(@"gwspace", @"Class %@ Bundle %@", c, [NSBundle bundleForClass:c]);
   NSRunAlertPanel(NSLocalizedStringFromTableInBundle(@"Error", nil, [NSBundle bundleForClass:c], @""),
                   NSLocalizedStringFromTableInBundle(@"Invalid name", nil, [NSBundle bundleForClass:c], @""),
                   NSLocalizedStringFromTableInBundle(@"Continue", nil, [NSBundle bundleForClass:c], @""),

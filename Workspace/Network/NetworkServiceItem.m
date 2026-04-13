@@ -146,7 +146,7 @@
     NSString *path = [[[NSString alloc] initWithData:pathData 
                                              encoding:NSUTF8StringEncoding] autorelease];
     if (path && [path length] > 0) {
-      NSLog(@"NetworkServiceItem: Found path in TXT record: %@", path);
+      NSDebugLLog(@"gwspace", @"NetworkServiceItem: Found path in TXT record: %@", path);
       return path;
     }
   }
@@ -183,7 +183,7 @@
     NSString *username = [[[NSString alloc] initWithData:userData 
                                                  encoding:NSUTF8StringEncoding] autorelease];
     if (username && [username length] > 0) {
-      NSLog(@"NetworkServiceItem: Found username in TXT record: %@", username);
+      NSDebugLLog(@"gwspace", @"NetworkServiceItem: Found username in TXT record: %@", username);
       return username;
     }
   }

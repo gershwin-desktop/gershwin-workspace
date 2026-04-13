@@ -46,7 +46,7 @@ NSString * const NetworkVirtualPath = @"/Network";
     node->flags.package = 0;
     node->flags.unknown = 0;
     
-    NSLog(@"NetworkFSNode: Created network root node at %@", NetworkVirtualPath);
+    NSDebugLLog(@"gwspace", @"NetworkFSNode: Created network root node at %@", NetworkVirtualPath);
   }
   return [node autorelease];
 }
@@ -104,7 +104,7 @@ NSString * const NetworkVirtualPath = @"/Network";
     ASSIGN(modDate, [NSDate date]);
     ASSIGN(crDate, [NSDate date]);
     
-    NSLog(@"NetworkFSNode: Created service node: %@ (type: %@)", 
+    NSDebugLLog(@"gwspace", @"NetworkFSNode: Created service node: %@ (type: %@)", 
           serviceName, [item type]);
   }
   return self;
@@ -152,7 +152,7 @@ NSString * const NetworkVirtualPath = @"/Network";
   NSArray *services = [manager allServices];
   NSMutableArray *nodes = [NSMutableArray arrayWithCapacity:[services count]];
   
-  NSLog(@"NetworkFSNode: Getting subnodes, %lu services available", 
+  NSDebugLLog(@"gwspace", @"NetworkFSNode: Getting subnodes, %lu services available", 
         (unsigned long)[services count]);
   
   /* Ensure unique visible names by appending -2, -3, ... for duplicates */
@@ -406,49 +406,49 @@ NSString * const NetworkVirtualPath = @"/Network";
 
 - (NSString *)openNetworkService
 {
-  NSLog(@"NetworkFSNode openNetworkService: called for path: %@", path);
-  NSLog(@"NetworkFSNode openNetworkService: serviceItem: %@", serviceItem);
+  NSDebugLLog(@"gwspace", @"NetworkFSNode openNetworkService: called for path: %@", path);
+  NSDebugLLog(@"gwspace", @"NetworkFSNode openNetworkService: serviceItem: %@", serviceItem);
   
   if (!serviceItem) {
     /* This is the network root, just return the path */
-    NSLog(@"NetworkFSNode openNetworkService: no serviceItem, returning path");
+    NSDebugLLog(@"gwspace", @"NetworkFSNode openNetworkService: no serviceItem, returning path");
     return path;
   }
   
-  NSLog(@"NetworkFSNode openNetworkService: isSFTPService: %d, isAFPService: %d, isWebDAVService: %d", 
+  NSDebugLLog(@"gwspace", @"NetworkFSNode openNetworkService: isSFTPService: %d, isAFPService: %d, isWebDAVService: %d", 
         [serviceItem isSFTPService], [serviceItem isAFPService], [serviceItem isWebDAVService]);
   
   if ([serviceItem isSFTPService]) {
     /* Attempt to mount the SFTP service using sshfs (takes precedence) */
-    NSLog(@"NetworkFSNode: Attempting to mount SFTP service: %@", [serviceItem name]);
+    NSDebugLLog(@"gwspace", @"NetworkFSNode: Attempting to mount SFTP service: %@", [serviceItem name]);
     
     NetworkVolumeManager *volumeManager = [NetworkVolumeManager sharedManager];
     NSString *mountPoint = [volumeManager mountSFTPService:serviceItem];
     
     if (mountPoint) {
-      NSLog(@"NetworkFSNode: SFTP service mounted at: %@", mountPoint);
+      NSDebugLLog(@"gwspace", @"NetworkFSNode: SFTP service mounted at: %@", mountPoint);
       return mountPoint;
     } else {
-      NSLog(@"NetworkFSNode: Failed to mount SFTP service");
+      NSDebugLLog(@"gwspace", @"NetworkFSNode: Failed to mount SFTP service");
       return nil;
     }
   } else if ([serviceItem isWebDAVService]) {
     /* Attempt to mount WebDAV service using AVFS */
-    NSLog(@"NetworkFSNode: Attempting to mount WebDAV service: %@", [serviceItem name]);
+    NSDebugLLog(@"gwspace", @"NetworkFSNode: Attempting to mount WebDAV service: %@", [serviceItem name]);
     
     NetworkVolumeManager *volumeManager = [NetworkVolumeManager sharedManager];
     NSString *mountPoint = [volumeManager mountWebDAVService:serviceItem];
     
     if (mountPoint) {
-      NSLog(@"NetworkFSNode: WebDAV service mounted at: %@", mountPoint);
+      NSDebugLLog(@"gwspace", @"NetworkFSNode: WebDAV service mounted at: %@", mountPoint);
       return mountPoint;
     } else {
-      NSLog(@"NetworkFSNode: Failed to mount WebDAV service");
+      NSDebugLLog(@"gwspace", @"NetworkFSNode: Failed to mount WebDAV service");
       return nil;
     }
   } else if ([serviceItem isAFPService]) {
     /* AFP mounting not yet implemented */
-    NSLog(@"NetworkFSNode: AFP mounting not yet implemented");
+    NSDebugLLog(@"gwspace", @"NetworkFSNode: AFP mounting not yet implemented");
     NSAlert *alert = [[NSAlert alloc] init];
     [alert setMessageText:NSLocalizedString(@"Not Implemented", @"")];
     [alert setInformativeText:NSLocalizedString(

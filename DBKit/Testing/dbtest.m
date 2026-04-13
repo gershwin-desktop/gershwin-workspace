@@ -112,8 +112,8 @@ int main(int argc, char** argv)
   test6(tree);
   [tree end];
     
-  NSLog(@"%.2f", [[NSDate date] timeIntervalSinceDate: date]);
-  NSLog(@"done");
+  NSDebugLLog(@"gwspace", @"%.2f", [[NSDate date] timeIntervalSinceDate: date]);
+  NSDebugLLog(@"gwspace", @"done");
       
   RELEASE (tree);
   RELEASE (delegate);

@@ -52,7 +52,7 @@ static NSString *nibName = @"DesktopPref";
     {
       if ([NSBundle loadNibNamed: nibName owner: self] == NO)
 	{
-	  NSLog(@"failed to load %@!", nibName);
+	  NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
 	}
       else
 	{

@@ -300,7 +300,7 @@
     return NO;
   }
 
-  NSLog(@"DiskFormatOperation: Successfully formatted %@", devicePath);
+  NSDebugLLog(@"gwspace", @"DiskFormatOperation: Successfully formatted %@", devicePath);
   return YES;
 }
 

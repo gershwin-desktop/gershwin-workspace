@@ -123,7 +123,7 @@ static uint32_t swapBytes32(uint32_t x) {
     uint32_t offsetCount = [rootBlock readUInt32];
     uint32_t unknown2 __attribute__((unused)) = [rootBlock readUInt32];
     
-    if (gDSStoreVerbose) NSLog(@"Root block: offsetCount=%u, unknown=%u", offsetCount, unknown2);
+    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Root block: offsetCount=%u, unknown=%u", offsetCount, unknown2);
     
     // Read offset table (always 256 entries, padded with zeros)
     NSMutableArray *offsets = [NSMutableArray arrayWithCapacity:offsetCount];
@@ -131,13 +131,13 @@ static uint32_t swapBytes32(uint32_t x) {
         uint32_t offset = [rootBlock readUInt32];
         if (i < offsetCount) {
             [offsets addObject:[NSNumber numberWithUnsignedInt:offset]];
-            if (gDSStoreVerbose) NSLog(@"Offset[%u]: 0x%08x", i, offset);
+            if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Offset[%u]: 0x%08x", i, offset);
         }
     }
     
     // Read TOC count
     uint32_t tocCount = [rootBlock readUInt32];
-    if (gDSStoreVerbose) NSLog(@"TOC count: %u", tocCount);
+    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"TOC count: %u", tocCount);
     
     // Parse ALL directory entries robustly (not just DSDB)
     NSMutableDictionary *directoryEntries = [NSMutableDictionary dictionaryWithCapacity:tocCount];
@@ -147,7 +147,7 @@ static uint32_t swapBytes32(uint32_t x) {
         uint32_t blockNum = [rootBlock readUInt32];
         
         NSString *name = [[NSString alloc] initWithData:nameData encoding:NSASCIIStringEncoding];
-        if (gDSStoreVerbose) NSLog(@"TOC[%u]: name='%@' -> block %u", i, name, blockNum);
+        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"TOC[%u]: name='%@' -> block %u", i, name, blockNum);
         
         // Store ALL directory entries for future extensibility
         [directoryEntries setObject:[NSNumber numberWithUnsignedInt:blockNum] forKey:name];
@@ -159,13 +159,13 @@ static uint32_t swapBytes32(uint32_t x) {
     // Look for DSDB directory entry (robust approach)
     NSNumber *dsdbBlockNumObj = [directoryEntries objectForKey:@"DSDB"];
     if (!dsdbBlockNumObj) {
-        if (gDSStoreVerbose) NSLog(@"DSDB directory not found in TOC");
+        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"DSDB directory not found in TOC");
         return NO;
     }
     
     uint32_t dsdbBlockNum = [dsdbBlockNumObj unsignedIntValue];
     if (dsdbBlockNum >= [offsets count]) {
-        if (gDSStoreVerbose) NSLog(@"DSDB block number %u exceeds offset table size %lu", dsdbBlockNum, (unsigned long)[offsets count]);
+        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"DSDB block number %u exceeds offset table size %lu", dsdbBlockNum, (unsigned long)[offsets count]);
         return NO;
     }
     
@@ -174,12 +174,12 @@ static uint32_t swapBytes32(uint32_t x) {
     uint32_t dsdbOffset = dsdbAddr & ~0x1F;  // Remove size bits
     uint32_t dsdbSize = 1 << (dsdbAddr & 0x1F);  // Extract size bits
     
-    if (gDSStoreVerbose) NSLog(@"DSDB block %u: addr=0x%08x, offset=0x%x, size=%u", dsdbBlockNum, dsdbAddr, dsdbOffset, dsdbSize);
+    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"DSDB block %u: addr=0x%08x, offset=0x%x, size=%u", dsdbBlockNum, dsdbAddr, dsdbOffset, dsdbSize);
     
     // Read DSDB superblock (NOTE: +4 for reference library file offset correction)
     DSBuddyBlock *dsdbBlock = [_allocator blockAtOffset:dsdbOffset + 4 size:dsdbSize];
     if (!dsdbBlock) {
-        if (gDSStoreVerbose) NSLog(@"Failed to read DSDB block at offset %u", dsdbOffset + 4);
+        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Failed to read DSDB block at offset %u", dsdbOffset + 4);
         return NO;
     }
     
@@ -190,13 +190,13 @@ static uint32_t swapBytes32(uint32_t x) {
     uint32_t nodesNumber = [dsdbBlock readUInt32];
     uint32_t pageSize = [dsdbBlock readUInt32];
     
-    if (gDSStoreVerbose) NSLog(@"DSDB: rootAddr=%u levels=%u records=%u nodes=%u pageSize=%u",
+    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"DSDB: rootAddr=%u levels=%u records=%u nodes=%u pageSize=%u",
           rootAddress, levelsNumber, recordsNumber, nodesNumber, pageSize);
     
     [_entries removeAllObjects];
     
     if (recordsNumber == 0) {
-        if (gDSStoreVerbose) NSLog(@"Empty B-tree");
+        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Empty B-tree");
         [dsdbBlock close];
         _isLoaded = YES;
         return YES;
@@ -212,12 +212,12 @@ static uint32_t swapBytes32(uint32_t x) {
         uint32_t btreeOffset = btreeAddr & ~0x1F;
         uint32_t btreeSize = 1 << (btreeAddr & 0x1F);
         
-        if (gDSStoreVerbose) NSLog(@"B-tree block %u: addr=0x%08x, offset=0x%x, size=%u", rootAddress, btreeAddr, btreeOffset, btreeSize);
+        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"B-tree block %u: addr=0x%08x, offset=0x%x, size=%u", rootAddress, btreeAddr, btreeOffset, btreeSize);
         
         // Read B-tree data (+4 for file offset correction)
         DSBuddyBlock *btreeBlock = [_allocator blockAtOffset:btreeOffset + 4 size:btreeSize - 4];
         if (!btreeBlock) {
-            if (gDSStoreVerbose) NSLog(@"Failed to read B-tree block");
+            if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Failed to read B-tree block");
             return NO;
         }
         
@@ -228,7 +228,7 @@ static uint32_t swapBytes32(uint32_t x) {
             return YES;
         }
         @catch (NSException *exception) {
-            NSLog(@"Error parsing B-tree: %@", [exception description]);
+            NSDebugLLog(@"gwspace", @"Error parsing B-tree: %@", [exception description]);
             [btreeBlock close];
             return NO;
         }
@@ -238,12 +238,12 @@ static uint32_t swapBytes32(uint32_t x) {
         NSUInteger btreeOffset = dsdbOffset + 4 + rootAddress;
         NSUInteger btreeSize = pageSize;  // Use pageSize from DSDB
         
-        if (gDSStoreVerbose) NSLog(@"B-tree at relative offset %u (absolute 0x%lx), size=%lu", rootAddress, (unsigned long)btreeOffset, (unsigned long)btreeSize);
+        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"B-tree at relative offset %u (absolute 0x%lx), size=%lu", rootAddress, (unsigned long)btreeOffset, (unsigned long)btreeSize);
         
         // Read B-tree data
         DSBuddyBlock *btreeBlock = [_allocator blockAtOffset:btreeOffset size:btreeSize - 4];
         if (!btreeBlock) {
-            if (gDSStoreVerbose) NSLog(@"Failed to read B-tree block at relative offset");
+            if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Failed to read B-tree block at relative offset");
             return NO;
         }
         
@@ -254,7 +254,7 @@ static uint32_t swapBytes32(uint32_t x) {
             return YES;
         }
         @catch (NSException *exception) {
-            NSLog(@"Error parsing B-tree: %@", [exception description]);
+            NSDebugLLog(@"gwspace", @"Error parsing B-tree: %@", [exception description]);
             [btreeBlock close];
             return NO;
         }
@@ -262,21 +262,21 @@ static uint32_t swapBytes32(uint32_t x) {
 }
 
 - (void)readBTreeNode:(DSBuddyBlock *)block address:(uint32_t)address isLeaf:(BOOL)isLeaf {
-    if (gDSStoreVerbose) NSLog(@"Reading B-tree node at address 0x%x, isLeaf: %@", address, isLeaf ? @"YES" : @"NO");
+    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Reading B-tree node at address 0x%x, isLeaf: %@", address, isLeaf ? @"YES" : @"NO");
     
     uint32_t nodeId = [block readUInt32];
     uint32_t recordsCount = [block readUInt32];
     
-    if (gDSStoreVerbose) NSLog(@"Node ID: 0x%x, Records count: %u", nodeId, recordsCount);
+    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Node ID: 0x%x, Records count: %u", nodeId, recordsCount);
     
     if (isLeaf) {
         // Read leaf records (actual DS_Store entries)
         for (uint32_t i = 0; i < recordsCount; i++) {
-            if (gDSStoreVerbose) NSLog(@"Reading leaf record %u", i);
+            if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Reading leaf record %u", i);
             
             uint32_t filenameLength = [block readUInt32];
             if (filenameLength == 0 || filenameLength > 1024) {
-                if (gDSStoreVerbose) NSLog(@"Invalid filename length: %u", filenameLength);
+                if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Invalid filename length: %u", filenameLength);
                 break;
             }
             
@@ -291,7 +291,7 @@ static uint32_t swapBytes32(uint32_t x) {
             NSData *typeData = [block readBytes:4];
             NSString *type = [[NSString alloc] initWithData:typeData encoding:NSASCIIStringEncoding];
             
-            if (gDSStoreVerbose) NSLog(@"Entry: filename='%@', code='%@', type='%@'", filename, code, type);
+            if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Entry: filename='%@', code='%@', type='%@'", filename, code, type);
             
             // Read value based on type
             id value = nil;
@@ -350,7 +350,7 @@ static uint32_t swapBytes32(uint32_t x) {
     } else {
         // Read internal node pointers
         for (uint32_t i = 0; i < recordsCount; i++) {
-            NSLog(@"Reading internal record %u", i);
+            NSDebugLLog(@"gwspace", @"Reading internal record %u", i);
             
             uint32_t childAddress = [block readUInt32];
             uint32_t filenameLength = [block readUInt32];
@@ -361,7 +361,7 @@ static uint32_t swapBytes32(uint32_t x) {
             
             // Recursively read child node
             if (childAddress != 0) {
-                NSLog(@"Following child pointer to address 0x%x", childAddress);
+                NSDebugLLog(@"gwspace", @"Following child pointer to address 0x%x", childAddress);
                 
                 // Decode child address
                 uint32_t childOffset = childAddress & ~0x1F;
@@ -380,7 +380,7 @@ static uint32_t swapBytes32(uint32_t x) {
 
 - (BOOL)save {
     if (!_isLoaded) {
-        NSLog(@"Cannot save unloaded store");
+        NSDebugLLog(@"gwspace", @"Cannot save unloaded store");
         return NO;
     }
     
@@ -540,7 +540,7 @@ static uint32_t swapBytes32(uint32_t x) {
     uint32_t entryCount = [_entries count];
     uint32_t recordCount = swapBytes32(entryCount);  // Convert to big-endian
     
-    NSLog(@"DEBUG SAVE: Writing %u entries, swapped recordCount=0x%08x", entryCount, recordCount);
+    NSDebugLLog(@"gwspace", @"DEBUG SAVE: Writing %u entries, swapped recordCount=0x%08x", entryCount, recordCount);
     
     [fileData appendBytes:&nodeType length:4];
     [fileData appendBytes:&recordCount length:4];
@@ -570,11 +570,11 @@ static uint32_t swapBytes32(uint32_t x) {
                                    error:&error];
     
     if (!success) {
-        NSLog(@"Failed to write .DS_Store file: %@", [error localizedDescription]);
+        NSDebugLLog(@"gwspace", @"Failed to write .DS_Store file: %@", [error localizedDescription]);
         return NO;
     }
     
-    NSLog(@"Saved .DS_Store file: %@ (%lu bytes)", _filePath, (unsigned long)[fileData length]);
+    NSDebugLLog(@"gwspace", @"Saved .DS_Store file: %@ (%lu bytes)", _filePath, (unsigned long)[fileData length]);
     return YES;
 }
 
@@ -924,7 +924,7 @@ static uint32_t swapBytes32(uint32_t x) {
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
         if (gDSStoreVerbose) {
-            NSLog(@"Column view settings only available in spatial/icon view mode");
+            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
         }
         return NO;
     }
@@ -943,7 +943,7 @@ static uint32_t swapBytes32(uint32_t x) {
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
         if (gDSStoreVerbose) {
-            NSLog(@"Column view settings only available in spatial/icon view mode");
+            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
         }
         return;
     }
@@ -951,7 +951,7 @@ static uint32_t swapBytes32(uint32_t x) {
     // Note: cvlc is a complex blob structure; this is a placeholder
     // Real implementation would properly encode the column visibility blob
     if (gDSStoreVerbose) {
-        NSLog(@"Column view relative dates setting: %@", show ? @"YES" : @"NO");
+        NSDebugLLog(@"gwspace", @"Column view relative dates setting: %@", show ? @"YES" : @"NO");
     }
 }
 
@@ -960,7 +960,7 @@ static uint32_t swapBytes32(uint32_t x) {
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
         if (gDSStoreVerbose) {
-            NSLog(@"Column view settings only available in spatial/icon view mode");
+            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
         }
         return 0;
     }
@@ -980,7 +980,7 @@ static uint32_t swapBytes32(uint32_t x) {
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
         if (gDSStoreVerbose) {
-            NSLog(@"Column view settings only available in spatial/icon view mode");
+            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
         }
         return;
     }
@@ -990,7 +990,7 @@ static uint32_t swapBytes32(uint32_t x) {
     [self setEntry:entry];
     
     if (gDSStoreVerbose) {
-        NSLog(@"Set column width for '%@': %d", columnName, width);
+        NSDebugLLog(@"gwspace", @"Set column width for '%@': %d", columnName, width);
     }
 }
 
@@ -999,7 +999,7 @@ static uint32_t swapBytes32(uint32_t x) {
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
         if (gDSStoreVerbose) {
-            NSLog(@"Column view settings only available in spatial/icon view mode");
+            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
         }
         return NO;
     }
@@ -1020,7 +1020,7 @@ static uint32_t swapBytes32(uint32_t x) {
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
         if (gDSStoreVerbose) {
-            NSLog(@"Column view settings only available in spatial/icon view mode");
+            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
         }
         return;
     }
@@ -1030,7 +1030,7 @@ static uint32_t swapBytes32(uint32_t x) {
     [self setEntry:entry];
     
     if (gDSStoreVerbose) {
-        NSLog(@"Set column '%@' visibility: %@", columnName, visible ? @"visible" : @"hidden");
+        NSDebugLLog(@"gwspace", @"Set column '%@' visibility: %@", columnName, visible ? @"visible" : @"hidden");
     }
 }
 
@@ -1039,7 +1039,7 @@ static uint32_t swapBytes32(uint32_t x) {
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
         if (gDSStoreVerbose) {
-            NSLog(@"Column view settings only available in spatial/icon view mode");
+            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
         }
         return nil;
     }
@@ -1066,7 +1066,7 @@ static uint32_t swapBytes32(uint32_t x) {
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
         if (gDSStoreVerbose) {
-            NSLog(@"Column view settings only available in spatial/icon view mode");
+            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
         }
         return;
     }
@@ -1085,7 +1085,7 @@ static uint32_t swapBytes32(uint32_t x) {
     }
     
     if (gDSStoreVerbose) {
-        NSLog(@"Set visible columns: %@", columns);
+        NSDebugLLog(@"gwspace", @"Set visible columns: %@", columns);
     }
 }
 
@@ -1191,7 +1191,7 @@ static uint32_t swapBytes32(uint32_t x) {
         _dirty = NO;
         return YES;
     } @catch (NSException *exception) {
-        NSLog(@"Error saving DS_Store file: %@", [exception reason]);
+        NSDebugLLog(@"gwspace", @"Error saving DS_Store file: %@", [exception reason]);
         return NO;
     }
 }

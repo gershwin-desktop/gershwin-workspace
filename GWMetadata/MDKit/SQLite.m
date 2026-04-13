@@ -34,7 +34,7 @@
 
 #define GWDebugLog(format, args...) \
   do { if (GW_DEBUG_LOG) \
-    NSLog(format , ## args); } while (0)
+    NSDebugLLog(@"gwspace", format , ## args); } while (0)
 
 #define MAX_RETRY 1000
 
@@ -108,7 +108,7 @@
       
       if (([fm fileExistsAtPath: dbpath isDirectory: &isdir] &isdir) == NO) {
         if ([fm createDirectoryAtPath: dbpath attributes: nil] == NO) { 
-          NSLog(@"unable to create: %@", dbpath);
+          NSDebugLLog(@"gwspace", @"unable to create: %@", dbpath);
           return NO;
         }
       }
@@ -117,7 +117,7 @@
     dbpath = [dbpath stringByAppendingPathComponent: dbname];
     
     if (sqlite3_open([dbpath fileSystemRepresentation], &db) != SQLITE_OK) {
-      NSLog(@"%s", sqlite3_errmsg(db));
+      NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
 		  return NO;	    
     }
   
@@ -149,7 +149,7 @@
       
       if (([fm fileExistsAtPath: dbpath isDirectory: &isdir] &isdir) == NO) {
         if ([fm createDirectoryAtPath: dbpath attributes: nil] == NO) { 
-          NSLog(@"unable to create: %@", dbpath);
+          NSDebugLLog(@"gwspace", @"unable to create: %@", dbpath);
           return NO;
         }
       }
@@ -182,10 +182,10 @@
   char *err;
 
   if (sqlite3_exec(db, [query UTF8String], NULL, 0, &err) != SQLITE_OK) {
-    NSLog(@"error at %@", query);
+    NSDebugLLog(@"gwspace", @"error at %@", query);
     
     if (err != NULL) {
-      NSLog(@"%s", err);
+      NSDebugLLog(@"gwspace", @"%s", err);
       sqlite3_free(err); 
     }
       
@@ -205,7 +205,7 @@
   err = sqlite3_prepare(db, qbuff, strlen(qbuff), &stmt, NULL);
   
   if (err != SQLITE_OK) {
-    NSLog(@"%s", sqlite3_errmsg(db));
+    NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
     return NO;
   }
   
@@ -223,15 +223,15 @@
       RELEASE (arp);
 
       if (retry++ >= MAX_RETRY) {
-        NSLog(@"timeout for query: %@", query);
-        NSLog(@"%s", sqlite3_errmsg(db));
+        NSDebugLLog(@"gwspace", @"timeout for query: %@", query);
+        NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
         sqlite3_finalize(stmt);
 		    return NO;
       }
 
     } else {
-      NSLog(@"error at: %@", query);
-      NSLog(@"%s", sqlite3_errmsg(db));
+      NSDebugLLog(@"gwspace", @"error at: %@", query);
+      NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
       sqlite3_finalize(stmt);
       return NO;
     }
@@ -303,14 +303,14 @@
           RELEASE (arp);
 
           if (retry++ >= MAX_RETRY) {
-            NSLog(@"timeout for query: %@", query);
-            NSLog(@"%s", sqlite3_errmsg(db));
+            NSDebugLLog(@"gwspace", @"timeout for query: %@", query);
+            NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
 		        break;
           }
 
         } else {
-          NSLog(@"error at: %@", query);
-          NSLog(@"%i %s", err, sqlite3_errmsg(db));
+          NSDebugLLog(@"gwspace", @"error at: %@", query);
+          NSDebugLLog(@"gwspace", @"%i %s", err, sqlite3_errmsg(db));
           break;
         }
       }
@@ -319,8 +319,8 @@
     sqlite3_finalize(stmt);
     
   } else {
-    NSLog(@"error at: %@", query);
-    NSLog(@"%s", sqlite3_errmsg(db));
+    NSDebugLLog(@"gwspace", @"error at: %@", query);
+    NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
   }
   
   return lines;
@@ -483,15 +483,15 @@
         RELEASE (arp);
 
         if (retry++ > MAX_RETRY) {
-          NSLog(@"timeout for query: %@", [statement query]);
-          NSLog(@"%s", sqlite3_errmsg(db));
+          NSDebugLLog(@"gwspace", @"timeout for query: %@", [statement query]);
+          NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
           [statement reset];
 		      return NO;
         }
 
       } else {
-        NSLog(@"error at: %@", [statement query]);
-        NSLog(@"%s", sqlite3_errmsg(db));
+        NSDebugLLog(@"gwspace", @"error at: %@", [statement query]);
+        NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
         [statement reset];
         return NO;
       }
@@ -566,14 +566,14 @@
           RELEASE (arp);
 
           if (retry++ > MAX_RETRY) {
-            NSLog(@"timeout for query: %@", [statement query]);
-            NSLog(@"%s", sqlite3_errmsg(db));
+            NSDebugLLog(@"gwspace", @"timeout for query: %@", [statement query]);
+            NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
 		        break;
           }
 
         } else {
-          NSLog(@"error at: %@", [statement query]);
-          NSLog(@"%i %s", err, sqlite3_errmsg(db));
+          NSDebugLLog(@"gwspace", @"error at: %@", [statement query]);
+          NSDebugLLog(@"gwspace", @"%i %s", err, sqlite3_errmsg(db));
           break;
         }
       }
@@ -660,7 +660,7 @@
     handle = NULL;
     
     if (sqlite3_prepare(db, [query UTF8String], -1, &handle, NULL) != SQLITE_OK) {
-      NSLog(@"%s", sqlite3_errmsg(db));
+      NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
       DESTROY (self);
     }
   }
@@ -725,7 +725,7 @@
 - (BOOL)prepare
 {
   if (sqlite3_prepare(db, [query UTF8String], -1, &handle, NULL) != SQLITE_OK) {
-    NSLog(@"%s", sqlite3_errmsg(db));
+    NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
     return NO;
   }
 

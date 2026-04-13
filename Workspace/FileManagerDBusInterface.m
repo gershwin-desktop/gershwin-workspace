@@ -41,14 +41,14 @@ typedef struct DBusConnection DBusConnectionStruct;
 - (BOOL)registerOnDBus
 {
     if (!self.dbusConnection || ![self.dbusConnection isConnected]) {
-        NSLog(@"FileManagerDBusInterface: Cannot register - DBus not connected");
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Cannot register - DBus not connected");
         return NO;
     }
     
     // Register the org.freedesktop.FileManager1 service name
     BOOL serviceRegistered = [self.dbusConnection registerService:@"org.freedesktop.FileManager1"];
     if (!serviceRegistered) {
-        NSLog(@"FileManagerDBusInterface: Failed to register org.freedesktop.FileManager1 service");
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Failed to register org.freedesktop.FileManager1 service");
         return NO;
     }
     
@@ -57,11 +57,11 @@ typedef struct DBusConnection DBusConnectionStruct;
                                                           interface:@"org.freedesktop.FileManager1"
                                                             handler:self];
     if (!objectRegistered) {
-        NSLog(@"FileManagerDBusInterface: Failed to register object path");
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Failed to register object path");
         return NO;
     }
     
-    NSLog(@"FileManagerDBusInterface: Successfully registered org.freedesktop.FileManager1 on DBus");
+    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Successfully registered org.freedesktop.FileManager1 on DBus");
     return YES;
 }
 
@@ -72,13 +72,13 @@ typedef struct DBusConnection DBusConnectionStruct;
     NSString *path = [callInfo objectForKey:@"path"];
     NSString *interface = [callInfo objectForKey:@"interface"];
     
-    NSLog(@"FileManagerDBusInterface: handleDBusMethodCall invoked");
-    NSLog(@"  Path: %@", path);
-    NSLog(@"  Interface: %@", interface);
-    NSLog(@"  Method: %@", method);
+    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: handleDBusMethodCall invoked");
+    NSDebugLLog(@"gwspace", @"  Path: %@", path);
+    NSDebugLLog(@"gwspace", @"  Interface: %@", interface);
+    NSDebugLLog(@"gwspace", @"  Method: %@", method);
     
     if (!messageValue || !method) {
-        NSLog(@"FileManagerDBusInterface: Invalid method call info");
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Invalid method call info");
         return;
     }
     
@@ -87,14 +87,14 @@ typedef struct DBusConnection DBusConnectionStruct;
     // Parse method arguments
     DBusMessageIter iter;
     if (!dbus_message_iter_init(message, &iter)) {
-        NSLog(@"FileManagerDBusInterface: Method %@ called with no arguments", method);
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Method %@ called with no arguments", method);
         [self sendEmptyReply:message];
         return;
     }
     
     // First argument: array of URIs (as)
     if (dbus_message_iter_get_arg_type(&iter) != DBUS_TYPE_ARRAY) {
-        NSLog(@"FileManagerDBusInterface: Expected array of strings for URIs");
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Expected array of strings for URIs");
         [self sendErrorReply:message errorName:"org.freedesktop.DBus.Error.InvalidArgs"
                 errorMessage:"Expected array of URI strings"];
         return;
@@ -124,7 +124,7 @@ typedef struct DBusConnection DBusConnectionStruct;
         }
     }
     
-    NSLog(@"FileManagerDBusInterface: Method %@ called with %lu URIs, startupId='%@'",
+    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Method %@ called with %lu URIs, startupId='%@'",
           method, (unsigned long)[uris count], startupId);
     
     // Dispatch to appropriate handler
@@ -135,7 +135,7 @@ typedef struct DBusConnection DBusConnectionStruct;
     } else if ([method isEqualToString:@"ShowItemProperties"]) {
         [self showItemProperties:uris startupId:startupId];
     } else {
-        NSLog(@"FileManagerDBusInterface: Unknown method: %@", method);
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Unknown method: %@", method);
         [self sendErrorReply:message errorName:"org.freedesktop.DBus.Error.UnknownMethod"
                 errorMessage:[[NSString stringWithFormat:@"Unknown method: %@", method] UTF8String]];
         return;
@@ -164,7 +164,7 @@ typedef struct DBusConnection DBusConnectionStruct;
         // Skip hostname if present - look for next '/'
         const char *pathStart = strchr(afterScheme, '/');
         if (!pathStart) {
-            NSLog(@"FileManagerDBusInterface: Invalid file: URI (no path): %@", uri);
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Invalid file: URI (no path): %@", uri);
             return nil;
         }
         
@@ -180,7 +180,7 @@ typedef struct DBusConnection DBusConnectionStruct;
                 char currentHost[256];
                 if (gethostname(currentHost, sizeof(currentHost)) == 0) {
                     if (strcmp(hostname, "localhost") != 0 && strcmp(hostname, currentHost) != 0) {
-                        NSLog(@"FileManagerDBusInterface: file: URI references remote host '%s', not local", hostname);
+                        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: file: URI references remote host '%s', not local", hostname);
                         return nil;
                     }
                 }
@@ -203,7 +203,7 @@ typedef struct DBusConnection DBusConnectionStruct;
         return uri;
     }
     
-    NSLog(@"FileManagerDBusInterface: Unsupported URI scheme: %@", uri);
+    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Unsupported URI scheme: %@", uri);
     return nil;
 }
 
@@ -249,26 +249,26 @@ typedef struct DBusConnection DBusConnectionStruct;
 
 - (void)showFolders:(NSArray *)uris startupId:(NSString *)startupId
 {
-    NSLog(@"FileManagerDBusInterface: ShowFolders called with %lu URIs", (unsigned long)[uris count]);
+    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: ShowFolders called with %lu URIs", (unsigned long)[uris count]);
     
     for (NSString *uri in uris) {
         NSString *path = [self pathFromURI:uri];
         if (!path) {
-            NSLog(@"FileManagerDBusInterface: Skipping invalid URI: %@", uri);
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Skipping invalid URI: %@", uri);
             continue;
         }
         
-        NSLog(@"FileManagerDBusInterface: Opening folder: %@", path);
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Opening folder: %@", path);
         
         // Check if path exists and is a directory
         BOOL isDirectory;
         if (![[NSFileManager defaultManager] fileExistsAtPath:path isDirectory:&isDirectory]) {
-            NSLog(@"FileManagerDBusInterface: Path does not exist: %@", path);
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Path does not exist: %@", path);
             continue;
         }
         
         if (!isDirectory) {
-            NSLog(@"FileManagerDBusInterface: Path is not a directory: %@", path);
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Path is not a directory: %@", path);
             continue;
         }
         
@@ -305,7 +305,7 @@ typedef struct DBusConnection DBusConnectionStruct;
                         NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
                         [vwrsManager setPendingOpenAnimationRect: rectOnScreen];
                         foundIcon = YES;
-                        NSLog(@"FileManagerDBusInterface: Setting animation rect from viewer icon in window %@ at %@", 
+                        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Setting animation rect from viewer icon in window %@ at %@", 
                               [win title], NSStringFromRect(rectOnScreen));
                         break;
                       }
@@ -327,7 +327,7 @@ typedef struct DBusConnection DBusConnectionStruct;
                     NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
                     [vwrsManager setPendingOpenAnimationRect: rectOnScreen];
                     foundIcon = YES;
-                    NSLog(@"FileManagerDBusInterface: Setting animation rect from desktop icon at %@", 
+                    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Setting animation rect from desktop icon at %@", 
                           NSStringFromRect(rectOnScreen));
                   }
               }
@@ -362,7 +362,7 @@ typedef struct DBusConnection DBusConnectionStruct;
                                     NSRect rectOnScreen = [[dockIcon window] convertRectToScreen:rectInWindow];
                                     [vwrsManager setPendingOpenAnimationRect: rectOnScreen];
                                     foundIcon = YES;
-                                    NSLog(@"FileManagerDBusInterface: Setting animation rect from Dock icon at %@",
+                                    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Setting animation rect from Dock icon at %@",
                                           NSStringFromRect(rectOnScreen));
                                     break;
                                   }
@@ -375,26 +375,26 @@ typedef struct DBusConnection DBusConnectionStruct;
         
         [self.workspace newViewerAtPath:path];
     } @catch (NSException *exception) {
-        NSLog(@"FileManagerDBusInterface: Exception opening folder %@: %@", path, exception);
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Exception opening folder %@: %@", path, exception);
     }
 }
 
 - (void)showItems:(NSArray *)uris startupId:(NSString *)startupId
 {
-    NSLog(@"FileManagerDBusInterface: ShowItems called with %lu URIs", (unsigned long)[uris count]);
+    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: ShowItems called with %lu URIs", (unsigned long)[uris count]);
     
     NSMutableArray *paths = [NSMutableArray array];
     
     for (NSString *uri in uris) {
         NSString *path = [self pathFromURI:uri];
         if (!path) {
-            NSLog(@"FileManagerDBusInterface: Skipping invalid URI: %@", uri);
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Skipping invalid URI: %@", uri);
             continue;
         }
         
         // Check if path exists
         if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
-            NSLog(@"FileManagerDBusInterface: Path does not exist: %@", path);
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Path does not exist: %@", path);
             continue;
         }
         
@@ -402,7 +402,7 @@ typedef struct DBusConnection DBusConnectionStruct;
     }
     
     if ([paths count] == 0) {
-        NSLog(@"FileManagerDBusInterface: No valid paths to show");
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: No valid paths to show");
         return;
     }
     
@@ -435,19 +435,19 @@ typedef struct DBusConnection DBusConnectionStruct;
         @try {
             // For each item, try to select them in an existing viewer; if that fails,
             // open the parent folder and retry, then fall back to root viewer selection
-            NSLog(@"FileManagerDBusInterface: Selecting %lu files in viewer rooted at %@", 
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Selecting %lu files in viewer rooted at %@", 
                   (unsigned long)[items count], parentPath);
 
             // Verify parent exists and is a directory
             BOOL isDir = NO;
             if (![[NSFileManager defaultManager] fileExistsAtPath:parentPath isDirectory:&isDir] || !isDir) {
-                NSLog(@"FileManagerDBusInterface: Parent path does not exist or is not a directory: %@", parentPath);
+                NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Parent path does not exist or is not a directory: %@", parentPath);
                 continue;
             }
 
             BOOL success = [self.workspace selectFiles:items inFileViewerRootedAtPath:parentPath];
             if (!success) {
-                NSLog(@"FileManagerDBusInterface: Initial select failed for %@, attempting to open viewer and retry", parentPath);
+                NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Initial select failed for %@, attempting to open viewer and retry", parentPath);
 
                 // Open the parent folder in a new viewer and try again
                 [self.workspace newViewerAtPath:parentPath];
@@ -455,21 +455,21 @@ typedef struct DBusConnection DBusConnectionStruct;
                 // Retry the selection
                 success = [self.workspace selectFiles:items inFileViewerRootedAtPath:parentPath];
                 if (success) {
-                    NSLog(@"FileManagerDBusInterface: Selection succeeded after opening viewer at %@", parentPath);
+                    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Selection succeeded after opening viewer at %@", parentPath);
                     continue;
                 }
 
                 // Try selecting in the root viewer as a further fallback
-                NSLog(@"FileManagerDBusInterface: Retry select failed for %@; attempting root viewer selection", parentPath);
+                NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Retry select failed for %@; attempting root viewer selection", parentPath);
                 [self.workspace rootViewerSelectFiles:items];
 
                 // As a last resort set the selected paths directly (inspector/selection based fallbacks)
                 [self.workspace setSelectedPaths:items];
 
-                NSLog(@"FileManagerDBusInterface: Finished fallback sequence for %@", parentPath);
+                NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Finished fallback sequence for %@", parentPath);
             }
         } @catch (NSException *exception) {
-            NSLog(@"FileManagerDBusInterface: Exception showing items in %@: %@", 
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Exception showing items in %@: %@", 
                   parentPath, exception);
         }
     }
@@ -477,7 +477,7 @@ typedef struct DBusConnection DBusConnectionStruct;
 
 - (void)showItemProperties:(NSArray *)uris startupId:(NSString *)startupId
 {
-    NSLog(@"FileManagerDBusInterface: ShowItemProperties called with %lu URIs", 
+    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: ShowItemProperties called with %lu URIs", 
           (unsigned long)[uris count]);
     
     NSMutableArray *paths = [NSMutableArray array];
@@ -485,13 +485,13 @@ typedef struct DBusConnection DBusConnectionStruct;
     for (NSString *uri in uris) {
         NSString *path = [self pathFromURI:uri];
         if (!path) {
-            NSLog(@"FileManagerDBusInterface: Skipping invalid URI: %@", uri);
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Skipping invalid URI: %@", uri);
             continue;
         }
         
         // Check if path exists
         if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
-            NSLog(@"FileManagerDBusInterface: Path does not exist: %@", path);
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Path does not exist: %@", path);
             continue;
         }
         
@@ -499,7 +499,7 @@ typedef struct DBusConnection DBusConnectionStruct;
     }
     
     if ([paths count] == 0) {
-        NSLog(@"FileManagerDBusInterface: No valid paths for properties");
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: No valid paths for properties");
         return;
     }
     
@@ -526,29 +526,29 @@ typedef struct DBusConnection DBusConnectionStruct;
                 [inspector performSelector:@selector(showAttributes)];
             }
         } else {
-            NSLog(@"FileManagerDBusInterface: Inspector not available");
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Inspector not available");
         }
     } @catch (NSException *exception) {
-        NSLog(@"FileManagerDBusInterface: Exception showing properties: %@", exception);
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Exception showing properties: %@", exception);
     }
 }
 
 - (void)sendEmptyReply:(DBusMessage *)message
 {
-    NSLog(@"FileManagerDBusInterface: Sending empty reply");
+    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Sending empty reply");
     DBusMessage *reply = dbus_message_new_method_return(message);
     if (reply) {
         void *conn = [self.dbusConnection rawConnection];
         if (conn) {
             dbus_bool_t result = dbus_connection_send((DBusConnectionStruct *)conn, reply, NULL);
-            NSLog(@"FileManagerDBusInterface: dbus_connection_send returned: %d", result);
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: dbus_connection_send returned: %d", result);
             dbus_connection_flush((DBusConnectionStruct *)conn);
         } else {
-            NSLog(@"FileManagerDBusInterface: Warning - could not get raw DBus connection");
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Warning - could not get raw DBus connection");
         }
         dbus_message_unref(reply);
     } else {
-        NSLog(@"FileManagerDBusInterface: Error - could not create method return");
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Error - could not create method return");
     }
 }
 
@@ -556,20 +556,20 @@ typedef struct DBusConnection DBusConnectionStruct;
              errorName:(const char *)errorName 
           errorMessage:(const char *)errorMessage
 {
-    NSLog(@"FileManagerDBusInterface: Sending error reply: %s - %s", errorName, errorMessage);
+    NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Sending error reply: %s - %s", errorName, errorMessage);
     DBusMessage *reply = dbus_message_new_error(message, errorName, errorMessage);
     if (reply) {
         void *conn = [self.dbusConnection rawConnection];
         if (conn) {
             dbus_bool_t result = dbus_connection_send((DBusConnectionStruct *)conn, reply, NULL);
-            NSLog(@"FileManagerDBusInterface: dbus_connection_send returned: %d", result);
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: dbus_connection_send returned: %d", result);
             dbus_connection_flush((DBusConnectionStruct *)conn);
         } else {
-            NSLog(@"FileManagerDBusInterface: Warning - could not get raw DBus connection");
+            NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Warning - could not get raw DBus connection");
         }
         dbus_message_unref(reply);
     } else {
-        NSLog(@"FileManagerDBusInterface: Error - could not create error reply");
+        NSDebugLLog(@"gwspace", @"FileManagerDBusInterface: Error - could not create error reply");
     }
 }
 

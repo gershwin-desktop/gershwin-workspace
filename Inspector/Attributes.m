@@ -114,7 +114,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
       if ([NSBundle loadNibNamed: nibName owner: self] == NO)
         {
-          NSLog(@"failed to load %@!", nibName);
+          NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
           DESTROY (self);
           return self;
         } 
@@ -843,7 +843,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   }
   NS_HANDLER
   {
-    NSLog(@"Error! A fatal error occurred while dispatching the task.");
+    NSDebugLLog(@"gwspace", @"Error! A fatal error occurred while dispatching the task.");
   }
   NS_ENDHANDLER
 }
@@ -859,7 +859,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 		  object: sizerConn];
       DESTROY (sizer);
       DESTROY (sizerConn);
-      NSLog(@"sizer connection died");
+      NSDebugLLog(@"gwspace", @"sizer connection died");
     }
 }
 

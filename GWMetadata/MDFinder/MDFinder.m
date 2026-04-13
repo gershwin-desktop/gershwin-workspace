@@ -538,7 +538,7 @@ static MDFinder *mdfinder = nil;
 
   if (self) {
 		if ([NSBundle loadNibNamed: @"StartAppWin" owner: self] == NO) {
-      NSLog(@"failed to load StartAppWin!");
+      NSDebugLLog(@"gwspace", @"failed to load StartAppWin!");
       DESTROY (self);
       return self;
     } else {

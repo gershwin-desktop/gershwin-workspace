@@ -36,9 +36,9 @@ static NetworkServiceManager *sharedManager = nil;
     mDNSAvailable = (netServiceBrowserClass != nil);
     
     if (mDNSAvailable) {
-      NSLog(@"NetworkServiceManager: mDNS-SD support is available");
+      NSDebugLLog(@"gwspace", @"NetworkServiceManager: mDNS-SD support is available");
     } else {
-      NSLog(@"NetworkServiceManager: mDNS-SD support is NOT available");
+      NSDebugLLog(@"gwspace", @"NetworkServiceManager: mDNS-SD support is NOT available");
     }
   }
   return self;
@@ -60,41 +60,41 @@ static NetworkServiceManager *sharedManager = nil;
 - (void)startBrowsing
 {
   if (!mDNSAvailable) {
-    NSLog(@"NetworkServiceManager: Cannot start browsing - mDNS-SD not available");
+    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Cannot start browsing - mDNS-SD not available");
     return;
   }
   
   if (isSearching) {
-    NSLog(@"NetworkServiceManager: Already browsing for services");
+    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Already browsing for services");
     return;
   }
   
-  NSLog(@"NetworkServiceManager: Starting to browse for SFTP, AFP, and WebDAV services...");
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Starting to browse for SFTP, AFP, and WebDAV services...");
   isSearching = YES;
   
   /* Start browsing for SFTP-SSH services */
   sftpBrowser = [[NSNetServiceBrowser alloc] init];
   [sftpBrowser setDelegate:self];
   [sftpBrowser searchForServicesOfType:@"_sftp-ssh._tcp." inDomain:@"local."];
-  NSLog(@"NetworkServiceManager: Started searching for _sftp-ssh._tcp. services");
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _sftp-ssh._tcp. services");
   
   /* Start browsing for AFP over TCP services */
   afpBrowser = [[NSNetServiceBrowser alloc] init];
   [afpBrowser setDelegate:self];
   [afpBrowser searchForServicesOfType:@"_afpovertcp._tcp." inDomain:@"local."];
-  NSLog(@"NetworkServiceManager: Started searching for _afpovertcp._tcp. services");
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _afpovertcp._tcp. services");
   
   /* Start browsing for WebDAV services (HTTP) */
   webdavBrowser = [[NSNetServiceBrowser alloc] init];
   [webdavBrowser setDelegate:self];
   [webdavBrowser searchForServicesOfType:@"_webdav._tcp." inDomain:@"local."];
-  NSLog(@"NetworkServiceManager: Started searching for _webdav._tcp. services");
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _webdav._tcp. services");
   
   /* Start browsing for WebDAV services (HTTPS) */
   webdavsBrowser = [[NSNetServiceBrowser alloc] init];
   [webdavsBrowser setDelegate:self];
   [webdavsBrowser searchForServicesOfType:@"_webdavs._tcp." inDomain:@"local."];
-  NSLog(@"NetworkServiceManager: Started searching for _webdavs._tcp. services");
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _webdavs._tcp. services");
 }
 
 - (void)stopBrowsing
@@ -103,7 +103,7 @@ static NetworkServiceManager *sharedManager = nil;
     return;
   }
   
-  NSLog(@"NetworkServiceManager: Stopping service browsing");
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Stopping service browsing");
   isSearching = NO;
   
   if (sftpBrowser) {
@@ -239,13 +239,13 @@ static NetworkServiceManager *sharedManager = nil;
   @synchronized(services) {
     /* Check if we already have this service */
     if ([self existingServiceMatchingNetService:[item netService]] != nil) {
-      NSLog(@"NetworkServiceManager: Service already exists: %@", [item displayName]);
+      NSDebugLLog(@"gwspace", @"NetworkServiceManager: Service already exists: %@", [item displayName]);
       return;
     }
     
     [services addObject:item];
     addedServices = [NSArray arrayWithObject:item];
-    NSLog(@"NetworkServiceManager: Added service: %@ (total: %lu)", 
+    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Added service: %@ (total: %lu)", 
           [item displayName], (unsigned long)[services count]);
   }
   
@@ -275,7 +275,7 @@ static NetworkServiceManager *sharedManager = nil;
     [[itemToRemove retain] autorelease];
     [services removeObject:itemToRemove];
     removedServices = [NSArray arrayWithObject:itemToRemove];
-    NSLog(@"NetworkServiceManager: Removed service: %@ (total: %lu)", 
+    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Removed service: %@ (total: %lu)", 
           [itemToRemove displayName], (unsigned long)[services count]);
   }
   
@@ -299,7 +299,7 @@ static NetworkServiceManager *sharedManager = nil;
     item.addresses = [netService addresses];
     item.resolved = YES;
     
-    NSLog(@"NetworkServiceManager: Resolved service: %@ -> %@:%d", 
+    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Resolved service: %@ -> %@:%d", 
           [item displayName], [item hostName], [item port]);
   }
   
@@ -321,7 +321,7 @@ static NetworkServiceManager *sharedManager = nil;
   else if (browser == webdavBrowser) browserType = @"WebDAV";
   else if (browser == webdavsBrowser) browserType = @"WebDAVS";
   else browserType = @"Unknown";
-  NSLog(@"NetworkServiceManager: %@ browser will search", browserType);
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: %@ browser will search", browserType);
 }
 
 - (void)netServiceBrowserDidStopSearch:(NSNetServiceBrowser *)browser
@@ -332,7 +332,7 @@ static NetworkServiceManager *sharedManager = nil;
   else if (browser == webdavBrowser) browserType = @"WebDAV";
   else if (browser == webdavsBrowser) browserType = @"WebDAVS";
   else browserType = @"Unknown";
-  NSLog(@"NetworkServiceManager: %@ browser stopped searching", browserType);
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: %@ browser stopped searching", browserType);
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)browser
@@ -345,7 +345,7 @@ static NetworkServiceManager *sharedManager = nil;
   else if (browser == webdavBrowser) browserType = @"WebDAV";
   else if (browser == webdavsBrowser) browserType = @"WebDAVS";
   else browserType = @"Unknown";
-  NSLog(@"NetworkServiceManager: %@ browser found service: %@ (type: %@, domain: %@)", 
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: %@ browser found service: %@ (type: %@, domain: %@)", 
         browserType, [netService name], [netService type], [netService domain]);
   
   /* Create a service item and add it */
@@ -356,7 +356,7 @@ static NetworkServiceManager *sharedManager = nil;
   [netService setDelegate:self];
   [netService resolveWithTimeout:10.0];
   [pendingResolutions addObject:netService];
-  NSLog(@"NetworkServiceManager: Starting resolution for: %@", [netService name]);
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Starting resolution for: %@", [netService name]);
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)browser
@@ -369,7 +369,7 @@ static NetworkServiceManager *sharedManager = nil;
   else if (browser == webdavBrowser) browserType = @"WebDAV";
   else if (browser == webdavsBrowser) browserType = @"WebDAVS";
   else browserType = @"Unknown";
-  NSLog(@"NetworkServiceManager: %@ browser removed service: %@", 
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: %@ browser removed service: %@", 
         browserType, [netService name]);
   
   [self removeServiceMatchingNetService:netService];
@@ -385,7 +385,7 @@ static NetworkServiceManager *sharedManager = nil;
   else if (browser == webdavBrowser) browserType = @"WebDAV";
   else if (browser == webdavsBrowser) browserType = @"WebDAVS";
   else browserType = @"Unknown";
-  NSLog(@"NetworkServiceManager: %@ browser failed to search: %@", 
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: %@ browser failed to search: %@", 
         browserType, errorDict);
 }
 
@@ -393,7 +393,7 @@ static NetworkServiceManager *sharedManager = nil;
 
 - (void)netServiceDidResolveAddress:(NSNetService *)netService
 {
-  NSLog(@"NetworkServiceManager: Service resolved: %@ -> %@:%ld", 
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Service resolved: %@ -> %@:%ld", 
         [netService name], [netService hostName], (long)[netService port]);
   
   /* Find and update the corresponding item */
@@ -410,7 +410,7 @@ static NetworkServiceManager *sharedManager = nil;
 - (void)netService:(NSNetService *)netService
      didNotResolve:(NSDictionary *)errorDict
 {
-  NSLog(@"NetworkServiceManager: Failed to resolve service %@: %@", 
+  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Failed to resolve service %@: %@", 
         [netService name], errorDict);
   
   [pendingResolutions removeObject:netService];

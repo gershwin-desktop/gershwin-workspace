@@ -191,7 +191,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	      icon = [[[NSImage alloc] initWithContentsOfFile: volumeIconPath] autorelease];
 	      if (icon == nil)
 		{
-		  NSLog(@"FSNodeRepIcons: Failed to load .VolumeIcon.icns from %@", volumeIconPath);
+		  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: Failed to load .VolumeIcon.icns from %@", volumeIconPath);
 		  /* Fallback to disk image check */
 		  key = nil;
 		}
@@ -213,7 +213,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	      if ([[FSNodeRep sharedInstance] isDiskImageVolume: nodepath])
 		{
 		  /* Use CD icon for disk image mounts (DMG, ISO, etc.) */
-		  NSLog(@"FSNodeRepIcons: isDiskImageVolume=YES for %@, using CD icon", nodepath);
+		  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: isDiskImageVolume=YES for %@, using CD icon", nodepath);
 		  NSString *cdIconPath = [[NSBundle mainBundle] pathForImageResource: @"CD"];
 		  if (cdIconPath != nil)
 		    {
@@ -222,7 +222,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 		      icon = [[[NSImage alloc] initWithContentsOfFile: cdIconPath] autorelease];
 		      if (icon == nil)
 			{
-			  NSLog(@"FSNodeRepIcons: Failed to load CD icon from %@", cdIconPath);
+			  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: Failed to load CD icon from %@", cdIconPath);
 			  /* Fallback to generic disk icon */
 			  key = @"disk";
 			  baseIcon = hardDiskIcon;
@@ -241,7 +241,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 		  else
 		    {
 		      /* No CD.icns found, use generic disk icon */
-		      NSLog(@"FSNodeRepIcons: CD.icns not found in bundle");
+		      NSDebugLLog(@"gwspace", @"FSNodeRepIcons: CD.icns not found in bundle");
 		      key = @"disk";
 		      baseIcon = hardDiskIcon;
 		    }
@@ -249,7 +249,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	      else
 		{
 		  /* Regular disk mount (physical disk, SSHFS, etc.) - use disk icon */
-		  NSLog(@"FSNodeRepIcons: isDiskImageVolume=NO for %@, using hard disk icon", nodepath);
+		  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: isDiskImageVolume=NO for %@, using hard disk icon", nodepath);
 		  key = @"disk";
 		  baseIcon = hardDiskIcon;
 		}
@@ -286,7 +286,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 
               if (baseIcon == nil)
                 {
-                  NSLog(@"no icon in cache for key %@ and no WS icon for %@", key, nodepath);
+                  NSDebugLLog(@"gwspace", @"no icon in cache for key %@ and no WS icon for %@", key, nodepath);
                 }
 
               if (baseIcon != nil)
@@ -406,7 +406,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 
   if (icon == nil)
     {
-      NSLog(@"Warning: No icon found for %@", nodepath);
+      NSDebugLLog(@"gwspace", @"Warning: No icon found for %@", nodepath);
     }
 
   return icon;
@@ -915,7 +915,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
             }
           NS_HANDLER
             {
-          NSLog(@"BAD IMAGE '%@'", tumbpath);
+          NSDebugLLog(@"gwspace", @"BAD IMAGE '%@'", tumbpath);
             }
           NS_ENDHANDLER
         }

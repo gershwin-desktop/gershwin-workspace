@@ -33,7 +33,7 @@
 
 #define GWDebugLog(format, args...) \
   do { if (GW_DEBUG_LOG) \
-    NSLog(format , ## args); } while (0)
+    NSDebugLLog(@"gwspace", format , ## args); } while (0)
 
 BOOL subPathOfPath(NSString *p1, NSString *p2);
 
@@ -205,7 +205,7 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
     conn = [NSConnection connectionWithRegisteredName: cname host: nil];
 
     if (conn == nil) {
-      NSLog(@"failed to contact the lsfolder - bye.");
+      NSDebugLLog(@"gwspace", @"failed to contact the lsfolder - bye.");
       DESTROY (self);
       return self;
     } 
@@ -231,7 +231,7 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
   [nc removeObserver: self
 	              name: NSConnectionDidDieNotification
 	            object: [notification object]];
-  NSLog(@"the lsfolder connection has been destroyed.");
+  NSDebugLLog(@"gwspace", @"the lsfolder connection has been destroyed.");
   [self terminate];
 }
 
@@ -672,8 +672,8 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
     NSArray *founds;
     int i;
     
-    NSLog(@"%@ not found in the db", srcpath);
-    NSLog(@"performing full search in %@", srcpath);
+    NSDebugLLog(@"gwspace", @"%@ not found in the db", srcpath);
+    NSDebugLLog(@"gwspace", @"performing full search in %@", srcpath);
   
     founds = [self fullSearchInDirectory: srcpath];
     
@@ -869,7 +869,7 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
                        
       GWDebugLog(@"ddbd connected!");     
     } else {
-      NSLog(@"unable to contact ddbd.");
+      NSDebugLLog(@"gwspace", @"unable to contact ddbd.");
       [lsfolder updaterError: @"unable to contact ddbd."];
     }
   }
@@ -1215,7 +1215,7 @@ int main(int argc, char** argv)
       [[NSRunLoop currentRunLoop] run];
     }
   } else {
-    NSLog(@"no connection name.");
+    NSDebugLLog(@"gwspace", @"no connection name.");
   }
   
   RELEASE (pool);  

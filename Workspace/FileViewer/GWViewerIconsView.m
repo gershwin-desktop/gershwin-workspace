@@ -103,12 +103,12 @@
       character = [characters characterAtIndex: 0];
     }
 
-  NSLog(@"GWViewerIconsView.keyDown: character=0x%x, flags=0x%x", character, flags);
+  NSDebugLLog(@"gwspace", @"GWViewerIconsView.keyDown: character=0x%x, flags=0x%x", character, flags);
 
   // Handle Shift-Down = Open Selection
   if (character == NSDownArrowFunctionKey && (flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
     {
-      NSLog(@"GWViewerIconsView: Shift-Down detected");
+      NSDebugLLog(@"gwspace", @"GWViewerIconsView: Shift-Down detected");
       [viewer openSelectionInNewViewer: NO];
       return;
     }
@@ -161,7 +161,7 @@
   // Handle Command-Up = Open Parent Folder
   if (character == NSUpArrowFunctionKey && (flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
     {
-      NSLog(@"GWViewerIconsView: Command-Up - opening parent folder in viewer");
+      NSDebugLLog(@"gwspace", @"GWViewerIconsView: Command-Up - opening parent folder in viewer");
       [[viewer win] openParentFolder];
       return;
     }
@@ -172,7 +172,7 @@
       NSArray *selection = [self selectedNodes];
       if (selection == nil || [selection count] == 0)
         {
-          NSLog(@"GWViewerIconsView: No selection, selecting first item");
+          NSDebugLLog(@"gwspace", @"GWViewerIconsView: No selection, selecting first item");
           // Let parent handle selection of first item
           [super keyDown: theEvent];
           return;
@@ -180,7 +180,7 @@
 
       if (character == '\r' && (flags & NSShiftKeyMask))
         {
-          NSLog(@"GWViewerIconsView: Shift-Enter - opening as folder");
+          NSDebugLLog(@"gwspace", @"GWViewerIconsView: Shift-Enter - opening as folder");
           [viewer openSelectionAsFolder];
           return;
         }

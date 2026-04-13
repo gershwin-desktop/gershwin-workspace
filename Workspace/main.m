@@ -135,7 +135,7 @@ int main(int argc, char **argv, char **env)
   for (int i = 1; i < argc; i++) {
     if (strcmp(argv[i], "-d") == 0 || strcmp(argv[i], "--debug") == 0) {
       debugMode = YES;
-      NSLog(@"Workspace: Debug mode enabled");
+      NSDebugLLog(@"gwspace", @"Workspace: Debug mode enabled");
       break;
     }
   }

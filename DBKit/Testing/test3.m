@@ -3,9 +3,9 @@
 
 void test3(DBKBTree *tree)
 {
-  NSLog(@"test 3");
+  NSDebugLLog(@"gwspace", @"test 3");
 
-  NSLog(@"insert 15 items");
+  NSDebugLLog(@"gwspace", @"insert 15 items");
   [tree insertKey: [NSNumber numberWithUnsignedLong: 122]];
   [tree insertKey: [NSNumber numberWithUnsignedLong: 125]];
   [tree insertKey: [NSNumber numberWithUnsignedLong: 245]];
@@ -22,7 +22,7 @@ void test3(DBKBTree *tree)
   [tree insertKey: [NSNumber numberWithUnsignedLong: 968]];
   [tree insertKey: [NSNumber numberWithUnsignedLong: 986]];
 
-  NSLog(@"Show tree structure");
+  NSDebugLLog(@"gwspace", @"Show tree structure");
   printTree(tree);
 
   printf("delete item 968 from a leaf and show result\n");
@@ -53,5 +53,5 @@ void test3(DBKBTree *tree)
   [tree deleteKey: [NSNumber numberWithUnsignedLong: 934]];
   printTree(tree);
 
-  NSLog(@"test 3 passed\n\n");
+  NSDebugLLog(@"gwspace", @"test 3 passed\n\n");
 }

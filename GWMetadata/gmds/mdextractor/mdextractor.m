@@ -41,12 +41,12 @@
 
 #define GWDebugLog(format, args...) \
   do { if (GW_DEBUG_LOG) \
-    NSLog(format , ## args); } while (0)
+    NSDebugLLog(@"gwspace", format , ## args); } while (0)
 
 #define EXECUTE_QUERY(q, r) \
 do { \
   if ([sqlite executeQuery: q] == NO) { \
-    NSLog(@"error at: %@", q); \
+    NSDebugLLog(@"gwspace", @"error at: %@", q); \
     return r; \
   } \
 } while (0)
@@ -54,7 +54,7 @@ do { \
 #define STATEMENT_EXECUTE_QUERY(s, r) \
 do { \
   if ([sqlite executeQueryWithStatement: s] == NO) { \
-    NSLog(@"error at: %@", [s query]); \
+    NSDebugLLog(@"gwspace", @"error at: %@", [s query]); \
     return r; \
   } \
 } while (0)
@@ -263,7 +263,7 @@ static void time_stamp(sqlite3_context *context, int argc, sqlite3_value **argv)
     [conn setDelegate: self];
 
     if ([conn registerName: @"mdextractor"] == NO) {
-	    NSLog(@"unable to register with name server - quitting.");
+	    NSDebugLLog(@"gwspace", @"unable to register with name server - quitting.");
 	    DESTROY (self);
 	    return self;
 	  }
@@ -545,7 +545,7 @@ static void time_stamp(sqlite3_context *context, int argc, sqlite3_value **argv)
 	        }
 	      NS_HANDLER
 	        {
-        NSLog(@"Unable to break lock %@ ... %@", indexedStatusLock, localException);
+        NSDebugLLog(@"gwspace", @"Unable to break lock %@ ... %@", indexedStatusLock, localException);
 	        }
 	      NS_ENDHANDLER
       }
@@ -560,7 +560,7 @@ static void time_stamp(sqlite3_context *context, int argc, sqlite3_value **argv)
 	    }
 
       if (sleeps >= 10) {
-        NSLog(@"Unable to obtain lock %@", indexedStatusLock);
+        NSDebugLLog(@"gwspace", @"Unable to obtain lock %@", indexedStatusLock);
         return [NSArray array];
       }
     }
@@ -593,7 +593,7 @@ static void time_stamp(sqlite3_context *context, int argc, sqlite3_value **argv)
 	        }
 	      NS_HANDLER
 	        {
-        NSLog(@"Unable to break lock %@ ... %@", indexedStatusLock, localException);
+        NSDebugLLog(@"gwspace", @"Unable to break lock %@ ... %@", indexedStatusLock, localException);
 	        }
 	      NS_ENDHANDLER
       }
@@ -608,7 +608,7 @@ static void time_stamp(sqlite3_context *context, int argc, sqlite3_value **argv)
 	    }
 
       if (sleeps >= 10) {
-        NSLog(@"Unable to obtain lock %@", indexedStatusLock);
+        NSDebugLLog(@"gwspace", @"Unable to obtain lock %@", indexedStatusLock);
         RELEASE (arp);
         return;
 	    }
@@ -753,7 +753,7 @@ static void time_stamp(sqlite3_context *context, int argc, sqlite3_value **argv)
       
       if (indexed == NO) {
         if ([self extractFromPath: indpath] == NO) {
-          NSLog(@"An error occurred while processing %@", [indpath path]);
+          NSDebugLLog(@"gwspace", @"An error occurred while processing %@", [indpath path]);
           RELEASE (indpath);
           break;
         }
@@ -769,7 +769,7 @@ static void time_stamp(sqlite3_context *context, int argc, sqlite3_value **argv)
           
           if ([subpath indexed] == NO) {
             if ([self extractFromPath: subpath] == NO) {
-              NSLog(@"An error occurred while processing %@", [subpath path]);
+              NSDebugLLog(@"gwspace", @"An error occurred while processing %@", [subpath path]);
               RELEASE (subpath);
               break;
             }
@@ -1330,14 +1330,14 @@ do { \
   if ([sqlite opendbAtPath: dbpath isNew: &newdb]) {    
     if (newdb) {
       if ([sqlite executeSimpleQuery: db_schema] == NO) {
-        NSLog(@"unable to create the database at %@", dbpath);
+        NSDebugLLog(@"gwspace", @"unable to create the database at %@", dbpath);
         return NO;
       } else {
         GWDebugLog(@"contents database created");
       }
     } 
   } else {
-    NSLog(@"unable to open the database at %@", dbpath);
+    NSDebugLLog(@"gwspace", @"unable to open the database at %@", dbpath);
     return NO;
   }    
 
@@ -1363,15 +1363,15 @@ do { \
   [sqlite executeQuery: @"PRAGMA temp_store = MEMORY"];
 
   if ([sqlite executeSimpleQuery: db_schema_tmp] == NO) {
-    NSLog(@"unable to create temp tables");
+    NSDebugLLog(@"gwspace", @"unable to create temp tables");
     [sqlite closeDb];
     return NO;    
   }
 
   /* only to avoid a compiler warning */
   if (0) {
-    NSLog(@"%@", user_db_schema);
-    NSLog(@"%@", user_db_schema_tmp);
+    NSDebugLLog(@"gwspace", @"%@", user_db_schema);
+    NSDebugLLog(@"gwspace", @"%@", user_db_schema_tmp);
   }
 
   return YES;
@@ -1414,7 +1414,7 @@ do { \
 	            object: connection];
 
   if (connection == conn) {
-    NSLog(@"mdextractor connection has been destroyed. Exiting.");
+    NSDebugLLog(@"gwspace", @"mdextractor connection has been destroyed. Exiting.");
     [sqlite closeDb];
     exit(EXIT_FAILURE);
   } else {

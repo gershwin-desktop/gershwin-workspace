@@ -85,27 +85,27 @@
       character = [characters characterAtIndex: 0];
     }
 
-  NSLog(@"GWViewerBrowser.keyDown: character=0x%x, flags=0x%x", character, flags);
+  NSDebugLLog(@"gwspace", @"GWViewerBrowser.keyDown: character=0x%x, flags=0x%x", character, flags);
 
   // Handle arrow keys with modifiers
   if (character == NSDownArrowFunctionKey)
     {
-      NSLog(@"GWViewerBrowser: NSDownArrowFunctionKey pressed, flags=0x%x", flags);
+      NSDebugLLog(@"gwspace", @"GWViewerBrowser: NSDownArrowFunctionKey pressed, flags=0x%x", flags);
       if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
         {
-          NSLog(@"GWViewerBrowser: Shift-Down detected - opening selection");
+          NSDebugLLog(@"gwspace", @"GWViewerBrowser: Shift-Down detected - opening selection");
           [viewer openSelectionInNewViewer: NO];
           return;
         }
       if ((flags & NSCommandKeyMask) && (flags & NSShiftKeyMask))
         {
-          NSLog(@"GWViewerBrowser: Command-Shift-Down detected - opening as folder");
+          NSDebugLLog(@"gwspace", @"GWViewerBrowser: Command-Shift-Down detected - opening as folder");
           [viewer openSelectionAsFolder];
           return;
         }
       if ((flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
         {
-          NSLog(@"GWViewerBrowser: Command-Down detected - opening selection");
+          NSDebugLLog(@"gwspace", @"GWViewerBrowser: Command-Down detected - opening selection");
           [viewer openSelectionInNewViewer: NO];
           return;
         }
@@ -113,10 +113,10 @@
 
   if (character == NSUpArrowFunctionKey)
     {
-      NSLog(@"GWViewerBrowser: NSUpArrowFunctionKey pressed, flags=0x%x", flags);
+      NSDebugLLog(@"gwspace", @"GWViewerBrowser: NSUpArrowFunctionKey pressed, flags=0x%x", flags);
       if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
         {
-          NSLog(@"GWViewerBrowser: Shift-Up detected - opening parent folder");
+          NSDebugLLog(@"gwspace", @"GWViewerBrowser: Shift-Up detected - opening parent folder");
           id delegate = viewer;
           if ([delegate respondsToSelector: @selector(baseNode)])
             {
@@ -146,7 +146,7 @@
         }
       if ((flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
         {
-          NSLog(@"GWViewerBrowser: Command-Up - opening parent folder in viewer");
+          NSDebugLLog(@"gwspace", @"GWViewerBrowser: Command-Up - opening parent folder in viewer");
           [[viewer win] openParentFolder];
           return;
         }
@@ -158,7 +158,7 @@
       NSArray *selection = [self selectedNodes];
       if (selection == nil || [selection count] == 0)
         {
-          NSLog(@"GWViewerBrowser: No selection, selecting first item");
+          NSDebugLLog(@"gwspace", @"GWViewerBrowser: No selection, selecting first item");
           // Select the first item in the first column
           [self selectRow: 0 inColumn: 0];
           return;
@@ -166,7 +166,7 @@
 
       if (character == '\r' && (flags & NSShiftKeyMask))
         {
-          NSLog(@"GWViewerBrowser: Shift-Enter - opening as folder");
+          NSDebugLLog(@"gwspace", @"GWViewerBrowser: Shift-Enter - opening as folder");
           [viewer openSelectionAsFolder];
           return;
         }

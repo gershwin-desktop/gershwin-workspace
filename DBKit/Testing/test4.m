@@ -6,9 +6,9 @@ void test4(DBKBTree *tree)
   DBKBTreeNode *node;
   int index;
 
-  NSLog(@"test 4");
+  NSDebugLLog(@"gwspace", @"test 4");
 
-  NSLog(@"insert 50 items");
+  NSDebugLLog(@"gwspace", @"insert 50 items");
   [tree insertKey: [NSNumber numberWithUnsignedLong: 122]];
   [tree insertKey: [NSNumber numberWithUnsignedLong: 245]];
   [tree insertKey: [NSNumber numberWithUnsignedLong: 491]];
@@ -60,53 +60,53 @@ void test4(DBKBTree *tree)
   [tree insertKey: [NSNumber numberWithUnsignedLong: 390]];
   [tree insertKey: [NSNumber numberWithUnsignedLong: 272]];
 
-  NSLog(@"Show tree structure");
+  NSDebugLLog(@"gwspace", @"Show tree structure");
   printTree(tree);
 
-  NSLog(@"test for successful searches");
+  NSDebugLLog(@"gwspace", @"test for successful searches");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 355] getIndex: &index];
-  if (node == nil) NSLog(@"************* ERROR not found *****************");
+  if (node == nil) NSDebugLLog(@"gwspace", @"************* ERROR not found *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 202] getIndex: &index];
-  if (node == nil) NSLog(@"************* ERROR not found *****************");
+  if (node == nil) NSDebugLLog(@"gwspace", @"************* ERROR not found *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 405] getIndex: &index];
-  if (node == nil) NSLog(@"************* ERROR not found *****************");
+  if (node == nil) NSDebugLLog(@"gwspace", @"************* ERROR not found *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 302] getIndex: &index];
-  if (node == nil) NSLog(@"************* ERROR not found *****************");
+  if (node == nil) NSDebugLLog(@"gwspace", @"************* ERROR not found *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 96] getIndex: &index];
-  if (node == nil) NSLog(@"************* ERROR not found *****************");
+  if (node == nil) NSDebugLLog(@"gwspace", @"************* ERROR not found *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 193] getIndex: &index];
-  if (node == nil) NSLog(@"************* ERROR not found *****************");
+  if (node == nil) NSDebugLLog(@"gwspace", @"************* ERROR not found *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 387] getIndex: &index];
-  if (node == nil) NSLog(@"************* ERROR not found *****************");
+  if (node == nil) NSDebugLLog(@"gwspace", @"************* ERROR not found *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 266] getIndex: &index];
-  if (node == nil) NSLog(@"************* ERROR not found *****************");
+  if (node == nil) NSDebugLLog(@"gwspace", @"************* ERROR not found *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 24] getIndex: &index];
-  if (node == nil) NSLog(@"************* ERROR not found *****************");
+  if (node == nil) NSDebugLLog(@"gwspace", @"************* ERROR not found *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 49] getIndex: &index];
-  if (node == nil) NSLog(@"************* ERROR not found *****************");
+  if (node == nil) NSDebugLLog(@"gwspace", @"************* ERROR not found *****************");
 
-  NSLog(@"test for unsuccessful searches");
+  NSDebugLLog(@"gwspace", @"test for unsuccessful searches");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 903] getIndex: &index];
-  if (node) NSLog(@"************* ERROR found unexisting element *****************");
+  if (node) NSDebugLLog(@"gwspace", @"************* ERROR found unexisting element *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 182] getIndex: &index];
-  if (node) NSLog(@"************* ERROR found unexisting element *****************");
+  if (node) NSDebugLLog(@"gwspace", @"************* ERROR found unexisting element *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 364] getIndex: &index];
-  if (node) NSLog(@"************* ERROR found unexisting element *****************");
+  if (node) NSDebugLLog(@"gwspace", @"************* ERROR found unexisting element *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 219] getIndex: &index];
-  if (node) NSLog(@"************* ERROR found unexisting element *****************");
+  if (node) NSDebugLLog(@"gwspace", @"************* ERROR found unexisting element *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 439] getIndex: &index];
-  if (node) NSLog(@"************* ERROR found unexisting element *****************");
+  if (node) NSDebugLLog(@"gwspace", @"************* ERROR found unexisting element *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 367] getIndex: &index];
-  if (node) NSLog(@"************* ERROR found unexisting element *****************");
+  if (node) NSDebugLLog(@"gwspace", @"************* ERROR found unexisting element *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 225] getIndex: &index];
-  if (node) NSLog(@"************* ERROR found unexisting element *****************");
+  if (node) NSDebugLLog(@"gwspace", @"************* ERROR found unexisting element *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 441] getIndex: &index];
-  if (node) NSLog(@"************* ERROR found unexisting element *****************");
+  if (node) NSDebugLLog(@"gwspace", @"************* ERROR found unexisting element *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 391] getIndex: &index];
-  if (node) NSLog(@"************* ERROR found unexisting element *****************");
+  if (node) NSDebugLLog(@"gwspace", @"************* ERROR found unexisting element *****************");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 273] getIndex: &index];
 
-  NSLog(@"delete some keys");
+  NSDebugLLog(@"gwspace", @"delete some keys");
   [tree deleteKey: [NSNumber numberWithUnsignedLong: 122]];
   [tree deleteKey: [NSNumber numberWithUnsignedLong: 355]];
   [tree deleteKey: [NSNumber numberWithUnsignedLong: 96]];
@@ -123,8 +123,8 @@ void test4(DBKBTree *tree)
   [tree deleteKey: [NSNumber numberWithUnsignedLong: 224]];
   [tree deleteKey: [NSNumber numberWithUnsignedLong: 272]];
 
-  NSLog(@"Show tree structure");
+  NSDebugLLog(@"gwspace", @"Show tree structure");
   printTree(tree);
 
-  NSLog(@"test 4 passed\n\n");
+  NSDebugLLog(@"gwspace", @"test 4 passed\n\n");
 }

@@ -6,9 +6,9 @@ void test6(DBKBTree *tree)
   DBKBTreeNode *node;
   int index;
 
-  NSLog(@"test 6");
+  NSDebugLLog(@"gwspace", @"test 6");
 
-  NSLog(@"insert 5000 items in order");
+  NSDebugLLog(@"gwspace", @"insert 5000 items in order");
   [tree insertKey: [NSNumber numberWithUnsignedLong: 8]];
   [tree insertKey: [NSNumber numberWithUnsignedLong: 12]];
   [tree insertKey: [NSNumber numberWithUnsignedLong: 21]];
@@ -5010,16 +5010,16 @@ void test6(DBKBTree *tree)
   [tree insertKey: [NSNumber numberWithUnsignedLong: 99997]];
   [tree insertKey: [NSNumber numberWithUnsignedLong: 99999]];
 
-  NSLog(@"search for the last one");
+  NSDebugLLog(@"gwspace", @"search for the last one");
   node = [tree nodeOfKey: [NSNumber numberWithUnsignedLong: 99999] 
                 getIndex: &index];
   if (node) {
-    NSLog(@"found last item");
+    NSDebugLLog(@"gwspace", @"found last item");
   } else {
-    NSLog(@"************* ERROR last item not found *****************");
+    NSDebugLLog(@"gwspace", @"************* ERROR last item not found *****************");
   }
 
-  NSLog(@"delete all but 30");
+  NSDebugLLog(@"gwspace", @"delete all but 30");
   [tree deleteKey: [NSNumber numberWithUnsignedLong: 561]];
   [tree deleteKey: [NSNumber numberWithUnsignedLong: 578]];
   [tree deleteKey: [NSNumber numberWithUnsignedLong: 607]];
@@ -9991,8 +9991,8 @@ void test6(DBKBTree *tree)
   [tree deleteKey: [NSNumber numberWithUnsignedLong: 99997]];
   [tree deleteKey: [NSNumber numberWithUnsignedLong: 99999]];
 
-  NSLog(@"Show tree structure");
+  NSDebugLLog(@"gwspace", @"Show tree structure");
   printTree(tree);
 
-  NSLog(@"test 6 passed\n\n");
+  NSDebugLLog(@"gwspace", @"test 6 passed\n\n");
 }

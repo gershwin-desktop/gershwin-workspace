@@ -240,12 +240,12 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       NSRect dsGeometry = [dsInfo gnustepWindowFrameForScreen:[NSScreen mainScreen]];
       
       if (dsGeometry.size.width > 0 && dsGeometry.size.height > 0) {
-        NSLog(@"╔══════════════════════════════════════════════════════════════════╗");
-        NSLog(@"║      APPLYING DS_STORE WINDOW GEOMETRY (GWViewer)                ║");
-        NSLog(@"╠══════════════════════════════════════════════════════════════════╣");
-        NSLog(@"║ Mac frame: %@", NSStringFromRect(dsInfo.windowFrame));
-        NSLog(@"║ GNUstep frame: %@", NSStringFromRect(dsGeometry));
-        NSLog(@"╚══════════════════════════════════════════════════════════════════╝");
+        NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
+        NSDebugLLog(@"gwspace", @"║      APPLYING DS_STORE WINDOW GEOMETRY (GWViewer)                ║");
+        NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
+        NSDebugLLog(@"gwspace", @"║ Mac frame: %@", NSStringFromRect(dsInfo.windowFrame));
+        NSDebugLLog(@"gwspace", @"║ GNUstep frame: %@", NSStringFromRect(dsGeometry));
+        NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
         
         [vwrwin setFrame:dsGeometry display:NO];
         geometryApplied = YES;
@@ -253,7 +253,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
     }
     
     if (!geometryApplied) {
-      NSLog(@"No valid DS_Store geometry, using fallback methods");
+      NSDebugLLog(@"gwspace", @"No valid DS_Store geometry, using fallback methods");
       defEntry = [viewerPrefs objectForKey: @"geometry"];
       if (defEntry) {
         [vwrwin setFrameFromString: defEntry];
@@ -976,7 +976,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 {
   /* Refresh the network node's subnodes and reload the view */
   if ([baseNode isKindOfClass:[NetworkFSNode class]]) {
-    NSLog(@"GWViewer: Network services changed, reloading contents");
+    NSDebugLLog(@"gwspace", @"GWViewer: Network services changed, reloading contents");
     [self reloadNodeContents];
   }
 }
@@ -1224,15 +1224,15 @@ constrainMinCoordinate:(CGFloat)proposedMin
             [dirs addObject: node];
           }
         } else if ([node isPlain]) {
-          NSLog(@"GWViewer: opening plain file: %@", [node path]);
+          NSDebugLLog(@"gwspace", @"GWViewer: opening plain file: %@", [node path]);
           [gworkspace openFile: [node path]];
         } else if ([node isExecutable]) {
           /* Handle executable items that aren't directories or plain files (e.g., network services) */
-          NSLog(@"GWViewer: opening executable item: %@ (isDirectory: %d, isPlain: %d, isExecutable: %d)",
+          NSDebugLLog(@"gwspace", @"GWViewer: opening executable item: %@ (isDirectory: %d, isPlain: %d, isExecutable: %d)",
                 [node path], [node isDirectory], [node isPlain], [node isExecutable]);
           [gworkspace openFile: [node path]];
         } else {
-          NSLog(@"GWViewer: node does not match any open condition (isDirectory: %d, isPlain: %d, isExecutable: %d): %@",
+          NSDebugLLog(@"gwspace", @"GWViewer: node does not match any open condition (isDirectory: %d, isPlain: %d, isExecutable: %d): %@",
                 [node isDirectory], [node isPlain], [node isExecutable], [node path]);
         }
           }

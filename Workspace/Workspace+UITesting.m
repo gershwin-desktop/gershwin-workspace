@@ -154,14 +154,14 @@ static void _startStderrCapture(void) {
   
   /* Create a pipe for stderr */
   if (pipe(stderrPipe) != 0) {
-    NSLog(@"UITesting: Failed to create pipe for stderr capture");
+    NSDebugLLog(@"gwspace", @"UITesting: Failed to create pipe for stderr capture");
     return;
   }
   
   /* Duplicate the original stderr */
   originalStderr = dup(STDERR_FILENO);
   if (originalStderr == -1) {
-    NSLog(@"UITesting: Failed to duplicate stderr");
+    NSDebugLLog(@"gwspace", @"UITesting: Failed to duplicate stderr");
     close(stderrPipe[0]);
     close(stderrPipe[1]);
     return;
@@ -169,7 +169,7 @@ static void _startStderrCapture(void) {
   
   /* Redirect stderr to the pipe */
   if (dup2(stderrPipe[1], STDERR_FILENO) == -1) {
-    NSLog(@"UITesting: Failed to redirect stderr");
+    NSDebugLLog(@"gwspace", @"UITesting: Failed to redirect stderr");
     close(originalStderr);
     close(stderrPipe[0]);
     close(stderrPipe[1]);
@@ -183,7 +183,7 @@ static void _startStderrCapture(void) {
   /* Start reader thread */
   logReaderRunning = YES;
   if (pthread_create(&logReaderThread, NULL, _logReaderThread, NULL) != 0) {
-    NSLog(@"UITesting: Failed to create log reader thread");
+    NSDebugLLog(@"gwspace", @"UITesting: Failed to create log reader thread");
     logReaderRunning = NO;
     /* Restore stderr */
     dup2(originalStderr, STDERR_FILENO);
@@ -194,7 +194,7 @@ static void _startStderrCapture(void) {
     return;
   }
   
-  NSLog(@"UITesting: stderr capture started");
+  NSDebugLLog(@"gwspace", @"UITesting: stderr capture started");
 }
 
 /**
@@ -220,7 +220,7 @@ static NSString* _getLogBufferContents(void) {
  */
 #define UITestLog(format, ...) do { \
   NSString *_msg = [NSString stringWithFormat:format, ##__VA_ARGS__]; \
-  NSLog(@"%@", _msg); \
+  NSDebugLLog(@"gwspace", @"%@", _msg); \
   _addToLogBuffer(_msg); \
 } while(0)
 
@@ -501,7 +501,7 @@ static NSMutableDictionary* _buildWindowDict(NSWindow *window)
        withIntermediateDirectories:YES 
                         attributes:nil 
                              error:&error]) {
-      NSLog(@"UITesting: Failed to create directory %@: %@", failureDir, [error localizedDescription]);
+      NSDebugLLog(@"gwspace", @"UITesting: Failed to create directory %@: %@", failureDir, [error localizedDescription]);
       [self release];
       return;
     }
@@ -521,9 +521,9 @@ static NSMutableDictionary* _buildWindowDict(NSWindow *window)
     NSString *fullLog = [logHeader stringByAppendingString:logContents];
     
     if (![fullLog writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:&error]) {
-      NSLog(@"UITesting: Failed to write log file %@: %@", logPath, [error localizedDescription]);
+      NSDebugLLog(@"gwspace", @"UITesting: Failed to write log file %@: %@", logPath, [error localizedDescription]);
     } else {
-      NSLog(@"UITesting: Log saved to %@", logPath);
+      NSDebugLLog(@"gwspace", @"UITesting: Log saved to %@", logPath);
     }
     
     /* Take screenshot */
@@ -532,7 +532,7 @@ static NSMutableDictionary* _buildWindowDict(NSWindow *window)
     
     /* Check if Screenshot app exists */
     if (![[NSFileManager defaultManager] isExecutableFileAtPath:screenshotApp]) {
-      NSLog(@"UITesting: Screenshot app not found at %@", screenshotApp);
+      NSDebugLLog(@"gwspace", @"UITesting: Screenshot app not found at %@", screenshotApp);
       [self release];
       return;
     }
@@ -549,11 +549,11 @@ static NSMutableDictionary* _buildWindowDict(NSWindow *window)
     [task launch];
     /* Don't wait - let it run in background */
     
-    NSLog(@"UITesting: Failure artifacts saved to %@", failureDir);
+    NSDebugLLog(@"gwspace", @"UITesting: Failure artifacts saved to %@", failureDir);
     [task release];
     
   } @catch (NSException *e) {
-    NSLog(@"UITesting: Failed to save failure artifacts: %@", [e reason]);
+    NSDebugLLog(@"gwspace", @"UITesting: Failed to save failure artifacts: %@", [e reason]);
   }
   
   /* Release self - we were retained for the delayed call */
@@ -965,7 +965,7 @@ static NSMutableDictionary* _buildWindowDict(NSWindow *window)
                     afterDelay:duration];
     }
     
-    NSLog(@"UITesting: Highlighted '%@' in window '%@'", elementText, windowTitle);
+    NSDebugLLog(@"gwspace", @"UITesting: Highlighted '%@' in window '%@'", elementText, windowTitle);
     UITestLog(@"UITesting: Highlighted '%@' in window '%@' (legacy method)", elementText, windowTitle);
     
     /* Return simple success - avoid complex objects that may fail DO marshaling */
@@ -1227,18 +1227,18 @@ static NSMutableDictionary* _buildWindowDict(NSWindow *window)
     return @"{\"success\":false,\"error\":\"UI Testing disabled\"}";
   }
   
-  NSLog(@"allMenuItemsWithStateAsJSON called");
+  NSDebugLLog(@"gwspace", @"allMenuItemsWithStateAsJSON called");
   
   NS_DURING {
     NSMenu *mainMenu = [[NSApplication sharedApplication] mainMenu];
     if (!mainMenu) {
-      NSLog(@"mainMenu is nil");
+      NSDebugLLog(@"gwspace", @"mainMenu is nil");
       return @"{\"success\":false,\"error\":\"Main menu not available\"}";
     }
     
     NSMutableArray *menusArray = [NSMutableArray array];
     NSArray *topItems = [mainMenu itemArray];
-    NSLog(@"Found %lu top-level menu items", (unsigned long)[topItems count]);
+    NSDebugLLog(@"gwspace", @"Found %lu top-level menu items", (unsigned long)[topItems count]);
     
     for (NSMenuItem *topItem in topItems) {
       NSMutableDictionary *menuDict = [NSMutableDictionary dictionary];
@@ -1291,7 +1291,7 @@ static NSMutableDictionary* _buildWindowDict(NSWindow *window)
       [menusArray addObject:menuDict];
     }
     
-    NSLog(@"allMenuItemsWithStateAsJSON returning %lu menus", (unsigned long)[menusArray count]);
+    NSDebugLLog(@"gwspace", @"allMenuItemsWithStateAsJSON returning %lu menus", (unsigned long)[menusArray count]);
     
     /* Convert to JSON string */
     NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
@@ -1304,7 +1304,7 @@ static NSMutableDictionary* _buildWindowDict(NSWindow *window)
                                                        options:NSJSONWritingPrettyPrinted
                                                          error:&error];
     if (error) {
-      NSLog(@"JSON serialization error: %@", error);
+      NSDebugLLog(@"gwspace", @"JSON serialization error: %@", error);
       return @"{\"success\":false,\"error\":\"JSON serialization failed\"}";
     }
     
@@ -1312,7 +1312,7 @@ static NSMutableDictionary* _buildWindowDict(NSWindow *window)
     return jsonString;
     
   } NS_HANDLER {
-    NSLog(@"allMenuItemsWithStateAsJSON exception: %@", localException);
+    NSDebugLLog(@"gwspace", @"allMenuItemsWithStateAsJSON exception: %@", localException);
     return [NSString stringWithFormat:@"{\"success\":false,\"error\":\"%@\"}", 
             [localException reason] ?: @"Unknown error"];
   } NS_ENDHANDLER

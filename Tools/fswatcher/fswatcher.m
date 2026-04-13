@@ -27,7 +27,7 @@
 
 #define GWDebugLog(format, args...) \
   do { if (GW_DEBUG_LOG) \
-    NSLog(format , ## args); } while (0)
+    NSDebugLLog(@"gwspace", format , ## args); } while (0)
 
 static BOOL	is_daemon = NO;		/* Currently running as daemon.	 */
 static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
@@ -162,7 +162,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 
     if ([conn registerName: @"fswatcher"] == NO)
     {
-      NSLog(@"unable to register with name server - quitting.");
+      NSDebugLLog(@"gwspace", @"unable to register with name server - quitting.");
       DESTROY (self);
       return self;
     }
@@ -216,10 +216,10 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 	              name: NSConnectionDidDieNotification
 	            object: connection];
 
-  NSLog(@"Connection became invalid");
+  NSDebugLLog(@"gwspace", @"Connection became invalid");
   if (connection == conn)
   {
-    NSLog(@"argh - fswatcher server root connection has been destroyed.");
+    NSDebugLLog(@"gwspace", @"argh - fswatcher server root connection has been destroyed.");
     exit(EXIT_FAILURE);
     
   } else
@@ -250,7 +250,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 	/* If there is nothing else using this process, and this is not
 	 * a daemon, then we can quietly terminate.
 	 */
-        NSLog(@"No more clients, shutting down.");
+        NSDebugLLog(@"gwspace", @"No more clients, shutting down.");
         exit(EXIT_SUCCESS);
       }
   }
@@ -369,7 +369,7 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
     [info setClient: client];  
     [info setGlobal: global];
   }
-  NSLog(@"register client %lu", (unsigned long)[clientsInfo count]);
+  NSDebugLLog(@"gwspace", @"register client %lu", (unsigned long)[clientsInfo count]);
 }
 
 - (oneway void)unregisterClient:(id <FSWClientProtocol>)client

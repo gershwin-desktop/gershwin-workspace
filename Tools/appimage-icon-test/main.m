@@ -27,7 +27,7 @@ int main(int argc, char **argv)
   NSFileManager *fm = [NSFileManager defaultManager];
   NSArray *contents = [fm directoryContentsAtPath: dir];
   if (contents == nil) {
-    NSLog(@"appimage-icon-test: failed to list %@", dir);
+    NSDebugLLog(@"gwspace", @"appimage-icon-test: failed to list %@", dir);
     [pool drain];
     return 1;
   }
@@ -45,14 +45,14 @@ int main(int argc, char **argv)
     NSImage *image = [ws iconForFile: path];
     if (image != nil) {
       NSSize size = [image size];
-      NSLog(@"appimage-icon-test: %@ -> icon %.0fx%.0f", name, size.width, size.height);
+      NSDebugLLog(@"gwspace", @"appimage-icon-test: %@ -> icon %.0fx%.0f", name, size.width, size.height);
       succeeded++;
     } else {
-      NSLog(@"appimage-icon-test: %@ -> no icon", name);
+      NSDebugLLog(@"gwspace", @"appimage-icon-test: %@ -> no icon", name);
     }
   }
 
-  NSLog(@"appimage-icon-test: processed %lu AppImages (%lu with icons)",
+  NSDebugLLog(@"gwspace", @"appimage-icon-test: processed %lu AppImages (%lu with icons)",
         (unsigned long)tested, (unsigned long)succeeded);
 
   [pool drain];

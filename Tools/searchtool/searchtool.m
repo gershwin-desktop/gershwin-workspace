@@ -108,7 +108,7 @@
     conn = [NSConnection connectionWithRegisteredName: cname host: nil];
     
     if (conn == nil) {
-      NSLog(@"failed to contact Finder - bye.");
+      NSDebugLLog(@"gwspace", @"failed to contact Finder - bye.");
       exit(1);           
     } 
 
@@ -140,7 +140,7 @@
   	      object: conn];
 
   if (done == NO) {
-    NSLog(@"finder connection has been destroyed.");
+    NSDebugLLog(@"gwspace", @"finder connection has been destroyed.");
     exit(0);
   }
 }
@@ -367,7 +367,7 @@
 		                   		 object: [ddbd connectionForProxy]];
                        
     } else {
-      NSLog(@"unable to contact ddbd.");
+      NSDebugLLog(@"gwspace", @"unable to contact ddbd.");
     }
   }
 }
@@ -410,7 +410,7 @@ int main(int argc, char** argv)
       [[NSRunLoop currentRunLoop] run];
     }
   } else {
-    NSLog(@"no connection name.");
+    NSDebugLLog(@"gwspace", @"no connection name.");
   }
   
   RELEASE (pool);  

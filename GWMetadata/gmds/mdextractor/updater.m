@@ -37,12 +37,12 @@
 
 #define GWDebugLog(format, args...) \
   do { if (GW_DEBUG_LOG) \
-    NSLog(format , ## args); } while (0)
+    NSDebugLLog(@"gwspace", format , ## args); } while (0)
 
 #define EXECUTE_QUERY(q, r) \
 do { \
   if ([sqlite executeQuery: q] == NO) { \
-    NSLog(@"error at: %@", q); \
+    NSDebugLLog(@"gwspace", @"error at: %@", q); \
     return r; \
   } \
 } while (0)
@@ -51,7 +51,7 @@ do { \
 do { \
   if ([sqlite executeQuery: q] == NO) { \
     [sqlite executeQuery: @"ROLLBACK"]; \
-    NSLog(@"error at: %@", q); \
+    NSDebugLLog(@"gwspace", @"error at: %@", q); \
     return r; \
   } \
 } while (0)
@@ -59,7 +59,7 @@ do { \
 #define STATEMENT_EXECUTE_QUERY(s, r) \
 do { \
   if ([sqlite executeQueryWithStatement: s] == NO) { \
-    NSLog(@"error at: %@", [s query]); \
+    NSDebugLLog(@"gwspace", @"error at: %@", [s query]); \
     return r; \
   } \
 } while (0)
@@ -71,7 +71,7 @@ do { \
       setUpdating(NO); \
     } \
     [sqlite executeQuery: @"ROLLBACK"]; \
-    NSLog(@"error at: %@", [s query]); \
+    NSDebugLLog(@"gwspace", @"error at: %@", [s query]); \
     return r; \
   } \
 } while (0)
@@ -580,11 +580,11 @@ do { \
                also its contents.
             */
             if ([self addPath: path] == NO) {
-              NSLog(@"An error occurred while processing %@", path);
+              NSDebugLLog(@"gwspace", @"An error occurred while processing %@", path);
             }                  
           } else {
             if ([self updatePath: path] == NO) {      
-              NSLog(@"An error occurred while processing %@", path);
+              NSDebugLLog(@"gwspace", @"An error occurred while processing %@", path);
             }        
           }          
           
@@ -645,7 +645,7 @@ do { \
             if ([self updateRenamedPath: path 
                                 oldPath: oldpath 
                             isDirectory: isdir] == NO) { 
-              NSLog(@"An error occurred while processing %@", path);
+              NSDebugLLog(@"gwspace", @"An error occurred while processing %@", path);
             }
 
           } else {
@@ -734,9 +734,9 @@ do { \
 	    [fswatcher registerClient: (id <FSWClientProtocol>)self 
                 isGlobalWatcher: YES];
 
-      NSLog(@"fswatcher connected!");                
+      NSDebugLLog(@"gwspace", @"fswatcher connected!");                
     } else {
-      NSLog(@"unable to contact fswatcher!");  
+      NSDebugLLog(@"gwspace", @"unable to contact fswatcher!");  
     }
   }
 }
@@ -754,7 +754,7 @@ do { \
   RELEASE (fswatcher);
   fswatcher = nil;
 
-  NSLog(@"The fswatcher connection died!");
+  NSDebugLLog(@"gwspace", @"The fswatcher connection died!");
 
   [NSTimer scheduledTimerWithTimeInterval: 5.0
 						                       target: self 
@@ -814,9 +814,9 @@ do { \
 		                     name: NSConnectionDidDieNotification
 		                   object: [ddbd connectionForProxy]];
     
-      NSLog(@"ddbd connected!");    
+      NSDebugLLog(@"gwspace", @"ddbd connected!");    
     } else {
-      NSLog(@"unable to contact ddbd!");  
+      NSDebugLLog(@"gwspace", @"unable to contact ddbd!");  
     }
   }
 }
@@ -834,7 +834,7 @@ do { \
   RELEASE (ddbd);
   ddbd = nil;
 
-  NSLog(@"The ddbd connection died!");
+  NSDebugLLog(@"gwspace", @"The ddbd connection died!");
 
   [self connectDDBd];                
 }

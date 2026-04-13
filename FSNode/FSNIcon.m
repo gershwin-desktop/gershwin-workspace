@@ -1561,36 +1561,36 @@ static NSImage *branchImage;
       NSString *droppedPath = [sourcePaths objectAtIndex: 0];
       Class handlerClass = NSClassFromString(@"ISOWriteHandler");
 
-      NSLog(@"FSNIcon: Checking ISO drop: file=%@ onto mountpoint=%@", droppedPath, [node path]);
+      NSDebugLLog(@"gwspace", @"FSNIcon: Checking ISO drop: file=%@ onto mountpoint=%@", droppedPath, [node path]);
 
       if (!handlerClass) {
-        NSLog(@"FSNIcon: ISO handler class not available");
+        NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler class not available");
       } else if ([handlerClass respondsToSelector:@selector(validationMessageForISODrop:ontoNode:)]) {
         NSString *diag = [handlerClass validationMessageForISODrop:droppedPath ontoNode:node];
         if (diag == nil) {
-          NSLog(@"FSNIcon: ISO handler accepted drag - allowing drop");
+          NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler accepted drag - allowing drop");
           isDragTarget = YES;
           return NSDragOperationCopy;
         } else {
-          NSLog(@"FSNIcon: ISO handler rejected drop: %@", diag);
+          NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler rejected drop: %@", diag);
         }
       } else if ([handlerClass respondsToSelector: @selector(canHandleISODrop:ontoNode:)]) {
         if ([handlerClass canHandleISODrop: droppedPath ontoNode: node]) {
-          NSLog(@"FSNIcon: ISO handler accepted drag - allowing drop");
+          NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler accepted drag - allowing drop");
           isDragTarget = YES;
           return NSDragOperationCopy;
         } else {
-          NSLog(@"FSNIcon: ISO handler rejected drop (no diagnostic available)");
+          NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler rejected drop (no diagnostic available)");
         }
       } else {
-        NSLog(@"FSNIcon: ISO handler present but missing required selectors");
+        NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler present but missing required selectors");
       }
     }
 
   if (selection || isLocked || ([node isDirectory] == NO)
       || (([node isWritable] == NO) && ([node isApplication] == NO)))
     {
-      NSLog(@"FSNIcon: Drag rejected - selection=%d isLocked=%d isDirectory=%d isWritable=%d isApp=%d [node=%@]",
+      NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - selection=%d isLocked=%d isDirectory=%d isWritable=%d isApp=%d [node=%@]",
             selection != nil, isLocked, [node isDirectory], [node isWritable], [node isApplication], [node path]);
       return NSDragOperationNone;
     }
@@ -1599,7 +1599,7 @@ static NSImage *branchImage;
     {
       if ([node isSubnodeOfPath: [desktopApp trashPath]])
 	{
-	  NSLog(@"FSNIcon: Drag rejected - target is in trash [node=%@]", [node path]);
+	  NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - target is in trash [node=%@]", [node path]);
 	  return NSDragOperationNone;
 	}
     }
@@ -1610,13 +1610,13 @@ static NSImage *branchImage;
 	{
 	  if ([node isEqual: [container baseNode]] == NO)
 	    {
-	      NSLog(@"FSNIcon: Drag rejected - package not base node [node=%@]", [node path]);
+	      NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - package not base node [node=%@]", [node path]);
 	      return NSDragOperationNone;
 	    }
 	}
       else
 	{
-	  NSLog(@"FSNIcon: Drag rejected - package without base node [node=%@]", [node path]);
+	  NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - package without base node [node=%@]", [node path]);
 	  return NSDragOperationNone;
 	}
     }
@@ -1648,14 +1648,14 @@ static NSImage *branchImage;
 
   if (sourcePaths == nil)
     {
-    NSLog(@"FSNIcon: Drag rejected - no source paths in pasteboard [node=%@]", [node path]);
+    NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - no source paths in pasteboard [node=%@]", [node path]);
     return NSDragOperationNone;
     }
 
   count = [sourcePaths count];
   if (count == 0)
     {
-      NSLog(@"FSNIcon: Drag rejected - empty source paths [node=%@]", [node path]);
+      NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - empty source paths [node=%@]", [node path]);
       return NSDragOperationNone;
     }
 
@@ -1686,13 +1686,13 @@ static NSImage *branchImage;
 
   if ([nodePath isEqual: fromPath])
     {
-      NSLog(@"FSNIcon: Drag rejected - source and destination are same [node=%@]", [node path]);
+      NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - source and destination are same [node=%@]", [node path]);
       return NSDragOperationNone;
     }
 
   if ([sourcePaths containsObject: nodePath])
     {
-      NSLog(@"FSNIcon: Drag rejected - would create circular reference [node=%@]", [node path]);
+      NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - would create circular reference [node=%@]", [node path]);
       return NSDragOperationNone;
     }
 

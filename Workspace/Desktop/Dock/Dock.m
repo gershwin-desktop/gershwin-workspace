@@ -432,10 +432,10 @@
                  pid:(pid_t)pid
 {
   if (appName != nil) {
-    NSLog(@"DEBUG: Dock appDidLaunch for appName: %@", appName);
+    NSDebugLLog(@"gwspace", @"DEBUG: Dock appDidLaunch for appName: %@", appName);
   } else
     {
-      NSLog(@"DEBUG: Dock appDidLaunch for nil appName");
+      NSDebugLLog(@"gwspace", @"DEBUG: Dock appDidLaunch for nil appName");
       return;
     }
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
@@ -694,7 +694,7 @@
       rect.origin.y = scrOriginY + ceil((scrrect.size.height - rect.size.height) / 2);
     }
 
-  NSLog(@"DEBUG: Dock tile - setting frame: %@, icons count: %lu", NSStringFromRect(rect), (unsigned long)[icons count]);
+  NSDebugLLog(@"gwspace", @"DEBUG: Dock tile - setting frame: %@, icons count: %lu", NSStringFromRect(rect), (unsigned long)[icons count]);
   
   if (view) {
     [view setNeedsDisplayInRect: [self frame]];
@@ -794,7 +794,7 @@
 
 - (void)saveDockConfiguration
 {
-  NSLog(@"DEBUG: Dock saveDockConfiguration");
+  NSDebugLLog(@"gwspace", @"DEBUG: Dock saveDockConfiguration");
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
   NSMutableDictionary *dict = [NSMutableDictionary dictionary];
   NSUInteger i;  
@@ -1228,7 +1228,7 @@
         NSArray *sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
         
         if (!sourcePaths || [sourcePaths count] == 0) {
-          NSLog(@"Dock: Drag rejected - empty filename pasteboard");
+          NSDebugLLog(@"gwspace", @"Dock: Drag rejected - empty filename pasteboard");
           return NSDragOperationNone;
         }
         

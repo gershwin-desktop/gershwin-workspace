@@ -213,13 +213,13 @@
       // since resizing is async, we check if we still need the generated image
       if ([imagePath isEqualToString:[imginfo objectForKey: @"imgpath"]] == NO)
 	{
-	  NSLog(@"ImageViewer: trying to display inconsistent image");
+	  NSDebugLLog(@"gwspace", @"ImageViewer: trying to display inconsistent image");
 	  return;
 	}
     }
   else
     {
-      NSLog(@"imageReady without imginfo");
+      NSDebugLLog(@"gwspace", @"imageReady without imginfo");
     }
 
   if (imgdata)
@@ -258,7 +258,7 @@
         }
       else
 	{
-	  NSLog(@"no image returned");
+	  NSDebugLLog(@"gwspace", @"no image returned");
 	}
     }
 

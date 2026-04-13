@@ -65,14 +65,14 @@
 
 - (BOOL)connectToFSWatcher
 {
-  NSLog(@"Connecting to fswatcher...");
+  NSDebugLLog(@"gwspace", @"Connecting to fswatcher...");
   
   fswatcher = [NSConnection rootProxyForConnectionWithRegisteredName: @"fswatcher"
                                                                  host: @""];
   
   if (fswatcher == nil) {
-    NSLog(@"ERROR: Could not connect to fswatcher!");
-    NSLog(@"Make sure fswatcher is running: ps aux | grep fswatcher");
+    NSDebugLLog(@"gwspace", @"ERROR: Could not connect to fswatcher!");
+    NSDebugLLog(@"gwspace", @"Make sure fswatcher is running: ps aux | grep fswatcher");
     return NO;
   }
   
@@ -86,27 +86,27 @@
   
   [fswatcher registerClient: (id <FSWClientProtocol>)self isGlobalWatcher: NO];
   
-  NSLog(@"✓ Successfully connected to fswatcher");
+  NSDebugLLog(@"gwspace", @"✓ Successfully connected to fswatcher");
   return YES;
 }
 
 - (void)fswatcherConnectionDidDie:(NSNotification *)notif
 {
-  NSLog(@"ERROR: fswatcher connection died!");
+  NSDebugLLog(@"gwspace", @"ERROR: fswatcher connection died!");
   exit(1);
 }
 
 - (void)addWatcherForPath:(NSString *)path
 {
   if (fswatcher == nil) {
-    NSLog(@"ERROR: Not connected to fswatcher");
+    NSDebugLLog(@"gwspace", @"ERROR: Not connected to fswatcher");
     return;
   }
   
-  NSLog(@"Adding watcher for path: %@", path);
+  NSDebugLLog(@"gwspace", @"Adding watcher for path: %@", path);
   [watchedPaths addObject: path];
   [fswatcher client: (id <FSWClientProtocol>)self addWatcherForPath: path];
-  NSLog(@"✓ Watcher added for: %@", path);
+  NSDebugLLog(@"gwspace", @"✓ Watcher added for: %@", path);
 }
 
 - (oneway void)watchedPathDidChange:(NSData *)dirinfo
@@ -116,35 +116,35 @@
   NSString *path = [info objectForKey: @"path"];
   NSArray *files = [info objectForKey: @"files"];
   
-  NSLog(@"");
-  NSLog(@"═══════════════════════════════════════");
-  NSLog(@"NOTIFICATION RECEIVED!");
-  NSLog(@"Event: %@", event);
-  NSLog(@"Path:  %@", path);
+  NSDebugLLog(@"gwspace", @"");
+  NSDebugLLog(@"gwspace", @"═══════════════════════════════════════");
+  NSDebugLLog(@"gwspace", @"NOTIFICATION RECEIVED!");
+  NSDebugLLog(@"gwspace", @"Event: %@", event);
+  NSDebugLLog(@"gwspace", @"Path:  %@", path);
   if (files) {
-    NSLog(@"Files: %@", [files componentsJoinedByString: @", "]);
+    NSDebugLLog(@"gwspace", @"Files: %@", [files componentsJoinedByString: @", "]);
   }
-  NSLog(@"═══════════════════════════════════════");
-  NSLog(@"");
+  NSDebugLLog(@"gwspace", @"═══════════════════════════════════════");
+  NSDebugLLog(@"gwspace", @"");
 }
 
 - (oneway void)globalWatchedPathDidChange:(NSDictionary *)dirinfo
 {
-  NSLog(@"Global watcher notification: %@", dirinfo);
+  NSDebugLLog(@"gwspace", @"Global watcher notification: %@", dirinfo);
 }
 
 - (void)run
 {
-  NSLog(@"");
-  NSLog(@"Test client is now listening for filesystem changes...");
-  NSLog(@"Watching paths:");
+  NSDebugLLog(@"gwspace", @"");
+  NSDebugLLog(@"gwspace", @"Test client is now listening for filesystem changes...");
+  NSDebugLLog(@"gwspace", @"Watching paths:");
   for (NSString *path in watchedPaths) {
-    NSLog(@"  - %@", path);
+    NSDebugLLog(@"gwspace", @"  - %@", path);
   }
-  NSLog(@"");
-  NSLog(@"Make changes to these paths to test!");
-  NSLog(@"Press Ctrl+C to exit");
-  NSLog(@"");
+  NSDebugLLog(@"gwspace", @"");
+  NSDebugLLog(@"gwspace", @"Make changes to these paths to test!");
+  NSDebugLLog(@"gwspace", @"Press Ctrl+C to exit");
+  NSDebugLLog(@"gwspace", @"");
   
   [[NSRunLoop currentRunLoop] run];
 }
@@ -156,11 +156,11 @@ int main(int argc, const char *argv[])
 {
   CREATE_AUTORELEASE_POOL(pool);
   
-  NSLog(@"");
-  NSLog(@"╔════════════════════════════════════════════╗");
-  NSLog(@"║  FSWatcher Test Client                     ║");
-  NSLog(@"╚════════════════════════════════════════════╝");
-  NSLog(@"");
+  NSDebugLLog(@"gwspace", @"");
+  NSDebugLLog(@"gwspace", @"╔════════════════════════════════════════════╗");
+  NSDebugLLog(@"gwspace", @"║  FSWatcher Test Client                     ║");
+  NSDebugLLog(@"gwspace", @"╚════════════════════════════════════════════╝");
+  NSDebugLLog(@"gwspace", @"");
   
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <path1> [path2] [path3] ...\n", argv[0]);
@@ -187,14 +187,14 @@ int main(int argc, const char *argv[])
     NSFileManager *fm = [NSFileManager defaultManager];
     BOOL isDir;
     if (![fm fileExistsAtPath: path isDirectory: &isDir]) {
-      NSLog(@"WARNING: Path does not exist: %@", path);
+      NSDebugLLog(@"gwspace", @"WARNING: Path does not exist: %@", path);
       continue;
     }
     
     [client addWatcherForPath: path];
   }
   
-  NSLog(@"");
+  NSDebugLLog(@"gwspace", @"");
   
   [client run];
   

@@ -9,6 +9,7 @@
 #import <dispatch/dispatch.h>
 #import "GWApplicationLauncher.h"
 #import <unistd.h>
+#include <fcntl.h>
 
 @implementation GWApplicationLauncher
 
@@ -25,20 +26,63 @@
 + (BOOL)launchAndMonitorTask:(NSTask *)task
 {
   @try {
-    /* Launch the task synchronously so we can capture the PID */
-    NSPipe *errPipe = [NSPipe pipe];
-    [task setStandardError:errPipe];
+    /* Per-app stderr log file; O_APPEND | O_NONBLOCK so write(2) can never
+       block the child's main thread. Writes to a regular POSIX file do not
+       block on pipe back-pressure, so no Workspace stall can ever wedge a
+       child's UI (this was the prior design flaw). A failed open falls
+       through to /dev/null rather than a blocking pipe. */
+    NSString *appName = [[task launchPath] lastPathComponent];
+    NSString *logDir  = [NSHomeDirectory()
+                         stringByAppendingPathComponent:@"Library/Logs"];
+    NSString *logPath = [logDir stringByAppendingPathComponent:
+                          [appName stringByAppendingPathExtension:@"log"]];
+
+    [[NSFileManager defaultManager] createDirectoryAtPath:logDir
+                              withIntermediateDirectories:YES
+                                               attributes:nil
+                                                    error:NULL];
+
+    NSFileHandle *errHandle;
+    int fd = open([logPath fileSystemRepresentation],
+                  O_WRONLY | O_CREAT | O_APPEND | O_NONBLOCK, 0644);
+    if (fd >= 0) {
+      errHandle = [[[NSFileHandle alloc]
+                     initWithFileDescriptor:fd
+                             closeOnDealloc:YES] autorelease];
+    } else {
+      errHandle = [NSFileHandle fileHandleWithNullDevice];
+    }
+    [task setStandardError:errHandle];
     [task launch];
-    
-    /* Now monitor in background thread */
+
+    /* Event-driven exit monitor via NSTaskDidTerminateNotification.
+     *
+     * NSTask posts this notification from its own SIGCHLD/waitpid
+     * plumbing, so no custom thread parks in usleep or waitpid. The
+     * block observer fires once, reads the log tail (bounded I/O on a
+     * regular file), forwards the alert to the main queue, and
+     * unregisters itself. POSIX-portable (Linux / FreeBSD / macOS) and
+     * does not depend on libdispatch PROC sources, which are unavailable
+     * on non-Apple libdispatch builds. */
     NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:
                           task, @"task",
                           [task launchPath], @"path",
-                          errPipe, @"errPipe",
+                          logPath, @"logPath",
                           nil];
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-      [self _monitorLaunchThread:info];
-    });
+    [info retain]; /* owned by the observer block, released on removal */
+
+    __block id token = nil;
+    token = [[[NSNotificationCenter defaultCenter]
+              addObserverForName:NSTaskDidTerminateNotification
+                          object:task
+                           queue:nil
+                      usingBlock:^(NSNotification *n) {
+                        [self _handleTaskExit:info];
+                        [[NSNotificationCenter defaultCenter]
+                          removeObserver:token];
+                        [token release];
+                        [info release];
+                      }] retain];
     return YES;
   } @catch (NSException *ex) {
     NSString *path = [task launchPath];
@@ -55,43 +99,45 @@
   }
 }
 
-+ (void)_monitorLaunchThread:(id)anObject
++ (void)_handleTaskExit:(id)anObject
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   NSDictionary *info = (NSDictionary *)anObject;
   NSTask *task = [info objectForKey:@"task"];
   NSString *path = [info objectForKey:@"path"];
-  NSPipe *errPipe = [info objectForKey:@"errPipe"];
-  
+  NSString *logPath = [info objectForKey:@"logPath"];
+
   @try {
-    /* Task is already launched; just monitor it */
-    /* Wait up to 10s for the process to exit; if it exits within that time with
-       non-zero status, show an alert with stderr */
-    int checks = 100; /* 100 * 0.1s = 10s */
-    for (int i = 0; i < checks; i++) {
-      usleep(100000);
-      if (![task isRunning]) break;
+    /* Invoked from DISPATCH_PROC_EXIT handler — the child is gone. */
+    int status = [task terminationStatus];
+    if (status == 0) {
+      return;
     }
 
-    if (![task isRunning]) {
-      int status = [task terminationStatus];
-      if (status != 0) {
-        NSData *d = [[[errPipe fileHandleForReading] readDataToEndOfFile] retain];
-        NSString *s = nil;
-        if (d) s = [[[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] autorelease];
-        if (!s) s = @"(no stderr output)";
-        NSDictionary *errorInfo = [NSDictionary dictionaryWithObjectsAndKeys:
-                                   path, @"path",
-                                   [NSNumber numberWithInt:status], @"status",
-                                   s, @"stderr",
-                                   nil];
-        dispatch_async(dispatch_get_main_queue(), ^{
-          [self _showErrorAlert:errorInfo];
-        });
-        [d release];
+    NSString *s = nil;
+    NSData *d = [NSData dataWithContentsOfFile:logPath
+                                       options:NSDataReadingMappedIfSafe
+                                         error:NULL];
+    if (d) {
+      /* Bound the alert payload to the last 64 KiB even if the log file
+         has accumulated across prior invocations. */
+      NSUInteger cap = 64 * 1024;
+      if ([d length] > cap) {
+        d = [d subdataWithRange:NSMakeRange([d length] - cap, cap)];
       }
+      s = [[[NSString alloc] initWithData:d
+                                 encoding:NSUTF8StringEncoding] autorelease];
     }
+    if (!s) s = @"(no stderr output)";
 
+    NSDictionary *errorInfo = [NSDictionary dictionaryWithObjectsAndKeys:
+                               path, @"path",
+                               [NSNumber numberWithInt:status], @"status",
+                               s, @"stderr",
+                               nil];
+    dispatch_async(dispatch_get_main_queue(), ^{
+      [self _showErrorAlert:errorInfo];
+    });
   } @finally {
     [pool drain];
   }

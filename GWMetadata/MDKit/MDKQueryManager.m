@@ -30,7 +30,7 @@
 
 #define GWDebugLog(format, args...) \
   do { if (GW_DEBUG_LOG) \
-    NSLog(format , ## args); } while (0)
+    NSDebugLLog(@"gwspace", format , ## args); } while (0)
 
 static MDKQueryManager *queryManager = nil;
 
@@ -137,7 +137,7 @@ static MDKQueryManager *queryManager = nil;
 	    }
     NS_HANDLER
 	    {
-        NSLog(@"%@", localException); 
+        NSDebugLLog(@"gwspace", @"%@", localException); 
         return NO;
 	    }
     NS_ENDHANDLER
@@ -279,10 +279,10 @@ static MDKQueryManager *queryManager = nil;
 		                   object: [gmds connectionForProxy]];
 
       [gmds registerClient: self];                              
-      NSLog(@"gmds connected!");     
+      NSDebugLLog(@"gwspace", @"gmds connected!");     
                        
     } else {
-      NSLog(@"unable to contact gmds.");  
+      NSDebugLLog(@"gwspace", @"unable to contact gmds.");  
     }
   }  
 }
@@ -293,7 +293,7 @@ static MDKQueryManager *queryManager = nil;
 	                    name: NSConnectionDidDieNotification
 	                  object: [notif object]];
   DESTROY (gmds);
-  NSLog(@"gmds connection died!");  
+  NSDebugLLog(@"gwspace", @"gmds connection died!");  
   [[NSRunLoop currentRunLoop] runUntilDate:
 		                    [NSDate dateWithTimeIntervalSinceNow: 1.0]];
   [self connectGMDs];

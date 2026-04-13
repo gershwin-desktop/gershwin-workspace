@@ -29,7 +29,7 @@
 
 #define GWDebugLog(format, args...) \
   do { if (GW_DEBUG_LOG) \
-    NSLog(format , ## args); } while (0)
+    NSDebugLLog(@"gwspace", format , ## args); } while (0)
 
 static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 
@@ -175,7 +175,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
     
       if ([conn registerName: @"fswatcher"] == NO)
 	{
-	  NSLog(@"unable to register with name server.");
+	  NSDebugLLog(@"gwspace", @"unable to register with name server.");
 	  DESTROY (self);
 	  return self;
 	}
@@ -184,7 +184,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
   
       if (fd == -1)
 	{
-	  NSLog(@"inotify_init() failed!");
+	  NSDebugLLog(@"gwspace", @"inotify_init() failed!");
 	  DESTROY (self);
 	  return self;  
 	}
@@ -193,7 +193,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
                                                   closeOnDealloc: YES];  
 
     if (inotifyHandle == nil) {
-      NSLog(@"unable to create the inotify handle.");
+      NSDebugLLog(@"gwspace", @"unable to create the inotify handle.");
       close(fd);
       DESTROY (self);
       return self;  
@@ -270,7 +270,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
 
   if (connection == conn)
     {
-      NSLog(@"argh - fswatcher server root connection has been destroyed.");
+      NSDebugLLog(@"gwspace", @"argh - fswatcher server root connection has been destroyed.");
       exit(EXIT_FAILURE);  
     }
   else
@@ -299,7 +299,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
 	  /* If there is nothing else using this process, and this is not
 	   * a daemon, then we can quietly terminate.
 	   */
-	  NSLog(@"No more clients, shutting down.");
+	  NSDebugLLog(@"gwspace", @"No more clients, shutting down.");
 	  exit(EXIT_SUCCESS);
 	}
     }
@@ -534,7 +534,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
         RELEASE (watcher);       
         
       } else {
-        NSLog(@"Invalid watch descriptor returned by inotify_add_watch(). "
+        NSDebugLLog(@"gwspace", @"Invalid watch descriptor returned by inotify_add_watch(). "
                                                 @"No watcher for: %@", path);  
       }    
     }
@@ -586,7 +586,7 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
   
   if (wd != -1) {      
     if (inotify_rm_watch([inotifyHandle fileDescriptor], wd) != 0) {
-      NSLog(@"error removing watch descriptor for: %@", path);
+      NSDebugLLog(@"gwspace", @"error removing watch descriptor for: %@", path);
     }    
     NSMapRemove(watchDescrMap, (void *)(intptr_t)wd);      
   }

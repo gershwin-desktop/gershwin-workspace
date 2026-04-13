@@ -652,7 +652,7 @@ shouldMakeNewConnection:(NSConnection*)newConn
                 					  name: @"GWFileSystemDidChangeNotification"
                 					object: nil];    
   } else {
-    NSLog(@"failed to load %@!", nibName);
+    NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
   }
 }
 

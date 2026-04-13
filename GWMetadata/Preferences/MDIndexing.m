@@ -891,7 +891,7 @@ return; \
 	        }
 	      NS_HANDLER
 	        {
-        NSLog(@"Unable to break lock %@ ... %@", indexedStatusLock, localException);
+        NSDebugLLog(@"gwspace", @"Unable to break lock %@ ... %@", indexedStatusLock, localException);
 	        }
 	      NS_ENDHANDLER
       }
@@ -906,7 +906,7 @@ return; \
 	    }
 
       if (sleeps >= 10) {
-        NSLog(@"Unable to obtain lock %@", indexedStatusLock);
+        NSDebugLLog(@"gwspace", @"Unable to obtain lock %@", indexedStatusLock);
         RELEASE (arp);
         return;
 	    }

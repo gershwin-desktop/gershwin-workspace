@@ -394,7 +394,7 @@
       
       /* Safety check: ensure we have a valid path and name */
       if (nodePath == nil || appName == nil) {
-        NSLog(@"DockIcon mouseUp: missing path or appName");
+        NSDebugLLog(@"gwspace", @"DockIcon mouseUp: missing path or appName");
         return;
       }
       

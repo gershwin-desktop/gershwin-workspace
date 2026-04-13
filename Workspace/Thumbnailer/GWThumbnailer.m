@@ -65,10 +65,10 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   countInstances--;
 
   if (countInstances < 0)
-    NSLog(@"Something went wrong!");
+    NSDebugLLog(@"gwspace", @"Something went wrong!");
   if (countInstances == 0)
     {
-      NSLog(@"Last thumbnailer instance, dealloc'ing");
+      NSDebugLLog(@"gwspace", @"Last thumbnailer instance, dealloc'ing");
       [[NSNotificationCenter defaultCenter] removeObserver: self];
 
       if (timer && [timer isValid])
@@ -118,7 +118,7 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 
     if (([fm fileExistsAtPath: thumbnailDir isDirectory: &isdir] && isdir) == NO) {
       if ([fm createDirectoryAtPath: thumbnailDir attributes: nil] == NO) {
-        NSLog(@"no thumbnails directory");
+        NSDebugLLog(@"gwspace", @"no thumbnails directory");
         return nil;
       }
     }
@@ -154,7 +154,7 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 - (void)writeDictToFile
 {
   [dictLock lock];
-  NSLog(@"(%d) writing to: %@", (int)countInstances, dictPath);
+  NSDebugLLog(@"gwspace", @"(%d) writing to: %@", (int)countInstances, dictPath);
   [thumbsDict writeToFile: dictPath atomically: YES];
   [dictLock unlock];
 }
@@ -315,7 +315,7 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   NSAutoreleasePool *arp;
 
   arp = [NSAutoreleasePool new];
-  NSLog(@"_makeThumbnails (%u): %@", (int)countInstances, path);
+  NSDebugLLog(@"gwspace", @"_makeThumbnails (%u): %@", (int)countInstances, path);
   added = [NSMutableArray array];
 
   if ([fm fileExistsAtPath: path isDirectory: &isdir] && isdir)
