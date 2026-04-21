@@ -194,6 +194,14 @@ static AboutController *sharedController = nil;
     processor = [self getProcessorInfo];
   }
 
+  if (!serial) {
+    serial = [self readTextFileTrimmingNulls:@"/proc/device-tree/serial-number"];
+  }
+
+  if (product && [product hasPrefix:@"Raspberry Pi"]) {
+    manufacturer = @"Raspberry Pi Ltd";
+  }
+
   [processorField setStringValue:processor ?: @"Unknown"];
   [modelField setStringValue:product ?: @"Unknown"];
   [manufacturerField setStringValue:manufacturer ?: @"Unknown"];
