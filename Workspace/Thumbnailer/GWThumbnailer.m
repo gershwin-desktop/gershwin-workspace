@@ -40,25 +40,27 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 
 @implementation Thumbnailer
 
-/* A singleton that can be released. However, once one existance exists,
-   all instances will be the same object.
-
-   This way we can insure that only one Thumbnail dictionary exists in memory
-*/
+/* Immortal singleton — one Thumbnailer for the lifetime of the process.
+   retain/release/autorelease are no-ops (overridden below) so callers
+   like Workspace.m:2595 that do `[t release]` after sharedThumbnailer
+   don't trip the legacy release-counted dealloc whose partial-cleanup
+   branch left the singleton in a half-dead zombie state under
+   concurrent file-watch storms (e.g. pasting many files at once). */
 
 + (Thumbnailer *)sharedThumbnailer
 {
-  if (nil == sharedThumbnailerInstance)
-    {
-      sharedThumbnailerInstance = [[Thumbnailer allocWithZone:NULL] init];
-      countInstances = 1;
-    }
-  else
-    {
-      countInstances++;
-    }
-  return sharedThumbnailerInstance;
+  static Thumbnailer *instance = nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    instance = [[Thumbnailer allocWithZone:NULL] init];
+  });
+  return instance;
 }
+
+- (id)retain                  { return self; }
+- (oneway void)release        { /* no-op: immortal singleton */ }
+- (id)autorelease             { return self; }
+- (NSUInteger)retainCount     { return NSUIntegerMax; }
 
 - (void)dealloc
 {
@@ -368,13 +370,8 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   if ([pathsInProcessing containsObject:path])
     return;
   [pathsInProcessing addObject:path];
-  // Block does not auto-retain `self` under MRC + libobjc2; balance the
-  // immediate -release in callers (e.g. Workspace.m:2595) so the instance
-  // outlives the dispatched work.
-  [self retain];
   dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
     [self _makeThumbnails:path];
-    [self release];
   });
 }
 
