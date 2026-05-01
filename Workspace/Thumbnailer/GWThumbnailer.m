@@ -368,8 +368,13 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   if ([pathsInProcessing containsObject:path])
     return;
   [pathsInProcessing addObject:path];
+  // Block does not auto-retain `self` under MRC + libobjc2; balance the
+  // immediate -release in callers (e.g. Workspace.m:2595) so the instance
+  // outlives the dispatched work.
+  [self retain];
   dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
     [self _makeThumbnails:path];
+    [self release];
   });
 }
 
