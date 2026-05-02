@@ -330,9 +330,10 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
                                selectionColumn: YES];
     }
 
-    [nviewScroll setDocumentView: nodeView];	
-    RELEASE (nodeView);                 
-    [nodeView showContentsOfNode: baseNode]; 
+    [nviewScroll setDocumentView: nodeView];
+    RELEASE (nodeView);
+    [self applyContentBackgroundColor];
+    [nodeView showContentsOfNode: baseNode];
     
     if (showsel) {
       defEntry = [viewerPrefs objectForKey: @"lastselection"];
@@ -591,6 +592,20 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
   [sidebar setFrame: NSMakeRect(0, 0, sidebarWidth, h)];
   [lowBox setFrame: NSMakeRect(sidebarWidth + d, 0, w - sidebarWidth - d, h)];
+}
+
+- (void)applyContentBackgroundColor
+{
+  NSColor *bg = [NSColor controlBackgroundColor];
+
+  if (nviewScroll) {
+    [nviewScroll setBackgroundColor: bg];
+    [nviewScroll setDrawsBackground: YES];
+  }
+
+  if (nodeView && [nodeView respondsToSelector: @selector(setBackgroundColor:)]) {
+    [(id)nodeView setBackgroundColor: bg];
+  }
 }
 
 - (void)scrollToBeginning
@@ -969,8 +984,9 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   range = NSMakeRange([pathsView firstVisibleIcon], [pathsView lastVisibleIcon]);
   [pathsView setSelectableIconsRange: range];
 
-  [nviewScroll setDocumentView: nodeView];	
-  RELEASE (nodeView); 
+  [nviewScroll setDocumentView: nodeView];
+  RELEASE (nodeView);
+  [self applyContentBackgroundColor];
   [nodeView resizeWithOldSuperviewSize: [nodeView bounds].size];
 
   [self windowDidResize: nil];
@@ -1472,9 +1488,10 @@ constrainMinCoordinate:(CGFloat)proposedMin
           viewType = GWViewTypeList;
         }
     
-      [nviewScroll setDocumentView: nodeView];	
-      RELEASE (nodeView); 
-      [nodeView showContentsOfNode: baseNode]; 
+      [nviewScroll setDocumentView: nodeView];
+      RELEASE (nodeView);
+      [self applyContentBackgroundColor];
+      [nodeView showContentsOfNode: baseNode];
                     
       if ([selection count])
         {
