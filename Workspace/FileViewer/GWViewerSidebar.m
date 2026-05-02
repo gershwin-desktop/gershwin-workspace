@@ -239,15 +239,9 @@ typedef enum {
   userDomain = [[GWSidebarItem alloc] initHeaderWithTitle:
                   NSLocalizedString(@"User Domain", @"")];
 
-  /* Applications: prefer /Applications, fall back to /System/Applications */
+  /* Applications: per-user ~/Applications under the User Domain group. */
   {
-    NSString *appsPath = @"/Applications";
-    if ([fm fileExistsAtPath: appsPath] == NO) {
-      NSString *sysApps = @"/System/Applications";
-      if ([fm fileExistsAtPath: sysApps]) {
-        appsPath = sysApps;
-      }
-    }
+    NSString *appsPath = [home stringByAppendingPathComponent: @"Applications"];
     GWSidebarItem *it = [[GWSidebarItem alloc]
         initPathItemWithTitle: NSLocalizedString(@"Applications", @"")
                          path: appsPath];
