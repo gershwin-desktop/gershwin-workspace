@@ -51,26 +51,37 @@
 - (void)updateDiskSpaceInfo:(NSString *)info
 {
 	if (info) {
-  	[diskInfoField setStringValue: info]; 
+  	[diskInfoField setStringValue: info];
 	} else {
-  	[diskInfoField setStringValue: @""]; 
+  	[diskInfoField setStringValue: @""];
   }
-  
-  if (NSEqualRects(diskInfoRect, NSZeroRect) == NO) {
+
+  if ([self isVertical] == NO
+      && NSEqualRects(diskInfoRect, NSZeroRect) == NO) {
     [diskInfoField drawWithFrame: diskInfoRect inView: self];
   }
 }
 
 - (CGFloat)dividerThickness
 {
+  if ([self isVertical]) {
+    return 7;
+  }
   return 11;
 }
 
 - (void)drawDividerInRect:(NSRect)aRect
 {
-  diskInfoRect = NSMakeRect(8, aRect.origin.y, 200, 10);    
-  
-  [super drawDividerInRect: aRect];   
+  if ([self isVertical]) {
+    /* Sidebar layout: thin vertical divider, no disk info overlay */
+    diskInfoRect = NSZeroRect;
+    [super drawDividerInRect: aRect];
+    return;
+  }
+
+  diskInfoRect = NSMakeRect(8, aRect.origin.y, 200, 10);
+
+  [super drawDividerInRect: aRect];
   [diskInfoField setBackgroundColor: [self backgroundColor]];
   [diskInfoField drawWithFrame: diskInfoRect inView: self];
 }

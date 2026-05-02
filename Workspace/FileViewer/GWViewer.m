@@ -37,6 +37,7 @@
 #import "GWViewerScrollView.h"
 #import "GWViewerSplit.h"
 #import "GWViewerShelf.h"
+#import "GWViewerSidebar.h"
 #import "GWViewerIconsPath.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
@@ -53,11 +54,9 @@
 #define DEFAULT_INCR 150
 #define MIN_WIN_H 300
 
-#define MIN_SHELF_HEIGHT 2.0
-#define MID_SHELF_HEIGHT 77.0
-#define MAX_SHELF_HEIGHT 150.0
-#define COLLAPSE_LIMIT 35
-#define MID_LIMIT 110
+#define MIN_SIDEBAR_WIDTH 120.0
+#define DEFAULT_SIDEBAR_WIDTH 160.0
+#define MAX_SIDEBAR_WIDTH 280.0
 
 /* Helper function to get volume information using statvfs */
 static BOOL getVolumeInfo(const char *path, unsigned long long *total, 
@@ -220,11 +219,13 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
         viewType = GWViewTypeIcon;
       }
     
-    defEntry = [viewerPrefs objectForKey: @"shelfheight"];
+    defEntry = [viewerPrefs objectForKey: @"sidebarwidth"];
     if (defEntry) {
-      shelfHeight = [defEntry floatValue];
+      sidebarWidth = [defEntry floatValue];
+      if (sidebarWidth < MIN_SIDEBAR_WIDTH) sidebarWidth = MIN_SIDEBAR_WIDTH;
+      if (sidebarWidth > MAX_SIDEBAR_WIDTH) sidebarWidth = MAX_SIDEBAR_WIDTH;
     } else {
-      shelfHeight = MID_SHELF_HEIGHT;
+      sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
     }
        
     ASSIGN (vwrwin, win);
@@ -306,19 +307,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
     }
 
     [self createSubviews];
-    
-    defEntry = [viewerPrefs objectForKey: @"shelfdicts"];
 
-    if (defEntry && [defEntry count]) {
-      [shelf setContents: defEntry];
-    } else if (rootViewer) {
-      NSDictionary *sfdict = [NSDictionary dictionaryWithObjectsAndKeys:
-                        [NSNumber numberWithInt: 0], @"index", 
-                        [NSArray arrayWithObject: NSHomeDirectory()], @"paths", 
-                        nil];
-      [shelf setContents: [NSArray arrayWithObject: sfdict]];
-    }
-    
     if (viewType == GWViewTypeIcon) {
       nodeView = [[GWViewerIconsView alloc] initForViewer: self];
       
@@ -410,26 +399,32 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 {
   NSRect r = [[vwrwin contentView] bounds];
   CGFloat w = r.size.width;
-  CGFloat h = r.size.height;   
+  CGFloat h = r.size.height;
   CGFloat d = 0.0;
   int xmargin = 0;
   int ymargin = 0;
   int pathscrh = 98;
   NSUInteger resizeMask;
   BOOL hasScroller;
-  
+
   split = [[GWViewerSplit alloc] initWithFrame: r];
+  [split setVertical: YES];
   [split setAutoresizingMask: (NSViewWidthSizable | NSViewHeightSizable)];
   [split setDelegate: self];
-  
+
   d = [split dividerThickness];
-  
-  r = NSMakeRect(0, 0, w, shelfHeight);  
-  shelf = [[GWViewerShelf alloc] initWithFrame: r forViewer: self];
-  [split addSubview: shelf];
-  RELEASE (shelf);
-  
-  r = NSMakeRect(0, shelfHeight + d, w, h - shelfHeight - d);
+
+  if (sidebarWidth + d > w - MIN_SIDEBAR_WIDTH) {
+    sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
+  }
+
+  r = NSMakeRect(0, 0, sidebarWidth, h);
+  sidebar = [[GWViewerSidebar alloc] initWithFrame: r forViewer: self];
+  [sidebar setAutoresizingMask: NSViewHeightSizable];
+  [split addSubview: sidebar];
+  RELEASE (sidebar);
+
+  r = NSMakeRect(sidebarWidth + d, 0, w - sidebarWidth - d, h);
   lowBox = [[NSView alloc] initWithFrame: r];
   resizeMask = NSViewWidthSizable | NSViewHeightSizable;
   [lowBox setAutoresizingMask: resizeMask];
@@ -439,7 +434,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
   r = [lowBox bounds];
   w = r.size.width;
-  h = r.size.height; 
+  h = r.size.height;
   
   r = NSMakeRect(xmargin, h - pathscrh, w - (xmargin * 2), pathscrh);
   pathsScroll = [[GWViewerPathsScroll alloc] initWithFrame: r];
@@ -533,7 +528,8 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
 - (id)shelf
 {
-  return shelf;
+  /* Browsing-mode viewers no longer have a shelf; the sidebar replaces it. */
+  return nil;
 }
 
 - (GWViewType)viewType
@@ -580,11 +576,18 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 {
   NSRect r = [split bounds];
   CGFloat w = r.size.width;
-  CGFloat h = r.size.height;   
+  CGFloat h = r.size.height;
   CGFloat d = [split dividerThickness];
-    
-  [shelf setFrame: NSMakeRect(0, 0, w, shelfHeight)];
-  [lowBox setFrame: NSMakeRect(0, shelfHeight + d, w, h - shelfHeight - d)];
+
+  if (sidebarWidth < MIN_SIDEBAR_WIDTH) sidebarWidth = MIN_SIDEBAR_WIDTH;
+  if (sidebarWidth > MAX_SIDEBAR_WIDTH) sidebarWidth = MAX_SIDEBAR_WIDTH;
+  if (sidebarWidth + d > w - MIN_SIDEBAR_WIDTH) {
+    sidebarWidth = w - MIN_SIDEBAR_WIDTH - d;
+    if (sidebarWidth < MIN_SIDEBAR_WIDTH) sidebarWidth = MIN_SIDEBAR_WIDTH;
+  }
+
+  [sidebar setFrame: NSMakeRect(0, 0, sidebarWidth, h)];
+  [lowBox setFrame: NSMakeRect(sidebarWidth + d, 0, w - sidebarWidth - d, h)];
 }
 
 - (void)scrollToBeginning
@@ -932,13 +935,11 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 - (void)hideDotsFileChanged:(BOOL)hide
 {
   [self reloadFromNode: baseNode];
-  [shelf checkIconsAfterDotsFilesChange];
 }
 
 - (void)hiddenFilesChanged:(NSArray *)paths
 {
   [self reloadFromNode: baseNode];
-  [shelf checkIconsAfterHidingOfPaths: paths];
 }
 
 - (void)columnsWidthChanged:(NSNotification *)notification
@@ -1005,11 +1006,8 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
     [updatedprefs setObject: viewTypeStr forKey: @"viewtype"];
 
-    [updatedprefs setObject: [NSNumber numberWithFloat: shelfHeight]
-                     forKey: @"shelfheight"];
-
-    [updatedprefs setObject: [shelf contentsInfo]
-                     forKey: @"shelfdicts"];
+    [updatedprefs setObject: [NSNumber numberWithFloat: sidebarWidth]
+                     forKey: @"sidebarwidth"];
 
     defEntry = [nodeView selectedPaths];
     if (defEntry) {
@@ -1081,39 +1079,38 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 }
 
 - (CGFloat)splitView:(NSSplitView *)sender
-constrainSplitPosition:(CGFloat)proposedPosition 
+constrainSplitPosition:(CGFloat)proposedPosition
          ofSubviewAt:(NSInteger)offset
 {
-  if (proposedPosition < COLLAPSE_LIMIT) {
-    shelfHeight = MIN_SHELF_HEIGHT;
-  } else if (proposedPosition <= MID_LIMIT) {  
-    shelfHeight = MID_SHELF_HEIGHT;
-  } else {
-    shelfHeight = MAX_SHELF_HEIGHT;
+  CGFloat pos = proposedPosition;
+
+  if (pos < MIN_SIDEBAR_WIDTH) {
+    pos = MIN_SIDEBAR_WIDTH;
+  } else if (pos > MAX_SIDEBAR_WIDTH) {
+    pos = MAX_SIDEBAR_WIDTH;
   }
-  
-  return shelfHeight;
+
+  sidebarWidth = pos;
+  return pos;
 }
 
-- (CGFloat)splitView:(NSSplitView *)sender 
-constrainMaxCoordinate:(CGFloat)proposedMax 
+- (CGFloat)splitView:(NSSplitView *)sender
+constrainMaxCoordinate:(CGFloat)proposedMax
          ofSubviewAt:(NSInteger)offset
 {
-  if (proposedMax >= MAX_SHELF_HEIGHT) {
-    return MAX_SHELF_HEIGHT;
+  if (proposedMax >= MAX_SIDEBAR_WIDTH) {
+    return MAX_SIDEBAR_WIDTH;
   }
-  
   return proposedMax;
 }
 
-- (CGFloat)splitView:(NSSplitView *)sender 
-constrainMinCoordinate:(CGFloat)proposedMin 
+- (CGFloat)splitView:(NSSplitView *)sender
+constrainMinCoordinate:(CGFloat)proposedMin
          ofSubviewAt:(NSInteger)offset
 {
-  if (proposedMin <= MIN_SHELF_HEIGHT) {
-    return MIN_SHELF_HEIGHT;
+  if (proposedMin <= MIN_SIDEBAR_WIDTH) {
+    return MIN_SIDEBAR_WIDTH;
   }
-  
   return proposedMin;
 }
 

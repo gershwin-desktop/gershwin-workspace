@@ -39,6 +39,7 @@ typedef enum
 @class GWViewerWindow;
 @class GWViewerSplit;
 @class GWViewerShelf;
+@class GWViewerSidebar;
 @class GWViewerScrollView;
 @class GWViewerIconsPath;
 @class GWViewerPathsScroll;
@@ -49,8 +50,8 @@ typedef enum
 {
   GWViewerWindow *vwrwin;
   GWViewerSplit *split;
-  GWViewerShelf *shelf;
-  float shelfHeight;
+  GWViewerSidebar *sidebar;
+  float sidebarWidth;
   NSView *lowBox;
   GWViewerPathsScroll *pathsScroll;
   GWViewerIconsPath *pathsView;
