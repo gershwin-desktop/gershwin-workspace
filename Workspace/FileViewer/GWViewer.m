@@ -403,7 +403,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   CGFloat d = 0.0;
   int xmargin = 0;
   int ymargin = 0;
-  int pathscrh = 98;
+  int pathscrh = 46;
   NSUInteger resizeMask;
   BOOL hasScroller;
 
@@ -436,29 +436,32 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   w = r.size.width;
   h = r.size.height;
   
-  r = NSMakeRect(xmargin, h - pathscrh, w - (xmargin * 2), pathscrh);
+  r = NSMakeRect(xmargin, 0, w - (xmargin * 2), pathscrh);
   pathsScroll = [[GWViewerPathsScroll alloc] initWithFrame: r];
   [pathsScroll setBorderType: NSBezelBorder];
   [pathsScroll setHasHorizontalScroller: YES];
   [pathsScroll setHasVerticalScroller: NO];
   [pathsScroll setDelegate: nil];
-  resizeMask = NSViewNotSizable | NSViewWidthSizable | NSViewMinYMargin;
+  resizeMask = NSViewNotSizable | NSViewWidthSizable | NSViewMaxYMargin;
   [pathsScroll setAutoresizingMask: resizeMask];
   [lowBox addSubview: pathsScroll];
   RELEASE (pathsScroll);
 
-  visibleCols = myrintf(r.size.width / [vwrwin resizeIncrements].width);  
-  
+  visibleCols = myrintf(r.size.width / [vwrwin resizeIncrements].width);
+
   r = [[pathsScroll contentView] bounds];
-  pathsView = [[GWViewerIconsPath alloc] initWithFrame: r 
+  pathsView = [[GWViewerIconsPath alloc] initWithFrame: r
                    visibleIcons: visibleCols forViewer: self
                    ownsScroller: (viewType != GWViewTypeBrowser)];
   resizeMask = NSViewNotSizable;
   [pathsView setAutoresizingMask: resizeMask];
   [pathsScroll setDocumentView: pathsView];
+  /* Lion-style compact path bar: small icon directly to the left of the
+     name, with a chevron drawn between path components. */
+  [pathsView setCompactPathBarMode: YES iconSize: 20 labelFontSize: 12];
   RELEASE (pathsView);
-  
-  r = NSMakeRect(xmargin, 0, w - (xmargin * 2), h - pathscrh - ymargin);
+
+  r = NSMakeRect(xmargin, pathscrh, w - (xmargin * 2), h - pathscrh - ymargin);
   nviewScroll = [[GWViewerScrollView alloc] initWithFrame: r inViewer: self];
   [nviewScroll setBorderType: NSBezelBorder];
   hasScroller = ((viewType ==GWViewTypeIcon) || (viewType ==GWViewTypeList));

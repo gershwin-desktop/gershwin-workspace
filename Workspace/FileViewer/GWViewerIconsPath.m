@@ -79,6 +79,7 @@
     firstVisibleIcon = 0;
     lastVisibleIcon = visibleIcons - 1;
     shift = 0;
+    compactMode = NO;
    
     defentry = [defaults dictionaryForKey: @"backcolor"];
     if (defentry) {
@@ -164,6 +165,61 @@
   ownScroller = ownscr;
   [self setFrame: [[self superview] bounds]];
   [self tile];
+}
+
+- (void)setIconSize:(int)isize
+       labelFontSize:(int)fsize
+{
+  NSUInteger i;
+
+  iconSize = isize;
+  if (fsize > 0) {
+    labelTextSize = fsize;
+    ASSIGN (labelFont, [NSFont systemFontOfSize: labelTextSize]);
+  }
+
+  for (i = 0; i < [icons count]; i++) {
+    id icon = [icons objectAtIndex: i];
+
+    if ([icon respondsToSelector: @selector(setIconSize:)]) {
+      [icon setIconSize: iconSize];
+    }
+  }
+
+  [self calculateGridSize];
+  [self tile];
+  [self setNeedsDisplay: YES];
+}
+
+- (void)setCompactPathBarMode:(BOOL)flag
+                     iconSize:(int)isize
+                labelFontSize:(int)fsize
+{
+  NSUInteger i;
+
+  compactMode = flag;
+  iconPosition = flag ? NSImageLeft : NSImageAbove;
+
+  iconSize = isize;
+  if (fsize > 0) {
+    labelTextSize = fsize;
+    ASSIGN (labelFont, [NSFont systemFontOfSize: labelTextSize]);
+  }
+
+  for (i = 0; i < [icons count]; i++) {
+    id icon = [icons objectAtIndex: i];
+
+    if ([icon respondsToSelector: @selector(setIconPosition:)]) {
+      [icon setIconPosition: iconPosition];
+    }
+    if ([icon respondsToSelector: @selector(setIconSize:)]) {
+      [icon setIconSize: iconSize];
+    }
+  }
+
+  [self calculateGridSize];
+  [self tile];
+  [self setNeedsDisplay: YES];
 }
 
 - (void)showPathComponents:(NSArray *)components
@@ -280,7 +336,7 @@
 {
   NSSize highlightSize = NSZeroSize;
   NSSize labelSize = NSZeroSize;
-  
+
   highlightSize.width = ceil(iconSize / 3 * 4);
   highlightSize.height = ceil(highlightSize.width * [fsnodeRep highlightHeightFactor]);
   if ((highlightSize.height - iconSize) < 4) {
@@ -288,7 +344,13 @@
   }
 
   labelSize.height = myrintf([fsnodeRep heightOfFont: labelFont]);
-  gridSize.height = highlightSize.height + labelSize.height;
+
+  if (compactMode) {
+    /* Lion-style horizontal layout: icon and label on one line */
+    gridSize.height = MAX(highlightSize.height, labelSize.height);
+  } else {
+    gridSize.height = highlightSize.height + labelSize.height;
+  }
 }
 
 - (void)tile
@@ -296,48 +358,56 @@
   NSClipView *clip = (NSClipView *)[self superview];
   float vwidth = [clip visibleRect].size.width;
 	int count = [icons count];
-  int i;    
-    
+  int i;
+  CGFloat yOffset = 0.0;
+
+  if (compactMode) {
+    /* Center icons vertically inside the path bar */
+    CGFloat selfH = [self bounds].size.height;
+    yOffset = myrintf((selfH - gridSize.height) / 2.0);
+    if (yOffset < 0) yOffset = 0;
+  }
+
   if (ownScroller) {
     NSRect fr = [self frame];
     float x = [clip bounds].origin.x;
     float y = [clip bounds].origin.y;
     float posx = 0.0;
-    
+
     gridSize.width = myrintf(vwidth / visibleIcons);
     [(NSScrollView *)[clip superview] setLineScroll: gridSize.width];
-  
+
     for (i = 0; i < count; i++) {
       NSRect r = NSZeroRect;
 
       r.size = gridSize;
-      r.origin.y = 0;
+      r.origin.y = yOffset;
       r.origin.x = posx;
-      
+
       [[icons objectAtIndex: i] setFrame: r];
-      
+
       posx += gridSize.width;
     }
-    
+
     if (posx != fr.size.width) {
       [self setFrame: NSMakeRect(0, fr.origin.y, posx, fr.size.height)];
     }
 
-    if (count > visibleIcons) {    
+    if (count > visibleIcons) {
       x += gridSize.width * count;
-      [clip scrollToPoint: NSMakePoint(x, y)];      
+      [clip scrollToPoint: NSMakePoint(x, y)];
     }
 
   } else {
     vwidth -= visibleIcons;
     gridSize.width = myrintf(vwidth / visibleIcons);
-  
+
     for (i = 0; i < count; i++) {
       int n = i - firstVisibleIcon;
       NSRect r = NSZeroRect;
 
       r.size = gridSize;
-      r.origin.y = 0;
+      r.origin.y = yOffset;
 
       if (i < firstVisibleIcon) {
         r.origin.x = (n * gridSize.width) - 8;
@@ -359,14 +429,80 @@
     }
   }
 
-  [self updateNameEditor]; 
-       
+  [self updateNameEditor];
+
   [self setNeedsDisplay: YES];
 }
 
 - (void)resizeWithOldSuperviewSize:(NSSize)oldFrameSize
 {
   [self tile];
+}
+
+- (void)drawRect:(NSRect)rect
+{
+  [super drawRect: rect];
+
+  if (compactMode == NO) {
+    return;
+  }
+
+  /* Draw a small chevron centered in the empty whitespace between
+     each path component's visible content (icon + label) and the
+     next component's icon. */
+  NSUInteger count = [icons count];
+  if (count < 2) {
+    return;
+  }
+
+  NSColor *chevColor = [[NSColor controlShadowColor]
+                          colorUsingColorSpaceName: NSDeviceRGBColorSpace];
+  if (chevColor == nil) {
+    chevColor = [NSColor darkGrayColor];
+  }
+  [chevColor set];
+
+  NSDictionary *attrs = nil;
+  if (labelFont) {
+    attrs = [NSDictionary dictionaryWithObject: labelFont
+                                        forKey: NSFontAttributeName];
+  }
+
+  NSUInteger i;
+  for (i = 0; i + 1 < count; i++) {
+    id thisIcon = [icons objectAtIndex: i];
+    id nextIcon = [icons objectAtIndex: i + 1];
+    NSRect thisFrame = [thisIcon frame];
+    NSRect nextFrame = [nextIcon frame];
+
+    /* Estimate the right edge of this component's visible content. */
+    CGFloat textEnd = NSMinX(thisFrame) + iconSize + 6.0;
+    if (attrs && [thisIcon respondsToSelector: @selector(node)]) {
+      FSNode *n = [thisIcon node];
+      NSString *name = [n name];
+      if (name) {
+        NSSize sz = [name sizeWithAttributes: attrs];
+        textEnd += sz.width + 4.0;
+      }
+    }
+    if (textEnd > NSMaxX(thisFrame) - 6.0) {
+      textEnd = NSMaxX(thisFrame) - 6.0;
+    }
+
+    CGFloat nextStart = NSMinX(nextFrame);
+    CGFloat cx = (textEnd + nextStart) / 2.0;
+    CGFloat cy = NSMidY(thisFrame);
+    CGFloat s = 4.0;
+
+    NSBezierPath *p = [NSBezierPath bezierPath];
+    [p setLineWidth: 1.75];
+    [p setLineCapStyle: NSRoundLineCapStyle];
+    [p setLineJoinStyle: NSRoundLineJoinStyle];
+    [p moveToPoint: NSMakePoint(cx - s, cy - s)];
+    [p lineToPoint: NSMakePoint(cx, cy)];
+    [p lineToPoint: NSMakePoint(cx - s, cy + s)];
+    [p stroke];
+  }
 }
 
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent
