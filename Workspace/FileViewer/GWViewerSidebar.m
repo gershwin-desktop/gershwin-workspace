@@ -338,21 +338,11 @@ typedef enum {
 
 - (void)openItem:(GWSidebarItem *)item
 {
-  GWViewersManager *manager = [GWViewersManager viewersManager];
+  FSNode *target = nil;
 
   if ([item kind] == GWSidebarItemNetwork) {
-    NetworkFSNode *netNode = [NetworkFSNode networkRootNode];
-    if (netNode) {
-      [manager viewerForNode: netNode
-                    showType: GWViewTypeIcon
-               showSelection: NO
-                    forceNew: NO
-                     withKey: @"network_viewer"];
-    }
-    return;
-  }
-
-  if ([item kind] == GWSidebarItemPath) {
+    target = [NetworkFSNode networkRootNode];
+  } else if ([item kind] == GWSidebarItemPath) {
     NSString *p = [item path];
     if (p == nil || [p length] == 0) {
       return;
@@ -365,17 +355,30 @@ typedef enum {
       return;
     }
 
-    FSNode *node = [FSNode nodeWithPath: p];
-    if (node == nil || [node isValid] == NO) {
+    target = [FSNode nodeWithPath: p];
+    if (target == nil || [target isValid] == NO) {
       return;
     }
-
-    [manager viewerForNode: node
-                  showType: GWViewTypeBrowser
-             showSelection: NO
-                  forceNew: NO
-                   withKey: nil];
   }
+
+  if (target == nil) {
+    return;
+  }
+
+  /* Navigate the current viewer in place rather than opening a new
+     window. */
+  if (viewer && [viewer respondsToSelector: @selector(openNodeInPlace:)]) {
+    [(id)viewer openNodeInPlace: target];
+    return;
+  }
+
+  /* Fallback: hand off to the viewers manager */
+  GWViewersManager *manager = [GWViewersManager viewersManager];
+  [manager viewerForNode: target
+                showType: GWViewTypeBrowser
+           showSelection: NO
+                forceNew: NO
+                 withKey: nil];
 }
 
 /* ---------------- NSOutlineView data source ---------------- */

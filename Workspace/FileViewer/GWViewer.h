@@ -104,6 +104,11 @@ typedef enum
 - (void)updateWindowTitle;
 - (void)navigateToNode:(FSNode *)node;
 
+/* Re-base the viewer window to a new node (sidebar navigation).
+   Recreates the node view, updates the window title and path bar,
+   and resets history. */
+- (void)openNodeInPlace:(FSNode *)newBase;
+
 - (GWViewerWindow *)win;
 - (id)nodeView;
 - (id)shelf;

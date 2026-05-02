@@ -65,7 +65,8 @@
 - (CGFloat)dividerThickness
 {
   if ([self isVertical]) {
-    return 7;
+    /* Sidebar layout: no visible/draggable divider */
+    return 0;
   }
   return 11;
 }
@@ -73,9 +74,8 @@
 - (void)drawDividerInRect:(NSRect)aRect
 {
   if ([self isVertical]) {
-    /* Sidebar layout: thin vertical divider, no disk info overlay */
+    /* No divider in sidebar layout */
     diskInfoRect = NSZeroRect;
-    [super drawDividerInRect: aRect];
     return;
   }
 
@@ -84,6 +84,15 @@
   [super drawDividerInRect: aRect];
   [diskInfoField setBackgroundColor: [self backgroundColor]];
   [diskInfoField drawWithFrame: diskInfoRect inView: self];
+}
+
+- (void)mouseDown:(NSEvent *)event
+{
+  /* Suppress drag-to-resize when there is no visible divider */
+  if ([self isVertical]) {
+    return;
+  }
+  [super mouseDown: event];
 }
 
 @end

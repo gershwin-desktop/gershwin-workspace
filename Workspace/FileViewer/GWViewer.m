@@ -1083,6 +1083,90 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   [manager addNode: node toHistoryOfViewer: self];
 }
 
+- (void)openNodeInPlace:(FSNode *)newBase
+{
+  if (newBase == nil) {
+    return;
+  }
+  if ([baseNode isEqual: newBase]) {
+    [self activate];
+    return;
+  }
+
+  /* Tear down watchers for the old base */
+  NSUInteger i;
+  for (i = 0; i < [watchedNodes count]; i++) {
+    [gworkspace removeWatcherForPath: [[watchedNodes objectAtIndex: i] path]];
+  }
+  [watchedNodes removeAllObjects];
+  DESTROY (lastSelection);
+
+  /* Switch the base node. NetworkFSNode is virtual, keep it as-is. */
+  if ([newBase isKindOfClass: [NetworkFSNode class]]) {
+    ASSIGN (baseNode, newBase);
+  } else {
+    ASSIGN (baseNode, [FSNode nodeWithPath: [newBase path]]);
+  }
+  ASSIGN (baseNodeArray, [NSArray arrayWithObject: baseNode]);
+
+  [history removeAllObjects];
+  historyPosition = 0;
+
+  /* Recreate the node view bound to the new base. Match the safe
+     pattern used in setViewerType:: tearing the documentView down via
+     setDocumentView:nil drops the only retain held by the scroller. */
+  [nviewScroll setDocumentView: nil];
+  nodeView = nil;
+
+  if (viewType == GWViewTypeIcon) {
+    nodeView = [[GWViewerIconsView alloc] initForViewer: self];
+  } else if (viewType == GWViewTypeList) {
+    NSRect r = [[nviewScroll contentView] bounds];
+    nodeView = [[GWViewerListView alloc] initWithFrame: r forViewer: self];
+  } else if (viewType == GWViewTypeBrowser) {
+    nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
+                                                inViewer: self
+                                          visibleColumns: visibleCols
+                                                scroller: [pathsScroll horizontalScroller]
+                                              cellsIcons: NO
+                                           editableCells: NO
+                                         selectionColumn: YES];
+  }
+
+  [nviewScroll setDocumentView: nodeView];
+  RELEASE (nodeView);
+  [self applyContentBackgroundColor];
+  [nodeView showContentsOfNode: baseNode];
+
+  /* Window title */
+  {
+    NSString *path = [baseNode path];
+    if ([path isEqual: path_separator()]) {
+      [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
+    } else {
+      [vwrwin setTitle: [baseNode name]];
+    }
+  }
+
+  /* Reset the path bar to show only the new base */
+  [pathsView showPathComponents: baseNodeArray selection: baseNodeArray];
+
+  /* Network observer follows the current base */
+  [nc removeObserver: self
+                name: NetworkServicesDidChangeNotification
+              object: nil];
+  if ([baseNode isKindOfClass: [NetworkFSNode class]]) {
+    [nc addObserver: self
+           selector: @selector(networkServicesDidChange:)
+               name: NetworkServicesDidChangeNotification
+             object: nil];
+  }
+
+  [manager addNode: baseNode toHistoryOfViewer: self];
+  [self scrollToBeginning];
+  [self activate];
+}
+
 //
 // splitView delegate methods
 //
