@@ -440,19 +440,21 @@ typedef enum {
 
   {
     GWSidebarItem *local = [[GWSidebarItem alloc]
-        initPathItemWithTitle: @"/Local" path: @"/Local"];
+        initPathItemWithTitle: NSLocalizedString(@"Local", @"")
+                         path: @"/Local"];
     [domain addChild: local];
     RELEASE (local);
 
     /* /Network keeps its virtual NetworkFSNode behavior so that
        mDNS service discovery still works when the user clicks it. */
     GWSidebarItem *net = [[GWSidebarItem alloc]
-        initNetworkItemWithTitle: @"/Network"];
+        initNetworkItemWithTitle: NSLocalizedString(@"Network", @"")];
     [domain addChild: net];
     RELEASE (net);
 
     GWSidebarItem *system = [[GWSidebarItem alloc]
-        initPathItemWithTitle: @"/System" path: @"/System"];
+        initPathItemWithTitle: NSLocalizedString(@"System", @"")
+                         path: @"/System"];
     [domain addChild: system];
     RELEASE (system);
   }
