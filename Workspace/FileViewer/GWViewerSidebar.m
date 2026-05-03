@@ -280,6 +280,7 @@ typedef enum {
     [outlineView setDelegate: nil];
   }
   RELEASE (rootItems);
+  RELEASE (collapsedGroupTitles);
   RELEASE (scrollView);
   [super dealloc];
 }
@@ -293,6 +294,7 @@ typedef enum {
 
     viewer = vwr;
     rootItems = [[NSMutableArray alloc] init];
+    collapsedGroupTitles = [[NSMutableSet alloc] init];
 
     [self buildModel];
 
@@ -332,13 +334,7 @@ typedef enum {
 
     [self addSubview: scrollView];
 
-    /* Expand all top-level groups */
-    {
-      NSUInteger i;
-      for (i = 0; i < [rootItems count]; i++) {
-        [outlineView expandItem: [rootItems objectAtIndex: i]];
-      }
-    }
+    [self expandGroupsRespectingCollapsedSet];
 
     [self applySidebarWidthIfNeeded];
 
@@ -354,6 +350,16 @@ typedef enum {
              selector: @selector(volumesWatcherNotification:)
                  name: @"GWFileWatcherFileDidChangeNotification"
                object: nil];
+      [[NSNotificationCenter defaultCenter]
+          addObserver: self
+             selector: @selector(groupDidExpand:)
+                 name: NSOutlineViewItemDidExpandNotification
+               object: outlineView];
+      [[NSNotificationCenter defaultCenter]
+          addObserver: self
+             selector: @selector(groupDidCollapse:)
+                 name: NSOutlineViewItemDidCollapseNotification
+               object: outlineView];
     }
   }
 
@@ -501,13 +507,41 @@ typedef enum {
 
 - (void)rebuildModelPreservingExpansion
 {
-  NSUInteger i;
   [self buildModel];
   [outlineView reloadData];
-  for (i = 0; i < [rootItems count]; i++) {
-    [outlineView expandItem: [rootItems objectAtIndex: i]];
-  }
+  [self expandGroupsRespectingCollapsedSet];
   [self applySidebarWidthIfNeeded];
+}
+
+- (void)expandGroupsRespectingCollapsedSet
+{
+  NSUInteger i;
+  for (i = 0; i < [rootItems count]; i++) {
+    GWSidebarItem *group = [rootItems objectAtIndex: i];
+    NSString *t = [group title];
+    if (t && [collapsedGroupTitles containsObject: t]) {
+      continue;
+    }
+    [outlineView expandItem: group];
+  }
+}
+
+- (void)groupDidCollapse:(NSNotification *)notif
+{
+  id item = [[notif userInfo] objectForKey: @"NSObject"];
+  if ([item respondsToSelector: @selector(isHeader)] && [item isHeader]) {
+    NSString *t = [item title];
+    if (t) [collapsedGroupTitles addObject: t];
+  }
+}
+
+- (void)groupDidExpand:(NSNotification *)notif
+{
+  id item = [[notif userInfo] objectForKey: @"NSObject"];
+  if ([item respondsToSelector: @selector(isHeader)] && [item isHeader]) {
+    NSString *t = [item title];
+    if (t) [collapsedGroupTitles removeObject: t];
+  }
 }
 
 - (NSMenu *)menuForSidebarItem:(id)item
@@ -732,13 +766,6 @@ objectValueForTableColumn:(NSTableColumn *)tableColumn
     return NO;
   }
   return ([item isHeader] == NO);
-}
-
-- (BOOL)outlineView:(NSOutlineView *)ov
-shouldCollapseItem:(id)item
-{
-  /* Keep top-level groups expanded */
-  return NO;
 }
 
 - (NSCell *)outlineView:(NSOutlineView *)ov

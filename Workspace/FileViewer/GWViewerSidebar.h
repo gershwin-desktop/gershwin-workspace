@@ -22,6 +22,7 @@
   NSScrollView *scrollView;
   NSOutlineView *outlineView;
   NSMutableArray *rootItems;
+  NSMutableSet *collapsedGroupTitles;
   id viewer;
 }
 
