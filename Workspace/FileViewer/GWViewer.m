@@ -56,7 +56,7 @@
 
 #define MIN_SIDEBAR_WIDTH 120.0
 #define DEFAULT_SIDEBAR_WIDTH 160.0
-#define MAX_SIDEBAR_WIDTH 280.0
+#define MAX_SIDEBAR_WIDTH 400.0
 
 /* Helper function to get volume information using statvfs */
 static BOOL getVolumeInfo(const char *path, unsigned long long *total, 
@@ -594,6 +594,20 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
   [sidebar setFrame: NSMakeRect(0, 0, sidebarWidth, h)];
   [lowBox setFrame: NSMakeRect(sidebarWidth + d, 0, w - sidebarWidth - d, h)];
+}
+
+- (CGFloat)defaultSidebarWidth
+{
+  return DEFAULT_SIDEBAR_WIDTH;
+}
+
+- (void)setSidebarWidth:(CGFloat)w
+{
+  if (w < DEFAULT_SIDEBAR_WIDTH) w = DEFAULT_SIDEBAR_WIDTH;
+  if (w > MAX_SIDEBAR_WIDTH) w = MAX_SIDEBAR_WIDTH;
+  if (w == sidebarWidth) return;
+  sidebarWidth = w;
+  [self tileViews];
 }
 
 - (void)applyContentBackgroundColor

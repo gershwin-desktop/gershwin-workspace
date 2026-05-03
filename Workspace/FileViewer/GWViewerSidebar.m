@@ -31,10 +31,16 @@ typedef enum {
   GWSidebarItemNetwork
 } GWSidebarItemKind;
 
+#define EJECT_ICON_SIZE 12.0
+#define EJECT_ICON_RIGHT_PADDING 6.0
+#define EJECT_ICON_LEFT_PADDING 10.0
+
 /* Outline view that forces a Snow-Leopard-style sidebar background.
    NSOutlineView/NSTableView's setBackgroundColor: isn't reliably honored
    in this GNUstep build, so we override the background paint directly. */
 @interface GWSidebarOutlineView : NSOutlineView
+- (NSRect)ejectRectForRow:(NSInteger)row;
+- (void)drawEjectGlyphInRect:(NSRect)r;
 @end
 
 @implementation GWSidebarOutlineView
@@ -55,6 +61,78 @@ typedef enum {
     return [ds performSelector: @selector(menuForSidebarItem:) withObject: item];
   }
   return nil;
+}
+
+- (NSRect)ejectRectForRow:(NSInteger)row
+{
+  NSRect rowRect = [self rectOfRow: row];
+  CGFloat x = NSMaxX(rowRect) - EJECT_ICON_RIGHT_PADDING - EJECT_ICON_SIZE;
+  CGFloat y = NSMidY(rowRect) - (EJECT_ICON_SIZE / 2.0);
+  return NSMakeRect(x, y, EJECT_ICON_SIZE, EJECT_ICON_SIZE);
+}
+
+- (void)drawEjectGlyphInRect:(NSRect)r
+{
+  CGFloat triH = r.size.height * 0.55;
+  CGFloat barH = 1.5;
+  CGFloat gap = 1.5;
+  CGFloat triBaseY = NSMinY(r) + barH + gap;
+  CGFloat triTipY = triBaseY + triH;
+  CGFloat midX = NSMidX(r);
+  CGFloat triHalfW = r.size.width / 2.0;
+
+  [[NSColor darkGrayColor] set];
+
+  NSBezierPath *tri = [NSBezierPath bezierPath];
+  [tri moveToPoint: NSMakePoint(midX - triHalfW, triBaseY)];
+  [tri lineToPoint: NSMakePoint(midX + triHalfW, triBaseY)];
+  [tri lineToPoint: NSMakePoint(midX, triTipY)];
+  [tri closePath];
+  [tri fill];
+
+  NSRect bar = NSMakeRect(NSMinX(r), NSMinY(r), r.size.width, barH);
+  NSRectFill(bar);
+}
+
+- (void)drawRect:(NSRect)rect
+{
+  [super drawRect: rect];
+
+  id ds = [self dataSource];
+  if (![ds respondsToSelector: @selector(itemAtRowIsVolume:)]) return;
+
+  NSRange visible = [self rowsInRect: rect];
+  NSUInteger end = visible.location + visible.length;
+  NSUInteger i;
+  for (i = visible.location; i < end; i++) {
+    NSNumber *isVol = [ds performSelector: @selector(itemAtRowIsVolume:)
+                              withObject: [NSNumber numberWithInteger: (NSInteger)i]];
+    if ([isVol boolValue]) {
+      [self drawEjectGlyphInRect: [self ejectRectForRow: (NSInteger)i]];
+    }
+  }
+}
+
+- (void)mouseDown:(NSEvent *)event
+{
+  NSPoint p = [self convertPoint: [event locationInWindow] fromView: nil];
+  NSInteger row = [self rowAtPoint: p];
+  id ds = [self dataSource];
+
+  if (row >= 0
+      && [ds respondsToSelector: @selector(itemAtRowIsVolume:)]
+      && [ds respondsToSelector: @selector(ejectVolumeAtRow:)]) {
+    NSNumber *isVol = [ds performSelector: @selector(itemAtRowIsVolume:)
+                              withObject: [NSNumber numberWithInteger: row]];
+    if ([isVol boolValue]
+        && NSPointInRect(p, [self ejectRectForRow: row])) {
+      [ds performSelector: @selector(ejectVolumeAtRow:)
+              withObject: [NSNumber numberWithInteger: row]];
+      return;
+    }
+  }
+
+  [super mouseDown: event];
 }
 @end
 
@@ -262,6 +340,8 @@ typedef enum {
       }
     }
 
+    [self applySidebarWidthIfNeeded];
+
     /* Watch /Volumes via the workspace fswatcher proxy so the Volumes
        section auto-refreshes on external mounts/unmounts as well. */
     {
@@ -425,6 +505,7 @@ typedef enum {
   for (i = 0; i < [rootItems count]; i++) {
     [outlineView expandItem: [rootItems objectAtIndex: i]];
   }
+  [self applySidebarWidthIfNeeded];
 }
 
 - (NSMenu *)menuForSidebarItem:(id)item
@@ -449,11 +530,92 @@ typedef enum {
 - (void)ejectVolumeMenuAction:(id)sender
 {
   NSString *path = [sender representedObject];
+  [self ejectPath: path];
+}
+
+- (NSNumber *)itemAtRowIsVolume:(NSNumber *)rowNum
+{
+  NSInteger row = [rowNum integerValue];
+  if (row < 0) return [NSNumber numberWithBool: NO];
+  id item = [outlineView itemAtRow: row];
+  BOOL v = (item && [item respondsToSelector: @selector(isVolume)]
+            && [item isVolume]);
+  return [NSNumber numberWithBool: v];
+}
+
+- (void)ejectVolumeAtRow:(NSNumber *)rowNum
+{
+  NSInteger row = [rowNum integerValue];
+  if (row < 0) return;
+  id item = [outlineView itemAtRow: row];
+  if (item && [item respondsToSelector: @selector(isVolume)] && [item isVolume]) {
+    [self ejectPath: [item path]];
+  }
+}
+
+- (void)ejectPath:(NSString *)path
+{
   if ([path length] == 0) return;
   Workspace *gw = [Workspace gworkspace];
   if (gw && [gw respondsToSelector: @selector(unmountVolumeAtPath:)]) {
     [gw unmountVolumeAtPath: path];
   }
+}
+
+- (CGFloat)requiredSidebarWidth
+{
+  CGFloat fixedOverhead = 19.0
+      + ICON_SIZE
+      + 5.0
+      + EJECT_ICON_LEFT_PADDING
+      + EJECT_ICON_SIZE
+      + EJECT_ICON_RIGHT_PADDING
+      + 8.0;
+  CGFloat headerOverhead = 19.0 + 8.0;
+
+  NSFont *itemFont = [NSFont systemFontOfSize: 11];
+  NSFont *headerFont = [NSFont boldSystemFontOfSize: 11];
+  NSDictionary *itemAttrs = [NSDictionary dictionaryWithObject: itemFont
+                                                        forKey: NSFontAttributeName];
+  NSDictionary *headerAttrs = [NSDictionary dictionaryWithObject: headerFont
+                                                          forKey: NSFontAttributeName];
+
+  CGFloat maxW = 0.0;
+  NSUInteger gi, ci;
+  for (gi = 0; gi < [rootItems count]; gi++) {
+    GWSidebarItem *group = [rootItems objectAtIndex: gi];
+    NSString *headerText = [[group title] uppercaseString];
+    if (headerText) {
+      CGFloat w = headerOverhead
+          + ceil([headerText sizeWithAttributes: headerAttrs].width);
+      if (w > maxW) maxW = w;
+    }
+    NSArray *kids = [group children];
+    for (ci = 0; ci < [kids count]; ci++) {
+      GWSidebarItem *child = [kids objectAtIndex: ci];
+      NSString *t = [child title];
+      if (t == nil) continue;
+      CGFloat w = ceil([t sizeWithAttributes: itemAttrs].width);
+      w += fixedOverhead;
+      if (w > maxW) maxW = w;
+    }
+  }
+
+  /* Add the scrollbar/bezel slack so content isn't clipped. */
+  return maxW + 12.0;
+}
+
+- (void)applySidebarWidthIfNeeded
+{
+  if (viewer == nil
+      || ![viewer respondsToSelector: @selector(setSidebarWidth:)]
+      || ![viewer respondsToSelector: @selector(defaultSidebarWidth)]) {
+    return;
+  }
+  CGFloat defaultW = [(id)viewer defaultSidebarWidth];
+  CGFloat needed = [self requiredSidebarWidth];
+  CGFloat target = (needed > defaultW) ? needed : defaultW;
+  [(id)viewer setSidebarWidth: target];
 }
 
 - (void)itemClicked:(id)sender

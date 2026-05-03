@@ -95,4 +95,13 @@
   [super mouseDown: event];
 }
 
+- (void)resetCursorRects
+{
+  /* Suppress the resize cursor for the vertical (sidebar) divider. */
+  if ([self isVertical]) {
+    return;
+  }
+  [super resetCursorRects];
+}
+
 @end

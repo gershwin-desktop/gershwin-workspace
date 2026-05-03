@@ -125,6 +125,8 @@ typedef enum
 - (void)activate;
 - (void)deactivate;
 - (void)tileViews;
+- (CGFloat)defaultSidebarWidth;
+- (void)setSidebarWidth:(CGFloat)w;
 - (void)scrollToBeginning;
 - (void)invalidate;
 - (BOOL)invalidated;
