@@ -443,6 +443,8 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   [pathsScroll setHasHorizontalScroller: YES];
   [pathsScroll setHasVerticalScroller: NO];
   [pathsScroll setDelegate: nil];
+  [pathsScroll setBackgroundColor: [NSColor windowBackgroundColor]];
+  [pathsScroll setDrawsBackground: YES];
   resizeMask = NSViewNotSizable | NSViewWidthSizable | NSViewMaxYMargin;
   [pathsScroll setAutoresizingMask: resizeMask];
   [lowBox addSubview: pathsScroll];

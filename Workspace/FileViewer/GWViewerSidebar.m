@@ -30,6 +30,20 @@ typedef enum {
   GWSidebarItemNetwork
 } GWSidebarItemKind;
 
+/* Outline view that forces a Snow-Leopard-style sidebar background.
+   NSOutlineView/NSTableView's setBackgroundColor: isn't reliably honored
+   in this GNUstep build, so we override the background paint directly. */
+@interface GWSidebarOutlineView : NSOutlineView
+@end
+
+@implementation GWSidebarOutlineView
+- (void)drawBackgroundInClipRect:(NSRect)clipRect
+{
+  [[NSColor windowBackgroundColor] set];
+  NSRectFill(clipRect);
+}
+@end
+
 @interface GWSidebarItem : NSObject
 {
   NSString *title;
@@ -184,8 +198,11 @@ typedef enum {
     [scrollView setHasHorizontalScroller: NO];
     [scrollView setBorderType: NSBezelBorder];
     [scrollView setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
+    [scrollView setBackgroundColor: [NSColor windowBackgroundColor]];
+    [scrollView setDrawsBackground: YES];
 
-    outlineView = [[NSOutlineView alloc] initWithFrame: [[scrollView contentView] bounds]];
+    outlineView = [[GWSidebarOutlineView alloc] initWithFrame: [[scrollView contentView] bounds]];
+    [outlineView setBackgroundColor: [NSColor windowBackgroundColor]];
     [outlineView setHeaderView: nil];
     [outlineView setRowHeight: ROW_HEIGHT];
     [outlineView setIndentationPerLevel: INDENT];
