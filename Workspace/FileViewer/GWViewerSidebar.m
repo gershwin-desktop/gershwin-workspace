@@ -17,6 +17,7 @@
 #import "FSNode.h"
 #import "FSNodeRep.h"
 #import "NetworkFSNode.h"
+#import "Workspace.h"
 
 #define ROW_HEIGHT 20.0
 #define HEADER_HEIGHT 18.0
@@ -41,6 +42,19 @@ typedef enum {
 {
   [[NSColor windowBackgroundColor] set];
   NSRectFill(clipRect);
+}
+
+- (NSMenu *)menuForEvent:(NSEvent *)theEvent
+{
+  NSPoint p = [self convertPoint: [theEvent locationInWindow] fromView: nil];
+  NSInteger row = [self rowAtPoint: p];
+  if (row < 0) return nil;
+  id item = [self itemAtRow: row];
+  id ds = [self dataSource];
+  if ([ds respondsToSelector: @selector(menuForSidebarItem:)]) {
+    return [ds performSelector: @selector(menuForSidebarItem:) withObject: item];
+  }
+  return nil;
 }
 @end
 
@@ -122,6 +136,12 @@ typedef enum {
 - (GWSidebarItemKind)kind { return kind; }
 - (NSArray *)children { return children; }
 - (BOOL)isHeader { return kind == GWSidebarItemHeader; }
+- (BOOL)isVolume
+{
+  return (kind == GWSidebarItemPath)
+      && path != nil
+      && [path hasPrefix: @"/Volumes/"];
+}
 
 - (NSImage *)icon
 {
@@ -172,6 +192,11 @@ typedef enum {
 
 - (void)dealloc
 {
+  Workspace *gw = [Workspace gworkspace];
+  if (gw) {
+    [gw removeWatcherForPath: @"/Volumes"];
+  }
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
   if (outlineView) {
     [outlineView setDataSource: nil];
     [outlineView setDelegate: nil];
@@ -236,6 +261,20 @@ typedef enum {
         [outlineView expandItem: [rootItems objectAtIndex: i]];
       }
     }
+
+    /* Watch /Volumes via the workspace fswatcher proxy so the Volumes
+       section auto-refreshes on external mounts/unmounts as well. */
+    {
+      Workspace *gw = [Workspace gworkspace];
+      if (gw) {
+        [gw addWatcherForPath: @"/Volumes"];
+      }
+      [[NSNotificationCenter defaultCenter]
+          addObserver: self
+             selector: @selector(volumesWatcherNotification:)
+                 name: @"GWFileWatcherFileDidChangeNotification"
+               object: nil];
+    }
   }
 
   return self;
@@ -245,10 +284,13 @@ typedef enum {
 {
   GWSidebarItem *userDomain;
   GWSidebarItem *domain;
+  GWSidebarItem *volumesGroup;
   NSString *home;
   NSFileManager *fm;
   NSArray *favs;
   NSUInteger i;
+
+  [rootItems removeAllObjects];
 
   fm = [NSFileManager defaultManager];
   home = NSHomeDirectory();
@@ -337,11 +379,81 @@ typedef enum {
 
   [rootItems addObject: domain];
   RELEASE (domain);
+
+  volumesGroup = [[GWSidebarItem alloc] initHeaderWithTitle:
+                    NSLocalizedString(@"Volumes", @"")];
+  {
+    NSError *err = nil;
+    NSArray *entries = [fm contentsOfDirectoryAtPath: @"/Volumes" error: &err];
+    NSArray *sorted = [entries sortedArrayUsingSelector: @selector(caseInsensitiveCompare:)];
+    for (i = 0; i < [sorted count]; i++) {
+      NSString *name = [sorted objectAtIndex: i];
+      if ([name hasPrefix: @"."]) continue;
+      NSString *full = [@"/Volumes" stringByAppendingPathComponent: name];
+      BOOL isDir = NO;
+      if (![fm fileExistsAtPath: full isDirectory: &isDir] || !isDir) continue;
+
+      GWSidebarItem *it = [[GWSidebarItem alloc]
+          initPathItemWithTitle: name path: full];
+      [volumesGroup addChild: it];
+      RELEASE (it);
+    }
+  }
+  [rootItems addObject: volumesGroup];
+  RELEASE (volumesGroup);
 }
 
 - (void)reloadData
 {
   [outlineView reloadData];
+}
+
+- (void)volumesWatcherNotification:(NSNotification *)notif
+{
+  NSDictionary *info = (NSDictionary *)[notif object];
+  NSString *path = [info objectForKey: @"path"];
+  if ([path isEqualToString: @"/Volumes"]) {
+    [self rebuildModelPreservingExpansion];
+  }
+}
+
+- (void)rebuildModelPreservingExpansion
+{
+  NSUInteger i;
+  [self buildModel];
+  [outlineView reloadData];
+  for (i = 0; i < [rootItems count]; i++) {
+    [outlineView expandItem: [rootItems objectAtIndex: i]];
+  }
+}
+
+- (NSMenu *)menuForSidebarItem:(id)item
+{
+  if (item == nil || ![item respondsToSelector: @selector(isVolume)]) {
+    return nil;
+  }
+  if (![item isVolume]) {
+    return nil;
+  }
+  NSMenu *menu = [[[NSMenu alloc] initWithTitle: @""] autorelease];
+  NSMenuItem *eject = [[[NSMenuItem alloc]
+      initWithTitle: NSLocalizedString(@"Eject", @"")
+             action: @selector(ejectVolumeMenuAction:)
+      keyEquivalent: @""] autorelease];
+  [eject setTarget: self];
+  [eject setRepresentedObject: [item path]];
+  [menu addItem: eject];
+  return menu;
+}
+
+- (void)ejectVolumeMenuAction:(id)sender
+{
+  NSString *path = [sender representedObject];
+  if ([path length] == 0) return;
+  Workspace *gw = [Workspace gworkspace];
+  if (gw && [gw respondsToSelector: @selector(unmountVolumeAtPath:)]) {
+    [gw unmountVolumeAtPath: path];
+  }
 }
 
 - (void)itemClicked:(id)sender
