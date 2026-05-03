@@ -253,8 +253,15 @@ typedef enum {
   fm = [NSFileManager defaultManager];
   home = NSHomeDirectory();
 
-  userDomain = [[GWSidebarItem alloc] initHeaderWithTitle:
-                  NSLocalizedString(@"User Domain", @"")];
+  {
+    NSString *headerTitle;
+    if ([home hasPrefix: @"/Network/"] || [home isEqualToString: @"/Network"]) {
+      headerTitle = NSLocalizedString(@"Network User", @"");
+    } else {
+      headerTitle = NSLocalizedString(@"Local User", @"");
+    }
+    userDomain = [[GWSidebarItem alloc] initHeaderWithTitle: headerTitle];
+  }
 
   {
     GWSidebarItem *it = [[GWSidebarItem alloc]
