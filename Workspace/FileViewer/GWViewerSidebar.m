@@ -19,9 +19,9 @@
 #import "NetworkFSNode.h"
 
 #define ROW_HEIGHT 20.0
-#define HEADER_HEIGHT 22.0
+#define HEADER_HEIGHT 18.0
 #define ICON_SIZE 16
-#define INDENT 14.0
+#define INDENT 0.0
 
 /* Sidebar item kinds */
 typedef enum {
