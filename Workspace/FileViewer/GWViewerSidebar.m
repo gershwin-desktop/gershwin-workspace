@@ -256,6 +256,14 @@ typedef enum {
   userDomain = [[GWSidebarItem alloc] initHeaderWithTitle:
                   NSLocalizedString(@"User Domain", @"")];
 
+  {
+    GWSidebarItem *it = [[GWSidebarItem alloc]
+        initPathItemWithTitle: NSUserName()
+                         path: home];
+    [userDomain addChild: it];
+    RELEASE (it);
+  }
+
   /* Applications: per-user ~/Applications under the User Domain group. */
   {
     NSString *appsPath = [home stringByAppendingPathComponent: @"Applications"];
