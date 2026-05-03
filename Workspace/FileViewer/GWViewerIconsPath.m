@@ -251,7 +251,7 @@
     } else {
       icon = [self addRepForSubnode: component];
     }
-    
+
     [icon setLeaf: NO];
     [icon setNameEdited: NO];
     [icon setGridIndex: i];
@@ -362,10 +362,71 @@
   CGFloat yOffset = 0.0;
 
   if (compactMode) {
-    /* Center icons vertically inside the path bar */
+    /* Snow Leopard-style packed path bar: each component is sized to its
+       natural icon+label width and laid out left-to-right with a small
+       chevron gap between, instead of dividing the visible width into
+       equal miller-column cells. */
     CGFloat selfH = [self bounds].size.height;
     yOffset = myrintf((selfH - gridSize.height) / 2.0);
     if (yOffset < 0) yOffset = 0;
+
+    NSDictionary *attrs = labelFont
+        ? [NSDictionary dictionaryWithObject: labelFont
+                                      forKey: NSFontAttributeName]
+        : nil;
+    CGFloat hlightW = ceil((CGFloat)iconSize / 3.0 * 4.0);
+    int lblmargin = [fsnodeRep labelMargin];
+    /* Match FSNIcon's reserved space for the branch arrow on non-leaf
+       icons (BRANCH_SIZE + small padding). */
+    const CGFloat branchArrowSpace = 11.0;
+    const CGFloat itemGap = 4.0;
+
+    CGFloat posx = 0.0;
+    for (i = 0; i < count; i++) {
+      id icon = [icons objectAtIndex: i];
+      CGFloat lblW = 0.0;
+      BOOL leaf = YES;
+
+      if ([icon respondsToSelector: @selector(isLeaf)]) {
+        leaf = [icon isLeaf];
+      }
+
+      if (attrs && [icon respondsToSelector: @selector(shownInfo)]) {
+        NSString *shown = [icon shownInfo];
+        if ([shown length] == 0 && [icon respondsToSelector: @selector(node)]) {
+          shown = [[icon node] name];
+        }
+        if (shown) {
+          lblW = ceil([shown sizeWithAttributes: attrs].width);
+        }
+      }
+
+      CGFloat itemW = hlightW + lblW + (CGFloat)lblmargin;
+      if (!leaf) {
+        itemW += branchArrowSpace;
+      }
+      NSRect r = NSMakeRect(posx, yOffset, itemW, gridSize.height);
+      [icon setFrame: r];
+
+      posx += itemW;
+      if (i + 1 < count) posx += itemGap;
+    }
+
+    NSRect fr = [self frame];
+    CGFloat newW = (posx > vwidth) ? posx : vwidth;
+    if (newW != fr.size.width) {
+      [self setFrame: NSMakeRect(0, fr.origin.y, newW, fr.size.height)];
+    }
+
+    if (posx > vwidth) {
+      [clip scrollToPoint: NSMakePoint(posx - vwidth, 0)];
+    } else {
+      [clip scrollToPoint: NSMakePoint(0, 0)];
+    }
+
+    [self updateNameEditor];
+    [self setNeedsDisplay: YES];
+    return;
   }
 
   if (ownScroller) {
@@ -442,67 +503,6 @@
 - (void)drawRect:(NSRect)rect
 {
   [super drawRect: rect];
-
-  if (compactMode == NO) {
-    return;
-  }
-
-  /* Draw a small chevron centered in the empty whitespace between
-     each path component's visible content (icon + label) and the
-     next component's icon. */
-  NSUInteger count = [icons count];
-  if (count < 2) {
-    return;
-  }
-
-  NSColor *chevColor = [[NSColor controlShadowColor]
-                          colorUsingColorSpaceName: NSDeviceRGBColorSpace];
-  if (chevColor == nil) {
-    chevColor = [NSColor darkGrayColor];
-  }
-  [chevColor set];
-
-  NSDictionary *attrs = nil;
-  if (labelFont) {
-    attrs = [NSDictionary dictionaryWithObject: labelFont
-                                        forKey: NSFontAttributeName];
-  }
-
-  NSUInteger i;
-  for (i = 0; i + 1 < count; i++) {
-    id thisIcon = [icons objectAtIndex: i];
-    id nextIcon = [icons objectAtIndex: i + 1];
-    NSRect thisFrame = [thisIcon frame];
-    NSRect nextFrame = [nextIcon frame];
-
-    /* Estimate the right edge of this component's visible content. */
-    CGFloat textEnd = NSMinX(thisFrame) + iconSize + 6.0;
-    if (attrs && [thisIcon respondsToSelector: @selector(node)]) {
-      FSNode *n = [thisIcon node];
-      NSString *name = [n name];
-      if (name) {
-        NSSize sz = [name sizeWithAttributes: attrs];
-        textEnd += sz.width + 4.0;
-      }
-    }
-    if (textEnd > NSMaxX(thisFrame) - 6.0) {
-      textEnd = NSMaxX(thisFrame) - 6.0;
-    }
-
-    CGFloat nextStart = NSMinX(nextFrame);
-    CGFloat cx = (textEnd + nextStart) / 2.0;
-    CGFloat cy = NSMidY(thisFrame);
-    CGFloat s = 4.0;
-
-    NSBezierPath *p = [NSBezierPath bezierPath];
-    [p setLineWidth: 1.75];
-    [p setLineCapStyle: NSRoundLineCapStyle];
-    [p setLineJoinStyle: NSRoundLineJoinStyle];
-    [p moveToPoint: NSMakePoint(cx - s, cy - s)];
-    [p lineToPoint: NSMakePoint(cx, cy)];
-    [p lineToPoint: NSMakePoint(cx - s, cy + s)];
-    [p stroke];
-  }
 }
 
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent
