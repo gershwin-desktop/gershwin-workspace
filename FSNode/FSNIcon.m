@@ -375,6 +375,15 @@ static NSImage *branchImage;
     }
 }
 
+- (void)setSuppressSelectionDrawing:(BOOL)flag
+{
+  if (suppressSelectionDrawing != flag)
+    {
+      suppressSelectionDrawing = flag;
+      [self setNeedsDisplay: YES];
+    }
+}
+
 - (NSRect)iconBounds
 {
   return icnBounds;
@@ -899,7 +908,7 @@ static NSImage *branchImage;
 
 - (void)drawRect:(NSRect)rect
 {
-  if (isSelected)
+  if (isSelected && !suppressSelectionDrawing)
     {
       [[NSColor selectedControlColor] set];
       [highlightPath fill];

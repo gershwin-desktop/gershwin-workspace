@@ -623,10 +623,13 @@
                                      dndSource: YES
                                      acceptDnd: YES
                                      slideBack: YES];
+  if (compactMode) {
+    [icon setSuppressSelectionDrawing: YES];
+  }
   [icons addObject: icon];
   [self addSubview: icon];
   RELEASE (icon);
-  
+
   return icon;
 }
 
@@ -734,7 +737,9 @@
 - (void)restoreLastSelection
 {
   [[self lastIcon] select];
-  [nameEditor setBackgroundColor: [NSColor selectedControlColor]];
+  [nameEditor setBackgroundColor: (compactMode
+                                   ? [NSColor windowBackgroundColor]
+                                   : [NSColor selectedControlColor])];
 }
 
 - (NSColor *)backgroundColor
@@ -797,10 +802,12 @@
 
     [nameEditor setFrame: edrect];
     [nameEditor setAlignment: NSCenterTextAlignment];
-    [nameEditor setNode: ednode 
+    [nameEditor setNode: ednode
             stringValue: nodeDescr];
 
-    [nameEditor setBackgroundColor: [NSColor selectedControlColor]];
+    [nameEditor setBackgroundColor: (compactMode
+                                     ? [NSColor windowBackgroundColor]
+                                     : [NSColor selectedControlColor])];
 
     [nameEditor setEditable: NO];
     [nameEditor setSelectable: NO];	
