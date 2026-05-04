@@ -11,6 +11,8 @@
  */
 
 #import <AppKit/AppKit.h>
+#import <sys/stat.h>
+#import <sys/types.h>
 #import "GWViewerSidebar.h"
 #import "GWViewer.h"
 #import "GWViewersManager.h"
@@ -34,6 +36,19 @@ typedef enum {
 #define EJECT_ICON_SIZE 12.0
 #define EJECT_ICON_RIGHT_PADDING 6.0
 #define EJECT_ICON_LEFT_PADDING 10.0
+
+static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
+{
+  if (path == nil) return NO;
+  NSArray *roots = [Workspace volumeMountRoots];
+  for (NSString *root in roots) {
+    NSString *prefix = [root stringByAppendingString: @"/"];
+    if ([path hasPrefix: prefix] && [path length] > [prefix length]) {
+      return YES;
+    }
+  }
+  return NO;
+}
 
 /* Outline view that forces a Snow-Leopard-style sidebar background.
    NSOutlineView/NSTableView's setBackgroundColor: isn't reliably honored
@@ -217,8 +232,7 @@ typedef enum {
 - (BOOL)isVolume
 {
   return (kind == GWSidebarItemPath)
-      && path != nil
-      && [path hasPrefix: @"/Volumes/"];
+      && GWSidebarPathIsUnderVolumeRoot(path);
 }
 
 - (NSImage *)icon
@@ -272,7 +286,9 @@ typedef enum {
 {
   Workspace *gw = [Workspace gworkspace];
   if (gw) {
-    [gw removeWatcherForPath: @"/Volumes"];
+    for (NSString *root in [Workspace volumeMountRoots]) {
+      [gw removeWatcherForPath: root];
+    }
   }
   [[NSNotificationCenter defaultCenter] removeObserver: self];
   if (outlineView) {
@@ -338,12 +354,15 @@ typedef enum {
 
     [self applySidebarWidthIfNeeded];
 
-    /* Watch /Volumes via the workspace fswatcher proxy so the Volumes
-       section auto-refreshes on external mounts/unmounts as well. */
+    /* Watch every mount-root directory the desktop watches so the
+       Volumes section auto-refreshes on mounts/unmounts under any
+       of them (/Volumes, /media, /run/media/$user, /media/$user). */
     {
       Workspace *gw = [Workspace gworkspace];
       if (gw) {
-        [gw addWatcherForPath: @"/Volumes"];
+        for (NSString *root in [Workspace volumeMountRoots]) {
+          [gw addWatcherForPath: root];
+        }
       }
       [[NSNotificationCenter defaultCenter]
           addObserver: self
@@ -471,18 +490,47 @@ typedef enum {
   volumesGroup = [[GWSidebarItem alloc] initHeaderWithTitle:
                     NSLocalizedString(@"Volumes", @"")];
   {
-    NSError *err = nil;
-    NSArray *entries = [fm contentsOfDirectoryAtPath: @"/Volumes" error: &err];
-    NSArray *sorted = [entries sortedArrayUsingSelector: @selector(caseInsensitiveCompare:)];
-    for (i = 0; i < [sorted count]; i++) {
-      NSString *name = [sorted objectAtIndex: i];
-      if ([name hasPrefix: @"."]) continue;
-      NSString *full = [@"/Volumes" stringByAppendingPathComponent: name];
-      BOOL isDir = NO;
-      if (![fm fileExistsAtPath: full isDirectory: &isDir] || !isDir) continue;
+    NSArray *roots = [Workspace volumeMountRoots];
+    NSMutableSet *seen = [NSMutableSet set];
+    NSMutableArray *vols = [NSMutableArray array];
 
+    for (NSString *root in roots) {
+      struct stat parentSt;
+      const char *rootC = [root fileSystemRepresentation];
+      if (lstat(rootC, &parentSt) != 0) continue;
+      if (!S_ISDIR(parentSt.st_mode)) continue;
+
+      NSArray *entries = [fm contentsOfDirectoryAtPath: root error: NULL];
+      for (NSString *name in entries) {
+        if ([name hasPrefix: @"."]) continue;
+
+        NSString *full = [root stringByAppendingPathComponent: name];
+        if ([seen containsObject: full]) continue;
+
+        struct stat childSt;
+        if (lstat([full fileSystemRepresentation], &childSt) != 0) continue;
+        if (!S_ISDIR(childSt.st_mode)) continue;
+        /* Same device as parent = directory exists but nothing is
+           mounted there; skip so we don't list stale stub dirs. */
+        if (childSt.st_dev == parentSt.st_dev) continue;
+
+        [seen addObject: full];
+        [vols addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                          name, @"name", full, @"path", nil]];
+      }
+    }
+
+    [vols sortUsingDescriptors:
+        [NSArray arrayWithObject:
+            [[[NSSortDescriptor alloc] initWithKey: @"name"
+                                          ascending: YES
+                                          selector: @selector(caseInsensitiveCompare:)]
+                autorelease]]];
+
+    for (NSDictionary *vol in vols) {
       GWSidebarItem *it = [[GWSidebarItem alloc]
-          initPathItemWithTitle: name path: full];
+          initPathItemWithTitle: [vol objectForKey: @"name"]
+                           path: [vol objectForKey: @"path"]];
       [volumesGroup addChild: it];
       RELEASE (it);
     }
@@ -500,7 +548,8 @@ typedef enum {
 {
   NSDictionary *info = (NSDictionary *)[notif object];
   NSString *path = [info objectForKey: @"path"];
-  if ([path isEqualToString: @"/Volumes"]) {
+  if (path == nil) return;
+  if ([[Workspace volumeMountRoots] containsObject: path]) {
     [self rebuildModelPreservingExpansion];
   }
 }

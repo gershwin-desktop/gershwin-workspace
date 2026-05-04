@@ -4582,6 +4582,20 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
                   @"OK", nil, nil);
 }
 
++ (NSArray *)volumeMountRoots
+{
+  NSString *user = NSUserName();
+  NSMutableArray *roots = [NSMutableArray arrayWithObjects:
+                           @"/media",
+                           @"/Volumes",
+                           nil];
+  if ([user length] > 0) {
+    [roots addObject: [@"/run/media" stringByAppendingPathComponent: user]];
+    [roots addObject: [@"/media" stringByAppendingPathComponent: user]];
+  }
+  return roots;
+}
+
 - (BOOL)unmountVolumeAtPath:(NSString *)path
 {
   if (!path) {

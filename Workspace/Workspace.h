@@ -331,6 +331,11 @@
 
 - (BOOL)unmountVolumeAtPath:(NSString *)path;
 
+/* Directories under which removable / user-mounted volumes appear.
+   Returns the per-user-resolved list in priority order:
+   /media, /Volumes, /run/media/$user, /media/$user. */
++ (NSArray *)volumeMountRoots;
+
 - (void)formatSelectedMountPoints:(id)sender;
 
 - (void)emptyTrash;
