@@ -72,6 +72,7 @@
   
   BOOL isSelected;
   BOOL selectable;
+  BOOL suppressSelectionDrawing;
   
   BOOL isOpened;
   
@@ -114,6 +115,8 @@
         slideBack:(BOOL)slback;
 
 - (void)setSelectable:(BOOL)value;
+
+- (void)setSuppressSelectionDrawing:(BOOL)flag;
 
 - (NSRect)iconBounds;
 

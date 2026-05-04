@@ -79,6 +79,7 @@
     firstVisibleIcon = 0;
     lastVisibleIcon = visibleIcons - 1;
     shift = 0;
+    compactMode = NO;
    
     defentry = [defaults dictionaryForKey: @"backcolor"];
     if (defentry) {
@@ -166,6 +167,61 @@
   [self tile];
 }
 
+- (void)setIconSize:(int)isize
+       labelFontSize:(int)fsize
+{
+  NSUInteger i;
+
+  iconSize = isize;
+  if (fsize > 0) {
+    labelTextSize = fsize;
+    ASSIGN (labelFont, [NSFont systemFontOfSize: labelTextSize]);
+  }
+
+  for (i = 0; i < [icons count]; i++) {
+    id icon = [icons objectAtIndex: i];
+
+    if ([icon respondsToSelector: @selector(setIconSize:)]) {
+      [icon setIconSize: iconSize];
+    }
+  }
+
+  [self calculateGridSize];
+  [self tile];
+  [self setNeedsDisplay: YES];
+}
+
+- (void)setCompactPathBarMode:(BOOL)flag
+                     iconSize:(int)isize
+                labelFontSize:(int)fsize
+{
+  NSUInteger i;
+
+  compactMode = flag;
+  iconPosition = flag ? NSImageLeft : NSImageAbove;
+
+  iconSize = isize;
+  if (fsize > 0) {
+    labelTextSize = fsize;
+    ASSIGN (labelFont, [NSFont systemFontOfSize: labelTextSize]);
+  }
+
+  for (i = 0; i < [icons count]; i++) {
+    id icon = [icons objectAtIndex: i];
+
+    if ([icon respondsToSelector: @selector(setIconPosition:)]) {
+      [icon setIconPosition: iconPosition];
+    }
+    if ([icon respondsToSelector: @selector(setIconSize:)]) {
+      [icon setIconSize: iconSize];
+    }
+  }
+
+  [self calculateGridSize];
+  [self tile];
+  [self setNeedsDisplay: YES];
+}
+
 - (void)showPathComponents:(NSArray *)components
                  selection:(NSArray *)selection
 {
@@ -195,7 +251,7 @@
     } else {
       icon = [self addRepForSubnode: component];
     }
-    
+
     [icon setLeaf: NO];
     [icon setNameEdited: NO];
     [icon setGridIndex: i];
@@ -280,7 +336,7 @@
 {
   NSSize highlightSize = NSZeroSize;
   NSSize labelSize = NSZeroSize;
-  
+
   highlightSize.width = ceil(iconSize / 3 * 4);
   highlightSize.height = ceil(highlightSize.width * [fsnodeRep highlightHeightFactor]);
   if ((highlightSize.height - iconSize) < 4) {
@@ -288,7 +344,13 @@
   }
 
   labelSize.height = myrintf([fsnodeRep heightOfFont: labelFont]);
-  gridSize.height = highlightSize.height + labelSize.height;
+
+  if (compactMode) {
+    /* Lion-style horizontal layout: icon and label on one line */
+    gridSize.height = MAX(highlightSize.height, labelSize.height);
+  } else {
+    gridSize.height = highlightSize.height + labelSize.height;
+  }
 }
 
 - (void)tile
@@ -296,48 +358,117 @@
   NSClipView *clip = (NSClipView *)[self superview];
   float vwidth = [clip visibleRect].size.width;
 	int count = [icons count];
-  int i;    
-    
+  int i;
+  CGFloat yOffset = 0.0;
+
+  if (compactMode) {
+    /* Snow Leopard-style packed path bar: each component is sized to its
+       natural icon+label width and laid out left-to-right with a small
+       chevron gap between, instead of dividing the visible width into
+       equal miller-column cells. */
+    CGFloat selfH = [self bounds].size.height;
+    yOffset = myrintf((selfH - gridSize.height) / 2.0);
+    if (yOffset < 0) yOffset = 0;
+
+    NSDictionary *attrs = labelFont
+        ? [NSDictionary dictionaryWithObject: labelFont
+                                      forKey: NSFontAttributeName]
+        : nil;
+    CGFloat hlightW = ceil((CGFloat)iconSize / 3.0 * 4.0);
+    int lblmargin = [fsnodeRep labelMargin];
+    /* Match FSNIcon's reserved space for the branch arrow on non-leaf
+       icons (BRANCH_SIZE + small padding). */
+    const CGFloat branchArrowSpace = 11.0;
+    const CGFloat itemGap = 4.0;
+
+    CGFloat posx = 0.0;
+    for (i = 0; i < count; i++) {
+      id icon = [icons objectAtIndex: i];
+      CGFloat lblW = 0.0;
+      BOOL leaf = YES;
+
+      if ([icon respondsToSelector: @selector(isLeaf)]) {
+        leaf = [icon isLeaf];
+      }
+
+      if (attrs && [icon respondsToSelector: @selector(shownInfo)]) {
+        NSString *shown = [icon shownInfo];
+        if ([shown length] == 0 && [icon respondsToSelector: @selector(node)]) {
+          shown = [[icon node] name];
+        }
+        if (shown) {
+          lblW = ceil([shown sizeWithAttributes: attrs].width);
+        }
+      }
+
+      CGFloat itemW = hlightW + lblW + (CGFloat)lblmargin;
+      if (!leaf) {
+        itemW += branchArrowSpace;
+      }
+      NSRect r = NSMakeRect(posx, yOffset, itemW, gridSize.height);
+      [icon setFrame: r];
+
+      posx += itemW;
+      if (i + 1 < count) posx += itemGap;
+    }
+
+    NSRect fr = [self frame];
+    CGFloat newW = (posx > vwidth) ? posx : vwidth;
+    if (newW != fr.size.width) {
+      [self setFrame: NSMakeRect(0, fr.origin.y, newW, fr.size.height)];
+    }
+
+    if (posx > vwidth) {
+      [clip scrollToPoint: NSMakePoint(posx - vwidth, 0)];
+    } else {
+      [clip scrollToPoint: NSMakePoint(0, 0)];
+    }
+
+    [self updateNameEditor];
+    [self setNeedsDisplay: YES];
+    return;
+  }
+
   if (ownScroller) {
     NSRect fr = [self frame];
     float x = [clip bounds].origin.x;
     float y = [clip bounds].origin.y;
     float posx = 0.0;
-    
+
     gridSize.width = myrintf(vwidth / visibleIcons);
     [(NSScrollView *)[clip superview] setLineScroll: gridSize.width];
-  
+
     for (i = 0; i < count; i++) {
       NSRect r = NSZeroRect;
 
       r.size = gridSize;
-      r.origin.y = 0;
+      r.origin.y = yOffset;
       r.origin.x = posx;
-      
+
       [[icons objectAtIndex: i] setFrame: r];
-      
+
       posx += gridSize.width;
     }
-    
+
     if (posx != fr.size.width) {
       [self setFrame: NSMakeRect(0, fr.origin.y, posx, fr.size.height)];
     }
 
-    if (count > visibleIcons) {    
+    if (count > visibleIcons) {
       x += gridSize.width * count;
-      [clip scrollToPoint: NSMakePoint(x, y)];      
+      [clip scrollToPoint: NSMakePoint(x, y)];
     }
 
   } else {
     vwidth -= visibleIcons;
     gridSize.width = myrintf(vwidth / visibleIcons);
-  
+
     for (i = 0; i < count; i++) {
       int n = i - firstVisibleIcon;
       NSRect r = NSZeroRect;
 
       r.size = gridSize;
-      r.origin.y = 0;
+      r.origin.y = yOffset;
 
       if (i < firstVisibleIcon) {
         r.origin.x = (n * gridSize.width) - 8;
@@ -359,14 +490,19 @@
     }
   }
 
-  [self updateNameEditor]; 
-       
+  [self updateNameEditor];
+
   [self setNeedsDisplay: YES];
 }
 
 - (void)resizeWithOldSuperviewSize:(NSSize)oldFrameSize
 {
   [self tile];
+}
+
+- (void)drawRect:(NSRect)rect
+{
+  [super drawRect: rect];
 }
 
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent
@@ -487,10 +623,13 @@
                                      dndSource: YES
                                      acceptDnd: YES
                                      slideBack: YES];
+  if (compactMode) {
+    [icon setSuppressSelectionDrawing: YES];
+  }
   [icons addObject: icon];
   [self addSubview: icon];
   RELEASE (icon);
-  
+
   return icon;
 }
 
@@ -598,7 +737,9 @@
 - (void)restoreLastSelection
 {
   [[self lastIcon] select];
-  [nameEditor setBackgroundColor: [NSColor selectedControlColor]];
+  [nameEditor setBackgroundColor: (compactMode
+                                   ? [NSColor windowBackgroundColor]
+                                   : [NSColor selectedControlColor])];
 }
 
 - (NSColor *)backgroundColor
@@ -629,6 +770,14 @@
 - (void)updateNameEditor
 {
   [self stopRepNameEditing];
+
+  /* In the compact path bar we don't overlay an editable name field on
+     the leaf — let FSNIcon draw its own label so the icon-to-text gap
+     matches the other path components. */
+  if (compactMode) {
+    editIcon = nil;
+    return;
+  }
 
   editIcon = [self lastIcon];
 
@@ -661,7 +810,7 @@
 
     [nameEditor setFrame: edrect];
     [nameEditor setAlignment: NSCenterTextAlignment];
-    [nameEditor setNode: ednode 
+    [nameEditor setNode: ednode
             stringValue: nodeDescr];
 
     [nameEditor setBackgroundColor: [NSColor selectedControlColor]];

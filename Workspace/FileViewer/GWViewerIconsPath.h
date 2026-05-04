@@ -53,7 +53,8 @@
   NSSize gridSize;
   
   BOOL ownScroller;
-  
+  BOOL compactMode;
+
   NSColor *backColor;
   NSColor *textColor;
   NSColor *disabledTextColor;
@@ -69,6 +70,13 @@
        ownsScroller:(BOOL)ownscr;
 
 - (void)setOwnsScroller:(BOOL)ownscr;
+
+- (void)setIconSize:(int)isize
+       labelFontSize:(int)fsize;
+
+- (void)setCompactPathBarMode:(BOOL)flag
+                     iconSize:(int)isize
+                labelFontSize:(int)fsize;
 
 - (void)showPathComponents:(NSArray *)components
                  selection:(NSArray *)selection;
