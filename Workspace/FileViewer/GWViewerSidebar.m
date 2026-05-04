@@ -299,7 +299,7 @@ typedef enum {
     [self buildModel];
 
     scrollView = [[NSScrollView alloc] initWithFrame: [self bounds]];
-    [scrollView setHasVerticalScroller: YES];
+    [scrollView setHasVerticalScroller: NO];
     [scrollView setHasHorizontalScroller: NO];
     [scrollView setBorderType: NSBezelBorder];
     [scrollView setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
