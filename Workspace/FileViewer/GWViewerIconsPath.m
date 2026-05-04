@@ -771,6 +771,14 @@
 {
   [self stopRepNameEditing];
 
+  /* In the compact path bar we don't overlay an editable name field on
+     the leaf — let FSNIcon draw its own label so the icon-to-text gap
+     matches the other path components. */
+  if (compactMode) {
+    editIcon = nil;
+    return;
+  }
+
   editIcon = [self lastIcon];
 
   if (editIcon && NSContainsRect([editIcon visibleRect], [editIcon iconBounds])) {
@@ -805,9 +813,7 @@
     [nameEditor setNode: ednode
             stringValue: nodeDescr];
 
-    [nameEditor setBackgroundColor: (compactMode
-                                     ? [NSColor windowBackgroundColor]
-                                     : [NSColor selectedControlColor])];
+    [nameEditor setBackgroundColor: [NSColor selectedControlColor]];
 
     [nameEditor setEditable: NO];
     [nameEditor setSelectable: NO];	
