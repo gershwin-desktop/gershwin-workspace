@@ -468,7 +468,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   nviewScroll = [[GWViewerScrollView alloc] initWithFrame: r inViewer: self];
   [nviewScroll setBorderType: NSBezelBorder];
   hasScroller = ((viewType ==GWViewTypeIcon) || (viewType ==GWViewTypeList));
-  [nviewScroll setHasHorizontalScroller: hasScroller];
+  [nviewScroll setHasHorizontalScroller: NO];
   [nviewScroll setHasVerticalScroller: hasScroller];
   resizeMask = NSViewNotSizable | NSViewWidthSizable | NSViewHeightSizable;
   [nviewScroll setAutoresizingMask: resizeMask];
@@ -1560,8 +1560,8 @@ constrainMinCoordinate:(CGFloat)proposedMin
           [pathsScroll setDelegate: pathsView];
 
           [nviewScroll setHasVerticalScroller: YES];
-          [nviewScroll setHasHorizontalScroller: YES];
-   
+          [nviewScroll setHasHorizontalScroller: NO];
+
           nodeView = [[GWViewerIconsView alloc] initForViewer: self];
       
           viewType = GWViewTypeIcon;     
@@ -1581,7 +1581,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
           [pathsScroll setDelegate: pathsView];
 
           [nviewScroll setHasVerticalScroller: YES];
-          [nviewScroll setHasHorizontalScroller: YES];
+          [nviewScroll setHasHorizontalScroller: NO];
 
           nodeView = [[GWViewerListView alloc] initWithFrame: r forViewer: self];
 
