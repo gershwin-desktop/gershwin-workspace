@@ -546,20 +546,24 @@
                     hitPart:(NSScrollerPart)hitpart
 {
   if (hitpart != NSScrollerNoPart) {
+    int gw = (int)myrintf(gridSize.width);
+    if (gw <= 0) {
+      return;
+    }
     int x = (int)[clip bounds].origin.x;
     int y = (int)[clip bounds].origin.y;
-    int rem = x % (int)(myrintf(gridSize.width));
+    int rem = x % gw;
 
-    [self stopRepNameEditing]; 
+    [self stopRepNameEditing];
 
     if (rem != 0) {
-      if (rem <= gridSize.width / 2) {
+      if (rem <= gw / 2) {
         x -= rem;
       } else {
-        x += myrintf(gridSize.width) - rem;
+        x += gw - rem;
       }
 
-      [clip scrollToPoint: NSMakePoint(x, y)];      
+      [clip scrollToPoint: NSMakePoint(x, y)];
       [self setNeedsDisplay: YES];
     }
 
