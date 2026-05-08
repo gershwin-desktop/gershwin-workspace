@@ -470,10 +470,9 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
     [domain addChild: local];
     RELEASE (local);
 
-    /* /Network keeps its virtual NetworkFSNode behavior so that
-       mDNS service discovery still works when the user clicks it. */
     GWSidebarItem *net = [[GWSidebarItem alloc]
-        initNetworkItemWithTitle: NSLocalizedString(@"Network", @"")];
+        initPathItemWithTitle: NSLocalizedString(@"Network", @"")
+                         path: @"/Network"];
     [domain addChild: net];
     RELEASE (net);
 
