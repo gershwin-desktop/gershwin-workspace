@@ -284,12 +284,10 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 
 - (void)dealloc
 {
-  Workspace *gw = [Workspace gworkspace];
-  if (gw) {
-    for (NSString *root in [Workspace volumeMountRoots]) {
-      [gw removeWatcherForPath: root];
-    }
-  }
+  /* Volume mount roots are watched by GWDesktopManager's MPointWatcher
+     for the desktop's lifetime; the sidebar just listens to the
+     broadcast GWFileWatcherFileDidChangeNotification, so there is
+     nothing to unregister with fswatcher here. */
   [[NSNotificationCenter defaultCenter] removeObserver: self];
   if (outlineView) {
     [outlineView setDataSource: nil];
@@ -354,16 +352,10 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 
     [self applySidebarWidthIfNeeded];
 
-    /* Watch every mount-root directory the desktop watches so the
-       Volumes section auto-refreshes on mounts/unmounts under any
-       of them (/Volumes, /media, /run/media/$user, /media/$user). */
+    /* Volume mount roots are already watched by GWDesktopManager's
+       MPointWatcher; just subscribe to the broadcast notification so
+       the Volumes section refreshes on real mount/unmount events. */
     {
-      Workspace *gw = [Workspace gworkspace];
-      if (gw) {
-        for (NSString *root in [Workspace volumeMountRoots]) {
-          [gw addWatcherForPath: root];
-        }
-      }
       [[NSNotificationCenter defaultCenter]
           addObserver: self
              selector: @selector(volumesWatcherNotification:)
