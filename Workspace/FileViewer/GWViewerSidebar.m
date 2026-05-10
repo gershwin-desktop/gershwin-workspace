@@ -434,15 +434,6 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
     NSString *folder = [pair objectAtIndex: 1];
     NSString *full = [home stringByAppendingPathComponent: folder];
 
-    /* For Videos, also try Movies (Mac convention) if Videos doesn't exist */
-    if ([folder isEqualToString: @"Videos"]
-        && [fm fileExistsAtPath: full] == NO) {
-      NSString *movies = [home stringByAppendingPathComponent: @"Movies"];
-      if ([fm fileExistsAtPath: movies]) {
-        full = movies;
-      }
-    }
-
     GWSidebarItem *it = [[GWSidebarItem alloc]
         initPathItemWithTitle: title path: full];
     [userDomain addChild: it];
