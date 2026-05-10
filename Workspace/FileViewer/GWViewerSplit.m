@@ -51,28 +51,57 @@
 - (void)updateDiskSpaceInfo:(NSString *)info
 {
 	if (info) {
-  	[diskInfoField setStringValue: info]; 
+  	[diskInfoField setStringValue: info];
 	} else {
-  	[diskInfoField setStringValue: @""]; 
+  	[diskInfoField setStringValue: @""];
   }
-  
-  if (NSEqualRects(diskInfoRect, NSZeroRect) == NO) {
+
+  if ([self isVertical] == NO
+      && NSEqualRects(diskInfoRect, NSZeroRect) == NO) {
     [diskInfoField drawWithFrame: diskInfoRect inView: self];
   }
 }
 
 - (CGFloat)dividerThickness
 {
+  if ([self isVertical]) {
+    /* Sidebar layout: no visible/draggable divider */
+    return 0;
+  }
   return 11;
 }
 
 - (void)drawDividerInRect:(NSRect)aRect
 {
-  diskInfoRect = NSMakeRect(8, aRect.origin.y, 200, 10);    
-  
-  [super drawDividerInRect: aRect];   
+  if ([self isVertical]) {
+    /* No divider in sidebar layout */
+    diskInfoRect = NSZeroRect;
+    return;
+  }
+
+  diskInfoRect = NSMakeRect(8, aRect.origin.y, 200, 10);
+
+  [super drawDividerInRect: aRect];
   [diskInfoField setBackgroundColor: [self backgroundColor]];
   [diskInfoField drawWithFrame: diskInfoRect inView: self];
+}
+
+- (void)mouseDown:(NSEvent *)event
+{
+  /* Suppress drag-to-resize when there is no visible divider */
+  if ([self isVertical]) {
+    return;
+  }
+  [super mouseDown: event];
+}
+
+- (void)resetCursorRects
+{
+  /* Suppress the resize cursor for the vertical (sidebar) divider. */
+  if ([self isVertical]) {
+    return;
+  }
+  [super resetCursorRects];
 }
 
 @end

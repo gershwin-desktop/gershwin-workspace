@@ -99,6 +99,7 @@ FileViewer/GWViewerBrowser.m \
 FileViewer/GWViewerIconsView.m \
 FileViewer/GWViewerListView.m \
 FileViewer/GWViewerShelf.m \
+FileViewer/GWViewerSidebar.m \
 FileViewer/GWViewerSplit.m \
 FileViewer/GWViewerScrollView.m \
 FileViewer/GWViewerIconsPath.m \

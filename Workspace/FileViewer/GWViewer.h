@@ -39,6 +39,7 @@ typedef enum
 @class GWViewerWindow;
 @class GWViewerSplit;
 @class GWViewerShelf;
+@class GWViewerSidebar;
 @class GWViewerScrollView;
 @class GWViewerIconsPath;
 @class GWViewerPathsScroll;
@@ -49,8 +50,8 @@ typedef enum
 {
   GWViewerWindow *vwrwin;
   GWViewerSplit *split;
-  GWViewerShelf *shelf;
-  float shelfHeight;
+  GWViewerSidebar *sidebar;
+  float sidebarWidth;
   NSView *lowBox;
   GWViewerPathsScroll *pathsScroll;
   GWViewerIconsPath *pathsView;
@@ -103,6 +104,11 @@ typedef enum
 - (void)updateWindowTitle;
 - (void)navigateToNode:(FSNode *)node;
 
+/* Re-base the viewer window to a new node (sidebar navigation).
+   Recreates the node view, updates the window title and path bar,
+   and resets history. */
+- (void)openNodeInPlace:(FSNode *)newBase;
+
 - (GWViewerWindow *)win;
 - (id)nodeView;
 - (id)shelf;
@@ -119,6 +125,8 @@ typedef enum
 - (void)activate;
 - (void)deactivate;
 - (void)tileViews;
+- (CGFloat)defaultSidebarWidth;
+- (void)setSidebarWidth:(CGFloat)w;
 - (void)scrollToBeginning;
 - (void)invalidate;
 - (BOOL)invalidated;

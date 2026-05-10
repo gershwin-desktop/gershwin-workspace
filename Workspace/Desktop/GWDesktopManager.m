@@ -1102,19 +1102,8 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
     }
   }
   
-  /* Add common mount root directories as fallbacks */
-  [pathsToWatch addObject: @"/media"];
-  [pathsToWatch addObject: @"/Volumes"];
-  
-  /* Add per-user media directory */
-  NSString *userName = NSUserName();
-  NSString *userMediaDir = [@"/media" stringByAppendingPathComponent: userName];
-  [pathsToWatch addObject: userMediaDir];
-  
-  NSString *runMediaUser = [[@"/run/media" stringByAppendingPathComponent: userName] stringByStandardizingPath];
-  if ([fm fileExistsAtPath: runMediaUser]) {
-    [pathsToWatch addObject: runMediaUser];
-  }
+  /* Add the shared volume mount roots (/media, /Volumes, per-user dirs). */
+  [pathsToWatch addObjectsFromArray: [Workspace volumeMountRoots]];
   
   /* Register watchers for paths that aren't already watched */
   for (NSString *path in pathsToWatch) {
@@ -1199,12 +1188,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   NSWorkspace *ws = [NSWorkspace sharedWorkspace];
   NSMutableSet *volumeSet = [NSMutableSet setWithArray:[ws mountedRemovableMedia]];
 
-  NSArray *mountRoots = [NSArray arrayWithObjects:
-    @"/media",
-    @"/Volumes",
-    [@"/run/media" stringByAppendingPathComponent: NSUserName()],
-    [@"/media" stringByAppendingPathComponent: NSUserName()],
-    nil];
+  NSArray *mountRoots = [Workspace volumeMountRoots];
 
   NSArray *allLocal = [ws mountedLocalVolumePaths];
   for (NSString *vol in allLocal) {
