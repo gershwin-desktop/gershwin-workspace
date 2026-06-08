@@ -168,6 +168,11 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
       /* Try to load the icon from the bundle */
       icon = [NSImage imageNamed:iconName];
       if (icon != nil) {
+        /* Resize the icon to the requested size if needed */
+        NSSize icnsize = [icon size];
+        if ((icnsize.width > size) || (icnsize.height > size)) {
+          return [self resizedIcon: icon ofSize: size];
+        }
         return icon;
       }
     }
