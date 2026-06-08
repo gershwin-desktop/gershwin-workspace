@@ -3304,98 +3304,19 @@ NSString *_pendingSystemActionTitle = nil;
       if (!username || [username length] == 0) {
         NSDebugLLog(@"gwspace", @"Workspace: No username in URL, prompting user");
         
-        /* Create a custom panel for username/password input */
-        NSPanel *panel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 400, 200)
-                                                    styleMask:(NSTitledWindowMask | NSClosableWindowMask)
-                                                      backing:NSBackingStoreBuffered
-                                                        defer:NO];
         NSString *dialogTitle = isSFTP ? NSLocalizedString(@"Connect to SFTP Server", @"")
                                        : NSLocalizedString(@"Connect to WebDAV Server", @"");
-        [panel setTitle:dialogTitle];
-        [panel center];
-        
-        /* Create main label */
-        NSTextField *label = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 140, 360, 40)];
-        [label setStringValue:[NSString stringWithFormat:
-          NSLocalizedString(@"Enter credentials for %@:", @""), hostname]];
-        [label setBezeled:NO];
-        [label setDrawsBackground:NO];
-        [label setEditable:NO];
-        [label setSelectable:NO];
-        [[panel contentView] addSubview:label];
-        [label release];
-        
-        /* Create username label */
-        NSTextField *usernameLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 110, 100, 17)];
-        [usernameLabel setStringValue:NSLocalizedString(@"Username:", @"")];
-        [usernameLabel setBezeled:NO];
-        [usernameLabel setDrawsBackground:NO];
-        [usernameLabel setEditable:NO];
-        [usernameLabel setSelectable:NO];
-        [usernameLabel setAlignment:NSRightTextAlignment];
-        [[panel contentView] addSubview:usernameLabel];
-        [usernameLabel release];
-        
-        /* Create username field */
-        NSTextField *usernameField = [[NSTextField alloc] initWithFrame:NSMakeRect(130, 108, 250, 24)];
-        [usernameField setStringValue:NSUserName()];
-        [[panel contentView] addSubview:usernameField];
-        [panel makeFirstResponder:usernameField];
-        
-        /* Create password label */
-        NSTextField *passwordLabel = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 75, 100, 17)];
-        [passwordLabel setStringValue:NSLocalizedString(@"Password:", @"")];
-        [passwordLabel setBezeled:NO];
-        [passwordLabel setDrawsBackground:NO];
-        [passwordLabel setEditable:NO];
-        [passwordLabel setSelectable:NO];
-        [passwordLabel setAlignment:NSRightTextAlignment];
-        [[panel contentView] addSubview:passwordLabel];
-        [passwordLabel release];
-        
-        /* Create password field */
-        NSSecureTextField *passwordField = [[NSSecureTextField alloc] initWithFrame:NSMakeRect(130, 73, 250, 24)];
-        [[panel contentView] addSubview:passwordField];
-        
-        /* Create buttons */
-        NSButton *connectButton = [[NSButton alloc] initWithFrame:NSMakeRect(290, 20, 90, 24)];
-        [connectButton setTitle:NSLocalizedString(@"Connect", @"")];
-        [connectButton setTarget:NSApp];
-        [connectButton setAction:@selector(stopModal)];
-        [connectButton setKeyEquivalent:@"\\r"];
-        [[panel contentView] addSubview:connectButton];
-        [connectButton release];
-        
-        NSButton *cancelButton = [[NSButton alloc] initWithFrame:NSMakeRect(190, 20, 90, 24)];
-        [cancelButton setTitle:NSLocalizedString(@"Cancel", @"")];
-        [cancelButton setTarget:NSApp];
-        [cancelButton setAction:@selector(abortModal)];
-        [cancelButton setKeyEquivalent:@"\\e"];
-        [[panel contentView] addSubview:cancelButton];
-        [cancelButton release];
-        
-        NSDebugLLog(@"gwspace", @"Workspace: Showing username/password prompt dialog");
-        NSInteger credResult = [NSApp runModalForWindow:panel];
-        NSDebugLLog(@"gwspace", @"Workspace: Dialog result: %ld", (long)credResult);
-        
-        if (credResult == NSRunStoppedResponse) {
-          username = [[usernameField stringValue] retain];
-          password = [[passwordField stringValue] retain];
+        NSDictionary *creds = [NetworkVolumeManager runCredentialsPanelWithTitle:dialogTitle
+                                                                        hostname:hostname];
+        if (creds) {
+          username = [[creds objectForKey:@"username"] retain];
+          password = [[creds objectForKey:@"password"] retain];
           NSDebugLLog(@"gwspace", @"Workspace: User entered username: %@", username);
         } else {
           NSDebugLLog(@"gwspace", @"Workspace: User cancelled connection");
-          [usernameField release];
-          [passwordField release];
-          [panel close];
-          [panel release];
           RELEASE(dialog);
           return;
         }
-        
-        [usernameField release];
-        [passwordField release];
-        [panel close];
-        [panel release];
         
         if (!username || [username length] == 0) {
           NSDebugLLog(@"gwspace", @"Workspace: No username provided");

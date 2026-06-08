@@ -127,4 +127,16 @@
  */
 - (void)unmountAll;
 
+/**
+ * Runs a modal credentials panel (username/password) for a network service.
+ * Returns a dictionary with keys @"username" and @"password" on success,
+ * or nil if the user cancelled.
+ *
+ * @param title The window title (e.g. "Connect to SFTP Server")
+ * @param hostname The hostname to display in the prompt
+ * @return NSDictionary with @"username" and @"password", or nil on cancel
+ */
++ (NSDictionary *)runCredentialsPanelWithTitle:(NSString *)title
+                                      hostname:(NSString *)hostname;
+
 @end
