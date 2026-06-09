@@ -30,5 +30,6 @@
           forViewer:(id)vwr;
 
 - (void)reloadData;
+- (void)rebuildVolumesSection;
 
 @end

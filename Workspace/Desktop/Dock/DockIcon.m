@@ -450,12 +450,8 @@
 
 	} else if (([nextEvent type] == NSLeftMouseDragged)
 		   && ([self isSpecialIcon] == NO)) {
-	  if (dragdelay < 5) {
-	    dragdelay++;
-	  } else {
-	    startdnd = YES;
-	    break;
-	  }
+	  startdnd = YES;
+	  break;
 	}
       }
 

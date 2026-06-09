@@ -381,7 +381,7 @@
     const CGFloat branchArrowSpace = 11.0;
     const CGFloat itemGap = 4.0;
 
-    CGFloat posx = 0.0;
+    CGFloat posx = 4.0;
     for (i = 0; i < count; i++) {
       id icon = [icons objectAtIndex: i];
       CGFloat lblW = 0.0;
@@ -443,7 +443,7 @@
 
       r.size = gridSize;
       r.origin.y = yOffset;
-      r.origin.x = posx;
+      r.origin.x = posx + 4.0;
 
       [[icons objectAtIndex: i] setFrame: r];
 

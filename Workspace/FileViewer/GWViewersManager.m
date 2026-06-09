@@ -623,7 +623,27 @@ static GWViewersManager *vwrsmanager = nil;
 {
   NSDictionary *opinfo = (NSDictionary *)[notif object];  
   NSMutableArray *viewersToClose = [NSMutableArray array];
+  NSString *operation = [opinfo objectForKey: @"operation"];
   int i;
+
+  /* Handle unmount operations: close all viewers on the unmounted volume */
+  if ([operation isEqual: @"UnmountOperation"]) {
+    NSString *unmountedPath = [opinfo objectForKey: @"unmounted"];
+    if (unmountedPath) {
+      for (i = 0; i < [viewers count]; i++) {
+        id viewer = [viewers objectAtIndex: i];
+        if ([viewer invalidated] == NO) {
+          NSString *viewerPath = [[viewer baseNode] path];
+          if ([viewerPath isEqual: unmountedPath] || isSubpathOfPath(unmountedPath, viewerPath)) {
+            [viewer invalidate];
+            [viewersToClose addObject: viewer];
+          }
+        }
+      }
+      [self closeInvalidViewers: viewersToClose];
+      return;
+    }
+  }
 
   for (i = 0; i < [viewers count]; i++) {
     id viewer = [viewers objectAtIndex: i];
@@ -654,7 +674,18 @@ static GWViewersManager *vwrsmanager = nil;
 {
   NSDictionary *opinfo = (NSDictionary *)[notif object];  
   NSMutableArray *viewersToClose = [NSMutableArray array];
+  NSString *operation = [opinfo objectForKey: @"operation"];
   int i;
+
+  /* Handle unmount operations: close all viewers on the unmounted volume. */
+  if ([operation isEqual: @"UnmountOperation"]) {
+    NSString *unmountedPath = [opinfo objectForKey: @"unmounted"];
+    if (unmountedPath) {
+      NSDebugLLog(@"gwspace", @"GWViewersManager: fileSystemDidChange received UnmountOperation for %@", unmountedPath);
+      [self closeViewersForUnmountedPath: unmountedPath];
+      return;
+    }
+  }
     
   for (i = 0; i < [viewers count]; i++) {
     id viewer = [viewers objectAtIndex: i];
@@ -892,6 +923,178 @@ static GWViewersManager *vwrsmanager = nil;
   [defaults setObject: viewersInfo forKey: @"viewersinfo"];
 }
 
+- (void)closeViewersForUnmountedPath:(NSString *)unmountedPath
+{
+  if (unmountedPath == nil)
+    return;
+
+  NSMutableArray *viewersToClose = [NSMutableArray array];
+  int i;
+
+  NSDebugLLog(@"gwspace", @"GWViewersManager: closeViewersForUnmountedPath: %@", unmountedPath);
+
+  for (i = 0; i < [viewers count]; i++)
+    {
+      id viewer = [viewers objectAtIndex: i];
+      if ([viewer invalidated] == NO)
+        {
+          NSString *viewerPath = [[viewer baseNode] path];
+          BOOL shouldClose = NO;
+
+          NSDebugLLog(@"gwspace", @"GWViewersManager:   viewer baseNode=%@", viewerPath);
+
+          /* Check 1: baseNode is the unmounted path or a subdirectory of it.
+           * This catches viewers opened directly at the volume path (spatial
+           * mode) or viewers for subdirectories on the volume. */
+          if ([viewerPath isEqual: unmountedPath] || isSubpathOfPath(unmountedPath, viewerPath))
+            {
+              shouldClose = YES;
+              NSDebugLLog(@"gwspace", @"GWViewersManager:   -> match via baseNode");
+            }
+
+          /* Check 2: the viewer is currently showing the unmounted path or a
+           * subdirectory inside it.  In the default browsing mode, all viewers
+           * are created with baseNode = @"/" and then navigated to the target
+           * path, so baseNode alone is never the volume path.  We must also
+           * check the shownNode via isShowingPath:. */
+          if (!shouldClose && [viewer isShowingPath: unmountedPath])
+            {
+              shouldClose = YES;
+              NSDebugLLog(@"gwspace", @"GWViewersManager:   -> match via isShowingPath");
+            }
+
+          if (shouldClose)
+            {
+              NSDebugLLog(@"gwspace", @"GWViewersManager:   -> CLOSING");
+              [viewer invalidate];
+              [viewersToClose addObject: viewer];
+            }
+        }
+    }
+
+  if ([viewersToClose count] > 0)
+    {
+      NSDebugLLog(@"gwspace", @"GWViewersManager: closing %ld viewers", (long)[viewersToClose count]);
+      [self closeInvalidViewers: viewersToClose];
+    }
+}
+
+- (void)mountedVolumesDidChange
+{
+  /* Called by GWDesktopManager when the MPointWatcher detects a volume
+     change.  This is the most reliable notification path — it polls
+     mount roots every 1.5s and fires after the mount is complete,
+     unlike GWFileWatcherFileDidChangeNotification which may arrive
+     before the filesystem is fully mounted. */
+  NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+  NSArray *mountRoots = [Workspace volumeMountRoots];
+  NSMutableArray *viewersToClose = [NSMutableArray array];
+  NSMutableSet *currentVolumeSet = [NSMutableSet set];
+
+  /* Build a set of all currently mounted removable/media volume paths. */
+  [currentVolumeSet addObjectsFromArray: [ws mountedRemovableMedia]];
+  {
+    NSArray *allLocal = [ws mountedLocalVolumePaths];
+    for (NSString *vol in allLocal)
+      {
+        for (NSString *root in mountRoots)
+          {
+            if ([vol hasPrefix: [root stringByAppendingString: @"/"]]
+                && ![vol isEqualToString: @"/"])
+              {
+                [currentVolumeSet addObject: vol];
+                break;
+              }
+          }
+      }
+  }
+
+  NSDebugLLog(@"gwspace", @"GWViewersManager: mountedVolumesDidChange - currentVolumeSet has %ld entries, %ld viewers", 
+              (long)[currentVolumeSet count], (long)[viewers count]);
+  for (NSString *vol in currentVolumeSet)
+    {
+      NSDebugLLog(@"gwspace", @"GWViewersManager:   mounted: %@", vol);
+    }
+
+  for (id viewer in viewers)
+    {
+      if ([viewer invalidated] == NO)
+        {
+          FSNode *node = [viewer baseNode];
+          NSString *vpath = [node path];
+
+          NSDebugLLog(@"gwspace", @"GWViewersManager:   viewer path=%@ isValid=%d", vpath, [node isValid]);
+
+          if ([node isValid] == NO)
+            {
+              /* Path no longer exists at all (subdirectories on an unmounted
+               * volume, or the volume itself on platforms where the mountpoint
+               * directory disappears). */
+              NSDebugLLog(@"gwspace", @"GWViewersManager:   -> CLOSING (isValid=NO)");
+              [viewer invalidate];
+              [viewersToClose addObject: viewer];
+            }
+          else
+            {
+              /* On Linux, mountpoint directories persist as empty dirs after
+               * unmount, so isValid returns YES even though the volume is gone.
+               * Check if this path is under a known mount root but NOT under
+               * any currently mounted volume — if so, the volume was unmounted. */
+              BOOL underMountRoot = NO;
+              for (NSString *root in mountRoots)
+                {
+                  if ([vpath isEqual: root] || [vpath hasPrefix: [root stringByAppendingString: @"/"]])
+                    {
+                      NSDebugLLog(@"gwspace", @"GWViewersManager:     under mount root %@", root);
+                      underMountRoot = YES;
+                      break;
+                    }
+                }
+
+              if (underMountRoot)
+                {
+                  BOOL onMountedVolume = NO;
+                  for (NSString *vol in currentVolumeSet)
+                    {
+                      if ([vpath isEqual: vol] || [vpath hasPrefix: [vol stringByAppendingString: @"/"]])
+                        {
+                          NSDebugLLog(@"gwspace", @"GWViewersManager:     on mounted volume %@", vol);
+                          onMountedVolume = YES;
+                          break;
+                        }
+                    }
+
+                  if (onMountedVolume == NO)
+                    {
+                      NSDebugLLog(@"gwspace", @"GWViewersManager:   -> CLOSING (not on any mounted volume)");
+                      [viewer invalidate];
+                      [viewersToClose addObject: viewer];
+                    }
+                  else
+                    {
+                      NSDebugLLog(@"gwspace", @"GWViewersManager:   -> KEEPING (on mounted volume)");
+                    }
+                }
+              else
+                {
+                  NSDebugLLog(@"gwspace", @"GWViewersManager:   -> KEEPING (not under any mount root)");
+                }
+            }
+        }
+    }
+
+  [self closeInvalidViewers: viewersToClose];
+
+  /* Then reload sidebars for remaining viewers */
+  for (id viewer in viewers)
+    {
+      if ([viewer invalidated] == NO)
+        {
+          [viewer reloadSidebar];
+        }
+    }
+}
+
 - (void)newVolumeMounted:(NSNotification *)notif
 {
   NSDictionary *dict = [notif userInfo];  
@@ -944,6 +1147,15 @@ static GWViewersManager *vwrsmanager = nil;
                                @"unmounted": volpath };
     
     [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemDidChangeNotification" object:didInfo];
+    
+    /* Update the Volumes section in all open viewer windows' sidebars. */
+    for (id viewer in viewers)
+      {
+        if ([viewer invalidated] == NO)
+          {
+            [viewer reloadSidebar];
+          }
+      }
   } else {
     NSDebugLLog(@"gwspace", @"mountedVolumeDidUnmount notification received with empty NSDevicePath");
   }

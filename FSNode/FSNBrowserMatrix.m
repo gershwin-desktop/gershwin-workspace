@@ -227,7 +227,6 @@
 	    {
 	      NSEvent *nextEvent;
 	      BOOL startdnd = NO;
-	      int dragdelay = 0;
 
 	      editIndex = -1;
 	      if (!([theEvent modifierFlags] & NSShiftKeyMask))
@@ -255,16 +254,9 @@
 		    }
 		  else if ([nextEvent type] == NSLeftMouseDragged)
 		    {
-		      if (dragdelay < 5)
-			{
-			  dragdelay++;
-			}
-		      else
-			{
-			  editIndex = -1;
-			  startdnd = YES;
-			  break;
-			}
+		      editIndex = -1;
+		      startdnd = YES;
+		      break;
 		    }
 		}
 
@@ -298,6 +290,31 @@
 - (BOOL)acceptsFirstResponder
 {
   return YES;
+}
+
+- (void)drawRect:(NSRect)rect
+{
+  NSInteger rows = [self numberOfRows];
+
+  if (rows > 0)
+    {
+      NSColor *evenColor = [NSColor colorWithCalibratedWhite: 0.92 alpha: 1.0];
+      NSColor *oddColor = [NSColor controlBackgroundColor];
+      NSInteger i;
+
+      for (i = 0; i < rows; i += 2)
+        {
+          NSRect cellFrame = [self cellFrameAtRow: i column: 0];
+
+          if (NSIntersectsRect(cellFrame, rect))
+            {
+              [evenColor set];
+              NSRectFill(cellFrame);
+            }
+        }
+    }
+
+  [super drawRect: rect];
 }
 
 @end

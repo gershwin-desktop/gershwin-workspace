@@ -209,7 +209,7 @@ static NSImage *branchImage;
 - (void)tile
 {
   float minWidth = [FSNPathComponentView minWidthForIconSize: ICN_SIZE];
-  float orx = BORDER;
+  float orx = BORDER + 4;
   unsigned i;
       
   for (i = 0; i < [components count]; i++) {

@@ -835,17 +835,10 @@ static NSImage *branchImage;
 		  else if (([nextEvent type] == NSLeftMouseDragged)
 			   && ([self mouse: selfloc inRect: icnBounds]))
 		    {
-		      if (dragdelay < 5)
-			{
-			  dragdelay++;
-			}
-		      else
-			{
-			  NSPoint p = [nextEvent locationInWindow];
-			  offset = NSMakeSize(p.x - location.x, p.y - location.y);
-			  startdnd = YES;
-			  break;
-			}
+		      NSPoint p = [nextEvent locationInWindow];
+		      offset = NSMakeSize(p.x - location.x, p.y - location.y);
+		      startdnd = YES;
+		      break;
 		    }
 		}
 	    }

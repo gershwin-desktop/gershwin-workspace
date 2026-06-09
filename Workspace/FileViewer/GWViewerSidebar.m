@@ -22,7 +22,7 @@
 #import "Workspace.h"
 
 #define ROW_HEIGHT 20.0
-#define HEADER_HEIGHT 18.0
+#define HEADER_HEIGHT 20.0
 #define ICON_SIZE 16
 #define INDENT 0.0
 
@@ -54,15 +54,39 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
    NSOutlineView/NSTableView's setBackgroundColor: isn't reliably honored
    in this GNUstep build, so we override the background paint directly. */
 @interface GWSidebarOutlineView : NSOutlineView
+{
+  NSInteger dragHighlightRow;
+}
 - (NSRect)ejectRectForRow:(NSInteger)row;
 - (void)drawEjectGlyphInRect:(NSRect)r;
 @end
 
 @implementation GWSidebarOutlineView
+
+- (id)initWithFrame:(NSRect)frameRect
+{
+  self = [super initWithFrame: frameRect];
+  if (self) {
+    dragHighlightRow = -1;
+  }
+  return self;
+}
+
 - (void)drawBackgroundInClipRect:(NSRect)clipRect
 {
   [[NSColor windowBackgroundColor] set];
   NSRectFill(clipRect);
+}
+
+- (NSRect)frameOfOutlineCellAtRow:(NSInteger)row
+{
+  NSRect frame = [super frameOfOutlineCellAtRow: row];
+  if (NSIsEmptyRect(frame) == NO) {
+    // Shift the disclosure triangle down by 2px so it centers better
+    // relative to the NSBrowserCell text positioning.
+    frame.origin.y += 2.0;
+  }
+  return frame;
 }
 
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent
@@ -113,6 +137,19 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 {
   [super drawRect: rect];
 
+  /* Draw drag highlight for the row being hovered */
+  if (dragHighlightRow >= 0) {
+    NSRange visibleRows = [self rowsInRect: rect];
+    if ((NSUInteger)dragHighlightRow >= visibleRows.location
+        && (NSUInteger)dragHighlightRow < visibleRows.location + visibleRows.length) {
+      NSRect rowRect = [self rectOfRow: dragHighlightRow];
+      [[NSColor selectedControlColor] set];
+      NSRectFill(rowRect);
+      /* Re-draw the cell content on top so text/icons aren't obscured */
+      [self drawRow: dragHighlightRow clipRect: rowRect];
+    }
+  }
+
   id ds = [self dataSource];
   if (![ds respondsToSelector: @selector(itemAtRowIsVolume:)]) return;
 
@@ -151,6 +188,260 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 }
 @end
 
+/* Forward category so the dragging destination methods below can call
+   GWSidebarItem methods without compiler warnings. */
+@interface NSObject (GWSidebarItemMethods)
+- (BOOL)isHeader;
+- (GWSidebarItemKind)itemKind;
+- (NSString *)path;
+- (NSString *)title;
+- (NSImage *)icon;
+- (BOOL)isVolume;
+- (NSArray *)children;
+@end
+
+
+@implementation GWSidebarOutlineView (DraggingDestination)
+
+- (void)setDragHighlightRow:(NSInteger)row
+{
+  if (dragHighlightRow != row) {
+    NSInteger oldRow = dragHighlightRow;
+    dragHighlightRow = row;
+    if (oldRow >= 0) {
+      [self setNeedsDisplayInRect: [self rectOfRow: oldRow]];
+    }
+    if (row >= 0) {
+      [self setNeedsDisplayInRect: [self rectOfRow: row]];
+    }
+  }
+}
+
+- (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
+{
+  NSInteger row = [self rowAtPoint: [self convertPoint: [sender draggingLocation]
+                                               fromView: nil]];
+  if (row < 0) {
+    [self setDragHighlightRow: -1];
+    return NSDragOperationNone;
+  }
+
+  id item = [self itemAtRow: row];
+  if (item == nil || [item isHeader] || [item itemKind] == GWSidebarItemNetwork) {
+    [self setDragHighlightRow: -1];
+    return NSDragOperationNone;
+  }
+
+  NSString *targetPath = [item path];
+  if (targetPath == nil || [targetPath length] == 0) {
+    [self setDragHighlightRow: -1];
+    return NSDragOperationNone;
+  }
+
+  FSNode *targetNode = [FSNode nodeWithPath: targetPath];
+  if (targetNode == nil || [targetNode isValid] == NO
+      || [targetNode isDirectory] == NO || [targetNode isPackage]) {
+    [self setDragHighlightRow: -1];
+    return NSDragOperationNone;
+  }
+
+  Workspace *gw = [Workspace gworkspace];
+  if ([targetNode isSubnodeOfPath: [gw trashPath]]) {
+    [self setDragHighlightRow: -1];
+    return NSDragOperationNone;
+  }
+
+  NSPasteboard *pb = [sender draggingPasteboard];
+  NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+  NSArray *sourcePaths = nil;
+
+  if ([[pb types] containsObject: NSFilenamesPboardType]) {
+    sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
+  } else if ([[pb types] containsObject: @"GWRemoteFilenamesPboardType"]) {
+    if ([targetNode isWritable] == NO) {
+      [self setDragHighlightRow: -1];
+      return NSDragOperationNone;
+    }
+    [self setDragHighlightRow: row];
+    return NSDragOperationCopy;
+  } else if ([[pb types] containsObject: @"GWLSFolderPboardType"]) {
+    if ([targetNode isWritable] == NO) {
+      [self setDragHighlightRow: -1];
+      return NSDragOperationNone;
+    }
+    [self setDragHighlightRow: row];
+    return NSDragOperationCopy;
+  }
+
+  if (sourcePaths == nil || [sourcePaths count] == 0) {
+    [self setDragHighlightRow: -1];
+    return NSDragOperationNone;
+  }
+
+  NSString *fromPath = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
+
+  if ([targetPath isEqual: fromPath]) {
+    [self setDragHighlightRow: -1];
+    return NSDragOperationNone;
+  }
+  if ([sourcePaths containsObject: targetPath]) {
+    [self setDragHighlightRow: -1];
+    return NSDragOperationNone;
+  }
+
+  /* Check that target is not a subdirectory of a source path */
+  NSString *prePath = targetPath;
+  while (1) {
+    if ([sourcePaths containsObject: prePath]) {
+      [self setDragHighlightRow: -1];
+      return NSDragOperationNone;
+    }
+    if ([prePath isEqual: @"/"]) {
+      break;
+    }
+    prePath = [prePath stringByDeletingLastPathComponent];
+  }
+
+  NSDragOperation result = NSDragOperationNone;
+  if (sourceDragMask & NSDragOperationMove) {
+    if ([[NSFileManager defaultManager] isWritableFileAtPath: fromPath]) {
+      result = NSDragOperationMove;
+    } else {
+      result = NSDragOperationCopy;
+    }
+  } else if (sourceDragMask & NSDragOperationCopy) {
+    result = NSDragOperationCopy;
+  } else if (sourceDragMask & NSDragOperationLink) {
+    result = NSDragOperationLink;
+  }
+
+  if (result != NSDragOperationNone) {
+    [self setDragHighlightRow: row];
+  } else {
+    [self setDragHighlightRow: -1];
+  }
+  return result;
+}
+
+- (NSDragOperation)draggingUpdated:(id <NSDraggingInfo>)sender
+{
+  NSDragOperation op = [self draggingEntered: sender];
+  if (op != NSDragOperationNone) {
+    NSInteger row = [self rowAtPoint: [self convertPoint: [sender draggingLocation]
+                                                 fromView: nil]];
+    [self setDragHighlightRow: row];
+  } else {
+    [self setDragHighlightRow: -1];
+  }
+  return op;
+}
+
+- (void)draggingExited:(id <NSDraggingInfo>)sender
+{
+  [self setDragHighlightRow: -1];
+}
+
+- (BOOL)prepareForDragOperation:(id <NSDraggingInfo>)sender
+{
+  return YES;
+}
+
+- (BOOL)performDragOperation:(id <NSDraggingInfo>)sender
+{
+  return YES;
+}
+
+- (void)concludeDragOperation:(id <NSDraggingInfo>)sender
+{
+  [self setDragHighlightRow: -1];
+
+  NSInteger row = [self rowAtPoint: [self convertPoint: [sender draggingLocation]
+                                               fromView: nil]];
+  if (row < 0) {
+    return;
+  }
+
+  id item = [self itemAtRow: row];
+  if (item == nil || [item isHeader] || [item itemKind] == GWSidebarItemNetwork) {
+    return;
+  }
+
+  NSString *targetPath = [item path];
+  if (targetPath == nil || [targetPath length] == 0) {
+    return;
+  }
+
+  FSNode *targetNode = [FSNode nodeWithPath: targetPath];
+  if (targetNode == nil || [targetNode isValid] == NO
+      || [targetNode isDirectory] == NO) {
+    return;
+  }
+
+  NSPasteboard *pb = [sender draggingPasteboard];
+  NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+
+  if ([[pb types] containsObject: @"GWRemoteFilenamesPboardType"]) {
+    NSData *pbData = [pb dataForType: @"GWRemoteFilenamesPboardType"];
+    [[Workspace gworkspace] concludeRemoteFilesDragOperation: pbData
+                                                 atLocalPath: targetPath];
+    return;
+  }
+
+  if ([[pb types] containsObject: @"GWLSFolderPboardType"]) {
+    NSData *pbData = [pb dataForType: @"GWLSFolderPboardType"];
+    [[Workspace gworkspace] lsfolderDragOperation: pbData
+                                  concludedAtPath: targetPath];
+    return;
+  }
+
+  NSArray *sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
+  if (sourcePaths == nil || [sourcePaths count] == 0) {
+    return;
+  }
+
+  NSString *source = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
+  NSString *operation = nil;
+  Workspace *gw = [Workspace gworkspace];
+  NSString *trashPath = [gw trashPath];
+
+  if ([source isEqual: trashPath]) {
+    operation = @"WorkspaceRecycleOutOperation";
+  } else {
+    if (sourceDragMask & NSDragOperationMove) {
+      if ([[NSFileManager defaultManager] isWritableFileAtPath: source]) {
+        operation = NSWorkspaceMoveOperation;
+      } else {
+        operation = NSWorkspaceCopyOperation;
+      }
+    } else if (sourceDragMask & NSDragOperationCopy) {
+      operation = NSWorkspaceCopyOperation;
+    } else if (sourceDragMask & NSDragOperationLink) {
+      operation = NSWorkspaceLinkOperation;
+    }
+  }
+
+  if (operation == nil) {
+    return;
+  }
+
+  NSMutableArray *files = [NSMutableArray arrayWithCapacity: [sourcePaths count]];
+  NSUInteger i;
+  for (i = 0; i < [sourcePaths count]; i++) {
+    [files addObject: [[sourcePaths objectAtIndex: i] lastPathComponent]];
+  }
+
+  NSMutableDictionary *opDict = [NSMutableDictionary dictionaryWithCapacity: 4];
+  [opDict setObject: operation forKey: @"operation"];
+  [opDict setObject: source forKey: @"source"];
+  [opDict setObject: targetPath forKey: @"destination"];
+  [opDict setObject: files forKey: @"files"];
+
+  [gw performFileOperation: opDict];
+}
+
+@end
+
+
 @interface GWSidebarItem : NSObject
 {
   NSString *title;
@@ -166,7 +457,7 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 - (NSString *)title;
 - (NSString *)path;
 - (NSImage *)icon;
-- (GWSidebarItemKind)kind;
+- (GWSidebarItemKind)itemKind;
 - (NSArray *)children;
 - (BOOL)isHeader;
 @end
@@ -226,7 +517,7 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 
 - (NSString *)title { return title; }
 - (NSString *)path { return path; }
-- (GWSidebarItemKind)kind { return kind; }
+- (GWSidebarItemKind)itemKind { return kind; }
 - (NSArray *)children { return children; }
 - (BOOL)isHeader { return kind == GWSidebarItemHeader; }
 - (BOOL)isVolume
@@ -330,6 +621,7 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
     [outlineView setAllowsMultipleSelection: NO];
     [outlineView setAllowsEmptySelection: YES];
     [outlineView setAllowsColumnSelection: NO];
+    [outlineView setUsesAlternatingRowBackgroundColors: YES];
 
     col = [[NSTableColumn alloc] initWithIdentifier: @"item"];
     [col setWidth: frameRect.size.width - 4];
@@ -342,6 +634,12 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
     [outlineView setDelegate: self];
     [outlineView setTarget: self];
     [outlineView setAction: @selector(itemClicked:)];
+    [outlineView registerForDraggedTypes:
+        [NSArray arrayWithObjects:
+            NSFilenamesPboardType,
+            @"GWLSFolderPboardType",
+            @"GWRemoteFilenamesPboardType",
+            nil]];
 
     [scrollView setDocumentView: outlineView];
     RELEASE (outlineView);
@@ -536,6 +834,11 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   }
 }
 
+- (void)rebuildVolumesSection
+{
+  [self rebuildModelPreservingExpansion];
+}
+
 - (void)rebuildModelPreservingExpansion
 {
   [self buildModel];
@@ -707,9 +1010,9 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 {
   FSNode *target = nil;
 
-  if ([item kind] == GWSidebarItemNetwork) {
+  if ([item itemKind] == GWSidebarItemNetwork) {
     target = [NetworkFSNode networkRootNode];
-  } else if ([item kind] == GWSidebarItemPath) {
+  } else if ([item itemKind] == GWSidebarItemPath) {
     NSString *p = [item path];
     if (p == nil || [p length] == 0) {
       return;
@@ -803,19 +1106,15 @@ objectValueForTableColumn:(NSTableColumn *)tableColumn
  dataCellForTableColumn:(NSTableColumn *)tableColumn
                    item:(id)item
 {
-  if (item != nil && [item isHeader]) {
-    NSTextFieldCell *cell = [[[NSTextFieldCell alloc] init] autorelease];
-    [cell setFont: [NSFont boldSystemFontOfSize: 11]];
-    [cell setTextColor: [NSColor controlShadowColor]];
-    [cell setEditable: NO];
-    [cell setSelectable: NO];
-    return cell;
-  }
-
   NSBrowserCell *cell = [[[NSBrowserCell alloc] init] autorelease];
   [cell setLeaf: YES];
   [cell setEditable: NO];
-  [cell setFont: [NSFont systemFontOfSize: 11]];
+
+  if (item != nil && [item isHeader]) {
+    [cell setFont: [NSFont boldSystemFontOfSize: 11]];
+  } else {
+    [cell setFont: [NSFont systemFontOfSize: 11]];
+  }
   return cell;
 }
 
@@ -831,6 +1130,9 @@ objectValueForTableColumn:(NSTableColumn *)tableColumn
   if ([item isHeader]) {
     if ([cell respondsToSelector: @selector(setStringValue:)]) {
       [cell setStringValue: [[item title] uppercaseString]];
+    }
+    if ([cell respondsToSelector: @selector(setTextColor:)]) {
+      [cell setTextColor: [NSColor controlShadowColor]];
     }
     return;
   }

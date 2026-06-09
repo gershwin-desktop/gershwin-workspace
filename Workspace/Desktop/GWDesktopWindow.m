@@ -183,6 +183,11 @@
   [super print: sender];
 }
 
+- (void)performClose:(id)sender
+{
+  NSLog(@"GWDesktopWindow performClose: called - IGNORED (desktop cannot be closed)");
+}
+
 - (void)orderWindow:(NSWindowOrderingMode)place 
          relativeTo:(NSInteger)otherWin
 {

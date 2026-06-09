@@ -99,6 +99,10 @@
 
 - (id)parentOfSpatialViewer:(id)aviewer;
 
+- (void)closeViewersForUnmountedPath:(NSString *)unmountedPath;
+
+- (void)mountedVolumesDidChange;
+
 
 - (void)viewerWillClose:(id)aviewer;
 

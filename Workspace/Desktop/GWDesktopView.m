@@ -35,6 +35,7 @@
 #import "GWDesktopManager.h"
 #import "Dock.h"
 #import "Workspace.h"
+#import "GWViewersManager.h"
 #import "../Network/NetworkVolumeManager.h"
 
 #define DEF_ICN_SIZE 48
@@ -43,7 +44,8 @@
 
 #define X_MARGIN (10)
 #define Y_MARGIN (12)
-#define TOP_BOTTOM_SPACING (10)
+#define TOP_MARGIN (-8)
+#define BOTTOM_MARGIN (8)
 
 #define EDIT_MARGIN (4)
 
@@ -188,9 +190,12 @@
         }
     }
     
-  /* Send unmount notification to viewers so they can close windows */
+  /* Directly close any viewer windows showing this path and post a
+   * notification so other listeners (including self) can react too. */
   if (vpath)
     {
+      [[[Workspace gworkspace] viewersManager] closeViewersForUnmountedPath: vpath];
+
       NSString *parent = [vpath stringByDeletingLastPathComponent];
       NSString *name = [vpath lastPathComponent];
       
@@ -323,6 +328,15 @@
       // Show alert for unexpected removals
       if ([unexpectedRemovals count] > 0)
         {
+          /* Mark these volumes as expected before showing the alert, so that
+           * if NSRunAlertPanel re-enters the run loop (e.g. via MPointWatcher
+           * timer) and showMountedVolumes is called again, the duplicate
+           * alert is suppressed.  The entries will be cleaned up below. */
+          for (NSString *v in unexpectedRemovals)
+            {
+              [expectedUnmountPaths setObject:[NSDate date] forKey:v];
+            }
+
           NSString *volumeList = [unexpectedRemovals componentsJoinedByString:@"\n"];
           NSString *message;
           
@@ -344,6 +358,13 @@
           NSRunAlertPanel(NSLocalizedString(@"Volume Removed Unexpectedly", @""), 
                          message,
                          NSLocalizedString(@"OK", @""), nil, nil);
+          
+          /* Clean up the expected-unmount entries we added above, now that
+           * the alert has been dismissed and re-entrancy is no longer a risk. */
+          for (NSString *v in unexpectedRemovals)
+            {
+              [expectedUnmountPaths removeObjectForKey:v];
+            }
         }
     }
   
@@ -606,9 +627,9 @@
 
   gridrect.size.height -= mmfr.size.height;
   
-  // Reserve TOP_BOTTOM_SPACING px at top and bottom of screen where no icons should be placed
-  gridrect.origin.y += TOP_BOTTOM_SPACING;
-  gridrect.size.height -= (TOP_BOTTOM_SPACING * 2);  // TOP_BOTTOM_SPACING px top + TOP_BOTTOM_SPACING px bottom
+  // Reserve margins at top and bottom of screen where no icons should be placed
+  gridrect.origin.y += BOTTOM_MARGIN;
+  gridrect.size.height -= (TOP_MARGIN + BOTTOM_MARGIN);  // top margin + bottom margin
 
   if ([manager dockPosition] == DockPositionLeft)
     {

@@ -34,6 +34,12 @@
     BOOL powerKeyTriggered;
     // Timer used to detect long-press (>5s)
     NSTimer *powerKeyTimer;
+
+    // Close window shortcut (Alt+W / Cmd+W in Gershwin)
+    // Keycode for 'w' (0 if not available/initialized)
+    int closeWindowKeyCode;
+    // Modifier mask for Alt (Mod1Mask)
+    unsigned int closeWindowModifier;
 }
 
 /**
@@ -76,6 +82,16 @@
  * Notification handler for GlobalShortcuts configuration changes
  */
 - (void)globalShortcutsConfigurationChanged:(NSNotification *)notification;
+
+/**
+ * Grab the Alt+W (Cmd+W) close window shortcut at the X11 level
+ */
+- (void)grabCloseWindowShortcut;
+
+/**
+ * Ungrab the Alt+W (Cmd+W) close window shortcut
+ */
+- (void)ungrabCloseWindowShortcut;
 
 /**
  * Ungrab a specific key combination

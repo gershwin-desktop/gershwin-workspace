@@ -769,6 +769,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 - (void)mountedVolumesDidChange
 {
   [[self desktopView] showMountedVolumes];
+  [[gworkspace viewersManager] mountedVolumesDidChange];
 }
 
 - (void)updateDefaults

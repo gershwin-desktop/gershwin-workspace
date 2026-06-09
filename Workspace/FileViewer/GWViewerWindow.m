@@ -172,13 +172,10 @@
 - (BOOL)performKeyEquivalent:(NSEvent *)theEvent
 {
   // Always check menu key equivalents FIRST before handling custom shortcuts
-  // This ensures menu items like Cmd-W (Close Window) work correctly
   if ([super performKeyEquivalent: theEvent])
     {
       return YES;
     }
-  
-  // If no menu handled it, let our custom key handling work
   return NO;
 }
 

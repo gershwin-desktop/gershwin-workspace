@@ -1429,7 +1429,7 @@ NSString *_pendingSystemActionTitle = nil;
       return [self pasteboardHasValidContent];
     }
   }
-  
+
   return YES;
 }
 
@@ -2213,14 +2213,33 @@ NSString *_pendingSystemActionTitle = nil;
 {
   NSWindow *kwin = [NSApp keyWindow];
   
-  NSDebugLLog(@"gwspace", @"Workspace performClose: called, keyWindow=%@", kwin);
+  NSLog(@"Workspace performClose: called, keyWindow=%@ (class=%@), sender=%@", 
+        kwin, (kwin ? [kwin className] : @"nil"), sender);
+  
+  // Don't close the desktop window. If the desktop is the key window (or there
+  // is no key window), find the first visible non-desktop window instead.
+  if (kwin == nil || [kwin isKindOfClass: [GWDesktopWindow class]]) {
+    NSLog(@"Workspace performClose: desktop is key or no key window, searching for another window");
+    NSArray *windows = [NSApp windows];
+    for (NSWindow *win in windows) {
+      if (![win isKindOfClass: [GWDesktopWindow class]] && [win isVisible]) {
+        kwin = win;
+        break;
+      }
+    }
+    // If we still have no suitable window, do nothing
+    if (kwin == nil || [kwin isKindOfClass: [GWDesktopWindow class]]) {
+      NSLog(@"Workspace performClose: no suitable window to close");
+      return;
+    }
+  }
   
   if (kwin) {
-    NSDebugLLog(@"gwspace", @"Workspace performClose: calling performClose on window: %@ (class=%@)", 
+    NSLog(@"Workspace performClose: closing window: %@ (class=%@)", 
           [kwin title], [kwin className]);
-    [kwin performClose: sender];
+    [kwin close];
   } else {
-    NSDebugLLog(@"gwspace", @"Workspace performClose: no key window!");
+    NSDebugLLog(@"gwspace", @"Workspace performClose: no usable window!");
   }
 }
 

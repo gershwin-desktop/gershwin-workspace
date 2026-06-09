@@ -156,7 +156,6 @@
 {
   NSPoint location = [theEvent locationInWindow];
 	NSEvent *nextEvent = nil;
-  int dragdelay = 0;
   BOOL startdnd = NO;
   NSSize offset;
 
@@ -169,9 +168,6 @@
       break;
 
     } else {
-	    if (dragdelay < 5) {
-        dragdelay++;
-      } else {    
         NSPoint p = [nextEvent locationInWindow];
         
         offset = NSMakeSize(p.x - location.x, p.y - location.y); 

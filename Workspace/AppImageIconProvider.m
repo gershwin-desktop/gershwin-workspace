@@ -1120,6 +1120,9 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
         ASSIGN (icon, currentIcon);
         drawicon = icon;
         DESTROY (selectedicon);  // Invalidate selected icon cache too
+        
+        // Recalculate icon positioning (icnPoint, icnBounds) for the new icon size
+        [self tile];
       }
     }
   }
@@ -1249,12 +1252,28 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
       dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         NSImage *properIcon = [[NSWorkspace sharedWorkspace] iconForFile: realPath];
         if (properIcon != nil) {
-          // Update cache with proper icon on main thread
+          // Update cache with proper icon on main thread (resizing is done on main thread
+          // since NSImage lockFocus/unlockFocus may not be thread-safe in GNUstep)
           dispatch_async(dispatch_get_main_queue(), ^{
+            // Resize to standard base size (48) before caching so positioning is consistent
+            NSImage *cachedIcon = properIcon;
+            NSSize icnsize = [cachedIcon size];
+            if ((icnsize.width > 48) || (icnsize.height > 48)) {
+              NSImage *resized = [self resizedIcon: cachedIcon ofSize: 48];
+              if (resized != nil) {
+                cachedIcon = resized;
+              }
+            }
             NSMutableDictionary *updateDict = [NSMutableDictionary dictionary];
-            [updateDict setObject: properIcon forKey: [NSNumber numberWithInt: 48]];
+            [updateDict setObject: cachedIcon forKey: [NSNumber numberWithInt: 48]];
             [iconsCache setObject: updateDict forKey: key];
             [appImageLoadingState removeObjectForKey: key];
+            
+            // Trigger redraw of all windows so FSNIcon views pick up the new icon
+            NSArray *windows = [NSApp windows];
+            for (NSWindow *win in windows) {
+              [[win contentView] setNeedsDisplay: YES];
+            }
           });
         } else {
           // Loading failed, remove loading state

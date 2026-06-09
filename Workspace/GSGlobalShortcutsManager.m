@@ -23,6 +23,7 @@
 #include <string.h>
 
 #import "Workspace.h"
+#import <GNUstepGUI/GSDisplayServer.h>
 
 // Long-press threshold (seconds) for power key to trigger automatic shutdown
 #define POWER_KEY_LONG_PRESS 5.0
@@ -108,6 +109,14 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         powerKeyDown = NO;
         powerKeyTriggered = NO;
         powerKeyTimer = nil;
+
+        // Close window shortcut (Alt+W) - initialized when display is ready
+        closeWindowKeyCode = 0;
+        closeWindowModifier = 0;
+
+        // Close window shortcut (Alt+W) - initialized when display is ready
+        closeWindowKeyCode = 0;
+        closeWindowModifier = 0;
         
         // Register for distributed notifications for cross-application communication
         [[NSDistributedNotificationCenter defaultCenter] 
@@ -381,6 +390,10 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     // Ensure the hardware power key is grabbed at all times
     [self grabPowerKey];
 
+    // Grab Alt+W (Cmd+W in Gershwin) to handle window closing
+    // at the X11 level before the window manager can intercept it.
+    [self grabCloseWindowShortcut];
+
     // Consider the manager started if either we grabbed any user shortcuts
     // or we successfully grabbed the power key (so Workspace can always handle power presses)
     return (successCount > 0) || (powerKeyCode != 0);
@@ -389,6 +402,8 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
 - (void)ungrabKeys
 {
     // Ungrab keys individually so we can preserve protected shortcuts (e.g., Alt-Space)
+    [self ungrabCloseWindowShortcut];
+
     if (!shortcuts || [shortcuts count] == 0) return;
 
     NSEnumerator *enumerator = [shortcuts keyEnumerator];
@@ -1104,6 +1119,147 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
 
     if (verbose) NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Grabbed power key keycode=%d", powerKeyCode);
     return YES;
+}
+
+// X11 error handler to catch BadAccess from XGrabKey
+// Returns 0 to tell the X server we handled it (prevents abort)
+static int GWX11GrabErrorHandler(Display *dpy, XErrorEvent *ev)
+{
+    char errbuf[256];
+    XGetErrorText(dpy, ev->error_code, errbuf, sizeof(errbuf));
+    NSLog(@"GSGlobalShortcutsManager: X11 error: %s (request=%d resource=%ld)",
+        errbuf, ev->request_code, ev->resourceid);
+    return 0;
+}
+
+- (void)grabCloseWindowShortcut
+{
+    if (!display || rootWindow == None) return;
+
+    // Map the 'w' key to an X11 keycode
+    KeySym keysym = XStringToKeysym("w");
+    if (keysym == NoSymbol) {
+        NSLog(@"GSGlobalShortcutsManager: Could not find keysym for 'w'");
+        return;
+    }
+
+    // We need to use the MAIN application X11 display (the one the GNUstep
+    // backend uses to own our windows), not our separate display connection.
+    // This ensures that grabbed events flow through the normal GNUstep event
+    // path and reach the menu key-equivalent system.
+    GSDisplayServer *server = GSCurrentServer();
+    if (!server) {
+        NSLog(@"GSGlobalShortcutsManager: No display server available");
+        return;
+    }
+    Display *appDisplay = (Display *)[server serverDevice];
+    if (!appDisplay) {
+        NSLog(@"GSGlobalShortcutsManager: No X11 display from server");
+        return;
+    }
+
+    closeWindowKeyCode = XKeysymToKeycode(appDisplay, keysym);
+    if (closeWindowKeyCode == 0) {
+        NSLog(@"GSGlobalShortcutsManager: Could not map 'w' to keycode");
+        return;
+    }
+
+    // Mod1Mask = Alt key (Cmd in Gershwin)
+    closeWindowModifier = Mod1Mask;
+
+    // Install temporary error handler to catch BadAccess from XGrabKey
+    XErrorHandler old_handler = XSetErrorHandler(GWX11GrabErrorHandler);
+
+    unsigned int modifiers[] = {
+        closeWindowModifier,
+        closeWindowModifier | numlock_mask,
+        closeWindowModifier | capslock_mask,
+        closeWindowModifier | numlock_mask | capslock_mask,
+        closeWindowModifier | scrolllock_mask,
+        closeWindowModifier | numlock_mask | scrolllock_mask,
+        closeWindowModifier | capslock_mask | scrolllock_mask,
+        closeWindowModifier | numlock_mask | capslock_mask | scrolllock_mask
+    };
+
+    // Grab on each application window using the MAIN display connection.
+    // With owner_events=True: the event is delivered normally through the
+    // GNUstep backend's event path (since the grabbing display OWNS these
+    // windows). This overrides the window manager's root-window grab for
+    // our windows, and the normal menu key-equivalent processing handles it.
+    int grabCount = 0;
+    NSArray *appWindows = [NSApp windows];
+    
+    for (NSWindow *win in appWindows)
+    {
+        // Skip desktop window
+        if ([win isKindOfClass: NSClassFromString(@"GWDesktopWindow")])
+            continue;
+        
+        void *winptr = [server windowDevice: [win windowNumber]];
+        if (!winptr)
+            continue;
+        
+        Window xwindow = (Window)(uintptr_t)winptr;
+        if (xwindow == 0)
+            continue;
+        
+        for (int i = 0; i < 8; i++) {
+            XGrabKey(appDisplay, closeWindowKeyCode, modifiers[i], xwindow,
+                     True, GrabModeAsync, GrabModeAsync);
+        }
+        grabCount++;
+    }
+    
+    XSync(appDisplay, False);
+
+    // Restore previous error handler
+    XSetErrorHandler(old_handler);
+
+    if (verbose) NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Grabbed Alt+W on %d windows via main display",
+        grabCount);
+}
+
+- (void)ungrabCloseWindowShortcut
+{
+    if (closeWindowKeyCode == 0) return;
+
+    GSDisplayServer *server = GSCurrentServer();
+    if (!server) return;
+    Display *appDisplay = (Display *)[server serverDevice];
+    if (!appDisplay) return;
+
+    unsigned int modifiers[] = {
+        closeWindowModifier,
+        closeWindowModifier | numlock_mask,
+        closeWindowModifier | capslock_mask,
+        closeWindowModifier | numlock_mask | capslock_mask,
+        closeWindowModifier | scrolllock_mask,
+        closeWindowModifier | numlock_mask | scrolllock_mask,
+        closeWindowModifier | capslock_mask | scrolllock_mask,
+        closeWindowModifier | numlock_mask | capslock_mask | scrolllock_mask
+    };
+
+    // Ungrab from all application windows
+    NSArray *appWindows = [NSApp windows];
+    for (NSWindow *win in appWindows)
+    {
+        void *winptr = [server windowDevice: [win windowNumber]];
+        if (!winptr)
+            continue;
+        
+        Window xwindow = (Window)(uintptr_t)winptr;
+        if (xwindow == 0)
+            continue;
+        
+        for (int i = 0; i < 8; i++) {
+            XUngrabKey(appDisplay, closeWindowKeyCode, modifiers[i], xwindow);
+        }
+    }
+
+    closeWindowKeyCode = 0;
+    closeWindowModifier = 0;
+
+    if (verbose) NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Ungrabbed Alt+W close window");
 }
 
 // Called when the power key long-press timer fires (user held the button > POWER_KEY_LONG_PRESS).

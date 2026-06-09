@@ -533,6 +533,7 @@ shouldMakeNewConnection:(NSConnection*)newConn
     [resultsView setAllowsMultipleSelection: YES];
     [resultsView setRowHeight: CELLS_HEIGHT];
     [resultsView setIntercellSpacing: NSZeroSize];
+    [resultsView setUsesAlternatingRowBackgroundColors: YES];
     [resultsView sizeLastColumnToFit];
 
     nameColumn = [[NSTableColumn alloc] initWithIdentifier: @"name"];

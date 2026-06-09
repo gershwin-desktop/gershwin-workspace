@@ -361,6 +361,7 @@ static NSString *nibName = @"MDKWindow";
   [resultsView setAllowsMultipleSelection: YES];
   [resultsView setRowHeight: CELLS_HEIGHT];
   [resultsView setIntercellSpacing: NSZeroSize];
+  [resultsView setUsesAlternatingRowBackgroundColors: YES];
   [resultsView setAutoresizesAllColumnsToFit: YES];
 
   nameColumn = [[NSTableColumn alloc] initWithIdentifier: @"name"];

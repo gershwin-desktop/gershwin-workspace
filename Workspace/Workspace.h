@@ -399,6 +399,8 @@
 
 - (void)checkRemovableMedia:(id)sender;
 
+- (void)performClose:(id)sender;
+
 - (void)emptyTrash:(id)sender;
 
 - (void)restart:(id)sender;

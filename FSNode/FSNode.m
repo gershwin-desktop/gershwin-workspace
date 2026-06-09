@@ -910,6 +910,16 @@
     source = [source stringByDeletingLastPathComponent];            
   } 
 
+  /* Unmount operations: the node will not be valid after the volume is gone */
+  if ([operation isEqual: @"UnmountOperation"]) {
+    NSString *unmountedPath = [opinfo objectForKey: @"unmounted"];
+    if (unmountedPath) {
+      if ([path isEqual: unmountedPath] || isSubpathOfPath(unmountedPath, path)) {
+        return NO;
+      }
+    }
+  }
+
   if ([self isSubnodeOfPath: source]) {
     if ([operation isEqual: NSWorkspaceMoveOperation]
         || [operation isEqual: NSWorkspaceDestroyOperation]
@@ -1117,7 +1127,7 @@
 
 - (NSComparisonResult)compareAccordingToDate:(FSNode *)aNode
 {
-  return [[self modificationDate] compare: [aNode modificationDate]]; 
+  return [[aNode modificationDate] compare: [self modificationDate]]; 
 }
 
 - (NSComparisonResult)compareAccordingToSize:(FSNode *)aNode
