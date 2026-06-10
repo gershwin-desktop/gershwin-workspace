@@ -289,7 +289,8 @@
     }
 
 	  [scroll setDocumentView: nodeView];	
-    RELEASE (nodeView);                 
+    RELEASE (nodeView);
+    [self applyContentBackgroundColor];
     [nodeView showContentsOfNode: baseNode]; 
 
     // ================================================================
@@ -805,9 +806,24 @@
   [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
 
   [scroll setDocumentView: nodeView];	
-  RELEASE (nodeView); 
+  RELEASE (nodeView);
+  [self applyContentBackgroundColor];
   [nodeView resizeWithOldSuperviewSize: [nodeView bounds].size];
   [self scrollToBeginning];
+}
+
+- (void)applyContentBackgroundColor
+{
+  NSColor *bg = [NSColor controlBackgroundColor];
+
+  if (scroll) {
+    [scroll setBackgroundColor: bg];
+    [scroll setDrawsBackground: YES];
+  }
+
+  if (nodeView && [nodeView respondsToSelector: @selector(setBackgroundColor:)]) {
+    [(id)nodeView setBackgroundColor: bg];
+  }
 }
 
 - (void)updateDefaults
@@ -1568,7 +1584,8 @@
     }
     
     [scroll setDocumentView: nodeView];	
-    RELEASE (nodeView);                 
+    RELEASE (nodeView);
+    [self applyContentBackgroundColor];
     
     if (nodeView && baseNode) {
       [nodeView showContentsOfNode: baseNode]; 

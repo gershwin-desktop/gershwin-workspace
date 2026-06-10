@@ -130,6 +130,7 @@
 - (void)columnsWidthChanged:(NSNotification *)notification;
 
 - (void)updateDefaults;
+- (void)applyContentBackgroundColor;
 
 // DS_Store file watching for interoperability
 - (void)setupDSStoreWatcher;

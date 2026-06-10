@@ -33,6 +33,7 @@
 #import "FSNBrowserColumn.h"
 #import "FSNIcon.h"
 #import "FSNFunctions.h"
+#import "../Workspace/Workspace.h"
 
 #define DOUBLE_CLICK_LIMIT  300
 #define EDIT_CLICK_LIMIT   1000
@@ -315,6 +316,75 @@
     }
 
   [super drawRect: rect];
+}
+
+- (NSMenu *)menuForEvent:(NSEvent *)theEvent
+{
+  if ([theEvent type] == NSRightMouseDown)
+    {
+      NSPoint location = [theEvent locationInWindow];
+      NSPoint localPoint = [self convertPoint: location fromView: nil];
+      NSInteger row, col;
+
+      if ([self getRow: &row column: &col forPoint: localPoint])
+        {
+          NSArray *cells = [self cells];
+
+          if (row >= 0 && row < (NSInteger)[cells count])
+            {
+              FSNBrowserCell *cell = [cells objectAtIndex: row];
+              FSNode *clickedNode = [cell node];
+              NSArray *selcells = [self selectedCells];
+              NSMutableArray *selnodes = [NSMutableArray array];
+              NSUInteger i;
+
+              for (i = 0; i < [selcells count]; i++)
+                {
+                  FSNode *node = [[selcells objectAtIndex: i] node];
+                  if (node && [node isValid])
+                    {
+                      [selnodes addObject: node];
+                    }
+                }
+
+              // If the clicked node is in the selection, use the full selection.
+              // Otherwise, use just the clicked node.
+              if (clickedNode && [clickedNode isValid])
+                {
+                  NSArray *menunodes = nil;
+
+                  if ([selnodes containsObject: clickedNode])
+                    {
+                      menunodes = selnodes;
+                    }
+                  else
+                    {
+                      menunodes = [NSArray arrayWithObject: clickedNode];
+                    }
+
+                  return [[Workspace gworkspace] contextMenuForNodes: menunodes
+                                                         openTarget: [self window]
+                                                      openWithTarget: [Workspace gworkspace]
+                                                         infoTarget: [Workspace gworkspace]
+                                                    duplicateTarget: [self window]
+                                                      recycleTarget: [self window]
+                                                        ejectTarget: [self window]
+                                                         openAction: @selector(openSelection:)
+                                                    duplicateAction: @selector(duplicateFiles:)
+                                                      recycleAction: @selector(recycleFiles:)
+                                                        ejectAction: @selector(ejectVolumes:)
+                                                   includeOpenWith: YES];
+                }
+            }
+        }
+      else
+        {
+          // Right-clicked on empty space
+          return [[Workspace gworkspace] emptySpaceContextMenuForViewer: [self window]];
+        }
+    }
+
+  return [super menuForEvent: theEvent];
 }
 
 @end
