@@ -8,6 +8,12 @@
 			"isBackground": false,
 			"problemMatcher": [],
 			"group": "build"
+		},
+		{
+			"label": "build-workspace",
+			"type": "shell",
+			"command": "doit",
+			"group": "build"
 		}
 	]
 }

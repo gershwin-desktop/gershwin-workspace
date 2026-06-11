@@ -255,8 +255,17 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 		{
 		  /* Regular disk mount (physical disk, SSHFS, etc.) - use disk icon */
 		  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: isDiskImageVolume=NO for %@, using hard disk icon", nodepath);
-		  key = @"disk";
-		  baseIcon = hardDiskIcon;
+
+		  /* Check if this is a network (FUSE) filesystem mount; use Network icon */
+		  NSImage *netIcon = [self networkIconForPath: nodepath];
+		  if (netIcon) {
+		    baseIcon = netIcon;
+		    key = nil;  /* Use per-path caching via the path itself */
+		    icon = [self cachedIconOfSize: size forKey: nodepath addBaseIcon: baseIcon];
+		  } else {
+		    key = @"disk";
+		    baseIcon = hardDiskIcon;
+		  }
 		}
 	    }
 	}
@@ -934,6 +943,47 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
   if (usesThumbnails && tumbsCache) {
     return [tumbsCache objectForKey: apath];
   }
+  return nil;
+}
+
+/**
+ * Returns a Network icon if the given path is a FUSE network filesystem mount
+ * (sshfs, etc.), or nil otherwise. Checks /proc/mounts for the filesystem type.
+ */
+- (NSImage *)networkIconForPath:(NSString *)path
+{
+  if (path == nil) return nil;
+
+  NSString *procMounts = @"/proc/mounts";
+  NSString *mountsContent;
+  mountsContent = [NSString stringWithContentsOfFile: procMounts
+                                             encoding: NSUTF8StringEncoding
+                                                error: NULL];
+  if (mountsContent == nil) return nil;
+
+  NSArray *lines = [mountsContent componentsSeparatedByString: @"\n"];
+  for (NSString *line in lines) {
+    if ([line length] == 0) continue;
+    NSArray *parts = [line componentsSeparatedByString: @" "];
+    if ([parts count] < 3) continue;
+    NSString *target = [parts objectAtIndex: 1];
+    if ([target isEqualToString: path]) {
+      NSString *fstype = [parts objectAtIndex: 2];
+      if ([fstype hasPrefix: @"fuse."]) {
+        NSImage *ic = [NSImage imageNamed: @"Network"];
+        if (ic == nil) {
+          ic = [NSImage imageNamed: @"Computer"];
+        }
+        if (ic) {
+          [ic setScalesWhenResized: YES];
+          [ic setSize: NSMakeSize(48, 48)];
+          return ic;
+        }
+      }
+      break;
+    }
+  }
+
   return nil;
 }
 

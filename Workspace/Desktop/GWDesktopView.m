@@ -144,6 +144,59 @@
   [vnode setMountPoint: YES];
   [self removeRepOfSubnode: vnode];
   [self addRepForSubnode: vnode];
+
+  /* Track this volume in mountedVolumes so the periodic timer check
+   * (showMountedVolumes) can later detect when it is unmounted and
+   * remove the desktop icon + update the sidebar.  Without this, volumes
+   * mounted by NetworkVolumeManager (e.g. sshfs) would never be in
+   * mountedVolumes if NSWorkspace.mountedLocalVolumePaths does not
+   * report FUSE mounts, making them invisible to the timer check. */
+  {
+    NSString *norm = [vpath stringByStandardizingPath];
+    if (norm && [mountedVolumes containsObject: norm] == NO)
+      {
+        [mountedVolumes addObject: norm];
+      }
+  }
+
+  /* Mark network volumes as expected unmounts briefly, so transient
+   * disconnections (e.g. sshfs reconnecting) don't trigger a spurious
+   * "Volume Removed Unexpectedly" dialog.  Regular volumes (USB sticks,
+   * etc.) should NOT be marked — if they disappear unexpectedly, the
+   * dialog must appear.  We identify network volumes by checking with
+   * NetworkVolumeManager. */
+  {
+    NSSet *netPaths = [[NetworkVolumeManager sharedManager] allMountedPaths];
+    if ([netPaths containsObject: vpath])
+      {
+        [expectedUnmountPaths setObject: [NSDate date] forKey: vpath];
+        [[Workspace gworkspace] noteUserInitiatedUnmountAtPath: vpath];
+      }
+  }
+
+  /* Navigate any viewer showing the parent directory to this new volume,
+   * so the user sees the volume contents immediately on mount. */
+  {
+    NSString *parentPath = [vpath stringByDeletingLastPathComponent];
+    FSNode *parentNode = [FSNode nodeWithPath: parentPath];
+    FSNode *volumeNode = [FSNode nodeWithPath: vpath];
+    NSArray *vwrs = [[[Workspace gworkspace] viewersManager] viewersForBaseNode: parentNode];
+    for (id viewer in vwrs)
+      {
+        NSDebugLLog(@"gwspace", @"GWDesktopView: Navigating viewer %@ from %@ to %@",
+                    viewer, parentPath, vpath);
+        NS_DURING
+          {
+            [viewer showContentsOfNode: volumeNode];
+          }
+        NS_HANDLER
+          {
+            NSDebugLLog(@"gwspace", @"GWDesktopView: Exception navigating viewer: %@", localException);
+          }
+        NS_ENDHANDLER
+      }
+  }
+
   [self tile];
   NSDebugLLog(@"gwspace", @"GWDesktopView: Added desktop icon for mount %@", vpath);
 }
@@ -172,7 +225,14 @@
    * The polling timer in showMountedVolumes needs to see it
    * to avoid a false "unexpected unmount" warning.
    * showMountedVolumes cleans up after the check. */
-    
+
+  /* Remove from the tracked mountedVolumes array so the periodic
+   * timer check doesn't try to process it again.  This is critical
+   * for volumes mounted via newVolumeMountedAtPath: (e.g. network
+   * volumes) since they are added to mountedVolumes there but would
+   * otherwise never be cleaned up. */
+  [mountedVolumes removeObject: vpath];
+
   icon = [self repOfSubnodePath: vpath];
 
   if (icon)
@@ -209,6 +269,24 @@
           
           [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemDidChangeNotification" object:opinfo];
         }
+
+      /* Also trigger sidebar rebuild by posting a file watcher notification
+         for each mount root that contains this path.  The sidebar listens
+         to GWFileWatcherFileDidChangeNotification and rebuilds its Volumes
+         section when a path under a mount root changes.  This is the most
+         reliable way to update the sidebar after desktop icon removal. */
+      {
+        NSArray *roots = [Workspace volumeMountRoots];
+        for (NSString *root in roots) {
+          if ([vpath isEqualToString: root] || [vpath hasPrefix: [root stringByAppendingString: @"/"]]) {
+            NSDictionary *winfo = @{ @"path": root };
+            [[NSNotificationCenter defaultCenter]
+              postNotificationName: @"GWFileWatcherFileDidChangeNotification"
+                            object: winfo];
+            break;
+          }
+        }
+      }
     }
 }
 
@@ -280,6 +358,83 @@
 	  [volumesToRemove addObject:v];
 	}
     }
+
+  /* Verify volumes-to-remove against /proc/mounts as a reliability check.
+   * This catches transient disconnections (e.g. sshfs reconnecting) where
+   * the volume temporarily vanishes from mountedLocalVolumePaths but is
+   * actually still mounted.  Without this, such transient events would
+   * trigger a false "Volume Removed Unexpectedly" dialog. */
+  if ([volumesToRemove count] > 0)
+    {
+      NSSet *procMounted = nil;
+      NSString *procContent = [NSString stringWithContentsOfFile: @"/proc/mounts"
+                                                       encoding: NSUTF8StringEncoding
+                                                          error: NULL];
+      if (procContent)
+        {
+          NSMutableSet *mounts = [NSMutableSet set];
+          NSArray *lines = [procContent componentsSeparatedByString: @"\n"];
+          for (NSString *line in lines)
+            {
+              if ([line length] == 0) continue;
+              NSArray *parts = [line componentsSeparatedByString: @" "];
+              if ([parts count] >= 2)
+                {
+                  [mounts addObject: [parts objectAtIndex: 1]];
+                }
+            }
+          procMounted = mounts;
+        }
+
+      if (procMounted)
+        {
+          /* Iterate backwards to safely remove while enumerating */
+          for (NSInteger j = [volumesToRemove count] - 1; j >= 0; j--)
+            {
+              NSString *v = [volumesToRemove objectAtIndex: j];
+              if ([procMounted containsObject: v])
+                {
+                  NSDebugLLog(@"gwspace",
+                    @"GWDesktopView: %@ is still mounted (found in /proc/mounts), not removing",
+                    v);
+                  [volumesToRemove removeObjectAtIndex: j];
+                }
+            }
+        }
+    }
+
+  /* Check for CLI-triggered unmount flag file.  The eject(1) and umount(1)
+   * tools write the unmount path here before executing the real command.
+   * If any of the volumes-to-remove match, we mark them as expected to
+   * suppress the dialog and let the normal removal flow clean up icons. */
+  if ([volumesToRemove count] > 0)
+    {
+      NSString *flagPath = @"/tmp/.gw-umount-flag";
+      NSString *flagContent = [NSString stringWithContentsOfFile: flagPath
+                                                        encoding: NSUTF8StringEncoding
+                                                           error: NULL];
+      if (flagContent)
+        {
+          flagContent = [flagContent stringByTrimmingCharactersInSet:
+                          [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+          if ([flagContent length] > 0)
+            {
+              for (i = 0; i < [volumesToRemove count]; i++)
+                {
+                  NSString *v = [volumesToRemove objectAtIndex:i];
+                  if ([v isEqualToString: flagContent])
+                    {
+                      /* Mark as expected unmount and record in Workspace */
+                      [expectedUnmountPaths setObject: [NSDate date] forKey: v];
+                      [[Workspace gworkspace] noteUserInitiatedUnmountAtPath: v];
+                      NSDebugLLog(@"gwspace", @"GWDesktopView: CLI unmount flag matched for %@", v);
+                    }
+                }
+            }
+          /* Remove the flag file after reading */
+          unlink([flagPath fileSystemRepresentation]);
+        }
+    }
   
   // Check if any volumes were forcibly removed (not in expected unmounts)
   if ([volumesToRemove count] > 0)
@@ -301,12 +456,51 @@
               /* This unmount was expected — suppress the warning. */
               NSDebugLLog(@"gwspace", @"GWDesktopView: Suppressing unexpected-unmount warning for %@ (expected)", v);
             }
+          else if ([[[NetworkVolumeManager sharedManager] recentlyUnmountedPaths] containsObject: v])
+            {
+              /* Network volume unmounted through NetworkVolumeManager — suppress. */
+              NSDebugLLog(@"gwspace", @"GWDesktopView: Suppressing unexpected-unmount warning for %@ (network)", v);
+            }
+          else if ([[Workspace gworkspace] isRecentUserUnmount: v])
+            {
+              /* User-initiated unmount via Workspace's unmountVolumeAtPath: — suppress. */
+              NSDebugLLog(@"gwspace", @"GWDesktopView: Suppressing unexpected-unmount warning for %@ (user-initiated)", v);
+            }
           else
             {
               [unexpectedRemovals addObject:v];
             }
         }
       
+      /* Final safety check: re-scan /proc/mounts for any volume in
+       * unexpectedRemovals.  If the volume is still mounted, it was
+       * a transient glitch — remove it from the list. */
+      if ([unexpectedRemovals count] > 0)
+        {
+          NSString *procContent = [NSString stringWithContentsOfFile: @"/proc/mounts"
+                                                            encoding: NSUTF8StringEncoding
+                                                               error: NULL];
+          if (procContent)
+            {
+              for (NSInteger ri = [unexpectedRemovals count] - 1; ri >= 0; ri--)
+                {
+                  NSString *v = [unexpectedRemovals objectAtIndex: ri];
+                  NSRange r = [procContent rangeOfString: v];
+                  if (r.location != NSNotFound)
+                    {
+                      /* The path appears in /proc/mounts — still mounted */
+                      NSDebugLLog(@"gwspace",
+                        @"GWDesktopView: Final check — %@ is still mounted, removing from unexpected",
+                        v);
+                      [unexpectedRemovals removeObjectAtIndex: ri];
+                      /* Also add to expected to prevent re-trigger next cycle */
+                      [expectedUnmountPaths setObject: [NSDate date] forKey: v];
+                      [[Workspace gworkspace] noteUserInitiatedUnmountAtPath: v];
+                    }
+                }
+            }
+        }
+
       /* Clean up expected-unmount entries for volumes that are now gone. */
       for (i = 0; i < [volumesToRemove count]; i++)
         {
@@ -328,19 +522,30 @@
       // Show alert for unexpected removals
       if ([unexpectedRemovals count] > 0)
         {
+          /* Deduplicate the list — the same path may appear multiple times
+           * if mountedVolumes had duplicates. */
+          NSMutableArray *uniqueRemovals = [NSMutableArray arrayWithCapacity: [unexpectedRemovals count]];
+          for (NSString *v in unexpectedRemovals)
+            {
+              if (![uniqueRemovals containsObject: v])
+                {
+                  [uniqueRemovals addObject: v];
+                }
+            }
+
           /* Mark these volumes as expected before showing the alert, so that
            * if NSRunAlertPanel re-enters the run loop (e.g. via MPointWatcher
            * timer) and showMountedVolumes is called again, the duplicate
            * alert is suppressed.  The entries will be cleaned up below. */
-          for (NSString *v in unexpectedRemovals)
+          for (NSString *v in uniqueRemovals)
             {
               [expectedUnmountPaths setObject:[NSDate date] forKey:v];
             }
 
-          NSString *volumeList = [unexpectedRemovals componentsJoinedByString:@"\n"];
+          NSString *volumeList = [uniqueRemovals componentsJoinedByString:@"\n"];
           NSString *message;
           
-          if ([unexpectedRemovals count] == 1)
+          if ([uniqueRemovals count] == 1)
             {
               message = [NSString stringWithFormat:
                 NSLocalizedString(@"The volume at the following path was removed without being properly ejected:\n\n%@\n\n"
@@ -361,7 +566,7 @@
           
           /* Clean up the expected-unmount entries we added above, now that
            * the alert has been dismissed and re-entrancy is no longer a risk. */
-          for (NSString *v in unexpectedRemovals)
+          for (NSString *v in uniqueRemovals)
             {
               [expectedUnmountPaths removeObjectForKey:v];
             }
@@ -406,7 +611,14 @@
   // we Tile only when adding, since workspaceDidUnmountVolumeAtPath does it for us
   if (added)
     {
-      [mountedVolumes addObjectsFromArray:newVolumes];
+      for (NSString *vol in newVolumes)
+        {
+          NSString *norm = [vol stringByStandardizingPath];
+          if (norm && [mountedVolumes containsObject: norm] == NO)
+            {
+              [mountedVolumes addObject: norm];
+            }
+        }
       [self tile];
     }
 }

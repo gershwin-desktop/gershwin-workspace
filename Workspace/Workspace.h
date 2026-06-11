@@ -650,6 +650,16 @@
 - (NSString *)windowSearchString;
 - (void)setWindowSearchString:(NSString *)searchString;
 
+/*
+ * User-initiated unmount tracking.
+ * Records paths that the user intentionally unmounts via the GUI,
+ * so showMountedVolumes in GWDesktopView can reliably suppress the
+ * "Volume Removed Unexpectedly" dialog regardless of how the
+ * unmount is performed.
+ */
+- (void)noteUserInitiatedUnmountAtPath:(NSString *)path;
+- (BOOL)isRecentUserUnmount:(NSString *)path;
+
 @end
 
 

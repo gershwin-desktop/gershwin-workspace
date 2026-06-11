@@ -37,6 +37,7 @@
 #import "FSNFunctions.h"
 #import "Workspace.h"
 #import "GWDesktopManager.h"
+#import "NetworkVolumeManager.h"
 
 
 static GWViewersManager *vwrsmanager = nil;
@@ -417,7 +418,9 @@ static GWViewersManager *vwrsmanager = nil;
     [self changeHistoryOwner: nil];
 
   [helpManager removeContextHelpForObject: [[aviewer win] contentView]];
-  [viewers removeObject: aviewer];
+  if ([viewers containsObject: aviewer]) {
+    [viewers removeObject: aviewer];
+  }
 }
 
 - (void)closeInvalidViewers:(NSArray *)vwrs
@@ -446,14 +449,19 @@ static GWViewersManager *vwrsmanager = nil;
   for (i = 0; i < [vwrs count]; i++)
     {
       id viewer = [vwrs objectAtIndex: i];
-      NSDate *limit = [NSDate dateWithTimeIntervalSinceNow: 0.1];
-    
+
       if (viewer == [historyWindow viewer])
         [self changeHistoryOwner: nil];
 
       [viewer deactivate];
-      [[NSRunLoop currentRunLoop] runUntilDate: limit];
       [helpManager removeContextHelpForObject: [[viewer win] contentView]];
+    }
+
+  /* Remove all viewers at once after the loop, to avoid re-entrancy
+   * issues from run loop events triggered by deactivate. */
+  for (i = 0; i < [vwrs count]; i++)
+    {
+      id viewer = [vwrs objectAtIndex: i];
       [viewers removeObject: viewer];
     }
 }
@@ -929,13 +937,12 @@ static GWViewersManager *vwrsmanager = nil;
     return;
 
   NSMutableArray *viewersToClose = [NSMutableArray array];
-  int i;
 
   NSDebugLLog(@"gwspace", @"GWViewersManager: closeViewersForUnmountedPath: %@", unmountedPath);
 
-  for (i = 0; i < [viewers count]; i++)
+  NSArray *vwCopy = [viewers copy];
+  for (id viewer in vwCopy)
     {
-      id viewer = [viewers objectAtIndex: i];
       if ([viewer invalidated] == NO)
         {
           NSString *viewerPath = [[viewer baseNode] path];
@@ -977,6 +984,8 @@ static GWViewersManager *vwrsmanager = nil;
       NSDebugLLog(@"gwspace", @"GWViewersManager: closing %ld viewers", (long)[viewersToClose count]);
       [self closeInvalidViewers: viewersToClose];
     }
+
+  [vwCopy release];
 }
 
 - (void)mountedVolumesDidChange
@@ -1016,12 +1025,19 @@ static GWViewersManager *vwrsmanager = nil;
       NSDebugLLog(@"gwspace", @"GWViewersManager:   mounted: %@", vol);
     }
 
-  for (id viewer in viewers)
+  /* Iterate a copy of the viewers array to avoid crashes if
+   * closeInvalidViewers: removes entries from the original array
+   * during iteration (e.g. via closeViewersForUnmountedPath: called
+   * from within showMountedVolumes). */
+  NSArray *viewersCopy = [viewers copy];
+  for (id viewer in viewersCopy)
     {
       if ([viewer invalidated] == NO)
         {
           FSNode *node = [viewer baseNode];
+          if (node == nil) continue;
           NSString *vpath = [node path];
+          if (vpath == nil) continue;
 
           NSDebugLLog(@"gwspace", @"GWViewersManager:   viewer path=%@ isValid=%d", vpath, [node isValid]);
 
@@ -1064,11 +1080,90 @@ static GWViewersManager *vwrsmanager = nil;
                         }
                     }
 
+                  /* Also check NetworkVolumeManager for FUSE mounts (sshfs etc.)
+                     that NSWorkspace may not report.  Check not only for an
+                     exact match (viewer showing the root of the network volume)
+                     but also for subdirectories (viewer showing a path under
+                     the network volume). */
                   if (onMountedVolume == NO)
                     {
-                      NSDebugLLog(@"gwspace", @"GWViewersManager:   -> CLOSING (not on any mounted volume)");
-                      [viewer invalidate];
-                      [viewersToClose addObject: viewer];
+                      NSSet *netPaths = [[NetworkVolumeManager sharedManager] allMountedPaths];
+                      if ([netPaths containsObject: vpath])
+                        {
+                          NSDebugLLog(@"gwspace", @"GWViewersManager:     on mounted network volume %@", vpath);
+                          onMountedVolume = YES;
+                        }
+                      else
+                        {
+                          /* Check if vpath is a subdirectory of any network mount */
+                          for (NSString *np in netPaths)
+                            {
+                              NSString *npSlash = [np stringByAppendingString: @"/"];
+                              if ([vpath hasPrefix: npSlash])
+                                {
+                                  NSDebugLLog(@"gwspace",
+                                    @"GWViewersManager:     under mounted network volume %@", np);
+                                  onMountedVolume = YES;
+                                  break;
+                                }
+                            }
+                        }
+                    }
+
+                  if (onMountedVolume == NO)
+                    {
+                      /* Before closing, check if this path is a PARENT of any
+                       * currently mounted volume (e.g. viewer shows /media/devuan/
+                       * while /media/devuan/Asterisk is mounted).  Such paths are
+                       * still valid and should NOT be closed — only the volume
+                       * path itself or its subdirectories should trigger a close.
+                       *
+                       * Normalize: strip trailing slash if present (some viewer
+                       * base nodes include it), then append a single slash. */
+                      NSString *vpn = vpath;
+                      if ([vpn hasSuffix: @"/"]) {
+                        vpn = [vpn substringToIndex: [vpn length] - 1];
+                      }
+                      vpn = [vpn stringByAppendingString: @"/"];
+                      BOOL isParentOfMounted = NO;
+                      for (NSString *vol in currentVolumeSet)
+                        {
+                          if ([vol hasPrefix: vpn])
+                            {
+                              NSDebugLLog(@"gwspace",
+                                @"GWViewersManager:     is parent of mounted volume %@", vol);
+                              isParentOfMounted = YES;
+                              break;
+                            }
+                        }
+                      /* Same check for network volumes */
+                      if (isParentOfMounted == NO)
+                        {
+                          NSSet *netPaths = [[NetworkVolumeManager sharedManager] allMountedPaths];
+                          for (NSString *np in netPaths)
+                            {
+                              if ([np hasPrefix: vpn])
+                                {
+                                  NSDebugLLog(@"gwspace",
+                                    @"GWViewersManager:     is parent of mounted network volume %@", np);
+                                  isParentOfMounted = YES;
+                                  break;
+                                }
+                            }
+                        }
+
+                      if (isParentOfMounted == NO)
+                        {
+                          NSDebugLLog(@"gwspace", @"GWViewersManager:   -> CLOSING (not on any mounted volume)");
+                          [viewer invalidate];
+                          [viewersToClose addObject: viewer];
+                        }
+                      else
+                        {
+                          /* Keep the viewer open — it is showing a parent of a
+                           * mounted volume, which is still a valid location. */
+                          NSDebugLLog(@"gwspace", @"GWViewersManager:   -> KEEPING (parent of mounted volume)");
+                        }
                     }
                   else
                     {
@@ -1085,14 +1180,16 @@ static GWViewersManager *vwrsmanager = nil;
 
   [self closeInvalidViewers: viewersToClose];
 
-  /* Then reload sidebars for remaining viewers */
-  for (id viewer in viewers)
+  /* Then reload sidebars for remaining viewers (use the same copy) */
+  for (id viewer in viewersCopy)
     {
       if ([viewer invalidated] == NO)
         {
           [viewer reloadSidebar];
         }
     }
+
+  [viewersCopy release];
 }
 
 - (void)newVolumeMounted:(NSNotification *)notif
@@ -1149,13 +1246,15 @@ static GWViewersManager *vwrsmanager = nil;
     [[NSNotificationCenter defaultCenter] postNotificationName:@"GWFileSystemDidChangeNotification" object:didInfo];
     
     /* Update the Volumes section in all open viewer windows' sidebars. */
-    for (id viewer in viewers)
+    NSArray *viewersCopy2 = [viewers copy];
+    for (id viewer in viewersCopy2)
       {
         if ([viewer invalidated] == NO)
           {
             [viewer reloadSidebar];
           }
       }
+    [viewersCopy2 release];
   } else {
     NSDebugLLog(@"gwspace", @"mountedVolumeDidUnmount notification received with empty NSDevicePath");
   }

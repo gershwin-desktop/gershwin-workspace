@@ -676,9 +676,37 @@ static FSNodeRep *shared = nil;
   }
 
   /* Check if the path is under /Volumes — these are always disk image
-   * or removable media mounts and should use the CD icon. */
+   * or removable media mounts and should use the CD icon.
+   * Exception: network filesystem mounts (fuse.sshfs, fuse.*) which
+   * are also placed under /Volumes but are not disk images. */
   if ([path hasPrefix: @"/Volumes/"]) {
-    return YES;
+    NSString *procMounts = @"/proc/mounts";
+    NSString *mountsContent;
+    mountsContent = [NSString stringWithContentsOfFile: procMounts
+                                             encoding: NSUTF8StringEncoding
+                                                error: NULL];
+    if (mountsContent) {
+      BOOL isNetworkMount = NO;
+      NSArray *lines = [mountsContent componentsSeparatedByString: @"\n"];
+      for (NSString *line in lines) {
+        if ([line length] == 0) continue;
+        NSArray *parts = [line componentsSeparatedByString: @" "];
+        if ([parts count] < 3) continue;
+        NSString *target = [parts objectAtIndex: 1];
+        if ([target isEqualToString: path]) {
+          NSString *fstype = [parts objectAtIndex: 2];
+          if ([fstype hasPrefix: @"fuse."]) {
+            isNetworkMount = YES;
+            break;
+          }
+        }
+      }
+      if (!isNetworkMount) {
+        return YES;
+      }
+    } else {
+      return YES;
+    }
   }
 
   return NO;

@@ -44,6 +44,7 @@ static NetworkVolumeManager *sharedInstance = nil;
     mountedVolumes = [[NSMutableDictionary alloc] init];
     mountedVolumesPIDs = [[NSMutableDictionary alloc] init];
     webdavMounts = [[NSMutableDictionary alloc] init];
+    recentlyUnmountedPaths = [[NSMutableSet alloc] init];
     fm = [NSFileManager defaultManager];
     lastErrorMessage = nil;
     
@@ -63,6 +64,7 @@ static NetworkVolumeManager *sharedInstance = nil;
   [mountedVolumes release];
   [mountedVolumesPIDs release];
   [webdavMounts release];
+  [recentlyUnmountedPaths release];
   RELEASE(lastErrorMessage);
   [super dealloc];
 }
@@ -167,6 +169,41 @@ static NetworkVolumeManager *sharedInstance = nil;
 - (BOOL)isServiceMounted:(NetworkServiceItem *)serviceItem
 {
   return [self mountPointForService:serviceItem] != nil;
+}
+
+- (NSSet *)allMountedPaths
+{
+  NSMutableSet *paths = [NSMutableSet setWithArray: [mountedVolumes allValues]];
+
+  /* Also scan /proc/mounts for fuse.sshfs mounts that may have survived
+     from a previous session and aren't in our tracked dictionary yet. */
+  NSString *procMounts = @"/proc/mounts";
+  NSString *mountsContent = [NSString stringWithContentsOfFile: procMounts
+                                                     encoding: NSUTF8StringEncoding
+                                                        error: NULL];
+  if (mountsContent) {
+    NSArray *lines = [mountsContent componentsSeparatedByString: @"\n"];
+    for (NSString *line in lines) {
+      if ([line length] == 0) continue;
+      NSArray *parts = [line componentsSeparatedByString: @" "];
+      if ([parts count] < 3) continue;
+      NSString *fstype = [parts objectAtIndex: 2];
+      /* Match any FUSE-based network filesystem type */
+      if ([fstype hasPrefix: @"fuse."]) {
+        NSString *target = [parts objectAtIndex: 1];
+        if (target) {
+          [paths addObject: target];
+        }
+      }
+    }
+  }
+
+  return paths;
+}
+
+- (NSSet *)recentlyUnmountedPaths
+{
+  return [[recentlyUnmountedPaths copy] autorelease];
 }
 
 - (NSString *)findExistingMountForHost:(NSString *)hostname username:(NSString *)username
@@ -609,6 +646,11 @@ static NetworkVolumeManager *sharedInstance = nil;
 {
   if (!path) return NO;
 
+  /* Record this path as recently unmounted BEFORE doing anything else,
+     so showMountedVolumes in GWDesktopView can reliably suppress the
+     "Volume Removed Unexpectedly" dialog regardless of timing. */
+  [recentlyUnmountedPaths addObject: path];
+
   /* Find the service identifier for this path to get the PID */
   NSString *foundId = nil;
   for (NSString *ident in [mountedVolumes allKeys]) {
@@ -619,8 +661,27 @@ static NetworkVolumeManager *sharedInstance = nil;
     }
   }
 
-  /* Remove filesystem watchers to prevent "target is busy" errors */
+  /* Mark the path as an expected unmount so the desktop monitor
+     does not show a "Volume Removed Unexpectedly" dialog.
+     workspaceWillUnmountVolumeAtPath: is the canonical way to do this —
+     it adds the path to expectedUnmountPaths and performs any needed
+     cleanup (checkLockedReps, etc.). */
   id gworkspace = [Workspace gworkspace];
+  if (gworkspace) {
+    id desktopManager = [gworkspace desktopManager];
+    if (desktopManager) {
+      id desktopView = [desktopManager desktopView];
+      if (desktopView) {
+        if ([desktopView respondsToSelector: @selector(workspaceWillUnmountVolumeAtPath:)]) {
+          [desktopView workspaceWillUnmountVolumeAtPath: path];
+        } else if ([desktopView respondsToSelector: @selector(markExpectedUnmountForPath:)]) {
+          [desktopView markExpectedUnmountForPath: path];
+        }
+      }
+    }
+  }
+
+  /* Remove filesystem watchers to prevent "target is busy" errors */
   if (gworkspace) {
     NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Removing filesystem watchers for %@", path);
     [gworkspace removeWatcherForPath:path];
@@ -750,25 +811,11 @@ static NetworkVolumeManager *sharedInstance = nil;
       NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Exception while running fusermount: %@", exception);
       [task release];
     }
-  } else {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Process kill succeeded, attempting cleanup with fusermount");
-    /* Even if kill succeeded, try fusermount for cleanup */
-    NSTask *cleanupTask = [[NSTask alloc] init];
-    [cleanupTask setLaunchPath:@"/usr/bin/fusermount"];
-    [cleanupTask setArguments:@[@"-u", path]];
-    
-    @try {
-      [cleanupTask launch];
-      [cleanupTask waitUntilExit];
-      
-      if ([cleanupTask terminationStatus] != 0) {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Cleanup fusermount failed (but process kill succeeded)");
-      }
-    } @catch (NSException *e) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Cleanup fusermount exception: %@", e);
-    }
-    [cleanupTask release];
   }
+  /* Note: if the process kill succeeded, the FUSE mount is already gone
+   * from the kernel.  We do NOT attempt a cleanup fusermount here because
+   * it can hang indefinitely on "Device or resource busy" even though the
+   * mount is already gone.  The /etc/mtab entry (if any) is harmless. */
 
   if (unmountSuccess) {
     /* Clean up our tracking data */

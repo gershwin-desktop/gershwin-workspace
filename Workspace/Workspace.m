@@ -44,6 +44,12 @@
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
 #import "Workspace.h"
+
+/* Set of paths the user has recently unmounted via the GUI.
+ * Used by showMountedVolumes to suppress the "Unexpectedly" dialog.
+ * Paths are removed after a short timeout. */
+static NSMutableSet *recentUserUnmounts = nil;
+static NSTimeInterval recentUserUnmountTimeout = 5.0;
 #import "Dialogs.h"
 #import "AboutController.h"
 #import "OpenWithController.h"
@@ -943,7 +949,23 @@ NSString *_pendingSystemActionTitle = nil;
           selector: @selector(applicationForExtensionsDidChange:) 
               name: @"GWAppForExtensionDidChangeNotification"
             object: nil];
-  
+
+  /* Listen for user-initiated unmount notifications from the eject(1)
+   * and umount(1) CLI tools, so the "Volume Removed Unexpectedly"
+   * dialog is suppressed when those tools are used. */
+  [dnc addObserver: self
+          selector: @selector(workspaceWillUnmountFromCLI:)
+              name: @"GWWorkspaceWillUnmountNotification"
+            object: nil];
+
+  /* Listen for successful unmount notifications from the eject(1) and
+   * umount(1) CLI tools, so the desktop icon is removed and the volume
+   * list is updated. */
+  [dnc addObserver: self
+          selector: @selector(workspaceDidUnmountFromCLI:)
+              name: @"GWWorkspaceDidUnmountNotification"
+            object: nil];
+
   [self initializeWorkspace];
   
   // Initialize global shortcuts manager only if this instance is rendering the desktop
@@ -2282,6 +2304,7 @@ NSString *_pendingSystemActionTitle = nil;
     
     /* Mark as expected unmount so the desktop does not show a spurious
        "Volume Removed Unexpectedly" warning. */
+    [self noteUserInitiatedUnmountAtPath: umpath];
     NSDictionary *unmountInfo = @{ @"NSDevicePath": umpath };
     [[NSNotificationCenter defaultCenter]
       postNotificationName:NSWorkspaceWillUnmountNotification
@@ -2309,6 +2332,78 @@ NSString *_pendingSystemActionTitle = nil;
                           source: basePath destination: trashPath 
                            files: files tag: &tag];
     }
+}
+
+- (void)noteUserInitiatedUnmountAtPath:(NSString *)path
+{
+  if (!path) return;
+  if (recentUserUnmounts == nil) {
+    recentUserUnmounts = [[NSMutableSet alloc] init];
+  }
+  [recentUserUnmounts addObject: path];
+  NSDebugLLog(@"gwspace", @"Workspace: Recorded user-initiated unmount: %@", path);
+  
+  /* Also mark on the desktop view directly, providing redundancy.
+   * Use the class method to ensure we always get the valid singleton. */
+  id deskMgr = [GWDesktopManager desktopManager];
+  id deskView = [deskMgr desktopView];
+  if ([deskView respondsToSelector: @selector(workspaceWillUnmountVolumeAtPath:)]) {
+    [deskView workspaceWillUnmountVolumeAtPath: path];
+  }
+  
+  /* Schedule cleanup after timeout */
+  [self performSelector: @selector(_cleanupRecentUnmount:)
+             withObject: path
+             afterDelay: recentUserUnmountTimeout];
+}
+
+- (void)workspaceWillUnmountFromCLI:(NSNotification *)notif
+{
+  NSDictionary *userInfo = [notif userInfo];
+  if (!userInfo) return;
+  
+  NSString *path = [userInfo objectForKey: @"GWUnmountPath"];
+  if (!path) return;
+  
+  NSDebugLLog(@"gwspace", @"Workspace: Received CLI unmount notification for %@", path);
+  [self noteUserInitiatedUnmountAtPath: path];
+}
+
+- (void)workspaceDidUnmountFromCLI:(NSNotification *)notif
+{
+  NSDictionary *userInfo = [notif userInfo];
+  if (!userInfo) return;
+
+  NSString *path = [userInfo objectForKey: @"GWUnmountPath"];
+  if (!path) return;
+
+  NSDebugLLog(@"gwspace", @"Workspace: Received CLI did-unmount notification for %@", path);
+  [self noteUserInitiatedUnmountAtPath: path];
+
+  /* Remove the desktop icon and update volumes list */
+  [[dtopManager desktopView] workspaceDidUnmountVolumeAtPath: path];
+
+  /* Also clear FSNode mount state */
+  @try {
+    FSNode *vnode = [FSNode nodeWithPath: path];
+    if (vnode) {
+      [vnode setMountPoint: NO];
+    }
+    [[FSNodeRep sharedInstance] removeVolumeAt: path];
+  } @catch (NSException *e) {
+    NSDebugLLog(@"gwspace", @"Workspace: Error clearing volume info from CLI unmount: %@", e);
+  }
+}
+
+- (BOOL)isRecentUserUnmount:(NSString *)path
+{
+  return [recentUserUnmounts containsObject: path];
+}
+
+- (void)_cleanupRecentUnmount:(NSString *)path
+{
+  [recentUserUnmounts removeObject: path];
+  NSDebugLLog(@"gwspace", @"Workspace: Cleaned up recent unmount record: %@", path);
 }
 
 - (BOOL)verifyFileAtPath:(NSString *)path
@@ -4543,6 +4638,21 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   }
   
   NSDebugLLog(@"gwspace", @"Workspace: Attempting to unmount volume at path: %@", path);
+
+  /* Record this as a user-initiated unmount BEFORE doing anything else.
+   * This is the authoritative record that showMountedVolumes checks to
+   * suppress the "Volume Removed Unexpectedly" dialog.
+   * Multiple covering mechanisms (expectedUnmountPaths in GWDesktopView,
+   * NSWorkspaceWillUnmountNotification) also exist, but this direct
+   * tracking is the guaranteed fallback that works on all platforms. */
+  [self noteUserInitiatedUnmountAtPath: path];
+  {
+    id deskMgr = [GWDesktopManager desktopManager];
+    id deskView = [deskMgr desktopView];
+    if ([deskView respondsToSelector: @selector(workspaceWillUnmountVolumeAtPath:)]) {
+      [deskView workspaceWillUnmountVolumeAtPath: path];
+    }
+  }
   
   // Check if this is a disk image mount managed by VolumeManager
   BOOL isDiskImageVolume = NO;
@@ -4550,7 +4660,6 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   
   Class VolumeManagerClass = NSClassFromString(@"VolumeManager");
   if (VolumeManagerClass) {
-    // Use the class method to check if VolumeManager actually manages this mount
     if ([VolumeManagerClass respondsToSelector:@selector(isDiskImageMount:)]) {
       isDiskImageVolume = [VolumeManagerClass isDiskImageMount:path];
       if (isDiskImageVolume) {
@@ -4561,47 +4670,38 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   }
   
   if (isDiskImageVolume && volumeManager) {
-    // Use VolumeManager for disk image volumes it mounted
     NSDebugLLog(@"gwspace", @"Workspace: Calling VolumeManager unmountPath for %@", path);
     return [volumeManager unmountPath: path];
   }
   
   // Check if this is a network volume managed by NetworkVolumeManager
-  BOOL isNetworkVolume = NO;
   id networkVolumeManager = nil;
   
   Class NetworkVolumeManagerClass = NSClassFromString(@"NetworkVolumeManager");
   if (NetworkVolumeManagerClass) {
     networkVolumeManager = [NetworkVolumeManagerClass sharedManager];
     if (networkVolumeManager && [networkVolumeManager respondsToSelector:@selector(unmountPath:)]) {
-      // Check if this looks like a network mount (simple heuristic)
-      if ([path hasPrefix:@"/media/"] && ([path rangeOfString:@" "].location != NSNotFound)) {
-        isNetworkVolume = YES;
-        NSDebugLLog(@"gwspace", @"Workspace: Detected network volume, using NetworkVolumeManager");
+      NSSet *netPaths = [networkVolumeManager allMountedPaths];
+      if ([netPaths containsObject: path]) {
+        NSDebugLLog(@"gwspace", @"Workspace: Detected network volume at %@, using NetworkVolumeManager", path);
+        return [networkVolumeManager unmountPath: path];
       }
     }
   }
   
-  if (isNetworkVolume && networkVolumeManager) {
-    // Use NetworkVolumeManager for network volumes
-    NSDebugLLog(@"gwspace", @"Workspace: Calling NetworkVolumeManager unmountPath for %@", path);
-    return [networkVolumeManager unmountPath: path];
-  } else {
-    // Use standard system unmount+eject for regular volumes (drag to trash)
-    NSDebugLLog(@"gwspace", @"Workspace: Using standard system unmount+eject for %@", path);
-    BOOL result = [GWUnmountHelper unmountAndEjectPath:path];
-    
-    if (!result) {
-      // Show error message
-      NSString *err = NSLocalizedString(@"Error", @"");
-      NSString *msg = NSLocalizedString(@"You are not allowed to umount\n", @"");
-      NSString *buttstr = NSLocalizedString(@"Continue", @"");
-      NSRunAlertPanel(err, [NSString stringWithFormat: @"%@ \"%@\"!\n", msg, path], buttstr, nil, nil);
-    }
-    
-    [dtopManager unlockVolumeAtPath: path];
-    return result;
+  // Use standard system unmount+eject for regular volumes (drag to trash)
+  NSDebugLLog(@"gwspace", @"Workspace: Using standard system unmount+eject for %@", path);
+  BOOL result = [GWUnmountHelper unmountAndEjectPath:path];
+  
+  if (!result) {
+    NSString *err = NSLocalizedString(@"Error", @"");
+    NSString *msg = NSLocalizedString(@"You are not allowed to umount\n", @"");
+    NSString *buttstr = NSLocalizedString(@"Continue", @"");
+    NSRunAlertPanel(err, [NSString stringWithFormat: @"%@ \"%@\"!\n", msg, path], buttstr, nil, nil);
   }
+  
+  [dtopManager unlockVolumeAtPath: path];
+  return result;
 }
 
 - (void)formatSelectedMountPoints:(id)sender

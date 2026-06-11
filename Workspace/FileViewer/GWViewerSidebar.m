@@ -19,6 +19,9 @@
 #import "FSNode.h"
 #import "FSNodeRep.h"
 #import "NetworkFSNode.h"
+#import "NetworkServiceManager.h"
+#import "NetworkServiceItem.h"
+#import "NetworkVolumeManager.h"
 #import "Workspace.h"
 
 #define ROW_HEIGHT 20.0
@@ -197,7 +200,10 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 - (NSString *)title;
 - (NSImage *)icon;
 - (BOOL)isVolume;
+- (BOOL)isMountedNetworkService;
 - (NSArray *)children;
+- (id)userInfo;
+- (void)setUserInfo:(id)obj;
 @end
 
 
@@ -227,12 +233,26 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   }
 
   id item = [self itemAtRow: row];
-  if (item == nil || [item isHeader] || [item itemKind] == GWSidebarItemNetwork) {
+  if (item == nil || [item isHeader]) {
     [self setDragHighlightRow: -1];
     return NSDragOperationNone;
   }
 
-  NSString *targetPath = [item path];
+  NSString *targetPath = nil;
+  if ([item itemKind] == GWSidebarItemNetwork) {
+    /* Resolve network service to its mount point */
+    id svc = [item userInfo];
+    if (svc && [svc isKindOfClass: [NetworkServiceItem class]]) {
+      targetPath = [[NetworkVolumeManager sharedManager] mountPointForService: svc];
+    }
+    if (targetPath == nil) {
+      [self setDragHighlightRow: -1];
+      return NSDragOperationNone;
+    }
+  } else {
+    targetPath = [item path];
+  }
+
   if (targetPath == nil || [targetPath length] == 0) {
     [self setDragHighlightRow: -1];
     return NSDragOperationNone;
@@ -362,11 +382,23 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   }
 
   id item = [self itemAtRow: row];
-  if (item == nil || [item isHeader] || [item itemKind] == GWSidebarItemNetwork) {
+  if (item == nil || [item isHeader]) {
     return;
   }
 
-  NSString *targetPath = [item path];
+  NSString *targetPath = nil;
+  if ([item itemKind] == GWSidebarItemNetwork) {
+    id svc = [item userInfo];
+    if (svc && [svc isKindOfClass: [NetworkServiceItem class]]) {
+      targetPath = [[NetworkVolumeManager sharedManager] mountPointForService: svc];
+    }
+    if (targetPath == nil) {
+      return;
+    }
+  } else {
+    targetPath = [item path];
+  }
+
   if (targetPath == nil || [targetPath length] == 0) {
     return;
   }
@@ -449,6 +481,7 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   NSImage *icon;
   GWSidebarItemKind kind;
   NSMutableArray *children;
+  id userInfo;
 }
 - (id)initHeaderWithTitle:(NSString *)aTitle;
 - (id)initPathItemWithTitle:(NSString *)aTitle path:(NSString *)aPath;
@@ -460,6 +493,8 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 - (GWSidebarItemKind)itemKind;
 - (NSArray *)children;
 - (BOOL)isHeader;
+- (id)userInfo;
+- (void)setUserInfo:(id)obj;
 @end
 
 @implementation GWSidebarItem
@@ -504,7 +539,18 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   RELEASE (path);
   RELEASE (icon);
   RELEASE (children);
+  RELEASE (userInfo);
   [super dealloc];
+}
+
+- (id)userInfo
+{
+  return userInfo;
+}
+
+- (void)setUserInfo:(id)obj
+{
+  ASSIGN (userInfo, obj);
 }
 
 - (void)addChild:(GWSidebarItem *)child
@@ -526,6 +572,57 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
       && GWSidebarPathIsUnderVolumeRoot(path);
 }
 
+- (BOOL)isMountedNetworkService
+{
+  if (kind != GWSidebarItemNetwork) return NO;
+  if (userInfo == nil || ![userInfo isKindOfClass: [NetworkServiceItem class]]) return NO;
+
+  /* First check what NetworkVolumeManager says (its internal dictionary). */
+  NetworkVolumeManager *nvm = [NetworkVolumeManager sharedManager];
+  NSString *mountPoint = nil;
+
+  if ([nvm isServiceMounted: userInfo]) {
+    mountPoint = [nvm mountPointForService: userInfo];
+  }
+
+  /* If NetworkVolumeManager doesn't know about this mount, check /proc/mounts
+     directly — the volume may have been mounted externally (e.g. via sshfs
+     command or the umount(1) CLI tool's mount remount).  We look for a line
+     containing the service's hostname in the mount table. */
+  if (mountPoint == nil) {
+    NSString *hostname = [userInfo hostName];
+    if (hostname) {
+      NSString *procContent = [NSString stringWithContentsOfFile: @"/proc/mounts"
+                                                        encoding: NSUTF8StringEncoding
+                                                           error: NULL];
+      if (procContent) {
+        if ([procContent rangeOfString: hostname].location != NSNotFound) {
+          /* The service's hostname appears in a mount — try to extract path */
+          NSArray *lines = [procContent componentsSeparatedByString: @"\n"];
+          for (NSString *line in lines) {
+            if ([line rangeOfString: hostname].location != NSNotFound) {
+              NSArray *parts = [line componentsSeparatedByString: @" "];
+              if ([parts count] >= 2) {
+                mountPoint = [parts objectAtIndex: 1];
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  if (mountPoint == nil) return NO;
+
+  NSFileManager *fm = [NSFileManager defaultManager];
+  BOOL isDir = NO;
+  if (![fm fileExistsAtPath: mountPoint isDirectory: &isDir]) return NO;
+  if (!isDir) return NO;
+
+  return YES;
+}
+
 - (NSImage *)icon
 {
   if (icon != nil) {
@@ -538,16 +635,19 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
       NSImage *ic = [[FSNodeRep sharedInstance] iconOfSize: ICON_SIZE
                                                    forNode: node];
       if (ic) {
-        ASSIGN (icon, ic);
+        /* Copy the icon so we don't mutate the shared FSNodeRep cache,
+         * which would affect desktop icons and other views. */
+        ASSIGN (icon, [[ic copy] autorelease]);
         return icon;
       }
     }
     /* Fallback to a generic folder icon */
     NSImage *fallback = [NSImage imageNamed: @"Folder"];
     if (fallback) {
-      [fallback setScalesWhenResized: YES];
-      [fallback setSize: NSMakeSize(ICON_SIZE, ICON_SIZE)];
-      ASSIGN (icon, fallback);
+      NSImage *copy = [[fallback copy] autorelease];
+      [copy setScalesWhenResized: YES];
+      [copy setSize: NSMakeSize(ICON_SIZE, ICON_SIZE)];
+      ASSIGN (icon, copy);
     }
     return icon;
   }
@@ -558,9 +658,10 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
       ic = [NSImage imageNamed: @"Computer"];
     }
     if (ic) {
-      [ic setScalesWhenResized: YES];
-      [ic setSize: NSMakeSize(ICON_SIZE, ICON_SIZE)];
-      ASSIGN (icon, ic);
+      NSImage *copy = [[ic copy] autorelease];
+      [copy setScalesWhenResized: YES];
+      [copy setSize: NSMakeSize(ICON_SIZE, ICON_SIZE)];
+      ASSIGN (icon, copy);
     }
     return icon;
   }
@@ -661,6 +762,11 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
                object: nil];
       [[NSNotificationCenter defaultCenter]
           addObserver: self
+             selector: @selector(rebuildVolumesSection)
+                 name: @"GWFileSystemDidChangeNotification"
+               object: nil];
+      [[NSNotificationCenter defaultCenter]
+          addObserver: self
              selector: @selector(groupDidExpand:)
                  name: NSOutlineViewItemDidExpandNotification
                object: outlineView];
@@ -669,6 +775,11 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
              selector: @selector(groupDidCollapse:)
                  name: NSOutlineViewItemDidCollapseNotification
                object: outlineView];
+      [[NSNotificationCenter defaultCenter]
+          addObserver: self
+             selector: @selector(networkServicesDidChange:)
+                 name: NetworkServicesDidChangeNotification
+               object: nil];
     }
   }
 
@@ -770,6 +881,8 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   volumesGroup = [[GWSidebarItem alloc] initHeaderWithTitle:
                     NSLocalizedString(@"Volumes", @"")];
   {
+    NetworkVolumeManager *nvm = [NetworkVolumeManager sharedManager];
+    NSSet *networkMountPaths = [nvm allMountedPaths];
     NSArray *roots = [Workspace volumeMountRoots];
     NSMutableSet *seen = [NSMutableSet set];
     NSMutableArray *vols = [NSMutableArray array];
@@ -786,6 +899,9 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 
         NSString *full = [root stringByAppendingPathComponent: name];
         if ([seen containsObject: full]) continue;
+
+        /* Skip paths that are network volume mount points (shown under Network) */
+        if ([networkMountPaths containsObject: full]) continue;
 
         struct stat childSt;
         if (lstat([full fileSystemRepresentation], &childSt) != 0) continue;
@@ -817,6 +933,59 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   }
   [rootItems addObject: volumesGroup];
   RELEASE (volumesGroup);
+
+  /* Network section: discovered services from mDNS */
+  {
+    GWSidebarItem *networkGroup = [[GWSidebarItem alloc]
+        initHeaderWithTitle: NSLocalizedString(@"Network", @"")];
+    NetworkServiceManager *mgr = [NetworkServiceManager sharedManager];
+
+    /* Collect all services: from discovery + mounted volumes without discovery */
+    NSMutableArray *allServices = [NSMutableArray array];
+    NSMutableSet *seenIdentifiers = [NSMutableSet set];
+
+    if ([mgr isMDNSAvailable]) {
+      /* Auto-start mDNS browsing so network services always appear
+         in the sidebar without the user having to go to Go To → Network. */
+      if (![mgr isBrowsing]) {
+        [mgr startBrowsing];
+      }
+      NSArray *discovered = [mgr allServices];
+      for (NetworkServiceItem *svc in discovered) {
+        NSString *ident = [svc identifier];
+        if (![seenIdentifiers containsObject: ident]) {
+          [seenIdentifiers addObject: ident];
+          [allServices addObject: svc];
+        }
+      }
+    }
+
+    /* Deduplicate display names */
+    NSMutableDictionary *nameCounts = [NSMutableDictionary dictionaryWithCapacity:[allServices count]];
+    for (NetworkServiceItem *svc in allServices) {
+      NSString *baseName = [svc name];
+      NSNumber *count = [nameCounts objectForKey: baseName];
+      NSString *uniqueName = nil;
+      if (!count) {
+        [nameCounts setObject: @1 forKey: baseName];
+        uniqueName = baseName;
+      } else {
+        NSUInteger newCount = [count unsignedIntegerValue] + 1;
+        [nameCounts setObject: [NSNumber numberWithUnsignedInteger: newCount]
+                       forKey: baseName];
+        uniqueName = [NSString stringWithFormat: @"%@-%lu",
+                               baseName, (unsigned long)newCount];
+      }
+
+      GWSidebarItem *it = [[GWSidebarItem alloc]
+          initNetworkItemWithTitle: uniqueName];
+      [it setUserInfo: svc];
+      [networkGroup addChild: it];
+      RELEASE (it);
+    }
+    [rootItems addObject: networkGroup];
+    RELEASE (networkGroup);
+  }
 }
 
 - (void)reloadData
@@ -829,9 +998,26 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   NSDictionary *info = (NSDictionary *)[notif object];
   NSString *path = [info objectForKey: @"path"];
   if (path == nil) return;
-  if ([[Workspace volumeMountRoots] containsObject: path]) {
-    [self rebuildModelPreservingExpansion];
+
+  /* Rebuild the Volumes section whenever something changes inside
+     any mount root directory (e.g. /media, /Volumes).  The file
+     watcher reports the exact path that changed (e.g.
+     /media/devuan/Asterisk), which is a *child* of the mount root,
+     not the root itself.  We therefore check if the changed path
+     has any mount root as a prefix. */
+  NSArray *roots = [Workspace volumeMountRoots];
+  for (NSString *root in roots) {
+    NSString *rootSlash = [root stringByAppendingString: @"/"];
+    if ([path isEqualToString: root] || [path hasPrefix: rootSlash]) {
+      [self rebuildModelPreservingExpansion];
+      return;
+    }
   }
+}
+
+- (void)networkServicesDidChange:(NSNotification *)notif
+{
+  [self rebuildModelPreservingExpansion];
 }
 
 - (void)rebuildVolumesSection
@@ -880,19 +1066,33 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 
 - (NSMenu *)menuForSidebarItem:(id)item
 {
-  if (item == nil || ![item respondsToSelector: @selector(isVolume)]) {
+  if (item == nil) {
     return nil;
   }
-  if (![item isVolume]) {
+
+  NSString *ejectPath = nil;
+
+  if ([item respondsToSelector: @selector(isVolume)] && [item isVolume]) {
+    ejectPath = [item path];
+  } else if ([item respondsToSelector: @selector(isMountedNetworkService)]
+             && [item isMountedNetworkService]) {
+    id svc = [item userInfo];
+    if (svc && [svc isKindOfClass: [NetworkServiceItem class]]) {
+      ejectPath = [[NetworkVolumeManager sharedManager] mountPointForService: svc];
+    }
+  }
+
+  if (ejectPath == nil) {
     return nil;
   }
+
   NSMenu *menu = [[[NSMenu alloc] initWithTitle: @""] autorelease];
   NSMenuItem *eject = [[[NSMenuItem alloc]
       initWithTitle: NSLocalizedString(@"Eject", @"")
              action: @selector(ejectVolumeMenuAction:)
       keyEquivalent: @""] autorelease];
   [eject setTarget: self];
-  [eject setRepresentedObject: [item path]];
+  [eject setRepresentedObject: ejectPath];
   [menu addItem: eject];
   return menu;
 }
@@ -908,8 +1108,14 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   NSInteger row = [rowNum integerValue];
   if (row < 0) return [NSNumber numberWithBool: NO];
   id item = [outlineView itemAtRow: row];
-  BOOL v = (item && [item respondsToSelector: @selector(isVolume)]
+  BOOL v = (item
+            && [item respondsToSelector: @selector(isVolume)]
             && [item isVolume]);
+  if (!v) {
+    v = (item
+         && [item respondsToSelector: @selector(isMountedNetworkService)]
+         && [item isMountedNetworkService]);
+  }
   return [NSNumber numberWithBool: v];
 }
 
@@ -918,14 +1124,31 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   NSInteger row = [rowNum integerValue];
   if (row < 0) return;
   id item = [outlineView itemAtRow: row];
-  if (item && [item respondsToSelector: @selector(isVolume)] && [item isVolume]) {
+  if (item == nil) return;
+
+  if ([item respondsToSelector: @selector(isVolume)] && [item isVolume]) {
     [self ejectPath: [item path]];
+  } else if ([item respondsToSelector: @selector(isMountedNetworkService)]
+             && [item isMountedNetworkService]) {
+    id svc = [item userInfo];
+    if (svc && [svc isKindOfClass: [NetworkServiceItem class]]) {
+      [[NetworkVolumeManager sharedManager] unmountService: svc];
+    }
   }
 }
 
 - (void)ejectPath:(NSString *)path
 {
   if ([path length] == 0) return;
+
+  /* Check if this is a network mount point */
+  NSSet *netPaths = [[NetworkVolumeManager sharedManager] allMountedPaths];
+  if ([netPaths containsObject: path]) {
+    [[NetworkVolumeManager sharedManager] unmountPath: path];
+    return;
+  }
+
+  /* Regular volume (disk image, USB, etc.) */
   Workspace *gw = [Workspace gworkspace];
   if (gw && [gw respondsToSelector: @selector(unmountVolumeAtPath:)]) {
     [gw unmountVolumeAtPath: path];
@@ -1011,7 +1234,32 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   FSNode *target = nil;
 
   if ([item itemKind] == GWSidebarItemNetwork) {
-    target = [NetworkFSNode networkRootNode];
+    id svc = [item userInfo];
+    if (svc && [svc isKindOfClass: [NetworkServiceItem class]]) {
+      NetworkFSNode *netNode = [NetworkFSNode nodeWithServiceItem: svc];
+      NSString *mountPoint = [netNode openNetworkService];
+      if (mountPoint) {
+        target = [FSNode nodeWithPath: mountPoint];
+        if (target == nil || [target isValid] == NO) {
+          return;
+        }
+        /* Mount succeeded — navigate in-place.  Defer slightly so any
+           mount-side notifications (GWFileSystemDidChangeNotification
+           etc.) settle before the view is rebuilt, preventing the
+           viewer window from closing. */
+        if (viewer && [viewer respondsToSelector: @selector(openNodeInPlace:)]) {
+          [self performSelector: @selector(performOpenNodeInPlace:)
+                     withObject: target
+                     afterDelay: 0.05];
+        }
+        return;
+      } else {
+        NSBeep ();
+        return;
+      }
+    } else {
+      target = [NetworkFSNode networkRootNode];
+    }
   } else if ([item itemKind] == GWSidebarItemPath) {
     NSString *p = [item path];
     if (p == nil || [p length] == 0) {
@@ -1049,6 +1297,22 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
            showSelection: NO
                 forceNew: NO
                  withKey: nil];
+}
+
+/**
+ * Deferred in-place navigation, called via performSelector:afterDelay:
+ * so mount notifications settle before the view is rebuilt.
+ * Checks that the viewer is still valid — mount-side handlers may have
+ * invalidated it in the meantime.
+ */
+- (void)performOpenNodeInPlace:(FSNode *)target
+{
+  if (viewer == nil) return;
+  if ([viewer respondsToSelector: @selector(invalidated)]
+      && [viewer invalidated]) return;
+  if ([viewer respondsToSelector: @selector(openNodeInPlace:)]) {
+    [(id)viewer openNodeInPlace: target];
+  }
 }
 
 /* ---------------- NSOutlineView data source ---------------- */

@@ -25,6 +25,7 @@
   NSMutableDictionary *webdavMounts;    /* Maps service identifier to AVFS virtual path */
   NSFileManager *fm;
   NSString *lastErrorMessage;  /* Last mount error for callers to retrieve */
+  NSMutableSet *recentlyUnmountedPaths;  /* Paths recently unmounted, for dialog suppression */
 }
 
 /**
@@ -126,6 +127,22 @@
  * Typically called during application shutdown.
  */
 - (void)unmountAll;
+
+/**
+ * Returns a set of all currently mounted network volume paths.
+ * Used by the sidebar to exclude network mounts from the Volumes section.
+ *
+ * @return NSSet of NSString mount point paths
+ */
+- (NSSet *)allMountedPaths;
+
+/**
+ * Returns a set of paths that were recently unmounted network volumes.
+ * Used by GWDesktopView to suppress "Volume Removed Unexpectedly" dialogs.
+ *
+ * @return NSSet of NSString paths unmounted within the last few seconds
+ */
+- (NSSet *)recentlyUnmountedPaths;
 
 /**
  * Runs a modal credentials panel (username/password) for a network service.
