@@ -853,14 +853,9 @@
       gridrect.size.width -= dckr.size.width;
     }
 
-  if (infoType != FSNInfoNameType)
-    {
-      ymargin = 2;
-    }
-  else
-    {
-      ymargin = Y_MARGIN;
-    }
+  // No padding between rows; leftover space stays at bottom of screen
+  ymargin = 0;
+  float gridTopOffset = 12;
 
   colItemsCount = (NSInteger)(gridrect.size.width / (gridSize.width + X_MARGIN));
   rowItemsCount = (NSInteger)(gridrect.size.height / (gridSize.height + ymargin));
@@ -869,7 +864,7 @@
   grid = NSZoneMalloc (NSDefaultMallocZone(), sizeof(NSRect) * gridItemsCount);
 
   gpnt.x = gridrect.size.width + gridrect.origin.x;
-  gpnt.y = gridrect.size.height + gridrect.origin.y;
+  gpnt.y = gridrect.size.height + gridrect.origin.y - gridTopOffset;
 
   gpnt.x -= gridSize.width + X_MARGIN;
 
@@ -879,7 +874,7 @@
 
       if (gpnt.y <= gridrect.origin.y)
 	{
-	  gpnt.y = gridrect.size.height + gridrect.origin.y;
+	  gpnt.y = gridrect.size.height + gridrect.origin.y - gridTopOffset;
 	  gpnt.y -= (gridSize.height + ymargin);
 	  gpnt.x -= (gridSize.width + X_MARGIN);
 	}
@@ -907,23 +902,8 @@
 	}
     }
 
-  if (gpnt.y != (gridrect.origin.y + ymargin))
-    {
-      float diffy = gpnt.y - (gridrect.origin.y + ymargin);
-      float yshft = 0.0;
-
-      diffy /= rowItemsCount;
-
-      for (i = 0; i < gridItemsCount; i++)
-	{
-	  if (div(i, rowItemsCount).rem == 0)
-	    {
-	      yshft = 0.0;
-	    }
-	  yshft += diffy;
-	  grid[i].origin.y -= yshft;
-	}
-    }
+  // Leave any leftover vertical space at the bottom of the screen,
+  // do not redistribute it between rows.
 
   for (i = 0; i < gridItemsCount; i++)
     {
@@ -1413,6 +1393,27 @@ static void GWHighlightFrameRect(NSRect aRect)
 		}
 	      return;
 	    }
+	}
+      if ((character == 'o' || character == 'O') && (flags & NSCommandKeyMask))
+	{
+	  if (flags & NSShiftKeyMask)
+	    {
+	      [manager openSelectionAsFolder];
+	    }
+	  else
+	    {
+	      [manager openSelectionInNewViewer: NO];
+	    }
+	  return;
+	}
+      if (character == 0x01B) // Escape
+	{
+	  selectionMask = NSSingleSelectionMask;
+	  selectionMask |= FSNCreatingSelectionMask;
+	  [self unselectOtherReps: nil];
+	  selectionMask = NSSingleSelectionMask;
+	  [self selectionDidChange];
+	  return;
 	}
     }
 

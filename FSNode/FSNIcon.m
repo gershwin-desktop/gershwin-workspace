@@ -218,12 +218,8 @@ static NSImage *branchImage;
       isLeaf = YES;
 
       hlightRect = NSZeroRect;
-      hlightRect.size.width = iconSize / 3 * 4;
-      hlightRect.size.height = hlightRect.size.width * [fsnodeRep highlightHeightFactor];
-      if ((hlightRect.size.height - iconSize) < 4)
-	{
-	  hlightRect.size.height = iconSize + 4;
-	}
+      hlightRect.size.width = iconSize + 6;
+      hlightRect.size.height = hlightRect.size.width;
       hlightRect = NSIntegralRect(hlightRect);
       ASSIGN (highlightPath, [fsnodeRep highlightPathOfSize: hlightRect.size]);
 
@@ -316,6 +312,9 @@ static NSImage *branchImage;
 	    {
 	      r.size.height += infoRect.size.height;
 	    }
+
+	  // Add space for lblmargin/2 bottom padding + 1px gap + 1px top safety
+	  r.size.height += [fsnodeRep labelMargin] / 2 + 2;
 	}
       else if (icnPosition == NSImageOnly)
 	{
@@ -452,7 +451,8 @@ static NSImage *branchImage;
 	}
 
       hlx = myrintf((frameRect.size.width - hlightRect.size.width) / 2);
-      hly = myrintf(frameRect.size.height - hlightRect.size.height);
+      // Position hlightRect so its bottom edge is 1px above the top of the label
+      hly = myrintf(labelRect.origin.y + labelRect.size.height + 1);
 
       if ((hlightRect.origin.x != hlx) || (hlightRect.origin.y != hly))
 	{
@@ -905,9 +905,11 @@ static NSImage *branchImage;
     {
       [[NSColor selectedControlColor] set];
       [highlightPath fill];
+
+      // Draw the text label background with the standard selected color (blue)
       if (nameEdited == NO)
         {
-          NSFrameRect(labelRect);
+          [[NSColor selectedControlColor] set];
           NSRectFill(labelRect);
         }
     }
@@ -1156,12 +1158,8 @@ static NSImage *branchImage;
     }
   drawicon = icon;
   DESTROY (selectedicon);
-  hlightRect.size.width = myrintf(iconSize / 3 * 4);
-  hlightRect.size.height = myrintf(hlightRect.size.width * [fsnodeRep highlightHeightFactor]);
-  if ((hlightRect.size.height - iconSize) < 4)
-    {
-      hlightRect.size.height = iconSize + 4;
-    }
+  hlightRect.size.width = myrintf(iconSize + 6);
+  hlightRect.size.height = myrintf(hlightRect.size.width);
   hlightRect.origin.x = 0;
   hlightRect.origin.y = 0;
   ASSIGN (highlightPath, [fsnodeRep highlightPathOfSize: hlightRect.size]);

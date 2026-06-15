@@ -294,6 +294,20 @@
 	  [[self delegate] toggleHiddenFiles];
 	}
       return;
+
+    case 0x01B: // Escape
+      {
+        id delegate = [self delegate];
+        if ([delegate respondsToSelector: @selector(nodeView)])
+          {
+            id nodeView = [delegate nodeView];
+            if ([nodeView respondsToSelector: @selector(cancelOperation:)])
+              {
+                [nodeView cancelOperation: nil];
+              }
+          }
+      }
+      return;
     /*
     case ' ':
       // Space = Quick Look
@@ -317,6 +331,22 @@
         }
       return;
     */
+
+    case 'o':
+    case 'O':
+      if (flags & NSCommandKeyMask)
+        {
+          if (flags & NSShiftKeyMask)
+            {
+              [[self delegate] openSelectionAsFolder];
+            }
+          else
+            {
+              [[self delegate] openSelection];
+            }
+          return;
+        }
+      break;
     }
 	
   [super keyDown: theEvent];

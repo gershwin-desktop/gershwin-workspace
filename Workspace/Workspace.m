@@ -401,12 +401,12 @@ NSString *_pendingSystemActionTitle = nil;
   subMenu = AUTORELEASE ([NSMenu new]);
   [menu setSubmenu: subMenu forItem: menuItem];
   
-  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Browsing") action:@selector(setViewerBehaviour:) keyEquivalent:@"B"];
+  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Browsing") action:@selector(setViewerBehaviour:) keyEquivalent:@"b"];
   [menuItem setTarget:self];
   [subMenu addItem:menuItem];
   [menuItem release];
   
-  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Spatial") action:@selector(setViewerBehaviour:) keyEquivalent:@"S"];
+  menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Spatial") action:@selector(setViewerBehaviour:) keyEquivalent:@"s"];
   [menuItem setTarget:self];
   [subMenu addItem:menuItem];
   [menuItem release];
@@ -1010,6 +1010,7 @@ NSString *_pendingSystemActionTitle = nil;
     }
   }
 #endif
+
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)aNotification
@@ -2211,7 +2212,7 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)openSelection:(id)sender
 {
-  [self openSelectionInNewViewer: NO];
+  [self openSelectionInNewViewer: YES];
 }
 
 - (void)openSelectionAsFolder:(id)sender
@@ -3566,13 +3567,19 @@ NSString *_pendingSystemActionTitle = nil;
 - (void)selectAllInViewer:(id)sender
 {
   NSWindow *kwin = [NSApp keyWindow];
-  
-  if (kwin && [vwrsManager hasViewerWithWindow: kwin]) {
-    GWViewerWindow *viewer = [vwrsManager viewerWithWindow: kwin];
-    if (viewer) {
-      [viewer selectAllInViewer:sender];
+
+  if (kwin && [vwrsManager hasViewerWithWindow: kwin])
+    {
+      id viewer = [vwrsManager viewerWithWindow: kwin];
+      if (viewer)
+        {
+          [viewer selectAllInViewer];
+        }
     }
-  }
+  else if (kwin && [dtopManager hasWindow: kwin])
+    {
+      [[dtopManager desktopView] selectAll];
+    }
 }
 
 - (void)toggleFullScreen:(id)sender

@@ -218,12 +218,8 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSSize labelSize = NSZeroSize;
   int lblmargin = [fsnodeRep labelMargin];
 
-  highlightSize.width = ceil(iconSize / 3 * 4);
-  highlightSize.height = ceil(highlightSize.width * [fsnodeRep highlightHeightFactor]);
-  if ((highlightSize.height - iconSize) < 4)
-    {
-      highlightSize.height = iconSize + 4;
-    }
+  highlightSize.width = ceil(iconSize + 6);
+  highlightSize.height = highlightSize.width;
 
   labelSize.height = floor([fsnodeRep heightOfFont: labelFont]);
   labelSize.width = [fsnodeRep labelWFactor] * labelTextSize;
@@ -237,7 +233,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       if (iconPosition == NSImageAbove)
 	{
 	  gridSize.height += lbsh;
-	  gridSize.width = labelSize.width;
+	  gridSize.width = (labelSize.width > highlightSize.width) ? labelSize.width : highlightSize.width;
 	}
       else
 	{
@@ -252,13 +248,16 @@ static void GWHighlightFrameRect(NSRect aRect)
       if (iconPosition == NSImageAbove)
 	{
 	  gridSize.height += labelSize.height;
-	  gridSize.width = labelSize.width;
+	  gridSize.width = (labelSize.width > highlightSize.width) ? labelSize.width : highlightSize.width;
 	}
       else
 	{
 	  gridSize.width = highlightSize.width + labelSize.width + lblmargin;
 	}
     }
+
+  // Add extra height matching FSNIcon's lblmargin/2 + 2 padding
+  gridSize.height += lblmargin / 2 + 2;
     
   // Apply DS_Store grid spacing if set (adds extra space between icons)
   if (dsStoreGridSpacing > 0)
@@ -347,7 +346,7 @@ static void GWHighlightFrameRect(NSRect aRect)
               if (gridX >= (svr.size.width - gridSize.width))
                 {
                   gridX = X_MARGIN;
-                  gridY += (gridSize.height + Y_MARGIN);
+                  gridY += gridSize.height;
                 }
               
               irects[i] = NSMakeRect(gridX, gridY, gridSize.width, gridSize.height);
@@ -388,7 +387,7 @@ static void GWHighlightFrameRect(NSRect aRect)
           if (px >= (svr.size.width - gridSize.width))
             {
               px = X_MARGIN;
-              py += (gridSize.height + Y_MARGIN);
+              py += gridSize.height;
 
               if (colItemsCount < poscount)
                 {
@@ -1025,6 +1024,11 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
   case 0x01B: // Escape
     DESTROY(charBuffer);
+    selectionMask = NSSingleSelectionMask;
+    selectionMask |= FSNCreatingSelectionMask;
+    [self unselectOtherReps: nil];
+    selectionMask = NSSingleSelectionMask;
+    [self selectionDidChange];
     return;
   default:
     break;
@@ -1062,6 +1066,18 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
 
   [super keyDown: theEvent];
+}
+
+- (void)cancelOperation:(id)sender
+{
+  // Escape key - deselect all items
+  selectionMask = NSSingleSelectionMask;
+  selectionMask |= FSNCreatingSelectionMask;
+  [self unselectOtherReps: nil];
+  selectionMask = NSSingleSelectionMask;
+  [self selectionDidChange];
+
+  DESTROY(charBuffer);
 }
 
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent
@@ -2017,6 +2033,11 @@ static void GWHighlightFrameRect(NSRect aRect)
   selectionMask = NSSingleSelectionMask;
 
   [self selectionDidChange];
+}
+
+- (void)selectAll:(id)sender
+{
+  [self selectAll];
 }
 
 - (void)scrollSelectionToVisible

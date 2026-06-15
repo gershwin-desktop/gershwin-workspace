@@ -162,7 +162,7 @@
   [delegate showTerminal];
 }
 
-- (void)keyDown:(NSEvent *)theEvent 
+- (void)keyDown:(NSEvent *)theEvent
 {	
   [super keyDown: theEvent];
 }

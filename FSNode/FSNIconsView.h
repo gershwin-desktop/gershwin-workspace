@@ -162,6 +162,7 @@
 - (void)selectRepsOfSubnodes:(NSArray *)nodes;
 - (void)selectRepsOfPaths:(NSArray *)paths;
 - (void)selectAll;
+- (void)selectAll:(id)sender;
 - (void)scrollSelectionToVisible;
 - (NSArray *)reps;
 - (NSArray *)selectedReps;
