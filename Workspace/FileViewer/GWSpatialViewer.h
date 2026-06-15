@@ -27,6 +27,7 @@
 
 @class GWViewersManager;
 @class GWViewerPathsPopUp;
+@class GWX11SpatialPath;
 @class FSNode;
 @class FSNodeRep;
 @class GWViewerWindow;
@@ -77,6 +78,9 @@
   Workspace *gworkspace;
 
   NSNotificationCenter *nc;
+
+  // X11 atom-based spatial path for WM titlebar popup
+  GWX11SpatialPath *_x11Path;
 }
 
 - (id)initForNode:(FSNode *)node

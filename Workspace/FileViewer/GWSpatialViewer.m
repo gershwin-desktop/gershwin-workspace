@@ -36,6 +36,7 @@
 #import "GWViewerIconsView.h"
 #import "GWViewerListView.h"
 #import "GWViewerPathsPopUp.h"
+#import "GWX11SpatialPath.h"
 #import "GWViewer.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
@@ -54,6 +55,11 @@
 {
   [nc removeObserver: self];
   [self teardownDSStoreWatcher];
+  
+  if (_x11Path) {
+    [_x11Path invalidate];
+    RELEASE(_x11Path);
+  }
   
   RELEASE (baseNode);
   RELEASE (baseNodeArray);
@@ -350,6 +356,16 @@
     invalidated = NO;
     closing = NO;
     
+    /* Set the _GW_SPATIAL_PATH X11 atom so the WindowManager can show
+     * a path-component popup when the user modifier-clicks on the titlebar. */
+    {
+      NSString *spatialPath = [baseNode path];
+      if (spatialPath) {
+        _x11Path = [[GWX11SpatialPath alloc] initWithWindow:vwrwin path:spatialPath];
+        NSDebugLLog(@"gwspace", @"GWX11SpatialPath: Set spatial path atom to '%@'", spatialPath);
+      }
+    }
+    
     NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
     NSDebugLLog(@"gwspace", @"║      GWSpatialViewer INITIALIZATION COMPLETE                     ║");
     NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
@@ -370,9 +386,9 @@
   NSRect r = [[vwrwin contentView] bounds];
   float w = r.size.width;  // Width of the window's content view bounds, used for calculating subview positions and sizes
   float h = r.size.height; // Height of the window's content view bounds, used for layout calculations
-  int boxh = 32;           // Height of the top box containing labels and popup, affects vertical spacing
+  int boxh = 16;           // Height of the top box containing the info labels
   int labelw = 106;        // Width of the elements and space labels, determines their horizontal extent
-  int labelh = 20;         // Height of the labels, sets their vertical size
+  int labelh = 12;         // Height of the labels, vertically centered within boxh
   int margin = 0;          // Margin spacing around elements (currently zero), controls padding
   unsigned int resizeMask; // Bitmask for autoresizing behavior of subviews, controls how they resize with the window
   BOOL hasScroller;        // Flag indicating if the scroll view should have a vertical scroller, based on view type (Icon/List have it, Browser does not)
@@ -388,8 +404,8 @@
   [mainView addSubview: topBox];
   RELEASE (topBox);
 
-  // Elements label on the left
-  r = NSMakeRect(margin + 4, margin + 2, labelw, labelh);
+  // Elements label on the left, vertically centered
+  r = NSMakeRect(margin + 4, (boxh - labelh) / 2, labelw, labelh);
   elementsLabel = [[NSTextField alloc] initWithFrame: r];
   [elementsLabel setFont: [NSFont systemFontOfSize: 10]];
   [elementsLabel setAlignment: NSLeftTextAlignment];
@@ -403,20 +419,12 @@
   [topBox addSubview: elementsLabel];
   RELEASE (elementsLabel);
 
-  // Paths popup in the center
-  r = NSMakeRect(0, margin + 5, labelw, labelh);
-  r.origin.x = (w / 2) - (labelw / 2);
-  pathsPopUp = [[GWViewerPathsPopUp alloc] initWithFrame: r pullsDown: NO];
-  resizeMask = NSViewNotSizable | NSViewMinXMargin | NSViewMaxXMargin;
-  [pathsPopUp setAutoresizingMask: resizeMask];
-  [pathsPopUp setTarget: self];
-  [pathsPopUp setAction: @selector(popUpAction:)];
-  [pathsPopUp setItemsToNode: baseNode];
-  [topBox addSubview: pathsPopUp];
-  RELEASE (pathsPopUp);
+  /* The path-component popup has been moved to the window titlebar.
+   * The WindowManager reads _GW_SPATIAL_PATH atom and shows the popup
+   * when the user modifier-clicks on the title. */
 
-  // Space label on the right
-  r = NSMakeRect(w - labelw - margin - 2 - 4, margin + 2, labelw, labelh);
+  // Space label on the right, same vertical position as elements label
+  r = NSMakeRect(w - labelw - margin - 2 - 4, (boxh - labelh) / 2, labelw, labelh);
   spaceLabel = [[NSTextField alloc] initWithFrame: r];
   [spaceLabel setFont: [NSFont systemFontOfSize: 10]];
   [spaceLabel setAlignment: NSRightTextAlignment];
