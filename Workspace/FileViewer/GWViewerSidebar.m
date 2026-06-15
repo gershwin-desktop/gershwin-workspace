@@ -822,11 +822,14 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   /* Applications: per-user ~/Applications under the User Domain group. */
   {
     NSString *appsPath = [home stringByAppendingPathComponent: @"Applications"];
-    GWSidebarItem *it = [[GWSidebarItem alloc]
-        initPathItemWithTitle: NSLocalizedString(@"Applications", @"")
-                         path: appsPath];
-    [userDomain addChild: it];
-    RELEASE (it);
+    BOOL isDir = NO;
+    if ([fm fileExistsAtPath: appsPath isDirectory: &isDir] && isDir) {
+      GWSidebarItem *it = [[GWSidebarItem alloc]
+          initPathItemWithTitle: NSLocalizedString(@"Applications", @"")
+                           path: appsPath];
+      [userDomain addChild: it];
+      RELEASE (it);
+    }
   }
 
   favs = [NSArray arrayWithObjects:
@@ -843,10 +846,13 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
     NSString *folder = [pair objectAtIndex: 1];
     NSString *full = [home stringByAppendingPathComponent: folder];
 
-    GWSidebarItem *it = [[GWSidebarItem alloc]
-        initPathItemWithTitle: title path: full];
-    [userDomain addChild: it];
-    RELEASE (it);
+    BOOL isDir = NO;
+    if ([fm fileExistsAtPath: full isDirectory: &isDir] && isDir) {
+      GWSidebarItem *it = [[GWSidebarItem alloc]
+          initPathItemWithTitle: title path: full];
+      [userDomain addChild: it];
+      RELEASE (it);
+    }
   }
 
   [rootItems addObject: userDomain];
@@ -856,26 +862,37 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
               NSLocalizedString(@"Domains", @"")];
 
   {
-    GWSidebarItem *local = [[GWSidebarItem alloc]
-        initPathItemWithTitle: NSLocalizedString(@"Local", @"")
-                         path: @"/Local"];
-    [domain addChild: local];
-    RELEASE (local);
+    BOOL isDir = NO;
 
-    GWSidebarItem *net = [[GWSidebarItem alloc]
-        initPathItemWithTitle: NSLocalizedString(@"Network", @"")
-                         path: @"/Network"];
-    [domain addChild: net];
-    RELEASE (net);
+    if ([fm fileExistsAtPath: @"/Local" isDirectory: &isDir] && isDir) {
+      GWSidebarItem *local = [[GWSidebarItem alloc]
+          initPathItemWithTitle: NSLocalizedString(@"Local", @"")
+                           path: @"/Local"];
+      [domain addChild: local];
+      RELEASE (local);
+    }
 
-    GWSidebarItem *system = [[GWSidebarItem alloc]
-        initPathItemWithTitle: NSLocalizedString(@"System", @"")
-                         path: @"/System"];
-    [domain addChild: system];
-    RELEASE (system);
+    if ([fm fileExistsAtPath: @"/Network" isDirectory: &isDir] && isDir) {
+      GWSidebarItem *net = [[GWSidebarItem alloc]
+          initPathItemWithTitle: NSLocalizedString(@"Network", @"")
+                           path: @"/Network"];
+      [domain addChild: net];
+      RELEASE (net);
+    }
+
+    if ([fm fileExistsAtPath: @"/System" isDirectory: &isDir] && isDir) {
+      GWSidebarItem *system = [[GWSidebarItem alloc]
+          initPathItemWithTitle: NSLocalizedString(@"System", @"")
+                           path: @"/System"];
+      [domain addChild: system];
+      RELEASE (system);
+    }
   }
 
-  [rootItems addObject: domain];
+  /* Only add the Domains section if at least one domain directory exists */
+  if ([[domain children] count] > 0) {
+    [rootItems addObject: domain];
+  }
   RELEASE (domain);
 
   volumesGroup = [[GWSidebarItem alloc] initHeaderWithTitle:
