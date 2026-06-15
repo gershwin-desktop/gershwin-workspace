@@ -1321,7 +1321,16 @@ constrainMinCoordinate:(CGFloat)proposedMin
 
         NS_DURING
           {
-        if ([node isDirectory]) {
+        if ([node isKindOfClass:[NetworkFSNode class]] && [(NetworkFSNode *)node isNetworkService]) {
+          /* Mount network service instead of treating it as a directory */
+          NSString *mountPoint = [(NetworkFSNode *)node openNetworkService];
+          if (mountPoint) {
+            FSNode *target = [FSNode nodeWithPath: mountPoint];
+            if (target && [target isValid]) {
+              [dirs addObject: target];
+            }
+          }
+        } else if ([node isDirectory]) {
           if ([node isPackage]) {    
             if ([node isApplication] == NO) {
               [gworkspace openFile: [node path]];
@@ -1802,6 +1811,11 @@ constrainMinCoordinate:(CGFloat)proposedMin
             FSNode *node = [lastSelection objectAtIndex: i];
 
             if ([node isDirectory] && ([node isPackage] == NO)) {
+              /* Allow network services (virtual directories that mount on open) */
+              if ([node respondsToSelector: @selector(isNetworkService)]
+                  && [(id)node isNetworkService]) {
+                continue;
+              }
               canopen = NO;
               break;      
             }

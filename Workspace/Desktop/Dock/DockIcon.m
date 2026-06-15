@@ -420,7 +420,9 @@
     } else if (isTrashIcon) {
       NSString *path = [node path];
       if (path) {
-        [[GWDesktopManager desktopManager] selectFile: path inFileViewerRootedAtPath: path];
+        /* Open the Trash through newViewerAtPath: so it respects
+           the user's default viewer mode (Spatial vs Browsing). */
+        [[Workspace gworkspace] newViewerAtPath: path];
       }
     }
   }

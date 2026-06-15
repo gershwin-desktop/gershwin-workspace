@@ -3240,12 +3240,21 @@ NSString *_pendingSystemActionTitle = nil;
   /* Create a NetworkFSNode for the /Network virtual location */
   NetworkFSNode *networkNode = [NetworkFSNode networkRootNode];
   
-  /* Open a viewer for the network node */
-  [vwrsManager viewerForNode:networkNode
-                    showType:GWViewTypeIcon
-               showSelection:NO
-                    forceNew:YES
-                     withKey:@"network_viewer"];
+  /* Respect the default viewer mode (Spatial vs Browsing) */
+  if ([self defaultViewerType] == SPATIAL) {
+    [vwrsManager viewerOfType: SPATIAL
+                     showType: nil
+                      forNode: networkNode
+                showSelection: NO
+               closeOldViewer: nil
+                     forceNew: NO];
+  } else {
+    [vwrsManager viewerForNode: networkNode
+                      showType: 0
+                 showSelection: NO
+                      forceNew: YES
+                       withKey: @"network_viewer"];
+  }
 }
 
 

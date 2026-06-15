@@ -45,6 +45,8 @@
 #import "FSNIconsView.h"
 #import "FSNListView.h"
 #import "FSNFunctions.h"
+#import "NetworkFSNode.h"
+#import "NetworkServiceManager.h"
  
 #define DEFAULT_INCR 150
 #define MIN_W_HEIGHT 180
@@ -88,7 +90,13 @@
     NSString *prefsname;
     id defEntry;
 
-    ASSIGN (baseNode, [FSNode nodeWithPath: [node path]]);
+    /* For virtual nodes (like NetworkFSNode), keep the original node.
+       For regular paths, create a fresh FSNode from the path. */
+    if ([node isKindOfClass:NSClassFromString(@"NetworkFSNode")]) {
+      ASSIGN(baseNode, node);
+    } else {
+      ASSIGN(baseNode, [FSNode nodeWithPath: [node path]]);
+    }
     ASSIGN (baseNodeArray, [NSArray arrayWithObject: baseNode]);
     fsnodeRep = [FSNodeRep sharedInstance];
     lastSelection = nil;
@@ -352,6 +360,14 @@
            selector: @selector(columnsWidthChanged:) 
                name: @"GWBrowserColumnWidthChangedNotification"
              object: nil];
+
+    /* If this viewer is showing the Network node, observe service changes */
+    if ([baseNode isKindOfClass:[NetworkFSNode class]]) {
+      [nc addObserver: self
+             selector: @selector(networkServicesDidChange:)
+                 name: NetworkServicesDidChangeNotification
+               object: nil];
+    }
     
     invalidated = NO;
     closing = NO;
@@ -474,6 +490,15 @@
 - (void)reloadNodeContents
 {
   [nodeView reloadContents];
+}
+
+- (void)networkServicesDidChange:(NSNotification *)notification
+{
+  /* Refresh the network node's subnodes and reload the view */
+  if ([baseNode isKindOfClass:[NetworkFSNode class]]) {
+    NSDebugLLog(@"gwspace", @"GWSpatialViewer: Network services changed, reloading contents");
+    [self reloadNodeContents];
+  }
 }
 
 - (void)reloadFromNode:(FSNode *)anode

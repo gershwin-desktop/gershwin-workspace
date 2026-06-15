@@ -503,7 +503,33 @@ static GWViewersManager *vwrsmanager = nil;
         {            
           NS_DURING
             {
-              if ([node isDirectory])
+              /* Network services: mount instead of treating as directory */
+              if ([node respondsToSelector: @selector(isNetworkService)]
+                  && [node performSelector: @selector(isNetworkService)])
+                {
+                  NSString *mountPoint = [node performSelector: @selector(openNetworkService)];
+                  if (mountPoint) {
+                    FSNode *target = [FSNode nodeWithPath: mountPoint];
+                    if (target && [target isValid]) {
+                      int defaultType = [gworkspace defaultViewerType];
+                      if (defaultType == SPATIAL) {
+                        [self viewerOfType: SPATIAL
+                                  showType: nil
+                                   forNode: target
+                             showSelection: NO
+                            closeOldViewer: nil
+                                  forceNew: NO];
+                      } else {
+                        [self viewerForNode: target
+                                   showType: 0
+                              showSelection: NO
+                                   forceNew: NO
+                                    withKey: nil];
+                      }
+                    }
+                  }
+                }
+              else if ([node isDirectory])
                 {
                   if ([node isPackage])
                     {    
@@ -583,8 +609,35 @@ static GWViewersManager *vwrsmanager = nil;
   for (i = 0; i < [selnodes count]; i++)
     {
       FSNode *node = [selnodes objectAtIndex: i];
+      
+      /* Network services: mount instead of treating as directory */
+      if ([node respondsToSelector: @selector(isNetworkService)]
+          && [node performSelector: @selector(isNetworkService)])
+        {
+          NSString *mountPoint = [node performSelector: @selector(openNetworkService)];
+          if (mountPoint) {
+            FSNode *target = [FSNode nodeWithPath: mountPoint];
+            if (target && [target isValid]) {
+              int defaultType = [gworkspace defaultViewerType];
+              if (defaultType == SPATIAL) {
+                [self viewerOfType: SPATIAL
+                          showType: nil
+                           forNode: target
+                     showSelection: NO
+                    closeOldViewer: nil
+                          forceNew: force];
+              } else {
+                [self viewerForNode: target
+                           showType: 0
+                      showSelection: NO
+                           forceNew: force
+                            withKey: nil];
+              }
+            }
+          }
+        }
       // Use the default viewer type preference
-      if ([node isDirectory])
+      else if ([node isDirectory])
         {
           int defaultType = [gworkspace defaultViewerType];
           NSDebugLLog(@"gwspace", @"openAsFolderSelectionInViewer: using default viewer type %d for folder %@", defaultType, [node path]);
