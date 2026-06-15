@@ -98,12 +98,14 @@ FileViewer/GWViewerWindow.m \
 FileViewer/GWViewerBrowser.m \
 FileViewer/GWViewerIconsView.m \
 FileViewer/GWViewerListView.m \
+FileViewer/NSTableView+DragFix.m \
 FileViewer/GWViewerShelf.m \
 FileViewer/GWViewerSidebar.m \
 FileViewer/GWViewerSplit.m \
 FileViewer/GWViewerScrollView.m \
 FileViewer/GWViewerIconsPath.m \
 FileViewer/GWViewerPathsPopUp.m \
+FileViewer/GWX11SpatialPath.m \
 FileViewer/DSStoreInfo.m \
 ../DSStore/DSStore.m \
 ../DSStore/DSBuddyAllocator.m \
