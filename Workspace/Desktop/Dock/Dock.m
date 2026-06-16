@@ -415,7 +415,7 @@
     }
   
     [self tile];
-    if (icon) {
+    if (icon && ([icon isLaunched] == NO)) {
       [icon animateLaunch];
     }
   }

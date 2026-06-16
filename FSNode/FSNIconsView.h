@@ -61,6 +61,7 @@
 
   BOOL isDragTarget;
   BOOL forceCopy;
+  NSDragOperation negotiatedDragOp;
   
   NSString *charBuffer;	
   NSTimeInterval lastKeyPressedTime;

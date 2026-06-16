@@ -10,12 +10,10 @@
 
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
+#import "AppearanceMetrics.h"
 
 #define WINDOW_WIDTH 480
 #define WINDOW_HEIGHT 400
-#define MARGIN 20
-#define BUTTON_WIDTH 100
-#define BUTTON_HEIGHT 28
 
 @implementation DeviceEraseConfirmation
 
@@ -198,14 +196,17 @@
 
   NSView *contentView = [_window contentView];
 
-  _warningIcon = [[NSImageView alloc] initWithFrame:NSMakeRect(MARGIN, WINDOW_HEIGHT - 80, 64, 64)];
+  float iconY = WINDOW_HEIGHT - METRICS_ICON_TOP - METRICS_ICON_SIDE;
+  _warningIcon = [[NSImageView alloc] initWithFrame:NSMakeRect(METRICS_ICON_LEFT, iconY, METRICS_ICON_SIDE, METRICS_ICON_SIDE)];
   [_warningIcon setImage:[NSImage imageNamed:@"NSCaution"]];
   [_warningIcon setImageScaling:NSImageScaleProportionallyUpOrDown];
   [contentView addSubview:_warningIcon];
   RELEASE(_warningIcon);
 
+  float titleHeight = 24.0;
+  float titleY = WINDOW_HEIGHT - METRICS_ICON_TOP - titleHeight;
   _titleLabel = [[NSTextField alloc] initWithFrame:
-                 NSMakeRect(MARGIN + 74, WINDOW_HEIGHT - 60, WINDOW_WIDTH - 2*MARGIN - 74, 40)];
+                 NSMakeRect(METRICS_TEXT_LEFT, titleY, WINDOW_WIDTH - METRICS_CONTENT_SIDE_MARGIN - METRICS_TEXT_LEFT, titleHeight)];
   [_titleLabel setBezeled:NO];
   [_titleLabel setDrawsBackground:NO];
   [_titleLabel setEditable:NO];
@@ -216,8 +217,11 @@
   [contentView addSubview:_titleLabel];
   RELEASE(_titleLabel);
 
+  float scrollY = iconY - METRICS_SPACE_16;
+  float buttonAreaTop = METRICS_CONTENT_BOTTOM_MARGIN + METRICS_BUTTON_HEIGHT + METRICS_SPACE_16;
+  float scrollHeight = scrollY - buttonAreaTop;
   NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame:
-                              NSMakeRect(MARGIN, 100, WINDOW_WIDTH - 2*MARGIN, WINDOW_HEIGHT - 200)];
+                              NSMakeRect(METRICS_CONTENT_SIDE_MARGIN, buttonAreaTop, WINDOW_WIDTH - 2*METRICS_CONTENT_SIDE_MARGIN, scrollHeight)];
   [scrollView setHasVerticalScroller:YES];
   [scrollView setHasHorizontalScroller:NO];
   [scrollView setBorderType:NSBezelBorder];
@@ -228,7 +232,7 @@
                   NSMakeRect(0, 0, contentSize.width, contentSize.height)];
   [_messageText setEditable:NO];
   [_messageText setSelectable:YES];
-  [_messageText setFont:[NSFont systemFontOfSize:13]];
+  [_messageText setFont:METRICS_FONT_SYSTEM_REGULAR_13];
   [_messageText setMinSize:NSMakeSize(0.0, contentSize.height)];
   [_messageText setMaxSize:NSMakeSize(FLT_MAX, FLT_MAX)];
   [_messageText setVerticallyResizable:YES];
@@ -242,8 +246,9 @@
   [contentView addSubview:scrollView];
   RELEASE(scrollView);
 
+  float buttonWidth = 80.0;
   _cancelButton = [[NSButton alloc] initWithFrame:
-                   NSMakeRect(MARGIN, MARGIN, BUTTON_WIDTH, BUTTON_HEIGHT)];
+                   NSMakeRect(METRICS_CONTENT_SIDE_MARGIN, METRICS_CONTENT_BOTTOM_MARGIN, buttonWidth, METRICS_BUTTON_HEIGHT)];
   [_cancelButton setTitle:NSLocalizedString(@"Cancel", @"")];
   [_cancelButton setBezelStyle:NSRoundedBezelStyle];
   [_cancelButton setTarget:self];
@@ -253,7 +258,7 @@
   RELEASE(_cancelButton);
 
   _actionButton = [[NSButton alloc] initWithFrame:
-                 NSMakeRect(WINDOW_WIDTH - BUTTON_WIDTH - MARGIN, MARGIN, BUTTON_WIDTH, BUTTON_HEIGHT)];
+                 NSMakeRect(WINDOW_WIDTH - buttonWidth - METRICS_CONTENT_SIDE_MARGIN, METRICS_CONTENT_BOTTOM_MARGIN, buttonWidth, METRICS_BUTTON_HEIGHT)];
   [_actionButton setTitle:(_actionTitle ? _actionTitle : @"")];
   [_actionButton setBezelStyle:NSRoundedBezelStyle];
   [_actionButton setTarget:self];

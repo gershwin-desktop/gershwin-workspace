@@ -1761,17 +1761,20 @@ static NSImage *branchImage;
 		   && [container respondsToSelector: @selector(baseNode)]
 		   && [node isEqual: [container baseNode]]);
 
-  sourceDragMask = [sender draggingSourceOperationMask];
+  sourceDragMask = dragOperationForCurrentModifierFlags();
   if (sourceDragMask & NSDragOperationMove)
     {
-      if ([[NSFileManager defaultManager] isWritableFileAtPath: fromPath]
+      if (([[NSFileManager defaultManager] isWritableFileAtPath: fromPath]
+	   && pathsAreOnSameVolume(fromPath, nodePath))
 	  || ([node isApplication] && (onApplication == NO)))
 	{
+	  negotiatedDragOp = NSDragOperationMove;
 	  return NSDragOperationMove;
 	}
       else if (([node isApplication] == NO) || onApplication)
 	{
 	  forceCopy = YES;
+	  negotiatedDragOp = NSDragOperationCopy;
 	  return NSDragOperationCopy;
 	}
     }
@@ -1780,10 +1783,12 @@ static NSImage *branchImage;
     {
       if ([node isApplication])
 	{
-	  return (onApplication ? NSDragOperationCopy : NSDragOperationMove);
+	  negotiatedDragOp = (onApplication ? NSDragOperationCopy : NSDragOperationMove);
+	  return negotiatedDragOp;
 	}
       else
 	{
+	  negotiatedDragOp = NSDragOperationCopy;
 	  return NSDragOperationCopy;
 	}
     }
@@ -1792,10 +1797,12 @@ static NSImage *branchImage;
     {
       if ([node isApplication])
 	{
-	  return (onApplication ? NSDragOperationLink : NSDragOperationMove);
+	  negotiatedDragOp = (onApplication ? NSDragOperationLink : NSDragOperationMove);
+	  return negotiatedDragOp;
 	}
       else
 	{
+	  negotiatedDragOp = NSDragOperationLink;
 	  return NSDragOperationLink;
 	}
     }
@@ -1805,7 +1812,7 @@ static NSImage *branchImage;
 
 - (NSDragOperation)draggingUpdated:(id <NSDraggingInfo>)sender
 {
-  NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+  NSDragOperation sourceDragMask = dragOperationForCurrentModifierFlags();
   NSPoint p = [self convertPoint: [sender draggingLocation] fromView: nil];
 
   if ([self mouse: p inRect: icnBounds] == NO)
@@ -1837,17 +1844,20 @@ static NSImage *branchImage;
 
   if (sourceDragMask & NSDragOperationMove)
     {
-      return forceCopy ? NSDragOperationCopy : NSDragOperationMove;
+      negotiatedDragOp = forceCopy ? NSDragOperationCopy : NSDragOperationMove;
+      return negotiatedDragOp;
     }
 
   if (sourceDragMask & NSDragOperationCopy)
     {
       if ([node isApplication])
 	{
-	  return (onApplication ? NSDragOperationCopy : NSDragOperationMove);
+	  negotiatedDragOp = (onApplication ? NSDragOperationCopy : NSDragOperationMove);
+	  return negotiatedDragOp;
 	}
       else
 	{
+	  negotiatedDragOp = NSDragOperationCopy;
 	  return NSDragOperationCopy;
 	}
     }
@@ -1856,10 +1866,12 @@ static NSImage *branchImage;
     {
       if ([node isApplication])
 	{
-	  return (onApplication ? NSDragOperationLink : NSDragOperationMove);
+	  negotiatedDragOp = (onApplication ? NSDragOperationLink : NSDragOperationMove);
+	  return negotiatedDragOp;
 	}
       else
 	{
+	  negotiatedDragOp = NSDragOperationLink;
 	  return NSDragOperationLink;
 	}
     }
@@ -1977,24 +1989,20 @@ static NSImage *branchImage;
 	}
       else
 	{
-	  if (sourceDragMask & NSDragOperationMove)
+	  switch (negotiatedDragOp)
 	    {
-	      if ([[NSFileManager defaultManager] isWritableFileAtPath: source])
-		{
-		  operation = NSWorkspaceMoveOperation;
-		}
-	      else
-		{
-		  operation = NSWorkspaceCopyOperation;
-		}
-	    }
-	  else if (sourceDragMask & NSDragOperationCopy)
-	    {
-	      operation = NSWorkspaceCopyOperation;
-	    }
-	  else if (sourceDragMask & NSDragOperationLink)
-	    {
-	      operation = NSWorkspaceLinkOperation;
+	      case NSDragOperationMove:
+		operation = NSWorkspaceMoveOperation;
+		break;
+	      case NSDragOperationCopy:
+		operation = NSWorkspaceCopyOperation;
+		break;
+	      case NSDragOperationLink:
+		operation = NSWorkspaceLinkOperation;
+		break;
+	      default:
+		operation = NSWorkspaceCopyOperation;
+		break;
 	    }
 	}
 

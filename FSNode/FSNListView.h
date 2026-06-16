@@ -51,6 +51,7 @@
   NSUInteger mouseFlags;
   BOOL isDragTarget;
   BOOL forceCopy;
+  NSDragOperation negotiatedDragOp;
   FSNListViewNodeRep *dndTarget;
   unsigned int dragOperation;
   NSRect dndValidRect;
@@ -258,6 +259,7 @@
   BOOL nameEdited;
   BOOL isDragTarget;
   BOOL forceCopy;
+  NSDragOperation negotiatedDragOp;
 
   FSNListViewDataSource *dataSource;
   FSNodeRep *fsnodeRep;

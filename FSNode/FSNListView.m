@@ -1715,16 +1715,17 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   if (dndTarget != arep)
     {
       dndTarget = arep;
-      dragOperation = [dndTarget repDraggingEntered: sender];
+    }
 
-      if (dragOperation != NSDragOperationNone)
-	{
-	  [self selectIconOfRep: dndTarget];
-	}
-      else
-	{
-	  [self unSelectIconsOfRepsDifferentFrom: nil];
-	}
+  dragOperation = [dndTarget repDraggingEntered: sender];
+
+  if (dragOperation != NSDragOperationNone)
+    {
+      [self selectIconOfRep: dndTarget];
+    }
+  else
+    {
+      [self unSelectIconsOfRepsDifferentFrom: nil];
     }
 
   return dragOperation;
@@ -1871,23 +1872,28 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
       isDragTarget = YES;
       forceCopy = NO;
 
-      sourceDragMask = [sender draggingSourceOperationMask];
+      sourceDragMask = dragOperationForCurrentModifierFlags();
 
       if (sourceDragMask & NSDragOperationMove)
 	{
-	  if ([[NSFileManager defaultManager] isWritableFileAtPath: basePath])
+	  if ([[NSFileManager defaultManager] isWritableFileAtPath: basePath]
+	      && pathsAreOnSameVolume(basePath, nodePath))
 	    {
+	      negotiatedDragOp = NSDragOperationMove;
 	      return NSDragOperationMove;
 	    }
 	  forceCopy = YES;
+	  negotiatedDragOp = NSDragOperationCopy;
 	  return NSDragOperationCopy;
 	}
       if (sourceDragMask & NSDragOperationCopy)
 	{
+	  negotiatedDragOp = NSDragOperationCopy;
 	  return NSDragOperationCopy;
 	}
       if (sourceDragMask & NSDragOperationLink)
 	{
+	  negotiatedDragOp = NSDragOperationLink;
 	  return NSDragOperationLink;
 	}
     }
@@ -1927,7 +1933,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
   if (dragOperation == NSDragOperationNone)
     {
-      NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+      NSDragOperation sourceDragMask = dragOperationForCurrentModifierFlags();
 
       dndTarget = nil;
 
@@ -1938,14 +1944,17 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
       if (sourceDragMask & NSDragOperationMove)
 	{
-	  return forceCopy ? NSDragOperationCopy : NSDragOperationMove;
+	  negotiatedDragOp = forceCopy ? NSDragOperationCopy : NSDragOperationMove;
+	  return negotiatedDragOp;
 	}
       if (sourceDragMask & NSDragOperationCopy)
 	{
+	  negotiatedDragOp = NSDragOperationCopy;
 	  return NSDragOperationCopy;
 	}
       if (sourceDragMask & NSDragOperationLink)
 	{
+	  negotiatedDragOp = NSDragOperationLink;
 	  return NSDragOperationLink;
 	}
     }
@@ -2038,24 +2047,20 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
       else
         {
-          if (sourceDragMask & NSDragOperationMove)
+          switch (negotiatedDragOp)
             {
-              if ([[NSFileManager defaultManager] isWritableFileAtPath: source])
-                {
-                  operation = NSWorkspaceMoveOperation;
-                }
-              else
-                {
-                  operation = NSWorkspaceCopyOperation;
-                }
-            }
-          else if (sourceDragMask & NSDragOperationCopy)
-            {
-              operation = NSWorkspaceCopyOperation;
-            }
-          else if (sourceDragMask & NSDragOperationLink)
-            {
-              operation = NSWorkspaceLinkOperation;
+              case NSDragOperationMove:
+                operation = NSWorkspaceMoveOperation;
+                break;
+              case NSDragOperationCopy:
+                operation = NSWorkspaceCopyOperation;
+                break;
+              case NSDragOperationLink:
+                operation = NSWorkspaceLinkOperation;
+                break;
+              default:
+                operation = NSWorkspaceCopyOperation;
+                break;
             }
         }
 
@@ -2539,22 +2544,27 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   isDragTarget = YES;
   forceCopy = NO;
 
-  sourceDragMask = [sender draggingSourceOperationMask];
+  sourceDragMask = dragOperationForCurrentModifierFlags();
   if (sourceDragMask & NSDragOperationMove)
     {
-      if ([[NSFileManager defaultManager] isWritableFileAtPath: fromPath])
+      if ([[NSFileManager defaultManager] isWritableFileAtPath: fromPath]
+	  && pathsAreOnSameVolume(fromPath, nodePath))
 	{
+	  negotiatedDragOp = NSDragOperationMove;
 	  return NSDragOperationMove;
 	}
       forceCopy = YES;
+      negotiatedDragOp = NSDragOperationCopy;
       return NSDragOperationCopy;
     }
   if (sourceDragMask & NSDragOperationCopy)
     {
+      negotiatedDragOp = NSDragOperationCopy;
       return NSDragOperationCopy;
     }
   if (sourceDragMask & NSDragOperationLink)
     {
+      negotiatedDragOp = NSDragOperationLink;
       return NSDragOperationLink;
     }
 
@@ -2565,7 +2575,6 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 {
   id <DesktopApplication> desktopApp = [dataSource desktopApp];
   NSPasteboard *pb = [sender draggingPasteboard];
-  NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
   NSArray *sourcePaths;
   NSString *operation, *source;
   NSMutableArray *files;
@@ -2603,24 +2612,20 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     }
   else
     {
-      if (sourceDragMask == NSDragOperationCopy)
+      switch (negotiatedDragOp)
 	{
-	  operation = NSWorkspaceCopyOperation;
-	}
-      else if (sourceDragMask == NSDragOperationLink)
-	{
-	  operation = NSWorkspaceLinkOperation;
-	}
-      else
-	{
-	  if ([[NSFileManager defaultManager] isWritableFileAtPath: source])
-	    {
-	      operation = NSWorkspaceMoveOperation;
-	    }
-	  else
-	    {
-	      operation = NSWorkspaceCopyOperation;
-	    }
+	  case NSDragOperationMove:
+	    operation = NSWorkspaceMoveOperation;
+	    break;
+	  case NSDragOperationCopy:
+	    operation = NSWorkspaceCopyOperation;
+	    break;
+	  case NSDragOperationLink:
+	    operation = NSWorkspaceLinkOperation;
+	    break;
+	  default:
+	    operation = NSWorkspaceCopyOperation;
+	    break;
 	}
     }
 

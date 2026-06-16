@@ -24,6 +24,7 @@
  */
 
 #include <math.h>
+#include <sys/stat.h>
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -63,6 +64,20 @@ BOOL isSubpathOfPath(NSString *p1, NSString *p2)
   }
 
   return NO;
+}
+
+BOOL pathsAreOnSameVolume(NSString *path1, NSString *path2)
+{
+  struct stat s1, s2;
+
+  if (stat([path1 fileSystemRepresentation], &s1) != 0) {
+    return NO;
+  }
+  if (stat([path2 fileSystemRepresentation], &s2) != 0) {
+    return NO;
+  }
+
+  return (s1.st_dev == s2.st_dev);
 }
 
 NSString *subtractFirstPartFromPath(NSString *path, NSString *firstpart)
@@ -135,6 +150,25 @@ double myrintf(double a)
   return (floor(a + 0.5));
 }
 
+
+NSDragOperation dragOperationForCurrentModifierFlags(void)
+{
+  NSUInteger flags = [NSEvent modifierFlags];
+
+  /* Meta → Option → NSAlternateKeyMask → Copy */
+  if (flags & NSAlternateKeyMask)
+    {
+      return NSDragOperationCopy;
+    }
+  /* Alt → Command → NSCommandKeyMask → Link */
+  if (flags & NSCommandKeyMask)
+    {
+      return NSDragOperationLink;
+    }
+
+  /* No relevant modifier → let caller apply volume-based default */
+  return NSDragOperationMove;
+}
 
 /* --- Text Field Editing Error Messages */
 

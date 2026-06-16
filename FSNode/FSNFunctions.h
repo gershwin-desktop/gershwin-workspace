@@ -30,6 +30,10 @@ NSString *path_separator(void);
 
 BOOL isSubpathOfPath(NSString *p1, NSString *p2);
 
+BOOL pathsAreOnSameVolume(NSString *path1, NSString *path2);
+
+NSDragOperation dragOperationForCurrentModifierFlags(void);
+
 NSString *subtractFirstPartFromPath(NSString *path, NSString *firstpart);
 
 NSComparisonResult compareWithExtType(id r1, id r2, void *context);

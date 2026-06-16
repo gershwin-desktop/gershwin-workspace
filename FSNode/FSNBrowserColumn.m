@@ -1361,23 +1361,28 @@ static id <DesktopApplication> desktopApp = nil;
   isDragTarget = YES;
   forceCopy = NO;
 
-  sourceDragMask = [sender draggingSourceOperationMask];
+  sourceDragMask = dragOperationForCurrentModifierFlags();
 
   if (sourceDragMask & NSDragOperationMove)
     {
-      if ([[NSFileManager defaultManager] isWritableFileAtPath: basePath])
+      if ([[NSFileManager defaultManager] isWritableFileAtPath: basePath]
+	  && pathsAreOnSameVolume(basePath, nodePath))
 	{
+	  negotiatedDragOp = NSDragOperationMove;
 	  return NSDragOperationMove;
 	}
       forceCopy = YES;
+      negotiatedDragOp = NSDragOperationCopy;
       return NSDragOperationCopy;
     }
   if (sourceDragMask & NSDragOperationCopy)
     {
+      negotiatedDragOp = NSDragOperationCopy;
       return NSDragOperationCopy;
     }
   if (sourceDragMask & NSDragOperationLink)
     {
+      negotiatedDragOp = NSDragOperationLink;
       return NSDragOperationLink;
     }
 
@@ -1387,7 +1392,7 @@ static id <DesktopApplication> desktopApp = nil;
 
 - (NSDragOperation)draggingUpdated:(id <NSDraggingInfo>)sender
 {
-  NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+  NSDragOperation sourceDragMask = dragOperationForCurrentModifierFlags();
 
   if (isDragTarget == NO)
     {
@@ -1396,14 +1401,17 @@ static id <DesktopApplication> desktopApp = nil;
 
   if (sourceDragMask & NSDragOperationMove)
     {
-      return forceCopy ? NSDragOperationCopy : NSDragOperationMove;
+      negotiatedDragOp = forceCopy ? NSDragOperationCopy : NSDragOperationMove;
+      return negotiatedDragOp;
     }
   if (sourceDragMask & NSDragOperationCopy)
     {
+      negotiatedDragOp = NSDragOperationCopy;
       return NSDragOperationCopy;
     }
   if (sourceDragMask & NSDragOperationLink)
     {
+      negotiatedDragOp = NSDragOperationLink;
       return NSDragOperationLink;
     }
 
@@ -1476,24 +1484,20 @@ static id <DesktopApplication> desktopApp = nil;
     }
   else
     {
-      if (sourceDragMask & NSDragOperationMove)
+      switch (negotiatedDragOp)
 	{
-	  if ([[NSFileManager defaultManager] isWritableFileAtPath: source])
-	    {
-	      operation = NSWorkspaceMoveOperation;
-	    }
-	  else
-	    {
-	      operation = NSWorkspaceCopyOperation;
-	    }
-	}
-      else if (sourceDragMask & NSDragOperationCopy)
-	{
-	  operation = NSWorkspaceCopyOperation;
-	}
-      else if (sourceDragMask & NSDragOperationLink)
-	{
-	  operation = NSWorkspaceLinkOperation;
+	  case NSDragOperationMove:
+	    operation = NSWorkspaceMoveOperation;
+	    break;
+	  case NSDragOperationCopy:
+	    operation = NSWorkspaceCopyOperation;
+	    break;
+	  case NSDragOperationLink:
+	    operation = NSWorkspaceLinkOperation;
+	    break;
+	  default:
+	    operation = NSWorkspaceCopyOperation;
+	    break;
 	}
     }
 
@@ -1514,7 +1518,7 @@ static id <DesktopApplication> desktopApp = nil;
                       inMatrixCell:(id)cell
 {
   NSPasteboard *pb = [sender draggingPasteboard];
-  NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+  NSDragOperation sourceDragMask = dragOperationForCurrentModifierFlags();
   FSNode *node = [cell node];
   NSString *nodePath = [node path];
   NSArray *sourcePaths;
@@ -1648,20 +1652,25 @@ static id <DesktopApplication> desktopApp = nil;
 
   if (sourceDragMask & NSDragOperationMove)
     {
-      if ([[NSFileManager defaultManager] isWritableFileAtPath: fromPath]
+      if (([[NSFileManager defaultManager] isWritableFileAtPath: fromPath]
+	   && pathsAreOnSameVolume(fromPath, nodePath))
 	  || [node isApplication])
 	{
+	  negotiatedDragOp = NSDragOperationMove;
 	  return NSDragOperationMove;
 	}
+      negotiatedDragOp = NSDragOperationCopy;
       return NSDragOperationCopy;
     }
   if (sourceDragMask & NSDragOperationCopy)
     {
-      return ([node isApplication] ? NSDragOperationMove : NSDragOperationCopy);
+      negotiatedDragOp = ([node isApplication] ? NSDragOperationMove : NSDragOperationCopy);
+      return negotiatedDragOp;
     }
   if (sourceDragMask & NSDragOperationLink)
     {
-      return ([node isApplication] ? NSDragOperationMove : NSDragOperationLink);
+      negotiatedDragOp = ([node isApplication] ? NSDragOperationMove : NSDragOperationLink);
+      return negotiatedDragOp;
     }
 
   return NSDragOperationNone;
@@ -1672,7 +1681,6 @@ static id <DesktopApplication> desktopApp = nil;
 {
   FSNode *node = [cell node];
   NSPasteboard *pb = [sender draggingPasteboard];
-  NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
   NSArray *sourcePaths;
   NSString *operation;
   NSString *source;
@@ -1723,24 +1731,20 @@ static id <DesktopApplication> desktopApp = nil;
 	}
       else
 	{
-	  if (sourceDragMask & NSDragOperationMove)
+	  switch (negotiatedDragOp)
 	    {
-	      if ([[NSFileManager defaultManager] isWritableFileAtPath: source])
-		{
-		  operation = NSWorkspaceMoveOperation;
-		}
-	      else
-		{
-		  operation = NSWorkspaceCopyOperation;
-		}
-	    }
-	  else if (sourceDragMask & NSDragOperationCopy)
-	    {
-	      operation = NSWorkspaceCopyOperation;
-	    }
-	  else if (sourceDragMask & NSDragOperationLink)
-	    {
-	      operation = NSWorkspaceLinkOperation;
+	      case NSDragOperationMove:
+		operation = NSWorkspaceMoveOperation;
+		break;
+	      case NSDragOperationCopy:
+		operation = NSWorkspaceCopyOperation;
+		break;
+	      case NSDragOperationLink:
+		operation = NSWorkspaceLinkOperation;
+		break;
+	      default:
+		operation = NSWorkspaceCopyOperation;
+		break;
 	    }
 	}
 

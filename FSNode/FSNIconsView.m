@@ -2400,23 +2400,28 @@ static void GWHighlightFrameRect(NSRect aRect)
   isDragTarget = YES;
   forceCopy = NO;
 
-  sourceDragMask = [sender draggingSourceOperationMask];
+  sourceDragMask = dragOperationForCurrentModifierFlags();
 
   if (sourceDragMask & NSDragOperationMove)
     {
-      if ([[NSFileManager defaultManager] isWritableFileAtPath: basePath])
+      if ([[NSFileManager defaultManager] isWritableFileAtPath: basePath]
+	  && pathsAreOnSameVolume(basePath, nodePath))
 	{
+	  negotiatedDragOp = NSDragOperationMove;
 	  return NSDragOperationMove;
 	}
       forceCopy = YES;
+      negotiatedDragOp = NSDragOperationCopy;
       return NSDragOperationCopy;
     }
   if (sourceDragMask & NSDragOperationCopy)
     {
+      negotiatedDragOp = NSDragOperationCopy;
       return NSDragOperationCopy;
     }
   if (sourceDragMask & NSDragOperationLink)
     {
+      negotiatedDragOp = NSDragOperationLink;
       return NSDragOperationLink;
     }
 
@@ -2426,7 +2431,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (NSDragOperation)draggingUpdated:(id <NSDraggingInfo>)sender
 {
-  NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
+  NSDragOperation sourceDragMask = dragOperationForCurrentModifierFlags();
   NSRect vr = [self visibleRect];
   NSRect scr = vr;
   int xsc = 0.0;
@@ -2494,14 +2499,17 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
   if (sourceDragMask & NSDragOperationMove)
     {
-      return forceCopy ? NSDragOperationCopy : NSDragOperationMove;
+      negotiatedDragOp = forceCopy ? NSDragOperationCopy : NSDragOperationMove;
+      return negotiatedDragOp;
     }
   if (sourceDragMask & NSDragOperationCopy)
     {
+      negotiatedDragOp = NSDragOperationCopy;
       return NSDragOperationCopy;
     }
   if (sourceDragMask & NSDragOperationLink)
     {
+      negotiatedDragOp = NSDragOperationLink;
       return NSDragOperationLink;
     }
 
@@ -2575,24 +2583,20 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
   else
     {
-      if (sourceDragMask & NSDragOperationMove)
+      switch (negotiatedDragOp)
 	{
-	  if ([[NSFileManager defaultManager] isWritableFileAtPath: source])
-	    {
-	      operation = NSWorkspaceMoveOperation;
-	    }
-	  else
-	    {
-	      operation = NSWorkspaceCopyOperation;
-	    }
-	}
-      else if (sourceDragMask & NSDragOperationCopy)
-	{
-	  operation = NSWorkspaceCopyOperation;
-	}
-      else if (sourceDragMask / NSDragOperationLink)
-	{
-	  operation = NSWorkspaceLinkOperation;
+	  case NSDragOperationMove:
+	    operation = NSWorkspaceMoveOperation;
+	    break;
+	  case NSDragOperationCopy:
+	    operation = NSWorkspaceCopyOperation;
+	    break;
+	  case NSDragOperationLink:
+	    operation = NSWorkspaceLinkOperation;
+	    break;
+	  default:
+	    operation = NSWorkspaceCopyOperation;
+	    break;
 	}
     }
 

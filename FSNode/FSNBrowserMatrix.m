@@ -489,17 +489,18 @@
 {
   if (dndTarget != acell) {
     dndTarget = acell;
-    dragOperation = [column draggingEntered: sender inMatrixCell: dndTarget];
-
-    if (dragOperation != NSDragOperationNone)
-      {
-	[self selectIconOfCell: dndTarget];
-      }
-    else
-      {
-	[self unSelectIconsOfCellsDifferentFrom: nil];
-      }
   }
+
+  dragOperation = [column draggingEntered: sender inMatrixCell: dndTarget];
+
+  if (dragOperation != NSDragOperationNone)
+    {
+      [self selectIconOfCell: dndTarget];
+    }
+  else
+    {
+      [self unSelectIconsOfCellsDifferentFrom: nil];
+    }
 
   return dragOperation;
 }

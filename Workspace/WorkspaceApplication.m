@@ -679,15 +679,18 @@
   if (app) {
     [launchedApps addObject:app];
     
-    /* For non-GNUstep apps (no NSConnection), register with X11AppManager immediately */
-    if (![app application] && pid > 0) {
-      [app setIsX11App:YES];
-      [app setWindowSearchString:appName];
-      [[GWX11AppManager sharedManager] registerX11App:appName
-                                                 path:appPath
-                                                  pid:pid
-                                   windowSearchString:appName];
-      GWDebugLog(@"\"%@\" registered as X11 app immediately after launch (pid=%d)", appName, pid);
+    /* Register with X11AppManager for window monitoring.  We don't know
+     * yet if this is a GNUstep app (DO connection not ready), so register
+     * anyway for non-GNUstep monitoring.  isX11App is NOT set here — it
+     * will be determined in appDidLaunch: where the DO connection status
+     * is known. */
+    if (pid > 0) {
+      [app setWindowSearchString: appName];
+      [[GWX11AppManager sharedManager] registerX11App: appName
+                                                 path: appPath
+                                                  pid: pid
+                                   windowSearchString: appName];
+      GWDebugLog(@"\"%@\" registered with X11AppManager at launch (pid=%d)", appName, pid);
     }
   }
   
@@ -704,6 +707,21 @@
   if (path && name) {
     [[dtopManager dock] appWillLaunch: path appName: name];
     GWDebugLog(@"appWillLaunch: \"%@\" %@", name, path);
+
+    /* Create a GWLaunchedApp entry now so the fallback timer
+     * (_launchDotFallbackTimerFired:) can track the process.
+     * If the app is already tracked, this is a no-op. */
+    if ([self launchedAppWithPath:path andName:name] == nil) {
+      GWLaunchedApp *newApp = [GWLaunchedApp appWithApplicationPath:path
+                                                    applicationName:name
+                                                  processIdentifier:nil
+                                                       checkRunning:NO];
+      if (newApp) {
+        [launchedApps addObject:newApp];
+        GWDebugLog(@"appWillLaunch: created GWLaunchedApp for \"%@\"", name);
+      }
+    }
+
     // Schedule 10s fallback: if no window/connection appears but the
     // process hasn't exited, show the dock dot anyway.
     [self _scheduleLaunchDotFallbackForPath: path name: name];
@@ -732,38 +750,42 @@
                               processIdentifier: ident
                                    checkRunning: NO];
     
-    if (app && [app application]) {
+    if (app) {
+      /* Always add to launchedApps so subsequent Dock clicks can find
+       * the app and activate it.  Previously this was conditional on
+       * [app application] (DO connection), which excluded X11 apps
+       * like Chrome — causing launchAppWithPath: to return nil and
+       * the activation fallback to rely on fragile X11 name matching. */
       [launchedApps addObject: app];
     }  
   }
 
   /*
-   * For GNUstep apps (with NSConnection), notify dock at launch time.
-   * Non-GNUstep apps are already registered with X11AppManager in launchApplication,
-   * so we skip duplicate registration here.
+   * Always notify the Dock for any app we track, so the Dock icon's
+   * "launched" flag is set to YES.  Without this, subsequent clicks on
+   * the Dock icon would launch a new instance instead of raising the
+   * existing one.
    */
-  if (app && [app application]) {
-    pid_t pid = ident ? (pid_t)[ident intValue] : 0;
-    [[dtopManager dock] appDidLaunch: path appName: name pid: pid];
-    GWDebugLog(@"\"%@\" appDidLaunch (%@) [dock notified - GNUstep app]", name, path);
-    // No need for fallback if connection established
+  if (app) {
+    pid_t dockPid = ident ? (pid_t)[ident intValue] : 0;
+    [[dtopManager dock] appDidLaunch: path appName: name pid: dockPid];
     [self _cancelLaunchDotFallbackForPath: path name: name];
-  } else if (app && [app isX11App]) {
-    /* X11 app that was already registered in launchApplication.
-     * The X11AppManager will notify the dock when windows appear. */
-    GWDebugLog(@"\"%@\" appDidLaunch (%@) [X11 app - already registered]", name, path);
-  } else if (app && ident) {
-    /* Fallback: GNUstep app launched externally without going through our launcher.
-     * Register as X11 app for monitoring. */
-    pid_t pid = (pid_t)[ident intValue];
-    if (pid > 0) {
+    GWDebugLog(@"\"%@\" appDidLaunch (%@) [dock notified]", name, path);
+
+    /* Register with X11AppManager for window activation on subsequent
+     * Dock clicks.  This is needed for externally-launched apps (e.g.
+     * first Dock click goes through NSWorkspace, not our launcher, so
+     * they weren't registered in launchApplication:arguments:).
+     * We use the PID directly from the notification — no [app application]
+     * call (which would trigger connectApplication: runloop spinning). */
+    if (dockPid > 0 && ![app isX11App]) {
       [app setIsX11App: YES];
       [app setWindowSearchString: name];
       [[GWX11AppManager sharedManager] registerX11App: name
                                                  path: path
-                                                  pid: pid
+                                                  pid: dockPid
                                    windowSearchString: name];
-      GWDebugLog(@"\"%@\" appDidLaunch (%@) [registered as X11 app (external launch), pid=%d]", name, path, pid);
+      GWDebugLog(@"\"%@\" appDidLaunch (%@) [registered with X11AppManager, pid=%d]", name, path, dockPid);
     }
   }
 }
@@ -934,6 +956,27 @@
     }
   }
 
+  /* If we still don't have a PID or running status, try the Dock icon.
+   * For apps launched via NSWorkspace (not our launcher), the GWLaunchedApp
+   * was created in appWillLaunch: but may not have a PID yet. */
+  if (appPID <= 0) {
+    DockIcon *icon = [[dtopManager dock] iconForApplicationName: name];
+    if (icon) {
+      appPID = [icon appPID];
+    }
+  }
+  if (appPID > 0 && !processRunning) {
+    processRunning = [self _pidExists:appPID];
+  }
+
+  /* As a last resort, if the app is tracked but we couldn't determine
+   * a PID, assume it might be running (the notification wouldn't fire
+   * if the launch failed).  This ensures the fallback retries and
+   * eventually shows the dock dot. */
+  if (app && !processRunning && appPID <= 0) {
+    processRunning = YES;
+  }
+
   /* Check if a window is visible on X11 (faster response for non-GNUstep apps) */
   GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
   
@@ -1028,7 +1071,6 @@
     return [[GWX11AppManager sharedManager] activateX11App: name];
   }
   
-  /* Fallback: try by PID first, then by name */
   pid_t pid = 0;
   if ([app identifier]) pid = (pid_t)[[app identifier] intValue];
   if (pid <= 0 && [app task]) {
@@ -1191,9 +1233,11 @@
     [app unhideApplication];
     if ([app application] == nil) {
       [self _x11ActivateForApp: app name: name];
+    } else {
+      /* GNUstep app: activate with full DO+X11 window raising */
+      [app activateApplication];
     }
   } else if (!app) {
-    // Fallback for non-tracked non-GNUstep apps: try to raise their X11 windows
     [self _x11ActivateForApp: nil name: name];
   }
 }
@@ -1817,23 +1861,41 @@
 
 - (void)activateApplication
 {
-  if (isX11App) {
-    /* Use X11 window manager for X11 apps */
-    [[GWX11AppManager sharedManager] activateX11App: name];
-    return;
-  }
-  
+  /* First, try DO-based activation (works for GNUstep apps with a
+   * live connection).  This is safe — sending a message to a nil
+   * proxy is a no-op, and exceptions are caught. */
   NS_DURING
     {
       [application activateIgnoringOtherApps: YES];
+      [application arrangeInFront: nil];
     }
   NS_HANDLER
     {
-      NSDebugLLog(@"gwspace", @"Unable to activate %@", name);
+      NSDebugLLog(@"gwspace", @"Unable to activate %@ via DO", name);
       NSDebugLLog(@"gwspace", @"Workspace caught exception %@: %@", 
             [localException name], [localException reason]);
     }
   NS_ENDHANDLER
+
+  /* Also try X11AppManager activation and direct PID-based X11 raising.
+   * For X11 apps this is the primary path; for GNUstep apps it serves as
+   * a backup if the DO activation above didn't raise windows reliably. */
+  {
+    GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+    
+    [[GWX11AppManager sharedManager] activateX11App: name];
+
+    pid_t appPID = 0;
+    if (identifier) {
+      appPID = (pid_t)[identifier intValue];
+    }
+    if (appPID <= 0 && task) {
+      @try { appPID = [task processIdentifier]; } @catch (id ex) { appPID = 0; }
+    }
+    if (appPID > 0) {
+      [wm activateWindowsForPID: appPID];
+    }
+  }
 }    
 
 - (void)setHidden:(BOOL)value

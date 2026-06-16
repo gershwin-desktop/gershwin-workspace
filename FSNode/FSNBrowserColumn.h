@@ -53,6 +53,7 @@
 
   BOOL isDragTarget;
   BOOL forceCopy;
+  NSDragOperation negotiatedDragOp;
   
   FSNBrowser *browser;
   NSColor *backColor;

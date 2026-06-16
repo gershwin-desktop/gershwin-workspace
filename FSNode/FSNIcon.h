@@ -88,6 +88,7 @@
   int dragdelay;
   BOOL isDragTarget;
   BOOL forceCopy;
+  NSDragOperation negotiatedDragOp;
   BOOL onApplication;
   BOOL onSelf;
   
