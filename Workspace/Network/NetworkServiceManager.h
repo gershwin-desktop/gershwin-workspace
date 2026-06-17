@@ -41,6 +41,14 @@ extern NSString * const NetworkServiceDidResolveNotification;
   NSMutableArray *pendingResolutions; // Array of NSNetService being resolved
   BOOL isSearching;
   BOOL mDNSAvailable;
+
+  /* Background thread that runs the mDNS run loop so that daemon
+     connection attempts never block the main thread / UI.
+     Browsers are created on this thread and delegate callbacks
+     arrive here; UI-facing notifications are posted to the main
+     thread. */
+  NSThread *networkThread;
+  BOOL threadShouldStop;
 }
 
 /**

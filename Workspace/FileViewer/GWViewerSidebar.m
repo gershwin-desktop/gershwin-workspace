@@ -956,9 +956,16 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
     GWSidebarItem *networkGroup = [[GWSidebarItem alloc]
         initHeaderWithTitle: NSLocalizedString(@"Network", @"")];
 
-    /* Collect all services: from discovery + mounted volumes without discovery.
-       Wrap in @try/@catch to guard against crashes when NSNetServiceBrowser
-       class exists but the mDNS daemon (Avahi/mDNSResponder) is not running.
+    /* Collect services from mDNS discovery.  Browsing is started
+       automatically in the background by NetworkServiceManager
+       (on its own thread with its own run loop) — the sidebar
+       never blocks on network I/O.  As services are discovered
+       or removed, NetworkServicesDidChangeNotification triggers
+       a rebuild, so results appear incrementally.
+
+       Wrap in @try/@catch to guard against any unexpected
+       exceptions from NSNetServiceBrowser when the mDNS daemon
+       (Avahi/mDNSResponder) is not running.
        See: https://github.com/gershwin-desktop/gershwin-workspace/issues/93 */
     @try {
       NetworkServiceManager *mgr = [NetworkServiceManager sharedManager];
@@ -966,18 +973,6 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
       NSMutableSet *seenIdentifiers = [NSMutableSet set];
 
       if ([mgr isMDNSAvailable]) {
-        /* Auto-start mDNS browsing so network services always appear
-           in the sidebar without the user having to go to Go To → Network.
-           Defer the actual browsing to the next run loop iteration so that
-           the viewer window is fully constructed first — this avoids the
-           sidebar init blocking on mDNS discovery and ensures that a crash
-           in the underlying DNS-SD library does not prevent the viewer
-           from appearing at all. */
-        if (![mgr isBrowsing]) {
-          [mgr performSelector:@selector(startBrowsing)
-                    withObject:nil
-                    afterDelay:0];
-        }
         NSArray *discovered = [mgr allServices];
         for (NetworkServiceItem *svc in discovered) {
           NSString *ident = [svc identifier];
