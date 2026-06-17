@@ -17,6 +17,7 @@
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+#include <stdio.h>
 
 /* Original NSTableView -mouseDown: implementation, saved before swizzling */
 static IMP _orig_mouseDown = NULL;
@@ -85,20 +86,24 @@ static IMP _orig_mouseDown = NULL;
 {
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
-    Method original = class_getInstanceMethod([NSTableView class],
+    /* Use C runtime functions only — no ObjC message sends — to avoid
+       triggering +initialize chains (NSUserDefaults → NSProcessInfo)
+       before main() has had a chance to call _gnu_process_args().  */
+    Class tableViewClass = objc_getClass("NSTableView");
+    Method original = class_getInstanceMethod(tableViewClass,
                                               @selector(mouseDown:));
-    Method swizzled = class_getInstanceMethod([self class],
+    Method swizzled = class_getInstanceMethod(self,
                                               @selector(_gw_mouseDown:));
     if (original && swizzled)
       {
         /* Save the original IMP before swapping */
         _orig_mouseDown = method_getImplementation(original);
         method_exchangeImplementations(original, swizzled);
-        NSLog(@"NSTableView+DragFix: swizzled -mouseDown: for instant drags");
+        fprintf(stderr, "NSTableView+DragFix: swizzled -mouseDown: for instant drags\n");
       }
     else
       {
-        NSLog(@"NSTableView+DragFix: failed to swizzle -mouseDown: (orig=%p, swizzled=%p)",
+        fprintf(stderr, "NSTableView+DragFix: failed to swizzle -mouseDown: (orig=%p, swizzled=%p)\n",
               (void *)original, (void *)swizzled);
       }
   });
