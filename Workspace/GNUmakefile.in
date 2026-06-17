@@ -38,9 +38,11 @@ ADDITIONAL_GUI_LIBS += -lFSNode
 ADDITIONAL_GUI_LIBS += -lInspector
 ADDITIONAL_GUI_LIBS += -lOperation
 ADDITIONAL_GUI_LIBS += -ldispatch
+ADDITIONAL_GUI_LIBS += -larchive
 
 # Include path for DSStore headers (sibling subproject)
 ADDITIONAL_INCLUDE_DIRS += -I../DSStore
+ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata
 
 Workspace_RESOURCE_FILES = \
   Resources/Icons/* \
@@ -107,11 +109,7 @@ FileViewer/GWViewerIconsPath.m \
 FileViewer/GWViewerPathsPopUp.m \
 FileViewer/GWX11SpatialPath.m \
 FileViewer/DSStoreInfo.m \
-../DSStore/DSStore.m \
-../DSStore/DSBuddyAllocator.m \
-../DSStore/DSStoreEntry.m \
-../DSStore/DSStoreCodecs.m \
-../DSStore/SimpleColor.m \
+../GWMetadata/GWMetaArchive.m \
 Finder/Finder.m \
 Finder/FindModuleView.m \
 Finder/SearchPlacesBox.m \
@@ -147,6 +145,7 @@ Network/SFTPMount.m \
 AVFSMount.m \
 VolumeManager.m \
 GWUnmountHelper.m \
+GWArchiveOperation.m \
 ISOWrite/ISOWriteHandler.m \
 ISOWrite/ISOWriteOperation.m \
 ISOWrite/BlockDeviceInfo.m \

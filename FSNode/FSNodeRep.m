@@ -33,6 +33,7 @@
 #import "FSNFunctions.h"
 #import "ExtendedInfo.h"
 #import "config.h"
+#import "GSFileMetadata.h"
 
 
 #ifdef HAVE_GETMNTINFO
@@ -300,42 +301,51 @@ static FSNodeRep *shared = nil;
 {
   NSArray *fnames = [fm directoryContentsAtPath: path];
   NSString *hdnFilePath = [path stringByAppendingPathComponent: @".hidden"];
-  NSArray *hiddenNames = nil;  
+  NSArray *hiddenNames = nil;
 
   if ([fm fileExistsAtPath: hdnFilePath])
     hiddenNames = [[NSString stringWithContentsOfFile: hdnFilePath] componentsSeparatedByString: @"\n"];
- 
 
-  if (hiddenNames || hideSysFiles || [hiddenPaths count])
-    {
-      NSMutableArray *filteredNames = [NSMutableArray array];
-      NSUInteger i;
 
-      for (i = 0; i < [fnames count]; i++)
-	{
-	  NSString *fname = [fnames objectAtIndex: i];
-	  NSString *fpath = [path stringByAppendingPathComponent: fname];
-	  BOOL hidden = NO;
-    
-	  if ([fname hasPrefix: @"."] && hideSysFiles)
-	    hidden = YES;  
-    
-	  if (hiddenNames && [hiddenNames containsObject: fname])
-	    hidden = YES;  
+  {
+    NSMutableArray *filteredNames = [NSMutableArray array];
+    NSUInteger i;
 
-	  if ([hiddenPaths containsObject: fpath])
-	    hidden = YES;  
-      
-	  if (hidden == NO)
-	    {
-	      [filteredNames addObject: fname];
-	    }
-	}
-  
-      return filteredNames;
-    }
-  
-  return fnames;
+    for (i = 0; i < [fnames count]; i++)
+      {
+        NSString *fname = [fnames objectAtIndex: i];
+        NSString *fpath = [path stringByAppendingPathComponent: fname];
+        BOOL hidden = NO;
+
+        /* Always hide internal metadata files */
+        if ([fname hasPrefix: @"._"])
+          hidden = YES;
+        if ([fname isEqualToString: @"__MACOSX"])
+          hidden = YES;
+        if ([fname isEqualToString: @".DS_Store"])
+          hidden = YES;
+
+        if (!hidden && [fname hasPrefix: @"."] && hideSysFiles)
+          hidden = YES;
+
+        if (!hidden && hiddenNames && [hiddenNames containsObject: fname])
+          hidden = YES;
+
+        if (!hidden && [hiddenPaths containsObject: fpath])
+          hidden = YES;
+
+        if (!hidden && hideSysFiles)
+          {
+            if ([self isFileInvisibleFromMetadataAtPath: fpath])
+              hidden = YES;
+          }
+
+        if (!hidden)
+          [filteredNames addObject: fname];
+      }
+
+    return filteredNames;
+  }
 }
 
 - (int)labelMargin
@@ -834,6 +844,14 @@ static FSNodeRep *shared = nil;
     }
   
   return nil;
+}
+
+- (BOOL)isFileInvisibleFromMetadataAtPath:(NSString *)filePath
+{
+  GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: filePath];
+  if (md)
+    return [md isInvisible];
+  return NO;
 }
 
 @end

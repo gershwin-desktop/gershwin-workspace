@@ -632,6 +632,12 @@
 
 - (void)tile
 {
+  if ([self freePositioningEnabled])
+    {
+      [super tile];
+      return;
+    }
+
   NSUInteger i;
 
   for (i = 0; i < [icons count]; i++)

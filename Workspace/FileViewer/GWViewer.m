@@ -1864,9 +1864,17 @@ constrainMinCoordinate:(CGFloat)proposedMin
       }
 
       return NO;
+
+    } else if (sel_isEqual(action, @selector(setLabelForNodes:))) {
+      // Label menu items are enabled when there's a valid selection
+      if (lastSelection && [lastSelection count]
+            && ([lastSelection isEqual: baseNodeArray] == NO)) {
+        return YES;
+      }
+      return NO;
     }
-    
-    return YES;   
+
+    return YES;
   } else {
     SEL action = [menuItem action];
     if (sel_isEqual(action, @selector(makeKeyAndOrderFront:))) {

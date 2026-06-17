@@ -31,6 +31,7 @@
 #import "FSNListView.h"
 #import "FSNTextCell.h"
 #import "FSNFunctions.h"
+#import "GSFileMetadata.h"
 
 #define ICNSIZE (24)
 #define CELLS_HEIGHT (28.0)
@@ -571,11 +572,12 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
               row:(NSInteger)rowIndex
 {
   FSNInfoType ident = [[aTableColumn identifier] intValue];
-  FSNTextCell *cell = (FSNTextCell *)[aTableColumn dataCell];
   FSNListViewNodeRep *rep = [nodeReps objectAtIndex: rowIndex];
 
   if (ident == FSNInfoNameType)
     {
+      FSNTextCell *cell = (FSNTextCell *)aCell;
+
       if ([rep iconSelected])
 	{
 	  [cell setIcon: [rep openIcon]];
@@ -591,19 +593,26 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
       else {
 	[cell setIcon: [rep icon]];
       }
+
+      /* Pass tag color (Finder label) and path from rep to cell */
+      if ([rep respondsToSelector: @selector(tagColor)])
+        [cell setTagColor: [rep tagColor]];
+      if ([cell respondsToSelector: @selector(setNodePath:)])
+        [cell setNodePath: [[rep node] path]];
+
+      if ([rep isLocked])
+	{
+	  [cell setTextColor: [NSColor disabledControlTextColor]];
+	}
+      else
+	{
+	  [cell setTextColor: [NSColor controlTextColor]];
+	}
     }
   else if (ident == FSNInfoDateType)
     {
+      FSNTextCell *cell = (FSNTextCell *)aCell;
       [cell setDateCell: YES];
-    }
-
-  if ([rep isLocked])
-    {
-      [cell setTextColor: [NSColor disabledControlTextColor]];
-    }
-  else
-    {
-      [cell setTextColor: [NSColor controlTextColor]];
     }
 }
 
@@ -2112,6 +2121,19 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
       ASSIGN (node, anode);
       ASSIGN (icon, [fsnodeRep iconOfSize: ICNSIZE forNode: node]);
 
+      /* Load Finder label color from metadata */
+      {
+        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [anode path]];
+        if (md)
+          {
+            NSInteger label = [md labelNumber];
+            if (label > 0)
+              {
+                ASSIGN (tagColor, [GSFileMetadata colorForLabel: (GSFileLabel)label]);
+              }
+          }
+      }
+
       openicon = nil;
       lockedicon = nil;
       spopenicon = nil;
@@ -2131,6 +2153,11 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 - (NSImage *)icon
 {
   return icon;
+}
+
+- (NSColor *)tagColor
+{
+  return tagColor;
 }
 
 - (NSImage *)openIcon

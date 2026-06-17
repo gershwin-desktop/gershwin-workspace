@@ -154,8 +154,13 @@
 
 	  if (startdnd == YES)
 	    {
-	      [container stopRepNameEditing];
-	      [self startExternalDragOnEvent: theEvent withMouseOffset: offset];
+	      if ([container respondsToSelector: @selector(repositionIcon:toCenterPoint:)])
+	        [self repositionLocal: theEvent offset: offset];
+	      else
+	        {
+	          [container stopRepNameEditing];
+	          [self startExternalDragOnEvent: theEvent withMouseOffset: offset];
+	        }
 	    }
 
 	  editstamp = [theEvent timestamp];

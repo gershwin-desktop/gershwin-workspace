@@ -33,7 +33,13 @@
 #import "FSNTextCell.h"
 #import "FSNode.h"
 #import "FSNFunctions.h"
+#import "GSFileMetadata.h"
 #import "../Workspace/Workspace.h"
+
+/* Private extension for FSNIcon */
+@interface FSNIcon (Private)
+- (void)loadLabelColorFromMetadata;
+@end
 
 /* Forward declaration to expose class methods used for ISO drop handling */
 @interface ISOWriteHandler : NSObject
@@ -209,6 +215,17 @@ static NSImage *branchImage;
       ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
       drawicon = icon;
       selectedicon = nil;
+
+      /* Load Finder label color eagerly from metadata */
+      {
+        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [anode path]];
+        if (md)
+          {
+            NSInteger label = [md labelNumber];
+            if (label > 0)
+              ASSIGN (tagColor, [GSFileMetadata colorForLabel: (GSFileLabel)label]);
+          }
+      }
 
       dndSource = dndsrc;
       acceptDnd = dndaccept;
@@ -658,6 +675,37 @@ static NSImage *branchImage;
   return spotlightComment;
 }
 
+//
+// Private: Attempt to load the Finder label colour from GSFileMetadata (xattr).
+// Called during draws when tagColor is nil (fallback/lazy-load path).
+// Sets tagColor if a non-zero label is found, so the existing draw code picks it up.
+// Once tagColor is set, subsequent draws skip this method entirely.
+//
+- (void)loadLabelColorFromMetadata
+{
+  if (tagColor != nil)
+    return;  // Already have a colour (e.g., from DS_Store lclr).
+
+  if (node == nil)
+    return;
+
+  NSString *path = [node path];
+  if (path == nil || [path length] == 0)
+    return;
+
+  GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
+  if (md == nil)
+    return;
+
+  NSInteger label = [md labelNumber];
+  if (label > 0)
+    {
+      NSColor *color = [GSFileMetadata colorForLabel: (GSFileLabel)label];
+      if (color)
+        [self setTagColor: color];
+    }
+}
+
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent
 {
   if ([theEvent type] == NSRightMouseDown)
@@ -845,17 +893,21 @@ static NSImage *branchImage;
 
 	  if (startdnd)
 	    {
-	      if ([container respondsToSelector: @selector(stopRepNameEditing)])
+	      /* Local reposition when container supports it */
+	      if ([container respondsToSelector: @selector(repositionIcon:toCenterPoint:)])
 		{
-		  [container stopRepNameEditing];
+		  [self repositionLocal: theEvent offset: offset];
 		}
-
-	      if ([container respondsToSelector: @selector(setFocusedRep:)])
+	      else
 		{
-		  [container setFocusedRep: nil];
-		}
+		  if ([container respondsToSelector: @selector(stopRepNameEditing)])
+		    [container stopRepNameEditing];
 
-	      [self startExternalDragOnEvent: theEvent withMouseOffset: offset];
+		  if ([container respondsToSelector: @selector(setFocusedRep:)])
+		    [container setFocusedRep: nil];
+
+		  [self startExternalDragOnEvent: theEvent withMouseOffset: offset];
+		}
 	    }
 
 	  editstamp = [theEvent timestamp];
@@ -951,7 +1003,15 @@ static NSImage *branchImage;
       [drawicon dissolveToPoint: icnPoint fraction: 0.3];
     }
 
-  // Draw tag color indicator (DS_Store label color support)
+  if (isLeaf == NO)
+    [[object_getClass(self) branchImage] compositeToPoint: brImgBounds.origin operation: NSCompositeSourceOver];
+
+  // Draw tag color indicator (from DS_Store lclr or FinderInfo fdFlags)
+  // Drawn last so it's always on top of everything, including the branch image.
+  // Lazily check GSFileMetadata if no colour has been set yet.
+  if (tagColor == nil)
+    [self loadLabelColorFromMetadata];
+
   if (tagColor)
     {
       // Draw a small colored dot in the bottom-right corner of the icon
@@ -960,25 +1020,22 @@ static NSImage *branchImage;
       NSRect dotRect = NSMakeRect(icnBounds.origin.x + icnBounds.size.width - dotSize - dotMargin,
                                   icnBounds.origin.y + dotMargin,
                                   dotSize, dotSize);
-      
+
       // Draw shadow
       [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
       NSBezierPath *shadowPath = [NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)];
       [shadowPath fill];
-      
+
       // Draw tag dot
       [tagColor set];
       NSBezierPath *dotPath = [NSBezierPath bezierPathWithOvalInRect:dotRect];
       [dotPath fill];
-      
+
       // Draw border
       [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
       [dotPath setLineWidth:0.5];
       [dotPath stroke];
     }
-
-  if (isLeaf == NO)
-    [[object_getClass(self) branchImage] compositeToPoint: brImgBounds.origin operation: NSCompositeSourceOver];
 }
 
 
@@ -990,6 +1047,7 @@ static NSImage *branchImage;
   DESTROY (selection);
   DESTROY (selectionTitle);
   DESTROY (hostname);
+  DESTROY (tagColor);   // Reset label colour; will be re-evaluated on next draw
 
   ASSIGN (node, anode);
   ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
@@ -1428,6 +1486,126 @@ static NSImage *branchImage;
 - (int)compareAccordingToIndex:(id)aIcon
 {
   return (gridIndex <= [aIcon gridIndex]) ? NSOrderedAscending : NSOrderedDescending;
+}
+
+/*
+ * Local icon repositioning (free positioning mode).
+ * Moves ALL selected icons together, keeping labels visible.
+ * On drop persists every moved icon's position via the container.
+ */
+- (void)repositionLocal:(NSEvent *)firstEvent offset:(NSSize)initialOffset
+{
+  NSWindow *win = [self window];
+  NSPoint startLoc = [firstEvent locationInWindow];
+  NSEvent *event;
+  BOOL didMove = NO;
+
+  /* Collect all selected icons and record their original frames */
+  NSMutableArray *allIcons = [NSMutableArray arrayWithObject: self];
+  NSMutableArray *origFrames = [NSMutableArray array];
+  [origFrames addObject: [NSValue valueWithRect: [self frame]]];
+
+  if ([container respondsToSelector: @selector(selectedReps)])
+    {
+      NSArray *sel = [container selectedReps];
+      NSUInteger i;
+      for (i = 0; i < [sel count]; i++)
+        {
+          id rep = [sel objectAtIndex: i];
+          if (rep != self && [rep isKindOfClass: [FSNIcon class]])
+            {
+              [allIcons addObject: rep];
+              [origFrames addObject: [NSValue valueWithRect: [rep frame]]];
+            }
+        }
+    }
+
+  /* Apply the initial offset from the drag-start event immediately.
+   * The first drag event is consumed by mouseDown's while-loop before
+   * we're called, so we seed the movement here. */
+  {
+    CGFloat dx = initialOffset.width;
+    CGFloat dy = initialOffset.height;
+    if (fabs(dx) > 0.5 || fabs(dy) > 0.5)
+      {
+        NSUInteger i;
+        for (i = 0; i < [allIcons count]; i++)
+          {
+            FSNIcon *ic = [allIcons objectAtIndex: i];
+            NSRect orig = [[origFrames objectAtIndex: i] rectValue];
+            NSRect drg = NSMakeRect(orig.origin.x + dx, orig.origin.y + dy,
+                                     orig.size.width, orig.size.height);
+            [ic setFrame: drg];
+            [ic setNeedsDisplay: YES];
+          }
+        didMove = YES;
+      }
+  }
+
+  while (1)
+    {
+      event = [win nextEventMatchingMask: NSLeftMouseDraggedMask | NSLeftMouseUpMask];
+
+      if ([event type] == NSLeftMouseUp)
+        break;
+
+      if ([event type] == NSLeftMouseDragged)
+        {
+          NSPoint curLoc = [event locationInWindow];
+          NSRect containerBounds = [container bounds];
+          NSPoint localInContainer = [container convertPoint: curLoc fromView: nil];
+
+          /* If the drag leaves the container, convert to an external
+           * file drag. Restore original positions first. */
+          if (!NSPointInRect(localInContainer, containerBounds))
+            {
+              NSUInteger i;
+              for (i = 0; i < [allIcons count]; i++)
+                [[allIcons objectAtIndex: i] setFrame: [[origFrames objectAtIndex: i] rectValue]];
+
+              [self startExternalDragOnEvent: firstEvent withMouseOffset: initialOffset];
+              return;
+            }
+
+          CGFloat dx = curLoc.x - startLoc.x;
+          CGFloat dy = curLoc.y - startLoc.y;
+
+          NSUInteger i;
+          for (i = 0; i < [allIcons count]; i++)
+            {
+              FSNIcon *ic = [allIcons objectAtIndex: i];
+              NSRect orig = [[origFrames objectAtIndex: i] rectValue];
+              NSRect drg = NSMakeRect(orig.origin.x + dx, orig.origin.y + dy,
+                                       orig.size.width, orig.size.height);
+              [ic setFrame: drg];
+              [ic setNeedsDisplay: YES];
+            }
+          didMove = YES;
+        }
+    }
+
+  if (didMove && [container respondsToSelector: @selector(repositionIcon:toCenterPoint:)])
+    {
+      NSUInteger i;
+      for (i = 0; i < [allIcons count]; i++)
+        {
+          FSNIcon *ic = [allIcons objectAtIndex: i];
+          NSRect frm = [ic frame];
+          NSPoint center = NSMakePoint(frm.origin.x + frm.size.width / 2.0,
+                                        frm.origin.y + frm.size.height / 2.0);
+          [container repositionIcon: ic toCenterPoint: center];
+        }
+    }
+  else if (!didMove)
+    {
+      /* No move — restore all original positions */
+      NSUInteger i;
+      for (i = 0; i < [allIcons count]; i++)
+        {
+          FSNIcon *ic = [allIcons objectAtIndex: i];
+          [ic setFrame: [[origFrames objectAtIndex: i] rectValue]];
+        }
+    }
 }
 
 @end

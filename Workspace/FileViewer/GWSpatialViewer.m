@@ -28,6 +28,7 @@
 
 #import <AppKit/AppKit.h>
 #import "DSStoreInfo.h"
+#import "GSFileMetadata.h"
 #import "GWSpatialViewer.h"
 #import "GWViewersManager.h"
 #import "GWViewerWindow.h"
@@ -1102,52 +1103,79 @@
     }
   }
   
-  // Check for free icon positioning (DS_Store icon locations)
-  if ([dsStoreInfo hasAnyIconPositions]) {
-    NSDebugLLog(@"gwspace", @"║ Free positioning mode: ENABLED");
-    NSDebugLLog(@"gwspace", @"║ Icons with custom positions: %lu", 
-          (unsigned long)[[dsStoreInfo filenamesWithPositions] count]);
-    
-    // Get view dimensions for coordinate conversion
-    CGFloat viewHeight = dsStoreInfo.windowFrame.size.height;
-    CGFloat iconHeight = dsStoreInfo.hasIconSize ? (CGFloat)dsStoreInfo.iconSize : 64.0;
-    
-    NSDebugLLog(@"gwspace", @"║ DS_Store content height: %.0f, Icon height: %.0f", viewHeight, iconHeight);
-    
-    // Build positions dictionary with coordinate conversion
-    NSMutableDictionary *iconPositions = [NSMutableDictionary dictionary];
-    for (NSString *filename in [dsStoreInfo filenamesWithPositions]) {
-      DSStoreIconInfo *iconInfo = [dsStoreInfo iconInfoForFilename:filename];
-      if (iconInfo && iconInfo.hasPosition) {
-        NSPoint gnustepPos = [iconInfo gnustepPositionForViewHeight:viewHeight 
-                                                         iconHeight:iconHeight];
-        [iconPositions setObject:[NSValue valueWithPoint:gnustepPos] 
-                          forKey:filename];
-        NSDebugLLog(@"gwspace", @"║   '%@': DS_Store(%.0f, %.0f) → GNUstep(%.0f, %.0f)", 
-              filename, 
-              iconInfo.position.x, iconInfo.position.y,
-              gnustepPos.x, gnustepPos.y);
-      }
+  /* Restore per-file icon positions for interoperability with
+   * other file managers.  .DS_Store Iloc is the primary source
+   * (folder-level) and FinderInfo fdLocation is a portable
+   * secondary (per-file xattr).  Both use icon CENTER coordinates
+   * with origin at content-area top-left.
+   *
+   * .DS_Store Iloc format:
+   *   https://users.cs.utah.edu/plt/snapshots/current/doc/ds-store/index.html
+   * FinderInfo fdLocation (bytes 10-13):
+   *   https://developer.apple.com/library/archive/technotes/tb/tb_42.html
+   */
+  NSMutableDictionary *iconPositions = [NSMutableDictionary dictionary];
+
+  /* Reference height: use the icon view bounds (stable across sessions
+   * because the FSNIconsView is inside the content area).  The write
+   * path uses the content view height which matches this. */
+  CGFloat refH = 600.0;
+  if ([iconView respondsToSelector: @selector(bounds)])
+    refH = [(NSView *)iconView bounds].size.height;
+  if (refH <= 0) refH = 600.0;
+
+  /* Source 1: .DS_Store Iloc (primary, folder-level).
+   * Convert top-left Y -> GNUstep bottom-left Y. */
+  if ([dsStoreInfo hasAnyIconPositions])
+    {
+      for (NSString *filename in [dsStoreInfo filenamesWithPositions])
+        {
+          DSStoreIconInfo *iconInfo = [dsStoreInfo iconInfoForFilename:filename];
+          if (iconInfo && iconInfo.hasPosition)
+            {
+              NSPoint iloc = iconInfo.position;
+              NSPoint gs = NSMakePoint(iloc.x, refH - iloc.y);
+              [iconPositions setObject:[NSValue valueWithPoint:gs] forKey:filename];
+            }
+        }
     }
-    
-    // Enable free positioning mode
-    if ([iconView respondsToSelector:@selector(setFreePositioningEnabled:)]) {
-      [(FSNIconsView *)iconView setCustomIconPositions:iconPositions];
-      [(FSNIconsView *)iconView setFreePositioningEnabled:YES];
+
+  /* Source 2: fdLocation xattr (secondary, portable — same top-left coords).
+   * Convert top-left Y -> GNUstep bottom-left Y using the same refH. */
+  if ([iconView respondsToSelector: @selector(reps)])
+    {
+      NSArray *reps = [(FSNIconsView *)iconView reps];
+      for (id rep in reps)
+        {
+          if (![rep respondsToSelector: @selector(node)]) continue;
+          FSNode *nd = [(FSNIcon *)rep node];
+          NSString *name = [nd name];
+          if (!name || [iconPositions objectForKey: name]) continue;
+
+          GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [nd path]];
+          if (!md) continue;
+          NSPoint floc = [md iconPosition];
+          if (floc.x != -1 && floc.y != -1)
+            {
+              NSPoint gs = NSMakePoint(floc.x, refH - floc.y);
+              [iconPositions setObject:[NSValue valueWithPoint:gs] forKey:name];
+            }
+        }
     }
-  } else {
-    NSDebugLLog(@"gwspace", @"║ Free positioning mode: disabled (no custom icon positions)");
-    
-    // Disable free positioning if it was previously enabled
-    if ([iconView respondsToSelector:@selector(setFreePositioningEnabled:)]) {
-      [(FSNIconsView *)iconView setFreePositioningEnabled:NO];
+
+  /* Always enable free positioning in spatial mode. If we have
+   * pre-existing positions (DS_Store or fdLocation) they're used;
+   * otherwise icons get automatic grid layout but can be freely
+   * dragged to new positions which are then persisted. */
+  if ([iconPositions count] > 0)
+    {
+      NSDebugLLog(@"gwspace", @"║ Free positioning: ENABLED (%lu pre-set positions)",
+            (unsigned long)[iconPositions count]);
+      if ([iconView respondsToSelector: @selector(setCustomIconPositions:)])
+        [(FSNIconsView *)iconView setCustomIconPositions: iconPositions];
     }
-    
-    if (dsStoreInfo.hasIconArrangement) {
-      NSDebugLLog(@"gwspace", @"║ Arrangement: %@", 
-            dsStoreInfo.iconArrangement == DSStoreIconArrangementNone ? @"none" : @"grid");
-    }
-  }
+  if ([iconView respondsToSelector: @selector(setFreePositioningEnabled:)])
+    [(FSNIconsView *)iconView setFreePositioningEnabled: YES];
   
   // Apply tag colors (lclr) and comments (cmmt) from DS_Store
   NSDictionary *allIconInfo = [dsStoreInfo allIconInfo];

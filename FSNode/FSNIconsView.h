@@ -112,6 +112,9 @@
 - (void)applyFreePositioning;
 - (NSArray *)icons;
 
+/* Free-positioning icon repositioning */
+- (void)repositionIcon:(FSNIcon *)icon toCenterPoint:(NSPoint)point;
+
 // DS_Store tag colors and comments support
 - (void)setTagColorsFromDictionary:(NSDictionary *)tagDict;
 - (void)setCommentsFromDictionary:(NSDictionary *)commentsDict;

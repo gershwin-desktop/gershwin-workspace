@@ -30,6 +30,7 @@
 #include "FSNodeRep.h"
 
 @class NSImage;
+@class NSColor;
 @class NSTextFieldCell;
 @class FSNPathComponentView;
 
@@ -51,15 +52,16 @@
 @end
 
 
-@interface FSNPathComponentView: NSView 
+@interface FSNPathComponentView: NSView
 {
   FSNode *node;
   NSString *hostname;
   BOOL isLeaf;
 
   NSImage *icon;
+  NSColor *tagColor;
   int iconSize;
-  NSRect iconRect;  
+  NSRect iconRect;
   NSTextFieldCell *label;
   NSDictionary *fontAttr;
   NSRect labelRect;
