@@ -955,50 +955,64 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   {
     GWSidebarItem *networkGroup = [[GWSidebarItem alloc]
         initHeaderWithTitle: NSLocalizedString(@"Network", @"")];
-    NetworkServiceManager *mgr = [NetworkServiceManager sharedManager];
 
-    /* Collect all services: from discovery + mounted volumes without discovery */
-    NSMutableArray *allServices = [NSMutableArray array];
-    NSMutableSet *seenIdentifiers = [NSMutableSet set];
+    /* Collect all services: from discovery + mounted volumes without discovery.
+       Wrap in @try/@catch to guard against crashes when NSNetServiceBrowser
+       class exists but the mDNS daemon (Avahi/mDNSResponder) is not running.
+       See: https://github.com/gershwin-desktop/gershwin-workspace/issues/93 */
+    @try {
+      NetworkServiceManager *mgr = [NetworkServiceManager sharedManager];
+      NSMutableArray *allServices = [NSMutableArray array];
+      NSMutableSet *seenIdentifiers = [NSMutableSet set];
 
-    if ([mgr isMDNSAvailable]) {
-      /* Auto-start mDNS browsing so network services always appear
-         in the sidebar without the user having to go to Go To → Network. */
-      if (![mgr isBrowsing]) {
-        [mgr startBrowsing];
-      }
-      NSArray *discovered = [mgr allServices];
-      for (NetworkServiceItem *svc in discovered) {
-        NSString *ident = [svc identifier];
-        if (![seenIdentifiers containsObject: ident]) {
-          [seenIdentifiers addObject: ident];
-          [allServices addObject: svc];
+      if ([mgr isMDNSAvailable]) {
+        /* Auto-start mDNS browsing so network services always appear
+           in the sidebar without the user having to go to Go To → Network.
+           Defer the actual browsing to the next run loop iteration so that
+           the viewer window is fully constructed first — this avoids the
+           sidebar init blocking on mDNS discovery and ensures that a crash
+           in the underlying DNS-SD library does not prevent the viewer
+           from appearing at all. */
+        if (![mgr isBrowsing]) {
+          [mgr performSelector:@selector(startBrowsing)
+                    withObject:nil
+                    afterDelay:0];
+        }
+        NSArray *discovered = [mgr allServices];
+        for (NetworkServiceItem *svc in discovered) {
+          NSString *ident = [svc identifier];
+          if (![seenIdentifiers containsObject: ident]) {
+            [seenIdentifiers addObject: ident];
+            [allServices addObject: svc];
+          }
         }
       }
-    }
 
-    /* Deduplicate display names */
-    NSMutableDictionary *nameCounts = [NSMutableDictionary dictionaryWithCapacity:[allServices count]];
-    for (NetworkServiceItem *svc in allServices) {
-      NSString *baseName = [svc name];
-      NSNumber *count = [nameCounts objectForKey: baseName];
-      NSString *uniqueName = nil;
-      if (!count) {
-        [nameCounts setObject: @1 forKey: baseName];
-        uniqueName = baseName;
-      } else {
-        NSUInteger newCount = [count unsignedIntegerValue] + 1;
-        [nameCounts setObject: [NSNumber numberWithUnsignedInteger: newCount]
-                       forKey: baseName];
-        uniqueName = [NSString stringWithFormat: @"%@-%lu",
-                               baseName, (unsigned long)newCount];
+      /* Deduplicate display names */
+      NSMutableDictionary *nameCounts = [NSMutableDictionary dictionaryWithCapacity:[allServices count]];
+      for (NetworkServiceItem *svc in allServices) {
+        NSString *baseName = [svc name];
+        NSNumber *count = [nameCounts objectForKey: baseName];
+        NSString *uniqueName = nil;
+        if (!count) {
+          [nameCounts setObject: @1 forKey: baseName];
+          uniqueName = baseName;
+        } else {
+          NSUInteger newCount = [count unsignedIntegerValue] + 1;
+          [nameCounts setObject: [NSNumber numberWithUnsignedInteger: newCount]
+                         forKey: baseName];
+          uniqueName = [NSString stringWithFormat: @"%@-%lu",
+                                 baseName, (unsigned long)newCount];
+        }
+
+        GWSidebarItem *it = [[GWSidebarItem alloc]
+            initNetworkItemWithTitle: uniqueName];
+        [it setUserInfo: svc];
+        [networkGroup addChild: it];
+        RELEASE (it);
       }
-
-      GWSidebarItem *it = [[GWSidebarItem alloc]
-          initNetworkItemWithTitle: uniqueName];
-      [it setUserInfo: svc];
-      [networkGroup addChild: it];
-      RELEASE (it);
+    } @catch (NSException *exception) {
+      NSWarnMLog(@"GWViewerSidebar: Failed to build network section: %@", exception);
     }
     [rootItems addObject: networkGroup];
     RELEASE (networkGroup);

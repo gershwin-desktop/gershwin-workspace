@@ -63,38 +63,73 @@ static NetworkServiceManager *sharedManager = nil;
     NSDebugLLog(@"gwspace", @"NetworkServiceManager: Cannot start browsing - mDNS-SD not available");
     return;
   }
-  
+
   if (isSearching) {
     NSDebugLLog(@"gwspace", @"NetworkServiceManager: Already browsing for services");
     return;
   }
-  
+
   NSDebugLLog(@"gwspace", @"NetworkServiceManager: Starting to browse for SFTP, AFP, and WebDAV services...");
-  isSearching = YES;
-  
-  /* Start browsing for SFTP-SSH services */
-  sftpBrowser = [[NSNetServiceBrowser alloc] init];
-  [sftpBrowser setDelegate:self];
-  [sftpBrowser searchForServicesOfType:@"_sftp-ssh._tcp." inDomain:@"local."];
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _sftp-ssh._tcp. services");
-  
-  /* Start browsing for AFP over TCP services */
-  afpBrowser = [[NSNetServiceBrowser alloc] init];
-  [afpBrowser setDelegate:self];
-  [afpBrowser searchForServicesOfType:@"_afpovertcp._tcp." inDomain:@"local."];
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _afpovertcp._tcp. services");
-  
-  /* Start browsing for WebDAV services (HTTP) */
-  webdavBrowser = [[NSNetServiceBrowser alloc] init];
-  [webdavBrowser setDelegate:self];
-  [webdavBrowser searchForServicesOfType:@"_webdav._tcp." inDomain:@"local."];
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _webdav._tcp. services");
-  
-  /* Start browsing for WebDAV services (HTTPS) */
-  webdavsBrowser = [[NSNetServiceBrowser alloc] init];
-  [webdavsBrowser setDelegate:self];
-  [webdavsBrowser searchForServicesOfType:@"_webdavs._tcp." inDomain:@"local."];
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _webdavs._tcp. services");
+
+  /* Wrap browser creation and search in @try/@catch to handle the case
+     where NSNetServiceBrowser class exists (GNUstep built with libdns_sd)
+     but the mDNS daemon (Avahi, mDNSResponder) is not running.
+     See: https://github.com/gershwin-desktop/gershwin-workspace/issues/93 */
+  @try {
+    /* Start browsing for SFTP-SSH services */
+    sftpBrowser = [[NSNetServiceBrowser alloc] init];
+    [sftpBrowser setDelegate:self];
+    [sftpBrowser searchForServicesOfType:@"_sftp-ssh._tcp." inDomain:@"local."];
+    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _sftp-ssh._tcp. services");
+
+    /* Start browsing for AFP over TCP services */
+    afpBrowser = [[NSNetServiceBrowser alloc] init];
+    [afpBrowser setDelegate:self];
+    [afpBrowser searchForServicesOfType:@"_afpovertcp._tcp." inDomain:@"local."];
+    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _afpovertcp._tcp. services");
+
+    /* Start browsing for WebDAV services (HTTP) */
+    webdavBrowser = [[NSNetServiceBrowser alloc] init];
+    [webdavBrowser setDelegate:self];
+    [webdavBrowser searchForServicesOfType:@"_webdav._tcp." inDomain:@"local."];
+    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _webdav._tcp. services");
+
+    /* Start browsing for WebDAV services (HTTPS) */
+    webdavsBrowser = [[NSNetServiceBrowser alloc] init];
+    [webdavsBrowser setDelegate:self];
+    [webdavsBrowser searchForServicesOfType:@"_webdavs._tcp." inDomain:@"local."];
+    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _webdavs._tcp. services");
+
+    isSearching = YES;
+  } @catch (NSException *exception) {
+    NSWarnMLog(@"NetworkServiceManager: mDNS browsing failed with exception: %@ - disabling mDNS support", exception);
+
+    /* Clean up any browsers that were created before the exception */
+    if (sftpBrowser) {
+      [sftpBrowser stop];
+      [sftpBrowser release];
+      sftpBrowser = nil;
+    }
+    if (afpBrowser) {
+      [afpBrowser stop];
+      [afpBrowser release];
+      afpBrowser = nil;
+    }
+    if (webdavBrowser) {
+      [webdavBrowser stop];
+      [webdavBrowser release];
+      webdavBrowser = nil;
+    }
+    if (webdavsBrowser) {
+      [webdavsBrowser stop];
+      [webdavsBrowser release];
+      webdavsBrowser = nil;
+    }
+
+    /* Disable mDNS so future calls don't attempt browsing again */
+    mDNSAvailable = NO;
+    isSearching = NO;
+  }
 }
 
 - (void)stopBrowsing
