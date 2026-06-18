@@ -607,6 +607,20 @@ static void mdnsAbortHandler(int sig)
     NetworkServiceItem *item = [self existingServiceMatchingNetService:netService];
     if (item) {
       [self updateServiceItem:item fromNetService:netService];
+
+      /* If the resolved service is on the local machine itself
+         (hostName is localhost/127.0.0.1, or has a loopback address),
+         remove it from the list so it doesn't appear in the sidebar.
+         This also posts NetworkServicesDidChangeNotification so the
+         UI rebuilds immediately. */
+      if ([item isLocalMachine]) {
+        [services removeObject:item];
+        // Post removal notification on main thread
+        NSDictionary *userInfo = @{@"addedServices": @[], @"removedServices": @[item]};
+        [self performSelectorOnMainThread:@selector(postServicesChangedOnMainThread:)
+                               withObject:userInfo
+                            waitUntilDone:NO];
+      }
     }
   }
 

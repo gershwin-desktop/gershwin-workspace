@@ -76,6 +76,13 @@
 - (NSString *)iconName;
 
 /**
+ * Returns YES if this service is on the local machine itself
+ * (hostName is localhost/127.0.0.1/::1, or addresses contain a
+ * loopback address).
+ */
+- (BOOL)isLocalMachine;
+
+/**
  * Returns the remote path from the TXT record, if available.
  * For SFTP services, this is often in the 'path' key.
  * Returns nil if no path is specified.

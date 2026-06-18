@@ -6,6 +6,9 @@
  */
 
 #import "NetworkServiceItem.h"
+#import <sys/socket.h>
+#import <netinet/in.h>
+#import <arpa/inet.h>
 
 @implementation NetworkServiceItem
 
@@ -89,6 +92,37 @@
 - (NSString *)identifier
 {
   return [NSString stringWithFormat:@"%@.%@.%@", name, type, domain];
+}
+
+- (BOOL)isLocalMachine
+{
+  /* Check hostName for well-known loopback / localhost patterns */
+  if (hostName) {
+    if ([hostName isEqualToString:@"localhost"] ||
+        [hostName isEqualToString:@"localhost.localdomain"] ||
+        [hostName isEqualToString:@"127.0.0.1"] ||
+        [hostName isEqualToString:@"::1"]) {
+      return YES;
+    }
+  }
+
+  /* Check every address for 127.x.x.x (IPv4 loopback) or ::1 (IPv6 loopback) */
+  for (NSData *addrData in addresses) {
+    const struct sockaddr *addr = (const struct sockaddr *)[addrData bytes];
+    if (addr->sa_family == AF_INET) {
+      const struct sockaddr_in *addr4 = (const struct sockaddr_in *)addr;
+      if ((ntohl(addr4->sin_addr.s_addr) & 0xFF000000) == 0x7F000000) {
+        return YES;
+      }
+    } else if (addr->sa_family == AF_INET6) {
+      const struct sockaddr_in6 *addr6 = (const struct sockaddr_in6 *)addr;
+      if (IN6_IS_ADDR_LOOPBACK(&addr6->sin6_addr)) {
+        return YES;
+      }
+    }
+  }
+
+  return NO;
 }
 
 - (BOOL)isSFTPService

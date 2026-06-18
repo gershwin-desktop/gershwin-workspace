@@ -975,6 +975,10 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
       if ([mgr isMDNSAvailable]) {
         NSArray *discovered = [mgr allServices];
         for (NetworkServiceItem *svc in discovered) {
+          /* Skip services on the local machine itself */
+          if ([svc isLocalMachine]) {
+            continue;
+          }
           NSString *ident = [svc identifier];
           if (![seenIdentifiers containsObject: ident]) {
             [seenIdentifiers addObject: ident];
