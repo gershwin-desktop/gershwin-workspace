@@ -49,13 +49,14 @@ ifneq ($(SQUASHFS_LIBS),)
   ADDITIONAL_GUI_LIBS += $(SQUASHFS_LIBS)
 endif
 
-# Additional library directories the linker should search   
+# Additional library directories the linker should search
 ADDITIONAL_LIB_DIRS += -L../FSNode/FSNode.framework/Versions/Current/$(GNUSTEP_TARGET_LDIR)
 ADDITIONAL_LIB_DIRS += -L../Inspector/Inspector.framework/Versions/Current/$(GNUSTEP_TARGET_LDIR)
 ADDITIONAL_LIB_DIRS += -L../Operation/Operation.framework/Versions/Current/$(GNUSTEP_TARGET_LDIR)
 ADDITIONAL_LIB_DIRS += -L../FSNode/FSNode.framework
 ADDITIONAL_LIB_DIRS += -L../Inspector/Inspector.framework
 ADDITIONAL_LIB_DIRS += -L../Operation/Operation.framework
+ADDITIONAL_LIB_DIRS += -L../DSStore/obj
 
 ADDITIONAL_TOOL_LIBS +=
 
