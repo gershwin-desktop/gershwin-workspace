@@ -3227,7 +3227,7 @@ NSString *_pendingSystemActionTitle = nil;
   if (![manager isMDNSAvailable]) {
     NSAlert *alert = [[[NSAlert alloc] init] autorelease];
     [alert setMessageText:@"Service Discovery: Not Available"];
-    [alert setInformativeText:@"mDNS/DNS-SD support is not available on this system.\nBuild GNUstep with libdns_sd to enable network service discovery."];
+    [alert setInformativeText:@"mDNS/DNS-SD support is not available on this system.\nBuild GNUstep with libdns_sd to enable network service discovery\nand/or start the daemon needed for discovery."];
     [alert addButtonWithTitle:@"OK"];
     [alert runModal];
     return;
