@@ -36,7 +36,6 @@
 #import "FSNFunctions.h"
 #import "GSFileMetadata.h"
 #import "DSStore.h"
-#import "FSNGridLayoutManager.h"
 #import "FSNPlacementEnumerator.h"
 
 #define DEF_ICN_SIZE 48
@@ -100,7 +99,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   RELEASE (disabledTextColor);
   RELEASE (backgroundImage);
   RELEASE (customIconPositions);
-  RELEASE (_gridLayoutManager);
 
   [super dealloc];
 }
@@ -169,12 +167,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 	    }
 	}
 
-      icons = [NSMutableArray new];
-
-      /* Create the unified grid layout manager */
-      _gridLayoutManager = [[FSNGridLayoutManager alloc] initWithContainer: self];
-      _snapEnabled = YES;
-      _placementDirection = FSNPlacementDirectionLeftToRightTopToBottom;
 
       nameEditor = [FSNIconNameEditor new];
       [nameEditor setDelegate: self];
@@ -187,13 +179,13 @@ static void GWHighlightFrameRect(NSRect aRect)
       [nameEditor setSelectable: NO];
       editIcon = nil;
 
+      icons = [NSMutableArray new];
       isDragTarget = NO;
       lastKeyPressedTime = 0.0;
       charBuffer = nil;
       selectionMask = NSSingleSelectionMask;
       
       // DS_Store free positioning support
-      freePositioningEnabled = NO;
       customIconPositions = nil;
       dsStoreIconHeight = 64.0; // Default icon height for coordinate conversion
 
@@ -269,12 +261,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   // Add extra height matching FSNIcon's lblmargin/2 + 2 padding
   gridSize.height += lblmargin / 2 + 2;
     
-  // Apply DS_Store grid spacing if set (adds extra space between icons)
-  if (dsStoreGridSpacing > 0)
-    {
-      gridSize.width += dsStoreGridSpacing;
-      gridSize.height += dsStoreGridSpacing;
-    }
 }
 
 - (void)tile
@@ -287,7 +273,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSArray *selection;
   NSUInteger i;
 
-  colItemsCount = 0;
 
   /* Reference height for iloc→GNUstep conversion.  Use content view
    * height (like macOS Finder) so positions are relative to the visible
@@ -297,286 +282,95 @@ static void GWHighlightFrameRect(NSRect aRect)
     if (w) { NSView *cv = [w contentView]; if (cv) refH = [cv bounds].size.height; } }
   if (refH <= 0) refH = 600.0;
 
-  /* ---- Free positioning path (pixel-based, DS_Store Iloc) ---- */
-  if (freePositioningEnabled)
+  /* ---- Unified free positioning path (pixel-based, DS_Store Iloc) ---- */
+  [self calculateGridSize];
+
+  if (!customIconPositions)
+    customIconPositions = [[NSMutableDictionary alloc] init];
+
+  float gridX = X_MARGIN;
+  float gridY = gridSize.height + Y_MARGIN;
+  float maxX = svr.size.width;
+  float maxY = svr.size.height;
+
+  irects = NSZoneMalloc (NSDefaultMallocZone(), sizeof(NSRect) * count);
+
+  for (i = 0; i < count; i++)
     {
-      if (!customIconPositions)
-        customIconPositions = [[NSMutableDictionary alloc] init];
+      FSNIcon *icon = [icons objectAtIndex: i];
+      NSString *filename = [[icon node] name];
+      FSNIconItemData *data = [icon placementData];
+      NSValue *posValue = [customIconPositions objectForKey: filename];
+      NSPoint cellOrigin;
 
-      float gridX = X_MARGIN;
-      float gridY = gridSize.height + Y_MARGIN;
-      float maxX = 0;
-      float maxY = 0;
-
-      irects = NSZoneMalloc (NSDefaultMallocZone(), sizeof(NSRect) * count);
-
-      for (i = 0; i < count; i++)
+      if (posValue)
         {
-          FSNIcon *icon = [icons objectAtIndex: i];
-          NSString *filename = [[icon node] name];
-          FSNIconItemData *data = [icon placementData];
-          NSValue *posValue = [customIconPositions objectForKey: filename];
-          NSPoint cellOrigin;
-
-          if (posValue)
+          /* Use saved center position, compute cell origin */
+          NSPoint center = [posValue pointValue];
+          cellOrigin.x = center.x - (gridSize.width / 2);
+          cellOrigin.y = center.y - (gridSize.height / 2);
+        }
+      else if (data.placementMode == FSNIconPlacementModeManual)
+        {
+          /* Convert iloc (DS_Store top-left) to GNUstep bottom-left
+           * using the CURRENT refH (computed once per tile).
+           * This ensures positions are correct regardless of when
+           * showContentsOfNode ran. */
+          CGFloat gnuX, gnuY;
+          if (data.ilocPosition.x >= 0)
             {
-              /* Use saved center position, compute cell origin */
-              NSPoint center = [posValue pointValue];
-              cellOrigin.x = center.x - (gridSize.width / 2);
-              cellOrigin.y = center.y - (gridSize.height / 2);
-            }
-          else if (data.placementMode == FSNIconPlacementModeManual
-                   || data.placementMode == FSNIconPlacementModeLocked)
-            {
-              /* Convert iloc (DS_Store top-left) to GNUstep bottom-left
-               * using the CURRENT refH (computed once per tile).
-               * This ensures positions are correct regardless of when
-               * showContentsOfNode ran. */
-              CGFloat gnuX, gnuY;
-              if (data.ilocPosition.x >= 0)
-                {
-                  /* Came from DS_Store reader: iloc → GNUstep */
-                  gnuX = data.ilocPosition.x;
-                  gnuY = refH - data.ilocPosition.y;
-                }
-              else
-                {
-                  /* Manually dragged: use stored pixel position */
-                  gnuX = data.pixelPosition.x;
-                  gnuY = data.pixelPosition.y;
-                }
-              cellOrigin.x = gnuX - (gridSize.width / 2);
-              cellOrigin.y = gnuY - (gridSize.height / 2);
-              NSLog(@"[FREE] %@ iloc=(%.0f,%.0f) gnu=(%.0f,%.0f) refH=%.0f",
-                    filename,
-                    data.ilocPosition.x, data.ilocPosition.y,
-                    gnuX, gnuY, refH);
+              /* Came from DS_Store reader: iloc → GNUstep */
+              gnuX = data.ilocPosition.x;
+              gnuY = refH - data.ilocPosition.y;
             }
           else
             {
-              /* No saved position: assign a grid slot and record it */
-              gridX += (gridSize.width + X_MARGIN);
-              if (gridX >= (svr.size.width - gridSize.width))
-                {
-                  gridX = X_MARGIN;
-                  gridY += gridSize.height;
-                }
-              cellOrigin.x = gridX;
-              cellOrigin.y = gridY;
-
-              /* Record so this icon stays put on subsequent tiles */
-              NSPoint center = NSMakePoint(cellOrigin.x + gridSize.width / 2.0,
-                                            cellOrigin.y + gridSize.height / 2.0);
-              [customIconPositions setObject: [NSValue valueWithPoint: center]
-                                      forKey: filename];
+              /* Manually dragged: use stored pixel position */
+              gnuX = data.pixelPosition.x;
+              gnuY = data.pixelPosition.y;
             }
-
-          irects[i] = NSMakeRect(cellOrigin.x, cellOrigin.y,
-                                  gridSize.width, gridSize.height);
-
-          float rightEdge = cellOrigin.x + gridSize.width;
-          float topEdge  = cellOrigin.y + gridSize.height;
-          if (rightEdge > maxX) maxX = rightEdge;
-          if (topEdge  > maxY) maxY = topEdge;
+          cellOrigin.x = gnuX - (gridSize.width / 2);
+          cellOrigin.y = gnuY - (gridSize.height / 2);
+          NSLog(@"[FREE] %@ iloc=(%.0f,%.0f) gnu=(%.0f,%.0f) refH=%.0f",
+                filename,
+                data.ilocPosition.x, data.ilocPosition.y,
+                gnuX, gnuY, refH);
         }
-
-      maxX += X_MARGIN;
-      SETRECT (self, 0, 0, maxX, maxY + Y_MARGIN);
-    }
-  else
-    {
-      /* ---- Grid-assisted path ----
-       * The "grid" is an imaginary overlay used only for finding
-       * free spots for new/unplaced icons.  Manual icons use their
-       * exact pixel position.  No occupancy map — just scan existing
-       * icon centers to avoid overlaps. */
-
-      /* Ensure gridSize is up to date (may change on window resize) */
-      [self calculateGridSize];
-
-      CGFloat lblH = [fsnodeRep heightOfFont: labelFont];
-      int lblM = [fsnodeRep labelMargin];
-      NSSize viewSz = [self bounds].size;
-      if (viewSz.width < 1) viewSz.width = 600;
-      if (viewSz.height < 1) viewSz.height = 400;
-
-      /* Grid geometry (imaginary — no cells allocated) */
-      CGFloat cellW = gridSize.width;
-      CGFloat cellH = gridSize.height;
-      CGFloat gapX = (CGFloat)X_MARGIN;
-      CGFloat gapY = 0.0;
-      NSPoint gOrigin = [self gridOriginForLayout];
-      NSUInteger nCols = (NSUInteger)((viewSz.width + gapX) / (cellW + gapX));
-      if (nCols < 1) nCols = 1;
-      NSUInteger nRows = (NSUInteger)((viewSz.height + gapY) / (cellH + gapY)); if (nRows > 1) nRows--;
-      if (nRows < 1) nRows = 1;
-
-      /* ---- Pass 1: place MANUAL / LOCKED icons at exact pixel positions ---- */
-      for (i = 0; i < count; i++)
+      else
         {
-          FSNIcon *icon = [icons objectAtIndex: i];
-          FSNIconItemData *data = [icon placementData];
-          if (data.placementMode == FSNIconPlacementModeManual
-              || data.placementMode == FSNIconPlacementModeLocked)
+          /* No saved position: assign a grid slot and record it */
+          gridX += (gridSize.width + X_MARGIN);
+          if (gridX >= (svr.size.width - gridSize.width))
             {
-              CGFloat gnuX, gnuY;
-              if (data.ilocPosition.x >= 0)
-                {
-                  gnuX = data.ilocPosition.x;
-                  gnuY = refH - data.ilocPosition.y;
-                }
-              else
-                {
-                  gnuX = data.pixelPosition.x;
-                  gnuY = data.pixelPosition.y;
-                }
-              NSRect f = NSMakeRect(gnuX - cellW / 2.0,
-                                    gnuY - cellH / 2.0,
-                                    cellW, cellH);
-              if (f.origin.x < 0) f.origin.x = 0;
-              if (f.origin.y < 0) f.origin.y = 0;
-              [icon setFrame: NSIntegralRect(f)];
-              if (i == 0)
-                NSLog(@"[TILE] first MANUAL icon: pix=(%.0f,%.0f) frame=%@",
-                      data.pixelPosition.x, data.pixelPosition.y,
-                      NSStringFromRect(NSIntegralRect(f)));
+              gridX = X_MARGIN;
+              gridY += gridSize.height;
             }
+          cellOrigin.x = gridX;
+          cellOrigin.y = gridY;
+
+          /* Record so this icon stays put on subsequent tiles */
+          NSPoint center = NSMakePoint(cellOrigin.x + gridSize.width / 2.0,
+                                        cellOrigin.y + gridSize.height / 2.0);
+          [customIconPositions setObject: [NSValue valueWithPoint: center]
+                                  forKey: filename];
         }
-      NSLog(@"[TILE] Pass 1 done: %lu icons  cell=%.0fx%.0f  freePos=%d",
-            (unsigned long)count, cellW, cellH, freePositioningEnabled);
 
-      /* ---- Pass 2: place remaining icons at first free grid cell ----
-       * Build a bitmask of blocked cells from MANUAL/LOCKED icon positions,
-       * then fill unblocked cells in placement order (desktop: right→left
-       * top→bottom; viewer: left→right top→bottom). */
-      {
-        /* Recalc to get current enumerator with correct geometry */
-        [_gridLayoutManager recalcWithIconSize: (CGFloat)iconSize
-                                    labelHeight: lblH
-                                   labelMargin: lblM
-                                      infoType: infoType
-                                 iconPosition: iconPosition
-                                     viewSize: viewSz
-                                   direction: _placementDirection
-                                     xMargin: gapX
-                                     yMargin: gapY
-                                  gridSpacing: dsStoreGridSpacing];
-        FSNPlacementEnumerator *e;
-        switch (_placementDirection)
-          {
-          case FSNPlacementDirectionTopToBottomRightToLeft:
-            e = [[FSNTopToBottomRightToLeftEnumerator alloc] initWithColumns: nCols rows: nRows];
-            break;
-          default:
-            e = [[FSNLeftToRightTopToBottomEnumerator alloc] initWithColumns: nCols rows: nRows];
-            break;
-          }
-        NSUInteger totalCells = nCols * nRows;
-        BOOL *blocked = (BOOL *)calloc(totalCells, sizeof(BOOL));
+      irects[i] = NSMakeRect(cellOrigin.x, cellOrigin.y,
+                              gridSize.width, gridSize.height);
 
-        /* Mark cells blocked by MANUAL/LOCKED icons */
-        for (i = 0; i < count; i++)
-          {
-            FSNIcon *icon = [icons objectAtIndex: i];
-            FSNIconItemData *data = [icon placementData];
-            if (data.placementMode == FSNIconPlacementModeManual
-                || data.placementMode == FSNIconPlacementModeLocked)
-              {
-                /* Find the grid cell nearest to this icon's pixel position */
-                NSPoint pt = data.pixelPosition;
-                NSInteger col = (NSInteger)((pt.x - gOrigin.x) / (cellW + gapX));
-                NSInteger row = (NSInteger)((gOrigin.y - pt.y) / (cellH + gapY));
-                if (col >= 0 && col < (NSInteger)nCols && row >= 0 && row < (NSInteger)nRows)
-                  blocked[row * nCols + col] = YES;
-              }
-          }
+      if (NSEqualRects(irects[i], [icon frame]) == NO)
+        {
+          [icon setFrame: irects[i]];
+        }
 
-        /* Place unplaced icons in first unblocked cells.
-         * Icons that already have a grid cell (from cleanup or
-         * previous tile) keep their position — just block the cell. */
-        [e reset];
-        FSNGridCell cell;
-        for (i = 0; i < count; i++)
-          {
-            FSNIcon *icon = [icons objectAtIndex: i];
-            FSNIconItemData *data = [icon placementData];
-            if (data.placementMode == FSNIconPlacementModeManual
-                || data.placementMode == FSNIconPlacementModeLocked)
-              continue;
-
-            /* Already has a valid grid cell from cleanup/previous tile */
-            if (data.hasGridPosition
-                && !FSNGridCellsEqual(data.gridCell, FSNGridCellNone))
-              {
-                NSUInteger idx = data.gridCell.row * nCols + data.gridCell.col;
-                if (idx < nCols * nRows)
-                  {
-                    blocked[idx] = YES;
-                    /* Re-apply frame from stored pixel position */
-                    NSRect f = NSMakeRect(data.pixelPosition.x - cellW / 2.0,
-                                          data.pixelPosition.y - cellH / 2.0,
-                                          cellW, cellH);
-                    [icon setFrame: NSIntegralRect(f)];
-                    continue;
-                  }
-              }
-
-            /* Find first unblocked cell */
-            BOOL found = NO;
-            while ([e nextCell: &cell])
-              {
-                NSUInteger idx = cell.row * nCols + cell.col;
-                if (!blocked[idx])
-                  {
-                    NSPoint gCenter = NSMakePoint(gOrigin.x + (CGFloat)cell.col * (cellW + gapX) + cellW / 2.0,
-                                                  gOrigin.y - (CGFloat)(cell.row + 1) * cellH
-                                                            - (CGFloat)cell.row * gapY + cellH / 2.0);
-                    NSRect f = NSMakeRect(gCenter.x - cellW / 2.0, gCenter.y - cellH / 2.0,
-                                          cellW, cellH);
-                    [icon setFrame: NSIntegralRect(f)];
-                    data.pixelPosition = gCenter;
-                    data.hasGridPosition = YES;
-                    data.gridCell = cell;
-                    data.placementMode = FSNIconPlacementModeAuto;
-                    blocked[idx] = YES;
-                    found = YES;
-                    break;
-                  }
-              }
-            if (!found)
-              {
-                NSRect f = NSMakeRect(gapX, viewSz.height - cellH * (CGFloat)(i + 1),
-                                      cellW, cellH);
-                [icon setFrame: NSIntegralRect(f)];
-              }
-          }
-        [e release];
-        free(blocked);
-      }
-
-      /* Update colItemsCount for keyboard navigation */
-      colItemsCount = [_gridLayoutManager colCount];
-
-      /* Compute view height: bottom-most cell + margin */
-      {
-        CGFloat maxCellBottom = 0;
-        for (i = 0; i < count; i++)
-          {
-            FSNIcon *icon = [icons objectAtIndex: i];
-            FSNIconItemData *data = [icon placementData];
-            if (data.hasGridPosition
-                && !FSNGridCellsEqual(data.gridCell, FSNGridCellNone))
-              {
-                NSPoint origin = [_gridLayoutManager originForCell: data.gridCell];
-                if (origin.y + gridSize.height > maxCellBottom)
-                  maxCellBottom = origin.y + gridSize.height;
-              }
-          }
-        float neededH = maxCellBottom + Y_MARGIN;
-        if (neededH < svr.size.height) neededH = svr.size.height;
-        SETRECT (self, r.origin.x, r.origin.y, svr.size.width, neededH);
-      }
+      float rightEdge = cellOrigin.x + gridSize.width;
+      float topEdge  = cellOrigin.y + gridSize.height;
+      if (rightEdge > maxX) maxX = rightEdge;
+      if (topEdge  > maxY) maxY = topEdge;
     }
+
+  maxX += X_MARGIN;
+  SETRECT (self, 0, 0, maxX, maxY + Y_MARGIN);
 
   /* Tile each icon's internal layout (highlight, label, icon image) */
   for (i = 0; i < count; i++)
@@ -645,12 +439,15 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       if ([icon isSelected])
 	{
-	  pos = i - colItemsCount;
+	  NSSize sz = [self bounds].size;
+	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + X_MARGIN) / (gridSize.width + X_MARGIN)) : 1;
+	  if (i >= cols)
+	    pos = i - cols;
 	  break;
 	}
     }
 
-  if (pos >= 0)
+  if (pos >= 0 && pos < [icons count])
     {
       icon = [icons objectAtIndex: pos];
       [icon select];
@@ -670,7 +467,10 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       if ([icon isSelected])
 	{
-	  pos = i + colItemsCount;
+	  NSSize sz = [self bounds].size;
+	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + X_MARGIN) / (gridSize.width + X_MARGIN)) : 1;
+	  if (i + cols < [icons count])
+	    pos = i + cols;
 	  break;
 	}
     }
@@ -728,25 +528,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 #pragma mark - DS_Store Free Positioning Support
 
-- (void)setFreePositioningEnabled:(BOOL)enabled
-{
-  if (freePositioningEnabled != enabled)
-    {
-      freePositioningEnabled = enabled;
-      NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-      NSDebugLLog(@"gwspace", @"║ FREE POSITIONING MODE: %@", enabled ? @"ENABLED" : @"DISABLED");
-      NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
-      
-      if (enabled)
-        [self tile];
-    }
-}
-
-- (BOOL)freePositioningEnabled
-{
-  return freePositioningEnabled;
-}
-
 - (void)setCustomIconPositions:(NSDictionary *)positions
 {
   if (positions != customIconPositions)
@@ -775,25 +556,62 @@ static void GWHighlightFrameRect(NSRect aRect)
   return customIconPositions;
 }
 
-- (void)applyFreePositioning
-{
-  if (freePositioningEnabled)
-    {
-      [self tile];
-      [self setNeedsDisplay: YES];
-    }
-}
-
 - (NSArray *)icons
 {
   return icons;
 }
 
+- (NSPoint)firstFreeGridCenter
+{
+  /* Virtual grid scan: find the first grid cell that is not occupied by
+   * any existing icon.  Used for initial placement of new/added items. */
+
+  [self calculateGridSize];
+
+  CGFloat cellW = gridSize.width;
+  CGFloat cellH = gridSize.height;
+  CGFloat gapX = (CGFloat)X_MARGIN;
+  CGFloat gapY = 0.0;
+  NSPoint gOrigin = [self gridOriginForLayout];
+  NSSize viewSz = [self bounds].size;
+  NSUInteger nCols = (NSUInteger)((viewSz.width + gapX) / (cellW + gapX));
+  if (nCols < 1) nCols = 1;
+  NSUInteger nRows = (NSUInteger)(gOrigin.y / cellH);
+  if (nRows < 1) nRows = 1;
+
+  FSNLeftToRightTopToBottomEnumerator *e =
+    [[[FSNLeftToRightTopToBottomEnumerator alloc] initWithColumns: nCols rows: nRows] autorelease];
+  [e reset];
+  FSNGridCell cell;
+  while ([e nextCell: &cell])
+    {
+      NSPoint c = NSMakePoint(gOrigin.x + (CGFloat)cell.col * (cellW + gapX) + cellW / 2.0,
+                               gOrigin.y - (CGFloat)(cell.row + 1) * cellH
+                                         - (CGFloat)cell.row * gapY + cellH / 2.0);
+      /* Check if any existing icon occupies this cell */
+      BOOL occupied = NO;
+      NSUInteger i;
+      for (i = 0; i < [icons count]; i++)
+        {
+          FSNIcon *icon = [icons objectAtIndex: i];
+          NSPoint ip = [[icon placementData] pixelPosition];
+          CGFloat dx = fabs(ip.x - c.x);
+          CGFloat dy = fabs(ip.y - c.y);
+          if (dx < cellW / 2.0 && dy < cellH / 2.0)
+            {
+              occupied = YES;
+              break;
+            }
+        }
+      if (!occupied)
+        return c;
+    }
+  return NSZeroPoint;
+}
+
 - (void)repositionIcon:(FSNIcon *)icon toCenterPoint:(NSPoint)point
 {
-  /* Thin wrapper — all real work is in batchRepositionIcons:toCenterPoints:.
-   * This method exists only for backward API compatibility.  It does NOT
-   * enable free positioning mode (that would corrupt the grid). */
+  /* Thin wrapper — all real work is in batchRepositionIcons:toCenterPoints:. */
   if (!icon) return;
   [self batchRepositionIcons: [NSArray arrayWithObject: icon]
               toCenterPoints: [NSArray arrayWithObject: [NSValue valueWithPoint: point]]];
@@ -829,8 +647,6 @@ static void GWHighlightFrameRect(NSRect aRect)
       /* Manual placement is pixel-precise — no grid snapping. */
       data.pixelPosition = point;
       data.ilocPosition = NSMakePoint(-1, -1);  /* clear raw coords */
-      data.hasGridPosition = NO;
-      data.gridCell = FSNGridCellNone;
       data.placementMode = FSNIconPlacementModeManual;
 
       NSLog(@"[WRITE]   %@  gnuStep=(%.0f, %.0f)",
@@ -981,38 +797,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
-#pragma mark - Grid Spacing Support
-
-- (void)setGridSpacing:(CGFloat)spacing
-{
-  dsStoreGridSpacing = spacing;
-  // Recalculate grid and re-tile
-  [self calculateGridSize];
-  [self tile];
-}
-
-- (CGFloat)gridSpacing
-{
-  return dsStoreGridSpacing;
-}
-
-#pragma mark - Unified Grid Layout Manager
-
-- (FSNGridLayoutManager *)gridLayoutManager
-{
-  return _gridLayoutManager;
-}
-
-- (void)setSnapEnabled:(BOOL)flag
-{
-  _snapEnabled = flag;
-}
-
-- (BOOL)snapEnabled
-{
-  return _snapEnabled;
-}
-
 - (NSPoint)gridOriginForLayout
 {
   /* Default: top-left origin with standard margins.
@@ -1023,21 +807,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)setPlacementDirection:(FSNPlacementDirection)direction
 {
-  if (_placementDirection != direction)
-    {
-      _placementDirection = direction;
-      /* Force recalc on next tile */
-      [_gridLayoutManager recalcWithIconSize: (CGFloat)iconSize
-                                  labelHeight: [fsnodeRep heightOfFont: labelFont]
-                                 labelMargin: [fsnodeRep labelMargin]
-                                    infoType: infoType
-                               iconPosition: iconPosition
-                                   viewSize: [self bounds].size
-                                 direction: direction
-                                   xMargin: (CGFloat)X_MARGIN
-                                   yMargin: 0.0
-                                gridSpacing: dsStoreGridSpacing];
-    }
+  _placementDirection = direction;
 }
 
 - (FSNPlacementDirection)placementDirection
@@ -1049,16 +819,15 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)cleanupIconPositions
 {
-  /* "Clean Up" — snap all non-LOCKED icons to the nearest points
-   * on the imaginary grid, in placement order.  Resolves overlaps
-   * by shifting forward.  LOCKED icons stay exactly where they are. */
+  /* "Clean Up" — snap all icons to the nearest points on the virtual
+   * grid, in placement order.  All icons are reassigned; MANUAL is
+   * set so subsequent tiles pin the grid-aligned positions. */
 
-  if (freePositioningEnabled)
-    {
-      [customIconPositions release];
-      customIconPositions = nil;
-      freePositioningEnabled = NO;
-    }
+  [customIconPositions release];
+  customIconPositions = nil;
+
+  /* Ensure gridSize is up to date — tile: recalculates it, so we must too */
+  [self calculateGridSize];
 
   CGFloat cellW = gridSize.width;
   CGFloat cellH = gridSize.height;
@@ -1068,11 +837,10 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSSize viewSz = [self bounds].size;
   NSUInteger nCols = (NSUInteger)((viewSz.width + gapX) / (cellW + gapX));
   if (nCols < 1) nCols = 1;
-  NSUInteger nRows = (NSUInteger)((viewSz.height + gapY) / (cellH + gapY)); if (nRows > 1) nRows--;
+  NSUInteger nRows = (NSUInteger)(gOrigin.y / cellH);
   if (nRows < 1) nRows = 1;
 
-  /* Build a FRESH enumerator directly — never reuse a stale one.
-   * recalcWithIconSize: may skip if params match, leaving old _cols. */
+  /* Build a FRESH enumerator directly — never reuse a stale one. */
   FSNPlacementEnumerator *e;
   switch (_placementDirection)
     {
@@ -1086,78 +854,35 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSLog(@"[CLEAN] enumerator: dir=%lu allocCols=%lu allocRows=%lu",
         (unsigned long)_placementDirection, (unsigned long)nCols, (unsigned long)nRows);
 
-  /* Collect LOCKED icon centers so they block grid points */
-  NSMutableArray *blockedCenters = [NSMutableArray array];
-  NSUInteger i;
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      FSNIconItemData *data = [icon placementData];
-      if (data.placementMode == FSNIconPlacementModeLocked)
-        [blockedCenters addObject: [NSValue valueWithPoint: data.pixelPosition]];
-    }
-
-  /* Sort unlocked icons by current placement order (closest to grid order) */
-  NSMutableArray *toClean = [NSMutableArray array];
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      FSNIconItemData *data = [icon placementData];
-      if (data.placementMode != FSNIconPlacementModeLocked)
-        [toClean addObject: icon];
-    }
-
-  NSLog(@"[CLEAN] starting  icons=%lu  cols=%lu rows=%lu  cell=%.0fx%.0f  gap=%.0f  LOCKED=%lu",
-        (unsigned long)[toClean count], (unsigned long)nCols, (unsigned long)nRows,
-        cellW, cellH, gapX, (unsigned long)[blockedCenters count]);
-
-  /* Place each unlocked icon at the first free grid point */
+  /* Place each icon at the next free grid point */
   [e reset];
   FSNGridCell cell;
   NSUInteger ci = 0;
-  while (ci < [toClean count] && [e nextCell: &cell])
+  while (ci < [icons count] && [e nextCell: &cell])
     {
       NSPoint gCenter = NSMakePoint(gOrigin.x + (CGFloat)cell.col * (cellW + gapX) + cellW / 2.0,
                                     gOrigin.y - (CGFloat)(cell.row + 1) * cellH
                                               - (CGFloat)cell.row * gapY + cellH / 2.0);
 
-      /* Skip if this cell is blocked by a LOCKED icon.
-       * Use cell-level comparison: check if any LOCKED icon's
-       * nearest grid cell matches this one. */
-      BOOL blocked = NO;
-      NSUInteger k;
-      for (k = 0; k < [blockedCenters count]; k++)
-        {
-          NSPoint bc = [[blockedCenters objectAtIndex: k] pointValue];
-          NSInteger bcCol = (NSInteger)((bc.x - gOrigin.x) / (cellW + gapX));
-          NSInteger bcRow = (NSInteger)((gOrigin.y - bc.y) / (cellH + gapY));
-          if (bcCol == (NSInteger)cell.col && bcRow == (NSInteger)cell.row)
-            { blocked = YES; break; }
-        }
-      if (blocked) continue;
-
       /* Assign this grid point to the next icon */
-      FSNIcon *icon = [toClean objectAtIndex: ci];
+      FSNIcon *icon = [icons objectAtIndex: ci];
       FSNIconItemData *data = [icon placementData];
       NSLog(@"[CLEAN] %2lu: %@  (col=%lu,row=%lu) -> gnu=(%.0f,%.0f)",
             (unsigned long)ci, [[icon node] name],
             (unsigned long)cell.col, (unsigned long)cell.row,
             gCenter.x, gCenter.y);
       data.pixelPosition = gCenter;
-      data.gridCell = cell;
-      data.hasGridPosition = YES;
+      data.ilocPosition = NSMakePoint(-1, -1);  /* clear raw coords so tile uses GNUstep pixelPosition */
       /* MANUAL keeps them pinned through resizes and tile calls.
        * Next Clean Up will re-snap them to the updated grid. */
       data.placementMode = FSNIconPlacementModeManual;
       NSRect f = NSMakeRect(gCenter.x - cellW / 2.0, gCenter.y - cellH / 2.0,
                             cellW, cellH);
       [icon setFrame: NSIntegralRect(f)];
-
-      [blockedCenters addObject: [NSValue valueWithPoint: gCenter]];
       ci++;
     }
 
-  NSLog(@"[CLEAN] placed %lu/%lu icons", (unsigned long)ci, (unsigned long)[toClean count]);
+  NSLog(@"[CLEAN] placed %lu/%lu icons", (unsigned long)ci, (unsigned long)[icons count]);
   [e release];
   [self tile];
 }
@@ -1180,15 +905,9 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
       FSNIconItemData *data = [icon placementData];
-      if (data.placementMode != FSNIconPlacementModeLocked)
-        {
-          data.placementMode = FSNIconPlacementModeAuto;
-          data.hasGridPosition = NO;
-          data.gridCell = FSNGridCellNone;
-        }
+      data.placementMode = FSNIconPlacementModeAuto;
     }
 
-  [_gridLayoutManager clearOccupancy];
   [self tile];
 }
 
@@ -1610,22 +1329,6 @@ static void GWHighlightFrameRect(NSRect aRect)
                     [[icon node] name], data.pixelPosition.x, data.pixelPosition.y);
     }
 
-  /* Force grid recalc on resize so columns/rows update */
-  if (!freePositioningEnabled)
-    {
-      CGFloat lblH = [fsnodeRep heightOfFont: labelFont];
-      int lblM = [fsnodeRep labelMargin];
-      [_gridLayoutManager recalcWithIconSize: (CGFloat)iconSize
-                                  labelHeight: lblH
-                                 labelMargin: lblM
-                                    infoType: infoType
-                               iconPosition: iconPosition
-                                   viewSize: newBounds.size
-                                 direction: _placementDirection
-                                   xMargin: (CGFloat)X_MARGIN
-                                   yMargin: 0.0
-                                gridSpacing: dsStoreGridSpacing];
-    }
   [self tile];
 
   for (k = 0; k < [icons count]; k++)
@@ -1777,8 +1480,6 @@ static void GWHighlightFrameRect(NSRect aRect)
                         FSNIconItemData *data = [icon placementData];
                         data.ilocPosition = iloc;
                         data.pixelPosition = NSMakePoint(iloc.x, iloc.y);
-                        data.hasGridPosition = NO;
-                        data.gridCell = FSNGridCellNone;
                         data.placementMode = FSNIconPlacementModeManual;
                         NSLog(@"[READ]   DS_Store: %@  iloc=(%.0f,%.0f)",
                                     name, iloc.x, iloc.y);
@@ -1812,8 +1513,6 @@ static void GWHighlightFrameRect(NSRect aRect)
             data.ilocPosition = floc;
             data.pixelPosition = gsCenter;
             data.placementMode = FSNIconPlacementModeManual;
-            data.hasGridPosition = NO;
-            data.gridCell = FSNGridCellNone;
             NSLog(@"[READ]   fdLocation: %@  floc=(%.0f,%.0f) -> gnu=(%.0f,%.0f)",
                         [[icon node] name], floc.x, floc.y, gsCenter.x, gsCenter.y);
           }

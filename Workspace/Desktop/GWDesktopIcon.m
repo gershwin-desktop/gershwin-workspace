@@ -62,6 +62,39 @@
   return self;
 }
 
+- (void)mouseUp:(NSEvent *)theEvent
+{
+  NSPoint location = [theEvent locationInWindow];
+  location = [self convertPoint: location fromView: nil];
+  BOOL onself = NO;
+
+  if (icnPosition == NSImageOnly)
+    {
+      onself = [self mouse: location inRect: icnBounds];
+    }
+  else
+    {
+      onself = ([self mouse: location inRect: icnBounds]
+                || [self mouse: location inRect: labelRect]);
+    }
+
+  if (onself && ([node isLocked] == NO) && ([theEvent clickCount] > 1))
+    {
+      // Route through the window's delegate (GWDesktopManager for desktop),
+      // which properly handles folders, packages, applications, and files.
+      id windowDelegate = [[self window] delegate];
+      if (windowDelegate && [windowDelegate respondsToSelector: @selector(openSelectionInNewViewer:)])
+        {
+          BOOL newv = (([theEvent modifierFlags] & NSControlKeyMask)
+                       || ([theEvent modifierFlags] & NSAlternateKeyMask));
+          [windowDelegate openSelectionInNewViewer: newv];
+        }
+      return;
+    }
+
+  [super mouseUp: theEvent];
+}
+
 - (void)mouseDown:(NSEvent *)theEvent
 {
   NSWindow *win = [self window];

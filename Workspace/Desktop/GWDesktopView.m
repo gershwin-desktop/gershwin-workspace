@@ -30,7 +30,6 @@
 #import <GNUstepGUI/GSVersion.h>
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
-#import "FSNGridLayoutManager.h"
 #import "DSStore.h"
 #import "GSFileMetadata.h"
 #import "GWDesktopView.h"
@@ -129,8 +128,7 @@
       expectedUnmountPaths = [NSMutableDictionary new];
 
       /* Set desktop placement direction (top→bottom, right→left) */
-      [self setPlacementDirection: FSNPlacementDirectionTopToBottomRightToLeft];
-      [self setSnapEnabled: YES];
+      _placementDirection = FSNPlacementDirectionTopToBottomRightToLeft;
 
       [self getDesktopInfo];
       dragIcon = nil;
@@ -661,60 +659,8 @@
 
 - (void)tile
 {
-  if ([self freePositioningEnabled])
-    {
-      [super tile];
-      return;
-    }
-
   [super tile];
   [self updateNameEditor];
-}
-
-- (NSUInteger)firstFreeGridIndex
-{
-  FSNGridCell cell;
-  if ([[self gridLayoutManager] firstFreeCell: &cell])
-    return [[self gridLayoutManager] flatIndexForCell: cell];
-  return NSNotFound;
-}
-
-- (NSUInteger)firstFreeGridIndexAfterIndex:(NSUInteger)index
-{
-  /* For backward compat: scan forward from index+1 for first free flat index */
-  NSUInteger total = [[self gridLayoutManager] totalCells];
-  NSUInteger i;
-  for (i = index + 1; i < total; i++)
-    {
-      FSNGridCell cell = [[self gridLayoutManager] cellForFlatIndex: i];
-      if (![[self gridLayoutManager] isCellOccupied: cell])
-        return i;
-    }
-  return [self firstFreeGridIndex];
-}
-
-- (BOOL)isFreeGridIndex:(NSUInteger)index
-{
-  if (index == NSNotFound || index >= [[self gridLayoutManager] totalCells])
-    return NO;
-  FSNGridCell cell = [[self gridLayoutManager] cellForFlatIndex: index];
-  return ![[self gridLayoutManager] isCellOccupied: cell];
-}
-
-- (FSNIcon *)iconWithGridIndex:(NSUInteger)index
-{
-  NSUInteger i;
-  FSNGridCell targetCell = [[self gridLayoutManager] cellForFlatIndex: index];
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      FSNIconItemData *data = [icon placementData];
-      if (data.hasGridPosition && FSNGridCellsEqual(data.gridCell, targetCell))
-        return icon;
-    }
-
-  return nil;
 }
 
 - (NSArray *)iconsWithGridOriginX:(float)x
@@ -765,63 +711,6 @@
   return nil;
 }
 
-- (NSRect)rectForGridIndex:(NSUInteger)index
-{
-  FSNGridCell cell = [[self gridLayoutManager] cellForFlatIndex: index];
-  NSPoint origin = [[self gridLayoutManager] originForCell: cell];
-  NSSize csz = [[self gridLayoutManager] cellSize];
-  return NSIntegralRect(NSMakeRect(origin.x, origin.y, csz.width, csz.height));
-}
-
-- (NSUInteger)indexOfGridRectContainingPoint:(NSPoint)p
-{
-  FSNGridCell cell = [[self gridLayoutManager] cellForPoint: p];
-  return [[self gridLayoutManager] flatIndexForCell: cell];
-}
-
-- (NSRect)iconBoundsInGridAtIndex:(NSUInteger)index
-{
-  FSNGridCell cell = [[self gridLayoutManager] cellForFlatIndex: index];
-  NSPoint origin = [[self gridLayoutManager] originForCell: cell];
-  NSSize csz = [[self gridLayoutManager] cellSize];
-
-  NSRect icnBounds = NSMakeRect(origin.x, origin.y, iconSize, iconSize);
-  NSRect hlightRect = NSZeroRect;
-
-  hlightRect.size.width = ceil(iconSize / 3 * 4);
-  hlightRect.size.height = ceil(hlightRect.size.width * [fsnodeRep highlightHeightFactor]);
-  if ((hlightRect.size.height - iconSize) < 2)
-    hlightRect.size.height = iconSize + 2;
-
-  if (iconPosition == NSImageAbove)
-    {
-      hlightRect.origin.x = ceil((csz.width - hlightRect.size.width) / 2);
-      if (infoType != FSNInfoNameType)
-        hlightRect.origin.y = floor([fsnodeRep heightOfFont: labelFont] * 2 - 2);
-      else
-        hlightRect.origin.y = floor([fsnodeRep heightOfFont: labelFont]);
-    }
-  else
-    {
-      hlightRect.origin.x = 0;
-      hlightRect.origin.y = 0;
-    }
-
-  icnBounds.origin.x += hlightRect.origin.x + ((hlightRect.size.width - iconSize) / 2);
-  icnBounds.origin.y += hlightRect.origin.y + ((hlightRect.size.height - iconSize) / 2);
-
-  return NSIntegralRect(icnBounds);
-}
-
-- (void)makeIconsGrid
-{
-  /* Grid geometry is now managed by FSNGridLayoutManager.
-   * The actual recalc happens in -tile where gridOrigin is also set
-   * based on screen frame and dock/menu reservations.
-   * This method remains as a compatibility stub for existing callers
-   * that trigger it when icon size, label size, etc. change. */
-  [self calculateGridSize];
-}
 
 
 
@@ -888,7 +777,7 @@
       if (infoType != itype)
 	{
 	  infoType = itype;
-	  [self makeIconsGrid];
+	  [self calculateGridSize];
 	}
       infoType = itype;
 
@@ -910,7 +799,7 @@
 	  if (extInfoType == nil)
 	    {
 	      infoType = FSNInfoNameType;
-	      [self makeIconsGrid];
+	      [self calculateGridSize];
 	    }
 	}
 
@@ -931,64 +820,73 @@
 
 - (void)selectIconInPrevLine
 {
+  /* Pixel-based: find icon with closest Y-origin above the selected one */
   NSUInteger i;
+  FSNIcon *selectedIcon = nil;
+  for (i = 0; i < [icons count]; i++)
+    {
+      if ([[icons objectAtIndex: i] isSelected])
+	{
+	  selectedIcon = [icons objectAtIndex: i];
+	  break;
+	}
+    }
+  if (!selectedIcon) return;
 
+  CGFloat selY = [selectedIcon frame].origin.y;
+  FSNIcon *best = nil;
+  CGFloat bestDist = CGFLOAT_MAX;
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      NSUInteger index = [icon gridIndex];
-
-      if ([icon isSelected])
+      if (icon == selectedIcon) continue;
+      CGFloat dy = [icon frame].origin.y - selY;
+      if (dy < 0 && fabs(dy) < bestDist)
 	{
-	  FSNIcon *prev;
-
-	  while (index > 0)
-	    {
-	      prev = [self iconWithGridIndex: index-1];
-
-	      if (prev)
-		{
-		  [prev select];
-		  break;
-		}
-	      index--;
-	    }
-
-	  break;
+	  best = icon;
+	  bestDist = fabs(dy);
 	}
+    }
+  if (best)
+    {
+      [best select];
+      [self scrollIconToVisible: best];
     }
 }
 
 - (void)selectIconInNextLine
 {
+  /* Pixel-based: find icon with closest Y-origin below the selected one */
   NSUInteger i;
+  FSNIcon *selectedIcon = nil;
+  for (i = 0; i < [icons count]; i++)
+    {
+      if ([[icons objectAtIndex: i] isSelected])
+	{
+	  selectedIcon = [icons objectAtIndex: i];
+	  break;
+	}
+    }
+  if (!selectedIcon) return;
 
+  CGFloat selY = [selectedIcon frame].origin.y;
+  FSNIcon *best = nil;
+  CGFloat bestDist = CGFLOAT_MAX;
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      FSNIconItemData *data = [icon placementData];
-      NSUInteger index = data.hasGridPosition ?
-        [[self gridLayoutManager] flatIndexForCell: data.gridCell] : NSNotFound;
-
-      if ([icon isSelected])
+      if (icon == selectedIcon) continue;
+      CGFloat dy = [icon frame].origin.y - selY;
+      if (dy > 0 && dy < bestDist)
 	{
-	  FSNIcon *next;
-
-	  while (index < [[self gridLayoutManager] totalCells])
-	    {
-	      index++;
-
-	      next = [self iconWithGridIndex: index];
-
-	      if (next)
-		{
-		  [next select];
-		  break;
-		}
-	    }
-
-	  break;
+	  best = icon;
+	  bestDist = dy;
 	}
+    }
+  if (best)
+    {
+      [best select];
+      [self scrollIconToVisible: best];
     }
 }
 
@@ -999,7 +897,7 @@
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      NSUInteger index = [icon gridIndex];
+      NSUInteger index = 0;
 
       if ([icon isSelected])
 	{
@@ -1009,10 +907,10 @@
 	    {
 	      FSNIcon *prev;
 
-	      while (index < [[self gridLayoutManager] totalCells])
+	      while (index < 0)
 		{
 		  index++;
-		  prev = [self iconWithGridIndex: index];
+		  prev = nil;
 
 		  if (prev && [rowicons containsObject: prev])
 		    {
@@ -1034,7 +932,7 @@
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      NSUInteger index = [icon gridIndex];
+      NSUInteger index = 0;
 
       if ([icon isSelected])
 	{
@@ -1046,7 +944,7 @@
 
 	      while (index > 0)
 		{
-		  next = [self iconWithGridIndex: index - 1];
+		  next = nil;
 
 		  if (next && [rowicons containsObject: next])
 		    {
@@ -1439,42 +1337,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       // Right-clicked on empty desktop background
       NSMenu *menu = [[Workspace gworkspace] emptySpaceContextMenuForViewer: [self window]];
 
-      // "Clean Up" — repacks icons in placement order
-      [menu addItem: [NSMenuItem separatorItem]];
-      {
-        NSMenuItem *cleanUpItem = [NSMenuItem new];
-        [cleanUpItem setTitle: NSLocalizedString(@"Clean Up", @"")];
-        [cleanUpItem setTarget: [Workspace gworkspace]];
-        [cleanUpItem setAction: @selector(cleanUp:)];
-        [menu addItem: cleanUpItem];
-        RELEASE (cleanUpItem);
-      }
-
-      // "Clean Up By" submenu
-      {
-        NSMenuItem *cleanUpByItem = [NSMenuItem new];
-        [cleanUpByItem setTitle: NSLocalizedString(@"Clean Up By", @"")];
-        NSMenu *submenu = [[NSMenu alloc] initWithTitle: @""];
-        NSArray *opts = @[@"Name", @"Kind", @"Date Modified", @"Size", @"Date Created"];
-        NSArray *tags = @[@0, @1, @2, @3, @5];
-        NSUInteger oi;
-        for (oi = 0; oi < [opts count]; oi++)
-          {
-            NSMenuItem *it = [NSMenuItem new];
-            [it setTitle: NSLocalizedString([opts objectAtIndex: oi], @"")];
-            [it setTarget: [Workspace gworkspace]];
-            [it setAction: @selector(cleanUpBy:)];
-            [it setTag: [[tags objectAtIndex: oi] integerValue]];
-            [submenu addItem: it];
-            RELEASE (it);
-          }
-        [cleanUpByItem setSubmenu: submenu];
-        RELEASE (submenu);
-        [menu addItem: cleanUpByItem];
-        RELEASE (cleanUpByItem);
-      }
-
-      // Add separator and Workspace Preferences (desktop-specific)
+      // Add Workspace Preferences (desktop-specific)
       [menu addItem: [NSMenuItem separatorItem]];
 
       NSMenuItem *menuItem = [NSMenuItem new];
@@ -1529,8 +1392,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   CREATE_AUTORELEASE_POOL(arp);
   NSArray *subNodes = [anode subNodes];
   NSMutableArray *unsorted = [NSMutableArray array];
-  NSDictionary *indexes = [desktopInfo objectForKey: @"indexes"];
-  NSDictionary *gridPositions = [desktopInfo objectForKey: @"gridPositions"];
   NSUInteger i;
 
   i = [icons count];
@@ -1598,8 +1459,6 @@ static void GWHighlightFrameRect(NSRect aRect)
                         FSNIconItemData *data = [icon placementData];
                         data.pixelPosition = gsCenter;
                         data.placementMode = FSNIconPlacementModeManual;
-                        data.hasGridPosition = NO;
-                        data.gridCell = FSNGridCellNone;
                         NSLog(@"[READ]   -> gnu=(%.0f,%.0f) MANUAL", gsCenter.x, gsCenter.y);
                         restored++;
                       }
@@ -1630,8 +1489,6 @@ static void GWHighlightFrameRect(NSRect aRect)
             NSPoint gsCenter = NSMakePoint(floc.x, refH - floc.y);
             data.pixelPosition = gsCenter;
             data.placementMode = FSNIconPlacementModeManual;
-            data.hasGridPosition = NO;
-            data.gridCell = FSNGridCellNone;
           }
       }
   }
@@ -1676,16 +1533,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 	  NSString *fname = [files objectAtIndex: i];
 	  FSNode *subnode = [FSNode nodeWithRelativePath: fname parent: node];
 
-	  if ([operation isEqual: @"WorkspaceRenameOperation"])
-	    {
-	      FSNIcon *icon = [self repOfSubnode: subnode];
-
-	      if (icon)
-		{
-		  insertIndex = [icon gridIndex];
-		}
-	    }
-
 	  [self removeRepOfSubnode: subnode];
 	}
     }
@@ -1696,428 +1543,22 @@ static void GWHighlightFrameRect(NSRect aRect)
       destination = [destination stringByDeletingLastPathComponent];
     }
 
-  if ([[node path] isEqual: destination]
-      && ([operation isEqual: NSWorkspaceMoveOperation]
-	  || [operation isEqual: NSWorkspaceCopyOperation]
-	  || [operation isEqual: NSWorkspaceLinkOperation]
-	  || [operation isEqual: NSWorkspaceDuplicateOperation]
-	  || [operation isEqual: @"WorkspaceCreateDirOperation"]
-	  || [operation isEqual: @"WorkspaceRenameOperation"]
-	  || [operation isEqual: @"WorkspaceRecycleOutOperation"]))
-    {
-      NSUInteger index = 0;
-
-      // during drag operations, we assune insertIndex is still valid
-      if (insertIndex != NSNotFound)
-	{
-	  if ([self isFreeGridIndex: insertIndex])
-	    {
-	      index = insertIndex;
-	    }
-	  else
-	    {
-	      index = [self firstFreeGridIndexAfterIndex: insertIndex];
-
-	      if (index == NSNotFound)
+  	  for (i = 0; i < [files count]; i++)
 		{
-		  index = [self firstFreeGridIndex];
+		  NSString *fname = [files objectAtIndex: i];
+		  FSNode *subnode = [FSNode nodeWithRelativePath: fname parent: node];
+		  FSNIcon *icon = [self repOfSubnode: subnode];
+
+		  if (icon)
+		    {
+		      [icon setNode: subnode];
+		    }
+		  else
+		    {
+		      icon = [self addRepForSubnode: subnode];
+		    }
 		}
 	    }
-	}
-      else
-	{
-	  index = [self firstFreeGridIndex];
-	}
-
-      for (i = 0; i < [files count]; i++)
-	{
-	  NSString *fname = [files objectAtIndex: i];
-	  FSNode *subnode = [FSNode nodeWithRelativePath: fname parent: node];
-	  FSNIcon *icon = [self repOfSubnode: subnode];
-
-	  index = [self firstFreeGridIndexAfterIndex: index];
-
-	  if (index == NSNotFound)
-	    {
-	      index = [self firstFreeGridIndex];
-	    }
-
-	  if (icon)
-	    {
-	      [icon setNode: subnode];
-	      [icon setGridIndex: index];
-	    }
-	  else
-	    {
-	      icon = [self addRepForSubnode: subnode];
-	      [icon setGridIndex: index];
-	    }
-	}
-    }
-
-  [self checkLockedReps];
-  [self tile];
-  [self setNeedsDisplay: YES];
-  [self selectionDidChange];
-}
-
-- (void)watchedPathChanged:(NSDictionary *)info
-{
-  NSString *event = [info objectForKey: @"event"];
-  NSArray *files = [info objectForKey: @"files"];
-  NSString *ndpath = [node path];
-  BOOL needupdate = NO;
-  NSString *fname;
-  NSString *fpath;
-  NSUInteger i;
-
-  NSDebugLLog(@"gwspace", @"DEBUG: GWDesktopView watchedPathChanged called");
-  NSDebugLLog(@"gwspace", @"DEBUG: event = %@", event);
-  NSDebugLLog(@"gwspace", @"DEBUG: path = %@", [info objectForKey: @"path"]);
-  NSDebugLLog(@"gwspace", @"DEBUG: files = %@", files);
-  NSDebugLLog(@"gwspace", @"DEBUG: ndpath = %@", ndpath);
-
-  if ([event isEqual: @"GWFileDeletedInWatchedDirectory"])
-    {
-      NSDebugLLog(@"gwspace", @"DEBUG: Handling GWFileDeletedInWatchedDirectory");
-      for (i = 0; i < [files count]; i++)
-	{
-	  fname = [files objectAtIndex: i];
-	  fpath = [ndpath stringByAppendingPathComponent: fname];
-
-	  NSDebugLLog(@"gwspace", @"DEBUG: Removing rep for: %@", fpath);
-	  [self removeRepOfSubnodePath: fpath];
-	  needupdate = YES;
-	}
-    }
-  else if ([event isEqual: @"GWFileCreatedInWatchedDirectory"])
-    {
-      NSDebugLLog(@"gwspace", @"DEBUG: Handling GWFileCreatedInWatchedDirectory");
-      for (i = 0; i < [files count]; i++)
-	{
-	  fname = [files objectAtIndex: i];
-	  fpath = [ndpath stringByAppendingPathComponent: fname];
-
-	  if ([self repOfSubnodePath: fpath] == nil)
-	    {
-	      NSDebugLLog(@"gwspace", @"DEBUG: Adding rep for: %@", fpath);
-	      [self addRepForSubnodePath: fpath];
-	      needupdate = YES;
-	    }
-	}
-    }
-  else if ([event isEqual: @"GWWatchedPathRenamed"])
-    {
-      /* A file/folder was moved away from this directory */
-      NSString *oldpath = [info objectForKey: @"oldpath"];
-      
-      NSDebugLLog(@"gwspace", @"DEBUG: Handling GWWatchedPathRenamed, oldpath = %@", oldpath);
-      
-      if (oldpath)
-        {
-          fname = [oldpath lastPathComponent];
-          fpath = [ndpath stringByAppendingPathComponent: fname];
-          
-          NSDebugLLog(@"gwspace", @"DEBUG: Removing rep for: %@", fpath);
-          [self removeRepOfSubnodePath: fpath];
-          needupdate = YES;
-        }
-    }
-
-  if (needupdate)
-    {
-      NSDebugLLog(@"gwspace", @"DEBUG: Desktop view needs update, calling tile");
-      [self tile];
-      [self setNeedsDisplay: YES];
-      [self selectionDidChange];
-    }
-}
-
-- (void)setShowType:(FSNInfoType)type
-{
-  if (infoType != type)
-    {
-      BOOL newgrid = ((infoType == FSNInfoNameType) || (type == FSNInfoNameType));
-      NSUInteger i;
-
-      infoType = type;
-      DESTROY (extInfoType);
-
-      if (newgrid)
-	{
-	  [self makeIconsGrid];
-	}
-
-      for (i = 0; i < [icons count]; i++)
-	{
-	  FSNIcon *icon = [icons objectAtIndex: i];
-
-	  [icon setNodeInfoShowType: infoType];
-	  [icon tile];
-	}
-
-      [self tile];
-    }
-}
-
-- (void)setExtendedShowType:(NSString *)type
-{
-  if ((extInfoType == nil) || ([extInfoType isEqual: type] == NO))
-    {
-      BOOL newgrid = (infoType == FSNInfoNameType);
-      NSUInteger i;
-
-      infoType = FSNInfoExtendedType;
-      ASSIGN (extInfoType, type);
-
-      if (newgrid)
-	{
-	  [self makeIconsGrid];
-	}
-
-      for (i = 0; i < [icons count]; i++)
-	{
-	  FSNIcon *icon = [icons objectAtIndex: i];
-
-	  [icon setExtendedShowType: extInfoType];
-	  [icon tile];
-	}
-
-      [self tile];
-    }
-}
-
-- (void)setIconSize:(int)size
-{
-  NSUInteger i;
-
-  iconSize = size;
-  [self makeIconsGrid];
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      [icon setIconSize: iconSize];
-    }
-
-  [self tile];
-}
-
-- (void)setLabelTextSize:(int)size
-{
-  NSUInteger i;
-
-  labelTextSize = size;
-  ASSIGN (labelFont, [NSFont systemFontOfSize: labelTextSize]);
-  [self makeIconsGrid];
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      [icon setFont: labelFont];
-    }
-
-  [nameEditor setFont: labelFont];
-
-  [self tile];
-}
-
-- (void)setIconPosition:(int)pos
-{
-  NSUInteger i;
-
-  iconPosition = pos;
-  [self makeIconsGrid];
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      [icon setIconPosition: iconPosition];
-    }
-
-  [self tile];
-}
-
-- (id)addRepForSubnode:(FSNode *)anode
-{
-  /* Never display internal metadata files on the desktop */
-  NSString *fname = [anode name];
-  if ([fname isEqualToString: @".DS_Store"]
-      || [fname hasPrefix: @"._"]
-      || [fname isEqualToString: @"__MACOSX"])
-    return nil;
-
-  CREATE_AUTORELEASE_POOL(arp);
-
-  // Mark root filesystem as a mount point
-  if ([[anode path] isEqualToString: @"/"]) {
-    [anode setMountPoint: YES];
-  }
-
-  GWDesktopIcon *icon = [[GWDesktopIcon alloc] initForNode: anode
-                                        nodeInfoType: infoType
-                                        extendedType: extInfoType
-                                            iconSize: iconSize
-                                        iconPosition: iconPosition
-                                           labelFont: labelFont
-                                           textColor: textColor
-                                           gridIndex: NSNotFound
-                                           dndSource: YES
-                                           acceptDnd: YES
-                                           slideBack: YES];
-
-  [icon setGridIndex: [self firstFreeGridIndex]];
-  [icons addObject: icon];
-  [self addSubview: icon];
-  RELEASE (icon);
-  RELEASE (arp);
-
-  return icon;
-}
-
-- (void)repSelected:(id)arep
-{
-  NSWindow *win = [self window];
-
-  if (win != [NSApp keyWindow]) {
-    [win makeKeyWindow];
-  }
-}
-
-- (void)selectAll
-{
-  NSUInteger i;
-
-  selectionMask = NSSingleSelectionMask;
-  selectionMask |= FSNCreatingSelectionMask;
-
-  [self unselectOtherReps: nil];
-
-  selectionMask = FSNMultipleSelectionMask;
-  selectionMask |= FSNCreatingSelectionMask;
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      FSNode *inode = [icon node];
-
-      if (([inode isReserved] == NO) && ([inode isMountPoint] == NO))
-	{
-	  [icon select];
-	}
-    }
-
-  selectionMask = NSSingleSelectionMask;
-
-  [self selectionDidChange];
-}
-
-- (void)selectionDidChange
-{
-  if (!(selectionMask & FSNCreatingSelectionMask))
-    {
-      NSArray *selection = [self selectedNodes];
-
-      if ([selection count] == 0)
-        selection = [NSArray arrayWithObject: node];
-      else
-        [manager deselectInSpatialViewers];
-
-      ASSIGN (lastSelection, selection);
-      [desktopApp selectionChanged: selection];
-      [self updateNameEditor];
-    }
-}
-
-- (void)openSelectionInNewViewer:(BOOL)newv
-{
-  [manager openSelectionInNewViewer: newv];
-}
-
-- (BOOL)validatePasteOfFilenames:(NSArray *)names
-			  wasCut:(BOOL)cut
-{
-  NSMutableArray *sourcePaths = [names mutableCopy];
-  NSString *basePath;
-  NSString *nodePath = [node path];
-  NSString *prePath = [NSString stringWithString: nodePath];
-  NSUInteger count = [names count];
-  NSUInteger i;
-
-  AUTORELEASE (sourcePaths);
-
-  if (count == 0)
-    {
-      return NO;
-    }
-
-  if ([node isWritable] == NO)
-    {
-      return NO;
-    }
-
-  basePath = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
-  if ([basePath isEqual: nodePath])
-    {
-      return NO;
-    }
-
-  if ([sourcePaths containsObject: nodePath])
-    {
-      return NO;
-    }
-
-  while (1) {
-    if ([sourcePaths containsObject: prePath])
-      {
-	return NO;
-      }
-    if ([prePath isEqual: path_separator()])
-      {
-	break;
-      }
-    prePath = [prePath stringByDeletingLastPathComponent];
-  }
-
-  i = 0;
-  while(i < [sourcePaths count])
-    {
-      NSString *srcpath = [sourcePaths objectAtIndex: i];
-      FSNIcon *icon = [self repOfSubnodePath: srcpath];
-
-      if (icon && [[icon node] isMountPoint])
-	{
-	  [sourcePaths removeObject: srcpath];
-	}
-      else
-	{
-	  i++;
-	}
-    }
-
-  if ([sourcePaths count] == 0) {
-    return NO;
-  }
-
-  return YES;
-}
-
-- (void)setBackgroundColor:(NSColor *)acolor
-{
-  [super setBackgroundColor: acolor];
-}
-
-- (void)setTextColor:(NSColor *)acolor
-{
-  [super setTextColor: acolor];
-  [self setNeedsDisplay: YES];
-}
-
-@end
-
-
-@implementation GWDesktopView (DraggingDestination)
-
 - (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
 {
   NSPasteboard *pb;
@@ -2132,7 +1573,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   isDragTarget = NO;
 
   pb = [sender draggingPasteboard];
-
   if (pb && [[pb types] containsObject: NSFilenamesPboardType])
     {
       sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
@@ -2141,118 +1581,89 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       NSData *pbData = [pb dataForType: @"GWRemoteFilenamesPboardType"];
       NSDictionary *pbDict = [NSUnarchiver unarchiveObjectWithData: pbData];
-
       sourcePaths = [pbDict objectForKey: @"paths"];
     }
   else if ([[pb types] containsObject: @"GWLSFolderPboardType"])
     {
       NSData *pbData = [pb dataForType: @"GWLSFolderPboardType"];
       NSDictionary *pbDict = [NSUnarchiver unarchiveObjectWithData: pbData];
-
       sourcePaths = [pbDict objectForKey: @"paths"];
     }
   else
     {
-      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag rejected - no supported pasteboard type");
       return NSDragOperationNone;
     }
-
   count = [sourcePaths count];
   if (count == 0)
     {
-      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag rejected - empty source paths");
       return NSDragOperationNone;
     }
-
   dragLocalIcon = YES;
-
   for (i = 0; i < [sourcePaths count]; i++)
     {
       NSString *srcpath = [sourcePaths objectAtIndex: i];
-
       if ([self repOfSubnodePath: srcpath] == nil)
-	{
-	  dragLocalIcon = NO;
-	}
+        {
+          dragLocalIcon = NO;
+        }
     }
-
   if (dragLocalIcon)
     {
-      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag accepted - local icon reposition");
       isDragTarget = YES;
       dragPoint = NSZeroPoint;
       DESTROY (dragIcon);
-      insertIndex = NSNotFound;
       return NSDragOperationEvery;
     }
-
   if ([node isWritable] == NO)
     {
-      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag rejected - desktop node %@ is not writable", [node path]);
       return NSDragOperationNone;
     }
-
   nodePath = [node path];
-
   basePath = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
   if ([basePath isEqual: nodePath])
     {
-      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag rejected - source and destination are the same (%@)", nodePath);
       return NSDragOperationNone;
     }
-
   if ([sourcePaths containsObject: nodePath])
     {
-      NSDebugLLog(@"gwspace", @"GWDesktopView: Drag rejected - would create circular reference (desktop in %@)", nodePath);
       return NSDragOperationNone;
     }
-
   prePath = [NSString stringWithString: nodePath];
-
   while (1)
     {
       if ([sourcePaths containsObject: prePath])
-	{
-	  return NSDragOperationNone;
-	}
+        {
+          return NSDragOperationNone;
+        }
       if ([prePath isEqual: path_separator()])
-	{
-	  break;
-	}
+        {
+          break;
+        }
       prePath = [prePath stringByDeletingLastPathComponent];
     }
-
   if ([node isDirectory] && [node isParentOfPath: basePath])
     {
       NSArray *subNodes = [node subNodes];
-      NSUInteger i;
-
       for (i = 0; i < [subNodes count]; i++)
-	{
-	  FSNode *nd = [subNodes objectAtIndex: i];
-
-	  if ([nd isDirectory])
-	    {
-	      NSUInteger j;
-
-	      for (j = 0; j < count; j++)
-		{
-		  NSString *fname = [[sourcePaths objectAtIndex: j] lastPathComponent];
-
-		  if ([[nd name] isEqual: fname])
-		    {
-		      return NSDragOperationNone;
-		    }
-		}
-	    }
-	}
+        {
+          FSNode *nd = [subNodes objectAtIndex: i];
+          if ([nd isDirectory])
+            {
+              for (NSUInteger j = 0; j < count; j++)
+                {
+                  NSString *fname = [[sourcePaths objectAtIndex: j] lastPathComponent];
+                  if ([[nd name] isEqual: fname])
+                    {
+                      return NSDragOperationNone;
+                    }
+                }
+            }
+        }
     }
-
   isDragTarget = YES;
   forceCopy = NO;
   dragPoint = NSZeroPoint;
   DESTROY (dragIcon);
-  insertIndex = NSNotFound;
 
   sourceDragMask = [sender draggingSourceOperationMask];
 
@@ -2282,50 +1693,19 @@ static void GWHighlightFrameRect(NSRect aRect)
 {
   NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
   NSPoint dpoint = [sender draggingLocation];
-  NSUInteger index;
 
   if (isDragTarget == NO)
     {
       return NSDragOperationNone;
     }
 
-  index = [self indexOfGridRectContainingPoint: dpoint];
-
-  if ([self isFreeGridIndex: index])
+  /* Track drop point for drag feedback without grid snapping */
+  dragPoint = dpoint;
+  if (dragIcon == nil)
     {
       NSImage *img = [sender draggedImage];
-      NSSize sz = [img size];
-      NSRect irect = [self iconBoundsInGridAtIndex: index];
-
-      dragPoint.x = ceil(irect.origin.x + ((irect.size.width - sz.width) / 2));
-      dragPoint.y = ceil(irect.origin.y + ((irect.size.height - sz.height) / 2));
-
-      if (dragIcon == nil)
-	{
-	  ASSIGN (dragIcon, img);
-	}
-
-      if (insertIndex != index)
-	{
-	  [self setNeedsDisplayInRect: [self rectForGridIndex: index]];
-
-	  if (insertIndex != NSNotFound)
-	    {
-	      [self setNeedsDisplayInRect: [self rectForGridIndex: insertIndex]];
-	    }
-	}
-
-      insertIndex = index;
-    }
-  else
-    {
-      DESTROY (dragIcon);
-      if (insertIndex != NSNotFound)
-	{
-	  [self setNeedsDisplayInRect: [self rectForGridIndex: insertIndex]];
-	}
-      insertIndex = NSNotFound;
-      return NSDragOperationNone;
+      if (img)
+        ASSIGN (dragIcon, img);
     }
 
   if (sourceDragMask & NSDragOperationMove)
@@ -2351,10 +1731,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (void)draggingExited:(id <NSDraggingInfo>)sender
 {
   DESTROY (dragIcon);
-  if (insertIndex != NSNotFound)
-    {
-      [self setNeedsDisplayInRect: [self rectForGridIndex: insertIndex]];
-    }
   isDragTarget = NO;
 }
 
@@ -2368,29 +1744,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   return YES;
 }
 
-NSComparisonResult sortDragged(id icn1, id icn2, void *context)
-{
-  NSArray *indexes = (NSArray *)context;
-  NSUInteger pos1 = [icn1 gridIndex];
-  NSUInteger pos2 = [icn2 gridIndex];
-  NSUInteger i;
 
-  for (i = 0; i < [indexes count]; i++)
-    {
-      NSNumber *n = [indexes objectAtIndex: i];
-
-      if ([n unsignedIntegerValue] == pos1)
-	{
-	  return NSOrderedAscending;
-	}
-      if ([n intValue] == pos2)
-	{
-	  return NSOrderedDescending;
-	}
-    }
-
-  return NSOrderedSame;
-}
 
 - (void)concludeDragOperation:(id <NSDraggingInfo>)sender
 {
@@ -2404,10 +1758,7 @@ NSComparisonResult sortDragged(id icn1, id icn2, void *context)
   NSInteger i; // FIXME see if it can be made unsigned
 
   DESTROY (dragIcon);
-  if ([self isFreeGridIndex: insertIndex])
-    {
-      [self setNeedsDisplayInRect: [self rectForGridIndex: insertIndex]];
-    }
+
   isDragTarget = NO;
 
   sourceDragMask = [sender draggingSourceOperationMask];
@@ -2433,88 +1784,7 @@ NSComparisonResult sortDragged(id icn1, id icn2, void *context)
   sourcePaths = [[pb propertyListForType: NSFilenamesPboardType] mutableCopy];
   AUTORELEASE (sourcePaths);
 
-  if (dragLocalIcon && (insertIndex != NSNotFound))
-    {
-      NSMutableArray *removed = [NSMutableArray array];
-      NSArray *sorted = nil;
-      NSMutableArray *sortIndexes = [NSMutableArray array];
-      NSUInteger firstinrow = [[self gridLayoutManager] totalCells] - [[self gridLayoutManager] rowCount];
-      NSUInteger row = 0;
 
-      for (i = 0; i < [sourcePaths count]; i++)
-	{
-	  NSString *locPath = [sourcePaths objectAtIndex: i];
-	  FSNIcon *icon = [self repOfSubnodePath: locPath];
-
-	  if (icon)
-	    {
-	      [removed addObject: icon];
-	      [icons removeObject: icon];
-	    }
-	}
-
-      while (firstinrow < [[self gridLayoutManager] totalCells])
-	{
-	  for (i = firstinrow; i >= (NSInteger)row; i -= [[self gridLayoutManager] rowCount])
-	    {
-	      [sortIndexes insertObject: [NSNumber numberWithInteger: i]
-				atIndex: [sortIndexes count]];
-	    }
-	  row++;
-	  firstinrow++;
-	}
-
-      sorted = [removed sortedArrayUsingFunction: sortDragged
-					 context: (void *)sortIndexes];
-
-      for (i = 0; i < [sorted count]; i++)
-	{
-	  FSNIcon *icon = [sorted objectAtIndex: i];
-	  NSUInteger oldindex = [icon gridIndex];
-	  NSUInteger index = 0;
-	  NSInteger shift = 0;
-
-	  if (i == 0)
-	    {
-	      index = insertIndex;
-	      shift = oldindex - index;
-	    }
-	  else
-	    {
-	      index = oldindex - shift;
-
-	      if ((oldindex - shift) || (index >= [[self gridLayoutManager] totalCells]))
-		{
-		  index = [self firstFreeGridIndexAfterIndex: insertIndex];
-		}
-
-	      if (index == NSNotFound)
-		{
-		  index = [self firstFreeGridIndex];
-		}
-
-	      if ([self isFreeGridIndex: index] == NO)
-		{
-		  index = [self firstFreeGridIndexAfterIndex: index];
-		}
-
-	      if (index == NSNotFound)
-		{
-		  index = [self firstFreeGridIndex];
-		}
-	    }
-
-	  [icons addObject: icon];
-
-	  [icon setGridIndex: index];
-	  [icon setFrame: [self rectForGridIndex: index]];
-
-	  [self setNeedsDisplayInRect: [self rectForGridIndex: oldindex]];
-	  [self setNeedsDisplayInRect: [self rectForGridIndex: index]];
-	}
-
-      return;
-    }
 
   i = [sourcePaths count];
   while (i > 0)

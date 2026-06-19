@@ -50,7 +50,6 @@
 
       /* Finder icon view fills left→right, top→bottom */
       [self setPlacementDirection: FSNPlacementDirectionLeftToRightTopToBottom];
-      [self setSnapEnabled: YES];
     }
 
   return self;

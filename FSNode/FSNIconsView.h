@@ -35,7 +35,8 @@
 @class FSNode;
 @class FSNIcon;
 @class FSNIconNameEditor;
-@class FSNGridLayoutManager;
+@class FSNIcon;
+@class FSNIconNameEditor;
 @class FSNIconItemData;
 
 @interface FSNIconsView : NSView <NSTextFieldDelegate>
@@ -44,7 +45,7 @@
   NSMutableArray *icons;
   FSNInfoType infoType;
   NSString *extInfoType;
-  
+
   NSImage *verticalImage;
   NSImage *horizontalImage;
 
@@ -60,45 +61,34 @@
   NSCellImagePosition iconPosition;
 
   NSSize gridSize;
-  NSInteger colItemsCount;
 
   BOOL isDragTarget;
   BOOL forceCopy;
   NSDragOperation negotiatedDragOp;
-  
-  NSString *charBuffer;	
+
+  NSString *charBuffer;
   NSTimeInterval lastKeyPressedTime;
-  
+
   NSColor *backColor;
   NSColor *textColor;
   NSColor *disabledTextColor;
   BOOL transparentSelection;
-  
+
   NSImage *backgroundImage;  // Background image for spatial views
 
   FSNodeRep *fsnodeRep;
 
   id <DesktopApplication> desktopApp;
-  
-  // Unified grid layout manager (replaces scattered grid logic)
-  FSNGridLayoutManager *_gridLayoutManager;
-  BOOL _snapEnabled;
+
+  // Placement direction for Clean Up virtual grid enumeration
   FSNPlacementDirection _placementDirection;
 
   // DS_Store free positioning support for Mac interoperability
-  // (When enabled, icons use free pixel positioning instead of grid)
-  BOOL freePositioningEnabled;              // If YES, bypasses grid-based tile
   NSMutableDictionary *customIconPositions; // filename -> NSValue(NSPoint) icon center in GNUstep coords
   CGFloat dsStoreIconHeight;                // Icon height for coordinate conversion
-
-  // DS_Store grid spacing support (additional spacing between icons beyond calculated gridSize)
-  CGFloat dsStoreGridSpacing;               // Additional spacing from DS_Store (0 = default)
 }
 
-/* Unified grid layout manager access */
-- (FSNGridLayoutManager *)gridLayoutManager;
-- (void)setSnapEnabled:(BOOL)flag;
-- (BOOL)snapEnabled;
+/* Placement direction access (used by Clean Up virtual grid) */
 - (void)setPlacementDirection:(FSNPlacementDirection)direction;
 - (FSNPlacementDirection)placementDirection;
 
@@ -130,11 +120,8 @@
 - (void)selectNextIcon;
 
 // DS_Store free positioning support for Mac interoperability
-- (void)setFreePositioningEnabled:(BOOL)enabled;
-- (BOOL)freePositioningEnabled;
 - (void)setCustomIconPositions:(NSDictionary *)positions;
 - (NSDictionary *)customIconPositions;
-- (void)applyFreePositioning;
 - (NSArray *)icons;
 
 /* Free-positioning icon repositioning */
@@ -143,13 +130,13 @@
 /* Batch reposition — moves many icons at once, tiles once, persists once */
 - (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
 
+/* Virtual grid: find the center of the first grid cell not occupied by
+ * any existing icon.  Used for initial placement of new/added items. */
+- (NSPoint)firstFreeGridCenter;
+
 // DS_Store tag colors and comments support
 - (void)setTagColorsFromDictionary:(NSDictionary *)tagDict;
 - (void)setCommentsFromDictionary:(NSDictionary *)commentsDict;
-
-// DS_Store grid spacing support
-- (void)setGridSpacing:(CGFloat)spacing;
-- (CGFloat)gridSpacing;
 
 @end
 

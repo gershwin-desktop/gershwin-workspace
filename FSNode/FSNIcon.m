@@ -34,7 +34,7 @@
 #import "FSNode.h"
 #import "FSNFunctions.h"
 #import "GSFileMetadata.h"
-#import "FSNGridLayoutManager.h"
+#import "FSNIconPlacement.h"
 
 /* Private extension for FSNIcon */
 @interface FSNIcon (Private)
@@ -178,12 +178,11 @@ static NSImage *branchImage;
   s = [s stringByAppendingString:[node path]];
   if ([node isMountPoint])
     s = [s stringByAppendingString:@" isMountPoint "];
-  s = [s stringByAppendingString: [NSString stringWithFormat:@" gridIndex: %u", (unsigned)gridIndex]];
   if (_placementData)
-    s = [s stringByAppendingString: [NSString stringWithFormat:@" mode:%lu cell:(%lu,%lu)",
+    s = [s stringByAppendingString: [NSString stringWithFormat:@" mode:%lu pix:(%.0f,%.0f)",
                 (unsigned long)_placementData.placementMode,
-                (unsigned long)_placementData.gridCell.col,
-                (unsigned long)_placementData.gridCell.row]];
+                _placementData.pixelPosition.x,
+                _placementData.pixelPosition.y]];
   s = [s stringByAppendingString:@" }"];
   return s;
 }
@@ -224,10 +223,9 @@ static NSImage *branchImage;
       drawicon = icon;
       selectedicon = nil;
 
-      /* Initialize placement data for grid layout manager */
+      /* Initialize placement data */
       _placementData = [[FSNIconItemData alloc] init];
       [_placementData setFilename: [anode name]];
-      [_placementData setZOrder: gindex];
 
       /* Load Finder label color eagerly from metadata */
       {
@@ -991,12 +989,40 @@ static NSImage *branchImage;
         {
           [label setBackgroundColor:labelFrameColor];
           [label setDrawsBackground: drawLabelBackground];
-          [label drawWithFrame: labelRect inView: self];
+
+          /* Render label text to a temporary NSImage and composite it.
+           * This ensures the text is pixel data in the window backing
+           * store, not just text primitives. */
+          {
+            NSSize lblSize = labelRect.size;
+            if (lblSize.width > 0 && lblSize.height > 0)
+              {
+                NSImage *lblImg = [[NSImage alloc] initWithSize: lblSize];
+                [lblImg lockFocus];
+                [label drawWithFrame: NSMakeRect(0, 0, lblSize.width, lblSize.height)
+                              inView: self];
+                [lblImg unlockFocus];
+                [lblImg compositeToPoint: labelRect.origin
+                               operation: NSCompositeSourceOver];
+                [lblImg release];
+              }
+          }
         }
 
       if ((showType != FSNInfoNameType) && [[infolabel stringValue] length])
         {
-          [infolabel drawWithFrame: infoRect inView: self];
+          NSSize infoSize = infoRect.size;
+          if (infoSize.width > 0 && infoSize.height > 0)
+            {
+              NSImage *infoImg = [[NSImage alloc] initWithSize: infoSize];
+              [infoImg lockFocus];
+              [infolabel drawWithFrame: NSMakeRect(0, 0, infoSize.width, infoSize.height)
+                                inView: self];
+              [infoImg unlockFocus];
+              [infoImg compositeToPoint: infoRect.origin
+                              operation: NSCompositeSourceOver];
+              [infoImg release];
+            }
         }
     }
 
@@ -1549,8 +1575,8 @@ static NSImage *branchImage;
             NSRect drg = NSMakeRect(orig.origin.x + dx, orig.origin.y + dy,
                                      orig.size.width, orig.size.height);
             [ic setFrame: drg];
-            [ic setNeedsDisplay: YES];
           }
+        [win display];
         didMove = YES;
       }
   }
@@ -1591,8 +1617,8 @@ static NSImage *branchImage;
               NSRect drg = NSMakeRect(orig.origin.x + dx, orig.origin.y + dy,
                                        orig.size.width, orig.size.height);
               [ic setFrame: drg];
-              [ic setNeedsDisplay: YES];
             }
+          [win display];
           didMove = YES;
         }
     }

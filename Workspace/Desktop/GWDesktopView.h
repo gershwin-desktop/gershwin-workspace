@@ -44,7 +44,6 @@ typedef enum BackImageStyle
 
   NSImage *dragIcon;
   NSPoint dragPoint;
-  NSUInteger insertIndex;
   BOOL dragLocalIcon;
 
   NSImage *backImage;
@@ -75,23 +74,9 @@ typedef enum BackImageStyle
 
 - (void)dockPositionDidChange;
 
-- (NSUInteger)firstFreeGridIndex;
-
-- (NSUInteger)firstFreeGridIndexAfterIndex:(NSUInteger)index;
-
-- (BOOL)isFreeGridIndex:(NSUInteger)index;
-
-- (FSNIcon *)iconWithGridIndex:(NSUInteger)index;
-
 - (NSArray *)iconsWithGridOriginX:(float)x;
 
 - (NSArray *)iconsWithGridOriginY:(float)y;
-
-- (NSUInteger)indexOfGridRectContainingPoint:(NSPoint)p;
-
-- (NSRect)iconBoundsInGridAtIndex:(NSUInteger)index;
-
-- (void)makeIconsGrid;
 
 - (void)getDesktopInfo;
 

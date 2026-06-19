@@ -1,8 +1,7 @@
 /* FSNIconPlacement.h
  *
  * Icon placement data model for DS_Store-compatible icon positioning.
- * Stores icon center points, grid indices, and placement mode
- * (AUTO, MANUAL, LOCKED).
+ * Stores icon center points and placement mode (AUTO, MANUAL).
  *
  * SPDX-License-Identifier: GPL-2.0-or-later OR BSD-2-Clause
  */
@@ -17,13 +16,11 @@
  *
  *  AUTO    Layout engine chooses. May move during cleanup or grid recalc.
  *  MANUAL  User dragged it. Layout engine never reassigns automatically.
- *  LOCKED  Absolutely fixed (GNUstep extension). Never relocated.
  * --------------------------------------------------------------------- */
 typedef NS_ENUM(NSUInteger, FSNIconPlacementMode)
 {
   FSNIconPlacementModeAuto   = 0,
-  FSNIconPlacementModeManual = 1,
-  FSNIconPlacementModeLocked = 2
+  FSNIconPlacementModeManual = 1
 };
 
 /* -----------------------------------------------------------------------
@@ -40,6 +37,7 @@ typedef NS_ENUM(NSUInteger, FSNPlacementDirection)
 
 /* -----------------------------------------------------------------------
  * FSNGridCell — logical (column, row) coordinate of an icon in the grid.
+ * Used by the virtual grid enumerator during Clean Up.
  * --------------------------------------------------------------------- */
 typedef struct {
   NSUInteger col;
@@ -76,5 +74,28 @@ NSStringFromFSNGridCell(FSNGridCell cell)
   return [NSString stringWithFormat: @"(%lu, %lu)",
                    (unsigned long)cell.col, (unsigned long)cell.row];
 }
+
+/* -----------------------------------------------------------------------
+ * FSNIconItemData — per-icon persistent placement state.
+ *
+ * Each FSNIcon owns one of these.  Stores pixel position, DS_Store
+ * raw coordinates, and placement mode (AUTO / MANUAL).
+ * --------------------------------------------------------------------- */
+@interface FSNIconItemData : NSObject <NSCopying>
+{
+  NSString *_itemID;
+  NSString *_filename;
+  FSNIconPlacementMode _placementMode;
+  NSPoint _pixelPosition;       /* GNUstep bottom-left center coordinate */
+  NSPoint _ilocPosition;        /* raw DS_Store top-left coords, for tile-time conversion */
+}
+
+@property (nonatomic, retain) NSString *itemID;
+@property (nonatomic, retain) NSString *filename;
+@property (nonatomic) FSNIconPlacementMode placementMode;
+@property (nonatomic) NSPoint pixelPosition;
+@property (nonatomic) NSPoint ilocPosition;
+
+@end
 
 #endif /* FSN_ICON_PLACEMENT_H */

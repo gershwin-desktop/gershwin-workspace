@@ -101,7 +101,7 @@
   NSColor *tagColor;        // Label/tag color from DS_Store (lclr)
   NSString *spotlightComment;  // Spotlight comment from DS_Store (cmmt)
 
-  // Grid placement data (managed by FSNGridLayoutManager)
+  // Pixel placement data
   FSNIconItemData *_placementData;
 }
 
