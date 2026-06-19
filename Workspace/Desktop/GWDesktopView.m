@@ -1937,4 +1937,37 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
 }
 
+/* Override addRepForSubnode: to create GWDesktopIcon instances
+ * (with proper label rendering and double-click handling) instead of
+ * plain FSNIcon.  This is used when volume mount icons are added via
+ * newVolumeMountedAtPath:, among others. */
+- (id)addRepForSubnode:(FSNode *)anode
+{
+  /* Never display internal metadata files */
+  NSString *fname = [anode name];
+  if ([fname isEqualToString: @".DS_Store"]
+      || [fname hasPrefix: @"._"]
+      || [fname isEqualToString: @"__MACOSX"])
+    return nil;
+
+  CREATE_AUTORELEASE_POOL(arp);
+  GWDesktopIcon *icon = [[GWDesktopIcon alloc] initForNode: anode
+                                              nodeInfoType: infoType
+                                              extendedType: extInfoType
+                                                  iconSize: iconSize
+                                              iconPosition: iconPosition
+                                                 labelFont: labelFont
+                                                 textColor: textColor
+                                                 gridIndex: NSNotFound
+                                                 dndSource: YES
+                                                 acceptDnd: YES
+                                                 slideBack: YES];
+  [icons addObject: icon];
+  [self addSubview: icon];
+  RELEASE (icon);
+  RELEASE (arp);
+
+  return icon;
+}
+
 @end
