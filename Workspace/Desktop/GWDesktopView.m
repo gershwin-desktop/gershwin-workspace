@@ -1433,7 +1433,6 @@ static void GWHighlightFrameRect(NSRect aRect)
     NSString *folderPath = [anode path];
     CGFloat refH = [self bounds].size.height;
     if (refH <= 0) refH = 600.0;
-    NSLog(@"[READ]  GWDesktopView refH=%.0f", refH);
 
     /* DS_Store Iloc (primary) */
     NSString *dsp = [folderPath stringByAppendingPathComponent: @".DS_Store"];
@@ -1451,24 +1450,20 @@ static void GWHighlightFrameRect(NSRect aRect)
                     FSNIcon *icon = [unsorted objectAtIndex: i];
                     NSString *name = [[icon node] name];
                     NSPoint iloc = [store iconLocationForFilename: name];
-                    NSLog(@"[READ]   DS_Store: %@  iloc=(%.0f,%.0f)  isZero=%d",
-                          name, iloc.x, iloc.y, (iloc.x == 0 && iloc.y == 0));
                     if (iloc.x != 0.0f || iloc.y != 0.0f)
                       {
                         NSPoint gsCenter = NSMakePoint(iloc.x, refH - iloc.y);
                         FSNIconItemData *data = [icon placementData];
                         data.pixelPosition = gsCenter;
                         data.placementMode = FSNIconPlacementModeManual;
-                        NSLog(@"[READ]   -> gnu=(%.0f,%.0f) MANUAL", gsCenter.x, gsCenter.y);
                         restored++;
                       }
                   }
-                NSLog(@"[READ]   DS_Store: %lu/%lu icons restored",
-                      (unsigned long)restored, (unsigned long)[unsorted count]);
               }
           }
         NS_HANDLER
-          NSLog(@"[READ]   DS_Store EXCEPTION for %@: %@", folderPath, localException);
+          {
+          }
         NS_ENDHANDLER
       }
 

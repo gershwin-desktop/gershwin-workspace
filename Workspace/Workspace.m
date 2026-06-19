@@ -4627,7 +4627,6 @@ NSString *_pendingSystemActionTitle = nil;
 {
   id iconView = [self activeIconView];
   if (!iconView) return;
-  NSLog(@"[CLEAN] cleanUp: triggered, iconView=%@", iconView);
   [self cleanUpWithSort: FSNInfoNameType iconView: iconView
            sortSelector: @selector(compareAccordingToName:)];
 }
@@ -4664,8 +4663,6 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)cleanUpWithSort:(FSNInfoType)sortType iconView:(id)iconView sortSelector:(SEL)sortSel
 {
-  NSLog(@"[CLEAN] cleanUpWithSort called, sortType=%d", (int)sortType);
-
   [[FSNodeRep sharedInstance] setDefaultSortOrder: (int)sortType];
 
   /* Sort the icon array in place */
@@ -4678,7 +4675,6 @@ NSString *_pendingSystemActionTitle = nil;
   if ([iconView respondsToSelector: @selector(cleanupIconPositions)])
     {
       [iconView cleanupIconPositions];
-      NSLog(@"[CLEAN] cleanupIconPositions done, now persisting");
     }
 
   /* Write positions to DS_Store for each icon after cleanup */
@@ -4697,7 +4693,6 @@ NSString *_pendingSystemActionTitle = nil;
           [centers addObject: [NSValue valueWithPoint: c]];
         }
       [iconView batchRepositionIcons: all toCenterPoints: centers];
-      NSLog(@"[CLEAN] persisted %lu icons to DS_Store", (unsigned long)[all count]);
     }
 
   if ([iconView respondsToSelector: @selector(setNeedsDisplay:)])
