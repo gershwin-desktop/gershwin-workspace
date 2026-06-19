@@ -770,7 +770,7 @@ NSString *_pendingSystemActionTitle = nil;
     } 
   else 
     {
-      [fsnodeRep setReservedNames: [NSArray arrayWithObjects: @".gwdir", @".gwsort", nil]];
+      [fsnodeRep setReservedNames: [NSArray arrayWithObjects: @".gwsort", nil]];
     }
         
   entry = [defaults stringForKey: @"defaulteditor"];
@@ -4187,6 +4187,40 @@ NSString *_pendingSystemActionTitle = nil;
   [menu addItem: menuItem];
   RELEASE (menuItem);
 
+  [menu addItem: [NSMenuItem separatorItem]];
+
+  // Clean Up
+  menuItem = [NSMenuItem new];
+  [menuItem setTitle: NSLocalizedString(@"Clean Up", @"")];
+  [menuItem setTarget: self];
+  [menuItem setAction: @selector(cleanUp:)];
+  [menu addItem: menuItem];
+  RELEASE (menuItem);
+
+  // Clean Up By submenu
+  {
+    NSMenuItem *cleanUpByItem = [NSMenuItem new];
+    [cleanUpByItem setTitle: NSLocalizedString(@"Clean Up By", @"")];
+    NSMenu *submenu = [[NSMenu alloc] initWithTitle: @""];
+    NSArray *opts = @[@"Name", @"Kind", @"Date Modified", @"Size"];
+    NSArray *tags = @[@0, @1, @2, @3];
+    NSUInteger oi;
+    for (oi = 0; oi < [opts count]; oi++)
+      {
+        NSMenuItem *it = [NSMenuItem new];
+        [it setTitle: NSLocalizedString([opts objectAtIndex: oi], @"")];
+        [it setTarget: self];
+        [it setAction: @selector(cleanUpBy:)];
+        [it setTag: [[tags objectAtIndex: oi] integerValue]];
+        [submenu addItem: it];
+        RELEASE (it);
+      }
+    [cleanUpByItem setSubmenu: submenu];
+    RELEASE (submenu);
+    [menu addItem: cleanUpByItem];
+    RELEASE (cleanUpByItem);
+  }
+
   return [menu autorelease];
 }
 
@@ -4593,10 +4627,7 @@ NSString *_pendingSystemActionTitle = nil;
 {
   id iconView = [self activeIconView];
   if (!iconView) return;
-
-  if ([iconView respondsToSelector: @selector(setCustomIconPositions:)])
-    [iconView setCustomIconPositions: nil];
-
+  NSLog(@"[CLEAN] cleanUp: triggered, iconView=%@", iconView);
   [self cleanUpWithSort: FSNInfoNameType iconView: iconView
            sortSelector: @selector(compareAccordingToName:)];
 }
@@ -4633,44 +4664,29 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)cleanUpWithSort:(FSNInfoType)sortType iconView:(id)iconView sortSelector:(SEL)sortSel
 {
-  if ([iconView respondsToSelector: @selector(setCustomIconPositions:)])
-    [iconView setCustomIconPositions: nil];
+  NSLog(@"[CLEAN] cleanUpWithSort called, sortType=%d", (int)sortType);
 
   [[FSNodeRep sharedInstance] setDefaultSortOrder: (int)sortType];
 
-  if ([iconView respondsToSelector: @selector(setFreePositioningEnabled:)])
-    [iconView setFreePositioningEnabled: NO];
-
-  if ([iconView respondsToSelector: @selector(reloadContents)])
-    [iconView reloadContents];
-
-  /* reloadContents sorts A->Z but the tile Y-flip puts the first
-   * items at the visual bottom. Reverse the subview Z-order so the
-   * first sorted item lands at the top-left after a fresh tile. */
+  /* Sort the icon array in place */
   if ([iconView respondsToSelector: @selector(icons)])
     {
-      NSArray *orig = [iconView icons];
-      NSInteger i;
-      for (i = [orig count] - 1; i >= 0; i--)
-        {
-          id ic = [orig objectAtIndex: i];
-          [ic retain];
-          [ic removeFromSuperview];
-          [iconView addSubview: ic];
-          [ic release];
-        }
+      NSMutableArray *all = [iconView icons];
+      [all sortUsingSelector: sortSel];
     }
 
-  if ([iconView respondsToSelector: @selector(tile)])
-    [iconView tile];
+  if ([iconView respondsToSelector: @selector(cleanupIconPositions)])
+    {
+      [iconView cleanupIconPositions];
+      NSLog(@"[CLEAN] cleanupIconPositions done, now persisting");
+    }
 
-  if ([iconView respondsToSelector: @selector(setFreePositioningEnabled:)])
-    [iconView setFreePositioningEnabled: YES];
-
-  if ([iconView respondsToSelector: @selector(repositionIcon:toCenterPoint:)]
+  /* Write positions to DS_Store for each icon after cleanup */
+  if ([iconView respondsToSelector: @selector(batchRepositionIcons:toCenterPoints:)]
       && [iconView respondsToSelector: @selector(icons)])
     {
       NSArray *all = [iconView icons];
+      NSMutableArray *centers = [NSMutableArray arrayWithCapacity: [all count]];
       NSUInteger i;
       for (i = 0; i < [all count]; i++)
         {
@@ -4678,10 +4694,10 @@ NSString *_pendingSystemActionTitle = nil;
           NSRect frm = [ic frame];
           NSPoint c = NSMakePoint(frm.origin.x + frm.size.width / 2.0,
                                    frm.origin.y + frm.size.height / 2.0);
-          [iconView repositionIcon: ic toCenterPoint: c];
-          if ([ic respondsToSelector: @selector(node)])
-            [self writeIconPosition: c forFileAtPath: [[ic node] path]];
+          [centers addObject: [NSValue valueWithPoint: c]];
         }
+      [iconView batchRepositionIcons: all toCenterPoints: centers];
+      NSLog(@"[CLEAN] persisted %lu icons to DS_Store", (unsigned long)[all count]);
     }
 
   if ([iconView respondsToSelector: @selector(setNeedsDisplay:)])

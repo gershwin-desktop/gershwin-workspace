@@ -34,7 +34,7 @@
 #import "FSNode.h"
 #import "FSNFunctions.h"
 #import "GSFileMetadata.h"
-#import "../Workspace/Workspace.h"
+#import "FSNGridLayoutManager.h"
 
 /* Private extension for FSNIcon */
 @interface FSNIcon (Private)
@@ -69,6 +69,8 @@ static NSImage *branchImage;
 
 @implementation FSNIcon
 
+@synthesize placementData = _placementData;
+
 - (void)dealloc
 {
   if (trectTag != -1)
@@ -88,6 +90,7 @@ static NSImage *branchImage;
   RELEASE (labelFrameColor);
   RELEASE (tagColor);
   RELEASE (spotlightComment);
+  RELEASE (_placementData);
   [super dealloc];
 }
 
@@ -176,6 +179,11 @@ static NSImage *branchImage;
   if ([node isMountPoint])
     s = [s stringByAppendingString:@" isMountPoint "];
   s = [s stringByAppendingString: [NSString stringWithFormat:@" gridIndex: %u", (unsigned)gridIndex]];
+  if (_placementData)
+    s = [s stringByAppendingString: [NSString stringWithFormat:@" mode:%lu cell:(%lu,%lu)",
+                (unsigned long)_placementData.placementMode,
+                (unsigned long)_placementData.gridCell.col,
+                (unsigned long)_placementData.gridCell.row]];
   s = [s stringByAppendingString:@" }"];
   return s;
 }
@@ -215,6 +223,11 @@ static NSImage *branchImage;
       ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
       drawicon = icon;
       selectedicon = nil;
+
+      /* Initialize placement data for grid layout manager */
+      _placementData = [[FSNIconItemData alloc] init];
+      [_placementData setFilename: [anode name]];
+      [_placementData setZOrder: gindex];
 
       /* Load Finder label color eagerly from metadata */
       {
@@ -1584,17 +1597,21 @@ static NSImage *branchImage;
         }
     }
 
-  if (didMove && [container respondsToSelector: @selector(repositionIcon:toCenterPoint:)])
+  if (didMove && [container respondsToSelector: @selector(batchRepositionIcons:toCenterPoints:)])
     {
+      /* Batch-reposition all moved icons — tiles once, persists once.
+       * No legacy fallback: batchReposition is the only code path. */
       NSUInteger i;
+      NSMutableArray *centers = [NSMutableArray arrayWithCapacity: [allIcons count]];
       for (i = 0; i < [allIcons count]; i++)
         {
           FSNIcon *ic = [allIcons objectAtIndex: i];
           NSRect frm = [ic frame];
           NSPoint center = NSMakePoint(frm.origin.x + frm.size.width / 2.0,
                                         frm.origin.y + frm.size.height / 2.0);
-          [container repositionIcon: ic toCenterPoint: center];
+          [centers addObject: [NSValue valueWithPoint: center]];
         }
+      [container batchRepositionIcons: allIcons toCenterPoints: centers];
     }
   else if (!didMove)
     {
@@ -2207,7 +2224,12 @@ static NSImage *branchImage;
 
       NS_DURING
         {
-          id gw = [Workspace gworkspace];
+          /* Resolve Workspace at runtime to avoid circular link dependency
+           * between FSNode framework and Workspace app. */
+          Class wsClass = NSClassFromString(@"Workspace");
+          id gw = nil;
+          if (wsClass && [wsClass respondsToSelector: @selector(gworkspace)])
+            gw = [wsClass performSelector: @selector(gworkspace)];
           if (gw)
             [gw openFile: path withApplication: [node name]];
           else

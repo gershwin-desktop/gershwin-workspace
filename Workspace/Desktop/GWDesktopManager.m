@@ -240,7 +240,7 @@ static GWDesktopManager *desktopManager = nil;
   path = [NSHomeDirectory() stringByAppendingPathComponent: @"Desktop"]; 
 
   if (([fm fileExistsAtPath: path isDirectory: &isdir] && isdir) == NO) {
-    NSString *hiddenNames = @".gwsort\n.gwdir\n.hidden\n";
+    NSString *hiddenNames = @".gwsort\n.hidden\n";
 
     if ([fm createDirectoryAtPath: path attributes: nil] == NO) {
       NSRunAlertPanel(NSLocalizedString(@"error", @""), 

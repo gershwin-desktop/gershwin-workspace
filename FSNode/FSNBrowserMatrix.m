@@ -33,7 +33,6 @@
 #import "FSNBrowserColumn.h"
 #import "FSNIcon.h"
 #import "FSNFunctions.h"
-#import "../Workspace/Workspace.h"
 
 #define DOUBLE_CLICK_LIMIT  300
 #define EDIT_CLICK_LIMIT   1000
@@ -362,25 +361,40 @@
                       menunodes = [NSArray arrayWithObject: clickedNode];
                     }
 
-                  return [[Workspace gworkspace] contextMenuForNodes: menunodes
-                                                         openTarget: [self window]
-                                                      openWithTarget: [Workspace gworkspace]
-                                                         infoTarget: [Workspace gworkspace]
-                                                    duplicateTarget: [self window]
-                                                      recycleTarget: [self window]
-                                                        ejectTarget: [self window]
-                                                         openAction: @selector(openSelection:)
-                                                    duplicateAction: @selector(duplicateFiles:)
-                                                      recycleAction: @selector(recycleFiles:)
-                                                        ejectAction: @selector(ejectVolumes:)
-                                                   includeOpenWith: YES];
+                {
+                  /* Resolve Workspace at runtime to avoid circular link dependency. */
+                  Class wsClass = NSClassFromString(@"Workspace");
+                  id gw = (wsClass && [wsClass respondsToSelector: @selector(gworkspace)])
+                         ? [wsClass performSelector: @selector(gworkspace)] : nil;
+                  if (gw)
+                    return [gw contextMenuForNodes: menunodes
+                                       openTarget: [self window]
+                                    openWithTarget: gw
+                                       infoTarget: gw
+                                  duplicateTarget: [self window]
+                                    recycleTarget: [self window]
+                                      ejectTarget: [self window]
+                                       openAction: @selector(openSelection:)
+                                  duplicateAction: @selector(duplicateFiles:)
+                                    recycleAction: @selector(recycleFiles:)
+                                      ejectAction: @selector(ejectVolumes:)
+                                 includeOpenWith: YES];
+                  else
+                    return [super menuForEvent: theEvent];
+                }
                 }
             }
         }
       else
         {
           // Right-clicked on empty space
-          return [[Workspace gworkspace] emptySpaceContextMenuForViewer: [self window]];
+          {
+            Class wsClass = NSClassFromString(@"Workspace");
+            id gw = (wsClass && [wsClass respondsToSelector: @selector(gworkspace)])
+                   ? [wsClass performSelector: @selector(gworkspace)] : nil;
+            if (gw)
+              return [gw emptySpaceContextMenuForViewer: [self window]];
+          }
         }
     }
 

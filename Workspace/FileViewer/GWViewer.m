@@ -175,19 +175,6 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       }
 
     defaultsKeyStr = [prefsname retain];
-    if ([baseNode isWritable] && (rootViewer == NO)
-            && ([[fsnodeRep volumes] containsObject: [baseNode path]] == NO)) {
-		  NSString *dictPath = [[baseNode path] stringByAppendingPathComponent: @".gwdir"];
-
-      if ([[NSFileManager defaultManager] fileExistsAtPath: dictPath]) {
-        NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: dictPath];
-
-        if (dict) {
-          viewerPrefs = [dict copy];
-        }   
-      }
-    }
-    
     if (viewerPrefs == nil) {
       defEntry = [defaults dictionaryForKey: defaultsKeyStr];
       if (defEntry) {
@@ -1052,13 +1039,8 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
     [baseNode checkWritable];
 
-    if ([baseNode isWritable] && (rootViewer == NO)
-              && ([[fsnodeRep volumes] containsObject: [baseNode path]] == NO)) {
-      NSString *dictPath = [[baseNode path] stringByAppendingPathComponent: @".gwdir"];
-
-      [updatedprefs writeToFile: dictPath atomically: YES];
-    } else {
-      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	    
+    {
+      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
       [defaults setObject: updatedprefs forKey: defaultsKeyStr];
     }
     

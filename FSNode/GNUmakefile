@@ -20,6 +20,8 @@ FSNode_OBJC_FILES = \
          FSNIconsView.m \
          FSNListView.m \
          FSNPathComponentsViewer.m \
+         FSNPlacementEnumerator.m \
+         FSNGridLayoutManager.m \
          ../GWMetadata/GWMetaXattr.m \
          ../GWMetadata/GSAppleDouble.m \
          ../GWMetadata/GSFileMetadata.m \
@@ -44,6 +46,9 @@ FSNode_HEADER_FILES = \
          FSNIconsView.h \
          FSNListView.h \
          FSNPathComponentsViewer.h \
+         FSNIconPlacement.h \
+         FSNPlacementEnumerator.h \
+         FSNGridLayoutManager.h \
 
 
 FSNode_HAS_RESOURCE_BUNDLE = yes                                          

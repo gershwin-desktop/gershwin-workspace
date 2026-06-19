@@ -32,7 +32,6 @@
 #import "FSNBrowserScroll.h"
 #import "FSNBrowser.h"
 #import "FSNFunctions.h"
-#import "../Workspace/Workspace.h"
 
 #define ICON_CELL_HEIGHT 28
 
@@ -1770,7 +1769,11 @@ static id <DesktopApplication> desktopApp = nil;
 
       NS_DURING
         {
-          id gw = [Workspace gworkspace];
+          /* Resolve Workspace at runtime to avoid circular link dependency. */
+          Class wsClass = NSClassFromString(@"Workspace");
+          id gw = nil;
+          if (wsClass && [wsClass respondsToSelector: @selector(gworkspace)])
+            gw = [wsClass performSelector: @selector(gworkspace)];
           if (gw)
             [gw openFile: path withApplication: [node name]];
           else

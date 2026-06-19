@@ -740,32 +740,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   FSNode *infoNode = [self infoNode];
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   NSString *prefsname = [NSString stringWithFormat: @"viewer_at_%@", [infoNode path]];
-  NSDictionary *nodeDict = nil;
-
-  if ([infoNode isWritable]
-      && ([[fsnodeRep volumes] containsObject: [node path]] == NO))
-    {
-      NSString *infoPath = [[infoNode path] stringByAppendingPathComponent: @".gwdir"];
-
-      if ([[NSFileManager defaultManager] fileExistsAtPath: infoPath]) {
-	NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: infoPath];
-
-	if (dict)
-	  {
-	    nodeDict = [NSDictionary dictionaryWithDictionary: dict];
-	  }
-      }
-    }
-
-  if (nodeDict == nil)
-    {
-      id defEntry = [defaults dictionaryForKey: prefsname];
-
-      if (defEntry)
-	{
-	  nodeDict = [NSDictionary dictionaryWithDictionary: defEntry];
-	}
-    }
+  NSDictionary *nodeDict = [defaults dictionaryForKey: prefsname];
 
   if (nodeDict)
     {
@@ -797,36 +772,12 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     {
       NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
       NSString *prefsname = [NSString stringWithFormat: @"viewer_at_%@", [infoNode path]];
-      NSString *infoPath = [[infoNode path] stringByAppendingPathComponent: @".gwdir"];
-      BOOL writable = ([infoNode isWritable] && ([[fsnodeRep volumes] containsObject: [node path]] == NO));
 
-      if (writable)
-	{
-	  if ([[NSFileManager defaultManager] fileExistsAtPath: infoPath])
-	    {
-	      NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: infoPath];
-
-	      if (dict)
-		{
-		  updatedInfo = [dict mutableCopy];
-		}
-	    }
-
-	}
+      NSDictionary *prefs = [defaults dictionaryForKey: prefsname];
+      if (prefs)
+        updatedInfo = [prefs mutableCopy];
       else
-	{
-	  NSDictionary *prefs = [defaults dictionaryForKey: prefsname];
-
-	  if (prefs)
-	    {
-	      updatedInfo = [prefs mutableCopy];
-	    }
-	}
-
-      if (updatedInfo == nil)
-	{
-	  updatedInfo = [NSMutableDictionary new];
-	}
+        updatedInfo = [NSMutableDictionary new];
 
       [updatedInfo setObject: [self columnsDescription]
 		      forKey: @"list_view_columns"];
@@ -840,14 +791,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 	}
 
       if (ondisk)
-	{
-	  if (writable)
-	    {
-	      [updatedInfo writeToFile: infoPath atomically: YES];
-	    } else {
-	    [defaults setObject: updatedInfo forKey: prefsname];
-	  }
-	}
+        [defaults setObject: updatedInfo forKey: prefsname];
     }
 
   RELEASE (arp);

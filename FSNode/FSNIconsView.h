@@ -28,12 +28,15 @@
 #import <AppKit/NSView.h>
 #import <AppKit/NSTextField.h>
 #import "FSNodeRep.h"
+#import "FSNIconPlacement.h"
 
 @class NSColor;
 @class NSFont;
 @class FSNode;
 @class FSNIcon;
 @class FSNIconNameEditor;
+@class FSNGridLayoutManager;
+@class FSNIconItemData;
 
 @interface FSNIconsView : NSView <NSTextFieldDelegate>
 {
@@ -77,14 +80,36 @@
 
   id <DesktopApplication> desktopApp;
   
+  // Unified grid layout manager (replaces scattered grid logic)
+  FSNGridLayoutManager *_gridLayoutManager;
+  BOOL _snapEnabled;
+  FSNPlacementDirection _placementDirection;
+
   // DS_Store free positioning support for Mac interoperability
+  // (When enabled, icons use free pixel positioning instead of grid)
   BOOL freePositioningEnabled;              // If YES, bypasses grid-based tile
   NSMutableDictionary *customIconPositions; // filename -> NSValue(NSPoint) icon center in GNUstep coords
   CGFloat dsStoreIconHeight;                // Icon height for coordinate conversion
-  
+
   // DS_Store grid spacing support (additional spacing between icons beyond calculated gridSize)
   CGFloat dsStoreGridSpacing;               // Additional spacing from DS_Store (0 = default)
 }
+
+/* Unified grid layout manager access */
+- (FSNGridLayoutManager *)gridLayoutManager;
+- (void)setSnapEnabled:(BOOL)flag;
+- (BOOL)snapEnabled;
+- (void)setPlacementDirection:(FSNPlacementDirection)direction;
+- (FSNPlacementDirection)placementDirection;
+
+/* Override point for subclasses to provide a custom grid origin.
+ * Default: (X_MARGIN, viewHeight - Y_MARGIN).  The desktop subclass
+ * overrides this to account for Dock position and menu bar. */
+- (NSPoint)gridOriginForLayout;
+
+/* Cleanup and sort operations (Finder-compatible) */
+- (void)cleanupIconPositions;
+- (void)sortIconsBy:(SEL)sortSelector;
 
 - (void)sortIcons;
 
@@ -114,6 +139,9 @@
 
 /* Free-positioning icon repositioning */
 - (void)repositionIcon:(FSNIcon *)icon toCenterPoint:(NSPoint)point;
+
+/* Batch reposition — moves many icons at once, tiles once, persists once */
+- (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
 
 // DS_Store tag colors and comments support
 - (void)setTagColorsFromDictionary:(NSDictionary *)tagDict;

@@ -30,6 +30,9 @@
 #import <GNUstepGUI/GSVersion.h>
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
+#import "FSNGridLayoutManager.h"
+#import "DSStore.h"
+#import "GSFileMetadata.h"
 #import "GWDesktopView.h"
 #import "GWDesktopIcon.h"
 #import "GWDesktopManager.h"
@@ -42,7 +45,7 @@
 #define DEF_TEXT_SIZE 12
 #define DEF_ICN_POS NSImageAbove
 
-#define X_MARGIN (10)
+#define X_MARGIN (20)
 #define Y_MARGIN (12)
 #define TOP_MARGIN (-8)
 #define BOTTOM_MARGIN (8)
@@ -64,10 +67,6 @@
 
 - (void)dealloc
 {
-  if (grid != NULL)
-    {
-      NSZoneFree (NSDefaultMallocZone(), grid);
-    }
   RELEASE (mountedVolumes);
   RELEASE (expectedUnmountPaths);
   RELEASE (desktopInfo);
@@ -128,8 +127,12 @@
       backImageStyle = BackImageCenterStyle;
       mountedVolumes = [NSMutableArray new];
       expectedUnmountPaths = [NSMutableDictionary new];
+
+      /* Set desktop placement direction (top→bottom, right→left) */
+      [self setPlacementDirection: FSNPlacementDirectionTopToBottomRightToLeft];
+      [self setSnapEnabled: YES];
+
       [self getDesktopInfo];
-      [self makeIconsGrid];
       dragIcon = nil;
     }
 
@@ -625,9 +628,35 @@
 
 - (void)dockPositionDidChange
 {
-  [self makeIconsGrid];
   [self tile];
   [self setNeedsDisplay: YES];
+}
+
+- (NSPoint)gridOriginForLayout
+{
+  /* Desktop grid origin: accounts for Dock position, menu bar,
+   * and top/bottom margins so icons avoid those reserved areas. */
+  NSRect dckr = [manager dockReservedFrame];
+  NSRect mmfr = [manager macmenuReservedFrame];
+  NSRect gridrect = screenFrame;
+  CGFloat gridTopOffset = 12.0;
+
+  gridrect.size.height -= mmfr.size.height;
+  gridrect.origin.y += BOTTOM_MARGIN;
+  gridrect.size.height -= (TOP_MARGIN + BOTTOM_MARGIN);
+
+  if ([manager dockPosition] == DockPositionLeft)
+    {
+      gridrect.size.width -= dckr.size.width;
+      gridrect.origin.x += dckr.size.width;
+    }
+  else if ([manager dockPosition] == DockPositionRight)
+    {
+      gridrect.size.width -= dckr.size.width;
+    }
+
+  return NSMakePoint(gridrect.origin.x + X_MARGIN,
+                     gridrect.origin.y + gridrect.size.height - gridTopOffset);
 }
 
 - (void)tile
@@ -638,91 +667,51 @@
       return;
     }
 
-  NSUInteger i;
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      NSUInteger index = [icon gridIndex];
-
-      if (index < gridItemsCount)
-	{
-	  if (NSEqualRects(grid[index], [icon frame]) == NO)
-	    {
-	      [icon setFrame: grid[index]];
-	    }
-	}
-      else
-	{
-	  NSUInteger freeindex = [self firstFreeGridIndex];
-	  [icon setGridIndex: freeindex];
-	  [icon setFrame: grid[freeindex]];
-	}
-    }
-
+  [super tile];
   [self updateNameEditor];
 }
 
 - (NSUInteger)firstFreeGridIndex
 {
-  NSUInteger i;
-
-  for (i = 0; i < gridItemsCount; i++)
-    {
-      if ([self isFreeGridIndex: i])
-	{
-	  return i;
-	}
-    }
-
+  FSNGridCell cell;
+  if ([[self gridLayoutManager] firstFreeCell: &cell])
+    return [[self gridLayoutManager] flatIndexForCell: cell];
   return NSNotFound;
 }
 
 - (NSUInteger)firstFreeGridIndexAfterIndex:(NSUInteger)index
 {
-  NSUInteger ind;
-
-  for (ind = index + 1; ind < gridItemsCount; ind++)
+  /* For backward compat: scan forward from index+1 for first free flat index */
+  NSUInteger total = [[self gridLayoutManager] totalCells];
+  NSUInteger i;
+  for (i = index + 1; i < total; i++)
     {
-      if ([self isFreeGridIndex: ind])
-	{
-	  return ind;
-	}
+      FSNGridCell cell = [[self gridLayoutManager] cellForFlatIndex: i];
+      if (![[self gridLayoutManager] isCellOccupied: cell])
+        return i;
     }
-
   return [self firstFreeGridIndex];
 }
 
 - (BOOL)isFreeGridIndex:(NSUInteger)index
 {
-  NSUInteger i;
-
-  if ((index == NSNotFound) || (index >= gridItemsCount))
+  if (index == NSNotFound || index >= [[self gridLayoutManager] totalCells])
     return NO;
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      if ([[icons objectAtIndex: i] gridIndex] == index)
-	{
-	  return NO;
-	}
-    }
-
-  return YES;
+  FSNGridCell cell = [[self gridLayoutManager] cellForFlatIndex: index];
+  return ![[self gridLayoutManager] isCellOccupied: cell];
 }
 
 - (FSNIcon *)iconWithGridIndex:(NSUInteger)index
 {
   NSUInteger i;
+  FSNGridCell targetCell = [[self gridLayoutManager] cellForFlatIndex: index];
 
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-
-      if ([icon gridIndex] == index)
-	{
-	  return icon;
-	}
+      FSNIconItemData *data = [icon placementData];
+      if (data.hasGridPosition && FSNGridCellsEqual(data.gridCell, targetCell))
+        return icon;
     }
 
   return nil;
@@ -776,44 +765,41 @@
   return nil;
 }
 
+- (NSRect)rectForGridIndex:(NSUInteger)index
+{
+  FSNGridCell cell = [[self gridLayoutManager] cellForFlatIndex: index];
+  NSPoint origin = [[self gridLayoutManager] originForCell: cell];
+  NSSize csz = [[self gridLayoutManager] cellSize];
+  return NSIntegralRect(NSMakeRect(origin.x, origin.y, csz.width, csz.height));
+}
+
 - (NSUInteger)indexOfGridRectContainingPoint:(NSPoint)p
 {
-  NSUInteger i;
-
-  for (i = 0; i < gridItemsCount; i++)
-    {
-      if (NSPointInRect(p, grid[i]))
-	{
-	  return i;
-	}
-    }
-
-  return NSNotFound;
+  FSNGridCell cell = [[self gridLayoutManager] cellForPoint: p];
+  return [[self gridLayoutManager] flatIndexForCell: cell];
 }
 
 - (NSRect)iconBoundsInGridAtIndex:(NSUInteger)index
 {
-  NSRect icnBounds = NSMakeRect(grid[index].origin.x, grid[index].origin.y, iconSize, iconSize);
+  FSNGridCell cell = [[self gridLayoutManager] cellForFlatIndex: index];
+  NSPoint origin = [[self gridLayoutManager] originForCell: cell];
+  NSSize csz = [[self gridLayoutManager] cellSize];
+
+  NSRect icnBounds = NSMakeRect(origin.x, origin.y, iconSize, iconSize);
   NSRect hlightRect = NSZeroRect;
 
   hlightRect.size.width = ceil(iconSize / 3 * 4);
   hlightRect.size.height = ceil(hlightRect.size.width * [fsnodeRep highlightHeightFactor]);
   if ((hlightRect.size.height - iconSize) < 2)
-    {
-      hlightRect.size.height = iconSize + 2;
-    }
+    hlightRect.size.height = iconSize + 2;
 
   if (iconPosition == NSImageAbove)
     {
-      hlightRect.origin.x = ceil((gridSize.width - hlightRect.size.width) / 2);
+      hlightRect.origin.x = ceil((csz.width - hlightRect.size.width) / 2);
       if (infoType != FSNInfoNameType)
-	{
-	  hlightRect.origin.y = floor([fsnodeRep heightOfFont: labelFont] * 2 - 2);
-	}
+        hlightRect.origin.y = floor([fsnodeRep heightOfFont: labelFont] * 2 - 2);
       else
-	{
-	  hlightRect.origin.y = floor([fsnodeRep heightOfFont: labelFont]);
-	}
+        hlightRect.origin.y = floor([fsnodeRep heightOfFont: labelFont]);
     }
   else
     {
@@ -829,92 +815,12 @@
 
 - (void)makeIconsGrid
 {
-  NSRect dckr = [manager dockReservedFrame];
-  NSRect mmfr = [manager macmenuReservedFrame];
-  NSRect gridrect = screenFrame;
-  unsigned ymargin;
-  NSPoint gpnt;
-  NSUInteger i;
-
-  if (grid != NULL)
-    {
-      NSZoneFree (NSDefaultMallocZone(), grid);
-    }
-
+  /* Grid geometry is now managed by FSNGridLayoutManager.
+   * The actual recalc happens in -tile where gridOrigin is also set
+   * based on screen frame and dock/menu reservations.
+   * This method remains as a compatibility stub for existing callers
+   * that trigger it when icon size, label size, etc. change. */
   [self calculateGridSize];
-
-  gridrect.size.height -= mmfr.size.height;
-  
-  // Reserve margins at top and bottom of screen where no icons should be placed
-  gridrect.origin.y += BOTTOM_MARGIN;
-  gridrect.size.height -= (TOP_MARGIN + BOTTOM_MARGIN);  // top margin + bottom margin
-
-  if ([manager dockPosition] == DockPositionLeft)
-    {
-      gridrect.size.width -= dckr.size.width;
-      gridrect.origin.x += dckr.size.width;
-    }
-  else if ([manager dockPosition] == DockPositionRight)
-    {
-      gridrect.size.width -= dckr.size.width;
-    }
-
-  // No padding between rows; leftover space stays at bottom of screen
-  ymargin = 0;
-  float gridTopOffset = 12;
-
-  colItemsCount = (NSInteger)(gridrect.size.width / (gridSize.width + X_MARGIN));
-  rowItemsCount = (NSInteger)(gridrect.size.height / (gridSize.height + ymargin));
-  gridItemsCount = colItemsCount * rowItemsCount;
-
-  grid = NSZoneMalloc (NSDefaultMallocZone(), sizeof(NSRect) * gridItemsCount);
-
-  gpnt.x = gridrect.size.width + gridrect.origin.x;
-  gpnt.y = gridrect.size.height + gridrect.origin.y - gridTopOffset;
-
-  gpnt.x -= gridSize.width + X_MARGIN;
-
-  for (i = 0; i < gridItemsCount; i++)
-    {
-      gpnt.y -= (gridSize.height + ymargin);
-
-      if (gpnt.y <= gridrect.origin.y)
-	{
-	  gpnt.y = gridrect.size.height + gridrect.origin.y - gridTopOffset;
-	  gpnt.y -= (gridSize.height + ymargin);
-	  gpnt.x -= (gridSize.width + X_MARGIN);
-	}
-
-      grid[i].origin = gpnt;
-      grid[i].size = gridSize;
-    }
-
-  gpnt = grid[gridItemsCount - 1].origin;
-
-  if (gpnt.x != (gridrect.origin.x + X_MARGIN))
-    {
-      float diffx = gpnt.x - (gridrect.origin.x + X_MARGIN);
-      float xshft = 0.0;
-
-      diffx /= (int)(gridrect.size.width / (gridSize.width + X_MARGIN));
-
-      for (i = 0; i < gridItemsCount; i++)
-	{
-	  if (div(i, rowItemsCount).rem == 0)
-	    {
-	      xshft += diffx;
-	    }
-	  grid[i].origin.x -= xshft;
-	}
-    }
-
-  // Leave any leftover vertical space at the bottom of the screen,
-  // do not redistribute it between rows.
-
-  for (i = 0; i < gridItemsCount; i++)
-    {
-      grid[i] = NSIntegralRect(grid[i]);
-    }
 }
 
 
@@ -1018,62 +924,9 @@
 
 - (void)updateDefaults
 {
-  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-  NSMutableDictionary *indexes = [NSMutableDictionary dictionary];
-  NSColor *tempColor;
-  NSMutableDictionary *backColorDict = [NSMutableDictionary dictionary];
-  CGFloat red, green, blue, alpha;
-  NSUInteger i;
-
-  tempColor = [backColor colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
-  [tempColor getRed: &red green: &green blue: &blue alpha: &alpha];
-  [backColorDict setObject: [NSNumber numberWithFloat: red] forKey: @"red"];
-  [backColorDict setObject: [NSNumber numberWithFloat: green] forKey: @"green"];
-  [backColorDict setObject: [NSNumber numberWithFloat: blue] forKey: @"blue"];
-  [backColorDict setObject: [NSNumber numberWithFloat: alpha] forKey: @"alpha"];
-
-  [desktopInfo setObject: backColorDict forKey: @"backcolor"];
-
-  [desktopInfo setObject: [NSNumber numberWithBool: useBackImage]
-                  forKey: @"usebackimage"];
-
-  [desktopInfo setObject: [NSNumber numberWithInt: backImageStyle]
-                  forKey: @"imagestyle"];
-
-  if (backImage)
-    {
-      [desktopInfo setObject: imagePath forKey: @"imagepath"];
-    }
-
-  [desktopInfo setObject: [NSNumber numberWithInt: iconSize]
-                  forKey: @"iconsize"];
-
-  [desktopInfo setObject: [NSNumber numberWithInt: labelTextSize]
-                  forKey: @"labeltxtsize"];
-
-  [desktopInfo setObject: [NSNumber numberWithInt: iconPosition]
-                  forKey: @"iconposition"];
-
-  [desktopInfo setObject: [NSNumber numberWithInt: infoType]
-                  forKey: @"fsn_info_type"];
-
-  if (infoType == FSNInfoExtendedType)
-    {
-      [desktopInfo setObject: extInfoType forKey: @"ext_info_type"];
-    }
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-
-      [indexes setObject: [NSNumber numberWithUnsignedInteger: [icon gridIndex]]
-		  forKey: [[icon node] name]];
-    }
-
-  [desktopInfo setObject: indexes forKey: @"indexes"];
-
-  [defaults setObject: desktopInfo forKey: @"desktopinfo"];
-  [defaults synchronize];
+  /* All desktop state (positions, appearance, wallpaper) lives in
+   * DS_Store now.  This stub exists for backward compat with existing
+   * callers that invoke it after property changes. */
 }
 
 - (void)selectIconInPrevLine
@@ -1113,13 +966,15 @@
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      NSUInteger index = [icon gridIndex];
+      FSNIconItemData *data = [icon placementData];
+      NSUInteger index = data.hasGridPosition ?
+        [[self gridLayoutManager] flatIndexForCell: data.gridCell] : NSNotFound;
 
       if ([icon isSelected])
 	{
 	  FSNIcon *next;
 
-	  while (index < gridItemsCount)
+	  while (index < [[self gridLayoutManager] totalCells])
 	    {
 	      index++;
 
@@ -1154,7 +1009,7 @@
 	    {
 	      FSNIcon *prev;
 
-	      while (index < gridItemsCount)
+	      while (index < [[self gridLayoutManager] totalCells])
 		{
 		  index++;
 		  prev = [self iconWithGridIndex: index];
@@ -1583,7 +1438,42 @@ static void GWHighlightFrameRect(NSRect aRect)
     } else {
       // Right-clicked on empty desktop background
       NSMenu *menu = [[Workspace gworkspace] emptySpaceContextMenuForViewer: [self window]];
-      
+
+      // "Clean Up" — repacks icons in placement order
+      [menu addItem: [NSMenuItem separatorItem]];
+      {
+        NSMenuItem *cleanUpItem = [NSMenuItem new];
+        [cleanUpItem setTitle: NSLocalizedString(@"Clean Up", @"")];
+        [cleanUpItem setTarget: [Workspace gworkspace]];
+        [cleanUpItem setAction: @selector(cleanUp:)];
+        [menu addItem: cleanUpItem];
+        RELEASE (cleanUpItem);
+      }
+
+      // "Clean Up By" submenu
+      {
+        NSMenuItem *cleanUpByItem = [NSMenuItem new];
+        [cleanUpByItem setTitle: NSLocalizedString(@"Clean Up By", @"")];
+        NSMenu *submenu = [[NSMenu alloc] initWithTitle: @""];
+        NSArray *opts = @[@"Name", @"Kind", @"Date Modified", @"Size", @"Date Created"];
+        NSArray *tags = @[@0, @1, @2, @3, @5];
+        NSUInteger oi;
+        for (oi = 0; oi < [opts count]; oi++)
+          {
+            NSMenuItem *it = [NSMenuItem new];
+            [it setTitle: NSLocalizedString([opts objectAtIndex: oi], @"")];
+            [it setTarget: [Workspace gworkspace]];
+            [it setAction: @selector(cleanUpBy:)];
+            [it setTag: [[tags objectAtIndex: oi] integerValue]];
+            [submenu addItem: it];
+            RELEASE (it);
+          }
+        [cleanUpByItem setSubmenu: submenu];
+        RELEASE (submenu);
+        [menu addItem: cleanUpByItem];
+        RELEASE (cleanUpByItem);
+      }
+
       // Add separator and Workspace Preferences (desktop-specific)
       [menu addItem: [NSMenuItem separatorItem]];
 
@@ -1626,6 +1516,9 @@ static void GWHighlightFrameRect(NSRect aRect)
   }
 }
 
+/* Batch reposition is handled by the base class (DS_Store + fdLocation).
+ * No user-defaults persistence needed — DS_Store is the source of truth. */
+
 @end
 
 
@@ -1637,6 +1530,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSArray *subNodes = [anode subNodes];
   NSMutableArray *unsorted = [NSMutableArray array];
   NSDictionary *indexes = [desktopInfo objectForKey: @"indexes"];
+  NSDictionary *gridPositions = [desktopInfo objectForKey: @"gridPositions"];
   NSUInteger i;
 
   i = [icons count];
@@ -1672,48 +1566,84 @@ static void GWHighlightFrameRect(NSRect aRect)
       RELEASE (icon);
     }
 
-  if (indexes)
-    {
-      for (i = 0; i < [unsorted count]; i++)
-	{
-	  FSNIcon *icon = [unsorted objectAtIndex: i];
-	  NSString *name = [[icon node] name];
-	  NSNumber *indnum = [indexes objectForKey: name];
+  /* Restore positions from DS_Store / fdLocation (Mac-compatible).
+   * This is the single source of truth — no user defaults. */
+  {
+    NSString *folderPath = [anode path];
+    CGFloat refH = [self bounds].size.height;
+    if (refH <= 0) refH = 600.0;
+    NSLog(@"[READ]  GWDesktopView refH=%.0f", refH);
 
-	  if (indnum)
-	    {
-	      NSUInteger index = [indnum unsignedIntegerValue];
+    /* DS_Store Iloc (primary) */
+    NSString *dsp = [folderPath stringByAppendingPathComponent: @".DS_Store"];
+    if ([[NSFileManager defaultManager] fileExistsAtPath: dsp])
+      {
+        NS_DURING
+          {
+            DSStore *store = [DSStore storeWithPath: dsp];
+            if (store)
+              {
+                [store load];
+                NSUInteger i, restored = 0;
+                for (i = 0; i < [unsorted count]; i++)
+                  {
+                    FSNIcon *icon = [unsorted objectAtIndex: i];
+                    NSString *name = [[icon node] name];
+                    NSPoint iloc = [store iconLocationForFilename: name];
+                    NSLog(@"[READ]   DS_Store: %@  iloc=(%.0f,%.0f)  isZero=%d",
+                          name, iloc.x, iloc.y, (iloc.x == 0 && iloc.y == 0));
+                    if (iloc.x != 0.0f || iloc.y != 0.0f)
+                      {
+                        NSPoint gsCenter = NSMakePoint(iloc.x, refH - iloc.y);
+                        FSNIconItemData *data = [icon placementData];
+                        data.pixelPosition = gsCenter;
+                        data.placementMode = FSNIconPlacementModeManual;
+                        data.hasGridPosition = NO;
+                        data.gridCell = FSNGridCellNone;
+                        NSLog(@"[READ]   -> gnu=(%.0f,%.0f) MANUAL", gsCenter.x, gsCenter.y);
+                        restored++;
+                      }
+                  }
+                NSLog(@"[READ]   DS_Store: %lu/%lu icons restored",
+                      (unsigned long)restored, (unsigned long)[unsorted count]);
+              }
+          }
+        NS_HANDLER
+          NSLog(@"[READ]   DS_Store EXCEPTION for %@: %@", folderPath, localException);
+        NS_ENDHANDLER
+      }
 
-	      if (index >= gridItemsCount)
-		index = [self firstFreeGridIndex];
+    /* fdLocation xattr (secondary) */
+    NSUInteger i;
+    for (i = 0; i < [unsorted count]; i++)
+      {
+        FSNIcon *icon = [unsorted objectAtIndex: i];
+        FSNIconItemData *data = [icon placementData];
+        if (data.placementMode == FSNIconPlacementModeManual) continue;
+        FSNode *nd = [icon node];
+        if (!nd) continue;
+        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [nd path]];
+        if (!md) continue;
+        NSPoint floc = [md iconPosition];
+        if (floc.x != -1 && floc.y != -1)
+          {
+            NSPoint gsCenter = NSMakePoint(floc.x, refH - floc.y);
+            data.pixelPosition = gsCenter;
+            data.placementMode = FSNIconPlacementModeManual;
+            data.hasGridPosition = NO;
+            data.gridCell = FSNGridCellNone;
+          }
+      }
+  }
 
-	      if (index != NSNotFound)
-		{
-		  [icon setGridIndex: index];
-		  [icons addObject: icon];
-		  [self addSubview: icon];
-		}
-	    }
-	}
-    }
-
+  /* Add all icons to the view */
   for (i = 0; i < [unsorted count]; i++)
     {
       FSNIcon *icon = [unsorted objectAtIndex: i];
-      NSUInteger index = [icon gridIndex];
-
-      if (index == NSNotFound)
-	{
-	  index = [self firstFreeGridIndex];
-
-	  if (index != NSNotFound)
-	    {
-	      [icon setGridIndex: index];
-	      [icons addObject: icon];
-	      [self addSubview: icon];
-	    }
-	}
+      [icons addObject: icon];
+      [self addSubview: icon];
     }
+
 
   [self tile];
   [self setNeedsDisplay: YES];
@@ -2010,13 +1940,20 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (id)addRepForSubnode:(FSNode *)anode
 {
+  /* Never display internal metadata files on the desktop */
+  NSString *fname = [anode name];
+  if ([fname isEqualToString: @".DS_Store"]
+      || [fname hasPrefix: @"._"]
+      || [fname isEqualToString: @"__MACOSX"])
+    return nil;
+
   CREATE_AUTORELEASE_POOL(arp);
-  
+
   // Mark root filesystem as a mount point
   if ([[anode path] isEqualToString: @"/"]) {
     [anode setMountPoint: YES];
   }
-  
+
   GWDesktopIcon *icon = [[GWDesktopIcon alloc] initForNode: anode
                                         nodeInfoType: infoType
                                         extendedType: extInfoType
@@ -2370,11 +2307,11 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       if (insertIndex != index)
 	{
-	  [self setNeedsDisplayInRect: grid[index]];
+	  [self setNeedsDisplayInRect: [self rectForGridIndex: index]];
 
 	  if (insertIndex != NSNotFound)
 	    {
-	      [self setNeedsDisplayInRect: grid[insertIndex]];
+	      [self setNeedsDisplayInRect: [self rectForGridIndex: insertIndex]];
 	    }
 	}
 
@@ -2385,7 +2322,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       DESTROY (dragIcon);
       if (insertIndex != NSNotFound)
 	{
-	  [self setNeedsDisplayInRect: grid[insertIndex]];
+	  [self setNeedsDisplayInRect: [self rectForGridIndex: insertIndex]];
 	}
       insertIndex = NSNotFound;
       return NSDragOperationNone;
@@ -2416,7 +2353,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   DESTROY (dragIcon);
   if (insertIndex != NSNotFound)
     {
-      [self setNeedsDisplayInRect: grid[insertIndex]];
+      [self setNeedsDisplayInRect: [self rectForGridIndex: insertIndex]];
     }
   isDragTarget = NO;
 }
@@ -2469,7 +2406,7 @@ NSComparisonResult sortDragged(id icn1, id icn2, void *context)
   DESTROY (dragIcon);
   if ([self isFreeGridIndex: insertIndex])
     {
-      [self setNeedsDisplayInRect: grid[insertIndex]];
+      [self setNeedsDisplayInRect: [self rectForGridIndex: insertIndex]];
     }
   isDragTarget = NO;
 
@@ -2501,7 +2438,7 @@ NSComparisonResult sortDragged(id icn1, id icn2, void *context)
       NSMutableArray *removed = [NSMutableArray array];
       NSArray *sorted = nil;
       NSMutableArray *sortIndexes = [NSMutableArray array];
-      NSUInteger firstinrow = gridItemsCount - rowItemsCount;
+      NSUInteger firstinrow = [[self gridLayoutManager] totalCells] - [[self gridLayoutManager] rowCount];
       NSUInteger row = 0;
 
       for (i = 0; i < [sourcePaths count]; i++)
@@ -2516,9 +2453,9 @@ NSComparisonResult sortDragged(id icn1, id icn2, void *context)
 	    }
 	}
 
-      while (firstinrow < gridItemsCount)
+      while (firstinrow < [[self gridLayoutManager] totalCells])
 	{
-	  for (i = firstinrow; i >= (NSInteger)row; i -= rowItemsCount)
+	  for (i = firstinrow; i >= (NSInteger)row; i -= [[self gridLayoutManager] rowCount])
 	    {
 	      [sortIndexes insertObject: [NSNumber numberWithInteger: i]
 				atIndex: [sortIndexes count]];
@@ -2546,7 +2483,7 @@ NSComparisonResult sortDragged(id icn1, id icn2, void *context)
 	    {
 	      index = oldindex - shift;
 
-	      if ((oldindex - shift) || (index >= gridItemsCount))
+	      if ((oldindex - shift) || (index >= [[self gridLayoutManager] totalCells]))
 		{
 		  index = [self firstFreeGridIndexAfterIndex: insertIndex];
 		}
@@ -2570,10 +2507,10 @@ NSComparisonResult sortDragged(id icn1, id icn2, void *context)
 	  [icons addObject: icon];
 
 	  [icon setGridIndex: index];
-	  [icon setFrame: grid[index]];
+	  [icon setFrame: [self rectForGridIndex: index]];
 
-	  [self setNeedsDisplayInRect: grid[oldindex]];
-	  [self setNeedsDisplayInRect: grid[index]];
+	  [self setNeedsDisplayInRect: [self rectForGridIndex: oldindex]];
+	  [self setNeedsDisplayInRect: [self rectForGridIndex: index]];
 	}
 
       return;
