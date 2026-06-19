@@ -1,0 +1,139 @@
+name: Build Gershwin Workspace
+
+# Build gershwin-workspace against the real Gershwin stack by reusing
+# gershwin-developer: build the core libraries once ("make corelibs"), then
+# build the checkout under test ("make workspace"). The workspace sources are
+# provided by this repo's checkout via a symlink, and SKIP_REPOS keeps
+# Checkout.sh from cloning gershwin-workspace itself or any sibling apps that
+# are not needed to build the core libraries.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # Repos Checkout.sh should NOT clone:
+  #   - gershwin-workspace      -> provided by this repo's checkout (symlinked)
+  #   - the sibling apps        -> not needed to build corelibs + workspace
+  # Everything else (libdispatch, libobjc2, tools-make, libs-base/gui/back,
+  # gershwin-system, gershwin-components, gershwin-assets) is still cloned.
+  SKIP_REPOS: >-
+    gershwin-workspace
+    gershwin-systempreferences
+    gershwin-eau-theme
+    gershwin-terminal
+    gershwin-textedit
+    gershwin-windowmanager
+
+jobs:
+  build-freebsd-14-amd64:
+    name: FreeBSD x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: gershwin-workspace
+
+      - name: Build workspace inside FreeBSD VM
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14.3"
+          usesh: true
+          sync: rsync
+          copyback: false
+          cpu: 2
+          mem: 4096
+          prepare: |
+            pkg update
+            pkg install -y git
+          run: |
+            set -e
+            BASE="$(pwd)"
+            git clone --depth 1 https://github.com/gershwin-desktop/gershwin-developer.git
+            cd "$BASE/gershwin-developer"
+            ./Library/Scripts/Bootstrap.sh
+            SKIP_REPOS="${{ env.SKIP_REPOS }}" ./Library/Scripts/Checkout.sh
+            ln -sfn "$BASE/gershwin-workspace" Library/Sources/gershwin-workspace
+            make corelibs
+            make workspace
+
+  build-archlinux-x86_64:
+    name: Arch x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    container:
+      image: archlinux:latest
+    steps:
+      - name: Install git
+        run: |
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm base-devel git
+
+      - uses: actions/checkout@v4
+        with:
+          path: gershwin-workspace
+
+      - name: Clone gershwin-developer
+        run: git clone --depth 1 https://github.com/gershwin-desktop/gershwin-developer.git
+
+      - name: Bootstrap
+        working-directory: gershwin-developer
+        run: ./Library/Scripts/Bootstrap.sh
+
+      - name: Checkout sources (skip workspace and sibling apps)
+        working-directory: gershwin-developer
+        run: ./Library/Scripts/Checkout.sh
+
+      - name: Link workspace source under test
+        working-directory: gershwin-developer
+        run: ln -sfn "$GITHUB_WORKSPACE/gershwin-workspace" Library/Sources/gershwin-workspace
+
+      - name: Build core libraries
+        working-directory: gershwin-developer
+        run: make corelibs
+
+      - name: Build workspace
+        working-directory: gershwin-developer
+        run: make workspace
+
+  build-debian-x86_64:
+    name: Debian x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    container:
+      image: debian:bookworm
+    steps:
+      - name: Install git
+        run: |
+          apt-get update
+          apt-get -y install git
+
+      - uses: actions/checkout@v4
+        with:
+          path: gershwin-workspace
+
+      - name: Clone gershwin-developer
+        run: git clone --depth 1 https://github.com/gershwin-desktop/gershwin-developer.git
+
+      - name: Bootstrap
+        working-directory: gershwin-developer
+        run: ./Library/Scripts/Bootstrap.sh
+
+      - name: Checkout sources (skip workspace and sibling apps)
+        working-directory: gershwin-developer
+        run: ./Library/Scripts/Checkout.sh
+
+      - name: Link workspace source under test
+        working-directory: gershwin-developer
+        run: ln -sfn "$GITHUB_WORKSPACE/gershwin-workspace" Library/Sources/gershwin-workspace
+
+      - name: Build core libraries
+        working-directory: gershwin-developer
+        run: make corelibs
+
+      - name: Build workspace
+        working-directory: gershwin-developer
+        run: make workspace
