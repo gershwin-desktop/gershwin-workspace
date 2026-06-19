@@ -14,6 +14,12 @@
 #define BUDDY_HEADER_SIZE 32
 
 // Byte swapping functions
+// Undefine any system macros with these names before defining the local static
+// functions. On OpenBSD, <sys/endian.h> defines swap16/swap32/swap64 as macros,
+// which would otherwise break these definitions via macro expansion.
+#undef swap16
+#undef swap32
+#undef swap64
 static uint16_t swap16(uint16_t x) {
     return ((x & 0xFF00) >> 8) | ((x & 0x00FF) << 8);
 }

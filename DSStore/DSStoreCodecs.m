@@ -7,6 +7,11 @@
 #import "DSStoreCodecs.h"
 
 // Byte swapping functions
+// Undefine any system macros with these names before defining the local static
+// functions. On OpenBSD, <sys/endian.h> defines swap32/swap64 as macros, which
+// would otherwise break these definitions via macro expansion.
+#undef swap32
+#undef swap64
 static uint32_t swap32(uint32_t x) {
     return ((x & 0xFF000000) >> 24) | ((x & 0x00FF0000) >> 8) |
            ((x & 0x0000FF00) << 8)  | ((x & 0x000000FF) << 24);
