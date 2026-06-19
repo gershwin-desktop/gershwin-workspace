@@ -305,8 +305,12 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       if (posValue)
         {
-          /* Use saved center position, compute cell origin */
-          NSPoint center = [posValue pointValue];
+          /* customIconPositions stores iloc-style (DS_Store top-down)
+           * coordinates so positions survive window resize.  Convert to
+           * GNUstep bottom-up using the current refH. */
+          NSPoint ilocCenter = [posValue pointValue];
+          NSPoint center = NSMakePoint(ilocCenter.x,
+                                       refH - ilocCenter.y);
           cellOrigin.x = center.x - (gridSize.width / 2);
           cellOrigin.y = center.y - (gridSize.height / 2);
         }
@@ -331,10 +335,6 @@ static void GWHighlightFrameRect(NSRect aRect)
             }
           cellOrigin.x = gnuX - (gridSize.width / 2);
           cellOrigin.y = gnuY - (gridSize.height / 2);
-          NSLog(@"[FREE] %@ iloc=(%.0f,%.0f) gnu=(%.0f,%.0f) refH=%.0f",
-                filename,
-                data.ilocPosition.x, data.ilocPosition.y,
-                gnuX, gnuY, refH);
         }
       else
         {
@@ -348,10 +348,13 @@ static void GWHighlightFrameRect(NSRect aRect)
           cellOrigin.x = gridX;
           cellOrigin.y = gridY;
 
-          /* Record so this icon stays put on subsequent tiles */
-          NSPoint center = NSMakePoint(cellOrigin.x + gridSize.width / 2.0,
-                                        cellOrigin.y + gridSize.height / 2.0);
-          [customIconPositions setObject: [NSValue valueWithPoint: center]
+          /* Record as iloc-style (top-down) so positions survive
+           * window resize.  The posValue branch above converts back
+           * to GNUstep bottom-up using the current refH. */
+          NSPoint gsCenter = NSMakePoint(cellOrigin.x + gridSize.width / 2.0,
+                                          cellOrigin.y + gridSize.height / 2.0);
+          NSPoint ilocCenter = NSMakePoint(gsCenter.x, refH - gsCenter.y);
+          [customIconPositions setObject: [NSValue valueWithPoint: ilocCenter]
                                   forKey: filename];
         }
 
@@ -633,9 +636,6 @@ static void GWHighlightFrameRect(NSRect aRect)
     if (w) { NSView *cv = [w contentView]; if (cv) refH = [cv bounds].size.height; } }
   if (refH <= 0) refH = 600.0;
 
-  NSLog(@"[WRITE] batchReposition refH=%.0f  icons=%lu",
-              refH, (unsigned long)count);
-
   /* ---- Pass 1: update all placement data in memory ---- */
   NSUInteger i;
   for (i = 0; i < count; i++)
@@ -649,8 +649,14 @@ static void GWHighlightFrameRect(NSRect aRect)
       data.ilocPosition = NSMakePoint(-1, -1);  /* clear raw coords */
       data.placementMode = FSNIconPlacementModeManual;
 
-      NSLog(@"[WRITE]   %@  gnuStep=(%.0f, %.0f)",
-                  [[icon node] name], point.x, point.y);
+      /* Sync customIconPositions with iloc-style (top-down) coords so
+       * the next tile call uses the dragged position, not a stale one. */
+      NSString *name = [[icon node] name];
+      if (!customIconPositions)
+        customIconPositions = [[NSMutableDictionary alloc] init];
+      NSPoint ilocPoint = NSMakePoint(point.x, refH - point.y);
+      [customIconPositions setObject: [NSValue valueWithPoint: ilocPoint]
+                              forKey: name];
     }
 
   /* ---- Pass 2: single tile ---- */
@@ -676,9 +682,6 @@ static void GWHighlightFrameRect(NSRect aRect)
         /* Convert GNUstep bottom-left Y to top-left Y */
         int ilocX = (int)point.x;
         int ilocY = (int)(refH - point.y);
-
-        NSLog(@"[WRITE]   DS_Store: %@  iloc=(%d, %d)",
-                    name, ilocX, ilocY);
 
         NSMutableArray *batch = [folders objectForKey: folder];
         if (!batch)
@@ -714,15 +717,15 @@ static void GWHighlightFrameRect(NSRect aRect)
                                                 x: [[entry objectAtIndex: 1] intValue]
                                                 y: [[entry objectAtIndex: 2] intValue]];
                   }
-                BOOL saved = [s save];
-                NSLog(@"[WRITE]   DS_Store save %@  entries=%lu  ok=%d",
-                      folder, (unsigned long)[batch count], saved);
+                [s save];
               }
             else
-              NSLog(@"[WRITE]   DS_Store FAILED to open/create: %@", dsp);
+              {
+              }
           }
         NS_HANDLER
-          NSLog(@"[WRITE]   DS_Store EXCEPTION for %@: %@", folder, localException);
+          {
+          }
         NS_ENDHANDLER
 
         /* fdLocation xattr for each file */
@@ -851,8 +854,6 @@ static void GWHighlightFrameRect(NSRect aRect)
       e = [[FSNLeftToRightTopToBottomEnumerator alloc] initWithColumns: nCols rows: nRows];
       break;
     }
-  NSLog(@"[CLEAN] enumerator: dir=%lu allocCols=%lu allocRows=%lu",
-        (unsigned long)_placementDirection, (unsigned long)nCols, (unsigned long)nRows);
 
   /* Place each icon at the next free grid point */
   [e reset];
@@ -867,10 +868,6 @@ static void GWHighlightFrameRect(NSRect aRect)
       /* Assign this grid point to the next icon */
       FSNIcon *icon = [icons objectAtIndex: ci];
       FSNIconItemData *data = [icon placementData];
-      NSLog(@"[CLEAN] %2lu: %@  (col=%lu,row=%lu) -> gnu=(%.0f,%.0f)",
-            (unsigned long)ci, [[icon node] name],
-            (unsigned long)cell.col, (unsigned long)cell.row,
-            gCenter.x, gCenter.y);
       data.pixelPosition = gCenter;
       data.ilocPosition = NSMakePoint(-1, -1);  /* clear raw coords so tile uses GNUstep pixelPosition */
       /* MANUAL keeps them pinned through resizes and tile calls.
@@ -882,7 +879,6 @@ static void GWHighlightFrameRect(NSRect aRect)
       ci++;
     }
 
-  NSLog(@"[CLEAN] placed %lu/%lu icons", (unsigned long)ci, (unsigned long)[icons count]);
   [e release];
   [self tile];
 }
@@ -1313,33 +1309,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)resizeWithOldSuperviewSize:(NSSize)oldFrameSize
 {
-  NSRect newBounds = [self bounds];
-  NSLog(@"[RESIZE] bounds %.0fx%.0f -> %.0fx%.0f",
-              oldFrameSize.width, oldFrameSize.height,
-              newBounds.size.width, newBounds.size.height);
-
-  /* Log MANUAL icon positions before resize */
-  NSUInteger k;
-  for (k = 0; k < [icons count]; k++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: k];
-      FSNIconItemData *data = [icon placementData];
-      if (data.placementMode == FSNIconPlacementModeManual)
-        NSLog(@"[RESIZE] BEFORE %@ pixelPos=(%.0f, %.0f)",
-                    [[icon node] name], data.pixelPosition.x, data.pixelPosition.y);
-    }
-
   [self tile];
-
-  for (k = 0; k < [icons count]; k++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: k];
-      FSNIconItemData *data = [icon placementData];
-      if (data.placementMode == FSNIconPlacementModeManual)
-        NSLog(@"[RESIZE] AFTER  %@ pixelPos=(%.0f, %.0f) frame=(%.0f, %.0f)",
-                    [[icon node] name], data.pixelPosition.x, data.pixelPosition.y,
-                    [icon frame].origin.x, [icon frame].origin.y);
-    }
 }
 
 - (void)viewDidMoveToSuperview
@@ -1452,8 +1422,6 @@ static void GWHighlightFrameRect(NSRect aRect)
     { NSWindow *w = [self window];
       if (w) { NSView *cv = [w contentView]; if (cv) refH = [cv bounds].size.height; } }
     if (refH <= 0) refH = 600.0;
-    NSLog(@"[READ]  showContentsOfNode refH=%.0f  path=%@", refH, folderPath);
-
     /* Source 1: .DS_Store Iloc (primary, folder-level) */
     NSString *dsp = [folderPath stringByAppendingPathComponent: @".DS_Store"];
     if ([[NSFileManager defaultManager] fileExistsAtPath: dsp])
@@ -1481,8 +1449,6 @@ static void GWHighlightFrameRect(NSRect aRect)
                         data.ilocPosition = iloc;
                         data.pixelPosition = NSMakePoint(iloc.x, iloc.y);
                         data.placementMode = FSNIconPlacementModeManual;
-                        NSLog(@"[READ]   DS_Store: %@  iloc=(%.0f,%.0f)",
-                                    name, iloc.x, iloc.y);
                       }
                   }
               }
@@ -1513,8 +1479,6 @@ static void GWHighlightFrameRect(NSRect aRect)
             data.ilocPosition = floc;
             data.pixelPosition = gsCenter;
             data.placementMode = FSNIconPlacementModeManual;
-            NSLog(@"[READ]   fdLocation: %@  floc=(%.0f,%.0f) -> gnu=(%.0f,%.0f)",
-                        [[icon node] name], floc.x, floc.y, gsCenter.x, gsCenter.y);
           }
       }
   }
