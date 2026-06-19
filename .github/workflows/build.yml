@@ -137,3 +137,34 @@ jobs:
       - name: Build workspace
         working-directory: gershwin-developer
         run: make workspace
+
+  build-openbsd-78-amd64:
+    name: OpenBSD x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: gershwin-workspace
+
+      - name: Build workspace inside OpenBSD VM
+        uses: vmactions/openbsd-vm@v1
+        with:
+          release: "7.8"
+          usesh: true
+          sync: rsync
+          copyback: false
+          cpu: 2
+          mem: 4096
+          prepare: |
+            pkg_add -I git
+          run: |
+            set -e
+            BASE="$(pwd)"
+            git clone --depth 1 https://github.com/gershwin-desktop/gershwin-developer.git
+            cd "$BASE/gershwin-developer"
+            ./Library/Scripts/Bootstrap.sh
+            SKIP_REPOS="${{ env.SKIP_REPOS }}" ./Library/Scripts/Checkout.sh
+            ln -sfn "$BASE/gershwin-workspace" Library/Sources/gershwin-workspace
+            make corelibs
+            make workspace
