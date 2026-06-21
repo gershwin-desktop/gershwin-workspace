@@ -294,9 +294,9 @@ static NSImage *branchImage;
       GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [anode path]];
       if (md)
         {
-          NSInteger label = [md labelNumber];
-          if (label > 0)
-            ASSIGN (tagColor, [GSFileMetadata colorForLabel: (GSFileLabel)label]);
+          NSInteger labelNum = [md labelNumber];
+          if (labelNum > 0)
+            ASSIGN (tagColor, [GSFileMetadata colorForLabel: (GSFileLabel)labelNum]);
         }
     }
 

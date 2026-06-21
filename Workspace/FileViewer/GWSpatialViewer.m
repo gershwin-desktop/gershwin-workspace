@@ -1020,10 +1020,7 @@
       }
     }
     
-    if ([nodeView respondsToSelector:@selector(setFreePositioningEnabled:)]) {
-      [(FSNIconsView *)nodeView setCustomIconPositions:iconPositions];
-      [(FSNIconsView *)nodeView setFreePositioningEnabled:YES];
-    }
+    [(FSNIconsView *)nodeView setCustomIconPositions:iconPositions];
   } else {
     NSDebugLLog(@"gwspace", @"║ Free positioning: disabled");
   }
@@ -1073,9 +1070,6 @@
   // Apply grid spacing if available
   if (dsStoreInfo.hasGridSpacing && dsStoreInfo.gridSpacing > 0) {
     NSDebugLLog(@"gwspace", @"║ Setting grid spacing: %.1f", dsStoreInfo.gridSpacing);
-    if ([iconView respondsToSelector:@selector(setGridSpacing:)]) {
-      [(FSNIconsView *)iconView setGridSpacing:dsStoreInfo.gridSpacing];
-    }
   }
   
   // Apply background color if available
@@ -1102,10 +1096,6 @@
       NSDebugLLog(@"gwspace", @"║   ✗ Failed to load background image from: %@", dsStoreInfo.backgroundImagePath);
     }
   }
-  
-  /* Already restored from showContentsOfNode. */
-  if ([iconView respondsToSelector: @selector(setFreePositioningEnabled:)])
-    [(FSNIconsView *)iconView setFreePositioningEnabled: YES];
   
   // Apply tag colors (lclr) and comments (cmmt) from DS_Store
   NSDictionary *allIconInfo = [dsStoreInfo allIconInfo];

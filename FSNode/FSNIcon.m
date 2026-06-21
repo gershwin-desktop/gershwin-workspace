@@ -41,6 +41,11 @@
 - (void)loadLabelColorFromMetadata;
 @end
 
+/* Forward declaration for batch repositioning called on container (FSNIconsView) */
+@interface NSView (FSNIconContainerMethods)
+- (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
+@end
+
 /* Forward declaration to expose class methods used for ISO drop handling */
 @interface ISOWriteHandler : NSObject
 + (BOOL)canHandleISODrop:(NSString *)path ontoNode:(FSNode *)node;
@@ -232,9 +237,9 @@ static NSImage *branchImage;
         GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [anode path]];
         if (md)
           {
-            NSInteger label = [md labelNumber];
-            if (label > 0)
-              ASSIGN (tagColor, [GSFileMetadata colorForLabel: (GSFileLabel)label]);
+            NSInteger labelNum = [md labelNumber];
+            if (labelNum > 0)
+              ASSIGN (tagColor, [GSFileMetadata colorForLabel: (GSFileLabel)labelNum]);
           }
       }
 
@@ -708,10 +713,10 @@ static NSImage *branchImage;
   if (md == nil)
     return;
 
-  NSInteger label = [md labelNumber];
-  if (label > 0)
+  NSInteger labelNum = [md labelNumber];
+  if (labelNum > 0)
     {
-      NSColor *color = [GSFileMetadata colorForLabel: (GSFileLabel)label];
+      NSColor *color = [GSFileMetadata colorForLabel: (GSFileLabel)labelNum];
       if (color)
         [self setTagColor: color];
     }
@@ -2110,7 +2115,6 @@ static NSImage *branchImage;
 - (void)concludeDragOperation:(id <NSDraggingInfo>)sender
 {
   NSPasteboard *pb;
-  NSDragOperation sourceDragMask;
   NSArray *sourcePaths;
   NSString *operation;
   NSString *source;
@@ -2137,7 +2141,6 @@ static NSImage *branchImage;
   drawicon = icon;
   [self setNeedsDisplay: YES];
 
-  sourceDragMask = [sender draggingSourceOperationMask];
   pb = [sender draggingPasteboard];
 
   if ([node isPackage] == NO)

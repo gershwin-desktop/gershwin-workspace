@@ -1435,7 +1435,6 @@ static id <DesktopApplication> desktopApp = nil;
 - (void)concludeDragOperation:(id <NSDraggingInfo>)sender
 {
   NSPasteboard *pb;
-  NSDragOperation sourceDragMask;
   NSArray *sourcePaths;
   NSString *operation;
   NSString *source;
@@ -1447,7 +1446,6 @@ static id <DesktopApplication> desktopApp = nil;
   isDragTarget = NO;
   operation = nil;
 
-  sourceDragMask = [sender draggingSourceOperationMask];
   pb = [sender draggingPasteboard];
 
   if ([[pb types] containsObject: @"GWRemoteFilenamesPboardType"])

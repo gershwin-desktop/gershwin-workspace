@@ -235,7 +235,6 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
   });
 
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
-  __block NSUInteger processed = 0;
 
   /* Enumerate all files (including in subdirectories), collect them */
   NSMutableArray *allFiles = [NSMutableArray arrayWithCapacity: totalItems];

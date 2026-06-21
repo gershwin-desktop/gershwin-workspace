@@ -34,6 +34,11 @@
 #import "GWDesktopManager.h"
 #import "Workspace.h"
 
+/* Forward declaration for loadLabelColorFromMetadata inherited from FSNIcon */
+@interface FSNIcon (DockIconForwardDecl)
+- (void)loadLabelColorFromMetadata;
+@end
+
 @implementation DockIcon
 
 - (void)dealloc

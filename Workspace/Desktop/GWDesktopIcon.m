@@ -28,6 +28,11 @@
 #include <AppKit/AppKit.h>
 #include "GWDesktopIcon.h"
 
+/* Forward declaration for repositionLocal:offset: inherited from FSNIcon */
+@interface FSNIcon (GWDesktopIconForwardDecl)
+- (void)repositionLocal:(NSEvent *)firstEvent offset:(NSSize)initialOffset;
+@end
+
 @implementation GWDesktopIcon
 
 - (id)initForNode:(FSNode *)anode

@@ -1943,7 +1943,6 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   else
     {
       NSPasteboard *pb;
-      NSDragOperation sourceDragMask;
       NSArray *sourcePaths;
       NSString *operation;
       NSString *source;
@@ -1952,7 +1951,6 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
       NSString *trashPath;
       NSUInteger i;
 
-      sourceDragMask = [sender draggingSourceOperationMask];
       pb = [sender draggingPasteboard];
       operation = nil;
 

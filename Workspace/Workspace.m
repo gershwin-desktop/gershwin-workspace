@@ -97,6 +97,17 @@ static Workspace *gworkspace = nil;
 NSString *_pendingSystemActionCommand = nil;
 NSString *_pendingSystemActionTitle = nil;
 
+/* Forward declarations for methods resolved at runtime on container/view objects.
+ * Avoids method-not-found warnings when calling on `id` typed objects. */
+@interface NSObject (WorkspaceForwardDecls)
+- (void)workspaceWillUnmountVolumeAtPath:(NSString *)vpath;
+- (void)workspaceDidUnmountVolumeAtPath:(NSString *)vpath;
+- (void)setCustomIconPositions:(NSDictionary *)positions;
+- (NSArray *)icons;
+- (void)cleanupIconPositions;
+- (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
+@end
+
 @interface Workspace (PrivateMethods)
 - (void)_updateTrashContents;
 @end
@@ -1955,9 +1966,9 @@ NSString *_pendingSystemActionTitle = nil;
             copyName = [NSString stringWithFormat: @"%@ copy", name];
 
           NSString *copyPath = [dir stringByAppendingPathComponent: copyName];
-          NSFileManager *fm = [NSFileManager defaultManager];
+          NSFileManager *fileMgr = [NSFileManager defaultManager];
 
-          if ([fm fileExistsAtPath: copyPath])
+          if ([fileMgr fileExistsAtPath: copyPath])
             {
               NSUInteger n = 2;
               do {
@@ -1968,10 +1979,10 @@ NSString *_pendingSystemActionTitle = nil;
                   tryName = [NSString stringWithFormat: @"%@ copy %lu", name, (unsigned long)n];
                 copyPath = [dir stringByAppendingPathComponent: tryName];
                 n++;
-              } while ([fm fileExistsAtPath: copyPath]);
+              } while ([fileMgr fileExistsAtPath: copyPath]);
             }
 
-          if ([fm copyPath: fullPath toPath: copyPath handler: nil])
+          if ([fileMgr copyPath: fullPath toPath: copyPath handler: nil])
             {
               GSFileMetadata *copyMd = [GSFileMetadata metadataForFileAtPath: copyPath];
               if (!copyMd) copyMd = [[[GSFileMetadata alloc] init] autorelease];
@@ -4668,8 +4679,41 @@ NSString *_pendingSystemActionTitle = nil;
   /* Sort the icon array in place */
   if ([iconView respondsToSelector: @selector(icons)])
     {
-      NSMutableArray *all = [iconView icons];
-      [all sortUsingSelector: sortSel];
+      NSMutableArray *all = (NSMutableArray *)[iconView icons];
+
+      /* Desktop special sort: "/" first, other mounted volumes next,
+       * then everything else in the requested sort order. */
+      if (NSClassFromString(@"GWDesktopView")
+          && [iconView isKindOfClass: NSClassFromString(@"GWDesktopView")])
+        {
+          NSMutableArray *rootItems = [NSMutableArray array];
+          NSMutableArray *volumeItems = [NSMutableArray array];
+          NSMutableArray *otherItems = [NSMutableArray array];
+
+          for (id icon in all)
+            {
+              FSNode *n = [icon node];
+              NSString *p = [n path];
+              if ([p isEqualToString: @"/"])
+                [rootItems addObject: icon];
+              else if ([n isMountPoint])
+                [volumeItems addObject: icon];
+              else
+                [otherItems addObject: icon];
+            }
+
+          [volumeItems sortUsingSelector: sortSel];
+          [otherItems sortUsingSelector: sortSel];
+
+          [all removeAllObjects];
+          [all addObjectsFromArray: rootItems];
+          [all addObjectsFromArray: volumeItems];
+          [all addObjectsFromArray: otherItems];
+        }
+      else
+        {
+          [all sortUsingSelector: sortSel];
+        }
     }
 
   if ([iconView respondsToSelector: @selector(cleanupIconPositions)])
@@ -4722,9 +4766,9 @@ NSString *_pendingSystemActionTitle = nil;
   NS_DURING
     {
       NSString *dsstorePath = [folderPath stringByAppendingPathComponent: @".DS_Store"];
-      NSFileManager *fm = [NSFileManager defaultManager];
+      NSFileManager *fileMgr = [NSFileManager defaultManager];
       DSStore *store;
-      if ([fm fileExistsAtPath: dsstorePath])
+      if ([fileMgr fileExistsAtPath: dsstorePath])
         store = [DSStore storeWithPath: dsstorePath];
       else
         store = [DSStore createStoreAtPath: dsstorePath withEntries: nil];
@@ -4773,8 +4817,8 @@ NSString *_pendingSystemActionTitle = nil;
                            [baseName stringByAppendingPathExtension: @"zip"]];
 
   /* If the default name already exists, append a number */
-  NSFileManager *fm = [NSFileManager defaultManager];
-  if ([fm fileExistsAtPath: outputPath])
+  NSFileManager *fileMgr = [NSFileManager defaultManager];
+  if ([fileMgr fileExistsAtPath: outputPath])
     {
       NSUInteger n = 1;
       do {
@@ -4782,7 +4826,7 @@ NSString *_pendingSystemActionTitle = nil;
         outputPath = [parentDir stringByAppendingPathComponent:
                        [tryName stringByAppendingPathExtension: @"zip"]];
         n++;
-      } while ([fm fileExistsAtPath: outputPath]);
+      } while ([fileMgr fileExistsAtPath: outputPath]);
     }
 
   /* Run with progress panel */
@@ -4824,15 +4868,15 @@ NSString *_pendingSystemActionTitle = nil;
   NSString *destDir   = [parentDir stringByAppendingPathComponent: baseName];
 
   /* If the destination already exists, append a number */
-  NSFileManager *fm = [NSFileManager defaultManager];
-  if ([fm fileExistsAtPath: destDir])
+  NSFileManager *fileMgr = [NSFileManager defaultManager];
+  if ([fileMgr fileExistsAtPath: destDir])
     {
       NSUInteger n = 1;
       do {
         NSString *tryName = [NSString stringWithFormat: @"%@ %lu", baseName, (unsigned long)n];
         destDir = [parentDir stringByAppendingPathComponent: tryName];
         n++;
-      } while ([fm fileExistsAtPath: destDir]);
+      } while ([fileMgr fileExistsAtPath: destDir]);
     }
 
   /* Run with progress panel */
