@@ -196,6 +196,10 @@ static void GWHighlightFrameRect(NSRect aRect)
 					      @"GWLSFolderPboardType",
 					      @"GWRemoteFilenamesPboardType",
 					      nil]];
+
+      /* Enable resize notification so resizeWithOldSuperviewSize:
+       * (which calls tile) is actually invoked. */
+      [self setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
     }
 
   return self;
@@ -393,11 +397,16 @@ static void GWHighlightFrameRect(NSRect aRect)
     maxX = visibleWidth;
   {
     CGFloat fh = maxY + Y_MARGIN;
-    /* The scrollable area must always fill the available window space
-     * (at least as tall as the clip view / parent), leaving no gap
-     * between the content and whatever is above the scroll view. */
-    if (fh < svr.size.height)
-      fh = svr.size.height;
+    /* Inside a scroll view: use the natural content height so the
+     * scrollbar knob is proportional to the actual icon positions.
+     * Content that fits entirely triggers no scrollbar (autohides);
+     * overflow makes the knob smaller.  On the desktop the view
+     * must always fill the parent. */
+    if ([[self superview] isKindOfClass: [NSClipView class]] == NO)
+      {
+        if (fh < svr.size.height)
+          fh = svr.size.height;
+      }
     SETRECT (self, 0, 0, maxX, fh);
   }
 
