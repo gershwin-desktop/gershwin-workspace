@@ -1534,7 +1534,13 @@ static NSImage *branchImage;
 
   /* Apply the initial offset from the drag-start event immediately.
    * The first drag event is consumed by mouseDown's while-loop before
-   * we're called, so we seed the movement here. */
+   * we're called, so we seed the movement here.
+   *
+   * Performance: invalidate ONLY the moved icons' old and new positions
+   * on the container rather than calling [win display] — that forces
+   * drawRect: on EVERY icon in the window regardless of whether it
+   * moved.  Using setNeedsDisplayInRect: + displayIfNeeded redraws
+   * only the affected areas (O(movedIcons) instead of O(totalIcons)). */
   {
     CGFloat dx = initialOffset.width;
     CGFloat dy = initialOffset.height;
@@ -1547,9 +1553,11 @@ static NSImage *branchImage;
             NSRect orig = [[origFrames objectAtIndex: i] rectValue];
             NSRect drg = NSMakeRect(orig.origin.x + dx, orig.origin.y + dy,
                                      orig.size.width, orig.size.height);
+            [container setNeedsDisplayInRect: orig];
             [ic setFrame: drg];
+            [container setNeedsDisplayInRect: [ic frame]];
           }
-        [win display];
+        [container displayIfNeeded];
         didMove = YES;
       }
   }
@@ -1589,9 +1597,11 @@ static NSImage *branchImage;
               NSRect orig = [[origFrames objectAtIndex: i] rectValue];
               NSRect drg = NSMakeRect(orig.origin.x + dx, orig.origin.y + dy,
                                        orig.size.width, orig.size.height);
+              [container setNeedsDisplayInRect: orig];
               [ic setFrame: drg];
+              [container setNeedsDisplayInRect: [ic frame]];
             }
-          [win display];
+          [container displayIfNeeded];
           didMove = YES;
         }
     }
