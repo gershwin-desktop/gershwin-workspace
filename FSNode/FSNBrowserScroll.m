@@ -42,7 +42,8 @@
   if (self) {
     [self setBorderType: NSNoBorder];
     [self setHasHorizontalScroller: NO];
-    [self setHasVerticalScroller: YES]; 
+    [self setHasVerticalScroller: YES];
+    [self setAutohidesScrollers: NO];
     column = col;
     if (dnd) {
       [self registerForDraggedTypes: [NSArray arrayWithObjects: 

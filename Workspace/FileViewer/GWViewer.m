@@ -307,11 +307,14 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
        
       [pathsScroll setDelegate: pathsView];
        
-    } else if (viewType == GWViewTypeBrowser ) {    
+    } else if (viewType == GWViewTypeBrowser ) {
+      [nviewScroll setAutohidesScrollers: NO];
+      [nviewScroll setHasHorizontalScroller: YES];
+      [nviewScroll setHasVerticalScroller: YES];
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
 		                            visibleColumns: visibleCols
-                                      scroller: [pathsScroll horizontalScroller]
+                                      scroller: [nviewScroll horizontalScroller]
                                     cellsIcons: NO
                                  editableCells: NO   
                                selectionColumn: YES];
@@ -454,7 +457,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   r = NSMakeRect(xmargin, pathscrh, w - (xmargin * 2), h - pathscrh - ymargin);
   nviewScroll = [[GWViewerScrollView alloc] initWithFrame: r inViewer: self];
   [nviewScroll setBorderType: NSBezelBorder];
-  hasScroller = ((viewType ==GWViewTypeIcon) || (viewType ==GWViewTypeList));
+  hasScroller = (viewType == GWViewTypeList);
   [nviewScroll setHasHorizontalScroller: NO];
   [nviewScroll setHasVerticalScroller: hasScroller];
   resizeMask = NSViewNotSizable | NSViewWidthSizable | NSViewHeightSizable;
@@ -1510,6 +1513,8 @@ constrainMinCoordinate:(CGFloat)proposedMin
  
       RETAIN (selection);
     
+      if ([nodeView respondsToSelector: @selector(releaseScroller)])
+        [nodeView releaseScroller];
       [nviewScroll setDocumentView: nil];	
     
       if (tag == GWViewTypeBrowser)
@@ -1517,13 +1522,14 @@ constrainMinCoordinate:(CGFloat)proposedMin
           [pathsScroll setDelegate: nil];
           [pathsView setOwnsScroller: NO];
 
-          [nviewScroll setHasVerticalScroller: NO];
-          [nviewScroll setHasHorizontalScroller: NO];
+          [nviewScroll setAutohidesScrollers: NO];
+          [nviewScroll setHasHorizontalScroller: YES];
+          [nviewScroll setHasVerticalScroller: YES];
 
           nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                                       inViewer: self
                                                 visibleColumns: visibleCols
-                                                      scroller: [pathsScroll horizontalScroller]
+                                                      scroller: [nviewScroll horizontalScroller]
                                                     cellsIcons: NO
                                                  editableCells: NO
                                                selectionColumn: YES];

@@ -286,14 +286,18 @@
     [self createSubviews];
 
     if ([viewType isEqual: @"Icon"]) {
+      [scroll setHasVerticalScroller: YES];
       nodeView = [[GWViewerIconsView alloc] initForViewer: self];
 
-    } else if ([viewType isEqual: @"List"]) { 
+    } else if ([viewType isEqual: @"List"]) {
       NSRect r = [[scroll contentView] bounds];
       
       nodeView = [[GWViewerListView alloc] initWithFrame: r forViewer: self];
 
     } else if ([viewType isEqual: @"Browser"]) {
+      [scroll setAutohidesScrollers: NO];
+      [scroll setHasHorizontalScroller: YES];
+      [scroll setHasVerticalScroller: YES];
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
 		                            visibleColumns: visibleCols
@@ -458,7 +462,7 @@
   r = NSMakeRect(margin, 0, w - (margin * 2), h - boxh);
   scroll = [[GWViewerScrollView alloc] initWithFrame: r inViewer: self];
   [scroll setBorderType: NSBezelBorder];
-  hasScroller = ([viewType isEqual: @"Icon"] || [viewType isEqual: @"List"]);
+  hasScroller = [viewType isEqual: @"List"];
   [scroll setHasHorizontalScroller: YES];
   [scroll setHasVerticalScroller: hasScroller];
   [scroll setAutohidesScrollers: YES];  // Automatically hide scrollbars when not needed
@@ -1537,9 +1541,14 @@
 
     RETAIN (opennodes);
     
+    if ([nodeView respondsToSelector: @selector(releaseScroller)])
+      [nodeView releaseScroller];
     [scroll setDocumentView: nil];	
     
     if ([requestedType isEqualToString:@"Browser"]) {
+      [scroll setAutohidesScrollers: NO];
+      [scroll setHasHorizontalScroller: YES];
+      [scroll setHasVerticalScroller: YES];
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
 		                            visibleColumns: visibleCols
@@ -1548,7 +1557,6 @@
                                  editableCells: YES   
                                selectionColumn: NO]; 
       
-      [scroll setHasVerticalScroller: NO];
       ASSIGN (viewType, @"Browser");
       
     } else if ([requestedType isEqualToString:@"Icon"]) {

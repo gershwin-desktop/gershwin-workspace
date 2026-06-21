@@ -50,8 +50,13 @@
 - (void)dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
+  if (scroller)
+    {
+      [scroller setTarget: nil];
+      [scroller setAction: NULL];
+    }
   RELEASE (baseNode);
-  RELEASE (extInfoType);  
+  RELEASE (extInfoType);
   RELEASE (lastSelection);
   RELEASE (columns);
   RELEASE (nameEditor);
@@ -60,6 +65,18 @@
   RELEASE (backColor);
 
   [super dealloc];
+}
+
+/* Before releasing the browser, clear the scroller's target/action
+ * so the scroll view does not hold a dangling pointer when it next
+ * tiles or the scroller is otherwise accessed. */
+- (void)releaseScroller
+{
+  if (scroller)
+    {
+      [scroller setTarget: nil];
+      [scroller setAction: NULL];
+    }
 }
 
 - (id)initWithBaseNode:(FSNode *)bsnode

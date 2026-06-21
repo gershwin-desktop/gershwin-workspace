@@ -266,11 +266,14 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (void)tile
 {
   CREATE_AUTORELEASE_POOL (pool);
-  NSRect svr = [[self superview] frame];
   NSUInteger count = [icons count];
   NSRect *irects = NULL;
   NSArray *selection;
   NSUInteger i;
+  /* Capture the superview frame for views that need to fill their
+   * parent (e.g., desktop where there is no NSScrollView).  When
+   * inside a clip view the content owns its own height. */
+  NSRect svr = [[self superview] frame];
 
 
   /* Reference height for iloc→GNUstep conversion.  Use content view
@@ -292,9 +295,9 @@ static void GWHighlightFrameRect(NSRect aRect)
   CGFloat visibleWidth = [self windowContentWidthForLayout];
 
   float gridX = X_MARGIN;
-  float gridY = gridSize.height + Y_MARGIN;
+  float gridY = Y_MARGIN;
   float maxX = visibleWidth;
-  float maxY = svr.size.height;
+  float maxY = 0;
 
   irects = NSZoneMalloc (NSDefaultMallocZone(), sizeof(NSRect) * count);
 
@@ -380,12 +383,23 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
 
   maxX += X_MARGIN;
-  /* Keep the view at or below the visible width so no horizontal
-   * scrollbar appears.  The rightmost margin is already provided by
-   * the X_MARGIN offset on every row's first icon. */
-  if (maxX > visibleWidth)
+  /* Snap trivial overflow past visibleWidth only when the extra width
+   * is strictly from the X_MARGIN added above — this avoids a horizontal
+   * scrollbar for a handful of pixels of grid rounding.  For content
+   * placed well outside the visible area (manual positions from DS_Store
+   * or drag), keep the natural width so the scrollbar allows reaching
+   * those off-screen icons. */
+  if (maxX - X_MARGIN <= visibleWidth)
     maxX = visibleWidth;
-  SETRECT (self, 0, 0, maxX, maxY + Y_MARGIN);
+  {
+    CGFloat fh = maxY + Y_MARGIN;
+    /* The scrollable area must always fill the available window space
+     * (at least as tall as the clip view / parent), leaving no gap
+     * between the content and whatever is above the scroll view. */
+    if (fh < svr.size.height)
+      fh = svr.size.height;
+    SETRECT (self, 0, 0, maxX, fh);
+  }
 
   /* Tile each icon's internal layout (highlight, label, icon image) */
   for (i = 0; i < count; i++)
@@ -404,9 +418,9 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
   else
     {
-      /* No selection — scroll to top-left so the cleaned-up grid
-       * is visible regardless of the prior scroll position. */
-      [self scrollPoint: NSMakePoint(0, [self bounds].size.height)];
+      /* No selection — scroll to the beginning so the first row
+       * of icons is visible regardless of the prior scroll pos. */
+      [self scrollPoint: NSMakePoint(0, 0)];
     }
 
   if ([[self subviews] containsObject: nameEditor])
