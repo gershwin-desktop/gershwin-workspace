@@ -1581,8 +1581,35 @@ static NSImage *branchImage;
           NSPoint localInContainer = [container convertPoint: curLoc fromView: nil];
 
           /* If the drag leaves the container, convert to an external
-           * file drag. Restore original positions first. */
-          if (!NSPointInRect(localInContainer, containerBounds))
+           * file drag. Restore original positions first.
+           * Also convert if the cursor is over a different window,
+           * e.g. dragging from the Desktop (which spans the full screen
+           * at NSDesktopWindowLevel -1000) to a Viewer window at
+           * NSNormalWindowLevel that sits on top of the Desktop.
+           * We cannot use +windowNumberAtPoint: — GNUstep implements
+           * it as a stub that always returns 0. */
+          BOOL shouldExternalize = !NSPointInRect(localInContainer, containerBounds);
+
+          if (!shouldExternalize)
+            {
+              NSPoint mouseScreen = [NSEvent mouseLocation];
+              NSArray *appWindows = [NSApp windows];
+
+              for (NSWindow *w in appWindows)
+                {
+                  if (w == win)
+                    continue;
+                  if ([[w className] hasPrefix: @"GSCache"])
+                    continue;
+                  if (NSPointInRect(mouseScreen, [w frame]))
+                    {
+                      shouldExternalize = YES;
+                      break;
+                    }
+                }
+            }
+
+          if (shouldExternalize)
             {
               NSUInteger i;
               for (i = 0; i < [allIcons count]; i++)
