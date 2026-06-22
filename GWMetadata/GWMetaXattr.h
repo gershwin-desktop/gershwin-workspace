@@ -2,7 +2,7 @@
  *
  * Portable wrapper for POSIX extended attributes.
  * Provides a uniform interface across Linux (sys/xattr.h) and
- * FreeBSD (sys/extattr.h) for storing Mac OS metadata attributes
+ * FreeBSD/OpenBSD (sys/extattr.h) for storing Mac OS metadata attributes
  * in the "user" namespace (user.com.apple.*).
  *
  * SPDX-License-Identifier: GPL-2.0-or-later OR BSD-2-Clause
