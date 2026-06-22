@@ -140,6 +140,10 @@
 {
 }
 
+- (void)completionFieldDidCancel:(id)afield
+{
+}
+
 - (void)windowWillClose:(NSNotification *)aNotification
 {
 }

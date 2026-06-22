@@ -1,5 +1,5 @@
 /* Dialogs.m
- *  
+ *
  * Copyright (C) 2003-2025 Free Software Foundation, Inc.
  *
  * Author: Enrico Sersale <enrico@imago.ro>
@@ -11,12 +11,12 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 31 Milk Street #960789 Boston, MA 02196 USA.
@@ -26,7 +26,7 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
 
-#import "GWFunctions.h"
+#import "AppearanceMetrics.h"
 #import "Dialogs.h"
 
 
@@ -46,15 +46,9 @@
 
 - (void)drawRect:(NSRect)rect
 {
-  if (useSwitch) {
-	  STROKE_LINE (darkGrayColor, 0, 121, 240, 121);
-	  STROKE_LINE (whiteColor, 0, 120, 240, 120);
-  } else {
-	  STROKE_LINE (darkGrayColor, 0, 91, 240, 91);
-	  STROKE_LINE (whiteColor, 0, 90, 240, 90);  
-  }
-	STROKE_LINE (darkGrayColor, 0, 45, 240, 45);
-	STROKE_LINE (whiteColor, 0, 44, 240, 44);
+  /* No separator lines — AppearanceMetrics specifies:
+   * "Must not use horizontal lines in dialogs or alert panels, use spacing only."
+   */
 }
 
 @end
@@ -63,79 +57,123 @@
 
 - (void)dealloc
 {
+  [validator release];
   [super dealloc];
 }
 
-- (id)initWithTitle:(NSString *)title 
+- (id)initWithTitle:(NSString *)title
            editText:(NSString *)eText
         switchTitle:(NSString *)swTitle
 {
-  NSRect r = swTitle ? NSMakeRect(0, 0, 240, 160) : NSMakeRect(0, 0, 240, 120);
-  
+  BOOL hasSwitch = (swTitle != nil);
+  CGFloat cw = METRICS_WIN_MIN_WIDTH;
+  CGFloat ch = hasSwitch ? 155 : 120;
+  NSRect r = NSMakeRect(0, 0, cw, ch);
+
   self = [super initWithContentRect: r
-                          styleMask: NSTitledWindowMask 
-                            backing: NSBackingStoreRetained 
+                          styleMask: NSTitledWindowMask
+                            backing: NSBackingStoreRetained
                               defer: NO];
-  if(self)
+  if (self)
     {
-      NSFont *font;
+      NSView *cv;
+      CGFloat y;
 
-      useSwitch = swTitle ? YES : NO;
+      useSwitch = hasSwitch;
 
-      dialogView = [[GWDialogView alloc] initWithFrame: [self frame] 
-                                             useSwitch: useSwitch];
-      AUTORELEASE (dialogView);
+      /* Plain content view — no separator lines per AppearanceMetrics */
+      cv = [[NSView alloc] initWithFrame: [self frame]];
+      [self setContentView: cv];
+      RELEASE(cv);
+      [self setTitle: @""];
 
-      font = [NSFont systemFontOfSize: 18];
+      /* Center the window, 36 px from the top of the screen */
+      {
+        NSRect sf = [[NSScreen mainScreen] frame];
+        NSRect wf = [self frame];
+        wf.origin.x = (sf.size.width - wf.size.width) / 2;
+        wf.origin.y = sf.size.height - wf.size.height - 36;
+        [self setFrame: wf display: NO];
+      }
 
-      r = useSwitch ? NSMakeRect(10, 125, 200, 20) : NSMakeRect(10, 95, 200, 20);
-      titleField = [[NSTextField alloc] initWithFrame: r];
+      y = ch - METRICS_CONTENT_TOP_MARGIN;
+
+      /* Title label: System Regular 13 pt */
+      titleField = [[NSTextField alloc] initWithFrame:
+                     NSMakeRect(METRICS_CONTENT_SIDE_MARGIN, y - 16,
+                                cw - 2 * METRICS_CONTENT_SIDE_MARGIN, 16)];
       [titleField setBackgroundColor: [NSColor windowBackgroundColor]];
       [titleField setBezeled: NO];
       [titleField setEditable: NO];
       [titleField setSelectable: NO];
-      [titleField setFont: font];
+      [titleField setFont: METRICS_FONT_SYSTEM_REGULAR_13];
       [titleField setStringValue: title];
-      [dialogView addSubview: titleField];
-      RELEASE (titleField);
+      [cv addSubview: titleField];
+      RELEASE(titleField);
 
-      r = useSwitch ? NSMakeRect(30, 86, 180, 22) : NSMakeRect(30, 56, 180, 22);
-      editField = [[NSTextField alloc] initWithFrame: r];
-      [editField setStringValue: eText];
-      [dialogView addSubview: editField];
-      RELEASE (editField);
+      y -= 16;
 
-      if (useSwitch)
+      if (hasSwitch)
         {
-          switchButt = [[NSButton alloc] initWithFrame: NSMakeRect(30, 62, 180, 16)];
+          y -= METRICS_SPACE_8;
+
+          switchButt = [[NSButton alloc] initWithFrame:
+                         NSMakeRect(METRICS_CONTENT_SIDE_MARGIN,
+                                    y - METRICS_RADIO_BUTTON_SIZE,
+                                    cw - 2 * METRICS_CONTENT_SIDE_MARGIN,
+                                    METRICS_RADIO_BUTTON_SIZE)];
           [switchButt setButtonType: NSSwitchButton];
           [switchButt setTitle: swTitle];
-          [dialogView addSubview: switchButt];
-          RELEASE (switchButt);
+          [cv addSubview: switchButt];
+          RELEASE(switchButt);
+
+          y -= METRICS_RADIO_BUTTON_SIZE;
         }
 
-      cancelButt = [[NSButton alloc] initWithFrame: NSMakeRect(100, 10, 60, 25)];
-      [cancelButt setButtonType: NSMomentaryLight];
-      [cancelButt setTitle: NSLocalizedString(@"Cancel", @"")];
-      [cancelButt setTarget: self];
-      [cancelButt setAction: @selector(buttonAction:)];
-      [dialogView addSubview: cancelButt];
-      RELEASE (cancelButt);
+      y -= METRICS_SPACE_16;
 
-      okButt = [[NSButton alloc] initWithFrame: NSMakeRect(170, 10, 60, 25)];
-      [okButt setButtonType: NSMomentaryLight];
-      [okButt setTitle: NSLocalizedString(@"OK", @"")];
-      [okButt setTarget: self];
-      [okButt setAction: @selector(buttonAction:)];
-      [dialogView addSubview: okButt];
-      RELEASE (okButt);
+      /* Edit field: 22 px tall */
+      editField = [[NSTextField alloc] initWithFrame:
+                    NSMakeRect(METRICS_CONTENT_SIDE_MARGIN,
+                               y - METRICS_TEXT_INPUT_FIELD_HEIGHT,
+                               cw - 2 * METRICS_CONTENT_SIDE_MARGIN,
+                               METRICS_TEXT_INPUT_FIELD_HEIGHT)];
+      [editField setStringValue: eText];
+      [cv addSubview: editField];
+      RELEASE(editField);
 
-      [self setContentView: dialogView];
-      [self setTitle: @""];
+      /* Buttons: 69×20, right-aligned, 10 px interspace */
+      {
+        CGFloat bw = METRICS_BUTTON_MIN_WIDTH;
+        CGFloat bh = METRICS_BUTTON_HEIGHT;
+        CGFloat okX = cw - METRICS_CONTENT_SIDE_MARGIN - bw;
+        CGFloat cancelX = okX - METRICS_BUTTON_HORIZ_INTERSPACE - bw;
+        CGFloat by = METRICS_CONTENT_BOTTOM_MARGIN;
+
+        cancelButt = [[NSButton alloc] initWithFrame:
+                       NSMakeRect(cancelX, by, bw, bh)];
+        [cancelButt setButtonType: NSMomentaryLight];
+        [cancelButt setTitle: NSLocalizedString(@"Cancel", @"")];
+        [cancelButt setTarget: self];
+        [cancelButt setAction: @selector(buttonAction:)];
+        [cancelButt setKeyEquivalent: @"\x1B"];
+        [cv addSubview: cancelButt];
+        RELEASE(cancelButt);
+
+        okButt = [[NSButton alloc] initWithFrame:
+                  NSMakeRect(okX, by, bw, bh)];
+        [okButt setButtonType: NSMomentaryLight];
+        [okButt setTitle: NSLocalizedString(@"OK", @"")];
+        [okButt setTarget: self];
+        [okButt setAction: @selector(buttonAction:)];
+        [okButt setKeyEquivalent: @"\r"];
+        [cv addSubview: okButt];
+        RELEASE(okButt);
+      }
 
       [self setInitialFirstResponder: editField];
     }
-  
+
   return self;
 }
 
@@ -159,15 +197,53 @@
   return NSOffState;
 }
 
+- (void)setValidator:(GWDialogValidator)aValidator
+{
+  if (validator != aValidator)
+    {
+      [validator release];
+      validator = [aValidator copy];
+    }
+}
+
+- (void)shakeWindow
+{
+  NSRect originalFrame = [self frame];
+  CGFloat shakeDistance = 10.0;
+  int shakeCount = 2;
+
+  for (int i = 0; i < shakeCount; i++)
+    {
+      NSRect leftFrame = originalFrame;
+      leftFrame.origin.x -= shakeDistance;
+      [self setFrameOrigin: leftFrame.origin];
+      [[NSRunLoop currentRunLoop] runUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.05]];
+
+      NSRect rightFrame = originalFrame;
+      rightFrame.origin.x += shakeDistance;
+      [self setFrameOrigin: rightFrame.origin];
+      [[NSRunLoop currentRunLoop] runUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.05]];
+
+      shakeDistance *= 0.7;
+    }
+
+  [self setFrameOrigin: originalFrame.origin];
+}
+
 - (void)buttonAction:(id)sender
 {
   if (sender == okButt)
     {
+      if (validator && !validator([editField stringValue]))
+        {
+          [self shakeWindow];
+          return;
+        }
       result = NSAlertDefaultReturn;
     }
   else
     {
-    result = NSAlertAlternateReturn;
+      result = NSAlertAlternateReturn;
     }
 
   [[NSApplication sharedApplication] stopModal];

@@ -3399,28 +3399,24 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)goToFolder:(id)sender
 {
-  GWDialog *dialog = [[GWDialog alloc] initWithTitle: _(@"Go to Folder:") 
+  GWDialog *dialog = [[GWDialog alloc] initWithTitle: _(@"Go to Folder:")
                                              editText: NSHomeDirectory()
                                           switchTitle: nil];
-  NSModalResponse response = [dialog runModal];
-  
-  if (response == NSAlertDefaultReturn) {
+  [dialog setValidator: ^BOOL(NSString *path) {
+    if ([path length] == 0) return NO;
+    BOOL isDir = NO;
+    return ([fm fileExistsAtPath: [path stringByExpandingTildeInPath]
+                     isDirectory: &isDir] && isDir);
+  }];
+
+  if ([dialog runModal] == NSAlertDefaultReturn) {
     NSString *path = [dialog getEditFieldText];
-    if (path && [path length] > 0) {
-      path = [path stringByExpandingTildeInPath];
-      BOOL isDir = NO;
-      if ([fm fileExistsAtPath: path isDirectory: &isDir]) {
-        if (isDir) {
-          [self openSelectedPaths: [NSArray arrayWithObject: path] newViewer: YES];
-        } else {
-          NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Path is not a folder"), _(@"OK"), nil, nil);
-        }
-      } else {
-        NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Folder does not exist"), _(@"OK"), nil, nil);
-      }
+    if ([path length] > 0) {
+      [self openSelectedPaths: [NSArray arrayWithObject: [path stringByExpandingTildeInPath]]
+                    newViewer: YES];
     }
   }
-  
+
   RELEASE (dialog);
 }
 
@@ -3727,6 +3723,16 @@ NSString *_pendingSystemActionTitle = nil;
   else if (kwin && [dtopManager hasWindow: kwin])
     {
       [[dtopManager desktopView] selectAll];
+    }
+  else if (kwin)
+    {
+      // Fallback for dialogs with text fields (e.g., Run, Go to Folder).
+      // NSTextView and the field editor both respond to selectAll:.
+      NSResponder *fr = [kwin firstResponder];
+      if ([fr respondsToSelector: @selector(selectAll:)])
+        {
+          [fr selectAll: sender];
+        }
     }
 }
 
