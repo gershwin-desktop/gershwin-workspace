@@ -91,6 +91,11 @@
   // DS_Store free positioning support for Mac interoperability
   NSMutableDictionary *customIconPositions; // filename -> NSValue(NSPoint) icon center in GNUstep coords
   CGFloat dsStoreIconHeight;                // Icon height for coordinate conversion
+
+  // Non-retained reference to the enclosing NSClipView being observed
+  // for frame-change notifications.  Used to trigger tile on resize
+  // even when NSClipView does not propagate resizeWithOldSuperviewSize.
+  NSView *_observedClipView;
 }
 
 /* Placement direction access (used by Clean Up virtual grid) */

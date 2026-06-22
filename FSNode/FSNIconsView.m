@@ -94,6 +94,13 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)dealloc
 {
+  if (_observedClipView)
+    {
+      [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                      name: NSViewFrameDidChangeNotification
+                                                    object: _observedClipView];
+      _observedClipView = nil;
+    }
   RELEASE (node);
   RELEASE (extInfoType);
   RELEASE (icons);
@@ -1626,10 +1633,43 @@ static void GWHighlightFrameRect(NSRect aRect)
 {
   [super viewDidMoveToSuperview];
 
+  /* Tear down any previous clip-view observer before setting up a new one.
+   * This handles the case where the view is moved from one clip view
+   * to another, or is removed from the view hierarchy entirely. */
+  if (_observedClipView)
+    {
+      [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                      name: NSViewFrameDidChangeNotification
+                                                    object: _observedClipView];
+      _observedClipView = nil;
+    }
+
+  /* Register for NSViewFrameDidChangeNotification on the enclosing
+   * NSClipView so that tile is called reliably when the window is
+   * resized, even if NSClipView does not propagate the standard
+   * resizeWithOldSuperviewSize: chain to its document view. */
+  if ([self superview]
+      && [[self superview] isKindOfClass: [NSClipView class]])
+    {
+      _observedClipView = [self superview];
+      [[NSNotificationCenter defaultCenter] addObserver: self
+                                               selector: @selector(clipViewFrameDidChange:)
+                                                   name: NSViewFrameDidChangeNotification
+                                                 object: _observedClipView];
+    }
+
   if ([self superview])
     {
       [[self window] setBackgroundColor: backColor];
     }
+}
+
+/* Called when the enclosing NSClipView's frame changes (window resize,
+ * split-view drag, etc.).  Re-tiles the icon layout so scrollbars
+ * and content positioning are correct for the new visible area. */
+- (void)clipViewFrameDidChange:(NSNotification *)notif
+{
+  [self tile];
 }
 
 - (void)drawRect:(NSRect)rect
