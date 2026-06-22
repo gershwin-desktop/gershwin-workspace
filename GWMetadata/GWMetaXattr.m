@@ -3,8 +3,11 @@
  * Portable wrapper for POSIX extended attributes.
  *
  * Linux:   uses <sys/xattr.h> (getxattr, setxattr, listxattr, removexattr)
- * FreeBSD / OpenBSD: uses <sys/extattr.h> (extattr_get_file, extattr_set_file,
- *          extattr_list_file, extattr_delete_file) with EXTATTR_NAMESPACE_USER.
+ * FreeBSD:       uses <sys/extattr.h> (extattr_get_file, extattr_set_file,
+ *                extattr_list_file, extattr_delete_file) with EXTATTR_NAMESPACE_USER.
+ * OpenBSD:       does not support extended attributes — all operations
+ *                return ENOTSUP.  Metadata falls back to .DS_Store and
+ *                AppleDouble sidecar files.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later OR BSD-2-Clause
  */
@@ -57,7 +60,7 @@ _gs_remove(const char *path, const char *name)
   return removexattr(path, name);
 }
 
-#elif defined(__FreeBSD__) || defined(__OpenBSD__)
+#elif defined(__FreeBSD__)
 # include <sys/extattr.h>
 
 /*
@@ -206,6 +209,42 @@ _gs_remove(const char *path, const char *name)
 #define STRIP_USER_PREFIX(n) \
   ((strncmp((n), "user.", 5) == 0) ? (n) + 5 : (n))
 
+#elif defined(__OpenBSD__)
+/*
+ * OpenBSD does not support extended attributes.
+ * All operations return ENOTSUP (operation not supported).
+ * Metadata is handled via .DS_Store and AppleDouble sidecar files instead.
+ */
+
+static int
+_gs_set(const char *path, const char *name, const void *value,
+        size_t size, int flags)
+{
+  errno = ENOTSUP;
+  return -1;
+}
+
+static ssize_t
+_gs_get(const char *path, const char *name, void *value, size_t size)
+{
+  errno = ENOTSUP;
+  return -1;
+}
+
+static ssize_t
+_gs_list(const char *path, char *list, size_t size)
+{
+  errno = ENOTSUP;
+  return -1;
+}
+
+static int
+_gs_remove(const char *path, const char *name)
+{
+  errno = ENOTSUP;
+  return -1;
+}
+
 #else
 # error "Unsupported platform: only Linux, FreeBSD, and OpenBSD are supported."
 #endif /* platform */
@@ -229,7 +268,7 @@ gs_setxattr(const char *path, const char *name,
       return -1;
     }
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#if defined(__FreeBSD__)
   const char *bare_name = STRIP_USER_PREFIX(name);
   return _gs_set(path, bare_name, value, size, flags);
 #else
@@ -246,7 +285,7 @@ gs_getxattr(const char *path, const char *name, void *value, size_t size)
       return -1;
     }
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#if defined(__FreeBSD__)
   const char *bare_name = STRIP_USER_PREFIX(name);
   return _gs_get(path, bare_name, value, size);
 #else
@@ -275,7 +314,7 @@ gs_removexattr(const char *path, const char *name)
       return -1;
     }
 
-#if defined(__FreeBSD__) || defined(__OpenBSD__)
+#if defined(__FreeBSD__)
   const char *bare_name = STRIP_USER_PREFIX(name);
   return _gs_remove(path, bare_name);
 #else
