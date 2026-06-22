@@ -559,15 +559,21 @@ static void GWHighlightFrameRect(NSRect aRect)
     maxX = visibleWidth;
   {
     CGFloat fh = maxY + Y_MARGIN;
-    /* Inside a scroll view: use the natural content height so the
-     * scrollbar knob is proportional to the actual icon positions.
-     * Content that fits entirely triggers no scrollbar (autohides);
-     * overflow makes the knob smaller.  On the desktop the view
-     * must always fill the parent. */
+    /* Inside a scroll view: ensure the document view is at least as
+     * tall as the visible content area, so icons start at the top
+     * of the visible area (no gap) and scrollbars behave naturally
+     * (hidden when content fits, proportional when overflow).
+     * On the desktop the view must always fill the parent. */
     if ([[self superview] isKindOfClass: [NSClipView class]] == NO)
       {
         if (fh < svr.size.height)
           fh = svr.size.height;
+      }
+    else
+      {
+        CGFloat visibleHeight = [self visibleContentHeightForLayout];
+        if (fh < visibleHeight)
+          fh = visibleHeight;
       }
     SETRECT (self, 0, 0, maxX, fh);
   }
@@ -1058,12 +1064,51 @@ static void GWHighlightFrameRect(NSRect aRect)
   return [self bounds].size.width;
 }
 
+/* Returns the visible content height for determining icon layout.
+ * Walks up to the enclosing NSScrollView (if any) and uses its
+ * contentSize height, which always reflects the current window size
+ * after autoresize.  Falls back to the window content view height,
+ * then superview frame, then own bounds. */
+- (CGFloat)visibleContentHeightForLayout
+{
+  NSView *v = [self superview];
+  while (v)
+    {
+      if ([v isKindOfClass: [NSScrollView class]])
+        {
+          NSSize cs = [(NSScrollView *)v contentSize];
+          if (cs.height > 0) return cs.height;
+          break;
+        }
+      v = [v superview];
+    }
+  /* Fallback: window content view. */
+  NSWindow *w = [self window];
+  if (w) {
+    NSView *cv = [w contentView];
+    if (cv) {
+      CGFloat ch = [cv bounds].size.height;
+      if (ch > 0) return ch;
+    }
+  }
+  /* Last resort: superview frame, then own bounds. */
+  v = [self superview];
+  if (v) {
+    CGFloat h = [v frame].size.height;
+    if (h > 0) return h;
+  }
+  return [self bounds].size.height;
+}
+
 - (NSPoint)gridOriginForLayout
 {
   /* Default: top-left origin with standard margins.
+   * Uses the visible content height from the enclosing scroll view
+   * so icons are positioned relative to the visible content area,
+   * not the document view's own (potentially smaller) bounds.
    * Subclasses (GWDesktopView) override for Dock/menu adjustments. */
-  NSRect bounds = [self bounds];
-  return NSMakePoint((CGFloat)X_MARGIN, bounds.size.height - (CGFloat)Y_MARGIN);
+  CGFloat visibleHeight = [self visibleContentHeightForLayout];
+  return NSMakePoint((CGFloat)X_MARGIN, visibleHeight - (CGFloat)Y_MARGIN);
 }
 
 - (void)setPlacementDirection:(FSNPlacementDirection)direction

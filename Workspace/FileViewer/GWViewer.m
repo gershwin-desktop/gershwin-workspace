@@ -457,7 +457,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   r = NSMakeRect(xmargin, pathscrh, w - (xmargin * 2), h - pathscrh - ymargin);
   nviewScroll = [[GWViewerScrollView alloc] initWithFrame: r inViewer: self];
   [nviewScroll setBorderType: NSBezelBorder];
-  hasScroller = (viewType == GWViewTypeList);
+  hasScroller = (viewType != GWViewTypeBrowser);
   [nviewScroll setHasHorizontalScroller: NO];
   [nviewScroll setHasVerticalScroller: hasScroller];
   resizeMask = NSViewNotSizable | NSViewWidthSizable | NSViewHeightSizable;
