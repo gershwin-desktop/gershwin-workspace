@@ -74,6 +74,11 @@
   NSColor *disabledTextColor;
   BOOL transparentSelection;
 
+  // Cached grid cell dimensions (computed once, reused across tile calls + Clean Up)
+  NSSize _cachedCellSize;
+  CGFloat _cachedGapX;
+  BOOL _gridCached;
+
   NSImage *backgroundImage;  // Background image for spatial views
 
   FSNodeRep *fsnodeRep;

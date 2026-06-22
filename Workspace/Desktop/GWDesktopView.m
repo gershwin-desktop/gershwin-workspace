@@ -44,7 +44,7 @@
 #define DEF_TEXT_SIZE 12
 #define DEF_ICN_POS NSImageAbove
 
-#define X_MARGIN (20)
+#define X_MARGIN (26)
 #define Y_MARGIN (12)
 #define TOP_MARGIN (-8)
 #define BOTTOM_MARGIN (8)
@@ -343,7 +343,7 @@
     }
   }
 
-  rvPaths = [[volumeSet allObjects] arrayByAddingObject: @"/"];
+  rvPaths = [[NSArray arrayWithObject: @"/"] arrayByAddingObjectsFromArray: [volumeSet allObjects]];
   newVolumes = [NSMutableArray arrayWithCapacity:1];
   volumesToRemove = [NSMutableArray arrayWithCapacity:1];
 
@@ -1408,6 +1408,8 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
 
   ASSIGN (node, anode);
+
+  _gridCached = NO; /* icon properties may have changed */
 
   for (i = 0; i < [subNodes count]; i++)
     {

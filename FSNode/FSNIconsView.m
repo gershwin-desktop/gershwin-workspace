@@ -42,7 +42,16 @@
 #define DEF_TEXT_SIZE 12
 #define DEF_ICN_POS NSImageAbove
 
-#define X_MARGIN (20)
+/* Left margin from view edge.  This is distinct from COLUMN_GAP_X below
+ * because DS_Store positions use a ~26px left margin but 32px column gap.
+ * Using the same value for both would cause AUTO-mode and DS_Store icons
+ * in the rightmost column to be at different x positions (the 6px offset
+ * bug).  Keep them separate and never conflate them. */
+#define X_MARGIN (26)
+/* Horizontal gap BETWEEN grid columns (not the left margin).
+ * Matches the 128px column spacing (96px icon + 32px gap) used by DS_Store.
+ * Must be separate from X_MARGIN — see above. */
+#define COLUMN_GAP_X (32)
 #define Y_MARGIN (12)
 
 #define EDIT_MARGIN (4)
@@ -291,6 +300,23 @@ static void GWHighlightFrameRect(NSRect aRect)
   /* ---- Unified free positioning path (pixel-based, DS_Store Iloc) ---- */
   [self calculateGridSize];
 
+  /* Cache grid cell dimensions on first call so they stay consistent
+   * across tile calls and with cleanupIconPositions below.
+   * IMPORTANT: calculateGridSize can return different gridSize.width
+   * on different calls (depends on label width), which would cause the
+   * AUTO enumerator's grid to shift mid-layout and the pre-computation
+   * of occupied cells to use wrong column mappings — resulting in
+   * overlapping icons.  Caching once on the first tile and reusing the
+   * same dimensions everywhere avoids this.  Invalidate in setters
+   * that change icon properties (icon size, label size, etc.) so the
+   * new size takes effect on the NEXT tile call consistently. */
+  if (!_gridCached)
+    {
+      _cachedCellSize = gridSize;
+      _cachedGapX = (CGFloat)COLUMN_GAP_X;
+      _gridCached = YES;
+    }
+
   if (!customIconPositions)
     customIconPositions = [[NSMutableDictionary alloc] init];
 
@@ -298,10 +324,22 @@ static void GWHighlightFrameRect(NSRect aRect)
    * rather than the superview frame which can lag. */
   CGFloat visibleWidth = [self windowContentWidthForLayout];
 
-  float gridX = X_MARGIN;
-  float gridY = Y_MARGIN;
   float maxX = visibleWidth;
   float maxY = 0;
+
+  /* Direction-aware grid enumerator for AUTO-mode (unplaced) icons.
+   * Lazily initialized when the first auto-placed icon is encountered.
+   * Uses gridOriginForLayout (desktop subclass accounts for Dock/menu)
+   * and respects _placementDirection so new icons appear at the correct
+   * end of the grid (e.g., top-right for desktop's TopToBottomRightToLeft). */
+  FSNPlacementEnumerator *autoEnumerator = nil;
+  NSMutableSet *occupiedCells = nil;
+  NSPoint autoGOrigin = NSZeroPoint;
+  CGFloat autoCellW = 0, autoCellH = 0, autoGapX = 0;
+  BOOL autoInitDone = NO;
+  /* Fallback row-flood counters (used only when enumerator is exhausted). */
+  float gridX = X_MARGIN;
+  float gridY = Y_MARGIN;
 
   irects = NSZoneMalloc (NSDefaultMallocZone(), sizeof(NSRect) * count);
 
@@ -317,12 +355,15 @@ static void GWHighlightFrameRect(NSRect aRect)
         {
           /* customIconPositions stores iloc-style (DS_Store top-down)
            * coordinates so positions survive window resize.  Convert to
-           * GNUstep bottom-up using the current refH. */
+           * GNUstep bottom-up using the current refH.
+           * Uses _cachedCellSize for positioning so icons stay at their
+           * assigned grid position even when gridSize.width varies with
+           * label width. */
           NSPoint ilocCenter = [posValue pointValue];
           NSPoint center = NSMakePoint(ilocCenter.x,
                                        refH - ilocCenter.y);
-          cellOrigin.x = center.x - (gridSize.width / 2);
-          cellOrigin.y = center.y - (gridSize.height / 2);
+          cellOrigin.x = center.x - (_cachedCellSize.width / 2);
+          cellOrigin.y = center.y - (_cachedCellSize.height / 2);
         }
       else if (data.placementMode == FSNIconPlacementModeManual)
         {
@@ -343,48 +384,169 @@ static void GWHighlightFrameRect(NSRect aRect)
               gnuX = data.pixelPosition.x;
               gnuY = data.pixelPosition.y;
             }
-          cellOrigin.x = gnuX - (gridSize.width / 2);
-          cellOrigin.y = gnuY - (gridSize.height / 2);
+          cellOrigin.x = gnuX - (_cachedCellSize.width / 2);
+          cellOrigin.y = gnuY - (_cachedCellSize.height / 2);
         }
       else
         {
-          /* No saved position: assign a grid slot at the current
-           * position, then advance to the next column.  Wraps at
-           * the window's visible content width so no horizontal
-           * scrollbar is needed. */
-          cellOrigin.x = gridX;
-          cellOrigin.y = gridY;
-
-          gridX += (gridSize.width + X_MARGIN);
-          if (gridX > (visibleWidth - gridSize.width))
+          /* No saved position: use the direction-aware grid enumerator
+           * to place the icon in the next free grid cell.  Respects
+           * _placementDirection (LeftToRightTopToBottom for file-viewer
+           * panels, TopToBottomRightToLeft for the desktop). */
+          if (!autoInitDone)
             {
-              gridX = X_MARGIN;
-              gridY += gridSize.height;
+              autoCellW = _cachedCellSize.width;
+              autoCellH = _cachedCellSize.height;
+              autoGapX = _cachedGapX;
+              autoGOrigin = [self gridOriginForLayout];
+              CGFloat gWidth = [self windowContentWidthForLayout];
+              CGFloat availableWidth = gWidth - autoGOrigin.x;
+              if (availableWidth < autoCellW + autoGapX)
+                availableWidth = gWidth;
+              NSUInteger nCols = (NSUInteger)((availableWidth + autoGapX) / (autoCellW + autoGapX));
+              if (nCols < 1) nCols = 1;
+              NSUInteger nRows = (NSUInteger)(autoGOrigin.y / autoCellH);
+              if (nRows < 1) nRows = 1;
+              {
+                NSUInteger neededRows = ([icons count] + nCols - 1) / nCols;
+                if (nRows < neededRows) nRows = neededRows;
+              }
+
+              switch (_placementDirection)
+                {
+                case FSNPlacementDirectionTopToBottomRightToLeft:
+                  autoEnumerator = [[FSNTopToBottomRightToLeftEnumerator alloc]
+                                     initWithColumns: nCols rows: nRows];
+                  break;
+                default:
+                  autoEnumerator = [[FSNLeftToRightTopToBottomEnumerator alloc]
+                                     initWithColumns: nCols rows: nRows];
+                  break;
+                }
+
+              /* Pre-compute grid cells occupied by icons that already
+               * have saved positions (customIconPositions or MANUAL mode)
+               * so the enumerator skips them. */
+              occupiedCells = [[NSMutableSet alloc] init];
+              NSUInteger j;
+              for (j = 0; j < count; j++)
+                {
+                  FSNIcon *otherIcon = [icons objectAtIndex: j];
+                  NSString *otherName = [[otherIcon node] name];
+                  FSNIconItemData *odata = [otherIcon placementData];
+                  NSPoint otherCenter = NSZeroPoint;
+                  BOOL hasPos = NO;
+
+                  NSValue *oval = [customIconPositions objectForKey: otherName];
+                  if (oval)
+                    {
+                      NSPoint iloc = [oval pointValue];
+                      otherCenter = NSMakePoint(iloc.x, refH - iloc.y);
+                      hasPos = YES;
+                    }
+                  else if (odata.placementMode == FSNIconPlacementModeManual)
+                    {
+                      if (odata.ilocPosition.x >= 0)
+                        {
+                          otherCenter = NSMakePoint(odata.ilocPosition.x,
+                                                    refH - odata.ilocPosition.y);
+                        }
+                      else
+                        {
+                          otherCenter = odata.pixelPosition;
+                        }
+                      hasPos = YES;
+                    }
+
+                  if (hasPos)
+                    {
+                      NSInteger col = (NSInteger)floor(
+                        (otherCenter.x - autoGOrigin.x) / (autoCellW + autoGapX));
+                      NSInteger row = (NSInteger)floor(
+                        (autoGOrigin.y - otherCenter.y) / autoCellH);
+                      if (col >= 0 && col < (NSInteger)nCols
+                          && row >= 0 && row < (NSInteger)nRows)
+                        {
+                          [occupiedCells addObject:
+                            [NSString stringWithFormat: @"%ld:%ld",
+                                       (long)col, (long)row]];
+                        }
+                    }
+                }
+              autoInitDone = YES;
             }
 
-          /* Record as iloc-style (top-down) so positions survive
-           * window resize.  The posValue branch above converts back
-           * to GNUstep bottom-up using the current refH. */
-          NSPoint gsCenter = NSMakePoint(cellOrigin.x + gridSize.width / 2.0,
-                                          cellOrigin.y + gridSize.height / 2.0);
-          NSPoint ilocCenter = NSMakePoint(gsCenter.x, refH - gsCenter.y);
-          [customIconPositions setObject: [NSValue valueWithPoint: ilocCenter]
-                                  forKey: filename];
+          /* Advance the direction-aware enumerator to the next free
+           * grid cell (skipping cells occupied by existing icons). */
+          {
+            FSNGridCell cell;
+            BOOL found = NO;
+            while ([autoEnumerator nextCell: &cell])
+              {
+                NSString *cellKey = [NSString stringWithFormat: @"%lu:%lu",
+                                              (unsigned long)cell.col,
+                                              (unsigned long)cell.row];
+                if ([occupiedCells containsObject: cellKey])
+                  continue;
+
+                /* Mark this cell as taken for subsequent AUTO-mode icons. */
+                [occupiedCells addObject: cellKey];
+
+                NSPoint center = NSMakePoint(
+                  autoGOrigin.x + (CGFloat)cell.col * (autoCellW + autoGapX)
+                                                          + autoCellW / 2.0,
+                  autoGOrigin.y - (CGFloat)(cell.row + 1) * autoCellH
+                                                          + autoCellH / 2.0);
+                cellOrigin.x = center.x - (_cachedCellSize.width / 2);
+                cellOrigin.y = center.y - (_cachedCellSize.height / 2);
+
+                NSPoint ilocCenter = NSMakePoint(center.x, refH - center.y);
+                [customIconPositions setObject:
+                  [NSValue valueWithPoint: ilocCenter] forKey: filename];
+                found = YES;
+                break;
+              }
+
+            if (!found)
+              {
+                /* Grid is full or no cells available — fallback to the
+                 * simple row flood so the icon is still placed somewhere
+                 * visible, even if cells wrap around. */
+                cellOrigin.x = gridX;
+                cellOrigin.y = gridY;
+                gridX += (gridSize.width + COLUMN_GAP_X);
+                if (gridX > (visibleWidth - gridSize.width))
+                  {
+                    gridX = X_MARGIN;
+                    gridY += gridSize.height;
+                  }
+                NSPoint gsCenter = NSMakePoint(
+                  cellOrigin.x + _cachedCellSize.width / 2.0,
+                  cellOrigin.y + _cachedCellSize.height / 2.0);
+                NSPoint ilocCenter = NSMakePoint(gsCenter.x,
+                                                  refH - gsCenter.y);
+                [customIconPositions setObject:
+                  [NSValue valueWithPoint: ilocCenter] forKey: filename];
+              }
+          }
         }
 
       irects[i] = NSMakeRect(cellOrigin.x, cellOrigin.y,
-                              gridSize.width, gridSize.height);
+                              _cachedCellSize.width, _cachedCellSize.height);
 
       if (NSEqualRects(irects[i], [icon frame]) == NO)
         {
           [icon setFrame: irects[i]];
         }
 
-      float rightEdge = cellOrigin.x + gridSize.width;
-      float topEdge  = cellOrigin.y + gridSize.height;
+      float rightEdge = cellOrigin.x + _cachedCellSize.width;
+      float topEdge  = cellOrigin.y + _cachedCellSize.height;
       if (rightEdge > maxX) maxX = rightEdge;
       if (topEdge  > maxY) maxY = topEdge;
     }
+
+  [autoEnumerator release];
+  [occupiedCells release];
 
   maxX += X_MARGIN;
   /* Snap trivial overflow past visibleWidth only when the extra width
@@ -484,7 +646,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       if ([icon isSelected])
 	{
 	  NSSize sz = [self bounds].size;
-	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + X_MARGIN) / (gridSize.width + X_MARGIN)) : 1;
+	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + COLUMN_GAP_X) / (gridSize.width + COLUMN_GAP_X)) : 1;
 	  if (i >= cols)
 	    pos = i - cols;
 	  break;
@@ -512,7 +674,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       if ([icon isSelected])
 	{
 	  NSSize sz = [self bounds].size;
-	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + X_MARGIN) / (gridSize.width + X_MARGIN)) : 1;
+	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + COLUMN_GAP_X) / (gridSize.width + COLUMN_GAP_X)) : 1;
 	  if (i + cols < [icons count])
 	    pos = i + cols;
 	  break;
@@ -614,7 +776,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   CGFloat cellW = gridSize.width;
   CGFloat cellH = gridSize.height;
-  CGFloat gapX = (CGFloat)X_MARGIN;
+  CGFloat gapX = (CGFloat)COLUMN_GAP_X;
   CGFloat gapY = 0.0;
   NSPoint gOrigin = [self gridOriginForLayout];
   CGFloat gridWidth = [self windowContentWidthForLayout];
@@ -923,11 +1085,20 @@ static void GWHighlightFrameRect(NSRect aRect)
   [customIconPositions release];
   customIconPositions = nil;
 
-  [self calculateGridSize];
+  /* Use cached grid cell dimensions so Clean Up stays in sync with
+   * the AUTO-mode tile positioning.  If tile hasn't been called yet,
+   * compute the cache first. */
+  if (!_gridCached)
+    {
+      [self calculateGridSize];
+      _cachedCellSize = gridSize;
+      _cachedGapX = (CGFloat)COLUMN_GAP_X;
+      _gridCached = YES;
+    }
 
-  CGFloat cellW = gridSize.width;
-  CGFloat cellH = gridSize.height;
-  CGFloat gapX = (CGFloat)X_MARGIN;
+  CGFloat cellW = _cachedCellSize.width;
+  CGFloat cellH = _cachedCellSize.height;
+  CGFloat gapX = _cachedGapX;
   CGFloat gapY = 0.0;
   NSPoint gOrigin = [self gridOriginForLayout];
   CGFloat gridWidth = [self windowContentWidthForLayout];
@@ -1483,6 +1654,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   ASSIGN (node, anode);
   [self readNodeInfo];
+  _gridCached = NO; /* icon properties may have changed */
   [self calculateGridSize];
 
   for (i = 0; i < [subNodes count]; i++)
@@ -1948,6 +2120,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       infoType = type;
       DESTROY (extInfoType);
 
+      _gridCached = NO;
       [self calculateGridSize];
 
       for (i = 0; i < [icons count]; i++)
@@ -1972,6 +2145,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       infoType = FSNInfoExtendedType;
       ASSIGN (extInfoType, type);
 
+      _gridCached = NO;
       [self calculateGridSize];
 
       for (i = 0; i < [icons count]; i++)
@@ -1997,6 +2171,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSUInteger i;
 
   iconSize = size;
+  _gridCached = NO;
   [self calculateGridSize];
 
   for (i = 0; i < [icons count]; i++)
@@ -2019,6 +2194,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   labelTextSize = size;
   ASSIGN (labelFont, [NSFont systemFontOfSize: labelTextSize]);
+  _gridCached = NO;
   [self calculateGridSize];
 
   for (i = 0; i < [icons count]; i++)
@@ -2042,6 +2218,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSUInteger i;
 
   iconPosition = pos;
+  _gridCached = NO;
   [self calculateGridSize];
 
   for (i = 0; i < [icons count]; i++)

@@ -203,8 +203,14 @@ static GWDesktopManager *desktopManager = nil;
       XCloseDisplay(display);
     }
   
-  [desktopView showMountedVolumes];
+  /* IMPORTANT: showContentsOfNode MUST run before showMountedVolumes.
+   * Desktop icons (~/Desktop contents) are placed at DS_Store positions
+   * (Manual mode) and their grid cells must be marked as occupied BEFORE
+   * volume icons are AUTO-placed into free cells.  If the order is
+   * reversed, volume icons can occupy cells that desktop icons later
+   * claim from DS_Store, causing overlapping icons. */
   [desktopView showContentsOfNode: dskNode];
+  [desktopView showMountedVolumes];
   [self addWatcherForPath: [dskNode path]];
     
   if ((hidedock == NO) && ([dock superview] == nil)) {
