@@ -9,6 +9,22 @@
 #include <sys/utsname.h>
 #include <X11/Xlib.h>
 
+/* Simple NSWindow subclass that closes on Escape key */
+@interface AboutWindow : NSWindow
+@end
+
+@implementation AboutWindow
+- (void)keyDown:(NSEvent *)theEvent
+{
+  NSString *characters = [theEvent characters];
+  if ([characters length] > 0 && [characters characterAtIndex: 0] == 0x01B) {
+    [self performClose:nil];
+    return;
+  }
+  [super keyDown: theEvent];
+}
+@end
+
 @implementation AboutController
 
 static AboutController *sharedController = nil;
@@ -35,7 +51,7 @@ static AboutController *sharedController = nil;
   NSRect rect = NSMakeRect(0, 0, 320, 420);
   unsigned int styleMask = NSTitledWindowMask | NSClosableWindowMask;
   
-  aboutWindow = [[NSWindow alloc] initWithContentRect:rect
+  aboutWindow = [[AboutWindow alloc] initWithContentRect:rect
                                             styleMask:styleMask
                                               backing:NSBackingStoreBuffered
                                                 defer:YES];
