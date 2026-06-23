@@ -282,9 +282,12 @@ static GWViewersManager *vwrsmanager = nil;
           
           NSDebugLLog(@"gwspace", @"[Animation] About to call setWindowAnimationRect for window %@", win);
           
-          // Set X window property with animation rectangle
-          // WindowManager will read this and perform appropriate animation
-          [self setWindowAnimationRect:startFrame forWindow:win];
+          // Set X window property with birth animation parameters
+          // WindowManager will read this and perform the spatial expansion animation
+          [self setWindowBirthRect:startFrame
+                       targetRect:endFrame
+                    animationType:0   // GSWindowBirthAnimationOpen
+                         forWindow:win];
           
           NSDebugLLog(@"gwspace", @"[Animation] Animation rect set, now showing window");
           
@@ -1356,6 +1359,30 @@ static GWViewersManager *vwrsmanager = nil;
                                     showSelection: showsel];
 
     if (viewer) {
+      // Birth animation must happen before releases to ensure
+      // the window object is fully alive when we read its frame.
+      if (hasPendingOpenAnimationRect)
+        {
+          NSRect endFrame = [win frame];
+          NSRect startFrame = pendingOpenAnimationRect;
+          hasPendingOpenAnimationRect = NO;
+
+          NSDebugLLog(@"gwspace", @"[Animation] Pending animation rect detected for spatial viewer: origin={%.0f,%.0f} size={%.0fx%.0f}",
+                startFrame.origin.x, startFrame.origin.y, startFrame.size.width, startFrame.size.height);
+
+          if (startFrame.size.width < 16) startFrame.size.width = 16;
+          if (startFrame.size.height < 16) startFrame.size.height = 16;
+
+          // Set the window to its final position
+          [win setFrame: endFrame display: NO];
+
+          // Set X window property with birth animation parameters
+          [self setWindowBirthRect: startFrame
+                       targetRect: endFrame
+                    animationType: 0   // GSWindowBirthAnimationOpen
+                         forWindow: win];
+        }
+
       [viewers addObject: viewer];
       [win release];
       [viewer release]; // viewers array retains it
@@ -1435,16 +1462,33 @@ static GWViewersManager *vwrsmanager = nil;
 
 #pragma mark - Window Animation Support
 
-- (void)setWindowAnimationRect:(NSRect)rect forWindow:(NSWindow *)window {
-  // Set X11 window property _GERSHWIN_WINDOW_OPEN_ANIMATION_RECT
-  // This will be read by WindowManager to perform the animation
-  // Format: 4 32-bit integers (x, y, width, height)
-  
+- (void)setWindowBirthRect:(NSRect)sourceRect
+               targetRect:(NSRect)targetRect
+            animationType:(int32_t)animationType
+                 forWindow:(NSWindow *)window {
+  // Set X11 window property _GSWORKSPACE_WINDOW_BIRTH
+  // This will be read by WindowManager to perform the spatial birth animation.
+  // Format: 9 x 32-bit integers (source x,y,w,h, target x,y,w,h, animationType)
+  // Per PRD.md section 8.
+
   if (!window) {
-    NSDebugLLog(@"gwspace", @"[Animation] NULL window passed to setWindowAnimationRect");
+    NSDebugLLog(@"gwspace", @"[Animation] NULL window passed to setWindowBirthRect");
     return;
   }
-  
+
+  // Check Reduce Motion preference.
+  // GSWindowAnimationEnabled only disables animation when explicitly set to NO.
+  id animEnabled = [[NSUserDefaults standardUserDefaults] objectForKey:@"GSWindowAnimationEnabled"];
+  if (animEnabled && [animEnabled boolValue] == NO) {
+    NSDebugLLog(@"gwspace", @"[Animation] Window animation disabled by GSWindowAnimationEnabled preference");
+    return;
+  }
+  // Also respect the macOS-style Reduce Motion key
+  if ([[NSUserDefaults standardUserDefaults] boolForKey:@"GSReduceMotion"] == YES) {
+    animationType = 1; // NoAnimation
+    NSDebugLLog(@"gwspace", @"[Animation] Reduce Motion active, using NoAnimation type");
+  }
+
 #ifdef __linux__
   GSDisplayServer *server = GSServerForWindow(window);
   if (!server) {
@@ -1454,13 +1498,13 @@ static GWViewersManager *vwrsmanager = nil;
     NSDebugLLog(@"gwspace", @"[Animation] No display server available for window animation");
     return;
   }
-  
+
   Display *display = (Display *)[server serverDevice];
   if (!display) {
     NSDebugLLog(@"gwspace", @"[Animation] No X11 display available for animation property");
     return;
   }
-  
+
   // windowDevice returns a Window ID (cast to void*), not a pointer to Window
   void *winptr = [server windowDevice:[window windowNumber]];
   if (!winptr) {
@@ -1472,7 +1516,7 @@ static GWViewersManager *vwrsmanager = nil;
     NSDebugLLog(@"gwspace", @"[Animation] Invalid X11 window id for animation property");
     return;
   }
-  
+
   // Convert NSRect to screen coordinates (X11 has origin at top-left)
   NSScreen *screen = [window screen];
   if (!screen) screen = [NSScreen mainScreen];
@@ -1481,44 +1525,59 @@ static GWViewersManager *vwrsmanager = nil;
     return;
   }
   NSRect screenFrame = [screen frame];
-  
-  // Compute absolute X11 screen coordinates (account for screen origin and flip Y)
-  int32_t x = (int32_t)(rect.origin.x + screenFrame.origin.x);
-  int32_t y = (int32_t)(screenFrame.origin.y + screenFrame.size.height - rect.origin.y - rect.size.height);
-  int32_t width = (int32_t)rect.size.width;
-  int32_t height = (int32_t)rect.size.height;
-  
-  int32_t data[4] = {x, y, width, height};
-  
+
+  // Compute absolute X11 screen coordinates for source rect
+  // (account for screen origin and flip Y from Cocoa bottom-left to X11 top-left)
+  int32_t srcX = (int32_t)(sourceRect.origin.x + screenFrame.origin.x);
+  int32_t srcY = (int32_t)(screenFrame.origin.y + screenFrame.size.height - sourceRect.origin.y - sourceRect.size.height);
+  int32_t srcW = (int32_t)sourceRect.size.width;
+  int32_t srcH = (int32_t)sourceRect.size.height;
+
+  // Compute absolute X11 screen coordinates for target rect
+  int32_t dstX = (int32_t)(targetRect.origin.x + screenFrame.origin.x);
+  int32_t dstY = (int32_t)(screenFrame.origin.y + screenFrame.size.height - targetRect.origin.y - targetRect.size.height);
+  int32_t dstW = (int32_t)targetRect.size.width;
+  int32_t dstH = (int32_t)targetRect.size.height;
+
+  // Build 9-int32 data array: source(x,y,w,h), target(x,y,w,h), animationType
+  int32_t data[9] = {srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, animationType};
+
   // Error checking: validate parameters before calling X11
   if (!display || xwindow == 0) {
-    NSDebugLLog(@"gwspace", @"[Animation] Invalid display or X window for setting animation rect");
+    NSDebugLLog(@"gwspace", @"[Animation] Invalid display or X window for setting birth rect");
     return;
   }
-  
+
   // Set error handler to catch X11 errors gracefully
   int (*oldHandler)(Display *, XErrorEvent *) = XSetErrorHandler(NULL);
-  
-  Atom animAtom = XInternAtom(display, "_GERSHWIN_WINDOW_OPEN_ANIMATION_RECT", False);
-  if (animAtom == None) {
-    NSDebugLLog(@"gwspace", @"[Animation] Failed to intern animation atom");
+
+  Atom birthAtom = XInternAtom(display, "_GSWORKSPACE_WINDOW_BIRTH", False);
+  if (birthAtom == None) {
+    NSDebugLLog(@"gwspace", @"[Animation] Failed to intern _GSWORKSPACE_WINDOW_BIRTH atom");
     XSetErrorHandler(oldHandler);
     return;
   }
-  
-  int status = XChangeProperty(display, xwindow, animAtom, XA_CARDINAL, 32,
-                               PropModeReplace, (unsigned char *)data, 4);
+
+  int status = XChangeProperty(display, xwindow, birthAtom, XA_CARDINAL, 32,
+                               PropModeReplace, (unsigned char *)data, 9);
   if (status == BadWindow) {
     NSDebugLLog(@"gwspace", @"[Animation] XChangeProperty failed: window %lu is invalid", (unsigned long)xwindow);
     XSetErrorHandler(oldHandler);
     return;
   }
-  
+
   XFlush(display);
+
+  // Sync to ensure the property is committed to the X server before
+  // makeKeyAndOrderFront: sends the MapRequest (which goes through a
+  // separate X connection via GNUstep's display server).  Without this
+  // sync the MapRequest can arrive at the X server before the property
+  // change is visible, and the WindowManager will not see the birth data.
+  XSync(display, False);
   XSetErrorHandler(oldHandler);
-  
-  NSDebugLLog(@"gwspace", @"[Animation] Set rect on window %lu (screen origin {%.0f,%.0f}): {%d, %d, %d, %d}", 
-        (unsigned long)xwindow, screenFrame.origin.x, screenFrame.origin.y, x, y, width, height);
+
+  NSDebugLLog(@"gwspace", @"[Animation] Set birth rect on window %lu: src={%d,%d,%d,%d} dst={%d,%d,%d,%d} type=%d",
+        (unsigned long)xwindow, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, animationType);
 #endif
 }
 

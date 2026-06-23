@@ -119,9 +119,12 @@
 - (void)openSelectionInViewer:(id)viewer
                   closeSender:(BOOL)close;
 
-// Window open animation support
+// Window open animation support (spatial Finder-like window birth)
 - (void)setPendingOpenAnimationRect:(NSRect)rect;
-- (void)setWindowAnimationRect:(NSRect)rect forWindow:(NSWindow *)window;
+- (void)setWindowBirthRect:(NSRect)sourceRect
+               targetRect:(NSRect)targetRect
+            animationType:(int32_t)animationType
+                 forWindow:(NSWindow *)window;
                   
 - (void)openAsFolderSelectionInViewer:(id)viewer;
 
