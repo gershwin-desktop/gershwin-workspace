@@ -655,8 +655,9 @@ NSString *_pendingSystemActionTitle = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Run...") action:@selector(runCommand:) keyEquivalent:@"R"];
+  menuItem = [menu addItemWithTitle:_(@"Run...") action:@selector(runCommand:) keyEquivalent:@"r"];
   [menuItem setTarget:self];
+  [menuItem setKeyEquivalentModifierMask: NSCommandKeyMask | NSShiftKeyMask];
   
   [menu addItem:[NSMenuItem separatorItem]];
 
