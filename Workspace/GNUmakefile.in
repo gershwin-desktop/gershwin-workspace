@@ -112,9 +112,6 @@ FileViewer/GWViewerPathsPopUp.m \
 FileViewer/GWX11SpatialPath.m \
 FileViewer/DSStoreInfo.m \
 ../GWMetadata/GWMetaArchive.m \
-../GWMetadata/GSFileMetadata.m \
-../GWMetadata/GSAppleDouble.m \
-../GWMetadata/GWMetaXattr.m \
 Finder/Finder.m \
 Finder/FindModuleView.m \
 Finder/SearchPlacesBox.m \
