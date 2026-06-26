@@ -125,7 +125,7 @@ static void ensureDockX11ErrorHandler(void)
 
   /*
    * Set X11 EWMH properties after the window is mapped so the window
-   * manager sees them and treats this as a DOCK window (above others,
+   * manager sees them and treats this as a DOCK window (dock layer,
    * on all desktops, etc.).  This follows the same pattern used by
    * XDesktopWindow for its X11 property setup.
    */
@@ -173,13 +173,23 @@ static void ensureDockX11ErrorHandler(void)
   XChangeProperty(display, dockXWindow, netWmWindowType, XA_ATOM, 32,
                   PropModeReplace, (unsigned char *)&netWmWindowTypeDock, 1);
 
-  /* ---- _NET_WM_STATE (ABOVE | STICKY) ---- */
+  /*
+   * ---- _NET_WM_STATE (SKIP_TASKBAR | SKIP_PAGER | STICKY) ----
+   *
+   * _NET_WM_STATE_ABOVE is intentionally NOT set; a DOCK-type window
+   * belongs in the WM's dock stacking layer (above normal windows but
+   * below menus, tooltips, and popups).  Adding _NET_WM_STATE_ABOVE
+   * can push the dock higher than intended, competing with transient
+   * UI elements.  Compliant WMs handle the DOCK type's layer placement
+   * automatically.
+   */
   Atom netWmState = XInternAtom(display, "_NET_WM_STATE", False);
-  Atom netWmStateAbove = XInternAtom(display, "_NET_WM_STATE_ABOVE", False);
+  Atom netWmStateSkipTaskbar = XInternAtom(display, "_NET_WM_STATE_SKIP_TASKBAR", False);
+  Atom netWmStateSkipPager = XInternAtom(display, "_NET_WM_STATE_SKIP_PAGER", False);
   Atom netWmStateSticky = XInternAtom(display, "_NET_WM_STATE_STICKY", False);
-  Atom states[2] = { netWmStateAbove, netWmStateSticky };
+  Atom states[3] = { netWmStateSkipTaskbar, netWmStateSkipPager, netWmStateSticky };
   XChangeProperty(display, dockXWindow, netWmState, XA_ATOM, 32,
-                  PropModeReplace, (unsigned char *)states, 2);
+                  PropModeReplace, (unsigned char *)states, 3);
 
   /* ---- _NET_WM_DESKTOP (0xFFFFFFFF = all desktops) ---- */
   Atom netWmDesktop = XInternAtom(display, "_NET_WM_DESKTOP", False);

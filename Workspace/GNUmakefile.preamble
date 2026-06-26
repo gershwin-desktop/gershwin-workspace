@@ -35,6 +35,7 @@ ADDITIONAL_INCLUDE_DIRS += -INetwork -I../Network
 ADDITIONAL_INCLUDE_DIRS += -I../FSNode -I../../FSNode -I../../../FSNode
 ADDITIONAL_INCLUDE_DIRS += -I../Inspector -I../../Inspector
 ADDITIONAL_INCLUDE_DIRS += -I../Operation -I../../Operation
+ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata -I../../GWMetadata
 
 # Additional LDFLAGS to pass to the linker
 ADDITIONAL_LDFLAGS += -lX11 
