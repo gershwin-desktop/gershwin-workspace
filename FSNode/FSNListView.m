@@ -2047,6 +2047,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   RELEASE (lockedicon);
   RELEASE (spopenicon);
   RELEASE (extInfoStr);
+  RELEASE (tagColor);
   [super dealloc];
 }
 
@@ -2158,6 +2159,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 {
   ASSIGN (node, anode);
   ASSIGN (icon, [fsnodeRep iconOfSize: ICNSIZE forNode: node]);
+  DESTROY (tagColor);
   [self setLocked: [node isLocked]];
 }
 

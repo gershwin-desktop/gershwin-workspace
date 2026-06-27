@@ -121,6 +121,7 @@
   c->icon = [icon retain];
   c->displayIcon = [displayIcon retain];
   c->tagColor = [tagColor retain];
+  c->nodePath = [nodePath retain];
 
   return c;
 }
