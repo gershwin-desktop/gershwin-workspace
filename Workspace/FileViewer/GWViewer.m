@@ -316,7 +316,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 		                            visibleColumns: visibleCols
                                       scroller: [nviewScroll horizontalScroller]
                                     cellsIcons: NO
-                                 editableCells: NO   
+                                 editableCells: NO
                                selectionColumn: YES];
     }
 
@@ -560,7 +560,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   }
   [vwrwin makeKeyAndOrderFront: nil];
   [self tileViews];
-  [self scrollToBeginning];    
+  [self scrollToBeginning];
 }
 
 - (void)deactivate
@@ -1266,17 +1266,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
     closing = YES;
     [self updateDefaults];
     [vwrwin setDelegate: nil];
-    // Defer viewer cleanup to next run loop iteration. Calling viewerWillClose:
-    // directly here removes the viewer from the manager's array, which triggers
-    // the viewer and then the window to be deallocated (via GWViewer's dealloc
-    // releasing vwrwin). But NSWindow's close method has NOT yet finished — it
-    // still needs to remove the window from NSApp's window list and recalculate
-    // the key window. A deallocated window pointer in the list causes a
-    // use-after-free crash when the next window closes and the system iterates
-    // the list to find a new key window candidate.
-    [manager performSelector: @selector(viewerWillClose:)
-                  withObject: self
-                  afterDelay: 0.0];
+    [manager viewerWillClose: self];
   }
 }
 

@@ -1326,11 +1326,7 @@
     [self teardownDSStoreWatcher];
     [self updateDefaults];
     [vwrwin setDelegate: nil];
-    // Defer viewer cleanup to next run loop iteration (same rationale as GWViewer).
-    // See GWViewer.m windowWillClose: for the full explanation.
-    [manager performSelector: @selector(viewerWillClose:)
-                  withObject: self
-                  afterDelay: 0.0];
+    [manager viewerWillClose: self];
   }
 }
 

@@ -50,11 +50,10 @@
 - (void)dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
-  if (scroller)
-    {
-      [scroller setTarget: nil];
-      [scroller setAction: NULL];
-    }
+  /* Do NOT clear scroller target/action here — the scroller is a subview
+   * of the parent NSScrollView and may already be deallocated by the time
+   * this dealloc runs (subviews are released before the document view).
+   * releaseScroller is called separately while the view hierarchy is intact. */
   RELEASE (baseNode);
   RELEASE (extInfoType);
   RELEASE (lastSelection);

@@ -302,8 +302,8 @@ static GWViewersManager *vwrsmanager = nil;
       [viewers addObject: viewer];
       RELEASE (win);
       RELEASE (viewer);
-    } 
-  
+    }
+
   [viewer activate];
   
 
@@ -341,7 +341,7 @@ static GWViewersManager *vwrsmanager = nil;
 - (id)viewerWithBaseNode:(FSNode *)node
 {
   NSUInteger i;
-  
+
   for (i = 0; i < [viewers count]; i++)
     {
       id viewer = [viewers objectAtIndex: i];
@@ -351,7 +351,7 @@ static GWViewersManager *vwrsmanager = nil;
           return viewer;
         }
     }
-  
+
   return nil;
 }
 
