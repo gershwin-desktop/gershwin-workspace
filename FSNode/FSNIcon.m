@@ -1601,7 +1601,8 @@ static NSImage *branchImage;
                     continue;
                   if ([[w className] hasPrefix: @"GSCache"])
                     continue;
-                  if (NSPointInRect(mouseScreen, [w frame]))
+                  if (NSPointInRect(mouseScreen, [w frame])
+                      && [w level] >= [win level])
                     {
                       shouldExternalize = YES;
                       break;
