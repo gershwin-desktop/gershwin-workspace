@@ -10,7 +10,8 @@
 #import "GWVolumeID.h"
 #ifdef __linux__
 #import <sys/statfs.h>
-#elif defined(__FreeBSD__) || defined(__APPLE__) || defined(__DragonFly__)
+#else
+/* BSDs and macOS: struct statfs via <sys/param.h> + <sys/mount.h> */
 #import <sys/param.h>
 #import <sys/mount.h>
 #endif

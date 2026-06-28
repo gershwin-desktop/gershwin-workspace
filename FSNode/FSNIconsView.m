@@ -28,7 +28,8 @@
 #include <sys/types.h>
 #ifdef __linux__
 #include <sys/statfs.h>
-#elif defined(__FreeBSD__) || defined(__APPLE__) || defined(__DragonFly__)
+#else
+/* BSDs and macOS: struct statfs via <sys/param.h> + <sys/mount.h> */
 #include <sys/param.h>
 #include <sys/mount.h>
 #endif
