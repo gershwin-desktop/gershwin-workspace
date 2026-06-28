@@ -285,6 +285,8 @@ static NSString *stringForFSMagic(long magic)
   struct statfs buf;
   if (statfs([resolved UTF8String], &buf) != 0) return NO;
 
+#ifdef __linux__
+  /* Linux: statfs provides f_type (numeric magic) */
   long type = (long)buf.f_type;
 
   /* Direct network filesystem detection */
@@ -311,6 +313,16 @@ static NSString *stringForFSMagic(long magic)
       return YES;
     }
   }
+#else
+  /* BSDs and macOS: statfs has f_fstypename (string) instead of f_type */
+  {
+    NSString *fstype = [NSString stringWithUTF8String:buf.f_fstypename];
+    if ([fstype isEqualToString:@"nfs"])   return YES;
+    if ([fstype isEqualToString:@"smbfs"]) return YES;
+    if ([fstype isEqualToString:@"cifs"])  return YES;
+    if ([fstype isEqualToString:@"fuse"])  return YES;
+  }
+#endif
 
   return NO;
 }
@@ -339,7 +351,13 @@ static NSString *stringForFSMagic(long magic)
   struct statfs buf;
   if (statfs([resolved UTF8String], &buf) != 0) return nil;
 
+#ifdef __linux__
+  /* Linux: statfs provides f_type (numeric magic) */
   return stringForFSMagic((long)buf.f_type);
+#else
+  /* BSDs and macOS: return f_fstypename string directly */
+  return [NSString stringWithUTF8String:buf.f_fstypename];
+#endif
 }
 
 + (NSString *)mountSourceForPath:(NSString *)path
