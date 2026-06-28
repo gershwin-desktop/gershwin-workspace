@@ -1,0 +1,3 @@
+branch: ci/verify-branch-source
+purpose: Prove CI builds the PR branch's gershwin-workspace source, not main.
+This file does NOT exist on main. If CI debug output shows it, the branch source is in use.

@@ -57,6 +57,20 @@ jobs:
             ./Library/Scripts/Bootstrap.sh
             SKIP_REPOS="${{ env.SKIP_REPOS }}" ./Library/Scripts/Checkout.sh
             ln -sfn "$BASE/gershwin-workspace" Library/Sources/gershwin-workspace
+            echo "=== GitHub context ==="
+            echo "event_name = ${{ github.event_name }}"
+            echo "ref        = ${{ github.ref }}"
+            echo "sha        = ${{ github.sha }}"
+            echo "head_ref   = ${{ github.head_ref }}"
+            echo "base_ref   = ${{ github.base_ref }}"
+            echo "=== Symlink + marker (present only on the PR branch) ==="
+            ls -la Library/Sources/gershwin-workspace
+            if [ -f Library/Sources/gershwin-workspace/CI_BRANCH_MARKER.txt ]; then
+              echo "MARKER FOUND -> building PR branch source"
+              cat Library/Sources/gershwin-workspace/CI_BRANCH_MARKER.txt
+            else
+              echo "MARKER MISSING -> NOT building PR branch source (would be main)"
+            fi
             make corelibs
             make workspace
 
@@ -90,6 +104,29 @@ jobs:
       - name: Link workspace source under test
         working-directory: gershwin-developer
         run: ln -sfn "$GITHUB_WORKSPACE/gershwin-workspace" Library/Sources/gershwin-workspace
+
+      - name: "DEBUG: prove branch source under test"
+        working-directory: gershwin-developer
+        run: |
+          echo "=== GitHub context ==="
+          echo "event_name = ${{ github.event_name }}"
+          echo "ref        = ${{ github.ref }}"
+          echo "sha        = ${{ github.sha }}"
+          echo "head_ref   = ${{ github.head_ref }}"
+          echo "base_ref   = ${{ github.base_ref }}"
+          echo "=== Checked-out gershwin-workspace HEAD ==="
+          git -C "$GITHUB_WORKSPACE/gershwin-workspace" rev-parse HEAD || true
+          git -C "$GITHUB_WORKSPACE/gershwin-workspace" log -1 --oneline || true
+          echo "=== Symlink resolution ==="
+          ls -la Library/Sources/gershwin-workspace
+          readlink -f Library/Sources/gershwin-workspace || true
+          echo "=== Branch marker (present only on the PR branch) ==="
+          if [ -f Library/Sources/gershwin-workspace/CI_BRANCH_MARKER.txt ]; then
+            echo "MARKER FOUND -> building PR branch source"
+            cat Library/Sources/gershwin-workspace/CI_BRANCH_MARKER.txt
+          else
+            echo "MARKER MISSING -> NOT building PR branch source (would be main)"
+          fi
 
       - name: Build core libraries
         working-directory: gershwin-developer
@@ -130,6 +167,29 @@ jobs:
         working-directory: gershwin-developer
         run: ln -sfn "$GITHUB_WORKSPACE/gershwin-workspace" Library/Sources/gershwin-workspace
 
+      - name: "DEBUG: prove branch source under test"
+        working-directory: gershwin-developer
+        run: |
+          echo "=== GitHub context ==="
+          echo "event_name = ${{ github.event_name }}"
+          echo "ref        = ${{ github.ref }}"
+          echo "sha        = ${{ github.sha }}"
+          echo "head_ref   = ${{ github.head_ref }}"
+          echo "base_ref   = ${{ github.base_ref }}"
+          echo "=== Checked-out gershwin-workspace HEAD ==="
+          git -C "$GITHUB_WORKSPACE/gershwin-workspace" rev-parse HEAD || true
+          git -C "$GITHUB_WORKSPACE/gershwin-workspace" log -1 --oneline || true
+          echo "=== Symlink resolution ==="
+          ls -la Library/Sources/gershwin-workspace
+          readlink -f Library/Sources/gershwin-workspace || true
+          echo "=== Branch marker (present only on the PR branch) ==="
+          if [ -f Library/Sources/gershwin-workspace/CI_BRANCH_MARKER.txt ]; then
+            echo "MARKER FOUND -> building PR branch source"
+            cat Library/Sources/gershwin-workspace/CI_BRANCH_MARKER.txt
+          else
+            echo "MARKER MISSING -> NOT building PR branch source (would be main)"
+          fi
+
       - name: Build core libraries
         working-directory: gershwin-developer
         run: make corelibs
@@ -166,5 +226,19 @@ jobs:
             ./Library/Scripts/Bootstrap.sh
             SKIP_REPOS="${{ env.SKIP_REPOS }}" ./Library/Scripts/Checkout.sh
             ln -sfn "$BASE/gershwin-workspace" Library/Sources/gershwin-workspace
+            echo "=== GitHub context ==="
+            echo "event_name = ${{ github.event_name }}"
+            echo "ref        = ${{ github.ref }}"
+            echo "sha        = ${{ github.sha }}"
+            echo "head_ref   = ${{ github.head_ref }}"
+            echo "base_ref   = ${{ github.base_ref }}"
+            echo "=== Symlink + marker (present only on the PR branch) ==="
+            ls -la Library/Sources/gershwin-workspace
+            if [ -f Library/Sources/gershwin-workspace/CI_BRANCH_MARKER.txt ]; then
+              echo "MARKER FOUND -> building PR branch source"
+              cat Library/Sources/gershwin-workspace/CI_BRANCH_MARKER.txt
+            else
+              echo "MARKER MISSING -> NOT building PR branch source (would be main)"
+            fi
             make corelibs
             make workspace
