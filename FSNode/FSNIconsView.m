@@ -26,6 +26,19 @@
 #include <math.h>
 #include <unistd.h>
 #include <sys/types.h>
+#ifdef __linux__
+#include <sys/statfs.h>
+#elif defined(__FreeBSD__) || defined(__APPLE__) || defined(__DragonFly__)
+#include <sys/param.h>
+#include <sys/mount.h>
+#endif
+
+/* Portable statfs f_fsid access: Linux uses __val[], BSD uses val[] */
+#ifdef __linux__
+#  define FSID_VAL(buf, i) ((buf).f_fsid.__val[(i)])
+#else
+#  define FSID_VAL(buf, i) ((buf).f_fsid.val[(i)])
+#endif
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -917,40 +930,114 @@ static void GWHighlightFrameRect(NSRect aRect)
 
     for (NSString *folder in folders)
       {
-        /* Skip folders we cannot write to (e.g. "/" for mount points) */
-        if (access([folder fileSystemRepresentation], W_OK) != 0) continue;
+        BOOL folderWritable = (access([folder fileSystemRepresentation], W_OK) == 0);
         NSArray *batch = [folders objectForKey: folder];
-        NS_DURING
-          {
-            NSString *dsp = [folder stringByAppendingPathComponent: @".DS_Store"];
-            DSStore *s;
-            if ([[NSFileManager defaultManager] fileExistsAtPath: dsp])
-              s = [DSStore storeWithPath: dsp];
-            else
-              s = [DSStore createStoreAtPath: dsp withEntries: nil];
-            if (s)
-              {
-                [s load];
-                NSUInteger bi;
-                for (bi = 0; bi < [batch count]; bi++)
-                  {
-                    NSArray *entry = [batch objectAtIndex: bi];
-                    [s setIconLocationForFilename: [entry objectAtIndex: 0]
-                                                x: [[entry objectAtIndex: 1] intValue]
-                                                y: [[entry objectAtIndex: 2] intValue]];
-                  }
-                [s save];
-              }
-            else
-              {
-              }
-          }
-        NS_HANDLER
-          {
-          }
-        NS_ENDHANDLER
 
-        /* fdLocation xattr for each file */
+        if (folderWritable)
+          {
+            /* Write icon positions to per-folder .DS_Store */
+            NS_DURING
+              {
+                NSString *dsp = [folder stringByAppendingPathComponent: @".DS_Store"];
+                DSStore *s;
+                if ([[NSFileManager defaultManager] fileExistsAtPath: dsp])
+                  s = [DSStore storeWithPath: dsp];
+                else
+                  s = [DSStore createStoreAtPath: dsp withEntries: nil];
+                if (s)
+                  {
+                    if (![s load])
+                      {
+                        s = [DSStore createStoreAtPath: dsp withEntries: nil];
+                      }
+                    if (s)
+                      {
+                        NSUInteger bi;
+                        for (bi = 0; bi < [batch count]; bi++)
+                          {
+                            NSArray *entry = [batch objectAtIndex: bi];
+                            [s setIconLocationForFilename: [entry objectAtIndex: 0]
+                                                        x: [[entry objectAtIndex: 1] intValue]
+                                                        y: [[entry objectAtIndex: 2] intValue]];
+                          }
+                        [s save];
+                      }
+                  }
+              }
+            NS_HANDLER
+              {
+              }
+            NS_ENDHANDLER
+          }
+        else
+          {
+            /* Folder not writable (e.g. "/") - write Iloc entries to the
+             * per-volume cache at ~/Library/Caches/com.apple.finder/.
+             * Use statfs f_fsid for a stable volume identifier. */
+            struct statfs svfs;
+            if (statfs([folder fileSystemRepresentation], &svfs) == 0)
+              {
+                int id0 = FSID_VAL(svfs, 0);
+                int id1 = FSID_VAL(svfs, 1);
+                if (id0 != 0 || id1 != 0)
+                  {
+                    NSString *volID = [NSString stringWithFormat:@"%08X%08X", id0, id1];
+                    NSString *cacheDir = [NSHomeDirectory()
+                      stringByAppendingPathComponent:
+                        @"Library/Caches/com.apple.finder"];
+                    NSFileManager *fm = [NSFileManager defaultManager];
+                    BOOL isDir = NO;
+                    if (![fm fileExistsAtPath: cacheDir isDirectory: &isDir])
+                      {
+                        [fm createDirectoryAtPath: cacheDir
+                         withIntermediateDirectories: YES
+                                         attributes: nil
+                                              error: NULL];
+                      }
+
+                    NSString *cachePath = [cacheDir
+                      stringByAppendingPathComponent:
+                        [volID stringByAppendingString: @".DS_Store"]];
+
+                    NS_DURING
+                      {
+                        DSStore *s;
+                        if ([fm fileExistsAtPath: cachePath])
+                          s = [DSStore storeWithPath: cachePath];
+                        else
+                          s = [DSStore createStoreAtPath: cachePath
+                                            withEntries: nil];
+                        if (s)
+                          {
+                            if (![s load])
+                              {
+                                s = [DSStore createStoreAtPath: cachePath
+                                                  withEntries: nil];
+                              }
+                            if (s)
+                              {
+                                NSUInteger bi;
+                                for (bi = 0; bi < [batch count]; bi++)
+                                  {
+                                    NSArray *entry = [batch objectAtIndex: bi];
+                                    [s setIconLocationForFilename:
+                                           [entry objectAtIndex: 0]
+                                        x: [[entry objectAtIndex: 1] intValue]
+                                        y: [[entry objectAtIndex: 2] intValue]];
+                                  }
+                                [s save];
+                              }
+                          }
+                      }
+                    NS_HANDLER
+                      {
+                        NSDebugLLog(@"gwspace", @"batchRepositionIcons: cache write failed for %@", folder);
+                      }
+                    NS_ENDHANDLER
+                  }
+              }
+          }
+        /* fdLocation xattr for each file (always, writes per-file metadata) */
         NSUInteger bi;
         for (bi = 0; bi < [batch count]; bi++)
           {
@@ -1798,6 +1885,7 @@ static void GWHighlightFrameRect(NSRect aRect)
     /* Source 2: .DS_Store Iloc (folder-level, secondary fallback).
      * Only fills in icons NOT already positioned by fdLocation. */
     NSString *dsp = [folderPath stringByAppendingPathComponent: @".DS_Store"];
+    BOOL dsStoreRead = NO;
     if ([[NSFileManager defaultManager] fileExistsAtPath: dsp])
       {
         NS_DURING
@@ -1806,6 +1894,7 @@ static void GWHighlightFrameRect(NSRect aRect)
             if (store)
               {
                 [store load];
+                dsStoreRead = YES;
                 for (i = 0; i < [icons count]; i++)
                   {
                     FSNIcon *icon = [icons objectAtIndex: i];
@@ -1832,6 +1921,56 @@ static void GWHighlightFrameRect(NSRect aRect)
         NS_HANDLER
           NSDebugLLog(@"gwspace", @"showContentsOfNode: DSStore read failed for %@", folderPath);
         NS_ENDHANDLER
+      }
+
+    /* Source 3: per-volume cache (for non-writable volumes where no
+     * per-folder .DS_Store can be written, e.g. "/").  Only consulted
+     * when Source 2 produced no data. */
+    if (!dsStoreRead)
+      {
+        struct statfs svfs3;
+        if (statfs([folderPath fileSystemRepresentation], &svfs3) == 0)
+          {
+            int id0 = FSID_VAL(svfs3, 0);
+            int id1 = FSID_VAL(svfs3, 1);
+            if (id0 != 0 || id1 != 0)
+              {
+                NSString *volID3 = [NSString stringWithFormat:@"%08X%08X", id0, id1];
+                NSString *cachePath3 = [NSHomeDirectory()
+                  stringByAppendingPathComponent:
+                    [NSString stringWithFormat:
+                       @"Library/Caches/com.apple.finder/%@.DS_Store", volID3]];
+                if ([[NSFileManager defaultManager] fileExistsAtPath: cachePath3])
+                  {
+                    NS_DURING
+                      {
+                        DSStore *store3 = [DSStore storeWithPath: cachePath3];
+                        if (store3)
+                          {
+                            [store3 load];
+                            for (i = 0; i < [icons count]; i++)
+                              {
+                                FSNIcon *icon = [icons objectAtIndex: i];
+                                FSNIconItemData *data = [icon placementData];
+                                if (data.placementMode == FSNIconPlacementModeManual) continue;
+
+                                NSString *name = [[icon node] name];
+                                NSPoint iloc = [store3 iconLocationForFilename: name];
+                                if (iloc.x != 0 || iloc.y != 0)
+                                  {
+                                    data.ilocPosition = iloc;
+                                    data.pixelPosition = NSMakePoint(iloc.x, iloc.y);
+                                    data.placementMode = FSNIconPlacementModeManual;
+                                  }
+                              }
+                          }
+                      }
+                    NS_HANDLER
+                      NSDebugLLog(@"gwspace", @"showContentsOfNode: cache read failed for %@", folderPath);
+                    NS_ENDHANDLER
+                  }
+              }
+          }
       }
   }
 

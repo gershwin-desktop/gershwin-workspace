@@ -50,6 +50,7 @@
 #import "NetworkServiceManager.h"
 #import "NetworkFSNode.h"
 #import "DSStoreInfo.h"
+#import "GWViewSettingsManager.h"
 
 #define DEFAULT_INCR 150
 #define MIN_WIN_H 300
@@ -1037,8 +1038,13 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
     [updatedprefs setObject: [vwrwin stringWithSavedFrame] 
                      forKey: @"geometry"];
 
-    // TODO: Save geometry to .DS_Store for Mac compatibility (writing not yet implemented)
-    // DSStoreInfo currently only supports reading
+    // Save view settings to .DS_Store for Mac interoperability
+    {
+      GWViewSettingsManager *sm = [GWViewSettingsManager managerForDirectoryPath:[baseNode path]];
+      DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path] loadImmediately:NO];
+      [dsInfo takeValuesFromViewerPrefs:updatedprefs];
+      [sm writeSettings:dsInfo];
+    }
 
     [baseNode checkWritable];
 
@@ -1699,9 +1705,67 @@ constrainMinCoordinate:(CGFloat)proposedMin
 
 - (void)chooseLabelColor:(id)sender
 {
-  if ([nodeView respondsToSelector: @selector(setTextColor:)]) {
+  NSInteger tag = [sender tag];
+  if (tag < 0 || tag > 7) return;
 
-  }
+  DSStoreLabelColor labelColor = (DSStoreLabelColor)tag;
+
+  NSArray *selection = [nodeView selectedNodes];
+  if (!selection || [selection count] == 0)
+    return;
+
+  NSString *basePath = [baseNode path];
+  if (![basePath hasSuffix: @"/"])
+    {
+      basePath = [basePath stringByAppendingString: @"/"];
+    }
+
+  /* Create a DSStoreInfo to hold the labels */
+  DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath: [baseNode path]
+                                           loadImmediately: NO];
+  NSMutableDictionary *tagColors = [NSMutableDictionary dictionary];
+
+  for (FSNode *node in selection)
+    {
+      if ([node isEqual: baseNode]) continue;
+
+      NSString *nodePath = [node path];
+      NSString *filename = [node name];
+
+      if ([nodePath hasPrefix: basePath])
+        {
+          filename = [nodePath substringFromIndex: [basePath length]];
+        }
+
+      DSStoreIconInfo *info = [dsInfo iconInfoForFilename: filename];
+      if (!info)
+        {
+          info = [DSStoreIconInfo infoForFilename: filename];
+        }
+      [info setLabelColor: labelColor];
+      [info setHasLabelColor: YES];
+      [dsInfo setIconInfo: info forFilename: filename];
+
+      if (labelColor != DSStoreLabelColorNone)
+        {
+          NSColor *color = [DSStoreIconInfo colorForLabelColor: labelColor];
+          if (color)
+            {
+              [tagColors setObject: color forKey: filename];
+            }
+        }
+    }
+
+  /* Visual feedback */
+  if ([nodeView respondsToSelector: @selector(setTagColorsFromDictionary:)])
+    {
+      [(FSNIconsView *)nodeView setTagColorsFromDictionary: tagColors];
+    }
+
+  /* Persist via settings manager */
+  GWViewSettingsManager *sm;
+  sm = [GWViewSettingsManager managerForDirectoryPath: [baseNode path]];
+  [sm writeSettings: dsInfo];
 }
 
 - (void)chooseBackColor:(id)sender

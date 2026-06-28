@@ -76,7 +76,10 @@ static NSTimeInterval recentUserUnmountTimeout = 5.0;
 #import "GSGlobalShortcutsManager.h"
 #import "GSFileMetadata.h"
 #import "DSStore.h"
+#import "DSStoreInfo.h"
+#import "GWViewSettingsManager.h"
 #import "GWMetaArchive.h"
+#import "FSNIconsView.h"
 #import "GWArchiveOperation.h"
 #import "Network/NetworkFSNode.h"
 #import "Network/NetworkServiceManager.h"
@@ -4553,6 +4556,24 @@ NSString *_pendingSystemActionTitle = nil;
  * applies it to all selected files in the active viewer, and updates
  * the display.
  */
+/**
+ * Convert GSFileLabel (from xattr FinderInfo) to DSStoreLabelColor
+ * (from .DS_Store lclr entries).  The two enums have different orderings.
+ */
+static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
+{
+  switch (gsLabel) {
+    case GSFileLabelNone:   return DSStoreLabelColorNone;
+    case GSFileLabelGrey:   return DSStoreLabelColorGrey;
+    case GSFileLabelGreen:  return DSStoreLabelColorGreen;
+    case GSFileLabelPurple: return DSStoreLabelColorPurple;
+    case GSFileLabelBlue:   return DSStoreLabelColorBlue;
+    case GSFileLabelYellow: return DSStoreLabelColorYellow;
+    case GSFileLabelRed:    return DSStoreLabelColorRed;
+    case GSFileLabelOrange: return DSStoreLabelColorOrange;
+  }
+}
+
 - (void)setLabelForNodes:(id)sender
 {
   NSInteger labelNumber = [sender tag];
@@ -4585,11 +4606,14 @@ NSString *_pendingSystemActionTitle = nil;
 
   NSUInteger i;
   NSUInteger count = [selection count];
+
+  /* ================================================================
+   * 1. Write label via xattr (com.apple.FinderInfo) — existing path
+   * ================================================================ */
   for (i = 0; i < count; i++)
     {
       NSString *path = [selection objectAtIndex: i];
 
-      /* Get existing metadata (or create new) */
       GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
       if (md == nil)
         {
@@ -4598,16 +4622,63 @@ NSString *_pendingSystemActionTitle = nil;
 
       [md setLabelNumber: labelNumber];
 
-      /* Write metadata to file */
       NSError *error = nil;
       if (![md writeToFileAtPath: path error: &error])
         {
-          NSDebugLLog(@"gwspace", @"setLabelForNodes: Failed to write label for %@: %@",
+          NSDebugLLog(@"gwspace", @"setLabelForNodes: xattr write failed for %@: %@",
                 path, error);
         }
     }
 
-  /* Refresh the viewer to show updated label colours */
+  /* ================================================================
+   * 2. Write lclr entries to .DS_Store / per-volume cache
+   *    (handles non-writable volumes via ~/Library/Caches)
+   * ================================================================ */
+  {
+    NSMutableDictionary *pathsByDir = [NSMutableDictionary dictionary];
+    DSStoreLabelColor dsColor = GSFileLabelToDSStoreLabelColor((GSFileLabel)labelNumber);
+
+    for (i = 0; i < count; i++)
+      {
+        NSString *path = [selection objectAtIndex: i];
+        NSString *parent = [path stringByDeletingLastPathComponent];
+        NSString *filename = [path lastPathComponent];
+
+        NSMutableArray *files = [pathsByDir objectForKey: parent];
+        if (!files)
+          {
+            files = [NSMutableArray array];
+            [pathsByDir setObject: files forKey: parent];
+          }
+        [files addObject: filename];
+      }
+
+    for (NSString *dirPath in pathsByDir)
+      {
+        NSArray *files = [pathsByDir objectForKey: dirPath];
+
+        DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath: dirPath
+                                                 loadImmediately: NO];
+        for (NSString *filename in files)
+          {
+            DSStoreIconInfo *iconInfo = [DSStoreIconInfo infoForFilename: filename];
+            [iconInfo setLabelColor: dsColor];
+            [iconInfo setHasLabelColor: YES];  /* Always YES so lclr=0 is persisted */
+            [dsInfo setIconInfo: iconInfo forFilename: filename];
+          }
+
+        GWViewSettingsManager *sm;
+        sm = [GWViewSettingsManager managerForDirectoryPath: dirPath];
+        BOOL wrote = [sm writeSettings: dsInfo];
+        NSDebugLLog(@"gwspace", @"setLabelForNodes: wrote %s for %@ (%lu files)",
+                    wrote ? "OK" : "FAIL", dirPath,
+                    (unsigned long)[files count]);
+      }
+  }
+
+  /* ================================================================
+   * 3. Refresh the viewer and apply visual feedback
+   * ================================================================ */
   if ([vwrsManager hasViewerWithWindow: kwin])
     {
       GWViewer *viewer = [vwrsManager viewerWithWindow: kwin];
@@ -4616,6 +4687,24 @@ NSString *_pendingSystemActionTitle = nil;
   else if ([dtopManager hasWindow: kwin])
     {
       [[dtopManager desktopView] reloadContents];
+    }
+
+  /* Apply tag colors to selected files for immediate visual feedback */
+  if (labelNumber != 0 && nodeView
+      && [nodeView respondsToSelector: @selector(setTagColorsFromDictionary:)])
+    {
+      NSMutableDictionary *tagColors = [NSMutableDictionary dictionary];
+      NSColor *color = [GSFileMetadata colorForLabel: (GSFileLabel)labelNumber];
+      if (color)
+        {
+          for (i = 0; i < count; i++)
+            {
+              NSString *path = [selection objectAtIndex: i];
+              NSString *filename = [path lastPathComponent];
+              [tagColors setObject: color forKey: filename];
+            }
+          [(id)nodeView setTagColorsFromDictionary: tagColors];
+        }
     }
 }
 
@@ -4769,7 +4858,8 @@ NSString *_pendingSystemActionTitle = nil;
     }
   NSPoint topLeft = NSMakePoint(center.x, viewH - center.y);
 
-  /* .DS_Store Iloc — tolerate races (file may be deleted externally) */
+  /* Fast path: write directly to .DS_Store via the settings manager,
+   * which handles the write hierarchy (folder → per-volume cache). */
   NS_DURING
     {
       NSString *dsstorePath = [folderPath stringByAppendingPathComponent: @".DS_Store"];

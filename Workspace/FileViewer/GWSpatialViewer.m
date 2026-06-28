@@ -28,6 +28,7 @@
 
 #import <AppKit/AppKit.h>
 #import "DSStoreInfo.h"
+#import "GWViewSettingsManager.h"
 #import "GSFileMetadata.h"
 #import "GWSpatialViewer.h"
 #import "GWViewersManager.h"
@@ -75,6 +76,7 @@
   RELEASE (viewerPrefs);
   RELEASE (dsStoreInfo);
   RELEASE (dsStorePath);
+  RELEASE (_settingsManager);
   
   [super dealloc];
 }
@@ -163,11 +165,22 @@
     }
 
     // ================================================================
-    // DS_Store Integration - Load comprehensive metadata
+    // DS_Store Integration - Load view settings (spec §2)
+    //   Tier 1: $FOLDER/.DS_Store
+    //   Tier 2: per-volume cache
+    //   Tier 3: defaults
     // ================================================================
-    // Store in ivar for later use (view switching, etc.)
-    ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath:[baseNode path]]);
-    
+    // Create the view-settings manager with the full read/write hierarchy
+    _settingsManager = [[GWViewSettingsManager managerForDirectoryPath:[baseNode path]] retain];
+
+    // Load working copy of view settings via the manager
+    // (readSettings returns autoreleased; ASSIGN retains it)
+    ASSIGN(dsStoreInfo, [_settingsManager readSettings]);
+    if (dsStoreInfo == nil) {
+      // Fallback: direct load (shouldn't normally happen)
+      ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath:[baseNode path]]);
+    }
+
     // Determine view type from DS_Store if available, otherwise use viewerPrefs
     viewType = [viewerPrefs objectForKey: @"viewtype"];
     
@@ -572,6 +585,10 @@
 
 - (void)activate
 {
+  /* Restore delegate — windowWillClose: sets it to nil, so without this
+   * windowDidBecomeKey: would never fire when the window is reused. */
+  [vwrwin setDelegate: self];
+
   if ([vwrwin isMiniaturized]) {
     [vwrwin deminiaturize: nil];
   }
@@ -920,7 +937,24 @@
     
       [defaults setObject: updatedprefs forKey: prefsname];
     }
-    
+
+    // ================================================================
+    // Save view settings to .DS_Store (interoperability, spec §3)
+    //   Tier 1: Try $FOLDER/.DS_Store (if writable, not policy-blocked)
+    //   Tier 2: Fallback to per-volume cache
+    //   Tier 3: Clean cache on success
+    // ================================================================
+    if (_settingsManager) {
+      // Update DSStoreInfo from the current preferences
+      if (dsStoreInfo == nil) {
+        ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath:[baseNode path]]);
+      }
+      [dsStoreInfo takeValuesFromViewerPrefs:updatedprefs];
+
+      // Write via the settings manager
+      [_settingsManager writeSettings:dsStoreInfo];
+    }
+
     ASSIGN (viewerPrefs, [updatedprefs makeImmutableCopyOnFail: NO]);
   }
 }
@@ -1274,6 +1308,11 @@
   historyPosition = pos;
 }
 
+- (GWViewSettingsManager *)settingsManager
+{
+  return _settingsManager;
+}
+
 @end
 
 
@@ -1284,7 +1323,27 @@
 
 - (void)windowDidBecomeKey:(NSNotification *)aNotification
 {
-  NSArray *selection = [nodeView selectedNodes];  
+  /* Reload settings from cache — the window may have been reused from a
+   * previous session via viewerWithBaseNode: + activate, in which case
+   * dsStoreInfo was never re-read.  This ensures label colours, positions,
+   * icon sizes, etc. reflect the latest written state. */
+  if (_settingsManager)
+    {
+      DSStoreInfo *fresh = [_settingsManager readSettings];
+      if (fresh)
+        {
+          ASSIGN(dsStoreInfo, fresh);
+          /* Re-apply DS_Store settings to update the view */
+          if ([viewType isEqual: @"Icon"])
+            [self applyDSStoreSettingsToIconView: nodeView];
+          else if ([viewType isEqual: @"List"])
+            [self applyDSStoreSettingsToListView: nodeView];
+          else if ([viewType isEqual: @"Browser"])
+            [self applyDSStoreSettingsToBrowserView: nodeView];
+        }
+    }
+
+  NSArray *selection = [nodeView selectedNodes];
   int count = [selection count];
   
   [vwrwin makeFirstResponder: nodeView]; 
@@ -1563,7 +1622,7 @@
       nodeView = [[GWViewerIconsView alloc] initForViewer: self];
       [scroll setHasVerticalScroller: YES];
       ASSIGN (viewType, @"Icon");
-      
+
     } else if ([requestedType isEqualToString:@"List"]) {
       NSRect r = [[scroll contentView] bounds];
 
@@ -1571,14 +1630,24 @@
       [scroll setHasVerticalScroller: YES];
       ASSIGN (viewType, @"List");
     }
-    
-    [scroll setDocumentView: nodeView];	
+
+    [scroll setDocumentView: nodeView];
     RELEASE (nodeView);
     [self applyContentBackgroundColor];
-    
+
     if (nodeView && baseNode) {
-      [nodeView showContentsOfNode: baseNode]; 
-      
+      [nodeView showContentsOfNode: baseNode];
+
+      // Reload dsStoreInfo before applying — it may have been updated since init
+      if (_settingsManager)
+        {
+          DSStoreInfo *fresh = [_settingsManager readSettings];
+          if (fresh)
+            {
+              ASSIGN(dsStoreInfo, fresh);
+            }
+        }
+
       // Apply DS_Store settings for the new view type
       if ([viewType isEqual: @"Icon"]) {
         [self applyDSStoreSettingsToIconView:nodeView];
@@ -1701,8 +1770,72 @@
 
 - (void)chooseLabelColor:(id)sender
 {
-  if ([nodeView respondsToSelector: @selector(setTextColor:)]) {
-  }
+  NSInteger tag = [sender tag];
+  if (tag < 0 || tag > 7) return;
+
+  DSStoreLabelColor labelColor = (DSStoreLabelColor)tag;
+
+  NSArray *selection = [nodeView selectedNodes];
+  if (!selection || [selection count] == 0)
+    return;
+
+  /* Ensure dsStoreInfo exists */
+  if (!dsStoreInfo)
+    {
+      ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath: [baseNode path]]);
+    }
+
+  NSString *basePath = [baseNode path];
+  if (![basePath hasSuffix: @"/"])
+    {
+      basePath = [basePath stringByAppendingString: @"/"];
+    }
+
+  NSMutableDictionary *tagColors = [NSMutableDictionary dictionary];
+
+  for (FSNode *node in selection)
+    {
+      if ([node isEqual: baseNode]) continue;
+
+      NSString *nodePath = [node path];
+      NSString *filename = [node name];
+
+      /* Get relative path for .DS_Store lookup */
+      if ([nodePath hasPrefix: basePath])
+        {
+          filename = [nodePath substringFromIndex: [basePath length]];
+        }
+
+      DSStoreIconInfo *info = [dsStoreInfo iconInfoForFilename: filename];
+      if (!info)
+        {
+          info = [DSStoreIconInfo infoForFilename: filename];
+        }
+      [info setLabelColor: labelColor];
+      [info setHasLabelColor: YES];  /* Always YES so lclr=0 persists as "None" */
+      [dsStoreInfo setIconInfo: info forFilename: filename];
+
+      if (labelColor != DSStoreLabelColorNone)
+        {
+          NSColor *color = [DSStoreIconInfo colorForLabelColor: labelColor];
+          if (color)
+            {
+              [tagColors setObject: color forKey: filename];
+            }
+        }
+    }
+
+  /* Visual feedback — apply tag colors to the icon view */
+  if ([nodeView respondsToSelector: @selector(setTagColorsFromDictionary:)])
+    {
+      [(FSNIconsView *)nodeView setTagColorsFromDictionary: tagColors];
+    }
+
+  /* Persist via settings manager (writable → .DS_Store, else → cache) */
+  if (_settingsManager)
+    {
+      [_settingsManager writeSettings: dsStoreInfo];
+    }
 }
 
 - (void)chooseBackColor:(id)sender
