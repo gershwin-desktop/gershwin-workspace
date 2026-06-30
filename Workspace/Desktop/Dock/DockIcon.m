@@ -270,6 +270,8 @@
 {
   /* Just set the flag; let the timer callback check it */
   isBouncing = NO;
+  [bounceTimer invalidate];
+  bounceTimer = nil;
   bounceOffset = 0.0;
   bounceVelocity = 0.0;
   pauseCounter = 0;
