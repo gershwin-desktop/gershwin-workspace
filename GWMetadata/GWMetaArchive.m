@@ -225,6 +225,26 @@ real_path_from_macosx(NSString *mpx)
   return [NSString pathWithComponents: out];
 }
 
+/*
+ * Zip-Slip guard: return YES only when `candidate` resolves to `canonicalDir`
+ * itself or a path strictly inside it.  `canonicalDir` must already be
+ * standardized (see extractArchive:).  `candidate` is standardized here so
+ * that any embedded ".." components (or an absolute entry name) are collapsed
+ * before the prefix check, preventing extraction outside the destination.
+ */
+static BOOL
+path_is_within(NSString *canonicalDir, NSString *candidate)
+{
+  NSString *std = [candidate stringByStandardizingPath];
+  if ([std isEqualToString: canonicalDir])
+    return YES;
+
+  NSString *prefix = [canonicalDir hasSuffix: @"/"]
+                       ? canonicalDir
+                       : [canonicalDir stringByAppendingString: @"/"];
+  return [std hasPrefix: prefix];
+}
+
 @implementation GWMetaArchive
 
 /* =================================================================
@@ -464,6 +484,9 @@ real_path_from_macosx(NSString *mpx)
       return NO;
     }
 
+  /* Canonical destination used for the per-entry Zip-Slip check below. */
+  NSString *canonicalDest = [destDir stringByStandardizingPath];
+
   for (;;)
     {
       int r = archive_read_next_header(a, &entry);
@@ -474,6 +497,9 @@ real_path_from_macosx(NSString *mpx)
       if (!ename) { archive_read_data_skip(a); continue; }
 
       NSString *epath = [NSString stringWithUTF8String: ename];
+      /* A non-UTF-8 entry name yields nil; skip rather than risk a
+       * nil argument to stringByAppendingPathComponent: below. */
+      if (epath == nil) { archive_read_data_skip(a); continue; }
 
       /* Skip metadata entries on second pass */
       if ([epath hasPrefix: @"__MACOSX/"] ||
@@ -484,6 +510,17 @@ real_path_from_macosx(NSString *mpx)
         }
 
       NSString *destPath = [destDir stringByAppendingPathComponent: epath];
+
+      /* Zip-Slip defense: reject entries that resolve outside destDir
+       * (embedded ".." or absolute names) before any create/open. */
+      if (!path_is_within(canonicalDest, destPath))
+        {
+          NSDebugLLog(@"gwspace",
+            @"GWMetaArchive: rejecting unsafe archive entry '%@'", epath);
+          archive_read_data_skip(a);
+          continue;
+        }
+
       mode_t filetype = archive_entry_filetype(entry);
 
       if (filetype == AE_IFDIR)

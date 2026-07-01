@@ -67,7 +67,9 @@
                   _directoryPath);
       return info;
     }
-    [info release];
+    /* +infoForDirectoryPath: returns an autoreleased object — do NOT
+     * release it here (that would over-release / double-free when the
+     * autorelease pool drains).  Just drop the reference and fall through. */
     info = nil;
   }
 

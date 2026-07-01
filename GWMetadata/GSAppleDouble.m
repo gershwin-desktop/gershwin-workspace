@@ -132,8 +132,11 @@ writeBE16(uint8_t *bytes, uint16_t value)
       uint32_t dataOff  = readBE32(desc + 4);
       uint32_t dataLen  = readBE32(desc + 8);
 
-      /* Validate offset and length */
-      if (dataOff + dataLen > length || dataOff < descriptorsEnd)
+      /* Validate offset and length.  Compute the sum in 64-bit so a
+       * crafted (dataOff, dataLen) cannot wrap the 32-bit addition and
+       * slip past this bound check into an out-of-bounds read below. */
+      if ((uint64_t)dataOff + (uint64_t)dataLen > length
+          || dataOff < descriptorsEnd)
         {
           /* Malformed entry; skip it rather than failing entirely */
           continue;
