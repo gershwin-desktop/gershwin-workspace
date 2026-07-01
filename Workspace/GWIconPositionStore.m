@@ -4,11 +4,8 @@
  */
 
 #import <Foundation/Foundation.h>
-#import <unistd.h>
 #import "GWIconPositionStore.h"
-#import "DSStore.h"
 #import "GSFileMetadata.h"
-#import "GWVolumeID.h"
 #import "GWViewSettingsManager.h"
 #import "DSStoreInfo.h"
 
@@ -22,54 +19,28 @@
   return shared;
 }
 
-/* Write one folder's batch of iloc entries (@[name, ilocX, ilocY]) to the
- * folder .DS_Store when writable, otherwise to the per-volume cache. */
+/* Write one folder's batch of iloc entries (@[name, ilocX, ilocY]). */
 - (void)writeBatch:(NSArray *)batch toFolder:(NSString *)folder
 {
-  BOOL folderWritable = (access([folder fileSystemRepresentation], W_OK) == 0);
+  NSUInteger bi;
 
-  NSString *dsp;
-  if (folderWritable)
-    dsp = [folder stringByAppendingPathComponent: @".DS_Store"];
-  else
-    dsp = [GWVolumeID cacheFilePathForPath: folder];   /* creates the cache dir */
-
-  if (dsp == nil)
-    return;
-
-  NS_DURING
+  /* Persist the positions through the settings orchestrator, which owns the
+   * write hierarchy: folder .DS_Store when writable (and not policy-blocked),
+   * otherwise the per-volume cache.  Carry only the iloc positions; loading
+   * inside saveToPath merges them with any existing view settings/labels. */
+  DSStoreInfo *info = [DSStoreInfo infoForDirectoryPath: folder loadImmediately: NO];
+  for (bi = 0; bi < [batch count]; bi++)
     {
-      DSStore *s;
-      if ([[NSFileManager defaultManager] fileExistsAtPath: dsp])
-        s = [DSStore storeWithPath: dsp];
-      else
-        s = [DSStore createStoreAtPath: dsp withEntries: nil];
-      if (s)
-        {
-          if (![s load])
-            s = [DSStore createStoreAtPath: dsp withEntries: nil];
-          if (s)
-            {
-              NSUInteger bi;
-              for (bi = 0; bi < [batch count]; bi++)
-                {
-                  NSArray *entry = [batch objectAtIndex: bi];
-                  [s setIconLocationForFilename: [entry objectAtIndex: 0]
-                                             x: [[entry objectAtIndex: 1] intValue]
-                                             y: [[entry objectAtIndex: 2] intValue]];
-                }
-              [s save];
-            }
-        }
+      NSArray *entry = [batch objectAtIndex: bi];
+      DSStoreIconInfo *ii = [DSStoreIconInfo infoForFilename: [entry objectAtIndex: 0]];
+      [ii setPosition: NSMakePoint([[entry objectAtIndex: 1] intValue],
+                                   [[entry objectAtIndex: 2] intValue])];
+      [ii setHasPosition: YES];
+      [info setIconInfo: ii forFilename: [entry objectAtIndex: 0]];
     }
-  NS_HANDLER
-    {
-      NSDebugLLog(@"gwspace", @"GWIconPositionStore: write failed for %@", folder);
-    }
-  NS_ENDHANDLER
+  [[GWViewSettingsManager managerForDirectoryPath: folder] writeSettings: info];
 
   /* fdLocation xattr export, per file. */
-  NSUInteger bi;
   for (bi = 0; bi < [batch count]; bi++)
     {
       NSArray *entry = [batch objectAtIndex: bi];
