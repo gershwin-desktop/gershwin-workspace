@@ -31,30 +31,6 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 
-/**
- * Custom X11 error handler for the dock window's X11 operations.
- * Silently ignores BadWindow/BadMatch errors from stale X11 windows.
- */
-static int dockX11ErrorHandler(Display *dpy, XErrorEvent *event)
-{
-  char errorText[256];
-  XGetErrorText(dpy, event->error_code, errorText, sizeof(errorText));
-  NSDebugLLog(@"gwspace", @"GWDockWindow X11 error: %s (request %d, error %d)",
-        errorText, event->request_code, event->error_code);
-  return 0;
-}
-
-static BOOL dockX11ErrorHandlerInstalled = NO;
-
-static void ensureDockX11ErrorHandler(void)
-{
-  if (!dockX11ErrorHandlerInstalled)
-    {
-      XSetErrorHandler(dockX11ErrorHandler);
-      dockX11ErrorHandlerInstalled = YES;
-    }
-}
-
 @implementation GWDockWindow
 
 - (void)dealloc
@@ -147,25 +123,30 @@ static void ensureDockX11ErrorHandler(void)
   return (Window)(uintptr_t)[srv windowDevice: [self windowNumber]];
 }
 
+/* The process already holds an X11 connection through the GNUstep backend;
+ * reuse it instead of opening (and leaking) a fresh Display on every call.
+ * Never XCloseDisplay this — it belongs to the backend. */
+- (Display *)dockDisplay
+{
+  GSDisplayServer *srv = GSServerForWindow(self);
+  if (srv == nil)
+    srv = GSCurrentServer();
+  if (srv == nil)
+    return NULL;
+  return (Display *)[srv serverDevice];
+}
+
 #pragma mark - X11 Dock Properties
 
 - (void)updateX11DockProperties
 {
-  ensureDockX11ErrorHandler();
-
-  Display *display = XOpenDisplay(NULL);
-  if (display == nil)
+  Display *display = [self dockDisplay];
+  if (display == NULL)
     return;
-
-  /* Ensure the display connection uses our error handler */
-  XSetErrorHandler(dockX11ErrorHandler);
 
   Window dockXWindow = [self dockX11Window];
   if (dockXWindow == (Window)0)
-    {
-      XCloseDisplay(display);
-      return;
-    }
+    return;
 
   /* ---- _NET_WM_WINDOW_TYPE (_NET_WM_WINDOW_TYPE_DOCK) ---- */
   Atom netWmWindowType = XInternAtom(display, "_NET_WM_WINDOW_TYPE", False);
@@ -198,7 +179,6 @@ static void ensureDockX11ErrorHandler(void)
                   PropModeReplace, (unsigned char *)&allDesktops, 1);
 
   XFlush(display);
-  XCloseDisplay(display);
 
   NSDebugLLog(@"gwspace", @"GWDockWindow: set X11 dock properties on window 0x%lx",
               (unsigned long)dockXWindow);
@@ -206,22 +186,23 @@ static void ensureDockX11ErrorHandler(void)
 
 - (void)updateX11Strut
 {
-  ensureDockX11ErrorHandler();
-
-  Display *display = XOpenDisplay(NULL);
-  if (display == nil)
+  Display *display = [self dockDisplay];
+  if (display == NULL)
     return;
-
-  XSetErrorHandler(dockX11ErrorHandler);
 
   Window dockXWindow = [self dockX11Window];
   if (dockXWindow == (Window)0)
-    {
-      XCloseDisplay(display);
-      return;
-    }
+    return;
 
   NSRect windowFrame = [self frame];
+
+  /* EWMH struts are in root-window coordinates with Y measured from the top,
+   * but NSWindow frames are bottom-left origin.  Convert the vertical span
+   * for left/right docks through the screen height. */
+  CGFloat screenH = [(self.screen ? self.screen : [NSScreen mainScreen]) frame].size.height;
+  unsigned long topY    = (unsigned long)(screenH - (windowFrame.origin.y
+                                                     + windowFrame.size.height));
+  unsigned long bottomY = (unsigned long)(screenH - windowFrame.origin.y);
 
   DockPosition pos = [dockView position];
 
@@ -239,16 +220,14 @@ static void ensureDockX11ErrorHandler(void)
     {
       case DockPositionLeft:
         strutPartial[0] = (unsigned long)windowFrame.size.width;  /* left */
-        strutPartial[4] = (unsigned long)windowFrame.origin.y;    /* left_start_y */
-        strutPartial[5] = (unsigned long)(windowFrame.origin.y
-                                          + windowFrame.size.height); /* left_end_y */
+        strutPartial[4] = topY;     /* left_start_y (top-down) */
+        strutPartial[5] = bottomY;  /* left_end_y   (top-down) */
         break;
 
       case DockPositionRight:
         strutPartial[1] = (unsigned long)windowFrame.size.width;  /* right */
-        strutPartial[6] = (unsigned long)windowFrame.origin.y;    /* right_start_y */
-        strutPartial[7] = (unsigned long)(windowFrame.origin.y
-                                          + windowFrame.size.height); /* right_end_y */
+        strutPartial[6] = topY;     /* right_start_y (top-down) */
+        strutPartial[7] = bottomY;  /* right_end_y   (top-down) */
         break;
 
       case DockPositionBottom:
@@ -271,7 +250,6 @@ static void ensureDockX11ErrorHandler(void)
                   PropModeReplace, (unsigned char *)strutPartial, 12);
 
   XFlush(display);
-  XCloseDisplay(display);
 
   NSDebugLLog(@"gwspace", @"GWDockWindow: set X11 strut (pos %d, size %@)",
               pos, NSStringFromSize(windowFrame.size));

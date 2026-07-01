@@ -10,8 +10,13 @@
 #import "GWVolumeID.h"
 #ifdef __linux__
 #import <sys/statfs.h>
+#import <mntent.h>       /* getmntent / setmntent — portable mount table */
+#ifndef _PATH_MOUNTED
+#define _PATH_MOUNTED "/etc/mtab"
+#endif
 #else
-/* BSDs and macOS: struct statfs via <sys/param.h> + <sys/mount.h> */
+/* BSDs and macOS: struct statfs via <sys/param.h> + <sys/mount.h>;
+ * getmntinfo() enumerates the mount table. */
 #import <sys/param.h>
 #import <sys/mount.h>
 #endif
@@ -33,9 +38,8 @@
 #ifndef NFS_SUPER_MAGIC
 #define NFS_SUPER_MAGIC     0x6969
 #endif
-#ifndef SMB_SUPER_MAGIC
-#define SMB_SUPER_MAGIC     0x0000FF534D42ull
-#endif
+/* Linux SMB/CIFS share the same super-magic (0xFF534D42); the previous
+ * SMB_SUPER_MAGIC constant was malformed and never matched f_type. */
 #ifndef CIFS_SUPER_MAGIC
 #define CIFS_SUPER_MAGIC    0xFF534D42
 #endif
@@ -53,85 +57,74 @@
 #endif
 
 static NSMutableDictionary *sVolumeIDCache = nil;
-static NSString *sMountInfoPath = @"/proc/self/mountinfo";
 
 /* ------------------------------------------------------------------ */
 #pragma mark - Internal helpers
 /* ------------------------------------------------------------------ */
 
 /**
- * Parse /proc/self/mountinfo and find the entry that matches @p path.
- * Returns a dictionary with keys: mountPoint, source, fsType, options,
- * superOptions, major, minor, root.
+ * Find the mount entry that owns @p path — the deepest mount point that is a
+ * directory-boundary prefix of it — and return { mountPoint, source, fsType }.
+ * Uses the portable mount-table APIs (getmntent on Linux, getmntinfo on the
+ * BSDs) instead of parsing /proc directly.
  */
 static NSDictionary *mountInfoForPath(NSString *path)
 {
   if (!path || [path length] == 0) return nil;
 
-  NSString *content = [NSString stringWithContentsOfFile:sMountInfoPath
-                                                encoding:NSUTF8StringEncoding
-                                                   error:NULL];
-  if (!content) return nil;
+  const char *cpath = [path fileSystemRepresentation];
+  if (cpath == NULL) return nil;
+  size_t plen = strlen(cpath);
 
-  /* Find the longest matching mount point (deepest mount) */
-  NSDictionary *best = nil;
-  NSUInteger bestLen = 0;
+  NSString *bestMount = nil, *bestSource = nil, *bestType = nil;
+  size_t bestLen = 0;
 
-  for (NSString *line in [content componentsSeparatedByString:@"\n"]) {
-    if ([line length] == 0) continue;
-
-    /* Format: id parent major:minor root mountPoint options - fsType source superOptions */
-    NSArray *parts = [line componentsSeparatedByString:@" "];
-    if ([parts count] < 10) continue;
-
-    /* Find the separator '-' */
-    NSUInteger dashIdx = NSNotFound;
-    for (NSUInteger i = 0; i < [parts count]; i++) {
-      if ([[parts objectAtIndex:i] isEqualToString:@"-"]) {
-        dashIdx = i;
-        break;
-      }
+#if defined(__linux__)
+  FILE *mt = setmntent(_PATH_MOUNTED, "r");
+  if (mt == NULL) return nil;
+  struct mntent *me;
+  while ((me = getmntent(mt)) != NULL)
+    {
+      const char *mp = me->mnt_dir;
+      size_t mlen = strlen(mp);
+      if (mlen > plen || strncmp(cpath, mp, mlen) != 0) continue;
+      /* Directory boundary: whole-string match, root "/", or next char '/'. */
+      if (mlen < plen && mlen > 1 && cpath[mlen] != '/') continue;
+      if (mlen >= bestLen)
+        {
+          bestLen    = mlen;
+          bestMount  = [NSString stringWithUTF8String: mp];
+          bestSource = [NSString stringWithUTF8String: me->mnt_fsname];
+          bestType   = [NSString stringWithUTF8String: me->mnt_type];
+        }
     }
-    if (dashIdx == NSNotFound || dashIdx + 3 >= [parts count]) continue;
-
-    NSString *mountPoint = [parts objectAtIndex:4];
-    NSUInteger mpLen = [mountPoint length];
-
-    /* Skip entries whose mount point is not a prefix of path */
-    if (mpLen > [path length]) continue;
-    if (![path hasPrefix:mountPoint]) continue;
-    /* Ensure a directory boundary: either same length or next char is '/' */
-    if (mpLen < [path length]
-        && [path characterAtIndex:mpLen] != '/') continue;
-
-    /* Prefer the deepest (longest) match */
-    if (mpLen > bestLen) {
-      bestLen = mpLen;
-      NSString *fsType  = [parts objectAtIndex:dashIdx + 1];
-      NSString *source  = [parts objectAtIndex:dashIdx + 2];
-      NSString *superOpts = (dashIdx + 3 < [parts count])
-                              ? [parts objectAtIndex:dashIdx + 3] : @"";
-      NSString *root    = [parts objectAtIndex:3];
-      NSString *majMin  = [parts objectAtIndex:2];
-
-      NSArray *mmParts = [majMin componentsSeparatedByString:@":"];
-      NSString *major = ([mmParts count] >= 2) ? [mmParts objectAtIndex:0] : @"0";
-      NSString *minor = ([mmParts count] >= 2) ? [mmParts objectAtIndex:1] : @"0";
-
-      best = [NSDictionary dictionaryWithObjectsAndKeys:
-                           mountPoint, @"mountPoint",
-                           source, @"source",
-                           fsType, @"fsType",
-                           [parts objectAtIndex:5], @"options",
-                           superOpts, @"superOptions",
-                           root, @"root",
-                           major, @"major",
-                           minor, @"minor",
-                           nil];
+  endmntent(mt);
+#else
+  struct statfs *mnts = NULL;
+  int n = getmntinfo(&mnts, MNT_NOWAIT);
+  int i;
+  for (i = 0; i < n; i++)
+    {
+      const char *mp = mnts[i].f_mntonname;
+      size_t mlen = strlen(mp);
+      if (mlen > plen || strncmp(cpath, mp, mlen) != 0) continue;
+      if (mlen < plen && mlen > 1 && cpath[mlen] != '/') continue;
+      if (mlen >= bestLen)
+        {
+          bestLen    = mlen;
+          bestMount  = [NSString stringWithUTF8String: mp];
+          bestSource = [NSString stringWithUTF8String: mnts[i].f_mntfromname];
+          bestType   = [NSString stringWithUTF8String: mnts[i].f_fstypename];
+        }
     }
-  }
+#endif
 
-  return best;
+  if (bestMount == nil) return nil;
+  return [NSDictionary dictionaryWithObjectsAndKeys:
+            bestMount, @"mountPoint",
+            (bestSource ? bestSource : @""), @"source",
+            (bestType ? bestType : @""), @"fsType",
+            nil];
 }
 
 static NSString *stringForFSMagic(long magic)
@@ -289,9 +282,8 @@ static NSString *stringForFSMagic(long magic)
   /* Linux: statfs provides f_type (numeric magic) */
   long type = (long)buf.f_type;
 
-  /* Direct network filesystem detection */
+  /* Direct network filesystem detection (SMB and CIFS share this magic) */
   if (type == NFS_SUPER_MAGIC)      return YES;
-  if (type == SMB_SUPER_MAGIC)      return YES;
   if (type == CIFS_SUPER_MAGIC)     return YES;
 
   /* FUSE: check mount source for network indicators */

@@ -220,14 +220,18 @@ static GWDesktopManager *desktopManager = nil;
   });
   [self addWatcherForPath: [dskNode path]];
     
-  if ((hidedock == NO) && (dockWindow == nil)) {
-    NSDebugLLog(@"gwspace", @"DEBUG: Creating dock window (hidedock=%d)", hidedock);
-    dockWindow = [[GWDockWindow alloc] initWithDockView: dock];
+  if (hidedock == NO) {
+    /* Create the dock window on first activation; on a later reactivation
+     * it already exists but was ordered out by deactivateDesktop, so it
+     * must be shown again here (the previous code only showed it when
+     * dockWindow == nil, leaving the dock hidden after reactivation). */
+    if (dockWindow == nil) {
+      NSDebugLLog(@"gwspace", @"DEBUG: Creating dock window (hidedock=%d)", hidedock);
+      dockWindow = [[GWDockWindow alloc] initWithDockView: dock];
+    }
     [dock tile];
     [dockWindow showDock];
-    NSDebugLLog(@"gwspace", @"DEBUG: Dock window created, dock frame: %@", NSStringFromRect([dock frame]));
-  } else {
-    NSDebugLLog(@"gwspace", @"DEBUG: Dock window NOT created (hidedock=%d, dockWindow=%@)", hidedock, dockWindow);
+    NSDebugLLog(@"gwspace", @"DEBUG: Dock window shown, dock frame: %@", NSStringFromRect([dock frame]));
   }
   
   [mpointWatcher startWatching];  
