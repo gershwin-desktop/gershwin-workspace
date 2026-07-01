@@ -31,6 +31,7 @@
 #import <unistd.h>
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
+#import "GSFileMetadata.h"
 
 /*
  *****************************************************************************
@@ -289,6 +290,21 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
           key = nodepath;
         }
 
+      // Check for custom icon from macOS metadata (directories/packages/bundles)
+      {
+        NSString *realDirPath = [nodepath stringByResolvingSymlinksInPath];
+        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: realDirPath];
+        if (md && [md hasCustomIcon])
+          {
+            NSImage *customIcon = [md customIconAsImage];
+            if (customIcon)
+              {
+                icon = [self cachedIconOfSize: size forKey: [realDirPath stringByAppendingString:@".customicon"] addBaseIcon: customIcon];
+                key = nil;  // prevent overwriting with default icon below
+              }
+          }
+      }
+
       if (key != nil)
 	{
 	  icon = [self cachedIconOfSize: size forKey: key];
@@ -353,6 +369,22 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	  }
 	}
       // no thumbnail found
+
+      // Check for custom icon from macOS metadata (non-directory files)
+      if (icon == nil)
+        {
+          NSString *realMetadataPath = [nodepath stringByResolvingSymlinksInPath];
+          GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: realMetadataPath];
+          if (md && [md hasCustomIcon])
+            {
+              NSImage *customIcon = [md customIconAsImage];
+              if (customIcon)
+                {
+                  icon = [self cachedIconOfSize: size forKey: [realMetadataPath stringByAppendingString:@".customicon"] addBaseIcon: customIcon];
+                }
+            }
+        }
+
       if (icon == nil)
 	{
           NSString *linkKey;

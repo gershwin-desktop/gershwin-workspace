@@ -321,6 +321,13 @@
     return [self load];
 }
 
+#pragma mark - Manual population support
+
+- (void)markAsLoaded
+{
+    _loaded = YES;
+}
+
 #pragma mark - Alias Resolution
 
 /**
@@ -1083,6 +1090,13 @@
     return [_iconInfoDict objectForKey:filename];
 }
 
+- (void)setIconInfo:(DSStoreIconInfo *)iconInfo forFilename:(NSString *)filename
+{
+    if (iconInfo && filename) {
+        [_iconInfoDict setObject:iconInfo forKey:filename];
+    }
+}
+
 - (NSDictionary *)allIconInfo
 {
     return [NSDictionary dictionaryWithDictionary:_iconInfoDict];
@@ -1159,6 +1173,236 @@
 {
     // Delegate to DSStore class method for .DS_Store interoperability coordinate conversion
     return [DSStore gnustepPointFromDSStorePoint:dsPoint viewHeight:viewHeight iconHeight:iconHeight];
+}
+
+#pragma mark - Writing / Saving
+
+- (BOOL)save
+{
+  return [self saveToPath:[_directoryPath stringByAppendingPathComponent:@".DS_Store"]];
+}
+
+- (BOOL)saveToPath:(NSString *)dsStorePath
+{
+  if (!dsStorePath || [dsStorePath length] == 0) return NO;
+
+  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
+  NSDebugLLog(@"gwspace", @"║             DS_STORE WRITE: %@", dsStorePath);
+  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
+
+  /* Build the DSStore object with all current settings */
+  DSStore *store = [DSStore createStoreAtPath:dsStorePath withEntries:nil];
+  if (!store) {
+    NSDebugLLog(@"gwspace", @"║ ✗ Failed to create DSStore for %@", dsStorePath);
+    return NO;
+  }
+
+  [store load];  /* Load existing entries so we merge, not replace */
+
+  /* --- Directory-level entries (filename = ".") --- */
+
+  /* View style */
+  if (_hasViewStyle) {
+    NSString *styleStr = @"icnv";
+    switch (_viewStyle) {
+      case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
+      case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
+      case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
+      case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
+      case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
+    }
+    DSStoreEntry *e = [DSStoreEntry viewStyleEntryForFile:@"." style:styleStr];
+    if (e) [store setEntry:e];
+  }
+
+  /* Icon size */
+  if (_hasIconSize && _iconSize > 0 && _iconSize <= 512) {
+    DSStoreEntry *e = [DSStoreEntry iconSizeEntryForFile:@"." size:_iconSize];
+    if (e) [store setEntry:e];
+  }
+
+  /* Icon arrangement */
+  if (_hasIconArrangement) {
+    int arr = (_iconArrangement == DSStoreIconArrangementGrid) ? 1 : 0;
+    DSStoreEntry *e = [DSStoreEntry iconArrangementEntryForFile:@"." arrangement:arr];
+    if (e) [store setEntry:e];
+  }
+
+  /* Label position */
+  if (_hasLabelPosition) {
+    int pos = (_labelPosition == DSStoreLabelPositionBottom) ? 0 : 1;
+    DSStoreEntry *e = [DSStoreEntry labelPositionEntryForFile:@"." position:pos];
+    if (e) [store setEntry:e];
+  }
+
+  /* Grid spacing */
+  if (_hasGridSpacing && _gridSpacing > 0) {
+    DSStoreEntry *e = [DSStoreEntry gridSpacingEntryForFile:@"." spacing:(int)_gridSpacing];
+    if (e) [store setEntry:e];
+  }
+
+  /* Background color */
+  if (_backgroundType == DSStoreBackgroundColor && _backgroundColor) {
+    CGFloat r, g, b, a;
+    [_backgroundColor getRed:&r green:&g blue:&b alpha:&a];
+    int ri = (int)(r * 65535.0);
+    int gi = (int)(g * 65535.0);
+    int bi = (int)(b * 65535.0);
+    DSStoreEntry *e = [DSStoreEntry backgroundColorEntryForFile:@"."
+                                                           red:ri
+                                                         green:gi
+                                                          blue:bi];
+    if (e) [store setEntry:e];
+  }
+
+  /* Background image */
+  if (_backgroundType == DSStoreBackgroundPicture && _backgroundImagePath) {
+    DSStoreEntry *e = [DSStoreEntry backgroundImageEntryForFile:@"."
+                                                     imagePath:_backgroundImagePath];
+    if (e) [store setEntry:e];
+  }
+
+  /* Sidebar width */
+  if (_hasSidebarWidth) {
+    DSStoreEntry *e = [DSStoreEntry sidebarWidthEntryForFile:@"." width:_sidebarWidth];
+    if (e) [store setEntry:e];
+  }
+
+  /* List view text size */
+  if (_hasListTextSize) {
+    DSStoreEntry *e = [DSStoreEntry textSizeEntryForFile:@"." size:_listTextSize];
+    if (e) [store setEntry:e];
+  }
+
+  /* Sort column */
+  if (_hasSortColumn && _sortColumn) {
+    DSStoreEntry *e = [DSStoreEntry sortByEntryForFile:@"." sortBy:_sortColumn];
+    if (e) [store setEntry:e];
+  }
+
+  /* --- Per-file entries --- */
+  for (NSString *filename in _iconInfoDict) {
+    DSStoreIconInfo *info = [_iconInfoDict objectForKey:filename];
+
+    /* Icon position (Iloc) */
+    if (info.hasPosition) {
+      DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:filename
+                                                             x:(int)info.position.x
+                                                             y:(int)info.position.y];
+      if (e) [store setEntry:e];
+    }
+
+    /* Comment */
+    if (info.comments) {
+      DSStoreEntry *e = [DSStoreEntry commentsEntryForFile:filename
+                                                  comments:info.comments];
+      if (e) [store setEntry:e];
+    }
+
+    /* Label color */
+    if (info.hasLabelColor) {
+      DSStoreEntry *e = [DSStoreEntry labelColorEntryForFile:filename
+                                                       color:(int)info.labelColor];
+      if (e) [store setEntry:e];
+    }
+  }
+
+  /* --- Write atomically --- */
+  BOOL saved = [store save];
+  if (saved) {
+    NSDebugLLog(@"gwspace", @"║ ✓ Successfully wrote %@", dsStorePath);
+  } else {
+    NSDebugLLog(@"gwspace", @"║ ✗ Failed to write %@", dsStorePath);
+  }
+
+  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
+
+  return saved;
+}
+
+- (void)takeValuesFromViewerPrefs:(NSDictionary *)prefs
+{
+  if (!prefs) return;
+
+  /* Window geometry */
+  NSString *geo = [prefs objectForKey:@"geometry"];
+  if (geo) {
+    NSRect frame = NSRectFromString(geo);
+    if (frame.size.width > 0 && frame.size.height > 0) {
+      _windowFrame = frame;
+      _hasWindowFrame = YES;
+    }
+  }
+
+  /* View type */
+  NSString *vt = [prefs objectForKey:@"viewtype"];
+  if (vt) {
+    if ([vt isEqualToString:@"Icon"]) {
+      _viewStyle = DSStoreViewStyleIcon;
+    } else if ([vt isEqualToString:@"List"]) {
+      _viewStyle = DSStoreViewStyleList;
+    } else if ([vt isEqualToString:@"Browser"]) {
+      _viewStyle = DSStoreViewStyleColumn;
+    }
+    _hasViewStyle = YES;
+  }
+
+  /* Icon size */
+  id iconSizeObj = [prefs objectForKey:@"iconsize"];
+  if (iconSizeObj) {
+    int sz = [iconSizeObj intValue];
+    if (sz > 0 && sz <= 512) {
+      _iconSize = sz;
+      _hasIconSize = YES;
+    }
+  }
+
+  /* Icon position (label position) */
+  NSString *ip = [prefs objectForKey:@"iconspos"];
+  if (ip) {
+    _labelPosition = [ip isEqualToString:@"bottom"] ? DSStoreLabelPositionBottom
+                     : DSStoreLabelPositionRight;
+    _hasLabelPosition = YES;
+  }
+
+  /* Icon arrangement */
+  NSString *ia = [prefs objectForKey:@"iconsarr"];
+  if (ia) {
+    _iconArrangement = [ia isEqualToString:@"grid"] ? DSStoreIconArrangementGrid
+                       : DSStoreIconArrangementNone;
+    _hasIconArrangement = YES;
+  }
+
+  /* Sidebar width */
+  id sw = [prefs objectForKey:@"sidebarwidth"];
+  if (sw) {
+    _sidebarWidth = [sw intValue];
+    _hasSidebarWidth = YES;
+  }
+}
+
+- (void)resetToDefaults
+{
+  _hasWindowFrame = NO;
+  _hasViewStyle = NO;
+  _hasIconSize = NO;
+  _hasIconArrangement = NO;
+  _hasLabelPosition = NO;
+  _hasGridSpacing = NO;
+  _hasSidebarWidth = NO;
+  _hasListTextSize = NO;
+  _hasListIconSize = NO;
+  _hasSortColumn = NO;
+
+  _backgroundType = DSStoreBackgroundDefault;
+  [_backgroundColor release];  _backgroundColor = nil;
+  [_backgroundImagePath release];  _backgroundImagePath = nil;
+  [_sortColumn release];  _sortColumn = nil;
+  [_columnWidths release];  _columnWidths = nil;
+  [_columnVisible release];  _columnVisible = nil;
+  [_iconInfoDict removeAllObjects];
+
+  _loaded = NO;
 }
 
 #pragma mark - Debugging

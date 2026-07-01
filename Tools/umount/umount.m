@@ -27,9 +27,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-static NSString *GWWorkspaceWillUnmountNotification = @"GWWorkspaceWillUnmountNotification";
-static NSString *GWUnmountPathKey = @"GWUnmountPath";
-
 /* Resolve our own executable's absolute path from argv[0] and PATH.
  * Returns nil on failure. */
 static NSString *resolveOwnPath(const char *argv0, NSArray *pathDirs)

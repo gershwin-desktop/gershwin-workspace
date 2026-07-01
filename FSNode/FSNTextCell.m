@@ -1,5 +1,5 @@
 /* FSNTextCell.m
- *  
+ *
  * Copyright (C) 2004-2021 Free Software Foundation, Inc.
  *
  * Authors: Enrico Sersale <enrico@imago.ro>
@@ -12,12 +12,12 @@
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation; either version 2 of the License, or
  * (at your option) any later version.
- * 
+ *
  * This program is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
- * 
+ *
  * You should have received a copy of the GNU General Public License
  * along with this program; if not, write to the Free Software
  * Foundation, Inc., 31 Milk Street #960789 Boston, MA 02196 USA.
@@ -26,6 +26,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import "FSNTextCell.h"
+#import "GSFileMetadata.h"
 
 
 @implementation FSNTextCell
@@ -35,8 +36,53 @@
   RELEASE (uncutTitle);
   RELEASE (fontAttr);
   RELEASE (dots);
-  RELEASE (icon);  
+  RELEASE (icon);
+  RELEASE (displayIcon);
+  RELEASE (tagColor);
+  RELEASE (nodePath);
   [super dealloc];
+}
+
+/*
+ * Build an icon image with the label coloured dot composited
+ * directly onto it. Because the badge is part of the image
+ * pixels it can never be obscured by selection highlights
+ * or any later drawing.
+ */
+- (void)rebuildDisplayIcon
+{
+  DESTROY (displayIcon);
+
+  if (icon == nil)
+    return;
+
+  if (tagColor == nil)
+    {
+      displayIcon = [icon retain];
+      return;
+    }
+
+  NSSize sz = [icon size];
+  displayIcon = [[NSImage alloc] initWithSize: sz];
+  [displayIcon lockFocus];
+  [icon compositeToPoint: NSZeroPoint operation: NSCompositeSourceOver];
+
+  CGFloat dotSize = (sz.width >= 48) ? 10.0 : 8.0;
+  CGFloat dotMargin = 2.0;
+  CGFloat dotTop = (sz.width >= 48) ? dotMargin : 12.0;
+  NSRect dotRect = NSMakeRect(sz.width - dotSize - dotMargin,
+                               dotTop, dotSize, dotSize);
+
+  [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
+  [[NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)] fill];
+  [tagColor set];
+  [[NSBezierPath bezierPathWithOvalInRect:dotRect] fill];
+  [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
+  NSBezierPath *dp = [NSBezierPath bezierPathWithOvalInRect:dotRect];
+  [dp setLineWidth:0.5];
+  [dp stroke];
+
+  [displayIcon unlockFocus];
 }
 
 - (id)init
@@ -46,10 +92,11 @@
   if (self)
     {
       ASSIGN (fontAttr, [NSDictionary dictionaryWithObject: [self font]
-				      forKey: NSFontAttributeName]);
+					      forKey: NSFontAttributeName]);
       ASSIGN (dots, @"...");
       titlesize = NSMakeSize(0, 0);
       icon = nil;
+      displayIcon = nil;
       dateCell = NO;
     }
 
@@ -64,14 +111,17 @@
   c->dots = [dots copyWithZone: zone];
 
   c->dateCell = dateCell;
-  
+
   if (uncutTitle) {
     c->uncutTitle = [uncutTitle copyWithZone: zone];
   } else {
     c->uncutTitle = nil;
   }
 
-  RETAIN (icon);
+  c->icon = [icon retain];
+  c->displayIcon = [displayIcon retain];
+  c->tagColor = [tagColor retain];
+  c->nodePath = [nodePath retain];
 
   return c;
 }
@@ -79,25 +129,42 @@
 - (void)setStringValue:(NSString *)aString
 {
   [super setStringValue: aString];
-  titlesize = [[self stringValue] sizeWithAttributes: fontAttr]; 
+  titlesize = [[self stringValue] sizeWithAttributes: fontAttr];
 }
 
 - (void)setFont:(NSFont *)fontObj
 {
   [super setFont: fontObj];
-  ASSIGN (fontAttr, [NSDictionary dictionaryWithObject: [self font] 
+  ASSIGN (fontAttr, [NSDictionary dictionaryWithObject: [self font]
                                                 forKey: NSFontAttributeName]);
-  titlesize = [[self stringValue] sizeWithAttributes: fontAttr];   
+  titlesize = [[self stringValue] sizeWithAttributes: fontAttr];
 }
 
 - (void)setIcon:(NSImage *)icn
-{ 
+{
   ASSIGN (icon, icn);
+  [self rebuildDisplayIcon];
 }
 
 - (NSImage *)icon
 {
   return icon;
+}
+
+- (void)setTagColor:(NSColor *)color
+{
+  ASSIGN (tagColor, color);
+  [self rebuildDisplayIcon];
+}
+
+- (NSColor *)tagColor
+{
+  return tagColor;
+}
+
+- (void)setNodePath:(NSString *)path
+{
+  ASSIGN (nodePath, path);
 }
 
 - (float)uncutTitleLenght
@@ -115,11 +182,11 @@
   return dateCell;
 }
 
-- (NSString *)cutTitle:(NSString *)title 
+- (NSString *)cutTitle:(NSString *)title
             toFitWidth:(float)width
 {
   int tl = [title length];
-  
+
   if (tl <= 5)
     {
       return dots;
@@ -138,7 +205,7 @@
       while (dotl > width) {
         if (dl <= 5) {
           return dots;
-        }        
+        }
 
         if (p) {
           fpto--;
@@ -152,19 +219,19 @@
         dotted = [NSString stringWithFormat: @"%@%@%@", fp, dots, sp];
         dotl = [dotted sizeWithAttributes: fontAttr].width;
         dl = [dotted length];
-      }      
-      
+      }
+
       return dotted;
     }
-  
+
   return title;
 }
 
-- (NSString *)cutDateTitle:(NSString *)title 
+- (NSString *)cutDateTitle:(NSString *)title
                 toFitWidth:(float)width
 {
   NSUInteger tl = [title length];
-    
+
   if (tl <= 5)
     {
       return dots;
@@ -177,43 +244,42 @@
       if (date)
         {
           NSString *descr;
-        
+
           format = @"%m/%d/%y";
-          descr = [date descriptionWithCalendarFormat: format 
+          descr = [date descriptionWithCalendarFormat: format
                                              timeZone: [NSTimeZone localTimeZone] locale: nil];
-        
+
           if ([descr sizeWithAttributes: fontAttr].width > width) {
             return [self cutTitle: descr toFitWidth: width];
           } else {
             return descr;
           }
-        
+
         }
       else
         {
           return [self cutTitle: title toFitWidth: width];
         }
     }
-  
+
   return title;
 }
 
-- (void)drawInteriorWithFrame:(NSRect)cellFrame 
+- (void)drawInteriorWithFrame:(NSRect)cellFrame
                        inView:(NSView *)controlView
 {
   NSRect title_rect = cellFrame;
   CGFloat textlength;
-  NSString *cutTitle;  
+  NSString *cutTitle;
 
 #define LEFT_MARGIN (2.0)
 #define ICON_TEXT_SPACING (8.0)
- 
+
   textlength = title_rect.size.width - LEFT_MARGIN;
   if (icon)
     textlength -= ([icon size].width + ICON_TEXT_SPACING);
 
   ASSIGN (uncutTitle, [self stringValue]);
-  /* we calculate the reduced title only if necessary */
   cutTitle = nil;
   if ([uncutTitle sizeWithAttributes: fontAttr].width > textlength)
     {
@@ -234,7 +300,7 @@
   if (icon == nil) {
     [super drawInteriorWithFrame: title_rect inView: controlView];
   } else {
-    NSRect icon_rect;    
+    NSRect icon_rect;
 
     icon_rect.origin = cellFrame.origin;
     icon_rect.size = [icon size];
@@ -250,8 +316,26 @@
 
     [super drawInteriorWithFrame: title_rect inView: controlView];
 
-    [icon compositeToPoint: icon_rect.origin 
-		 operation: NSCompositeSourceOver];
+    /* Lazily load tag colour from file metadata if not already set */
+    if (tagColor == nil && nodePath != nil)
+      {
+        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: nodePath];
+        if (md)
+          {
+            NSInteger label = [md labelNumber];
+            if (label > 0)
+              {
+                NSColor *color = [GSFileMetadata colorForLabel: (GSFileLabel)label];
+                if (color)
+                  [self setTagColor: color];
+              }
+          }
+      }
+
+    /* Draw the (possibly badged) icon. If a label is set the icon
+     * already has the badge baked into its pixels. */
+    [displayIcon compositeToPoint: icon_rect.origin
+			operation: NSCompositeSourceOver];
   }
 
   /* we reset the title to the orginal string */

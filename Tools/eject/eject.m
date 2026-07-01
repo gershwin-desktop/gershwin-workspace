@@ -27,10 +27,6 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
-/* Notification name posted to notify Workspace of a user-initiated unmount. */
-static NSString *GWWorkspaceWillUnmountNotification = @"GWWorkspaceWillUnmountNotification";
-static NSString *GWUnmountPathKey = @"GWUnmountPath";
-
 /* Resolve our own executable's directory so we can skip it
  * in the PATH search for the real command.  Portable across
  * Linux and BSD. */

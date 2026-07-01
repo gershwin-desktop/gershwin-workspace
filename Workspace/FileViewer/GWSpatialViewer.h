@@ -36,6 +36,7 @@
 @class NSTextField;
 @class GWViewerScrollView;
 @class DSStoreInfo;
+@class GWViewSettingsManager;
 
 @interface GWSpatialViewer : NSObject
 {
@@ -67,8 +68,9 @@
 
   FSNodeRep *fsnodeRep;
 
-  // DS_Store file monitoring for interoperability
-  DSStoreInfo *dsStoreInfo;                 // Current DSStoreInfo object
+  // .DS_Store view-settings persistence (full spec hierarchy)
+  GWViewSettingsManager *_settingsManager;  // Orchestrates read/write (§2-3)
+  DSStoreInfo *dsStoreInfo;                 // Current working copy of view settings
   NSString *dsStorePath;                    // Path to .DS_Store file being watched
 
   BOOL invalidated;
@@ -144,6 +146,7 @@
 - (void)applyDSStoreSettingsToListView:(id)listView;
 - (void)applyDSStoreSettingsToBrowserView:(id)browserView;
 - (DSStoreInfo *)dsStoreInfo;
+- (GWViewSettingsManager *)settingsManager;
 
 // History support (required by GWViewersManager)
 - (NSMutableArray *)history;

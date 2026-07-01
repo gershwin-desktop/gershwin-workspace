@@ -32,6 +32,7 @@
 #import "FSNPathComponentsViewer.h"
 #import "FSNode.h"
 #import "FSNFunctions.h"
+#import "GSFileMetadata.h"
 
 #define BORDER 8.0
 
@@ -253,10 +254,11 @@ static NSImage *branchImage;
   RELEASE (node);
   RELEASE (hostname);
   RELEASE (icon);
+  RELEASE (tagColor);
   RELEASE (label);
   RELEASE (fontAttr);
-  
-  [super dealloc];  
+
+  [super dealloc];
 }
 
 + (void)initialize
@@ -286,6 +288,17 @@ static NSImage *branchImage;
     fsnodeRep = [FSNodeRep sharedInstance];    
     ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
     isLeaf = NO;
+
+    /* Load Finder label color from metadata */
+    {
+      GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [anode path]];
+      if (md)
+        {
+          NSInteger labelNum = [md labelNumber];
+          if (labelNum > 0)
+            ASSIGN (tagColor, [GSFileMetadata colorForLabel: (GSFileLabel)labelNum]);
+        }
+    }
 
 		if ([[node path] isEqual: path_separator()] && ([node isMountPoint] == NO)) {
 		  NSHost *host = [NSHost currentHost];
@@ -399,16 +412,36 @@ static NSImage *branchImage;
 
 - (void)drawRect:(NSRect)rect
 {	 
-  [icon compositeToPoint: iconRect.origin operation: NSCompositeSourceOver];      
-  
+  [icon compositeToPoint: iconRect.origin operation: NSCompositeSourceOver];
+
   if (NSIsEmptyRect(labelRect) == NO) {
     [label drawWithFrame: labelRect inView: self];
   }
-       
+
   if (isLeaf == NO) {
-    [branchImage compositeToPoint: brImgRect.origin 
+    [branchImage compositeToPoint: brImgRect.origin
                         operation: NSCompositeSourceOver];
   }
+
+  /* Draw tag color dot (Finder label) - drawn last so it's on top */
+  if (tagColor)
+    {
+      CGFloat dotSize = 6.0;
+      CGFloat dotMargin = 1.0;
+      NSRect dotRect = NSMakeRect(
+        iconRect.origin.x + iconRect.size.width - dotSize - dotMargin,
+        iconRect.origin.y + dotMargin,
+        dotSize, dotSize);
+      [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
+      NSBezierPath *sp = [NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)];
+      [sp fill];
+      [tagColor set];
+      NSBezierPath *dp = [NSBezierPath bezierPathWithOvalInRect:dotRect];
+      [dp fill];
+      [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
+      [dp setLineWidth:0.5];
+      [dp stroke];
+    }
 }
 
 @end

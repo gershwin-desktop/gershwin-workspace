@@ -30,20 +30,30 @@
 #import "FSNodeRep.h"
 
 @class NSImage;
+@class NSColor;
 
-@interface FSNTextCell : NSTextFieldCell 
+@interface FSNTextCell : NSTextFieldCell
 {
   NSDictionary *fontAttr;
   NSString *dots;
   NSSize titlesize;
   BOOL dateCell;
-  NSString *uncutTitle; 
+  NSString *uncutTitle;
   NSImage *icon;
+  NSImage *displayIcon;   /* icon with tagColor badge composited on */
+  NSColor *tagColor;
+  NSString *nodePath;
 }
 
 - (void)setIcon:(NSImage *)icn;
 
 - (NSImage *)icon;
+
+- (void)setTagColor:(NSColor *)color;
+
+- (NSColor *)tagColor;
+
+- (void)setNodePath:(NSString *)path;
 
 - (float)uncutTitleLenght;
 

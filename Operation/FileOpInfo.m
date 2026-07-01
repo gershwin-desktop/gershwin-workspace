@@ -33,6 +33,20 @@
 #import "Functions.h"
 
 
+/*
+ * Return the AppleDouble sidecar path for a given file path.
+ * e.g. /foo/bar.txt -> /foo/._bar.txt
+ */
+static NSString *
+sidecar_path(NSString *filePath)
+{
+  NSString *dir = [filePath stringByDeletingLastPathComponent];
+  NSString *file = [filePath lastPathComponent];
+  return [dir stringByAppendingPathComponent:
+           [NSString stringWithFormat: @"._%@", file]];
+}
+
+
 #define PROGR_STEPS (100.0)
 static BOOL stopped = NO;
 static BOOL paused = NO;
@@ -1076,6 +1090,13 @@ filename = [fileinfo objectForKey: @"name"];
 	  if ([fm movePath: src toPath: dst handler: self])
 	    {    
 	      [procfiles addObject: filename];	
+          /* Move AppleDouble sidecar if present */
+          {
+            NSString *sc_src = sidecar_path(src);
+            NSString *sc_dst = sidecar_path(dst);
+            if ([fm fileExistsAtPath: sc_src])
+              [fm movePath: sc_src toPath: sc_dst handler: self];
+          }
 	    }
 	  else
 	    {
@@ -1122,7 +1143,12 @@ filename = [fileinfo objectForKey: @"name"];
                     toPath: [destination stringByAppendingPathComponent: filename]
                    handler: self])
             {
-              [procfiles addObject: filename];	
+              [procfiles addObject: filename];
+              /* Copy AppleDouble sidecar if present */
+              NSString *sc_src = sidecar_path([source stringByAppendingPathComponent: filename]);
+              NSString *sc_dst = sidecar_path([destination stringByAppendingPathComponent: filename]);
+              if ([fm fileExistsAtPath: sc_src])
+                [fm copyPath: sc_src toPath: sc_dst handler: self];	
             }
         }
       [files removeObject: fileinfo];
@@ -1180,16 +1206,22 @@ filename = [fileinfo objectForKey: @"name"];
 {
   while (1)
     {
-      CHECK_DONE;	
-      GET_FILENAME;  
-	  
-      if ([fm removeFileAtPath: [source stringByAppendingPathComponent: filename]
-		       handler: self])
-	{
-	  [procfiles addObject: filename];
-	}
-      [files removeObject: fileinfo];	 
-      RELEASE (fileinfo);   
+      CHECK_DONE;
+      GET_FILENAME;
+
+      NSString *srcpath = [source stringByAppendingPathComponent: filename];
+
+      if ([fm removeFileAtPath: srcpath handler: self])
+        {
+          /* Remove AppleDouble sidecar (._filename) if present */
+          NSString *scpath = sidecar_path(srcpath);
+          if ([fm fileExistsAtPath: scpath])
+            [fm removeFileAtPath: scpath handler: self];
+
+          [procfiles addObject: filename];
+        }
+      [files removeObject: fileinfo];
+      RELEASE (fileinfo);
     }
 
   [fileOp cacheProcessedFiles: [self processedFiles]];
@@ -1383,7 +1415,12 @@ filename = [fileinfo objectForKey: @"name"];
     }
 
 	  if ([fm movePath: srcpath toPath: destpath handler: self]) {
-      [procfiles addObject: newname];	
+      [procfiles addObject: newname];
+        /* Move AppleDouble sidecar if present */
+        NSString *sc_src2 = sidecar_path(srcpath);
+        NSString *sc_dst2 = sidecar_path(destpath);
+        if ([fm fileExistsAtPath: sc_src2])
+          [fm movePath: sc_src2 toPath: sc_dst2 handler: self];	
       
     } else {
       /* check for broken symlink */

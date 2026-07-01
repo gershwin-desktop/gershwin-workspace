@@ -33,7 +33,24 @@
 #import "FSNBrowserColumn.h"
 #import "FSNIcon.h"
 #import "FSNFunctions.h"
-#import "../Workspace/Workspace.h"
+
+/* Forward declarations for methods on Workspace resolved at runtime
+ * via NSClassFromString to avoid circular library dependencies. */
+@interface NSObject (FSNBrowserMatrixWorkspaceMethods)
+- (NSMenu *)contextMenuForNodes:(NSArray *)nodes
+                     openTarget:(id)openTarget
+                  openWithTarget:(id)openWithTarget
+                     infoTarget:(id)infoTarget
+                duplicateTarget:(id)duplicateTarget
+                  recycleTarget:(id)recycleTarget
+                    ejectTarget:(id)ejectTarget
+                     openAction:(SEL)openAction
+                duplicateAction:(SEL)duplicateAction
+                  recycleAction:(SEL)recycleAction
+                    ejectAction:(SEL)ejectAction
+               includeOpenWith:(BOOL)includeOpenWith;
+- (NSMenu *)emptySpaceContextMenuForViewer:(id)viewer;
+@end
 
 #define DOUBLE_CLICK_LIMIT  300
 #define EDIT_CLICK_LIMIT   1000
@@ -300,7 +317,6 @@
   if (rows > 0)
     {
       NSColor *evenColor = [NSColor colorWithCalibratedWhite: 0.92 alpha: 1.0];
-      NSColor *oddColor = [NSColor controlBackgroundColor];
       NSInteger i;
 
       for (i = 0; i < rows; i += 2)
@@ -362,25 +378,40 @@
                       menunodes = [NSArray arrayWithObject: clickedNode];
                     }
 
-                  return [[Workspace gworkspace] contextMenuForNodes: menunodes
-                                                         openTarget: [self window]
-                                                      openWithTarget: [Workspace gworkspace]
-                                                         infoTarget: [Workspace gworkspace]
-                                                    duplicateTarget: [self window]
-                                                      recycleTarget: [self window]
-                                                        ejectTarget: [self window]
-                                                         openAction: @selector(openSelection:)
-                                                    duplicateAction: @selector(duplicateFiles:)
-                                                      recycleAction: @selector(recycleFiles:)
-                                                        ejectAction: @selector(ejectVolumes:)
-                                                   includeOpenWith: YES];
+                {
+                  /* Resolve Workspace at runtime to avoid circular link dependency. */
+                  Class wsClass = NSClassFromString(@"Workspace");
+                  id gw = (wsClass && [wsClass respondsToSelector: @selector(gworkspace)])
+                         ? [wsClass performSelector: @selector(gworkspace)] : nil;
+                  if (gw)
+                    return [gw contextMenuForNodes: menunodes
+                                       openTarget: [self window]
+                                    openWithTarget: gw
+                                       infoTarget: gw
+                                  duplicateTarget: [self window]
+                                    recycleTarget: [self window]
+                                      ejectTarget: [self window]
+                                       openAction: @selector(openSelection:)
+                                  duplicateAction: @selector(duplicateFiles:)
+                                    recycleAction: @selector(recycleFiles:)
+                                      ejectAction: @selector(ejectVolumes:)
+                                 includeOpenWith: YES];
+                  else
+                    return [super menuForEvent: theEvent];
+                }
                 }
             }
         }
       else
         {
           // Right-clicked on empty space
-          return [[Workspace gworkspace] emptySpaceContextMenuForViewer: [self window]];
+          {
+            Class wsClass = NSClassFromString(@"Workspace");
+            id gw = (wsClass && [wsClass respondsToSelector: @selector(gworkspace)])
+                   ? [wsClass performSelector: @selector(gworkspace)] : nil;
+            if (gw)
+              return [gw emptySpaceContextMenuForViewer: [self window]];
+          }
         }
     }
 

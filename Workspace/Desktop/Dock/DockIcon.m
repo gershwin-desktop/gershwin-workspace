@@ -34,6 +34,11 @@
 #import "GWDesktopManager.h"
 #import "Workspace.h"
 
+/* Forward declaration for loadLabelColorFromMetadata inherited from FSNIcon */
+@interface FSNIcon (DockIconForwardDecl)
+- (void)loadLabelColorFromMetadata;
+@end
+
 @implementation DockIcon
 
 - (void)dealloc
@@ -744,7 +749,30 @@ x += 6; \
       p.y = 2;
       DRAWDOT([NSColor blackColor], [NSColor whiteColor], p);
     }
-    
+
+    /* Draw tag color dot (Finder label) - drawn last so it's on top */
+    if (tagColor == nil)
+      [self loadLabelColorFromMetadata];
+    if (tagColor)
+      {
+        CGFloat dotSize = 10.0;
+        CGFloat dotMargin = 2.0;
+        NSSize iconSz = [icon size];
+        NSRect dotRect = NSMakeRect(
+          drawPoint.x + iconSz.width - dotSize - dotMargin,
+          drawPoint.y + dotMargin,
+          dotSize, dotSize);
+        [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
+        NSBezierPath *sp = [NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)];
+        [sp fill];
+        [tagColor set];
+        NSBezierPath *dp = [NSBezierPath bezierPathWithOvalInRect:dotRect];
+        [dp fill];
+        [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
+        [dp setLineWidth:0.5];
+        [dp stroke];
+      }
+
   }
 }
 

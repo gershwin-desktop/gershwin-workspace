@@ -47,8 +47,11 @@
     {
       viewer = vwr;
       manager = [GWViewersManager viewersManager];
+
+      /* Finder icon view fills left→right, top→bottom */
+      [self setPlacementDirection: FSNPlacementDirectionLeftToRightTopToBottom];
     }
-  
+
   return self;
 }
 

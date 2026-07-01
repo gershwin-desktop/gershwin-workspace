@@ -222,6 +222,8 @@
 
 - (BOOL)involvedByFileOperation:(NSDictionary *)opinfo;
 
+- (BOOL)isFinderInvisible;
+
 @end
 
 
@@ -238,6 +240,8 @@
 - (NSComparisonResult)compareAccordingToExtension:(FSNode *)aNode;
 
 - (NSComparisonResult)compareAccordingToDate:(FSNode *)aNode;
+
+- (NSComparisonResult)compareAccordingToCrDate:(FSNode *)aNode;
 
 - (NSComparisonResult)compareAccordingToSize:(FSNode *)aNode;
 

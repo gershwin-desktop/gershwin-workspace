@@ -38,6 +38,26 @@
   [super dealloc];
 }
 
+- (id)initWithFrame:(NSRect)frameRect
+{
+  self = [super initWithFrame:frameRect];
+  if (self)
+    {
+      [self setRichText: NO];
+      [self setImportsGraphics: NO];
+      [self setUsesFontPanel: NO];
+      [self setUsesRuler: NO];
+      [self setEditable: YES];
+      fm = [NSFileManager defaultManager];
+    }
+  return self;
+}
+
+- (void)setController:(id)aController
+{
+  controller = aController;
+}
+
 - (id)initWithCoder: (NSCoder *) coder
 {
   self = [super initWithCoder: coder];  
@@ -296,6 +316,8 @@ if ([path hasSuffix: pathSeparator] == NO) \
   
   } else if ([eventstr isEqual: @"\r"] && [str length]) {
     [controller completionFieldDidEndLine: self];
+  } else if ([eventstr isEqual: @"\x1B"]) {
+    [controller completionFieldDidCancel: self];
   }
 }
 

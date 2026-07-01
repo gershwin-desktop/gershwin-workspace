@@ -28,12 +28,16 @@
 #import <AppKit/NSView.h>
 #import <AppKit/NSTextField.h>
 #import "FSNodeRep.h"
+#import "FSNIconPlacement.h"
 
 @class NSColor;
 @class NSFont;
 @class FSNode;
 @class FSNIcon;
 @class FSNIconNameEditor;
+@class FSNIcon;
+@class FSNIconNameEditor;
+@class FSNIconItemData;
 
 @interface FSNIconsView : NSView <NSTextFieldDelegate>
 {
@@ -41,7 +45,7 @@
   NSMutableArray *icons;
   FSNInfoType infoType;
   NSString *extInfoType;
-  
+
   NSImage *verticalImage;
   NSImage *horizontalImage;
 
@@ -57,34 +61,55 @@
   NSCellImagePosition iconPosition;
 
   NSSize gridSize;
-  NSInteger colItemsCount;
 
   BOOL isDragTarget;
   BOOL forceCopy;
   NSDragOperation negotiatedDragOp;
-  
-  NSString *charBuffer;	
+
+  NSString *charBuffer;
   NSTimeInterval lastKeyPressedTime;
-  
+
   NSColor *backColor;
   NSColor *textColor;
   NSColor *disabledTextColor;
   BOOL transparentSelection;
-  
+
+  // Cached grid cell dimensions (computed once, reused across tile calls + Clean Up)
+  NSSize _cachedCellSize;
+  CGFloat _cachedGapX;
+  BOOL _gridCached;
+
   NSImage *backgroundImage;  // Background image for spatial views
 
   FSNodeRep *fsnodeRep;
 
   id <DesktopApplication> desktopApp;
-  
+
+  // Placement direction for Clean Up virtual grid enumeration
+  FSNPlacementDirection _placementDirection;
+
   // DS_Store free positioning support for Mac interoperability
-  BOOL freePositioningEnabled;              // If YES, bypasses grid-based tile
   NSMutableDictionary *customIconPositions; // filename -> NSValue(NSPoint) icon center in GNUstep coords
   CGFloat dsStoreIconHeight;                // Icon height for coordinate conversion
-  
-  // DS_Store grid spacing support (additional spacing between icons beyond calculated gridSize)
-  CGFloat dsStoreGridSpacing;               // Additional spacing from DS_Store (0 = default)
+
+  // Non-retained reference to the enclosing NSClipView being observed
+  // for frame-change notifications.  Used to trigger tile on resize
+  // even when NSClipView does not propagate resizeWithOldSuperviewSize.
+  NSView *_observedClipView;
 }
+
+/* Placement direction access (used by Clean Up virtual grid) */
+- (void)setPlacementDirection:(FSNPlacementDirection)direction;
+- (FSNPlacementDirection)placementDirection;
+
+/* Override point for subclasses to provide a custom grid origin.
+ * Default: (X_MARGIN, viewHeight - Y_MARGIN).  The desktop subclass
+ * overrides this to account for Dock position and menu bar. */
+- (NSPoint)gridOriginForLayout;
+
+/* Cleanup and sort operations (Finder-compatible) */
+- (void)cleanupIconPositions;
+- (void)sortIconsBy:(SEL)sortSelector;
 
 - (void)sortIcons;
 
@@ -105,20 +130,23 @@
 - (void)selectNextIcon;
 
 // DS_Store free positioning support for Mac interoperability
-- (void)setFreePositioningEnabled:(BOOL)enabled;
-- (BOOL)freePositioningEnabled;
 - (void)setCustomIconPositions:(NSDictionary *)positions;
 - (NSDictionary *)customIconPositions;
-- (void)applyFreePositioning;
 - (NSArray *)icons;
+
+/* Free-positioning icon repositioning */
+- (void)repositionIcon:(FSNIcon *)icon toCenterPoint:(NSPoint)point;
+
+/* Batch reposition — moves many icons at once, tiles once, persists once */
+- (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
+
+/* Virtual grid: find the center of the first grid cell not occupied by
+ * any existing icon.  Used for initial placement of new/added items. */
+- (NSPoint)firstFreeGridCenter;
 
 // DS_Store tag colors and comments support
 - (void)setTagColorsFromDictionary:(NSDictionary *)tagDict;
 - (void)setCommentsFromDictionary:(NSDictionary *)commentsDict;
-
-// DS_Store grid spacing support
-- (void)setGridSpacing:(CGFloat)spacing;
-- (CGFloat)gridSpacing;
 
 @end
 

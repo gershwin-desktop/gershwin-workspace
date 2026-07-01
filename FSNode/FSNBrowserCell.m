@@ -29,6 +29,7 @@
 
 #import "FSNBrowserCell.h"
 #import "FSNode.h"
+#import "GSFileMetadata.h"
 
 #define DEFAULT_ISIZE (16)
 #define HLIGHT_H_FACT (0.8125)
@@ -47,8 +48,11 @@ static NSString *dots = @"...";
   RELEASE (extInfoType);
   RELEASE (infoCell); 
   RELEASE (icon); 
-  RELEASE (selectedicon); 
-  
+  RELEASE (selectedicon);
+  RELEASE (displayIcon);
+  RELEASE (selectedDisplayIcon);
+  RELEASE (tagColor);
+
   [super dealloc];
 }
 
@@ -86,6 +90,8 @@ static NSString *dots = @"...";
       extInfoType = nil;
       icon = nil;
       selectedicon = nil;
+      displayIcon = nil;
+      selectedDisplayIcon = nil;
       icnsize = DEFAULT_ISIZE;
       
       isLocked = NO;
@@ -107,7 +113,75 @@ static NSString *dots = @"...";
     ASSIGN (icon, [fsnodeRep iconOfSize: icnsize forNode: node]);
     icnh = [icon size].height;
     DESTROY (selectedicon);
+    [self rebuildDisplayIcons];
   }
+}
+
+/*
+ * Build badged versions of icon and selectedicon with the label
+ * colour dot composited directly onto them. Because the badge is
+ * part of the image pixels it can never be obscured by selection
+ * highlights or any later drawing.
+ */
+- (NSImage *)badgeImage:(NSImage *)src
+{
+  if (src == nil || tagColor == nil)
+    return src;
+
+  NSSize sz = [src size];
+  NSImage *badged = [[NSImage alloc] initWithSize: sz];
+  [badged lockFocus];
+  [src compositeToPoint: NSZeroPoint operation: NSCompositeSourceOver];
+
+  CGFloat dotSize = (sz.width >= 48) ? 10.0 : 8.0;
+  CGFloat dotMargin = 2.0;
+  CGFloat dotTop = (sz.width >= 48) ? dotMargin : 12.0;
+  NSRect dotRect = NSMakeRect(sz.width - dotSize - dotMargin,
+                               dotTop, dotSize, dotSize);
+
+  [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
+  [[NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)] fill];
+  [tagColor set];
+  [[NSBezierPath bezierPathWithOvalInRect:dotRect] fill];
+  [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
+  NSBezierPath *dp = [NSBezierPath bezierPathWithOvalInRect:dotRect];
+  [dp setLineWidth:0.5];
+  [dp stroke];
+
+  [badged unlockFocus];
+  return AUTORELEASE (badged);
+}
+
+- (void)rebuildDisplayIcons
+{
+  DESTROY (displayIcon);
+  DESTROY (selectedDisplayIcon);
+
+  if (icon == nil)
+    return;
+
+  if (tagColor)
+    {
+      displayIcon = [[self badgeImage: icon] retain];
+      if (selectedicon)
+        selectedDisplayIcon = [[self badgeImage: selectedicon] retain];
+    }
+  else
+    {
+      displayIcon = [icon retain];
+      selectedDisplayIcon = [selectedicon retain];
+    }
+}
+
+- (void)setTagColor:(NSColor *)color
+{
+  ASSIGN (tagColor, color);
+  [self rebuildDisplayIcons];
+}
+
+- (NSColor *)tagColor
+{
+  return tagColor;
 }
 
 - (NSString *)path
@@ -195,13 +269,14 @@ static NSString *dots = @"...";
   return title;
 }
 
-- (void)drawInteriorWithFrame:(NSRect)cellFrame 
+- (void)drawInteriorWithFrame:(NSRect)cellFrame
                        inView:(NSView *)controlView
 {
 #define MARGIN (2.0)
 #define LEAF_MARGIN (5.0)
 
   NSWindow *cvwin = [controlView window];
+  NSRect icon_rect = NSZeroRect;
 
   if (cvwin)
     {
@@ -286,8 +361,6 @@ static NSString *dots = @"...";
         }
       else
         {
-          NSRect icon_rect;
-
           if (([self isHighlighted] || [self state]) && (nameEdited == NO))
             {
 	      [[self highlightColorInView: controlView] set];
@@ -389,6 +462,29 @@ static NSString *dots = @"...";
           NSDottedFrameRect(cellFrame);
         }
 
+      /* Draw tag color dot (Finder label) - drawn last so it's on top */
+      if (tagColor && !NSIsEmptyRect(icon_rect))
+        {
+          CGFloat dotSize = 8.0;
+          CGFloat dotMarginX = 1.0;
+          CGFloat dotMarginY = 12.0;
+          NSRect dotRect = NSMakeRect(
+            icon_rect.origin.x + icon_rect.size.width - dotSize - dotMarginX,
+            icon_rect.origin.y + dotMarginY,
+            dotSize, dotSize);
+          [controlView lockFocus];
+          [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
+          NSBezierPath *sp = [NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)];
+          [sp fill];
+          [tagColor set];
+          NSBezierPath *dp = [NSBezierPath bezierPathWithOvalInRect:dotRect];
+          [dp fill];
+          [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
+          [dp setLineWidth:0.5];
+          [dp stroke];
+          [controlView unlockFocus];
+        }
+
       [self setStringValue: uncutTitle];
     }
 }
@@ -404,13 +500,28 @@ static NSString *dots = @"...";
   ASSIGN (node, anode);
 
   [self setIcon];
-  
+
+  /* Load Finder label color from metadata */
+  {
+    GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [anode path]];
+    if (md)
+      {
+        NSInteger label = [md labelNumber];
+        if (label > 0)
+          [self setTagColor: [GSFileMetadata colorForLabel: (GSFileLabel)label]];
+        else
+          [self setTagColor: nil];
+      }
+    else
+      [self setTagColor: nil];
+  }
+
   if (extInfoType) {
     [self setExtendedShowType: extInfoType];
   } else {
-    [self setNodeInfoShowType: showType];  
+    [self setNodeInfoShowType: showType];
   }
-  
+
   [self setLocked: [node isLocked]];
 }
 

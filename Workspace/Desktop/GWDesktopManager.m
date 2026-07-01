@@ -31,6 +31,7 @@
 #import "GWDesktopWindow.h"
 #import "GWDesktopView.h"
 #import "Dock.h"
+#import "GWDockWindow.h"
 #import "FSNFunctions.h"
 #import "Workspace.h"
 #import "GWViewersManager.h"
@@ -62,6 +63,7 @@ static GWDesktopManager *desktopManager = nil;
   RELEASE (dskNode);
   RELEASE (win);
   RELEASE (dock);
+  RELEASE (dockWindow);
   RELEASE (mpointWatcher);
 
   [super dealloc];
@@ -206,19 +208,26 @@ static GWDesktopManager *desktopManager = nil;
   // Show desktop window + dock immediately for perceived performance.
   // Defer icon population to next runloop — each icon creates an X11 window
   // (~50+ XCreateWindow calls) which blocks startup 1s+.
+  /* IMPORTANT: showContentsOfNode MUST run before showMountedVolumes.
+   * Desktop icons (~/Desktop contents) are placed at DS_Store positions
+   * (Manual mode) and their grid cells must be marked as occupied BEFORE
+   * volume icons are AUTO-placed into free cells.  If the order is
+   * reversed, volume icons can occupy cells that desktop icons later
+   * claim from DS_Store, causing overlapping icons. */
   dispatch_async(dispatch_get_main_queue(), ^{
-    [desktopView showMountedVolumes];
     [desktopView showContentsOfNode: dskNode];
+    [desktopView showMountedVolumes];
   });
   [self addWatcherForPath: [dskNode path]];
     
-  if ((hidedock == NO) && ([dock superview] == nil)) {
-    NSDebugLLog(@"gwspace", @"DEBUG: Adding dock as subview (hidedock=%d)", hidedock);
-    [desktopView addSubview: dock];
+  if ((hidedock == NO) && (dockWindow == nil)) {
+    NSDebugLLog(@"gwspace", @"DEBUG: Creating dock window (hidedock=%d)", hidedock);
+    dockWindow = [[GWDockWindow alloc] initWithDockView: dock];
     [dock tile];
-    NSDebugLLog(@"gwspace", @"DEBUG: Dock added to desktop view, frame: %@", NSStringFromRect([dock frame]));
+    [dockWindow showDock];
+    NSDebugLLog(@"gwspace", @"DEBUG: Dock window created, dock frame: %@", NSStringFromRect([dock frame]));
   } else {
-    NSDebugLLog(@"gwspace", @"DEBUG: Dock NOT added (hidedock=%d, superview=%@)", hidedock, [dock superview]);
+    NSDebugLLog(@"gwspace", @"DEBUG: Dock window NOT created (hidedock=%d, dockWindow=%@)", hidedock, dockWindow);
   }
   
   [mpointWatcher startWatching];  
@@ -228,7 +237,11 @@ static GWDesktopManager *desktopManager = nil;
 - (void)deactivateDesktop
 {
   [win deactivate];
-  [self removeWatcherForPath: [dskNode path]];  
+  if (dockWindow)
+    {
+      [dockWindow hideDock];
+    }
+  [self removeWatcherForPath: [dskNode path]];
   [mpointWatcher stopWatching];
 }
 
@@ -245,7 +258,7 @@ static GWDesktopManager *desktopManager = nil;
   path = [NSHomeDirectory() stringByAppendingPathComponent: @"Desktop"]; 
 
   if (([fm fileExistsAtPath: path isDirectory: &isdir] && isdir) == NO) {
-    NSString *hiddenNames = @".gwsort\n.gwdir\n.hidden\n";
+    NSString *hiddenNames = @".gwsort\n.hidden\n";
 
     if ([fm createDirectoryAtPath: path attributes: nil] == NO) {
       NSRunAlertPanel(NSLocalizedString(@"error", @""), 
@@ -377,21 +390,27 @@ static GWDesktopManager *desktopManager = nil;
   [dock setPosition: pos];
   [self setReservedFrames];
   [desktopView dockPositionDidChange];
+  [dockWindow updateX11Strut];
 }
 
 - (void)setDockActive:(BOOL)value
 {
   hidedock = !value;
-  
-  if (hidedock && [dock superview]) {
-    [dock removeFromSuperview];
-    [desktopView setNeedsDisplayInRect: dockReservedFrame];
-    
-  } else if ([dock superview] == nil) {
-    [desktopView addSubview: dock];
-    [dock tile];
-    [desktopView setNeedsDisplayInRect: dockReservedFrame];
-  }
+
+  if (hidedock && dockWindow)
+    {
+      [dockWindow hideDock];
+
+    }
+  else if (!hidedock)
+    {
+      if (dockWindow == nil)
+        {
+          dockWindow = [[GWDockWindow alloc] initWithDockView: dock];
+        }
+      [dock tile];
+      [dockWindow showDock];
+    }
 }
 
 - (BOOL)dockActive

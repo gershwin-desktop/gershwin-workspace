@@ -251,6 +251,7 @@
   NSImage *lockedicon;
   NSImage *spopenicon;
   NSString *extInfoStr;
+  NSColor *tagColor;
 
   BOOL isLocked;
   BOOL iconSelected;
@@ -279,6 +280,8 @@
 - (BOOL)selectIcon:(BOOL)value;
 
 - (BOOL)iconSelected;
+
+- (NSColor *)tagColor;
 
 @end
 

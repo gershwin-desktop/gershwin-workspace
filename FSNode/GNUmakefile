@@ -20,6 +20,16 @@ FSNode_OBJC_FILES = \
          FSNIconsView.m \
          FSNListView.m \
          FSNPathComponentsViewer.m \
+         FSNPlacementEnumerator.m \
+         FSNIconPlacement.m \
+         ../GWMetadata/GWMetaXattr.m \
+         ../GWMetadata/GSAppleDouble.m \
+         ../GWMetadata/GSFileMetadata.m \
+         ../DSStore/DSStore.m \
+         ../DSStore/DSBuddyAllocator.m \
+         ../DSStore/DSStoreEntry.m \
+         ../DSStore/DSStoreCodecs.m \
+         ../DSStore/SimpleColor.m \
 
 
 FSNode_HEADER_FILES = \
@@ -36,6 +46,8 @@ FSNode_HEADER_FILES = \
          FSNIconsView.h \
          FSNListView.h \
          FSNPathComponentsViewer.h \
+         FSNIconPlacement.h \
+         FSNPlacementEnumerator.h \
 
 
 FSNode_HAS_RESOURCE_BUNDLE = yes                                          
@@ -43,6 +55,9 @@ FSNode_HAS_RESOURCE_BUNDLE = yes
 FSNode_RESOURCE_FILES = \
     Resources/Images/* \
     Resources/*.lproj \
+
+ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata
+ADDITIONAL_INCLUDE_DIRS += -I../DSStore
 
 FSNode_LANGUAGES = \
 	English \

@@ -112,6 +112,7 @@
 - (void)selectRow:(NSInteger)row inColumn:(NSInteger)column;
 
 - (void)tile;
+- (void)releaseScroller;
 - (void)scrollViaScroller:(NSScroller *)sender;
 - (void)updateScroller;
 - (void)scrollColumnsLeftBy:(int)shiftAmount;

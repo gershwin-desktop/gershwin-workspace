@@ -36,6 +36,7 @@
 @class NSTextField;
 @class FSNode;
 @class FSNTextCell;
+@class FSNIconItemData;
 
 @interface FSNIcon : NSView <FSNodeRep>
 {
@@ -99,7 +100,12 @@
   // DS_Store label color support
   NSColor *tagColor;        // Label/tag color from DS_Store (lclr)
   NSString *spotlightComment;  // Spotlight comment from DS_Store (cmmt)
+
+  // Pixel placement data
+  FSNIconItemData *_placementData;
 }
+
+@property (nonatomic, retain) FSNIconItemData *placementData;
 
 + (NSImage *)branchImage;
 
