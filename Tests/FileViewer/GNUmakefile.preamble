@@ -1,0 +1,3 @@
+# Include path so in-process test sources (compiled via #include of the .m
+# under test) find their headers under Workspace/FileViewer/.
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/FileViewer
