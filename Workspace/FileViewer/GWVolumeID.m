@@ -65,6 +65,7 @@ static NSString *sMountInfoPath = @"/proc/self/mountinfo";
  */
 static uint32_t stableHashForString(NSString *str)
 {
+  if (!str) return 0;
   const char *utf8 = [str UTF8String];
   if (!utf8) return 0;
   uint32_t hash = 5381;
@@ -218,7 +219,7 @@ static NSString *stringForFSMagic(long magic)
   if (statfs([resolved UTF8String], &buf) != 0) {
     /* Fallback: stable hash of the path itself */
     NSString *fallback = [NSString stringWithFormat:@"path_%08X",
-                                   stableHashForString(resolved)];
+                                   (unsigned int)stableHashForString(resolved)];
     if (sVolumeIDCache) {
       [sVolumeIDCache setObject:fallback forKey:resolved];
     }
@@ -240,12 +241,12 @@ static NSString *stringForFSMagic(long magic)
     NSString *source = [mi objectForKey:@"source"];
     if (source && [source length] > 0) {
       volID = [NSString stringWithFormat:@"src_%08X",
-                         stableHashForString(source)];
+                         (unsigned int)stableHashForString(source)];
     } else {
       /* Last resort: hash the mount point */
       NSString *mp = [self mountPointForPath:resolved];
       volID = [NSString stringWithFormat:@"mp_%08X",
-                         stableHashForString(mp)];
+                         (unsigned int)stableHashForString(mp)];
     }
   }
 

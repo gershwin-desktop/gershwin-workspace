@@ -35,6 +35,10 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
     }
 }
 
+/* Forward declaration so runCompress can call it before the definition */
+static void collect_items(NSString *dir, NSMutableArray *into,
+                          NSFileManager *fm, volatile BOOL *cancelled);
+
 @implementation GWArchiveOperation
 
 /* =================================================================
@@ -247,7 +251,7 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
         {
           [allFiles addObject: p];
           if (isDir)
-            collect_items(p, allFiles, fm);
+            collect_items(p, allFiles, fm, &cancelled);
         }
     }
 
@@ -280,11 +284,14 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
 
 /* helper — collects file paths recursively, skipping sidecars */
 static void
-collect_items(NSString *dir, NSMutableArray *into, NSFileManager *fm)
+collect_items(NSString *dir, NSMutableArray *into, NSFileManager *fm,
+              volatile BOOL *cancelled)
 {
   NSArray *kids = [fm directoryContentsAtPath: dir];
   for (NSString *name in kids)
     {
+      if (*cancelled)
+        return;
       if ([name hasPrefix: @"._"])
         continue;
       NSString *full = [dir stringByAppendingPathComponent: name];
@@ -292,7 +299,7 @@ collect_items(NSString *dir, NSMutableArray *into, NSFileManager *fm)
 
       BOOL isDir;
       if ([fm fileExistsAtPath: full isDirectory: &isDir] && isDir)
-        collect_items(full, into, fm);
+        collect_items(full, into, fm, cancelled);
     }
 }
 
