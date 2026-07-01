@@ -33,6 +33,7 @@
 #import "Dock.h"
 #import "GWDesktopManager.h"
 #import "Workspace.h"
+#import "FSNFunctions.h"
 
 /* Forward declaration for loadLabelColorFromMetadata inherited from FSNIcon */
 @interface FSNIcon (DockIconForwardDecl)
@@ -762,15 +763,7 @@ x += 6; \
           drawPoint.x + iconSz.width - dotSize - dotMargin,
           drawPoint.y + dotMargin,
           dotSize, dotSize);
-        [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
-        NSBezierPath *sp = [NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)];
-        [sp fill];
-        [tagColor set];
-        NSBezierPath *dp = [NSBezierPath bezierPathWithOvalInRect:dotRect];
-        [dp fill];
-        [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
-        [dp setLineWidth:0.5];
-        [dp stroke];
+        FSNDrawLabelDot(dotRect, tagColor);
       }
 
   }

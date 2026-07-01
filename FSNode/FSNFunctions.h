@@ -50,4 +50,30 @@ void showAlertInvalidName(Class c);
 NSInteger showAlertExtensionChange(Class c, NSString *extension);
 void showAlertNameInUse(Class c, NSString *newname);
 
+/* Icon-position coordinate conversion (single source of truth).
+ *
+ * DS_Store Iloc / FinderInfo fdLocation use top-left origin (y grows down);
+ * GNUstep views use bottom-left origin (y grows up).  Both stored as icon
+ * CENTER coordinates.  Conversion is symmetric about a reference height. */
+@class NSView;
+
+/* Reference height used for iloc<->GNUstep conversion: the enclosing window's
+ * content-view height (like macOS Finder), so positions are relative to the
+ * visible content area and survive window resize.  Falls back to the view's
+ * own bounds height, then 600.0 if nothing is available yet. */
+CGFloat FSNReferenceHeightForView(NSView *view);
+
+/* Flip a center point between iloc (top-left) and GNUstep (bottom-left).
+ * The transform is its own inverse, so one implementation serves both. */
+NSPoint FSNFlipCenterForReferenceHeight(NSPoint center, CGFloat refH);
+
+@class NSColor;
+
+/* Draw a Finder label-colour dot (drop shadow + filled oval + hairline
+ * border) into the current graphics context at dotRect.  Single source for
+ * the badge drawing that was duplicated across icon/list/browser/path/dock
+ * cells; each caller still computes its own dotRect so placement/size are
+ * unchanged.  No-op when color is nil. */
+void FSNDrawLabelDot(NSRect dotRect, NSColor *color);
+
 #endif // FSN_FUNCTIONS_H

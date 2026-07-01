@@ -1037,21 +1037,7 @@ static NSImage *branchImage;
       NSRect dotRect = NSMakeRect(icnBounds.origin.x + icnBounds.size.width - dotSize - dotMargin,
                                   icnBounds.origin.y + dotMargin,
                                   dotSize, dotSize);
-
-      // Draw shadow
-      [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
-      NSBezierPath *shadowPath = [NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)];
-      [shadowPath fill];
-
-      // Draw tag dot
-      [tagColor set];
-      NSBezierPath *dotPath = [NSBezierPath bezierPathWithOvalInRect:dotRect];
-      [dotPath fill];
-
-      // Draw border
-      [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
-      [dotPath setLineWidth:0.5];
-      [dotPath stroke];
+      FSNDrawLabelDot(dotRect, tagColor);
     }
 }
 

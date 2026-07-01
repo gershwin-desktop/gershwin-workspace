@@ -29,6 +29,7 @@
 
 #import "FSNBrowserCell.h"
 #import "FSNode.h"
+#import "FSNFunctions.h"
 #import "GSFileMetadata.h"
 
 #define DEFAULT_ISIZE (16)
@@ -49,8 +50,6 @@ static NSString *dots = @"...";
   RELEASE (infoCell); 
   RELEASE (icon); 
   RELEASE (selectedicon);
-  RELEASE (displayIcon);
-  RELEASE (selectedDisplayIcon);
   RELEASE (tagColor);
 
   [super dealloc];
@@ -90,8 +89,6 @@ static NSString *dots = @"...";
       extInfoType = nil;
       icon = nil;
       selectedicon = nil;
-      displayIcon = nil;
-      selectedDisplayIcon = nil;
       icnsize = DEFAULT_ISIZE;
       
       isLocked = NO;
@@ -113,70 +110,12 @@ static NSString *dots = @"...";
     ASSIGN (icon, [fsnodeRep iconOfSize: icnsize forNode: node]);
     icnh = [icon size].height;
     DESTROY (selectedicon);
-    [self rebuildDisplayIcons];
   }
-}
-
-/*
- * Build badged versions of icon and selectedicon with the label
- * colour dot composited directly onto them. Because the badge is
- * part of the image pixels it can never be obscured by selection
- * highlights or any later drawing.
- */
-- (NSImage *)badgeImage:(NSImage *)src
-{
-  if (src == nil || tagColor == nil)
-    return src;
-
-  NSSize sz = [src size];
-  NSImage *badged = [[NSImage alloc] initWithSize: sz];
-  [badged lockFocus];
-  [src compositeToPoint: NSZeroPoint operation: NSCompositeSourceOver];
-
-  CGFloat dotSize = (sz.width >= 48) ? 10.0 : 8.0;
-  CGFloat dotMargin = 2.0;
-  CGFloat dotTop = (sz.width >= 48) ? dotMargin : 12.0;
-  NSRect dotRect = NSMakeRect(sz.width - dotSize - dotMargin,
-                               dotTop, dotSize, dotSize);
-
-  [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
-  [[NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)] fill];
-  [tagColor set];
-  [[NSBezierPath bezierPathWithOvalInRect:dotRect] fill];
-  [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
-  NSBezierPath *dp = [NSBezierPath bezierPathWithOvalInRect:dotRect];
-  [dp setLineWidth:0.5];
-  [dp stroke];
-
-  [badged unlockFocus];
-  return AUTORELEASE (badged);
-}
-
-- (void)rebuildDisplayIcons
-{
-  DESTROY (displayIcon);
-  DESTROY (selectedDisplayIcon);
-
-  if (icon == nil)
-    return;
-
-  if (tagColor)
-    {
-      displayIcon = [[self badgeImage: icon] retain];
-      if (selectedicon)
-        selectedDisplayIcon = [[self badgeImage: selectedicon] retain];
-    }
-  else
-    {
-      displayIcon = [icon retain];
-      selectedDisplayIcon = [selectedicon retain];
-    }
 }
 
 - (void)setTagColor:(NSColor *)color
 {
   ASSIGN (tagColor, color);
-  [self rebuildDisplayIcons];
 }
 
 - (NSColor *)tagColor
@@ -473,15 +412,7 @@ static NSString *dots = @"...";
             icon_rect.origin.y + dotMarginY,
             dotSize, dotSize);
           [controlView lockFocus];
-          [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
-          NSBezierPath *sp = [NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)];
-          [sp fill];
-          [tagColor set];
-          NSBezierPath *dp = [NSBezierPath bezierPathWithOvalInRect:dotRect];
-          [dp fill];
-          [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
-          [dp setLineWidth:0.5];
-          [dp stroke];
+          FSNDrawLabelDot(dotRect, tagColor);
           [controlView unlockFocus];
         }
 

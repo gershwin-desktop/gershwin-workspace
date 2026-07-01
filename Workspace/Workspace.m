@@ -4860,16 +4860,10 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   NSString *name      = [path lastPathComponent];
   if ([folderPath length] == 0) return;
 
-  /* Compute top-left Y from GNUstep bottom-left Y.
-   * Use a fixed reference height (the window is the authority). */
-  CGFloat viewH = 600.0;
-  NSWindow *kwin = [NSApp keyWindow];
-  if (kwin)
-    {
-      NSView *cv = [kwin contentView];
-      if (cv) viewH = [cv bounds].size.height;
-    }
-  NSPoint topLeft = NSMakePoint(center.x, viewH - center.y);
+  /* Compute top-left Y from GNUstep bottom-left Y using the shared
+   * reference height (key window content view is the authority). */
+  CGFloat viewH = FSNReferenceHeightForView([[NSApp keyWindow] contentView]);
+  NSPoint topLeft = FSNFlipCenterForReferenceHeight(center, viewH);
 
   /* Fast path: write directly to .DS_Store via the settings manager,
    * which handles the write hierarchy (folder → per-volume cache). */

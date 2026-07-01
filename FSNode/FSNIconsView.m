@@ -313,10 +313,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   /* Reference height for iloc→GNUstep conversion.  Use content view
    * height (like macOS Finder) so positions are relative to the visible
    * content area and survive window resize.  Computed once per tile. */
-  CGFloat refH = [self bounds].size.height;
-  { NSWindow *w = [self window];
-    if (w) { NSView *cv = [w contentView]; if (cv) refH = [cv bounds].size.height; } }
-  if (refH <= 0) refH = 600.0;
+  CGFloat refH = FSNReferenceHeightForView(self);
 
   /* ---- Unified free positioning path (pixel-based, DS_Store Iloc) ---- */
   [self calculateGridSize];
@@ -867,10 +864,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   /* Reference height for DS_Store coordinate conversion.
    * Use the window content height like macOS Finder, so positions
    * are relative to the visible content area and survive resize. */
-  CGFloat refH = [self bounds].size.height;
-  { NSWindow *w = [self window];
-    if (w) { NSView *cv = [w contentView]; if (cv) refH = [cv bounds].size.height; } }
-  if (refH <= 0) refH = 600.0;
+  CGFloat refH = FSNReferenceHeightForView(self);
 
   /* ---- Pass 1: update all placement data in memory ---- */
   NSUInteger i;
@@ -1855,12 +1849,8 @@ static void GWHighlightFrameRect(NSRect aRect)
    * Icons with saved positions get MANUAL placement mode. */
   {
     NSString *folderPath = [anode path];
-    /* Use the window content height as reference, like macOS Finder.
-     * This is stable regardless of view content size changes. */
-    CGFloat refH = [self bounds].size.height;
-    { NSWindow *w = [self window];
-      if (w) { NSView *cv = [w contentView]; if (cv) refH = [cv bounds].size.height; } }
-    if (refH <= 0) refH = 600.0;
+    /* Window content height as reference, like macOS Finder. */
+    CGFloat refH = FSNReferenceHeightForView(self);
 
     /* Source 1: fdLocation xattr (per-file extended attribute, primary).
      * FinderInfo writes (0,0) by default when no position exists,

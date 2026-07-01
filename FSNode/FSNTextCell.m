@@ -26,6 +26,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import "FSNTextCell.h"
+#import "FSNFunctions.h"
 #import "GSFileMetadata.h"
 
 
@@ -73,14 +74,7 @@
   NSRect dotRect = NSMakeRect(sz.width - dotSize - dotMargin,
                                dotTop, dotSize, dotSize);
 
-  [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
-  [[NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)] fill];
-  [tagColor set];
-  [[NSBezierPath bezierPathWithOvalInRect:dotRect] fill];
-  [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
-  NSBezierPath *dp = [NSBezierPath bezierPathWithOvalInRect:dotRect];
-  [dp setLineWidth:0.5];
-  [dp stroke];
+  FSNDrawLabelDot(dotRect, tagColor);
 
   [displayIcon unlockFocus];
 }

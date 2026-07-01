@@ -49,8 +49,6 @@
 
   NSImage *icon;
   NSImage *selectedicon;
-  NSImage *displayIcon;
-  NSImage *selectedDisplayIcon;
   NSColor *tagColor;
   int icnsize;
   float icnh;
