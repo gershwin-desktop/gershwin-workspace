@@ -22,9 +22,6 @@ FSNode_OBJC_FILES = \
          FSNPathComponentsViewer.m \
          FSNPlacementEnumerator.m \
          FSNIconPlacement.m \
-         ../GWMetadata/GWMetaXattr.m \
-         ../GWMetadata/GSAppleDouble.m \
-         ../GWMetadata/GSFileMetadata.m \
 
 
 FSNode_HEADER_FILES = \
@@ -53,12 +50,10 @@ FSNode_RESOURCE_FILES = \
     Resources/Images/* \
     Resources/*.lproj \
 
-ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata
-ADDITIONAL_INCLUDE_DIRS += -I../DSStore
-
-# Link the libDSStore library (built first as a sibling subproject) instead
-# of recompiling its sources into this framework.
-ADDITIONAL_LIB_DIRS += -L../DSStore/obj
+# FSNode no longer references the Finder-metadata (GWMetadata) or .DS_Store
+# (DSStore) stacks directly — the application supplies those through the
+# FSNMetadataProvider / FSNIconPositionStore protocols — so this framework
+# links and includes neither.
 
 FSNode_LANGUAGES = \
 	English \
@@ -67,7 +62,7 @@ FSNode_LANGUAGES = \
 	French \
 	Spanish \
 
-LIBRARIES_DEPEND_UPON += -lDSStore $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
+LIBRARIES_DEPEND_UPON += $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
 
 ifeq ($(findstring darwin, $(GNUSTEP_TARGET_OS)), darwin)
   ifeq ($(OBJC_RUNTIME_LIB), gnu)

@@ -686,7 +686,7 @@ static NSImage *branchImage;
 }
 
 //
-// Private: Attempt to load the Finder label colour from GSFileMetadata (xattr).
+// Private: Attempt to load the Finder label colour from the metadata provider.
 // Called during draws when tagColor is nil (fallback/lazy-load path).
 // Sets tagColor if a non-zero label is found, so the existing draw code picks it up.
 // Once tagColor is set, subsequent draws skip this method entirely.
@@ -1017,7 +1017,7 @@ static NSImage *branchImage;
 
   // Draw tag color indicator (from DS_Store lclr or FinderInfo fdFlags)
   // Drawn last so it's always on top of everything, including the branch image.
-  // Lazily check GSFileMetadata if no colour has been set yet.
+  // Lazily check the metadata provider if no colour has been set yet.
   if (tagColor == nil)
     [self loadLabelColorFromMetadata];
 

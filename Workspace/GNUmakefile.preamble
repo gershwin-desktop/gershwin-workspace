@@ -51,6 +51,7 @@ ADDITIONAL_LDFLAGS += -L../Inspector/Inspector.framework
 ADDITIONAL_LDFLAGS += -L../Operation/Operation.framework/Versions/Current
 ADDITIONAL_LDFLAGS += -L../Operation/Operation.framework
 ADDITIONAL_LDFLAGS += -L../DSStore/obj
+ADDITIONAL_LDFLAGS += -L../GSMetadata/obj
 
 # Conditional DBus support
 ifneq ($(DBUS_LIBS),)
@@ -70,6 +71,7 @@ ADDITIONAL_LIB_DIRS += -L../FSNode/FSNode.framework
 ADDITIONAL_LIB_DIRS += -L../Inspector/Inspector.framework
 ADDITIONAL_LIB_DIRS += -L../Operation/Operation.framework
 ADDITIONAL_LIB_DIRS += -L../DSStore/obj
+ADDITIONAL_LIB_DIRS += -L../GSMetadata/obj
 
 ADDITIONAL_TOOL_LIBS +=
 

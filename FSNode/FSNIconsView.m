@@ -26,20 +26,6 @@
 #include <math.h>
 #include <unistd.h>
 #include <sys/types.h>
-#ifdef __linux__
-#include <sys/statfs.h>
-#else
-/* BSDs and macOS: struct statfs via <sys/param.h> + <sys/mount.h> */
-#include <sys/param.h>
-#include <sys/mount.h>
-#endif
-
-/* Portable statfs f_fsid access: Linux uses __val[], BSD uses val[] */
-#ifdef __linux__
-#  define FSID_VAL(buf, i) ((buf).f_fsid.__val[(i)])
-#else
-#  define FSID_VAL(buf, i) ((buf).f_fsid.val[(i)])
-#endif
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -48,10 +34,8 @@
 #import "FSNIconsView.h"
 #import "FSNIcon.h"
 #import "FSNFunctions.h"
-#import "GSFileMetadata.h"
 #import "FSNMetadataProvider.h"
 #import "FSNIconPositionStore.h"
-#import "DSStore.h"
 #import "FSNPlacementEnumerator.h"
 
 #define DEF_ICN_SIZE 48
@@ -1756,93 +1740,29 @@ static void GWHighlightFrameRect(NSRect aRect)
           }
       }
 
-    /* Source 2: .DS_Store Iloc (folder-level, secondary fallback).
-     * Only fills in icons NOT already positioned by fdLocation. */
-    NSString *dsp = [folderPath stringByAppendingPathComponent: @".DS_Store"];
-    BOOL dsStoreRead = NO;
-    if ([[NSFileManager defaultManager] fileExistsAtPath: dsp])
+    /* Sources 2/3: folder .DS_Store Iloc, else the per-volume cache —
+     * both provided by the injected position store (the app reads them via
+     * the settings hierarchy).  Only fills icons not already positioned by
+     * fdLocation.  Raw iloc (top-left) is stored; conversion to GNUstep
+     * bottom-left happens at tile time with the correct refH. */
+    NSDictionary *stored =
+      [[fsnodeRep iconPositionStore] storedIconPositionsForFolder: folderPath];
+    if ([stored count])
       {
-        NS_DURING
+        for (i = 0; i < [icons count]; i++)
           {
-            DSStore *store = [DSStore storeWithPath: dsp];
-            if (store)
+            FSNIcon *icon = [icons objectAtIndex: i];
+            FSNIconItemData *data = [icon placementData];
+            if (data.placementMode == FSNIconPlacementModeManual) continue;
+
+            NSValue *v = [stored objectForKey: [[icon node] name]];
+            if (v == nil) continue;
+            NSPoint iloc = [v pointValue];
+            if (iloc.x != 0 || iloc.y != 0)
               {
-                [store load];
-                dsStoreRead = YES;
-                for (i = 0; i < [icons count]; i++)
-                  {
-                    FSNIcon *icon = [icons objectAtIndex: i];
-                    FSNIconItemData *data = [icon placementData];
-                    if (data.placementMode == FSNIconPlacementModeManual) continue;
-
-                    NSString *name = [[icon node] name];
-                    NSPoint iloc = [store iconLocationForFilename: name];
-                    /* (0,0) means no position stored */
-                    if (iloc.x != 0 || iloc.y != 0)
-                      {
-                        /* Store RAW iloc (DS_Store top-left coords).
-                         * Conversion to GNUstep bottom-left happens at TILE
-                         * time when the window is properly laid out and refH
-                         * is correct.  This prevents Y-shifts from a stale
-                         * refH at read time. */
-                        data.ilocPosition = iloc;
-                        data.pixelPosition = NSMakePoint(iloc.x, iloc.y);
-                        data.placementMode = FSNIconPlacementModeManual;
-                      }
-                  }
-              }
-          }
-        NS_HANDLER
-          NSDebugLLog(@"gwspace", @"showContentsOfNode: DSStore read failed for %@", folderPath);
-        NS_ENDHANDLER
-      }
-
-    /* Source 3: per-volume cache (for non-writable volumes where no
-     * per-folder .DS_Store can be written, e.g. "/").  Only consulted
-     * when Source 2 produced no data. */
-    if (!dsStoreRead)
-      {
-        struct statfs svfs3;
-        if (statfs([folderPath fileSystemRepresentation], &svfs3) == 0)
-          {
-            int id0 = FSID_VAL(svfs3, 0);
-            int id1 = FSID_VAL(svfs3, 1);
-            if (id0 != 0 || id1 != 0)
-              {
-                NSString *volID3 = [NSString stringWithFormat:@"%08X%08X", id0, id1];
-                NSString *cachePath3 = [NSHomeDirectory()
-                  stringByAppendingPathComponent:
-                    [NSString stringWithFormat:
-                       @"Library/Caches/com.apple.finder/%@.DS_Store", volID3]];
-                if ([[NSFileManager defaultManager] fileExistsAtPath: cachePath3])
-                  {
-                    NS_DURING
-                      {
-                        DSStore *store3 = [DSStore storeWithPath: cachePath3];
-                        if (store3)
-                          {
-                            [store3 load];
-                            for (i = 0; i < [icons count]; i++)
-                              {
-                                FSNIcon *icon = [icons objectAtIndex: i];
-                                FSNIconItemData *data = [icon placementData];
-                                if (data.placementMode == FSNIconPlacementModeManual) continue;
-
-                                NSString *name = [[icon node] name];
-                                NSPoint iloc = [store3 iconLocationForFilename: name];
-                                if (iloc.x != 0 || iloc.y != 0)
-                                  {
-                                    data.ilocPosition = iloc;
-                                    data.pixelPosition = NSMakePoint(iloc.x, iloc.y);
-                                    data.placementMode = FSNIconPlacementModeManual;
-                                  }
-                              }
-                          }
-                      }
-                    NS_HANDLER
-                      NSDebugLLog(@"gwspace", @"showContentsOfNode: cache read failed for %@", folderPath);
-                    NS_ENDHANDLER
-                  }
+                data.ilocPosition = iloc;
+                data.pixelPosition = NSMakePoint(iloc.x, iloc.y);
+                data.placementMode = FSNIconPlacementModeManual;
               }
           }
       }
@@ -1948,7 +1868,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   /* A reload re-reads the directory from disk; drop cached file metadata
    * so labels/positions reflect any external change. */
-  [GSFileMetadata invalidateAllCachedMetadata];
+  [[fsnodeRep metadataProvider] invalidateCaches];
 
   RETAIN (selection);
 
@@ -2177,7 +2097,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   /* Files under the watched directory changed on disk — drop cached
    * metadata so re-read reflects the new state. */
-  [GSFileMetadata invalidateAllCachedMetadata];
+  [[fsnodeRep metadataProvider] invalidateCaches];
 
   if ([event isEqual: @"GWFileDeletedInWatchedDirectory"])
     {

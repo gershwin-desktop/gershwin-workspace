@@ -9,6 +9,8 @@
 #import "DSStore.h"
 #import "GSFileMetadata.h"
 #import "GWVolumeID.h"
+#import "GWViewSettingsManager.h"
+#import "DSStoreInfo.h"
 
 @implementation GWIconPositionStore
 
@@ -85,6 +87,28 @@
 {
   for (NSString *folder in positionsByFolder)
     [self writeBatch: [positionsByFolder objectForKey: folder] toFolder: folder];
+}
+
+- (NSDictionary *)storedIconPositionsForFolder:(NSString *)folder
+{
+  NSMutableDictionary *result = [NSMutableDictionary dictionary];
+  if (folder == nil)
+    return result;
+
+  /* Read through the settings manager's hierarchy (folder .DS_Store, then
+   * per-volume cache, then empty defaults) and pull out the iloc positions. */
+  GWViewSettingsManager *sm = [GWViewSettingsManager managerForDirectoryPath: folder];
+  DSStoreInfo *info = [sm readSettings];
+  if (info == nil)
+    return result;
+
+  for (NSString *name in [info filenamesWithPositions])
+    {
+      DSStoreIconInfo *ii = [info iconInfoForFilename: name];
+      if (ii && [ii hasPosition])
+        [result setObject: [NSValue valueWithPoint: [ii position]] forKey: name];
+    }
+  return result;
 }
 
 - (void)saveIconPosition:(NSPoint)ilocCenter forFileAtPath:(NSString *)path

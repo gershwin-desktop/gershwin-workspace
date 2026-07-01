@@ -39,6 +39,7 @@ ADDITIONAL_GUI_LIBS += -lInspector
 ADDITIONAL_GUI_LIBS += -lOperation
 ADDITIONAL_GUI_LIBS += -ldispatch
 ADDITIONAL_GUI_LIBS += -lDSStore
+ADDITIONAL_GUI_LIBS += -lGSMetadata
 ADDITIONAL_GUI_LIBS += -larchive
 
 # Include path for DSStore headers (sibling subproject)

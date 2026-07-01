@@ -37,6 +37,10 @@
  * or (-1, -1) when no position is stored. */
 - (NSPoint)iconPositionForPath:(NSString *)path;
 
+/* Drop any cached metadata (called by FSNode on directory refresh so the
+ * next read reflects external changes). */
+- (void)invalidateCaches;
+
 @end
 
 #endif /* FSN_METADATA_PROVIDER_H */

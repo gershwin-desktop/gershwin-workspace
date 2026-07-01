@@ -35,9 +35,10 @@ export with_squashfs SQUASHFS_CFLAGS SQUASHFS_LIBS
 #
 # subprojects
 #
-# DSStore builds first: FSNode and Tools/dsutil now link libDSStore
-# instead of recompiling its sources, so the library must exist first.
+# DSStore builds first (FSNode and Tools/dsutil link libDSStore), and
+# GSMetadata (the Finder-metadata library) before Workspace which links it.
 SUBPROJECTS = DSStore \
+	      GSMetadata \
 	      FSNode \
 	      DBKit \
 	      Tools \

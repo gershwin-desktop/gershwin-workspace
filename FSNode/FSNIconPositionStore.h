@@ -25,6 +25,11 @@
  * are DS_Store top-left CENTER coordinates. */
 - (void)saveIconPositionsByFolder:(NSDictionary *)positionsByFolder;
 
+/* Read stored positions for a folder (folder .DS_Store, then per-volume
+ * cache).  Returns filename -> NSValue(NSPoint) with DS_Store top-left
+ * CENTER (iloc) coordinates, or an empty dictionary when none are stored. */
+- (NSDictionary *)storedIconPositionsForFolder:(NSString *)folder;
+
 @end
 
 #endif /* FSN_ICON_POSITION_STORE_H */

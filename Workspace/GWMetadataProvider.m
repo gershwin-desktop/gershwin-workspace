@@ -48,4 +48,9 @@
   return md ? [md iconPosition] : NSMakePoint(-1, -1);
 }
 
+- (void)invalidateCaches
+{
+  [GSFileMetadata invalidateAllCachedMetadata];
+}
+
 @end
