@@ -391,9 +391,49 @@ host_to_be16(uint8_t *bytes, uint16_t value)
  * Read from file
  * ================================================================= */
 
+/*
+ * Path-keyed cache for the common (xattr-first) read path.  Reading
+ * metadata costs up to three getxattr syscalls plus a possible sidecar
+ * open, and callers hit this per-file during directory listing, icon
+ * drawing, and cell display — so an unbounded amount of syscalls without
+ * a cache.  A negative result is cached as NSNull so unlabeled files (the
+ * majority) stop re-probing on every redraw.  Cleared by
+ * +invalidateAllCachedMetadata (wired to the same refresh events that
+ * clear FSNodeRep's icon cache) and per-path on write.  Main-thread only.
+ */
+static NSMutableDictionary *_metadataCache = nil;
+
++ (NSMutableDictionary *)_metadataCache
+{
+  if (_metadataCache == nil)
+    _metadataCache = [[NSMutableDictionary alloc] init];
+  return _metadataCache;
+}
+
++ (void)invalidateAllCachedMetadata
+{
+  [_metadataCache removeAllObjects];
+}
+
++ (void)invalidateCachedMetadataForPath:(NSString *)path
+{
+  if (path)
+    [_metadataCache removeObjectForKey: path];
+}
+
 + (GSFileMetadata *)metadataForFileAtPath:(NSString *)path
 {
-  return [self metadataForFileAtPath: path forceSidecar: NO];
+  if (!path || [path length] == 0)
+    return nil;
+
+  NSMutableDictionary *cache = [self _metadataCache];
+  id cached = [cache objectForKey: path];
+  if (cached != nil)
+    return (cached == [NSNull null]) ? nil : cached;
+
+  GSFileMetadata *md = [self metadataForFileAtPath: path forceSidecar: NO];
+  [cache setObject: (md ? (id)md : (id)[NSNull null]) forKey: path];
+  return md;
 }
 
 + (GSFileMetadata *)metadataForFileAtPath:(NSString *)path
@@ -483,6 +523,10 @@ host_to_be16(uint8_t *bytes, uint16_t value)
 
 - (BOOL)writeToFileAtPath:(NSString *)path error:(NSError **)error
 {
+  /* Drop any cached read for this path so subsequent reads see the
+   * values we are about to persist. */
+  [[self class] invalidateCachedMetadataForPath: path];
+
   if (!path || [path length] == 0)
     {
       if (error)

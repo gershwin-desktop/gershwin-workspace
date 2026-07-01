@@ -180,6 +180,15 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
                              forceSidecar:(BOOL)forceSidecar;
 
 /**
+ * Cache control for +metadataForFileAtPath:.  The default read path caches
+ * results (including "no metadata") keyed by path.  Callers that change a
+ * file's metadata out of band should invalidate; the shared read caches are
+ * also flushed wholesale on directory refresh.
+ */
++ (void)invalidateAllCachedMetadata;
++ (void)invalidateCachedMetadataForPath:(NSString *)path;
+
+/**
  * Write metadata to a file path.
  * Tries xattrs first; falls back to creating/updating a ._ sidecar file.
  * Returns YES on success, NO on failure (error is set if provided).

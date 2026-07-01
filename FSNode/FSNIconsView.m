@@ -2063,6 +2063,10 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSMutableArray *opennodes = [NSMutableArray array];
   NSUInteger i;
 
+  /* A reload re-reads the directory from disk; drop cached file metadata
+   * so labels/positions reflect any external change. */
+  [GSFileMetadata invalidateAllCachedMetadata];
+
   RETAIN (selection);
 
   for (i = 0; i < [icons count]; i++)
@@ -2287,6 +2291,10 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSArray *files = [info objectForKey: @"files"];
   NSString *ndpath = [node path];
   NSUInteger i;
+
+  /* Files under the watched directory changed on disk — drop cached
+   * metadata so re-read reflects the new state. */
+  [GSFileMetadata invalidateAllCachedMetadata];
 
   if ([event isEqual: @"GWFileDeletedInWatchedDirectory"])
     {

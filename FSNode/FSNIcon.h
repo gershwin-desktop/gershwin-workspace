@@ -99,6 +99,7 @@
   
   // DS_Store label color support
   NSColor *tagColor;        // Label/tag color from DS_Store (lclr)
+  BOOL labelChecked;        // YES once metadata has been probed for a label
   NSString *spotlightComment;  // Spotlight comment from DS_Store (cmmt)
 
   // Pixel placement data

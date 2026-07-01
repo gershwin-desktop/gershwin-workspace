@@ -702,12 +702,17 @@ static NSImage *branchImage;
   if (tagColor != nil)
     return;  // Already have a colour (e.g., from DS_Store lclr).
 
+  if (labelChecked)
+    return;  // Probed already and found no label — don't re-check every draw.
+
   if (node == nil)
     return;
 
   NSString *path = [node path];
   if (path == nil || [path length] == 0)
     return;
+
+  labelChecked = YES;
 
   GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
   if (md == nil)
@@ -1051,6 +1056,7 @@ static NSImage *branchImage;
   DESTROY (selectionTitle);
   DESTROY (hostname);
   DESTROY (tagColor);   // Reset label colour; will be re-evaluated on next draw
+  labelChecked = NO;    // New node — probe its label again on next draw
 
   ASSIGN (node, anode);
   ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
