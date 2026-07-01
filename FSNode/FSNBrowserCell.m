@@ -472,7 +472,6 @@ static NSString *dots = @"...";
             icon_rect.origin.x + icon_rect.size.width - dotSize - dotMarginX,
             icon_rect.origin.y + dotMarginY,
             dotSize, dotSize);
-          [controlView lockFocus];
           [[NSColor colorWithCalibratedWhite:0.0 alpha:0.3] set];
           NSBezierPath *sp = [NSBezierPath bezierPathWithOvalInRect:NSOffsetRect(dotRect, 1, -1)];
           [sp fill];
@@ -482,7 +481,6 @@ static NSString *dots = @"...";
           [[NSColor colorWithCalibratedWhite:0.0 alpha:0.4] set];
           [dp setLineWidth:0.5];
           [dp stroke];
-          [controlView unlockFocus];
         }
 
       [self setStringValue: uncutTitle];

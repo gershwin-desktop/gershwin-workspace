@@ -56,6 +56,26 @@ static NSMutableDictionary *sVolumeIDCache = nil;
 static NSString *sMountInfoPath = @"/proc/self/mountinfo";
 
 /* ------------------------------------------------------------------ */
+#pragma mark - Stable string hash (djb2, deterministic across runs)
+/* ------------------------------------------------------------------ */
+
+/**
+ * djb2 hash over the UTF-8 bytes of str.  Unlike -[NSString hash] this
+ * is stable across process restarts and platform implementations.
+ */
+static uint32_t stableHashForString(NSString *str)
+{
+  if (!str) return 0;
+  const char *utf8 = [str UTF8String];
+  if (!utf8) return 0;
+  uint32_t hash = 5381;
+  unsigned char c;
+  while ((c = (unsigned char)*utf8++))
+    hash = ((hash << 5) + hash) + c;
+  return hash;
+}
+
+/* ------------------------------------------------------------------ */
 #pragma mark - Internal helpers
 /* ------------------------------------------------------------------ */
 
@@ -197,9 +217,9 @@ static NSString *stringForFSMagic(long magic)
 
   struct statfs buf;
   if (statfs([resolved UTF8String], &buf) != 0) {
-    /* Fallback: hash the path itself */
-    NSString *fallback = [NSString stringWithFormat:@"path_%lu",
-                                   (unsigned long)[resolved hash]];
+    /* Fallback: stable hash of the path itself */
+    NSString *fallback = [NSString stringWithFormat:@"path_%08X",
+                                   (unsigned int)stableHashForString(resolved)];
     if (sVolumeIDCache) {
       [sVolumeIDCache setObject:fallback forKey:resolved];
     }
@@ -220,13 +240,13 @@ static NSString *stringForFSMagic(long magic)
     NSDictionary *mi = mountInfoForPath(resolved);
     NSString *source = [mi objectForKey:@"source"];
     if (source && [source length] > 0) {
-      volID = [NSString stringWithFormat:@"src_%lu",
-                         (unsigned long)[source hash]];
+      volID = [NSString stringWithFormat:@"src_%08X",
+                         (unsigned int)stableHashForString(source)];
     } else {
       /* Last resort: hash the mount point */
       NSString *mp = [self mountPointForPath:resolved];
-      volID = [NSString stringWithFormat:@"mp_%lu",
-                         (unsigned long)[mp hash]];
+      volID = [NSString stringWithFormat:@"mp_%08X",
+                         (unsigned int)stableHashForString(mp)];
     }
   }
 
@@ -337,8 +357,13 @@ static NSString *stringForFSMagic(long magic)
   struct statfs buf;
   if (statfs([resolved UTF8String], &buf) != 0) return NO;
 
+#ifdef __linux__
   /* On Linux, MS_RDONLY is bit 0 of f_flags */
   return (buf.f_flags & 1) != 0;
+#else
+  /* On BSD/macOS, use the portable MNT_RDONLY constant */
+  return (buf.f_flags & MNT_RDONLY) != 0;
+#endif
 }
 
 + (NSString *)filesystemTypeForPath:(NSString *)path
@@ -367,8 +392,14 @@ static NSString *stringForFSMagic(long magic)
   NSString *resolved = [[path stringByStandardizingPath] stringByResolvingSymlinksInPath];
   if (!resolved) resolved = path;
 
+#ifdef __linux__
   NSDictionary *mi = mountInfoForPath(resolved);
   return [mi objectForKey:@"source"];
+#else
+  struct statfs buf;
+  if (statfs([resolved UTF8String], &buf) != 0) return nil;
+  return [NSString stringWithUTF8String:buf.f_mntfromname];
+#endif
 }
 
 + (NSString *)mountPointForPath:(NSString *)path
@@ -378,8 +409,14 @@ static NSString *stringForFSMagic(long magic)
   NSString *resolved = [[path stringByStandardizingPath] stringByResolvingSymlinksInPath];
   if (!resolved) resolved = path;
 
+#ifdef __linux__
   NSDictionary *mi = mountInfoForPath(resolved);
   return [mi objectForKey:@"mountPoint"];
+#else
+  struct statfs buf;
+  if (statfs([resolved UTF8String], &buf) != 0) return nil;
+  return [NSString stringWithUTF8String:buf.f_mntonname];
+#endif
 }
 
 + (void)flushCache

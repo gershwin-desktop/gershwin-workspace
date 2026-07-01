@@ -35,6 +35,10 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
     }
 }
 
+/* Forward declaration so runCompress can call it before the definition */
+static void collect_items(NSString *dir, NSMutableArray *into,
+                          NSFileManager *fm, BOOL *cancelled);
+
 @implementation GWArchiveOperation
 
 /* =================================================================
@@ -240,17 +244,26 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
   NSMutableArray *allFiles = [NSMutableArray arrayWithCapacity: totalItems];
   for (NSString *p in paths)
     {
+      if (cancelled)
+        break;
       BOOL isDir;
       if ([fm fileExistsAtPath: p isDirectory: &isDir])
         {
           [allFiles addObject: p];
           if (isDir)
-            collect_items(p, allFiles, fm);
+            collect_items(p, allFiles, fm, &cancelled);
         }
     }
 
   [pool release];  /* free temporary objects from the enumeration */
   pool = [[NSAutoreleasePool alloc] init];
+
+  /* Bail out early if the user cancelled during file collection */
+  if (cancelled)
+    {
+      [pool release];
+      return NO;
+    }
 
   /* Now compress — we use GWMetaArchive directly since we already enumerated */
   NSError *compressError = nil;
@@ -260,8 +273,9 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
     ASSIGN(error, compressError);
 
   dispatch_async(dispatch_get_main_queue(), ^{
-    [self updateProgress: 100.0 status: (ok ? NSLocalizedString(@"Done.", @"")
-                                           : NSLocalizedString(@"Failed.", @""))];
+    [self updateProgress: (double)totalItems
+                  status: (ok ? NSLocalizedString(@"Done.", @"")
+                             : NSLocalizedString(@"Failed.", @""))];
   });
 
   [pool release];
@@ -270,11 +284,14 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
 
 /* helper — collects file paths recursively, skipping sidecars */
 static void
-collect_items(NSString *dir, NSMutableArray *into, NSFileManager *fm)
+collect_items(NSString *dir, NSMutableArray *into, NSFileManager *fm,
+              BOOL *cancelled)
 {
   NSArray *kids = [fm directoryContentsAtPath: dir];
   for (NSString *name in kids)
     {
+      if (*cancelled)
+        return;
       if ([name hasPrefix: @"._"])
         continue;
       NSString *full = [dir stringByAppendingPathComponent: name];
@@ -282,7 +299,7 @@ collect_items(NSString *dir, NSMutableArray *into, NSFileManager *fm)
 
       BOOL isDir;
       if ([fm fileExistsAtPath: full isDirectory: &isDir] && isDir)
-        collect_items(full, into, fm);
+        collect_items(full, into, fm, cancelled);
     }
 }
 
@@ -301,6 +318,13 @@ collect_items(NSString *dir, NSMutableArray *into, NSFileManager *fm)
   });
 
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+  if (cancelled)
+    {
+      [pool release];
+      return NO;
+    }
+
   NSError *extractError = nil;
   BOOL ok = [GWMetaArchive extractArchive: archivePath toDir: outputPath error: &extractError];
 
