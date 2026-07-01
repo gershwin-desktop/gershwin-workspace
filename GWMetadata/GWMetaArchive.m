@@ -26,6 +26,12 @@
 #define READ_BLOCK_SIZE  10240
 #define WRITE_BLOCK_SIZE  16384
 
+/* Upper bound for a single __MACOSX/._ metadata entry buffered in pass 1.
+ * AppleDouble headers are a few KB; anything larger is almost certainly a
+ * malicious archive trying to exhaust memory (every such entry is buffered
+ * at full size in metadataDict).  1 MB is a generous ceiling. */
+#define MAX_METADATA_ENTRY_SIZE  (1024 * 1024)
+
 /* ------------------------------------------------------------------
  * Helpers
  * ------------------------------------------------------------------ */
@@ -442,9 +448,10 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
       if ([epath hasPrefix: @"__MACOSX/"])
         {
           NSString *real = real_path_from_macosx(epath);
-          if (real && archive_entry_size(entry) > 0)
+          int64_t esize = archive_entry_size(entry);
+          if (real && esize > 0 && esize <= MAX_METADATA_ENTRY_SIZE)
             {
-              NSMutableData *ad = [NSMutableData dataWithLength: (NSUInteger)archive_entry_size(entry)];
+              NSMutableData *ad = [NSMutableData dataWithLength: (NSUInteger)esize];
               ssize_t nread = archive_read_data(a, [ad mutableBytes], [ad length]);
               if (nread > 0)
                 [metadataDict setObject: ad forKey: real];
@@ -474,6 +481,13 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
   archive_read_free(a);
 
   a = archive_read_new();
+  if (!a)
+    {
+      if (error)
+        *error = [NSError errorWithDomain: @"GWMetaArchive" code: 15
+          userInfo: @{NSLocalizedDescriptionKey: @"archive_read_new failed"}];
+      return NO;
+    }
   archive_read_support_format_zip(a);
   archive_read_support_filter_all(a);
   if (archive_read_open_filename(a, cpath, READ_BLOCK_SIZE) != ARCHIVE_OK)
@@ -539,7 +553,18 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
                         O_WRONLY | O_CREAT | O_TRUNC, 0644);
           if (fd >= 0)
             {
-              copy_archive_data_to_fd(a, fd);
+              /* Propagate a write failure instead of silently leaving a
+               * truncated file and still reporting success. */
+              if (copy_archive_data_to_fd(a, fd) != ARCHIVE_OK)
+                {
+                  close(fd);
+                  if (error)
+                    *error = [NSError errorWithDomain: @"GWMetaArchive" code: 16
+                      userInfo: @{NSLocalizedDescriptionKey:
+                        [NSString stringWithFormat: @"Error extracting %@", epath]}];
+                  ok = NO;
+                  break;
+                }
               close(fd);
             }
           else

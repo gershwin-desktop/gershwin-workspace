@@ -236,23 +236,7 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
 
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
-  /* Enumerate all files (including in subdirectories), collect them */
-  NSMutableArray *allFiles = [NSMutableArray arrayWithCapacity: totalItems];
-  for (NSString *p in paths)
-    {
-      BOOL isDir;
-      if ([fm fileExistsAtPath: p isDirectory: &isDir])
-        {
-          [allFiles addObject: p];
-          if (isDir)
-            collect_items(p, allFiles, fm);
-        }
-    }
-
-  [pool release];  /* free temporary objects from the enumeration */
-  pool = [[NSAutoreleasePool alloc] init];
-
-  /* Now compress — we use GWMetaArchive directly since we already enumerated */
+  /* Compress via GWMetaArchive, which enumerates the tree itself. */
   NSError *compressError = nil;
   BOOL ok = [GWMetaArchive compressPaths: paths toArchiveAt: outputPath error: &compressError];
 
@@ -266,24 +250,6 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
 
   [pool release];
   return ok;
-}
-
-/* helper — collects file paths recursively, skipping sidecars */
-static void
-collect_items(NSString *dir, NSMutableArray *into, NSFileManager *fm)
-{
-  NSArray *kids = [fm directoryContentsAtPath: dir];
-  for (NSString *name in kids)
-    {
-      if ([name hasPrefix: @"._"])
-        continue;
-      NSString *full = [dir stringByAppendingPathComponent: name];
-      [into addObject: full];
-
-      BOOL isDir;
-      if ([fm fileExistsAtPath: full isDirectory: &isDir] && isDir)
-        collect_items(full, into, fm);
-    }
 }
 
 /* =================================================================
