@@ -203,8 +203,13 @@ static GWDesktopManager *desktopManager = nil;
       XCloseDisplay(display);
     }
   
-  [desktopView showMountedVolumes];
-  [desktopView showContentsOfNode: dskNode];
+  // Show desktop window + dock immediately for perceived performance.
+  // Defer icon population to next runloop — each icon creates an X11 window
+  // (~50+ XCreateWindow calls) which blocks startup 1s+.
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [desktopView showMountedVolumes];
+    [desktopView showContentsOfNode: dskNode];
+  });
   [self addWatcherForPath: [dskNode path]];
     
   if ((hidedock == NO) && ([dock superview] == nil)) {
