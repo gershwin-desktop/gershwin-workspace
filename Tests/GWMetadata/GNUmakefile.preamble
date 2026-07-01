@@ -1,0 +1,3 @@
+# Extra include path so the in-process test sources (compiled via #include
+# of the .m under test) can find their headers under GWMetadata/.
+ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata
