@@ -376,6 +376,7 @@ typedef enum FSNSelectionMask {
   NSFileManager *fm;
 
   id _metadataProvider;   /* id <FSNMetadataProvider>, set by the application */
+  id _iconPositionStore;  /* id <FSNIconPositionStore>, set by the application */
 }
 
 + (FSNodeRep *)sharedInstance;
@@ -384,6 +385,11 @@ typedef enum FSNSelectionMask {
  * position).  Injected by the application; nil in a plain FSNode client. */
 - (void)setMetadataProvider:(id)provider;
 - (id)metadataProvider;
+
+/* Icon-position store (persists dragged/cleaned-up positions).  Injected by
+ * the application; nil in a plain FSNode client (positions not persisted). */
+- (void)setIconPositionStore:(id)store;
+- (id)iconPositionStore;
 
 - (NSArray *)directoryContentsAtPath:(NSString *)path;
 

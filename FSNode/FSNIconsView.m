@@ -50,6 +50,7 @@
 #import "FSNFunctions.h"
 #import "GSFileMetadata.h"
 #import "FSNMetadataProvider.h"
+#import "FSNIconPositionStore.h"
 #import "DSStore.h"
 #import "FSNPlacementEnumerator.h"
 
@@ -924,128 +925,11 @@ static void GWHighlightFrameRect(NSRect aRect)
                                   [NSNumber numberWithInt: ilocY]]];
       }
 
-    for (NSString *folder in folders)
-      {
-        BOOL folderWritable = (access([folder fileSystemRepresentation], W_OK) == 0);
-        NSArray *batch = [folders objectForKey: folder];
-
-        if (folderWritable)
-          {
-            /* Write icon positions to per-folder .DS_Store */
-            NS_DURING
-              {
-                NSString *dsp = [folder stringByAppendingPathComponent: @".DS_Store"];
-                DSStore *s;
-                if ([[NSFileManager defaultManager] fileExistsAtPath: dsp])
-                  s = [DSStore storeWithPath: dsp];
-                else
-                  s = [DSStore createStoreAtPath: dsp withEntries: nil];
-                if (s)
-                  {
-                    if (![s load])
-                      {
-                        s = [DSStore createStoreAtPath: dsp withEntries: nil];
-                      }
-                    if (s)
-                      {
-                        NSUInteger bi;
-                        for (bi = 0; bi < [batch count]; bi++)
-                          {
-                            NSArray *entry = [batch objectAtIndex: bi];
-                            [s setIconLocationForFilename: [entry objectAtIndex: 0]
-                                                        x: [[entry objectAtIndex: 1] intValue]
-                                                        y: [[entry objectAtIndex: 2] intValue]];
-                          }
-                        [s save];
-                      }
-                  }
-              }
-            NS_HANDLER
-              {
-              }
-            NS_ENDHANDLER
-          }
-        else
-          {
-            /* Folder not writable (e.g. "/") - write Iloc entries to the
-             * per-volume cache at ~/Library/Caches/com.apple.finder/.
-             * Use statfs f_fsid for a stable volume identifier. */
-            struct statfs svfs;
-            if (statfs([folder fileSystemRepresentation], &svfs) == 0)
-              {
-                int id0 = FSID_VAL(svfs, 0);
-                int id1 = FSID_VAL(svfs, 1);
-                if (id0 != 0 || id1 != 0)
-                  {
-                    NSString *volID = [NSString stringWithFormat:@"%08X%08X", id0, id1];
-                    NSString *cacheDir = [NSHomeDirectory()
-                      stringByAppendingPathComponent:
-                        @"Library/Caches/com.apple.finder"];
-                    NSFileManager *fm = [NSFileManager defaultManager];
-                    BOOL isDir = NO;
-                    if (![fm fileExistsAtPath: cacheDir isDirectory: &isDir])
-                      {
-                        [fm createDirectoryAtPath: cacheDir
-                         withIntermediateDirectories: YES
-                                         attributes: nil
-                                              error: NULL];
-                      }
-
-                    NSString *cachePath = [cacheDir
-                      stringByAppendingPathComponent:
-                        [volID stringByAppendingString: @".DS_Store"]];
-
-                    NS_DURING
-                      {
-                        DSStore *s;
-                        if ([fm fileExistsAtPath: cachePath])
-                          s = [DSStore storeWithPath: cachePath];
-                        else
-                          s = [DSStore createStoreAtPath: cachePath
-                                            withEntries: nil];
-                        if (s)
-                          {
-                            if (![s load])
-                              {
-                                s = [DSStore createStoreAtPath: cachePath
-                                                  withEntries: nil];
-                              }
-                            if (s)
-                              {
-                                NSUInteger bi;
-                                for (bi = 0; bi < [batch count]; bi++)
-                                  {
-                                    NSArray *entry = [batch objectAtIndex: bi];
-                                    [s setIconLocationForFilename:
-                                           [entry objectAtIndex: 0]
-                                        x: [[entry objectAtIndex: 1] intValue]
-                                        y: [[entry objectAtIndex: 2] intValue]];
-                                  }
-                                [s save];
-                              }
-                          }
-                      }
-                    NS_HANDLER
-                      {
-                        NSDebugLLog(@"gwspace", @"batchRepositionIcons: cache write failed for %@", folder);
-                      }
-                    NS_ENDHANDLER
-                  }
-              }
-          }
-        /* fdLocation xattr for each file (always, writes per-file metadata) */
-        NSUInteger bi;
-        for (bi = 0; bi < [batch count]; bi++)
-          {
-            NSArray *entry = [batch objectAtIndex: bi];
-            NSString *fullPath = [folder stringByAppendingPathComponent: [entry objectAtIndex: 0]];
-            GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: fullPath];
-            if (!md) md = [[[GSFileMetadata alloc] init] autorelease];
-            [md setIconPosition: NSMakePoint((int16_t)[[entry objectAtIndex: 1] intValue],
-                                              (int16_t)[[entry objectAtIndex: 2] intValue])];
-            [md writeToFileAtPath: fullPath error: nil];
-          }
-      }
+    /* All persistence goes through the injected icon-position store (the
+     * Workspace application), which owns the folder .DS_Store / per-volume
+     * cache / fdLocation xattr writes.  FSNode no longer writes those stores
+     * directly. */
+    [[fsnodeRep iconPositionStore] saveIconPositionsByFolder: folders];
   }
 }
 

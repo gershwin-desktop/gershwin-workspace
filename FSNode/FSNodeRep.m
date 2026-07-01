@@ -861,5 +861,15 @@ static FSNodeRep *shared = nil;
   return _metadataProvider;
 }
 
+- (void)setIconPositionStore:(id)store
+{
+  _iconPositionStore = store;   /* not retained: the app owns its lifetime */
+}
+
+- (id)iconPositionStore
+{
+  return _iconPositionStore;
+}
+
 @end
 

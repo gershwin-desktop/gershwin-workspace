@@ -83,6 +83,7 @@ Workspace_LANGUAGES = \
 Workspace_OBJC_FILES = main.m \
 GWFunctions.m \
 GWMetadataProvider.m \
+GWIconPositionStore.m \
 Workspace.m \
 Workspace+UITesting.m \
 X11AppSupport.m \

@@ -44,6 +44,7 @@ FSNode_HEADER_FILES = \
          FSNIconPlacement.h \
          FSNPlacementEnumerator.h \
          FSNMetadataProvider.h \
+         FSNIconPositionStore.h \
 
 
 FSNode_HAS_RESOURCE_BUNDLE = yes                                          

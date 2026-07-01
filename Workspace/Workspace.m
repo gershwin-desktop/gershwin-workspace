@@ -81,6 +81,7 @@ static NSTimeInterval recentUserUnmountTimeout = 5.0;
 #import "GWMetaArchive.h"
 #import "FSNIconsView.h"
 #import "GWMetadataProvider.h"
+#import "GWIconPositionStore.h"
 #import "GWArchiveOperation.h"
 #import "Network/NetworkFSNode.h"
 #import "Network/NetworkServiceManager.h"
@@ -768,6 +769,7 @@ NSString *_pendingSystemActionTitle = nil;
    * label colours, invisibility, custom icons and icon positions without
    * depending on the metadata implementation directly. */
   [fsnodeRep setMetadataProvider: [GWMetadataProvider sharedProvider]];
+  [fsnodeRep setIconPositionStore: [GWIconPositionStore sharedStore]];
 
 
   extendedInfo = [fsnodeRep availableExtendedInfoNames];
@@ -4863,7 +4865,6 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   if (!path) return;
 
   NSString *folderPath = [path stringByDeletingLastPathComponent];
-  NSString *name      = [path lastPathComponent];
   if ([folderPath length] == 0) return;
 
   /* Compute top-left Y from GNUstep bottom-left Y using the shared
@@ -4871,33 +4872,9 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   CGFloat viewH = FSNReferenceHeightForView([[NSApp keyWindow] contentView]);
   NSPoint topLeft = FSNFlipCenterForReferenceHeight(center, viewH);
 
-  /* Fast path: write directly to .DS_Store via the settings manager,
-   * which handles the write hierarchy (folder → per-volume cache). */
-  NS_DURING
-    {
-      NSString *dsstorePath = [folderPath stringByAppendingPathComponent: @".DS_Store"];
-      NSFileManager *fileMgr = [NSFileManager defaultManager];
-      DSStore *store;
-      if ([fileMgr fileExistsAtPath: dsstorePath])
-        store = [DSStore storeWithPath: dsstorePath];
-      else
-        store = [DSStore createStoreAtPath: dsstorePath withEntries: nil];
-      if (store)
-        {
-          [store load];
-          [store setIconLocationForFilename: name x: (int)topLeft.x y: (int)topLeft.y];
-          [store save];
-        }
-    }
-  NS_HANDLER
-    NSDebugLLog(@"gwspace", @"writeIconPosition: DSStore write failed for %@", path);
-  NS_ENDHANDLER
-
-  /* fdLocation xattr — same top-left coords as DS_Store Iloc */
-  GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
-  if (!md) md = [[[GSFileMetadata alloc] init] autorelease];
-  [md setIconPosition: NSMakePoint((int16_t)topLeft.x, (int16_t)topLeft.y)];
-  [md writeToFileAtPath: path error: nil];
+  /* Persist through the single icon-position store (folder .DS_Store /
+   * per-volume cache / fdLocation xattr all in one place). */
+  [[GWIconPositionStore sharedStore] saveIconPosition: topLeft forFileAtPath: path];
 }
 
 - (void)compressFiles:(id)sender
