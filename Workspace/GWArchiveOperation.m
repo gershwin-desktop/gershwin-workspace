@@ -171,11 +171,10 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
 - (BOOL)run
 {
   [self buildProgressWindow];
-  [progressWindow makeKeyAndOrderFront: nil];
 
   running = YES;
 
-  /* Use a semaphore to block the calling thread until work finishes */
+  /* Semaphore signalled on the main thread when the worker finishes. */
   dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
   dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
@@ -192,16 +191,22 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
     });
   });
 
-  /* Pump the run loop so the progress window stays responsive */
-  while (dispatch_semaphore_wait(sem, DISPATCH_TIME_NOW))
+  /* Present the progress panel as a proper modal session so events are
+   * confined to it — the user can no longer trigger menu actions or other
+   * windows mid-operation (the previous hand-pumped NSAnyEventMask loop
+   * dispatched every event and was reentrant).  The archive work runs on a
+   * background queue; each iteration we advance the modal session, then run
+   * the default run-loop mode briefly so libdispatch's main-queue completion
+   * block can fire, and poll the semaphore for completion. */
+  NSModalSession session = [NSApp beginModalSessionForWindow: progressWindow];
+  while (dispatch_semaphore_wait(sem, DISPATCH_TIME_NOW) != 0)
     {
-      NSEvent *event = [NSApp nextEventMatchingMask: NSAnyEventMask
-                                          untilDate: [NSDate dateWithTimeIntervalSinceNow: 0.05]
-                                             inMode: NSDefaultRunLoopMode
-                                            dequeue: YES];
-      if (event)
-        [NSApp sendEvent: event];
+      if ([NSApp runModalSession: session] != NSRunContinuesResponse)
+        break;
+      [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+                               beforeDate: [NSDate dateWithTimeIntervalSinceNow: 0.03]];
     }
+  [NSApp endModalSession: session];
 
   dispatch_release(sem);
 
