@@ -37,7 +37,7 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
 
 /* Forward declaration so runCompress can call it before the definition */
 static void collect_items(NSString *dir, NSMutableArray *into,
-                          NSFileManager *fm, volatile BOOL *cancelled);
+                          NSFileManager *fm, BOOL *cancelled);
 
 @implementation GWArchiveOperation
 
@@ -285,7 +285,7 @@ static void collect_items(NSString *dir, NSMutableArray *into,
 /* helper — collects file paths recursively, skipping sidecars */
 static void
 collect_items(NSString *dir, NSMutableArray *into, NSFileManager *fm,
-              volatile BOOL *cancelled)
+              BOOL *cancelled)
 {
   NSArray *kids = [fm directoryContentsAtPath: dir];
   for (NSString *name in kids)
