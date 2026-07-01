@@ -102,9 +102,9 @@ static void killOtherInstances(const char *myBasename, pid_t myPid)
     closedir(procDir);
     
     if (killedCount > 0) {
-        fprintf(stderr, "Workspace: Terminated %d other instance(s), waiting 500ms for cleanup\n", 
+        fprintf(stderr, "Workspace: Terminated %d other instance(s), waiting 50ms for cleanup\n",
                 killedCount);
-        usleep(500000); // Wait 500ms for processes to terminate
+        usleep(50000); // Wait 50ms for processes to terminate (SIGKILL is immediate)
     } else {
         fprintf(stderr, "Workspace: No other instances found\n");
     }

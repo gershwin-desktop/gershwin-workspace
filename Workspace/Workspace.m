@@ -869,23 +869,30 @@ NSString *_pendingSystemActionTitle = nil;
 
   }
 
-  prefController = [PrefController new];  
-  
+  // Defer non-essential GORM loads to next runloop for faster startup
+  dispatch_async(dispatch_get_main_queue(), ^{
+    prefController = [PrefController new];
+    if ([defaults boolForKey: @"uses_inspector"]) {
+      inspector = [Inspector new];
+      [self showInspector: nil];
+    }
+  });
+
+  // Lazy inspector — created on first showInspector: call if not already done
+  if ([defaults boolForKey: @"uses_inspector"] == NO) {
+    inspector = nil;
+  }
+
   history = [[History alloc] init];
-  
+
   openWithController = [[OpenWithController alloc] init];
   runExtController = [[RunExternalController alloc] init];
-  	    
+
   finder = [Finder finder];
-  
+
   vwrsManager = [GWViewersManager viewersManager];
   // Don't open viewer windows on startup - just show desktop
   // [vwrsManager showViewers];
-  
-  inspector = [Inspector new];
-  if ([defaults boolForKey: @"uses_inspector"]) {  
-    [self showInspector: nil]; 
-  }
   
   fileOpsManager = [Operation new];
   
@@ -3204,7 +3211,10 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)showPreferences:(id)sender
 {
-  [prefController activate]; 
+  if (prefController == nil) {
+    prefController = [PrefController new];
+  }
+  [prefController activate];
 }
 
 - (void)activateContextHelp:(id)sender
@@ -3772,6 +3782,9 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)showInspector:(id)sender
 {
+  if (inspector == nil) {
+    inspector = [Inspector new];
+  }
   [inspector activate];
   [inspector setCurrentSelection: selectedPaths];
 }
