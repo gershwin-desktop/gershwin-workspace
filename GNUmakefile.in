@@ -35,9 +35,11 @@ export with_squashfs SQUASHFS_CFLAGS SQUASHFS_LIBS
 #
 # subprojects
 #
-SUBPROJECTS = FSNode \
+# DSStore builds first: FSNode and Tools/dsutil now link libDSStore
+# instead of recompiling its sources, so the library must exist first.
+SUBPROJECTS = DSStore \
+	      FSNode \
 	      DBKit \
-	      DSStore \
 	      Tools \
 	      Inspector \
 	      Operation \

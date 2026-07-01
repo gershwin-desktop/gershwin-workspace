@@ -25,11 +25,6 @@ FSNode_OBJC_FILES = \
          ../GWMetadata/GWMetaXattr.m \
          ../GWMetadata/GSAppleDouble.m \
          ../GWMetadata/GSFileMetadata.m \
-         ../DSStore/DSStore.m \
-         ../DSStore/DSBuddyAllocator.m \
-         ../DSStore/DSStoreEntry.m \
-         ../DSStore/DSStoreCodecs.m \
-         ../DSStore/SimpleColor.m \
 
 
 FSNode_HEADER_FILES = \
@@ -59,6 +54,10 @@ FSNode_RESOURCE_FILES = \
 ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata
 ADDITIONAL_INCLUDE_DIRS += -I../DSStore
 
+# Link the libDSStore library (built first as a sibling subproject) instead
+# of recompiling its sources into this framework.
+ADDITIONAL_LIB_DIRS += -L../DSStore/obj
+
 FSNode_LANGUAGES = \
 	English \
 	Italian \
@@ -66,7 +65,7 @@ FSNode_LANGUAGES = \
 	French \
 	Spanish \
 
-LIBRARIES_DEPEND_UPON += $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
+LIBRARIES_DEPEND_UPON += -lDSStore $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
 
 ifeq ($(findstring darwin, $(GNUSTEP_TARGET_OS)), darwin)
   ifeq ($(OBJC_RUNTIME_LIB), gnu)
