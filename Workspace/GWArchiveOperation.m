@@ -240,6 +240,8 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
   NSMutableArray *allFiles = [NSMutableArray arrayWithCapacity: totalItems];
   for (NSString *p in paths)
     {
+      if (cancelled)
+        break;
       BOOL isDir;
       if ([fm fileExistsAtPath: p isDirectory: &isDir])
         {
@@ -252,6 +254,13 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
   [pool release];  /* free temporary objects from the enumeration */
   pool = [[NSAutoreleasePool alloc] init];
 
+  /* Bail out early if the user cancelled during file collection */
+  if (cancelled)
+    {
+      [pool release];
+      return NO;
+    }
+
   /* Now compress — we use GWMetaArchive directly since we already enumerated */
   NSError *compressError = nil;
   BOOL ok = [GWMetaArchive compressPaths: paths toArchiveAt: outputPath error: &compressError];
@@ -260,8 +269,9 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
     ASSIGN(error, compressError);
 
   dispatch_async(dispatch_get_main_queue(), ^{
-    [self updateProgress: 100.0 status: (ok ? NSLocalizedString(@"Done.", @"")
-                                           : NSLocalizedString(@"Failed.", @""))];
+    [self updateProgress: (double)totalItems
+                  status: (ok ? NSLocalizedString(@"Done.", @"")
+                             : NSLocalizedString(@"Failed.", @""))];
   });
 
   [pool release];
@@ -301,6 +311,13 @@ collect_items(NSString *dir, NSMutableArray *into, NSFileManager *fm)
   });
 
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+  if (cancelled)
+    {
+      [pool release];
+      return NO;
+    }
+
   NSError *extractError = nil;
   BOOL ok = [GWMetaArchive extractArchive: archivePath toDir: outputPath error: &extractError];
 

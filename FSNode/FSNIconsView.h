@@ -35,8 +35,6 @@
 @class FSNode;
 @class FSNIcon;
 @class FSNIconNameEditor;
-@class FSNIcon;
-@class FSNIconNameEditor;
 @class FSNIconItemData;
 
 @interface FSNIconsView : NSView <NSTextFieldDelegate>
