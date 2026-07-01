@@ -49,6 +49,7 @@
 #import "FSNIcon.h"
 #import "FSNFunctions.h"
 #import "GSFileMetadata.h"
+#import "FSNMetadataProvider.h"
 #import "DSStore.h"
 #import "FSNPlacementEnumerator.h"
 
@@ -1860,9 +1861,7 @@ static void GWHighlightFrameRect(NSRect aRect)
         FSNIcon *icon = [icons objectAtIndex: i];
         FSNode *nd = [icon node];
         if (!nd) continue;
-        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [nd path]];
-        if (!md) continue;
-        NSPoint floc = [md iconPosition];
+        NSPoint floc = [[fsnodeRep metadataProvider] iconPositionForPath: [nd path]];
         if ((floc.x > 0 || floc.y > 0) && floc.x != -1 && floc.y != -1)
           {
             NSPoint gsCenter = NSMakePoint(floc.x, refH - floc.y);

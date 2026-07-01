@@ -43,6 +43,7 @@ FSNode_HEADER_FILES = \
          FSNPathComponentsViewer.h \
          FSNIconPlacement.h \
          FSNPlacementEnumerator.h \
+         FSNMetadataProvider.h \
 
 
 FSNode_HAS_RESOURCE_BUNDLE = yes                                          

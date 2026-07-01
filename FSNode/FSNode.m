@@ -29,7 +29,7 @@
 #import "FSNode.h"
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
-#import "GSFileMetadata.h"
+#import "FSNMetadataProvider.h"
 
 
 @implementation FSNode
@@ -876,11 +876,7 @@
 - (BOOL)isFinderInvisible
 {
     if ([self isPlain] || [self isDirectory])
-    {
-        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
-        if (md)
-            return [md isInvisible];
-    }
+        return [[fsnodeRep metadataProvider] isInvisibleAtPath: path];
     return NO;
 }
 

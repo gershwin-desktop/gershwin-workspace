@@ -31,7 +31,7 @@
 #import "FSNListView.h"
 #import "FSNTextCell.h"
 #import "FSNFunctions.h"
-#import "GSFileMetadata.h"
+#import "FSNMetadataProvider.h"
 
 #define ICNSIZE (24)
 #define CELLS_HEIGHT (28.0)
@@ -2064,18 +2064,10 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
       ASSIGN (node, anode);
       ASSIGN (icon, [fsnodeRep iconOfSize: ICNSIZE forNode: node]);
 
-      /* Load Finder label color from metadata */
-      {
-        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [anode path]];
-        if (md)
-          {
-            NSInteger label = [md labelNumber];
-            if (label > 0)
-              {
-                ASSIGN (tagColor, [GSFileMetadata colorForLabel: (GSFileLabel)label]);
-              }
-          }
-      }
+      /* Load Finder label color from the metadata provider */
+      ASSIGN (tagColor,
+              [[[FSNodeRep sharedInstance] metadataProvider]
+                labelColorForPath: [anode path]]);
 
       openicon = nil;
       lockedicon = nil;

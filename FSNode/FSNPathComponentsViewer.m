@@ -32,7 +32,7 @@
 #import "FSNPathComponentsViewer.h"
 #import "FSNode.h"
 #import "FSNFunctions.h"
-#import "GSFileMetadata.h"
+#import "FSNMetadataProvider.h"
 
 #define BORDER 8.0
 
@@ -289,16 +289,10 @@ static NSImage *branchImage;
     ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
     isLeaf = NO;
 
-    /* Load Finder label color from metadata */
-    {
-      GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [anode path]];
-      if (md)
-        {
-          NSInteger labelNum = [md labelNumber];
-          if (labelNum > 0)
-            ASSIGN (tagColor, [GSFileMetadata colorForLabel: (GSFileLabel)labelNum]);
-        }
-    }
+    /* Load Finder label color from the metadata provider */
+    ASSIGN (tagColor,
+            [[[FSNodeRep sharedInstance] metadataProvider]
+              labelColorForPath: [anode path]]);
 
 		if ([[node path] isEqual: path_separator()] && ([node isMountPoint] == NO)) {
 		  NSHost *host = [NSHost currentHost];

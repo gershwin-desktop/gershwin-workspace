@@ -27,7 +27,8 @@
 #import <AppKit/AppKit.h>
 #import "FSNTextCell.h"
 #import "FSNFunctions.h"
-#import "GSFileMetadata.h"
+#import "FSNMetadataProvider.h"
+#import "FSNodeRep.h"
 
 
 @implementation FSNTextCell
@@ -310,20 +311,13 @@
 
     [super drawInteriorWithFrame: title_rect inView: controlView];
 
-    /* Lazily load tag colour from file metadata if not already set */
+    /* Lazily load tag colour from the metadata provider if not already set */
     if (tagColor == nil && nodePath != nil)
       {
-        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: nodePath];
-        if (md)
-          {
-            NSInteger label = [md labelNumber];
-            if (label > 0)
-              {
-                NSColor *color = [GSFileMetadata colorForLabel: (GSFileLabel)label];
-                if (color)
-                  [self setTagColor: color];
-              }
-          }
+        NSColor *color = [[[FSNodeRep sharedInstance] metadataProvider]
+                           labelColorForPath: nodePath];
+        if (color)
+          [self setTagColor: color];
       }
 
     /* Draw the (possibly badged) icon. If a label is set the icon

@@ -33,7 +33,7 @@
 #import "FSNTextCell.h"
 #import "FSNode.h"
 #import "FSNFunctions.h"
-#import "GSFileMetadata.h"
+#import "FSNMetadataProvider.h"
 #import "FSNIconPlacement.h"
 
 /* Private extension for FSNIcon */
@@ -232,16 +232,10 @@ static NSImage *branchImage;
       _placementData = [[FSNIconItemData alloc] init];
       [_placementData setFilename: [anode name]];
 
-      /* Load Finder label color eagerly from metadata */
-      {
-        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [anode path]];
-        if (md)
-          {
-            NSInteger labelNum = [md labelNumber];
-            if (labelNum > 0)
-              ASSIGN (tagColor, [GSFileMetadata colorForLabel: (GSFileLabel)labelNum]);
-          }
-      }
+      /* Load Finder label color eagerly from the metadata provider */
+      ASSIGN (tagColor,
+              [[[FSNodeRep sharedInstance] metadataProvider]
+                labelColorForPath: [anode path]]);
 
       dndSource = dndsrc;
       acceptDnd = dndaccept;
@@ -714,17 +708,10 @@ static NSImage *branchImage;
 
   labelChecked = YES;
 
-  GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
-  if (md == nil)
-    return;
-
-  NSInteger labelNum = [md labelNumber];
-  if (labelNum > 0)
-    {
-      NSColor *color = [GSFileMetadata colorForLabel: (GSFileLabel)labelNum];
-      if (color)
-        [self setTagColor: color];
-    }
+  NSColor *color = [[[FSNodeRep sharedInstance] metadataProvider]
+                     labelColorForPath: path];
+  if (color)
+    [self setTagColor: color];
 }
 
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent

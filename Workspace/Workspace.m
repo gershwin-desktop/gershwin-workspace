@@ -80,6 +80,7 @@ static NSTimeInterval recentUserUnmountTimeout = 5.0;
 #import "GWViewSettingsManager.h"
 #import "GWMetaArchive.h"
 #import "FSNIconsView.h"
+#import "GWMetadataProvider.h"
 #import "GWArchiveOperation.h"
 #import "Network/NetworkFSNode.h"
 #import "Network/NetworkServiceManager.h"
@@ -762,8 +763,13 @@ NSString *_pendingSystemActionTitle = nil;
   
   fm = [NSFileManager defaultManager];
   ws = [NSWorkspace sharedWorkspace];
-  fsnodeRep = [FSNodeRep sharedInstance];  
-    
+  fsnodeRep = [FSNodeRep sharedInstance];
+  /* Supply FSNode with the Finder-metadata provider so cells/views can read
+   * label colours, invisibility, custom icons and icon positions without
+   * depending on the metadata implementation directly. */
+  [fsnodeRep setMetadataProvider: [GWMetadataProvider sharedProvider]];
+
+
   extendedInfo = [fsnodeRep availableExtendedInfoNames];
   menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"View", @"")] submenu];
   menu = [[menu itemWithTitle: NSLocalizedString(@"Show", @"")] submenu];

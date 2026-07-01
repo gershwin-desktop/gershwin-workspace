@@ -33,7 +33,7 @@
 #import "FSNFunctions.h"
 #import "ExtendedInfo.h"
 #import "config.h"
-#import "GSFileMetadata.h"
+#import "FSNMetadataProvider.h"
 
 
 #ifdef HAVE_GETMNTINFO
@@ -848,10 +848,17 @@ static FSNodeRep *shared = nil;
 
 - (BOOL)isFileInvisibleFromMetadataAtPath:(NSString *)filePath
 {
-  GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: filePath];
-  if (md)
-    return [md isInvisible];
-  return NO;
+  return [_metadataProvider isInvisibleAtPath: filePath];
+}
+
+- (void)setMetadataProvider:(id)provider
+{
+  _metadataProvider = provider;   /* not retained: the app owns its lifetime */
+}
+
+- (id)metadataProvider
+{
+  return _metadataProvider;
 }
 
 @end

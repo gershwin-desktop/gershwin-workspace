@@ -30,7 +30,7 @@
 #import "FSNBrowserCell.h"
 #import "FSNode.h"
 #import "FSNFunctions.h"
-#import "GSFileMetadata.h"
+#import "FSNMetadataProvider.h"
 
 #define DEFAULT_ISIZE (16)
 #define HLIGHT_H_FACT (0.8125)
@@ -432,20 +432,9 @@ static NSString *dots = @"...";
 
   [self setIcon];
 
-  /* Load Finder label color from metadata */
-  {
-    GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [anode path]];
-    if (md)
-      {
-        NSInteger label = [md labelNumber];
-        if (label > 0)
-          [self setTagColor: [GSFileMetadata colorForLabel: (GSFileLabel)label]];
-        else
-          [self setTagColor: nil];
-      }
-    else
-      [self setTagColor: nil];
-  }
+  /* Load Finder label color from the metadata provider */
+  [self setTagColor: [[[FSNodeRep sharedInstance] metadataProvider]
+                       labelColorForPath: [anode path]]];
 
   if (extInfoType) {
     [self setExtendedShowType: extInfoType];
