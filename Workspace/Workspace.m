@@ -4860,23 +4860,6 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
     [iconView setNeedsDisplay: YES];
 }
 
-- (void)writeIconPosition:(NSPoint)center forFileAtPath:(NSString *)path
-{
-  if (!path) return;
-
-  NSString *folderPath = [path stringByDeletingLastPathComponent];
-  if ([folderPath length] == 0) return;
-
-  /* Compute top-left Y from GNUstep bottom-left Y using the shared
-   * reference height (key window content view is the authority). */
-  CGFloat viewH = FSNReferenceHeightForView([[NSApp keyWindow] contentView]);
-  NSPoint topLeft = FSNFlipCenterForReferenceHeight(center, viewH);
-
-  /* Persist through the single icon-position store (folder .DS_Store /
-   * per-volume cache / fdLocation xattr all in one place). */
-  [[GWIconPositionStore sharedStore] saveIconPosition: topLeft forFileAtPath: path];
-}
-
 - (void)compressFiles:(id)sender
 {
   NSWindow *kwin = [NSApp keyWindow];

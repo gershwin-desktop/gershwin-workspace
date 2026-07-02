@@ -363,10 +363,13 @@ static void GWHighlightFrameRect(NSRect aRect)
   RELEASE (pool);
 }
 
-/* Base layout policy: the reflow/grid layout (icons flow to fill the width,
- * saved positions honoured via refH conversion).  The spatial and desktop
- * subclasses override this with fixed-position policies.  Sets each icon's
- * frame and reports the content extent in _contentExtent. */
+/* Layout policy for every view: honored icons (desktop, spatial) are placed
+ * at their saved iloc mapped through -viewCenterForIlocCenter:; unhonored
+ * icons (browser) and any unplaced icon flow into the next free grid cell and
+ * reflow to the width.  Subclasses pick their behavior via -isFlipped,
+ * -honorsSavedPositions, the iloc<->view mapping and -gridOriginForLayout —
+ * none override this method.  Sets each icon's frame and reports the content
+ * extent in _contentExtent. */
 - (void)layoutIcons
 {
   NSUInteger count = [icons count];
@@ -786,61 +789,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   return icons;
 }
 
-- (NSPoint)firstFreeGridCenter
-{
-  /* Virtual grid scan: find the first grid cell that is not occupied by
-   * any existing icon.  Used for initial placement of new/added items. */
-
-  [self calculateGridSize];
-
-  CGFloat cellW = gridSize.width;
-  CGFloat cellH = gridSize.height;
-  CGFloat gapX = (CGFloat)COLUMN_GAP_X;
-  NSPoint gOrigin = [self gridOriginForLayout];
-  CGFloat gridWidth = [self windowContentWidthForLayout];
-  CGFloat availableWidth = gridWidth - gOrigin.x;
-  if (availableWidth < cellW + gapX) availableWidth = gridWidth;
-  NSUInteger nCols = (NSUInteger)((availableWidth + gapX) / (cellW + gapX));
-  if (nCols < 1) nCols = 1;
-  NSUInteger nRows = [self isFlipped] ? 1 : (NSUInteger)(gOrigin.y / cellH);
-  if (nRows < 1) nRows = 1;
-  {
-    NSUInteger neededRows = ([icons count] + nCols - 1) / nCols;
-    if (nRows < neededRows) nRows = neededRows;
-  }
-
-  FSNLeftToRightTopToBottomEnumerator *e =
-    [[[FSNLeftToRightTopToBottomEnumerator alloc] initWithColumns: nCols rows: nRows] autorelease];
-  [e reset];
-  FSNGridCell cell;
-  while ([e nextCell: &cell])
-    {
-      NSPoint c = [self centerForGridCell: cell
-                                 cellSize: NSMakeSize(cellW, cellH)
-                                     gapX: gapX
-                                   origin: gOrigin];
-      /* Check if any existing icon occupies this cell, judged by the live
-       * icon frames — the layout truth in this view's own coordinates
-       * (placement data is only maintained for MANUAL icons). */
-      BOOL occupied = NO;
-      NSUInteger i;
-      for (i = 0; i < [icons count]; i++)
-        {
-          NSRect fr = [[icons objectAtIndex: i] frame];
-          CGFloat dx = fabs(NSMidX(fr) - c.x);
-          CGFloat dy = fabs(NSMidY(fr) - c.y);
-          if (dx < cellW / 2.0 && dy < cellH / 2.0)
-            {
-              occupied = YES;
-              break;
-            }
-        }
-      if (!occupied)
-        return c;
-    }
-  return NSZeroPoint;
-}
-
 - (void)repositionIcon:(FSNIcon *)icon toCenterPoint:(NSPoint)point
 {
   /* Thin wrapper — all real work is in batchRepositionIcons:toCenterPoints:. */
@@ -1234,29 +1182,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   [self tile];
 }
 
-- (void)sortIconsBy:(SEL)sortSelector
-{
-  if (infoType == FSNInfoExtendedType)
-    {
-      /* Extended info type uses function-based sort */
-      /* FIXME: use appropriate compare function */
-    }
-  else
-    {
-      [icons sortUsingSelector: sortSelector];
-    }
-
-  /* After sort, all items become AUTO (layout engine owns positions) */
-  NSUInteger i;
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      FSNIconItemData *data = [icon placementData];
-      data.placementMode = FSNIconPlacementModeAuto;
-    }
-
-  [self tile];
-}
 
 - (void)mouseUp:(NSEvent *)theEvent
 {

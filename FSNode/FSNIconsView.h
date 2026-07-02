@@ -89,7 +89,7 @@
   FSNPlacementDirection _placementDirection;
 
   // DS_Store free positioning support for Mac interoperability
-  NSMutableDictionary *customIconPositions; // filename -> NSValue(NSPoint) icon center in GNUstep coords
+  NSMutableDictionary *customIconPositions; // filename -> NSValue(NSPoint) iloc top-left CENTER coords
   CGFloat dsStoreIconHeight;                // Icon height for coordinate conversion
 
   // Non-retained reference to the enclosing NSClipView being observed
@@ -105,8 +105,9 @@
 /* Layout policy: position every icon (setFrame:) and set _contentExtent to
  * the laid-out content's max right/top edge.  -tile owns the surrounding
  * mechanics (grid caching, document sizing, per-icon tile, scrolling) and
- * calls this.  The base implementation is the reflow/grid layout; the
- * spatial and desktop subclasses override it with fixed-position policies. */
+ * calls this.  One implementation serves every view: subclasses select a
+ * policy through -isFlipped, -honorsSavedPositions, the iloc<->view mapping
+ * and -gridOriginForLayout, not by overriding this method. */
 - (void)layoutIcons;
 
 /* Whether this view honors saved (.DS_Store/fdLocation) icon positions.
@@ -151,7 +152,6 @@
 
 /* Cleanup and sort operations (Finder-compatible) */
 - (void)cleanupIconPositions;
-- (void)sortIconsBy:(SEL)sortSelector;
 
 - (void)sortIcons;
 
@@ -181,10 +181,6 @@
 
 /* Batch reposition — moves many icons at once, tiles once, persists once */
 - (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
-
-/* Virtual grid: find the center of the first grid cell not occupied by
- * any existing icon.  Used for initial placement of new/added items. */
-- (NSPoint)firstFreeGridCenter;
 
 // DS_Store tag colors and comments support
 - (void)setTagColorsFromDictionary:(NSDictionary *)tagDict;

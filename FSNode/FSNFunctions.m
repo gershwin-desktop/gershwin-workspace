@@ -253,12 +253,6 @@ FSNReferenceHeightForView(NSView *view)
   return refH;
 }
 
-NSPoint
-FSNFlipCenterForReferenceHeight(NSPoint center, CGFloat refH)
-{
-  return NSMakePoint(center.x, refH - center.y);
-}
-
 void
 FSNDrawLabelDot(NSRect dotRect, NSColor *color)
 {

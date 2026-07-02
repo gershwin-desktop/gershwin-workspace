@@ -29,7 +29,6 @@
 #import <AppKit/AppKit.h>
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
-#import "GSFileMetadata.h"
 #import "GWSpatialViewer.h"
 #import "GWViewersManager.h"
 #import "GWViewerWindow.h"

@@ -63,10 +63,6 @@ void showAlertNameInUse(Class c, NSString *newname);
  * own bounds height, then 600.0 if nothing is available yet. */
 CGFloat FSNReferenceHeightForView(NSView *view);
 
-/* Flip a center point between iloc (top-left) and GNUstep (bottom-left).
- * The transform is its own inverse, so one implementation serves both. */
-NSPoint FSNFlipCenterForReferenceHeight(NSPoint center, CGFloat refH);
-
 @class NSColor;
 
 /* Draw a Finder label-colour dot (drop shadow + filled oval + hairline
