@@ -27,6 +27,7 @@
 #include <Foundation/Foundation.h>
 #include <AppKit/AppKit.h>
 #include "GWDesktopIcon.h"
+#import "FSNIconsView.h"
 
 /* Forward declaration for repositionLocal:offset: inherited from FSNIcon */
 @interface FSNIcon (GWDesktopIconForwardDecl)
@@ -192,7 +193,15 @@
 
 	  if (startdnd == YES)
 	    {
-	      if ([container respondsToSelector: @selector(repositionIcon:toCenterPoint:)])
+	      /* Same gate as FSNIcon: reposition only in position-honoring
+	       * containers (the desktop is one; this keeps the sites in sync). */
+	      BOOL canReposition =
+	        [container respondsToSelector: @selector(repositionIcon:toCenterPoint:)];
+	      if (canReposition
+	          && [container respondsToSelector: @selector(honorsSavedPositions)])
+	        canReposition = [(FSNIconsView *)container honorsSavedPositions];
+
+	      if (canReposition)
 	        [self repositionLocal: theEvent offset: offset];
 	      else
 	        {

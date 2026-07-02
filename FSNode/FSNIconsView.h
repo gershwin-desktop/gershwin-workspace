@@ -120,6 +120,20 @@
 - (NSPoint)ilocCenterForViewCenter:(NSPoint)center;
 - (NSPoint)viewCenterForIlocCenter:(NSPoint)iloc;
 
+/* Grid geometry in this view's own coordinates, flip-aware: rows grow
+ * visually downward from gridOriginForLayout regardless of the coordinate
+ * model.  Every operation that computes or assigns a grid position (layout,
+ * Clean Up, first-free-cell, occupancy) goes through this pair so a layout
+ * policy only has to define the coordinate model once. */
+- (NSPoint)centerForGridCell:(FSNGridCell)cell
+                    cellSize:(NSSize)cellSize
+                        gapX:(CGFloat)gapX
+                      origin:(NSPoint)gridOrigin;
+- (FSNGridCell)gridCellForCenter:(NSPoint)center
+                        cellSize:(NSSize)cellSize
+                            gapX:(CGFloat)gapX
+                          origin:(NSPoint)gridOrigin;
+
 /* Placement direction access (used by Clean Up virtual grid) */
 - (void)setPlacementDirection:(FSNPlacementDirection)direction;
 - (FSNPlacementDirection)placementDirection;

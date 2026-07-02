@@ -35,6 +35,7 @@
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
 #import "FSNIconPlacement.h"
+#import "FSNIconsView.h"
 
 /* Private extension for FSNIcon */
 @interface FSNIcon (Private)
@@ -901,8 +902,16 @@ static NSImage *branchImage;
 
 	  if (startdnd)
 	    {
-	      /* Local reposition when container supports it */
-	      if ([container respondsToSelector: @selector(repositionIcon:toCenterPoint:)])
+	      /* Local reposition only in position-honoring containers; a
+	       * pure-reflow container (browser icon view) has no meaningful
+	       * icon positions, so a drag is an external file drag. */
+	      BOOL canReposition =
+	        [container respondsToSelector: @selector(repositionIcon:toCenterPoint:)];
+	      if (canReposition
+	          && [container respondsToSelector: @selector(honorsSavedPositions)])
+	        canReposition = [(FSNIconsView *)container honorsSavedPositions];
+
+	      if (canReposition)
 		{
 		  [self repositionLocal: theEvent offset: offset];
 		}

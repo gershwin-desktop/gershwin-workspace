@@ -80,6 +80,21 @@ FSNGridCellCenter(FSNGridCell cell, NSPoint origin,
                      origin.y + (CGFloat)cell.row * cellH + cellH / 2.0);
 }
 
+/* Inverse of FSNGridCellCenter: the (col,row) whose cell area contains
+ * `center` in the same top-left grid.  Returns FSNGridCellNone for points
+ * left of / above the origin. */
+static inline FSNGridCell
+FSNGridCellForCenter(NSPoint center, NSPoint origin,
+                     CGFloat cellW, CGFloat cellH, CGFloat gapX)
+{
+  CGFloat dx = center.x - origin.x;
+  CGFloat dy = center.y - origin.y;
+  if (dx < 0 || dy < 0 || cellW <= 0 || cellH <= 0)
+    return FSNGridCellNone;
+  return FSNGridCellMake((NSUInteger)(dx / (cellW + gapX)),
+                         (NSUInteger)(dy / cellH));
+}
+
 static inline NSString *
 NSStringFromFSNGridCell(FSNGridCell cell)
 {
