@@ -287,33 +287,17 @@ static void GWHighlightFrameRect(NSRect aRect)
 {
   CREATE_AUTORELEASE_POOL (pool);
   NSUInteger count = [icons count];
-  NSRect *irects = NULL;
-  NSArray *selection;
   NSUInteger i;
-  /* Capture the superview frame for views that need to fill their
-   * parent (e.g., desktop where there is no NSScrollView).  When
-   * inside a clip view the content owns its own height. */
+  /* Superview frame — used to fill the parent on the desktop (no scroll view). */
   NSRect svr = [[self superview] frame];
 
-
-  /* Reference height for iloc→GNUstep conversion.  Use content view
-   * height (like macOS Finder) so positions are relative to the visible
-   * content area and survive window resize.  Computed once per tile. */
-  CGFloat refH = FSNReferenceHeightForView(self);
-
-  /* ---- Unified free positioning path (pixel-based, DS_Store Iloc) ---- */
   [self calculateGridSize];
 
-  /* Cache grid cell dimensions on first call so they stay consistent
-   * across tile calls and with cleanupIconPositions below.
-   * IMPORTANT: calculateGridSize can return different gridSize.width
-   * on different calls (depends on label width), which would cause the
-   * AUTO enumerator's grid to shift mid-layout and the pre-computation
-   * of occupied cells to use wrong column mappings — resulting in
-   * overlapping icons.  Caching once on the first tile and reusing the
-   * same dimensions everywhere avoids this.  Invalidate in setters
-   * that change icon properties (icon size, label size, etc.) so the
-   * new size takes effect on the NEXT tile call consistently. */
+  /* Cache grid cell dimensions on the first call so they stay consistent
+   * across tile calls and Clean Up.  calculateGridSize can return different
+   * widths (label-width dependent), which would shift the AUTO grid
+   * mid-layout; caching once avoids that.  Invalidated by setters that
+   * change icon properties (icon/label size, etc.). */
   if (!_gridCached)
     {
       _cachedCellSize = gridSize;
@@ -323,6 +307,68 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   if (!customIconPositions)
     customIconPositions = [[NSMutableDictionary alloc] init];
+
+  /* Layout policy: set every icon's frame and fill _contentExtent. */
+  [self layoutIcons];
+
+  /* Size the document view from the reported content extent. */
+  {
+    CGFloat visibleWidth = [self windowContentWidthForLayout];
+    CGFloat maxX = _contentExtent.width + X_MARGIN;
+    /* Snap trivial overflow so a few pixels of grid rounding don't add a
+     * horizontal scrollbar; keep the natural width for content genuinely
+     * outside the visible area (off-screen manual positions). */
+    if (maxX - X_MARGIN <= visibleWidth)
+      maxX = visibleWidth;
+
+    CGFloat fh = _contentExtent.height + Y_MARGIN;
+    /* Inside a scroll view the document owns its height (>= visible so icons
+     * start at the top and scrollbars are proportional); on the desktop the
+     * view must fill the parent. */
+    if ([[self superview] isKindOfClass: [NSClipView class]] == NO)
+      {
+        if (fh < svr.size.height)
+          fh = svr.size.height;
+      }
+    else
+      {
+        CGFloat visibleHeight = [self visibleContentHeightForLayout];
+        if (fh < visibleHeight)
+          fh = visibleHeight;
+      }
+    SETRECT (self, 0, 0, maxX, fh);
+  }
+
+  /* Tile each icon's internal layout (highlight, label, icon image). */
+  for (i = 0; i < count; i++)
+    [[icons objectAtIndex: i] tile];
+
+  {
+    NSArray *selection = [self selectedReps];
+    if ([selection count])
+      [self scrollIconToVisible: [selection objectAtIndex: 0]];
+    else
+      /* No selection — show the first row regardless of prior scroll pos. */
+      [self scrollPoint: NSMakePoint(0, 0)];
+  }
+
+  if ([[self subviews] containsObject: nameEditor])
+    [self updateNameEditor];
+
+  RELEASE (pool);
+}
+
+/* Base layout policy: the reflow/grid layout (icons flow to fill the width,
+ * saved positions honoured via refH conversion).  The spatial and desktop
+ * subclasses override this with fixed-position policies.  Sets each icon's
+ * frame and reports the content extent in _contentExtent. */
+- (void)layoutIcons
+{
+  NSUInteger count = [icons count];
+  NSUInteger i;
+  NSRect *irects = NULL;
+
+  CGFloat refH = FSNReferenceHeightForView(self);
 
   /* Use the current window content width (always up to date after resize)
    * rather than the superview frame which can lag. */
@@ -552,64 +598,12 @@ static void GWHighlightFrameRect(NSRect aRect)
   [autoEnumerator release];
   [occupiedCells release];
 
-  maxX += X_MARGIN;
-  /* Snap trivial overflow past visibleWidth only when the extra width
-   * is strictly from the X_MARGIN added above — this avoids a horizontal
-   * scrollbar for a handful of pixels of grid rounding.  For content
-   * placed well outside the visible area (manual positions from DS_Store
-   * or drag), keep the natural width so the scrollbar allows reaching
-   * those off-screen icons. */
-  if (maxX - X_MARGIN <= visibleWidth)
-    maxX = visibleWidth;
-  {
-    CGFloat fh = maxY + Y_MARGIN;
-    /* Inside a scroll view: ensure the document view is at least as
-     * tall as the visible content area, so icons start at the top
-     * of the visible area (no gap) and scrollbars behave naturally
-     * (hidden when content fits, proportional when overflow).
-     * On the desktop the view must always fill the parent. */
-    if ([[self superview] isKindOfClass: [NSClipView class]] == NO)
-      {
-        if (fh < svr.size.height)
-          fh = svr.size.height;
-      }
-    else
-      {
-        CGFloat visibleHeight = [self visibleContentHeightForLayout];
-        if (fh < visibleHeight)
-          fh = visibleHeight;
-      }
-    SETRECT (self, 0, 0, maxX, fh);
-  }
-
-  /* Tile each icon's internal layout (highlight, label, icon image) */
-  for (i = 0; i < count; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      [icon tile];
-    }
-
   if (irects)
     NSZoneFree (NSDefaultMallocZone(), irects);
 
-  selection = [self selectedReps];
-  if ([selection count])
-    {
-      [self scrollIconToVisible: [selection objectAtIndex: 0]];
-    }
-  else
-    {
-      /* No selection — scroll to the beginning so the first row
-       * of icons is visible regardless of the prior scroll pos. */
-      [self scrollPoint: NSMakePoint(0, 0)];
-    }
-
-  if ([[self subviews] containsObject: nameEditor])
-    {
-      [self updateNameEditor];
-    }
-
-  RELEASE (pool);
+  /* Report the content extent (raw max right/top edge) to -tile, which
+   * adds margins, clamps, and sizes the document view. */
+  _contentExtent = NSMakeSize(maxX, maxY);
 }
 
 - (void)scrollIconToVisible:(FSNIcon *)icon

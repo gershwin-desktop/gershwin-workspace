@@ -96,7 +96,18 @@
   // for frame-change notifications.  Used to trigger tile on resize
   // even when NSClipView does not propagate resizeWithOldSuperviewSize.
   NSView *_observedClipView;
+
+  // Content extent (max right/top edge of laid-out icons) reported by
+  // -layoutIcons and consumed by -tile to size the document view.
+  NSSize _contentExtent;
 }
+
+/* Layout policy: position every icon (setFrame:) and set _contentExtent to
+ * the laid-out content's max right/top edge.  -tile owns the surrounding
+ * mechanics (grid caching, document sizing, per-icon tile, scrolling) and
+ * calls this.  The base implementation is the reflow/grid layout; the
+ * spatial and desktop subclasses override it with fixed-position policies. */
+- (void)layoutIcons;
 
 /* Placement direction access (used by Clean Up virtual grid) */
 - (void)setPlacementDirection:(FSNPlacementDirection)direction;
