@@ -30,8 +30,8 @@
 #import <GNUstepGUI/GSVersion.h>
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
-#import "DSStore.h"
-#import "GSFileMetadata.h"
+#import "FSNMetadataProvider.h"
+#import "FSNIconPositionStore.h"
 #import "GWDesktopView.h"
 #import "GWDesktopIcon.h"
 #import "GWDesktopManager.h"
@@ -1429,65 +1429,54 @@ static void GWHighlightFrameRect(NSRect aRect)
       RELEASE (icon);
     }
 
-  /* Restore positions from fdLocation xattr and DS_Store (Mac-compatible).
-   * fdLocation (per-file extended attribute) is checked first since it
-   * follows the file even when moved; DS_Store is the folder-level fallback. */
+  /* Restore positions from fdLocation xattr and DS_Store (Mac-compatible),
+   * through the same injected provider/store interfaces the base view uses.
+   * The raw iloc (top-left CENTER) is the only stored representation;
+   * conversion to view coordinates happens at layout time via the shared
+   * mapping, so positions stay correct across re-tiles. */
   {
     NSString *folderPath = [anode path];
-    CGFloat refH = [self bounds].size.height;
-    if (refH <= 0) refH = 600.0;
+    FSNodeRep *rep = [FSNodeRep sharedInstance];
 
-    /* Source 1: fdLocation xattr (per-file extended attribute, primary) */
+    /* Source 1: fdLocation xattr (per-file, primary).  FinderInfo defaults
+     * to (0,0) when no position exists, so skip (0,0) and (-1,-1). */
     NSUInteger i;
     for (i = 0; i < [unsorted count]; i++)
       {
         FSNIcon *icon = [unsorted objectAtIndex: i];
         FSNode *nd = [icon node];
         if (!nd) continue;
-        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: [nd path]];
-        if (!md) continue;
-        NSPoint floc = [md iconPosition];
-        if (floc.x != -1 && floc.y != -1)
+        NSPoint floc = [[rep metadataProvider] iconPositionForPath: [nd path]];
+        if ((floc.x > 0 || floc.y > 0) && floc.x != -1 && floc.y != -1)
           {
             FSNIconItemData *data = [icon placementData];
-            NSPoint gsCenter = NSMakePoint(floc.x, refH - floc.y);
-            data.pixelPosition = gsCenter;
+            data.ilocPosition = floc;
             data.placementMode = FSNIconPlacementModeManual;
           }
       }
 
     /* Source 2: DS_Store Iloc (folder-level, secondary fallback).
      * Only fills in icons NOT already positioned by fdLocation. */
-    NSString *dsp = [folderPath stringByAppendingPathComponent: @".DS_Store"];
-    if ([[NSFileManager defaultManager] fileExistsAtPath: dsp])
+    NSDictionary *stored =
+      [[rep iconPositionStore] storedIconPositionsForFolder: folderPath];
+    if ([stored count])
       {
-        NS_DURING
+        NSUInteger ii;
+        for (ii = 0; ii < [unsorted count]; ii++)
           {
-            DSStore *store = [DSStore storeWithPath: dsp];
-            if (store)
+            FSNIcon *icon = [unsorted objectAtIndex: ii];
+            FSNIconItemData *data = [icon placementData];
+            if (data.placementMode == FSNIconPlacementModeManual) continue;
+
+            NSValue *v = [stored objectForKey: [[icon node] name]];
+            if (v == nil) continue;
+            NSPoint iloc = [v pointValue];
+            if (iloc.x != 0 || iloc.y != 0)
               {
-                [store load];
-                NSUInteger ii;
-                for (ii = 0; ii < [unsorted count]; ii++)
-                  {
-                    FSNIcon *icon = [unsorted objectAtIndex: ii];
-                    FSNIconItemData *data = [icon placementData];
-                    if (data.placementMode == FSNIconPlacementModeManual) continue;
-                    NSString *name = [[icon node] name];
-                    NSPoint iloc = [store iconLocationForFilename: name];
-                    if (iloc.x != 0.0f || iloc.y != 0.0f)
-                      {
-                        NSPoint gsCenter = NSMakePoint(iloc.x, refH - iloc.y);
-                        data.pixelPosition = gsCenter;
-                        data.placementMode = FSNIconPlacementModeManual;
-                      }
-                  }
+                data.ilocPosition = iloc;
+                data.placementMode = FSNIconPlacementModeManual;
               }
           }
-        NS_HANDLER
-          {
-          }
-        NS_ENDHANDLER
       }
   }
 

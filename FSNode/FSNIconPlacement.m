@@ -17,7 +17,6 @@
       _itemID = [[[NSProcessInfo processInfo] globallyUniqueString] copy];
       _filename = nil;
       _placementMode = FSNIconPlacementModeAuto;
-      _pixelPosition = NSZeroPoint;
       _ilocPosition = NSMakePoint(-1, -1);
     }
   return self;
@@ -36,7 +35,6 @@
   [copy setItemID: _itemID];
   [copy setFilename: _filename];
   [copy setPlacementMode: _placementMode];
-  [copy setPixelPosition: _pixelPosition];
   [copy setIlocPosition: _ilocPosition];
   return copy;
 }
@@ -44,10 +42,10 @@
 - (NSString *)description
 {
   return [NSString stringWithFormat:
-    @"<FSNIconItemData %p: file=%@ mode=%lu pix=(%.0f,%.0f)>",
+    @"<FSNIconItemData %p: file=%@ mode=%lu iloc=(%.0f,%.0f)>",
     self, _filename,
     (unsigned long)_placementMode,
-    _pixelPosition.x, _pixelPosition.y];
+    _ilocPosition.x, _ilocPosition.y];
 }
 
 @end

@@ -420,17 +420,14 @@ static void GWHighlightFrameRect(NSRect aRect)
           cellOrigin.x = center.x - (_cachedCellSize.width / 2);
           cellOrigin.y = center.y - (_cachedCellSize.height / 2);
         }
-      else if (honor && data.placementMode == FSNIconPlacementModeManual)
+      else if (honor && data.placementMode == FSNIconPlacementModeManual
+               && data.ilocPosition.x >= 0)
         {
-          /* Stored iloc (DS_Store top-left) maps through the overridable
-           * conversion at layout time, so positions are correct regardless
-           * of when showContentsOfNode ran; a manually dragged icon without
-           * raw iloc uses its stored view-local pixel position. */
-          NSPoint center;
-          if (data.ilocPosition.x >= 0)
-            center = [self viewCenterForIlocCenter: data.ilocPosition];
-          else
-            center = data.pixelPosition;
+          /* The stored iloc (the only stored representation) maps through
+           * the overridable conversion at layout time, so positions are
+           * correct regardless of when showContentsOfNode ran.  A MANUAL
+           * icon without iloc falls through to AUTO placement. */
+          NSPoint center = [self viewCenterForIlocCenter: data.ilocPosition];
           cellOrigin.x = center.x - (_cachedCellSize.width / 2);
           cellOrigin.y = center.y - (_cachedCellSize.height / 2);
         }
@@ -508,12 +505,10 @@ static void GWHighlightFrameRect(NSRect aRect)
                       otherCenter = [self viewCenterForIlocCenter: [oval pointValue]];
                       hasPos = YES;
                     }
-                  else if (odata.placementMode == FSNIconPlacementModeManual)
+                  else if (odata.placementMode == FSNIconPlacementModeManual
+                           && odata.ilocPosition.x >= 0)
                     {
-                      if (odata.ilocPosition.x >= 0)
-                        otherCenter = [self viewCenterForIlocCenter: odata.ilocPosition];
-                      else
-                        otherCenter = odata.pixelPosition;
+                      otherCenter = [self viewCenterForIlocCenter: odata.ilocPosition];
                       hasPos = YES;
                     }
 
@@ -824,15 +819,16 @@ static void GWHighlightFrameRect(NSRect aRect)
                                  cellSize: NSMakeSize(cellW, cellH)
                                      gapX: gapX
                                    origin: gOrigin];
-      /* Check if any existing icon occupies this cell */
+      /* Check if any existing icon occupies this cell, judged by the live
+       * icon frames — the layout truth in this view's own coordinates
+       * (placement data is only maintained for MANUAL icons). */
       BOOL occupied = NO;
       NSUInteger i;
       for (i = 0; i < [icons count]; i++)
         {
-          FSNIcon *icon = [icons objectAtIndex: i];
-          NSPoint ip = [[icon placementData] pixelPosition];
-          CGFloat dx = fabs(ip.x - c.x);
-          CGFloat dy = fabs(ip.y - c.y);
+          NSRect fr = [[icons objectAtIndex: i] frame];
+          CGFloat dx = fabs(NSMidX(fr) - c.x);
+          CGFloat dy = fabs(NSMidY(fr) - c.y);
           if (dx < cellW / 2.0 && dy < cellH / 2.0)
             {
               occupied = YES;
@@ -892,17 +888,17 @@ static void GWHighlightFrameRect(NSRect aRect)
       NSPoint point = [[points objectAtIndex: i] pointValue];
       FSNIconItemData *data = [icon placementData];
 
-      /* Manual placement is pixel-precise — no grid snapping. */
-      data.pixelPosition = point;
-      data.ilocPosition = NSMakePoint(-1, -1);  /* clear raw coords */
+      /* Manual placement is pixel-precise — no grid snapping.  Store the
+       * canonical iloc representation (view coords mapped through the
+       * overridable conversion) and sync customIconPositions so the next
+       * tile uses the dragged position, not a stale one. */
+      NSPoint ilocPoint = [self ilocCenterForViewCenter: point];
+      data.ilocPosition = ilocPoint;
       data.placementMode = FSNIconPlacementModeManual;
 
-      /* Sync customIconPositions with iloc-style (top-down) coords so
-       * the next tile call uses the dragged position, not a stale one. */
       NSString *name = [[icon node] name];
       if (!customIconPositions)
         customIconPositions = [[NSMutableDictionary alloc] init];
-      NSPoint ilocPoint = [self ilocCenterForViewCenter: point];
       [customIconPositions setObject: [NSValue valueWithPoint: ilocPoint]
                               forKey: name];
     }
@@ -1226,8 +1222,7 @@ static void GWHighlightFrameRect(NSRect aRect)
                                          origin: gOrigin];
       FSNIcon *icon = [icons objectAtIndex: ci];
       FSNIconItemData *data = [icon placementData];
-      data.pixelPosition = gCenter;
-      data.ilocPosition = NSMakePoint(-1, -1);
+      data.ilocPosition = [self ilocCenterForViewCenter: gCenter];
       data.placementMode = FSNIconPlacementModeManual;
       NSRect f = NSMakeRect(gCenter.x - cellW / 2.0, gCenter.y - cellH / 2.0,
                             cellW, cellH);
@@ -1809,8 +1804,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   if ([self honorsSavedPositions])
   {
     NSString *folderPath = [anode path];
-    /* Window content height as reference, like macOS Finder. */
-    CGFloat refH = FSNReferenceHeightForView(self);
 
     /* Source 1: fdLocation xattr (per-file extended attribute, primary).
      * FinderInfo writes (0,0) by default when no position exists,
@@ -1823,10 +1816,8 @@ static void GWHighlightFrameRect(NSRect aRect)
         NSPoint floc = [[fsnodeRep metadataProvider] iconPositionForPath: [nd path]];
         if ((floc.x > 0 || floc.y > 0) && floc.x != -1 && floc.y != -1)
           {
-            NSPoint gsCenter = NSMakePoint(floc.x, refH - floc.y);
             FSNIconItemData *data = [icon placementData];
             data.ilocPosition = floc;
-            data.pixelPosition = gsCenter;
             data.placementMode = FSNIconPlacementModeManual;
           }
       }
@@ -1852,7 +1843,6 @@ static void GWHighlightFrameRect(NSRect aRect)
             if (iloc.x != 0 || iloc.y != 0)
               {
                 data.ilocPosition = iloc;
-                data.pixelPosition = NSMakePoint(iloc.x, iloc.y);
                 data.placementMode = FSNIconPlacementModeManual;
               }
           }

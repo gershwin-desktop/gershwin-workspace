@@ -105,22 +105,24 @@ NSStringFromFSNGridCell(FSNGridCell cell)
 /* -----------------------------------------------------------------------
  * FSNIconItemData — per-icon persistent placement state.
  *
- * Each FSNIcon owns one of these.  Stores pixel position, DS_Store
- * raw coordinates, and placement mode (AUTO / MANUAL).
+ * Each FSNIcon owns one of these.  The position is stored in exactly one
+ * representation: ilocPosition, the DS_Store top-left CENTER coordinate
+ * ((-1,-1) = no stored position).  View-local coordinates exist only
+ * transiently and cross the boundary through FSNIconsView's overridable
+ * ilocCenterForViewCenter:/viewCenterForIlocCenter: mapping, so the stored
+ * value never depends on which view (flipped or bottom-left) wrote it.
  * --------------------------------------------------------------------- */
 @interface FSNIconItemData : NSObject <NSCopying>
 {
   NSString *_itemID;
   NSString *_filename;
   FSNIconPlacementMode _placementMode;
-  NSPoint _pixelPosition;       /* GNUstep bottom-left center coordinate */
-  NSPoint _ilocPosition;        /* raw DS_Store top-left coords, for tile-time conversion */
+  NSPoint _ilocPosition;        /* DS_Store top-left CENTER; (-1,-1) = none */
 }
 
 @property (nonatomic, retain) NSString *itemID;
 @property (nonatomic, retain) NSString *filename;
 @property (nonatomic) FSNIconPlacementMode placementMode;
-@property (nonatomic) NSPoint pixelPosition;
 @property (nonatomic) NSPoint ilocPosition;
 
 @end

@@ -185,10 +185,10 @@ static NSImage *branchImage;
   if ([node isMountPoint])
     s = [s stringByAppendingString:@" isMountPoint "];
   if (_placementData)
-    s = [s stringByAppendingString: [NSString stringWithFormat:@" mode:%lu pix:(%.0f,%.0f)",
+    s = [s stringByAppendingString: [NSString stringWithFormat:@" mode:%lu iloc:(%.0f,%.0f)",
                 (unsigned long)_placementData.placementMode,
-                _placementData.pixelPosition.x,
-                _placementData.pixelPosition.y]];
+                _placementData.ilocPosition.x,
+                _placementData.ilocPosition.y]];
   s = [s stringByAppendingString:@" }"];
   return s;
 }
