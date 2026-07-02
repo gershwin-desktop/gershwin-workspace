@@ -374,6 +374,11 @@ static void GWHighlightFrameRect(NSRect aRect)
    * rather than the superview frame which can lag. */
   CGFloat visibleWidth = [self windowContentWidthForLayout];
 
+  /* Browser icon views do not honor saved positions — they always auto-grid
+   * and reflow to the current width.  Position-honoring views (desktop, and
+   * the spatial view via its own override) keep their icons put. */
+  BOOL honor = [self honorsSavedPositions];
+
   float maxX = visibleWidth;
   float maxY = 0;
 
@@ -398,7 +403,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       FSNIcon *icon = [icons objectAtIndex: i];
       NSString *filename = [[icon node] name];
       FSNIconItemData *data = [icon placementData];
-      NSValue *posValue = [customIconPositions objectForKey: filename];
+      NSValue *posValue = honor ? [customIconPositions objectForKey: filename] : nil;
       NSPoint cellOrigin;
 
       if (posValue)
@@ -415,7 +420,7 @@ static void GWHighlightFrameRect(NSRect aRect)
           cellOrigin.x = center.x - (_cachedCellSize.width / 2);
           cellOrigin.y = center.y - (_cachedCellSize.height / 2);
         }
-      else if (data.placementMode == FSNIconPlacementModeManual)
+      else if (honor && data.placementMode == FSNIconPlacementModeManual)
         {
           /* Convert iloc (DS_Store top-left) to GNUstep bottom-left
            * using the CURRENT refH (computed once per tile).
@@ -550,9 +555,15 @@ static void GWHighlightFrameRect(NSRect aRect)
                 cellOrigin.x = center.x - (_cachedCellSize.width / 2);
                 cellOrigin.y = center.y - (_cachedCellSize.height / 2);
 
-                NSPoint ilocCenter = NSMakePoint(center.x, refH - center.y);
-                [customIconPositions setObject:
-                  [NSValue valueWithPoint: ilocCenter] forKey: filename];
+                /* Record the assigned position only for position-honoring
+                 * views; browser views must recompute the grid each layout
+                 * (reflow) rather than stick to the first assignment. */
+                if (honor)
+                  {
+                    NSPoint ilocCenter = NSMakePoint(center.x, refH - center.y);
+                    [customIconPositions setObject:
+                      [NSValue valueWithPoint: ilocCenter] forKey: filename];
+                  }
                 found = YES;
                 break;
               }
@@ -573,10 +584,13 @@ static void GWHighlightFrameRect(NSRect aRect)
                 NSPoint gsCenter = NSMakePoint(
                   cellOrigin.x + _cachedCellSize.width / 2.0,
                   cellOrigin.y + _cachedCellSize.height / 2.0);
-                NSPoint ilocCenter = NSMakePoint(gsCenter.x,
-                                                  refH - gsCenter.y);
-                [customIconPositions setObject:
-                  [NSValue valueWithPoint: ilocCenter] forKey: filename];
+                if (honor)
+                  {
+                    NSPoint ilocCenter = NSMakePoint(gsCenter.x,
+                                                      refH - gsCenter.y);
+                    [customIconPositions setObject:
+                      [NSValue valueWithPoint: ilocCenter] forKey: filename];
+                  }
               }
           }
         }
@@ -836,6 +850,11 @@ static void GWHighlightFrameRect(NSRect aRect)
 /* Batch reposition — moves many icons at once, tiles once, persists once.
  * Each entry in `icons` is an FSNIcon *, each entry in `points` is an
  * NSValue wrapping the NSPoint center.  The arrays must have equal length. */
+- (BOOL)honorsSavedPositions
+{
+  return YES;
+}
+
 - (NSPoint)ilocCenterForViewCenter:(NSPoint)center
 {
   return NSMakePoint(center.x, FSNReferenceHeightForView(self) - center.y);
@@ -1712,10 +1731,13 @@ static void GWHighlightFrameRect(NSRect aRect)
       RELEASE (icon);
     }
 
-  /* Restore icon positions from fdLocation xattr and DS_Store Iloc.
+  /* Restore icon positions from fdLocation xattr and DS_Store Iloc — only for
+   * position-honoring views (desktop, spatial).  Browser icon views auto-grid
+   * and reflow, so they neither read nor apply saved positions.
    * fdLocation (per-file extended attribute) is checked first since it
    * follows the file even when moved; DS_Store is the folder-level fallback.
    * Icons with saved positions get MANUAL placement mode. */
+  if ([self honorsSavedPositions])
   {
     NSString *folderPath = [anode path];
     /* Window content height as reference, like macOS Finder. */

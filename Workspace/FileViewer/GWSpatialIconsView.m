@@ -21,6 +21,12 @@
   return YES;
 }
 
+/* Spatial honors saved positions (re-override GWViewerIconsView's NO). */
+- (BOOL)honorsSavedPositions
+{
+  return YES;
+}
+
 /* The view's own coordinates are already top-left, so the iloc<->view-center
  * mapping is the identity (no reference-height flip). */
 - (NSPoint)ilocCenterForViewCenter:(NSPoint)center { return center; }

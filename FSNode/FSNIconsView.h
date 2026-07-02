@@ -109,6 +109,11 @@
  * spatial and desktop subclasses override it with fixed-position policies. */
 - (void)layoutIcons;
 
+/* Whether this view honors saved (.DS_Store/fdLocation) icon positions.
+ * YES for position-honoring views (desktop, spatial); NO for the browser
+ * icon view, which always auto-grids and reflows to the current width. */
+- (BOOL)honorsSavedPositions;
+
 /* Map an icon CENTER in this view's coordinates <-> a DS_Store iloc
  * (top-left) center.  The base view is bottom-left and flips about the
  * reference height; a flipped (spatial) view overrides both to the identity. */

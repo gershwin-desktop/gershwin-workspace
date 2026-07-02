@@ -55,6 +55,14 @@
   return self;
 }
 
+/* The browser icon view auto-grids and reflows to the window width; it does
+ * not honor or persist saved .DS_Store positions (those are for the spatial
+ * view and the desktop). */
+- (BOOL)honorsSavedPositions
+{
+  return NO;
+}
+
 - (void)selectionDidChange
 {
   if (!(selectionMask & FSNCreatingSelectionMask))
