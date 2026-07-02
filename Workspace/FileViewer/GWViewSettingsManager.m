@@ -198,36 +198,10 @@
       return [val boolValue];
   }
 
-  /* Fallback: try running `defaults read` via NSTask */
-  NSTask *task = [[NSTask alloc] init];
-  NSPipe *pipe = [NSPipe pipe];
-
-  @try {
-    [task setLaunchPath:@"/usr/bin/defaults"];
-    [task setArguments:[NSArray arrayWithObjects:@"read", prefDomain, prefKey, nil]];
-    [task setStandardOutput:pipe];
-    [task setStandardError:[NSFileHandle fileHandleWithNullDevice]];
-    [task launch];
-    [task waitUntilExit];
-
-    if ([task terminationStatus] == 0) {
-      NSData *data = [[pipe fileHandleForReading] readDataToEndOfFile];
-      NSString *output = [[[NSString alloc] initWithData:data
-                                                encoding:NSUTF8StringEncoding] autorelease];
-      output = [output stringByTrimmingCharactersInSet:
-                         [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-      BOOL blocked = [output isEqualToString:@"1"]
-                      || [output isEqualToString:@"true"]
-                      || [output isEqualToString:@"YES"];
-      [task release];
-      return blocked;
-    }
-  } @catch (NSException *e) {
-    NSDebugLLog(@"gwspace", @"GWViewSettingsManager: defaults read failed: %@", e);
-  }
-
-  [task release];
-  return NO;  /* default: allow network .DS_Store writes */
+  /* No macOS `defaults`/CFPreferences equivalent on GNUstep — the
+   * NSUserDefaults checks above are the supported way to set this.
+   * Default: allow network .DS_Store writes. */
+  return NO;
 }
 
 /* ------------------------------------------------------------------ */
