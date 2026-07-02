@@ -789,6 +789,48 @@ static void GWHighlightFrameRect(NSRect aRect)
   return icons;
 }
 
+- (void)persistStoredPositionsForIcons:(NSArray *)iconList
+{
+  /* Persist the auto-assigned positions of icons just added to an already-open
+   * window, so a newly created/dropped file keeps its spot on reopen.  Only
+   * position-honoring views (spatial, desktop) persist; the browser reflows
+   * and stores nothing.  The iloc was recorded into customIconPositions during
+   * the preceding tile's layout; group by folder and hand off to the injected
+   * store (same write home as drags).  A no-op when nothing was placed, so the
+   * common bulk case (folder open) writes nothing here. */
+  if (![self honorsSavedPositions] || [iconList count] == 0)
+    return;
+
+  NSMutableDictionary *folders = [NSMutableDictionary dictionary];
+  NSUInteger i;
+  for (i = 0; i < [iconList count]; i++)
+    {
+      FSNIcon *icon = [iconList objectAtIndex: i];
+      FSNode *nd = [icon node];
+      if (!nd) continue;
+
+      NSString *folder = [[nd path] stringByDeletingLastPathComponent];
+      NSString *name = [nd name];
+      if (!folder || !name) continue;
+
+      NSValue *v = [customIconPositions objectForKey: name];
+      if (!v) continue;   /* not laid out yet / unhonored — skip */
+      NSPoint iloc = [v pointValue];
+
+      NSMutableArray *batch = [folders objectForKey: folder];
+      if (!batch)
+        {
+          batch = [NSMutableArray array];
+          [folders setObject: batch forKey: folder];
+        }
+      [batch addObject: @[name, [NSNumber numberWithInt: (int)iloc.x],
+                                [NSNumber numberWithInt: (int)iloc.y]]];
+    }
+
+  if ([folders count])
+    [[fsnodeRep iconPositionStore] saveIconPositionsByFolder: folders];
+}
+
 - (void)repositionIcon:(FSNIcon *)icon toCenterPoint:(NSPoint)point
 {
   /* Thin wrapper — all real work is in batchRepositionIcons:toCenterPoints:. */
@@ -2015,6 +2057,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSString *destination = [info objectForKey: @"destination"];
   NSArray *files = [info objectForKey: @"files"];
   NSString *ndpath = [node path];
+  NSMutableArray *newlyAdded = nil;
   NSUInteger i;
 
   if ([operation isEqual: @"WorkspaceRenameOperation"])
@@ -2081,7 +2124,12 @@ static void GWHighlightFrameRect(NSRect aRect)
 	  if (icon){
 	    [icon setNode: subnode];
 	  } else {
-	    [self addRepForSubnode: subnode];
+	    FSNIcon *added = [self addRepForSubnode: subnode];
+	    if (added)
+	      {
+		if (!newlyAdded) newlyAdded = [NSMutableArray array];
+		[newlyAdded addObject: added];
+	      }
 	  }
 	}
 
@@ -2090,6 +2138,8 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   [self checkLockedReps];
   [self tile];
+  /* Persist positions of any items added to this open window (honor views). */
+  [self persistStoredPositionsForIcons: newlyAdded];
   [self setNeedsDisplay: YES];
   [self selectionDidChange];
 }
@@ -2099,6 +2149,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSString *event = [info objectForKey: @"event"];
   NSArray *files = [info objectForKey: @"files"];
   NSString *ndpath = [node path];
+  NSMutableArray *newlyAdded = nil;
   NSUInteger i;
 
   /* Files under the watched directory changed on disk — drop cached
@@ -2131,7 +2182,12 @@ static void GWHighlightFrameRect(NSRect aRect)
 		}
 	      else
 		{
-		  [self addRepForSubnode: subnode];
+		  FSNIcon *added = [self addRepForSubnode: subnode];
+		  if (added)
+		    {
+		      if (!newlyAdded) newlyAdded = [NSMutableArray array];
+		      [newlyAdded addObject: added];
+		    }
 		}
 	    }
 	}
@@ -2139,6 +2195,8 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   [self sortIcons];
   [self tile];
+  /* Persist positions of any items created in this open window (honor views). */
+  [self persistStoredPositionsForIcons: newlyAdded];
   [self setNeedsDisplay: YES];
   [self selectionDidChange];
 }
@@ -2353,6 +2411,11 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   if (icon)
     {
+      /* Genuine removal (delete/move-out/unmount): drop the transient
+       * position cache entry so a same-name file recreated this session is
+       * placed fresh.  The .DS_Store record is left as macOS leaves it —
+       * overwritten if the name is reused. */
+      [customIconPositions removeObjectForKey: [anode name]];
       [self removeRep: icon];
     }
 }
@@ -2363,6 +2426,8 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   if (icon)
     {
+      /* See -removeRepOfSubnode:: drop the transient position cache entry. */
+      [customIconPositions removeObjectForKey: [apath lastPathComponent]];
       [self removeRep: icon];
     }
 }

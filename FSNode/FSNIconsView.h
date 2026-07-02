@@ -182,6 +182,10 @@
 /* Batch reposition — moves many icons at once, tiles once, persists once */
 - (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
 
+/* Persist the auto-assigned positions of icons just added to an open window
+ * (call after -tile).  Honor-gated and empty-safe; browser views no-op. */
+- (void)persistStoredPositionsForIcons:(NSArray *)iconList;
+
 // DS_Store tag colors and comments support
 - (void)setTagColorsFromDictionary:(NSDictionary *)tagDict;
 - (void)setCommentsFromDictionary:(NSDictionary *)commentsDict;

@@ -1500,6 +1500,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSString *source = [info objectForKey: @"source"];
   NSString *destination = [info objectForKey: @"destination"];
   NSArray *files = [info objectForKey: @"files"];
+  NSMutableArray *newlyAdded = nil;
   NSUInteger i;
 
   if ([operation isEqual: @"WorkspaceRenameOperation"])
@@ -1552,7 +1553,14 @@ static void GWHighlightFrameRect(NSRect aRect)
 	  if (icon)
 	    [icon setNode: subnode];
 	  else
-	    [self addRepForSubnode: subnode];
+	    {
+	      FSNIcon *added = [self addRepForSubnode: subnode];
+	      if (added)
+		{
+		  if (!newlyAdded) newlyAdded = [NSMutableArray array];
+		  [newlyAdded addObject: added];
+		}
+	    }
 	}
 
       [self sortIcons];
@@ -1560,6 +1568,8 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   [self checkLockedReps];
   [self tile];
+  /* Persist positions of any items added to the desktop (honor view). */
+  [self persistStoredPositionsForIcons: newlyAdded];
   [self setNeedsDisplay: YES];
   [self selectionDidChange];
 }
