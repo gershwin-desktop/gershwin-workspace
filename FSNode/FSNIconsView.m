@@ -836,15 +836,20 @@ static void GWHighlightFrameRect(NSRect aRect)
 /* Batch reposition — moves many icons at once, tiles once, persists once.
  * Each entry in `icons` is an FSNIcon *, each entry in `points` is an
  * NSValue wrapping the NSPoint center.  The arrays must have equal length. */
+- (NSPoint)ilocCenterForViewCenter:(NSPoint)center
+{
+  return NSMakePoint(center.x, FSNReferenceHeightForView(self) - center.y);
+}
+
+- (NSPoint)viewCenterForIlocCenter:(NSPoint)iloc
+{
+  return NSMakePoint(iloc.x, FSNReferenceHeightForView(self) - iloc.y);
+}
+
 - (void)batchRepositionIcons:(NSArray *)iconList toCenterPoints:(NSArray *)points
 {
   NSUInteger count = [iconList count];
   if (count == 0 || [points count] != count) return;
-
-  /* Reference height for DS_Store coordinate conversion.
-   * Use the window content height like macOS Finder, so positions
-   * are relative to the visible content area and survive resize. */
-  CGFloat refH = FSNReferenceHeightForView(self);
 
   /* ---- Pass 1: update all placement data in memory ---- */
   NSUInteger i;
@@ -864,7 +869,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       NSString *name = [[icon node] name];
       if (!customIconPositions)
         customIconPositions = [[NSMutableDictionary alloc] init];
-      NSPoint ilocPoint = NSMakePoint(point.x, refH - point.y);
+      NSPoint ilocPoint = [self ilocCenterForViewCenter: point];
       [customIconPositions setObject: [NSValue valueWithPoint: ilocPoint]
                               forKey: name];
     }
@@ -889,9 +894,10 @@ static void GWHighlightFrameRect(NSRect aRect)
         NSString *name = [nd name];
         if (!folder || !name) continue;
 
-        /* Convert GNUstep bottom-left Y to top-left Y */
-        int ilocX = (int)point.x;
-        int ilocY = (int)(refH - point.y);
+        /* View-center -> DS_Store iloc (top-left); identity in a flipped view. */
+        NSPoint iloc = [self ilocCenterForViewCenter: point];
+        int ilocX = (int)iloc.x;
+        int ilocY = (int)iloc.y;
 
         NSMutableArray *batch = [folders objectForKey: folder];
         if (!batch)

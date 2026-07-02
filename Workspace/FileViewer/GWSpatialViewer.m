@@ -36,6 +36,7 @@
 #import "GWViewerScrollView.h"
 #import "GWViewerBrowser.h"
 #import "GWViewerIconsView.h"
+#import "GWSpatialIconsView.h"
 #import "GWViewerListView.h"
 #import "GWViewerPathsPopUp.h"
 #import "GWX11SpatialPath.h"
@@ -300,7 +301,7 @@
 
     if ([viewType isEqual: @"Icon"]) {
       [scroll setHasVerticalScroller: YES];
-      nodeView = [[GWViewerIconsView alloc] initForViewer: self];
+      nodeView = [[GWSpatialIconsView alloc] initForViewer: self];
 
     } else if ([viewType isEqual: @"List"]) {
       NSRect r = [[scroll contentView] bounds];
@@ -1619,7 +1620,7 @@
       ASSIGN (viewType, @"Browser");
       
     } else if ([requestedType isEqualToString:@"Icon"]) {
-      nodeView = [[GWViewerIconsView alloc] initForViewer: self];
+      nodeView = [[GWSpatialIconsView alloc] initForViewer: self];
       [scroll setHasVerticalScroller: YES];
       ASSIGN (viewType, @"Icon");
 

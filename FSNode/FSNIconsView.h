@@ -109,6 +109,12 @@
  * spatial and desktop subclasses override it with fixed-position policies. */
 - (void)layoutIcons;
 
+/* Map an icon CENTER in this view's coordinates <-> a DS_Store iloc
+ * (top-left) center.  The base view is bottom-left and flips about the
+ * reference height; a flipped (spatial) view overrides both to the identity. */
+- (NSPoint)ilocCenterForViewCenter:(NSPoint)center;
+- (NSPoint)viewCenterForIlocCenter:(NSPoint)iloc;
+
 /* Placement direction access (used by Clean Up virtual grid) */
 - (void)setPlacementDirection:(FSNPlacementDirection)direction;
 - (FSNPlacementDirection)placementDirection;
@@ -117,6 +123,12 @@
  * Default: (X_MARGIN, viewHeight - Y_MARGIN).  The desktop subclass
  * overrides this to account for Dock position and menu bar. */
 - (NSPoint)gridOriginForLayout;
+
+/* Visible content width/height for layout, derived from the enclosing scroll
+ * view (falls back to the window content view / own bounds).  Used by layout
+ * policies to size the grid and canvas. */
+- (CGFloat)windowContentWidthForLayout;
+- (CGFloat)visibleContentHeightForLayout;
 
 /* Cleanup and sort operations (Finder-compatible) */
 - (void)cleanupIconPositions;

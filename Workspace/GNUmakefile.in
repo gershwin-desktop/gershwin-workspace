@@ -117,6 +117,7 @@ FileViewer/DSStoreInfo.m \
 FileViewer/GWVolumeID.m \
 FileViewer/GWVolumeCache.m \
 FileViewer/GWViewSettingsManager.m \
+FileViewer/GWSpatialIconsView.m \
 ../GWMetadata/GWMetaArchive.m \
 Finder/Finder.m \
 Finder/FindModuleView.m \
