@@ -1530,22 +1530,40 @@ static void GWHighlightFrameRect(NSRect aRect)
       destination = [destination stringByDeletingLastPathComponent];
     }
 
-  	  for (i = 0; i < [files count]; i++)
-		{
-		  NSString *fname = [files objectAtIndex: i];
-		  FSNode *subnode = [FSNode nodeWithRelativePath: fname parent: node];
-		  FSNIcon *icon = [self repOfSubnode: subnode];
+  /* Only add reps for files whose destination is this folder — otherwise a
+   * file moved elsewhere would be re-added as a phantom desktop icon. */
+  if ([[node path] isEqual: destination]
+      && ([operation isEqual: NSWorkspaceMoveOperation]
+	  || [operation isEqual: NSWorkspaceCopyOperation]
+	  || [operation isEqual: NSWorkspaceLinkOperation]
+	  || [operation isEqual: NSWorkspaceDuplicateOperation]
+	  || [operation isEqual: @"WorkspaceCreateDirOperation"]
+	  || [operation isEqual: @"WorkspaceCreateFileOperation"]
+	  || [operation isEqual: NSWorkspaceRecycleOperation]
+	  || [operation isEqual: @"WorkspaceRenameOperation"]
+	  || [operation isEqual: @"WorkspaceRecycleOutOperation"]))
+    {
+      for (i = 0; i < [files count]; i++)
+	{
+	  NSString *fname = [files objectAtIndex: i];
+	  FSNode *subnode = [FSNode nodeWithRelativePath: fname parent: node];
+	  FSNIcon *icon = [self repOfSubnode: subnode];
 
-		  if (icon)
-		    {
-		      [icon setNode: subnode];
-		    }
-		  else
-		    {
-		      icon = [self addRepForSubnode: subnode];
-		    }
-		}
-	    }
+	  if (icon)
+	    [icon setNode: subnode];
+	  else
+	    [self addRepForSubnode: subnode];
+	}
+
+      [self sortIcons];
+    }
+
+  [self checkLockedReps];
+  [self tile];
+  [self setNeedsDisplay: YES];
+  [self selectionDidChange];
+}
+
 - (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
 {
   NSPasteboard *pb;
