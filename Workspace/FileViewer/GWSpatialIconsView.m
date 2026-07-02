@@ -115,8 +115,8 @@ static NSString *cellKey(NSInteger col, NSInteger row)
           } while ([occupied containsObject: key]);
           [occupied addObject: key];
 
-          center = NSMakePoint(gOrigin.x + col * (cellW + gapX) + cellW / 2.0,
-                               gOrigin.y + row * cellH + cellH / 2.0);
+          center = FSNGridCellCenter(FSNGridCellMake(col, row),
+                                     gOrigin, cellW, cellH, gapX);
           data.ilocPosition = center;   /* record (flipped identity = iloc) */
           data.placementMode = FSNIconPlacementModeManual;
           [customIconPositions setObject: [NSValue valueWithPoint: center]

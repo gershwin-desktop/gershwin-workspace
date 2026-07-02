@@ -68,6 +68,18 @@ FSNGridCellHash(FSNGridCell cell)
 /* Placeholder sentinel for "no cell assigned". */
 static const FSNGridCell FSNGridCellNone = { (NSUInteger)-1, (NSUInteger)-1 };
 
+/* Center point of a grid cell in a top-left origin grid: columns are spaced
+ * (cellW + gapX) apart, rows cellH apart, from `origin` (a cell's top-left
+ * area corner).  Pure geometry — the single source used by the spatial icon
+ * view's AUTO placement, and unit-tested headlessly. */
+static inline NSPoint
+FSNGridCellCenter(FSNGridCell cell, NSPoint origin,
+                  CGFloat cellW, CGFloat cellH, CGFloat gapX)
+{
+  return NSMakePoint(origin.x + (CGFloat)cell.col * (cellW + gapX) + cellW / 2.0,
+                     origin.y + (CGFloat)cell.row * cellH + cellH / 2.0);
+}
+
 static inline NSString *
 NSStringFromFSNGridCell(FSNGridCell cell)
 {

@@ -1,0 +1,3 @@
+# Include path so the in-process test can find FSNode's Foundation-only
+# placement header (FSNIconPlacement.h).
+ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
