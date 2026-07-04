@@ -229,29 +229,6 @@ void showAlertNameInUse(Class c, NSString *newname)
                   NSLocalizedStringFromTableInBundle(@"Continue", nil, [NSBundle bundleForClass:c], @""), nil, nil); 
 }
 
-CGFloat
-FSNReferenceHeightForView(NSView *view)
-{
-  CGFloat refH = 0.0;
-
-  if (view != nil)
-    {
-      NSWindow *w = [view window];
-      if (w != nil)
-        {
-          NSView *cv = [w contentView];
-          if (cv != nil)
-            refH = [cv bounds].size.height;
-        }
-      if (refH <= 0)
-        refH = [view bounds].size.height;
-    }
-
-  if (refH <= 0)
-    refH = 600.0;
-
-  return refH;
-}
 
 void
 FSNDrawLabelDot(NSRect dotRect, NSColor *color)

@@ -6,18 +6,18 @@
 #import <AppKit/AppKit.h>
 #import "GWSpatialIconsView.h"
 
-/* The spatial policy is fully expressed by four small overrides; all layout,
+/* The spatial policy is fully expressed by three small overrides; all layout,
  * Clean Up, occupancy and persistence mechanics live in FSNIconsView and are
  * flip-aware, so no layout code is duplicated here:
  *
  *  - isFlipped            -> top-left coordinates; the window is a viewport
  *                            onto a content-sized canvas and icons never
- *                            reflow on resize.
+ *                            reflow on resize.  Because the view is flipped,
+ *                            the base iloc<->view transform (FSNFunctions) is
+ *                            the identity here -- no mapping override needed.
  *  - honorsSavedPositions -> saved .DS_Store/fdLocation positions are
  *                            honored and persisted (re-overrides the browser
  *                            view's NO).
- *  - iloc mapping         -> identity: the view's own coordinates ARE
- *                            DS_Store top-left iloc coordinates.
  *  - drawRect             -> flip-aware background drawing.
  */
 @implementation GWSpatialIconsView
@@ -31,9 +31,6 @@
 {
   return YES;
 }
-
-- (NSPoint)ilocCenterForViewCenter:(NSPoint)center { return center; }
-- (NSPoint)viewCenterForIlocCenter:(NSPoint)iloc   { return iloc; }
 
 /* Flipped-aware background.  The base anchors the background image to the
  * visual top using bottom-left math; in a flipped view the top is y=0, so

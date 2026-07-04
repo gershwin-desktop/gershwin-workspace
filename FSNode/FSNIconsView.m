@@ -404,13 +404,24 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   irects = NSZoneMalloc (NSDefaultMallocZone(), sizeof(NSRect) * count);
 
+  /* A scroll-hosted view sizes its document to fit any saved position, so
+   * every honored position is reachable there.  A non-scrollable view (the
+   * desktop) cannot scroll, so a saved position that maps off-screen — e.g.
+   * one written by a windowed spatial viewer of the same folder, which uses
+   * a different coordinate reference — would hide the icon.  On such views we
+   * reject off-screen manual positions and let the icon fall back to AUTO
+   * placement, guaranteeing it stays visible. */
+  BOOL scrollHosted = ([self enclosingScrollView] != nil);
+  NSRect usableRect = [self usableContentRect];
+
   for (i = 0; i < count; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
       NSString *filename = [[icon node] name];
       FSNIconItemData *data = [icon placementData];
       NSValue *posValue = honor ? [customIconPositions objectForKey: filename] : nil;
-      NSPoint cellOrigin;
+      NSPoint cellOrigin = NSZeroPoint;
+      BOOL placed = NO;
 
       if (posValue)
         {
@@ -422,6 +433,7 @@ static void GWHighlightFrameRect(NSRect aRect)
           NSPoint center = [self viewCenterForIlocCenter: [posValue pointValue]];
           cellOrigin.x = center.x - (_cachedCellSize.width / 2);
           cellOrigin.y = center.y - (_cachedCellSize.height / 2);
+          placed = YES;
         }
       else if (honor && data.placementMode == FSNIconPlacementModeManual
                && data.ilocPosition.x >= 0)
@@ -433,11 +445,34 @@ static void GWHighlightFrameRect(NSRect aRect)
           NSPoint center = [self viewCenterForIlocCenter: data.ilocPosition];
           cellOrigin.x = center.x - (_cachedCellSize.width / 2);
           cellOrigin.y = center.y - (_cachedCellSize.height / 2);
+          placed = YES;
         }
-      else
+
+      /* Legacy/corrupt-data rescue: with a single canonical iloc<->view
+       * transform, an honored position should map on-screen.  If a stored
+       * position still lands outside a non-scrollable view's usable area
+       * (e.g. data written by an older build with a different convention),
+       * discard it and fall through to AUTO so the icon can never be hidden.
+       * Reset the placement state so nothing downstream re-honors the bad
+       * value. */
+      if (placed && !scrollHosted)
         {
-          /* No saved position: use the direction-aware grid enumerator
-           * to place the icon in the next free grid cell.  Respects
+          NSPoint c = NSMakePoint(cellOrigin.x + _cachedCellSize.width / 2,
+                                  cellOrigin.y + _cachedCellSize.height / 2);
+          if (!NSPointInRect(c, usableRect))
+            {
+              placed = NO;
+              data.placementMode = FSNIconPlacementModeAuto;
+              data.ilocPosition = NSMakePoint(-1, -1);
+              [customIconPositions removeObjectForKey: filename];
+            }
+        }
+
+      if (!placed)
+        {
+          /* No usable saved position (none stored, or one rejected as
+           * off-screen above): use the direction-aware grid enumerator to
+           * place the icon in the next free grid cell.  Respects
            * _placementDirection (LeftToRightTopToBottom for file-viewer
            * panels, TopToBottomRightToLeft for the desktop). */
           if (!autoInitDone)
@@ -847,14 +882,19 @@ static void GWHighlightFrameRect(NSRect aRect)
   return YES;
 }
 
+/* Both directions go through the single canonical transform (FSNFunctions).
+ * refHeight is this view's own content height and the flip is its own, so the
+ * mapping is fully determined by the view — no window/host dependency.  A
+ * flipped subclass (GWSpatialIconsView) needs no override: the flip branch is
+ * the identity it used to hard-code. */
 - (NSPoint)ilocCenterForViewCenter:(NSPoint)center
 {
-  return NSMakePoint(center.x, FSNReferenceHeightForView(self) - center.y);
+  return FSNIlocFromViewCenter(center, [self bounds].size.height, [self isFlipped]);
 }
 
 - (NSPoint)viewCenterForIlocCenter:(NSPoint)iloc
 {
-  return NSMakePoint(iloc.x, FSNReferenceHeightForView(self) - iloc.y);
+  return FSNViewCenterFromIloc(iloc, [self bounds].size.height, [self isFlipped]);
 }
 
 - (void)batchRepositionIcons:(NSArray *)iconList toCenterPoints:(NSArray *)points
@@ -999,20 +1039,17 @@ static void GWHighlightFrameRect(NSRect aRect)
  * Falls back to the window content view, then superview frame. */
 - (CGFloat)windowContentWidthForLayout
 {
-  /* Walk up to find the enclosing scroll view — its contentSize
-   * is always up to date (autoresized with the window) and already
-   * accounts for sidebar, borders, and scrollers. */
-  NSView *v = [self superview];
-  while (v)
+  NSView *v;
+
+  /* The enclosing scroll view's contentSize is always up to date (autoresized
+   * with the window) and already accounts for sidebar, borders, scrollers. */
+  NSScrollView *sv = [self enclosingScrollView];
+  if (sv)
     {
-      if ([v isKindOfClass: [NSScrollView class]])
-        {
-          NSSize cs = [(NSScrollView *)v contentSize];
-          if (cs.width > 0) return cs.width;
-          break;
-        }
-      v = [v superview];
+      CGFloat cw = [sv contentSize].width;
+      if (cw > 0) return cw;
     }
+
   /* Fallback: window content view (always resized synchronously). */
   NSWindow *w = [self window];
   if (w) {
@@ -1035,29 +1072,23 @@ static void GWHighlightFrameRect(NSRect aRect)
   /* Last resort: superview frame, then own bounds. */
   v = [self superview];
   if (v) {
-    CGFloat w = [v frame].size.width;
-    if (w > 0) return w;
+    CGFloat width = [v frame].size.width;
+    if (width > 0) return width;
   }
   return [self bounds].size.width;
 }
 
-/* Returns the visible content height for determining icon layout.
- * Walks up to the enclosing NSScrollView (if any) and uses its
- * contentSize height, which always reflects the current window size
- * after autoresize.  Falls back to the window content view height,
- * then superview frame, then own bounds. */
+/* Returns the visible content height for determining icon layout: the
+ * enclosing NSScrollView's contentSize height (up to date after autoresize),
+ * then the window content view height, then superview frame, then own bounds. */
 - (CGFloat)visibleContentHeightForLayout
 {
-  NSView *v = [self superview];
-  while (v)
+  NSView *v;
+  NSScrollView *sv = [self enclosingScrollView];
+  if (sv)
     {
-      if ([v isKindOfClass: [NSScrollView class]])
-        {
-          NSSize cs = [(NSScrollView *)v contentSize];
-          if (cs.height > 0) return cs.height;
-          break;
-        }
-      v = [v superview];
+      CGFloat ch = [sv contentSize].height;
+      if (ch > 0) return ch;
     }
   /* Fallback: window content view. */
   NSWindow *w = [self window];
@@ -1075,6 +1106,18 @@ static void GWHighlightFrameRect(NSRect aRect)
     if (h > 0) return h;
   }
   return [self bounds].size.height;
+}
+
+/* Usable content area for the off-screen rescue guard: the region where an
+ * honored position is actually reachable/visible.  Scroll-hosted views grow
+ * their document to fit, so the whole view is usable; the desktop overrides
+ * this to exclude the Dock and menu-bar reserved strips. */
+- (NSRect)usableContentRect
+{
+  NSRect r = [self visibleRect];
+  if (NSIsEmptyRect(r))
+    r = [self bounds];
+  return r;
 }
 
 - (NSPoint)gridOriginForLayout

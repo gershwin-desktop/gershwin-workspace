@@ -127,4 +127,33 @@ NSStringFromFSNGridCell(FSNGridCell cell)
 
 @end
 
+/* -----------------------------------------------------------------------
+ * Canonical iloc <-> view-center transform — defined in exactly one place.
+ *
+ * An iloc is an icon CENTER with x from the left and y from the TOP of the
+ * view's content area (the DS_Store Iloc / FinderInfo fdLocation convention).
+ * A view-center is the same point in the view's own coordinate space:
+ *
+ *   flipped view (top-left origin, e.g. GWSpatialIconsView): identity.
+ *   non-flipped view (bottom-left origin, e.g. the desktop):  (x, refHeight - y)
+ *
+ * refHeight is the view's own content height ([self bounds].size.height).
+ * The transform is its own inverse, so both directions share one formula.
+ * --------------------------------------------------------------------- */
+static inline NSPoint
+FSNViewCenterFromIloc(NSPoint iloc, CGFloat refHeight, BOOL flipped)
+{
+  if (flipped)
+    return iloc;
+  return NSMakePoint(iloc.x, refHeight - iloc.y);
+}
+
+static inline NSPoint
+FSNIlocFromViewCenter(NSPoint center, CGFloat refHeight, BOOL flipped)
+{
+  if (flipped)
+    return center;
+  return NSMakePoint(center.x, refHeight - center.y);
+}
+
 #endif /* FSN_ICON_PLACEMENT_H */

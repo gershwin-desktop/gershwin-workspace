@@ -1525,6 +1525,14 @@ static NSImage *branchImage;
         }
     }
 
+  /* Drag deltas must be expressed in the container's coordinate space,
+   * not window base coords: the spatial container (GWSpatialIconsView)
+   * is flipped, so window Y-up would move frames the wrong way.
+   * -convertPoint:fromView:nil accounts for the flip; for non-flipped
+   * containers (browser/desktop) the container delta equals the window
+   * delta, so this is a no-op there. */
+  NSPoint startLocal = [container convertPoint: startLoc fromView: nil];
+
   /* Apply the initial offset from the drag-start event immediately.
    * The first drag event is consumed by mouseDown's while-loop before
    * we're called, so we seed the movement here.
@@ -1535,8 +1543,11 @@ static NSImage *branchImage;
    * moved.  Using setNeedsDisplayInRect: + displayIfNeeded redraws
    * only the affected areas (O(movedIcons) instead of O(totalIcons)). */
   {
-    CGFloat dx = initialOffset.width;
-    CGFloat dy = initialOffset.height;
+    NSPoint seedEndLocal = [container convertPoint:
+      NSMakePoint(startLoc.x + initialOffset.width,
+                  startLoc.y + initialOffset.height) fromView: nil];
+    CGFloat dx = seedEndLocal.x - startLocal.x;
+    CGFloat dy = seedEndLocal.y - startLocal.y;
     if (fabs(dx) > 0.5 || fabs(dy) > 0.5)
       {
         NSUInteger i;
@@ -1608,8 +1619,12 @@ static NSImage *branchImage;
               return;
             }
 
-          CGFloat dx = curLoc.x - startLoc.x;
-          CGFloat dy = curLoc.y - startLoc.y;
+          /* Delta in container space (see startLocal above): correct for
+           * both the flipped spatial container and non-flipped ones.
+           * localInContainer is already [container convertPoint: curLoc
+           * fromView: nil], computed above for the bounds check. */
+          CGFloat dx = localInContainer.x - startLocal.x;
+          CGFloat dy = localInContainer.y - startLocal.y;
 
           NSUInteger i;
           for (i = 0; i < [allIcons count]; i++)

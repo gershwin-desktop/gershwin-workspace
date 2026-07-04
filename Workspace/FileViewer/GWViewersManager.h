@@ -70,6 +70,12 @@
     closeOldViewer:(id)oldvwr
           forceNew:(BOOL)force;
 
+/* First-class mode switch: replace a viewer window with one of the other
+ * kind (BROWSING/SPATIAL) for the same folder — the new window inherits the
+ * old one's frame and identity, and the old one is closed only after the
+ * replacement is shown. */
+- (id)replaceViewer:(id)oldvwr withViewerType:(unsigned)vtype;
+
 - (id)viewerForNode:(FSNode *)node
           showType:(GWViewType)stype
      showSelection:(BOOL)showsel

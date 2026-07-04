@@ -55,13 +55,8 @@ void showAlertNameInUse(Class c, NSString *newname);
  * DS_Store Iloc / FinderInfo fdLocation use top-left origin (y grows down);
  * GNUstep views use bottom-left origin (y grows up).  Both stored as icon
  * CENTER coordinates.  Conversion is symmetric about a reference height. */
-@class NSView;
-
-/* Reference height used for iloc<->GNUstep conversion: the enclosing window's
- * content-view height (like macOS Finder), so positions are relative to the
- * visible content area and survive window resize.  Falls back to the view's
- * own bounds height, then 600.0 if nothing is available yet. */
-CGFloat FSNReferenceHeightForView(NSView *view);
+/* The canonical iloc <-> view-center transform lives in FSNIconPlacement.h
+ * (Foundation-only, co-located with the other placement geometry). */
 
 @class NSColor;
 

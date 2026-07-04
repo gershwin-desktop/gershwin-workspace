@@ -1,3 +1,8 @@
 # Extra include path so the in-process test sources (compiled via #include
 # of the .m under test) can find their headers under GWMetadata/.
 ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata
+
+# GSFileMetadata references NSImage/NSColor (custom-icon / label helpers), so
+# its test tool must link gnustep-gui.  Scoped per-tool so the Foundation-only
+# tests (t_GSAppleDouble, t_GWMetaXattr) stay display-independent.
+t_GSFileMetadata_TOOL_LIBS += -lgnustep-gui

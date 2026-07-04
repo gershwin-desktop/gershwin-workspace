@@ -180,6 +180,13 @@
  */
 - (void)takeValuesFromViewerPrefs:(NSDictionary *)prefs;
 
+/* Like -takeValuesFromViewerPrefs: but, when preserve is YES, leaves any field
+ * whose corresponding has* flag is already set untouched.  Used by migration so
+ * a stale source (e.g. a legacy .gwdir) only fills gaps and never clobbers newer
+ * values already present in the .DS_Store. */
+- (void)takeValuesFromViewerPrefs:(NSDictionary *)prefs
+                preservingExisting:(BOOL)preserve;
+
 /**
  * Set all "has*" flags to NO and release all values,
  * returning the receiver to its default-initialised state
@@ -212,6 +219,11 @@
 // Returns -1 if column name not recognized
 + (int)infoTypeForSortColumnName:(NSString *)columnName;
 + (NSString *)sortColumnNameForInfoType:(int)infoType;
+
+/* Canonical view-type name for a DS_Store view style: @"Icon", @"List" or
+ * @"Browser" (Column -> Browser), defaulting to @"Icon".  Single source so
+ * the browser and spatial viewers decode DSStoreViewStyle identically. */
++ (NSString *)viewTypeNameForViewStyle:(DSStoreViewStyle)style;
 
 // Debugging
 - (NSString *)debugDescription;

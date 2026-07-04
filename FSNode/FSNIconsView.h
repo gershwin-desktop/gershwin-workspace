@@ -150,6 +150,11 @@
 - (CGFloat)windowContentWidthForLayout;
 - (CGFloat)visibleContentHeightForLayout;
 
+/* Usable content area for the off-screen icon rescue guard.  Base returns the
+ * whole visible view; the desktop overrides it to exclude the Dock/menu-bar
+ * reserved strips so an icon is never placed behind them. */
+- (NSRect)usableContentRect;
+
 /* Cleanup and sort operations (Finder-compatible) */
 - (void)cleanupIconPositions;
 

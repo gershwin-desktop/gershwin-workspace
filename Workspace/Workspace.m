@@ -425,11 +425,13 @@ NSString *_pendingSystemActionTitle = nil;
   
   menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Browsing") action:@selector(setViewerBehaviour:) keyEquivalent:@"b"];
   [menuItem setTarget:self];
+  [menuItem setTag:BROWSING];   /* read by -setViewerBehaviour: (locale-safe) */
   [subMenu addItem:menuItem];
   [menuItem release];
-  
+
   menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Spatial") action:@selector(setViewerBehaviour:) keyEquivalent:@"s"];
   [menuItem setTarget:self];
+  [menuItem setTag:SPATIAL];
   [subMenu addItem:menuItem];
   [menuItem release];
   
@@ -5187,21 +5189,21 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
 
 - (void)setViewerBehaviour:(id)sender
 {
-  NSDebugLLog(@"gwspace", @"*** setViewerBehaviour method called! ***");
-  NSString *title = [sender title];
-  NSDebugLLog(@"gwspace", @"setViewerBehaviour called with title: %@", title);
+  /* The kind is carried by the item's tag (BROWSING/SPATIAL), not its title —
+   * titles are localized, so comparing them broke on non-English locales. */
+  unsigned int viewerType = (unsigned int)[sender tag];
+  NSDebugLLog(@"gwspace", @"setViewerBehaviour called, type=%u", viewerType);
 
-  // Get current key window to determine what path we're working with
-  NSWindow *keyWindow = [NSApp keyWindow];
-  if (!keyWindow) {
-    NSDebugLLog(@"gwspace", @"No key window found");
-    return;
-  }
-
-  // Try to get viewer from the key window
-  id viewer = [vwrsManager viewerWithWindow: keyWindow];
+  /* Resolve the source viewer from the key window, falling back to the main
+   * window.  With a detached global menu (Menu.app) the viewer is not always
+   * the key window when the item fires, which otherwise made this a silent
+   * no-op ("sometimes nothing happens"). */
+  id viewer = [vwrsManager viewerWithWindow: [NSApp keyWindow]];
   if (!viewer) {
-    NSDebugLLog(@"gwspace", @"No viewer found for key window");
+    viewer = [vwrsManager viewerWithWindow: [NSApp mainWindow]];
+  }
+  if (!viewer) {
+    NSDebugLLog(@"gwspace", @"No viewer found for key/main window");
     return;
   }
 
@@ -5214,32 +5216,16 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
 
   NSDebugLLog(@"gwspace", @"Current path: %@", [currentNode path]);
 
-  // Determine viewer type based on menu item title
-  unsigned int viewerType;
-  if ([title isEqualToString: @"Browsing"]) {
-    viewerType = BROWSING;
-    NSDebugLLog(@"gwspace", @"Setting viewer to BROWSING mode");
-  } else if ([title isEqualToString: @"Spatial"]) {
-    viewerType = SPATIAL;
-    NSDebugLLog(@"gwspace", @"Setting viewer to SPATIAL mode");
-  } else {
-    NSDebugLLog(@"gwspace", @"Unknown viewer behaviour: %@", title);
-    return;
-  }
+  // Replace the current viewer window with one of the selected kind
+  NSDebugLLog(@"gwspace", @"Replacing viewer with type %u", viewerType);
 
-  // Create new viewer with the selected behavior
-  NSDebugLLog(@"gwspace", @"Attempting to create new viewer with type %u", viewerType);
-
-  id newViewer = [vwrsManager viewerOfType: viewerType
-                                  showType: nil
-                                   forNode: currentNode
-                             showSelection: YES
-                            closeOldViewer: viewer
-                                  forceNew: YES];
+  id newViewer = [vwrsManager replaceViewer: viewer
+                             withViewerType: viewerType];
 
   if (newViewer) {
+    /* viewerOfType:… already activates the new viewer; activating again here
+     * would, for spatial, re-run viewer:didShowNode:. */
     NSDebugLLog(@"gwspace", @"Successfully created new viewer for path %@", [currentNode path]);
-    [newViewer activate];
   } else {
     NSDebugLLog(@"gwspace", @"Failed to create new viewer");
   }

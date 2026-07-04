@@ -51,6 +51,7 @@
 #import "NetworkFSNode.h"
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
+#import "GWViewerPrefs.h"
 
 #define DEFAULT_INCR 150
 #define MIN_WIN_H 300
@@ -152,7 +153,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       {
 	if (firstRootViewer)
 	  {
-	    prefsname = @"root_viewer";
+	    prefsname = GWViewerPrefsKey([node path], NO, nil, YES);
 	  }
 	else
 	  {
@@ -162,17 +163,21 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
 		rootViewerKey = [NSNumber numberWithUnsignedLong: (unsigned long)self];
 
-		prefsname = [NSString stringWithFormat: @"%lu_viewer_at_%@", [rootViewerKey unsignedLongValue], [node path]];
+		prefsname = GWViewerPrefsKey([node path], NO, rootViewerKey, NO);
 	      }
 	    else
 	      {
-		prefsname = [key retain];
+		/* Non-owning like the sibling branches (which assign an
+		 * autoreleased string); defaultsKeyStr takes the sole retain
+		 * below.  A [key retain] here would leak — dealloc balances
+		 * only defaultsKeyStr. */
+		prefsname = key;
 	      }
 	  }
       }
     else
       {
-	prefsname = [NSString stringWithFormat: @"viewer_at_%@", [node path]];
+	prefsname = GWViewerPrefsKey([node path], NO, nil, NO);
       }
 
     defaultsKeyStr = [prefsname retain];
@@ -185,46 +190,63 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       }
     }
     
-    viewType = GWViewTypeIcon;
-    viewTypeStr = [viewerPrefs objectForKey: @"viewtype"];
-    if (viewTypeStr == nil)
-      {
-        if (stype != 0)
-          {
-            viewType = stype;
-          }
-      }
-    else if ([viewTypeStr isEqual: @"Browser"])
-      {
-        viewType = GWViewTypeBrowser;
-      }
-    else if ([viewTypeStr isEqual: @"List"])
-      {
-        viewType = GWViewTypeList;
-      }
-    else if ([viewTypeStr isEqual: @"Icon"])
-      {
-        viewType = GWViewTypeIcon;
-      }
-    
-    defEntry = [viewerPrefs objectForKey: @"sidebarwidth"];
-    if (defEntry) {
-      sidebarWidth = [defEntry floatValue];
-      if (sidebarWidth < MIN_SIDEBAR_WIDTH) sidebarWidth = MIN_SIDEBAR_WIDTH;
-      if (sidebarWidth > MAX_SIDEBAR_WIDTH) sidebarWidth = MAX_SIDEBAR_WIDTH;
-    } else {
-      sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
+    /* View settings come from .DS_Store (tiered via the settings manager,
+     * the single store shared with the spatial viewer) as primary, with the
+     * user-defaults viewerPrefs as fallback.  This matches -updateDefaults,
+     * which already writes these settings to .DS_Store. */
+    DSStoreInfo *dsInfo =
+      [[GWViewSettingsManager managerForDirectoryPath: [baseNode path]] readSettings];
+    if (dsInfo == nil) {
+      dsInfo = [DSStoreInfo infoForDirectoryPath: [baseNode path]];
     }
+
+    /* Precedence: an explicit caller-supplied type (stype != 0) wins; then the
+     * folder's remembered .DS_Store style; then the user-defaults viewerPrefs;
+     * else Icon.  (The enum starts at GWViewTypeBrowser = 1, so 0 means "no
+     * preference".) */
+    viewType = GWViewTypeIcon;
+    if (stype != 0)
+      {
+        viewType = stype;
+      }
+    else
+      {
+        /* DS_Store style (decoded through the shared name helper) is primary,
+         * viewerPrefs the fallback; both reduce to a canonical view-type name
+         * decoded once below. */
+        if (dsInfo.loaded && dsInfo.hasViewStyle)
+          viewTypeStr = [DSStoreInfo viewTypeNameForViewStyle: dsInfo.viewStyle];
+        else
+          viewTypeStr = [viewerPrefs objectForKey: @"viewtype"];
+
+        if ([viewTypeStr isEqual: @"Browser"])
+          viewType = GWViewTypeBrowser;
+        else if ([viewTypeStr isEqual: @"List"])
+          viewType = GWViewTypeList;
+        else if ([viewTypeStr isEqual: @"Icon"])
+          viewType = GWViewTypeIcon;
+      }
+
+    if (dsInfo.loaded && dsInfo.hasSidebarWidth)
+      {
+        sidebarWidth = dsInfo.sidebarWidth;
+      }
+    else
+      {
+        defEntry = [viewerPrefs objectForKey: @"sidebarwidth"];
+        sidebarWidth = defEntry ? [defEntry floatValue] : DEFAULT_SIDEBAR_WIDTH;
+      }
+    if (sidebarWidth < MIN_SIDEBAR_WIDTH) sidebarWidth = MIN_SIDEBAR_WIDTH;
+    if (sidebarWidth > MAX_SIDEBAR_WIDTH) sidebarWidth = MAX_SIDEBAR_WIDTH;
        
     ASSIGN (vwrwin, win);
     [vwrwin setDelegate: self];
 
     // ================================================================
-    // DS_Store Integration - Load comprehensive Mac metadata
+    // DS_Store Integration - window geometry (dsInfo loaded above)
     // ================================================================
-    DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path]];
     BOOL geometryApplied = NO;
-    
+
     if (dsInfo.loaded && dsInfo.hasWindowFrame) {
       NSRect dsGeometry = [dsInfo gnustepWindowFrameForScreen:[NSScreen mainScreen]];
       

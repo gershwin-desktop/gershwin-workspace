@@ -202,6 +202,16 @@
     }
 }
 
++ (NSString *)viewTypeNameForViewStyle:(DSStoreViewStyle)style
+{
+    switch (style) {
+        case DSStoreViewStyleList:   return @"List";
+        case DSStoreViewStyleColumn: return @"Browser";
+        case DSStoreViewStyleIcon:
+        default:                     return @"Icon";
+    }
+}
+
 #pragma mark - Initialization
 
 - (instancetype)initWithDirectoryPath:(NSString *)path
@@ -1322,11 +1332,17 @@
 
 - (void)takeValuesFromViewerPrefs:(NSDictionary *)prefs
 {
+  [self takeValuesFromViewerPrefs:prefs preservingExisting:NO];
+}
+
+- (void)takeValuesFromViewerPrefs:(NSDictionary *)prefs
+                preservingExisting:(BOOL)preserve
+{
   if (!prefs) return;
 
   /* Window geometry */
   NSString *geo = [prefs objectForKey:@"geometry"];
-  if (geo) {
+  if (geo && !(preserve && _hasWindowFrame)) {
     NSRect frame = NSRectFromString(geo);
     if (frame.size.width > 0 && frame.size.height > 0) {
       _windowFrame = frame;
@@ -1336,7 +1352,7 @@
 
   /* View type */
   NSString *vt = [prefs objectForKey:@"viewtype"];
-  if (vt) {
+  if (vt && !(preserve && _hasViewStyle)) {
     if ([vt isEqualToString:@"Icon"]) {
       _viewStyle = DSStoreViewStyleIcon;
     } else if ([vt isEqualToString:@"List"]) {
@@ -1349,7 +1365,7 @@
 
   /* Icon size */
   id iconSizeObj = [prefs objectForKey:@"iconsize"];
-  if (iconSizeObj) {
+  if (iconSizeObj && !(preserve && _hasIconSize)) {
     int sz = [iconSizeObj intValue];
     if (sz > 0 && sz <= 512) {
       _iconSize = sz;
@@ -1359,7 +1375,7 @@
 
   /* Icon position (label position) */
   NSString *ip = [prefs objectForKey:@"iconspos"];
-  if (ip) {
+  if (ip && !(preserve && _hasLabelPosition)) {
     _labelPosition = [ip isEqualToString:@"bottom"] ? DSStoreLabelPositionBottom
                      : DSStoreLabelPositionRight;
     _hasLabelPosition = YES;
@@ -1367,7 +1383,7 @@
 
   /* Icon arrangement */
   NSString *ia = [prefs objectForKey:@"iconsarr"];
-  if (ia) {
+  if (ia && !(preserve && _hasIconArrangement)) {
     _iconArrangement = [ia isEqualToString:@"grid"] ? DSStoreIconArrangementGrid
                        : DSStoreIconArrangementNone;
     _hasIconArrangement = YES;
@@ -1375,7 +1391,7 @@
 
   /* Sidebar width */
   id sw = [prefs objectForKey:@"sidebarwidth"];
-  if (sw) {
+  if (sw && !(preserve && _hasSidebarWidth)) {
     _sidebarWidth = [sw intValue];
     _hasSidebarWidth = YES;
   }

@@ -33,6 +33,7 @@
 #import "GWViewer.h"
 #import "GWSpatialViewer.h"
 #import "GWViewerWindow.h"
+#import "GWViewerPrefs.h"
 #import "History.h"
 #import "FSNFunctions.h"
 #import "Workspace.h"
@@ -244,6 +245,87 @@ static GWViewersManager *vwrsmanager = nil;
     }
 }
 
+/* Single creation path for both viewer kinds.  Owns, in one place: window
+ * alloc, the class-specific init, replace-in-place frame inheritance (applied
+ * BEFORE any display, so a replacement never flashes at the init-chosen
+ * position), the pending birth-animation handoff, ownership transfer to
+ * `viewers` (the sole owner), help-context registration, and activation.
+ * inheritedFrame = NSZeroRect means "no frame to inherit". */
+- (id)createViewerOfType:(unsigned)vtype
+                 forNode:(FSNode *)node
+         browserShowType:(GWViewType)btype
+         spatialShowType:(NSString *)sstype
+           showSelection:(BOOL)showsel
+                 withKey:(NSString *)key
+          inheritedFrame:(NSRect)inheritedFrame
+{
+  GWViewerWindow *win = [GWViewerWindow new];
+  id viewer;
+
+  [win setReleasedWhenClosed: NO];
+
+  if (vtype == SPATIAL)
+    {
+      viewer = [[GWSpatialViewer alloc] initForNode: node
+                                           inWindow: win
+                                           showType: sstype
+                                      showSelection: showsel];
+    }
+  else
+    {
+      viewer = [[GWViewer alloc] initForNode: node
+                                    inWindow: win
+                                    showType: btype
+                               showSelection: showsel
+                                     withKey: key];
+    }
+
+  if (viewer == nil)
+    {
+      /* Consume the pending animation rect even on failure, so it can't leak
+       * into the next window creation as a stale birth-animation source. */
+      hasPendingOpenAnimationRect = NO;
+      [win release];
+      return nil;
+    }
+
+  if (!NSIsEmptyRect(inheritedFrame))
+    [win setFrame: inheritedFrame display: NO];
+
+  if (hasPendingOpenAnimationRect)
+    {
+      NSRect endFrame = [win frame];
+      NSRect startFrame = pendingOpenAnimationRect;
+
+      hasPendingOpenAnimationRect = NO;
+
+      if (startFrame.size.width < 16) startFrame.size.width = 16;
+      if (startFrame.size.height < 16) startFrame.size.height = 16;
+
+      [win setFrame: endFrame display: NO];
+
+      /* X property the WindowManager reads to run the birth animation when
+       * -activate below maps the window. */
+      [self setWindowBirthRect: startFrame
+                    targetRect: endFrame
+                 animationType: 0   // GSWindowBirthAnimationOpen
+                     forWindow: win];
+    }
+
+  [viewers addObject: viewer];
+  [win release];
+  [viewer release];
+
+  /* bviewerHelp is browser-window help; spatial windows have none (yet). */
+  if (vtype != SPATIAL)
+    [helpManager setContextHelp: bviewerHelp
+                      forObject: [[viewer win] contentView]];
+
+  [viewer activate];
+
+  return viewer;
+}
+
 - (id)viewerForNode:(FSNode *)node
           showType:(GWViewType)stype
      showSelection:(BOOL)showsel
@@ -251,65 +333,22 @@ static GWViewersManager *vwrsmanager = nil;
 	   withKey:(NSString *)key
 {
   id viewer = [self viewerWithBaseNode: node];
-    
-  if ((viewer == nil) || (force))
+
+  if ((viewer == nil) || force)
     {
-      Class c = [GWViewer class];
-      GWViewerWindow *win = [GWViewerWindow new];
-      
-      [win setReleasedWhenClosed: NO];
-      
-      viewer = [[c alloc] initForNode: node 
-			     inWindow: win 
-			     showType: stype
-			showSelection: showsel
-			      withKey: key]; 
-
-      if (hasPendingOpenAnimationRect)
-        {
-          NSRect endFrame = [win frame];
-          NSRect startFrame = pendingOpenAnimationRect;
-          hasPendingOpenAnimationRect = NO;
-
-          NSDebugLLog(@"gwspace", @"[Animation] Pending animation rect detected: origin={%.0f,%.0f} size={%.0fx%.0f}",
-                startFrame.origin.x, startFrame.origin.y, startFrame.size.width, startFrame.size.height);
-
-          if (startFrame.size.width < 16) startFrame.size.width = 16;
-          if (startFrame.size.height < 16) startFrame.size.height = 16;
-          
-          // Set the window to its final position
-          [win setFrame: endFrame display: NO];
-          
-          NSDebugLLog(@"gwspace", @"[Animation] About to call setWindowAnimationRect for window %@", win);
-          
-          // Set X window property with birth animation parameters
-          // WindowManager will read this and perform the spatial expansion animation
-          [self setWindowBirthRect:startFrame
-                       targetRect:endFrame
-                    animationType:0   // GSWindowBirthAnimationOpen
-                         forWindow:win];
-          
-          NSDebugLLog(@"gwspace", @"[Animation] Animation rect set, now showing window");
-          
-          // Now show the window - WindowManager will animate it
-          [win makeKeyAndOrderFront: nil];
-        }
-      else
-        {
-          NSDebugLLog(@"gwspace", @"[Animation] No pending animation rect for new window");
-        }
-      
-      [viewers addObject: viewer];
-      RELEASE (win);
-      RELEASE (viewer);
+      viewer = [self createViewerOfType: BROWSING
+                                forNode: node
+                        browserShowType: stype
+                        spatialShowType: nil
+                          showSelection: showsel
+                                withKey: key
+                         inheritedFrame: NSZeroRect];
+    }
+  else
+    {
+      [viewer activate];
     }
 
-  [viewer activate];
-  
-
-  [helpManager setContextHelp: bviewerHelp
-                    forObject: [[viewer win] contentView]];
-       
   return viewer;
 }
 
@@ -436,14 +475,19 @@ static GWViewersManager *vwrsmanager = nil;
       id viewer = [vwrs objectAtIndex: i];
       NSString *vpath = [[viewer baseNode] path];
       NSArray *watchedNodes = [viewer watchedNodes];
-      NSString *prefsname = [NSString stringWithFormat: @"viewer_at_%@", vpath]; 
-      NSDictionary *vwrprefs = [defaults dictionaryForKey: prefsname];
-    
+      /* The node is gone: purge the prefs of both window kinds for the path
+       * (browser and spatial keys are separate since the key split). */
+      NSString *keys[2] = { GWViewerPrefsKey(vpath, NO, nil, NO),
+                            GWViewerPrefsKey(vpath, YES, nil, NO) };
+      NSUInteger k;
 
-      if (vwrprefs)
-        [defaults removeObjectForKey: prefsname];
+      for (k = 0; k < 2; k++)
+        {
+          if ([defaults dictionaryForKey: keys[k]])
+            [defaults removeObjectForKey: keys[k]];
 
-      [NSWindow removeFrameUsingName: prefsname]; 
+          [NSWindow removeFrameUsingName: keys[k]];
+        }
     
       for (j = 0; j < [watchedNodes count]; j++)
         [gworkspace removeWatcherForPath: [[watchedNodes objectAtIndex: j] path]];
@@ -1329,81 +1373,90 @@ static GWViewersManager *vwrsmanager = nil;
   NSDebugLLog(@"gwspace", @"vtype=%u, node=%@, showsel=%d, force=%d", vtype, [node path], showsel, force);
 
   id viewer = nil;
+  NSRect inheritedFrame = NSZeroRect;
 
-  // Close old viewer if requested
+  /* Replace semantics: hand the predecessor's identity over BEFORE the
+   * successor is created.  Removing it from `viewers` up front (kept alive by
+   * the retain) makes root-viewer detection, dedup and window placement see
+   * the array exactly as under a close-first ordering, while the actual close
+   * happens LAST so the object is never deallocated mid-close (`viewers` is
+   * its sole owner).  viewerWillClose: guards its own removal with
+   * containsObject:. */
   if (oldvwr) {
-    NSDebugLLog(@"gwspace", @"Closing old viewer");
-    [oldvwr deactivate];
+    NSWindow *ow;
+
+    RETAIN (oldvwr);
+    [viewers removeObject: oldvwr];
+
+    ow = [oldvwr win];
+    if (ow)
+      inheritedFrame = [ow frame];
   }
 
   if (vtype == SPATIAL) {
-    NSDebugLLog(@"gwspace", @"Creating spatial viewer");
-
-    // Check if we already have a spatial viewer for this node (unless forcing new)
-    if (!force) {
-      viewer = [self viewerOfType:SPATIAL withBaseNode:node];
-      if (viewer) {
-        NSDebugLLog(@"gwspace", @"Found existing spatial viewer, activating it");
-        [viewer activate];
-        return viewer;
-      }
-    }
-
-    // Create new spatial viewer
-    GWViewerWindow *win = [GWViewerWindow new];
-    [win setReleasedWhenClosed: NO];
-
-    viewer = [[GWSpatialViewer alloc] initForNode: node
-                                         inWindow: win
-                                         showType: stype
-                                    showSelection: showsel];
+    if (!force)
+      viewer = [self viewerOfType: SPATIAL withBaseNode: node];
 
     if (viewer) {
-      // Birth animation must happen before releases to ensure
-      // the window object is fully alive when we read its frame.
-      if (hasPendingOpenAnimationRect)
-        {
-          NSRect endFrame = [win frame];
-          NSRect startFrame = pendingOpenAnimationRect;
-          hasPendingOpenAnimationRect = NO;
-
-          NSDebugLLog(@"gwspace", @"[Animation] Pending animation rect detected for spatial viewer: origin={%.0f,%.0f} size={%.0fx%.0f}",
-                startFrame.origin.x, startFrame.origin.y, startFrame.size.width, startFrame.size.height);
-
-          if (startFrame.size.width < 16) startFrame.size.width = 16;
-          if (startFrame.size.height < 16) startFrame.size.height = 16;
-
-          // Set the window to its final position
-          [win setFrame: endFrame display: NO];
-
-          // Set X window property with birth animation parameters
-          [self setWindowBirthRect: startFrame
-                       targetRect: endFrame
-                    animationType: 0   // GSWindowBirthAnimationOpen
-                         forWindow: win];
-        }
-
-      [viewers addObject: viewer];
-      [win release];
-      [viewer release]; // viewers array retains it
-
-      NSDebugLLog(@"gwspace", @"Successfully created spatial viewer for %@", [node path]);
+      NSDebugLLog(@"gwspace", @"Found existing spatial viewer, activating it");
       [viewer activate];
     } else {
-      NSDebugLLog(@"gwspace", @"Failed to create spatial viewer");
-      [win release];
+      viewer = [self createViewerOfType: SPATIAL
+                                forNode: node
+                        browserShowType: 0
+                        spatialShowType: stype
+                          showSelection: showsel
+                                withKey: nil
+                         inheritedFrame: inheritedFrame];
     }
-
   } else {
-    NSDebugLLog(@"gwspace", @"Creating browsing viewer");
-    // For browsing mode, use the existing method
-    viewer = [self viewerForNode:node showType:GWViewTypeBrowser showSelection:showsel forceNew:force withKey:nil];
+    /* showType:0 = "no explicit inner view"; choosing Browsing selects window
+     * chrome, so let the folder's remembered .DS_Store style win.  Callers
+     * that want a specific inner view still pass a concrete GWViewType. */
+    if (!force)
+      viewer = [self viewerOfType: BROWSING withBaseNode: node];
+
     if (viewer) {
-      NSDebugLLog(@"gwspace", @"Successfully created browsing viewer for %@", [node path]);
+      NSDebugLLog(@"gwspace", @"Found existing browsing viewer, activating it");
+      [viewer activate];
+    } else {
+      viewer = [self createViewerOfType: BROWSING
+                                forNode: node
+                        browserShowType: 0
+                        spatialShowType: nil
+                          showSelection: showsel
+                                withKey: nil
+                         inheritedFrame: inheritedFrame];
     }
   }
 
+  /* Close the predecessor only now that its replacement exists and is
+   * shown, so focus hands over cleanly. */
+  if (oldvwr) {
+    NSDebugLLog(@"gwspace", @"Closing old viewer");
+    [oldvwr deactivate];
+    RELEASE (oldvwr);
+  }
+
   return viewer;
+}
+
+/* First-class mode switch: replace a viewer window with one of the other
+ * kind for the same folder.  Owns the whole sequence — identity handoff,
+ * frame inheritance, create-then-close ordering — via
+ * viewerOfType:…closeOldViewer:forceNew: (that selector is kept as the
+ * workhorse because GWX11SpatialPath invokes it by runtime lookup). */
+- (id)replaceViewer:(id)oldvwr withViewerType:(unsigned)vtype
+{
+  if (oldvwr == nil)
+    return nil;
+
+  return [self viewerOfType: vtype
+                   showType: nil
+                    forNode: [oldvwr baseNode]
+              showSelection: YES
+             closeOldViewer: oldvwr
+                   forceNew: YES];
 }
 
 - (void)setBehaviour:(NSString *)behaviour forViewer:(id)aviewer
@@ -1414,8 +1467,22 @@ static GWViewersManager *vwrsmanager = nil;
 
 - (id)viewerOfType:(unsigned)type withBaseNode:(FSNode *)node
 {
-  // Return existing viewer if any
-  return [self viewerWithBaseNode:node];
+  /* Return an existing viewer for this node *of the requested kind* — a
+   * browser window must not satisfy a request for a spatial one (or vice
+   * versa), or a mode switch / WM navigation would activate the wrong kind. */
+  NSUInteger i;
+  BOOL wantSpatial = (type == SPATIAL);
+
+  for (i = 0; i < [viewers count]; i++)
+    {
+      id viewer = [viewers objectAtIndex: i];
+
+      if ([[viewer baseNode] isEqual: node]
+          && ([viewer isSpatial] == wantSpatial))
+        return viewer;
+    }
+
+  return nil;
 }
 
 - (id)viewerOfType:(unsigned)type showingNode:(FSNode *)node

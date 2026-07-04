@@ -29,6 +29,7 @@
 #import <AppKit/AppKit.h>
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
+#import "GWViewerPrefs.h"
 #import "GWSpatialViewer.h"
 #import "GWViewersManager.h"
 #import "GWViewerWindow.h"
@@ -133,12 +134,11 @@
         RETAIN (rootViewerKey);
       }
       
-      prefsname = [NSString stringWithFormat: @"viewer_at_%@_%lu",
-                            [node path], [rootViewerKey unsignedLongValue]];
+      prefsname = GWViewerPrefsKey([node path], YES, rootViewerKey, NO);
 
     } else {
       rootViewerKey = nil;
-      prefsname = [NSString stringWithFormat: @"viewer_at_%@", [node path]];
+      prefsname = GWViewerPrefsKey([node path], YES, nil, NO);
     }
 
     if ([baseNode isWritable] && (rootviewer == NO) && (rootViewerKey == nil) 
@@ -156,6 +156,14 @@
 
     if (viewerPrefs == nil) {
       defEntry = [defaults dictionaryForKey: prefsname];
+
+      if (defEntry == nil) {
+        /* One-shot fallback to the pre-split key shared with the browser,
+         * so existing users keep their shelf/geometry.  Writes always go
+         * to the new spatial key. */
+        defEntry = [defaults dictionaryForKey:
+          GWViewerLegacySharedPrefsKey([node path], rootViewerKey)];
+      }
 
       if (defEntry) {
         viewerPrefs = [defEntry copy];
@@ -181,6 +189,28 @@
       ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath:[baseNode path]]);
     }
 
+    /* One-time migration off the legacy per-folder .gwdir: fold its view
+     * settings into .DS_Store (the single source of truth now) and keep the
+     * non-DS_Store remainder (shelf, last selection, geometry) in user
+     * defaults, then delete the .gwdir so it is never read or written again. */
+    if ([baseNode isWritable] && (rootviewer == NO) && (rootViewerKey == nil)
+        && ([[fsnodeRep volumes] containsObject: [baseNode path]] == NO)) {
+      NSString *legacyPath = [[baseNode path] stringByAppendingPathComponent: @".gwdir"];
+      NSFileManager *fmgr = [NSFileManager defaultManager];
+      if ([fmgr fileExistsAtPath: legacyPath]) {
+        /* Merge, don't clobber: the just-read .DS_Store wins; the legacy
+         * .gwdir only fills fields the .DS_Store does not already have. */
+        [dsStoreInfo takeValuesFromViewerPrefs: viewerPrefs
+                                preservingExisting: YES];
+        [_settingsManager writeSettings: dsStoreInfo];
+        [[NSUserDefaults standardUserDefaults] setObject: viewerPrefs
+                                                  forKey: prefsname];
+        [fmgr removeFileAtPath: legacyPath handler: nil];
+        NSDebugLLog(@"gwspace",
+          @"GWSpatialViewer: migrated legacy .gwdir at %@ into .DS_Store", legacyPath);
+      }
+    }
+
     // Determine view type from DS_Store if available, otherwise use viewerPrefs
     viewType = [viewerPrefs objectForKey: @"viewtype"];
     
@@ -189,23 +219,8 @@
       NSDebugLLog(@"gwspace", @"║      APPLYING DS_STORE VIEW STYLE                                ║");
       NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
       
-      switch (dsStoreInfo.viewStyle) {
-        case DSStoreViewStyleIcon:
-          viewType = @"Icon";
-          NSDebugLLog(@"gwspace", @"║ View style from DS_Store: Icon");
-          break;
-        case DSStoreViewStyleList:
-          viewType = @"List";
-          NSDebugLLog(@"gwspace", @"║ View style from DS_Store: List");
-          break;
-        case DSStoreViewStyleColumn:
-          viewType = @"Browser";
-          NSDebugLLog(@"gwspace", @"║ View style from DS_Store: Browser (column)");
-        default:
-          viewType = @"Icon";
-          NSDebugLLog(@"gwspace", @"║ View style from DS_Store: defaulting to Icon");
-          break;
-      }
+      viewType = [DSStoreInfo viewTypeNameForViewStyle: dsStoreInfo.viewStyle];
+      NSDebugLLog(@"gwspace", @"║ View style from DS_Store: %@", viewType);
       NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
     }
 
@@ -493,6 +508,14 @@
 - (FSNode *)baseNode
 {
   return baseNode;
+}
+
+/* The manager's viewerWillClose: asks any closing viewer for its defaults key
+ * to purge prefs of invalid nodes; GWViewer implements this but the spatial
+ * viewer never did (unrecognized selector on that path). */
+- (NSString *)defaultsKey
+{
+  return GWViewerPrefsKey([baseNode path], YES, rootViewerKey, NO);
 }
 
 - (BOOL)isShowingNode:(FSNode *)anode
@@ -919,23 +942,20 @@
 
     [baseNode checkWritable];
 
-    if ([baseNode isWritable] && (rootviewer == NO) && (rootViewerKey == nil)
-            && ([[fsnodeRep volumes] containsObject: [baseNode path]] == NO)) {
-      NSString *dictPath = [[baseNode path] stringByAppendingPathComponent: @".gwdir"];
-            
-      [updatedprefs writeToFile: dictPath atomically: YES];
-    } else {
-      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
-      NSString *prefsname;
-    
-      if (rootViewerKey != nil) {
-        prefsname = [NSString stringWithFormat: @"viewer_at_%@_%lu",
-                            [baseNode path], [rootViewerKey unsignedLongValue]];
-      } else {
-        prefsname = [NSString stringWithFormat: @"viewer_at_%@", [baseNode path]];
-      }    
-    
-      [defaults setObject: updatedprefs forKey: prefsname];
+    /* Persist the non-DS_Store remainder (shelf, last selection, geometry
+     * fallback) to user defaults; view settings go to .DS_Store below.  The
+     * legacy per-folder .gwdir file is no longer written. */
+    {
+      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+      [defaults setObject: updatedprefs
+                   forKey: GWViewerPrefsKey([baseNode path], YES,
+                                            rootViewerKey, NO)];
+
+      /* State now lives under the spatial-specific key; drop the pre-split
+       * shared entry so the one-shot read fallback can't later resurrect it. */
+      [defaults removeObjectForKey:
+        GWViewerLegacySharedPrefsKey([baseNode path], rootViewerKey)];
     }
 
     // ================================================================

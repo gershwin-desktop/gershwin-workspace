@@ -35,6 +35,8 @@
 #import "GWDesktopView.h"
 #import "GWDesktopIcon.h"
 #import "GWDesktopManager.h"
+#import "DSStoreInfo.h"
+#import "GWViewSettingsManager.h"
 #import "Dock.h"
 #import "Workspace.h"
 #import "GWViewersManager.h"
@@ -630,14 +632,21 @@
   [self setNeedsDisplay: YES];
 }
 
-- (NSPoint)gridOriginForLayout
+/* The region of the desktop where icons may actually live: the screen minus
+ * the menu-bar strip, the Dock's reserved side, and the top/bottom margins.
+ * Single source for both the AUTO grid origin and the off-screen rescue
+ * guard's usable rect, so a manual position under the Dock/menu bar is
+ * treated as off-screen and re-flowed instead of hidden. */
+- (NSRect)desktopGridRect
 {
-  /* Desktop grid origin: accounts for Dock position, menu bar,
-   * and top/bottom margins so icons avoid those reserved areas. */
   NSRect dckr = [manager dockReservedFrame];
   NSRect mmfr = [manager macmenuReservedFrame];
-  NSRect gridrect = screenFrame;
-  CGFloat gridTopOffset = 12.0;
+  /* View-local (bounds) coordinates: origin (0,0), size of the spanned
+   * screens.  screenFrame is in screen space and its origin is non-zero on a
+   * multi-monitor union — icon frames are compared in this view's own space,
+   * so build the rect at the origin, not at screenFrame.origin. */
+  NSRect gridrect = NSMakeRect(0, 0, screenFrame.size.width,
+                                     screenFrame.size.height);
 
   gridrect.size.height -= mmfr.size.height;
   gridrect.origin.y += BOTTOM_MARGIN;
@@ -653,8 +662,22 @@
       gridrect.size.width -= dckr.size.width;
     }
 
+  return gridrect;
+}
+
+- (NSPoint)gridOriginForLayout
+{
+  /* Desktop grid origin: top-left of the usable region, inset. */
+  NSRect gridrect = [self desktopGridRect];
+  CGFloat gridTopOffset = 12.0;
+
   return NSMakePoint(gridrect.origin.x + X_MARGIN,
                      gridrect.origin.y + gridrect.size.height - gridTopOffset);
+}
+
+- (NSRect)usableContentRect
+{
+  return [self desktopGridRect];
 }
 
 - (void)tile
@@ -816,6 +839,56 @@
   /* All desktop state (positions, appearance, wallpaper) lives in
    * DS_Store now.  This stub exists for backward compat with existing
    * callers that invoke it after property changes. */
+}
+
+/* Persist a changed icon-view setting to the desktop folder's .DS_Store via
+ * the same tiered store all viewers use, merging into whatever else the
+ * store already holds.  This is the write half of the read in
+ * -showContentsOfNode:. */
+- (void)persistDesktopViewSetting:(void (^)(DSStoreInfo *info))apply
+{
+  GWViewSettingsManager *sm;
+  DSStoreInfo *info;
+
+  if (node == nil)
+    return;
+
+  sm = [GWViewSettingsManager managerForDirectoryPath: [node path]];
+  info = [sm readSettings];
+  if (info == nil)
+    return;
+
+  apply(info);
+  [sm writeSettings: info];
+}
+
+- (void)setIconSize:(int)size
+{
+  BOOL changed = (size != iconSize);
+
+  [super setIconSize: size];
+
+  /* Only rewrite ~/Desktop/.DS_Store (and fire the directory watcher) on a
+   * real change — a same-value re-apply would trigger a needless refresh. */
+  if (changed)
+    [self persistDesktopViewSetting: ^(DSStoreInfo *info) {
+      info.iconSize = size;
+      info.hasIconSize = YES;
+    }];
+}
+
+- (void)setIconPosition:(NSCellImagePosition)pos
+{
+  BOOL changed = (pos != iconPosition);
+
+  [super setIconPosition: pos];
+
+  if (changed)
+    [self persistDesktopViewSetting: ^(DSStoreInfo *info) {
+      info.labelPosition = (pos == NSImageAbove)
+        ? DSStoreLabelPositionBottom : DSStoreLabelPositionRight;
+      info.hasLabelPosition = YES;
+    }];
 }
 
 - (void)selectIconInPrevLine
@@ -1410,6 +1483,37 @@ static void GWHighlightFrameRect(NSRect aRect)
   ASSIGN (node, anode);
 
   _gridCached = NO; /* icon properties may have changed */
+
+  /* Folder-scoped icon-view settings come from the same tiered store all
+   * viewers use (~/Desktop/.DS_Store via GWViewSettingsManager) as primary,
+   * with the desktopinfo defaults loaded at init as fallback — so a size or
+   * label-position set in a folder viewer of ~/Desktop (or by Finder) shows
+   * on the desktop too.  Desktop-only state (background) stays in
+   * desktopinfo. */
+  {
+    DSStoreInfo *dsInfo =
+      [[GWViewSettingsManager managerForDirectoryPath: [anode path]] readSettings];
+    BOOL changed = NO;
+
+    if (dsInfo.hasIconSize && dsInfo.iconSize != iconSize)
+      {
+        iconSize = dsInfo.iconSize;
+        changed = YES;
+      }
+    if (dsInfo.hasLabelPosition)
+      {
+        NSCellImagePosition pos =
+          (dsInfo.labelPosition == DSStoreLabelPositionBottom)
+            ? NSImageAbove : NSImageLeft;
+        if (pos != iconPosition)
+          {
+            iconPosition = pos;
+            changed = YES;
+          }
+      }
+    if (changed)
+      [self calculateGridSize];
+  }
 
   for (i = 0; i < [subNodes count]; i++)
     {

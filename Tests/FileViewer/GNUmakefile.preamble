@@ -1,3 +1,27 @@
 # Include path so in-process test sources (compiled via #include of the .m
 # under test) find their headers under Workspace/FileViewer/.
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/FileViewer
+
+# t_DSStoreInfo compiles DSStoreInfo.m in-process; its DSStore back-end lives
+# under DSStore/ and is linked as separate objects (avoids in-TU symbol
+# clashes).  DSStoreInfo references NSColor, so link gnustep-gui too.
+ADDITIONAL_INCLUDE_DIRS += -I../../DSStore
+t_DSStoreInfo_OBJC_FILES += ../../DSStore/DSStore.m \
+                            ../../DSStore/DSStoreCodecs.m \
+                            ../../DSStore/DSStoreEntry.m \
+                            ../../DSStore/DSBuddyAllocator.m \
+                            ../../DSStore/SimpleColor.m
+t_DSStoreInfo_TOOL_LIBS += -lgnustep-gui
+
+# t_GWViewSettingsManager compiles the facade in-process; its collaborators
+# (DSStoreInfo, volume cache/id, DSStore back-end) are linked as separate
+# objects.  DSStoreInfo references NSColor -> gnustep-gui.
+t_GWViewSettingsManager_OBJC_FILES += ../../Workspace/FileViewer/DSStoreInfo.m \
+                            ../../Workspace/FileViewer/GWVolumeCache.m \
+                            ../../Workspace/FileViewer/GWVolumeID.m \
+                            ../../DSStore/DSStore.m \
+                            ../../DSStore/DSStoreCodecs.m \
+                            ../../DSStore/DSStoreEntry.m \
+                            ../../DSStore/DSBuddyAllocator.m \
+                            ../../DSStore/SimpleColor.m
+t_GWViewSettingsManager_TOOL_LIBS += -lgnustep-gui
