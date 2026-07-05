@@ -291,6 +291,7 @@ NSString *_pendingSystemActionTitle = nil;
   // File menu
   menuItem = [mainMenu addItemWithTitle:_(@"File") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
+  [menu setAutoenablesItems: NO];
   [mainMenu setSubmenu: menu forItem: menuItem];
   
   menuItem = [menu addItemWithTitle:_(@"New Workspace Window") action:@selector(showViewer:) keyEquivalent:@"n"];

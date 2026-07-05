@@ -1405,7 +1405,7 @@ static void GWHighlightFrameRect(NSRect aRect)
                                          duplicateAction: @selector(duplicateFiles:)
                                            recycleAction: @selector(recycleFiles:)
                                              ejectAction: @selector(ejectSelection:)
-                                        includeOpenWith: NO];
+                                         includeOpenWith: YES];
     } else {
       // Right-clicked on empty desktop background
       NSMenu *menu = [[Workspace gworkspace] emptySpaceContextMenuForViewer: [self window]];
