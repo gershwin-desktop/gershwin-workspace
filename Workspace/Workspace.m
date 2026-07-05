@@ -853,7 +853,10 @@ NSString *_pendingSystemActionTitle = nil;
   
   dontWarnOnQuit = [defaults boolForKey: @"NoWarnOnQuit"];
 
-  boolentry = [defaults boolForKey: @"use_thumbnails"];
+  if ([defaults objectForKey: @"use_thumbnails"] == nil)
+    boolentry = YES;
+  else
+    boolentry = [defaults boolForKey: @"use_thumbnails"];
   [fsnodeRep setUseThumbnails: boolentry];
   
   selectedPaths = [[NSArray alloc] initWithObjects: NSHomeDirectory(), nil];
