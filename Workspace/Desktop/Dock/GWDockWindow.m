@@ -90,6 +90,11 @@
   return NO;
 }
 
+- (void)performClose:(id)sender
+{
+  NSLog(@"GWDockWindow performClose: called - IGNORED (dock cannot be closed)");
+}
+
 - (void)showDock
 {
   [self orderFront: nil];

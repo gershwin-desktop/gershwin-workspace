@@ -64,6 +64,7 @@ static NSTimeInterval recentUserUnmountTimeout = 5.0;
 #import "ISOWrite/BlockDeviceInfo.h"
 #import "ISOWrite/DeviceEraseConfirmation.h"
 #import "GWDesktopWindow.h"
+#import "GWDockWindow.h"
 #import "Dock.h"
 #import "GWViewersManager.h"
 #import "GWViewer.h"
@@ -2406,19 +2407,23 @@ NSString *_pendingSystemActionTitle = nil;
   NSLog(@"Workspace performClose: called, keyWindow=%@ (class=%@), sender=%@", 
         kwin, (kwin ? [kwin className] : @"nil"), sender);
   
-  // Don't close the desktop window. If the desktop is the key window (or there
-  // is no key window), find the first visible non-desktop window instead.
-  if (kwin == nil || [kwin isKindOfClass: [GWDesktopWindow class]]) {
-    NSLog(@"Workspace performClose: desktop is key or no key window, searching for another window");
+  // Don't close the desktop or dock window. If either is the key window (or
+  // there is no key window), find the first visible non-persistent window.
+  if (kwin == nil || [kwin isKindOfClass: [GWDesktopWindow class]]
+      || [kwin isKindOfClass: [GWDockWindow class]]) {
+    NSLog(@"Workspace performClose: desktop/dock is key or no key window, searching for another window");
     NSArray *windows = [NSApp windows];
     for (NSWindow *win in windows) {
-      if (![win isKindOfClass: [GWDesktopWindow class]] && [win isVisible]) {
+      if (![win isKindOfClass: [GWDesktopWindow class]]
+          && ![win isKindOfClass: [GWDockWindow class]]
+          && [win isVisible]) {
         kwin = win;
         break;
       }
     }
     // If we still have no suitable window, do nothing
-    if (kwin == nil || [kwin isKindOfClass: [GWDesktopWindow class]]) {
+    if (kwin == nil || [kwin isKindOfClass: [GWDesktopWindow class]]
+        || [kwin isKindOfClass: [GWDockWindow class]]) {
       NSLog(@"Workspace performClose: no suitable window to close");
       return;
     }
