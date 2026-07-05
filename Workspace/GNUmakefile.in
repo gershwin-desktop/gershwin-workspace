@@ -154,6 +154,7 @@ Network/NetworkVolumeManager.m \
 Network/SFTPMount.m \
 AVFSMount.m \
 VolumeManager.m \
+LowDiskWarn.m \
 GWUnmountHelper.m \
 GWArchiveOperation.m \
 ISOWrite/ISOWriteHandler.m \

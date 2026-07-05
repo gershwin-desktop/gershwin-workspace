@@ -52,6 +52,7 @@
 @class StartAppWin;
 @class GWLaunchedApp;
 @class GSGlobalShortcutsManager;
+@class LowDiskWarn;
 
 @protocol	FSWClientProtocol
 
@@ -132,6 +133,8 @@
   
   BOOL dontWarnOnQuit;
   BOOL terminating;
+  
+  LowDiskWarn *lowDiskWarn;
   
   OpenWithController *openWithController;
   RunExternalController *runExtController;

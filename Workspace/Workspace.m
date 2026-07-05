@@ -88,6 +88,7 @@ static NSTimeInterval recentUserUnmountTimeout = 5.0;
 #import "Network/NetworkServiceItem.h"
 #import "Network/NetworkVolumeManager.h"
 #import "AVFSMount.h"
+#import "LowDiskWarn.h"
 #if HAVE_DBUS
 #import "DBusConnection.h"
 #import "FileManagerDBusInterface.h"
@@ -227,7 +228,8 @@ NSString *_pendingSystemActionTitle = nil;
   }
   RELEASE (storedAppinfoPath);
   RELEASE (storedAppinfoLock);
-  
+  DESTROY (lowDiskWarn);
+
 #if HAVE_DBUS
   DESTROY (fileManagerDBusInterface);
   DESTROY (dbusFileHandle);
@@ -1005,7 +1007,10 @@ NSString *_pendingSystemActionTitle = nil;
             object: nil];
 
   [self initializeWorkspace];
-  
+
+  lowDiskWarn = [[LowDiskWarn alloc] init];
+  [lowDiskWarn startMonitoring];
+
   // Initialize global shortcuts manager only if this instance is rendering the desktop
   if ([dtopManager isActive]) {
     globalShortcutsManager = [[GSGlobalShortcutsManager sharedManager] retain];
@@ -1150,6 +1155,8 @@ NSString *_pendingSystemActionTitle = nil;
         }
   }
   
+  [lowDiskWarn stopMonitoring];
+
   /* Unmount all network volumes */
   [[NetworkVolumeManager sharedManager] unmountAll];
   		
