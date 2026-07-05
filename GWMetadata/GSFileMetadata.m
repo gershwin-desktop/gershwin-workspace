@@ -523,10 +523,6 @@ static NSMutableDictionary *_metadataCache = nil;
 
 - (BOOL)writeToFileAtPath:(NSString *)path error:(NSError **)error
 {
-  /* Drop any cached read for this path so subsequent reads see the
-   * values we are about to persist. */
-  [[self class] invalidateCachedMetadataForPath: path];
-
   if (!path || [path length] == 0)
     {
       if (error)

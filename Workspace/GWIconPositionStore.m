@@ -19,39 +19,60 @@
   return shared;
 }
 
-/* Write one folder's batch of iloc entries (@[name, ilocX, ilocY]). */
+/* Write one folder's batch of iloc entries (@[name, ilocX, ilocY]).
+ *
+ * Combines persistence into three distinct phases so that all reads happen
+ * together, then all writes happen together - no interleaving of metadata
+ * reads and writes that could trigger cache-invalidation use-after-free. */
 - (void)writeBatch:(NSArray *)batch toFolder:(NSString *)folder
 {
-  NSUInteger bi;
+  NSUInteger bi, count = [batch count];
+  if (count == 0) return;
 
-  /* Persist the positions through the settings orchestrator, which owns the
-   * write hierarchy: folder .DS_Store when writable (and not policy-blocked),
-   * otherwise the per-volume cache.  Carry only the iloc positions; loading
-   * inside saveToPath merges them with any existing view settings/labels. */
-  DSStoreInfo *info = [DSStoreInfo infoForDirectoryPath: folder loadImmediately: NO];
-  for (bi = 0; bi < [batch count]; bi++)
-    {
-      NSArray *entry = [batch objectAtIndex: bi];
-      DSStoreIconInfo *ii = [DSStoreIconInfo infoForFilename: [entry objectAtIndex: 0]];
-      [ii setPosition: NSMakePoint([[entry objectAtIndex: 1] intValue],
-                                   [[entry objectAtIndex: 2] intValue])];
-      [ii setHasPosition: YES];
-      [info setIconInfo: ii forFilename: [entry objectAtIndex: 0]];
-    }
-  [[GWViewSettingsManager managerForDirectoryPath: folder] writeSettings: info];
+  /* Phase 1: Combine all icon positions into a single .DS_Store write. */
+  {
+    DSStoreInfo *info = [DSStoreInfo infoForDirectoryPath: folder loadImmediately: NO];
+    for (bi = 0; bi < count; bi++)
+      {
+        NSArray *entry = [batch objectAtIndex: bi];
+        DSStoreIconInfo *ii = [DSStoreIconInfo infoForFilename: [entry objectAtIndex: 0]];
+        [ii setPosition: NSMakePoint([[entry objectAtIndex: 1] intValue],
+                                      [[entry objectAtIndex: 2] intValue])];
+        [ii setHasPosition: YES];
+        [info setIconInfo: ii forFilename: [entry objectAtIndex: 0]];
+      }
+    [[GWViewSettingsManager managerForDirectoryPath: folder] writeSettings: info];
+  }
 
-  /* fdLocation xattr export, per file. */
-  for (bi = 0; bi < [batch count]; bi++)
-    {
-      NSArray *entry = [batch objectAtIndex: bi];
-      NSString *fullPath = [folder stringByAppendingPathComponent: [entry objectAtIndex: 0]];
-      GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: fullPath];
-      if (!md)
-        md = [[[GSFileMetadata alloc] init] autorelease];
-      [md setIconPosition: NSMakePoint((int16_t)[[entry objectAtIndex: 1] intValue],
-                                        (int16_t)[[entry objectAtIndex: 2] intValue])];
-      [md writeToFileAtPath: fullPath error: nil];
-    }
+  /* Phase 2: Collect all per-file metadata, modifying positions in memory.
+   * All reads happen here — the GSFileMetadata cache is populated with every
+   * entry before any xattr write touches the filesystem. */
+  {
+    NSMutableArray *mds = [NSMutableArray arrayWithCapacity: count];
+    NSMutableArray *paths = [NSMutableArray arrayWithCapacity: count];
+
+    for (bi = 0; bi < count; bi++)
+      {
+        NSArray *entry = [batch objectAtIndex: bi];
+        NSString *fullPath = [folder stringByAppendingPathComponent: [entry objectAtIndex: 0]];
+        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: fullPath];
+        if (!md)
+          md = [[[GSFileMetadata alloc] init] autorelease];
+        [md setIconPosition: NSMakePoint((int16_t)[[entry objectAtIndex: 1] intValue],
+                                          (int16_t)[[entry objectAtIndex: 2] intValue])];
+        [mds addObject: md];
+        [paths addObject: fullPath];
+      }
+
+    /* Phase 3: Flush all xattr writes.  The metadata objects are kept alive
+     * by the array (and the GSFileMetadata cache), so self remains valid
+     * through every writeToFileAtPath:error: call - no use-after-free even if
+     * the implementation temporarily removes the cache entry. */
+    for (bi = 0; bi < count; bi++)
+      {
+        [[mds objectAtIndex: bi] writeToFileAtPath: [paths objectAtIndex: bi] error: nil];
+      }
+  }
 }
 
 - (void)saveIconPositionsByFolder:(NSDictionary *)positionsByFolder
