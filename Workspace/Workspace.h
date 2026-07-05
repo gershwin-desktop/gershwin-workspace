@@ -137,6 +137,7 @@
   LowDiskWarn *lowDiskWarn;
   
   OpenWithController *openWithController;
+  NSMenu *openWithMenu;
   RunExternalController *runExtController;
   
   StartAppWin *startAppWin;

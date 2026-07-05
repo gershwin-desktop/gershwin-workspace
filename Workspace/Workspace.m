@@ -210,6 +210,7 @@ NSString *_pendingSystemActionTitle = nil;
   RELEASE (watchedPaths);
   RELEASE (history);
   RELEASE (openWithController);
+  RELEASE (openWithMenu);
   RELEASE (vwrsManager);
   RELEASE (dtopManager);
   DESTROY (inspector);
@@ -310,7 +311,9 @@ NSString *_pendingSystemActionTitle = nil;
   // Open With submenu
   menuItem = [menu addItemWithTitle:_(@"Open With") action:NULL keyEquivalent:@""];
   subMenu = AUTORELEASE ([NSMenu new]);
+  [subMenu setAutoenablesItems: NO];
   [menu setSubmenu: subMenu forItem: menuItem];
+  ASSIGN (openWithMenu, subMenu);
   menuItem = [menu addItemWithTitle:_(@"Open as Folder") action:@selector(openSelectionAsFolder:) keyEquivalent:@"O"];
   [[menu itemWithTitle:_(@"Open as Folder")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
 
@@ -1556,6 +1559,8 @@ NSString *_pendingSystemActionTitle = nil;
         {
           [inspector setCurrentSelection: paths];
         }
+      
+      [self updateOpenWithMenu];
       
       /* we extract from the selection only valid directories */
       onlyDirPaths = [[NSMutableArray arrayWithCapacity:1] retain];
@@ -4047,6 +4052,45 @@ NSString *_pendingSystemActionTitle = nil;
   }  
 }
 
+- (void)updateOpenWithMenu
+{
+  if (openWithMenu == nil)
+    return;
+
+  while ([openWithMenu numberOfItems] > 0)
+    [openWithMenu removeItemAtIndex: 0];
+
+  if (selectedPaths == nil || [selectedPaths count] == 0)
+    return;
+
+  NSString *firstext = [[[selectedPaths objectAtIndex: 0] pathExtension] lowercaseString];
+  for (NSUInteger i = 1; i < [selectedPaths count]; i++)
+    {
+      NSString *ext = [[[selectedPaths objectAtIndex: i] pathExtension] lowercaseString];
+      if ([ext isEqual: firstext] == NO)
+        return;
+    }
+
+  NSDictionary *apps = [ws infoForExtension: firstext];
+  if (apps == nil || [apps count] == 0)
+    return;
+
+  NSEnumerator *appEnum = [[apps allKeys] objectEnumerator];
+  NSString *key;
+  while ((key = [appEnum nextObject]))
+    {
+      NSMenuItem *appItem = [NSMenuItem new];
+      key = [key stringByDeletingPathExtension];
+      [appItem setTitle: key];
+      [appItem setTarget: self];
+      [appItem setAction: @selector(openSelectionWithApp:)];
+      [appItem setRepresentedObject: key];
+      [appItem setEnabled: YES];
+      [openWithMenu addItem: appItem];
+      RELEASE (appItem);
+    }
+}
+
 - (void)openSelectionWithApp:(id)sender
 {
   NSString *appName = (NSString *)[(NSMenuItem *)sender representedObject];
@@ -4363,8 +4407,8 @@ NSString *_pendingSystemActionTitle = nil;
       menuItem = [NSMenuItem new];
       [menuItem setTitle: NSLocalizedString(@"Open With", @"")];
       [menuItem setEnabled: YES];
-      NSMenu *openWithMenu = [[NSMenu alloc] initWithTitle: @""];
-      [openWithMenu setAutoenablesItems: NO];
+      NSMenu *owMenu = [[NSMenu alloc] initWithTitle: @""];
+      [owMenu setAutoenablesItems: NO];
       
       apps = [[NSWorkspace sharedWorkspace] infoForExtension: firstext];
       app_enum = [[apps allKeys] objectEnumerator];
@@ -4377,12 +4421,12 @@ NSString *_pendingSystemActionTitle = nil;
         [appItem setAction: @selector(openSelectionWithApp:)];
         [appItem setRepresentedObject: key];
         [appItem setEnabled: YES];
-        [openWithMenu addItem: appItem];
+        [owMenu addItem: appItem];
         RELEASE (appItem);
       }
       
-      [menuItem setSubmenu: openWithMenu];
-      RELEASE (openWithMenu);
+      [menuItem setSubmenu: owMenu];
+      RELEASE (owMenu);
       [menu addItem: menuItem];
       RELEASE (menuItem);
     }
