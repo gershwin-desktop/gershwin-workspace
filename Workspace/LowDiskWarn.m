@@ -52,6 +52,13 @@
 
   if (ret == 0)
     {
+      /* Skip read-only volumes (e.g. live/install media, overlay roots). */
+      if (buf.f_flag & ST_RDONLY)
+        {
+          checking = NO;
+          return;
+        }
+
       unsigned long long total = (unsigned long long)buf.f_blocks
                                   * (unsigned long long)buf.f_frsize;
       unsigned long long available = (unsigned long long)buf.f_bavail
