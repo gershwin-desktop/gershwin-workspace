@@ -889,19 +889,8 @@ NSString *_pendingSystemActionTitle = nil;
 
   }
 
-  // Defer non-essential GORM loads to next runloop for faster startup
-  dispatch_async(dispatch_get_main_queue(), ^{
-    prefController = [PrefController new];
-    if ([defaults boolForKey: @"uses_inspector"]) {
-      inspector = [Inspector new];
-      [self showInspector: nil];
-    }
-  });
-
-  // Lazy inspector — created on first showInspector: call if not already done
-  if ([defaults boolForKey: @"uses_inspector"] == NO) {
-    inspector = nil;
-  }
+  prefController = [PrefController new];
+  inspector = [Inspector new];
 
   history = [[History alloc] init];
 
