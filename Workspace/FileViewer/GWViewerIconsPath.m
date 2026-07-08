@@ -210,7 +210,7 @@
     id icon = [icons objectAtIndex: i];
 
     if ([icon respondsToSelector: @selector(setIconPosition:)]) {
-      [icon setIconPosition: iconPosition];
+      [(FSNIcon *)icon setIconPosition: iconPosition];
     }
     if ([icon respondsToSelector: @selector(setIconSize:)]) {
       [icon setIconSize: iconSize];

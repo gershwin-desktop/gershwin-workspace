@@ -164,7 +164,13 @@
   NSArray *lines = [detail componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
   NSUInteger total = [lines count];
   NSString *displayText = detail;
-  if (total > 15) {
+  BOOL needsScrolling = NO;
+
+  if ([detail length] == 0) {
+    /* No stderr output — show a meaningful message instead of an empty view */
+    displayText = [NSString stringWithFormat:@"%@ has quit unexpectedly.", [path lastPathComponent]];
+  } else if (total > 15) {
+    needsScrolling = YES;
     NSMutableArray *parts = [NSMutableArray array];
     for (NSUInteger i = 0; i < 5; i++) [parts addObject:[lines objectAtIndex:i]];
     NSUInteger omitted = total - 15;
@@ -177,7 +183,7 @@
   [alert setMessageText:title];
   [alert setInformativeText:msg];
   [alert addButtonWithTitle:@"OK"];
-  if ([displayText length] > 0) {
+  if (needsScrolling) {
     NSTextView *tv = [[[NSTextView alloc] initWithFrame:NSMakeRect(0,0,400,200)] autorelease];
     [tv setString:displayText];
     [tv setEditable:NO];
@@ -192,6 +198,9 @@
          view isn't available on this platform/SDK. */
       [alert setInformativeText:[NSString stringWithFormat:@"%@\n\n%@", msg, displayText]];
     }
+  } else if ([displayText length] > 0) {
+    /* Short output or fallback message — append to informative text */
+    [alert setInformativeText:[NSString stringWithFormat:@"%@\n\n%@", msg, displayText]];
   }
   [alert runModal];
 }

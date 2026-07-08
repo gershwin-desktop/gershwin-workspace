@@ -31,6 +31,7 @@
 #import "GWDesktopWindow.h"
 #import "GWDesktopView.h"
 #import "Dock.h"
+#import "GWDockWindow.h"
 #import "FSNFunctions.h"
 #import "Workspace.h"
 #import "GWViewersManager.h"
@@ -62,6 +63,7 @@ static GWDesktopManager *desktopManager = nil;
   RELEASE (dskNode);
   RELEASE (win);
   RELEASE (dock);
+  RELEASE (dockWindow);
   RELEASE (mpointWatcher);
 
   [super dealloc];
@@ -207,13 +209,18 @@ static GWDesktopManager *desktopManager = nil;
   [desktopView showContentsOfNode: dskNode];
   [self addWatcherForPath: [dskNode path]];
     
-  if ((hidedock == NO) && ([dock superview] == nil)) {
-    NSDebugLLog(@"gwspace", @"DEBUG: Adding dock as subview (hidedock=%d)", hidedock);
-    [desktopView addSubview: dock];
+  if (hidedock == NO) {
+    /* Create the dock window on first activation; on a later reactivation
+     * it already exists but was ordered out by deactivateDesktop, so it
+     * must be shown again here (the previous code only showed it when
+     * dockWindow == nil, leaving the dock hidden after reactivation). */
+    if (dockWindow == nil) {
+      NSDebugLLog(@"gwspace", @"DEBUG: Creating dock window (hidedock=%d)", hidedock);
+      dockWindow = [[GWDockWindow alloc] initWithDockView: dock];
+    }
     [dock tile];
-    NSDebugLLog(@"gwspace", @"DEBUG: Dock added to desktop view, frame: %@", NSStringFromRect([dock frame]));
-  } else {
-    NSDebugLLog(@"gwspace", @"DEBUG: Dock NOT added (hidedock=%d, superview=%@)", hidedock, [dock superview]);
+    [dockWindow showDock];
+    NSDebugLLog(@"gwspace", @"DEBUG: Dock window shown, dock frame: %@", NSStringFromRect([dock frame]));
   }
   
   [mpointWatcher startWatching];  
@@ -223,7 +230,11 @@ static GWDesktopManager *desktopManager = nil;
 - (void)deactivateDesktop
 {
   [win deactivate];
-  [self removeWatcherForPath: [dskNode path]];  
+  if (dockWindow)
+    {
+      [dockWindow hideDock];
+    }
+  [self removeWatcherForPath: [dskNode path]];
   [mpointWatcher stopWatching];
 }
 
@@ -240,7 +251,7 @@ static GWDesktopManager *desktopManager = nil;
   path = [NSHomeDirectory() stringByAppendingPathComponent: @"Desktop"]; 
 
   if (([fm fileExistsAtPath: path isDirectory: &isdir] && isdir) == NO) {
-    NSString *hiddenNames = @".gwsort\n.gwdir\n.hidden\n";
+    NSString *hiddenNames = @".gwsort\n.hidden\n";
 
     if ([fm createDirectoryAtPath: path attributes: nil] == NO) {
       NSRunAlertPanel(NSLocalizedString(@"error", @""), 
@@ -372,21 +383,27 @@ static GWDesktopManager *desktopManager = nil;
   [dock setPosition: pos];
   [self setReservedFrames];
   [desktopView dockPositionDidChange];
+  [dockWindow updateX11Strut];
 }
 
 - (void)setDockActive:(BOOL)value
 {
   hidedock = !value;
-  
-  if (hidedock && [dock superview]) {
-    [dock removeFromSuperview];
-    [desktopView setNeedsDisplayInRect: dockReservedFrame];
-    
-  } else if ([dock superview] == nil) {
-    [desktopView addSubview: dock];
-    [dock tile];
-    [desktopView setNeedsDisplayInRect: dockReservedFrame];
-  }
+
+  if (hidedock && dockWindow)
+    {
+      [dockWindow hideDock];
+
+    }
+  else if (!hidedock)
+    {
+      if (dockWindow == nil)
+        {
+          dockWindow = [[GWDockWindow alloc] initWithDockView: dock];
+        }
+      [dock tile];
+      [dockWindow showDock];
+    }
 }
 
 - (BOOL)dockActive
@@ -409,14 +426,24 @@ static GWDesktopManager *desktopManager = nil;
     macmenuReservedFrame.origin.y = screenFrame.origin.y + screenFrame.size.height - 25;
   }
 
-  dockReservedFrame.size.height = screenFrame.size.height;
-  dockReservedFrame.size.width = 64 + RESV_MARGIN;
-  dockReservedFrame.origin.x = screenFrame.origin.x;
-  dockReservedFrame.origin.y = screenFrame.origin.y;
+  if (dockPosition == DockPositionBottom)
+    {
+      dockReservedFrame.size.width = screenFrame.size.width;
+      dockReservedFrame.size.height = 64 + RESV_MARGIN;
+      dockReservedFrame.origin.x = screenFrame.origin.x;
+      dockReservedFrame.origin.y = screenFrame.origin.y;
+    }
+  else
+    {
+      dockReservedFrame.size.height = screenFrame.size.height;
+      dockReservedFrame.size.width = 64 + RESV_MARGIN;
+      dockReservedFrame.origin.x = screenFrame.origin.x;
+      dockReservedFrame.origin.y = screenFrame.origin.y;
 
-  if (dockPosition == DockPositionRight) {
-    dockReservedFrame.origin.x = screenFrame.origin.x + screenFrame.size.width - 64 - RESV_MARGIN;
-  }
+      if (dockPosition == DockPositionRight) {
+        dockReservedFrame.origin.x = screenFrame.origin.x + screenFrame.size.width - 64 - RESV_MARGIN;
+      }
+    }
 }
 
 - (NSRect)macmenuReservedFrame

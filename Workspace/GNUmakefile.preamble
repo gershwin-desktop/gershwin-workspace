@@ -35,9 +35,23 @@ ADDITIONAL_INCLUDE_DIRS += -INetwork -I../Network
 ADDITIONAL_INCLUDE_DIRS += -I../FSNode -I../../FSNode -I../../../FSNode
 ADDITIONAL_INCLUDE_DIRS += -I../Inspector -I../../Inspector
 ADDITIONAL_INCLUDE_DIRS += -I../Operation -I../../Operation
+ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata -I../../GWMetadata
 
 # Additional LDFLAGS to pass to the linker
-ADDITIONAL_LDFLAGS += -lX11 
+# NOTE: ADDITIONAL_LDFLAGS appears BEFORE system -L paths in the link command.
+# We explicitly add local framework -L paths here so the freshly-built
+# FSNode/Inspector/Operation libraries are found before any stale system-
+# installed copies. Using ADDITIONAL_LIB_DIRS alone is insufficient because
+# the system -L/System/Library/Libraries is added earlier in the command.
+ADDITIONAL_LDFLAGS += -lX11
+ADDITIONAL_LDFLAGS += -L../FSNode/FSNode.framework/Versions/Current
+ADDITIONAL_LDFLAGS += -L../FSNode/FSNode.framework
+ADDITIONAL_LDFLAGS += -L../Inspector/Inspector.framework/Versions/Current
+ADDITIONAL_LDFLAGS += -L../Inspector/Inspector.framework
+ADDITIONAL_LDFLAGS += -L../Operation/Operation.framework/Versions/Current
+ADDITIONAL_LDFLAGS += -L../Operation/Operation.framework
+ADDITIONAL_LDFLAGS += -L../DSStore/obj
+ADDITIONAL_LDFLAGS += -L../GSMetadata/obj
 
 # Conditional DBus support
 ifneq ($(DBUS_LIBS),)
@@ -57,6 +71,7 @@ ADDITIONAL_LIB_DIRS += -L../FSNode/FSNode.framework
 ADDITIONAL_LIB_DIRS += -L../Inspector/Inspector.framework
 ADDITIONAL_LIB_DIRS += -L../Operation/Operation.framework
 ADDITIONAL_LIB_DIRS += -L../DSStore/obj
+ADDITIONAL_LIB_DIRS += -L../GSMetadata/obj
 
 ADDITIONAL_TOOL_LIBS +=
 

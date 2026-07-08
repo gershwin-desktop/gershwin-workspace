@@ -333,6 +333,29 @@ static GWX11WindowManager *sharedWindowManager = nil;
     return windows;
 }
 
+/*
+ * Returns YES if 'word' appears as a whole word in 'str'
+ * (case-insensitive).  A whole word means it is either at the start of str
+ * or preceded by a non-alphanumeric character, and either at the end of str
+ * or followed by a non-alphanumeric character.  This prevents matching the
+ * app name embedded inside a longer word (e.g. "CreateLiveMediaAssistant"
+ * inside "CreateLiveMediaAssistantBuild").
+ */
+static BOOL stringContainsWord(NSString *str, NSString *word)
+{
+    NSRange r = [str rangeOfString: word options: NSCaseInsensitiveSearch];
+    if (r.location == NSNotFound)
+        return NO;
+
+    BOOL beforeOk = (r.location == 0)
+        || ![[NSCharacterSet alphanumericCharacterSet]
+               characterIsMember: [str characterAtIndex: r.location - 1]];
+    BOOL afterOk = (r.location + r.length >= [str length])
+        || ![[NSCharacterSet alphanumericCharacterSet]
+               characterIsMember: [str characterAtIndex: r.location + r.length]];
+    return beforeOk && afterOk;
+}
+
 - (NSArray *)windowsMatchingName:(NSString *)name
 {
     NSMutableArray *windows = [NSMutableArray array];
@@ -368,9 +391,9 @@ static GWX11WindowManager *sharedWindowManager = nil;
                 }
 
                 BOOL matches = NO;
-                if (winName && [winName rangeOfString:name options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                if (winName && stringContainsWord(winName, name)) {
                     matches = YES;
-                } else if (winClass && [winClass rangeOfString:name options:NSCaseInsensitiveSearch].location != NSNotFound) {
+                } else if (winClass && stringContainsWord(winClass, name)) {
                     matches = YES;
                 }
 

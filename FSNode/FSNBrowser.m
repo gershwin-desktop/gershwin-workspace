@@ -50,8 +50,12 @@
 - (void)dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
+  /* Do NOT clear scroller target/action here — the scroller is a subview
+   * of the parent NSScrollView and may already be deallocated by the time
+   * this dealloc runs (subviews are released before the document view).
+   * releaseScroller is called separately while the view hierarchy is intact. */
   RELEASE (baseNode);
-  RELEASE (extInfoType);  
+  RELEASE (extInfoType);
   RELEASE (lastSelection);
   RELEASE (columns);
   RELEASE (nameEditor);
@@ -60,6 +64,18 @@
   RELEASE (backColor);
 
   [super dealloc];
+}
+
+/* Before releasing the browser, clear the scroller's target/action
+ * so the scroll view does not hold a dangling pointer when it next
+ * tiles or the scroller is otherwise accessed. */
+- (void)releaseScroller
+{
+  if (scroller)
+    {
+      [scroller setTarget: nil];
+      [scroller setAction: NULL];
+    }
 }
 
 - (id)initWithBaseNode:(FSNode *)bsnode
@@ -1514,30 +1530,9 @@
 
 - (NSDictionary *)readNodeInfo
 {
-  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	      
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   NSString *prefsname = [NSString stringWithFormat: @"viewer_at_%@", [baseNode path]];
-  NSDictionary *nodeDict = nil;
-
-  if ([baseNode isWritable]
-        && ([[fsnodeRep volumes] containsObject: [baseNode path]] == NO)) {
-    NSString *infoPath = [[baseNode path] stringByAppendingPathComponent: @".gwdir"];
-  
-    if ([[NSFileManager defaultManager] fileExistsAtPath: infoPath]) {
-      NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: infoPath];
-
-      if (dict) {
-        nodeDict = [NSDictionary dictionaryWithDictionary: dict];
-      }   
-    }
-  }
-
-  if (nodeDict == nil) {
-    id defEntry = [defaults dictionaryForKey: prefsname];
-
-    if (defEntry) {
-      nodeDict = [NSDictionary dictionaryWithDictionary: defEntry];
-    }
-  }
+  NSDictionary *nodeDict = [defaults dictionaryForKey: prefsname];
 
   if (nodeDict) {
     id entry = [nodeDict objectForKey: @"fsn_info_type"];
@@ -1570,46 +1565,23 @@
   NSMutableDictionary *updatedInfo = nil;
 
   if ([baseNode isValid]) {
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	      
+    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     NSString *prefsname = [NSString stringWithFormat: @"viewer_at_%@", [baseNode path]];
-    NSString *infoPath = [[baseNode path] stringByAppendingPathComponent: @".gwdir"];
-    BOOL writable = ([baseNode isWritable] && ([[fsnodeRep volumes] containsObject: [baseNode path]] == NO));
-    
-    if (writable) {
-      if ([[NSFileManager defaultManager] fileExistsAtPath: infoPath]) {
-        NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: infoPath];
 
-        if (dict) {
-          updatedInfo = [dict mutableCopy];
-        }   
-      }
-  
-    } else { 
-      NSDictionary *prefs = [defaults dictionaryForKey: prefsname];
-  
-      if (prefs) {
-        updatedInfo = [prefs mutableCopy];
-      }
-    }
-
-    if (updatedInfo == nil) {
+    NSDictionary *prefs = [defaults dictionaryForKey: prefsname];
+    if (prefs)
+      updatedInfo = [prefs mutableCopy];
+    else
       updatedInfo = [NSMutableDictionary new];
-    }
-	
-    [updatedInfo setObject: [NSNumber numberWithInt: infoType] 
+
+    [updatedInfo setObject: [NSNumber numberWithInt: infoType]
                     forKey: @"fsn_info_type"];
 
-    if (infoType == FSNInfoExtendedType) {
+    if (infoType == FSNInfoExtendedType)
       [updatedInfo setObject: extInfoType forKey: @"ext_info_type"];
-    }
 
-    if (ondisk) {    
-      if (writable) {
-        [updatedInfo writeToFile: infoPath atomically: YES];
-      } else {
-        [defaults setObject: updatedInfo forKey: prefsname];
-      }
-    }
+    if (ondisk)
+      [defaults setObject: updatedInfo forKey: prefsname];
   }
       
   RELEASE (arp);

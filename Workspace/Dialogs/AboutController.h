@@ -18,9 +18,11 @@
     NSTextField *x11Field;
     NSTextField *serialNumberField;
     NSImageView *computerImageView;
+    NSString *systemProfilerPath;
 }
 
 + (AboutController *)sharedController;
 - (void)showAboutWindow:(id)sender;
+- (void)moreInfo:(id)sender;
 
 @end

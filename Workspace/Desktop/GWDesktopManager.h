@@ -30,12 +30,13 @@
 typedef enum {
   DockPositionLeft,
   DockPositionRight,
-  DockPositionBottom   // ← Add this line
+  DockPositionBottom
 } DockPosition;
 
 @class Workspace;
 @class GWDesktopView;
 @class Dock;
+@class GWDockWindow;
 @class MPointWatcher;
 
 @interface GWDesktopManager : NSObject
@@ -43,11 +44,12 @@ typedef enum {
   FSNode *dskNode;
   id win;
   BOOL usexbundle;
-  
+
   GWDesktopView *desktopView;
 
   BOOL singleClickLaunch;
   Dock *dock;
+  GWDockWindow *dockWindow;
   BOOL hidedock;
   DockPosition dockPosition;
   

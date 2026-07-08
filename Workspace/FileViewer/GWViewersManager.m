@@ -33,6 +33,7 @@
 #import "GWViewer.h"
 #import "GWSpatialViewer.h"
 #import "GWViewerWindow.h"
+#import "GWViewerPrefs.h"
 #import "History.h"
 #import "FSNFunctions.h"
 #import "Workspace.h"
@@ -244,6 +245,87 @@ static GWViewersManager *vwrsmanager = nil;
     }
 }
 
+/* Single creation path for both viewer kinds.  Owns, in one place: window
+ * alloc, the class-specific init, replace-in-place frame inheritance (applied
+ * BEFORE any display, so a replacement never flashes at the init-chosen
+ * position), the pending birth-animation handoff, ownership transfer to
+ * `viewers` (the sole owner), help-context registration, and activation.
+ * inheritedFrame = NSZeroRect means "no frame to inherit". */
+- (id)createViewerOfType:(unsigned)vtype
+                 forNode:(FSNode *)node
+         browserShowType:(GWViewType)btype
+         spatialShowType:(NSString *)sstype
+           showSelection:(BOOL)showsel
+                 withKey:(NSString *)key
+          inheritedFrame:(NSRect)inheritedFrame
+{
+  GWViewerWindow *win = [GWViewerWindow new];
+  id viewer;
+
+  [win setReleasedWhenClosed: NO];
+
+  if (vtype == SPATIAL)
+    {
+      viewer = [[GWSpatialViewer alloc] initForNode: node
+                                           inWindow: win
+                                           showType: sstype
+                                      showSelection: showsel];
+    }
+  else
+    {
+      viewer = [[GWViewer alloc] initForNode: node
+                                    inWindow: win
+                                    showType: btype
+                               showSelection: showsel
+                                     withKey: key];
+    }
+
+  if (viewer == nil)
+    {
+      /* Consume the pending animation rect even on failure, so it can't leak
+       * into the next window creation as a stale birth-animation source. */
+      hasPendingOpenAnimationRect = NO;
+      [win release];
+      return nil;
+    }
+
+  if (!NSIsEmptyRect(inheritedFrame))
+    [win setFrame: inheritedFrame display: NO];
+
+  if (hasPendingOpenAnimationRect)
+    {
+      NSRect endFrame = [win frame];
+      NSRect startFrame = pendingOpenAnimationRect;
+
+      hasPendingOpenAnimationRect = NO;
+
+      if (startFrame.size.width < 16) startFrame.size.width = 16;
+      if (startFrame.size.height < 16) startFrame.size.height = 16;
+
+      [win setFrame: endFrame display: NO];
+
+      /* X property the WindowManager reads to run the birth animation when
+       * -activate below maps the window. */
+      [self setWindowBirthRect: startFrame
+                    targetRect: endFrame
+                 animationType: 0   // GSWindowBirthAnimationOpen
+                     forWindow: win];
+    }
+
+  [viewers addObject: viewer];
+  [win release];
+  [viewer release];
+
+  /* bviewerHelp is browser-window help; spatial windows have none (yet). */
+  if (vtype != SPATIAL)
+    [helpManager setContextHelp: bviewerHelp
+                      forObject: [[viewer win] contentView]];
+
+  [viewer activate];
+
+  return viewer;
+}
+
 - (id)viewerForNode:(FSNode *)node
           showType:(GWViewType)stype
      showSelection:(BOOL)showsel
@@ -251,62 +333,22 @@ static GWViewersManager *vwrsmanager = nil;
 	   withKey:(NSString *)key
 {
   id viewer = [self viewerWithBaseNode: node];
-    
-  if ((viewer == nil) || (force))
+
+  if ((viewer == nil) || force)
     {
-      Class c = [GWViewer class];
-      GWViewerWindow *win = [GWViewerWindow new];
-      
-      [win setReleasedWhenClosed: NO];
-      
-      viewer = [[c alloc] initForNode: node 
-			     inWindow: win 
-			     showType: stype
-			showSelection: showsel
-			      withKey: key]; 
+      viewer = [self createViewerOfType: BROWSING
+                                forNode: node
+                        browserShowType: stype
+                        spatialShowType: nil
+                          showSelection: showsel
+                                withKey: key
+                         inheritedFrame: NSZeroRect];
+    }
+  else
+    {
+      [viewer activate];
+    }
 
-      if (hasPendingOpenAnimationRect)
-        {
-          NSRect endFrame = [win frame];
-          NSRect startFrame = pendingOpenAnimationRect;
-          hasPendingOpenAnimationRect = NO;
-
-          NSDebugLLog(@"gwspace", @"[Animation] Pending animation rect detected: origin={%.0f,%.0f} size={%.0fx%.0f}",
-                startFrame.origin.x, startFrame.origin.y, startFrame.size.width, startFrame.size.height);
-
-          if (startFrame.size.width < 16) startFrame.size.width = 16;
-          if (startFrame.size.height < 16) startFrame.size.height = 16;
-          
-          // Set the window to its final position
-          [win setFrame: endFrame display: NO];
-          
-          NSDebugLLog(@"gwspace", @"[Animation] About to call setWindowAnimationRect for window %@", win);
-          
-          // Set X window property with animation rectangle
-          // WindowManager will read this and perform appropriate animation
-          [self setWindowAnimationRect:startFrame forWindow:win];
-          
-          NSDebugLLog(@"gwspace", @"[Animation] Animation rect set, now showing window");
-          
-          // Now show the window - WindowManager will animate it
-          [win makeKeyAndOrderFront: nil];
-        }
-      else
-        {
-          NSDebugLLog(@"gwspace", @"[Animation] No pending animation rect for new window");
-        }
-      
-      [viewers addObject: viewer];
-      RELEASE (win);
-      RELEASE (viewer);
-    } 
-  
-  [viewer activate];
-  
-
-  [helpManager setContextHelp: bviewerHelp
-                    forObject: [[viewer win] contentView]];
-       
   return viewer;
 }
 
@@ -338,7 +380,7 @@ static GWViewersManager *vwrsmanager = nil;
 - (id)viewerWithBaseNode:(FSNode *)node
 {
   NSUInteger i;
-  
+
   for (i = 0; i < [viewers count]; i++)
     {
       id viewer = [viewers objectAtIndex: i];
@@ -348,7 +390,7 @@ static GWViewersManager *vwrsmanager = nil;
           return viewer;
         }
     }
-  
+
   return nil;
 }
 
@@ -433,14 +475,19 @@ static GWViewersManager *vwrsmanager = nil;
       id viewer = [vwrs objectAtIndex: i];
       NSString *vpath = [[viewer baseNode] path];
       NSArray *watchedNodes = [viewer watchedNodes];
-      NSString *prefsname = [NSString stringWithFormat: @"viewer_at_%@", vpath]; 
-      NSDictionary *vwrprefs = [defaults dictionaryForKey: prefsname];
-    
+      /* The node is gone: purge the prefs of both window kinds for the path
+       * (browser and spatial keys are separate since the key split). */
+      NSString *keys[2] = { GWViewerPrefsKey(vpath, NO, nil, NO),
+                            GWViewerPrefsKey(vpath, YES, nil, NO) };
+      NSUInteger k;
 
-      if (vwrprefs)
-        [defaults removeObjectForKey: prefsname];
+      for (k = 0; k < 2; k++)
+        {
+          if ([defaults dictionaryForKey: keys[k]])
+            [defaults removeObjectForKey: keys[k]];
 
-      [NSWindow removeFrameUsingName: prefsname]; 
+          [NSWindow removeFrameUsingName: keys[k]];
+        }
     
       for (j = 0; j < [watchedNodes count]; j++)
         [gworkspace removeWatcherForPath: [[watchedNodes objectAtIndex: j] path]];
@@ -1326,57 +1373,90 @@ static GWViewersManager *vwrsmanager = nil;
   NSDebugLLog(@"gwspace", @"vtype=%u, node=%@, showsel=%d, force=%d", vtype, [node path], showsel, force);
 
   id viewer = nil;
+  NSRect inheritedFrame = NSZeroRect;
 
-  // Close old viewer if requested
+  /* Replace semantics: hand the predecessor's identity over BEFORE the
+   * successor is created.  Removing it from `viewers` up front (kept alive by
+   * the retain) makes root-viewer detection, dedup and window placement see
+   * the array exactly as under a close-first ordering, while the actual close
+   * happens LAST so the object is never deallocated mid-close (`viewers` is
+   * its sole owner).  viewerWillClose: guards its own removal with
+   * containsObject:. */
   if (oldvwr) {
-    NSDebugLLog(@"gwspace", @"Closing old viewer");
-    [oldvwr deactivate];
+    NSWindow *ow;
+
+    RETAIN (oldvwr);
+    [viewers removeObject: oldvwr];
+
+    ow = [oldvwr win];
+    if (ow)
+      inheritedFrame = [ow frame];
   }
 
   if (vtype == SPATIAL) {
-    NSDebugLLog(@"gwspace", @"Creating spatial viewer");
-
-    // Check if we already have a spatial viewer for this node (unless forcing new)
-    if (!force) {
-      viewer = [self viewerOfType:SPATIAL withBaseNode:node];
-      if (viewer) {
-        NSDebugLLog(@"gwspace", @"Found existing spatial viewer, activating it");
-        [viewer activate];
-        return viewer;
-      }
-    }
-
-    // Create new spatial viewer
-    GWViewerWindow *win = [GWViewerWindow new];
-    [win setReleasedWhenClosed: NO];
-
-    viewer = [[GWSpatialViewer alloc] initForNode: node
-                                         inWindow: win
-                                         showType: stype
-                                    showSelection: showsel];
+    if (!force)
+      viewer = [self viewerOfType: SPATIAL withBaseNode: node];
 
     if (viewer) {
-      [viewers addObject: viewer];
-      [win release];
-      [viewer release]; // viewers array retains it
-
-      NSDebugLLog(@"gwspace", @"Successfully created spatial viewer for %@", [node path]);
+      NSDebugLLog(@"gwspace", @"Found existing spatial viewer, activating it");
       [viewer activate];
     } else {
-      NSDebugLLog(@"gwspace", @"Failed to create spatial viewer");
-      [win release];
+      viewer = [self createViewerOfType: SPATIAL
+                                forNode: node
+                        browserShowType: 0
+                        spatialShowType: stype
+                          showSelection: showsel
+                                withKey: nil
+                         inheritedFrame: inheritedFrame];
     }
-
   } else {
-    NSDebugLLog(@"gwspace", @"Creating browsing viewer");
-    // For browsing mode, use the existing method
-    viewer = [self viewerForNode:node showType:GWViewTypeBrowser showSelection:showsel forceNew:force withKey:nil];
+    /* showType:0 = "no explicit inner view"; choosing Browsing selects window
+     * chrome, so let the folder's remembered .DS_Store style win.  Callers
+     * that want a specific inner view still pass a concrete GWViewType. */
+    if (!force)
+      viewer = [self viewerOfType: BROWSING withBaseNode: node];
+
     if (viewer) {
-      NSDebugLLog(@"gwspace", @"Successfully created browsing viewer for %@", [node path]);
+      NSDebugLLog(@"gwspace", @"Found existing browsing viewer, activating it");
+      [viewer activate];
+    } else {
+      viewer = [self createViewerOfType: BROWSING
+                                forNode: node
+                        browserShowType: 0
+                        spatialShowType: nil
+                          showSelection: showsel
+                                withKey: nil
+                         inheritedFrame: inheritedFrame];
     }
   }
 
+  /* Close the predecessor only now that its replacement exists and is
+   * shown, so focus hands over cleanly. */
+  if (oldvwr) {
+    NSDebugLLog(@"gwspace", @"Closing old viewer");
+    [oldvwr deactivate];
+    RELEASE (oldvwr);
+  }
+
   return viewer;
+}
+
+/* First-class mode switch: replace a viewer window with one of the other
+ * kind for the same folder.  Owns the whole sequence — identity handoff,
+ * frame inheritance, create-then-close ordering — via
+ * viewerOfType:…closeOldViewer:forceNew: (that selector is kept as the
+ * workhorse because GWX11SpatialPath invokes it by runtime lookup). */
+- (id)replaceViewer:(id)oldvwr withViewerType:(unsigned)vtype
+{
+  if (oldvwr == nil)
+    return nil;
+
+  return [self viewerOfType: vtype
+                   showType: nil
+                    forNode: [oldvwr baseNode]
+              showSelection: YES
+             closeOldViewer: oldvwr
+                   forceNew: YES];
 }
 
 - (void)setBehaviour:(NSString *)behaviour forViewer:(id)aviewer
@@ -1387,8 +1467,22 @@ static GWViewersManager *vwrsmanager = nil;
 
 - (id)viewerOfType:(unsigned)type withBaseNode:(FSNode *)node
 {
-  // Return existing viewer if any
-  return [self viewerWithBaseNode:node];
+  /* Return an existing viewer for this node *of the requested kind* — a
+   * browser window must not satisfy a request for a spatial one (or vice
+   * versa), or a mode switch / WM navigation would activate the wrong kind. */
+  NSUInteger i;
+  BOOL wantSpatial = (type == SPATIAL);
+
+  for (i = 0; i < [viewers count]; i++)
+    {
+      id viewer = [viewers objectAtIndex: i];
+
+      if ([[viewer baseNode] isEqual: node]
+          && ([viewer isSpatial] == wantSpatial))
+        return viewer;
+    }
+
+  return nil;
 }
 
 - (id)viewerOfType:(unsigned)type showingNode:(FSNode *)node
@@ -1435,16 +1529,33 @@ static GWViewersManager *vwrsmanager = nil;
 
 #pragma mark - Window Animation Support
 
-- (void)setWindowAnimationRect:(NSRect)rect forWindow:(NSWindow *)window {
-  // Set X11 window property _GERSHWIN_WINDOW_OPEN_ANIMATION_RECT
-  // This will be read by WindowManager to perform the animation
-  // Format: 4 32-bit integers (x, y, width, height)
-  
+- (void)setWindowBirthRect:(NSRect)sourceRect
+               targetRect:(NSRect)targetRect
+            animationType:(int32_t)animationType
+                 forWindow:(NSWindow *)window {
+  // Set X11 window property _GSWORKSPACE_WINDOW_BIRTH
+  // This will be read by WindowManager to perform the spatial birth animation.
+  // Format: 9 x 32-bit integers (source x,y,w,h, target x,y,w,h, animationType)
+  // Per PRD.md section 8.
+
   if (!window) {
-    NSDebugLLog(@"gwspace", @"[Animation] NULL window passed to setWindowAnimationRect");
+    NSDebugLLog(@"gwspace", @"[Animation] NULL window passed to setWindowBirthRect");
     return;
   }
-  
+
+  // Check Reduce Motion preference.
+  // GSWindowAnimationEnabled only disables animation when explicitly set to NO.
+  id animEnabled = [[NSUserDefaults standardUserDefaults] objectForKey:@"GSWindowAnimationEnabled"];
+  if (animEnabled && [animEnabled boolValue] == NO) {
+    NSDebugLLog(@"gwspace", @"[Animation] Window animation disabled by GSWindowAnimationEnabled preference");
+    return;
+  }
+  // Also respect the macOS-style Reduce Motion key
+  if ([[NSUserDefaults standardUserDefaults] boolForKey:@"GSReduceMotion"] == YES) {
+    animationType = 1; // NoAnimation
+    NSDebugLLog(@"gwspace", @"[Animation] Reduce Motion active, using NoAnimation type");
+  }
+
 #ifdef __linux__
   GSDisplayServer *server = GSServerForWindow(window);
   if (!server) {
@@ -1454,13 +1565,13 @@ static GWViewersManager *vwrsmanager = nil;
     NSDebugLLog(@"gwspace", @"[Animation] No display server available for window animation");
     return;
   }
-  
+
   Display *display = (Display *)[server serverDevice];
   if (!display) {
     NSDebugLLog(@"gwspace", @"[Animation] No X11 display available for animation property");
     return;
   }
-  
+
   // windowDevice returns a Window ID (cast to void*), not a pointer to Window
   void *winptr = [server windowDevice:[window windowNumber]];
   if (!winptr) {
@@ -1472,7 +1583,7 @@ static GWViewersManager *vwrsmanager = nil;
     NSDebugLLog(@"gwspace", @"[Animation] Invalid X11 window id for animation property");
     return;
   }
-  
+
   // Convert NSRect to screen coordinates (X11 has origin at top-left)
   NSScreen *screen = [window screen];
   if (!screen) screen = [NSScreen mainScreen];
@@ -1481,44 +1592,59 @@ static GWViewersManager *vwrsmanager = nil;
     return;
   }
   NSRect screenFrame = [screen frame];
-  
-  // Compute absolute X11 screen coordinates (account for screen origin and flip Y)
-  int32_t x = (int32_t)(rect.origin.x + screenFrame.origin.x);
-  int32_t y = (int32_t)(screenFrame.origin.y + screenFrame.size.height - rect.origin.y - rect.size.height);
-  int32_t width = (int32_t)rect.size.width;
-  int32_t height = (int32_t)rect.size.height;
-  
-  int32_t data[4] = {x, y, width, height};
-  
+
+  // Compute absolute X11 screen coordinates for source rect
+  // (account for screen origin and flip Y from Cocoa bottom-left to X11 top-left)
+  int32_t srcX = (int32_t)(sourceRect.origin.x + screenFrame.origin.x);
+  int32_t srcY = (int32_t)(screenFrame.origin.y + screenFrame.size.height - sourceRect.origin.y - sourceRect.size.height);
+  int32_t srcW = (int32_t)sourceRect.size.width;
+  int32_t srcH = (int32_t)sourceRect.size.height;
+
+  // Compute absolute X11 screen coordinates for target rect
+  int32_t dstX = (int32_t)(targetRect.origin.x + screenFrame.origin.x);
+  int32_t dstY = (int32_t)(screenFrame.origin.y + screenFrame.size.height - targetRect.origin.y - targetRect.size.height);
+  int32_t dstW = (int32_t)targetRect.size.width;
+  int32_t dstH = (int32_t)targetRect.size.height;
+
+  // Build 9-int32 data array: source(x,y,w,h), target(x,y,w,h), animationType
+  int32_t data[9] = {srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, animationType};
+
   // Error checking: validate parameters before calling X11
   if (!display || xwindow == 0) {
-    NSDebugLLog(@"gwspace", @"[Animation] Invalid display or X window for setting animation rect");
+    NSDebugLLog(@"gwspace", @"[Animation] Invalid display or X window for setting birth rect");
     return;
   }
-  
+
   // Set error handler to catch X11 errors gracefully
   int (*oldHandler)(Display *, XErrorEvent *) = XSetErrorHandler(NULL);
-  
-  Atom animAtom = XInternAtom(display, "_GERSHWIN_WINDOW_OPEN_ANIMATION_RECT", False);
-  if (animAtom == None) {
-    NSDebugLLog(@"gwspace", @"[Animation] Failed to intern animation atom");
+
+  Atom birthAtom = XInternAtom(display, "_GSWORKSPACE_WINDOW_BIRTH", False);
+  if (birthAtom == None) {
+    NSDebugLLog(@"gwspace", @"[Animation] Failed to intern _GSWORKSPACE_WINDOW_BIRTH atom");
     XSetErrorHandler(oldHandler);
     return;
   }
-  
-  int status = XChangeProperty(display, xwindow, animAtom, XA_CARDINAL, 32,
-                               PropModeReplace, (unsigned char *)data, 4);
+
+  int status = XChangeProperty(display, xwindow, birthAtom, XA_CARDINAL, 32,
+                               PropModeReplace, (unsigned char *)data, 9);
   if (status == BadWindow) {
     NSDebugLLog(@"gwspace", @"[Animation] XChangeProperty failed: window %lu is invalid", (unsigned long)xwindow);
     XSetErrorHandler(oldHandler);
     return;
   }
-  
+
   XFlush(display);
+
+  // Sync to ensure the property is committed to the X server before
+  // makeKeyAndOrderFront: sends the MapRequest (which goes through a
+  // separate X connection via GNUstep's display server).  Without this
+  // sync the MapRequest can arrive at the X server before the property
+  // change is visible, and the WindowManager will not see the birth data.
+  XSync(display, False);
   XSetErrorHandler(oldHandler);
-  
-  NSDebugLLog(@"gwspace", @"[Animation] Set rect on window %lu (screen origin {%.0f,%.0f}): {%d, %d, %d, %d}", 
-        (unsigned long)xwindow, screenFrame.origin.x, screenFrame.origin.y, x, y, width, height);
+
+  NSDebugLLog(@"gwspace", @"[Animation] Set birth rect on window %lu: src={%d,%d,%d,%d} dst={%d,%d,%d,%d} type=%d",
+        (unsigned long)xwindow, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, animationType);
 #endif
 }
 

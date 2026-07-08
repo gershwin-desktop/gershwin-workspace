@@ -29,6 +29,8 @@
 
 #import "FSNBrowserCell.h"
 #import "FSNode.h"
+#import "FSNFunctions.h"
+#import "FSNMetadataProvider.h"
 
 #define DEFAULT_ISIZE (16)
 #define HLIGHT_H_FACT (0.8125)
@@ -47,8 +49,9 @@ static NSString *dots = @"...";
   RELEASE (extInfoType);
   RELEASE (infoCell); 
   RELEASE (icon); 
-  RELEASE (selectedicon); 
-  
+  RELEASE (selectedicon);
+  RELEASE (tagColor);
+
   [super dealloc];
 }
 
@@ -108,6 +111,16 @@ static NSString *dots = @"...";
     icnh = [icon size].height;
     DESTROY (selectedicon);
   }
+}
+
+- (void)setTagColor:(NSColor *)color
+{
+  ASSIGN (tagColor, color);
+}
+
+- (NSColor *)tagColor
+{
+  return tagColor;
 }
 
 - (NSString *)path
@@ -195,13 +208,14 @@ static NSString *dots = @"...";
   return title;
 }
 
-- (void)drawInteriorWithFrame:(NSRect)cellFrame 
+- (void)drawInteriorWithFrame:(NSRect)cellFrame
                        inView:(NSView *)controlView
 {
 #define MARGIN (2.0)
 #define LEAF_MARGIN (5.0)
 
   NSWindow *cvwin = [controlView window];
+  NSRect icon_rect = NSZeroRect;
 
   if (cvwin)
     {
@@ -286,8 +300,6 @@ static NSString *dots = @"...";
         }
       else
         {
-          NSRect icon_rect;
-
           if (([self isHighlighted] || [self state]) && (nameEdited == NO))
             {
 	      [[self highlightColorInView: controlView] set];
@@ -389,6 +401,21 @@ static NSString *dots = @"...";
           NSDottedFrameRect(cellFrame);
         }
 
+      /* Draw tag color dot (Finder label) - drawn last so it's on top */
+      if (tagColor && !NSIsEmptyRect(icon_rect))
+        {
+          CGFloat dotSize = 8.0;
+          CGFloat dotMarginX = 1.0;
+          CGFloat dotMarginY = 12.0;
+          NSRect dotRect = NSMakeRect(
+            icon_rect.origin.x + icon_rect.size.width - dotSize - dotMarginX,
+            icon_rect.origin.y + dotMarginY,
+            dotSize, dotSize);
+          [controlView lockFocus];
+          FSNDrawLabelDot(dotRect, tagColor);
+          [controlView unlockFocus];
+        }
+
       [self setStringValue: uncutTitle];
     }
 }
@@ -404,13 +431,17 @@ static NSString *dots = @"...";
   ASSIGN (node, anode);
 
   [self setIcon];
-  
+
+  /* Load Finder label color from the metadata provider */
+  [self setTagColor: [[[FSNodeRep sharedInstance] metadataProvider]
+                       labelColorForPath: [anode path]]];
+
   if (extInfoType) {
     [self setExtendedShowType: extInfoType];
   } else {
-    [self setNodeInfoShowType: showType];  
+    [self setNodeInfoShowType: showType];
   }
-  
+
   [self setLocked: [node isLocked]];
 }
 

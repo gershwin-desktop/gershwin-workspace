@@ -33,6 +33,8 @@
 @class NSTextField;
 @class NSButton;
 
+typedef BOOL (^GWDialogValidator)(NSString *editText);
+
 @interface GWDialogView : NSView
 {
   BOOL useSwitch;
@@ -50,9 +52,10 @@
   NSButton *cancelButt, *okButt;
   BOOL useSwitch;
   NSModalResponse result;
+  GWDialogValidator validator;
 }
 
-- (id)initWithTitle:(NSString *)title 
+- (id)initWithTitle:(NSString *)title
            editText:(NSString *)eText
         switchTitle:(NSString *)swTitle;
 
@@ -61,6 +64,10 @@
 - (NSString *)getEditFieldText;
 
 - (NSControlStateValue)switchButtonState;
+
+- (void)setValidator:(GWDialogValidator)aValidator;
+
+- (void)shakeWindow;
 
 - (void)buttonAction:(id)sender;
 

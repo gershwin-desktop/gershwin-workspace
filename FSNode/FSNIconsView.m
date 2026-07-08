@@ -34,12 +34,24 @@
 #import "FSNIconsView.h"
 #import "FSNIcon.h"
 #import "FSNFunctions.h"
+#import "FSNMetadataProvider.h"
+#import "FSNIconPositionStore.h"
+#import "FSNPlacementEnumerator.h"
 
 #define DEF_ICN_SIZE 48
 #define DEF_TEXT_SIZE 12
 #define DEF_ICN_POS NSImageAbove
 
-#define X_MARGIN (10)
+/* Left margin from view edge.  This is distinct from COLUMN_GAP_X below
+ * because DS_Store positions use a ~26px left margin but 32px column gap.
+ * Using the same value for both would cause AUTO-mode and DS_Store icons
+ * in the rightmost column to be at different x positions (the 6px offset
+ * bug).  Keep them separate and never conflate them. */
+#define X_MARGIN (26)
+/* Horizontal gap BETWEEN grid columns (not the left margin).
+ * Matches the 128px column spacing (96px icon + 32px gap) used by DS_Store.
+ * Must be separate from X_MARGIN — see above. */
+#define COLUMN_GAP_X (32)
 #define Y_MARGIN (12)
 
 #define EDIT_MARGIN (4)
@@ -82,6 +94,13 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)dealloc
 {
+  if (_observedClipView)
+    {
+      [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                      name: NSViewFrameDidChangeNotification
+                                                    object: _observedClipView];
+      _observedClipView = nil;
+    }
   RELEASE (node);
   RELEASE (extInfoType);
   RELEASE (icons);
@@ -164,7 +183,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 	    }
 	}
 
-      icons = [NSMutableArray new];
 
       nameEditor = [FSNIconNameEditor new];
       [nameEditor setDelegate: self];
@@ -177,13 +195,13 @@ static void GWHighlightFrameRect(NSRect aRect)
       [nameEditor setSelectable: NO];
       editIcon = nil;
 
+      icons = [NSMutableArray new];
       isDragTarget = NO;
       lastKeyPressedTime = 0.0;
       charBuffer = nil;
       selectionMask = NSSingleSelectionMask;
       
       // DS_Store free positioning support
-      freePositioningEnabled = NO;
       customIconPositions = nil;
       dsStoreIconHeight = 64.0; // Default icon height for coordinate conversion
 
@@ -194,6 +212,10 @@ static void GWHighlightFrameRect(NSRect aRect)
 					      @"GWLSFolderPboardType",
 					      @"GWRemoteFilenamesPboardType",
 					      nil]];
+
+      /* Enable resize notification so resizeWithOldSuperviewSize:
+       * (which calls tile) is actually invoked. */
+      [self setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
     }
 
   return self;
@@ -259,239 +281,382 @@ static void GWHighlightFrameRect(NSRect aRect)
   // Add extra height matching FSNIcon's lblmargin/2 + 2 padding
   gridSize.height += lblmargin / 2 + 2;
     
-  // Apply DS_Store grid spacing if set (adds extra space between icons)
-  if (dsStoreGridSpacing > 0)
-    {
-      gridSize.width += dsStoreGridSpacing;
-      gridSize.height += dsStoreGridSpacing;
-    }
 }
 
 - (void)tile
 {
   CREATE_AUTORELEASE_POOL (pool);
-  NSRect svr = [[self superview] frame];
-  NSRect r = [self frame];
-  NSRect maxr = [[NSScreen mainScreen] frame];
-  float px = 0 - gridSize.width;
-  float py = gridSize.height + Y_MARGIN;
-  NSSize sz;
-  NSUInteger poscount = 0;
   NSUInteger count = [icons count];
-  NSRect *irects = NSZoneMalloc (NSDefaultMallocZone(), sizeof(NSRect) * count);
-  NSCachedImageRep *rep = nil;
-  NSArray *selection;
   NSUInteger i;
-  
-  // Track maximum X and Y positions for view size calculation in free positioning mode
-  float maxX = svr.size.width;
-  float maxY = svr.size.height;
+  /* Superview frame — used to fill the parent on the desktop (no scroll view). */
+  NSRect svr = [[self superview] frame];
 
-  colItemsCount = 0;
+  [self calculateGridSize];
 
-  // Check if we're using DS_Store free positioning mode
-  if (freePositioningEnabled && customIconPositions && [customIconPositions count] > 0)
+  /* Cache grid cell dimensions on the first call so they stay consistent
+   * across tile calls and Clean Up.  calculateGridSize can return different
+   * widths (label-width dependent), which would shift the AUTO grid
+   * mid-layout; caching once avoids that.  Invalidated by setters that
+   * change icon properties (icon/label size, etc.). */
+  if (!_gridCached)
     {
-      NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-      NSDebugLLog(@"gwspace", @"║           FREE POSITIONING MODE (DS_Store)                       ║");
-      NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-      NSDebugLLog(@"gwspace", @"║ Icons to position: %lu", (unsigned long)count);
-      NSDebugLLog(@"gwspace", @"║ Custom positions available: %lu", (unsigned long)[customIconPositions count]);
-      NSDebugLLog(@"gwspace", @"║ View dimensions: %.0fx%.0f", svr.size.width, svr.size.height);
-      
-      // Free positioning: use DS_Store coordinates, fall back to grid for unknown icons
-      float gridX = X_MARGIN;
-      float gridY = gridSize.height + Y_MARGIN;
-      NSUInteger gridCount = 0;
-      
-      // Reset max tracking to find actual required size
-      maxX = 0;
-      maxY = 0;
-      
-      for (i = 0; i < count; i++)
-        {
-          FSNIcon *icon = [icons objectAtIndex: i];
-          NSString *filename = [[icon node] name];
-          NSValue *posValue = [customIconPositions objectForKey:filename];
-          
-          if (posValue)
-            {
-              // Use custom position from DS_Store (already converted to GNUstep coords by DSStore.m)
-              NSPoint iconCenterPos = [posValue pointValue];
-              
-              // iconCenterPos is the icon center in GNUstep coordinates (bottom-left origin)
-              // We need to calculate the grid cell position such that when the icon is
-              // drawn centered within its grid cell, it ends up at iconCenterPos
-              
-              // Calculate grid cell bottom-left corner from icon center
-              float gnustepX = iconCenterPos.x - (gridSize.width / 2);
-              float gnustepY = iconCenterPos.y - (gridSize.height / 2);
-              
-              irects[i] = NSMakeRect(gnustepX, gnustepY, gridSize.width, gridSize.height);
-              
-              NSDebugLLog(@"gwspace", @"║ ✓ '%@': Icon center(%.0f,%.0f) → Grid cell(%.0f,%.0f)", 
-                    filename, iconCenterPos.x, iconCenterPos.y, gnustepX, gnustepY);
-              
-              // Track bounds for view sizing
-              float rightEdge = gnustepX + gridSize.width;
-              float topEdge = gnustepY + gridSize.height;
-              if (rightEdge > maxX) maxX = rightEdge;
-              if (topEdge > maxY) maxY = topEdge;
-            }
-          else
-            {
-              // No custom position - use grid layout for this icon
-              gridX += (gridSize.width + X_MARGIN);
-              
-              if (gridX >= (svr.size.width - gridSize.width))
-                {
-                  gridX = X_MARGIN;
-                  gridY += gridSize.height;
-                }
-              
-              irects[i] = NSMakeRect(gridX, gridY, gridSize.width, gridSize.height);
-              
-              // Track bounds for grid-positioned icons too
-              float rightEdge = gridX + gridSize.width;
-              float topEdge = gridY + gridSize.height;
-              if (rightEdge > maxX) maxX = rightEdge;
-              if (topEdge > maxY) maxY = topEdge;
-              
-              gridCount++;
-              
-              NSDebugLLog(@"gwspace", @"║ ○ '%@': Grid position (no DS_Store data)", filename);
-            }
-        }
-      
-      // Add margins to final size
-      maxX += X_MARGIN;
-      // Note: In free positioning mode, icons have exact coordinates from DS_Store
-      // Don't add vertical margin - it's only needed for grid-based layouts
-      // maxY += Y_MARGIN;
-      
-      // Use calculated dimensions (don't use py/gridY for free positioning)
-      py = maxY;
-      
-      NSDebugLLog(@"gwspace", @"║ Grid-positioned icons: %lu", (unsigned long)gridCount);
-      NSDebugLLog(@"gwspace", @"║ Icon bounds - maxX: %.0f, maxY: %.0f", maxX - X_MARGIN, py);
-      NSDebugLLog(@"gwspace", @"║ Final view size: %.0fx%.0f (exact fit for positioned icons)", maxX, py);
-      NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
-    }
-  else
-    {
-      // Standard grid-based layout
-      for (i = 0; i < count; i++)
-        {
-          px += (gridSize.width + X_MARGIN);
-
-          if (px >= (svr.size.width - gridSize.width))
-            {
-              px = X_MARGIN;
-              py += gridSize.height;
-
-              if (colItemsCount < poscount)
-                {
-                  colItemsCount = poscount;
-                }
-              poscount = 0;
-            }
-
-          poscount++;
-
-          irects[i] = NSMakeRect(px, py, gridSize.width, gridSize.height);
-        }
+      _cachedCellSize = gridSize;
+      _cachedGapX = (CGFloat)COLUMN_GAP_X;
+      _gridCached = YES;
     }
 
-  // For free positioning mode, py already includes margins
-  // For grid mode, add margin and ensure minimum size
-  if (!(freePositioningEnabled && customIconPositions && [customIconPositions count] > 0))
-    {
-      py += Y_MARGIN;
-      py = (py < svr.size.height) ? svr.size.height : py;
-    }
+  if (!customIconPositions)
+    customIconPositions = [[NSMutableDictionary alloc] init];
 
-  // Set view frame - use calculated maxX for free positioning, svr.size.width for grid
-  float viewWidth = (freePositioningEnabled && customIconPositions && [customIconPositions count] > 0) 
-                    ? maxX : svr.size.width;
-  
-  // In free positioning mode, always use origin (0, 0) for the view
-  // The scroll view handles positioning within the scroll area
-  if (freePositioningEnabled && customIconPositions && [customIconPositions count] > 0)
-    {
-      // View height is set to fit all icons
-      // Scroll view's autohidesScrollers will handle showing/hiding scrollbars appropriately
-      SETRECT (self, 0, 0, viewWidth, py);
-    }
-  else
-    {
-      SETRECT (self, r.origin.x, r.origin.y, viewWidth, py);
-    }
+  /* Layout policy: set every icon's frame and fill _contentExtent. */
+  [self layoutIcons];
+
+  /* Size the document view from the reported content extent. */
+  {
+    CGFloat visibleWidth = [self windowContentWidthForLayout];
+    CGFloat maxX = _contentExtent.width + X_MARGIN;
+    /* Snap trivial overflow so a few pixels of grid rounding don't add a
+     * horizontal scrollbar; keep the natural width for content genuinely
+     * outside the visible area (off-screen manual positions). */
+    if (maxX - X_MARGIN <= visibleWidth)
+      maxX = visibleWidth;
+
+    CGFloat fh = _contentExtent.height + Y_MARGIN;
+    /* Inside a scroll view the document owns its height (>= visible so icons
+     * start at the top and scrollbars are proportional); on the desktop the
+     * view must fill the parent. */
+    if ([[self superview] isKindOfClass: [NSClipView class]] == NO)
+      {
+        if (fh < svr.size.height)
+          fh = svr.size.height;
+      }
+    else
+      {
+        CGFloat visibleHeight = [self visibleContentHeightForLayout];
+        if (fh < visibleHeight)
+          fh = visibleHeight;
+      }
+    SETRECT (self, 0, 0, maxX, fh);
+  }
+
+  /* Tile each icon's internal layout (highlight, label, icon image). */
+  for (i = 0; i < count; i++)
+    [[icons objectAtIndex: i] tile];
+
+  {
+    NSArray *selection = [self selectedReps];
+    if ([selection count])
+      [self scrollIconToVisible: [selection objectAtIndex: 0]];
+    else
+      {
+        /* No selection — show the first row regardless of prior scroll pos.
+         * The visual top is y=0 in a flipped view but the document's max y
+         * in the bottom-left model (the scroll view clamps the point). */
+        CGFloat topY = [self isFlipped] ? 0 : [self bounds].size.height;
+        [self scrollPoint: NSMakePoint(0, topY)];
+      }
+  }
+
+  if ([[self subviews] containsObject: nameEditor])
+    [self updateNameEditor];
+
+  RELEASE (pool);
+}
+
+/* Layout policy for every view: honored icons (desktop, spatial) are placed
+ * at their saved iloc mapped through -viewCenterForIlocCenter:; unhonored
+ * icons (browser) and any unplaced icon flow into the next free grid cell and
+ * reflow to the width.  Subclasses pick their behavior via -isFlipped,
+ * -honorsSavedPositions, the iloc<->view mapping and -gridOriginForLayout —
+ * none override this method.  Sets each icon's frame and reports the content
+ * extent in _contentExtent. */
+- (void)layoutIcons
+{
+  NSUInteger count = [icons count];
+  NSUInteger i;
+  NSRect *irects = NULL;
+
+  /* Use the current window content width (always up to date after resize)
+   * rather than the superview frame which can lag. */
+  CGFloat visibleWidth = [self windowContentWidthForLayout];
+
+  /* Browser icon views do not honor saved positions — they always auto-grid
+   * and reflow to the current width.  Position-honoring views (desktop, and
+   * the spatial view via its own override) keep their icons put. */
+  BOOL honor = [self honorsSavedPositions];
+
+  float maxX = visibleWidth;
+  float maxY = 0;
+
+  /* Direction-aware grid enumerator for AUTO-mode (unplaced) icons.
+   * Lazily initialized when the first auto-placed icon is encountered.
+   * Uses gridOriginForLayout (desktop subclass accounts for Dock/menu)
+   * and respects _placementDirection so new icons appear at the correct
+   * end of the grid (e.g., top-right for desktop's TopToBottomRightToLeft). */
+  FSNPlacementEnumerator *autoEnumerator = nil;
+  NSMutableSet *occupiedCells = nil;
+  NSPoint autoGOrigin = NSZeroPoint;
+  CGFloat autoCellW = 0, autoCellH = 0, autoGapX = 0;
+  BOOL autoInitDone = NO;
+  /* Fallback row-flood counters (used only when enumerator is exhausted). */
+  float gridX = X_MARGIN;
+  float gridY = Y_MARGIN;
+
+  irects = NSZoneMalloc (NSDefaultMallocZone(), sizeof(NSRect) * count);
+
+  /* A scroll-hosted view sizes its document to fit any saved position, so
+   * every honored position is reachable there.  A non-scrollable view (the
+   * desktop) cannot scroll, so a saved position that maps off-screen — e.g.
+   * one written by a windowed spatial viewer of the same folder, which uses
+   * a different coordinate reference — would hide the icon.  On such views we
+   * reject off-screen manual positions and let the icon fall back to AUTO
+   * placement, guaranteeing it stays visible. */
+  BOOL scrollHosted = ([self enclosingScrollView] != nil);
+  NSRect usableRect = [self usableContentRect];
 
   for (i = 0; i < count; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      
-      // For free positioning mode, coordinates are already in GNUstep space
-      // For grid mode, we need to flip Y
-      if (!(freePositioningEnabled && customIconPositions && [customIconPositions count] > 0))
+      NSString *filename = [[icon node] name];
+      FSNIconItemData *data = [icon placementData];
+      NSValue *posValue = honor ? [customIconPositions objectForKey: filename] : nil;
+      NSPoint cellOrigin = NSZeroPoint;
+      BOOL placed = NO;
+
+      if (posValue)
         {
-          irects[i].origin.y = py - irects[i].origin.y;
+          /* customIconPositions stores iloc-style (DS_Store top-down)
+           * coordinates; map into this view's coordinates through the
+           * overridable conversion (identity in a flipped view).
+           * Uses _cachedCellSize so icons stay at their assigned grid
+           * position even when gridSize.width varies with label width. */
+          NSPoint center = [self viewCenterForIlocCenter: [posValue pointValue]];
+          cellOrigin.x = center.x - (_cachedCellSize.width / 2);
+          cellOrigin.y = center.y - (_cachedCellSize.height / 2);
+          placed = YES;
         }
-      
-      irects[i] = NSIntegralRect(irects[i]);
+      else if (honor && data.placementMode == FSNIconPlacementModeManual
+               && data.ilocPosition.x >= 0)
+        {
+          /* The stored iloc (the only stored representation) maps through
+           * the overridable conversion at layout time, so positions are
+           * correct regardless of when showContentsOfNode ran.  A MANUAL
+           * icon without iloc falls through to AUTO placement. */
+          NSPoint center = [self viewCenterForIlocCenter: data.ilocPosition];
+          cellOrigin.x = center.x - (_cachedCellSize.width / 2);
+          cellOrigin.y = center.y - (_cachedCellSize.height / 2);
+          placed = YES;
+        }
+
+      /* Legacy/corrupt-data rescue: with a single canonical iloc<->view
+       * transform, an honored position should map on-screen.  If a stored
+       * position still lands outside a non-scrollable view's usable area
+       * (e.g. data written by an older build with a different convention),
+       * discard it and fall through to AUTO so the icon can never be hidden.
+       * Reset the placement state so nothing downstream re-honors the bad
+       * value. */
+      if (placed && !scrollHosted)
+        {
+          NSPoint c = NSMakePoint(cellOrigin.x + _cachedCellSize.width / 2,
+                                  cellOrigin.y + _cachedCellSize.height / 2);
+          if (!NSPointInRect(c, usableRect))
+            {
+              placed = NO;
+              data.placementMode = FSNIconPlacementModeAuto;
+              data.ilocPosition = NSMakePoint(-1, -1);
+              [customIconPositions removeObjectForKey: filename];
+            }
+        }
+
+      if (!placed)
+        {
+          /* No usable saved position (none stored, or one rejected as
+           * off-screen above): use the direction-aware grid enumerator to
+           * place the icon in the next free grid cell.  Respects
+           * _placementDirection (LeftToRightTopToBottom for file-viewer
+           * panels, TopToBottomRightToLeft for the desktop). */
+          if (!autoInitDone)
+            {
+              autoCellW = _cachedCellSize.width;
+              autoCellH = _cachedCellSize.height;
+              autoGapX = _cachedGapX;
+              autoGOrigin = [self gridOriginForLayout];
+              CGFloat gWidth = [self windowContentWidthForLayout];
+              CGFloat availableWidth = gWidth - autoGOrigin.x;
+              if (availableWidth < autoCellW + autoGapX)
+                availableWidth = gWidth;
+              NSUInteger nCols = (NSUInteger)((availableWidth + autoGapX) / (autoCellW + autoGapX));
+              if (nCols < 1) nCols = 1;
+              NSUInteger nRows = [self isFlipped]
+                ? 1 : (NSUInteger)(autoGOrigin.y / autoCellH);
+              if (nRows < 1) nRows = 1;
+              {
+                NSUInteger neededRows = ([icons count] + nCols - 1) / nCols;
+                if (nRows < neededRows) nRows = neededRows;
+              }
+
+              /* Pure reflow (no honored positions) owns its document height:
+               * anchor the grid to the height the rows actually need, so in
+               * the bottom-left model rows past the visible area don't run
+               * into negative y (outside the document, unreachable by
+               * scrolling). */
+              if (!honor && ![self isFlipped])
+                {
+                  CGFloat neededH = (CGFloat)nRows * autoCellH + (CGFloat)Y_MARGIN;
+                  if (neededH > autoGOrigin.y)
+                    autoGOrigin.y = neededH;
+                }
+
+              switch (_placementDirection)
+                {
+                case FSNPlacementDirectionTopToBottomRightToLeft:
+                  autoEnumerator = [[FSNTopToBottomRightToLeftEnumerator alloc]
+                                     initWithColumns: nCols rows: nRows];
+                  break;
+                default:
+                  autoEnumerator = [[FSNLeftToRightTopToBottomEnumerator alloc]
+                                     initWithColumns: nCols rows: nRows];
+                  break;
+                }
+
+              /* Pre-compute grid cells occupied by icons that already have
+               * saved positions so the enumerator skips them.  Only for
+               * position-honoring views: in a pure-reflow view no saved
+               * position is honored, so no cell is occupied by one (stale
+               * MANUAL flags or customIconPositions entries must not punch
+               * phantom holes in the reflow grid). */
+              occupiedCells = [[NSMutableSet alloc] init];
+              if (honor)
+                {
+              NSUInteger j;
+              for (j = 0; j < count; j++)
+                {
+                  FSNIcon *otherIcon = [icons objectAtIndex: j];
+                  NSString *otherName = [[otherIcon node] name];
+                  FSNIconItemData *odata = [otherIcon placementData];
+                  NSPoint otherCenter = NSZeroPoint;
+                  BOOL hasPos = NO;
+
+                  NSValue *oval = [customIconPositions objectForKey: otherName];
+                  if (oval)
+                    {
+                      otherCenter = [self viewCenterForIlocCenter: [oval pointValue]];
+                      hasPos = YES;
+                    }
+                  else if (odata.placementMode == FSNIconPlacementModeManual
+                           && odata.ilocPosition.x >= 0)
+                    {
+                      otherCenter = [self viewCenterForIlocCenter: odata.ilocPosition];
+                      hasPos = YES;
+                    }
+
+                  if (hasPos)
+                    {
+                      FSNGridCell ocell = [self gridCellForCenter: otherCenter
+                                                         cellSize: NSMakeSize(autoCellW, autoCellH)
+                                                             gapX: autoGapX
+                                                           origin: autoGOrigin];
+                      if (!FSNGridCellsEqual(ocell, FSNGridCellNone)
+                          && ocell.col < nCols && ocell.row < nRows)
+                        {
+                          [occupiedCells addObject:
+                            [NSString stringWithFormat: @"%lu:%lu",
+                                       (unsigned long)ocell.col,
+                                       (unsigned long)ocell.row]];
+                        }
+                    }
+                }
+                }
+              autoInitDone = YES;
+            }
+
+          /* Advance the direction-aware enumerator to the next free
+           * grid cell (skipping cells occupied by existing icons). */
+          {
+            FSNGridCell cell;
+            BOOL found = NO;
+            while ([autoEnumerator nextCell: &cell])
+              {
+                NSString *cellKey = [NSString stringWithFormat: @"%lu:%lu",
+                                              (unsigned long)cell.col,
+                                              (unsigned long)cell.row];
+                if ([occupiedCells containsObject: cellKey])
+                  continue;
+
+                /* Mark this cell as taken for subsequent AUTO-mode icons. */
+                [occupiedCells addObject: cellKey];
+
+                NSPoint center = [self centerForGridCell: cell
+                                                cellSize: NSMakeSize(autoCellW, autoCellH)
+                                                    gapX: autoGapX
+                                                  origin: autoGOrigin];
+                cellOrigin.x = center.x - (_cachedCellSize.width / 2);
+                cellOrigin.y = center.y - (_cachedCellSize.height / 2);
+
+                /* Record the assigned position only for position-honoring
+                 * views; browser views must recompute the grid each layout
+                 * (reflow) rather than stick to the first assignment. */
+                if (honor)
+                  {
+                    [customIconPositions setObject:
+                      [NSValue valueWithPoint:
+                        [self ilocCenterForViewCenter: center]]
+                      forKey: filename];
+                  }
+                found = YES;
+                break;
+              }
+
+            if (!found)
+              {
+                /* Grid is full or no cells available — fallback to the
+                 * simple row flood so the icon is still placed somewhere
+                 * visible, even if cells wrap around. */
+                cellOrigin.x = gridX;
+                cellOrigin.y = gridY;
+                gridX += (gridSize.width + COLUMN_GAP_X);
+                if (gridX > (visibleWidth - gridSize.width))
+                  {
+                    gridX = X_MARGIN;
+                    gridY += gridSize.height;
+                  }
+                NSPoint gsCenter = NSMakePoint(
+                  cellOrigin.x + _cachedCellSize.width / 2.0,
+                  cellOrigin.y + _cachedCellSize.height / 2.0);
+                if (honor)
+                  {
+                    [customIconPositions setObject:
+                      [NSValue valueWithPoint:
+                        [self ilocCenterForViewCenter: gsCenter]]
+                      forKey: filename];
+                  }
+              }
+          }
+        }
+
+      irects[i] = NSMakeRect(cellOrigin.x, cellOrigin.y,
+                              _cachedCellSize.width, _cachedCellSize.height);
 
       if (NSEqualRects(irects[i], [icon frame]) == NO)
-	{
-	  [icon setFrame: irects[i]];
-	}
+        {
+          [icon setFrame: irects[i]];
+        }
 
-      [icon setGridIndex: i];
+      float rightEdge = cellOrigin.x + _cachedCellSize.width;
+      float topEdge  = cellOrigin.y + _cachedCellSize.height;
+      if (rightEdge > maxX) maxX = rightEdge;
+      if (topEdge  > maxY) maxY = topEdge;
     }
 
-  DESTROY (horizontalImage);
-  sz = NSMakeSize(svr.size.width, 2);
-  CHECK_SIZE (sz);
-  horizontalImage = [[NSImage allocWithZone: (NSZone *)[(NSObject *)self zone]]
-                               initWithSize: sz];
+  [autoEnumerator release];
+  [occupiedCells release];
 
-  rep = [[NSCachedImageRep allocWithZone: (NSZone *)[(NSObject *)self zone]]
-                            initWithSize: sz
-                                   depth: [NSWindow defaultDepthLimit]
-                                separate: YES
-                                   alpha: YES];
+  if (irects)
+    NSZoneFree (NSDefaultMallocZone(), irects);
 
-  [horizontalImage addRepresentation: rep];
-  RELEASE (rep);
-
-  DESTROY (verticalImage);
-  sz = NSMakeSize(2, py);
-  CHECK_SIZE (sz);
-  verticalImage = [[NSImage allocWithZone: (NSZone *)[(NSObject *)self zone]]
-                             initWithSize: sz];
-
-  rep = [[NSCachedImageRep allocWithZone: (NSZone *)[(NSObject *)self zone]]
-                            initWithSize: sz
-                                   depth: [NSWindow defaultDepthLimit]
-                                separate: YES
-                                   alpha: YES];
-
-  [verticalImage addRepresentation: rep];
-  RELEASE (rep);
-
-  NSZoneFree (NSDefaultMallocZone(), irects);
-
-  RELEASE (pool);
-
-  selection = [self selectedReps];
-  if ([selection count])
-    {
-      [self scrollIconToVisible: [selection objectAtIndex: 0]];
-    }
-
-  if ([[self subviews] containsObject: nameEditor])
-    {
-      [self updateNameEditor];
-    }
+  /* Report the content extent (raw max right/top edge) to -tile, which
+   * adds margins, clamps, and sizes the document view. */
+  _contentExtent = NSMakeSize(maxX, maxY);
 }
 
 - (void)scrollIconToVisible:(FSNIcon *)icon
@@ -537,12 +702,15 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       if ([icon isSelected])
 	{
-	  pos = i - colItemsCount;
+	  NSSize sz = [self bounds].size;
+	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + COLUMN_GAP_X) / (gridSize.width + COLUMN_GAP_X)) : 1;
+	  if (i >= cols)
+	    pos = i - cols;
 	  break;
 	}
     }
 
-  if (pos >= 0)
+  if (pos >= 0 && pos < [icons count])
     {
       icon = [icons objectAtIndex: pos];
       [icon select];
@@ -562,7 +730,10 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       if ([icon isSelected])
 	{
-	  pos = i + colItemsCount;
+	  NSSize sz = [self bounds].size;
+	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + COLUMN_GAP_X) / (gridSize.width + COLUMN_GAP_X)) : 1;
+	  if (i + cols < [icons count])
+	    pos = i + cols;
 	  break;
 	}
     }
@@ -620,27 +791,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 #pragma mark - DS_Store Free Positioning Support
 
-- (void)setFreePositioningEnabled:(BOOL)enabled
-{
-  if (freePositioningEnabled != enabled)
-    {
-      freePositioningEnabled = enabled;
-      NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-      NSDebugLLog(@"gwspace", @"║ FREE POSITIONING MODE: %@", enabled ? @"ENABLED" : @"DISABLED");
-      NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
-      
-      if (enabled && customIconPositions && [customIconPositions count] > 0)
-        {
-          [self tile];
-        }
-    }
-}
-
-- (BOOL)freePositioningEnabled
-{
-  return freePositioningEnabled;
-}
-
 - (void)setCustomIconPositions:(NSDictionary *)positions
 {
   if (positions != customIconPositions)
@@ -669,19 +819,161 @@ static void GWHighlightFrameRect(NSRect aRect)
   return customIconPositions;
 }
 
-- (void)applyFreePositioning
-{
-  if (freePositioningEnabled && customIconPositions && [customIconPositions count] > 0)
-    {
-      NSDebugLLog(@"gwspace", @"Applying free positioning - calling tile");
-      [self tile];
-      [self setNeedsDisplay:YES];
-    }
-}
-
 - (NSArray *)icons
 {
   return icons;
+}
+
+- (void)persistStoredPositionsForIcons:(NSArray *)iconList
+{
+  /* Persist the auto-assigned positions of icons just added to an already-open
+   * window, so a newly created/dropped file keeps its spot on reopen.  Only
+   * position-honoring views (spatial, desktop) persist; the browser reflows
+   * and stores nothing.  The iloc was recorded into customIconPositions during
+   * the preceding tile's layout; group by folder and hand off to the injected
+   * store (same write home as drags).  A no-op when nothing was placed, so the
+   * common bulk case (folder open) writes nothing here. */
+  if (![self honorsSavedPositions] || [iconList count] == 0)
+    return;
+
+  NSMutableDictionary *folders = [NSMutableDictionary dictionary];
+  NSUInteger i;
+  for (i = 0; i < [iconList count]; i++)
+    {
+      FSNIcon *icon = [iconList objectAtIndex: i];
+      FSNode *nd = [icon node];
+      if (!nd) continue;
+
+      NSString *folder = [[nd path] stringByDeletingLastPathComponent];
+      NSString *name = [nd name];
+      if (!folder || !name) continue;
+
+      NSValue *v = [customIconPositions objectForKey: name];
+      if (!v) continue;   /* not laid out yet / unhonored — skip */
+      NSPoint iloc = [v pointValue];
+
+      NSMutableArray *batch = [folders objectForKey: folder];
+      if (!batch)
+        {
+          batch = [NSMutableArray array];
+          [folders setObject: batch forKey: folder];
+        }
+      [batch addObject: @[name, [NSNumber numberWithInt: (int)iloc.x],
+                                [NSNumber numberWithInt: (int)iloc.y]]];
+    }
+
+  if ([folders count])
+    [[fsnodeRep iconPositionStore] saveIconPositionsByFolder: folders];
+}
+
+- (void)repositionIcon:(FSNIcon *)icon toCenterPoint:(NSPoint)point
+{
+  /* Thin wrapper — all real work is in batchRepositionIcons:toCenterPoints:. */
+  if (!icon) return;
+  [self batchRepositionIcons: [NSArray arrayWithObject: icon]
+              toCenterPoints: [NSArray arrayWithObject: [NSValue valueWithPoint: point]]];
+}
+
+/* Batch reposition — moves many icons at once, tiles once, persists once.
+ * Each entry in `icons` is an FSNIcon *, each entry in `points` is an
+ * NSValue wrapping the NSPoint center.  The arrays must have equal length. */
+- (BOOL)honorsSavedPositions
+{
+  return YES;
+}
+
+/* Both directions go through the single canonical transform (FSNFunctions).
+ * refHeight is this view's own content height and the flip is its own, so the
+ * mapping is fully determined by the view — no window/host dependency.  A
+ * flipped subclass (GWSpatialIconsView) needs no override: the flip branch is
+ * the identity it used to hard-code. */
+- (NSPoint)ilocCenterForViewCenter:(NSPoint)center
+{
+  return FSNIlocFromViewCenter(center, [self bounds].size.height, [self isFlipped]);
+}
+
+- (NSPoint)viewCenterForIlocCenter:(NSPoint)iloc
+{
+  return FSNViewCenterFromIloc(iloc, [self bounds].size.height, [self isFlipped]);
+}
+
+- (void)batchRepositionIcons:(NSArray *)iconList toCenterPoints:(NSArray *)points
+{
+  NSUInteger count = [iconList count];
+  if (count == 0 || [points count] != count) return;
+
+  /* A pure-reflow view has no positions to update or persist: just re-tile
+   * (the reflow grid reasserts itself) and write nothing to disk. */
+  if (![self honorsSavedPositions])
+    {
+      [self tile];
+      return;
+    }
+
+  /* ---- Pass 1: update all placement data in memory ---- */
+  NSUInteger i;
+  for (i = 0; i < count; i++)
+    {
+      FSNIcon *icon = [iconList objectAtIndex: i];
+      NSPoint point = [[points objectAtIndex: i] pointValue];
+      FSNIconItemData *data = [icon placementData];
+
+      /* Manual placement is pixel-precise — no grid snapping.  Store the
+       * canonical iloc representation (view coords mapped through the
+       * overridable conversion) and sync customIconPositions so the next
+       * tile uses the dragged position, not a stale one. */
+      NSPoint ilocPoint = [self ilocCenterForViewCenter: point];
+      data.ilocPosition = ilocPoint;
+      data.placementMode = FSNIconPlacementModeManual;
+
+      NSString *name = [[icon node] name];
+      if (!customIconPositions)
+        customIconPositions = [[NSMutableDictionary alloc] init];
+      [customIconPositions setObject: [NSValue valueWithPoint: ilocPoint]
+                              forKey: name];
+    }
+
+  /* ---- Pass 2: single tile ---- */
+  [self tile];
+
+  /* ---- Pass 3: single DS_Store write batch ---- */
+  {
+    /* Group icons by parent folder so we open each .DS_Store only once */
+    NSMutableDictionary *folders = [NSMutableDictionary dictionary];
+
+    for (i = 0; i < count; i++)
+      {
+        FSNIcon *icon = [iconList objectAtIndex: i];
+        NSPoint point = [[points objectAtIndex: i] pointValue];
+        FSNode *nd = [icon node];
+        if (!nd) continue;
+
+        NSString *fp = [nd path];
+        NSString *folder = [fp stringByDeletingLastPathComponent];
+        NSString *name = [nd name];
+        if (!folder || !name) continue;
+
+        /* View-center -> DS_Store iloc (top-left); identity in a flipped view. */
+        NSPoint iloc = [self ilocCenterForViewCenter: point];
+        int ilocX = (int)iloc.x;
+        int ilocY = (int)iloc.y;
+
+        NSMutableArray *batch = [folders objectForKey: folder];
+        if (!batch)
+          {
+            batch = [NSMutableArray array];
+            [folders setObject: batch forKey: folder];
+          }
+        [batch addObject: @[name, [NSNumber numberWithInt: ilocX],
+                                  [NSNumber numberWithInt: ilocY]]];
+      }
+
+    /* All persistence goes through the injected icon-position store (the
+     * Workspace application), which owns the folder .DS_Store / per-volume
+     * cache / fdLocation xattr writes.  FSNode no longer writes those stores
+     * directly. */
+    [[fsnodeRep iconPositionStore] saveIconPositionsByFolder: folders];
+  }
 }
 
 #pragma mark - DS_Store Tag Colors and Comments Support
@@ -740,20 +1032,241 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
-#pragma mark - Grid Spacing Support
-
-- (void)setGridSpacing:(CGFloat)spacing
+/* Returns the visible content width for determining virtual grid
+ * dimensions.  Walks up to the enclosing NSScrollView (if any) and
+ * uses its contentSize, which always reflects the current window size
+ * after autoresize and already excludes sidebar / border overhead.
+ * Falls back to the window content view, then superview frame. */
+- (CGFloat)windowContentWidthForLayout
 {
-  dsStoreGridSpacing = spacing;
-  // Recalculate grid and re-tile
-  [self calculateGridSize];
+  NSView *v;
+
+  /* The enclosing scroll view's contentSize is always up to date (autoresized
+   * with the window) and already accounts for sidebar, borders, scrollers. */
+  NSScrollView *sv = [self enclosingScrollView];
+  if (sv)
+    {
+      CGFloat cw = [sv contentSize].width;
+      if (cw > 0) return cw;
+    }
+
+  /* Fallback: window content view (always resized synchronously). */
+  NSWindow *w = [self window];
+  if (w) {
+    NSView *cv = [w contentView];
+    if (cv) {
+      CGFloat cw = [cv bounds].size.width;
+      if (cw > 0) {
+        /* For browser-mode windows the content view is a vertical
+         * NSSplitView — subtract the sidebar (first subview). */
+        if ([cv isKindOfClass: [NSSplitView class]]
+            && [(NSSplitView *)cv isVertical]
+            && [[cv subviews] count] > 1) {
+          cw -= [[[cv subviews] objectAtIndex: 0] frame].size.width;
+          cw -= [(NSSplitView *)cv dividerThickness];
+        }
+        return cw;
+      }
+    }
+  }
+  /* Last resort: superview frame, then own bounds. */
+  v = [self superview];
+  if (v) {
+    CGFloat width = [v frame].size.width;
+    if (width > 0) return width;
+  }
+  return [self bounds].size.width;
+}
+
+/* Returns the visible content height for determining icon layout: the
+ * enclosing NSScrollView's contentSize height (up to date after autoresize),
+ * then the window content view height, then superview frame, then own bounds. */
+- (CGFloat)visibleContentHeightForLayout
+{
+  NSView *v;
+  NSScrollView *sv = [self enclosingScrollView];
+  if (sv)
+    {
+      CGFloat ch = [sv contentSize].height;
+      if (ch > 0) return ch;
+    }
+  /* Fallback: window content view. */
+  NSWindow *w = [self window];
+  if (w) {
+    NSView *cv = [w contentView];
+    if (cv) {
+      CGFloat ch = [cv bounds].size.height;
+      if (ch > 0) return ch;
+    }
+  }
+  /* Last resort: superview frame, then own bounds. */
+  v = [self superview];
+  if (v) {
+    CGFloat h = [v frame].size.height;
+    if (h > 0) return h;
+  }
+  return [self bounds].size.height;
+}
+
+/* Usable content area for the off-screen rescue guard: the region where an
+ * honored position is actually reachable/visible.  Scroll-hosted views grow
+ * their document to fit, so the whole view is usable; the desktop overrides
+ * this to exclude the Dock and menu-bar reserved strips. */
+- (NSRect)usableContentRect
+{
+  NSRect r = [self visibleRect];
+  if (NSIsEmptyRect(r))
+    r = [self bounds];
+  return r;
+}
+
+- (NSPoint)gridOriginForLayout
+{
+  /* The visual top-left corner where the grid starts, in this view's own
+   * coordinates: (margin, margin) in a flipped view; (margin, height -
+   * margin) in the default bottom-left model, using the visible content
+   * height so icons sit relative to the visible area.  Subclasses
+   * (GWDesktopView) override for Dock/menu adjustments. */
+  if ([self isFlipped])
+    return NSMakePoint((CGFloat)X_MARGIN, (CGFloat)Y_MARGIN);
+
+  CGFloat visibleHeight = [self visibleContentHeightForLayout];
+  return NSMakePoint((CGFloat)X_MARGIN, visibleHeight - (CGFloat)Y_MARGIN);
+}
+
+- (NSPoint)centerForGridCell:(FSNGridCell)cell
+                    cellSize:(NSSize)cellSize
+                        gapX:(CGFloat)gapX
+                      origin:(NSPoint)gridOrigin
+{
+  /* Rows grow visually downward from the origin: +y in a flipped view,
+   * -y in the default bottom-left model. */
+  if ([self isFlipped])
+    return FSNGridCellCenter(cell, gridOrigin,
+                             cellSize.width, cellSize.height, gapX);
+
+  return NSMakePoint(gridOrigin.x + (CGFloat)cell.col * (cellSize.width + gapX)
+                                  + cellSize.width / 2.0,
+                     gridOrigin.y - (CGFloat)(cell.row + 1) * cellSize.height
+                                  + cellSize.height / 2.0);
+}
+
+- (FSNGridCell)gridCellForCenter:(NSPoint)center
+                        cellSize:(NSSize)cellSize
+                            gapX:(CGFloat)gapX
+                          origin:(NSPoint)gridOrigin
+{
+  if ([self isFlipped])
+    return FSNGridCellForCenter(center, gridOrigin,
+                                cellSize.width, cellSize.height, gapX);
+
+  {
+    CGFloat dx = center.x - gridOrigin.x;
+    CGFloat dy = gridOrigin.y - center.y;
+    if (dx < 0 || dy < 0 || cellSize.width <= 0 || cellSize.height <= 0)
+      return FSNGridCellNone;
+    return FSNGridCellMake((NSUInteger)(dx / (cellSize.width + gapX)),
+                           (NSUInteger)(dy / cellSize.height));
+  }
+}
+
+- (void)setPlacementDirection:(FSNPlacementDirection)direction
+{
+  _placementDirection = direction;
+}
+
+- (FSNPlacementDirection)placementDirection
+{
+  return _placementDirection;
+}
+
+#pragma mark - Cleanup and Sort Operations
+
+- (void)cleanupIconPositions
+{
+  /* "Clean Up" — snap all icons to the virtual grid. */
+
+  [customIconPositions release];
+  customIconPositions = nil;
+
+  /* In a pure-reflow view there are no positions to snap: reset every icon
+   * to AUTO and let the layout policy re-grid.  (Setting MANUAL here would
+   * leave phantom placement state a reflow view never honors.) */
+  if (![self honorsSavedPositions])
+    {
+      NSUInteger i;
+      for (i = 0; i < [icons count]; i++)
+        {
+          FSNIconItemData *data = [[icons objectAtIndex: i] placementData];
+          data.ilocPosition = NSMakePoint(-1, -1);
+          data.placementMode = FSNIconPlacementModeAuto;
+        }
+      [self tile];
+      return;
+    }
+
+  /* Use cached grid cell dimensions so Clean Up stays in sync with
+   * the AUTO-mode tile positioning.  If tile hasn't been called yet,
+   * compute the cache first. */
+  if (!_gridCached)
+    {
+      [self calculateGridSize];
+      _cachedCellSize = gridSize;
+      _cachedGapX = (CGFloat)COLUMN_GAP_X;
+      _gridCached = YES;
+    }
+
+  CGFloat cellW = _cachedCellSize.width;
+  CGFloat cellH = _cachedCellSize.height;
+  CGFloat gapX = _cachedGapX;
+  NSPoint gOrigin = [self gridOriginForLayout];
+  CGFloat gridWidth = [self windowContentWidthForLayout];
+  CGFloat availableWidth = gridWidth - gOrigin.x;
+  if (availableWidth < cellW + gapX) availableWidth = gridWidth;
+  NSUInteger nCols = (NSUInteger)((availableWidth + gapX) / (cellW + gapX));
+  if (nCols < 1) nCols = 1;
+  NSUInteger nRows = [self isFlipped] ? 1 : (NSUInteger)(gOrigin.y / cellH);
+  if (nRows < 1) nRows = 1;
+  {
+    NSUInteger neededRows = ([icons count] + nCols - 1) / nCols;
+    if (nRows < neededRows) nRows = neededRows;
+  }
+
+  /* Build a fresh enumerator. */
+  FSNPlacementEnumerator *e;
+  switch (_placementDirection)
+    {
+    case FSNPlacementDirectionTopToBottomRightToLeft:
+      e = [[FSNTopToBottomRightToLeftEnumerator alloc] initWithColumns: nCols rows: nRows];
+      break;
+    default:
+      e = [[FSNLeftToRightTopToBottomEnumerator alloc] initWithColumns: nCols rows: nRows];
+      break;
+    }
+
+  [e reset];
+  FSNGridCell cell;
+  NSUInteger ci = 0;
+  while (ci < [icons count] && [e nextCell: &cell])
+    {
+      NSPoint gCenter = [self centerForGridCell: cell
+                                       cellSize: NSMakeSize(cellW, cellH)
+                                           gapX: gapX
+                                         origin: gOrigin];
+      FSNIcon *icon = [icons objectAtIndex: ci];
+      FSNIconItemData *data = [icon placementData];
+      data.ilocPosition = [self ilocCenterForViewCenter: gCenter];
+      data.placementMode = FSNIconPlacementModeManual;
+      NSRect f = NSMakeRect(gCenter.x - cellW / 2.0, gCenter.y - cellH / 2.0,
+                            cellW, cellH);
+      [icon setFrame: NSIntegralRect(f)];
+      ci++;
+    }
+
+  [e release];
   [self tile];
 }
 
-- (CGFloat)gridSpacing
-{
-  return dsStoreGridSpacing;
-}
 
 - (void)mouseUp:(NSEvent *)theEvent
 {
@@ -1164,10 +1677,43 @@ static void GWHighlightFrameRect(NSRect aRect)
 {
   [super viewDidMoveToSuperview];
 
+  /* Tear down any previous clip-view observer before setting up a new one.
+   * This handles the case where the view is moved from one clip view
+   * to another, or is removed from the view hierarchy entirely. */
+  if (_observedClipView)
+    {
+      [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                      name: NSViewFrameDidChangeNotification
+                                                    object: _observedClipView];
+      _observedClipView = nil;
+    }
+
+  /* Register for NSViewFrameDidChangeNotification on the enclosing
+   * NSClipView so that tile is called reliably when the window is
+   * resized, even if NSClipView does not propagate the standard
+   * resizeWithOldSuperviewSize: chain to its document view. */
+  if ([self superview]
+      && [[self superview] isKindOfClass: [NSClipView class]])
+    {
+      _observedClipView = [self superview];
+      [[NSNotificationCenter defaultCenter] addObserver: self
+                                               selector: @selector(clipViewFrameDidChange:)
+                                                   name: NSViewFrameDidChangeNotification
+                                                 object: _observedClipView];
+    }
+
   if ([self superview])
     {
       [[self window] setBackgroundColor: backColor];
     }
+}
+
+/* Called when the enclosing NSClipView's frame changes (window resize,
+ * split-view drag, etc.).  Re-tiles the icon layout so scrollbars
+ * and content positioning are correct for the new visible area. */
+- (void)clipViewFrameDidChange:(NSNotification *)notif
+{
+  [self tile];
 }
 
 - (void)drawRect:(NSRect)rect
@@ -1237,6 +1783,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   ASSIGN (node, anode);
   [self readNodeInfo];
+  _gridCached = NO; /* icon properties may have changed */
   [self calculateGridSize];
 
   for (i = 0; i < [subNodes count]; i++)
@@ -1258,6 +1805,60 @@ static void GWHighlightFrameRect(NSRect aRect)
       RELEASE (icon);
     }
 
+  /* Restore icon positions from fdLocation xattr and DS_Store Iloc — only for
+   * position-honoring views (desktop, spatial).  Browser icon views auto-grid
+   * and reflow, so they neither read nor apply saved positions.
+   * fdLocation (per-file extended attribute) is checked first since it
+   * follows the file even when moved; DS_Store is the folder-level fallback.
+   * Icons with saved positions get MANUAL placement mode. */
+  if ([self honorsSavedPositions])
+  {
+    NSString *folderPath = [anode path];
+
+    /* Source 1: fdLocation xattr (per-file extended attribute, primary).
+     * FinderInfo writes (0,0) by default when no position exists,
+     * so skip (0,0) and (-1,-1) which are both "no position" markers. */
+    for (i = 0; i < [icons count]; i++)
+      {
+        FSNIcon *icon = [icons objectAtIndex: i];
+        FSNode *nd = [icon node];
+        if (!nd) continue;
+        NSPoint floc = [[fsnodeRep metadataProvider] iconPositionForPath: [nd path]];
+        if ((floc.x > 0 || floc.y > 0) && floc.x != -1 && floc.y != -1)
+          {
+            FSNIconItemData *data = [icon placementData];
+            data.ilocPosition = floc;
+            data.placementMode = FSNIconPlacementModeManual;
+          }
+      }
+
+    /* Sources 2/3: folder .DS_Store Iloc, else the per-volume cache —
+     * both provided by the injected position store (the app reads them via
+     * the settings hierarchy).  Only fills icons not already positioned by
+     * fdLocation.  Raw iloc (top-left) is stored; conversion to GNUstep
+     * bottom-left happens at tile time with the correct refH. */
+    NSDictionary *stored =
+      [[fsnodeRep iconPositionStore] storedIconPositionsForFolder: folderPath];
+    if ([stored count])
+      {
+        for (i = 0; i < [icons count]; i++)
+          {
+            FSNIcon *icon = [icons objectAtIndex: i];
+            FSNIconItemData *data = [icon placementData];
+            if (data.placementMode == FSNIconPlacementModeManual) continue;
+
+            NSValue *v = [stored objectForKey: [[icon node] name]];
+            if (v == nil) continue;
+            NSPoint iloc = [v pointValue];
+            if (iloc.x != 0 || iloc.y != 0)
+              {
+                data.ilocPosition = iloc;
+                data.placementMode = FSNIconPlacementModeManual;
+              }
+          }
+      }
+  }
+
   [icons sortUsingSelector: [fsnodeRep compareSelectorForDirectory: [node path]]];
   [self tile];
 
@@ -1268,33 +1869,11 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (NSDictionary *)readNodeInfo
 {
+  /* Read per-folder view settings from user defaults only.
+   * Icon positions are restored separately from DS_Store / fdLocation. */
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   NSString *prefsname = [NSString stringWithFormat: @"viewer_at_%@", [node path]];
-  NSDictionary *nodeDict = nil;
-
-  if ([node isWritable]
-      && ([[fsnodeRep volumes] containsObject: [node path]] == NO)) {
-    NSString *infoPath = [[node path] stringByAppendingPathComponent: @".gwdir"];
-
-    if ([[NSFileManager defaultManager] fileExistsAtPath: infoPath]) {
-      NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: infoPath];
-
-      if (dict)
-	{
-	  nodeDict = [NSDictionary dictionaryWithDictionary: dict];
-	}
-    }
-  }
-
-  if (nodeDict == nil)
-    {
-      id defEntry = [defaults dictionaryForKey: prefsname];
-
-      if (defEntry)
-	{
-	  nodeDict = [NSDictionary dictionaryWithDictionary: defEntry];
-	}
-    }
+  NSDictionary *nodeDict = [defaults dictionaryForKey: prefsname];
 
   if (nodeDict)
     {
@@ -1322,16 +1901,12 @@ static void GWHighlightFrameRect(NSRect aRect)
 	  if (entry)
 	    {
 	      NSArray *availableTypes = [fsnodeRep availableExtendedInfoNames];
-
-	      if ([availableTypes containsObject: entry]) {
+	      if ([availableTypes containsObject: entry])
 		ASSIGN (extInfoType, entry);
-	      }
 	    }
 
 	  if (extInfoType == nil)
-	    {
-	      infoType = FSNInfoNameType;
-	    }
+	    infoType = FSNInfoNameType;
 	}
     }
 
@@ -1340,74 +1915,39 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (NSMutableDictionary *)updateNodeInfo:(BOOL)ondisk
 {
+  /* Persist per-folder view settings to user defaults only.
+   * Icon positions are stored via DS_Store / fdLocation, not here. */
   CREATE_AUTORELEASE_POOL(arp);
   NSMutableDictionary *updatedInfo = nil;
 
-  if ([node isValid]) {
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    NSString *prefsname = [NSString stringWithFormat: @"viewer_at_%@", [node path]];
-    NSString *infoPath = [[node path] stringByAppendingPathComponent: @".gwdir"];
-    BOOL writable = ([node isWritable] && ([[fsnodeRep volumes] containsObject: [node path]] == NO));
+  if ([node isValid])
+    {
+      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+      NSString *prefsname = [NSString stringWithFormat: @"viewer_at_%@", [node path]];
 
-    if (writable)
-      {
-	if ([[NSFileManager defaultManager] fileExistsAtPath: infoPath])
-	  {
-	    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: infoPath];
+      NSDictionary *prefs = [defaults dictionaryForKey: prefsname];
+      if (prefs)
+        updatedInfo = [prefs mutableCopy];
+      else
+        updatedInfo = [NSMutableDictionary new];
 
-	    if (dict) {
-	      updatedInfo = [dict mutableCopy];
-	    }
-	  }
+      [updatedInfo setObject: [NSNumber numberWithInt: iconSize]
+                      forKey: @"iconsize"];
+      [updatedInfo setObject: [NSNumber numberWithInt: labelTextSize]
+                      forKey: @"labeltxtsize"];
+      [updatedInfo setObject: [NSNumber numberWithInt: iconPosition]
+                      forKey: @"iconposition"];
+      [updatedInfo setObject: [NSNumber numberWithInt: infoType]
+                      forKey: @"fsn_info_type"];
 
-      }
-    else
-      {
-	NSDictionary *prefs = [defaults dictionaryForKey: prefsname];
+      if (infoType == FSNInfoExtendedType)
+        [updatedInfo setObject: extInfoType forKey: @"ext_info_type"];
 
-	if (prefs)
-	  {
-	    updatedInfo = [prefs mutableCopy];
-	  }
-      }
-
-    if (updatedInfo == nil)
-      {
-	updatedInfo = [NSMutableDictionary new];
-      }
-
-    [updatedInfo setObject: [NSNumber numberWithInt: iconSize]
-                    forKey: @"iconsize"];
-
-    [updatedInfo setObject: [NSNumber numberWithInt: labelTextSize]
-                    forKey: @"labeltxtsize"];
-
-    [updatedInfo setObject: [NSNumber numberWithInt: iconPosition]
-                    forKey: @"iconposition"];
-
-    [updatedInfo setObject: [NSNumber numberWithInt: infoType]
-                    forKey: @"fsn_info_type"];
-
-    if (infoType == FSNInfoExtendedType)
-      {
-	[updatedInfo setObject: extInfoType forKey: @"ext_info_type"];
-      }
-
-    if (ondisk)
-      {
-	if (writable)
-	  {
-	    [updatedInfo writeToFile: infoPath atomically: YES];
-	  }
-	else
-	  {
-	    [defaults setObject: updatedInfo forKey: prefsname];
-	  }
-      }
-  }
+      if (ondisk)
+        [defaults setObject: updatedInfo forKey: prefsname];
+    }
 
   RELEASE (arp);
-
   return (AUTORELEASE (updatedInfo));
 }
 
@@ -1416,6 +1956,10 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSArray *selection = [self selectedNodes];
   NSMutableArray *opennodes = [NSMutableArray array];
   NSUInteger i;
+
+  /* A reload re-reads the directory from disk; drop cached file metadata
+   * so labels/positions reflect any external change. */
+  [[fsnodeRep metadataProvider] invalidateCaches];
 
   RETAIN (selection);
 
@@ -1556,6 +2100,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSString *destination = [info objectForKey: @"destination"];
   NSArray *files = [info objectForKey: @"files"];
   NSString *ndpath = [node path];
+  NSMutableArray *newlyAdded = nil;
   NSUInteger i;
 
   if ([operation isEqual: @"WorkspaceRenameOperation"])
@@ -1622,7 +2167,12 @@ static void GWHighlightFrameRect(NSRect aRect)
 	  if (icon){
 	    [icon setNode: subnode];
 	  } else {
-	    [self addRepForSubnode: subnode];
+	    FSNIcon *added = [self addRepForSubnode: subnode];
+	    if (added)
+	      {
+		if (!newlyAdded) newlyAdded = [NSMutableArray array];
+		[newlyAdded addObject: added];
+	      }
 	  }
 	}
 
@@ -1631,6 +2181,8 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   [self checkLockedReps];
   [self tile];
+  /* Persist positions of any items added to this open window (honor views). */
+  [self persistStoredPositionsForIcons: newlyAdded];
   [self setNeedsDisplay: YES];
   [self selectionDidChange];
 }
@@ -1640,7 +2192,12 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSString *event = [info objectForKey: @"event"];
   NSArray *files = [info objectForKey: @"files"];
   NSString *ndpath = [node path];
+  NSMutableArray *newlyAdded = nil;
   NSUInteger i;
+
+  /* Files under the watched directory changed on disk — drop cached
+   * metadata so re-read reflects the new state. */
+  [[fsnodeRep metadataProvider] invalidateCaches];
 
   if ([event isEqual: @"GWFileDeletedInWatchedDirectory"])
     {
@@ -1668,7 +2225,12 @@ static void GWHighlightFrameRect(NSRect aRect)
 		}
 	      else
 		{
-		  [self addRepForSubnode: subnode];
+		  FSNIcon *added = [self addRepForSubnode: subnode];
+		  if (added)
+		    {
+		      if (!newlyAdded) newlyAdded = [NSMutableArray array];
+		      [newlyAdded addObject: added];
+		    }
 		}
 	    }
 	}
@@ -1676,6 +2238,8 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   [self sortIcons];
   [self tile];
+  /* Persist positions of any items created in this open window (honor views). */
+  [self persistStoredPositionsForIcons: newlyAdded];
   [self setNeedsDisplay: YES];
   [self selectionDidChange];
 }
@@ -1689,6 +2253,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       infoType = type;
       DESTROY (extInfoType);
 
+      _gridCached = NO;
       [self calculateGridSize];
 
       for (i = 0; i < [icons count]; i++)
@@ -1713,6 +2278,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       infoType = FSNInfoExtendedType;
       ASSIGN (extInfoType, type);
 
+      _gridCached = NO;
       [self calculateGridSize];
 
       for (i = 0; i < [icons count]; i++)
@@ -1738,6 +2304,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSUInteger i;
 
   iconSize = size;
+  _gridCached = NO;
   [self calculateGridSize];
 
   for (i = 0; i < [icons count]; i++)
@@ -1760,6 +2327,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   labelTextSize = size;
   ASSIGN (labelFont, [NSFont systemFontOfSize: labelTextSize]);
+  _gridCached = NO;
   [self calculateGridSize];
 
   for (i = 0; i < [icons count]; i++)
@@ -1783,6 +2351,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSUInteger i;
 
   iconPosition = pos;
+  _gridCached = NO;
   [self calculateGridSize];
 
   for (i = 0; i < [icons count]; i++)
@@ -1846,6 +2415,13 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (id)addRepForSubnode:(FSNode *)anode
 {
+  /* Never display internal metadata files */
+  NSString *fname = [anode name];
+  if ([fname isEqualToString: @".DS_Store"]
+      || [fname hasPrefix: @"._"]
+      || [fname isEqualToString: @"__MACOSX"])
+    return nil;
+
   CREATE_AUTORELEASE_POOL(arp);
   FSNIcon *icon = [[FSNIcon alloc] initForNode: anode
                                   nodeInfoType: infoType
@@ -1878,6 +2454,11 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   if (icon)
     {
+      /* Genuine removal (delete/move-out/unmount): drop the transient
+       * position cache entry so a same-name file recreated this session is
+       * placed fresh.  The .DS_Store record is left as macOS leaves it —
+       * overwritten if the name is reused. */
+      [customIconPositions removeObjectForKey: [anode name]];
       [self removeRep: icon];
     }
 }
@@ -1888,6 +2469,8 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   if (icon)
     {
+      /* See -removeRepOfSubnode:: drop the transient position cache entry. */
+      [customIconPositions removeObjectForKey: [apath lastPathComponent]];
       [self removeRep: icon];
     }
 }
@@ -2534,7 +3117,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (void)concludeDragOperation:(id <NSDraggingInfo>)sender
 {
   NSPasteboard *pb;
-  NSDragOperation sourceDragMask;
   NSArray *sourcePaths;
   NSString *operation;
   NSString *source;
@@ -2546,7 +3128,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   isDragTarget = NO;
   operation = nil;
 
-  sourceDragMask = [sender draggingSourceOperationMask];
   pb = [sender draggingPasteboard];
 
   if ([[pb types] containsObject: @"GWRemoteFilenamesPboardType"])

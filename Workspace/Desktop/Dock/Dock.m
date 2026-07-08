@@ -33,6 +33,7 @@
 #import "Workspace.h"
 #import "GWFunctions.h"
 #import "X11AppSupport.h"
+#import "GWDockWindow.h"
 
 #define MAX_ICN_SIZE 48
 #define MIN_ICN_SIZE 16
@@ -696,10 +697,27 @@
 
   NSDebugLLog(@"gwspace", @"DEBUG: Dock tile - setting frame: %@, icons count: %lu", NSStringFromRect(rect), (unsigned long)[icons count]);
   
-  if (view) {
-    [view setNeedsDisplayInRect: [self frame]];
-  }
-  [self setFrame: rect];
+  /*
+   * When the dock lives in its own GWDockWindow, resize the window to the
+   * computed screen-coordinate rect instead of setting this view's frame
+   * (the window's content view is expected to stay at {0,0} within the
+   * window content area).
+   */
+  BOOL inOwnDockWindow = [[self window] isKindOfClass: [GWDockWindow class]];
+
+  if (inOwnDockWindow)
+    {
+      [[self window] setFrame: rect display: YES];
+      [self setNeedsDisplay: YES];
+    }
+  else
+    {
+      if (view)
+        {
+          [view setNeedsDisplayInRect: [self frame]];
+        }
+      [self setFrame: rect];
+    }
 
   if (position == DockPositionBottom)
   {
@@ -740,7 +758,7 @@
   }
 
   [self setNeedsDisplay: YES];
-  if (view) {
+  if (view && (inOwnDockWindow == NO)) {
     [view setNeedsDisplayInRect: [self frame]];
   }
 
@@ -858,11 +876,17 @@
   }
 }
 
+- (BOOL)isOpaque
+{
+  /* Modern style draws a semi-transparent gray, so the view is not opaque. */
+  return (style != DockStyleModern);
+}
+
 - (void)drawRect:(NSRect)rect
-{  
+{
   // NSLog(@"DEBUG: Dock drawRect called, rect: %@, superview: %@", NSStringFromRect(rect), [self superview]);
   [super drawRect: rect];
-  
+
   [backColor set];
   NSRectFill(rect);
 }

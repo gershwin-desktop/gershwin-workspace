@@ -50,4 +50,21 @@ void showAlertInvalidName(Class c);
 NSInteger showAlertExtensionChange(Class c, NSString *extension);
 void showAlertNameInUse(Class c, NSString *newname);
 
+/* Icon-position coordinate conversion (single source of truth).
+ *
+ * DS_Store Iloc / FinderInfo fdLocation use top-left origin (y grows down);
+ * GNUstep views use bottom-left origin (y grows up).  Both stored as icon
+ * CENTER coordinates.  Conversion is symmetric about a reference height. */
+/* The canonical iloc <-> view-center transform lives in FSNIconPlacement.h
+ * (Foundation-only, co-located with the other placement geometry). */
+
+@class NSColor;
+
+/* Draw a Finder label-colour dot (drop shadow + filled oval + hairline
+ * border) into the current graphics context at dotRect.  Single source for
+ * the badge drawing that was duplicated across icon/list/browser/path/dock
+ * cells; each caller still computes its own dotRect so placement/size are
+ * unchanged.  No-op when color is nil. */
+void FSNDrawLabelDot(NSRect dotRect, NSColor *color);
+
 #endif // FSN_FUNCTIONS_H

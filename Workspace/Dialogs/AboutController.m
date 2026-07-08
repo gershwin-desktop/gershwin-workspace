@@ -9,6 +9,22 @@
 #include <sys/utsname.h>
 #include <X11/Xlib.h>
 
+/* Simple NSWindow subclass that closes on Escape key */
+@interface AboutWindow : NSWindow
+@end
+
+@implementation AboutWindow
+- (void)keyDown:(NSEvent *)theEvent
+{
+  NSString *characters = [theEvent characters];
+  if ([characters length] > 0 && [characters characterAtIndex: 0] == 0x01B) {
+    [self performClose:nil];
+    return;
+  }
+  [super keyDown: theEvent];
+}
+@end
+
 @implementation AboutController
 
 static AboutController *sharedController = nil;
@@ -35,7 +51,7 @@ static AboutController *sharedController = nil;
   NSRect rect = NSMakeRect(0, 0, 320, 420);
   unsigned int styleMask = NSTitledWindowMask | NSClosableWindowMask;
   
-  aboutWindow = [[NSWindow alloc] initWithContentRect:rect
+  aboutWindow = [[AboutWindow alloc] initWithContentRect:rect
                                             styleMask:styleMask
                                               backing:NSBackingStoreBuffered
                                                 defer:YES];
@@ -125,14 +141,37 @@ static AboutController *sharedController = nil;
   manufacturerField = [fields objectAtIndex:5];
   serialNumberField = [fields objectAtIndex:6];
 
-  // More Info button calls Workspace "notImplemented:" so behavior is consistent
-  NSButton *moreInfo = [[NSButton alloc] initWithFrame:NSMakeRect(110, 20, 100, 24)];
-  [moreInfo setTitle:_(@"More Info...")];
-  [moreInfo setBezelStyle:NSRoundedBezelStyle];
-  [moreInfo setTarget:[Workspace gworkspace]];
-  [moreInfo setAction:@selector(notImplemented:)];
-  [contentView addSubview:moreInfo];
-  RELEASE(moreInfo);
+  // Look for SystemProfiler app in .app bundles and in $PATH
+  systemProfilerPath = nil;
+  {
+    NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+    NSString *path = [ws fullPathForApplication: @"SystemProfiler"];
+    if (path == nil)
+      {
+        NSString *envPath = [[[NSProcessInfo processInfo] environment]
+                              objectForKey: @"PATH"];
+        for (NSString *dir in [envPath componentsSeparatedByString: @":"])
+          {
+            NSString *candidate = [dir stringByAppendingPathComponent: @"SystemProfiler"];
+            if ([[NSFileManager defaultManager] isExecutableFileAtPath: candidate])
+              {
+                path = candidate;
+                break;
+              }
+          }
+      }
+    if (path)
+      {
+        systemProfilerPath = [path copy];
+        NSButton *moreInfo = [[NSButton alloc] initWithFrame:NSMakeRect(110, 20, 100, 24)];
+        [moreInfo setTitle:_(@"More Info...")];
+        [moreInfo setBezelStyle:NSRoundedBezelStyle];
+        [moreInfo setTarget:self];
+        [moreInfo setAction:@selector(moreInfo:)];
+        [contentView addSubview:moreInfo];
+        RELEASE(moreInfo);
+      }
+  }
 }
 
 - (void)updateSystemInfo
@@ -227,7 +266,10 @@ static AboutController *sharedController = nil;
 
 - (void)moreInfo:(id)sender
 {
-  // Placeholder - routed to Workspace:notImplemented:
+  if (systemProfilerPath)
+    {
+      [[NSWorkspace sharedWorkspace] launchApplication: systemProfilerPath];
+    }
 }
 
 - (BOOL)windowShouldClose:(id)sender

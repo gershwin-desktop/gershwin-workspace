@@ -50,6 +50,8 @@
 #import "NetworkServiceManager.h"
 #import "NetworkFSNode.h"
 #import "DSStoreInfo.h"
+#import "GWViewSettingsManager.h"
+#import "GWViewerPrefs.h"
 
 #define DEFAULT_INCR 150
 #define MIN_WIN_H 300
@@ -151,7 +153,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       {
 	if (firstRootViewer)
 	  {
-	    prefsname = @"root_viewer";
+	    prefsname = GWViewerPrefsKey([node path], NO, nil, YES);
 	  }
 	else
 	  {
@@ -161,33 +163,24 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
 		rootViewerKey = [NSNumber numberWithUnsignedLong: (unsigned long)self];
 
-		prefsname = [NSString stringWithFormat: @"%lu_viewer_at_%@", [rootViewerKey unsignedLongValue], [node path]];
+		prefsname = GWViewerPrefsKey([node path], NO, rootViewerKey, NO);
 	      }
 	    else
 	      {
-		prefsname = [key retain];
+		/* Non-owning like the sibling branches (which assign an
+		 * autoreleased string); defaultsKeyStr takes the sole retain
+		 * below.  A [key retain] here would leak — dealloc balances
+		 * only defaultsKeyStr. */
+		prefsname = key;
 	      }
 	  }
       }
     else
       {
-	prefsname = [NSString stringWithFormat: @"viewer_at_%@", [node path]];
+	prefsname = GWViewerPrefsKey([node path], NO, nil, NO);
       }
 
     defaultsKeyStr = [prefsname retain];
-    if ([baseNode isWritable] && (rootViewer == NO)
-            && ([[fsnodeRep volumes] containsObject: [baseNode path]] == NO)) {
-		  NSString *dictPath = [[baseNode path] stringByAppendingPathComponent: @".gwdir"];
-
-      if ([[NSFileManager defaultManager] fileExistsAtPath: dictPath]) {
-        NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: dictPath];
-
-        if (dict) {
-          viewerPrefs = [dict copy];
-        }   
-      }
-    }
-    
     if (viewerPrefs == nil) {
       defEntry = [defaults dictionaryForKey: defaultsKeyStr];
       if (defEntry) {
@@ -197,46 +190,63 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       }
     }
     
-    viewType = GWViewTypeIcon;
-    viewTypeStr = [viewerPrefs objectForKey: @"viewtype"];
-    if (viewTypeStr == nil)
-      {
-        if (stype != 0)
-          {
-            viewType = stype;
-          }
-      }
-    else if ([viewTypeStr isEqual: @"Browser"])
-      {
-        viewType = GWViewTypeBrowser;
-      }
-    else if ([viewTypeStr isEqual: @"List"])
-      {
-        viewType = GWViewTypeList;
-      }
-    else if ([viewTypeStr isEqual: @"Icon"])
-      {
-        viewType = GWViewTypeIcon;
-      }
-    
-    defEntry = [viewerPrefs objectForKey: @"sidebarwidth"];
-    if (defEntry) {
-      sidebarWidth = [defEntry floatValue];
-      if (sidebarWidth < MIN_SIDEBAR_WIDTH) sidebarWidth = MIN_SIDEBAR_WIDTH;
-      if (sidebarWidth > MAX_SIDEBAR_WIDTH) sidebarWidth = MAX_SIDEBAR_WIDTH;
-    } else {
-      sidebarWidth = DEFAULT_SIDEBAR_WIDTH;
+    /* View settings come from .DS_Store (tiered via the settings manager,
+     * the single store shared with the spatial viewer) as primary, with the
+     * user-defaults viewerPrefs as fallback.  This matches -updateDefaults,
+     * which already writes these settings to .DS_Store. */
+    DSStoreInfo *dsInfo =
+      [[GWViewSettingsManager managerForDirectoryPath: [baseNode path]] readSettings];
+    if (dsInfo == nil) {
+      dsInfo = [DSStoreInfo infoForDirectoryPath: [baseNode path]];
     }
+
+    /* Precedence: an explicit caller-supplied type (stype != 0) wins; then the
+     * folder's remembered .DS_Store style; then the user-defaults viewerPrefs;
+     * else Icon.  (The enum starts at GWViewTypeBrowser = 1, so 0 means "no
+     * preference".) */
+    viewType = GWViewTypeIcon;
+    if (stype != 0)
+      {
+        viewType = stype;
+      }
+    else
+      {
+        /* DS_Store style (decoded through the shared name helper) is primary,
+         * viewerPrefs the fallback; both reduce to a canonical view-type name
+         * decoded once below. */
+        if (dsInfo.loaded && dsInfo.hasViewStyle)
+          viewTypeStr = [DSStoreInfo viewTypeNameForViewStyle: dsInfo.viewStyle];
+        else
+          viewTypeStr = [viewerPrefs objectForKey: @"viewtype"];
+
+        if ([viewTypeStr isEqual: @"Browser"])
+          viewType = GWViewTypeBrowser;
+        else if ([viewTypeStr isEqual: @"List"])
+          viewType = GWViewTypeList;
+        else if ([viewTypeStr isEqual: @"Icon"])
+          viewType = GWViewTypeIcon;
+      }
+
+    if (dsInfo.loaded && dsInfo.hasSidebarWidth)
+      {
+        sidebarWidth = dsInfo.sidebarWidth;
+      }
+    else
+      {
+        defEntry = [viewerPrefs objectForKey: @"sidebarwidth"];
+        sidebarWidth = defEntry ? [defEntry floatValue] : DEFAULT_SIDEBAR_WIDTH;
+      }
+    if (sidebarWidth < MIN_SIDEBAR_WIDTH) sidebarWidth = MIN_SIDEBAR_WIDTH;
+    if (sidebarWidth > MAX_SIDEBAR_WIDTH) sidebarWidth = MAX_SIDEBAR_WIDTH;
        
     ASSIGN (vwrwin, win);
     [vwrwin setDelegate: self];
 
     // ================================================================
-    // DS_Store Integration - Load comprehensive Mac metadata
+    // DS_Store Integration - window geometry (dsInfo loaded above)
     // ================================================================
-    DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path]];
     BOOL geometryApplied = NO;
-    
+
     if (dsInfo.loaded && dsInfo.hasWindowFrame) {
       NSRect dsGeometry = [dsInfo gnustepWindowFrameForScreen:[NSScreen mainScreen]];
       
@@ -320,13 +330,16 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
        
       [pathsScroll setDelegate: pathsView];
        
-    } else if (viewType == GWViewTypeBrowser ) {    
+    } else if (viewType == GWViewTypeBrowser ) {
+      [nviewScroll setAutohidesScrollers: NO];
+      [nviewScroll setHasHorizontalScroller: YES];
+      [nviewScroll setHasVerticalScroller: YES];
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
 		                            visibleColumns: visibleCols
-                                      scroller: [pathsScroll horizontalScroller]
+                                      scroller: [nviewScroll horizontalScroller]
                                     cellsIcons: NO
-                                 editableCells: NO   
+                                 editableCells: NO
                                selectionColumn: YES];
     }
 
@@ -467,7 +480,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   r = NSMakeRect(xmargin, pathscrh, w - (xmargin * 2), h - pathscrh - ymargin);
   nviewScroll = [[GWViewerScrollView alloc] initWithFrame: r inViewer: self];
   [nviewScroll setBorderType: NSBezelBorder];
-  hasScroller = ((viewType ==GWViewTypeIcon) || (viewType ==GWViewTypeList));
+  hasScroller = (viewType != GWViewTypeBrowser);
   [nviewScroll setHasHorizontalScroller: NO];
   [nviewScroll setHasVerticalScroller: hasScroller];
   resizeMask = NSViewNotSizable | NSViewWidthSizable | NSViewHeightSizable;
@@ -570,7 +583,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   }
   [vwrwin makeKeyAndOrderFront: nil];
   [self tileViews];
-  [self scrollToBeginning];    
+  [self scrollToBeginning];
 }
 
 - (void)deactivate
@@ -1047,18 +1060,18 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
     [updatedprefs setObject: [vwrwin stringWithSavedFrame] 
                      forKey: @"geometry"];
 
-    // TODO: Save geometry to .DS_Store for Mac compatibility (writing not yet implemented)
-    // DSStoreInfo currently only supports reading
+    // Save view settings to .DS_Store for Mac interoperability
+    {
+      GWViewSettingsManager *sm = [GWViewSettingsManager managerForDirectoryPath:[baseNode path]];
+      DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path] loadImmediately:NO];
+      [dsInfo takeValuesFromViewerPrefs:updatedprefs];
+      [sm writeSettings:dsInfo];
+    }
 
     [baseNode checkWritable];
 
-    if ([baseNode isWritable] && (rootViewer == NO)
-              && ([[fsnodeRep volumes] containsObject: [baseNode path]] == NO)) {
-      NSString *dictPath = [[baseNode path] stringByAppendingPathComponent: @".gwdir"];
-
-      [updatedprefs writeToFile: dictPath atomically: YES];
-    } else {
-      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	    
+    {
+      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
       [defaults setObject: updatedprefs forKey: defaultsKeyStr];
     }
     
@@ -1281,7 +1294,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
     closing = YES;
     [self updateDefaults];
     [vwrwin setDelegate: nil];
-    [manager viewerWillClose: self]; 
+    [manager viewerWillClose: self];
   }
 }
 
@@ -1528,6 +1541,8 @@ constrainMinCoordinate:(CGFloat)proposedMin
  
       RETAIN (selection);
     
+      if ([nodeView respondsToSelector: @selector(releaseScroller)])
+        [nodeView releaseScroller];
       [nviewScroll setDocumentView: nil];	
     
       if (tag == GWViewTypeBrowser)
@@ -1535,13 +1550,14 @@ constrainMinCoordinate:(CGFloat)proposedMin
           [pathsScroll setDelegate: nil];
           [pathsView setOwnsScroller: NO];
 
-          [nviewScroll setHasVerticalScroller: NO];
-          [nviewScroll setHasHorizontalScroller: NO];
+          [nviewScroll setAutohidesScrollers: NO];
+          [nviewScroll setHasHorizontalScroller: YES];
+          [nviewScroll setHasVerticalScroller: YES];
 
           nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                                       inViewer: self
                                                 visibleColumns: visibleCols
-                                                      scroller: [pathsScroll horizontalScroller]
+                                                      scroller: [nviewScroll horizontalScroller]
                                                     cellsIcons: NO
                                                  editableCells: NO
                                                selectionColumn: YES];
@@ -1711,9 +1727,67 @@ constrainMinCoordinate:(CGFloat)proposedMin
 
 - (void)chooseLabelColor:(id)sender
 {
-  if ([nodeView respondsToSelector: @selector(setTextColor:)]) {
+  NSInteger tag = [sender tag];
+  if (tag < 0 || tag > 7) return;
 
-  }
+  DSStoreLabelColor labelColor = (DSStoreLabelColor)tag;
+
+  NSArray *selection = [nodeView selectedNodes];
+  if (!selection || [selection count] == 0)
+    return;
+
+  NSString *basePath = [baseNode path];
+  if (![basePath hasSuffix: @"/"])
+    {
+      basePath = [basePath stringByAppendingString: @"/"];
+    }
+
+  /* Create a DSStoreInfo to hold the labels */
+  DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath: [baseNode path]
+                                           loadImmediately: NO];
+  NSMutableDictionary *tagColors = [NSMutableDictionary dictionary];
+
+  for (FSNode *node in selection)
+    {
+      if ([node isEqual: baseNode]) continue;
+
+      NSString *nodePath = [node path];
+      NSString *filename = [node name];
+
+      if ([nodePath hasPrefix: basePath])
+        {
+          filename = [nodePath substringFromIndex: [basePath length]];
+        }
+
+      DSStoreIconInfo *info = [dsInfo iconInfoForFilename: filename];
+      if (!info)
+        {
+          info = [DSStoreIconInfo infoForFilename: filename];
+        }
+      [info setLabelColor: labelColor];
+      [info setHasLabelColor: YES];
+      [dsInfo setIconInfo: info forFilename: filename];
+
+      if (labelColor != DSStoreLabelColorNone)
+        {
+          NSColor *color = [DSStoreIconInfo colorForLabelColor: labelColor];
+          if (color)
+            {
+              [tagColors setObject: color forKey: filename];
+            }
+        }
+    }
+
+  /* Visual feedback */
+  if ([nodeView respondsToSelector: @selector(setTagColorsFromDictionary:)])
+    {
+      [(FSNIconsView *)nodeView setTagColorsFromDictionary: tagColors];
+    }
+
+  /* Persist via settings manager */
+  GWViewSettingsManager *sm;
+  sm = [GWViewSettingsManager managerForDirectoryPath: [baseNode path]];
+  [sm writeSettings: dsInfo];
 }
 
 - (void)chooseBackColor:(id)sender
@@ -1864,9 +1938,17 @@ constrainMinCoordinate:(CGFloat)proposedMin
       }
 
       return NO;
+
+    } else if (sel_isEqual(action, @selector(setLabelForNodes:))) {
+      // Label menu items are enabled when there's a valid selection
+      if (lastSelection && [lastSelection count]
+            && ([lastSelection isEqual: baseNodeArray] == NO)) {
+        return YES;
+      }
+      return NO;
     }
-    
-    return YES;   
+
+    return YES;
   } else {
     SEL action = [menuItem action];
     if (sel_isEqual(action, @selector(makeKeyAndOrderFront:))) {

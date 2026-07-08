@@ -31,6 +31,7 @@
 #import "FSNListView.h"
 #import "FSNTextCell.h"
 #import "FSNFunctions.h"
+#import "FSNMetadataProvider.h"
 
 #define ICNSIZE (24)
 #define CELLS_HEIGHT (28.0)
@@ -571,11 +572,12 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
               row:(NSInteger)rowIndex
 {
   FSNInfoType ident = [[aTableColumn identifier] intValue];
-  FSNTextCell *cell = (FSNTextCell *)[aTableColumn dataCell];
   FSNListViewNodeRep *rep = [nodeReps objectAtIndex: rowIndex];
 
   if (ident == FSNInfoNameType)
     {
+      FSNTextCell *cell = (FSNTextCell *)aCell;
+
       if ([rep iconSelected])
 	{
 	  [cell setIcon: [rep openIcon]];
@@ -591,19 +593,26 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
       else {
 	[cell setIcon: [rep icon]];
       }
+
+      /* Pass tag color (Finder label) and path from rep to cell */
+      if ([rep respondsToSelector: @selector(tagColor)])
+        [cell setTagColor: [rep tagColor]];
+      if ([cell respondsToSelector: @selector(setNodePath:)])
+        [cell setNodePath: [[rep node] path]];
+
+      if ([rep isLocked])
+	{
+	  [cell setTextColor: [NSColor disabledControlTextColor]];
+	}
+      else
+	{
+	  [cell setTextColor: [NSColor controlTextColor]];
+	}
     }
   else if (ident == FSNInfoDateType)
     {
+      FSNTextCell *cell = (FSNTextCell *)aCell;
       [cell setDateCell: YES];
-    }
-
-  if ([rep isLocked])
-    {
-      [cell setTextColor: [NSColor disabledControlTextColor]];
-    }
-  else
-    {
-      [cell setTextColor: [NSColor controlTextColor]];
     }
 }
 
@@ -731,32 +740,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   FSNode *infoNode = [self infoNode];
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   NSString *prefsname = [NSString stringWithFormat: @"viewer_at_%@", [infoNode path]];
-  NSDictionary *nodeDict = nil;
-
-  if ([infoNode isWritable]
-      && ([[fsnodeRep volumes] containsObject: [node path]] == NO))
-    {
-      NSString *infoPath = [[infoNode path] stringByAppendingPathComponent: @".gwdir"];
-
-      if ([[NSFileManager defaultManager] fileExistsAtPath: infoPath]) {
-	NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: infoPath];
-
-	if (dict)
-	  {
-	    nodeDict = [NSDictionary dictionaryWithDictionary: dict];
-	  }
-      }
-    }
-
-  if (nodeDict == nil)
-    {
-      id defEntry = [defaults dictionaryForKey: prefsname];
-
-      if (defEntry)
-	{
-	  nodeDict = [NSDictionary dictionaryWithDictionary: defEntry];
-	}
-    }
+  NSDictionary *nodeDict = [defaults dictionaryForKey: prefsname];
 
   if (nodeDict)
     {
@@ -788,36 +772,12 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     {
       NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
       NSString *prefsname = [NSString stringWithFormat: @"viewer_at_%@", [infoNode path]];
-      NSString *infoPath = [[infoNode path] stringByAppendingPathComponent: @".gwdir"];
-      BOOL writable = ([infoNode isWritable] && ([[fsnodeRep volumes] containsObject: [node path]] == NO));
 
-      if (writable)
-	{
-	  if ([[NSFileManager defaultManager] fileExistsAtPath: infoPath])
-	    {
-	      NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: infoPath];
-
-	      if (dict)
-		{
-		  updatedInfo = [dict mutableCopy];
-		}
-	    }
-
-	}
+      NSDictionary *prefs = [defaults dictionaryForKey: prefsname];
+      if (prefs)
+        updatedInfo = [prefs mutableCopy];
       else
-	{
-	  NSDictionary *prefs = [defaults dictionaryForKey: prefsname];
-
-	  if (prefs)
-	    {
-	      updatedInfo = [prefs mutableCopy];
-	    }
-	}
-
-      if (updatedInfo == nil)
-	{
-	  updatedInfo = [NSMutableDictionary new];
-	}
+        updatedInfo = [NSMutableDictionary new];
 
       [updatedInfo setObject: [self columnsDescription]
 		      forKey: @"list_view_columns"];
@@ -831,14 +791,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 	}
 
       if (ondisk)
-	{
-	  if (writable)
-	    {
-	      [updatedInfo writeToFile: infoPath atomically: YES];
-	    } else {
-	    [defaults setObject: updatedInfo forKey: prefsname];
-	  }
-	}
+        [defaults setObject: updatedInfo forKey: prefsname];
     }
 
   RELEASE (arp);
@@ -1990,7 +1943,6 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   else
     {
       NSPasteboard *pb;
-      NSDragOperation sourceDragMask;
       NSArray *sourcePaths;
       NSString *operation;
       NSString *source;
@@ -1999,7 +1951,6 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
       NSString *trashPath;
       NSUInteger i;
 
-      sourceDragMask = [sender draggingSourceOperationMask];
       pb = [sender draggingPasteboard];
       operation = nil;
 
@@ -2096,6 +2047,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   RELEASE (lockedicon);
   RELEASE (spopenicon);
   RELEASE (extInfoStr);
+  RELEASE (tagColor);
   [super dealloc];
 }
 
@@ -2111,6 +2063,11 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
       ASSIGN (node, anode);
       ASSIGN (icon, [fsnodeRep iconOfSize: ICNSIZE forNode: node]);
+
+      /* Load Finder label color from the metadata provider */
+      ASSIGN (tagColor,
+              [[[FSNodeRep sharedInstance] metadataProvider]
+                labelColorForPath: [anode path]]);
 
       openicon = nil;
       lockedicon = nil;
@@ -2131,6 +2088,11 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 - (NSImage *)icon
 {
   return icon;
+}
+
+- (NSColor *)tagColor
+{
+  return tagColor;
 }
 
 - (NSImage *)openIcon
@@ -2189,6 +2151,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 {
   ASSIGN (node, anode);
   ASSIGN (icon, [fsnodeRep iconOfSize: ICNSIZE forNode: node]);
+  DESTROY (tagColor);
   [self setLocked: [node isLocked]];
 }
 

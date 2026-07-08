@@ -40,16 +40,12 @@ typedef enum BackImageStyle
 
 @interface GWDesktopView : FSNIconsView
 {
-  NSRect screenFrame;  
-  NSRect *grid;
-  NSInteger gridItemsCount;
-  NSInteger rowItemsCount;
+  NSRect screenFrame;
 
   NSImage *dragIcon;
   NSPoint dragPoint;
-  NSUInteger insertIndex;
   BOOL dragLocalIcon;
-  
+
   NSImage *backImage;
   NSString *imagePath;
   BackImageStyle backImageStyle;
@@ -58,7 +54,7 @@ typedef enum BackImageStyle
   NSMutableArray *mountedVolumes;
   NSMutableDictionary *desktopInfo;
   NSMutableDictionary *expectedUnmountPaths; // path -> NSDate, tracks expected unmounts
-      
+
   GWDesktopManager *manager;
 }
 
@@ -78,23 +74,9 @@ typedef enum BackImageStyle
 
 - (void)dockPositionDidChange;
 
-- (NSUInteger)firstFreeGridIndex;
-
-- (NSUInteger)firstFreeGridIndexAfterIndex:(NSUInteger)index;
-
-- (BOOL)isFreeGridIndex:(NSUInteger)index;
-
-- (FSNIcon *)iconWithGridIndex:(NSUInteger)index;
-
 - (NSArray *)iconsWithGridOriginX:(float)x;
 
 - (NSArray *)iconsWithGridOriginY:(float)y;
-
-- (NSUInteger)indexOfGridRectContainingPoint:(NSPoint)p;
-
-- (NSRect)iconBoundsInGridAtIndex:(NSUInteger)index;
-
-- (void)makeIconsGrid;
 
 - (void)getDesktopInfo;
 

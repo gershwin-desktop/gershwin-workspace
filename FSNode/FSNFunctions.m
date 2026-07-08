@@ -228,3 +228,25 @@ void showAlertNameInUse(Class c, NSString *newname)
                             NSLocalizedStringFromTableInBundle(@" is already in use!", nil, [NSBundle bundleForClass:c], @"")], 
                   NSLocalizedStringFromTableInBundle(@"Continue", nil, [NSBundle bundleForClass:c], @""), nil, nil); 
 }
+
+
+void
+FSNDrawLabelDot(NSRect dotRect, NSColor *color)
+{
+  if (color == nil)
+    return;
+
+  /* Drop shadow */
+  [[NSColor colorWithCalibratedWhite: 0.0 alpha: 0.3] set];
+  [[NSBezierPath bezierPathWithOvalInRect: NSOffsetRect(dotRect, 1, -1)] fill];
+
+  /* Filled dot */
+  [color set];
+  NSBezierPath *dp = [NSBezierPath bezierPathWithOvalInRect: dotRect];
+  [dp fill];
+
+  /* Hairline border */
+  [[NSColor colorWithCalibratedWhite: 0.0 alpha: 0.4] set];
+  [dp setLineWidth: 0.5];
+  [dp stroke];
+}

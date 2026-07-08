@@ -28,12 +28,15 @@
 
 #import <AppKit/AppKit.h>
 #import "DSStoreInfo.h"
+#import "GWViewSettingsManager.h"
+#import "GWViewerPrefs.h"
 #import "GWSpatialViewer.h"
 #import "GWViewersManager.h"
 #import "GWViewerWindow.h"
 #import "GWViewerScrollView.h"
 #import "GWViewerBrowser.h"
 #import "GWViewerIconsView.h"
+#import "GWSpatialIconsView.h"
 #import "GWViewerListView.h"
 #import "GWViewerPathsPopUp.h"
 #import "GWX11SpatialPath.h"
@@ -74,6 +77,7 @@
   RELEASE (viewerPrefs);
   RELEASE (dsStoreInfo);
   RELEASE (dsStorePath);
+  RELEASE (_settingsManager);
   
   [super dealloc];
 }
@@ -130,12 +134,11 @@
         RETAIN (rootViewerKey);
       }
       
-      prefsname = [NSString stringWithFormat: @"viewer_at_%@_%lu",
-                            [node path], [rootViewerKey unsignedLongValue]];
+      prefsname = GWViewerPrefsKey([node path], YES, rootViewerKey, NO);
 
     } else {
       rootViewerKey = nil;
-      prefsname = [NSString stringWithFormat: @"viewer_at_%@", [node path]];
+      prefsname = GWViewerPrefsKey([node path], YES, nil, NO);
     }
 
     if ([baseNode isWritable] && (rootviewer == NO) && (rootViewerKey == nil) 
@@ -154,6 +157,14 @@
     if (viewerPrefs == nil) {
       defEntry = [defaults dictionaryForKey: prefsname];
 
+      if (defEntry == nil) {
+        /* One-shot fallback to the pre-split key shared with the browser,
+         * so existing users keep their shelf/geometry.  Writes always go
+         * to the new spatial key. */
+        defEntry = [defaults dictionaryForKey:
+          GWViewerLegacySharedPrefsKey([node path], rootViewerKey)];
+      }
+
       if (defEntry) {
         viewerPrefs = [defEntry copy];
       } else {
@@ -162,11 +173,44 @@
     }
 
     // ================================================================
-    // DS_Store Integration - Load comprehensive metadata
+    // DS_Store Integration - Load view settings (spec §2)
+    //   Tier 1: $FOLDER/.DS_Store
+    //   Tier 2: per-volume cache
+    //   Tier 3: defaults
     // ================================================================
-    // Store in ivar for later use (view switching, etc.)
-    ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath:[baseNode path]]);
-    
+    // Create the view-settings manager with the full read/write hierarchy
+    _settingsManager = [[GWViewSettingsManager managerForDirectoryPath:[baseNode path]] retain];
+
+    // Load working copy of view settings via the manager
+    // (readSettings returns autoreleased; ASSIGN retains it)
+    ASSIGN(dsStoreInfo, [_settingsManager readSettings]);
+    if (dsStoreInfo == nil) {
+      // Fallback: direct load (shouldn't normally happen)
+      ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath:[baseNode path]]);
+    }
+
+    /* One-time migration off the legacy per-folder .gwdir: fold its view
+     * settings into .DS_Store (the single source of truth now) and keep the
+     * non-DS_Store remainder (shelf, last selection, geometry) in user
+     * defaults, then delete the .gwdir so it is never read or written again. */
+    if ([baseNode isWritable] && (rootviewer == NO) && (rootViewerKey == nil)
+        && ([[fsnodeRep volumes] containsObject: [baseNode path]] == NO)) {
+      NSString *legacyPath = [[baseNode path] stringByAppendingPathComponent: @".gwdir"];
+      NSFileManager *fmgr = [NSFileManager defaultManager];
+      if ([fmgr fileExistsAtPath: legacyPath]) {
+        /* Merge, don't clobber: the just-read .DS_Store wins; the legacy
+         * .gwdir only fills fields the .DS_Store does not already have. */
+        [dsStoreInfo takeValuesFromViewerPrefs: viewerPrefs
+                                preservingExisting: YES];
+        [_settingsManager writeSettings: dsStoreInfo];
+        [[NSUserDefaults standardUserDefaults] setObject: viewerPrefs
+                                                  forKey: prefsname];
+        [fmgr removeFileAtPath: legacyPath handler: nil];
+        NSDebugLLog(@"gwspace",
+          @"GWSpatialViewer: migrated legacy .gwdir at %@ into .DS_Store", legacyPath);
+      }
+    }
+
     // Determine view type from DS_Store if available, otherwise use viewerPrefs
     viewType = [viewerPrefs objectForKey: @"viewtype"];
     
@@ -175,23 +219,8 @@
       NSDebugLLog(@"gwspace", @"║      APPLYING DS_STORE VIEW STYLE                                ║");
       NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
       
-      switch (dsStoreInfo.viewStyle) {
-        case DSStoreViewStyleIcon:
-          viewType = @"Icon";
-          NSDebugLLog(@"gwspace", @"║ View style from DS_Store: Icon");
-          break;
-        case DSStoreViewStyleList:
-          viewType = @"List";
-          NSDebugLLog(@"gwspace", @"║ View style from DS_Store: List");
-          break;
-        case DSStoreViewStyleColumn:
-          viewType = @"Browser";
-          NSDebugLLog(@"gwspace", @"║ View style from DS_Store: Browser (column)");
-        default:
-          viewType = @"Icon";
-          NSDebugLLog(@"gwspace", @"║ View style from DS_Store: defaulting to Icon");
-          break;
-      }
+      viewType = [DSStoreInfo viewTypeNameForViewStyle: dsStoreInfo.viewStyle];
+      NSDebugLLog(@"gwspace", @"║ View style from DS_Store: %@", viewType);
       NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
     }
 
@@ -285,14 +314,18 @@
     [self createSubviews];
 
     if ([viewType isEqual: @"Icon"]) {
-      nodeView = [[GWViewerIconsView alloc] initForViewer: self];
+      [scroll setHasVerticalScroller: YES];
+      nodeView = [[GWSpatialIconsView alloc] initForViewer: self];
 
-    } else if ([viewType isEqual: @"List"]) { 
+    } else if ([viewType isEqual: @"List"]) {
       NSRect r = [[scroll contentView] bounds];
       
       nodeView = [[GWViewerListView alloc] initWithFrame: r forViewer: self];
 
     } else if ([viewType isEqual: @"Browser"]) {
+      [scroll setAutohidesScrollers: NO];
+      [scroll setHasHorizontalScroller: YES];
+      [scroll setHasVerticalScroller: YES];
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
 		                            visibleColumns: visibleCols
@@ -457,7 +490,7 @@
   r = NSMakeRect(margin, 0, w - (margin * 2), h - boxh);
   scroll = [[GWViewerScrollView alloc] initWithFrame: r inViewer: self];
   [scroll setBorderType: NSBezelBorder];
-  hasScroller = ([viewType isEqual: @"Icon"] || [viewType isEqual: @"List"]);
+  hasScroller = [viewType isEqual: @"List"];
   [scroll setHasHorizontalScroller: YES];
   [scroll setHasVerticalScroller: hasScroller];
   [scroll setAutohidesScrollers: YES];  // Automatically hide scrollbars when not needed
@@ -475,6 +508,14 @@
 - (FSNode *)baseNode
 {
   return baseNode;
+}
+
+/* The manager's viewerWillClose: asks any closing viewer for its defaults key
+ * to purge prefs of invalid nodes; GWViewer implements this but the spatial
+ * viewer never did (unrecognized selector on that path). */
+- (NSString *)defaultsKey
+{
+  return GWViewerPrefsKey([baseNode path], YES, rootViewerKey, NO);
 }
 
 - (BOOL)isShowingNode:(FSNode *)anode
@@ -567,6 +608,10 @@
 
 - (void)activate
 {
+  /* Restore delegate — windowWillClose: sets it to nil, so without this
+   * windowDidBecomeKey: would never fire when the window is reused. */
+  [vwrwin setDelegate: self];
+
   if ([vwrwin isMiniaturized]) {
     [vwrwin deminiaturize: nil];
   }
@@ -897,25 +942,39 @@
 
     [baseNode checkWritable];
 
-    if ([baseNode isWritable] && (rootviewer == NO) && (rootViewerKey == nil)
-            && ([[fsnodeRep volumes] containsObject: [baseNode path]] == NO)) {
-      NSString *dictPath = [[baseNode path] stringByAppendingPathComponent: @".gwdir"];
-            
-      [updatedprefs writeToFile: dictPath atomically: YES];
-    } else {
-      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
-      NSString *prefsname;
-    
-      if (rootViewerKey != nil) {
-        prefsname = [NSString stringWithFormat: @"viewer_at_%@_%lu",
-                            [baseNode path], [rootViewerKey unsignedLongValue]];
-      } else {
-        prefsname = [NSString stringWithFormat: @"viewer_at_%@", [baseNode path]];
-      }    
-    
-      [defaults setObject: updatedprefs forKey: prefsname];
+    /* Persist the non-DS_Store remainder (shelf, last selection, geometry
+     * fallback) to user defaults; view settings go to .DS_Store below.  The
+     * legacy per-folder .gwdir file is no longer written. */
+    {
+      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+      [defaults setObject: updatedprefs
+                   forKey: GWViewerPrefsKey([baseNode path], YES,
+                                            rootViewerKey, NO)];
+
+      /* State now lives under the spatial-specific key; drop the pre-split
+       * shared entry so the one-shot read fallback can't later resurrect it. */
+      [defaults removeObjectForKey:
+        GWViewerLegacySharedPrefsKey([baseNode path], rootViewerKey)];
     }
-    
+
+    // ================================================================
+    // Save view settings to .DS_Store (interoperability, spec §3)
+    //   Tier 1: Try $FOLDER/.DS_Store (if writable, not policy-blocked)
+    //   Tier 2: Fallback to per-volume cache
+    //   Tier 3: Clean cache on success
+    // ================================================================
+    if (_settingsManager) {
+      // Update DSStoreInfo from the current preferences
+      if (dsStoreInfo == nil) {
+        ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath:[baseNode path]]);
+      }
+      [dsStoreInfo takeValuesFromViewerPrefs:updatedprefs];
+
+      // Write via the settings manager
+      [_settingsManager writeSettings:dsStoreInfo];
+    }
+
     ASSIGN (viewerPrefs, [updatedprefs makeImmutableCopyOnFail: NO]);
   }
 }
@@ -1019,10 +1078,7 @@
       }
     }
     
-    if ([nodeView respondsToSelector:@selector(setFreePositioningEnabled:)]) {
-      [(FSNIconsView *)nodeView setCustomIconPositions:iconPositions];
-      [(FSNIconsView *)nodeView setFreePositioningEnabled:YES];
-    }
+    [(FSNIconsView *)nodeView setCustomIconPositions:iconPositions];
   } else {
     NSDebugLLog(@"gwspace", @"║ Free positioning: disabled");
   }
@@ -1072,9 +1128,6 @@
   // Apply grid spacing if available
   if (dsStoreInfo.hasGridSpacing && dsStoreInfo.gridSpacing > 0) {
     NSDebugLLog(@"gwspace", @"║ Setting grid spacing: %.1f", dsStoreInfo.gridSpacing);
-    if ([iconView respondsToSelector:@selector(setGridSpacing:)]) {
-      [(FSNIconsView *)iconView setGridSpacing:dsStoreInfo.gridSpacing];
-    }
   }
   
   // Apply background color if available
@@ -1099,53 +1152,6 @@
       [bgImage release];
     } else {
       NSDebugLLog(@"gwspace", @"║   ✗ Failed to load background image from: %@", dsStoreInfo.backgroundImagePath);
-    }
-  }
-  
-  // Check for free icon positioning (DS_Store icon locations)
-  if ([dsStoreInfo hasAnyIconPositions]) {
-    NSDebugLLog(@"gwspace", @"║ Free positioning mode: ENABLED");
-    NSDebugLLog(@"gwspace", @"║ Icons with custom positions: %lu", 
-          (unsigned long)[[dsStoreInfo filenamesWithPositions] count]);
-    
-    // Get view dimensions for coordinate conversion
-    CGFloat viewHeight = dsStoreInfo.windowFrame.size.height;
-    CGFloat iconHeight = dsStoreInfo.hasIconSize ? (CGFloat)dsStoreInfo.iconSize : 64.0;
-    
-    NSDebugLLog(@"gwspace", @"║ DS_Store content height: %.0f, Icon height: %.0f", viewHeight, iconHeight);
-    
-    // Build positions dictionary with coordinate conversion
-    NSMutableDictionary *iconPositions = [NSMutableDictionary dictionary];
-    for (NSString *filename in [dsStoreInfo filenamesWithPositions]) {
-      DSStoreIconInfo *iconInfo = [dsStoreInfo iconInfoForFilename:filename];
-      if (iconInfo && iconInfo.hasPosition) {
-        NSPoint gnustepPos = [iconInfo gnustepPositionForViewHeight:viewHeight 
-                                                         iconHeight:iconHeight];
-        [iconPositions setObject:[NSValue valueWithPoint:gnustepPos] 
-                          forKey:filename];
-        NSDebugLLog(@"gwspace", @"║   '%@': DS_Store(%.0f, %.0f) → GNUstep(%.0f, %.0f)", 
-              filename, 
-              iconInfo.position.x, iconInfo.position.y,
-              gnustepPos.x, gnustepPos.y);
-      }
-    }
-    
-    // Enable free positioning mode
-    if ([iconView respondsToSelector:@selector(setFreePositioningEnabled:)]) {
-      [(FSNIconsView *)iconView setCustomIconPositions:iconPositions];
-      [(FSNIconsView *)iconView setFreePositioningEnabled:YES];
-    }
-  } else {
-    NSDebugLLog(@"gwspace", @"║ Free positioning mode: disabled (no custom icon positions)");
-    
-    // Disable free positioning if it was previously enabled
-    if ([iconView respondsToSelector:@selector(setFreePositioningEnabled:)]) {
-      [(FSNIconsView *)iconView setFreePositioningEnabled:NO];
-    }
-    
-    if (dsStoreInfo.hasIconArrangement) {
-      NSDebugLLog(@"gwspace", @"║ Arrangement: %@", 
-            dsStoreInfo.iconArrangement == DSStoreIconArrangementNone ? @"none" : @"grid");
     }
   }
   
@@ -1322,6 +1328,11 @@
   historyPosition = pos;
 }
 
+- (GWViewSettingsManager *)settingsManager
+{
+  return _settingsManager;
+}
+
 @end
 
 
@@ -1332,7 +1343,27 @@
 
 - (void)windowDidBecomeKey:(NSNotification *)aNotification
 {
-  NSArray *selection = [nodeView selectedNodes];  
+  /* Reload settings from cache — the window may have been reused from a
+   * previous session via viewerWithBaseNode: + activate, in which case
+   * dsStoreInfo was never re-read.  This ensures label colours, positions,
+   * icon sizes, etc. reflect the latest written state. */
+  if (_settingsManager)
+    {
+      DSStoreInfo *fresh = [_settingsManager readSettings];
+      if (fresh)
+        {
+          ASSIGN(dsStoreInfo, fresh);
+          /* Re-apply DS_Store settings to update the view */
+          if ([viewType isEqual: @"Icon"])
+            [self applyDSStoreSettingsToIconView: nodeView];
+          else if ([viewType isEqual: @"List"])
+            [self applyDSStoreSettingsToListView: nodeView];
+          else if ([viewType isEqual: @"Browser"])
+            [self applyDSStoreSettingsToBrowserView: nodeView];
+        }
+    }
+
+  NSArray *selection = [nodeView selectedNodes];
   int count = [selection count];
   
   [vwrwin makeFirstResponder: nodeView]; 
@@ -1374,7 +1405,7 @@
     [self teardownDSStoreWatcher];
     [self updateDefaults];
     [vwrwin setDelegate: nil];
-    [manager viewerWillClose: self]; 
+    [manager viewerWillClose: self];
   }
 }
 
@@ -1589,9 +1620,14 @@
 
     RETAIN (opennodes);
     
+    if ([nodeView respondsToSelector: @selector(releaseScroller)])
+      [nodeView releaseScroller];
     [scroll setDocumentView: nil];	
     
     if ([requestedType isEqualToString:@"Browser"]) {
+      [scroll setAutohidesScrollers: NO];
+      [scroll setHasHorizontalScroller: YES];
+      [scroll setHasVerticalScroller: YES];
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
 		                            visibleColumns: visibleCols
@@ -1600,14 +1636,13 @@
                                  editableCells: YES   
                                selectionColumn: NO]; 
       
-      [scroll setHasVerticalScroller: NO];
       ASSIGN (viewType, @"Browser");
       
     } else if ([requestedType isEqualToString:@"Icon"]) {
-      nodeView = [[GWViewerIconsView alloc] initForViewer: self];
+      nodeView = [[GWSpatialIconsView alloc] initForViewer: self];
       [scroll setHasVerticalScroller: YES];
       ASSIGN (viewType, @"Icon");
-      
+
     } else if ([requestedType isEqualToString:@"List"]) {
       NSRect r = [[scroll contentView] bounds];
 
@@ -1615,14 +1650,24 @@
       [scroll setHasVerticalScroller: YES];
       ASSIGN (viewType, @"List");
     }
-    
-    [scroll setDocumentView: nodeView];	
+
+    [scroll setDocumentView: nodeView];
     RELEASE (nodeView);
     [self applyContentBackgroundColor];
-    
+
     if (nodeView && baseNode) {
-      [nodeView showContentsOfNode: baseNode]; 
-      
+      [nodeView showContentsOfNode: baseNode];
+
+      // Reload dsStoreInfo before applying — it may have been updated since init
+      if (_settingsManager)
+        {
+          DSStoreInfo *fresh = [_settingsManager readSettings];
+          if (fresh)
+            {
+              ASSIGN(dsStoreInfo, fresh);
+            }
+        }
+
       // Apply DS_Store settings for the new view type
       if ([viewType isEqual: @"Icon"]) {
         [self applyDSStoreSettingsToIconView:nodeView];
@@ -1745,8 +1790,72 @@
 
 - (void)chooseLabelColor:(id)sender
 {
-  if ([nodeView respondsToSelector: @selector(setTextColor:)]) {
-  }
+  NSInteger tag = [sender tag];
+  if (tag < 0 || tag > 7) return;
+
+  DSStoreLabelColor labelColor = (DSStoreLabelColor)tag;
+
+  NSArray *selection = [nodeView selectedNodes];
+  if (!selection || [selection count] == 0)
+    return;
+
+  /* Ensure dsStoreInfo exists */
+  if (!dsStoreInfo)
+    {
+      ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath: [baseNode path]]);
+    }
+
+  NSString *basePath = [baseNode path];
+  if (![basePath hasSuffix: @"/"])
+    {
+      basePath = [basePath stringByAppendingString: @"/"];
+    }
+
+  NSMutableDictionary *tagColors = [NSMutableDictionary dictionary];
+
+  for (FSNode *node in selection)
+    {
+      if ([node isEqual: baseNode]) continue;
+
+      NSString *nodePath = [node path];
+      NSString *filename = [node name];
+
+      /* Get relative path for .DS_Store lookup */
+      if ([nodePath hasPrefix: basePath])
+        {
+          filename = [nodePath substringFromIndex: [basePath length]];
+        }
+
+      DSStoreIconInfo *info = [dsStoreInfo iconInfoForFilename: filename];
+      if (!info)
+        {
+          info = [DSStoreIconInfo infoForFilename: filename];
+        }
+      [info setLabelColor: labelColor];
+      [info setHasLabelColor: YES];  /* Always YES so lclr=0 persists as "None" */
+      [dsStoreInfo setIconInfo: info forFilename: filename];
+
+      if (labelColor != DSStoreLabelColorNone)
+        {
+          NSColor *color = [DSStoreIconInfo colorForLabelColor: labelColor];
+          if (color)
+            {
+              [tagColors setObject: color forKey: filename];
+            }
+        }
+    }
+
+  /* Visual feedback — apply tag colors to the icon view */
+  if ([nodeView respondsToSelector: @selector(setTagColorsFromDictionary:)])
+    {
+      [(FSNIconsView *)nodeView setTagColorsFromDictionary: tagColors];
+    }
+
+  /* Persist via settings manager (writable → .DS_Store, else → cache) */
+  if (_settingsManager)
+    {
+      [_settingsManager writeSettings: dsStoreInfo];
+    }
 }
 
 - (void)chooseBackColor:(id)sender

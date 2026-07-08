@@ -20,6 +20,8 @@ FSNode_OBJC_FILES = \
          FSNIconsView.m \
          FSNListView.m \
          FSNPathComponentsViewer.m \
+         FSNPlacementEnumerator.m \
+         FSNIconPlacement.m \
 
 
 FSNode_HEADER_FILES = \
@@ -36,6 +38,10 @@ FSNode_HEADER_FILES = \
          FSNIconsView.h \
          FSNListView.h \
          FSNPathComponentsViewer.h \
+         FSNIconPlacement.h \
+         FSNPlacementEnumerator.h \
+         FSNMetadataProvider.h \
+         FSNIconPositionStore.h \
 
 
 FSNode_HAS_RESOURCE_BUNDLE = yes                                          
@@ -43,6 +49,11 @@ FSNode_HAS_RESOURCE_BUNDLE = yes
 FSNode_RESOURCE_FILES = \
     Resources/Images/* \
     Resources/*.lproj \
+
+# FSNode no longer references the Finder-metadata (GWMetadata) or .DS_Store
+# (DSStore) stacks directly — the application supplies those through the
+# FSNMetadataProvider / FSNIconPositionStore protocols — so this framework
+# links and includes neither.
 
 FSNode_LANGUAGES = \
 	English \

@@ -31,6 +31,7 @@
 #import <unistd.h>
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
+#import "FSNMetadataProvider.h"
 
 /*
  *****************************************************************************
@@ -289,6 +290,17 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
           key = nodepath;
         }
 
+      // Check for a custom icon from Finder metadata (directories/packages/bundles)
+      {
+        NSString *realDirPath = [nodepath stringByResolvingSymlinksInPath];
+        NSImage *customIcon = [[self metadataProvider] customIconForPath: realDirPath];
+        if (customIcon)
+          {
+            icon = [self cachedIconOfSize: size forKey: [realDirPath stringByAppendingString:@".customicon"] addBaseIcon: customIcon];
+            key = nil;  // prevent overwriting with default icon below
+          }
+      }
+
       if (key != nil)
 	{
 	  icon = [self cachedIconOfSize: size forKey: key];
@@ -353,6 +365,18 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	  }
 	}
       // no thumbnail found
+
+      // Check for a custom icon from Finder metadata (non-directory files)
+      if (icon == nil)
+        {
+          NSString *realMetadataPath = [nodepath stringByResolvingSymlinksInPath];
+          NSImage *customIcon = [[self metadataProvider] customIconForPath: realMetadataPath];
+          if (customIcon)
+            {
+              icon = [self cachedIconOfSize: size forKey: [realMetadataPath stringByAppendingString:@".customicon"] addBaseIcon: customIcon];
+            }
+        }
+
       if (icon == nil)
 	{
           NSString *linkKey;

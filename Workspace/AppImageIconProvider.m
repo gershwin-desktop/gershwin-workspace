@@ -1112,8 +1112,8 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 
     if (AppImageHasType2Magic([realPath fileSystemRepresentation])) {
       // Check if the proper icon is now available
-      FSNodeRep *fsnodeRep = [FSNodeRep sharedInstance];
-      NSImage *currentIcon = [fsnodeRep iconOfSize: iconSize forNode: node];
+      FSNodeRep *fsnodeRepShared = [FSNodeRep sharedInstance];
+      NSImage *currentIcon = [fsnodeRepShared iconOfSize: iconSize forNode: node];
       
       if (currentIcon != icon && [[currentIcon name] isEqualToString: @"AppImageGeneric"] == NO) {
         // Icon has been updated, refresh our cached icon

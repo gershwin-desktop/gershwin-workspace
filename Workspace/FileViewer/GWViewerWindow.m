@@ -31,6 +31,8 @@
 // Forward declare methods to avoid warnings
 @interface NSObject (ViewerDelegateMethods)
 - (NSArray *)lastSelection;
+- (void)openSelection;
+- (void)openSelectionAsFolder;
 @end
 
 

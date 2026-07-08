@@ -372,11 +372,24 @@ typedef enum FSNSelectionMask {
   NSImage *trashFullIcon;
   
   float labelWFactor;
-    
+
   NSFileManager *fm;
+
+  id _metadataProvider;   /* id <FSNMetadataProvider>, set by the application */
+  id _iconPositionStore;  /* id <FSNIconPositionStore>, set by the application */
 }
 
 + (FSNodeRep *)sharedInstance;
+
+/* Finder-metadata provider (label colour, invisibility, custom icon, icon
+ * position).  Injected by the application; nil in a plain FSNode client. */
+- (void)setMetadataProvider:(id)provider;
+- (id)metadataProvider;
+
+/* Icon-position store (persists dragged/cleaned-up positions).  Injected by
+ * the application; nil in a plain FSNode client (positions not persisted). */
+- (void)setIconPositionStore:(id)store;
+- (id)iconPositionStore;
 
 - (NSArray *)directoryContentsAtPath:(NSString *)path;
 

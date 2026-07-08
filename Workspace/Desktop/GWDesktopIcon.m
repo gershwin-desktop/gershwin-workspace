@@ -27,6 +27,12 @@
 #include <Foundation/Foundation.h>
 #include <AppKit/AppKit.h>
 #include "GWDesktopIcon.h"
+#import "FSNIconsView.h"
+
+/* Forward declaration for repositionLocal:offset: inherited from FSNIcon */
+@interface FSNIcon (GWDesktopIconForwardDecl)
+- (void)repositionLocal:(NSEvent *)firstEvent offset:(NSSize)initialOffset;
+@end
 
 @implementation GWDesktopIcon
 
@@ -60,6 +66,39 @@
     }
 
   return self;
+}
+
+- (void)mouseUp:(NSEvent *)theEvent
+{
+  NSPoint location = [theEvent locationInWindow];
+  location = [self convertPoint: location fromView: nil];
+  BOOL onself = NO;
+
+  if (icnPosition == NSImageOnly)
+    {
+      onself = [self mouse: location inRect: icnBounds];
+    }
+  else
+    {
+      onself = ([self mouse: location inRect: icnBounds]
+                || [self mouse: location inRect: labelRect]);
+    }
+
+  if (onself && ([node isLocked] == NO) && ([theEvent clickCount] > 1))
+    {
+      // Route through the window's delegate (GWDesktopManager for desktop),
+      // which properly handles folders, packages, applications, and files.
+      id windowDelegate = [[self window] delegate];
+      if (windowDelegate && [windowDelegate respondsToSelector: @selector(openSelectionInNewViewer:)])
+        {
+          BOOL newv = (([theEvent modifierFlags] & NSControlKeyMask)
+                       || ([theEvent modifierFlags] & NSAlternateKeyMask));
+          [windowDelegate openSelectionInNewViewer: newv];
+        }
+      return;
+    }
+
+  [super mouseUp: theEvent];
 }
 
 - (void)mouseDown:(NSEvent *)theEvent
@@ -154,8 +193,21 @@
 
 	  if (startdnd == YES)
 	    {
-	      [container stopRepNameEditing];
-	      [self startExternalDragOnEvent: theEvent withMouseOffset: offset];
+	      /* Same gate as FSNIcon: reposition only in position-honoring
+	       * containers (the desktop is one; this keeps the sites in sync). */
+	      BOOL canReposition =
+	        [container respondsToSelector: @selector(repositionIcon:toCenterPoint:)];
+	      if (canReposition
+	          && [container respondsToSelector: @selector(honorsSavedPositions)])
+	        canReposition = [(FSNIconsView *)container honorsSavedPositions];
+
+	      if (canReposition)
+	        [self repositionLocal: theEvent offset: offset];
+	      else
+	        {
+	          [container stopRepNameEditing];
+	          [self startExternalDragOnEvent: theEvent withMouseOffset: offset];
+	        }
 	    }
 
 	  editstamp = [theEvent timestamp];

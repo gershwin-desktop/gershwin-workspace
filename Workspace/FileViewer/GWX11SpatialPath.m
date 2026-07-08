@@ -15,6 +15,10 @@
 
 /* Forward declarations to avoid pulling in headers with type issues */
 @class GWViewersManager;
+@interface NSObject (GWX11SpatialPathDelegateMethods)
+- (BOOL)isSpatial;
+- (FSNode *)baseNode;
+@end
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
 

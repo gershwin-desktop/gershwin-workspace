@@ -5,18 +5,17 @@ include $(GNUSTEP_MAKEFILES)/common.make
 # Command-line utility for .DS_Store file manipulation
 TOOL_NAME = dsutil
 
-dsutil_OBJC_FILES = dsutil.m \
-	../../DSStore/DSStore.m \
-	../../DSStore/DSBuddyAllocator.m \
-	../../DSStore/DSStoreEntry.m \
-	../../DSStore/DSStoreCodecs.m \
-	../../DSStore/SimpleColor.m
+dsutil_OBJC_FILES = dsutil.m
 
 # Man pages
 MAN1_PAGES = dsutil.1
 
 # Include path for DSStore headers (sibling subproject)
 dsutil_INCLUDE_DIRS += -I../../DSStore
+
+# Link libDSStore instead of recompiling its sources.
+ADDITIONAL_LIB_DIRS += -L../../DSStore/obj
+ADDITIONAL_TOOL_LIBS += -lDSStore
 
 # Compiler flags
 ADDITIONAL_OBJCFLAGS += -Wall

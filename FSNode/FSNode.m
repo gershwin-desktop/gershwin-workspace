@@ -29,6 +29,7 @@
 #import "FSNode.h"
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
+#import "FSNMetadataProvider.h"
 
 
 @implementation FSNode
@@ -872,6 +873,13 @@
   return [fsnodeRep isNodeLocked: self];
 }
 
+- (BOOL)isFinderInvisible
+{
+    if ([self isPlain] || [self isDirectory])
+        return [[fsnodeRep metadataProvider] isInvisibleAtPath: path];
+    return NO;
+}
+
 - (BOOL)isValid
 {
   BOOL valid = (attributes != nil);
@@ -1127,7 +1135,12 @@
 
 - (NSComparisonResult)compareAccordingToDate:(FSNode *)aNode
 {
-  return [[aNode modificationDate] compare: [self modificationDate]]; 
+  return [[aNode modificationDate] compare: [self modificationDate]];
+}
+
+- (NSComparisonResult)compareAccordingToCrDate:(FSNode *)aNode
+{
+  return [[aNode creationDate] compare: [self creationDate]];
 }
 
 - (NSComparisonResult)compareAccordingToSize:(FSNode *)aNode

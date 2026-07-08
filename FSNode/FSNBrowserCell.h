@@ -31,14 +31,15 @@
 
 @class FSNode;
 @class NSImage;
+@class NSColor;
 @class NSTextFieldCell;
 
 @interface FSNBrowserCell : NSBrowserCell <FSNodeRep>
 {
   FSNode *node;
   NSArray *selection;
-  NSString *selectionTitle; 
-  NSString *uncutTitle; 
+  NSString *selectionTitle;
+  NSString *uncutTitle;
   NSString *extInfoType;
 
   FSNInfoType showType;
@@ -48,16 +49,17 @@
 
   NSImage *icon;
   NSImage *selectedicon;
+  NSColor *tagColor;
   int icnsize;
   float icnh;
-  
+
   BOOL isLocked;
   BOOL iconSelected;
   BOOL isOpened;
 
   BOOL nameEdited;
-    
-  FSNodeRep *fsnodeRep;  
+
+  FSNodeRep *fsnodeRep;
 }
 
 - (void)setIcon;
@@ -68,9 +70,13 @@
 
 - (BOOL)unselectIcon;
 
-- (NSString *)cutTitle:(NSString *)title 
+- (NSString *)cutTitle:(NSString *)title
             toFitWidth:(float)width;
-            
+
+- (void)setTagColor:(NSColor *)color;
+
+- (NSColor *)tagColor;
+
 @end
 
 

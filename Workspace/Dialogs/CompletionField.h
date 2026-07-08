@@ -25,11 +25,13 @@
 
 #import <AppKit/NSTextView.h>
 
-@interface CompletionField : NSTextView 
+@interface CompletionField : NSTextView
 {
   id fm;
   id controller;
 }
+
+- (void)setController:(id)aController;
 
 @end
 
@@ -37,5 +39,6 @@
 @interface NSObject (CompletionField)
 
 - (void)completionFieldDidEndLine:(id)afield;
+- (void)completionFieldDidCancel:(id)afield;
 
 @end

@@ -64,6 +64,7 @@ static NSTimeInterval recentUserUnmountTimeout = 5.0;
 #import "ISOWrite/BlockDeviceInfo.h"
 #import "ISOWrite/DeviceEraseConfirmation.h"
 #import "GWDesktopWindow.h"
+#import "GWDockWindow.h"
 #import "Dock.h"
 #import "GWViewersManager.h"
 #import "GWViewer.h"
@@ -74,11 +75,21 @@ static NSTimeInterval recentUserUnmountTimeout = 5.0;
 #import "X11AppSupport.h"
 #import "Thumbnailer/GWThumbnailer.h"
 #import "GSGlobalShortcutsManager.h"
+#import "GSFileMetadata.h"
+#import "DSStore.h"
+#import "DSStoreInfo.h"
+#import "GWViewSettingsManager.h"
+#import "GWMetaArchive.h"
+#import "FSNIconsView.h"
+#import "GWMetadataProvider.h"
+#import "GWIconPositionStore.h"
+#import "GWArchiveOperation.h"
 #import "Network/NetworkFSNode.h"
 #import "Network/NetworkServiceManager.h"
 #import "Network/NetworkServiceItem.h"
 #import "Network/NetworkVolumeManager.h"
 #import "AVFSMount.h"
+#import "LowDiskWarn.h"
 #if HAVE_DBUS
 #import "DBusConnection.h"
 #import "FileManagerDBusInterface.h"
@@ -92,6 +103,17 @@ static Workspace *gworkspace = nil;
 
 NSString *_pendingSystemActionCommand = nil;
 NSString *_pendingSystemActionTitle = nil;
+
+/* Forward declarations for methods resolved at runtime on container/view objects.
+ * Avoids method-not-found warnings when calling on `id` typed objects. */
+@interface NSObject (WorkspaceForwardDecls)
+- (void)workspaceWillUnmountVolumeAtPath:(NSString *)vpath;
+- (void)workspaceDidUnmountVolumeAtPath:(NSString *)vpath;
+- (void)setCustomIconPositions:(NSDictionary *)positions;
+- (NSArray *)icons;
+- (void)cleanupIconPositions;
+- (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
+@end
 
 @interface Workspace (PrivateMethods)
 - (void)_updateTrashContents;
@@ -188,6 +210,7 @@ NSString *_pendingSystemActionTitle = nil;
   RELEASE (watchedPaths);
   RELEASE (history);
   RELEASE (openWithController);
+  RELEASE (openWithMenu);
   RELEASE (vwrsManager);
   RELEASE (dtopManager);
   DESTROY (inspector);
@@ -207,7 +230,8 @@ NSString *_pendingSystemActionTitle = nil;
   }
   RELEASE (storedAppinfoPath);
   RELEASE (storedAppinfoLock);
-  
+  DESTROY (lowDiskWarn);
+
 #if HAVE_DBUS
   DESTROY (fileManagerDBusInterface);
   DESTROY (dbusFileHandle);
@@ -267,6 +291,7 @@ NSString *_pendingSystemActionTitle = nil;
   // File menu
   menuItem = [mainMenu addItemWithTitle:_(@"File") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
+  [menu setAutoenablesItems: NO];
   [mainMenu setSubmenu: menu forItem: menuItem];
   
   menuItem = [menu addItemWithTitle:_(@"New Workspace Window") action:@selector(showViewer:) keyEquivalent:@"n"];
@@ -287,7 +312,9 @@ NSString *_pendingSystemActionTitle = nil;
   // Open With submenu
   menuItem = [menu addItemWithTitle:_(@"Open With") action:NULL keyEquivalent:@""];
   subMenu = AUTORELEASE ([NSMenu new]);
+  [subMenu setAutoenablesItems: NO];
   [menu setSubmenu: subMenu forItem: menuItem];
+  ASSIGN (openWithMenu, subMenu);
   menuItem = [menu addItemWithTitle:_(@"Open as Folder") action:@selector(openSelectionAsFolder:) keyEquivalent:@"O"];
   [[menu itemWithTitle:_(@"Open as Folder")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
 
@@ -305,7 +332,7 @@ NSString *_pendingSystemActionTitle = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Compress \"item\"") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Compress") action:@selector(compressFiles:) keyEquivalent:@""];
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Duplicate") action:@selector(duplicateFiles:) keyEquivalent:@"d"];
   [menuItem setTarget:self];
@@ -332,8 +359,10 @@ NSString *_pendingSystemActionTitle = nil;
   
   menuItem = [menu addItemWithTitle:_(@"Find") action:@selector(showFinder:) keyEquivalent:@"f"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Tags...") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
+  // Label submenu
+  menuItem = [menu addItemWithTitle:_(@"Label") action:NULL keyEquivalent:@""];
+  subMenu = [self labelColorSubmenu];
+  [menu setSubmenu: subMenu forItem: menuItem];
 
   // Edit menu
   menuItem = [mainMenu addItemWithTitle:_(@"Edit") action:NULL keyEquivalent:@""];
@@ -403,11 +432,13 @@ NSString *_pendingSystemActionTitle = nil;
   
   menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Browsing") action:@selector(setViewerBehaviour:) keyEquivalent:@"b"];
   [menuItem setTarget:self];
+  [menuItem setTag:BROWSING];   /* read by -setViewerBehaviour: (locale-safe) */
   [subMenu addItem:menuItem];
   [menuItem release];
-  
+
   menuItem = [[NSMenuItem alloc] initWithTitle:_(@"Spatial") action:@selector(setViewerBehaviour:) keyEquivalent:@"s"];
   [menuItem setTarget:self];
+  [menuItem setTag:SPATIAL];
   [subMenu addItem:menuItem];
   [menuItem release];
   
@@ -512,25 +543,25 @@ NSString *_pendingSystemActionTitle = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Clean Up") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Clean Up") action:@selector(cleanUp:) keyEquivalent:@""];
   [menuItem setTarget:self];
-  
+
   // Clean Up By submenu
   menuItem = [menu addItemWithTitle:_(@"Clean Up By") action:NULL keyEquivalent:@""];
   subMenu = AUTORELEASE ([NSMenu new]);
   [menu setSubmenu: subMenu forItem: menuItem];
-  menuItem = [subMenu addItemWithTitle:_(@"Name") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [subMenu addItemWithTitle:_(@"Kind") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [subMenu addItemWithTitle:_(@"Date Modified") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [subMenu addItemWithTitle:_(@"Date Created") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [subMenu addItemWithTitle:_(@"Size") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [subMenu addItemWithTitle:_(@"Tags") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
+  menuItem = [subMenu addItemWithTitle:_(@"Name") action:@selector(cleanUpBy:) keyEquivalent:@""];
+  [menuItem setTarget:self]; [menuItem setTag: 0];
+  menuItem = [subMenu addItemWithTitle:_(@"Kind") action:@selector(cleanUpBy:) keyEquivalent:@""];
+  [menuItem setTarget:self]; [menuItem setTag: 1];
+  menuItem = [subMenu addItemWithTitle:_(@"Date Modified") action:@selector(cleanUpBy:) keyEquivalent:@""];
+  [menuItem setTarget:self]; [menuItem setTag: 2];
+  menuItem = [subMenu addItemWithTitle:_(@"Date Created") action:@selector(cleanUpBy:) keyEquivalent:@""];
+  [menuItem setTarget:self]; [menuItem setTag: 5];
+  menuItem = [subMenu addItemWithTitle:_(@"Size") action:@selector(cleanUpBy:) keyEquivalent:@""];
+  [menuItem setTarget:self]; [menuItem setTag: 3];
+  menuItem = [subMenu addItemWithTitle:_(@"Tags") action:@selector(cleanUpBy:) keyEquivalent:@""];
+  [menuItem setTarget:self]; [menuItem setTag: 0];
   
   [menu addItem:[NSMenuItem separatorItem]];
   
@@ -638,8 +669,9 @@ NSString *_pendingSystemActionTitle = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Run...") action:@selector(runCommand:) keyEquivalent:@"0"];
+  menuItem = [menu addItemWithTitle:_(@"Run...") action:@selector(runCommand:) keyEquivalent:@"R"];
   [menuItem setTarget:self];
+  [menuItem setKeyEquivalentModifierMask: NSCommandKeyMask | NSShiftKeyMask];
   
   [menu addItem:[NSMenuItem separatorItem]];
 
@@ -741,8 +773,14 @@ NSString *_pendingSystemActionTitle = nil;
   
   fm = [NSFileManager defaultManager];
   ws = [NSWorkspace sharedWorkspace];
-  fsnodeRep = [FSNodeRep sharedInstance];  
-    
+  fsnodeRep = [FSNodeRep sharedInstance];
+  /* Supply FSNode with the Finder-metadata provider so cells/views can read
+   * label colours, invisibility, custom icons and icon positions without
+   * depending on the metadata implementation directly. */
+  [fsnodeRep setMetadataProvider: [GWMetadataProvider sharedProvider]];
+  [fsnodeRep setIconPositionStore: [GWIconPositionStore sharedStore]];
+
+
   extendedInfo = [fsnodeRep availableExtendedInfoNames];
   menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"View", @"")] submenu];
   menu = [[menu itemWithTitle: NSLocalizedString(@"Show", @"")] submenu];
@@ -764,7 +802,7 @@ NSString *_pendingSystemActionTitle = nil;
     } 
   else 
     {
-      [fsnodeRep setReservedNames: [NSArray arrayWithObjects: @".gwdir", @".gwsort", nil]];
+      [fsnodeRep setReservedNames: [NSArray arrayWithObjects: @".gwsort", nil]];
     }
         
   entry = [defaults stringForKey: @"defaulteditor"];
@@ -819,7 +857,10 @@ NSString *_pendingSystemActionTitle = nil;
   
   dontWarnOnQuit = [defaults boolForKey: @"NoWarnOnQuit"];
 
-  boolentry = [defaults boolForKey: @"use_thumbnails"];
+  if ([defaults objectForKey: @"use_thumbnails"] == nil)
+    boolentry = YES;
+  else
+    boolentry = [defaults boolForKey: @"use_thumbnails"];
   [fsnodeRep setUseThumbnails: boolentry];
   
   selectedPaths = [[NSArray alloc] initWithObjects: NSHomeDirectory(), nil];
@@ -945,8 +986,8 @@ NSString *_pendingSystemActionTitle = nil;
               name: @"GWCustomDirectoryIconDidChangeNotification"
             object: nil];
 
-  [dnc addObserver: self 
-          selector: @selector(applicationForExtensionsDidChange:) 
+  [dnc addObserver: self
+          selector: @selector(applicationForExtensionsDidChange:)
               name: @"GWAppForExtensionDidChangeNotification"
             object: nil];
 
@@ -967,7 +1008,10 @@ NSString *_pendingSystemActionTitle = nil;
             object: nil];
 
   [self initializeWorkspace];
-  
+
+  lowDiskWarn = [[LowDiskWarn alloc] init];
+  [lowDiskWarn startMonitoring];
+
   // Initialize global shortcuts manager only if this instance is rendering the desktop
   if ([dtopManager isActive]) {
     globalShortcutsManager = [[GSGlobalShortcutsManager sharedManager] retain];
@@ -1112,6 +1156,8 @@ NSString *_pendingSystemActionTitle = nil;
         }
   }
   
+  [lowDiskWarn stopMonitoring];
+
   /* Unmount all network volumes */
   [[NetworkVolumeManager sharedManager] unmountAll];
   		
@@ -1507,6 +1553,8 @@ NSString *_pendingSystemActionTitle = nil;
         {
           [inspector setCurrentSelection: paths];
         }
+      
+      [self updateOpenWithMenu];
       
       /* we extract from the selection only valid directories */
       onlyDirPaths = [[NSMutableArray arrayWithCapacity:1] retain];
@@ -1917,9 +1965,77 @@ NSString *_pendingSystemActionTitle = nil;
   }
 
   aURL = nil;
+
+  /* Mac Creator code lookup + Stationery handling */
+  {
+    GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: fullPath];
+    if (md)
+    {
+      /* Creator code -> application mapping */
+      if ([md creatorCode] != 0)
+        {
+          NSString *appPath = [self applicationForCreatorCode: [md creatorCode]];
+          if (appPath)
+            {
+              NSDebugLLog(@"gwspace", @"Workspace openFile: Using creator code app: %@", appPath);
+              return [[NSWorkspace sharedWorkspace] openFile: fullPath withApplication: appPath];
+            }
+        }
+
+      /* Stationery: create a copy and open the copy instead */
+      if ([md isStationery])
+        {
+          NSString *dir  = [fullPath stringByDeletingLastPathComponent];
+          NSString *name = [fullPath lastPathComponent];
+          NSString *ext  = [name pathExtension];
+          NSString *base = [name stringByDeletingPathExtension];
+
+          NSString *copyName;
+          if ([ext length] > 0)
+            copyName = [NSString stringWithFormat: @"%@ copy.%@", base, ext];
+          else
+            copyName = [NSString stringWithFormat: @"%@ copy", name];
+
+          NSString *copyPath = [dir stringByAppendingPathComponent: copyName];
+          NSFileManager *fileMgr = [NSFileManager defaultManager];
+
+          if ([fileMgr fileExistsAtPath: copyPath])
+            {
+              NSUInteger n = 2;
+              do {
+                NSString *tryName;
+                if ([ext length] > 0)
+                  tryName = [NSString stringWithFormat: @"%@ copy %lu.%@", base, (unsigned long)n, ext];
+                else
+                  tryName = [NSString stringWithFormat: @"%@ copy %lu", name, (unsigned long)n];
+                copyPath = [dir stringByAppendingPathComponent: tryName];
+                n++;
+              } while ([fileMgr fileExistsAtPath: copyPath]);
+            }
+
+          if ([fileMgr copyPath: fullPath toPath: copyPath handler: nil])
+            {
+              GSFileMetadata *copyMd = [GSFileMetadata metadataForFileAtPath: copyPath];
+              if (!copyMd) copyMd = [[[GSFileMetadata alloc] init] autorelease];
+              [copyMd setStationery: NO];
+              [copyMd writeToFileAtPath: copyPath error: nil];
+
+              NSDebugLLog(@"gwspace", @"Workspace openFile: Stationery -> copy %@", copyPath);
+              return [self openFile: copyPath];
+            }
+          else
+            {
+              NSDebugLLog(@"gwspace", @"Workspace openFile: Stationery copy failed for %@", fullPath);
+              return NO;
+            }
+        }
+    }
+  }
+
   [ws getInfoForFile: fullPath application: &appName type: &type];
 
   /* If file is a plain file, check for ELF magic and handle executable prompting.
+
    * This mirrors how archives are intercepted earlier: special-case before
    * falling through to the generic "open with application" handler.
    */
@@ -2044,6 +2160,60 @@ NSString *_pendingSystemActionTitle = nil;
   return NO;
 }
 
+
+/**
+ * Return the full path of the application to use for a given Mac
+ * creator code (FourCharCode), or nil if no mapping is known.
+ *
+ * Uses a hardcoded dictionary of known creator code -> app name
+ * mappings, then looks up the app via NSWorkspace. If no app is
+ * found, returns nil so the caller falls through to extension-based
+ * lookup.
+ */
+- (NSString *)applicationForCreatorCode:(GSOType)creatorCode
+{
+  static NSDictionary *creatorMap = nil;
+  if (!creatorMap)
+    {
+      creatorMap = [[NSDictionary alloc] initWithObjectsAndKeys:
+        @"TextEdit",                 @"ttxt",       // SimpleText / plain text
+        @"LibreOffice",              @"MSWD",       // Microsoft Word
+        @"LibreOffice",              @"exel",       // Microsoft Excel
+        @"LibreOffice",              @"PPT3",       // Microsoft PowerPoint
+        @"Preview",                  @"prvw",       // Preview (images / PDF)
+        @"Preview",                  @"pdf ",       // PDF
+        @"GV",                       @"xviz",       // GraphicConverter (XV preview)
+        @"ImageMagick",              @"PNGf",       // PNG image
+        @"ImageMagick",              @"JPEG",       // JPEG image
+        @"ImageMagick",              @"GIFf",       // GIF image
+        @"Terminal",                 @"trmx",       // Terminal
+        @"TextEdit",                 @"R*ch",       // Rich text
+        @"GWorkspace",               @"GWSP",       // GWorkspace itself
+        nil];
+    }
+
+  /* Convert GSOType (32-bit FourCharCode) to a 4-character NSString. */
+  char code[5] = {
+    (char)((creatorCode >> 24) & 0xFF),
+    (char)((creatorCode >> 16) & 0xFF),
+    (char)((creatorCode >> 8) & 0xFF),
+    (char)(creatorCode) & 0xFF,
+    0
+  };
+  NSString *codeStr = [NSString stringWithCString: code encoding: NSASCIIStringEncoding];
+  NSString *appName = [creatorMap objectForKey: codeStr];
+
+  if (appName)
+    {
+      NSString *fullPath = [[NSWorkspace sharedWorkspace] fullPathForApplication: appName];
+      NSDebugLLog(@"gwspace", @"Workspace applicationForCreatorCode: code '%@' -> app '%@' -> path '%@'",
+                  codeStr, appName, fullPath);
+      return fullPath;
+    }
+
+  NSDebugLLog(@"gwspace", @"Workspace applicationForCreatorCode: no mapping for code '%@'", codeStr);
+  return nil;
+}
 
 - (void)launchElfAndMonitor:(NSString *)path
 {
@@ -2239,19 +2409,23 @@ NSString *_pendingSystemActionTitle = nil;
   NSLog(@"Workspace performClose: called, keyWindow=%@ (class=%@), sender=%@", 
         kwin, (kwin ? [kwin className] : @"nil"), sender);
   
-  // Don't close the desktop window. If the desktop is the key window (or there
-  // is no key window), find the first visible non-desktop window instead.
-  if (kwin == nil || [kwin isKindOfClass: [GWDesktopWindow class]]) {
-    NSLog(@"Workspace performClose: desktop is key or no key window, searching for another window");
+  // Don't close the desktop or dock window. If either is the key window (or
+  // there is no key window), find the first visible non-persistent window.
+  if (kwin == nil || [kwin isKindOfClass: [GWDesktopWindow class]]
+      || [kwin isKindOfClass: [GWDockWindow class]]) {
+    NSLog(@"Workspace performClose: desktop/dock is key or no key window, searching for another window");
     NSArray *windows = [NSApp windows];
     for (NSWindow *win in windows) {
-      if (![win isKindOfClass: [GWDesktopWindow class]] && [win isVisible]) {
+      if (![win isKindOfClass: [GWDesktopWindow class]]
+          && ![win isKindOfClass: [GWDockWindow class]]
+          && [win isVisible]) {
         kwin = win;
         break;
       }
     }
     // If we still have no suitable window, do nothing
-    if (kwin == nil || [kwin isKindOfClass: [GWDesktopWindow class]]) {
+    if (kwin == nil || [kwin isKindOfClass: [GWDesktopWindow class]]
+        || [kwin isKindOfClass: [GWDockWindow class]]) {
       NSLog(@"Workspace performClose: no suitable window to close");
       return;
     }
@@ -3260,28 +3434,24 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)goToFolder:(id)sender
 {
-  GWDialog *dialog = [[GWDialog alloc] initWithTitle: _(@"Go to Folder:") 
+  GWDialog *dialog = [[GWDialog alloc] initWithTitle: _(@"Go to Folder:")
                                              editText: NSHomeDirectory()
                                           switchTitle: nil];
-  NSModalResponse response = [dialog runModal];
-  
-  if (response == NSAlertDefaultReturn) {
+  [dialog setValidator: ^BOOL(NSString *path) {
+    if ([path length] == 0) return NO;
+    BOOL isDir = NO;
+    return ([fm fileExistsAtPath: [path stringByExpandingTildeInPath]
+                     isDirectory: &isDir] && isDir);
+  }];
+
+  if ([dialog runModal] == NSAlertDefaultReturn) {
     NSString *path = [dialog getEditFieldText];
-    if (path && [path length] > 0) {
-      path = [path stringByExpandingTildeInPath];
-      BOOL isDir = NO;
-      if ([fm fileExistsAtPath: path isDirectory: &isDir]) {
-        if (isDir) {
-          [self openSelectedPaths: [NSArray arrayWithObject: path] newViewer: YES];
-        } else {
-          NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Path is not a folder"), _(@"OK"), nil, nil);
-        }
-      } else {
-        NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Folder does not exist"), _(@"OK"), nil, nil);
-      }
+    if ([path length] > 0) {
+      [self openSelectedPaths: [NSArray arrayWithObject: [path stringByExpandingTildeInPath]]
+                    newViewer: YES];
     }
   }
-  
+
   RELEASE (dialog);
 }
 
@@ -3589,6 +3759,16 @@ NSString *_pendingSystemActionTitle = nil;
     {
       [[dtopManager desktopView] selectAll];
     }
+  else if (kwin)
+    {
+      // Fallback for dialogs with text fields (e.g., Run, Go to Folder).
+      // NSTextView and the field editor both respond to selectAll:.
+      NSResponder *fr = [kwin firstResponder];
+      if ([fr respondsToSelector: @selector(selectAll:)])
+        {
+          [fr selectAll: sender];
+        }
+    }
 }
 
 - (void)toggleFullScreen:(id)sender
@@ -3860,6 +4040,45 @@ NSString *_pendingSystemActionTitle = nil;
   }  
 }
 
+- (void)updateOpenWithMenu
+{
+  if (openWithMenu == nil)
+    return;
+
+  while ([openWithMenu numberOfItems] > 0)
+    [openWithMenu removeItemAtIndex: 0];
+
+  if (selectedPaths == nil || [selectedPaths count] == 0)
+    return;
+
+  NSString *firstext = [[[selectedPaths objectAtIndex: 0] pathExtension] lowercaseString];
+  for (NSUInteger i = 1; i < [selectedPaths count]; i++)
+    {
+      NSString *ext = [[[selectedPaths objectAtIndex: i] pathExtension] lowercaseString];
+      if ([ext isEqual: firstext] == NO)
+        return;
+    }
+
+  NSDictionary *apps = [ws infoForExtension: firstext];
+  if (apps == nil || [apps count] == 0)
+    return;
+
+  NSEnumerator *appEnum = [[apps allKeys] objectEnumerator];
+  NSString *key;
+  while ((key = [appEnum nextObject]))
+    {
+      NSMenuItem *appItem = [NSMenuItem new];
+      key = [key stringByDeletingPathExtension];
+      [appItem setTitle: key];
+      [appItem setTarget: self];
+      [appItem setAction: @selector(openSelectionWithApp:)];
+      [appItem setRepresentedObject: key];
+      [appItem setEnabled: YES];
+      [openWithMenu addItem: appItem];
+      RELEASE (appItem);
+    }
+}
+
 - (void)openSelectionWithApp:(id)sender
 {
   NSString *appName = (NSString *)[(NSMenuItem *)sender representedObject];
@@ -4059,6 +4278,40 @@ NSString *_pendingSystemActionTitle = nil;
   [menu addItem: menuItem];
   RELEASE (menuItem);
 
+  [menu addItem: [NSMenuItem separatorItem]];
+
+  // Clean Up
+  menuItem = [NSMenuItem new];
+  [menuItem setTitle: NSLocalizedString(@"Clean Up", @"")];
+  [menuItem setTarget: self];
+  [menuItem setAction: @selector(cleanUp:)];
+  [menu addItem: menuItem];
+  RELEASE (menuItem);
+
+  // Clean Up By submenu
+  {
+    NSMenuItem *cleanUpByItem = [NSMenuItem new];
+    [cleanUpByItem setTitle: NSLocalizedString(@"Clean Up By", @"")];
+    NSMenu *submenu = [[NSMenu alloc] initWithTitle: @""];
+    NSArray *opts = @[@"Name", @"Kind", @"Date Modified", @"Size"];
+    NSArray *tags = @[@0, @1, @2, @3];
+    NSUInteger oi;
+    for (oi = 0; oi < [opts count]; oi++)
+      {
+        NSMenuItem *it = [NSMenuItem new];
+        [it setTitle: NSLocalizedString([opts objectAtIndex: oi], @"")];
+        [it setTarget: self];
+        [it setAction: @selector(cleanUpBy:)];
+        [it setTag: [[tags objectAtIndex: oi] integerValue]];
+        [submenu addItem: it];
+        RELEASE (it);
+      }
+    [cleanUpByItem setSubmenu: submenu];
+    RELEASE (submenu);
+    [menu addItem: cleanUpByItem];
+    RELEASE (cleanUpByItem);
+  }
+
   return [menu autorelease];
 }
 
@@ -4142,8 +4395,8 @@ NSString *_pendingSystemActionTitle = nil;
       menuItem = [NSMenuItem new];
       [menuItem setTitle: NSLocalizedString(@"Open With", @"")];
       [menuItem setEnabled: YES];
-      NSMenu *openWithMenu = [[NSMenu alloc] initWithTitle: @""];
-      [openWithMenu setAutoenablesItems: NO];
+      NSMenu *owMenu = [[NSMenu alloc] initWithTitle: @""];
+      [owMenu setAutoenablesItems: NO];
       
       apps = [[NSWorkspace sharedWorkspace] infoForExtension: firstext];
       app_enum = [[apps allKeys] objectEnumerator];
@@ -4156,12 +4409,12 @@ NSString *_pendingSystemActionTitle = nil;
         [appItem setAction: @selector(openSelectionWithApp:)];
         [appItem setRepresentedObject: key];
         [appItem setEnabled: YES];
-        [openWithMenu addItem: appItem];
+        [owMenu addItem: appItem];
         RELEASE (appItem);
       }
       
-      [menuItem setSubmenu: openWithMenu];
-      RELEASE (openWithMenu);
+      [menuItem setSubmenu: owMenu];
+      RELEASE (owMenu);
       [menu addItem: menuItem];
       RELEASE (menuItem);
     }
@@ -4188,7 +4441,49 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setEnabled: YES];
   [menu addItem: menuItem];
   RELEASE (menuItem);
-  
+
+  // Label submenu + Compress or Extract — only for non-mount-points
+  if (!isMountPoint) {
+    [menu addItem: [NSMenuItem separatorItem]];
+    menuItem = [NSMenuItem new];
+    [menuItem setTitle: NSLocalizedString(@"Label", @"")];
+    [menuItem setEnabled: YES];
+    [menuItem setSubmenu: [self labelColorSubmenu]];
+    [menu addItem: menuItem];
+    RELEASE (menuItem);
+
+    // Check if the single selected item is a .zip archive
+    BOOL isSingleZip = NO;
+    if ([nodes count] == 1) {
+      FSNode *singleNode = [nodes objectAtIndex: 0];
+      NSString *ext = [[[singleNode path] pathExtension] lowercaseString];
+      if ([ext isEqualToString: @"zip"] || [ext isEqualToString: @"cbz"])
+        isSingleZip = YES;
+    }
+
+    if (isSingleZip) {
+      // Extract — single .zip selected
+      [menu addItem: [NSMenuItem separatorItem]];
+      menuItem = [NSMenuItem new];
+      [menuItem setTitle: NSLocalizedString(@"Extract", @"")];
+      [menuItem setTarget: [Workspace gworkspace]];
+      [menuItem setAction: @selector(extractArchive:)];
+      [menuItem setEnabled: YES];
+      [menu addItem: menuItem];
+      RELEASE (menuItem);
+    } else {
+      // Compress — any non-zip selection
+      [menu addItem: [NSMenuItem separatorItem]];
+      menuItem = [NSMenuItem new];
+      [menuItem setTitle: NSLocalizedString(@"Compress", @"")];
+      [menuItem setTarget: [Workspace gworkspace]];
+      [menuItem setAction: @selector(compressFiles:)];
+      [menuItem setEnabled: YES];
+      [menu addItem: menuItem];
+      RELEASE (menuItem);
+    }
+  }
+
   // Only show Duplicate if not all mount points
   if (!allMountPoints) {
     [menu addItem: [NSMenuItem separatorItem]];
@@ -4279,6 +4574,438 @@ NSString *_pendingSystemActionTitle = nil;
 - (id)workspaceApplication
 {
   return [Workspace gworkspace];
+}
+
+/*
+ * =================================================================
+ * Label Color support
+ * =================================================================
+ */
+
+/**
+ * Build and return a "Label" submenu with items for each Finder label
+ * colour (None + 7 colours). Each item's tag is set to the GSFileLabel
+ * value (0-7), target is [Workspace gworkspace], and action is
+ * setLabelForNodes:.
+ */
+- (NSMenu *)labelColorSubmenu
+{
+  NSMenu *labelMenu = [[NSMenu alloc] initWithTitle: @""];
+  [labelMenu setAutoenablesItems: NO];
+
+  /* Label names in order of GSFileLabel enum (0-7) */
+  NSString *labelNames[] = {
+    NSLocalizedString(@"None", @""),
+    NSLocalizedString(@"Grey", @""),
+    NSLocalizedString(@"Green", @""),
+    NSLocalizedString(@"Purple", @""),
+    NSLocalizedString(@"Blue", @""),
+    NSLocalizedString(@"Yellow", @""),
+    NSLocalizedString(@"Red", @""),
+    NSLocalizedString(@"Orange", @""),
+  };
+
+  for (NSInteger i = 0; i < 8; i++)
+    {
+      NSMenuItem *item = [[NSMenuItem alloc] initWithTitle: labelNames[i]
+                                                     action: @selector(setLabelForNodes:)
+                                              keyEquivalent: @""];
+      [item setTarget: [Workspace gworkspace]];
+      [item setTag: i];  /* tag holds the GSFileLabel value */
+      [item setEnabled: YES];
+      [labelMenu addItem: item];
+      RELEASE(item);
+    }
+
+  return AUTORELEASE(labelMenu);
+}
+
+/**
+ * Action for label colour menu items.
+ * Reads the label number from [sender tag] (0-7, where 0 = None),
+ * applies it to all selected files in the active viewer, and updates
+ * the display.
+ */
+/**
+ * Convert GSFileLabel (from xattr FinderInfo) to DSStoreLabelColor
+ * (from .DS_Store lclr entries).  The two enums have different orderings.
+ */
+static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
+{
+  switch (gsLabel) {
+    case GSFileLabelNone:   return DSStoreLabelColorNone;
+    case GSFileLabelGrey:   return DSStoreLabelColorGrey;
+    case GSFileLabelGreen:  return DSStoreLabelColorGreen;
+    case GSFileLabelPurple: return DSStoreLabelColorPurple;
+    case GSFileLabelBlue:   return DSStoreLabelColorBlue;
+    case GSFileLabelYellow: return DSStoreLabelColorYellow;
+    case GSFileLabelRed:    return DSStoreLabelColorRed;
+    case GSFileLabelOrange: return DSStoreLabelColorOrange;
+  }
+}
+
+- (void)setLabelForNodes:(id)sender
+{
+  NSInteger labelNumber = [sender tag];
+  NSWindow *kwin = [NSApp keyWindow];
+
+  if (!kwin)
+    return;
+
+  id nodeView = nil;
+  NSArray *selection = nil;
+
+  if ([vwrsManager hasViewerWithWindow: kwin])
+    {
+      nodeView = [[vwrsManager viewerWithWindow: kwin] nodeView];
+    }
+  else if ([dtopManager hasWindow: kwin])
+    {
+      nodeView = [dtopManager desktopView];
+    }
+
+  if (!nodeView)
+    return;
+
+  selection = [nodeView selectedPaths];
+  if (!selection || [selection count] == 0)
+    {
+      /* If no selection, use the base node (current directory) */
+      selection = [NSArray arrayWithObject: [[nodeView baseNode] path]];
+    }
+
+  NSUInteger i;
+  NSUInteger count = [selection count];
+
+  /* ================================================================
+   * 1. Write label via xattr (com.apple.FinderInfo) — existing path
+   * ================================================================ */
+  for (i = 0; i < count; i++)
+    {
+      NSString *path = [selection objectAtIndex: i];
+
+      GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
+      if (md == nil)
+        {
+          md = [[[GSFileMetadata alloc] init] autorelease];
+        }
+
+      [md setLabelNumber: labelNumber];
+
+      NSError *error = nil;
+      if (![md writeToFileAtPath: path error: &error])
+        {
+          NSDebugLLog(@"gwspace", @"setLabelForNodes: xattr write failed for %@: %@",
+                path, error);
+        }
+    }
+
+  /* ================================================================
+   * 2. Write lclr entries to .DS_Store / per-volume cache
+   *    (handles non-writable volumes via ~/Library/Caches)
+   * ================================================================ */
+  {
+    NSMutableDictionary *pathsByDir = [NSMutableDictionary dictionary];
+    DSStoreLabelColor dsColor = GSFileLabelToDSStoreLabelColor((GSFileLabel)labelNumber);
+
+    for (i = 0; i < count; i++)
+      {
+        NSString *path = [selection objectAtIndex: i];
+        NSString *parent = [path stringByDeletingLastPathComponent];
+        NSString *filename = [path lastPathComponent];
+
+        NSMutableArray *files = [pathsByDir objectForKey: parent];
+        if (!files)
+          {
+            files = [NSMutableArray array];
+            [pathsByDir setObject: files forKey: parent];
+          }
+        [files addObject: filename];
+      }
+
+    for (NSString *dirPath in pathsByDir)
+      {
+        NSArray *files = [pathsByDir objectForKey: dirPath];
+
+        DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath: dirPath
+                                                 loadImmediately: NO];
+        for (NSString *filename in files)
+          {
+            DSStoreIconInfo *iconInfo = [DSStoreIconInfo infoForFilename: filename];
+            [iconInfo setLabelColor: dsColor];
+            [iconInfo setHasLabelColor: YES];  /* Always YES so lclr=0 is persisted */
+            [dsInfo setIconInfo: iconInfo forFilename: filename];
+          }
+
+        GWViewSettingsManager *sm;
+        sm = [GWViewSettingsManager managerForDirectoryPath: dirPath];
+        BOOL wrote = [sm writeSettings: dsInfo];
+        NSDebugLLog(@"gwspace", @"setLabelForNodes: wrote %s for %@ (%lu files)",
+                    wrote ? "OK" : "FAIL", dirPath,
+                    (unsigned long)[files count]);
+      }
+  }
+
+  /* ================================================================
+   * 3. Refresh the viewer and apply visual feedback
+   * ================================================================ */
+  if ([vwrsManager hasViewerWithWindow: kwin])
+    {
+      GWViewer *viewer = [vwrsManager viewerWithWindow: kwin];
+      [viewer reloadNodeContents];
+    }
+  else if ([dtopManager hasWindow: kwin])
+    {
+      [[dtopManager desktopView] reloadContents];
+    }
+
+  /* Apply tag colors to selected files for immediate visual feedback */
+  if (labelNumber != 0 && nodeView
+      && [nodeView respondsToSelector: @selector(setTagColorsFromDictionary:)])
+    {
+      NSMutableDictionary *tagColors = [NSMutableDictionary dictionary];
+      NSColor *color = [GSFileMetadata colorForLabel: (GSFileLabel)labelNumber];
+      if (color)
+        {
+          for (i = 0; i < count; i++)
+            {
+              NSString *path = [selection objectAtIndex: i];
+              NSString *filename = [path lastPathComponent];
+              [tagColors setObject: color forKey: filename];
+            }
+          [(id)nodeView setTagColorsFromDictionary: tagColors];
+        }
+    }
+}
+
+/*
+ * =================================================================
+ * Compress / Extract with Mac metadata
+ * =================================================================
+ */
+
+/**
+ * Action: compress selected files into a .zip archive, preserving
+ * macOS metadata (FinderInfo, ResourceFork, etc.) via AppleDouble.
+ */
+- (id)activeIconView
+{
+  NSWindow *kwin = [NSApp keyWindow];
+  if (!kwin) return nil;
+
+  if ([vwrsManager hasViewerWithWindow: kwin])
+    return [[vwrsManager viewerWithWindow: kwin] nodeView];
+  else if ([dtopManager hasWindow: kwin])
+    return [dtopManager desktopView];
+  return nil;
+}
+
+- (void)cleanUp:(id)sender
+{
+  id iconView = [self activeIconView];
+  if (!iconView) return;
+  [self cleanUpWithSort: FSNInfoNameType iconView: iconView
+           sortSelector: @selector(compareAccordingToName:)];
+}
+
+- (void)cleanUpBy:(id)sender
+{
+  id iconView = [self activeIconView];
+  if (!iconView) return;
+
+  NSInteger tag = [sender tag];
+  FSNInfoType sortType;
+  SEL sortSel = @selector(compareAccordingToName:);
+
+  switch (tag)
+    {
+    case 0: sortType = FSNInfoNameType;
+            sortSel = @selector(compareAccordingToName:); break;
+    case 1: sortType = FSNInfoKindType;
+            sortSel = @selector(compareAccordingToKind:); break;
+    case 2: sortType = FSNInfoDateType;
+            sortSel = @selector(compareAccordingToDate:); break;
+    case 3: sortType = FSNInfoSizeType;
+            sortSel = @selector(compareAccordingToSize:); break;
+    case 5: sortType = FSNInfoDateType;  /* creation date */
+            sortSel = @selector(compareAccordingToCrDate:); break;
+    default: sortType = FSNInfoNameType; break;
+    }
+
+  if ([iconView respondsToSelector: @selector(setCustomIconPositions:)])
+    [iconView setCustomIconPositions: nil];
+
+  [self cleanUpWithSort: sortType iconView: iconView sortSelector: sortSel];
+}
+
+- (void)cleanUpWithSort:(FSNInfoType)sortType iconView:(id)iconView sortSelector:(SEL)sortSel
+{
+  [[FSNodeRep sharedInstance] setDefaultSortOrder: (int)sortType];
+
+  /* Sort the icon array in place */
+  if ([iconView respondsToSelector: @selector(icons)])
+    {
+      NSMutableArray *all = (NSMutableArray *)[iconView icons];
+
+      /* Desktop special sort: "/" first, other mounted volumes next,
+       * then everything else in the requested sort order. */
+      if (NSClassFromString(@"GWDesktopView")
+          && [iconView isKindOfClass: NSClassFromString(@"GWDesktopView")])
+        {
+          NSMutableArray *rootItems = [NSMutableArray array];
+          NSMutableArray *volumeItems = [NSMutableArray array];
+          NSMutableArray *otherItems = [NSMutableArray array];
+
+          for (id icon in all)
+            {
+              FSNode *n = [icon node];
+              NSString *p = [n path];
+              if ([p isEqualToString: @"/"])
+                [rootItems addObject: icon];
+              else if ([n isMountPoint])
+                [volumeItems addObject: icon];
+              else
+                [otherItems addObject: icon];
+            }
+
+          [volumeItems sortUsingSelector: sortSel];
+          [otherItems sortUsingSelector: sortSel];
+
+          [all removeAllObjects];
+          [all addObjectsFromArray: rootItems];
+          [all addObjectsFromArray: volumeItems];
+          [all addObjectsFromArray: otherItems];
+        }
+      else
+        {
+          [all sortUsingSelector: sortSel];
+        }
+    }
+
+  if ([iconView respondsToSelector: @selector(cleanupIconPositions)])
+    {
+      [iconView cleanupIconPositions];
+    }
+
+  /* Write positions to DS_Store for each icon after cleanup */
+  if ([iconView respondsToSelector: @selector(batchRepositionIcons:toCenterPoints:)]
+      && [iconView respondsToSelector: @selector(icons)])
+    {
+      NSArray *all = [iconView icons];
+      NSMutableArray *centers = [NSMutableArray arrayWithCapacity: [all count]];
+      NSUInteger i;
+      for (i = 0; i < [all count]; i++)
+        {
+          id ic = [all objectAtIndex: i];
+          NSRect frm = [ic frame];
+          NSPoint c = NSMakePoint(frm.origin.x + frm.size.width / 2.0,
+                                   frm.origin.y + frm.size.height / 2.0);
+          [centers addObject: [NSValue valueWithPoint: c]];
+        }
+      [iconView batchRepositionIcons: all toCenterPoints: centers];
+    }
+
+  if ([iconView respondsToSelector: @selector(setNeedsDisplay:)])
+    [iconView setNeedsDisplay: YES];
+}
+
+- (void)compressFiles:(id)sender
+{
+  NSWindow *kwin = [NSApp keyWindow];
+  NSArray *selection = nil;
+
+  if (!kwin)
+    return;
+
+  if ([vwrsManager hasViewerWithWindow: kwin])
+    selection = [[[vwrsManager viewerWithWindow: kwin] nodeView] selectedPaths];
+  else if ([dtopManager hasWindow: kwin])
+    selection = [[dtopManager desktopView] selectedPaths];
+
+  if (!selection || [selection count] == 0)
+    return;
+
+  /* Build a default output name from the first item */
+  NSString *firstName = [[selection objectAtIndex: 0] lastPathComponent];
+  NSString *baseName  = [firstName stringByDeletingPathExtension];
+  if ([baseName length] == 0)
+    baseName = firstName;
+
+  NSString *parentDir = [[selection objectAtIndex: 0] stringByDeletingLastPathComponent];
+  NSString *outputPath = [parentDir stringByAppendingPathComponent:
+                           [baseName stringByAppendingPathExtension: @"zip"]];
+
+  /* If the default name already exists, append a number */
+  NSFileManager *fileMgr = [NSFileManager defaultManager];
+  if ([fileMgr fileExistsAtPath: outputPath])
+    {
+      NSUInteger n = 1;
+      do {
+        NSString *tryName = [NSString stringWithFormat: @"%@ %lu", baseName, (unsigned long)n];
+        outputPath = [parentDir stringByAppendingPathComponent:
+                       [tryName stringByAppendingPathExtension: @"zip"]];
+        n++;
+      } while ([fileMgr fileExistsAtPath: outputPath]);
+    }
+
+  /* Run with progress panel */
+  [GWArchiveOperation compressPaths: selection toArchive: outputPath];
+
+  /* Refresh the viewer so the new .zip appears */
+  if ([vwrsManager hasViewerWithWindow: kwin])
+    [[vwrsManager viewerWithWindow: kwin] reloadNodeContents];
+  else if ([dtopManager hasWindow: kwin])
+    [[dtopManager desktopView] reloadContents];
+}
+
+/**
+ * Action: extract a .zip archive preserving macOS metadata.
+ * The archive is extracted into a folder named after the archive
+ * (without .zip extension) in the same directory.
+ */
+- (void)extractArchive:(id)sender
+{
+  NSWindow *kwin = [NSApp keyWindow];
+  NSArray *selection = nil;
+
+  if (!kwin)
+    return;
+
+  if ([vwrsManager hasViewerWithWindow: kwin])
+    selection = [[[vwrsManager viewerWithWindow: kwin] nodeView] selectedPaths];
+  else if ([dtopManager hasWindow: kwin])
+    selection = [[dtopManager desktopView] selectedPaths];
+
+  if (!selection || [selection count] != 1)
+    return;
+
+  NSString *archivePath = [selection objectAtIndex: 0];
+
+  /* Destination: same directory, folder named after the archive */
+  NSString *baseName  = [[archivePath lastPathComponent] stringByDeletingPathExtension];
+  NSString *parentDir = [archivePath stringByDeletingLastPathComponent];
+  NSString *destDir   = [parentDir stringByAppendingPathComponent: baseName];
+
+  /* If the destination already exists, append a number */
+  NSFileManager *fileMgr = [NSFileManager defaultManager];
+  if ([fileMgr fileExistsAtPath: destDir])
+    {
+      NSUInteger n = 1;
+      do {
+        NSString *tryName = [NSString stringWithFormat: @"%@ %lu", baseName, (unsigned long)n];
+        destDir = [parentDir stringByAppendingPathComponent: tryName];
+        n++;
+      } while ([fileMgr fileExistsAtPath: destDir]);
+    }
+
+  /* Run with progress panel */
+  [GWArchiveOperation extractArchive: archivePath toDirectory: destDir];
+
+  /* Refresh the viewer so the new folder appears */
+  if ([vwrsManager hasViewerWithWindow: kwin])
+    [[vwrsManager viewerWithWindow: kwin] reloadNodeContents];
+  else if ([dtopManager hasWindow: kwin])
+    [[dtopManager desktopView] reloadContents];
 }
 
 - (oneway void)terminateApplication
@@ -4509,21 +5236,21 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
 
 - (void)setViewerBehaviour:(id)sender
 {
-  NSDebugLLog(@"gwspace", @"*** setViewerBehaviour method called! ***");
-  NSString *title = [sender title];
-  NSDebugLLog(@"gwspace", @"setViewerBehaviour called with title: %@", title);
+  /* The kind is carried by the item's tag (BROWSING/SPATIAL), not its title —
+   * titles are localized, so comparing them broke on non-English locales. */
+  unsigned int viewerType = (unsigned int)[sender tag];
+  NSDebugLLog(@"gwspace", @"setViewerBehaviour called, type=%u", viewerType);
 
-  // Get current key window to determine what path we're working with
-  NSWindow *keyWindow = [NSApp keyWindow];
-  if (!keyWindow) {
-    NSDebugLLog(@"gwspace", @"No key window found");
-    return;
-  }
-
-  // Try to get viewer from the key window
-  id viewer = [vwrsManager viewerWithWindow: keyWindow];
+  /* Resolve the source viewer from the key window, falling back to the main
+   * window.  With a detached global menu (Menu.app) the viewer is not always
+   * the key window when the item fires, which otherwise made this a silent
+   * no-op ("sometimes nothing happens"). */
+  id viewer = [vwrsManager viewerWithWindow: [NSApp keyWindow]];
   if (!viewer) {
-    NSDebugLLog(@"gwspace", @"No viewer found for key window");
+    viewer = [vwrsManager viewerWithWindow: [NSApp mainWindow]];
+  }
+  if (!viewer) {
+    NSDebugLLog(@"gwspace", @"No viewer found for key/main window");
     return;
   }
 
@@ -4536,32 +5263,16 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
 
   NSDebugLLog(@"gwspace", @"Current path: %@", [currentNode path]);
 
-  // Determine viewer type based on menu item title
-  unsigned int viewerType;
-  if ([title isEqualToString: @"Browsing"]) {
-    viewerType = BROWSING;
-    NSDebugLLog(@"gwspace", @"Setting viewer to BROWSING mode");
-  } else if ([title isEqualToString: @"Spatial"]) {
-    viewerType = SPATIAL;
-    NSDebugLLog(@"gwspace", @"Setting viewer to SPATIAL mode");
-  } else {
-    NSDebugLLog(@"gwspace", @"Unknown viewer behaviour: %@", title);
-    return;
-  }
+  // Replace the current viewer window with one of the selected kind
+  NSDebugLLog(@"gwspace", @"Replacing viewer with type %u", viewerType);
 
-  // Create new viewer with the selected behavior
-  NSDebugLLog(@"gwspace", @"Attempting to create new viewer with type %u", viewerType);
-
-  id newViewer = [vwrsManager viewerOfType: viewerType
-                                  showType: nil
-                                   forNode: currentNode
-                             showSelection: YES
-                            closeOldViewer: viewer
-                                  forceNew: YES];
+  id newViewer = [vwrsManager replaceViewer: viewer
+                             withViewerType: viewerType];
 
   if (newViewer) {
+    /* viewerOfType:… already activates the new viewer; activating again here
+     * would, for spatial, re-run viewer:didShowNode:. */
     NSDebugLLog(@"gwspace", @"Successfully created new viewer for path %@", [currentNode path]);
-    [newViewer activate];
   } else {
     NSDebugLLog(@"gwspace", @"Failed to create new viewer");
   }
