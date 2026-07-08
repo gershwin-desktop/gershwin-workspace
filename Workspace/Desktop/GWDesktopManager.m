@@ -437,14 +437,24 @@ static GWDesktopManager *desktopManager = nil;
     macmenuReservedFrame.origin.y = screenFrame.origin.y + screenFrame.size.height - 25;
   }
 
-  dockReservedFrame.size.height = screenFrame.size.height;
-  dockReservedFrame.size.width = 64 + RESV_MARGIN;
-  dockReservedFrame.origin.x = screenFrame.origin.x;
-  dockReservedFrame.origin.y = screenFrame.origin.y;
+  if (dockPosition == DockPositionBottom)
+    {
+      dockReservedFrame.size.width = screenFrame.size.width;
+      dockReservedFrame.size.height = 64 + RESV_MARGIN;
+      dockReservedFrame.origin.x = screenFrame.origin.x;
+      dockReservedFrame.origin.y = screenFrame.origin.y;
+    }
+  else
+    {
+      dockReservedFrame.size.height = screenFrame.size.height;
+      dockReservedFrame.size.width = 64 + RESV_MARGIN;
+      dockReservedFrame.origin.x = screenFrame.origin.x;
+      dockReservedFrame.origin.y = screenFrame.origin.y;
 
-  if (dockPosition == DockPositionRight) {
-    dockReservedFrame.origin.x = screenFrame.origin.x + screenFrame.size.width - 64 - RESV_MARGIN;
-  }
+      if (dockPosition == DockPositionRight) {
+        dockReservedFrame.origin.x = screenFrame.origin.x + screenFrame.size.width - 64 - RESV_MARGIN;
+      }
+    }
 }
 
 - (NSRect)macmenuReservedFrame

@@ -30,7 +30,7 @@
 typedef enum {
   DockPositionLeft,
   DockPositionRight,
-  DockPositionBottom   // ← Add this line
+  DockPositionBottom
 } DockPosition;
 
 @class Workspace;

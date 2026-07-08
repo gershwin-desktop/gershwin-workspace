@@ -661,15 +661,37 @@
     {
       gridrect.size.width -= dckr.size.width;
     }
+  else if ([manager dockPosition] == DockPositionBottom)
+    {
+      gridrect.origin.y += dckr.size.height;
+      gridrect.size.height -= dckr.size.height;
+    }
 
   return gridrect;
 }
 
 - (NSPoint)gridOriginForLayout
 {
-  /* Desktop grid origin: top-left of the usable region, inset. */
   NSRect gridrect = [self desktopGridRect];
   CGFloat gridTopOffset = 12.0;
+
+  /* Right-align the grid so the rightmost column is flush with the right edge
+   * of the usable area.  With TopToBottomRightToLeft placement the first icon
+   * goes to the rightmost column; any leftover space from the floor()
+   * truncation in nCols stays on the left side. */
+  if (_gridCached)
+    {
+      CGFloat cellW = _cachedCellSize.width;
+      CGFloat gapX = _cachedGapX;
+      NSUInteger nCols = (NSUInteger)((gridrect.size.width + gapX)
+                                       / (cellW + gapX));
+      if (nCols < 1)
+        nCols = 1;
+      CGFloat totalWidth = nCols * (cellW + gapX) - gapX;
+      CGFloat originX = gridrect.origin.x + gridrect.size.width - totalWidth;
+      return NSMakePoint(originX,
+                         gridrect.origin.y + gridrect.size.height - gridTopOffset);
+    }
 
   return NSMakePoint(gridrect.origin.x + X_MARGIN,
                      gridrect.origin.y + gridrect.size.height - gridTopOffset);
