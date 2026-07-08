@@ -889,19 +889,23 @@ NSString *_pendingSystemActionTitle = nil;
 
   }
 
-  prefController = [PrefController new];
-  inspector = [Inspector new];
-
+  prefController = [PrefController new];  
+  
   history = [[History alloc] init];
-
+  
   openWithController = [[OpenWithController alloc] init];
   runExtController = [[RunExternalController alloc] init];
-
+  	    
   finder = [Finder finder];
-
+  
   vwrsManager = [GWViewersManager viewersManager];
   // Don't open viewer windows on startup - just show desktop
   // [vwrsManager showViewers];
+  
+  inspector = [Inspector new];
+  if ([defaults boolForKey: @"uses_inspector"]) {  
+    [self showInspector: nil]; 
+  }
   
   fileOpsManager = [Operation new];
   
@@ -3231,10 +3235,7 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)showPreferences:(id)sender
 {
-  if (prefController == nil) {
-    prefController = [PrefController new];
-  }
-  [prefController activate];
+  [prefController activate]; 
 }
 
 - (void)activateContextHelp:(id)sender
@@ -3802,9 +3803,6 @@ NSString *_pendingSystemActionTitle = nil;
 
 - (void)showInspector:(id)sender
 {
-  if (inspector == nil) {
-    inspector = [Inspector new];
-  }
   [inspector activate];
   [inspector setCurrentSelection: selectedPaths];
 }
