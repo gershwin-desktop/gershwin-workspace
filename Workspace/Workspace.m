@@ -1524,7 +1524,12 @@ NSString *_pendingSystemActionTitle = nil;
       || sel_isEqual(action, @selector(hide:))
       || sel_isEqual(action, @selector(hideOtherApplications:))
       || sel_isEqual(action, @selector(unhideAllApplications:))
-      || sel_isEqual(action, @selector(orderFrontStandardAboutPanel:)))
+      || sel_isEqual(action, @selector(orderFrontStandardAboutPanel:))
+      || sel_isEqual(action, @selector(workspaceHelp:))
+      || sel_isEqual(action, @selector(openGershwinHelp:))
+      || sel_isEqual(action, @selector(openFeedback:))
+      || sel_isEqual(action, @selector(openLegal:))
+      || sel_isEqual(action, @selector(notImplemented:)))
     {
       return YES;
     }
