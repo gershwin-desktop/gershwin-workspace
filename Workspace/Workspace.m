@@ -285,7 +285,7 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setTarget:self];
   menuItem = [mainMenu addItemWithTitle:_(@"Shut Down...") action:@selector(shutdown:) keyEquivalent:@""];
   [menuItem setTarget:self];
-  menuItem = [mainMenu addItemWithTitle:_(@"Logout") action:@selector(logout:) keyEquivalent:@""];
+  menuItem = [mainMenu addItemWithTitle:_(@"Log Out...") action:@selector(logout:) keyEquivalent:@""];
   [menuItem setTarget:self];
 
   // File menu
@@ -386,15 +386,15 @@ NSString *_pendingSystemActionTitle = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Show Clipboard") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  
+  //menuItem = [menu addItemWithTitle:_(@"Show Clipboard") action:@selector(notImplemented:) keyEquivalent:@""];
+  //[menuItem setTarget:self];
+
   [menu addItem:[NSMenuItem separatorItem]];
-  
+
   // menuItem = [menu addItemWithTitle:_(@"Start Dictation") action:@selector(notImplemented:) keyEquivalent:@""];
   // [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Symbols") action:@selector(notImplemented:) keyEquivalent:@""];
-  [menuItem setTarget:self];
+  //menuItem = [menu addItemWithTitle:_(@"Symbols") action:@selector(notImplemented:) keyEquivalent:@""];
+  //[menuItem setTarget:self];
 
   // View menu
   menuItem = [mainMenu addItemWithTitle:_(@"View") action:NULL keyEquivalent:@""];
@@ -416,8 +416,8 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem autorelease];
   [menu addItem:menuItem];
   
-  menuItem = [menu addItemWithTitle:_(@"as Gallery") action:@selector(notImplemented:) keyEquivalent:@"4"];
-  [menuItem setTarget:self];
+  //menuItem = [menu addItemWithTitle:_(@"as Gallery") action:@selector(notImplemented:) keyEquivalent:@"4"];
+  //[menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
   

@@ -96,7 +96,7 @@
 
 "Quit" = "Beenden";
 
-"Logout" = "Ausloggen";
+"Log Out" = "Ausloggen";
 	
 	
 	
@@ -119,7 +119,7 @@
 "Yes" = "Ja";
 "No" = "Nein";
 
-"Log out" = "Ausloggen";
+"Log Out" = "Ausloggen";
 "Are you sure you want to quit\nall applications and log out now?" = "Sind sie sicher, dass Sie alle\nAnwendungen beenden und ausloggen wollen?";
 "If you do nothing, the system will log out\nautomatically in " = "Falls Sie nichts tun, wird das System\nautomatisch nach ";
 "seconds." = "Sekunden ausloggen.";
