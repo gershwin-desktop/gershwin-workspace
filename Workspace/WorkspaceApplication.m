@@ -1463,7 +1463,7 @@
                   [launchedApps addObject: app];
                   [app setHidden: hidden];
                   [[dtopManager dock] appDidLaunch: path appName: name];
-          
+
                   if (hidden)
                     {
                       [[dtopManager dock] appDidHide: name];
@@ -1494,9 +1494,9 @@
  
   msg = message;
 
-  if (NSRunAlertPanel(systemActionTitle ? systemActionTitle : NSLocalizedString(@"Logout", @""),
+  if (NSRunAlertPanel(        systemActionTitle ? systemActionTitle : NSLocalizedString(@"Log Out", @""),
                       msg,
-                      systemActionTitle ? systemActionTitle : NSLocalizedString(@"Log out", @""),
+                      systemActionTitle ? systemActionTitle : NSLocalizedString(@"Log Out", @""),
                       NSLocalizedString(@"Cancel", @""),
                       nil))
     {
@@ -1599,7 +1599,7 @@
                       appNames, 
                       NSLocalizedString(@"refuse to terminate.", @"")];    
 
-      if (NSRunAlertPanel(_pendingSystemActionTitle ? _pendingSystemActionTitle : NSLocalizedString(@"Logout", @""),
+      if (NSRunAlertPanel(_pendingSystemActionTitle ? _pendingSystemActionTitle : NSLocalizedString(@"Log Out", @""),
                           msg,
                           NSLocalizedString(@"Kill applications", @""),
                           NSLocalizedString(@"Cancel", @""),

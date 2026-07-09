@@ -96,7 +96,7 @@
 
 "Quit" = "Quitter";
 
-"Logout" = "Déconnexion";
+"Log Out" = "Déconnexion";
 	
 	
 /* ----------------------- File Operations strings --------------------------- */
@@ -117,7 +117,7 @@
 "Yes" = "Oui";
 "No" = "Non";
 
-"Log out" = "Déconnexion";
+"Log Out" = "Déconnexion";
 "Are you sure you want to quit\nall applications and log out now?" = "Etes-vous sûr de vouloir quitter toutes\nles applications et vous déconnecter immédiatement ?";
 "If you do nothing, the system will log out\nautomatically in " = "Sans action de votre part, le système se déconnectera\nautomatiquement dans ";
 "seconds." = "secondes.";

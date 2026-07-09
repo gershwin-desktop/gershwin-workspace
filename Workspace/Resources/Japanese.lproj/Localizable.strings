@@ -91,7 +91,7 @@
 
 "Quit" = "終了";
 	
-"Logout" = "ログアウト";
+"Log Out" = "ログアウト";
 	
 	
 /* ----------------------- File Operations strings --------------------------- */
@@ -112,7 +112,7 @@
 "Yes" = "はい";
 "No" = "いいえ";
 
-"Log out" = "ログアウト";
+"Log Out" = "ログアウト";
 "Are you sure you want to quit\nall applications and log out now?" = "Are you sure you want to quit\nall applications and log out now?";
 "If you do nothing, the system will log out\nautomatically in " = "If you do nothing, the system will log out\nautomatically in ";
 "seconds." = "seconds.";

@@ -91,7 +91,7 @@
 
 "Quit" = "Wyjdź";
 	
-"Logout" = "Wyloguj";
+"Log Out" = "Wyloguj";
 	
 	
 /* ----------------------- File Operations strings --------------------------- *\
@@ -112,7 +112,7 @@
 "Yes" = "Tak";
 "No" = "Nie";
 
-"Log out" = "Wyloguj";
+"Log Out" = "Wyloguj";
 "Are you sure you want to quit\nall applications and log out now?" = "Jesteś pewien, że chcesz zamknąć\nwszystkie programy i wylogować się teraz?";
 "If you do nothing, the system will log out\nautomatically in " = "W wypadku braku reakcji, system wyloguje Cię\nautomatycznie w ciągu ";
 "seconds." = "sekund.";

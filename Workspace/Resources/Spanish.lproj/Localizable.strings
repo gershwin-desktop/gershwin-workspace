@@ -98,7 +98,7 @@
 
 "Quit" = "Salir";
 
-"Logout" = "Cerrar sesión";
+"Log Out" = "Cerrar sesión";
 
 
 /* ----------------------- File Operations strings --------------------------- */
@@ -120,7 +120,7 @@
 "Yes" = "Si";
 "No" = "No";
 
-"Log out" = "Cerrar sesión";
+"Log Out" = "Cerrar sesión";
 "Are you sure you want to quit\nall applications and log out now?" = "¿Seguro que quieres salir de las \naplicaciones y cerrar la sesión ahora?";
 "If you do nothing, the system will log out\nautomatically in " = "Si no hace nada, el sistema cerrara la sesión\nautomáticamente en ";
 "seconds." = "segundos.";
