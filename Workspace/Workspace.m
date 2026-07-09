@@ -291,7 +291,6 @@ NSString *_pendingSystemActionTitle = nil;
   // File menu
   menuItem = [mainMenu addItemWithTitle:_(@"File") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
-  [menu setAutoenablesItems: NO];
   [mainMenu setSubmenu: menu forItem: menuItem];
   
   menuItem = [menu addItemWithTitle:_(@"New Workspace Window") action:@selector(showViewer:) keyEquivalent:@"n"];
@@ -312,7 +311,6 @@ NSString *_pendingSystemActionTitle = nil;
   // Open With submenu
   menuItem = [menu addItemWithTitle:_(@"Open With") action:NULL keyEquivalent:@""];
   subMenu = AUTORELEASE ([NSMenu new]);
-  [subMenu setAutoenablesItems: NO];
   [menu setSubmenu: subMenu forItem: menuItem];
   ASSIGN (openWithMenu, subMenu);
   menuItem = [menu addItemWithTitle:_(@"Open as Folder") action:@selector(openSelectionAsFolder:) keyEquivalent:@"O"];
@@ -1471,48 +1469,96 @@ NSString *_pendingSystemActionTitle = nil;
 }
 
 - (BOOL)validateMenuItem:(id <NSMenuItem>)anItem
-{	
+{
   SEL action = [anItem action];
 
   // CRITICAL: Disable ALL menu items when a modal window is active
-  // This prevents menu key equivalents (like Spacebar for Quick Look) from
-  // stealing keyboard events that should go to the modal dialog
   if ([NSApp modalWindow] != nil) {
-    // Allow certain essential menu items even during modal (like Help)
-    // but disable everything else to prevent key equivalent conflicts
     return NO;
   }
 
+  // === App-level items handled directly by Workspace ===
+
   if (sel_isEqual(action, @selector(emptyTrash:))) {
     return ([trashContents count] != 0);
-  } else if (sel_isEqual(action, @selector(activateContextHelp:))) {
+  }
+  if (sel_isEqual(action, @selector(activateContextHelp:))) {
     return ([NSHelpManager isContextHelpModeActive] == NO);
-
-  } else if (sel_isEqual(action, @selector(logout:))) {
+  }
+  if (sel_isEqual(action, @selector(logout:))) {
     return !loggingout;
-    
-  } else if (sel_isEqual(action, @selector(cut:))
-                || sel_isEqual(action, @selector(copy:))
-                  || sel_isEqual(action, @selector(paste:))) {
-    if (sel_isEqual(action, @selector(paste:))) {
-      return [self pasteboardHasValidContent];
-    }
   }
 
-  return YES;
+  // Cut/copy/paste for file operations
+  if (sel_isEqual(action, @selector(cut:))
+      || sel_isEqual(action, @selector(copy:)))
+    {
+      // Enable if there's a file selection in the current viewer/desktop
+      NSWindow *kwin = [NSApp keyWindow];
+      if (kwin && ([vwrsManager hasViewerWithWindow: kwin]
+                   || [dtopManager hasWindow: kwin]))
+        {
+          id nodeView;
+          if ([vwrsManager hasViewerWithWindow: kwin])
+            nodeView = [[vwrsManager viewerWithWindow: kwin] nodeView];
+          else
+            nodeView = [dtopManager desktopView];
+          NSArray *selection = [nodeView selectedPaths];
+          NSArray *basesel = [NSArray arrayWithObject: [[nodeView baseNode] path]];
+          return ([selection count] > 0
+                  && [selection isEqual: basesel] == NO);
+        }
+      return NO;
+    }
+  if (sel_isEqual(action, @selector(paste:))) {
+    return [self pasteboardHasValidContent];
+  }
+
+  // Always-enabled app-level commands
+  if (sel_isEqual(action, @selector(showViewer:))
+      || sel_isEqual(action, @selector(runCommand:))
+      || sel_isEqual(action, @selector(showFinder:))
+      || sel_isEqual(action, @selector(shutdown:))
+      || sel_isEqual(action, @selector(showPreferences:))
+      || sel_isEqual(action, @selector(terminate:))
+      || sel_isEqual(action, @selector(hide:))
+      || sel_isEqual(action, @selector(hideOtherApplications:))
+      || sel_isEqual(action, @selector(unhideAllApplications:))
+      || sel_isEqual(action, @selector(orderFrontStandardAboutPanel:)))
+    {
+      return YES;
+    }
+
+  // === Window-level standard operations — forward to key window ===
+  if (sel_isEqual(action, @selector(performClose:))
+      || sel_isEqual(action, @selector(performMiniaturize:))
+      || sel_isEqual(action, @selector(performZoom:))
+      || sel_isEqual(action, @selector(undo:))
+      || sel_isEqual(action, @selector(redo:))
+      || sel_isEqual(action, @selector(toggleToolbarShown:)))
+    {
+      NSWindow *keyWindow = [NSApp keyWindow];
+      if ([keyWindow respondsToSelector:@selector(validateMenuItem:)])
+        return [keyWindow validateMenuItem:anItem];
+      return NO;
+    }
+
+  // === Context-dependent file/viewer operations ===
+  // Forward to the key window's delegate (GWViewer, GWSpatialViewer,
+  // GWDesktopManager) via validateItem: which checks selection state,
+  // writability, trash path, etc.
+  NSWindow *keyWindow = [NSApp keyWindow];
+  id delegate = [keyWindow delegate];
+  if ([delegate respondsToSelector:@selector(validateItem:)])
+    {
+      return [delegate validateItem:anItem];
+    }
+
+  // Fallback: if no window handles it, disable the item
+  return NO;
 }
 
-- (void)menuWillOpen:(NSMenu *)menu
-{
-  // Validate all menu items before displaying the menu
-  NSArray *items = [menu itemArray];
-  for (NSMenuItem *item in items) {
-    if ([item action] != NULL) {
-      [item setEnabled: [self validateMenuItem: item]];
-    }
-  }
-}
-           
+            
 - (void)fileSystemWillChange:(NSNotification *)notif
 {
 }
@@ -4355,7 +4401,6 @@ NSString *_pendingSystemActionTitle = nil;
   }
   
   menu = [[NSMenu alloc] initWithTitle: @""];
-  [menu setAutoenablesItems: NO];
   
   // Open
   menuItem = [NSMenuItem new];
@@ -4396,7 +4441,6 @@ NSString *_pendingSystemActionTitle = nil;
       [menuItem setTitle: NSLocalizedString(@"Open With", @"")];
       [menuItem setEnabled: YES];
       NSMenu *owMenu = [[NSMenu alloc] initWithTitle: @""];
-      [owMenu setAutoenablesItems: NO];
       
       apps = [[NSWorkspace sharedWorkspace] infoForExtension: firstext];
       app_enum = [[apps allKeys] objectEnumerator];
@@ -4591,7 +4635,6 @@ NSString *_pendingSystemActionTitle = nil;
 - (NSMenu *)labelColorSubmenu
 {
   NSMenu *labelMenu = [[NSMenu alloc] initWithTitle: @""];
-  [labelMenu setAutoenablesItems: NO];
 
   /* Label names in order of GSFileLabel enum (0-7) */
   NSString *labelNames[] = {
