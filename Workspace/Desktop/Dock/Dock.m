@@ -402,6 +402,17 @@
 {
   if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
+    /* Honor GSSuppressAppIcon — skip apps that declare they should not
+     * appear in the Dock (e.g. WindowManager). */
+    NSBundle *bundle = [NSBundle bundleWithPath: appPath];
+    if ([[bundle objectForInfoDictionaryKey: @"GSSuppressAppIcon"] boolValue]) {
+      DockIcon *icon = [self iconForApplicationName: appName];
+      if (icon) {
+        [self removeIcon: icon];
+      }
+      return;
+    }
+
     DockIcon *icon = [self iconForApplicationName: appName];
   
     if (icon == nil) {
@@ -440,6 +451,17 @@
       return;
     }
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
+    /* Honor GSSuppressAppIcon — skip apps that declare they should not
+     * appear in the Dock (e.g. WindowManager). */
+    NSBundle *bundle = [NSBundle bundleWithPath: appPath];
+    if ([[bundle objectForInfoDictionaryKey: @"GSSuppressAppIcon"] boolValue]) {
+      DockIcon *icon = [self iconForApplicationName: appName];
+      if (icon) {
+        [self removeIcon: icon];
+      }
+      return;
+    }
+
     DockIcon *icon = [self iconForApplicationName: appName];
 
     if (icon == nil) {

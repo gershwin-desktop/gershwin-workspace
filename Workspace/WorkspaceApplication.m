@@ -1463,7 +1463,7 @@
                   [launchedApps addObject: app];
                   [app setHidden: hidden];
                   [[dtopManager dock] appDidLaunch: path appName: name];
-          
+
                   if (hidden)
                     {
                       [[dtopManager dock] appDidHide: name];

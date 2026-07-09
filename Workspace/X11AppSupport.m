@@ -241,6 +241,34 @@ static GWX11WindowManager *sharedWindowManager = nil;
     return hidden;
 }
 
+- (BOOL)hasNetWmStateSkipTaskbar:(Display *)dpy window:(Window)win
+{
+    if (!dpy || !win) return NO;
+    
+    Atom net_wm_state = XInternAtom(dpy, "_NET_WM_STATE", False);
+    Atom skip_taskbar = XInternAtom(dpy, "_NET_WM_STATE_SKIP_TASKBAR", False);
+    Atom actual_type;
+    int actual_format;
+    unsigned long nitems, bytes_after;
+    unsigned char *data = NULL;
+    BOOL hasSkip = NO;
+    
+    if (XGetWindowProperty(dpy, win, net_wm_state, 0, LONG_MAX, False, XA_ATOM,
+                           &actual_type, &actual_format, &nitems,
+                           &bytes_after, &data) == Success && data) {
+        Atom *states = (Atom *)data;
+        for (unsigned long i = 0; i < nitems; i++) {
+            if (states[i] == skip_taskbar) {
+                hasSkip = YES;
+                break;
+            }
+        }
+        XFree(data);
+    }
+    
+    return hasSkip;
+}
+
 - (BOOL)checkWindowIconified:(Display *)dpy window:(Window)win
 {
     if (!dpy || !win) return NO;
@@ -290,6 +318,15 @@ static GWX11WindowManager *sharedWindowManager = nil;
         
         if (clients) {
             for (unsigned long i = 0; i < count; i++) {
+                /* Skip windows with no PID (WM root/decoration windows) or
+                 * _NET_WM_STATE_SKIP_TASKBAR (dock panels, desktop, etc.). */
+                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
+                if (winPID <= 0) {
+                    continue;
+                }
+                if ([self hasNetWmStateSkipTaskbar:dpy window:clients[i]]) {
+                    continue;
+                }
                 GWX11WindowInfo *info = [self infoForWindow:dpy window:clients[i]];
                 [windows addObject:info];
             }
@@ -319,8 +356,11 @@ static GWX11WindowManager *sharedWindowManager = nil;
             for (unsigned long i = 0; i < count; i++) {
                 pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
                 if (winPID == pid) {
-                    GWX11WindowInfo *info = [self infoForWindow:dpy window:clients[i]];
-                    [windows addObject:info];
+                    /* Skip windows with _NET_WM_STATE_SKIP_TASKBAR */
+                    if (![self hasNetWmStateSkipTaskbar:dpy window:clients[i]]) {
+                        GWX11WindowInfo *info = [self infoForWindow:dpy window:clients[i]];
+                        [windows addObject:info];
+                    }
                 }
             }
             XFree(clients);
@@ -372,12 +412,18 @@ static BOOL stringContainsWord(NSString *str, NSString *word)
             pid_t myPID = getpid();
 
             for (unsigned long i = 0; i < count; i++) {
+                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
+
+                /* Skip windows with no PID (WM root/decoration windows) */
+                if (winPID <= 0) {
+                    continue;
+                }
+
                 /* Skip our own windows — the Workspace file viewer titles
                  * can match app names (e.g., a viewer browsing "xpdf" volume
                  * would falsely match an app named "xpdf").
                  * Check both _NET_WM_PID and WM_CLASS since GNUstep apps
                  * may not set _NET_WM_PID. */
-                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
                 if (winPID == myPID) {
                     continue;
                 }
@@ -387,6 +433,12 @@ static BOOL stringContainsWord(NSString *str, NSString *word)
 
                 /* Skip windows belonging to Workspace (by WM_CLASS) */
                 if (winClass && [winClass isEqualToString:@"Workspace"]) {
+                    continue;
+                }
+
+                /* Skip windows with _NET_WM_STATE_SKIP_TASKBAR (e.g. app icon
+                 * windows, desktop windows, dock panels). */
+                if ([self hasNetWmStateSkipTaskbar:dpy window:clients[i]]) {
                     continue;
                 }
 
