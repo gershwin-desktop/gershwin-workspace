@@ -25,6 +25,8 @@
 
 #include "config.h"
 
+#import <objc/runtime.h>
+
 /* the following for getrlimit */
 #include <sys/types.h>
 #include <sys/time.h>
@@ -929,8 +931,41 @@ NSString *_pendingSystemActionTitle = nil;
   activeApplication = nil;   
 }
 
+static BOOL (*orig_getInfoForFile)(id, SEL, NSString*, NSString**, NSString**);
+
+static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSString **appName, NSString **type)
+{
+  BOOL result = orig_getInfoForFile(self, _cmd, fullPath, appName, type);
+  if (result == YES && *appName != nil) {
+    return YES;
+  }
+  NSString *ext = [fullPath pathExtension];
+  if ([ext length] == 0) {
+    NSString *filename = [[fullPath lastPathComponent] lowercaseString];
+    *appName = [self getBestAppInRole: nil forExtension: filename];
+    if (*appName != nil) {
+      *type = NSPlainFileType;
+      return YES;
+    }
+  }
+  return result;
+}
+
+- (void)_swizzleGetInfoForFileForNoExtensionFiles
+{
+  Class cls = [NSWorkspace class];
+  SEL sel = @selector(getInfoForFile:application:type:);
+  Method m = class_getInstanceMethod(cls, sel);
+  if (m) {
+    orig_getInfoForFile = (BOOL (*)(id, SEL, NSString*, NSString**, NSString**))method_getImplementation(m);
+    method_setImplementation(m, (IMP)swizzled_getInfoForFile);
+  }
+}
+
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
+  [self _swizzleGetInfoForFileForNoExtensionFiles];
+
   NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
   NSNotificationCenter *dnc = [NSDistributedNotificationCenter defaultCenter];
   
@@ -4394,6 +4429,10 @@ NSString *_pendingSystemActionTitle = nil;
   }
   
   firstext = [[[nodes objectAtIndex: 0] path] pathExtension];
+  if ([firstext length] == 0)
+    {
+      firstext = [[[[nodes objectAtIndex: 0] path] lastPathComponent] lowercaseString];
+    }
   
   // Check if any selected items are mount points
   for (i = 0; i < [nodes count]; i++) {
@@ -4422,6 +4461,10 @@ NSString *_pendingSystemActionTitle = nil;
     for (i = 0; i < [nodes count]; i++) {
       FSNode *node = [nodes objectAtIndex: i];
       NSString *ext = [[node path] pathExtension];
+      if ([ext length] == 0)
+        {
+          ext = [[[node path] lastPathComponent] lowercaseString];
+        }
       
       if ([ext isEqual: firstext] == NO) {
         canShowOpenWith = NO;
