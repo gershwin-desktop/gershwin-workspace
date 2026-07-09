@@ -4138,9 +4138,17 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     return;
 
   NSString *firstext = [[[selectedPaths objectAtIndex: 0] pathExtension] lowercaseString];
+  if ([firstext length] == 0)
+    {
+      firstext = [[[selectedPaths objectAtIndex: 0] lastPathComponent] lowercaseString];
+    }
   for (NSUInteger i = 1; i < [selectedPaths count]; i++)
     {
       NSString *ext = [[[selectedPaths objectAtIndex: i] pathExtension] lowercaseString];
+      if ([ext length] == 0)
+        {
+          ext = [[[selectedPaths objectAtIndex: i] lastPathComponent] lowercaseString];
+        }
       if ([ext isEqual: firstext] == NO)
         return;
     }
