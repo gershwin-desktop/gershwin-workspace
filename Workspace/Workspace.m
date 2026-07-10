@@ -4463,6 +4463,26 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   [menu addItem: menuItem];
   RELEASE (menuItem);
   
+  // Open as Folder - only for bundles (packages)
+  {
+    BOOL allBundles = YES;
+    for (i = 0; i < [nodes count]; i++) {
+      if ([[nodes objectAtIndex: i] isPackage] == NO) {
+        allBundles = NO;
+        break;
+      }
+    }
+    if (allBundles) {
+      menuItem = [NSMenuItem new];
+      [menuItem setTitle: NSLocalizedString(@"Open as Folder", @"")];
+      [menuItem setTarget: openTarget];
+      [menuItem setAction: @selector(openSelectionAsFolder:)];
+      [menuItem setEnabled: YES];
+      [menu addItem: menuItem];
+      RELEASE (menuItem);
+    }
+  }
+  
   // Open With submenu - only for files with same extension
   if (includeOpenWith) {
     BOOL canShowOpenWith = YES;
