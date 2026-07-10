@@ -146,6 +146,8 @@
 
 - (NSString *)name;
 
+- (NSString *)displayName;
+
 - (NSString *)fileType;
 
 - (NSString *)application;

@@ -476,6 +476,14 @@
   return name;
 }
 
+- (NSString *)displayName
+{
+  if ([[self path] isEqualToString: @"/"]) {
+    return @"System Disk";
+  }
+  return GSDisplayNameForFilename(name, GSCurrentExtensionDisplayMode());
+}
+
 - (NSString *)fileType
 {
   if (attributes && (fileType == nil)) {

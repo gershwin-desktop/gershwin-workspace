@@ -1278,7 +1278,7 @@ static NSImage *branchImage;
       return;
     }
 
-  [label setStringValue: (hostname ? hostname : [node name])];
+  [label setStringValue: (hostname ? hostname : [node displayName])];
 
   switch(showType) {
     case FSNInfoNameType:

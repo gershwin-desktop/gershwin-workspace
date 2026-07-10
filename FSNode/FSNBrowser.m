@@ -204,6 +204,27 @@
       [self setVisibleColumns:[self visibleColumns]];
     }
   }
+
+  [self reloadExtensionDisplay];
+}
+
+- (void)reloadExtensionDisplay
+{
+  NSInteger i;
+  for (i = 0; i < [columns count]; i++) {
+    FSNBrowserColumn *col = [columns objectAtIndex: i];
+    NSMatrix *matrix = [col cmatrix];
+    NSCell *cell;
+    NSInteger r, c;
+    for (r = 0; r < [matrix numberOfRows]; r++) {
+      for (c = 0; c < [matrix numberOfColumns]; c++) {
+        cell = [matrix cellAtRow: r column: c];
+        if ([cell isKindOfClass: [FSNBrowserCell class]]) {
+          [(FSNBrowserCell *)cell setNodeInfoShowType: [(FSNBrowserCell *)cell nodeInfoShowType]];
+        }
+      }
+    }
+  }
 }
 
 - (void)setBaseNode:(FSNode *)node
@@ -2264,7 +2285,7 @@
       [nameEditor setFrame: r];
 
       [nameEditor setNode: cellnode 
-              stringValue: [cell shownInfo]
+              stringValue: [cellnode name]
                     index: 0];
 
       [nameEditor setEditable: YES];
@@ -2316,13 +2337,39 @@
       }
     else
       {
-      NSString *newname = [nameEditor stringValue];
-      NSString *newpath = [[ednode parentPath] stringByAppendingPathComponent: newname];
-      NSString *extension = [newpath pathExtension];
+      NSString *userName = [nameEditor stringValue];
+      NSString *origName = [ednode name];
+      GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
+      NSString *dispName = GSDisplayNameForFilename(origName, mode);
+      NSString *hiddenExt = GSFilenameHiddenExtension(origName, mode);
+      NSString *newname = userName;
+      NSString *newpath;
+      NSString *extension;
       NSCharacterSet *notAllowSet = [NSCharacterSet characterSetWithCharactersInString: @"/\\*:?\33"];
-      NSRange range = [newname rangeOfCharacterFromSet: notAllowSet];
-      NSArray *dirContents = [ednode subNodeNamesOfParent];
-      NSMutableDictionary *opinfo = [NSMutableDictionary dictionary];
+      NSRange range;
+      NSArray *dirContents;
+      NSMutableDictionary *opinfo;
+
+      if ([userName isEqualToString: dispName])
+	{
+	  CLEAREDITING;
+	}
+
+      if ([hiddenExt length] > 0 && [userName rangeOfString: @"."].location == NSNotFound)
+	{
+	  newname = [userName stringByAppendingString: hiddenExt];
+	}
+
+      if ([newname isEqualToString: origName])
+	{
+	  CLEAREDITING;
+	}
+
+      newpath = [[ednode parentPath] stringByAppendingPathComponent: newname];
+      extension = [newpath pathExtension];
+      range = [newname rangeOfCharacterFromSet: notAllowSet];
+      dirContents = [ednode subNodeNamesOfParent];
+      opinfo = [NSMutableDictionary dictionary];
 
       if (([newname length] == 0) || (range.length > 0))
 	{
@@ -2330,7 +2377,7 @@
 	  CLEAREDITING;
 	}
 
-      if (([extension length] 
+      if (([extension length]
               && ([ednode isDirectory] && ([ednode isPackage] == NO))))
 	{
           if (showAlertExtensionChange([FSNode class], extension) == NSAlertDefaultReturn)
@@ -2339,22 +2386,16 @@
             }
 	}
 
-      if ([dirContents containsObject: newname]) {
-        if ([newname isEqual: [ednode name]])
-	  {
-	    CLEAREDITING;
-	  }
-	else
-	  {
-	    showAlertNameInUse([FSNode class], newname);
-	    CLEAREDITING;
-	  }
-      }
+      if ([dirContents containsObject: newname])
+	{
+	  showAlertNameInUse([FSNode class], newname);
+	  CLEAREDITING;
+	}
 
-      [opinfo setObject: @"WorkspaceRenameOperation" forKey: @"operation"];	
-      [opinfo setObject: [ednode path] forKey: @"source"];	
-      [opinfo setObject: newpath forKey: @"destination"];	
-      [opinfo setObject: [NSArray arrayWithObject: @""] forKey: @"files"];	
+      [opinfo setObject: @"WorkspaceRenameOperation" forKey: @"operation"];
+      [opinfo setObject: [ednode path] forKey: @"source"];
+      [opinfo setObject: newpath forKey: @"destination"];
+      [opinfo setObject: [NSArray arrayWithObject: @""] forKey: @"files"];
 
       [self stopCellEditing];
       [desktopApp performFileOperation: opinfo];

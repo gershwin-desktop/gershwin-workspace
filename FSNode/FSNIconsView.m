@@ -94,6 +94,9 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)dealloc
 {
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSUserDefaultsDidChangeNotification
+                                                object: nil];
   if (_observedClipView)
     {
       [[NSNotificationCenter defaultCenter] removeObserver: self
@@ -216,9 +219,27 @@ static void GWHighlightFrameRect(NSRect aRect)
       /* Enable resize notification so resizeWithOldSuperviewSize:
        * (which calls tile) is actually invoked. */
       [self setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
+
+      [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector(defaultsChanged:)
+               name: NSUserDefaultsDidChangeNotification
+             object: nil];
     }
 
   return self;
+}
+
+- (void)defaultsChanged:(NSNotification *)not
+{
+  NSUInteger i;
+  for (i = 0; i < [icons count]; i++)
+    {
+      FSNIcon *icon = [icons objectAtIndex: i];
+      [icon setNodeInfoShowType: [icon nodeInfoShowType]];
+      [icon tile];
+      [icon setNeedsDisplay: YES];
+    }
 }
 
 - (void)sortIcons
@@ -3213,7 +3234,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   if (editIcon)
     {
       FSNode *ednode = [editIcon node];
-      NSString *nodeDescr = [editIcon shownInfo];
+      NSString *nodeDescr = [ednode name];
       NSRect icnr = [editIcon frame];
       NSRect labr = [editIcon labelRect];
       NSCellImagePosition ipos = [editIcon iconPosition];
@@ -3395,13 +3416,39 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
   else
     {
-      NSString *newname = [nameEditor stringValue];
-      NSString *newpath = [[ednode parentPath] stringByAppendingPathComponent: newname];
-      NSString *extension = [newpath pathExtension];
+      NSString *userName = [nameEditor stringValue];
+      NSString *origName = [ednode name];
+      GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
+      NSString *dispName = GSDisplayNameForFilename(origName, mode);
+      NSString *hiddenExt = GSFilenameHiddenExtension(origName, mode);
+      NSString *newname = userName;
+      NSString *newpath;
+      NSString *extension;
       NSCharacterSet *notAllowSet = [NSCharacterSet characterSetWithCharactersInString: @"/\\*:?\33"];
-      NSRange range = [newname rangeOfCharacterFromSet: notAllowSet];
-      NSArray *dirContents = [ednode subNodeNamesOfParent];
-      NSMutableDictionary *opinfo = [NSMutableDictionary dictionary];
+      NSRange range;
+      NSArray *dirContents;
+      NSMutableDictionary *opinfo;
+
+      if ([userName isEqualToString: dispName])
+	{
+	  CLEAREDITING;
+	}
+
+      if ([hiddenExt length] > 0 && [userName rangeOfString: @"."].location == NSNotFound)
+	{
+	  newname = [userName stringByAppendingString: hiddenExt];
+	}
+
+      if ([newname isEqualToString: origName])
+	{
+	  CLEAREDITING;
+	}
+
+      newpath = [[ednode parentPath] stringByAppendingPathComponent: newname];
+      extension = [newpath pathExtension];
+      range = [newname rangeOfCharacterFromSet: notAllowSet];
+      dirContents = [ednode subNodeNamesOfParent];
+      opinfo = [NSMutableDictionary dictionary];
 
       if (([newname length] == 0) || (range.length > 0))
 	{
@@ -3420,15 +3467,8 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       if ([dirContents containsObject: newname])
 	{
-	  if ([newname isEqual: [ednode name]])
-	    {
-	      CLEAREDITING;
-	    }
-	  else
-	    {
-	      showAlertNameInUse([FSNode class], newname);
-	      CLEAREDITING;
-	    }
+	  showAlertNameInUse([FSNode class], newname);
+	  CLEAREDITING;
 	}
 
       [opinfo setObject: @"WorkspaceRenameOperation" forKey: @"operation"];

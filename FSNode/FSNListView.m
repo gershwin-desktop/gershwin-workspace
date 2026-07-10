@@ -72,6 +72,9 @@ static NSString *defaultColumns = @"{ \
 
 - (void)dealloc
 {
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSUserDefaultsDidChangeNotification
+                                                object: nil];
   RELEASE (node);
   RELEASE (extInfoType);
   RELEASE (nodeReps);
@@ -129,9 +132,20 @@ static NSString *defaultColumns = @"{ \
 
       mouseFlags = 0;
       isDragTarget = NO;
+
+      [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector(defaultsChanged:)
+               name: NSUserDefaultsDidChangeNotification
+             object: nil];
     }
 
   return self;
+}
+
+- (void)defaultsChanged:(NSNotification *)not
+{
+  [listView reloadData];
 }
 
 - (FSNode *)infoNode
@@ -478,7 +492,7 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
   switch(ident)
     {
     case FSNInfoNameType:
-      return [nd name];
+      return [nd displayName];
       break;
     case FSNInfoKindType:
       return [nd typeDescription];
@@ -1598,13 +1612,39 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     }
   else
     {
-      NSString *newname = [nameEditor stringValue];
-      NSString *newpath = [[ednode parentPath] stringByAppendingPathComponent: newname];
-      NSString *extension = [newpath pathExtension];
+      NSString *userName = [nameEditor stringValue];
+      NSString *origName = [ednode name];
+      GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
+      NSString *dispName = GSDisplayNameForFilename(origName, mode);
+      NSString *hiddenExt = GSFilenameHiddenExtension(origName, mode);
+      NSString *newname = userName;
+      NSString *newpath;
+      NSString *extension;
       NSCharacterSet *notAllowSet = [NSCharacterSet characterSetWithCharactersInString: @"/\\*:?\33"];
-      NSRange range = [newname rangeOfCharacterFromSet: notAllowSet];
-      NSArray *dirContents = [ednode subNodeNamesOfParent];
-      NSMutableDictionary *opinfo = [NSMutableDictionary dictionary];
+      NSRange range;
+      NSArray *dirContents;
+      NSMutableDictionary *opinfo;
+
+      if ([userName isEqualToString: dispName])
+	{
+	  CLEAREDITING;
+	}
+
+      if ([hiddenExt length] > 0 && [userName rangeOfString: @"."].location == NSNotFound)
+	{
+	  newname = [userName stringByAppendingString: hiddenExt];
+	}
+
+      if ([newname isEqualToString: origName])
+	{
+	  CLEAREDITING;
+	}
+
+      newpath = [[ednode parentPath] stringByAppendingPathComponent: newname];
+      extension = [newpath pathExtension];
+      range = [newname rangeOfCharacterFromSet: notAllowSet];
+      dirContents = [ednode subNodeNamesOfParent];
+      opinfo = [NSMutableDictionary dictionary];
 
       if (([newname length] == 0) || (range.length > 0))
 	{
@@ -1621,17 +1661,11 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
             }
         }
 
-      if ([dirContents containsObject: newname]) {
-        if ([newname isEqual: [ednode name]])
-          {
-            CLEAREDITING;
-          }
-        else
-          {
-            showAlertNameInUse([FSNode class], newname);
-            CLEAREDITING;
-          }
-      }
+      if ([dirContents containsObject: newname])
+	{
+	  showAlertNameInUse([FSNode class], newname);
+	  CLEAREDITING;
+	}
 
       [opinfo setObject: @"WorkspaceRenameOperation" forKey: @"operation"];
       [opinfo setObject: [ednode path] forKey: @"source"];

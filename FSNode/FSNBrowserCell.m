@@ -570,7 +570,7 @@ static NSString *dots = @"...";
     return;
   }
   
-  [self setStringValue: [node name]];
+  [self setStringValue: [node displayName]];
   
   if (showType == FSNInfoNameType) {
     DESTROY (infoCell);

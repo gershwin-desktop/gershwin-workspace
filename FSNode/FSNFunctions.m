@@ -31,6 +31,194 @@
 #import <GNUstepBase/GNUstep.h>
 #import "FSNFunctions.h"
 #import "FSNodeRep.h"
+#import <dispatch/dispatch.h>
+static GSFilenameExtensionDisplayMode _displayModeCache = -1;
+
+static NSString *defaultsPlistPath(void)
+{
+  NSString *dir;
+  NSString *env = [[[NSProcessInfo processInfo] environment]
+                    objectForKey: @"GNUSTEP_USER_DEFAULTS_DIR"];
+  if (env)
+    dir = env;
+  else
+    dir = [NSHomeDirectory() stringByAppendingPathComponent: @"Library/Preferences"];
+  return [dir stringByAppendingPathComponent: @"NSGlobalDomain.plist"];
+}
+
+static void pollDefaults(void)
+{
+  NSString *path = defaultsPlistPath();
+  NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile: path];
+  NSInteger mode;
+  
+  if (plist) {
+    id val = [plist objectForKey: @"GSFilenameExtensionDisplayMode"];
+    if (val) {
+      mode = [val integerValue];
+    } else {
+      mode = GSFilenameExtensionHidePackageExtensions;
+    }
+  } else {
+    mode = GSFilenameExtensionHidePackageExtensions;
+  }
+  
+  if (mode < GSFilenameExtensionDisplayAll || mode > GSFilenameExtensionHideAll) {
+    mode = GSFilenameExtensionHidePackageExtensions;
+  }
+
+  if (_displayModeCache == -1) {
+    _displayModeCache = (GSFilenameExtensionDisplayMode)mode;
+  } else if (_displayModeCache != (GSFilenameExtensionDisplayMode)mode) {
+    NSLog(@"GSExt: mode changed from %ld to %ld", (long)_displayModeCache, (long)mode);
+    _displayModeCache = (GSFilenameExtensionDisplayMode)mode;
+    [[NSNotificationCenter defaultCenter]
+      postNotificationName: NSUserDefaultsDidChangeNotification
+                    object: [NSUserDefaults standardUserDefaults]];
+  }
+}
+
+static void ensureDisplayModeObserver(void)
+{
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
+                                                  dispatch_get_main_queue());
+    dispatch_source_set_timer(t, dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC),
+                              2 * NSEC_PER_SEC, 0);
+    dispatch_source_set_event_handler(t, ^{ pollDefaults(); });
+    dispatch_resume(t);
+  });
+}
+
+static NSSet *packageExtensions(void)
+{
+  static NSSet *exts = nil;
+  if (exts == nil) {
+    exts = [[NSSet alloc] initWithObjects:
+      @"app", @"bundle", @"framework", @"plugin",
+      @"prefPane", @"service", @"wdgt", @"qlgenerator",
+      @"kext", @"xpc", @"ideplugin", @"metalsplugin",
+      nil];
+  }
+  return exts;
+}
+
+BOOL
+GSFilenameExtensionIsNumeric(NSString *ext)
+{
+  if ([ext length] == 0) {
+    return NO;
+  }
+  NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+  return ([ext rangeOfCharacterFromSet: nonDigits].location == NSNotFound);
+}
+
+GSFilenameExtensionDisplayMode
+GSCurrentExtensionDisplayMode(void)
+{
+  ensureDisplayModeObserver();
+  if (_displayModeCache == -1) {
+    NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+    [defs synchronize];
+    NSInteger mode = [defs integerForKey: @"GSFilenameExtensionDisplayMode"];
+    if (mode < GSFilenameExtensionDisplayAll || mode > GSFilenameExtensionHideAll) {
+      mode = GSFilenameExtensionHidePackageExtensions;
+    }
+    _displayModeCache = (GSFilenameExtensionDisplayMode)mode;
+  }
+  return _displayModeCache;
+}
+
+BOOL
+GSExtensionIsPackageExtension(NSString *extension)
+{
+  if ([extension length] == 0) {
+    return NO;
+  }
+  return [packageExtensions() containsObject: [extension lowercaseString]];
+}
+
+NSString *
+GSDisplayNameForFilename(NSString *filename, GSFilenameExtensionDisplayMode mode)
+{
+  if ([filename length] == 0 || [filename hasPrefix: @"."]) {
+    return filename;
+  }
+  if (mode == GSFilenameExtensionDisplayAll) {
+    return filename;
+  }
+  if (mode == GSFilenameExtensionHidePackageExtensions) {
+    NSString *ext = [filename pathExtension];
+    if ([ext length] > 0 && GSExtensionIsPackageExtension(ext) && !GSFilenameExtensionIsNumeric(ext)) {
+      NSString *stripped = [filename substringToIndex: [filename length] - [ext length] - 1];
+      if ([stripped length] > 0) {
+        return stripped;
+      }
+    }
+    return filename;
+  }
+  // GSFilenameExtensionHideAll
+  {
+    static NSSet *compoundExts = nil;
+    if (compoundExts == nil) {
+      compoundExts = [[NSSet alloc] initWithObjects:
+        @"tar.gz", @"tar.bz2", @"tar.xz", @"tar.lz",
+        @"tar.lzma", @"tar.zst", @"tar.Z",
+        @"user.js", nil];
+    }
+    for (NSString *cext in compoundExts) {
+      if ([filename hasSuffix: @"."] == NO && [filename length] > [cext length]
+          && [[filename substringFromIndex: [filename length] - [cext length]] isEqualToString: cext]) {
+        return [filename substringToIndex: [filename length] - [cext length]];
+      }
+    }
+    NSString *ext = [filename pathExtension];
+    if ([ext length] > 0 && !GSFilenameExtensionIsNumeric(ext)) {
+      return [filename substringToIndex: [filename length] - [ext length] - 1];
+    }
+  }
+  return filename;
+}
+
+NSString *
+GSFilenameHiddenExtension(NSString *filename, GSFilenameExtensionDisplayMode mode)
+{
+  if ([filename length] == 0 || [filename hasPrefix: @"."]) {
+    return @"";
+  }
+  if (mode == GSFilenameExtensionDisplayAll) {
+    return @"";
+  }
+  if (mode == GSFilenameExtensionHidePackageExtensions) {
+    NSString *ext = [filename pathExtension];
+    if ([ext length] > 0 && GSExtensionIsPackageExtension(ext) && !GSFilenameExtensionIsNumeric(ext)) {
+      return [@"." stringByAppendingString: ext];
+    }
+    return @"";
+  }
+  // GSFilenameExtensionHideAll
+  {
+    static NSSet *compoundExts = nil;
+    if (compoundExts == nil) {
+      compoundExts = [[NSSet alloc] initWithObjects:
+        @"tar.gz", @"tar.bz2", @"tar.xz", @"tar.lz",
+        @"tar.lzma", @"tar.zst", @"tar.Z",
+        @"user.js", nil];
+    }
+    for (NSString *cext in compoundExts) {
+      if ([filename hasSuffix: @"."] == NO && [filename length] > [cext length]
+          && [[filename substringFromIndex: [filename length] - [cext length]] isEqualToString: cext]) {
+        return cext;
+      }
+    }
+    NSString *ext = [filename pathExtension];
+    if ([ext length] > 0 && !GSFilenameExtensionIsNumeric(ext)) {
+      return [@"." stringByAppendingString: ext];
+    }
+  }
+  return @"";
+}
 
 NSString *path_separator(void)
 {

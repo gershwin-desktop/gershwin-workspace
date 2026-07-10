@@ -26,6 +26,23 @@
 #ifndef FSN_FUNCTIONS_H
 #define FSN_FUNCTIONS_H
 
+enum GSFilenameExtensionDisplayMode {
+    GSFilenameExtensionDisplayAll = 0,
+    GSFilenameExtensionHidePackageExtensions = 1,
+    GSFilenameExtensionHideAll = 2
+};
+typedef enum GSFilenameExtensionDisplayMode GSFilenameExtensionDisplayMode;
+
+GSFilenameExtensionDisplayMode GSCurrentExtensionDisplayMode(void);
+
+BOOL GSExtensionIsPackageExtension(NSString *extension);
+
+BOOL GSFilenameExtensionIsNumeric(NSString *ext);
+
+NSString *GSDisplayNameForFilename(NSString *filename, GSFilenameExtensionDisplayMode mode);
+
+NSString *GSFilenameHiddenExtension(NSString *filename, GSFilenameExtensionDisplayMode mode);
+
 NSString *path_separator(void);
 
 BOOL isSubpathOfPath(NSString *p1, NSString *p2);
