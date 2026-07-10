@@ -30,6 +30,11 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
+
+/* Minimum column width used for reversible column count calculation
+ * on window resize (see _recalcColumnCount).  Must match DEFAULT_INCR
+ * in GWViewer.m so that initial and dynamic counts are consistent. */
+#define FSNBROWSER_MIN_COL_WIDTH 150.0
 #import "FSNBrowser.h"
 #import "FSNBrowserColumn.h"
 #import "FSNBrowserMatrix.h"
@@ -1477,30 +1482,62 @@
   return YES;
 }
 
-- (void)resizeWithOldSuperviewSize:(NSSize)oldBoundsSize
-{
-  NSRect r = [[self superview] bounds];
-  NSInteger ncols = myrintf(r.size.width / columnSize.width);
-
-  [self setFrame: r];
-  
-  if (ncols != visibleColumns) {
-    updateViewsLock++;
-    [self setVisibleColumns: ncols];
-    updateViewsLock--;
-  }
-    
-  [self tile];
-}
-
 - (void)viewDidMoveToSuperview
 {
   [super viewDidMoveToSuperview];
+
+  if (_observedClipView)
+    {
+      [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                      name: NSViewFrameDidChangeNotification
+                                                    object: _observedClipView];
+      _observedClipView = nil;
+    }
+
+  if ([self superview] && [[self superview] isKindOfClass: [NSClipView class]])
+    {
+      _observedClipView = [self superview];
+      [[NSNotificationCenter defaultCenter] addObserver: self
+                                               selector: @selector(clipViewFrameDidChange:)
+                                                   name: NSViewFrameDidChangeNotification
+                                                 object: _observedClipView];
+    }
 
   if ([self superview]) {
     [self setFrame: [[self superview] bounds]];
     [self tile];
   }
+}
+
+- (void)clipViewFrameDidChange:(NSNotification *)notif
+{
+  [self _recalcColumnCount];
+}
+
+- (void)resizeWithOldSuperviewSize:(NSSize)oldBoundsSize
+{
+  [self _recalcColumnCount];
+}
+
+- (void)_recalcColumnCount
+{
+  NSRect r = [[self superview] bounds];
+  [self setFrame: r];
+
+  if (r.size.width > 0) {
+    /* Use a fixed minimum column width so that the column count
+     * is purely a function of the current width — fully reversible
+     * when the window is made larger then smaller again. */
+    NSInteger ncols = r.size.width / FSNBROWSER_MIN_COL_WIDTH;
+    if (ncols < 1) ncols = 1;
+    if (ncols != visibleColumns) {
+      updateViewsLock++;
+      [self setVisibleColumns: ncols];
+      updateViewsLock--;
+    }
+  }
+
+  [self tile];
 }
 
 /*

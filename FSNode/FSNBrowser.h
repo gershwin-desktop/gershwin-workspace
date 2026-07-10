@@ -76,7 +76,8 @@
   id viewer;  
   id manager;
   id <DesktopApplication> desktopApp;
-  FSNodeRep *fsnodeRep; 
+  FSNodeRep *fsnodeRep;
+  id _observedClipView;
 }
 
 - (id)initWithBaseNode:(FSNode *)bsnode
