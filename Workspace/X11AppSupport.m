@@ -431,9 +431,32 @@ static BOOL stringContainsWord(NSString *str, NSString *word)
                 NSString *winName = [self getWindowName:dpy window:clients[i]];
                 NSString *winClass = [self getWindowClass:dpy window:clients[i]];
 
-                /* Skip windows belonging to Workspace (by WM_CLASS) */
-                if (winClass && [winClass isEqualToString:@"Workspace"]) {
-                    continue;
+                /* Skip windows belonging to Workspace (by WM_CLASS).
+                 * GNUstep apps have res_class="GNUstep". Workspace's own
+                 * windows use specific res_name values like "Workspace",
+                 * "FileViewer", "Window", etc. Check both parts to avoid
+                 * filtering out other GNUstep applications' windows. */
+                if (winClass && [winClass isEqualToString:@"GNUstep"]) {
+                    XClassHint classHint;
+                    if (XGetClassHint(dpy, clients[i], &classHint)) {
+                        BOOL isWorkspace = NO;
+                        if (classHint.res_name) {
+                            NSString *resName = [NSString stringWithCString:classHint.res_name encoding:NSUTF8StringEncoding];
+                            if ([resName isEqualToString:@"Workspace"] ||
+                                [resName isEqualToString:@"FileViewer"] ||
+                                [resName isEqualToString:@"Window"] ||
+                                [resName isEqualToString:@"Finder"]) {
+                                isWorkspace = YES;
+                            }
+                            XFree(classHint.res_name);
+                        }
+                        if (classHint.res_class) {
+                            XFree(classHint.res_class);
+                        }
+                        if (isWorkspace) {
+                            continue;
+                        }
+                    }
                 }
 
                 /* Skip windows with _NET_WM_STATE_SKIP_TASKBAR (e.g. app icon

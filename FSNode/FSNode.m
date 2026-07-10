@@ -525,8 +525,23 @@
       flags.directory = 1;
 
 	    if (type == NSApplicationFileType) {
-        flags.application = 1;
-        flags.package = 1;
+        /* Verify bundle structure: check for Resources/Info.plist
+         * or Resources/Info-gnustep.plist to avoid treating bare
+         * directories with a .app suffix as apps. Also reject
+         * directories that contain a GNUmakefile at the root (likely
+         * a source tree, not a built bundle). */
+        NSString *plistPath = [path stringByAppendingPathComponent: @"Resources/Info.plist"];
+        NSString *gnustepPlistPath = [path stringByAppendingPathComponent: @"Resources/Info-gnustep.plist"];
+        NSString *makefilePath = [path stringByAppendingPathComponent: @"GNUmakefile"];
+        BOOL hasPlist = ([fm fileExistsAtPath: plistPath] || [fm fileExistsAtPath: gnustepPlistPath]);
+        BOOL hasMakefile = [fm fileExistsAtPath: makefilePath];
+        if (hasPlist && !hasMakefile) {
+          flags.application = 1;
+          flags.package = 1;
+        } else if (hasPlist == NO) {
+          /* Not a valid bundle at all — don't set package either,
+           * so double-click navigates into it as a plain directory. */
+        }
 	    } else if (type == NSPlainFileType) {
         flags.package = 1;
       }
@@ -569,19 +584,34 @@
       ASSIGN (application, defApp);
     }
     
-    flags.directory = 1;
+      flags.directory = 1;
 
-	  if (type == NSApplicationFileType) {
-      flags.application = 1;
-      flags.package = 1;
-	  } else if (type == NSPlainFileType) {
-      flags.package = 1;
-    } else if (type == NSFilesystemFileType) {
-      flags.mountpoint = 1;
-    } 
+	    if (type == NSApplicationFileType) {
+        /* Verify bundle structure: check for Resources/Info.plist
+         * or Resources/Info-gnustep.plist to avoid treating bare
+         * directories with a .app suffix as apps. Also reject
+         * directories that contain a GNUmakefile at the root (likely
+         * a source tree, not a built bundle). */
+        NSString *plistPath = [path stringByAppendingPathComponent: @"Resources/Info.plist"];
+        NSString *gnustepPlistPath = [path stringByAppendingPathComponent: @"Resources/Info-gnustep.plist"];
+        NSString *makefilePath = [path stringByAppendingPathComponent: @"GNUmakefile"];
+        BOOL hasPlist = ([fm fileExistsAtPath: plistPath] || [fm fileExistsAtPath: gnustepPlistPath]);
+        BOOL hasMakefile = [fm fileExistsAtPath: makefilePath];
+        if (hasPlist && !hasMakefile) {
+          flags.application = 1;
+          flags.package = 1;
+        } else if (hasPlist == NO) {
+          /* Not a valid bundle at all — don't set package either,
+           * so double-click navigates into it as a plain directory. */
+        }
+	    } else if (type == NSPlainFileType) {
+        flags.package = 1;
+      } else if (type == NSFilesystemFileType) {
+        flags.mountpoint = 1;
+      } 
 
-  } else if (ftype == NSFileTypeSymbolicLink) {
-    attrs = [fm fileAttributesAtPath: path traverseLink: YES];
+    } else if (ftype == NSFileTypeSymbolicLink) {
+      attrs = [fm fileAttributesAtPath: path traverseLink: YES];
     if (attrs) {
       [self setFlagsForSymLink: attrs];
     }

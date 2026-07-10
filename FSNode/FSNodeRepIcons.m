@@ -308,7 +308,22 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	  if (icon == nil)
 	    {
               if (baseIcon == nil)
-                baseIcon = [[NSWorkspace sharedWorkspace] iconForFile: nodepath];
+                {
+                  /* For .app directories that aren't valid applications
+                   * (missing Resources/Info.plist or
+                   * Resources/Info-gnustep.plist, or containing a
+                   * GNUmakefile), use a folder icon instead of the
+                   * application icon that NSWorkspace would return. */
+                  if ([[nodepath pathExtension] isEqualToString: @"app"] && ![node isApplication])
+                    {
+                      NSString *parentPath = [nodepath stringByDeletingLastPathComponent];
+                      baseIcon = [[NSWorkspace sharedWorkspace] iconForFile: parentPath];
+                    }
+                  else
+                    {
+                      baseIcon = [[NSWorkspace sharedWorkspace] iconForFile: nodepath];
+                    }
+                }
 
               if (baseIcon == nil)
                 {
@@ -328,7 +343,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
                       [baseIcon unlockFocus];
                       [baseIcon autorelease];
                     }
-  
+   
                   icon = [self cachedIconOfSize: size forKey: key addBaseIcon: baseIcon];
                 }
 	    }
