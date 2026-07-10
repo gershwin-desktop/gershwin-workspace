@@ -5031,6 +5031,19 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
         }
     }
 
+  /* Snapshot icon positions for smooth animation */
+  NSMutableDictionary *oldFrames = nil;
+  if ([iconView respondsToSelector: @selector(icons)])
+    {
+      oldFrames = [NSMutableDictionary dictionary];
+      for (id ic in [iconView icons])
+        {
+          NSString *name = [[ic node] name];
+          [oldFrames setObject: [NSValue valueWithRect: [ic frame]]
+                        forKey: name];
+        }
+    }
+
   if ([iconView respondsToSelector: @selector(cleanupIconPositions)])
     {
       [iconView cleanupIconPositions];
@@ -5052,6 +5065,47 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
           [centers addObject: [NSValue valueWithPoint: c]];
         }
       [iconView batchRepositionIcons: all toCenterPoints: centers];
+    }
+
+  /* Animate icons smoothly from old positions to new positions */
+  if (oldFrames && [iconView respondsToSelector: @selector(icons)])
+    {
+      NSMutableArray *animations = [NSMutableArray array];
+      for (id ic in [iconView icons])
+        {
+          NSString *name = [[ic node] name];
+          NSValue *oldVal = [oldFrames objectForKey: name];
+          if (oldVal)
+            {
+              NSRect oldFrame = [oldVal rectValue];
+              NSRect newFrame = [ic frame];
+              if (!NSEqualRects(oldFrame, newFrame))
+                {
+                  /* Set icon back to its old frame so NSViewAnimation
+                   * has a visible starting position to interpolate from. */
+                  [ic setFrame: oldFrame];
+                  [animations addObject:
+                    [NSDictionary dictionaryWithObjectsAndKeys:
+                      ic, NSViewAnimationTargetKey,
+                      [NSValue valueWithRect: oldFrame], NSViewAnimationStartFrameKey,
+                      [NSValue valueWithRect: newFrame], NSViewAnimationEndFrameKey,
+                      nil]];
+                }
+            }
+        }
+
+      if ([animations count] > 0)
+        {
+          NSViewAnimation *animation =
+            [[NSViewAnimation alloc] initWithViewAnimations: animations];
+          [animation setDuration: 0.35];
+          [animation setAnimationCurve: NSAnimationEaseInOut];
+          [animation setAnimationBlockingMode: NSAnimationNonblocking];
+          [animation startAnimation];
+          /* Don't release - NSAnimation releases itself on completion
+           * via animatorDidStop (NSAnimation.m:990). External release
+           * causes use-after-free in GSAnimator's dealloc chain. */
+        }
     }
 
   if ([iconView respondsToSelector: @selector(setNeedsDisplay:)])

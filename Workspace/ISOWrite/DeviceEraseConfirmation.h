@@ -14,27 +14,17 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 
-@class NSWindow;
-@class NSTextField;
-@class NSTextView;
-@class NSButton;
-@class NSImageView;
 @class BlockDeviceInfo;
 
 @interface DeviceEraseConfirmation : NSObject
 {
-  NSString *_windowTitle;
-  NSString *_actionTitle;
-  NSString *_message;
+  BlockDeviceInfo *_deviceInfo;
+  NSString *_isoPath;
+  NSString *_mountPoint;
+  unsigned long long _isoSize;
+  BOOL _isISOWrite;
 
   BOOL _confirmed;
-
-  NSWindow *_window;
-  NSImageView *_warningIcon;
-  NSTextField *_titleLabel;
-  NSTextView *_messageText;
-  NSButton *_cancelButton;
-  NSButton *_actionButton;
 }
 
 @property (nonatomic, assign, readonly) BOOL confirmed;
@@ -44,16 +34,9 @@
                                            isoSize:(unsigned long long)isoSize;
 
 + (instancetype)confirmationForDiskFormatWithMountPoint:(NSString *)mountPoint
-                                             deviceInfo:(BlockDeviceInfo *)deviceInfo;
-
-- (id)initWithWindowTitle:(NSString *)windowTitle
-              actionTitle:(NSString *)actionTitle
-                  message:(NSString *)message;
+                                              deviceInfo:(BlockDeviceInfo *)deviceInfo;
 
 - (NSModalResponse)runModal;
-
-- (IBAction)cancel:(id)sender;
-- (IBAction)proceed:(id)sender;
 
 @end
 
