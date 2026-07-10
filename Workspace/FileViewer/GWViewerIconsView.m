@@ -31,6 +31,7 @@
 #import "GWViewer.h"
 #import "GWViewersManager.h"
 #import "Workspace.h"
+#import "GWDesktopManager.h"
 
 @implementation GWViewerIconsView
 
@@ -169,11 +170,52 @@
       return;
     }
 
-  // Handle Command-Up = Open Parent Folder
-  if (character == NSUpArrowFunctionKey && (flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
+  // Handle Command-Up = Open Enclosing Folder
+  // Handle Command-Shift-Up = Open parent and close current viewer (spatial)
+  if (character == NSUpArrowFunctionKey && (flags & NSCommandKeyMask))
     {
-      NSDebugLLog(@"gwspace", @"GWViewerIconsView: Command-Up - opening parent folder in viewer");
-      [[viewer win] openParentFolder];
+      id delegate = viewer;
+      if ([delegate respondsToSelector: @selector(baseNode)])
+	{
+	  FSNode *baseNode = [delegate baseNode];
+	  if (baseNode)
+	    {
+	      NSString *parentPath = [[baseNode path] stringByDeletingLastPathComponent];
+	      if (parentPath && ![parentPath isEqual: [baseNode path]])
+		{
+		  FSNode *parentNode = [FSNode nodeWithPath: parentPath];
+		  FSNode *dskNode = [[[Workspace gworkspace] desktopManager] desktopNode];
+		  if (dskNode && [[parentNode path] isEqual: [dskNode path]])
+		    return;
+
+		  if (parentNode)
+		    {
+		      GWViewersManager *mgr = [GWViewersManager viewersManager];
+		      if (mgr)
+			{
+			  if (flags & NSShiftKeyMask)
+			    {
+			      [mgr viewerOfType: SPATIAL
+				    showType: nil
+				     forNode: parentNode
+			       showSelection: NO
+			      closeOldViewer: delegate
+				    forceNew: NO];
+			    }
+			  else
+			    {
+			      [mgr viewerOfType: SPATIAL
+				    showType: nil
+				     forNode: parentNode
+			       showSelection: NO
+			      closeOldViewer: nil
+				    forceNew: NO];
+			    }
+			}
+		    }
+		}
+	    }
+	}
       return;
     }
 
@@ -194,6 +236,20 @@
           NSDebugLLog(@"gwspace", @"GWViewerIconsView: Shift-Enter - opening as folder");
           [viewer openSelectionAsFolder];
           return;
+        }
+    }
+
+  // Auto-select first item when pressing arrow keys with no selection
+  if ((character == NSUpArrowFunctionKey
+       || character == NSDownArrowFunctionKey
+       || character == NSLeftArrowFunctionKey
+       || character == NSRightArrowFunctionKey)
+      && !(flags & NSCommandKeyMask))
+    {
+      NSArray *selection = [self selectedNodes];
+      if (selection == nil || [selection count] == 0)
+        {
+          [self selectIconWithPrefix: @""];
         }
     }
 

@@ -356,6 +356,12 @@ static GWDesktopManager *desktopManager = nil;
 }
 
 
+- (FSNode *)desktopNode
+{
+  return dskNode;
+}
+
+
 - (BOOL)singleClickLaunch
 {
   return singleClickLaunch;
@@ -886,6 +892,11 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       }
     
       return NO;
+    } else if (sel_isEqual(action, @selector(showAttributesInspector:))) {
+      // Get Info requires at least one selected item (not just the desktop root)
+      NSArray *selection = [desktopView selectedNodes];
+      return (selection && [selection count]
+            && ([selection isEqual: [NSArray arrayWithObject: dskNode]] == NO));
     }
          
     return YES;

@@ -27,6 +27,8 @@
 #import "GWViewerWindow.h"
 #import "FSNode.h"
 #import "GWViewersManager.h"
+#import "Workspace.h"
+#import "GWDesktopManager.h"
 
 // Forward declare methods to avoid warnings
 @interface NSObject (ViewerDelegateMethods)
@@ -171,13 +173,41 @@
   [self openParentFolder: nil];
 }
 
+- (void)showAttributesInspector:(id)sender
+{
+  [[self delegate] showAttributesInspector: sender];
+}
+
 - (BOOL)performKeyEquivalent:(NSEvent *)theEvent
 {
-  // Always check menu key equivalents FIRST before handling custom shortcuts
   if ([super performKeyEquivalent: theEvent])
     {
       return YES;
     }
+
+  unsigned flags = [theEvent modifierFlags];
+  NSString *characters = [theEvent characters];
+
+  if ([characters length] > 0 && [characters characterAtIndex: 0] == ' ')
+    {
+      if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
+        {
+          id del = [self delegate];
+
+          if ([del respondsToSelector: @selector(lastSelection)])
+            {
+              NSArray *sel = [del lastSelection];
+              if (sel && [sel count] > 0)
+                {
+                  [NSApp sendAction: @selector(showAttributesInspector:)
+                                 to: nil
+                               from: self];
+                  return YES;
+                }
+            }
+        }
+    }
+
   return NO;
 }
 
@@ -243,7 +273,50 @@
 	}
       if (flags & NSCommandKeyMask)
 	{
-	  [[self delegate] openParentFolder];
+	  id delegate = [self delegate];
+	  if ([delegate respondsToSelector: @selector(baseNode)])
+	    {
+	      FSNode *baseNode = [delegate baseNode];
+	      if (baseNode)
+		{
+		  NSString *parentPath = [[baseNode path] stringByDeletingLastPathComponent];
+		  if (parentPath && ![parentPath isEqual: [baseNode path]])
+		    {
+		      FSNode *parentNode = [FSNode nodeWithPath: parentPath];
+		      FSNode *dskNode = [[[Workspace gworkspace] desktopManager] desktopNode];
+		      if (dskNode && [[parentNode path] isEqual: [dskNode path]])
+			return;
+
+		      if (parentNode)
+			{
+			  GWViewersManager *manager = [GWViewersManager viewersManager];
+			  if (manager)
+			    {
+			      if (flags & NSShiftKeyMask)
+				{
+				  // Cmd+Shift+Up = Open parent and close current viewer (spatial)
+				  [manager viewerOfType: SPATIAL
+						showType: nil
+						 forNode: parentNode
+					   showSelection: NO
+					  closeOldViewer: delegate
+						forceNew: NO];
+				}
+			      else
+				{
+				  // Cmd+Up = Open Enclosing Folder
+				  [manager viewerOfType: SPATIAL
+						showType: nil
+						 forNode: parentNode
+					   showSelection: NO
+					  closeOldViewer: nil
+						forceNew: NO];
+				}
+			    }
+			}
+		    }
+		}
+	    }
 	}
       return;
 
@@ -310,30 +383,6 @@
           }
       }
       return;
-    /*
-    case ' ':
-      // Space = Quick Look
-      if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
-        {
-          id del = [self delegate];
-          BOOL allowQuickLook = YES;
-
-          // If the delegate can report a last selection, require a non-empty selection
-          if ([del respondsToSelector: @selector(lastSelection)])
-            {
-              NSArray *sel = [del lastSelection];
-              if (!sel || ([sel count] == 0))
-                allowQuickLook = NO;
-            }
-
-          if (allowQuickLook && [del respondsToSelector: @selector(quickLook:)])
-            {
-              [del quickLook: nil];
-            }
-        }
-      return;
-    */
-
     case 'o':
     case 'O':
       if (flags & NSCommandKeyMask)

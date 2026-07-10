@@ -183,6 +183,8 @@
 - (void)chooseBackColor:(id)sender;
 - (void)selectAllInViewer;
 - (void)showTerminal;
+- (void)showAttributesInspector:(id)sender;
+- (NSArray *)lastSelection;
 - (BOOL)validateItem:(id)menuItem;
 
 @end

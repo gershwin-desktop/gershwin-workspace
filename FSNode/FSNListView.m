@@ -446,7 +446,7 @@ static NSString *defaultColumns = @"{ \
       FSNListViewNodeRep *rep = [nodeReps objectAtIndex: i];
       NSString *name = [[rep node] name];
 
-      if ([name hasPrefix: prefix])
+      if ([name rangeOfString: prefix options: NSCaseInsensitiveSearch].location == 0)
         {
           [listView deselectAll: self];
           [self selectReps: [NSArray arrayWithObject: rep]];

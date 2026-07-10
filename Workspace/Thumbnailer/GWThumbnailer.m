@@ -177,16 +177,20 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 
   bPaths = [self bundlesWithExtension: @"thumb" 
                           inDirectory: [[NSBundle mainBundle] resourcePath]];
-	[bundlesPaths addObjectsFromArray: bPaths];
+  NSLog(@"Thumbnailer search in app bundle: %@ -> %lu bundles", [[NSBundle mainBundle] resourcePath], (unsigned long)[bPaths count]);
+  [bundlesPaths addObjectsFromArray: bPaths];
 
   enumerator = [NSSearchPathForDirectoriesInDomains
 		 (NSLibraryDirectory, NSAllDomainsMask, YES) objectEnumerator];
   while ((bundlesDir = [enumerator nextObject]) != nil)
     {
       bundlesDir = [bundlesDir stringByAppendingPathComponent: @"Bundles"];
-      [bundlesPaths addObjectsFromArray:
-	[self bundlesWithExtension: @"thumb" inDirectory: bundlesDir]];
+      NSArray *found = [self bundlesWithExtension: @"thumb" inDirectory: bundlesDir];
+      NSLog(@"Thumbnailer search in %@ -> %lu bundles", bundlesDir, (unsigned long)[found count]);
+      [bundlesPaths addObjectsFromArray: found];
     }
+
+  NSLog(@"Total thumbnailer bundles found: %lu", (unsigned long)[bundlesPaths count]);
 
   for (i = 0; i < [bundlesPaths count]; i++)
     {
@@ -205,10 +209,24 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 
                   [self addThumbnailer: tmb];
                   RELEASE ((id)tmb);
-                }
-            }
-  	}
+          NSLog(@"Thumbnailer loaded: %@", bpath);
+              }
+            else
+              {
+                NSLog(@"Thumbnailer bundle %@ does not conform to TMBProtocol", bpath);
+              }
+          }
+        else
+          {
+            NSLog(@"Thumbnailer bundle %@ has no principal class", bpath);
+          }
+      }
+    else
+      {
+        NSLog(@"Thumbnailer bundle %@ could not be loaded", bpath);
+      }
     }
+  NSLog(@"Thumbnailers loaded: %lu", (unsigned long)[thumbnailers count]);
 }
 
 - (BOOL)addThumbnailer:(id)tmb
@@ -328,6 +346,10 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
         {
           NSString *fname = [contents objectAtIndex: i];
           NSString *fullPath = [path stringByAppendingPathComponent: fname];
+
+          if ([thumbsDict objectForKey: fullPath])
+            continue;
+
           id<TMBProtocol> tmb = [self thumbnailerForPath: fullPath];
           
           if (tmb)

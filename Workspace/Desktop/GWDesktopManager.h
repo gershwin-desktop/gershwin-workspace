@@ -86,6 +86,8 @@ typedef enum {
 
 - (id)desktopView;
 
+- (FSNode *)desktopNode;
+
 - (BOOL)singleClickLaunch;
 
 - (void)setSingleClickLaunch:(BOOL)value;

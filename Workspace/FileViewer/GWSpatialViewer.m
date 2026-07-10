@@ -49,6 +49,7 @@
 #import "FSNListView.h"
 #import "FSNFunctions.h"
 #import "NetworkFSNode.h"
+#import "Thumbnailer/GWThumbnailer.h"
 #import "NetworkServiceManager.h"
  
 #define DEFAULT_INCR 150
@@ -338,7 +339,13 @@
 	  [scroll setDocumentView: nodeView];	
     RELEASE (nodeView);
     [self applyContentBackgroundColor];
-    [nodeView showContentsOfNode: baseNode]; 
+    [nodeView showContentsOfNode: baseNode];
+
+    if ([[NSUserDefaults standardUserDefaults] boolForKey: @"use_thumbnails"])
+      {
+        Thumbnailer *t = [Thumbnailer sharedThumbnailer];
+        if (t) [t makeThumbnails: [baseNode path]];
+      }
 
     // ================================================================
     // Apply DS_Store settings AFTER showContentsOfNode loads prefs
@@ -1901,12 +1908,36 @@
   [gworkspace startXTermOnDirectory: path];
 }
 
+- (void)showAttributesInspector:(id)sender
+{
+  [gworkspace showAttributesInspector: sender];
+}
+
+- (NSArray *)lastSelection
+{
+  return lastSelection;
+}
+
 - (BOOL)validateItem:(id)menuItem
 {
   SEL action = [menuItem action];
   NSString *actionName = NSStringFromSelector(action);
   NSDebugLLog(@"gwspace", @"validateItem called: action=%@, menuItem=%@", actionName, menuItem);
-  
+
+  // Always enable view type/behaviour items regardless of key window
+  if (sel_isEqual(action, @selector(setViewerType:)))
+    {
+      GWViewType vtype = [self viewType];
+      [menuItem setState: ([menuItem tag] == vtype) ? NSOnState : NSOffState];
+      return YES;
+    }
+  if (sel_isEqual(action, @selector(setViewerBehaviour:)))
+    {
+      int vt = [self vtype];
+      [menuItem setState: ([menuItem tag] == vt) ? NSOnState : NSOffState];
+      return YES;
+    }
+
   if ([NSApp keyWindow] == vwrwin) {
     SEL action = [menuItem action];
     NSString *itemTitle = [menuItem title];
@@ -1976,8 +2007,15 @@
       }
 
       return NO;
-    } 
-    
+    } else if (sel_isEqual(action, @selector(showAttributesInspector:))) {
+      // Get Info requires at least one selected item (not just the base)
+      if (lastSelection && [lastSelection count]
+            && ([lastSelection isEqual: baseNodeArray] == NO)) {
+        return YES;
+      }
+      return NO;
+    }
+
     return YES;
   } else {
     SEL action = [menuItem action];

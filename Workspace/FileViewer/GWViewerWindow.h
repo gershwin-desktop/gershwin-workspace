@@ -56,6 +56,7 @@
 - (void)openParentFolder:(id)sender;
 - (void)openParentFolder;
 - (void)performClose:(id)sender;
+- (void)showAttributesInspector:(id)sender;
 - (BOOL)performKeyEquivalent:(NSEvent *)theEvent;
 
 @end
@@ -90,5 +91,6 @@
 - (void)showTerminal;
 - (void)toggleHiddenFiles;
 - (void)quickLook:(id)sender;
+- (NSArray *)lastSelection;
 
 @end

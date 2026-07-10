@@ -426,7 +426,7 @@ NSString *_pendingSystemActionTitle = nil;
   menuItem = [menu addItemWithTitle:_(@"Use Stacks") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
-  menuItem = [menu addItemWithTitle:_(@"View Behaviour") action:NULL keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"View Behavior") action:NULL keyEquivalent:@""];
   subMenu = AUTORELEASE ([NSMenu new]);
   [menu setSubmenu: subMenu forItem: menuItem];
   
@@ -1564,6 +1564,8 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       || sel_isEqual(action, @selector(openGershwinHelp:))
       || sel_isEqual(action, @selector(openFeedback:))
       || sel_isEqual(action, @selector(openLegal:))
+      || sel_isEqual(action, @selector(makeThumbnails:))
+      || sel_isEqual(action, @selector(removeThumbnails:))
       || sel_isEqual(action, @selector(notImplemented:)))
     {
       return YES;
@@ -1581,6 +1583,34 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       if ([keyWindow respondsToSelector:@selector(validateMenuItem:)])
         return [keyWindow validateMenuItem:anItem];
       return NO;
+    }
+
+  // === View type / behaviour — always enabled, set checkmark ===
+  if (sel_isEqual(action, @selector(setViewerType:))) {
+      NSWindow *kwin = [NSApp keyWindow];
+      if (kwin && [vwrsManager hasViewerWithWindow: kwin])
+        {
+          id viewer = [vwrsManager viewerWithWindow: kwin];
+          if ([viewer respondsToSelector: @selector(viewType)])
+            {
+              GWViewType vtype = [viewer viewType];
+              [anItem setState: ([anItem tag] == vtype) ? NSOnState : NSOffState];
+            }
+        }
+      return YES;
+    }
+  if (sel_isEqual(action, @selector(setViewerBehaviour:))) {
+      NSWindow *kwin = [NSApp keyWindow];
+      if (kwin && [vwrsManager hasViewerWithWindow: kwin])
+        {
+          id viewer = [vwrsManager viewerWithWindow: kwin];
+          if ([viewer respondsToSelector: @selector(vtype)])
+            {
+              int vt = [viewer vtype];
+              [anItem setState: ([anItem tag] == vt) ? NSOnState : NSOffState];
+            }
+        }
+      return YES;
     }
 
   // === Context-dependent file/viewer operations ===

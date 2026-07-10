@@ -41,6 +41,7 @@
 #import "Workspace.h"
 #import "GWViewersManager.h"
 #import "../Network/NetworkVolumeManager.h"
+#import "Thumbnailer/GWThumbnailer.h"
 
 #define DEF_ICN_SIZE 48
 #define DEF_TEXT_SIZE 12
@@ -936,7 +937,7 @@
       FSNIcon *icon = [icons objectAtIndex: i];
       if (icon == selectedIcon) continue;
       CGFloat dy = [icon frame].origin.y - selY;
-      if (dy < 0 && fabs(dy) < bestDist)
+      if (dy > 0 && dy < bestDist)
 	{
 	  best = icon;
 	  bestDist = fabs(dy);
@@ -972,10 +973,10 @@
       FSNIcon *icon = [icons objectAtIndex: i];
       if (icon == selectedIcon) continue;
       CGFloat dy = [icon frame].origin.y - selY;
-      if (dy > 0 && dy < bestDist)
+      if (dy < 0 && fabs(dy) < bestDist)
 	{
 	  best = icon;
-	  bestDist = dy;
+	  bestDist = fabs(dy);
 	}
     }
   if (best)
@@ -984,6 +985,7 @@
       [self scrollIconToVisible: best];
     }
 }
+
 
 - (void)selectPrevIcon
 {
@@ -1196,10 +1198,11 @@ static void GWHighlightFrameRect(NSRect aRect)
 {
   unsigned flags = [theEvent modifierFlags];
   NSString *characters = [theEvent characters];
+  unichar character = 0;
 
   if ([characters length] > 0)
     {
-      unichar character = [characters characterAtIndex: 0];
+      character = [characters characterAtIndex: 0];
 
       NSDebugLLog(@"gwspace", @"GWDesktopView.keyDown: character=0x%x, flags=0x%x", character, flags);
 
@@ -1260,6 +1263,16 @@ static void GWHighlightFrameRect(NSRect aRect)
 	    }
 	  return;
 	}
+      if (character == ' ')
+	{
+	  if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
+	    {
+	      [NSApp sendAction: @selector(showAttributesInspector:)
+			     to: nil
+			   from: self];
+	    }
+	  return;
+	}
       if (character == 0x01B) // Escape
 	{
 	  selectionMask = NSSingleSelectionMask;
@@ -1269,6 +1282,20 @@ static void GWHighlightFrameRect(NSRect aRect)
 	  [self selectionDidChange];
 	  return;
 	}
+    }
+
+  // Auto-select first item when pressing arrow keys with no selection
+  if ((character == NSUpArrowFunctionKey
+       || character == NSDownArrowFunctionKey
+       || character == NSLeftArrowFunctionKey
+       || character == NSRightArrowFunctionKey)
+      && !(flags & NSCommandKeyMask))
+    {
+      NSArray *selection = [self selectedNodes];
+      if (selection == nil || [selection count] == 0)
+        {
+          [self selectIconWithPrefix: @""];
+        }
     }
 
   [super keyDown: theEvent];
@@ -1617,6 +1644,13 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   [self tile];
   [self setNeedsDisplay: YES];
+
+  if ([[NSUserDefaults standardUserDefaults] boolForKey: @"use_thumbnails"])
+    {
+      Thumbnailer *t = [Thumbnailer sharedThumbnailer];
+      if (t) [t makeThumbnails: [node path]];
+    }
+
   RELEASE (arp);
 }
 

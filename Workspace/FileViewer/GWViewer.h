@@ -192,6 +192,7 @@ typedef enum
 - (void)chooseBackColor:(id)sender;
 - (void)selectAllInViewer;
 - (void)showTerminal;
+- (void)showAttributesInspector:(id)sender;
 - (BOOL)validateItem:(id)menuItem;
 - (void)makeThumbnails:(id)sender;
 - (void)removeThumbnails:(id)sender;

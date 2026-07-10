@@ -30,6 +30,8 @@
 #import "FSNBrowserMatrix.h"
 #import "FSNBrowserCell.h"
 #import "GWViewersManager.h"
+#import "Workspace.h"
+#import "GWDesktopManager.h"
 
 @implementation GWViewerBrowser
 
@@ -144,10 +146,50 @@
             }
           return;
         }
-      if ((flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
+      if ((flags & NSCommandKeyMask))
         {
-          NSDebugLLog(@"gwspace", @"GWViewerBrowser: Command-Up - opening parent folder in viewer");
-          [[viewer win] openParentFolder];
+          id delegate = viewer;
+          if ([delegate respondsToSelector: @selector(baseNode)])
+            {
+              FSNode *node = [delegate baseNode];
+              if (node)
+                {
+                  NSString *parentPath = [[node path] stringByDeletingLastPathComponent];
+                  if (parentPath && ![parentPath isEqual: [node path]])
+                    {
+                      FSNode *parentNode = [FSNode nodeWithPath: parentPath];
+                      FSNode *dskNode = [[[Workspace gworkspace] desktopManager] desktopNode];
+                      if (dskNode && [[parentNode path] isEqual: [dskNode path]])
+                        return;
+
+                      if (parentNode)
+                        {
+                          GWViewersManager *mgr = [GWViewersManager viewersManager];
+                          if (mgr)
+                            {
+                              if (flags & NSShiftKeyMask)
+                                {
+                                  [mgr viewerOfType: SPATIAL
+                                        showType: nil
+                                         forNode: parentNode
+                                   showSelection: NO
+                                  closeOldViewer: delegate
+                                        forceNew: NO];
+                                }
+                              else
+                                {
+                                  [mgr viewerOfType: SPATIAL
+                                        showType: nil
+                                         forNode: parentNode
+                                   showSelection: NO
+                                  closeOldViewer: nil
+                                        forceNew: NO];
+                                }
+                            }
+                        }
+                    }
+                }
+            }
           return;
         }
     }
@@ -169,6 +211,20 @@
           NSDebugLLog(@"gwspace", @"GWViewerBrowser: Shift-Enter - opening as folder");
           [viewer openSelectionAsFolder];
           return;
+        }
+    }
+
+  // Auto-select first item when pressing arrow keys with no selection
+  if ((character == NSUpArrowFunctionKey
+       || character == NSDownArrowFunctionKey
+       || character == NSLeftArrowFunctionKey
+       || character == NSRightArrowFunctionKey)
+      && !(flags & NSCommandKeyMask))
+    {
+      NSArray *selection = [self selectedNodes];
+      if (selection == nil || [selection count] == 0)
+        {
+          [self selectRow: 0 inColumn: 0];
         }
     }
 

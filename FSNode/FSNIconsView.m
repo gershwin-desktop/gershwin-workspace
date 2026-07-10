@@ -699,7 +699,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       FSNIcon *icon = [icons objectAtIndex: i];
       NSString *name = [icon shownInfo];
 
-      if ([name hasPrefix: prefix])
+      if ([name rangeOfString: prefix options: NSCaseInsensitiveSearch].location == 0)
 	{
 	  [icon select];
 	  [self scrollIconToVisible: icon];

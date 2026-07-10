@@ -347,6 +347,12 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
     RELEASE (nodeView);
     [self applyContentBackgroundColor];
     [nodeView showContentsOfNode: baseNode];
+
+    if ([[NSUserDefaults standardUserDefaults] boolForKey: @"use_thumbnails"])
+      {
+        Thumbnailer *t = [Thumbnailer sharedThumbnailer];
+        if (t) [t makeThumbnails: [baseNode path]];
+      }
     
     if (showsel) {
       defEntry = [viewerPrefs objectForKey: @"lastselection"];
@@ -1843,8 +1849,29 @@ constrainMinCoordinate:(CGFloat)proposedMin
   [gworkspace startXTermOnDirectory: path];
 }
 
+- (void)showAttributesInspector:(id)sender
+{
+  [gworkspace showAttributesInspector: sender];
+}
+
 - (BOOL)validateItem:(id)menuItem
 {
+  SEL action = [menuItem action];
+
+  // Always enable view type/behaviour items regardless of key window
+  if (sel_isEqual(action, @selector(setViewerType:)))
+    {
+      GWViewType vtype = [self viewType];
+      [menuItem setState: ([menuItem tag] == vtype) ? NSOnState : NSOffState];
+      return YES;
+    }
+  if (sel_isEqual(action, @selector(setViewerBehaviour:)))
+    {
+      int vt = [self vtype];
+      [menuItem setState: ([menuItem tag] == vt) ? NSOnState : NSOffState];
+      return YES;
+    }
+
   if ([NSApp keyWindow] == vwrwin) {
     SEL action = [menuItem action];
     NSString *itemTitle = [menuItem title];
@@ -1941,6 +1968,13 @@ constrainMinCoordinate:(CGFloat)proposedMin
 
     } else if (sel_isEqual(action, @selector(setLabelForNodes:))) {
       // Label menu items are enabled when there's a valid selection
+      if (lastSelection && [lastSelection count]
+            && ([lastSelection isEqual: baseNodeArray] == NO)) {
+        return YES;
+      }
+      return NO;
+    } else if (sel_isEqual(action, @selector(showAttributesInspector:))) {
+      // Get Info requires at least one selected item (not just the base)
       if (lastSelection && [lastSelection count]
             && ([lastSelection isEqual: baseNodeArray] == NO)) {
         return YES;

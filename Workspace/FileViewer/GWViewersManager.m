@@ -671,7 +671,7 @@ static GWViewersManager *vwrsmanager = nil;
                           showType: nil
                            forNode: target
                      showSelection: NO
-                    closeOldViewer: nil
+                    closeOldViewer: viewer
                           forceNew: force];
               } else {
                 [self viewerForNode: target
@@ -694,7 +694,7 @@ static GWViewersManager *vwrsmanager = nil;
                       showType: nil
                        forNode: node
                  showSelection: NO
-                closeOldViewer: nil
+                closeOldViewer: viewer
                       forceNew: force];
           } else {
             [self viewerForNode: node

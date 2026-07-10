@@ -814,7 +814,7 @@ static id <DesktopApplication> desktopApp = nil;
 	{
 	  cellStr = [[matrix cellAtRow: i column: 0] stringValue];
 
-	  if (([cellStr length] > 0) && ([cellStr hasPrefix: prefix]))
+	  if (([cellStr length] > 0) && ([cellStr rangeOfString: prefix options: NSCaseInsensitiveSearch].location == 0))
 	    {
 	      [matrix deselectAllCells];
 	      [matrix selectCellAtRow: i column: 0];
@@ -829,7 +829,7 @@ static id <DesktopApplication> desktopApp = nil;
 	{
 	  cellStr = [[matrix cellAtRow: i column: 0] stringValue];
 
-	  if (([cellStr length] > 0) && ([cellStr hasPrefix: prefix]))
+	  if (([cellStr length] > 0) && ([cellStr rangeOfString: prefix options: NSCaseInsensitiveSearch].location == 0))
 	    {
 	      [matrix deselectAllCells];
 	      [matrix selectCellAtRow: i column: 0];
