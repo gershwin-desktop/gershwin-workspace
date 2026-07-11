@@ -4602,17 +4602,17 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     [menu addItem: menuItem];
     RELEASE (menuItem);
 
-    // Check if the single selected item is a .zip archive
-    BOOL isSingleZip = NO;
+    // Check if the single selected item is an archive supported by libarchive
+    BOOL isArchiveFile = NO;
     if ([nodes count] == 1) {
       FSNode *singleNode = [nodes objectAtIndex: 0];
       NSString *ext = [[[singleNode path] pathExtension] lowercaseString];
-      if ([ext isEqualToString: @"zip"] || [ext isEqualToString: @"cbz"])
-        isSingleZip = YES;
+      if ([GWMetaArchive isArchiveExtension: ext])
+        isArchiveFile = YES;
     }
 
-    if (isSingleZip) {
-      // Extract — single .zip selected
+    if (isArchiveFile) {
+      // Extract — single archive selected
       [menu addItem: [NSMenuItem separatorItem]];
       menuItem = [NSMenuItem new];
       [menuItem setTitle: NSLocalizedString(@"Extract", @"")];
@@ -5184,8 +5184,16 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
   NSString *archivePath = [selection objectAtIndex: 0];
 
-  /* Destination: same directory, folder named after the archive */
-  NSString *baseName  = [[archivePath lastPathComponent] stringByDeletingPathExtension];
+  /* Destination: same directory, folder named after the archive.
+   * Strip all archive-related extensions so "file.tar.gz" yields "file". */
+  NSString *baseName = [archivePath lastPathComponent];
+  while (1)
+    {
+      NSString *ext = [baseName pathExtension];
+      if ([ext length] == 0 || ![GWMetaArchive isArchiveExtension: ext])
+        break;
+      baseName = [baseName stringByDeletingPathExtension];
+    }
   NSString *parentDir = [archivePath stringByDeletingLastPathComponent];
   NSString *destDir   = [parentDir stringByAppendingPathComponent: baseName];
 

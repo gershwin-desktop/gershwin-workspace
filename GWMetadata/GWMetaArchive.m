@@ -402,7 +402,7 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
       return NO;
     }
 
-  archive_read_support_format_zip(a);
+  archive_read_support_format_all(a);
   archive_read_support_filter_all(a);
 
   const char *cpath = [archivePath fileSystemRepresentation];
@@ -488,7 +488,7 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
           userInfo: @{NSLocalizedDescriptionKey: @"archive_read_new failed"}];
       return NO;
     }
-  archive_read_support_format_zip(a);
+  archive_read_support_format_all(a);
   archive_read_support_filter_all(a);
   if (archive_read_open_filename(a, cpath, READ_BLOCK_SIZE) != ARCHIVE_OK)
     {
@@ -596,6 +596,27 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
   archive_read_close(a);
   archive_read_free(a);
   return ok;
+}
+
++ (BOOL)isArchiveExtension:(NSString *)ext
+{
+  if ([ext length] == 0)
+    return NO;
+
+  static NSSet *archiveExts = nil;
+  if (!archiveExts)
+    {
+      archiveExts = [[NSSet alloc] initWithObjects:
+        @"zip", @"cbz",
+        @"tar", @"tgz", @"tar.gz", @"gz", @"gzip",
+        @"bz2", @"bzip2", @"tbz2", @"tar.bz2",
+        @"xz", @"txz", @"tar.xz",
+        @"lzma", @"tlz", @"tar.lzma",
+        @"7z", @"rar", @"cab", @"iso",
+        @"lzh", @"lha", @"ar", @"cpio", @"zst",
+        nil];
+    }
+  return [archiveExts containsObject: [ext lowercaseString]];
 }
 
 @end

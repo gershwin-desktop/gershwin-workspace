@@ -43,10 +43,11 @@
                     error:(NSError **)error;
 
 /**
- * Extract a zip archive to a destination directory, restoring
+ * Extract a zip/archive to a destination directory, restoring
  * macOS metadata (xattrs) for every entry that carries AppleDouble.
+ * Supports all formats that libarchive can read (tar, 7z, rar, iso, ...).
  *
- * @param archivePath  Path to the .zip file.
+ * @param archivePath  Path to the archive file.
  * @param destDir      Directory to extract into (created if needed).
  * @param error        Optional output error.
  * @return YES on success.
@@ -54,6 +55,12 @@
 + (BOOL)extractArchive:(NSString *)archivePath
                   toDir:(NSString *)destDir
                  error:(NSError **)error;
+
+/**
+ * Returns YES if the given file extension corresponds to an archive
+ * format that libarchive can read (zip, tar, 7z, rar, iso, ...).
+ */
++ (BOOL)isArchiveExtension:(NSString *)ext;
 
 @end
 
