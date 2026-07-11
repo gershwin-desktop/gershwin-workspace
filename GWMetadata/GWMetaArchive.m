@@ -418,10 +418,14 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
     }
 
   /*
-   * First pass: read all __MACOSX entries, collecting AppleDouble data
-   * keyed by the real file path (relative to destDir).
+   * First pass:
+   *   - Read __MACOSX entries, collecting AppleDouble metadata.
+   *   - Collect all regular entry paths to detect a common top-level
+   *     directory that can be stripped (avoids double-nesting archives
+   *     like "archive/archive/file.txt").
    */
   NSMutableDictionary *metadataDict = [NSMutableDictionary dictionary];
+  NSMutableArray *entryPaths = [NSMutableArray array];
   BOOL ok = YES;
   struct archive_entry *entry;
 
@@ -460,11 +464,11 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
         }
       else if ([[epath lastPathComponent] hasPrefix: @"._"])
         {
-          /* Loose ._ sidecar — parse it, find corresponding file */
           archive_read_data_skip(a);
         }
       else
         {
+          [entryPaths addObject: epath];
           archive_read_data_skip(a);
         }
     }
@@ -474,6 +478,27 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
       archive_read_close(a);
       archive_read_free(a);
       return NO;
+    }
+
+  /* Determine common top-level prefix to strip.
+   * If all entries share the same first path component (e.g. "archive/"),
+   * that component is stripped so the user gets files directly in destDir
+   * rather than destDir/archive/ …. */
+  NSString *stripPrefix = nil;
+  if ([entryPaths count] > 1)
+    {
+      NSString *common = nil;
+      for (NSString *p in entryPaths)
+        {
+          NSString *top = [[p pathComponents] objectAtIndex: 0];
+          if (top == nil) { common = nil; break; }
+          if (common == nil)
+            common = top;
+          else if (![common isEqualToString: top])
+            { common = nil; break; }
+        }
+      if (common)
+        stripPrefix = [common stringByAppendingString: @"/"];
     }
 
   /* Close and re-open for second pass (extract real files) */
@@ -511,8 +536,6 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
       if (!ename) { archive_read_data_skip(a); continue; }
 
       NSString *epath = [NSString stringWithUTF8String: ename];
-      /* A non-UTF-8 entry name yields nil; skip rather than risk a
-       * nil argument to stringByAppendingPathComponent: below. */
       if (epath == nil) { archive_read_data_skip(a); continue; }
 
       /* Skip metadata entries on second pass */
@@ -523,10 +546,14 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
           continue;
         }
 
-      NSString *destPath = [destDir stringByAppendingPathComponent: epath];
+      /* Strip common top-level prefix if detected */
+      NSString *relpath = epath;
+      if (stripPrefix && [relpath hasPrefix: stripPrefix])
+        relpath = [relpath substringFromIndex: [stripPrefix length]];
 
-      /* Zip-Slip defense: reject entries that resolve outside destDir
-       * (embedded ".." or absolute names) before any create/open. */
+      NSString *destPath = [destDir stringByAppendingPathComponent: relpath];
+
+      /* Zip-Slip defense */
       if (!path_is_within(canonicalDest, destPath))
         {
           NSDebugLLog(@"gwspace",
@@ -535,26 +562,31 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
           continue;
         }
 
-      mode_t filetype = archive_entry_filetype(entry);
+      mode_t mode = archive_entry_mode(entry);
+      mode_t filetype = mode & S_IFMT;
 
-      if (filetype == AE_IFDIR)
+      if (filetype == S_IFDIR)
         {
           if (![fm fileExistsAtPath: destPath])
-            [fm createDirectoryAtPath: destPath attributes: nil];
+            {
+              NSDictionary *attrs = nil;
+              if (mode & ACCESSPERMS)
+                attrs = @{NSFilePosixPermissions: @(mode & ACCESSPERMS)};
+              [fm createDirectoryAtPath: destPath attributes: attrs];
+            }
           archive_read_data_skip(a);
         }
-      else if (filetype == AE_IFREG)
+      else if (filetype == S_IFREG)
         {
           NSString *parent = [destPath stringByDeletingLastPathComponent];
           if (![fm fileExistsAtPath: parent])
             [fm createDirectoryAtPath: parent attributes: nil];
 
+          mode_t openmode = (mode & ACCESSPERMS) ? (mode & ACCESSPERMS) : 0644;
           int fd = open([destPath fileSystemRepresentation],
-                        O_WRONLY | O_CREAT | O_TRUNC, 0644);
+                        O_WRONLY | O_CREAT | O_TRUNC, openmode);
           if (fd >= 0)
             {
-              /* Propagate a write failure instead of silently leaving a
-               * truncated file and still reporting success. */
               if (copy_archive_data_to_fd(a, fd) != ARCHIVE_OK)
                 {
                   close(fd);
@@ -578,7 +610,7 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
           continue;
         }
 
-      /* Apply metadata from pass 1 */
+      /* Apply metadata from pass 1 (matched against original epath) */
       NSData *ad = [metadataDict objectForKey: epath];
       if (ad)
         {
