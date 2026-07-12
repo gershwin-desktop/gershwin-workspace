@@ -25,6 +25,9 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <GNUstepGUI/GSDisplayServer.h>
+#import <X11/Xlib.h>
+#import <X11/Xatom.h>
 
 #import "GWDesktopWindow.h"
 
@@ -64,7 +67,46 @@
   NSDebugLLog(@"gwspace", @"DEBUG: GWDesktopWindow activate called - setting level and ordering front");
   [self setLevel: NSDesktopWindowLevel];
   [self orderFront: nil];
+
+  // Set EWMH/ICCCM atoms so the window manager recognizes this as
+  // a desktop window and keeps it below normal windows.
+  // Must happen after orderFront: — the X11 window isn't realised yet
+  // during applicationWillFinishLaunching:.
+  [self setX11DesktopAtoms];
+
   NSDebugLLog(@"gwspace", @"DEBUG: GWDesktopWindow is now visible: %d, level: %ld", [self isVisible], (long)[self level]);
+}
+
+- (void)setX11DesktopAtoms
+{
+  GSDisplayServer *server = GSCurrentServer();
+  if (!server) return;
+  NSInteger winNum = [self windowNumber];
+  if (winNum <= 0) return;
+  Display *dpy = (Display *)[server serverDevice];
+  if (!dpy) return;
+
+  Window win = (Window)(uintptr_t)[server windowDevice: winNum];
+  if (!win) return;
+
+  Atom netWmWindowType = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
+  Atom netWmWindowTypeDesktop = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", False);
+  XChangeProperty(dpy, win, netWmWindowType, XA_ATOM, 32,
+                  PropModeReplace, (unsigned char *)&netWmWindowTypeDesktop, 1);
+
+  Atom netWmState = XInternAtom(dpy, "_NET_WM_STATE", False);
+  Atom netWmStateBelow = XInternAtom(dpy, "_NET_WM_STATE_BELOW", False);
+  Atom netWmStateSticky = XInternAtom(dpy, "_NET_WM_STATE_STICKY", False);
+  Atom states[2] = { netWmStateBelow, netWmStateSticky };
+  XChangeProperty(dpy, win, netWmState, XA_ATOM, 32,
+                  PropModeReplace, (unsigned char *)states, 2);
+
+  Atom netWmDesktop = XInternAtom(dpy, "_NET_WM_DESKTOP", False);
+  unsigned long allDesktops = 0xFFFFFFFFUL;
+  XChangeProperty(dpy, win, netWmDesktop, XA_CARDINAL, 32,
+                  PropModeReplace, (unsigned char *)&allDesktops, 1);
+
+  XFlush(dpy);
 }
 
 - (void)deactivate
@@ -191,8 +233,9 @@
 - (void)orderWindow:(NSWindowOrderingMode)place 
          relativeTo:(NSInteger)otherWin
 {
-      [super orderWindow: place relativeTo: otherWin];
+  [super orderWindow: place relativeTo: otherWin];
   [self setLevel: NSDesktopWindowLevel];
+  [self setX11DesktopAtoms];
 }
 
 - (BOOL)canBecomeKeyWindow

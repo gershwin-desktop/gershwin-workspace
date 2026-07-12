@@ -66,16 +66,33 @@
   Window win = *(Window *)winptr;
   Atom atom = 0;  
   long data = 1;
-  
+
+  // Set standard EWMH desktop window atoms
+  Atom netWmWindowType = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE", False);
+  Atom netWmWindowTypeDesktop = XInternAtom(dpy, "_NET_WM_WINDOW_TYPE_DESKTOP", False);
+  XChangeProperty(dpy, win, netWmWindowType, XA_ATOM, 32,
+                  PropModeReplace, (unsigned char *)&netWmWindowTypeDesktop, 1);
+
+  Atom netWmState = XInternAtom(dpy, "_NET_WM_STATE", False);
+  Atom netWmStateBelow = XInternAtom(dpy, "_NET_WM_STATE_BELOW", False);
+  Atom netWmStateSticky = XInternAtom(dpy, "_NET_WM_STATE_STICKY", False);
+  Atom states[2] = { netWmStateBelow, netWmStateSticky };
+  XChangeProperty(dpy, win, netWmState, XA_ATOM, 32,
+                  PropModeReplace, (unsigned char *)states, 2);
+
+  Atom netWmDesktop = XInternAtom(dpy, "_NET_WM_DESKTOP", False);
+  unsigned long allDesktops = 0xFFFFFFFFUL;
+  XChangeProperty(dpy, win, netWmDesktop, XA_CARDINAL, 32,
+                  PropModeReplace, (unsigned char *)&allDesktops, 1);
+
+  // Legacy Window Maker atoms (keep for backward compatibility)
   atom = XInternAtom(dpy, "KWM_WIN_STICKY", False);
-
   XChangeProperty(dpy, win, atom, atom, 32, 
                         PropModeReplace, (unsigned char *)&data, 1);
-
   atom = XInternAtom(dpy, "WIN_STATE_STICKY", False);
-
   XChangeProperty(dpy, win, atom, atom, 32, 
                         PropModeReplace, (unsigned char *)&data, 1);
+  XFlush(dpy);
 
   NSDebugLLog(@"gwspace", @"DEBUG: XDesktopWindow activate called - setting level and ordering front");
   [self setLevel: NSDesktopWindowLevel];

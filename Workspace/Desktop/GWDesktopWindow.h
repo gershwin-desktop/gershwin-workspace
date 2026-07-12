@@ -34,6 +34,7 @@
 
 - (void)activate;
 - (void)deactivate;
+- (void)setX11DesktopAtoms;
 - (id)desktopView;
 
 - (void)openSelection:(id)sender;
