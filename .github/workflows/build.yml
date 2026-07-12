@@ -54,8 +54,8 @@ jobs:
             BASE="$(pwd)"
             git clone --depth 1 https://github.com/gershwin-desktop/gershwin-developer.git
             cd "$BASE/gershwin-developer"
-            ./Library/Scripts/Bootstrap.sh
-            SKIP_REPOS="${{ env.SKIP_REPOS }}" ./Library/Scripts/Checkout.sh
+            ./Library/Scripts/bootstrap.sh
+            SKIP_REPOS="${{ env.SKIP_REPOS }}" ./Library/Scripts/checkout.sh
             ln -sfn "$BASE/gershwin-workspace" Library/Sources/gershwin-workspace
             make corelibs
             make workspace
@@ -81,11 +81,11 @@ jobs:
 
       - name: Bootstrap
         working-directory: gershwin-developer
-        run: ./Library/Scripts/Bootstrap.sh
+        run: ./Library/Scripts/bootstrap.sh
 
       - name: Checkout sources (skip workspace and sibling apps)
         working-directory: gershwin-developer
-        run: ./Library/Scripts/Checkout.sh
+        run: ./Library/Scripts/checkout.sh
 
       - name: Link workspace source under test
         working-directory: gershwin-developer
@@ -120,11 +120,11 @@ jobs:
 
       - name: Bootstrap
         working-directory: gershwin-developer
-        run: ./Library/Scripts/Bootstrap.sh
+        run: ./Library/Scripts/bootstrap.sh
 
       - name: Checkout sources (skip workspace and sibling apps)
         working-directory: gershwin-developer
-        run: ./Library/Scripts/Checkout.sh
+        run: ./Library/Scripts/checkout.sh
 
       - name: Link workspace source under test
         working-directory: gershwin-developer
@@ -163,8 +163,8 @@ jobs:
             BASE="$(pwd)"
             git clone --depth 1 https://github.com/gershwin-desktop/gershwin-developer.git
             cd "$BASE/gershwin-developer"
-            ./Library/Scripts/Bootstrap.sh
-            SKIP_REPOS="${{ env.SKIP_REPOS }}" ./Library/Scripts/Checkout.sh
+            ./Library/Scripts/bootstrap.sh
+            SKIP_REPOS="${{ env.SKIP_REPOS }}" ./Library/Scripts/checkout.sh
             ln -sfn "$BASE/gershwin-workspace" Library/Sources/gershwin-workspace
             make corelibs
             make workspace
