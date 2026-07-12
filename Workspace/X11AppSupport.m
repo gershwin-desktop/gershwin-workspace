@@ -381,19 +381,17 @@ static GWX11WindowManager *sharedWindowManager = nil;
  * app name embedded inside a longer word (e.g. "CreateLiveMediaAssistant"
  * inside "CreateLiveMediaAssistantBuild").
  */
-static BOOL stringContainsWord(NSString *str, NSString *word)
+static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 {
-    NSRange r = [str rangeOfString: word options: NSCaseInsensitiveSearch];
-    if (r.location == NSNotFound)
+    if ([str length] < [word length])
         return NO;
-
-    BOOL beforeOk = (r.location == 0)
-        || ![[NSCharacterSet alphanumericCharacterSet]
-               characterIsMember: [str characterAtIndex: r.location - 1]];
-    BOOL afterOk = (r.location + r.length >= [str length])
-        || ![[NSCharacterSet alphanumericCharacterSet]
-               characterIsMember: [str characterAtIndex: r.location + r.length]];
-    return beforeOk && afterOk;
+    // Match at start (case-insensitive)
+    if ([[str substringToIndex: [word length]] caseInsensitiveCompare: word] == NSOrderedSame)
+        return YES;
+    // Match at end (case-insensitive)
+    if ([[str substringFromIndex: [str length] - [word length]] caseInsensitiveCompare: word] == NSOrderedSame)
+        return YES;
+    return NO;
 }
 
 - (NSArray *)windowsMatchingName:(NSString *)name
@@ -466,9 +464,9 @@ static BOOL stringContainsWord(NSString *str, NSString *word)
                 }
 
                 BOOL matches = NO;
-                if (winName && stringContainsWord(winName, name)) {
+                if (winName && stringStartsOrEndsWith(winName, name)) {
                     matches = YES;
-                } else if (winClass && stringContainsWord(winClass, name)) {
+                } else if (winClass && stringStartsOrEndsWith(winClass, name)) {
                     matches = YES;
                 }
 
@@ -1102,11 +1100,13 @@ static GWX11AppManager *sharedX11AppManager = nil;
     
     GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
     
-    if ([wm activateWindowsMatchingName:info.windowSearchString]) {
+    /* Priority 1: _NET_WM_PID (most reliable) */
+    if (info.pid > 0 && [wm activateWindowsForPID:info.pid]) {
         return YES;
     }
     
-    return [wm activateWindowsForPID:info.pid];
+    /* Priority 2: name/class matching (fallback) */
+    return [wm activateWindowsMatchingName:info.windowSearchString];
 }
 
 - (BOOL)hideX11App:(NSString *)appName
@@ -1116,11 +1116,11 @@ static GWX11AppManager *sharedX11AppManager = nil;
     
     GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
     
-    if ([wm iconifyWindowsMatchingName:info.windowSearchString]) {
+    if (info.pid > 0 && [wm iconifyWindowsForPID:info.pid]) {
         return YES;
     }
     
-    return [wm iconifyWindowsForPID:info.pid];
+    return [wm iconifyWindowsMatchingName:info.windowSearchString];
 }
 
 - (BOOL)unhideX11App:(NSString *)appName
@@ -1130,11 +1130,11 @@ static GWX11AppManager *sharedX11AppManager = nil;
     
     GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
     
-    if ([wm restoreWindowsMatchingName:info.windowSearchString]) {
+    if (info.pid > 0 && [wm restoreWindowsForPID:info.pid]) {
         return YES;
     }
     
-    return [wm restoreWindowsForPID:info.pid];
+    return [wm restoreWindowsMatchingName:info.windowSearchString];
 }
 
 - (BOOL)x11AppHasVisibleWindows:(NSString *)appName
@@ -1144,9 +1144,16 @@ static GWX11AppManager *sharedX11AppManager = nil;
     
     GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
     
-    NSArray *windows = [wm windowsMatchingName:info.windowSearchString];
-    if ([windows count] == 0) {
+    NSArray *windows = nil;
+    
+    /* Priority 1: _NET_WM_PID */
+    if (info.pid > 0) {
         windows = [wm windowsForPID:info.pid];
+    }
+    
+    /* Priority 2: name/class matching */
+    if ([windows count] == 0 && info.windowSearchString) {
+        windows = [wm windowsMatchingName:info.windowSearchString];
     }
     
     for (GWX11WindowInfo *winInfo in windows) {
