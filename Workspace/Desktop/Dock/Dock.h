@@ -32,6 +32,7 @@
 @class NSImage;
 @class DockIcon;
 @class Workspace;
+@class DockMiniWindow;
 
 typedef enum DockStyle
 {   
@@ -61,6 +62,21 @@ typedef enum DockStyle
   Workspace *gw;
   NSFileManager *fm; 
   id ws;
+
+  NSMutableDictionary *miniWindowsByID;  // windowID -> DockMiniWindow
+  NSTimer *miniWindowTimer;             // polling fallback for minimized windows
+  CGFloat separatorLeft;                // x position of separator before miniwindows
+  CGFloat separatorRight;               // x position of separator after miniwindows
+  float magnifyCursorX;
+  float magnifyCursorY;
+  BOOL magnifyActive;
+  BOOL magnifiedOnce;
+  BOOL needsTile;                    // YES when icon list changed (triggers full tile)
+  NSRect iconBgRect;                 // Semi-transparent background area behind icons
+  int *lastIconSizes;                // Cached sizes to skip redundant setIconSize:
+  NSUInteger lastIconSizesCount;
+  NSTrackingRectTag magnifyTrackingTag;
+  NSTimer *mouseWatchTimer;          // Polls mouseLocation globally
 }
 
 - (id)initForManager:(id)mngr;
@@ -129,6 +145,8 @@ typedef enum DockStyle
 - (void)updateDefaults;
 
 - (void)checkRemovedApp:(id)sender;
+
+- (void)layoutTilesWithMagnification;
 
 @end
 

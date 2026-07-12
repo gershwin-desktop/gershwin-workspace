@@ -27,8 +27,10 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <objc/runtime.h>
 #import "Dock.h"
 #import "DockIcon.h"
+#import "DockMiniWindow.h"
 #import "GWDesktopView.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
@@ -38,6 +40,21 @@
 #define MAX_ICN_SIZE 48
 #define MIN_ICN_SIZE 16
 #define ICN_INCR 4
+
+#define MAGNIFY_MAX_RATIO 2.0
+#define MAGNIFY_EFFECT_WIDTH 200.0
+
+static CGFloat
+magnifyScaleForDistance(CGFloat d)
+{
+  if (d > MAGNIFY_EFFECT_WIDTH) return 1.0;
+  /* Quartic falloff: (1 - (d/W)²)²
+   * Peaks sharply at d=0 (cursor at tile center), reaches 0 at d=W.
+   * This ensures the tile under the cursor is always the largest. */
+  CGFloat t = d / MAGNIFY_EFFECT_WIDTH;
+  CGFloat falloff = 1.0 - t * t;
+  return 1.0 + (MAGNIFY_MAX_RATIO - 1.0) * falloff * falloff;
+}
 
 /* small category to access NSNUmericSearch through a selector */
 
@@ -57,8 +74,12 @@
 - (void)dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver: self];
+  [mouseWatchTimer invalidate];
+  RELEASE (mouseWatchTimer);
+  RELEASE (miniWindowsByID);
   RELEASE (icons);
   RELEASE (backColor);
+  if (lastIconSizes) free(lastIconSizes);
   
   [super dealloc];
 }
@@ -91,6 +112,19 @@
 
       icons = [NSMutableArray new];
       iconSize = MAX_ICN_SIZE;
+      magnifyActive = YES;
+      magnifyCursorX = -1e6;
+      magnifyCursorY = -1e6;
+      magnifyTrackingTag = 0;
+      magnifiedOnce = NO;
+      needsTile = YES;
+      lastIconSizes = NULL;
+      lastIconSizesCount = 0;
+      mouseWatchTimer = [NSTimer scheduledTimerWithTimeInterval: 0.033
+                                                         target: self
+                                                       selector: @selector(mouseWatchFired:)
+                                                       userInfo: nil
+                                                        repeats: YES];
                                 
       dndSourceIcon = nil;
       isDragTarget = NO;
@@ -186,6 +220,12 @@
 
       [self createTrashIcon];
 
+      /* Initialize minimized windows tracking */
+      miniWindowsByID = [[NSMutableDictionary alloc] init];
+      separatorLeft = 0;
+      separatorRight = 0;
+
+
       /* Register for drag notifications */
       [[NSNotificationCenter defaultCenter] addObserver: self
                                                selector: @selector(dragMountpointStarted:)
@@ -240,6 +280,7 @@
   [icon setSingleClickLaunch: singleClickLaunch];
   [icon setDocked: YES];                         
   [icons insertObject: icon atIndex: [icons count]];
+  needsTile = YES;
   [self addSubview: icon];
   RELEASE (icon);
   
@@ -279,6 +320,7 @@
 
       [icon setHighlightColor: backColor];
       [icons insertObject: icon atIndex: icnindex];
+      needsTile = YES;
       [icon setSingleClickLaunch: singleClickLaunch];
       [self addSubview: icon];
       RELEASE (icon);
@@ -318,6 +360,7 @@
     [icon setLaunched: NO];
   }
   [icons removeObject: icon];
+  needsTile = YES;
   [self tile];
   
   /* Persist the removal immediately */
@@ -650,34 +693,56 @@
 {
   NSView *view = [self superview];
   NSRect scrrect = [[[NSScreen screens] objectAtIndex:0] frame];
-  int oldIcnSize = iconSize;
   CGFloat maxheight = scrrect.size.height;
   NSRect icnrect = NSZeroRect;  
   NSRect rect = NSZeroRect;
   NSUInteger i;
 
   iconSize = MAX_ICN_SIZE;
-  
+
+  // Skip the expensive window-resize computation during mouse tracking
+  // — the window is already oversized and doesn't need to change until
+  // the icon list itself changes.
+  if (needsTile == NO && magnifyActive)
+    {
+      goto do_layout;
+    }
+  needsTile = NO;
+
   icnrect.origin.x = 0;
   icnrect.origin.y = 0;
   icnrect.size.width = ceil(iconSize / 3 * 4);
   icnrect.size.height = icnrect.size.width;
     
-  rect.size.height = [icons count] * icnrect.size.height;
+  /* For window sizing, use the maximum possible magnified size so the
+   * window never clips enlarged icons.  The icons themselves are laid
+   * out at their actual (potentially smaller) size by
+   * layoutTilesWithMagnification. */
+  CGFloat magFactor = magnifyActive ? MAGNIFY_MAX_RATIO : 1.0;
+  NSRect magIcnRect = icnrect;
+  magIcnRect.size.width *= magFactor;
+  magIcnRect.size.height *= magFactor;
+
+  NSUInteger miniCount = [miniWindowsByID count];
+  NSUInteger totalItems = [icons count] + miniCount;
+
+  rect.size.height = totalItems * magIcnRect.size.height;
   if (targetIndex != -1) {
-    rect.size.height += icnrect.size.height;
+    rect.size.height += magIcnRect.size.height;
   }
   
-  maxheight -= (icnrect.size.height * 2);  
+  maxheight -= (magIcnRect.size.height * 2);  
   
   while (rect.size.height > maxheight) {
     iconSize -= ICN_INCR;
     icnrect.size.height = ceil(iconSize / 3 * 4);
     icnrect.size.width = icnrect.size.height;
-    rect.size.height = [icons count] * icnrect.size.height;
+    magIcnRect.size.width = icnrect.size.width * magFactor;
+    magIcnRect.size.height = icnrect.size.height * magFactor;
+    rect.size.height = totalItems * magIcnRect.size.height;
 
     if (targetIndex != -1) {
-      rect.size.height += icnrect.size.height;
+      rect.size.height += magIcnRect.size.height;
     }
       
     if (iconSize <= MIN_ICN_SIZE) {
@@ -687,13 +752,13 @@
  
   if (position == DockPositionBottom)
   {
-    rect.size.width = [icons count] * icnrect.size.width;
-    rect.size.height = icnrect.size.height;
+    rect.size.width = totalItems * magIcnRect.size.width;
+    rect.size.height = magIcnRect.size.height;
   }
   else
   {
-    rect.size.width = icnrect.size.width;
-    rect.size.height = [icons count] * icnrect.size.height;
+    rect.size.width = magIcnRect.size.width;
+    rect.size.height = totalItems * magIcnRect.size.height;
   }
 
   // Offset by the primary screen's origin so the dock lands on the correct
@@ -703,8 +768,12 @@
 
   if (position == DockPositionBottom)
     {
-      rect.origin.x = scrOriginX + ceil((scrrect.size.width - rect.size.width) / 2);
+      // Full-width transparent window; double-height so magnified icons
+      // have room to grow upward.
+      rect.origin.x = scrOriginX;
       rect.origin.y = scrOriginY;
+      rect.size.width = scrrect.size.width;
+      rect.size.height = magIcnRect.size.height * 3.0;
     }
   else if (position == DockPositionLeft)
     {
@@ -741,43 +810,35 @@
       [self setFrame: rect];
     }
 
-  if (position == DockPositionBottom)
+do_layout:
+  // When magnification is disabled entirely, reset all icons to base size.
+  if (magnifyActive == NO && magnifiedOnce)
+    {
+      for (i = 0; i < [icons count]; i++)
+        {
+          DockIcon *icon = [icons objectAtIndex: i];
+          [icon setIconSize: iconSize];
+        }
+      for (i = 0; i < lastIconSizesCount; i++)
+        lastIconSizes[i] = -1;
+      magnifiedOnce = NO;
+    }
+
+  // Rebuild last-icon-sizes tracking array.
+  // Must cover all items in the scales[] array: icons + mini windows.
   {
-    icnrect.origin.x = 0;
-    icnrect.origin.y = 0;  // ← RESET Y!
-
-    for (i = 0; i < [icons count]; i++)
-    {
-      DockIcon *icon = [icons objectAtIndex: i];
-
-      if (oldIcnSize != iconSize)
-       [icon setIconSize: iconSize];
-
-      [icon setFrame: icnrect];
-      icnrect.origin.x += icnrect.size.width;
-
-      if ((targetIndex != -1) && (targetIndex == i))
-        icnrect.origin.x += icnrect.size.width;
-    }
+    NSUInteger total = [icons count] + [miniWindowsByID count];
+    if (lastIconSizesCount != total)
+      {
+        if (lastIconSizes) free(lastIconSizes);
+        lastIconSizesCount = total;
+        lastIconSizes = malloc(lastIconSizesCount * sizeof(int));
+        for (i = 0; i < lastIconSizesCount; i++)
+          lastIconSizes[i] = -1;
+      }
   }
-  else
-   {
-    icnrect.origin.y = rect.size.height;  // ← ONLY for vertical layout
 
-    for (i = 0; i < [icons count]; i++)
-    {
-      DockIcon *icon = [icons objectAtIndex: i];
-
-      if (oldIcnSize != iconSize)
-        [icon setIconSize: iconSize];
-
-      icnrect.origin.y -= icnrect.size.height;
-      [icon setFrame: icnrect];
-
-      if ((targetIndex != -1) && (targetIndex == i))
-        icnrect.origin.y -= icnrect.size.height;
-    }
-  }
+  [self layoutTilesWithMagnification];
 
   [self setNeedsDisplay: YES];
   if (view && (inOwnDockWindow == NO)) {
@@ -906,11 +967,746 @@
 
 - (void)drawRect:(NSRect)rect
 {
-  // NSLog(@"DEBUG: Dock drawRect called, rect: %@, superview: %@", NSStringFromRect(rect), [self superview]);
-  [super drawRect: rect];
+  // Clear the entire window (transparent background)
+  [[NSColor clearColor] set];
+  NSRectFill([self bounds]);
 
-  [backColor set];
-  NSRectFill(rect);
+  // Draw semi-transparent grey background behind the icons
+  if (iconBgRect.size.width > 0 && iconBgRect.size.height > 0)
+    {
+      // Rounded corners only at the TOP; bottom corners are square.
+      NSBezierPath *bp = [NSBezierPath bezierPath];
+      CGFloat r = 8.0, x = iconBgRect.origin.x, y = iconBgRect.origin.y;
+      CGFloat w = iconBgRect.size.width, h = iconBgRect.size.height;
+      [bp moveToPoint: NSMakePoint(x, y)];  // bottom-left
+      [bp lineToPoint: NSMakePoint(x + w, y)];  // bottom-right
+      [bp lineToPoint: NSMakePoint(x + w, y + h - r)];  // right edge up
+      [bp appendBezierPathWithArcFromPoint: NSMakePoint(x + w, y + h)
+                                   toPoint: NSMakePoint(x + w - r, y + h)
+                                    radius: r];  // top-right arc
+      [bp lineToPoint: NSMakePoint(x + r, y + h)];  // top edge left
+      [bp appendBezierPathWithArcFromPoint: NSMakePoint(x, y + h)
+                                   toPoint: NSMakePoint(x, y + h - r)
+                                    radius: r];  // top-left arc
+      [bp closePath];
+
+      [[NSColor colorWithCalibratedWhite: 0.35 alpha: 0.65] set];
+      [bp fill];
+    }
+
+  NSRect bounds = [self bounds];
+  NSUInteger miniCount = [miniWindowsByID ? miniWindowsByID : (id)[NSMutableDictionary dictionary] count];
+
+  if (position == DockPositionBottom)
+  {
+    // Left separator: between regular apps and miniwindows (or Trash if no miniwindows)
+    if (separatorLeft > 0 && separatorLeft < bounds.size.width)
+    {
+      CGFloat sepY = iconBgRect.origin.y + 4;
+      CGFloat sepH = iconBgRect.size.height - 8;
+      [[NSColor colorWithCalibratedWhite:1.0 alpha:0.25] set];
+      NSRectFill(NSMakeRect(separatorLeft, sepY, 1, sepH));
+      [[NSColor colorWithCalibratedWhite:0.0 alpha:0.25] set];
+      NSRectFill(NSMakeRect(separatorLeft + 1, sepY, 1, sepH));
+    }
+
+    // Right separator: between miniwindows and Trash
+    if (miniCount > 0 && separatorRight > 0 && separatorRight < bounds.size.width
+        && separatorRight != separatorLeft)
+    {
+      CGFloat sepY = iconBgRect.origin.y + 4;
+      CGFloat sepH = iconBgRect.size.height - 8;
+      [[NSColor colorWithCalibratedWhite:1.0 alpha:0.25] set];
+      NSRectFill(NSMakeRect(separatorRight, sepY, 1, sepH));
+      [[NSColor colorWithCalibratedWhite:0.0 alpha:0.25] set];
+      NSRectFill(NSMakeRect(separatorRight + 1, sepY, 1, sepH));
+    }
+  }
+}
+
+#pragma mark - Minimized Window Monitoring
+
+- (NSView *)hitTest:(NSPoint)point
+{
+  NSPoint loc = [self convertPoint: point fromView: nil];
+  if (NSPointInRect(loc, iconBgRect) == NO)
+    return nil;  // click-through transparent area
+  return [super hitTest: point];
+}
+
+- (void)viewDidMoveToWindow
+{
+  [super viewDidMoveToWindow];
+  if ([self window]) {
+    [[self window] setOpaque: NO];
+    [[self window] setBackgroundColor: [NSColor clearColor]];
+  }
+}
+
+- (void)animateIconFramesFrom:(NSArray *)savedFrames
+{
+  if ([savedFrames count] == 0)
+    return;
+
+  NSUInteger count = [icons count] + [miniWindowsByID count];
+  NSMutableArray *animList = [NSMutableArray arrayWithCapacity: count];
+  NSUInteger ci;
+
+  for (ci = 0; ci < [icons count]; ci++)
+    {
+      DockIcon *ic = [icons objectAtIndex: ci];
+      NSRect start = [[savedFrames objectAtIndex: ci] rectValue];
+      NSRect end = [ic frame];
+      if (!NSEqualRects(start, end))
+        {
+          [animList addObject:
+            @{@"view": ic,
+              @"sx": @(start.origin.x), @"sy": @(start.origin.y),
+              @"sw": @(start.size.width), @"sh": @(start.size.height),
+              @"ex": @(end.origin.x), @"ey": @(end.origin.y),
+              @"ew": @(end.size.width), @"eh": @(end.size.height)}];
+          // Set back to start so the timer animates forward
+          [ic setFrame: start];
+        }
+    }
+
+  {
+    NSUInteger mi = ci;
+    for (NSNumber *key in miniWindowsByID)
+      {
+        DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+        NSRect start = [[savedFrames objectAtIndex: mi] rectValue];
+        NSRect end = [mw frame];
+        if (!NSEqualRects(start, end))
+          {
+            [animList addObject:
+              @{@"view": mw,
+                @"sx": @(start.origin.x), @"sy": @(start.origin.y),
+                @"sw": @(start.size.width), @"sh": @(start.size.height),
+                @"ex": @(end.origin.x), @"ey": @(end.origin.y),
+                @"ew": @(end.size.width), @"eh": @(end.size.height)}];
+            [mw setFrame: start];
+          }
+        mi++;
+      }
+  }
+
+  if ([animList count] == 0)
+    return;
+
+  // Timer-driven interpolation: 8 steps over ~0.12s
+  NSMutableDictionary *animState = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+    animList, @"list", @(1), @"step", @(8), @"total", nil];
+  [NSTimer scheduledTimerWithTimeInterval: 0.015
+                                   target: self
+                                 selector: @selector(animStep:)
+                                 userInfo: animState
+                                  repeats: YES];
+}
+
+- (void)animStep:(NSTimer *)timer
+{
+  NSDictionary *state = [timer userInfo];
+  NSArray *list = [state objectForKey: @"list"];
+  int total = [[state objectForKey: @"total"] intValue];
+
+  NSMutableDictionary *mstate = (NSMutableDictionary *)state;
+  int step = [[mstate objectForKey: @"step"] intValue];
+  float t = (float)step / (float)total;
+
+  for (NSDictionary *d in list)
+    {
+      NSView *v = [d objectForKey: @"view"];
+      float sx = [[d objectForKey: @"sx"] floatValue];
+      float sy = [[d objectForKey: @"sy"] floatValue];
+      float sw = [[d objectForKey: @"sw"] floatValue];
+      float sh = [[d objectForKey: @"sh"] floatValue];
+      float ex = [[d objectForKey: @"ex"] floatValue];
+      float ey = [[d objectForKey: @"ey"] floatValue];
+      float ew = [[d objectForKey: @"ew"] floatValue];
+      float eh = [[d objectForKey: @"eh"] floatValue];
+      NSRect cur = NSMakeRect(
+        sx + (ex - sx) * t, sy + (ey - sy) * t,
+        sw + (ew - sw) * t, sh + (eh - sh) * t);
+      [v setFrame: cur];
+    }
+
+  if (step >= total)
+    {
+      for (NSDictionary *d in list)
+        {
+          NSView *v = [d objectForKey: @"view"];
+          float ex = [[d objectForKey: @"ex"] floatValue];
+          float ey = [[d objectForKey: @"ey"] floatValue];
+          float ew = [[d objectForKey: @"ew"] floatValue];
+          float eh = [[d objectForKey: @"eh"] floatValue];
+          [v setFrame: NSMakeRect(ex, ey, ew, eh)];
+        }
+      [timer invalidate];
+    }
+  else
+    {
+      [mstate setObject: @(step + 1) forKey: @"step"];
+    }
+}
+
+// Global mouse-watch timer: fires ~30×/s and reads [NSEvent mouseLocation]
+// directly, so magnification responds smoothly even when the cursor is
+// outside the dock window (e.g. approaching from above).
+#define DOCK_MOUSE_RANGE 300.0  // pixels of influence beyond the dock
+
+- (void)mouseWatchFired:(NSTimer *)timer
+{
+  NSPoint screenPos = [NSEvent mouseLocation];
+  NSWindow *win = [self window];
+  if (!win) return;
+  NSPoint winPos = [win convertScreenToBase: screenPos];
+  NSPoint loc = [self convertPoint: winPos fromView: nil];
+  NSRect bounds = [self bounds];
+  CGFloat dist = 0;
+
+  if (position == DockPositionBottom)
+    {
+      // Distance from cursor to the dock band (y=0 .. iconBgHeight)
+      if (loc.y > iconBgRect.size.height && loc.y > 0)
+        dist = loc.y - iconBgRect.size.height;
+      else if (loc.y < 0)
+        dist = -loc.y;
+      else
+        dist = 0;  // inside the dock band
+    }
+  else
+    {
+      if (loc.x > bounds.size.width)
+        dist = loc.x - bounds.size.width;
+      else if (loc.x < 0)
+        dist = -loc.x;
+      else
+        dist = 0;
+    }
+
+  if (dist > DOCK_MOUSE_RANGE)
+    {
+      // Cursor just left the influence range — animate icons back to base
+      if (magnifyCursorX != -1e6)
+        {
+          NSMutableArray *savedFrames = [NSMutableArray array];
+          NSUInteger ci;
+          for (ci = 0; ci < [icons count]; ci++)
+            [savedFrames addObject: [NSValue valueWithRect: [[icons objectAtIndex: ci] frame]]];
+          for (NSNumber *key in miniWindowsByID)
+            {
+              DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+              [savedFrames addObject: [NSValue valueWithRect: [mw frame]]];
+            }
+          magnifyCursorX = -1e6;
+          magnifyCursorY = -1e6;
+          [self tile];
+          [self animateIconFramesFrom: savedFrames];
+        }
+      return;
+    }
+
+  NSPoint oldPos = NSMakePoint(magnifyCursorX, magnifyCursorY);
+  magnifyCursorX = loc.x;
+  magnifyCursorY = loc.y;
+
+  // Throttle: skip tile if cursor moved less than 2 px
+  if (fabs(loc.x - oldPos.x) < 2.0 && fabs(loc.y - oldPos.y) < 2.0
+      && oldPos.x >= 0)
+    return;
+
+  [self tile];
+}
+
+- (void)mouseEntered:(NSEvent *)theEvent
+{
+  // Handled by mouseWatchFired:
+}
+
+- (void)mouseExited:(NSEvent *)theEvent
+{
+  // Handled by mouseWatchFired — no abrupt sentinel needed.
+}
+
+- (void)mouseMoved:(NSEvent *)theEvent
+{
+  // Handled by mouseWatchFired:
+}
+
+- (void)layoutTilesWithMagnification
+{
+  NSUInteger i;
+  NSRect icnrect = NSZeroRect;
+  icnrect.origin.x = 0;
+  icnrect.origin.y = 0;
+  icnrect.size.width = ceil(iconSize / 3 * 4);
+  icnrect.size.height = icnrect.size.width;
+  NSUInteger miniCount = [miniWindowsByID count];
+  CGFloat baseWidth = icnrect.size.width;
+  CGFloat baseHeight = icnrect.size.height;
+
+  CGFloat cursorPos = (position == DockPositionBottom) ? magnifyCursorX : magnifyCursorY;
+
+  if (!magnifyActive || cursorPos < 0)
+  {
+    // Original layout (no magnification)
+    if (position == DockPositionBottom)
+    {
+      icnrect.origin.x = 0;
+      icnrect.origin.y = 0;
+
+      DockIcon *wsIcon = [icons objectAtIndex: 0];
+      [wsIcon setFrame: icnrect];
+      icnrect.origin.x += icnrect.size.width;
+      if (targetIndex == 0)
+        icnrect.origin.x += icnrect.size.width;
+
+      for (i = 1; i < [icons count] - 1; i++)
+      {
+        DockIcon *icon = [icons objectAtIndex: i];
+        [icon setFrame: icnrect];
+        icnrect.origin.x += icnrect.size.width;
+        if ((targetIndex != -1) && (targetIndex == (int)i))
+          icnrect.origin.x += icnrect.size.width;
+      }
+
+      separatorLeft = icnrect.origin.x;
+
+      for (NSNumber *key in miniWindowsByID)
+      {
+        DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+        [mw setFrame: NSMakeRect(icnrect.origin.x, icnrect.origin.y,
+                                 icnrect.size.width, icnrect.size.height)];
+        icnrect.origin.x += icnrect.size.width;
+      }
+
+      separatorRight = icnrect.origin.x;
+
+      DockIcon *trashIcon = [icons lastObject];
+      [trashIcon setFrame: icnrect];
+      icnrect.origin.x += icnrect.size.width;
+
+      // Center non-magnified row within the oversize window
+      {
+        CGFloat totalW = icnrect.origin.x;
+        CGFloat boundsW = [self bounds].size.width;
+        if (totalW < boundsW) {
+          CGFloat off = (boundsW - totalW) / 2.0;
+          NSUInteger ci;
+          for (ci = 0; ci < [icons count]; ci++) {
+            NSRect f = [[icons objectAtIndex: ci] frame];
+            f.origin.x += off;
+            [[icons objectAtIndex: ci] setFrame: f];
+          }
+          for (NSNumber *key in miniWindowsByID) {
+            DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+            NSRect f = [mw frame];
+            f.origin.x += off;
+            [mw setFrame: f];
+          }
+          separatorLeft += off;
+          separatorRight += off;
+        }
+      }
+    }
+    else
+    {
+      NSRect dockBounds = [self bounds];
+      icnrect.origin.y = dockBounds.size.height;
+
+      DockIcon *wsIcon = [icons objectAtIndex: 0];
+      [wsIcon setFrame: icnrect];
+      icnrect.origin.y -= icnrect.size.height;
+
+      for (i = 1; i < [icons count] - 1; i++)
+      {
+        DockIcon *icon = [icons objectAtIndex: i];
+        icnrect.origin.y -= icnrect.size.height;
+        [icon setFrame: icnrect];
+        if ((targetIndex != -1) && (targetIndex == (int)i))
+          icnrect.origin.y -= icnrect.size.height;
+      }
+
+      separatorLeft = icnrect.origin.y;
+
+      for (NSNumber *key in miniWindowsByID)
+      {
+        DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+        icnrect.origin.y -= icnrect.size.height;
+        [mw setFrame: NSMakeRect(icnrect.origin.x, icnrect.origin.y,
+                                 icnrect.size.width, icnrect.size.height)];
+      }
+
+      separatorRight = icnrect.origin.y;
+
+      DockIcon *trashIcon = [icons lastObject];
+      icnrect.origin.y -= icnrect.size.height;
+      [trashIcon setFrame: icnrect];
+
+      // Center non-magnified column within the oversize window
+      {
+        CGFloat boundsH = [self bounds].size.height;
+        CGFloat yMin = boundsH, yMax = 0;
+        NSUInteger ci;
+        for (ci = 0; ci < [icons count]; ci++) {
+          NSRect f = [[icons objectAtIndex: ci] frame];
+          if (f.origin.y < yMin) yMin = f.origin.y;
+          if (f.origin.y + f.size.height > yMax) yMax = f.origin.y + f.size.height;
+        }
+        for (NSNumber *key in miniWindowsByID) {
+          DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+          NSRect f = [mw frame];
+          if (f.origin.y < yMin) yMin = f.origin.y;
+          if (f.origin.y + f.size.height > yMax) yMax = f.origin.y + f.size.height;
+        }
+        CGFloat contentH = yMax - yMin;
+        if (contentH < boundsH) {
+          CGFloat off = ((boundsH - contentH) / 2.0) - yMin;
+          for (ci = 0; ci < [icons count]; ci++) {
+            NSRect f = [[icons objectAtIndex: ci] frame];
+            f.origin.y += off;
+            [[icons objectAtIndex: ci] setFrame: f];
+          }
+          for (NSNumber *key in miniWindowsByID) {
+            DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+            NSRect f = [mw frame];
+            f.origin.y += off;
+            [mw setFrame: f];
+          }
+          separatorLeft += off;
+          separatorRight += off;
+        }
+      }
+    }
+
+    // Non-magnified layout done.
+    return;
+  }
+
+  // Fish-eye layout
+  {
+    CGFloat cursorMain = cursorPos;
+    CGFloat halfBase = baseWidth / 2.0;
+
+    // Centering offset: default-position row is left-aligned at x=0,
+    // but after layout it gets shifted to center.  The scale formula
+    // must use the ACTUAL centered tile center, not the pre-shift one.
+    NSUInteger totalItems = [icons count] + miniCount;
+    CGFloat totalDefaultWidth = totalItems * baseWidth;
+    CGFloat boundsW = [self bounds].size.width;
+    CGFloat centerOff = (position == DockPositionBottom)
+                         ? (boundsW > totalDefaultWidth ? (boundsW - totalDefaultWidth) / 2.0 : 0)
+                         : 0;
+
+    if (position == DockPositionBottom)
+    {
+      // Item order: WS (0), apps (1..count-2), miniwindows, Trash (last)
+      CGFloat scales[totalItems];
+      CGFloat x = 0;
+      int idx = 0;
+
+      // Compute vertical distance from cursor to the icon row centre
+      CGFloat rowCenterY = iconBgRect.origin.y + iconBgRect.size.height / 2.0;
+      CGFloat yDist = fabs(magnifyCursorY - rowCenterY);
+
+      // Pass 1: compute scales using 2D Euclidean distance so the
+      // magnification ramps up smoothly as the cursor approaches from
+      // any direction (including vertically from above).
+      // WS
+      {
+        CGFloat dx = cursorMain - (centerOff + x + halfBase);
+        CGFloat dist = sqrt(dx * dx + yDist * yDist);
+        scales[idx] = magnifyScaleForDistance(dist);
+      }
+      idx++;
+      x += baseWidth;
+
+      // Regular apps
+      for (i = 1; i < [icons count] - 1; i++)
+      {
+        CGFloat dx = cursorMain - (centerOff + x + halfBase);
+        CGFloat dist = sqrt(dx * dx + yDist * yDist);
+        scales[idx] = magnifyScaleForDistance(dist);
+        idx++;
+        x += baseWidth;
+      }
+
+      // Mini windows
+      for (NSNumber *key in miniWindowsByID)
+      {
+        (void)key;
+        CGFloat dx = cursorMain - (centerOff + x + halfBase);
+        CGFloat dist = sqrt(dx * dx + yDist * yDist);
+        scales[idx] = magnifyScaleForDistance(dist);
+        idx++;
+        x += baseWidth;
+      }
+
+      // Trash
+      {
+        CGFloat dx = cursorMain - (centerOff + x + halfBase);
+        CGFloat dist = sqrt(dx * dx + yDist * yDist);
+        scales[idx] = magnifyScaleForDistance(dist);
+        idx++;
+      }
+
+      // Pass 2: re-cascade positions with scaled sizes
+      x = 0;
+      idx = 0;
+
+      // Helper: call setIconSize: only when the size actually changes.
+#define SET_ICON_SIZE(obj, idxv) \
+  do { \
+    int _new_ = (int)ceil(scales[idxv] * iconSize); \
+    if (idxv < (int)lastIconSizesCount && lastIconSizes[idxv] != _new_) { \
+      [obj setIconSize: _new_]; \
+      lastIconSizes[idxv] = _new_; \
+    } \
+  } while(0)
+
+      // WS
+      {
+        CGFloat w = baseWidth * scales[idx];
+        CGFloat h = baseHeight * scales[idx];
+        [[icons objectAtIndex: 0] setFrame: NSMakeRect(x, 0, w, h)];
+        SET_ICON_SIZE([icons objectAtIndex: 0], idx);
+        x += w;
+        idx++;
+      }
+
+      // Regular apps
+      for (i = 1; i < [icons count] - 1; i++)
+      {
+        CGFloat w = baseWidth * scales[idx];
+        CGFloat h = baseHeight * scales[idx];
+        [[icons objectAtIndex: i] setFrame: NSMakeRect(x, 0, w, h)];
+        SET_ICON_SIZE([icons objectAtIndex: i], idx);
+        x += w;
+        idx++;
+      }
+
+      separatorLeft = x;
+
+      // Mini windows
+      for (NSNumber *key in miniWindowsByID)
+      {
+        CGFloat w = baseWidth * scales[idx];
+        CGFloat h = baseHeight * scales[idx];
+        DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+        [mw setFrame: NSMakeRect(x, 0, w, h)];
+        x += w;
+        idx++;
+      }
+
+      separatorRight = x;
+
+      // Trash
+      {
+        CGFloat w = baseWidth * scales[idx];
+        CGFloat h = baseHeight * scales[idx];
+        [[icons lastObject] setFrame: NSMakeRect(x, 0, w, h)];
+        SET_ICON_SIZE([icons lastObject], idx);
+        x += w;
+        idx++;
+      }
+
+      magnifiedOnce = YES;
+
+      // Center horizontally within the oversize dock bounds
+      {
+        CGFloat boundsW = [self bounds].size.width;
+        if (x < boundsW) {
+          CGFloat offset = (boundsW - x) / 2.0;
+          NSUInteger ci;
+          for (ci = 0; ci < [icons count]; ci++) {
+            DockIcon *ic = [icons objectAtIndex: ci];
+            NSRect f = [ic frame];
+            f.origin.x += offset;
+            [ic setFrame: f];
+          }
+          for (NSNumber *key in miniWindowsByID) {
+            DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+            NSRect f = [mw frame];
+            f.origin.x += offset;
+            [mw setFrame: f];
+          }
+          separatorLeft += offset;
+          separatorRight += offset;
+        }
+      }
+    }
+    else
+    {
+      // Vertical fish-eye (left/right positions)
+      NSRect dockBounds = [self bounds];
+      CGFloat boundsH = dockBounds.size.height;
+      CGFloat totalDefaultHeight = totalItems * baseHeight;
+      CGFloat centerOffV = (boundsH > totalDefaultHeight) ? (boundsH - totalDefaultHeight) / 2.0 : 0;
+
+      CGFloat y = boundsH - centerOffV;
+      CGFloat scales[totalItems];
+      int idx = 0;
+
+      // Horizontal distance from cursor to dock centre (for side docks)
+      CGFloat rowCenterX = iconBgRect.origin.x + iconBgRect.size.width / 2.0;
+      CGFloat xDist = fabs(magnifyCursorX - rowCenterX);
+
+      // Pass 1: compute scales using 2D Euclidean distance
+      // WS
+      y -= baseHeight;
+      {
+        CGFloat dy = cursorMain - (y + baseHeight / 2.0);
+        CGFloat dist = sqrt(dy * dy + xDist * xDist);
+        scales[idx] = magnifyScaleForDistance(dist);
+      }
+      idx++;
+      y -= baseHeight;
+
+      // Regular apps
+      for (i = 1; i < [icons count] - 1; i++)
+      {
+        y -= baseHeight;
+        CGFloat dy = cursorMain - (y + baseHeight / 2.0);
+        CGFloat dist = sqrt(dy * dy + xDist * xDist);
+        scales[idx] = magnifyScaleForDistance(dist);
+        idx++;
+      }
+
+      // Mini windows
+      for (NSNumber *key in miniWindowsByID)
+      {
+        (void)key;
+        y -= baseHeight;
+        CGFloat dy = cursorMain - (y + baseHeight / 2.0);
+        CGFloat dist = sqrt(dy * dy + xDist * xDist);
+        scales[idx] = magnifyScaleForDistance(dist);
+        idx++;
+      }
+
+      // Trash
+      y -= baseHeight;
+      {
+        CGFloat dy = cursorMain - (y + baseHeight / 2.0);
+        CGFloat dist = sqrt(dy * dy + xDist * xDist);
+        scales[idx] = magnifyScaleForDistance(dist);
+      }
+      idx++;
+
+      // Pass 2: re-cascade positions with scaled sizes
+      y = dockBounds.size.height;
+      idx = 0;
+
+      // WS
+      {
+        CGFloat w = baseWidth * scales[idx];
+        CGFloat h = baseHeight * scales[idx];
+        y -= h;
+        [[icons objectAtIndex: 0] setFrame: NSMakeRect(0, y, w, h)];
+        SET_ICON_SIZE([icons objectAtIndex: 0], idx);
+        idx++;
+      }
+
+      // Regular apps
+      for (i = 1; i < [icons count] - 1; i++)
+      {
+        CGFloat w = baseWidth * scales[idx];
+        CGFloat h = baseHeight * scales[idx];
+        y -= h;
+        [[icons objectAtIndex: i] setFrame: NSMakeRect(0, y, w, h)];
+        SET_ICON_SIZE([icons objectAtIndex: i], idx);
+        idx++;
+      }
+
+      separatorLeft = y;
+
+      // Mini windows
+      for (NSNumber *key in miniWindowsByID)
+      {
+        CGFloat w = baseWidth * scales[idx];
+        CGFloat h = baseHeight * scales[idx];
+        y -= h;
+        DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+        [mw setFrame: NSMakeRect(0, y, w, h)];
+        idx++;
+      }
+
+      separatorRight = y;
+
+      // Trash
+      {
+        CGFloat w = baseWidth * scales[idx];
+        CGFloat h = baseHeight * scales[idx];
+        y -= h;
+        [[icons lastObject] setFrame: NSMakeRect(0, y, w, h)];
+        SET_ICON_SIZE([icons lastObject], idx);
+        idx++;
+      }
+
+      // Center vertically within the oversize dock bounds
+      {
+        CGFloat boundsH = [self bounds].size.height;
+        NSUInteger ci;
+        CGFloat yMin = boundsH, yMax = 0;
+        for (ci = 0; ci < [icons count]; ci++) {
+          NSRect f = [[icons objectAtIndex: ci] frame];
+          if (f.origin.y < yMin) yMin = f.origin.y;
+          if (f.origin.y + f.size.height > yMax) yMax = f.origin.y + f.size.height;
+        }
+        for (NSNumber *key in miniWindowsByID) {
+          DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+          NSRect f = [mw frame];
+          if (f.origin.y < yMin) yMin = f.origin.y;
+          if (f.origin.y + f.size.height > yMax) yMax = f.origin.y + f.size.height;
+        }
+        CGFloat contentH = yMax - yMin;
+        if (contentH < boundsH) {
+          CGFloat offset = ((boundsH - contentH) / 2.0) - yMin;
+          for (ci = 0; ci < [icons count]; ci++) {
+            DockIcon *ic = [icons objectAtIndex: ci];
+            NSRect f = [ic frame];
+            f.origin.y += offset;
+            [ic setFrame: f];
+          }
+          for (NSNumber *key in miniWindowsByID) {
+            DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+            NSRect f = [mw frame];
+            f.origin.y += offset;
+            [mw setFrame: f];
+          }
+          separatorLeft += offset;
+          separatorRight += offset;
+        }
+      }
+    }
+  // Close the if-else; remaining block is the fish-eye block closure.
+  }
+
+  // Compute the semi-transparent background rect behind the icons.
+  // The height is FIXED (based on base icon size) so it never changes
+  // during magnification — only the width adjusts to the number of icons.
+  {
+    NSUInteger ci;
+    CGFloat x0 = 1e9, x1 = -1e9;
+    for (ci = 0; ci < [icons count]; ci++) {
+      NSRect f = [[icons objectAtIndex: ci] frame];
+      if (f.origin.x < x0) x0 = f.origin.x;
+      if (f.origin.x + f.size.width > x1) x1 = f.origin.x + f.size.width;
+    }
+    for (NSNumber *key in miniWindowsByID) {
+      DockMiniWindow *mw = [miniWindowsByID objectForKey: key];
+      NSRect f = [mw frame];
+      if (f.origin.x < x0) x0 = f.origin.x;
+      if (f.origin.x + f.size.width > x1) x1 = f.origin.x + f.size.width;
+    }
+    if (x0 < x1) {
+      // Height matches the original dock window (pre-magnification):
+      // ceil(iconSize / 3 * 4) with iconSize = 48 → 64 px.
+      CGFloat origH = ceil(iconSize / 3 * 4);
+      CGFloat pad = 8.0;
+      iconBgRect = NSMakeRect(x0 - pad, 0, x1 - x0 + pad * 2, origH);
+    }
+  }
 }
 
 @end

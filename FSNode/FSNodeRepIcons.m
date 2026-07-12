@@ -565,22 +565,20 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 - (NSImage *)trashIconOfSize:(int)size
 {
   NSSize icnsize = [trashIcon size];
-
-  if ((icnsize.width > size) || (icnsize.height > size)) {
+  int diff = abs((int)icnsize.width - size);
+  if (diff > 2) {
     return [self resizedIcon: trashIcon ofSize: size];
   }  
-  
   return trashIcon;
 }
 
 - (NSImage *)trashFullIconOfSize:(int)size
 {
   NSSize icnsize = [trashFullIcon size];
-
-  if ((icnsize.width > size) || (icnsize.height > size)) {
+  int diff = abs((int)icnsize.width - size);
+  if (diff > 2) {
     return [self resizedIcon: trashFullIcon ofSize: size];
   }  
-  
   return trashFullIcon;
 }
 
