@@ -10,13 +10,12 @@
     NSWindow *aboutWindow;
     NSTextField *osNameField;
     NSTextField *osVersionField;
-    NSTextField *manufacturerField;
-    NSTextField *modelField;
+    NSTextField *osField;
     NSTextField *processorField;
     NSTextField *memoryField;
+    NSTextField *modelNumberField;
     NSTextField *kernelField;
     NSTextField *x11Field;
-    NSTextField *serialNumberField;
     NSImageView *computerImageView;
     NSString *systemProfilerPath;
 }

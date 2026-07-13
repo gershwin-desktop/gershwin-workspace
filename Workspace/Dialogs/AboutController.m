@@ -70,20 +70,8 @@ static AboutController *sharedController = nil;
   [contentView addSubview:computerImageView];
   RELEASE(computerImageView);
 
-  // OS Pretty Name
-  osNameField = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 250, 280, 24)];
-  [osNameField setEditable:NO];
-  [osNameField setBezeled:NO];
-  [osNameField setBordered:NO];
-  [osNameField setDrawsBackground:NO];
-  [osNameField setSelectable:NO];
-  [osNameField setAlignment:NSCenterTextAlignment];
-  [osNameField setFont:[NSFont boldSystemFontOfSize:18]];
-  [contentView addSubview:osNameField];
-  RELEASE(osNameField);
-
-  // OS Version
-  osVersionField = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 230, 280, 20)];
+  // Manufacturer label (small, above model)
+  osVersionField = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 262, 280, 20)];
   [osVersionField setEditable:NO];
   [osVersionField setBezeled:NO];
   [osVersionField setBordered:NO];
@@ -94,7 +82,19 @@ static AboutController *sharedController = nil;
   [contentView addSubview:osVersionField];
   RELEASE(osVersionField);
 
-  float y = 190;
+  // Model name (big)
+  osNameField = [[NSTextField alloc] initWithFrame:NSMakeRect(20, 238, 280, 24)];
+  [osNameField setEditable:NO];
+  [osNameField setBezeled:NO];
+  [osNameField setBordered:NO];
+  [osNameField setDrawsBackground:NO];
+  [osNameField setSelectable:NO];
+  [osNameField setAlignment:NSCenterTextAlignment];
+  [osNameField setFont:[NSFont boldSystemFontOfSize:18]];
+  [contentView addSubview:osNameField];
+  RELEASE(osNameField);
+
+  float y = 192;
   float labelX = 20;
   float valueX = 120;
   float width = 180;
@@ -102,7 +102,7 @@ static AboutController *sharedController = nil;
   float rowHeight = 18;
 
   // Labels for system info
-  NSArray *labels = @[_(@"Processor"), _(@"Memory"), _(@"Kernel"), _(@"X11 Server"), _(@"Product"), _(@"Manufacturer"), _(@"Serial Number")];
+  NSArray *labels = @[_(@"Model"), _(@"Processor"), _(@"Memory"), _(@"OS"), _(@"Kernel"), _(@"X11 Server")];
   NSMutableArray *fields = [NSMutableArray array];
 
   for (NSString *labelText in labels) {
@@ -133,13 +133,12 @@ static AboutController *sharedController = nil;
     y -= rowHeight;
   }
 
-  processorField = [fields objectAtIndex:0];
-  memoryField = [fields objectAtIndex:1];
-  kernelField = [fields objectAtIndex:2];
-  x11Field = [fields objectAtIndex:3];
-  modelField = [fields objectAtIndex:4];
-  manufacturerField = [fields objectAtIndex:5];
-  serialNumberField = [fields objectAtIndex:6];
+  modelNumberField = [fields objectAtIndex:0];
+  processorField = [fields objectAtIndex:1];
+  memoryField = [fields objectAtIndex:2];
+  osField = [fields objectAtIndex:3];
+  kernelField = [fields objectAtIndex:4];
+  x11Field = [fields objectAtIndex:5];
 
   // Look for SystemProfiler app in .app bundles and in $PATH
   systemProfilerPath = nil;
@@ -177,55 +176,55 @@ static AboutController *sharedController = nil;
 - (void)updateSystemInfo
 {
   NSDictionary *osRelease = [self parseOSRelease];
-  NSString *name = [osRelease objectForKey:@"NAME"];
-  if (!name) name = [osRelease objectForKey:@"PRETTY_NAME"];
-  [osNameField setStringValue:name ?: @"GNU/Linux"];
-  
-  NSString *version = [osRelease objectForKey:@"VERSION_ID"];
-  if (!version) version = [osRelease objectForKey:@"VERSION"];
-  [osVersionField setStringValue:[NSString stringWithFormat:@"%@ %@", _(@"Version"), version ?: @""]];
+  NSString *osName = [osRelease objectForKey:@"NAME"] ?: [osRelease objectForKey:@"PRETTY_NAME"] ?: @"";
+  NSString *osVersion = [osRelease objectForKey:@"VERSION_ID"] ?: [osRelease objectForKey:@"VERSION"] ?: @"";
+  if ([osName length] > 0 && [osVersion length] > 0) {
+    [osField setStringValue:[NSString stringWithFormat:@"%@ %@", osName, osVersion]];
+  } else if ([osName length] > 0) {
+    [osField setStringValue:osName];
+  } else {
+    [osField setStringValue:@"GNU/Linux"];
+  }
 
   [kernelField setStringValue:[self kernelInfo]];
   [x11Field setStringValue:[self x11VersionInfo]];
 
   NSString *product = nil;
+  NSString *productVersion = nil;
   NSString *manufacturer = nil;
-  NSString *serial = nil;
   NSString *processor = nil;
 
 #ifdef __linux__
   if (![self isX86Architecture] && [self isDeviceTreeSystem]) {
     product = [self readTextFileTrimmingNulls:@"/sys/firmware/devicetree/base/model"];
+    productVersion = product;
     NSString *compatible = [self readTextFileTrimmingNulls:@"/sys/firmware/devicetree/base/compatible"];
     processor = [self processorNameFromCompatibleString:compatible];
-    serial = [self cpuInfoValueForKey:@"Serial"];
   } else {
     product = [self smbiosValueForLinux:@"product_name"
                               bsdSysctl:@"hw.smbios.product"
                                 bsdKenv:@"smbios.system.product"];
+    productVersion = [self smbiosValueForLinux:@"product_version"
+                                    bsdSysctl:nil
+                                      bsdKenv:nil];
     manufacturer = [self smbiosValueForLinux:@"sys_vendor"
                                    bsdSysctl:@"hw.smbios.maker"
                                      bsdKenv:@"smbios.system.maker"];
-    serial = [self smbiosValueForLinux:@"product_serial"
-                             bsdSysctl:@"hw.smbios.serial"
-                               bsdKenv:@"smbios.system.serial"];
   }
 #else
   if (![self isX86Architecture]) {
     product = [self runCommand:@"sysctl" withArguments:@[@"-n", @"hw.model"]];
+    productVersion = product;
     NSString *compatible = [self runCommand:@"sysctl" withArguments:@[@"-n", @"hw.compatible"]];
     processor = [self processorNameFromCompatibleString:compatible];
-    serial = [self runCommand:@"sysctl" withArguments:@[@"-n", @"hw.serialno"]];
   } else {
     product = [self smbiosValueForLinux:nil
                               bsdSysctl:@"hw.smbios.product"
                                 bsdKenv:@"smbios.system.product"];
+    productVersion = product;
     manufacturer = [self smbiosValueForLinux:nil
                                    bsdSysctl:@"hw.smbios.maker"
                                      bsdKenv:@"smbios.system.maker"];
-    serial = [self smbiosValueForLinux:nil
-                             bsdSysctl:@"hw.smbios.serial"
-                               bsdKenv:@"smbios.system.serial"];
   }
 #endif
 
@@ -233,18 +232,18 @@ static AboutController *sharedController = nil;
     processor = [self getProcessorInfo];
   }
 
-  if (!serial) {
-    serial = [self readTextFileTrimmingNulls:@"/proc/device-tree/serial-number"];
+  if (productVersion == nil) {
+    productVersion = product;
   }
 
   if (product && [product hasPrefix:@"Raspberry Pi"]) {
     manufacturer = @"Raspberry Pi Ltd";
   }
 
+  [osNameField setStringValue:productVersion ?: @"Unknown"];
+  [osVersionField setStringValue:manufacturer ?: @""];
+  [modelNumberField setStringValue:product ?: @""];
   [processorField setStringValue:processor ?: @"Unknown"];
-  [modelField setStringValue:product ?: @"Unknown"];
-  [manufacturerField setStringValue:manufacturer ?: @"Unknown"];
-  [serialNumberField setStringValue:serial ?: @""];
   
   // Memory info
   unsigned long long mem = [[NSProcessInfo processInfo] physicalMemory];
