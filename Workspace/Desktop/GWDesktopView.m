@@ -633,6 +633,32 @@
   [self setNeedsDisplay: YES];
 }
 
+- (void)screenParametersDidChange
+{
+  NSArray *screens = [NSScreen screens];
+  NSDebugLLog(@"gwspace", @"desktop view screenParametersDidChange: %lu screen(s)",
+             (unsigned long)[screens count]);
+
+  screenFrame = [[screens objectAtIndex:0] frame];
+  for (NSUInteger si = 1; si < [screens count]; si++) {
+    NSRect srect = [[screens objectAtIndex:si] frame];
+    NSDebugLLog(@"gwspace", @"  screen %lu frame: {{%g, %g}, {%g, %g}}",
+               (unsigned long)si, srect.origin.x, srect.origin.y,
+               srect.size.width, srect.size.height);
+    screenFrame = NSUnionRect(screenFrame, srect);
+  }
+  NSDebugLLog(@"gwspace", @"  union screenFrame: {{%g, %g}, {%g, %g}}",
+             screenFrame.origin.x, screenFrame.origin.y,
+             screenFrame.size.width, screenFrame.size.height);
+
+  /* The content view's origin in window coordinates is always (0,0);
+   * only the size changes when the screen configuration changes. */
+  [self setFrame: NSMakeRect(0, 0, screenFrame.size.width, screenFrame.size.height)];
+  _gridCached = NO;
+  [self tile];
+  [self setNeedsDisplay: YES];
+}
+
 /* The region of the desktop where icons may actually live: the screen minus
  * the menu-bar strip, the Dock's reserved side, and the top/bottom margins.
  * Single source for both the AUTO grid origin and the off-screen rescue

@@ -74,6 +74,8 @@ typedef enum BackImageStyle
 
 - (void)dockPositionDidChange;
 
+- (void)screenParametersDidChange;
+
 - (NSArray *)iconsWithGridOriginX:(float)x;
 
 - (NSArray *)iconsWithGridOriginY:(float)y;

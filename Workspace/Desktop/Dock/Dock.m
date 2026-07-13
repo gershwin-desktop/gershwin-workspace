@@ -581,6 +581,11 @@
       [app hideApplication];
     } else if ([title isEqual: NSLocalizedString(@"Unhide", @"")]) {
       [app unhideApplication];
+    } else if ([title isEqual: NSLocalizedString(@"Bring to Front", @"")]) {
+      if ([app isHidden]) {
+        [app unhideApplication];
+      }
+      [app activateApplication];
     } else if ([title isEqual: NSLocalizedString(@"Quit", @"")]) {
       [app terminateApplication];
     }  

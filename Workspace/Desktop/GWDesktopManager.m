@@ -133,6 +133,11 @@ static GWDesktopManager *desktopManager = nil;
       }
     NS_ENDHANDLER
         
+    [nc addObserver: self
+           selector: @selector(screenParametersDidChange:)
+               name: NSApplicationDidChangeScreenParametersNotification
+             object: nil];
+
     [nc addObserver: self 
            selector: @selector(fileSystemWillChange:) 
                name: @"GWFileSystemWillChangeNotification"
@@ -415,6 +420,36 @@ static GWDesktopManager *desktopManager = nil;
 - (BOOL)dockActive
 {
   return !hidedock;
+}
+
+- (void)screenParametersDidChange:(NSNotification *)notif
+{
+  NSArray *screens = [NSScreen screens];
+  NSRect fullFrame = [[screens objectAtIndex:0] frame];
+  NSDebugLLog(@"gwspace", @"screenParametersDidChange: %lu screen(s), primary frame: {{%g, %g}, {%g, %g}}",
+             (unsigned long)[screens count],
+             fullFrame.origin.x, fullFrame.origin.y,
+             fullFrame.size.width, fullFrame.size.height);
+
+  for (NSUInteger i = 1; i < [screens count]; i++) {
+    NSRect srect = [[screens objectAtIndex:i] frame];
+    NSDebugLLog(@"gwspace", @"  screen %lu frame: {{%g, %g}, {%g, %g}}",
+               (unsigned long)i, srect.origin.x, srect.origin.y,
+               srect.size.width, srect.size.height);
+    fullFrame = NSUnionRect(fullFrame, srect);
+  }
+
+  NSDebugLLog(@"gwspace", @"  union fullFrame: {{%g, %g}, {%g, %g}}",
+             fullFrame.origin.x, fullFrame.origin.y,
+             fullFrame.size.width, fullFrame.size.height);
+
+  [win setFrame: fullFrame display: YES];
+  [desktopView screenParametersDidChange];
+  [self setReservedFrames];
+
+  if (dock && hidedock == NO) {
+    [dock tile];
+  }
 }
 
 - (void)setReservedFrames

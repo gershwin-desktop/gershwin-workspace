@@ -524,7 +524,15 @@
         }
         
         [menu addItem: item];
-        RELEASE (item);      
+        RELEASE (item);
+
+        item = [NSMenuItem new];
+        [item setTitle: NSLocalizedString(@"Bring to Front", @"")];
+        [item setTarget: (Dock *)container];
+        [item setAction: @selector(iconMenuAction:)];
+        [item setRepresentedObject: app];
+        [menu addItem: item];
+        RELEASE (item);
 
         item = [NSMenuItem new];  
         [item setTitle: NSLocalizedString(@"Quit", @"")];
