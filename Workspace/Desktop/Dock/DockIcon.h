@@ -67,6 +67,13 @@
   float bounceGravity;
   int pauseCounter;  /* Tracks pause between bounces (counts down in timer frames) */
 
+  /* Unity Launcher API state */
+  int64_t badgeCount;
+  BOOL countVisible;
+  double progressValue;
+  BOOL progressVisible;
+  BOOL urgent;
+
   NSFileManager *fm;
   NSNotificationCenter *nc; 
   id ws;
@@ -129,5 +136,17 @@
 - (void)setIsDragMountpointOnly:(BOOL)value;
 
 - (BOOL)isDragMountpointOnly;
+
+/* Unity Launcher API property accessors */
+- (void)setBadgeCount:(int64_t)count;
+- (int64_t)badgeCount;
+- (void)setCountVisible:(BOOL)visible;
+- (BOOL)isCountVisible;
+- (void)setProgressValue:(double)value;
+- (double)progressValue;
+- (void)setProgressVisible:(BOOL)visible;
+- (BOOL)isProgressVisible;
+- (void)setUrgent:(BOOL)value;
+- (BOOL)isUrgent;
 
 @end

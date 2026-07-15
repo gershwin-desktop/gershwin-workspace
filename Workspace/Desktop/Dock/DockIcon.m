@@ -117,6 +117,13 @@
     fm = [NSFileManager defaultManager];
     ws = [NSWorkspace sharedWorkspace];
 
+    /* Unity Launcher API defaults */
+    badgeCount = 0;
+    countVisible = NO;
+    progressValue = 0.0;
+    progressVisible = NO;
+    urgent = NO;
+
     if (appName) {
       [self setToolTip: appName];
     }
@@ -277,6 +284,78 @@
   bounceVelocity = 0.0;
   pauseCounter = 0;
   [self setNeedsDisplay: YES];
+}
+
+#pragma mark - Unity Launcher API
+
+- (void)setBadgeCount:(int64_t)count
+{
+  if (badgeCount != count)
+    {
+      badgeCount = count;
+      [self setNeedsDisplay: YES];
+    }
+}
+
+- (int64_t)badgeCount
+{
+  return badgeCount;
+}
+
+- (void)setCountVisible:(BOOL)visible
+{
+  if (countVisible != visible)
+    {
+      countVisible = visible;
+      [self setNeedsDisplay: YES];
+    }
+}
+
+- (BOOL)isCountVisible
+{
+  return countVisible;
+}
+
+- (void)setProgressValue:(double)value
+{
+  if (progressValue != value)
+    {
+      progressValue = value;
+      [self setNeedsDisplay: YES];
+    }
+}
+
+- (double)progressValue
+{
+  return progressValue;
+}
+
+- (void)setProgressVisible:(BOOL)visible
+{
+  if (progressVisible != visible)
+    {
+      progressVisible = visible;
+      [self setNeedsDisplay: YES];
+    }
+}
+
+- (BOOL)isProgressVisible
+{
+  return progressVisible;
+}
+
+- (void)setUrgent:(BOOL)value
+{
+  if (urgent != value)
+    {
+      urgent = value;
+      [self setNeedsDisplay: YES];
+    }
+}
+
+- (BOOL)isUrgent
+{
+  return urgent;
 }
 
 - (void)_bounceTimerFired:(NSTimer *)timer
@@ -730,6 +809,16 @@ x += 6; \
       }
     }
     
+    /* Urgent glow behind the icon */
+    if (urgent)
+      {
+        CGFloat glowSize = icnBounds.size.width + 6;
+        NSRect glowRect = NSMakeRect(drawPoint.x - 3, drawPoint.y - 3,
+                                     glowSize, glowSize);
+        [[[NSColor orangeColor] colorWithAlphaComponent:0.25] set];
+        [[NSBezierPath bezierPathWithOvalInRect:glowRect] fill];
+      }
+
     if (isTrashIcon == NO) {
       [icon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
     } else {
@@ -772,6 +861,45 @@ x += 6; \
           drawPoint.y + dotMargin,
           dotSize, dotSize);
         FSNDrawLabelDot(dotRect, tagColor);
+      }
+
+    /* Count badge (top-right) */
+    if (countVisible && badgeCount > 0)
+      {
+        CGFloat badgeSize = 16;
+        CGFloat badgeX = drawPoint.x + icnBounds.size.width - badgeSize;
+        CGFloat badgeY = drawPoint.y + icnBounds.size.height - badgeSize;
+        NSRect badgeRect = NSMakeRect(badgeX, badgeY, badgeSize, badgeSize);
+        [[NSColor redColor] set];
+        [[NSBezierPath bezierPathWithOvalInRect:badgeRect] fill];
+        NSString *countStr = [NSString stringWithFormat:@"%lld",
+                                       (long long)badgeCount];
+        NSDictionary *attrs = @{
+          NSFontAttributeName: [NSFont boldSystemFontOfSize:10],
+          NSForegroundColorAttributeName: [NSColor whiteColor]
+        };
+        NSSize strSize = [countStr sizeWithAttributes:attrs];
+        NSPoint strPoint = NSMakePoint(
+          badgeX + (badgeSize - strSize.width) / 2,
+          badgeY + (badgeSize - strSize.height) / 2);
+        [countStr drawAtPoint:strPoint withAttributes:attrs];
+      }
+
+    /* Progress bar (bottom edge) */
+    if (progressVisible)
+      {
+        CGFloat barHeight = 3;
+        CGFloat barY = drawPoint.y + 1;
+        CGFloat barX = drawPoint.x + 1;
+        CGFloat barWidth = icnBounds.size.width - 2;
+        [[[NSColor darkGrayColor] colorWithAlphaComponent:0.6] set];
+        NSRectFill(NSMakeRect(barX, barY, barWidth, barHeight));
+        if (progressValue >= 0.0)
+          {
+            [[NSColor greenColor] set];
+            NSRectFill(NSMakeRect(barX, barY,
+                                  barWidth * progressValue, barHeight));
+          }
       }
 
   }

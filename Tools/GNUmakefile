@@ -2,6 +2,8 @@ PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
 
 SUBPROJECTS = \
+        BadgeTest \
+        ProgressTest \
         dsutil \
         fswatcher \
         searchtool \

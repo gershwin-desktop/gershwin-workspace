@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//GNUstep//DTD plist 0.9//EN" "http://www.gnu.org/DTDs/plist-0.9.dtd">
+<plist version="0.9">
+<dict>
+  <key>ApplicationDescription</key>
+  <string>Animates a progress bar on a Dock icon</string>
+  <key>ApplicationName</key>
+  <string>ProgressTest</string>
+  <key>ApplicationRelease</key>
+  <string>0.1</string>
+</dict>
+</plist>

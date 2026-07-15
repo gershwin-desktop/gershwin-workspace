@@ -29,6 +29,7 @@
 #import <AppKit/AppKit.h>
 #import "Dock.h"
 #import "DockIcon.h"
+#import "DockService.h"
 #import "GWDesktopView.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
@@ -57,6 +58,7 @@
 - (void)dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver: self];
+  DockServiceStop();
   RELEASE (icons);
   RELEASE (backColor);
   
@@ -194,7 +196,9 @@
       [[NSNotificationCenter defaultCenter] addObserver: self
                                                selector: @selector(dragMountpointEnded:)
                                                    name: @"GWDragMountpointEnded"
-                                                 object: nil];
+                                                  object: nil];
+     
+      DockServiceStart(self);
     }
 
   return self;  
