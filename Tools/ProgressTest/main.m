@@ -8,7 +8,6 @@
 #import <AppKit/AppKit.h>
 
 @protocol DockService
-- (void)registerAppWithName:(NSString *)appName;
 - (void)setProgressValue:(double)value;
 - (void)setProgressVisible:(BOOL)visible;
 @end
@@ -40,7 +39,8 @@
       if (conn)
         {
           proxy = [[conn rootProxy] retain];
-          [proxy registerAppWithName:@"ProgressTest"];
+          [proxy setProgressValue:progress];
+          [proxy setProgressVisible:YES];
         }
       else
         {

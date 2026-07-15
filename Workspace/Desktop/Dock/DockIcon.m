@@ -295,6 +295,7 @@
       badgeCount = count;
       NSWarnMLog(@"DockIcon[%@] badgeCount -> %lld", appName, (long long)badgeCount);
       [self setNeedsDisplay: YES];
+      [container setNeedsDisplayInRect: [self frame]];
     }
 }
 
@@ -310,6 +311,7 @@
       countVisible = visible;
       NSWarnMLog(@"DockIcon[%@] countVisible -> %d", appName, countVisible);
       [self setNeedsDisplay: YES];
+      [container setNeedsDisplayInRect: [self frame]];
     }
 }
 
@@ -325,6 +327,7 @@
       progressValue = value;
       NSWarnMLog(@"DockIcon[%@] progressValue -> %.3f", appName, progressValue);
       [self setNeedsDisplay: YES];
+      [container setNeedsDisplayInRect: [self frame]];
     }
 }
 
@@ -340,6 +343,7 @@
       progressVisible = visible;
       NSWarnMLog(@"DockIcon[%@] progressVisible -> %d", appName, progressVisible);
       [self setNeedsDisplay: YES];
+      [container setNeedsDisplayInRect: [self frame]];
     }
 }
 
@@ -355,6 +359,7 @@
       urgent = value;
       NSWarnMLog(@"DockIcon[%@] urgent -> %d", appName, urgent);
       [self setNeedsDisplay: YES];
+      [container setNeedsDisplayInRect: [self frame]];
     }
 }
 

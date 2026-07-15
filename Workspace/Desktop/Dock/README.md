@@ -2,7 +2,7 @@
 
 ## Distributed Objects (GNUstep Native)
 
-A clean DO protocol for GNUstep applications to modify their own Dock icon (badge count, progress bar, urgent indicator). Each app can only modify its own icon.
+A clean DO protocol for GNUstep applications to modify their own Dock icon (badge count, progress bar, urgent indicator). Each app can only modify its own icon. Works on Linux, FreeBSD, OpenBSD, NetBSD, and macOS.
 
 ### Service
 
@@ -14,7 +14,6 @@ A clean DO protocol for GNUstep applications to modify their own Dock icon (badg
 
 ```objc
 @protocol DockService <NSObject>
-- (void)registerAppWithName:(NSString *)appName;
 - (void)setBadgeCount:(int64_t)count;
 - (void)setCountVisible:(BOOL)visible;
 - (void)setProgressValue:(double)value;
@@ -26,12 +25,11 @@ A clean DO protocol for GNUstep applications to modify their own Dock icon (badg
 
 ### Usage
 
-Call `registerAppWithName:` first with your application name (must match a Dock icon), then use the property setters freely. The Dock maps each DO connection to its registered app name, so only your own icon is affected.
+Connect to the service and call setters directly. The Dock automatically identifies which app is calling (via the DO connection's process PID) and applies changes only to that app's Dock icon. No registration or app name needed.
 
 ```objc
 NSConnection *conn = [NSConnection connectionWithRegisteredName:@"com.canonical.Unity.LauncherEntry" host:nil];
 id<DockService> dock = (id<DockService>)[conn rootProxy];
-[dock registerAppWithName:@"MyApp"];
 [dock setBadgeCount:42];
 [dock setUrgent:YES];
 ```
@@ -133,7 +131,7 @@ Tools/docktest-dbus.sh "App Name" self-test
 ## Implementation Files
 
 - `DockService.h` — DO protocol declaration, shared C helpers, C `DockServiceStart`/`Stop`
-- `DockService.m` — DO service implementation: per-connection app name registration, property setters
+- `DockService.m` — DO service implementation: automatic caller detection via PID, property setters
 - `DockServiceDBus.h` / `DockServiceDBus.m` — D-Bus service implementation (conditional on `HAVE_DBUS`)
 - `DockIcon.h` / `DockIcon.m` — ivars, accessors, `drawRect:` rendering
 - `Dock.m` — both services' startup/shutdown wiring

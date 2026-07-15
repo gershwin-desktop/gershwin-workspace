@@ -8,7 +8,6 @@
 #import <AppKit/AppKit.h>
 
 @protocol DockService
-- (void)registerAppWithName:(NSString *)appName;
 - (void)setBadgeCount:(int64_t)count;
 - (void)setCountVisible:(BOOL)visible;
 @end
@@ -37,7 +36,8 @@
       if (conn)
         {
           proxy = [[conn rootProxy] retain];
-          [proxy registerAppWithName:@"BadgeTest"];
+          [proxy setBadgeCount:count];
+          [proxy setCountVisible:(count > 0)];
         }
       else
         {

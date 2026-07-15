@@ -16,7 +16,6 @@ extern NSString * const kDockServiceName;
 
 @protocol DockService <NSObject>
 
-- (void)registerAppWithName:(NSString *)appName;
 - (void)setBadgeCount:(int64_t)count;
 - (void)setCountVisible:(BOOL)visible;
 - (void)setProgressValue:(double)value;
