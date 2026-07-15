@@ -10,84 +10,140 @@
 #import "Dock.h"
 #import "DockIcon.h"
 
+@interface NSConnection (DockService)
++ (NSConnection *)currentConnection;
+@end
+
 NSString * const kDockServiceName = @"com.canonical.Unity.LauncherEntry";
-NSString * const kDockObjectPath  = @"/com/canonical/unity/launcherentry";
 
 @interface DockServiceImplementation : NSObject <DockService>
 {
 @private
-  id _dock; // weak ref
-  NSMutableDictionary *_entries;
+  Dock *_dock;
+  NSMutableDictionary *_connections;
 }
-- (id)initWithDock:(id)dock;
-- (NSString *)appNameFromUri:(NSString *)appUri;
-- (void)applyProperties:(NSDictionary *)properties toIcon:(DockIcon *)icon;
+- (id)initWithDock:(Dock *)dock;
 @end
 
 @implementation DockServiceImplementation
 
-- (id)initWithDock:(id)dock
+- (id)initWithDock:(Dock *)dock
 {
   self = [super init];
   if (self)
     {
       _dock = dock;
-      _entries = [NSMutableDictionary new];
+      _connections = [NSMutableDictionary new];
+      [[NSNotificationCenter defaultCenter] addObserver:self
+                                               selector:@selector(connectionDidDie:)
+                                                   name:NSConnectionDidDieNotification
+                                                 object:nil];
     }
   return self;
 }
 
 - (void)dealloc
 {
-  RELEASE(_entries);
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
+  RELEASE(_connections);
   [super dealloc];
 }
 
-- (NSString *)appNameFromUri:(NSString *)appUri
+static id connKey(NSConnection *conn)
 {
-  return DockServiceAppNameFromUri(appUri);
+  return [NSValue valueWithNonretainedObject:conn];
 }
 
-- (void)update:(NSString *)appUri properties:(NSDictionary *)properties
+- (void)connectionDidDie:(NSNotification *)notif
 {
-  if (appUri == nil || properties == nil)
-    return;
-
-  NSMutableDictionary *entry = [_entries objectForKey:appUri];
-  if (entry == nil)
+  NSConnection *deadConn = [notif object];
+  if (deadConn)
     {
-      entry = [NSMutableDictionary dictionary];
-      [_entries setObject:entry forKey:appUri];
+      [_connections removeObjectForKey:connKey(deadConn)];
     }
-  [entry addEntriesFromDictionary:properties];
+}
 
-  NSString *appName = [self appNameFromUri:appUri];
-  if (appName == nil)
+- (void)registerAppWithName:(NSString *)appName
+{
+  if (appName == nil || [appName length] == 0)
     return;
 
-  DockIcon *icon = [_dock iconForApplicationName:appName];
+  NSConnection *conn = [NSConnection currentConnection];
+  if (conn == nil)
+    return;
+
+  [_connections setObject:appName forKey:connKey(conn)];
+}
+
+- (DockIcon *)iconForCaller
+{
+  NSConnection *conn = [NSConnection currentConnection];
+  if (conn == nil)
+    return nil;
+
+  NSString *appName = [_connections objectForKey:connKey(conn)];
+  if (appName == nil)
+    return nil;
+
+  return [_dock iconForApplicationName:appName];
+}
+
+- (void)setBadgeCount:(int64_t)count
+{
+  DockIcon *icon = [self iconForCaller];
   if (icon)
     {
-      [self applyProperties:properties toIcon:icon];
+      [icon setBadgeCount:MAX(0, count)];
+      [icon setCountVisible:YES];
     }
 }
 
-- (NSDictionary *)query
+- (void)setCountVisible:(BOOL)visible
 {
-  NSString *appUri = [[_entries allKeys] lastObject];
-  if (appUri == nil)
+  DockIcon *icon = [self iconForCaller];
+  if (icon)
     {
-      return @{};
+      [icon setCountVisible:visible];
     }
-  return @{
-    @"appUri": appUri,
-    @"properties": [_entries objectForKey:appUri] ?: @{}
-  };
 }
 
-- (void)applyProperties:(NSDictionary *)properties toIcon:(DockIcon *)icon
+- (void)setProgressValue:(double)value
 {
-  DockServiceApplyProperties(properties, icon);
+  DockIcon *icon = [self iconForCaller];
+  if (icon)
+    {
+      [icon setProgressValue:fmax(-1.0, fmin(1.0, value))];
+      [icon setProgressVisible:YES];
+    }
+}
+
+- (void)setProgressVisible:(BOOL)visible
+{
+  DockIcon *icon = [self iconForCaller];
+  if (icon)
+    {
+      [icon setProgressVisible:visible];
+    }
+}
+
+- (void)setUrgent:(BOOL)urgent
+{
+  DockIcon *icon = [self iconForCaller];
+  if (icon)
+    {
+      [icon setUrgent:urgent];
+    }
+}
+
+- (void)clearAll
+{
+  DockIcon *icon = [self iconForCaller];
+  if (icon)
+    {
+      [icon setCountVisible:NO];
+      [icon setProgressVisible:NO];
+      [icon setUrgent:NO];
+    }
 }
 
 @end

@@ -8,7 +8,9 @@
 #import <AppKit/AppKit.h>
 
 @protocol DockService
-- (void)update:(NSString *)appUri properties:(NSDictionary *)properties;
+- (void)registerAppWithName:(NSString *)appName;
+- (void)setProgressValue:(double)value;
+- (void)setProgressVisible:(BOOL)visible;
 @end
 
 @interface ProgressTestDelegate : NSObject
@@ -38,6 +40,7 @@
       if (conn)
         {
           proxy = [[conn rootProxy] retain];
+          [proxy registerAppWithName:@"ProgressTest"];
         }
       else
         {
@@ -69,10 +72,8 @@
     }
 
   [indicator setDoubleValue:progress * 100.0];
-  [proxy update:@"ProgressTest" properties:@{
-    @"progress": @(progress),
-    @"progress-visible": @YES
-  }];
+  [proxy setProgressValue:progress];
+  [proxy setProgressVisible:YES];
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notif

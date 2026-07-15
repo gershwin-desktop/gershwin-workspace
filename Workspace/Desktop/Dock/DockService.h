@@ -10,16 +10,19 @@
 #import <Foundation/NSObject.h>
 
 @class NSString;
-@class NSDictionary;
 @class DockIcon;
 
 extern NSString * const kDockServiceName;
-extern NSString * const kDockObjectPath;
 
 @protocol DockService <NSObject>
 
-- (void)update:(NSString *)appUri properties:(NSDictionary *)properties;
-- (NSDictionary *)query;
+- (void)registerAppWithName:(NSString *)appName;
+- (void)setBadgeCount:(int64_t)count;
+- (void)setCountVisible:(BOOL)visible;
+- (void)setProgressValue:(double)value;
+- (void)setProgressVisible:(BOOL)visible;
+- (void)setUrgent:(BOOL)urgent;
+- (void)clearAll;
 
 @end
 
