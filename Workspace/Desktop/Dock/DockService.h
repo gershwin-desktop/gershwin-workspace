@@ -11,6 +11,7 @@
 
 @class NSString;
 @class NSDictionary;
+@class DockIcon;
 
 extern NSString * const kDockServiceName;
 extern NSString * const kDockObjectPath;
@@ -24,5 +25,13 @@ extern NSString * const kDockObjectPath;
 
 void DockServiceStart(id dock);
 void DockServiceStop(void);
+
+NSString *DockServiceAppNameFromUri(NSString *appUri);
+void DockServiceApplyProperties(NSDictionary *properties, DockIcon *icon);
+
+#if HAVE_DBUS
+void DockServiceDBusStart(id dock);
+void DockServiceDBusStop(void);
+#endif
 
 #endif

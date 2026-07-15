@@ -165,10 +165,11 @@ ISOWrite/ISOWriteProgressWindow.m \
 ISOWrite/DiskFormatOperation.m \
 ISOWrite/DeviceEraseConfirmation.m \
 
-# Conditionally add DBusConnection.m and FileManagerDBusInterface.m if DBus is available
+# Conditionally add DBus source files if DBus is available
 ifeq ($(with_dbus), yes)
   Workspace_OBJC_FILES += DBusConnection.m
   Workspace_OBJC_FILES += FileManagerDBusInterface.m
+  Workspace_OBJC_FILES += Desktop/Dock/DockServiceDBus.m
 endif
 
 # Conditionally add AppImageIconProvider.m if libsquashfs is available

@@ -45,17 +45,7 @@ NSString * const kDockObjectPath  = @"/com/canonical/unity/launcherentry";
 
 - (NSString *)appNameFromUri:(NSString *)appUri
 {
-  NSString *name = appUri;
-  NSRange prefixRange = [name rangeOfString:@"application://"];
-  if (prefixRange.location != NSNotFound)
-    {
-      name = [name substringFromIndex:NSMaxRange(prefixRange)];
-    }
-  if ([name hasSuffix:@".desktop"])
-    {
-      name = [name substringToIndex:[name length] - [@".desktop" length]];
-    }
-  return name;
+  return DockServiceAppNameFromUri(appUri);
 }
 
 - (void)update:(NSString *)appUri properties:(NSDictionary *)properties
@@ -97,6 +87,49 @@ NSString * const kDockObjectPath  = @"/com/canonical/unity/launcherentry";
 
 - (void)applyProperties:(NSDictionary *)properties toIcon:(DockIcon *)icon
 {
+  DockServiceApplyProperties(properties, icon);
+}
+
+@end
+
+static DockServiceImplementation *sharedService = nil;
+
+void DockServiceStart(id dock)
+{
+  if (sharedService == nil)
+    {
+      sharedService = [[DockServiceImplementation alloc] initWithDock:dock];
+      NSConnection *conn = [NSConnection defaultConnection];
+      [conn setRootObject:sharedService];
+      [conn registerName:kDockServiceName];
+    }
+}
+
+void DockServiceStop(void)
+{
+  if (sharedService)
+    {
+      DESTROY(sharedService);
+    }
+}
+
+NSString *DockServiceAppNameFromUri(NSString *appUri)
+{
+  NSString *name = appUri;
+  NSRange prefixRange = [name rangeOfString:@"application://"];
+  if (prefixRange.location != NSNotFound)
+    {
+      name = [name substringFromIndex:NSMaxRange(prefixRange)];
+    }
+  if ([name hasSuffix:@".desktop"])
+    {
+      name = [name substringToIndex:[name length] - [@".desktop" length]];
+    }
+  return name;
+}
+
+void DockServiceApplyProperties(NSDictionary *properties, DockIcon *icon)
+{
   NSNumber *countVal = [properties objectForKey:@"count"];
   NSNumber *progressVal = [properties objectForKey:@"progress"];
   NSNumber *countVis = [properties objectForKey:@"count-visible"];
@@ -124,28 +157,5 @@ NSString * const kDockObjectPath  = @"/com/canonical/unity/launcherentry";
   if (urgentVal)
     {
       [icon setUrgent:[urgentVal boolValue]];
-    }
-}
-
-@end
-
-static DockServiceImplementation *sharedService = nil;
-
-void DockServiceStart(id dock)
-{
-  if (sharedService == nil)
-    {
-      sharedService = [[DockServiceImplementation alloc] initWithDock:dock];
-      NSConnection *conn = [NSConnection defaultConnection];
-      [conn setRootObject:sharedService];
-      [conn registerName:kDockServiceName];
-    }
-}
-
-void DockServiceStop(void)
-{
-  if (sharedService)
-    {
-      DESTROY(sharedService);
     }
 }

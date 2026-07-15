@@ -24,6 +24,7 @@
  */
 
 #include <math.h>
+#include "config.h"
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -35,6 +36,10 @@
 #import "GWFunctions.h"
 #import "X11AppSupport.h"
 #import "GWDockWindow.h"
+
+#if HAVE_DBUS
+#import "DockServiceDBus.h"
+#endif
 
 #define MAX_ICN_SIZE 48
 #define MIN_ICN_SIZE 16
@@ -59,6 +64,9 @@
 {
   [[NSNotificationCenter defaultCenter] removeObserver: self];
   DockServiceStop();
+#if HAVE_DBUS
+  DockServiceDBusStop();
+#endif
   RELEASE (icons);
   RELEASE (backColor);
   
@@ -199,6 +207,9 @@
                                                   object: nil];
      
       DockServiceStart(self);
+#if HAVE_DBUS
+      DockServiceDBusStart(self);
+#endif
     }
 
   return self;  

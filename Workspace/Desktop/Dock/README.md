@@ -1,45 +1,45 @@
 # DockService Protocol
 
-A Distributed Objects protocol for external clients to inspect and modify Dock icon state (badge count, progress bar, urgent indicator). Compatible with the Unity LauncherEntry DBus API.
+Two transports for external clients to inspect and modify Dock icon state (badge count, progress bar, urgent indicator), compatible with the Unity LauncherEntry API.
 
-## Service
+## Transports
 
-| Field | Value |
-|-------|-------|
-| DO service name | `com.canonical.Unity.LauncherEntry` |
-| C functions | `DockServiceStart(id dock)`, `DockServiceStop()` |
+| Transport | Service name | Dependency | Use case |
+|-----------|-------------|------------|----------|
+| Distributed Objects | `com.canonical.Unity.LauncherEntry` on `[NSConnection defaultConnection]` | None (always built) | GNUstep-native apps |
+| D-Bus | `com.canonical.Unity.LauncherEntry` on session bus | libdbus (optional, `HAVE_DBUS`) | Legacy Linux/GTK apps (Firefox, Thunderbird, etc.) |
 
-The service is vended by the Dock on `[NSConnection defaultConnection]`. Started in `Dock.m` `awakeFromNib`; stopped in `dealloc`.
+Both transports use the same properties dictionary (see below) and share the URI-to-icon matching and property-clamping logic.
 
-## Protocol
+## Properties
 
-```objc
-@protocol DockService
-- (void)update:(NSString *)appUri properties:(NSDictionary *)properties;
-- (NSDictionary *)query;
-@end
-```
+### `update:properties:` (DO) / `Update` D-Bus method
 
-### `update:properties:`
+Sets properties on a Dock icon identified by `app_id` / `appUri`.
 
-Sets properties on the Dock icon identified by `appUri`.
-
-**URI format:** `application://<AppName>.desktop` or just `<AppName>`.  
+**app_id format:** `application://<AppName>.desktop` or just `<AppName>`.  
 The service strips the `application://` prefix and `.desktop` suffix before matching against the Dock's icon list.
+
+**D-Bus method signature:**
+```
+Interface: com.canonical.Unity.LauncherEntry
+Object path: /com/canonical/unity/launcherentry
+Method: Update(string app_id, dict<string, variant> properties)
+```
 
 **Properties dictionary:**
 
-| Key | Type | Range | Description |
-|-----|------|-------|-------------|
-| `count` | number | >= 0 | Badge number (clamped to 0) |
-| `count-visible` | boolean | — | Show/hide the badge |
-| `progress` | number | -1.0 to 1.0 | Progress value (clamped). -1 = indeterminate |
-| `progress-visible` | boolean | — | Show/hide the progress bar |
-| `urgent` | boolean | — | Glow the icon orange when YES |
+| Key | D-Bus type | Range | Description |
+|-----|-----------|-------|-------------|
+| `count` | INT64 | >= 0 | Badge number (clamped to 0) |
+| `count-visible` | BOOLEAN | — | Show/hide the badge |
+| `progress` | DOUBLE | -1.0 to 1.0 | Progress value (clamped). -1 = indeterminate |
+| `progress-visible` | BOOLEAN | — | Show/hide the progress bar |
+| `urgent` | BOOLEAN | — | Glow the icon orange when YES |
 
 All keys are optional; only present keys are applied.
 
-### `query`
+### `query` (DO only)
 
 Returns a dictionary with the last known `appUri` and `properties` for the most recently updated entry.
 
@@ -53,7 +53,7 @@ Returns a dictionary with the last known `appUri` and `properties` for the most 
 
 ## Test Clients
 
-`Tools/BadgeTest/` and `Tools/ProgressTest/` are GNUstep applications that connect to the service and manipulate their own Dock icon.
+`Tools/BadgeTest/` and `Tools/ProgressTest/` are GNUstep applications that connect to the DO service and manipulate their own Dock icon.
 
 ### Build
 
@@ -69,9 +69,7 @@ Opens a window with +/- buttons to adjust the badge count on its Dock icon.
 
 Opens a window that animates a progress bar (0→1→0) on its Dock icon.
 
-### Custom URIs
-
-To target a different app's Dock icon from your own client:
+### Custom URIs (DO)
 
 ```objc
 #import <Foundation/Foundation.h>
@@ -86,9 +84,25 @@ id<DockService> dock = (id<DockService>)[conn rootProxy];
 }];
 ```
 
+### Legacy apps via D-Bus
+
+Legacy Linux/GTK applications (Firefox, Thunderbird, etc.) that already speak the Unity LauncherEntry D-Bus protocol will automatically update their Dock icon when Workspace is built with D-Bus support. No changes to those applications are needed.
+
+## Building with D-Bus
+
+D-Bus support is auto-detected by `./configure` and can be forced on/off with:
+
+```bash
+./configure --enable-dbus
+./configure --disable-dbus
+```
+
+When D-Bus is enabled, `config.h` defines `HAVE_DBUS` and the build includes `DBusConnection.m`, `FileManagerDBusInterface.m`, and `DockServiceDBus.m`.
+
 ## Implementation Files
 
-- `DockService.h` — protocol declaration and C helper prototypes
-- `DockService.m` — service implementation, URI→icon mapping, property clamping
+- `DockService.h` — protocol declaration, shared C helpers (`DockServiceAppNameFromUri`, `DockServiceApplyProperties`), and C `DockServiceStart`/`Stop`
+- `DockService.m` — DO service implementation, shared helper implementations
+- `DockServiceDBus.h` / `DockServiceDBus.m` — D-Bus service implementation (conditional on `HAVE_DBUS`)
 - `DockIcon.h` / `DockIcon.m` — ivars, accessors, `drawRect:` rendering
-- `Dock.m` — service startup/shutdown wiring
+- `Dock.m` — both services' startup/shutdown wiring (DO always, D-Bus conditional)
