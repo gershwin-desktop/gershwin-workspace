@@ -30,7 +30,7 @@
     {
       count = 5;
 
-      NSString *name = @"com.canonical.Unity.LauncherEntry";
+      NSString *name = @"DockIcon";
       NSConnection *conn;
       conn = [NSConnection connectionWithRegisteredName:name host:nil];
       if (conn)

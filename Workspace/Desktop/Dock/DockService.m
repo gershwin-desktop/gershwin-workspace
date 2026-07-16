@@ -22,7 +22,7 @@
 #import "Dock.h"
 #import "DockIcon.h"
 
-NSString * const kDockServiceName = @"com.canonical.Unity.LauncherEntry";
+NSString * const kDockServiceName = @"DockIcon";
 
 static id connKey(NSConnection *conn)
 {

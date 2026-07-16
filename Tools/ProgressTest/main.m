@@ -33,7 +33,7 @@
       progress = 0.0;
       direction = 1;
 
-      NSString *name = @"com.canonical.Unity.LauncherEntry";
+      NSString *name = @"DockIcon";
       NSConnection *conn;
       conn = [NSConnection connectionWithRegisteredName:name host:nil];
       if (conn)

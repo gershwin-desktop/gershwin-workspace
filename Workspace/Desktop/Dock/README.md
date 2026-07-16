@@ -8,7 +8,7 @@ A clean DO protocol for GNUstep applications to modify their own Dock icon (badg
 
 | Field | Value |
 |-------|-------|
-| DO service name | `com.canonical.Unity.LauncherEntry` on `[NSConnection defaultConnection]` |
+| DO service name | `DockIcon` on `[NSConnection defaultConnection]` |
 
 ### Protocol
 
@@ -28,7 +28,7 @@ A clean DO protocol for GNUstep applications to modify their own Dock icon (badg
 Connect to the service and call setters directly. The Dock automatically identifies which app is calling (via the DO connection's process PID) and applies changes only to that app's Dock icon. No registration or app name needed.
 
 ```objc
-NSConnection *conn = [NSConnection connectionWithRegisteredName:@"com.canonical.Unity.LauncherEntry" host:nil];
+NSConnection *conn = [NSConnection connectionWithRegisteredName:@"DockIcon" host:nil];
 id<DockService> dock = (id<DockService>)[conn rootProxy];
 [dock setBadgeCount:42];
 [dock setUrgent:YES];
