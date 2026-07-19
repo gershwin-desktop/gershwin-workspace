@@ -1,155 +1,81 @@
-/***
-German.lproj/Localizable.strings
-updated by make_strings 2026-07-19 17:07:19 +0200
-add comments above this one
-***/
+/*** deduplicated by dedup-strings.py ***/
 
+" is already in use!" = " wird bereits verwendet!";
 
-/*** Keys found in multiple places ***/
+"Applications" = "Anwendungen";
 
-/* File: ../FSNBrowserColumn.m:1785 */
-/* Flag: untranslated */
-/* File: ../FSNFunctions.m:404 */
-/* Flag: untranslated */
-/* File: ../FSNIcon.m:2286 */
-/* Flag: untranslated */
-"OK" = "OK";
+"Are you sure you want to add the extension" = "Sind Sie sicher, dass Sie die Erweiterung hinzuf\u00fcgen m\u00f6chten";
 
-/* File: ../FSNBrowserCell.m:477 */
-/* File: ../FSNIcon.m:1111 */
-"elements" = "Elemente";
-
-/* File: ../FSNBrowserColumn.m:1782 */
-/* File: ../FSNIcon.m:2283 */
-"error" = "Fehler";
-
-/* File: ../FSNBrowserColumn.m:1784 */
-/* File: ../FSNIcon.m:2285 */
 "Can't open " = "Kann nicht \u00f6ffnen ";
 
-/* File: ../FSNListView.m:224 */
-/* File: ../FSNListView.m:245 */
-"Name" = "Name";
+"Cancel" = "Abbrechen";
 
-/* File: ../FSNode.m:636 */
-/* File: ../FSNode.m:655 */
-"symbolic link" = "symbolischer Verweis";
-
-/* File: ../FSNFunctions.m:366 */
-/* File: ../FSNFunctions.m:376 */
-/* File: ../FSNFunctions.m:385 */
-/* File: ../FSNFunctions.m:412 */
-"Error" = "Fehler";
-
-/* File: ../FSNFunctions.m:370 */
-/* File: ../FSNFunctions.m:378 */
-/* File: ../FSNFunctions.m:387 */
-/* File: ../FSNFunctions.m:417 */
 "Continue" = "Fortfahren";
 
+"Date Modified" = "\u00c4nderungsdatum";
 
-/*** Unmatched/untranslated keys ***/
+"Desktop" = "Schreibtisch";
 
-/* File: ../FSNFunctions.m:368 */
-"You do not have write permission for"
-  = "Sie haben keine Schreibrechte f\u00fcr";
+"Documents" = "Dokumente";
 
-/* File: ../FSNFunctions.m:377 */
-"You can't rename an object that is in the Recycler"
-  = "Sie k\u00f6nnen kein Objekt umbenennen, das sich im Papierkorb befindet";
+"Downloads" = "Heruntergeladen";
 
-/* File: ../FSNFunctions.m:386 */
+"Error" = "Fehler";
+
+"Images" = "Bilder";
+
 "Invalid name" = "Ung\u00fcltiger Name";
 
-/* File: ../FSNFunctions.m:396 */
-"Are you sure you want to add the extension"
-  = "Sind Sie sicher, dass Sie die Erweiterung hinzuf\u00fcgen m\u00f6chten";
+"Music" = "Musik";
 
-/* File: ../FSNFunctions.m:399 */
-"to the end of the name?" = "an das Ende des Namens?";
+"Name" = "Name";
 
-/* File: ../FSNFunctions.m:400 */
+"OK" = "OK";
+
+"Open with" = "\u00d6ffnen mit";
+
+"Owner" = "Besitzer";
+
+"Parent" = "\u00dcbergeordnet";
+
+"Size" = "Gr\u00f6\u00dfe";
+
+"The name " = "Der Name ";
+
+"Tools" = "Werkzeuge";
+
+"Type" = "Typ";
+
+"You can't rename an object that is in the Recycler" = "Sie k\u00f6nnen kein Objekt umbenennen, das sich im Papierkorb befindet";
+
+"You do not have write permission for" = "Sie haben keine Schreibrechte f\u00fcr";
+
 "\nif you make this change, your folder may appear as a single file."
   = "\nWenn Sie diese \u00c4nderung vornehmen, wird Ihr Ordner m\u00f6glicherweise als einzelne Datei angezeigt.";
 
-/* File: ../FSNFunctions.m:403 */
-"Cancel" = "Abbrechen";
-
-/* File: ../FSNFunctions.m:414 */
-"The name " = "Der Name ";
-
-/* File: ../FSNFunctions.m:416 */
-" is already in use!" = " wird bereits verwendet!";
-
-/* File: ../FSNIconsView.m:1653 */
-"Open with" = "\u00d6ffnen mit";
-
-/* File: ../FSNListView.m:227 */
-"Type" = "Typ";
-
-/* File: ../FSNListView.m:230 */
-"Date Modified" = "\u00c4nderungsdatum";
-
-/* File: ../FSNListView.m:233 */
-"Size" = "Gr\u00f6\u00dfe";
-
-/* File: ../FSNListView.m:236 */
-"Owner" = "Besitzer";
-
-/* File: ../FSNListView.m:239 */
-"Parent" = "\u00dcbergeordnet";
-
-/* File: ../FSNode.m:643 */
-"plain file" = "Datei";
-
-/* File: ../FSNode.m:646 */
 "application" = "Anwendung";
 
-/* File: ../FSNode.m:648 */
-"package" = "Paket";
-
-/* File: ../FSNode.m:650 */
-"mount point" = "Einh\u00e4ngepunkt";
-
-/* File: ../FSNode.m:652 */
-"directory" = "Verzeichnis";
-
-/* File: ../FSNode.m:657 */
-"socket" = "Socket";
-
-/* File: ../FSNode.m:659 */
-"character special" = "zeichenorientiert";
-
-/* File: ../FSNode.m:661 */
 "block special" = "blockorientiert";
 
-/* File: ../FSNode.m:663 */
+"character special" = "zeichenorientiert";
+
+"directory" = "Verzeichnis";
+
+"elements" = "Elemente";
+
+"error" = "Fehler";
+
+"mount point" = "Einh\u00e4ngepunkt";
+
+"package" = "Paket";
+
+"plain file" = "Datei";
+
+"socket" = "Socket";
+
+"symbolic link" = "symbolischer Verweis";
+
+"to the end of the name?" = "an das Ende des Namens?";
+
 "unknown" = "unbekannt";
 
-/* File: <dummy>:0 */
-/* Flag: unmatched */
-"Desktop" = "Schreibtisch";
-
-/* File: <dummy>:0 */
-/* Flag: unmatched */
-"Music" = "Musik";
-
-/* File: <dummy>:0 */
-/* Flag: unmatched */
-"Images" = "Bilder";
-
-/* File: <dummy>:0 */
-/* Flag: unmatched */
-"Documents" = "Dokumente";
-
-/* File: <dummy>:0 */
-/* Flag: unmatched */
-"Downloads" = "Heruntergeladen";
-
-/* File: <dummy>:0 */
-/* Flag: unmatched */
-"Tools" = "Werkzeuge";
-
-/* File: <dummy>:0 */
-/* Flag: unmatched */
-"Applications" = "Anwendungen";

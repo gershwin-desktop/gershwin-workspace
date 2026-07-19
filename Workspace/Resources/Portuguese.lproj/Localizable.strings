@@ -1,733 +1,850 @@
-﻿/* Traduzido a partir do Español, espero que esteja bom */
+/*** deduplicated by dedup-strings.py ***/
 
-/* ----------------------- menu strings --------------------------- */
-/* main.m */
-
-"Info" = "Informações";
-	"Info Panel..." = "Painel de Informações...";
-	"Preferences..." = "Preferências...";
-	"Help..." = "Ajuda...";
-
-"File" = "Arquivo";
-	"Open" = "Abrir";
-	"Open as Folder" = "Abrir Pasta";
-	"Edit File" = "Editar Arquivo";
-	"New Folder" = "Nova Pasta";
-	"New File" = "Novo Arquivo";
-	"Duplicate" = "Duplicar";	
-	"Destroy" = "Destruir";
-	"Empty Recycler" = "Esvaziar Lixeira";
-
-"Edit" = "Editar";
-	"Cut" = "Cortar";
-	"Copy" = "Copiar";
-	"Paste" = "Colar";
-	"Select All" = "Selecionar todo";
-		
-"View" = "Visualizar";
-	"Browser" = "Navegador";
-	"Icon" = "Ícones";
-		
-"Tools" = "Ferramentas";
-	"Viewer" = "Visualizador";
-	"Inspectors" = "Inspetores";
-		"Show Inspectors" = "Mostrar Inspetores";
-		"Attributes" = "Atributos";
-		"Contents" = "Conteúdo";
-		"Tools" = "Ferramentas";	
-		"Permissions" = "Permissões";	
-	"Finder" = "Localizador";
-	"Processes..." = "Processos...";
-	"Fiend" = "Fiend";
-		"Show Fiend" = "Mostrar Fiend"; /* R// O que é Fiend? */
-		"Hide Fiend" = "Ocultar Fiend";
-		"Add Layer..." = "Adicionar Camada..." 
-		"Remove Current Layer" = "Apagar Camada Atual";
-		"Rename Current Layer" = "Renomear Camada Atual";
-		"Layers" = "Camadas";
-	"DeskTop Shelf" = "DeskTop Shelf";	
-	"XTerm" = "XTerm";
-	
-"Windows" = "Janelas";
-	"Arrange in Front" = "Organizar na Frente";
-	"Miniaturize Window" = "Miniaturizar Janela";
-	"Close Window" = "Fechar Janela";
-	
-"Services" = "Serviços";
-
-"Hide" = "Ocultar";
-
-"Quit" = "Sair";
-	
-	
-	
-/* ----------------------- File Operations strings --------------------------- */
-
-/* Workspace.m */
-
-"GNUstep Workspace Manager" = "Gerenciador de Workspace GNUstep";
-"See https://www.gnustep.org/experience/Workspace.html" = "Veja em https://www.gnustep.org/experience/Gworkspace.html";
-"Released under the GNU General Public License 2.0" = "Publicado sob a Licença Pública GNU 2.0";
-"Error" = "Error";
-"You have not write permission\nfor" = "Você não possui permissão de escrita\npara"; 
-"Continue" = "Continuar";
-
-
-/* FileOperation.m */
-
-"OK" = "Aceitar";
-"Cancel" = "Cancelar";
-"Move" = "Mover";
-"Move from: " = "Mover de: ";
-"\nto: " = "\npara: ";
-"Copy" = "Copiar";
-"Copy from: " = "Copiar de: ";
-"Link" = "Link";
-"Link " = "Link ";
-"Delete" = "Apagar";
-"Delete the selected objects?" = "Apagar os objetos selecionados?";
-"Duplicate" = "Duplicar";
-"Duplicate the selected objects?" = "Duplicar os objetos selecionados?";
-"From:" = "De:";
-"To:" = "Para:";
-"In:" = "Em:";
-"Stop" = "Parar";
-"Pause" = "Pausar";
-"Moving" = "Movendo";
-"Copying" = "Copiando";
-"Linking" = "Linkando";
-"Duplicating" = "Duplicando";
-"Destroying" = "Destruindo";
-"File Operation Completed" = "Operação com Arquivo Finalizada";
-"Backgrounder connection died!" = "Conexão em segundo plano morreu!"; /* R// */
-"Some items have the same name;\ndo you want to substitute them?" = "Alguns itens possuem o mesmo \nnome; você deseja substituí-los?";
-"Error" = "Erro";
-"File Operation Error!" = "Erro na Operação com Arquivos!";
-
-
-/* ColumnIcon.m */
-
-"You have not write permission\nfor " = "Você não tem permissão de escrita\npara ";
-"The name " = "O nome ";
 " is already in use!" = " ja está sendo utilizado!";
-"Cannot rename " = "Não é possível renomear ";
-"Invalid char in name" = "Caractere não válido no nome";
 
+"%d:%02d remaining" = "%d:%02d remaining";
 
-/* ----------------------- Inspectors strings --------------------------- */
+"%d:%02d:%02d remaining" = "%d:%02d:%02d remaining";
 
-"Items" = "Itens";
+"(failed to launch)" = "(failed to launch)";
 
-/* InspectorsWin.m */
+"(unlabeled)" = "(unlabeled)";
 
-"Attributes" = "Atributos";
-"Contents" = "Conteúdo";
-"Tools" = "Ferramentas";
-"Access Control" = "Controle de Acessos";
+"10" = "10";
 
+"10 minutes" = "10 minutes";
 
-/* AttributesPanel.m */
+"11" = "11";
 
-"Attributes" = "Atributos";
-"Attributes Inspector" = "Inspetor de atributos";
-"Path:" = "Caminho:";
-"Link To:" = "Linkar a:";
-"Size:" = "Tamanho:";
-"Owner:" = "Dono:";
-"Group:" = "Grupo:";
-"Changed" = "Alterado";
-"Revert" = "Reverter";
-"OK" = "Aceitar";
+"12" = "12";
 
+"12 hours" = "12 hours";
 
-/* ContentsPanel.m */
+"13" = "13";
 
-"Contents" = "Conteúdo";
-"Contents Inspector" = "Inspetor de Conteúdos";
-"No Contents Inspector" = "Sem Inspetor de Conteúdos";
-"No Contents Inspector\nFor Multiple Selection" = "Não há Inspector de\nConteúdos para\nseleções múltiplas";
+"14" = "14";
 
+"15" = "15";
 
-/* FolderViewer.m */
+"16" = "16";
 
-"Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder"
-  = "O método de ordenação se\naplica ao contúdo da pasta\nselecionada, NÃO a a sua pasta pai";
-"Sort by" = "Ordenar por";
-"Name" = "Nome";
-"Type" = "Classe";
-"Date" = "Data";
-"Size" = "Tamanho";
-"Owner" = "Dono";
-"Folder Inspector" = "Inspetor de Pastas";	
+"2 hours" = "2 hours";
 
+"24" = "24";
 
-/* ImageViewer.m */
+"28" = "28";
 
-"Image Inspector" = "Inspetor de Imagens";
+"3 hours" = "3 hours";
 
+"30 minutes" = "30 minutes";
 
-/* AppViewer.m */
+"32" = "32";
 
-"Open these kinds of documents:" = "Abrir este tipo de documento:";
-"Invalid Contents" = "Conteúdo inválido";
-"App Inspector" = "Inspetor de Aplicações";
+"36" = "36";
 
+"40" = "40";
 
-/* PermissionsPanel.m */
+"48" = "48";
 
-"UNIX Permissions" = "Permissões UNIX";
+"5 minutes" = "5 minutes";
+
+"6 hours" = "6 hours";
+
+"64" = "64";
+
+": no such file or directory!" = ": no such file or directory!";
+
+"A layer with this name is already present!" = "Já existe uma camada com este nome!";
+
+"AFP Server" = "AFP Server";
+
+"AVFS Error" = "AVFS Error";
+
+"AVFS Not Installed" = "AVFS Not Installed";
+
+"About %@" = "About %@";
+
+"About This Computer" = "About This Computer";
+
+"About Workspace" = "About Workspace";
+
 "Access Control" = "Controle de acesso";
+
+"Activate changes" = "Activate changes";
+
+"Add" = "Add";
+
+"Already at the root directory" = "Already at the root directory";
+
 "Also apply to files inside selection" = "Aplicar aos arquivos da seleção";
 
-
-/* ToolsPanel.m */
-
-"Tools" = "Ferramentas";
-"Tools Inspector" = "Inspetor de Ferramentas";
-"No Tools Inspector" = "Sem Inspetor de Ferramentas";
-"Set Default" = "Aceitar como Padrão";
-
-
-/* AppsView.m */
-	
-"Double-click to open selected document(s)" =
-"Duplo clique para abrir os documentos selecionados";
-"Default:" = "Padrão:";
-"Path:" = "Caminho:";		
-"Click 'Set Default' to set default application\nfor all documents with this extension" 
-  ="Clique em 'Aceitar como Padrão' para selecionar\na aplicação para abrir todos os arquivos\ncom esta extensão";
-
-/* PermsBox.m */
-
-"Permissions" = "Permissões";
-"Read" = "Leitura";
-"Write" = "Escrita";
-"Execute" = "Execução";
-"Owner" = "Dono";
-"Group" = "Grupo";
-"Other" = "Outros";
-
-
-/* ----------------------- Processes strings --------------------------- */
-
-/* Processes.m */
-
-"Processes" = "Processos";
-"No Background Process" = "Sem processos em segundo plano";
-"Kill" = "Matar";
-"Path: " = "Caminho: ";
-"Status: " = "Estado: ";
-
-
-/* ProcsView.m */
-
-"Applications" = "Aplicações";
-"Background" = "Segundo Plano"; 
-
-
-/* ----------------------- Finder strings --------------------------- */
-
-/* Finder.m */
-
-"Finder" = "Localizador";
-"Find items with names that match" = "Localizar items com o nome contendo";
-"Find items with contents that match" = "Localizar item contendo a string";
-"No selection!" = "Sem seleção!";
-"No arguments!" = "Sem argumentos!";
-
-
-/* ----------------------- Fiend strings --------------------------- */
-
-/* Fiend.m - Como traduzir Fiend? */
-
-"New Layer" = "Nova Camada";
-"A layer with this name is already present!" = "Já existe uma camada com este nome!";
-"You can't remove the last layer!" = "Não é possível remover a última camada!";
-"Remove layer" = "Remover camada";
-"Are you sure that you want to remove this layer?" = "Tem certeza de que deseja remover esta camada?";
-"Rename Layer" = "Renomear camada";
-"You can't dock multiple paths!" = "Você não pode anexar múltiplos caminhos!";
-"This object is already present in this layer!" = "Este objeto já está nesta camada!"
-	
-			
-/* ----------------------- Preference strings --------------------------- */
-
-/* PreferencesWin.m */
-
-"Workspace Preferences" = "Preferências do Workspace";
-
-
-/* BackWinPreferences.m */       
-
-/* R// Traduzir shelf */
-"DeskTop Shelf" = "DeskTop Shelf";	
-"DeskTop Color" = "Cor do Desktop";
-"red" = "vermelho";
-"green" = "verde";
-"blue" = "azul";
-"Set Color" = "Selecionar cor";
-"Push the \"Set Image\" button\nto set your DeskTop image.\nThe image must have the same\nsize of your screen." = "Clique no botão \"Selecionar Imagem\" para \nselecionar seu papel de parede. A imagem de fundo\ndeve ter o mesmo tamanho da tela.";
-"Set Image" = "Selecionar Imagem";
-"Unset Image" = "Remover Imagem";
-
-	
-/* DefaultXTerm.m */             
-	
-"Set" = "Selecionar";	
-
-	
-/* BrowserViewsPreferences.m */  
-
-"Column Width" = "Largura das Colunas";
-"Use Default Settings" = "Usar o padrão";	
-"Browser" = "Navegador";
-	
-	
-/* FileWatchingPreferences.m */  
-
-/* timeout */
-"File System Watching" = "Visualizador do Sistema de Arquivos";
-"timeout" = "timeout";
-"frequency" = "frequência";
-"Values will apply to the \nnew watchers from now, \nto the existing ones, after the first timeout" = 
-"Os valores se aplicam aos\nnovos visualizadores, \npara os já existentes, serão\naplicados após o primeiro timeout"
-	
-/* ShelfPreferences.m */
-	
-"Shelf" = "Shelf";
-	
-	
-/* DefaultEditor.m */            
-
-"Default Editor" = "Editor Padrão";
-"No Default Editor" = "Sem Editor Padrão";
-"Choose..." = "Escolha...";
-
-
-/* IconViewsPreferences.m */
-
-"Title Width" = "Tamano do Título";
-"Icon View" = "Visualização dos Ícones";
-
-
-
-/* OpenWithController */
-"Open With" = "Open With";
-"Type the name or the path of the application" = "Type the name or the path of the application";
-"to use to open the current selection" = "to use to open the current selection";
-
-/* RunExternalController.m */
-"Run" = "Run";
-"Type the command to execute:"="Type the command to execute:";
-
-
-
-
-
-
-
-
-
-
-/* _() macro keys not parsed by make_strings */
-"10" = "10";
-"11" = "11";
-"12" = "12";
-"13" = "13";
-"14" = "14";
-"15" = "15";
-"16" = "16";
-"24" = "24";
-"28" = "28";
-"32" = "32";
-"36" = "36";
-"40" = "40";
-"48" = "48";
-"64" = "64";
-"About %@" = "About %@";
-"About This Computer" = "About This Computer";
-"About Workspace" = "About Workspace";
-"Already at the root directory" = "Already at the root directory";
-"Annotations" = "Annotations";
-"Applications" = "Applications";
-"as Columns" = "as Columns";
-"as Gallery" = "as Gallery";
-"as Icons" = "as Icons";
-"as List" = "as List";
-"Back" = "Back";
-"Bring All to Front" = "Bring All to Front";
-"Browsing" = "Browsing";
-"Cannot access %@" = "Cannot access %@";
-"Check for disks" = "Check for disks";
-"Clean Up" = "Clean Up";
-"Clean Up By" = "Clean Up By";
-"Close Window" = "Close Window";
-"Cloud Drive" = "Cloud Drive";
-"Color:" = "Color:";
-"Compress" = "Compress";
-"Computer" = "Computer";
-"Connect to Server..." = "Connect to Server...";
-"Connect to Server:" = "Connect to Server:";
-"Contents" = "Contents";
-"Copy" = "Copy";
-"Could not create or access the %@ folder" = "Could not create or access the %@ folder";
-"Could not open URL:\n\n%@" = "Could not open URL:\n\n%@";
-"Customize Toolbar..." = "Customize Toolbar...";
-"Cut" = "Cut";
-"Cycle Through Windows" = "Cycle Through Windows";
-"Date Created" = "Date Created";
-"Date Modified" = "Date Modified";
-"Desktop" = "Desktop";
-"Destroy" = "Destroy";
-"Dock" = "Dock";
-"Documents" = "Documents";
-"Downloads" = "Downloads";
-"Duplicate" = "Duplicate";
-"Edit" = "Edit";
-"Empty Trash" = "Empty Trash";
-"Enclosing Folder" = "Enclosing Folder";
-"Enter Full Screen" = "Enter Full Screen";
-"Feedback" = "Feedback";
-"File" = "File";
-"Find" = "Find";
-"Forward" = "Forward";
-"Gershwin Help" = "Gershwin Help";
-"Get Info" = "Get Info";
-"Go" = "Go";
-"Go backward" = "Go backward";
-"Go forward" = "Go forward";
-"Go to Folder..." = "Go to Folder...";
-"Go to Folder:" = "Go to Folder:";
-"Help" = "Help";
-"Hide" = "Hide";
-"Hide Others" = "Hide Others";
-"Hide Sidebar" = "Hide Sidebar";
-"Hide Toolbar" = "Hide Toolbar";
-"Hide Workspace" = "Hide Workspace";
-"History" = "History";
-"Home" = "Home";
-"Icon Position" = "Icon Position";
-"Icon Size" = "Icon Size";
-"Inspectors" = "Inspectors";
-"Invalid URL format" = "Invalid URL format";
-"Kernel" = "Kernel";
-"Keyboard Shortcuts" = "Keyboard Shortcuts";
-"Kind" = "Kind";
-"Label" = "Label";
-"Label Size" = "Label Size";
-"Left" = "Left";
-"Legal & Regulatory" = "Legal & Regulatory";
-"Log Out..." = "Log Out...";
-"Low Disk Space" = "Low Disk Space";
-"Make Alias" = "Make Alias";
-"Make thumbnail(s)" = "Make thumbnail(s)";
-"Memory" = "Memory";
-"Minimize" = "Minimize";
-"Model" = "Model";
-"Modification date" = "Modification date";
-"More Info..." = "More Info...";
-"Move to Trash" = "Move to Trash";
-"Music" = "Music";
-"Name" = "Name";
-"Name only" = "Name only";
-"Network" = "Network";
-"New File" = "New File";
-"New Folder" = "New Folder";
-"New to Gershwin? Get Started" = "New to Gershwin? Get Started";
-"New Workspace Window" = "New Workspace Window";
-"OK" = "OK";
-"Omnipresent" = "Omnipresent";
-"Open" = "Open";
-"Open as Folder" = "Open as Folder";
-"Open With" = "Open With";
-"OS" = "OS";
-"Owner" = "Owner";
-"Paste" = "Paste";
-"Pictures" = "Pictures";
-"Preferences..." = "Preferences...";
-"Print" = "Print";
-"Processor" = "Processor";
-"Quick Look \" = "Quick Look \";
-"Recents" = "Recents";
-"Redo" = "Redo";
-"Remove thumbnail(s)" = "Remove thumbnail(s)";
-"Restart..." = "Restart...";
-"Run..." = "Run...";
-"Select All" = "Select All";
-"Services" = "Services";
-"Set Browsing as Default" = "Set Browsing as Default";
-"Set Spatial as Default" = "Set Spatial as Default";
-"Share" = "Share";
-"Show" = "Show";
-"Show All" = "Show All";
-"Show Clipboard" = "Show Clipboard";
-"Show History" = "Show History";
-"Show Inspectors" = "Show Inspectors";
-"Show Preview" = "Show Preview";
-"Show Preview Options" = "Show Preview Options";
-"Show View Options" = "Show View Options";
-"Shut Down..." = "Shut Down...";
-"Size" = "Size";
-"Sort By" = "Sort By";
-"Spatial" = "Spatial";
-"Start Dictation" = "Start Dictation";
-"Supported URL schemes: sftp://, webdav://, webdavs://" = "Supported URL schemes: sftp://, webdav://, webdavs://";
-"Symbols" = "Symbols";
-"Tags" = "Tags";
-"The startup disk has less than 3%% free space.\n\n" = "The startup disk has less than 3%% free space.\n\n";
-"The Utilities folder could not be found at:\n\n%@" = "The Utilities folder could not be found at:\n\n%@";
-"Thumbnails" = "Thumbnails";
-"Tools" = "Tools";
-"Transfer" = "Transfer";
-"Type" = "Type";
-"Undo" = "Undo";
-"Up" = "Up";
-"URL must include a hostname" = "URL must include a hostname";
-"URL must include a scheme (sftp://, webdav://, webdavs://)" = "URL must include a scheme (sftp://, webdav://, webdavs://)";
-"Use Stacks" = "Use Stacks";
-"Utilities" = "Utilities";
-"Videos" = "Videos";
-"View" = "View";
-"View Behavior" = "View Behavior";
-"Window" = "Window";
-"Workspace Help" = "Workspace Help";
-"X11 Server" = "X11 Server";
-"You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element." = "You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element.";
-"Zoom" = "Zoom";
-
-/* ---- missing keys added by fill-translations.sh ---- */
-"10 minutes" = "10 minutes";
-"12 hours" = "12 hours";
-"2 hours" = "2 hours";
-"30 minutes" = "30 minutes";
-"3 hours" = "3 hours";
-"5 minutes" = "5 minutes";
-"6 hours" = "6 hours";
-"Activate changes" = "Activate changes";
-"a day" = "a day";
-"Add" = "Add";
-"AFP Server" = "AFP Server";
 "An ISO write operation is already in progress for this device." = "An ISO write operation is already in progress for this device.";
-"annotations" = "annotations";
-"application" = "application";
+
+"Annotations" = "Annotations";
+
+"App Inspector" = "Inspetor de Aplicações";
+
+"Applications" = "Applications";
+
+"Are you sure that you want to remove this layer?" = "Tem certeza de que deseja remover esta camada?";
+
 "Are you sure you want to cancel?
 
 The target device may be left in an inconsistent state and will need to be reformatted." = "Are you sure you want to cancel?
 
 The target device may be left in an inconsistent state and will need to be reformatted.";
+
 "Are you sure you want to open" = "Are you sure you want to open";
+
 "Are you sure you want to quit
 all applications and log out now?" = "Are you sure you want to quit
 all applications and log out now?";
+
 "Are you sure you want to quit
 all applications and restart now?" = "Are you sure you want to quit
 all applications and restart now?";
+
 "Are you sure you want to quit
 all applications and shut down now?" = "Are you sure you want to quit
 all applications and shut down now?";
-"arguments" = "arguments";
-"available" = "available";
-"AVFS Error" = "AVFS Error";
-"AVFS Not Installed" = "AVFS Not Installed";
+
+"Arrange in Front" = "Organizar na Frente";
+
+"Attributes" = "Atributos";
+
+"Attributes Inspector" = "Inspetor de atributos";
+
+"Back" = "Back";
+
+"Background" = "Segundo Plano";
+
 "Background Color..." = "Background Color...";
+
+"Backgrounder connection died!" = "Conexão em segundo plano morreu!";
+
 "Blue" = "Blue";
+
 "Bottom" = "Bottom";
+
+"Bring All to Front" = "Bring All to Front";
+
 "Bring to Front" = "Bring to Front";
-"Cancelling..." = "Cancelling...";
-"Cancel Write" = "Cancel Write";
-"Cancel Write?" = "Cancel Write?";
-"Cannot determine device for the selected mount point." = "Cannot determine device for the selected mount point.";
-"Cannot determine device information for the selected mount point." = "Cannot determine device information for the selected mount point.";
-"Cannot Mount" = "Cannot Mount";
-"Cannot read information for the selected device." = "Cannot read information for the selected device.";
+
+"Browser" = "Navegador";
+
+"Browsing" = "Browsing";
+
 "Can't create the Desktop directory!" = "Can't create the Desktop directory!";
-"can't create the Live Search folder" = "can't create the Live Search folder";
+
 "Can't edit a directory!" = "Can't edit a directory!";
+
 "Can't open " = "Can't open ";
-"center" = "center";
+
+"Cancel" = "Cancelar";
+
+"Cancel Write" = "Cancel Write";
+
+"Cancel Write?" = "Cancel Write?";
+
+"Cancelling..." = "Cancelling...";
+
+"Cannot Mount" = "Cannot Mount";
+
+"Cannot access %@" = "Cannot access %@";
+
+"Cannot determine device for the selected mount point." = "Cannot determine device for the selected mount point.";
+
+"Cannot determine device information for the selected mount point." = "Cannot determine device information for the selected mount point.";
+
+"Cannot read information for the selected device." = "Cannot read information for the selected device.";
+
+"Cannot rename " = "Não é possível renomear ";
+
+"Changed" = "Alterado";
+
+"Check for disks" = "Check for disks";
+
 "Check this option to show a status window" = "Check this option to show a status window";
+
 "Choose" = "Choose";
+
 "Choose Image" = "Choose Image";
+
+"Choose..." = "Escolha...";
+
 "Classic" = "Classic";
+
+"Clean Up" = "Clean Up";
+
+"Clean Up By" = "Clean Up By";
+
+"Click 'Set Default' to set default application\nfor all documents with this extension"
+  = "Clique em 'Aceitar como Padrão' para selecionar\na aplicação para abrir todos os arquivos\ncom esta extensão";
+
+"Close Window" = "Close Window";
+
+"Cloud Drive" = "Cloud Drive";
+
+"Color:" = "Color:";
+
+"Column Width" = "Largura das Colunas";
+
+"Compress" = "Compress";
+
 "Compressing..." = "Compressing...";
+
+"Computer" = "Computer";
+
 "Confirmation" = "Confirmation";
+
 "Connect" = "Connect";
-"Connection Failed" = "Connection Failed";
+
 "Connect to SFTP Server" = "Connect to SFTP Server";
+
+"Connect to Server..." = "Connect to Server...";
+
+"Connect to Server:" = "Connect to Server:";
+
 "Connect to WebDAV Server" = "Connect to WebDAV Server";
-"contains" = "contains";
-"contains all of" = "contains all of";
-"contains not" = "contains not";
-"contains one of" = "contains one of";
-"contents" = "contents";
+
+"Connection Failed" = "Connection Failed";
+
+"Contents" = "Contents";
+
+"Contents Inspector" = "Inspetor de Conteúdos";
+
+"Continue" = "Continuar";
+
 "Continue Writing" = "Continue Writing";
+
+"Copy" = "Copy";
+
 "Copy File" = "Copy File";
+
+"Copy from: " = "Copiar de: ";
+
+"Copying" = "Copiando";
+
 "Could not connect to %@
 
 Check the hostname and try again." = "Could not connect to %@
 
 Check the hostname and try again.";
+
 "Could not connect to %@.
 
 Error: %@" = "Could not connect to %@.
 
 Error: %@";
+
+"Could not create or access the %@ folder" = "Could not create or access the %@ folder";
+
 "Could not find formatdisk-helper. Please reinstall Workspace tools." = "Could not find formatdisk-helper. Please reinstall Workspace tools.";
+
+"Could not open URL:\n\n%@"
+  = "Could not open URL:\n\n%@";
+
 "Current selection" = "Current selection";
-"%d:%02d:%02d remaining" = "%d:%02d:%02d remaining";
-"%d:%02d remaining" = "%d:%02d remaining";
-"date created" = "date created";
-"date modified" = "date modified";
-"ddbd connection died." = "ddbd connection died.";
+
+"Customize Toolbar..." = "Customize Toolbar...";
+
+"Cut" = "Cut";
+
+"Cycle Through Windows" = "Cycle Through Windows";
+
+"Date" = "Data";
+
+"Date Created" = "Date Created";
+
+"Date Modified" = "Date Modified";
+
+"Default Editor" = "Editor Padrão";
+
+"Default:" = "Padrão:";
+
+"Delete" = "Apagar";
+
+"Delete the selected objects?" = "Apagar os objetos selecionados?";
+
+"DeskTop Color" = "Cor do Desktop";
+
+"DeskTop Shelf" = "DeskTop Shelf";
+
+"Desktop" = "Desktop";
+
+"Destroy" = "Destroy";
+
+"Destroying" = "Destruindo";
+
+"Dock" = "Dock";
+
+"Documents" = "Documents";
+
 "Domains" = "Domains";
+
 "Done." = "Done.";
-"during the file operations" = "during the file operations";
+
+"Double-click to open selected document(s)" = "Duplo clique para abrir os documentos selecionados";
+
+"Downloads" = "Downloads";
+
+"Duplicate" = "Duplicate";
+
+"Duplicate the selected objects?" = "Duplicar os objetos selecionados?";
+
+"Duplicating" = "Duplicando";
+
+"Edit" = "Edit";
+
+"Edit File" = "Editar Arquivo";
+
 "Editor" = "Editor";
+
 "Eject" = "Eject";
-"elements" = "elements";
-"ends with" = "ends with";
+
+"Empty Recycler" = "Esvaziar Lixeira";
+
+"Empty Trash" = "Empty Trash";
+
+"Enclosing Folder" = "Enclosing Folder";
+
+"Enter Full Screen" = "Enter Full Screen";
+
 "Enter credentials for %@:" = "Enter credentials for %@:";
+
 "Erases all data on %@ and reformats as FAT32.
 " = "Erases all data on %@ and reformats as FAT32.
 ";
+
 "Erases all data on %@ and writes “%@” (%@).
 " = "Erases all data on %@ and writes “%@” (%@).
 ";
-"error" = "error";
+
+"Error" = "Erro";
+
+"Execute" = "Execução";
+
 "Extract" = "Extract";
+
 "Extracting..." = "Extracting...";
-"Failed." = "Failed.";
+
 "Failed to execute shutdown command." = "Failed to execute shutdown command.";
-"(failed to launch)" = "(failed to launch)";
+
 "Failed to mount SFTP volume:
 
 %@" = "Failed to mount SFTP volume:
 
 %@";
+
 "Failed to unmount %@." = "Failed to unmount %@.";
+
 "Failed to unmount %@: %@" = "Failed to unmount %@: %@";
+
+"Failed." = "Failed.";
+
+"Feedback" = "Feedback";
+
+"Fiend" = "Fiend";
+
+"File" = "File";
+
+"File Operation Completed" = "Operação com Arquivo Finalizada";
+
+"File Operation Error!" = "Erro na Operação com Arquivos!";
+
 "File Operations" = "File Operations";
+
+"File System Watching" = "Visualizador do Sistema de Arquivos";
+
 "Files" = "Files";
-"fit" = "fit";
-"folder" = "folder";
+
+"Find" = "Find";
+
+"Find items with contents that match" = "Localizar item contendo a string";
+
+"Find items with names that match" = "Localizar items com o nome contendo";
+
+"Finder" = "Localizador";
+
+"Folder Inspector" = "Inspetor de Pastas";
+
 "Folders" = "Folders";
+
 "Format" = "Format";
-"Format “%@”?" = "Format “%@”?";
+
 "Format Complete" = "Format Complete";
+
 "Format Disk..." = "Format Disk...";
+
 "Format Failed" = "Format Failed";
+
+"Format “%@”?" = "Format “%@”?";
+
 "Formatting failed." = "Formatting failed.";
-"free" = "free";
-"fswatcher notifications disabled!" = "fswatcher notifications disabled!";
+
+"Forward" = "Forward";
+
+"From:" = "De:";
+
+"GNUstep Workspace Manager" = "Gerenciador de Workspace GNUstep";
+
 "General" = "General";
-"greater than" = "greater than";
+
+"Gershwin Help" = "Gershwin Help";
+
+"Get Info" = "Get Info";
+
+"Go" = "Go";
+
+"Go backward" = "Go backward";
+
+"Go forward" = "Go forward";
+
+"Go to Folder..." = "Go to Folder...";
+
+"Go to Folder:" = "Go to Folder:";
+
 "Green" = "Green";
+
 "Grey" = "Grey";
-"Hidden directories" = "Hidden directories";
-"Hidden files" = "Hidden files";
+
+"Group" = "Grupo";
+
+"Group:" = "Grupo:";
+
+"Help" = "Help";
+
+"Help..." = "Ajuda...";
+
 "Hidden Files" = "Hidden Files";
-"Icons" = "Icons";
-"includes" = "includes";
-"Invalid mount point." = "Invalid mount point.";
-"is" = "is";
-"is after" = "is after";
-"is before" = "is before";
-"is exactly" = "is exactly";
-"is not" = "is not";
-"is not a valid application!" = "is not a valid application!";
+
+"Hidden directories" = "Hidden directories";
+
+"Hidden files" = "Hidden files";
+
+"Hide" = "Hide";
+
+"Hide Fiend" = "Ocultar Fiend";
+
+"Hide Others" = "Hide Others";
+
+"Hide Sidebar" = "Hide Sidebar";
+
+"Hide Toolbar" = "Hide Toolbar";
+
+"Hide Workspace" = "Hide Workspace";
+
+"History" = "History";
+
+"Home" = "Home";
+
 "ISO File Dropped" = "ISO File Dropped";
+
 "ISO Write Error" = "ISO Write Error";
-"is today" = "is today";
-"is within" = "is within";
-"items?" = "items?";
+
+"Icon" = "Ícones";
+
+"Icon Position" = "Icon Position";
+
+"Icon Size" = "Icon Size";
+
+"Icon View" = "Visualização dos Ícones";
+
+"Icons" = "Icons";
+
+"Image Inspector" = "Inspetor de Imagens";
+
+"In:" = "Em:";
+
+"Info" = "Informações";
+
+"Info Panel..." = "Painel de Informações...";
+
+"Inspectors" = "Inspectors";
+
+"Invalid Contents" = "Conteúdo inválido";
+
+"Invalid URL format" = "Invalid URL format";
+
+"Invalid char in name" = "Caractere não válido no nome";
+
+"Invalid mount point." = "Invalid mount point.";
+
+"Items" = "Itens";
+
 "Keep in Dock" = "Keep in Dock";
+
+"Kernel" = "Kernel";
+
+"Keyboard Shortcuts" = "Keyboard Shortcuts";
+
+"Kill" = "Matar";
+
 "Kill applications" = "Kill applications";
-"kind" = "kind";
+
+"Kind" = "Kind";
+
+"Label" = "Label";
+
 "Label Color..." = "Label Color...";
-"less than" = "less than";
+
+"Label Size" = "Label Size";
+
+"Layers" = "Camadas";
+
+"Left" = "Left";
+
+"Legal & Regulatory" = "Legal & Regulatory";
+
+"Link" = "Link";
+
+"Link " = "Link ";
+
+"Link To:" = "Linkar a:";
+
+"Linking" = "Linkando";
+
 "Load" = "Load";
+
 "Local" = "Local";
+
 "Local User" = "Local User";
+
 "Log Out" = "Log Out";
+
+"Log Out..." = "Log Out...";
+
+"Low Disk Space" = "Low Disk Space";
+
+"Make Alias" = "Make Alias";
+
+"Make thumbnail(s)" = "Make thumbnail(s)";
+
+"Memory" = "Memory";
+
+"Miniaturize Window" = "Miniaturizar Janela";
+
+"Minimize" = "Minimize";
+
+"Model" = "Model";
+
 "Modern" = "Modern";
+
+"Modification date" = "Modification date";
+
 "Modules:" = "Modules:";
+
+"More Info..." = "More Info...";
+
 "Mount Failed" = "Mount Failed";
+
+"Move" = "Mover";
+
+"Move from: " = "Mover de: ";
+
 "Move to Recycler" = "Move to Recycler";
-"name" = "name";
+
+"Move to Trash" = "Move to Trash";
+
+"Moving" = "Movendo";
+
+"Music" = "Music";
+
+"Name" = "Name";
+
+"Name only" = "Name only";
+
+"Network" = "Network";
+
 "Network Location" = "Network Location";
+
 "Network Server" = "Network Server";
+
 "Network User" = "Network User";
+
+"New File" = "New File";
+
+"New Folder" = "New Folder";
+
+"New Layer" = "Nova Camada";
+
 "New Live Search" = "New Live Search";
+
 "New Viewer" = "New Viewer";
+
+"New Workspace Window" = "New Workspace Window";
+
+"New to Gershwin? Get Started" = "New to Gershwin? Get Started";
+
 "No" = "No";
-"no autoupdate" = "no autoupdate";
-"No executable found!" = "No executable found!";
+
+"No Background Process" = "Sem processos em segundo plano";
+
+"No Contents Inspector" = "Sem Inspetor de Conteúdos";
+
+"No Contents Inspector\nFor Multiple Selection"
+  = "Não há Inspector de\nConteúdos para\nseleções múltiplas";
+
+"No Default Editor" = "Sem Editor Padrão";
+
 "No Finder modules! Quitting now." = "No Finder modules! Quitting now.";
+
+"No Tools Inspector" = "Sem Inspetor de Ferramentas";
+
+"No arguments!" = "Sem argumentos!";
+
+"No executable found!" = "No executable found!";
+
 "No name supplied!" = "No name supplied!";
-"None" = "None";
+
 "No search criteria!" = "No search criteria!";
-": no such file or directory!" = ": no such file or directory!";
-"Not an ISO or supported disk image file." = "Not an ISO or supported disk image file.";
+
+"No selection!" = "Sem seleção!";
+
+"None" = "None";
+
 "Not Implemented" = "Not Implemented";
+
+"Not an ISO or supported disk image file." = "Not an ISO or supported disk image file.";
+
 "Number of saved paths" = "Number of saved paths";
-"of file operations" = "of file operations";
-"one hour" = "one hour";
-"one minute" = "one minute";
-"open" = "open";
+
+"OK" = "OK";
+
+"OS" = "OS";
+
+"Omnipresent" = "Omnipresent";
+
+"Open" = "Open";
+
+"Open With" = "Open With";
+
+"Open as Folder" = "Open as Folder";
+
 "Open in Terminal" = "Open in Terminal";
+
+"Open these kinds of documents:" = "Abrir este tipo de documento:";
+
 "Operation Failed" = "Operation Failed";
+
 "Operation In Progress" = "Operation In Progress";
+
 "Operation Preferences" = "Operation Preferences";
+
 "Orange" = "Orange";
-"owner" = "owner";
+
+"Other" = "Outros";
+
+"Owner" = "Owner";
+
+"Owner:" = "Dono:";
+
 "Parent" = "Parent";
+
 "Password:" = "Password:";
-"plain file" = "plain file";
+
+"Paste" = "Paste";
+
+"Path:" = "Caminho:";
+
+"Path: " = "Caminho: ";
+
+"Pause" = "Pausar";
+
+"Permissions" = "Permissões";
+
+"Pictures" = "Pictures";
+
 "Position:" = "Position:";
+
+"Preferences..." = "Preferences...";
+
 "Preparing..." = "Preparing...";
+
+"Print" = "Print";
+
+"Processes" = "Processos";
+
+"Processes..." = "Processos...";
+
+"Processor" = "Processor";
+
 "Purple" = "Purple";
-"recursive" = "recursive";
+
+"Push the \"Set Image\" button\nto set your DeskTop image.\nThe image must have the same\nsize of your screen."
+  = "Clique no botão \"Selecionar Imagem\" para \nselecionar seu papel de parede. A imagem de fundo\ndeve ter o mesmo tamanho da tela.";
+
+"Quit" = "Sair";
+
+"Read" = "Leitura";
+
+"Recents" = "Recents";
+
 "Recursive" = "Recursive";
+
 "Recycler" = "Recycler";
+
 "Red" = "Red";
-"refuse to terminate." = "refuse to terminate.";
+
+"Redo" = "Redo";
+
+"Released under the GNU General Public License 2.0" = "Publicado sob a Licença Pública GNU 2.0";
+
 "Remove" = "Remove";
+
+"Remove Current Layer" = "Apagar Camada Atual";
+
 "Remove from Dock" = "Remove from Dock";
+
+"Remove layer" = "Remover camada";
+
+"Remove thumbnail(s)" = "Remove thumbnail(s)";
+
+"Rename Current Layer" = "Renomear Camada Atual";
+
+"Rename Layer" = "Renomear camada";
+
 "Restart" = "Restart";
+
+"Restart..." = "Restart...";
+
+"Revert" = "Reverter";
+
 "Right" = "Right";
-"scale" = "scale";
-"Search" = "Search";
-"Search for items whose:" = "Search for items whose:";
-"Search in:" = "Search in:";
-"Searching in:" = "Searching in:";
-"seems not a valid application!" = "seems not a valid application!";
-"Select and move the files to hide or to show" = "Select and move the files to hide or to show";
+
+"Run" = "Run";
+
+"Run..." = "Run...";
+
 "SFTP Server" = "SFTP Server";
-"Show Dock" = "Show Dock";
-"Show In File Viewer" = "Show In File Viewer";
-"Shown files" = "Shown files";
-"Show status window" = "Show status window";
-"Shut Down" = "Shut Down";
-"Single Click Launch" = "Single Click Launch";
-"size" = "size";
-"Sorting Order" = "Sorting Order";
-"Specific places" = "Specific places";
+
 "SSHFS Not Installed" = "SSHFS Not Installed";
-"sshpass Not Installed" = "sshpass Not Installed";
-"starting:" = "starting:";
-"starts with" = "starts with";
+
+"Search" = "Search";
+
+"Search for items whose:" = "Search for items whose:";
+
+"Search in:" = "Search in:";
+
+"Searching in:" = "Searching in:";
+
+"See https://www.gnustep.org/experience/Workspace.html" = "Veja em https://www.gnustep.org/experience/Gworkspace.html";
+
+"Select All" = "Select All";
+
+"Select and move the files to hide or to show" = "Select and move the files to hide or to show";
+
+"Services" = "Services";
+
+"Set" = "Selecionar";
+
+"Set Browsing as Default" = "Set Browsing as Default";
+
+"Set Color" = "Selecionar cor";
+
+"Set Default" = "Aceitar como Padrão";
+
+"Set Image" = "Selecionar Imagem";
+
+"Set Spatial as Default" = "Set Spatial as Default";
+
+"Share" = "Share";
+
+"Shelf" = "Shelf";
+
+"Show" = "Show";
+
+"Show All" = "Show All";
+
+"Show Clipboard" = "Show Clipboard";
+
+"Show Dock" = "Show Dock";
+
+"Show Fiend" = "Mostrar Fiend";
+
+"Show History" = "Show History";
+
+"Show In File Viewer" = "Show In File Viewer";
+
+"Show Inspectors" = "Show Inspectors";
+
+"Show Preview" = "Show Preview";
+
+"Show Preview Options" = "Show Preview Options";
+
+"Show View Options" = "Show View Options";
+
+"Show status window" = "Show status window";
+
+"Shown files" = "Shown files";
+
+"Shut Down" = "Shut Down";
+
+"Shut Down..." = "Shut Down...";
+
+"Single Click Launch" = "Single Click Launch";
+
+"Size" = "Size";
+
+"Size:" = "Tamanho:";
+
+"Some items have the same name;\ndo you want to substitute them?"
+  = "Alguns itens possuem o mesmo \nnome; você deseja substituí-los?";
+
+"Sort By" = "Sort By";
+
+"Sort by" = "Ordenar por";
+
+"Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder"
+  = "O método de ordenação se\naplica ao contúdo da pasta\nselecionada, NÃO a a sua pasta pai";
+
+"Sorting Order" = "Sorting Order";
+
+"Spatial" = "Spatial";
+
+"Specific places" = "Specific places";
+
+"Start Dictation" = "Start Dictation";
+
 "Status Window" = "Status Window";
+
+"Status: " = "Estado: ";
+
+"Stop" = "Parar";
+
 "Style:" = "Style:";
-"symbolic link" = "symbolic link";
+
+"Supported URL schemes: sftp://, webdav://, webdavs://" = "Supported URL schemes: sftp://, webdav://, webdavs://";
+
+"Symbols" = "Symbols";
+
 "System" = "System";
+
 "System Disk" = "System Disk";
+
+"Tags" = "Tags";
+
 "Target is not a physical device mount point." = "Target is not a physical device mount point.";
+
 "Terminal" = "Terminal";
+
 "Terminal.app" = "Terminal.app";
-"that have no order specified" = "that have no order specified";
+
 "The Desktop directory has been deleted! Quitting now!" = "The Desktop directory has been deleted! Quitting now!";
+
+"The ISO image has been successfully written to the device.
+
+The new volume should appear on your desktop when you plug the device in." = "The ISO image has been successfully written to the device.
+
+The new volume should appear on your desktop when you plug the device in.";
+
+"The Utilities folder could not be found at:\n\n%@"
+  = "The Utilities folder could not be found at:\n\n%@";
+
 "The disk was formatted as FAT32." = "The disk was formatted as FAT32.";
+
 "The following applications:" = "The following applications:";
+
 "The following volumes were removed without being properly ejected:
 
 %@
@@ -737,29 +854,22 @@ Error: %@";
 %@
 
 ";
+
 "The fswatcher connection died.
 Do you want to restart it?" = "The fswatcher connection died.
 Do you want to restart it?";
-"The ISO image has been successfully written to the device.
 
-The new volume should appear on your desktop when you plug the device in." = "The ISO image has been successfully written to the device.
-
-The new volume should appear on your desktop when you plug the device in.";
-"the last 2 days" = "the last 2 days";
-"the last 2 months" = "the last 2 months";
-"the last 2 weeks" = "the last 2 weeks";
-"the last 3 days" = "the last 3 days";
-"the last 3 months" = "the last 3 months";
-"the last 3 weeks" = "the last 3 weeks";
-"the last 6 months" = "the last 6 months";
-"the last day" = "the last day";
-"the last month" = "the last month";
-"the last week" = "the last week";
 "The mdextractor connection died.
 Do you want to restart it?" = "The mdextractor connection died.
 Do you want to restart it?";
+
 "The method will apply to all the folders" = "The method will apply to all the folders";
-"the search tool connection died!" = "the search tool connection died!";
+
+"The name " = "O nome ";
+
+"The startup disk has less than 3%% free space.\n\n"
+  = "The startup disk has less than 3%% free space.\n\n";
+
 "The volume at the following path was removed without being properly ejected:
 
 %@
@@ -769,56 +879,329 @@ Do you want to restart it?";
 %@
 
 ";
+
 "The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use." = "The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use.";
-"tile" = "tile";
-"tool" = "tool";
-"total" = "total";
-"type" = "type";
-"unable to launch the search task." = "unable to launch the search task.";
-"unable to launch the updater task." = "unable to launch the updater task.";
+
+"Thumbnails" = "Thumbnails";
+
+"Title Width" = "Tamano do Título";
+
+"To:" = "Para:";
+
+"Tools" = "Tools";
+
+"Tools Inspector" = "Inspetor de Ferramentas";
+
+"Transfer" = "Transfer";
+
+"Type" = "Type";
+
+"Type the command to execute:" = "Type the command to execute:";
+
+"Type the name or the path of the application" = "Type the name or the path of the application";
+
+"UNIX Permissions" = "Permissões UNIX";
+
+"URL must include a hostname" = "URL must include a hostname";
+
+"URL must include a scheme (sftp://, webdav://, webdavs://)" = "URL must include a scheme (sftp://, webdav://, webdavs://)";
+
 "Uncheck the buttons to allow automatic confirmation" = "Uncheck the buttons to allow automatic confirmation";
+
+"Undo" = "Undo";
+
 "Unhide" = "Unhide";
-"unknown" = "unknown";
-"unknown volume size" = "unknown volume size";
-"(unlabeled)" = "(unlabeled)";
+
 "Unmount failed." = "Unmount failed.";
+
 "Unmounting partitions..." = "Unmounting partitions...";
+
+"Unset Image" = "Remover Imagem";
+
+"Up" = "Up";
+
 "Update now" = "Update now";
-"updater connection died!" = "updater connection died!";
-"Use image" = "Use image";
-"Username:" = "Username:";
+
+"Use Default Settings" = "Usar o padrão";
+
+"Use Stacks" = "Use Stacks";
+
 "Use Terminal service" = "Use Terminal service";
-"use thumbnails" = "use thumbnails";
+
+"Use image" = "Use image";
+
+"Username:" = "Username:";
+
+"Utilities" = "Utilities";
+
 "Verifying..." = "Verifying...";
+
+"Videos" = "Videos";
+
+"View" = "View";
+
+"View Behavior" = "View Behavior";
+
+"Viewer" = "Visualizador";
+
 "Volume Removed Unexpectedly" = "Volume Removed Unexpectedly";
+
 "Volumes" = "Volumes";
+
 "Wait the operations to terminate!" = "Wait the operations to terminate!";
+
 "WebDAV Connection Failed" = "WebDAV Connection Failed";
+
 "WebDAV Server" = "WebDAV Server";
+
 "WebDAV Server (Secure)" = "WebDAV Server (Secure)";
-"with exactly" = "with exactly";
-"without one of" = "without one of";
+
+"Window" = "Window";
+
+"Windows" = "Janelas";
+
+"Workspace Help" = "Workspace Help";
+
+"Workspace Preferences" = "Preferências do Workspace";
+
 "Workspace is logging out!" = "Workspace is logging out!";
+
+"Write" = "Escrita";
+
 "Write Cancelled" = "Write Cancelled";
+
 "Write Complete" = "Write Complete";
+
 "Write ISO to “%@”?" = "Write ISO to “%@”?";
+
 "Write to Device" = "Write to Device";
+
 "Writing image" = "Writing image";
+
 "Writing image to device..." = "Writing image to device...";
-"xterm" = "xterm";
+
+"X11 Server" = "X11 Server";
+
+"XTerm" = "XTerm";
+
 "Yellow" = "Yellow";
+
 "Yes" = "Yes";
+
 "You are not allowed to umount
 " = "You are not allowed to umount
 ";
-"You cannot eject the root filesystem" = "You cannot eject the root filesystem";
-"You cannot format the root filesystem." = "You cannot format the root filesystem.";
+
+"You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element." = "You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element.";
+
 "You can't create a new file in the Recycler!" = "You can't create a new file in the Recycler!";
+
 "You can't create a new folder in the Recycler!" = "You can't create a new folder in the Recycler!";
+
 "You can't do this in the Recycler!" = "You can't do this in the Recycler!";
+
+"You can't dock multiple paths!" = "Você não pode anexar múltiplos caminhos!";
+
 "You can't duplicate files in the Recycler!" = "You can't duplicate files in the Recycler!";
+
 "You can't move objects with multiple parent paths!" = "You can't move objects with multiple parent paths!";
+
 "You can't open a document that is in the Recycler!" = "You can't open a document that is in the Recycler!";
+
+"You can't remove the last layer!" = "Não é possível remover a última camada!";
+
+"You cannot eject the root filesystem" = "You cannot eject the root filesystem";
+
+"You cannot format the root filesystem." = "You cannot format the root filesystem.";
+
 "You do not have write permission
 for" = "You do not have write permission
 for";
+
+"You have not write permission\nfor"
+  = "Você não possui permissão de escrita\npara";
+
+"You have not write permission\nfor "
+  = "Você não tem permissão de escrita\npara ";
+
+"Zoom" = "Zoom";
+
+"\nto: "
+  = "\npara: ";
+
+"a day" = "a day";
+
+"annotations" = "annotations";
+
+"application" = "application";
+
+"arguments" = "arguments";
+
+"as Columns" = "as Columns";
+
+"as Gallery" = "as Gallery";
+
+"as Icons" = "as Icons";
+
+"as List" = "as List";
+
+"available" = "available";
+
+"blue" = "azul";
+
+"can't create the Live Search folder" = "can't create the Live Search folder";
+
+"center" = "center";
+
+"contains" = "contains";
+
+"contains all of" = "contains all of";
+
+"contains not" = "contains not";
+
+"contains one of" = "contains one of";
+
+"contents" = "contents";
+
+"date created" = "date created";
+
+"date modified" = "date modified";
+
+"ddbd connection died." = "ddbd connection died.";
+
+"during the file operations" = "during the file operations";
+
+"elements" = "elements";
+
+"ends with" = "ends with";
+
+"error" = "error";
+
+"fit" = "fit";
+
+"folder" = "folder";
+
+"free" = "free";
+
+"frequency" = "frequência";
+
+"fswatcher notifications disabled!" = "fswatcher notifications disabled!";
+
+"greater than" = "greater than";
+
+"green" = "verde";
+
+"includes" = "includes";
+
+"is" = "is";
+
+"is after" = "is after";
+
+"is before" = "is before";
+
+"is exactly" = "is exactly";
+
+"is not" = "is not";
+
+"is not a valid application!" = "is not a valid application!";
+
+"is today" = "is today";
+
+"is within" = "is within";
+
+"items?" = "items?";
+
+"kind" = "kind";
+
+"less than" = "less than";
+
+"name" = "name";
+
+"no autoupdate" = "no autoupdate";
+
+"of file operations" = "of file operations";
+
+"one hour" = "one hour";
+
+"one minute" = "one minute";
+
+"open" = "open";
+
+"owner" = "owner";
+
+"plain file" = "plain file";
+
+"recursive" = "recursive";
+
+"red" = "vermelho";
+
+"refuse to terminate." = "refuse to terminate.";
+
+"scale" = "scale";
+
+"seems not a valid application!" = "seems not a valid application!";
+
+"size" = "size";
+
+"sshpass Not Installed" = "sshpass Not Installed";
+
+"starting:" = "starting:";
+
+"starts with" = "starts with";
+
+"symbolic link" = "symbolic link";
+
+"that have no order specified" = "that have no order specified";
+
+"the last 2 days" = "the last 2 days";
+
+"the last 2 months" = "the last 2 months";
+
+"the last 2 weeks" = "the last 2 weeks";
+
+"the last 3 days" = "the last 3 days";
+
+"the last 3 months" = "the last 3 months";
+
+"the last 3 weeks" = "the last 3 weeks";
+
+"the last 6 months" = "the last 6 months";
+
+"the last day" = "the last day";
+
+"the last month" = "the last month";
+
+"the last week" = "the last week";
+
+"the search tool connection died!" = "the search tool connection died!";
+
+"tile" = "tile";
+
+"timeout" = "timeout";
+
+"to use to open the current selection" = "to use to open the current selection";
+
+"tool" = "tool";
+
+"total" = "total";
+
+"type" = "type";
+
+"unable to launch the search task." = "unable to launch the search task.";
+
+"unable to launch the updater task." = "unable to launch the updater task.";
+
+"unknown" = "unknown";
+
+"unknown volume size" = "unknown volume size";
+
+"updater connection died!" = "updater connection died!";
+
+"use thumbnails" = "use thumbnails";
+
+"with exactly" = "with exactly";
+
+"without one of" = "without one of";
+
+"xterm" = "xterm";
+

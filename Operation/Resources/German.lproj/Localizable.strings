@@ -1,166 +1,74 @@
-/***
-German.lproj/Localizable.strings
-updated by make_strings 2026-07-19 17:10:45 +0200
-add comments above this one
-***/
+/*** deduplicated by dedup-strings.py ***/
 
+": Directory Protected!" = ": Verzeichnis gesch\u00fctzt!";
 
-/*** Keys found in multiple places ***/
-
-/* File: ../FileOpInfo.m:308 */
-/* File: ../FileOpInfo.m:370 */
-/* File: ../FileOpInfo.m:379 */
-/* File: ../FileOpInfo.m:674 */
-/* File: ../Operation.m:180 */
-"OK" = "OK";
-
-/* File: ../Operation.m:432 */
-/* File: ../Operation.m:470 */
-"Error" = "Fehler";
-
-/* File: ../FileOpInfo.m:357 */
-/* File: ../FileOpInfo.m:388 */
-/* File: ../FileOpInfo.m:728 */
-/* File: ../Operation.m:434 */
-/* File: ../Operation.m:472 */
-"Continue" = "Fortfahren";
-
-/* File: ../FileOpInfo.m:135 */
-/* File: ../FileOpInfo.m:458 */
-/* File: ../FileOpInfo.m:466 */
-/* File: ../FileOpInfo.m:474 */
-/* File: ../FileOpInfo.m:498 */
-/* File: ../FileOpInfo.m:506 */
-"From:" = "Von:";
-
-/* File: ../FileOpInfo.m:136 */
-/* File: ../FileOpInfo.m:460 */
-/* File: ../FileOpInfo.m:468 */
-/* File: ../FileOpInfo.m:476 */
-/* File: ../FileOpInfo.m:500 */
-/* File: ../FileOpInfo.m:508 */
-"To:" = "Nach:";
-
-/* File: ../FileOpInfo.m:137 */
-/* File: ../FileOpInfo.m:394 */
-"Pause" = "Pause";
-
-/* File: ../FileOpInfo.m:157 */
-/* File: ../FileOpInfo.m:1242 */
-/* File: ../FileOpInfo.m:1373 */
-"_copy" = "_copy";
-
-/* File: ../FileOpInfo.m:243 */
-/* File: ../FileOpInfo.m:245 */
-/* File: ../FileOpInfo.m:275 */
-/* File: ../FileOpInfo.m:285 */
-/* File: ../FileOpInfo.m:457 */
-/* File: ../FileOpInfo.m:497 */
-/* File: ../FileOpInfo.m:505 */
-"Move" = "Verschieben";
-
-/* File: ../FileOpInfo.m:247 */
-/* File: ../FileOpInfo.m:257 */
-/* File: ../FileOpInfo.m:267 */
-/* File: ../FileOpInfo.m:277 */
-"from" = "von";
-
-/* File: ../FileOpInfo.m:248 */
-/* File: ../FileOpInfo.m:258 */
-/* File: ../FileOpInfo.m:268 */
-/* File: ../FileOpInfo.m:288 */
-"\nto: " = "\nnach: ";
-
-/* File: ../FileOpInfo.m:253 */
-/* File: ../FileOpInfo.m:255 */
-/* File: ../FileOpInfo.m:465 */
-"Copy" = "Kopieren";
-
-/* File: ../FileOpInfo.m:263 */
-/* File: ../FileOpInfo.m:265 */
-/* File: ../FileOpInfo.m:473 */
-"Link" = "Link";
-
-/* File: ../FileOpInfo.m:273 */
-/* File: ../FileOpInfo.m:283 */
-/* File: ../FileOpInfo.m:293 */
-"Recycler" = "Papierkorb";
-
-/* File: ../FileOpInfo.m:303 */
-/* File: ../FileOpInfo.m:481 */
-"Duplicate" = "Duplizieren";
-
-/* File: ../FileOpInfo.m:309 */
-/* File: ../FileOpInfo.m:371 */
-/* File: ../FileOpInfo.m:675 */
-"Cancel" = "Abbrechen";
-
-/* File: ../FileOpInfo.m:482 */
-/* File: ../FileOpInfo.m:490 */
-/* File: ../FileOpInfo.m:514 */
-"In:" = "In:";
-
-/* File: ../FileOpInfo.m:489 */
-/* File: ../FileOpInfo.m:513 */
-"Destroy" = "Vernichten";
-
-/* File: ../FileOpInfo.m:501 */
-/* File: ../FileOpInfo.m:507 */
-/* File: ../FileOpInfo.m:515 */
-"the Recycler" = "der Papierkorb";
-
-
-/*** Unmatched/untranslated keys ***/
-
-/* File: ../FileOpInfo.m:138 */
-"Stop" = "Stopp";
-
-/* File: ../FileOpInfo.m:234 */
-"items" = "Elemente";
-
-/* File: ../FileOpInfo.m:238 */
-"one item" = "ein Element";
-
-/* File: ../FileOpInfo.m:278 */
-"\nto the Recycler" = "\nin den Papierkorb";
-
-/* File: ../FileOpInfo.m:287 */
-"from the Recycler" = "aus dem Papierkorb";
-
-/* File: ../FileOpInfo.m:294 */
-"Empty the Recycler?" = "Papierkorb leeren?";
-
-/* File: ../FileOpInfo.m:298 */
-"Delete" = "L\u00f6schen";
-
-/* File: ../FileOpInfo.m:299 */
-"Delete the selected objects?" = "Die ausgew\u00e4hlten Objekte l\u00f6schen?";
-
-/* File: ../FileOpInfo.m:304 */
-"Duplicate the selected objects?" = "Die ausgew\u00e4hlten Objekte duplizieren?";
-
-/* File: ../FileOpInfo.m:356 */
-"A fatal error occurred while dispatching the task!"
-  = "Ein schwerwiegender Fehler ist beim Ausf\u00fchren der Aufgabe aufgetreten!";
-
-/* File: ../FileOpInfo.m:676 */
-"Only older" = "Nur \u00e4ltere";
-
-/* File: ../FileOpInfo.m:727 */
-"executor connection died!" = "Executor-Verbindung abgebrochen!";
-
-/* File: ../FileOpInfo.m:1532 */
-"File operation error:" = "Dateioperationsfehler:";
-
-/* File: ../FileOpInfo.m:1534 */
-"with file:" = "mit Datei:";
-
-/* File: ../Operation.m:179 */
-"Some files are in use by another operation!"
-  = "Einige Dateien werden von einer anderen Operation verwendet!";
-
-/* File: ../Operation.m:433 */
 ": no such file or directory!" = ": Datei oder Verzeichnis nicht gefunden!";
 
-/* File: ../Operation.m:471 */
-": Directory Protected!" = ": Verzeichnis gesch\u00fctzt!";
+"A fatal error occurred while dispatching the task!" = "Ein schwerwiegender Fehler ist beim Ausf\u00fchren der Aufgabe aufgetreten!";
+
+"Cancel" = "Abbrechen";
+
+"Continue" = "Fortfahren";
+
+"Copy" = "Kopieren";
+
+"Delete" = "L\u00f6schen";
+
+"Delete the selected objects?" = "Die ausgew\u00e4hlten Objekte l\u00f6schen?";
+
+"Destroy" = "Vernichten";
+
+"Duplicate" = "Duplizieren";
+
+"Duplicate the selected objects?" = "Die ausgew\u00e4hlten Objekte duplizieren?";
+
+"Empty the Recycler?" = "Papierkorb leeren?";
+
+"Error" = "Fehler";
+
+"File operation error:" = "Dateioperationsfehler:";
+
+"From:" = "Von:";
+
+"In:" = "In:";
+
+"Link" = "Link";
+
+"Move" = "Verschieben";
+
+"OK" = "OK";
+
+"Only older" = "Nur \u00e4ltere";
+
+"Pause" = "Pause";
+
+"Recycler" = "Papierkorb";
+
+"Some files are in use by another operation!" = "Einige Dateien werden von einer anderen Operation verwendet!";
+
+"Stop" = "Stopp";
+
+"To:" = "Nach:";
+
+"\nto the Recycler"
+  = "\nin den Papierkorb";
+
+"\nto: "
+  = "\nnach: ";
+
+"_copy" = "_copy";
+
+"executor connection died!" = "Executor-Verbindung abgebrochen!";
+
+"from" = "von";
+
+"from the Recycler" = "aus dem Papierkorb";
+
+"items" = "Elemente";
+
+"one item" = "ein Element";
+
+"the Recycler" = "der Papierkorb";
+
+"with file:" = "mit Datei:";
+
