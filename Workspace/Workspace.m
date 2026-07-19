@@ -39,6 +39,7 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <GNUstepGUI/GSInfoPanel.h>
 #import <GNUstepBase/GNUstep.h>
 #import <dispatch/dispatch.h>
 
@@ -1560,6 +1561,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       || sel_isEqual(action, @selector(hideOtherApplications:))
       || sel_isEqual(action, @selector(unhideAllApplications:))
       || sel_isEqual(action, @selector(orderFrontStandardAboutPanel:))
+      || sel_isEqual(action, @selector(orderFrontStandardInfoPanel:))
+      || sel_isEqual(action, @selector(orderFrontStandardInfoPanelWithOptions:))
+      || sel_isEqual(action, @selector(showInfo:))
+      || sel_isEqual(action, @selector(showAboutThisComputer:))
       || sel_isEqual(action, @selector(workspaceHelp:))
       || sel_isEqual(action, @selector(openGershwinHelp:))
       || sel_isEqual(action, @selector(openFeedback:))
@@ -3345,8 +3350,11 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (void)showInfo:(id)sender
 {
-  
-  [NSApp orderFrontStandardInfoPanel: self];
+  GSInfoPanel *panel = [[GSInfoPanel alloc] initWithDictionary: nil];
+  [panel setReleasedWhenClosed: YES];
+  [panel setTitle: [NSString stringWithFormat: _(@"About %@"),
+                             [[NSProcessInfo processInfo] processName]]];
+  [panel orderFront: self];
 }
 
 - (void)showPreferences:(id)sender
