@@ -318,13 +318,6 @@
 "Erases all data on %@ and reformats as FAT32.\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone."
   = "Erases all data on %@ and reformats as FAT32.\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone.";
 
-"Erases all data on %@ and writes “%@” (%@).
-" = "Erases all data on %@ and writes “%@” (%@).
-";
-
-"Erases all data on %@ and writes “%@” (%@).\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone."
-  = "Erases all data on %@ and writes “%@” (%@).\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone.";
-
 "Error" = "Erreur";
 
 "Execute" = "Exécuter";

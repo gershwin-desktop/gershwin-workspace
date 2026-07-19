@@ -312,10 +312,6 @@ Error: %@";
 " = "Erases all data on %@ and reformats as FAT32.
 ";
 
-"Erases all data on %@ and writes “%@” (%@).
-" = "Erases all data on %@ and writes “%@” (%@).
-";
-
 "Error" = "Błąd";
 
 "Execute" = "Wykonywanie";

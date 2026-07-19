@@ -308,21 +308,8 @@
 
 "Enter credentials for %@:" = "Anmeldedaten f\u00fcr %@ eingeben:";
 
-"Erases all data on %@ and reformats as FAT32.\n"
-  = "L\u00f6scht alle Daten auf %@ und formatiert als FAT32.\n";
-
 "Erases all data on %@ and reformats as FAT32.\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone."
   = "Erases all data on %@ and reformats as FAT32.\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone.";
-
-"Erases all data on %@ and writes \u201c%@\u201d (%@).\n"
-  = "L\u00f6scht alle Daten auf %@ und schreibt \u201e%@\u201c (%@).\n";
-
-"Erases all data on %@ and writes “%@” (%@).
-" = "Erases all data on %@ and writes “%@” (%@).
-";
-
-"Erases all data on %@ and writes “%@” (%@).\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone."
-  = "Erases all data on %@ and writes “%@” (%@).\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone.";
 
 "Error" = "Fehler";
 
