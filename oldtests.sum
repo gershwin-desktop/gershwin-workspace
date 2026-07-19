@@ -1,9 +1,0 @@
-Passed test:     (2026-07-19 18:19:29.308 GMT+2) t_StepTalkInfoPanels.m:81 ... connect to Workspace DO
-Passed test:     (2026-07-19 18:19:29.319 GMT+2) t_StepTalkInfoPanels.m:89 ... orderFrontStandardInfoPanel via DO
-Passed test:     (2026-07-19 18:19:30.422 GMT+2) t_StepTalkInfoPanels.m:104 ... Workspace PID found
-Passed test:     (2026-07-19 18:19:30.525 GMT+2) t_StepTalkInfoPanels.m:108 ... Desktop window ID found
-Passed test:     (2026-07-19 18:19:30.525 GMT+2) t_StepTalkInfoPanels.m:114 ... connect to Eau menu client
-Passed test:     (2026-07-19 18:19:30.526 GMT+2) t_StepTalkInfoPanels.m:129 ... activateMenuItemAtPath 1 (About Workspace)
-Completed file:  t_StepTalkInfoPanels.m
-
-      6 Passed tests
