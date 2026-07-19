@@ -10,9 +10,10 @@ Operation_HAS_RESOURCE_BUNDLE = yes
 
 Operation_RESOURCE_FILES = \
     Resources/Images/* \
-    Resources/English.lproj 
+    Resources/English.lproj \
+    Resources/German.lproj
 
-Operation_LANGUAGES = Resources/English 
+Operation_LANGUAGES = Resources/English Resources/German 
 
 # The Objective-C source files to be compiled
 

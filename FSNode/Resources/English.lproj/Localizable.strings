@@ -1,75 +1,75 @@
 /***
 English.lproj/Localizable.strings
-updated by make_strings 2016-01-22 00:30:18 +0100
+updated by make_strings 2026-07-19 17:07:19 +0200
 add comments above this one
 ***/
 
 
 /*** Keys found in multiple places ***/
 
-/* File: ../FSNFunctions.m:147 */
-/* File: ../FSNFunctions.m:155 */
+/* File: ../FSNFunctions.m:370 */
+/* File: ../FSNFunctions.m:378 */
 /* Flag: untranslated */
-/* File: ../FSNFunctions.m:164 */
+/* File: ../FSNFunctions.m:387 */
 /* Flag: untranslated */
-/* File: ../FSNFunctions.m:194 */
+/* File: ../FSNFunctions.m:417 */
 /* Flag: untranslated */
 "Continue" = "Continue";
 
-/* File: ../FSNBrowserColumn.m:1619 */
-/* File: ../FSNFunctions.m:181 */
+/* File: ../FSNBrowserColumn.m:1785 */
+/* File: ../FSNFunctions.m:404 */
 /* Flag: untranslated */
-/* File: ../FSNIcon.m:1584 */
+/* File: ../FSNIcon.m:2286 */
 /* Flag: untranslated */
 "OK" = "OK";
 
-/* File: ../FSNBrowserCell.m:407 */
+/* File: ../FSNBrowserCell.m:477 */
 /* Flag: untranslated */
-/* File: ../FSNIcon.m:817 */
+/* File: ../FSNIcon.m:1111 */
 /* Flag: untranslated */
 /* File: <dummy>:0 */
 /* Flag: unmatched */
 "elements" = "elements";
 
-/* File: ../FSNBrowserColumn.m:1616 */
+/* File: ../FSNBrowserColumn.m:1782 */
 /* Flag: untranslated */
-/* File: ../FSNIcon.m:1581 */
+/* File: ../FSNIcon.m:2283 */
 /* Flag: untranslated */
 /* File: <dummy>:0 */
 /* Flag: unmatched */
 "error" = "error";
 
-/* File: ../FSNBrowserColumn.m:1618 */
+/* File: ../FSNBrowserColumn.m:1784 */
 /* Flag: untranslated */
-/* File: ../FSNIcon.m:1583 */
+/* File: ../FSNIcon.m:2285 */
 /* Flag: untranslated */
 /* File: <dummy>:0 */
 /* Flag: unmatched */
 "Can't open " = "Can't open ";
 
-/* File: ../FSNListView.m:150 */
+/* File: ../FSNListView.m:224 */
 /* Flag: untranslated */
-/* File: ../FSNListView.m:171 */
+/* File: ../FSNListView.m:245 */
 /* Flag: untranslated */
 /* File: <dummy>:0 */
 /* Flag: unmatched */
 "Name" = "Name";
 
-/* File: ../FSNode.m:561 */
+/* File: ../FSNode.m:636 */
 /* Flag: untranslated */
-/* File: ../FSNode.m:580 */
+/* File: ../FSNode.m:655 */
 /* Flag: untranslated */
 /* File: <dummy>:0 */
 /* Flag: unmatched */
 "symbolic link" = "symbolic link";
 
-/* File: ../FSNode.m:568 */
+/* File: ../FSNode.m:643 */
 /* Flag: untranslated */
 /* File: <dummy>:0 */
 /* Flag: unmatched */
 "plain file" = "plain file";
 
-/* File: ../FSNode.m:588 */
+/* File: ../FSNode.m:663 */
 /* Flag: untranslated */
 /* File: <dummy>:0 */
 /* Flag: unmatched */
@@ -80,77 +80,97 @@ add comments above this one
 
 /* File: <dummy>:0 */
 /* Flag: unmatched */
+"Tools" = "Tools";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Applications" = "Applications";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Downloads" = "Downloads";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Documents" = "Documents";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Images" = "Images";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Music" = "Music";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Desktop" = "Desktop";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Application" = "Application";
 
 
 /*** Strings from ../FSNFunctions.m ***/
-/* File: ../FSNFunctions.m:193 */
+/* File: ../FSNFunctions.m:416 */
 " is already in use!" = " is already in use!";
-/* File: ../FSNFunctions.m:173 */
+/* File: ../FSNFunctions.m:396 */
 "Are you sure you want to add the extension"
   = "Are you sure you want to add the extension";
-/* File: ../FSNFunctions.m:180 */
+/* File: ../FSNFunctions.m:403 */
 "Cancel" = "Cancel";
-/* File: ../FSNFunctions.m:189 */
-/* File: ../FSNFunctions.m:162 */
-/* File: ../FSNFunctions.m:153 */
-/* File: ../FSNFunctions.m:143 */
+/* File: ../FSNFunctions.m:366 */
+/* File: ../FSNFunctions.m:376 */
+/* File: ../FSNFunctions.m:385 */
+/* File: ../FSNFunctions.m:412 */
 "Error" = "Error";
-/* File: ../FSNFunctions.m:163 */
+/* File: ../FSNFunctions.m:386 */
 "Invalid name" = "Invalid name";
-/* File: ../FSNFunctions.m:191 */
+/* File: ../FSNFunctions.m:414 */
 "The name " = "The name ";
-/* File: ../FSNFunctions.m:154 */
+/* File: ../FSNFunctions.m:377 */
 "You can't rename an object that is in the Recycler"
   = "You can't rename an object that is in the Recycler";
-/* File: ../FSNFunctions.m:145 */
+/* File: ../FSNFunctions.m:368 */
 "You do not have write permission for"
   = "You do not have write permission for";
-/* File: ../FSNFunctions.m:177 */
+/* File: ../FSNFunctions.m:400 */
 "\nif you make this change, your folder may appear as a single file."
   = "\nif you make this change, your folder may appear as a single file.";
-/* File: ../FSNFunctions.m:176 */
+/* File: ../FSNFunctions.m:399 */
 "to the end of the name?" = "to the end of the name?";
 
 
 /*** Strings from ../FSNIconsView.m ***/
-/* File: ../FSNIconsView.m:799 */
+/* File: ../FSNIconsView.m:1653 */
 "Open with" = "Open with";
 
 
 /*** Strings from ../FSNListView.m ***/
-/* File: ../FSNListView.m:156 */
+/* File: ../FSNListView.m:230 */
 "Date Modified" = "Date Modified";
-/* File: ../FSNListView.m:162 */
+/* File: ../FSNListView.m:236 */
 "Owner" = "Owner";
-/* File: ../FSNListView.m:165 */
+/* File: ../FSNListView.m:239 */
 "Parent" = "Parent";
-/* File: ../FSNListView.m:159 */
+/* File: ../FSNListView.m:233 */
 "Size" = "Size";
-/* File: ../FSNListView.m:153 */
+/* File: ../FSNListView.m:227 */
 "Type" = "Type";
 
 
 /*** Strings from ../FSNode.m ***/
-/* File: ../FSNode.m:571 */
+/* File: ../FSNode.m:646 */
 "application" = "application";
-/* File: ../FSNode.m:586 */
+/* File: ../FSNode.m:661 */
 "block special" = "block special";
-/* File: ../FSNode.m:584 */
+/* File: ../FSNode.m:659 */
 "character special" = "character special";
-/* File: ../FSNode.m:577 */
+/* File: ../FSNode.m:652 */
 "directory" = "directory";
-/* File: ../FSNode.m:575 */
+/* File: ../FSNode.m:650 */
 "mount point" = "mount point";
-/* File: ../FSNode.m:573 */
+/* File: ../FSNode.m:648 */
 "package" = "package";
-/* File: ../FSNode.m:582 */
+/* File: ../FSNode.m:657 */
 "socket" = "socket";
-
-"Desktop"="Desktop";
-"Music"="Music";
-"Images"="Images";
-"Documents"="Documents";
-"Downloads"="Downloads";
-"Applications"="Applications";
-"Tools"="Tools";

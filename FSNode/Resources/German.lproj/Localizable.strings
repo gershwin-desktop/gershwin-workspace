@@ -1,177 +1,155 @@
 /***
 German.lproj/Localizable.strings
-updated by make_strings 2016-01-22 00:30:18 +0100
+updated by make_strings 2026-07-19 17:07:19 +0200
 add comments above this one
 ***/
 
 
 /*** Keys found in multiple places ***/
 
-/* File: ../FSNBrowserColumn.m:1619 */
+/* File: ../FSNBrowserColumn.m:1785 */
 /* Flag: untranslated */
-/* File: ../FSNFunctions.m:181 */
+/* File: ../FSNFunctions.m:404 */
 /* Flag: untranslated */
-/* File: ../FSNIcon.m:1584 */
+/* File: ../FSNIcon.m:2286 */
 /* Flag: untranslated */
 "OK" = "OK";
 
-/* File: ../FSNBrowserCell.m:407 */
-/* Flag: untranslated */
-/* File: ../FSNIcon.m:817 */
-/* Flag: untranslated */
-"elements" = "elements";
+/* File: ../FSNBrowserCell.m:477 */
+/* File: ../FSNIcon.m:1111 */
+"elements" = "Elemente";
 
-/* File: ../FSNBrowserColumn.m:1616 */
-/* Flag: untranslated */
-/* File: ../FSNIcon.m:1581 */
-/* Flag: untranslated */
-"error" = "error";
+/* File: ../FSNBrowserColumn.m:1782 */
+/* File: ../FSNIcon.m:2283 */
+"error" = "Fehler";
 
-/* File: ../FSNBrowserColumn.m:1618 */
-/* Flag: untranslated */
-/* File: ../FSNIcon.m:1583 */
-/* Flag: untranslated */
-"Can't open " = "Can't open ";
+/* File: ../FSNBrowserColumn.m:1784 */
+/* File: ../FSNIcon.m:2285 */
+"Can't open " = "Kann nicht \u00f6ffnen ";
 
-/* File: ../FSNListView.m:150 */
-/* Flag: untranslated */
-/* File: ../FSNListView.m:171 */
-/* Flag: untranslated */
+/* File: ../FSNListView.m:224 */
+/* File: ../FSNListView.m:245 */
 "Name" = "Name";
 
-/* File: ../FSNode.m:561 */
-/* Flag: untranslated */
-/* File: ../FSNode.m:580 */
-/* Flag: untranslated */
-"symbolic link" = "symbolic link";
+/* File: ../FSNode.m:636 */
+/* File: ../FSNode.m:655 */
+"symbolic link" = "symbolischer Verweis";
 
-/* File: ../FSNFunctions.m:143 */
-/* Flag: untranslated */
-/* File: ../FSNFunctions.m:153 */
-/* Flag: untranslated */
-/* File: ../FSNFunctions.m:162 */
-/* Flag: untranslated */
-/* File: ../FSNFunctions.m:189 */
-/* Flag: untranslated */
-"Error" = "Error";
+/* File: ../FSNFunctions.m:366 */
+/* File: ../FSNFunctions.m:376 */
+/* File: ../FSNFunctions.m:385 */
+/* File: ../FSNFunctions.m:412 */
+"Error" = "Fehler";
 
-/* File: ../FSNFunctions.m:147 */
-/* Flag: untranslated */
-/* File: ../FSNFunctions.m:155 */
-/* Flag: untranslated */
-/* File: ../FSNFunctions.m:164 */
-/* Flag: untranslated */
-/* File: ../FSNFunctions.m:194 */
-/* Flag: untranslated */
-"Continue" = "Continue";
+/* File: ../FSNFunctions.m:370 */
+/* File: ../FSNFunctions.m:378 */
+/* File: ../FSNFunctions.m:387 */
+/* File: ../FSNFunctions.m:417 */
+"Continue" = "Fortfahren";
 
 
 /*** Unmatched/untranslated keys ***/
 
-/* File: ../FSNFunctions.m:145 */
-/* Flag: untranslated */
+/* File: ../FSNFunctions.m:368 */
 "You do not have write permission for"
-  = "You do not have write permission for";
+  = "Sie haben keine Schreibrechte f\u00fcr";
 
-/* File: ../FSNFunctions.m:154 */
-/* Flag: untranslated */
+/* File: ../FSNFunctions.m:377 */
 "You can't rename an object that is in the Recycler"
-  = "You can't rename an object that is in the Recycler";
+  = "Sie k\u00f6nnen kein Objekt umbenennen, das sich im Papierkorb befindet";
 
-/* File: ../FSNFunctions.m:163 */
-/* Flag: untranslated */
-"Invalid name" = "Invalid name";
+/* File: ../FSNFunctions.m:386 */
+"Invalid name" = "Ung\u00fcltiger Name";
 
-/* File: ../FSNFunctions.m:173 */
-/* Flag: untranslated */
+/* File: ../FSNFunctions.m:396 */
 "Are you sure you want to add the extension"
-  = "Are you sure you want to add the extension";
+  = "Sind Sie sicher, dass Sie die Erweiterung hinzuf\u00fcgen m\u00f6chten";
 
-/* File: ../FSNFunctions.m:176 */
-/* Flag: untranslated */
-"to the end of the name?" = "to the end of the name?";
+/* File: ../FSNFunctions.m:399 */
+"to the end of the name?" = "an das Ende des Namens?";
 
-/* File: ../FSNFunctions.m:177 */
-/* Flag: untranslated */
+/* File: ../FSNFunctions.m:400 */
 "\nif you make this change, your folder may appear as a single file."
-  = "\nif you make this change, your folder may appear as a single file.";
+  = "\nWenn Sie diese \u00c4nderung vornehmen, wird Ihr Ordner m\u00f6glicherweise als einzelne Datei angezeigt.";
 
-/* File: ../FSNFunctions.m:180 */
-/* Flag: untranslated */
-"Cancel" = "Cancel";
+/* File: ../FSNFunctions.m:403 */
+"Cancel" = "Abbrechen";
 
-/* File: ../FSNFunctions.m:191 */
-/* Flag: untranslated */
-"The name " = "The name ";
+/* File: ../FSNFunctions.m:414 */
+"The name " = "Der Name ";
 
-/* File: ../FSNFunctions.m:193 */
-/* Flag: untranslated */
-" is already in use!" = " is already in use!";
+/* File: ../FSNFunctions.m:416 */
+" is already in use!" = " wird bereits verwendet!";
 
-/* File: ../FSNIconsView.m:799 */
-/* Flag: untranslated */
-"Open with" = "Open with";
+/* File: ../FSNIconsView.m:1653 */
+"Open with" = "\u00d6ffnen mit";
 
-/* File: ../FSNListView.m:153 */
-/* Flag: untranslated */
-"Type" = "Type";
+/* File: ../FSNListView.m:227 */
+"Type" = "Typ";
 
-/* File: ../FSNListView.m:156 */
-/* Flag: untranslated */
-"Date Modified" = "Date Modified";
+/* File: ../FSNListView.m:230 */
+"Date Modified" = "\u00c4nderungsdatum";
 
-/* File: ../FSNListView.m:159 */
-/* Flag: untranslated */
-"Size" = "Size";
+/* File: ../FSNListView.m:233 */
+"Size" = "Gr\u00f6\u00dfe";
 
-/* File: ../FSNListView.m:162 */
-/* Flag: untranslated */
-"Owner" = "Owner";
+/* File: ../FSNListView.m:236 */
+"Owner" = "Besitzer";
 
-/* File: ../FSNListView.m:165 */
-/* Flag: untranslated */
-"Parent" = "Parent";
+/* File: ../FSNListView.m:239 */
+"Parent" = "\u00dcbergeordnet";
 
-/* File: ../FSNode.m:568 */
-/* Flag: untranslated */
-"plain file" = "plain file";
+/* File: ../FSNode.m:643 */
+"plain file" = "Datei";
 
-/* File: ../FSNode.m:571 */
-/* Flag: untranslated */
-"application" = "application";
+/* File: ../FSNode.m:646 */
+"application" = "Anwendung";
 
-/* File: ../FSNode.m:573 */
-/* Flag: untranslated */
-"package" = "package";
+/* File: ../FSNode.m:648 */
+"package" = "Paket";
 
-/* File: ../FSNode.m:575 */
-/* Flag: untranslated */
-"mount point" = "mount point";
+/* File: ../FSNode.m:650 */
+"mount point" = "Einh\u00e4ngepunkt";
 
-/* File: ../FSNode.m:577 */
-/* Flag: untranslated */
-"directory" = "directory";
+/* File: ../FSNode.m:652 */
+"directory" = "Verzeichnis";
 
-/* File: ../FSNode.m:582 */
-/* Flag: untranslated */
-"socket" = "socket";
+/* File: ../FSNode.m:657 */
+"socket" = "Socket";
 
-/* File: ../FSNode.m:584 */
-/* Flag: untranslated */
-"character special" = "character special";
+/* File: ../FSNode.m:659 */
+"character special" = "zeichenorientiert";
 
-/* File: ../FSNode.m:586 */
-/* Flag: untranslated */
-"block special" = "block special";
+/* File: ../FSNode.m:661 */
+"block special" = "blockorientiert";
 
-/* File: ../FSNode.m:588 */
-/* Flag: untranslated */
-"unknown" = "unknown";
+/* File: ../FSNode.m:663 */
+"unknown" = "unbekannt";
 
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Desktop" = "Schreibtisch";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Music" = "Musik";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Images" = "Bilder";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Documents" = "Dokumente";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Downloads" = "Heruntergeladen";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Tools" = "Werkzeuge";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Applications" = "Anwendungen";

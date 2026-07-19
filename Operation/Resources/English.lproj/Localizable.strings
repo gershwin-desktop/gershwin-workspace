@@ -1,322 +1,908 @@
-/* ----------------------- menu strings --------------------------- *\
-/* main.m */
+/***
+English.lproj/Localizable.strings
+updated by make_strings 2026-07-19 17:10:45 +0200
+add comments above this one
+***/
 
-"Info" = "Info";
-	"Info Panel..." = "Info Panel...";
-	"Preferences..." = "Preferences...";
-	"Help..." = "Help...";
 
-"File" = "File";
-	"Open" = "Open";
-	"Open as Folder" = "Open as Folder";
-	"Edit File" = "Edit File";
-	"New Folder" = "New Folder";
-	"New File" = "New File";
-	"Duplicate" = "Duplicate";	
-	"Destroy" = "Destroy";
-	"Empty Recycler" = "Empty Recycler";
+/*** Keys found in multiple places ***/
 
-"Edit" = "Edit";
-	"Cut" = "Cut";
-	"Copy" = "Copy";
-	"Paste" = "Paste";
-	"Select All" = "Select All";
-		
-"View" = "View";
-	"Browser" = "Browser";
-	"Icon" = "Icon";
-		
-"Tools" = "Tools";
-	"Viewer" = "Viewer";
-	"Inspectors" = "Inspectors";
-		"Show Inspectors" = "Show Inspectors";
-		"Attributes" = "Attributes";
-		"Contents" = "Contents";
-		"Tools" = "Tools";	
-		"Permissions" = "Permissions";	
-	"Finder" = "Finder";
-	"Processes..." = "Processes...";
-	"Fiend" = "Fiend";
-		"Show Fiend" = "Show Fiend";
-		"Hide Fiend" = "Hide Fiend";
-		"Add Layer..." = "Add Layer...";
-		"Remove Current Layer" = "Remove Current Layer";
-		"Rename Current Layer" = "Rename Current Layer";
-		"Layers" = "Layers";
-	"DeskTop Shelf" = "Desktop Shelf";	
-	"XTerm" = "XTerm";
-	
-"Windows" = "Windows";
-	"Arrange in Front" = "Arrange in Front";
-	"Miniaturize Window" = "Miniaturize Window";
-	"Close Window" = "Close Window";
-	
-"Services" = "Services";
+/* File: ../FileOpInfo.m:303 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:481 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Duplicate" = "Duplicate";
 
-"Hide" = "Hide";
+/* File: ../FileOpInfo.m:489 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:513 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Destroy" = "Destroy";
 
-"Quit" = "Quit";
-	
-	
-	
-/* ----------------------- File Operations strings --------------------------- *\
+/* File: ../FileOpInfo.m:253 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:255 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:465 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Copy" = "Copy";
 
-/* Workspace.m */
-
-"GNUstep Workspace Manager" = "GNUstep Workspace Manager";
-"See https://www.gnustep.org/experience/Workspace.html" = "See https://www.gnustep.org/experience/Workspace.html";
-"Released under the GNU General Public License 2.0" = "Released under the GNU General Public License 2.0";
+/* File: ../Operation.m:432 */
+/* Flag: untranslated */
+/* File: ../Operation.m:470 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Error" = "Error";
-"You have not write permission\nfor" = "You do not have write permission\nfor";
+
+/* File: ../FileOpInfo.m:357 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:388 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:728 */
+/* Flag: untranslated */
+/* File: ../Operation.m:434 */
+/* Flag: untranslated */
+/* File: ../Operation.m:472 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Continue" = "Continue";
 
-
-/* FileOperation.m */
-
+/* File: ../FileOpInfo.m:308 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:370 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:379 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:674 */
+/* Flag: untranslated */
+/* File: ../Operation.m:180 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "OK" = "OK";
+
+/* File: ../FileOpInfo.m:309 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:371 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:675 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Cancel" = "Cancel";
+
+/* File: ../FileOpInfo.m:243 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:245 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:275 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:285 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:457 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:497 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:505 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Move" = "Move";
-"Move from: " = "Move from: ";
+
+/* File: ../FileOpInfo.m:248 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:258 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:268 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:288 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "\nto: " = "\nto: ";
-"Copy" = "Copy";
-"Copy from: " = "Copy from: ";
+
+/* File: ../FileOpInfo.m:263 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:265 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:473 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Link" = "Link";
-"Link " = "Link ";
+
+/* File: ../FileOpInfo.m:298 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Delete" = "Delete";
+
+/* File: ../FileOpInfo.m:299 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Delete the selected objects?" = "Delete the selected objects?";
-"Duplicate" = "Duplicate";
+
+/* File: ../FileOpInfo.m:304 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Duplicate the selected objects?" = "Duplicate the selected objects?";
+
+/* File: ../FileOpInfo.m:135 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:458 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:466 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:474 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:498 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:506 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "From:" = "From:";
+
+/* File: ../FileOpInfo.m:136 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:460 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:468 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:476 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:500 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:508 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "To:" = "To:";
+
+/* File: ../FileOpInfo.m:482 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:490 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:514 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "In:" = "In:";
+
+/* File: ../FileOpInfo.m:138 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Stop" = "Stop";
+
+/* File: ../FileOpInfo.m:137 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:394 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Pause" = "Pause";
-"Moving" = "Moving";
-"Copying" = "Copying";
-"Linking" = "Linking";
-"Duplicating" = "Duplicating";
-"Destroying" = "Destroying";
-"File Operation Completed" = "File Operation Completed";
-"Backgrounder connection died!" = "Background connection died!";
-"Some items have the same name;\ndo you want to substitute them?" = "Some items have the same name;\ndo you want to substitute them?";
-"Error" = "Error";
-"File Operation Error!" = "File Operation Error!";
+
+/* File: ../Operation.m:433 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 ": no such file or directory!" = ": no such file or directory!";
+
+/* File: ../Operation.m:471 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 ": Directory Protected!" = ": Directory Protected!";
 
+/* File: ../FileOpInfo.m:273 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:283 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:293 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Recycler" = "Recycler";
 
-/* ColumnIcon.m */
+/* File: ../FileOpInfo.m:501 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:507 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:515 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"the Recycler" = "the Recycler";
 
-"You have not write permission\nfor " = "You do not have write permission\nfor ";
-"The name " = "The name ";
-" is already in use!" = " is already in use!";
-"Cannot rename " = "Cannot rename ";
-"Invalid char in name" = "Invalid character in name";
+/* File: ../FileOpInfo.m:278 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"\nto the Recycler" = "\nto the Recycler";
 
+/* File: ../FileOpInfo.m:294 */
+/* Flag: untranslated */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Empty the Recycler?" = "Empty the Recycler?";
 
-/* ----------------------- Inspectors strings --------------------------- *\
+/* File: ../FileOpInfo.m:157 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:1242 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:1373 */
+/* Flag: untranslated */
+"_copy" = "_copy";
 
-/* InspectorsWin.m */
-
-"Attributes" = "Attributes";
-"Contents" = "Contents";
-"Tools" = "Tools";
-"Access Control" = "Access Control";
-
-
-/* AttributesPanel.m */
-
-"Attributes" = "Attributes";
-"Attributes Inspector" = "Attributes Inspector";
-"Path:" = "Path:";
-"Link To:" = "Link To:";
-"Size:" = "Size:";
-"Owner:" = "Owner:";
-"Group:" = "Group:";
-"Changed" = "Changed";
-"Revert" = "Revert";
-"OK" = "OK";
-
-
-/* ContentsPanel.m */
-
-"Contents" = "Contents";
-"Contents Inspector" = "Contents Inspector";
-"No Contents Inspector" = "No Contents Inspector";
-"No Contents Inspector\nFor Multiple Selection" = "No Contents Inspector\nfor Multiple Selection";
-"error" = "error";
-"No Contents Inspectors found!" = "No Contents Inspectors found!";
-
-
-/* FolderViewer.m */
-
-"Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder"
-  = "Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder";
-"Sort by" = "Sort by";
-"Name" = "Name";
-"Type" = "Type";
-"Date" = "Date";
-"Size" = "Size";
-"Owner" = "Owner";
-"Folder Inspector" = "Folder Inspector";	
+/* File: ../FileOpInfo.m:247 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:257 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:267 */
+/* Flag: untranslated */
+/* File: ../FileOpInfo.m:277 */
+/* Flag: untranslated */
+"from" = "from";
 
 
-/* ImageViewer.m */
+/*** Unmatched/untranslated keys ***/
 
-"Image Inspector" = "Image Inspector";
+/* File: ../FileOpInfo.m:234 */
+/* Flag: untranslated */
+"items" = "items";
 
+/* File: ../FileOpInfo.m:238 */
+/* Flag: untranslated */
+"one item" = "one item";
 
-/* AppViewer.m */
+/* File: ../FileOpInfo.m:287 */
+/* Flag: untranslated */
+"from the Recycler" = "from the Recycler";
 
-"Open these kinds of documents:" = "Open these kinds of documents:";
-"Invalid Contents" = "Invalid Contents";
-"App Inspector" = "App Inspector";
+/* File: ../FileOpInfo.m:356 */
+/* Flag: untranslated */
+"A fatal error occurred while dispatching the task!"
+  = "A fatal error occurred while dispatching the task!";
 
+/* File: ../FileOpInfo.m:676 */
+/* Flag: untranslated */
+"Only older" = "Only older";
 
-/* PermissionsPanel.m */
+/* File: ../FileOpInfo.m:727 */
+/* Flag: untranslated */
+"executor connection died!" = "executor connection died!";
 
-"UNIX Permissions" = "UNIX Permissions";
-"Access Control" = "Access Control";
-"Also apply to files inside selection" = "Also apply to files inside selection";
+/* File: ../FileOpInfo.m:1532 */
+/* Flag: untranslated */
+"File operation error:" = "File operation error:";
 
+/* File: ../FileOpInfo.m:1534 */
+/* Flag: untranslated */
+"with file:" = "with file:";
 
-/* ToolsPanel.m */
+/* File: ../Operation.m:179 */
+/* Flag: untranslated */
+"Some files are in use by another operation!"
+  = "Some files are in use by another operation!";
 
-"Tools" = "Tools";
-"Tools Inspector" = "Tools Inspector";
-"No Tools Inspector" = "No Tools Inspector";
-"Set Default" = "Set Default";
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Put Away" = "Put Away";
 
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"In" = "In";
 
-/* AppsView.m */
-	
-"Double-click to open selected document(s)" = "Double-click to open selected document(s)";	
-"Default:" = "Default:";
-"Path:" = "Path:";		
-"Click 'Set Default' to set default application\nfor all documents with this extension" 
-  = "Click 'Set Default' to set default application\nfor all documents with this extension";
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Move from the Recycler " = "Move from the Recycler ";
 
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Recycler: " = "Recycler: ";
 
-/* PermsBox.m */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Recycle: " = "Recycle: ";
 
-"Permissions" = "Permissions";
-"Read" = "Read";
-"Write" = "Write";
-"Execute" = "Execute";
-"Owner" = "Owner";
-"Group" = "Group";
-"Other" = "Other";
-
-
-/* ----------------------- Processes strings --------------------------- *\
-
-/* Processes.m */
-
-"Processes" = "Processes";
-"No Background Process" = "No Background Processes";
-"Kill" = "Kill";
-"Path: " = "Path: ";
-"Status: " = "Status: ";
-
-
-/* ProcsView.m */
-
-"Applications" = "Applications";
-"Background" = "Background";
-
-
-/* ----------------------- Finder strings --------------------------- *\
-
-/* Finder.m */
-
-"Finder" = "Finder";
-"Find items with names that match" = "Search by name";
-"Find items with contents that match" = "Search by contents";
-"No selection!" = "No selection!";
-"No arguments!" = "No arguments!";
-
-
-/* ----------------------- Fiend strings --------------------------- *\
-
-/* Fiend.m */
-
-"New Layer" = "New Layer";
-"A layer with this name is already present!" = "A layer with this name is already present!";
-"You can't remove the last layer!" = "You can't remove the last layer!";
-"Remove layer" = "Remove layer";
-"Are you sure that you want to remove this layer?" = "Are you sure you want to remove this layer?";
-"Rename Layer" = "Rename Layer";
-"You can't dock multiple paths!" = "You can't dock multiple paths!";
-"This object is already present in this layer!" = "This object is already present in this layer!";
-	
-			
-/* ----------------------- Preference strings --------------------------- *\
-
-/* PreferencesWin.m */
-
-"Workspace Preferences" = "Workspace Preferences";
-
-
-/* BackWinPreferences.m */       
-
-"DeskTop Shelf" = "Desktop Shelf";	
-"DeskTop Color" = "Desktop Color";
-"red" = "red";
-"green" = "green";
-"blue" = "blue";
-"Set Color" = "Set Color";
-"Push the \"Set Image\" button\nto set your DeskTop image.\nThe image must have the same\nsize of your screen." = 
-  "Push the \"Set Image\" button\nto set your Desktop image.\nThe image must have the same\nsize as your screen.";
-"Set Image" = "Set Image";
-"Unset Image" = "Unset Image";
-
-	
-/* DefaultXTerm.m */             
-	
-"Set" = "Set";	
-
-	
-/* BrowserViewsPreferences.m */  
-
-"Column Width" = "Column Width";
-"Use Default Settings" = "Use Default Settings";	
-"Browser" = "Browser";
-	
-	
-/* FileWatchingPreferences.m */  
-	
-"File System Watching" = "File System Watching";
-"timeout" = "timeout";
-"frequency" = "frequency";
-"Values will apply to the \nnew watchers from now, \nto the existing ones, after the first timeout" = 
-   "Values will apply to the \nnew watchers from now, \nto the existing ones after the first timeout";
-	
-	
-/* ShelfPreferences.m */
-	
-"Shelf" = "Shelf";
-	
-	
-/* DefaultEditor.m */            
-
-"Default Editor" = "Default Editor";
-"No Default Editor" = "No Default Editor";
-"Choose..." = "Choose...";
-
-
-/* IconViewsPreferences.m */
-
-"Title Width" = "Title Width";
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Icon View" = "Icon View";
 
-/* Recycler strings */
-"Recycle: " = "Recycle: ";
-"Recycler: " = "Recycler: ";
-"Recycler" = "Recycler";
-"the Recycler" = "the Recycler";
-"\nto the Recycler" = "\nto the Recycler";
-"Move from the Recycler " = "Move from the Recycler ";
-"In" = "In";
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Title Width" = "Title Width";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Choose..." = "Choose...";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No Default Editor" = "No Default Editor";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Default Editor" = "Default Editor";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Shelf" = "Shelf";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Values will apply to the \nnew watchers from now, \nto the existing ones, after the first timeout"
+  = "Values will apply to the \nnew watchers from now, \nto the existing ones after the first timeout";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"frequency" = "frequency";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"timeout" = "timeout";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"File System Watching" = "File System Watching";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Use Default Settings" = "Use Default Settings";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Column Width" = "Column Width";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Set" = "Set";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Unset Image" = "Unset Image";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Set Image" = "Set Image";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Push the \"Set Image\" button\nto set your DeskTop image.\nThe image must have the same\nsize of your screen."
+  = "Push the \"Set Image\" button\nto set your Desktop image.\nThe image must have the same\nsize as your screen.";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Set Color" = "Set Color";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"blue" = "blue";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"green" = "green";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"red" = "red";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"DeskTop Color" = "Desktop Color";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Workspace Preferences" = "Workspace Preferences";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"This object is already present in this layer!"
+  = "This object is already present in this layer!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"You can't dock multiple paths!" = "You can't dock multiple paths!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Rename Layer" = "Rename Layer";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Are you sure that you want to remove this layer?"
+  = "Are you sure you want to remove this layer?";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Remove layer" = "Remove layer";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"You can't remove the last layer!" = "You can't remove the last layer!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"A layer with this name is already present!"
+  = "A layer with this name is already present!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"New Layer" = "New Layer";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No arguments!" = "No arguments!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No selection!" = "No selection!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Find items with contents that match" = "Search by contents";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Find items with names that match" = "Search by name";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Background" = "Background";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Applications" = "Applications";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Status: " = "Status: ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Path: " = "Path: ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Kill" = "Kill";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No Background Process" = "No Background Processes";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Processes" = "Processes";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Other" = "Other";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Group" = "Group";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Execute" = "Execute";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Write" = "Write";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Read" = "Read";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Click 'Set Default' to set default application\nfor all documents with this extension"
+  = "Click 'Set Default' to set default application\nfor all documents with this extension";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Default:" = "Default:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Double-click to open selected document(s)"
+  = "Double-click to open selected document(s)";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Set Default" = "Set Default";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No Tools Inspector" = "No Tools Inspector";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Tools Inspector" = "Tools Inspector";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Also apply to files inside selection"
+  = "Also apply to files inside selection";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"UNIX Permissions" = "UNIX Permissions";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"App Inspector" = "App Inspector";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Invalid Contents" = "Invalid Contents";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Open these kinds of documents:" = "Open these kinds of documents:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Image Inspector" = "Image Inspector";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Folder Inspector" = "Folder Inspector";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Owner" = "Owner";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Size" = "Size";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Date" = "Date";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Type" = "Type";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Name" = "Name";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Sort by" = "Sort by";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder"
+  = "Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No Contents Inspectors found!" = "No Contents Inspectors found!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"error" = "error";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No Contents Inspector\nFor Multiple Selection"
+  = "No Contents Inspector\nfor Multiple Selection";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No Contents Inspector" = "No Contents Inspector";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Contents Inspector" = "Contents Inspector";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Revert" = "Revert";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Changed" = "Changed";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Group:" = "Group:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Owner:" = "Owner:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Size:" = "Size:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Link To:" = "Link To:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Path:" = "Path:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Attributes Inspector" = "Attributes Inspector";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Access Control" = "Access Control";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Invalid char in name" = "Invalid character in name";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Cannot rename " = "Cannot rename ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+" is already in use!" = " is already in use!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"The name " = "The name ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"You have not write permission\nfor "
+  = "You do not have write permission\nfor ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"File Operation Error!" = "File Operation Error!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Some items have the same name;\ndo you want to substitute them?"
+  = "Some items have the same name;\ndo you want to substitute them?";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Backgrounder connection died!" = "Background connection died!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"File Operation Completed" = "File Operation Completed";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Destroying" = "Destroying";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Duplicating" = "Duplicating";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Linking" = "Linking";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Copying" = "Copying";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Moving" = "Moving";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Link " = "Link ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Copy from: " = "Copy from: ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Move from: " = "Move from: ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"You have not write permission\nfor"
+  = "You do not have write permission\nfor";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Released under the GNU General Public License 2.0"
+  = "Released under the GNU General Public License 2.0";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"See https://www.gnustep.org/experience/Workspace.html"
+  = "See https://www.gnustep.org/experience/Workspace.html";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"GNUstep Workspace Manager" = "GNUstep Workspace Manager";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Quit" = "Quit";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Hide" = "Hide";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Services" = "Services";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Close Window" = "Close Window";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Miniaturize Window" = "Miniaturize Window";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Arrange in Front" = "Arrange in Front";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Windows" = "Windows";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"XTerm" = "XTerm";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"DeskTop Shelf" = "Desktop Shelf";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Layers" = "Layers";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Rename Current Layer" = "Rename Current Layer";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Remove Current Layer" = "Remove Current Layer";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Add Layer..." = "Add Layer...";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Hide Fiend" = "Hide Fiend";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Show Fiend" = "Show Fiend";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Fiend" = "Fiend";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Processes..." = "Processes...";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Finder" = "Finder";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Permissions" = "Permissions";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Contents" = "Contents";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Attributes" = "Attributes";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Show Inspectors" = "Show Inspectors";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Inspectors" = "Inspectors";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Viewer" = "Viewer";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Tools" = "Tools";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Icon" = "Icon";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Browser" = "Browser";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"View" = "View";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Select All" = "Select All";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Paste" = "Paste";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Cut" = "Cut";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Edit" = "Edit";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Empty Recycler" = "Empty Recycler";
-"Empty the Recycler?" = "Empty the Recycler?";
-"Put Away" = "Put Away";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"New File" = "New File";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"New Folder" = "New Folder";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Edit File" = "Edit File";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Open as Folder" = "Open as Folder";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Open" = "Open";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"File" = "File";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Help..." = "Help...";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Preferences..." = "Preferences...";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Info Panel..." = "Info Panel...";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Info" = "Info";

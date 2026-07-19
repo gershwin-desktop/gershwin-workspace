@@ -100,11 +100,10 @@
 	
 	
 	
-/* ----------------------- File Operations strings --------------------------- *\
+/* ----------------------- File Operations strings --------------------------- */
 
 /* Workspace.m */
 
-"Author" = "Autor";
 "GNUstep Workspace Manager" = "GNUstep Workspace Manager";
 "See https://www.gnustep.org/experience/Workspace.html" = "Siehe https://www.gnustep.org/experience/Gworkspace.html";
 "Released under the GNU General Public License 2.0" = "Veröffentlicht unter der GNU General Public License 2.0";
@@ -150,7 +149,6 @@
 "Destroying" = "Vernichte";
 "File Operation Completed" = "Dateioperation vollständig";
 "Backgrounder connection died!" = "Backgrounder-Verbindung gestorben!";
-"Some items have the same name;\ndo you want to sobstitute them?" = "Einige Elemente haben den selben Namen;\nwollen Sie diese ersetzen?";
 "File Operation Error!" = "Fehler bei Dateioperation!";
 
 
@@ -161,13 +159,6 @@
 " is already in use!" = " wird bereits verwendet!";
 
 "Cannot rename " = "Kann folgende Datei nicht umbenennen: ";
-
-/* much better:
-
-"Kann ";
-" nicht umbennen ";
-which ends in "kann <the file> nicht umbenennen"
-*/
 
 "Invalid char in name" = "Ungültiges Zeichen im Namen";
 
@@ -425,6 +416,16 @@ which ends in "kann <the file> nicht umbenennen"
 
 
 
+/* Make/Remove thumbnails */
+"Make thumbnail(s)" = "Vorschaubild(er) erstellen";
+"Remove thumbnail(s)" = "Vorschaubild(er) entfernen";
+
+/* Edit File context menu */
+"Edit File" = "Datei bearbeiten";
+
+/* Log Out with ellipsis */
+"Log Out..." = "Ausloggen...";
+
 /* -------- */
 
 /* OpenWithController */
@@ -435,3 +436,358 @@ which ends in "kann <the file> nicht umbenennen"
 /* RunExternalController.m */
 "Run" = "Ausführen";
 "Type the command to execute:"="Befehl eingeben:";
+
+
+/* ----------------------- Recycler strings (missing) --------------------------- */
+
+"the Recycler" = "der Papierkorb";
+"\nto the Recycler" = "\nin den Papierkorb";
+"Move from the Recycler " = "Aus dem Papierkorb verschieben ";
+"Recycle: " = "Papierkorb leeren: ";
+"Recycler: " = "Papierkorb: ";
+"Recycler" = "Papierkorb";
+"In" = "In";
+"Empty the Recycler?" = "Papierkorb leeren?";
+"Some items have the same name;\ndo you want to substitute them?" = "Einige Elemente haben den gleichen Namen;\nwollen Sie diese ersetzen?";
+
+/* Other strings */
+"Other" = "Andere";
+"No Contents Inspectors found!" = "Keine Inhalts-Inspektoren gefunden!";
+"Classic" = "Klassisch";
+"Modern" = "Modern";
+"scale" = "Skaliert";
+"Position:" = "Position:";
+
+/* Dynamic menu entries (Clean Up By / label colors / …) */
+"Kind" = "Art";
+"Clean Up" = "Aufr\u00e4umen";
+"Clean Up By" = "Aufr\u00e4umen nach";
+"Get Info" = "Information";
+"Label" = "Etikett";
+"Extract" = "Entpacken";
+"Compress" = "Packen";
+"Eject" = "Auswerfen";
+"Format Disk..." = "Datentr\u00e4ger formatieren...";
+"None" = "Keine";
+"Grey" = "Grau";
+"Green" = "Gr\u00fcn";
+"Purple" = "Lila";
+"Blue" = "Blau";
+"Yellow" = "Gelb";
+"Red" = "Rot";
+"Orange" = "Orange";
+
+/* Network / Mount / Volume */
+"AFP Server" = "AFP-Server";
+"SFTP Server" = "SFTP-Server";
+"WebDAV Server" = "WebDAV-Server";
+"WebDAV Server (Secure)" = "WebDAV-Server (sicher)";
+"WebDAV Connection Failed" = "WebDAV-Verbindung fehlgeschlagen";
+"Connect to SFTP Server" = "Mit SFTP-Server verbinden";
+"Connect to WebDAV Server" = "Mit WebDAV-Server verbinden";
+"Enter credentials for %@:" = "Anmeldedaten f\u00fcr %@ eingeben:";
+"Connection Failed" = "Verbindung fehlgeschlagen";
+"Connect" = "Verbinden";
+"Network Location" = "Netzwerkort";
+"Network Server" = "Netzwerkserver";
+"Network User" = "Netzwerkbenutzer";
+"Local User" = "Lokaler Benutzer";
+"Local" = "Lokal";
+"Network" = "Netzwerk";
+"Could not connect to %@\n\nCheck the hostname and try again." = "Konnte keine Verbindung zu %@ herstellen\n\n\u00dcberpr\u00fcfen Sie den Hostnamen und versuchen Sie es erneut.";
+"Could not connect to %@.\n\nError: %@" = "Konnte keine Verbindung zu %@ herstellen.\n\nFehler: %@";
+"Failed to mount SFTP volume:\n\n%@" = "SFTP-Volume konnte nicht eingeh\u00e4ngt werden:\n\n%@";
+"Failed to unmount %@." = "Auswerfen von %@ fehlgeschlagen.";
+"Failed to unmount %@: %@" = "Auswerfen von %@ fehlgeschlagen: %@";
+"Mount Failed" = "Einh\u00e4ngen fehlgeschlagen";
+"Unmount failed." = "Auswerfen fehlgeschlagen.";
+"Unmounting partitions..." = "H\u00e4nge Partitionen aus...";
+"Invalid mount point." = "Ung\u00fcltiger Einh\u00e4ngepunkt.";
+"Cannot Mount" = "Kann nicht einh\u00e4ngen";
+"Cannot determine device for the selected mount point." = "Kann Ger\u00e4t f\u00fcr den ausgew\u00e4hlten Einh\u00e4ngepunkt nicht bestimmen.";
+"Cannot determine device information for the selected mount point." = "Kann Ger\u00e4teinformationen f\u00fcr den ausgew\u00e4hlten Einh\u00e4ngepunkt nicht bestimmen.";
+"Cannot read information for the selected device." = "Kann Informationen f\u00fcr das ausgew\u00e4hlte Ger\u00e4t nicht lesen.";
+"Target is not a physical device mount point." = "Ziel ist kein physikalischer Ger\u00e4te-Einh\u00e4ngepunkt.";
+"System Disk" = "Systemfestplatte";
+"System" = "System";
+"Volume Removed Unexpectedly" = "Volume unerwartet entfernt";
+"The following volumes were removed without being properly ejected:\n\n%@\n\n" = "Die folgenden Volumes wurden ohne ordnungsgem\u00e4\u00dfes Auswerfen entfernt:\n\n%@\n\n";
+"The volume at the following path was removed without being properly ejected:\n\n%@\n\n" = "Das Volume am folgenden Pfad wurde ohne ordnungsgem\u00e4\u00dfes Auswerfen entfernt:\n\n%@\n\n";
+"You are not allowed to umount\n" = "Sie d\u00fcrfen nicht auswerfen\n";
+"You cannot eject the root filesystem" = "Sie k\u00f6nnen das Root-Dateisystem nicht auswerfen";
+"Volumes" = "Volumes";
+"Domains" = "Dom\u00e4nen";
+"available" = "verf\u00fcgbar";
+
+/* AVFS / SSHFS */
+"AVFS Error" = "AVFS-Fehler";
+"AVFS Not Installed" = "AVFS nicht installiert";
+"SSHFS Not Installed" = "SSHFS nicht installiert";
+"sshpass Not Installed" = "sshpass nicht installiert";
+
+/* ISO write operations */
+"An ISO write operation is already in progress for this device." = "Ein ISO-Schreibvorgang ist f\u00fcr dieses Ger\u00e4t bereits in Bearbeitung.";
+"Are you sure you want to cancel?\n\nThe target device may be left in an inconsistent state and will need to be reformatted." = "Sind Sie sicher, dass Sie abbrechen m\u00f6chten?\n\nDas Zielger\u00e4t k\u00f6nnte in einem inkonsistenten Zustand zur\u00fcckgelassen werden und muss neu formatiert werden.";
+"Cancel Write" = "Schreiben abbrechen";
+"Cancel Write?" = "Schreiben abbrechen?";
+"Continue Writing" = "Weiterschreiben";
+"Copy File" = "Datei kopieren";
+"Could not find formatdisk-helper. Please reinstall Workspace tools." = "Konnte formatdisk-helper nicht finden. Bitte installieren Sie die Workspace-Werkzeuge neu.";
+"Disk Format..." = "Datentr\u00e4ger formatieren...";
+"Done." = "Fertig.";
+"Erases all data on %@ and reformats as FAT32.\n" = "L\u00f6scht alle Daten auf %@ und formatiert als FAT32.\n";
+"Erases all data on %@ and writes \u201c%@\u201d (%@).\n" = "L\u00f6scht alle Daten auf %@ und schreibt \u201e%@\u201c (%@).\n";
+"Format" = "Formatieren";
+"Format \u201c%@\u201d?" = "\u201e%@\u201c formatieren?";
+"Format Complete" = "Formatierung abgeschlossen";
+"Format Failed" = "Formatierung fehlgeschlagen";
+"Formatting failed." = "Formatierung fehlgeschlagen.";
+"ISO File Dropped" = "ISO-Datei abgelegt";
+"ISO Write Error" = "ISO-Schreibfehler";
+"Not an ISO or supported disk image file." = "Keine ISO- oder unterst\u00fctzte Disk-Image-Datei.";
+"The disk was formatted as FAT32." = "Die Festplatte wurde als FAT32 formatiert.";
+"The ISO image has been successfully written to the device.\n\nThe new volume should appear on your desktop when you plug the device in." = "Das ISO-Abbild wurde erfolgreich auf das Ger\u00e4t geschrieben.\n\nDas neue Volume sollte auf Ihrem Schreibtisch erscheinen, wenn Sie das Ger\u00e4t einstecken.";
+"The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use." = "Der Schreibvorgang wurde abgebrochen. Das Zielger\u00e4t k\u00f6nnte in einem inkonsistenten Zustand sein und sollte vor der Verwendung neu formatiert werden.";
+"Verifying..." = "\u00dcberpr\u00fcfe...";
+"Write Cancelled" = "Schreiben abgebrochen";
+"Write Complete" = "Schreiben abgeschlossen";
+"Write ISO to \u201c%@\u201d?" = "ISO auf \u201e%@\u201c schreiben?";
+"Write to Device" = "Auf Ger\u00e4t schreiben";
+"Writing image" = "Schreibe Abbild";
+"Writing image to device..." = "Schreibe Abbild auf Ger\u00e4t...";
+"Preparing..." = "Bereite vor...";
+"Cancelling..." = "Breche ab...";
+"Failed." = "Fehlgeschlagen.";
+"(failed to launch)" = "(konnte nicht starten)";
+
+/* Shutdown / Restart / Logout */
+"Are you sure you want to quit\nall applications and restart now?" = "Sind Sie sicher, dass Sie alle\nAnwendungen beenden und jetzt neu starten wollen?";
+"Are you sure you want to quit\nall applications and shut down now?" = "Sind Sie sicher, dass Sie alle\nAnwendungen beenden und jetzt herunterfahren wollen?";
+"Failed to execute shutdown command." = "Herunterfahrbefehl fehlgeschlagen.";
+"Kill applications" = "Anwendungen beenden";
+"Restart" = "Neustarten";
+"Shut Down" = "Herunterfahren";
+"The following applications:" = "Die folgenden Anwendungen:";
+"refuse to terminate." = "weigern sich zu beenden.";
+
+/* Dock / Desktop */
+"Background Color..." = "Hintergrundfarbe...";
+"Bottom" = "Unten";
+"Bring to Front" = "In den Vordergrund";
+"Keep in Dock" = "Im Dock behalten";
+"Remove from Dock" = "Aus Dock entfernen";
+"Show In File Viewer" = "Im Dateibetrachter zeigen";
+"Unhide" = "Einblenden";
+
+/* Finder / Search */
+"Searching in:" = "Suche in:";
+"No search criteria!" = "Keine Suchkriterien!";
+"New Live Search" = "Neue Live-Suche";
+"New Viewer" = "Neuer Betrachter";
+"can't create the Live Search folder" = "Kann Live-Suche-Ordner nicht erstellen";
+"the search tool connection died!" = "Die Suchwerkzeug-Verbindung wurde unterbrochen!";
+"No Finder modules! Quitting now." = "Keine Finder-Module! Beende jetzt.";
+"Modules:" = "Module:";
+"unable to launch the search task." = "Suchaufgabe konnte nicht gestartet werden.";
+"unable to launch the updater task." = "Aktualisierungsaufgabe konnte nicht gestartet werden.";
+"Update now" = "Jetzt aktualisieren";
+"updater connection died!" = "Aktualisierungsverbindung unterbrochen!";
+"fswatcher notifications disabled!" = "fswatcher-Benachrichtigungen deaktiviert!";
+"The fswatcher connection died.\nDo you want to restart it?" = "Die fswatcher-Verbindung wurde unterbrochen.\nM\u00f6chten Sie sie neu starten?";
+"The mdextractor connection died.\nDo you want to restart it?" = "Die mdextractor-Verbindung wurde unterbrochen.\nM\u00f6chten Sie sie neu starten?";
+"ddbd connection died." = "ddbd-Verbindung unterbrochen.";
+
+/* Generic operations */
+"Operation Failed" = "Vorgang fehlgeschlagen";
+"Operation In Progress" = "Vorgang l\u00e4uft";
+"Wait the operations to terminate!" = "Warten Sie, bis die Vorg\u00e4nge beendet sind!";
+"Workspace is logging out!" = "Workspace loggt aus!";
+"No executable found!" = "Keine ausf\u00fchrbare Datei gefunden!";
+"is not a valid application!" = "ist keine g\u00fcltige Anwendung!";
+"seems not a valid application!" = "scheint keine g\u00fcltige Anwendung zu sein!";
+"No name supplied!" = "Kein Name angegeben!";
+"Can't create the Desktop directory!" = "Kann Schreibtisch-Verzeichnis nicht erstellen!";
+"The Desktop directory has been deleted! Quitting now!" = "Das Schreibtisch-Verzeichnis wurde gel\u00f6scht! Beende jetzt!";
+"Can't edit a directory!" = "Kann Verzeichnis nicht bearbeiten!";
+": no such file or directory!" = ": Datei oder Verzeichnis nicht gefunden!";
+"open" = "\u00f6ffnen";
+"Open in Terminal" = "Im Terminal \u00f6ffnen";
+"Terminal.app" = "Terminal.app";
+
+/* Time intervals (Finder date filters) */
+"one minute" = "einer Minute";
+"one hour" = "einer Stunde";
+"10 minutes" = "10 Minuten";
+"30 minutes" = "30 Minuten";
+"2 hours" = "2 Stunden";
+"3 hours" = "3 Stunden";
+"5 minutes" = "5 Minuten";
+"6 hours" = "6 Stunden";
+"12 hours" = "12 Stunden";
+"a day" = "einem Tag";
+
+/* File attributes / kind */
+"kind" = "Art";
+"total" = "insgesamt";
+"unknown" = "unbekannt";
+"unknown volume size" = "unbekannte Volumegr\u00f6\u00dfe";
+"(unlabeled)" = "(unbeschriftet)";
+
+/* Recycler-related (extra for Workspace) */
+"You can't open a document that is in the Recycler!" = "Sie k\u00f6nnen kein Dokument \u00f6ffnen, das sich im Papierkorb befindet!";
+"You can't do this in the Recycler!" = "Sie k\u00f6nnen dies nicht im Papierkorb tun!";
+"You can't create a new folder in the Recycler!" = "Sie k\u00f6nnen keinen neuen Ordner im Papierkorb erstellen!";
+"You can't create a new file in the Recycler!" = "Sie k\u00f6nnen keine neue Datei im Papierkorb erstellen!";
+"You can't duplicate files in the Recycler!" = "Sie k\u00f6nnen keine Dateien im Papierkorb duplizieren!";
+"You can't move objects with multiple parent paths!" = "Sie k\u00f6nnen Objekte mit mehreren \u00fcbergeordneten Pfaden nicht verschieben!";
+"Empty Trash" = "Papierkorb leeren";
+
+/* Miscellaneous */
+"elements" = "Elemente";
+"recursive" = "rekursiv";
+"Choose Image" = "Bild ausw\u00e4hlen";
+"Username:" = "Benutzername:";
+"Password:" = "Passwort:";
+"Label Color..." = "Etikettenfarbe...";
+"Not Implemented" = "Nicht implementiert";
+"no autoupdate" = "keine automatische Aktualisierung";
+"starting:" = "Starte:";
+"You cannot format the root filesystem." = "Sie k\u00f6nnen das Root-Dateisystem nicht formatieren.";
+"You do not have write permission\nfor" = "Sie haben keine Schreibrechte\nf\u00fcr";
+
+/* Sidebar items */
+"Applications" = "Anwendungen";
+"Documents" = "Dokumente";
+"Downloads" = "Heruntergeladen";
+"Music" = "Musik";
+"Pictures" = "Bilder";
+"Videos" = "Filme";
+"Date Modified" = "\u00c4nderungsdatum";
+
+/* Archive operations */
+"Compressing..." = "Packe...";
+"Extracting..." = "Entpacke...";
+
+/* Parent column header */
+"Parent" = "\u00dcbergeordnet";
+
+/* ====== Menu bar (_() macro entries, not parseable by make_strings) ====== */
+
+/* Workspace menu */
+"About This Computer" = "Dieser Computer";
+"About Workspace" = "\u00dcber Workspace";
+"Hide Workspace" = "Workspace ausblenden";
+"Workspace Help" = "Workspace-Hilfe";
+"Gershwin Help" = "Gershwin-Hilfe";
+"New to Gershwin? Get Started" = "Neu bei Gershwin? Erste Schritte";
+"Keyboard Shortcuts" = "Tastaturk\u00fcrzel";
+"Feedback" = "R\u00fcckmeldung";
+"Legal & Regulatory" = "Rechtliches";
+"Show Clipboard" = "Zwischenablage zeigen";
+"Start Dictation" = "Diktat beginnen";
+"Symbols" = "Symbole";
+"Tags" = "Schlagworte";
+
+/* File menu */
+"New Workspace Window" = "Neues Workspace-Fenster";
+"Make Alias" = "Alias erstellen";
+"Move to Trash" = "In den Papierkorb";
+"Print" = "Drucken";
+"Share" = "Teilen";
+"Find" = "Suchen";
+
+/* Edit menu */
+"Undo" = "R\u00fcckg\u00e4ngig";
+"Redo" = "Wiederholen";
+
+/* View menu */
+"Enter Full Screen" = "Vollbild";
+"as Icons" = "als Symbole";
+"as List" = "als Liste";
+"as Columns" = "als Spalten";
+"as Gallery" = "als Galerie";
+"Ascent" = "Ansicht";
+"Use Stacks" = "Stapel verwenden";
+"Sort By" = "Sortieren nach";
+"Show Preview" = "Vorschau zeigen";
+"Show Preview Options" = "Vorschauoptionen";
+"Show View Options" = "Ansichtsoptionen";
+"Show Toolbar" = "Werkzeugleiste zeigen";
+"Hide Toolbar" = "Werkzeugleiste ausblenden";
+"Show Sidebar" = "Seitenleiste zeigen";
+"Hide Sidebar" = "Seitenleiste ausblenden";
+"Customize Toolbar..." = "Werkzeugleiste anpassen...";
+"Browsing" = "Browseransicht";
+"Spatial" = "R\u00e4umliche Ansicht";
+"Set Browsing as Default" = "Browseransicht als Standard";
+"Set Spatial as Default" = "R\u00e4umliche Ansicht als Standard";
+"View Behavior" = "Ansichtsverhalten";
+
+/* Go menu */
+"Go" = "Gehe zu";
+"Back" = "R\u00fcckw\u00e4rts";
+"Forward" = "Vorw\u00e4rts";
+"Enclosing Folder" = "\u00dcbergeordneter Ordner";
+"Recents" = "Letzte";
+"Home" = "Eigenes Verzeichnis";
+"Computer" = "Computer";
+"Transfer" = "\u00dcbertragung";
+"Applications" = "Anwendungen";
+"Utilities" = "Dienstprogramme";
+"Go to Folder..." = "Gehe zu Ordner...";
+"Connect to Server..." = "Mit Server verbinden...";
+
+/* Window menu */
+"Window" = "Fenster";
+"Minimize" = "Miniaturisieren";
+"Zoom" = "Zoomen";
+"Cycle Through Windows" = "Fenster durchschalten";
+
+/* Help menu */
+"Help" = "Hilfe";
+"Quick Look" = "Kurzblick";
+"Bring All to Front" = "Alle in den Vordergrund";
+
+/* Other status/dialog strings */
+"Already at the root directory" = "Bereits im Wurzelverzeichnis";
+"Cannot access %@" = "Kann nicht auf %@ zugreifen";
+"Could not create or access the %@ folder" = "Konnte Ordner %@ nicht erstellen oder darauf zugreifen";
+"Could not open URL:\n\n%@" = "Konnte URL nicht \u00f6ffnen:\n\n%@";
+"Invalid URL format" = "Ung\u00fcltiges URL-Format";
+"URL must include a hostname" = "URL muss einen Hostnamen enthalten";
+"URL must include a scheme (sftp://, webdav://, webdavs://)" = "URL muss ein Schema enthalten (sftp://, webdav://, webdavs://)";
+"Connect to Server:" = "Mit Server verbinden:";
+"Go to Folder:" = "Gehe zu Ordner:";
+"Supported URL schemes: sftp://, webdav://, webdavs://" = "Unterst\u00fctzte URL-Schemata: sftp://, webdav://, webdavs://";
+"More Info..." = "Mehr Informationen...";
+
+/* System info */
+"OS" = "Betriebssystem";
+"Kernel" = "Kernel";
+"Model" = "Modell";
+"Memory" = "Arbeitsspeicher";
+"Processor" = "Prozessor";
+"Date Created" = "Erstellungsdatum";
+
+/* Finder */
+"Browsing" = "Durchsuchen";
+"Spatial" = "R\u00e4umlich";
+
+/* Low disk space */
+"Low Disk Space" = "Wenig Festplattenspeicher";
+"The startup disk has less than 3%% free space.\n\n" = "Der Startdatentr\u00e4ger hat weniger als 3%% freien Speicher.\n\n";
+
+/* Restart/Shutdown */
+"Restart..." = "Neustarten...";
+"Shut Down..." = "Herunterfahren...";
+
+/* X11 */
+"X11 Server" = "X11-Server";
+
+/* Alerts */
+"The Utilities folder could not be found at:\n\n%@" = "Der Dienstprogramme-Ordner konnte nicht gefunden werden unter:\n\n%@";
+"You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element." = "Sie erhalten Hilfe, indem Sie die Wahltaste dr\u00fccken (der Mauszeiger wird zu einem Fragezeichen) und dann auf ein beliebiges Benutzeroberfl\u00e4chenelement klicken.";
+
+/* Status window durations (format strings) */
+"%d:%02d:%02d remaining" = "%d:%02d:%02d verbleibend";
+"%d:%02d remaining" = "%d:%02d verbleibend";
