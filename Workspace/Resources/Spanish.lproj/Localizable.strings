@@ -869,3 +869,482 @@ for";
 "with exactly" = "con exactamente";
 
 "without one of" = "sin uno de";
+
+"The ISO image has been successfully written to the device.\n\nThe new volume should appear on your desktop when you plug the device in." = "La imagen ISO se ha escrito correctamente en el dispositivo.\n\nEl nuevo volumen debería aparecer en su escritorio cuando conecte el dispositivo.";
+
+"Could not find formatdisk-helper. Please reinstall Workspace tools." = "No se pudo encontrar formatdisk-helper. Reinstale las herramientas de Workspace.";
+
+"An ISO write operation is already in progress for this device." = "Ya hay una operación de escritura ISO en curso para este dispositivo.";
+
+"Could not connect to %@\n\nCheck the hostname and try again." = "No se pudo conectar a %@\n\nVerifique el nombre de host e intente de nuevo.";
+
+"The Desktop directory has been deleted! Quitting now!" = "¡El directorio Escritorio ha sido eliminado! Cerrando.";
+
+"You can't open a document that is in the Recycler!" = "¡No se puede abrir un documento que está en la Papelera!";
+
+"You can't move objects with multiple parent paths!" = "¡No se pueden mover objetos con rutas padre múltiples!";
+
+"You can't create a new folder in the Recycler!" = "¡No se puede crear una nueva carpeta en la Papelera!";
+
+"You can't create a new file in the Recycler!" = "¡No se puede crear un nuevo archivo en la Papelera!";
+
+"You can't duplicate files in the Recycler!" = "¡No se pueden duplicar archivos en la Papelera!";
+
+"Not an ISO or supported disk image file." = "No es un archivo ISO o imagen de disco compatible.";
+
+"Could not create or access the %@ folder" = "No se pudo crear o acceder a la carpeta %@";
+
+"You cannot format the root filesystem." = "No se puede formatear el sistema de archivos raíz.";
+
+"You cannot eject the root filesystem" = "No puede expulsar el sistema de archivos raíz";
+
+"You do not have write permission\nfor" = "No tiene permisos de escritura\npara";
+
+"Could not connect to %@.\n\nError: %@" = "No se pudo conectar a %@.\n\nError : %@";
+
+"can't create the Live Search folder" = "no se puede crear la carpeta de búsqueda en vivo";
+
+"Can't create the Desktop directory!" = "¡No se puede crear el directorio Escritorio!";
+
+"unable to launch the updater task." = "no se puede lanzar la tarea de actualización.";
+
+"You can't do this in the Recycler!" = "¡No se puede hacer esto en la Papelera!";
+
+"unable to launch the search task." = "no se puede lanzar la tarea de búsqueda.";
+
+"fswatcher notifications disabled!" = "notificaciones de fswatcher desactivadas";
+
+"Wait the operations to terminate!" = "¡Espere a que terminen las operaciones!";
+
+"Failed to mount SFTP volume:\n\n%@" = "Error al montar el volumen SFTP :\n\n%@";
+
+"The disk was formatted as FAT32." = "El disco fue formateado como FAT32.";
+
+"the search tool connection died!" = "conexión con la herramienta de búsqueda interrumpida";
+
+"No Finder modules! Quitting now." = "No hay módulos de Finder. Cerrando.";
+
+"seems not a valid application!" = "¡no parece una aplicación válida!";
+
+"Already at the root directory" = "Ya está en el directorio raíz";
+
+"New to Gershwin? Get Started" = "¿Nuevo en Gershwin? Comience";
+
+": no such file or directory!" = ": archivo o directorio inexistente";
+
+"Volume Removed Unexpectedly" = "Volumen retirado inesperadamente";
+
+"is not a valid application!" = "¡no es una aplicación válida!";
+
+"URL must include a hostname" = "La URL debe incluir un nombre de host";
+
+"Writing image to device..." = "Escribiendo imagen en el dispositivo...";
+
+"Enter credentials for %@:" = "Introduzca credenciales para %@ :";
+
+"Workspace is logging out!" = "¡Workspace está cerrando sesión!";
+
+"WebDAV Connection Failed" = "Conexión WebDAV fallida";
+
+"Connect to WebDAV Server" = "Conectar al servidor WebDAV";
+
+"Failed to unmount %@: %@" = "Error al desmontar %@ : %@";
+
+"Unmounting partitions..." = "Desmontando particiones...";
+
+"updater connection died!" = "conexión de actualización interrumpida";
+
+"Set Browsing as Default" = "Establecer navegación como predeterminada";
+
+"Can't edit a directory!" = "¡No se puede editar un directorio!";
+
+"Could not open URL:\n\n%@" = "No se pudo abrir la URL :\n\n%@";
+
+"Set Spatial as Default" = "Establecer espacial como predeterminado";
+
+"WebDAV Server (Secure)" = "Servidor WebDAV (seguro)";
+
+"Connect to SFTP Server" = "Conectar al servidor SFTP";
+
+"%d:%02d:%02d remaining" = "%d:%02d:%02d restante";
+
+"Cycle Through Windows" = "Recorrer ventanas";
+
+"Failed to unmount %@." = "Error al desmontar %@.";
+
+"sshpass Not Installed" = "sshpass no instalado";
+
+"ddbd connection died." = "conexión ddbd interrumpida";
+
+"Operation In Progress" = "Operación en curso";
+
+"Connect to Server..." = "Conectar al servidor...";
+
+"Show Preview Options" = "Opciones de vista previa";
+
+"Customize Toolbar..." = "Personalizar barra de herramientas...";
+
+"New Workspace Window" = "Nueva ventana de Workspace";
+
+"Invalid mount point." = "Punto de montaje no válido.";
+
+"No executable found!" = "¡No se encontró ningún ejecutable!";
+
+"About This Computer" = "Acerca de este equipo";
+
+"Show In File Viewer" = "Mostrar en el visor";
+
+"SSHFS Not Installed" = "SSHFS no instalado";
+
+"unknown volume size" = "tamaño de volumen desconocido";
+
+"Single Click Launch" = "Inicio con un clic";
+
+"Connect to Server:" = "Conectar al servidor :";
+
+"Keyboard Shortcuts" = "Atajos de teclado";
+
+"Legal & Regulatory" = "Aviso legal";
+
+"Bring All to Front" = "Traer todo al frente";
+
+"AVFS Not Installed" = "AVFS no instalado";
+
+"Formatting failed." = "El formateo falló.";
+
+"(failed to launch)" = "(fallo al lanzar)";
+
+"Invalid URL format" = "Formato de URL no válido";
+
+"Enter Full Screen" = "Pantalla completa";
+
+"Show View Options" = "Opciones de vista";
+
+"Connection Failed" = "Conexión fallida";
+
+"No name supplied!" = "¡No se proporcionó ningún nombre!";
+
+"%d:%02d remaining" = "%d:%02d restante";
+
+"Enclosing Folder" = "Carpeta contenedora";
+
+"Remove from Dock" = "Eliminar del Dock";
+
+"Network Location" = "Ubicación de red";
+
+"Continue Writing" = "Continuar escritura";
+
+"ISO File Dropped" = "Archivo ISO soltado";
+
+"Operation Failed" = "Operación fallida";
+
+"Open in Terminal" = "Abrir en Terminal";
+
+"Cannot access %@" = "No se puede acceder a %@";
+
+"Go to Folder..." = "Ir a la carpeta...";
+
+"About Workspace" = "Acerca de Workspace";
+
+"Start Dictation" = "Iniciar dictado";
+
+"Unmount failed." = "Desmontaje fallido.";
+
+"Format Complete" = "Formateo completado";
+
+"ISO Write Error" = "Error de escritura ISO";
+
+"Write Cancelled" = "Escritura cancelada";
+
+"Write to Device" = "Escribir en el dispositivo";
+
+"New Live Search" = "Nueva búsqueda en vivo";
+
+"Not Implemented" = "No implementado";
+
+"Hide Workspace" = "Ocultar Workspace";
+
+"Workspace Help" = "Ayuda de Workspace";
+
+"Show Clipboard" = "Mostrar portapapeles";
+
+"Bring to Front" = "Traer al frente";
+
+"Network Server" = "Servidor de red";
+
+"Format Disk..." = "Formatear disco...";
+
+"Write Complete" = "Escritura completada";
+
+"Compressing..." = "Comprimiendo...";
+
+"Label Color..." = "Color de etiqueta...";
+
+"Low Disk Space" = "Poco espacio en disco";
+
+"Go to Folder:" = "Ir a la carpeta :";
+
+"View Behavior" = "Comportamiento de vista";
+
+"Move to Trash" = "Mover a la papelera";
+
+"Gershwin Help" = "Ayuda de Gershwin";
+
+"WebDAV Server" = "Servidor WebDAV";
+
+"Cancel Write?" = "¿Cancelar escritura?";
+
+"Format Failed" = "Formateo fallido";
+
+"Writing image" = "Escribiendo imagen";
+
+"Cancelling..." = "Cancelando...";
+
+"Date Modified" = "Fecha de modificación";
+
+"Extracting..." = "Extrayendo...";
+
+"Searching in:" = "Buscando en :";
+
+"no autoupdate" = "sin actualización automática";
+
+"Show Preview" = "Mostrar vista previa";
+
+"Show Toolbar" = "Mostrar barra de herramientas";
+
+"Hide Toolbar" = "Ocultar barra de herramientas";
+
+"Show Sidebar" = "Mostrar barra lateral";
+
+"Hide Sidebar" = "Ocultar barra lateral";
+
+"Keep in Dock" = "Mantener en el Dock";
+
+"Network User" = "Usuario de red";
+
+"Mount Failed" = "Montaje fallido";
+
+"Cannot Mount" = "No se puede montar";
+
+"Cancel Write" = "Cancelar escritura";
+
+"Verifying..." = "Verificando...";
+
+"Preparing..." = "Preparando...";
+
+"Shut Down..." = "Apagar...";
+
+"Applications" = "Aplicaciones";
+
+"Choose Image" = "Elegir imagen";
+
+"Date Created" = "Fecha de creación";
+
+"SFTP Server" = "Servidor SFTP";
+
+"System Disk" = "Disco del sistema";
+
+"Clean Up By" = "Limpiar por";
+
+"(unlabeled)" = "(sin etiqueta)";
+
+"Empty Trash" = "Vaciar papelera";
+
+"as Columns" = "como columnas";
+
+"as Gallery" = "como galería";
+
+"Use Stacks" = "Usar pilas";
+
+"Make Alias" = "Crear alias";
+
+"Quick Look" = "Vista rápida";
+
+"AFP Server" = "Servidor AFP";
+
+"Local User" = "Usuario local";
+
+"AVFS Error" = "Error de AVFS";
+
+"Restart..." = "Reiniciar...";
+
+"New Viewer" = "Nuevo visor";
+
+"Update now" = "Actualizar ahora";
+
+"one minute" = "un minuto";
+
+"10 minutes" = "10 minutos";
+
+"30 minutes" = "30 minutos";
+
+"X11 Server" = "Servidor X11";
+
+"Utilities" = "Utilidades";
+
+"available" = "disponible";
+
+"Copy File" = "Copiar archivo";
+
+"Shut Down" = "Apagar";
+
+"Documents" = "Documentos";
+
+"Downloads" = "Descargas";
+
+"5 minutes" = "5 minutos";
+
+"recursive" = "recursivo";
+
+"Username:" = "Nombre de usuario :";
+
+"Password:" = "Contraseña :";
+
+"starting:" = "iniciando :";
+
+"Processor" = "Procesador";
+
+"Computer" = "Equipo";
+
+"Transfer" = "Transferencia";
+
+"as Icons" = "como iconos";
+
+"Browsing" = "Navegación";
+
+"Minimize" = "Minimizar";
+
+"Feedback" = "Comentarios";
+
+"Pictures" = "Imágenes";
+
+"Compress" = "Comprimir";
+
+"Clean Up" = "Limpiar";
+
+"Get Info" = "Obtener información";
+
+"Modules:" = "Módulos :";
+
+"one hour" = "una hora";
+
+"12 hours" = "12 horas";
+
+"elements" = "elementos";
+
+"About %@" = "Acerca de %@";
+
+"Forward" = "Adelante";
+
+"Recents" = "Recientes";
+
+"as List" = "como lista";
+
+"Sort By" = "Ordenar por";
+
+"Spatial" = "Espacial";
+
+"Symbols" = "Símbolos";
+
+"Connect" = "Conectar";
+
+"Network" = "Red";
+
+"Volumes" = "Volúmenes";
+
+"Domains" = "Dominios";
+
+"Failed." = "Falló.";
+
+"Restart" = "Reiniciar";
+
+"Extract" = "Extraer";
+
+"2 hours" = "2 horas";
+
+"3 hours" = "3 horas";
+
+"6 hours" = "6 horas";
+
+"unknown" = "desconocido";
+
+"Window" = "Ventana";
+
+"Bottom" = "Abajo";
+
+"Unhide" = "Mostrar";
+
+"System" = "Sistema";
+
+"Format" = "Formatear";
+
+"Videos" = "Vídeos";
+
+"Parent" = "Padre";
+
+"Purple" = "Púrpura";
+
+"Yellow" = "Amarillo";
+
+"Orange" = "Naranja";
+
+"Kernel" = "Kernel";
+
+"Memory" = "Memoria";
+
+"Share" = "Compartir";
+
+"Print" = "Imprimir";
+
+"Local" = "Local";
+
+"Done." = "Completado.";
+
+"Music" = "Música";
+
+"Label" = "Etiqueta";
+
+"Eject" = "Expulsar";
+
+"Green" = "Verde";
+
+"a day" = "un día";
+
+"total" = "total";
+
+"Model" = "Modelo";
+
+"Back" = "Atrás";
+
+"Home" = "Inicio";
+
+"Zoom" = "Zoom";
+
+"Find" = "Buscar";
+
+"Undo" = "Deshacer";
+
+"Redo" = "Rehacer";
+
+"Tags" = "Etiquetas";
+
+"Help" = "Ayuda";
+
+"Kind" = "Tipo";
+
+"None" = "Ninguno";
+
+"Grey" = "Gris";
+
+"Blue" = "Azul";
+
+"open" = "abrir";
+
+"kind" = "tipo";
+
+"Red" = "Rojo";
+
+"Go" = "Ir";
+
+"OS" = "Sistema operativo";
+

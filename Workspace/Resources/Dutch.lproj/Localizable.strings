@@ -741,3 +741,709 @@
 
 
 "the Recycler" = "de Prullenmand";
+
+"New to Gershwin? Get Started" = "Nieuw bij Gershwin? Begin hier";
+
+"WebDAV Connection Failed" = "WebDAV-verbinding mislukt";
+
+"Connect to WebDAV Server" = "Verbind met WebDAV-server";
+
+"WebDAV Server (Secure)" = "WebDAV-server (beveiligd)";
+
+"Connect to SFTP Server" = "Verbind met SFTP-server";
+
+"Cycle Through Windows" = "Door vensters bladeren";
+
+"sshpass Not Installed" = "sshpass niet geïnstalleerd";
+
+"Operation In Progress" = "Bewerking bezig";
+
+"Connect to Server..." = "Verbind met server...";
+
+"Customize Toolbar..." = "Werkbalk aanpassen...";
+
+"New Workspace Window" = "Nieuw Workspace-venster";
+
+"About This Computer" = "Over deze computer";
+
+"Show In File Viewer" = "Toon in viewer";
+
+"SSHFS Not Installed" = "SSHFS niet geïnstalleerd";
+
+"unknown volume size" = "onbekende volumegrootte";
+
+"Single Click Launch" = "Starten met één klik";
+
+"Keyboard Shortcuts" = "Sneltoetsen";
+
+"Legal & Regulatory" = "Juridisch";
+
+"Bring All to Front" = "Alles naar voorgrond";
+
+"AVFS Not Installed" = "AVFS niet geïnstalleerd";
+
+"Formatting failed." = "Formatteren mislukt.";
+
+"Enter Full Screen" = "Volledig scherm";
+
+"Show View Options" = "Beeldopties";
+
+"Connection Failed" = "Verbinding mislukt";
+
+"Enclosing Folder" = "Bovenliggende map";
+
+"Remove from Dock" = "Verwijder uit Dock";
+
+"Network Location" = "Netwerklocatie";
+
+"Operation Failed" = "Bewerking mislukt";
+
+"Open in Terminal" = "Openen in Terminal";
+
+"Go to Folder..." = "Ga naar map...";
+
+"About Workspace" = "Over Workspace";
+
+"Start Dictation" = "Dictee starten";
+
+"Unmount failed." = "Ontkoppelen mislukt.";
+
+"Format Complete" = "Formatteren voltooid";
+
+"Write Cancelled" = "Schrijven geannuleerd";
+
+"Write to Device" = "Naar apparaat schrijven";
+
+"Not Implemented" = "Niet geïmplementeerd";
+
+"Hide Workspace" = "Verberg Workspace";
+
+"Workspace Help" = "Workspace-help";
+
+"Show Clipboard" = "Toon klembord";
+
+"Bring to Front" = "Naar voorgrond";
+
+"Network Server" = "Netwerkserver";
+
+"Format Disk..." = "Schijf formatteren...";
+
+"Write Complete" = "Schrijven voltooid";
+
+"Low Disk Space" = "Weinig schijfruimte";
+
+"Move to Trash" = "Naar prullenmand";
+
+"WebDAV Server" = "WebDAV-server";
+
+"Format Failed" = "Formatteren mislukt";
+
+"Cancelling..." = "Annuleren...";
+
+"Date Modified" = "Wijzigingsdatum";
+
+"Show Preview" = "Toon voorbeeld";
+
+"Show Toolbar" = "Toon werkbalk";
+
+"Hide Toolbar" = "Verberg werkbalk";
+
+"Show Sidebar" = "Toon zijbalk";
+
+"Hide Sidebar" = "Verberg zijbalk";
+
+"Keep in Dock" = "Bewaar in Dock";
+
+"Network User" = "Netwerkgebruiker";
+
+"Mount Failed" = "Mounten mislukt";
+
+"Verifying..." = "Controleren...";
+
+"Preparing..." = "Voorbereiden...";
+
+"Choose Image" = "Kies afbeelding";
+
+"Date Created" = "Aanmaakdatum";
+
+"SFTP Server" = "SFTP-server";
+
+"(unlabeled)" = "(zonder label)";
+
+"Empty Trash" = "Prullenmand legen";
+
+"Annotations" = "Annotaties";
+
+"as Columns" = "als kolommen";
+
+"as Gallery" = "als galerij";
+
+"Make Alias" = "Alias maken";
+
+"Quick Look" = "Snelle weergave";
+
+"AFP Server" = "AFP-server";
+
+"Local User" = "Lokale gebruiker";
+
+"AVFS Error" = "AVFS-fout";
+
+"X11 Server" = "X11-server";
+
+"Utilities" = "Hulpprogramma's";
+
+"available" = "beschikbaar";
+
+"Shut Down" = "Uitschakelen";
+
+"Documents" = "Documenten";
+
+"Downloads" = "Downloads";
+
+"Position:" = "Positie :";
+
+"recursive" = "recursief";
+
+"Username:" = "Gebruikersnaam :";
+
+"Password:" = "Wachtwoord :";
+
+"starting:" = "starten :";
+
+"Processor" = "Processor";
+
+"Computer" = "Computer";
+
+"Transfer" = "Overdracht";
+
+"as Icons" = "als pictogrammen";
+
+"Browsing" = "Bladeren";
+
+"Minimize" = "Minimaliseren";
+
+"Feedback" = "Feedback";
+
+"Pictures" = "Afbeeldingen";
+
+"Compress" = "Comprimeren";
+
+"Clean Up" = "Opschonen";
+
+"Get Info" = "Info";
+
+"elements" = "elementen";
+
+"About %@" = "Over %@";
+
+"Forward" = "Vooruit";
+
+"Recents" = "Recente items";
+
+"as List" = "als lijst";
+
+"Sort By" = "Sorteer op";
+
+"Spatial" = "Ruimtelijk";
+
+"Symbols" = "Symbolen";
+
+"Connect" = "Verbinden";
+
+"Network" = "Netwerk";
+
+"Volumes" = "Volumes";
+
+"Domains" = "Domeinen";
+
+"Failed." = "Mislukt.";
+
+"Restart" = "Herstart";
+
+"Extract" = "Uitpakken";
+
+"unknown" = "onbekend";
+
+"Classic" = "Klassiek";
+
+"Window" = "Venster";
+
+"Bottom" = "Onder";
+
+"Unhide" = "Tonen";
+
+"Format" = "Formatteren";
+
+"Videos" = "Video's";
+
+"Parent" = "Bovenliggend";
+
+"Purple" = "Paars";
+
+"Yellow" = "Geel";
+
+"Orange" = "Oranje";
+
+"Modern" = "Modern";
+
+"Kernel" = "Kernel";
+
+"Memory" = "Geheugen";
+
+"Share" = "Delen";
+
+"Print" = "Print";
+
+"Local" = "Lokaal";
+
+"Music" = "Muziek";
+
+"Label" = "Label";
+
+"Eject" = "Uitwerpen";
+
+"Green" = "Groen";
+
+"scale" = "geschikt";
+
+"Model" = "Model";
+
+"Back" = "Terug";
+
+"Home" = "Thuis";
+
+"Zoom" = "Zoomen";
+
+"Find" = "Zoek";
+
+"Undo" = "Ongedaan maken";
+
+"Redo" = "Opnieuw";
+
+"Tags" = "Labels";
+
+"Help" = "Help";
+
+"Kind" = "Soort";
+
+"None" = "Geen";
+
+"Grey" = "Grijs";
+
+"Blue" = "Blauw";
+
+"open" = "openen";
+
+"Red" = "Rood";
+
+"Go" = "Ga";
+
+"In" = "In";
+
+"OS" = "Besturingssysteem";
+
+"The ISO image has been successfully written to the device.\n\nThe new volume should appear on your desktop when you plug the device in." = "De ISO-image is succesvol naar het apparaat geschreven.\n\nHet nieuwe volume zou op uw bureaublad moeten verschijnen wanneer u het apparaat aansluit.";
+
+"The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use." = "De schrijfbewerking is geannuleerd. Het doelapparaat kan in een inconsistente staat verkeren en moet opnieuw worden geformatteerd voor gebruik.";
+
+"Are you sure you want to cancel?\n\nThe target device may be left in an inconsistent state and will need to be reformatted." = "Weet u zeker dat u wilt annuleren?\n\nHet doelapparaat kan in een inconsistente staat achterblijven en moet opnieuw worden geformatteerd.";
+
+"Could not find formatdisk-helper. Please reinstall Workspace tools." = "Kan formatdisk-helper niet vinden. Installeer de Workspace-hulpmiddelen opnieuw.";
+
+"Are you sure you want to quit\nall applications and shut down now?" = "Weet u zeker dat u alle\ntoepassingen wilt afsluiten en nu wilt afsluiten?";
+
+"Are you sure you want to quit\nall applications and log out now?" = "Weet u zeker dat u alle\ntoepassingen wilt afsluiten en nu wilt uitloggen?";
+
+"Are you sure you want to quit\nall applications and restart now?" = "Weet u zeker dat u alle\ntoepassingen wilt afsluiten en nu wilt herstarten?";
+
+"An ISO write operation is already in progress for this device." = "Er is al een ISO-schrijfbewerking bezig voor dit apparaat.";
+
+"Could not connect to %@\n\nCheck the hostname and try again." = "Kan geen verbinding maken met %@\n\nControleer de hostnaam en probeer opnieuw.";
+
+"Cannot determine device for the selected mount point." = "Kan apparaat niet bepalen voor het geselecteerde koppelpunt.";
+
+"The Desktop directory has been deleted! Quitting now!" = "De map Bureaublad is verwijderd! Nu afsluiten.";
+
+"Uncheck the buttons to allow automatic confirmation" = "Schakel de knoppen uit om automatische bevestiging toe te staan";
+
+"You can't move objects with multiple parent paths!" = "U kunt objecten met meerdere bovenliggende paden niet verplaatsen!";
+
+"You can't open a document that is in the Recycler!" = "U kunt geen document openen dat in de Prullenmand staat!";
+
+"You can't create a new folder in the Recycler!" = "U kunt geen nieuwe map maken in de Prullenmand!";
+
+"Select and move the files to hide or to show" = "Selecteer en verplaats de bestanden om te verbergen of tonen";
+
+"Target is not a physical device mount point." = "Doel is geen fysiek apparaatkoppelpunt.";
+
+"Type the name or the path of the application" = "Voer de naam of het pad van de toepassing in";
+
+"You can't create a new file in the Recycler!" = "U kunt geen nieuw bestand maken in de Prullenmand!";
+
+"You can't duplicate files in the Recycler!" = "U kunt geen bestanden dupliceren in de Prullenmand!";
+
+"Check this option to show a status window" = "Vink deze optie aan om een statusvenster te tonen";
+
+"Could not create or access the %@ folder" = "Kan map %@ niet aanmaken of openen";
+
+"Not an ISO or supported disk image file." = "Geen ISO of ondersteund schijfimagebestand.";
+
+"The method will apply to all the folders" = "De methode wordt toegepast op alle mappen";
+
+"You cannot format the root filesystem." = "U kunt het root-bestandssysteem niet formatteren.";
+
+"to use to open the current selection" = "te gebruiken om de huidige selectie te openen";
+
+"You cannot eject the root filesystem" = "U kunt het root-bestandssysteem niet uitwerpen";
+
+"You do not have write permission\nfor" = "U heeft geen schrijfrechten\nvoor";
+
+"Can't create the Desktop directory!" = "Kan de map Bureaublad niet aanmaken!";
+
+"can't create the Live Search folder" = "kan de map Live Zoeken niet aanmaken";
+
+"Could not connect to %@.\n\nError: %@" = "Kan geen verbinding maken met %@.\n\nFout : %@";
+
+"Failed to execute shutdown command." = "Uitvoeren van afsluitopdracht mislukt.";
+
+"unable to launch the updater task." = "kan de updatetaak niet starten.";
+
+"You can't do this in the Recycler!" = "U kunt dit niet doen in de Prullenmand!";
+
+"fswatcher notifications disabled!" = "fswatcher-meldingen uitgeschakeld!";
+
+"unable to launch the search task." = "kan de zoektaak niet starten.";
+
+"Wait the operations to terminate!" = "Wacht tot de bewerkingen zijn voltooid!";
+
+"Failed to mount SFTP volume:\n\n%@" = "Koppelen van SFTP-volume mislukt :\n\n%@";
+
+"No Finder modules! Quitting now." = "Geen Finder-modules. Nu afsluiten.";
+
+"The disk was formatted as FAT32." = "De schijf is geformatteerd als FAT32.";
+
+"the search tool connection died!" = "de verbinding met het zoekprogramma is verbroken!";
+
+"seems not a valid application!" = "lijkt geen geldige toepassing!";
+
+"Already at the root directory" = "Reeds in de hoofdmap";
+
+"Are you sure you want to open" = "Weet u zeker dat u wilt openen";
+
+"No Contents Inspectors found!" = "Geen inhoudsinspecteurs gevonden!";
+
+": no such file or directory!" = ": bestand of map niet gevonden!";
+
+"that have no order specified" = "waarvoor geen volgorde is ingesteld";
+
+"Type the command to execute:" = "Voer het uit te voeren commando in :";
+
+"is not a valid application!" = "is geen geldige toepassing!";
+
+"The following applications:" = "De volgende toepassingen :";
+
+"Volume Removed Unexpectedly" = "Volume onverwacht verwijderd";
+
+"during the file operations" = "tijdens de bestandsbewerkingen";
+
+"Writing image to device..." = "Bezig met schrijven van image naar apparaat...";
+
+"Enter credentials for %@:" = "Voer inloggegevens in voor %@ :";
+
+"Workspace is logging out!" = "Workspace wordt afgemeld!";
+
+"Failed to unmount %@: %@" = "Ontkoppelen van %@ mislukt : %@";
+
+"Unmounting partitions..." = "Partities ontkoppelen...";
+
+"updater connection died!" = "updater-verbinding verbroken!";
+
+"Can't edit a directory!" = "Kan een map niet bewerken!";
+
+"Could not open URL:\n\n%@" = "Kan URL niet openen :\n\n%@";
+
+"Search for items whose:" = "Zoek items waarvan :";
+
+"ddbd connection died." = "ddbd-verbinding verbroken.";
+
+"Failed to unmount %@." = "Ontkoppelen van %@ mislukt.";
+
+"Number of saved paths" = "Aantal opgeslagen paden";
+
+"Operation Preferences" = "Bewerkingsvoorkeuren";
+
+"Invalid mount point." = "Ongeldig koppelpunt.";
+
+"No executable found!" = "Geen uitvoerbaar bestand gevonden!";
+
+"refuse to terminate." = "weigeren te stoppen.";
+
+"Use Terminal service" = "Terminal-service gebruiken";
+
+"Background Color..." = "Achtergrondkleur...";
+
+"No search criteria!" = "Geen zoekcriteria!";
+
+"Remove thumbnail(s)" = "Miniatuur/miniaturen verwijderen";
+
+"Connect to Server:" = "Verbinden met server :";
+
+"Hidden directories" = "Verborgen mappen";
+
+"Invalid URL format" = "Ongeldig URL-formaat";
+
+"of file operations" = "van bestandsbewerkingen";
+
+"Show status window" = "Statusvenster tonen";
+
+"Write ISO to \u201c%@\u201d?" = "ISO schrijven naar \u201c%@\u201d?";
+
+"Current selection" = "Huidige selectie";
+
+"Kill applications" = "Toepassingen beëindigen";
+
+"Make thumbnail(s)" = "Maak miniatuur/miniaturen";
+
+"Modification date" = "Wijzigingsdatum";
+
+"the last 2 months" = "de afgelopen 2 maanden";
+
+"the last 3 months" = "de afgelopen 3 maanden";
+
+"the last 6 months" = "de afgelopen 6 maanden";
+
+"Activate changes" = "Wijzigingen activeren";
+
+"Cannot access %@" = "Kan geen toegang krijgen tot %@";
+
+"Continue Writing" = "Doorgaan met schrijven";
+
+"ISO File Dropped" = "ISO-bestand neergezet";
+
+"Move to Recycler" = "Verplaatsen naar Prullenmand";
+
+"the last 2 weeks" = "de afgelopen 2 weken";
+
+"the last 3 weeks" = "de afgelopen 3 weken";
+
+"Check for disks" = "Controleren op schijven";
+
+"contains all of" = "bevat al";
+
+"contains one of" = "bevat een van";
+
+"File Operations" = "Bestandsbewerkingen";
+
+"ISO Write Error" = "ISO-schrijffout";
+
+"New Live Search" = "Nieuw Live Zoeken";
+
+"Specific places" = "Specifieke locaties";
+
+"the last 2 days" = "de afgelopen 2 dagen";
+
+"the last 3 days" = "de afgelopen 3 dagen";
+
+"Compressing..." = "Bezig met comprimeren...";
+
+"the last month" = "de afgelopen maand";
+
+"use thumbnails" = "miniaturen gebruiken";
+
+"without one of" = "zonder een van";
+
+"Cancel Write?" = "Schrijven annuleren?";
+
+"date modified" = "wijzigingsdatum";
+
+"Extracting..." = "Bezig met uitpakken...";
+
+"no autoupdate" = "geen automatische update";
+
+"Searching in:" = "Bezig met zoeken in :";
+
+"Status Window" = "Statusvenster";
+
+"symbolic link" = "symbolische koppeling";
+
+"the last week" = "de afgelopen week";
+
+"Writing image" = "Bezig met schrijven van image";
+
+"Cannot Mount" = "Kan niet koppelen";
+
+"Cancel Write" = "Schrijven annuleren";
+
+"Confirmation" = "Bevestiging";
+
+"contains not" = "bevat niet";
+
+"date created" = "aanmaakdatum";
+
+"greater than" = "groter dan";
+
+"Hidden files" = "Verborgen bestanden";
+
+"Hidden Files" = "Verborgen bestanden";
+
+"the last day" = "de afgelopen dag";
+
+"with exactly" = "met exact";
+
+"annotations" = "annotaties";
+
+"application" = "toepassing";
+
+"Can't open " = "Kan niet openen ";
+
+"Clean Up By" = "Opschonen op";
+
+"Cloud Drive" = "Cloud Drive";
+
+"Shown files" = "Zichtbare bestanden";
+
+"starts with" = "begint met";
+
+"System Disk" = "Systeemschijf";
+
+"10 minutes" = "10 minuten";
+
+"30 minutes" = "30 minuten";
+
+"one minute" = "een minuut";
+
+"is exactly" = "is exact";
+
+"Label Size" = "Labelgrootte";
+
+"Log Out..." = "Uitloggen...";
+
+"New Viewer" = "Nieuwe viewer";
+
+"plain file" = "gewoon bestand";
+
+"Search in:" = "Zoeken in :";
+
+"Thumbnails" = "Miniaturen";
+
+"Update now" = "Nu bijwerken";
+
+"5 minutes" = "5 minuten";
+
+"arguments" = "argumenten";
+
+"Copy File" = "Bestand kopiëren";
+
+"ends with" = "eindigt met";
+
+"Icon Size" = "Pictogramgrootte";
+
+"is before" = "is voor";
+
+"is within" = "is binnen";
+
+"less than" = "minder dan";
+
+"Name only" = "Alleen naam";
+
+"Open With" = "Openen met";
+
+"Recursive" = "Recursief";
+
+"Use image" = "Afbeelding gebruiken";
+
+"12 hours" = "12 uur";
+
+"one hour" = "een uur";
+
+"contains" = "bevat";
+
+"contents" = "inhoud";
+
+"includes" = "bevat";
+
+"is after" = "is na";
+
+"is today" = "is vandaag";
+
+"Modules:" = "Modules :";
+
+"2 hours" = "2 uur";
+
+"3 hours" = "3 uur";
+
+"6 hours" = "6 uur";
+
+"Folders" = "Mappen";
+
+"General" = "Algemeen";
+
+"History" = "Geschiedenis";
+
+"Log Out" = "Uitloggen";
+
+"center" = "gecentreerd";
+
+"Choose" = "Kies";
+
+"Color:" = "Kleur :";
+
+"finder" = "Finder";
+
+"folder" = "map";
+
+"is not" = "is niet";
+
+"items?" = "items?";
+
+"Search" = "Zoeken";
+
+"Style:" = "Stijl :";
+
+"a day" = "een dag";
+
+"error" = "fout";
+
+"Files" = "Bestanden";
+
+"Icons" = "Pictogrammen";
+
+"owner" = "eigenaar";
+
+"Right" = "Rechts";
+
+"xterm" = "xterm";
+
+"free" = "vrij";
+
+"kind" = "soort";
+
+"Left" = "Links";
+
+"Link" = "Koppeling";
+
+"Load" = "Laden";
+
+"name" = "naam";
+
+"size" = "grootte";
+
+"tile" = "tegel";
+
+"tool" = "hulpmiddel";
+
+"type" = "type";
+
+"Add" = "Toevoegen";
+
+"fit" = "passend";
+
+"Run" = "Uitvoeren";
+
+"Yes" = "Ja";
+
+"is" = "is";
+
+"No" = "Nee";
+
+"OK" = "OK";
