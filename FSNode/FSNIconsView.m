@@ -1280,6 +1280,8 @@ static void GWHighlightFrameRect(NSRect aRect)
       data.placementMode = FSNIconPlacementModeManual;
       NSRect f = NSMakeRect(gCenter.x - cellW / 2.0, gCenter.y - cellH / 2.0,
                             cellW, cellH);
+      /* Invalidate old position so the container redraws its background. */
+      [self setNeedsDisplayInRect: [icon frame]];
       [icon setFrame: NSIntegralRect(f)];
       ci++;
     }
@@ -1390,38 +1392,23 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       r = NSMakeRect(x, y, w, h);
 
-      // Erase the previous rect
-      if (transparentSelection
-	  || (!transparentSelection && scrolled))
-	{
-	  [self setNeedsDisplayInRect: oldRect];
-	  [[self window] displayIfNeeded];
-	}
+      // Erase the previous rect via normal display machinery
+      [self setNeedsDisplayInRect: oldRect];
+      [[self window] displayIfNeeded];
 
-      // Draw the new rect
+      // Draw the new rect via direct drawing (inside lockFocus, no mixing)
       [self lockFocus];
 
       if (transparentSelection)
 	{
 	  [[NSColor darkGrayColor] set];
 	  NSFrameRect(r);
-	  if (transparentSelection)
-	    {
-	      [[[NSColor darkGrayColor] colorWithAlphaComponent: 0.33] set];
-	      NSRectFillUsingOperation(r, NSCompositeSourceOver);
-	    }
+	  [[[NSColor darkGrayColor] colorWithAlphaComponent: 0.33] set];
+	  NSRectFillUsingOperation(r, NSCompositeSourceOver);
 	}
       else
 	{
-	  if (!NSEqualRects(oldRect, r) && !scrolled)
-	    {
-	      GWHighlightFrameRect(oldRect);
-	      GWHighlightFrameRect(r);
-	    }
-	  else if (scrolled)
-	    {
-	      GWHighlightFrameRect(r);
-	    }
+	  GWHighlightFrameRect(r);
 	}
 
       [self unlockFocus];
