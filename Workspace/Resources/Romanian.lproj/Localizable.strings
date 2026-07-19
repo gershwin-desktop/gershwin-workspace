@@ -2,89 +2,51 @@
 
 " is already in use!" = " e deja în uz!";
 
-"%d:%02d remaining" = "%d:%02d remaining";
 
-"%d:%02d:%02d remaining" = "%d:%02d:%02d remaining";
 
-"(failed to launch)" = "(failed to launch)";
 
-"(unlabeled)" = "(unlabeled)";
 
-"10" = "10";
 
-"10 minutes" = "10 minutes";
 
-"11" = "11";
 
-"12" = "12";
 
-"12 hours" = "12 hours";
 
-"13" = "13";
 
-"14" = "14";
 
-"15" = "15";
 
-"16" = "16";
 
-"2 hours" = "2 hours";
 
-"24" = "24";
 
-"28" = "28";
 
-"3 hours" = "3 hours";
 
-"30 minutes" = "30 minutes";
 
-"32" = "32";
 
-"36" = "36";
 
-"40" = "40";
 
-"48" = "48";
 
-"5 minutes" = "5 minutes";
 
-"6 hours" = "6 hours";
 
-"64" = "64";
 
-": no such file or directory!" = ": no such file or directory!";
 
-"AFP Server" = "AFP Server";
 
-"AVFS Error" = "AVFS Error";
 
-"AVFS Not Installed" = "AVFS Not Installed";
 
-"About %@" = "About %@";
 
-"About This Computer" = "About This Computer";
 
-"About Workspace" = "About Workspace";
 
 "Access Control" = "Control Acces";
 
-"Activate changes" = "Activate changes";
 
-"Add" = "Add";
 
 "Add Layer..." = "Adaugã un Layer...";
 
-"Already at the root directory" = "Already at the root directory";
 
 "Also apply to files inside selection" = "Aplică și fișierelor dinãuntrul selectării";
 
-"An ISO write operation is already in progress for this device." = "An ISO write operation is already in progress for this device.";
 
-"Annotations" = "Annotations";
 
 "App Inspector" = "Inspector App";
 
-"Applications" = "Applications";
 
 "Are you sure you want to cancel?
 
@@ -92,7 +54,6 @@ The target device may be left in an inconsistent state and will need to be refor
 
 The target device may be left in an inconsistent state and will need to be reformatted.";
 
-"Are you sure you want to open" = "Are you sure you want to open";
 
 "Are you sure you want to quit
 all applications and log out now?" = "Are you sure you want to quit
@@ -112,110 +73,65 @@ all applications and shut down now?";
 
 "Attributes Inspector" = "Inspector Atribuþii";
 
-"Back" = "Back";
 
-"Background" = "Background";
 
-"Background Color..." = "Background Color...";
 
 "Backgrounder connection died!" = "Conexiunea cu Backgrounder-ul a cãzut!";
 
-"Blue" = "Blue";
 
-"Bottom" = "Bottom";
 
-"Bring All to Front" = "Bring All to Front";
 
-"Bring to Front" = "Bring to Front";
 
-"Browser" = "Browser";
 
-"Browsing" = "Browsing";
 
-"Can't create the Desktop directory!" = "Can't create the Desktop directory!";
 
-"Can't edit a directory!" = "Can't edit a directory!";
 
-"Can't open " = "Can't open ";
 
 "Cancel" = "Anuleazã";
 
-"Cancel Write" = "Cancel Write";
 
-"Cancel Write?" = "Cancel Write?";
 
-"Cancelling..." = "Cancelling...";
 
-"Cannot Mount" = "Cannot Mount";
 
-"Cannot access %@" = "Cannot access %@";
 
-"Cannot determine device for the selected mount point." = "Cannot determine device for the selected mount point.";
 
-"Cannot determine device information for the selected mount point." = "Cannot determine device information for the selected mount point.";
 
-"Cannot read information for the selected device." = "Cannot read information for the selected device.";
 
 "Cannot rename " = "Nu pot renumi ";
 
 "Changed" = "Modificat";
 
-"Check for disks" = "Check for disks";
 
-"Check this option to show a status window" = "Check this option to show a status window";
 
-"Choose" = "Choose";
 
-"Choose Image" = "Choose Image";
 
-"Classic" = "Classic";
 
-"Clean Up" = "Clean Up";
 
-"Clean Up By" = "Clean Up By";
 
 "Click 'Set Default' to set default application\nfor all documents with this extension"
   = "'Set Default' pentru a seta app-ul default\npentru toate documentele cu aceastã extensie";
 
-"Close Window" = "Close Window";
 
-"Cloud Drive" = "Cloud Drive";
 
-"Color:" = "Color:";
 
-"Column Width" = "Column Width";
 
-"Compress" = "Compress";
 
-"Compressing..." = "Compressing...";
 
-"Computer" = "Computer";
 
-"Confirmation" = "Confirmation";
 
-"Connect" = "Connect";
 
-"Connect to SFTP Server" = "Connect to SFTP Server";
 
-"Connect to Server..." = "Connect to Server...";
 
-"Connect to Server:" = "Connect to Server:";
 
-"Connect to WebDAV Server" = "Connect to WebDAV Server";
 
-"Connection Failed" = "Connection Failed";
 
-"Contents" = "Contents";
 
 "Contents Inspector" = "Inspector Conþinut";
 
 "Continue" = "Continuã";
 
-"Continue Writing" = "Continue Writing";
 
-"Copy" = "Copy";
 
-"Copy File" = "Copy File";
 
 "Copy from: " = "Copiez de la: ";
 
@@ -233,94 +149,62 @@ Error: %@" = "Could not connect to %@.
 
 Error: %@";
 
-"Could not create or access the %@ folder" = "Could not create or access the %@ folder";
 
-"Could not find formatdisk-helper. Please reinstall Workspace tools." = "Could not find formatdisk-helper. Please reinstall Workspace tools.";
 
-"Could not open URL:\n\n%@"
-  = "Could not open URL:\n\n%@";
 
-"Current selection" = "Current selection";
 
-"Customize Toolbar..." = "Customize Toolbar...";
 
-"Cut" = "Cut";
 
-"Cycle Through Windows" = "Cycle Through Windows";
 
 "Date" = "Data";
 
-"Date Created" = "Date Created";
 
-"Date Modified" = "Date Modified";
 
-"Default Editor" = "Default Editor";
 
-"Default:" = "Default:";
 
 "Delete" = "ªterge";
 
 "Delete the selected objects?" = "ªterg obiectele selectate?";
 
-"DeskTop Shelf" = "DeskTop Shelf";
 
-"Desktop" = "Desktop";
 
-"Destroy" = "Destroy";
 
 "Destroying" = "ªterg";
 
-"Dock" = "Dock";
 
-"Documents" = "Documents";
 
-"Domains" = "Domains";
 
-"Done." = "Done.";
 
 "Double-click to open selected document(s)" = "Douã-click pentru a deschide documentele selectate";
 
-"Downloads" = "Downloads";
 
-"Duplicate" = "Duplicate";
 
 "Duplicate the selected objects?" = "Duplichez obiectele selectate?";
 
 "Duplicating" = "Duplichez";
 
-"Edit" = "Edit";
 
 "Edit File" = "Editeazã Fiºier";
 
-"Editor" = "Editor";
 
-"Eject" = "Eject";
 
 "Empty Recycler" = "Golește Coșul";
 
-"Empty Trash" = "Empty Trash";
 
 "Empty the Recycler?" = "Golesc Coșul?";
 
-"Enclosing Folder" = "Enclosing Folder";
 
-"Enter Full Screen" = "Enter Full Screen";
 
-"Enter credentials for %@:" = "Enter credentials for %@:";
 
 "Erases all data on %@ and reformats as FAT32.
-" = "Erases all data on %@ and reformats as FAT32.
 ";
 
 "Error" = "Eroare";
 
 "Execute" = "Executã";
 
-"Extract" = "Extract";
 
-"Extracting..." = "Extracting...";
 
-"Failed to execute shutdown command." = "Failed to execute shutdown command.";
 
 "Failed to mount SFTP volume:
 
@@ -328,113 +212,69 @@ Error: %@";
 
 %@";
 
-"Failed to unmount %@." = "Failed to unmount %@.";
 
-"Failed to unmount %@: %@" = "Failed to unmount %@: %@";
 
-"Failed." = "Failed.";
 
-"Feedback" = "Feedback";
 
-"Fiend" = "Fiend";
 
-"File" = "File";
 
 "File Operation Completed" = "Operazie Terminatã";
 
 "File Operation Error!" = "Eroare în operaþia pe fiºiere!";
 
-"File Operations" = "File Operations";
 
-"Files" = "Files";
 
-"Find" = "Find";
 
-"Finder" = "Finder";
 
 "Folder Inspector" = "Inspector Dosare";
 
-"Folders" = "Folders";
 
-"Format" = "Format";
 
-"Format Complete" = "Format Complete";
 
-"Format Disk..." = "Format Disk...";
 
-"Format Failed" = "Format Failed";
 
-"Format “%@”?" = "Format “%@”?";
 
-"Formatting failed." = "Formatting failed.";
 
-"Forward" = "Forward";
 
 "From:" = "De la:";
 
 "GNUstep Workspace Manager" = "Workspace Manager-ul pentru GNUstep";
 
-"General" = "General";
 
-"Gershwin Help" = "Gershwin Help";
 
-"Get Info" = "Get Info";
 
-"Go" = "Go";
 
-"Go backward" = "Go backward";
 
-"Go forward" = "Go forward";
 
-"Go to Folder..." = "Go to Folder...";
 
-"Go to Folder:" = "Go to Folder:";
 
-"Green" = "Green";
 
-"Grey" = "Grey";
 
 "Group" = "Grup";
 
 "Group:" = "Grup:";
 
-"Help" = "Help";
 
 "Help..." = "Ajutor...";
 
-"Hidden Files" = "Hidden Files";
 
-"Hidden directories" = "Hidden directories";
 
-"Hidden files" = "Hidden files";
 
-"Hide" = "Hide";
 
 "Hide Fiend" = "Ascunde Fiend-ul";
 
-"Hide Others" = "Hide Others";
 
-"Hide Sidebar" = "Hide Sidebar";
 
-"Hide Toolbar" = "Hide Toolbar";
 
-"Hide Workspace" = "Hide Workspace";
 
-"History" = "History";
 
-"Home" = "Home";
 
-"ISO File Dropped" = "ISO File Dropped";
 
-"ISO Write Error" = "ISO Write Error";
 
 "Icon" = "Icoane";
 
-"Icon Position" = "Icon Position";
 
-"Icon Size" = "Icon Size";
 
-"Icons" = "Icons";
 
 "Image Inspector" = "Inspector Imagini";
 
@@ -442,43 +282,28 @@ Error: %@";
 
 "In:" = "În:";
 
-"Info" = "Info";
 
 "Info Panel..." = "Panou Informaþii...";
 
-"Inspectors" = "Inspectors";
 
 "Invalid Contents" = "Conþinut invalid";
 
-"Invalid URL format" = "Invalid URL format";
 
 "Invalid char in name" = "Caracter invalid în nume";
 
-"Invalid mount point." = "Invalid mount point.";
 
 "Items" = "Elemente";
 
-"Keep in Dock" = "Keep in Dock";
 
-"Kernel" = "Kernel";
 
-"Keyboard Shortcuts" = "Keyboard Shortcuts";
 
-"Kill applications" = "Kill applications";
 
-"Kind" = "Kind";
 
-"Label" = "Label";
 
-"Label Color..." = "Label Color...";
 
-"Label Size" = "Label Size";
 
-"Layers" = "Layers";
 
-"Left" = "Left";
 
-"Legal & Regulatory" = "Legal & Regulatory";
 
 "Link" = "Leagã";
 
@@ -486,39 +311,23 @@ Error: %@";
 
 "Linking" = "Leg";
 
-"Load" = "Load";
 
-"Local" = "Local";
 
-"Local User" = "Local User";
 
-"Log Out" = "Log Out";
 
-"Log Out..." = "Log Out...";
 
-"Low Disk Space" = "Low Disk Space";
 
-"Make Alias" = "Make Alias";
 
-"Make thumbnail(s)" = "Make thumbnail(s)";
 
-"Memory" = "Memory";
 
 "Miniaturize Window" = "Micºoreazã Fereastra";
 
-"Minimize" = "Minimize";
 
-"Model" = "Model";
 
-"Modern" = "Modern";
 
-"Modification date" = "Modification date";
 
-"Modules:" = "Modules:";
 
-"More Info..." = "More Info...";
 
-"Mount Failed" = "Mount Failed";
 
 "Move" = "Miºca";
 
@@ -526,124 +335,75 @@ Error: %@";
 
 "Move from: " = "Miºc de la: ";
 
-"Move to Recycler" = "Move to Recycler";
 
-"Move to Trash" = "Move to Trash";
 
 "Moving" = "Miºc";
 
-"Music" = "Music";
 
-"Name" = "Name";
 
-"Name only" = "Name only";
 
-"Network" = "Network";
 
-"Network Location" = "Network Location";
 
-"Network Server" = "Network Server";
 
-"Network User" = "Network User";
 
-"New File" = "New File";
 
-"New Folder" = "New Folder";
 
-"New Live Search" = "New Live Search";
 
-"New Viewer" = "New Viewer";
 
-"New Workspace Window" = "New Workspace Window";
 
-"New to Gershwin? Get Started" = "New to Gershwin? Get Started";
 
-"No" = "No";
 
 "No Contents Inspector" = "Nici un inspector";
 
 "No Contents Inspector\nFor Multiple Selection"
   = "Nici un inspector\npentru o selectare multiplã";
 
-"No Default Editor" = "No Default Editor";
 
-"No Finder modules! Quitting now." = "No Finder modules! Quitting now.";
 
 "No Tools Inspector" = "Nici un inspector";
 
-"No executable found!" = "No executable found!";
 
-"No name supplied!" = "No name supplied!";
 
-"No search criteria!" = "No search criteria!";
 
-"No selection!" = "No selection!";
 
-"None" = "None";
 
-"Not Implemented" = "Not Implemented";
 
-"Not an ISO or supported disk image file." = "Not an ISO or supported disk image file.";
 
-"Number of saved paths" = "Number of saved paths";
 
-"OK" = "OK";
 
-"OS" = "OS";
 
-"Omnipresent" = "Omnipresent";
 
-"Open" = "Open";
 
-"Open With" = "Open With";
 
-"Open as Folder" = "Open as Folder";
 
-"Open in Terminal" = "Open in Terminal";
 
 "Open these kinds of documents:" = "Deschide acest tip de documente:";
 
-"Operation Failed" = "Operation Failed";
 
-"Operation In Progress" = "Operation In Progress";
 
-"Operation Preferences" = "Operation Preferences";
 
-"Orange" = "Orange";
 
 "Other" = "Alþii";
 
-"Owner" = "Owner";
 
 "Owner:" = "Proprietar:";
 
-"Parent" = "Parent";
 
-"Password:" = "Password:";
 
-"Paste" = "Paste";
 
-"Path:" = "Path:";
 
 "Pause" = "Pauzã";
 
 "Permissions" = "Permisii";
 
-"Pictures" = "Pictures";
 
-"Position:" = "Position:";
 
-"Preferences..." = "Preferences...";
 
-"Preparing..." = "Preparing...";
 
-"Print" = "Print";
 
 "Processes..." = "Procese...";
 
-"Processor" = "Processor";
 
-"Purple" = "Purple";
 
 "Put Away" = "Pune la loc";
 
@@ -651,9 +411,7 @@ Error: %@";
 
 "Read" = "Citeºte";
 
-"Recents" = "Recents";
 
-"Recursive" = "Recursive";
 
 "Recycle: " = "Coș: ";
 
@@ -661,141 +419,84 @@ Error: %@";
 
 "Recycler: " = "Coș: ";
 
-"Red" = "Red";
 
-"Redo" = "Redo";
 
 "Released under the GNU General Public License 2.0" = "Publicat sub GNU General Public License 2.0";
 
-"Remove" = "Remove";
 
 "Remove Current Layer" = "Scoate Layer-ul Curent";
 
-"Remove from Dock" = "Remove from Dock";
 
-"Remove thumbnail(s)" = "Remove thumbnail(s)";
 
 "Rename Current Layer" = "Redenumeºte Layer-ul Curent";
 
-"Restart" = "Restart";
 
-"Restart..." = "Restart...";
 
 "Revert" = "Anuleazã";
 
-"Right" = "Right";
 
-"Run" = "Run";
 
-"Run..." = "Run...";
 
-"SFTP Server" = "SFTP Server";
 
-"SSHFS Not Installed" = "SSHFS Not Installed";
 
-"Search" = "Search";
 
-"Search for items whose:" = "Search for items whose:";
 
-"Search in:" = "Search in:";
 
-"Searching in:" = "Searching in:";
 
 "See https://www.gnustep.org/experience/Workspace.html" = "Vezi https://www.gnustep.org/experience/Gworkspace.html";
 
-"Select All" = "Select All";
 
-"Select and move the files to hide or to show" = "Select and move the files to hide or to show";
 
-"Services" = "Services";
 
-"Set" = "Set";
 
-"Set Browsing as Default" = "Set Browsing as Default";
 
-"Set Default" = "Set Default";
 
-"Set Spatial as Default" = "Set Spatial as Default";
 
-"Share" = "Share";
 
-"Show" = "Show";
 
-"Show All" = "Show All";
 
-"Show Clipboard" = "Show Clipboard";
 
-"Show Dock" = "Show Dock";
 
 "Show Fiend" = "Aratã Fiend-ul";
 
-"Show History" = "Show History";
 
-"Show In File Viewer" = "Show In File Viewer";
 
-"Show Inspectors" = "Show Inspectors";
 
-"Show Preview" = "Show Preview";
 
-"Show Preview Options" = "Show Preview Options";
 
-"Show View Options" = "Show View Options";
 
-"Show status window" = "Show status window";
 
-"Shown files" = "Shown files";
 
-"Shut Down" = "Shut Down";
 
-"Shut Down..." = "Shut Down...";
 
-"Single Click Launch" = "Single Click Launch";
 
-"Size" = "Size";
 
 "Size:" = "Dimensiuni:";
 
 "Some items have the same name;\ndo you want to sobstitute them?"
   = "Anumite elemente au acelaºi nume;\nvrei sã le înlocuieºti?";
 
-"Sort By" = "Sort By";
 
 "Sort by" = "Ordonare";
 
 "Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder"
   = "Ordonarea se aplică\nconþinutului dosarului selectat,\nNU directorului care îl conþine";
 
-"Sorting Order" = "Sorting Order";
 
-"Spatial" = "Spatial";
 
-"Specific places" = "Specific places";
 
-"Start Dictation" = "Start Dictation";
 
-"Status Window" = "Status Window";
 
-"Stop" = "Stop";
 
-"Style:" = "Style:";
 
-"Supported URL schemes: sftp://, webdav://, webdavs://" = "Supported URL schemes: sftp://, webdav://, webdavs://";
 
-"Symbols" = "Symbols";
 
-"System" = "System";
 
-"System Disk" = "System Disk";
 
-"Tags" = "Tags";
 
-"Target is not a physical device mount point." = "Target is not a physical device mount point.";
 
-"Terminal" = "Terminal";
 
-"Terminal.app" = "Terminal.app";
 
-"The Desktop directory has been deleted! Quitting now!" = "The Desktop directory has been deleted! Quitting now!";
 
 "The ISO image has been successfully written to the device.
 
@@ -803,18 +504,13 @@ The new volume should appear on your desktop when you plug the device in." = "Th
 
 The new volume should appear on your desktop when you plug the device in.";
 
-"The Utilities folder could not be found at:\n\n%@"
-  = "The Utilities folder could not be found at:\n\n%@";
 
-"The disk was formatted as FAT32." = "The disk was formatted as FAT32.";
 
-"The following applications:" = "The following applications:";
 
 "The following volumes were removed without being properly ejected:
 
 %@
 
-" = "The following volumes were removed without being properly ejected:
 
 %@
 
@@ -828,148 +524,87 @@ Do you want to restart it?";
 Do you want to restart it?" = "The mdextractor connection died.
 Do you want to restart it?";
 
-"The method will apply to all the folders" = "The method will apply to all the folders";
 
 "The name " = "numele ";
 
-"The startup disk has less than 3%% free space.\n\n"
-  = "The startup disk has less than 3%% free space.\n\n";
 
 "The volume at the following path was removed without being properly ejected:
 
 %@
 
-" = "The volume at the following path was removed without being properly ejected:
 
 %@
 
 ";
 
-"The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use." = "The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use.";
 
-"Thumbnails" = "Thumbnails";
 
 "To:" = "La:";
 
-"Tools" = "Tools";
 
 "Tools Inspector" = "Inspector Instrumente";
 
-"Transfer" = "Transfer";
 
-"Type" = "Type";
 
-"Type the command to execute:" = "Type the command to execute:";
 
-"Type the name or the path of the application" = "Type the name or the path of the application";
 
 "UNIX Permissions" = "Permisii UNIX";
 
-"URL must include a hostname" = "URL must include a hostname";
 
-"URL must include a scheme (sftp://, webdav://, webdavs://)" = "URL must include a scheme (sftp://, webdav://, webdavs://)";
 
-"Uncheck the buttons to allow automatic confirmation" = "Uncheck the buttons to allow automatic confirmation";
 
-"Undo" = "Undo";
 
-"Unhide" = "Unhide";
 
-"Unmount failed." = "Unmount failed.";
 
-"Unmounting partitions..." = "Unmounting partitions...";
 
-"Up" = "Up";
 
-"Update now" = "Update now";
 
-"Use Default Settings" = "Use Default Settings";
 
-"Use Stacks" = "Use Stacks";
 
-"Use Terminal service" = "Use Terminal service";
 
-"Use image" = "Use image";
 
-"Username:" = "Username:";
 
-"Utilities" = "Utilities";
 
-"Verifying..." = "Verifying...";
 
-"Videos" = "Videos";
 
-"View" = "View";
 
-"View Behavior" = "View Behavior";
 
-"Viewer" = "Viewer";
 
-"Volume Removed Unexpectedly" = "Volume Removed Unexpectedly";
 
-"Volumes" = "Volumes";
 
-"Wait the operations to terminate!" = "Wait the operations to terminate!";
 
-"WebDAV Connection Failed" = "WebDAV Connection Failed";
 
-"WebDAV Server" = "WebDAV Server";
 
-"WebDAV Server (Secure)" = "WebDAV Server (Secure)";
 
-"Window" = "Window";
 
 "Windows" = "Ferestre";
 
-"Workspace Help" = "Workspace Help";
 
-"Workspace Preferences" = "Workspace Preferences";
 
-"Workspace is logging out!" = "Workspace is logging out!";
 
 "Write" = "Scrie";
 
-"Write Cancelled" = "Write Cancelled";
 
-"Write Complete" = "Write Complete";
 
-"Write ISO to “%@”?" = "Write ISO to “%@”?";
 
-"Write to Device" = "Write to Device";
 
-"Writing image" = "Writing image";
 
-"Writing image to device..." = "Writing image to device...";
 
-"X11 Server" = "X11 Server";
 
-"XTerm" = "XTerm";
 
-"Yellow" = "Yellow";
 
-"Yes" = "Yes";
 
 "You are not allowed to umount
-" = "You are not allowed to umount
 ";
 
-"You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element." = "You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element.";
 
-"You can't create a new file in the Recycler!" = "You can't create a new file in the Recycler!";
 
-"You can't create a new folder in the Recycler!" = "You can't create a new folder in the Recycler!";
 
-"You can't do this in the Recycler!" = "You can't do this in the Recycler!";
 
-"You can't duplicate files in the Recycler!" = "You can't duplicate files in the Recycler!";
 
-"You can't move objects with multiple parent paths!" = "You can't move objects with multiple parent paths!";
 
-"You can't open a document that is in the Recycler!" = "You can't open a document that is in the Recycler!";
 
-"You cannot eject the root filesystem" = "You cannot eject the root filesystem";
 
-"You cannot format the root filesystem." = "You cannot format the root filesystem.";
 
 "You do not have write permission
 for" = "You do not have write permission
@@ -981,7 +616,6 @@ for";
 "You have not write permission\nfor "
   = "Nu ai permisie de scriere\npentru ";
 
-"Zoom" = "Zoom";
 
 "\nto the Recycler"
   = "\nîn coș";
@@ -989,171 +623,62 @@ for";
 "\nto: "
   = "\nla: ";
 
-"a day" = "a day";
 
-"annotations" = "annotations";
 
-"application" = "application";
 
-"arguments" = "arguments";
 
-"as Columns" = "as Columns";
 
-"as Gallery" = "as Gallery";
 
-"as Icons" = "as Icons";
 
-"as List" = "as List";
 
-"available" = "available";
 
-"can't create the Live Search folder" = "can't create the Live Search folder";
 
-"center" = "center";
 
-"contains" = "contains";
 
-"contains all of" = "contains all of";
 
-"contains not" = "contains not";
 
-"contains one of" = "contains one of";
 
-"contents" = "contents";
 
-"date created" = "date created";
 
-"date modified" = "date modified";
 
-"ddbd connection died." = "ddbd connection died.";
 
-"during the file operations" = "during the file operations";
 
-"elements" = "elements";
 
-"ends with" = "ends with";
 
-"error" = "error";
 
-"fit" = "fit";
 
-"folder" = "folder";
 
-"free" = "free";
 
-"fswatcher notifications disabled!" = "fswatcher notifications disabled!";
 
-"greater than" = "greater than";
 
-"includes" = "includes";
 
-"is" = "is";
 
-"is after" = "is after";
 
-"is before" = "is before";
 
-"is exactly" = "is exactly";
 
-"is not" = "is not";
 
-"is not a valid application!" = "is not a valid application!";
 
-"is today" = "is today";
 
-"is within" = "is within";
 
-"items?" = "items?";
 
-"kind" = "kind";
 
-"less than" = "less than";
 
-"name" = "name";
 
-"no autoupdate" = "no autoupdate";
 
-"of file operations" = "of file operations";
 
-"one hour" = "one hour";
 
-"one minute" = "one minute";
 
-"open" = "open";
 
-"owner" = "owner";
 
-"plain file" = "plain file";
 
-"recursive" = "recursive";
 
-"refuse to terminate." = "refuse to terminate.";
 
-"scale" = "scale";
 
-"seems not a valid application!" = "seems not a valid application!";
 
-"size" = "size";
 
-"sshpass Not Installed" = "sshpass Not Installed";
 
-"starting:" = "starting:";
 
-"starts with" = "starts with";
 
-"symbolic link" = "symbolic link";
 
-"that have no order specified" = "that have no order specified";
 
 "the Recycler" = "Coșul";
-
-"the last 2 days" = "the last 2 days";
-
-"the last 2 months" = "the last 2 months";
-
-"the last 2 weeks" = "the last 2 weeks";
-
-"the last 3 days" = "the last 3 days";
-
-"the last 3 months" = "the last 3 months";
-
-"the last 3 weeks" = "the last 3 weeks";
-
-"the last 6 months" = "the last 6 months";
-
-"the last day" = "the last day";
-
-"the last month" = "the last month";
-
-"the last week" = "the last week";
-
-"the search tool connection died!" = "the search tool connection died!";
-
-"tile" = "tile";
-
-"to use to open the current selection" = "to use to open the current selection";
-
-"tool" = "tool";
-
-"total" = "total";
-
-"type" = "type";
-
-"unable to launch the search task." = "unable to launch the search task.";
-
-"unable to launch the updater task." = "unable to launch the updater task.";
-
-"unknown" = "unknown";
-
-"unknown volume size" = "unknown volume size";
-
-"updater connection died!" = "updater connection died!";
-
-"use thumbnails" = "use thumbnails";
-
-"with exactly" = "with exactly";
-
-"without one of" = "without one of";
-
-"xterm" = "xterm";
-

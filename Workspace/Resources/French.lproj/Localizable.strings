@@ -2,76 +2,41 @@
 
 " is already in use!" = " est déja utilisé!";
 
-"%d:%02d remaining" = "%d:%02d remaining";
 
-"%d:%02d:%02d remaining" = "%d:%02d:%02d remaining";
 
-"(failed to launch)" = "(failed to launch)";
 
-"(unlabeled)" = "(unlabeled)";
 
-"10" = "10";
 
-"10 minutes" = "10 minutes";
 
-"11" = "11";
 
-"12" = "12";
 
-"12 hours" = "12 hours";
 
-"13" = "13";
 
-"14" = "14";
 
-"15" = "15";
 
-"16" = "16";
 
-"2 hours" = "2 hours";
 
-"24" = "24";
 
-"28" = "28";
 
-"3 hours" = "3 hours";
 
-"30 minutes" = "30 minutes";
 
-"32" = "32";
 
-"36" = "36";
 
-"40" = "40";
 
-"48" = "48";
 
-"5 minutes" = "5 minutes";
 
-"6 hours" = "6 hours";
 
-"64" = "64";
 
-": no such file or directory!" = ": no such file or directory!";
 
 "A layer with this name is already present!" = "Un espace de travail possède déja ce nom !";
 
-"AFP Server" = "AFP Server";
 
-"AFP volume mounting is not yet implemented." = "AFP volume mounting is not yet implemented.";
 
-"AVFS (A Virtual File System) is required to browse archive contents but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install avfs\n• On Fedora/RHEL: sudo dnf install avfs\n• On Arch: sudo pacman -S avfs\n• From source: https://avf.sourceforge.net/"
-  = "AVFS (A Virtual File System) is required to browse archive contents but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install avfs\n• On Fedora/RHEL: sudo dnf install avfs\n• On Arch: sudo pacman -S avfs\n• From source: https://avf.sourceforge.net/";
 
-"AVFS Error" = "AVFS Error";
 
-"AVFS Not Installed" = "AVFS Not Installed";
 
-"About %@" = "About %@";
 
-"About This Computer" = "About This Computer";
 
-"About Workspace" = "About Workspace";
 
 "Activate changes" = "Appliquer";
 
@@ -83,31 +48,21 @@
 
 "Add Tab..." = "Ajouter une étagère...";
 
-"Already at the root directory" = "Already at the root directory";
 
-"An ISO write operation is already in progress for this device." = "An ISO write operation is already in progress for this device.";
 
-"Annotations" = "Annotations";
 
 "App Inspector" = "Inspecteur d'application";
 
-"Applications" = "Applications";
 
 "Are you sure that you want to remove this layer?" = "Êtes-vous sûr de vouloir supprimer cet espace de travail ?";
 
-"Are you sure you want to cancel?\n\nThe target device may be left in an inconsistent state and will need to be reformatted."
-  = "Are you sure you want to cancel?\n\nThe target device may be left in an inconsistent state and will need to be reformatted.";
 
 "Are you sure you want to open" = "Voulez-vous vraiment ouvrir";
 
 "Are you sure you want to quit\nall applications and log out now?"
   = "Etes-vous sûr de vouloir quitter toutes\nles applications et vous déconnecter immédiatement ?";
 
-"Are you sure you want to quit\nall applications and restart now?"
-  = "Are you sure you want to quit\nall applications and restart now?";
 
-"Are you sure you want to quit\nall applications and shut down now?"
-  = "Are you sure you want to quit\nall applications and shut down now?";
 
 "Arrange in Front" = "Mettre au premier plan";
 
@@ -117,51 +72,34 @@
 
 "Autohide Tabbed Shelf" = "Cacher automatiquement les étagères";
 
-"Back" = "Back";
 
 "Background" = "Fond d'écran";
 
-"Background Color..." = "Background Color...";
 
 "Backgrounder connection died!" = "Interruption de la connexion !";
 
-"Blue" = "Blue";
 
-"Bottom" = "Bottom";
 
-"Bring All to Front" = "Bring All to Front";
 
-"Bring to Front" = "Bring to Front";
 
 "Browser" = "Navigateur";
 
-"Browsing" = "Browsing";
 
 "Calculate" = "Calculer";
 
-"Can't create the Desktop directory!" = "Can't create the Desktop directory!";
 
-"Can't edit a directory!" = "Can't edit a directory!";
 
 "Can't open " = "Impossible d'ouvrir ";
 
 "Cancel" = "Annuler";
 
-"Cancel Write" = "Cancel Write";
 
-"Cancel Write?" = "Cancel Write?";
 
-"Cancelling..." = "Cancelling...";
 
-"Cannot Mount" = "Cannot Mount";
 
-"Cannot access %@" = "Cannot access %@";
 
-"Cannot determine device for the selected mount point." = "Cannot determine device for the selected mount point.";
 
-"Cannot determine device information for the selected mount point." = "Cannot determine device information for the selected mount point.";
 
-"Cannot read information for the selected device." = "Cannot read information for the selected device.";
 
 "Cannot rename " = "Impossible de renommer ";
 
@@ -173,46 +111,31 @@
 
 "Choose" = "Sélectionner";
 
-"Choose Image" = "Choose Image";
 
 "Classic" = "Classique";
 
-"Clean Up" = "Clean Up";
 
-"Clean Up By" = "Clean Up By";
 
 "Click 'Set Default' to set default application\nfor all documents with this extension"
   = "Cliquez sur 'Définir par défaut' pour définir l'application \nqui sera associée à tous les documents ayant cette extension";
 
 "Close Window" = "Fermer la fenêtre";
 
-"Cloud Drive" = "Cloud Drive";
 
 "Color:" = "Couleur:";
 
-"Column Width" = "Column Width";
 
 "Columns Width" = "Largeur des colonnes";
 
-"Compress" = "Compress";
 
-"Compressing..." = "Compressing...";
 
-"Computer" = "Computer";
 
-"Confirmation" = "Confirmation";
 
-"Connect" = "Connect";
 
-"Connect to SFTP Server" = "Connect to SFTP Server";
 
-"Connect to Server..." = "Connect to Server...";
 
-"Connect to Server:" = "Connect to Server:";
 
-"Connect to WebDAV Server" = "Connect to WebDAV Server";
 
-"Connection Failed" = "Connection Failed";
 
 "Contents" = "Contenus";
 
@@ -220,42 +143,27 @@
 
 "Continue" = "Continuer";
 
-"Continue Writing" = "Continue Writing";
 
 "Copy" = "Copier";
 
-"Copy File" = "Copy File";
 
 "Copy from: " = "Copie depuis : ";
 
 "Copying" = "Copie en cours";
 
-"Could not connect to %@.\n\nError: %@"
-  = "Could not connect to %@.\n\nError: %@";
 
-"Could not connect to %@\n\nCheck the hostname and try again."
-  = "Could not connect to %@\n\nCheck the hostname and try again.";
 
-"Could not create or access the %@ folder" = "Could not create or access the %@ folder";
 
-"Could not find formatdisk-helper. Please reinstall Workspace tools." = "Could not find formatdisk-helper. Please reinstall Workspace tools.";
 
-"Could not open URL:\n\n%@"
-  = "Could not open URL:\n\n%@";
 
 "Current selection" = "Selection courante";
 
-"Customize Toolbar..." = "Customize Toolbar...";
 
 "Cut" = "Couper";
 
-"Cycle Through Windows" = "Cycle Through Windows";
 
-"Date" = "Date";
 
-"Date Created" = "Date Created";
 
-"Date Modified" = "Date Modified";
 
 "Default Editor" = "Éditeur par défaut";
 
@@ -273,17 +181,12 @@
 
 "Do you really want to quit?" = "Voulez-vous réellement quitter ?";
 
-"Dock" = "Dock";
 
-"Documents" = "Documents";
 
-"Domains" = "Domains";
 
-"Done." = "Done.";
 
 "Double-click to open selected document(s)" = "Double-cliquez pour ouvrir le ou les document(s) sélectionné(s)";
 
-"Downloads" = "Downloads";
 
 "Duplicate" = "Dupliquer";
 
@@ -297,54 +200,33 @@
 
 "Editor" = "Éditeur";
 
-"Eject" = "Eject";
 
 "Empty Recycler" = "Vider la corbeille";
 
-"Empty Trash" = "Empty Trash";
 
 "Empty the Recycler?" = "Vider la Corbeille ?";
 
-"Enclosing Folder" = "Enclosing Folder";
 
-"Enter Full Screen" = "Enter Full Screen";
 
-"Enter credentials for %@:" = "Enter credentials for %@:";
 
 "Erases all data on %@ and reformats as FAT32.
-" = "Erases all data on %@ and reformats as FAT32.
 ";
 
-"Erases all data on %@ and reformats as FAT32.\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone."
-  = "Erases all data on %@ and reformats as FAT32.\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone.";
 
 "Error" = "Erreur";
 
 "Execute" = "Exécuter";
 
-"Extract" = "Extract";
 
-"Extracting..." = "Extracting...";
 
-"FUSE sshfs is required to mount SFTP network volumes but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshfs\n• On Fedora/RHEL: sudo dnf install fuse-sshfs\n• On Arch: sudo pacman -S sshfs"
-  = "FUSE sshfs is required to mount SFTP network volumes but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshfs\n• On Fedora/RHEL: sudo dnf install fuse-sshfs\n• On Arch: sudo pacman -S sshfs";
 
-"Failed to execute shutdown command." = "Failed to execute shutdown command.";
 
-"Failed to mount SFTP volume:\n\n%@"
-  = "Failed to mount SFTP volume:\n\n%@";
 
-"Failed to start the AVFS daemon. Please check that AVFS is properly installed." = "Failed to start the AVFS daemon. Please check that AVFS is properly installed.";
 
-"Failed to unmount %@." = "Failed to unmount %@.";
 
-"Failed to unmount %@: %@" = "Failed to unmount %@: %@";
 
-"Failed." = "Failed.";
 
-"Feedback" = "Feedback";
 
-"Fiend" = "Fiend";
 
 "File" = "Fichier";
 
@@ -358,7 +240,6 @@
 
 "Files" = "Fichiers";
 
-"Find" = "Find";
 
 "Finder" = "Chercher un fichier";
 
@@ -366,19 +247,12 @@
 
 "Folders" = "Dossiers";
 
-"Format" = "Format";
 
-"Format Complete" = "Format Complete";
 
-"Format Disk..." = "Format Disk...";
 
-"Format Failed" = "Format Failed";
 
-"Format “%@”?" = "Format “%@”?";
 
-"Formatting failed." = "Formatting failed.";
 
-"Forward" = "Forward";
 
 "From:" = "De :";
 
@@ -386,29 +260,21 @@
 
 "General" = "Général";
 
-"Gershwin Help" = "Gershwin Help";
 
-"Get Info" = "Get Info";
 
-"Go" = "Go";
 
 "Go backward" = "Revenir en arrière";
 
 "Go forward" = "Avancer";
 
-"Go to Folder..." = "Go to Folder...";
 
-"Go to Folder:" = "Go to Folder:";
 
-"Green" = "Green";
 
-"Grey" = "Grey";
 
 "Group" = "Groupe";
 
 "Group:" = "Groupe:";
 
-"Help" = "Help";
 
 "Help..." = "Aide...";
 
@@ -428,21 +294,15 @@
 
 "Hide Recycler" = "Masquer la corbeille";
 
-"Hide Sidebar" = "Hide Sidebar";
 
 "Hide Tabbed Shelf" = "Masquer les étagères";
 
-"Hide Toolbar" = "Hide Toolbar";
 
-"Hide Workspace" = "Hide Workspace";
 
 "History" = "Historique";
 
-"Home" = "Home";
 
-"ISO File Dropped" = "ISO File Dropped";
 
-"ISO Write Error" = "ISO Write Error";
 
 "Icon" = "Icône";
 
@@ -469,27 +329,18 @@
 
 "Invalid Contents" = "Contenu invalide";
 
-"Invalid URL format" = "Invalid URL format";
 
 "Invalid char in name" = "Le nom contient un caractère invalide";
 
-"Invalid mount point." = "Invalid mount point.";
 
 "Items" = "Éléments";
 
-"Keep in Dock" = "Keep in Dock";
 
-"Kernel" = "Kernel";
 
-"Keyboard Shortcuts" = "Keyboard Shortcuts";
 
-"Kill applications" = "Kill applications";
 
-"Kind" = "Kind";
 
-"Label" = "Label";
 
-"Label Color..." = "Label Color...";
 
 "Label Size" = "Taille du texte";
 
@@ -497,7 +348,6 @@
 
 "Left" = "Gauche";
 
-"Legal & Regulatory" = "Legal & Regulatory";
 
 "Link" = "Lier";
 
@@ -509,39 +359,27 @@
 
 "List" = "Liste";
 
-"Load" = "Load";
 
-"Local" = "Local";
 
-"Local User" = "Local User";
 
 "Log Out" = "Déconnexion";
 
-"Log Out..." = "Log Out...";
 
-"Low Disk Space" = "Low Disk Space";
 
-"Make Alias" = "Make Alias";
 
 "Make thumbnail(s)" = "Créer les vignettes";
 
-"Memory" = "Memory";
 
 "Miniaturize Window" = "Réduire la fenêtre";
 
-"Minimize" = "Minimize";
 
-"Model" = "Model";
 
 "Modern" = "Moderne";
 
 "Modification date" = "Date de modification";
 
-"Modules:" = "Modules:";
 
-"More Info..." = "More Info...";
 
-"Mount Failed" = "Mount Failed";
 
 "Move" = "Déplacer";
 
@@ -551,23 +389,17 @@
 
 "Move to Recycler" = "Envoyer à la corbeille";
 
-"Move to Trash" = "Move to Trash";
 
 "Moving" = "Déplacement en cours";
 
-"Music" = "Music";
 
 "Name" = "Nom";
 
 "Name only" = "Nom seulement";
 
-"Network" = "Network";
 
-"Network Location" = "Network Location";
 
-"Network Server" = "Network Server";
 
-"Network User" = "Network User";
 
 "New File" = "Nouveau fichier";
 
@@ -575,13 +407,9 @@
 
 "New Layer" = "Nouvel espace de travail";
 
-"New Live Search" = "New Live Search";
 
-"New Viewer" = "New Viewer";
 
-"New Workspace Window" = "New Workspace Window";
 
-"New to Gershwin? Get Started" = "New to Gershwin? Get Started";
 
 "No" = "Non";
 
@@ -592,31 +420,22 @@
 
 "No Default Editor" = "Pas d'éditeur par défaut";
 
-"No Finder modules! Quitting now." = "No Finder modules! Quitting now.";
 
 "No Tools Inspector" = "Pas d'inspecteur d'outils";
 
 "No arguments!" = "Pas d'argument!";
 
-"No executable found!" = "No executable found!";
 
-"No name supplied!" = "No name supplied!";
 
-"No search criteria!" = "No search criteria!";
 
 "No selection!" = "Pas de sélection!";
 
-"None" = "None";
 
-"Not Implemented" = "Not Implemented";
 
-"Not an ISO or supported disk image file." = "Not an ISO or supported disk image file.";
 
 "Number of saved paths" = "Nombre de chemins sauvegardés";
 
-"OK" = "OK";
 
-"OS" = "OS";
 
 "Omnipresent" = "Omniprésent";
 
@@ -628,17 +447,13 @@
 
 "Open as Folder" = "Ouvrir le dossier";
 
-"Open in Terminal" = "Open in Terminal";
 
 "Open these kinds of documents:" = "Ouvrir ce type de document :";
 
-"Operation Failed" = "Operation Failed";
 
-"Operation In Progress" = "Operation In Progress";
 
 "Operation Preferences" = "Préférences des opérations";
 
-"Orange" = "Orange";
 
 "Other" = "Autre";
 
@@ -648,37 +463,28 @@
 
 "Owner_short" = "Propr.";
 
-"Parent" = "Parent";
 
-"Password:" = "Password:";
 
 "Paste" = "Coller";
 
 "Path:" = "Nom complet:";
 
-"Pause" = "Pause";
 
 "Permissions" = "Droits";
 
-"Pictures" = "Pictures";
 
 "Position:" = "Position :";
 
 "Preferences..." = "Préférences...";
 
-"Preparing..." = "Preparing...";
 
-"Print" = "Print";
 
 "Print..." = "Imprimer...";
 
-"Processor" = "Processor";
 
-"Purple" = "Purple";
 
 "Put Away" = "Jeter";
 
-"Quick Look \"item\"" = "Quick Look \"item\"";
 
 "Quit" = "Quitter";
 
@@ -686,7 +492,6 @@
 
 "Read" = "Lire";
 
-"Recents" = "Recents";
 
 "Recursive" = "Recursivement";
 
@@ -696,9 +501,7 @@
 
 "Recycler: " = "Corbeille: ";
 
-"Red" = "Red";
 
-"Redo" = "Redo";
 
 "Released under the GNU General Public License 2.0" = "Mise à disposition sous licence : GNU General Public License 2.0";
 
@@ -708,7 +511,6 @@
 
 "Remove Current Tab" = "Supprimer l'étagère";
 
-"Remove from Dock" = "Remove from Dock";
 
 "Remove layer" = "Supprimer cet espace de travail";
 
@@ -720,9 +522,7 @@
 
 "Rename Layer" = "Renommer cet espace de travail";
 
-"Restart" = "Restart";
 
-"Restart..." = "Restart...";
 
 "Revert" = "Revenir";
 
@@ -732,9 +532,7 @@
 
 "Run..." = "Exécuter...";
 
-"SFTP Server" = "SFTP Server";
 
-"SSHFS Not Installed" = "SSHFS Not Installed";
 
 "Search" = "Chercher";
 
@@ -742,7 +540,6 @@
 
 "Search in:" = "Dans :";
 
-"Searching in:" = "Searching in:";
 
 "See https://www.gnustep.org/experience/Workspace.html" = "https://www.gnustep.org/experience/Workspace.html";
 
@@ -750,23 +547,18 @@
 
 "Select and move the files to hide or to show" = "Selectionnez et déplacez les fichiers à cacher ou afficher";
 
-"Services" = "Services";
 
 "Set" = "Appliquer";
 
-"Set Browsing as Default" = "Set Browsing as Default";
 
 "Set Default" = "Définir par défaut";
 
-"Set Spatial as Default" = "Set Spatial as Default";
 
-"Share" = "Share";
 
 "Show" = "Afficher";
 
 "Show All" = "Montrer tout";
 
-"Show Clipboard" = "Show Clipboard";
 
 "Show Desktop" = "Montrer le bureau";
 
@@ -776,27 +568,21 @@
 
 "Show History" = "Voir l'historique";
 
-"Show In File Viewer" = "Show In File Viewer";
 
 "Show Inspectors" = "Afficher les inspecteurs";
 
-"Show Preview" = "Show Preview";
 
-"Show Preview Options" = "Show Preview Options";
 
 "Show Recycler" = "Montrer la corbeille";
 
 "Show Tabbed Shelf" = "Montrer les étagères";
 
-"Show View Options" = "Show View Options";
 
 "Show status window" = "Montrer la progression";
 
 "Shown files" = "Fichiers visibles";
 
-"Shut Down" = "Shut Down";
 
-"Shut Down..." = "Shut Down...";
 
 "Single Click Launch" = "Lancement par un clic simple";
 
@@ -807,7 +593,6 @@
 "Some items have the same name;\ndo you want to sobstitute them?"
   = "Des éléments ont le même nom ;\nvoulez-vous en remplacer le nom ?";
 
-"Sort By" = "Sort By";
 
 "Sort by" = "Trier par";
 
@@ -816,93 +601,59 @@
 
 "Sorting Order" = "Ordre de tri";
 
-"Spatial" = "Spatial";
 
 "Specific places" = "Choix de l'utilisateur";
 
-"Start Dictation" = "Start Dictation";
 
 "Status Window" = "Fenêtre de progression";
 
-"Stop" = "Stop";
 
 "Style:" = "Style :";
 
-"Supported URL schemes: sftp://, webdav://, webdavs://" = "Supported URL schemes: sftp://, webdav://, webdavs://";
 
-"Symbols" = "Symbols";
 
-"System" = "System";
 
-"System Disk" = "System Disk";
 
 "Tabbed Shelf" = "Étagères";
 
-"Tags" = "Tags";
 
-"Target is not a physical device mount point." = "Target is not a physical device mount point.";
 
-"Terminal" = "Terminal";
 
-"Terminal.app" = "Terminal.app";
 
-"The Desktop directory has been deleted! Quitting now!" = "The Desktop directory has been deleted! Quitting now!";
 
-"The ISO image has been successfully written to the device.\n\nThe new volume should appear on your desktop when you plug the device in."
-  = "The ISO image has been successfully written to the device.\n\nThe new volume should appear on your desktop when you plug the device in.";
 
-"The Utilities folder could not be found at:\n\n%@"
-  = "The Utilities folder could not be found at:\n\n%@";
 
-"The disk was formatted as FAT32." = "The disk was formatted as FAT32.";
 
-"The following applications:" = "The following applications:";
 
 "The following volumes were removed without being properly ejected:
 
 %@
 
-" = "The following volumes were removed without being properly ejected:
 
 %@
 
 ";
 
-"The following volumes were removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes."
-  = "The following volumes were removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes.";
 
-"The fswatcher connection died.\nDo you want to restart it?"
-  = "The fswatcher connection died.\nDo you want to restart it?";
 
-"The mdextractor connection died.\nDo you want to restart it?"
-  = "The mdextractor connection died.\nDo you want to restart it?";
 
 "The method will apply to all the folders" = "Cette méthode s'appliquera à tous les dossiers";
 
 "The name " = "Le nom ";
 
-"The network service does not have a valid hostname." = "The network service does not have a valid hostname.";
 
-"The startup disk has less than 3%% free space.\n\n"
-  = "The startup disk has less than 3%% free space.\n\n";
 
-"The startup disk has less than 3%% free space.\n\nOnly %.1f%% (%llu MB) available."
-  = "The startup disk has less than 3%% free space.\n\nOnly %.1f%% (%llu MB) available.";
 
 "The volume at the following path was removed without being properly ejected:
 
 %@
 
-" = "The volume at the following path was removed without being properly ejected:
 
 %@
 
 ";
 
-"The volume at the following path was removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes."
-  = "The volume at the following path was removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes.";
 
-"The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use." = "The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use.";
 
 "This object is already present in this layer!" = "Cet objet est déja présent dans cet espace de travail !";
 
@@ -916,123 +667,79 @@
 
 "Tools Inspector" = "Inspecteur d'outils";
 
-"Transfer" = "Transfer";
 
-"Type" = "Type";
 
 "Type the command to execute:" = "Entrer la commande à exécuter :";
 
 "Type the name or the path of the application" = "Tapez le nom ou le chemin de l'application";
 
-"URL must include a hostname" = "URL must include a hostname";
 
-"URL must include a scheme (sftp://, webdav://, webdavs://)" = "URL must include a scheme (sftp://, webdav://, webdavs://)";
 
 "Uncheck the buttons to allow automatic confirmation" = "Décocher les boutons pour permettre une confirmation";
 
-"Undo" = "Undo";
 
-"Unhide" = "Unhide";
 
-"Unmount failed." = "Unmount failed.";
 
-"Unmounting partitions..." = "Unmounting partitions...";
 
 "Up" = "Haut";
 
-"Update now" = "Update now";
 
 "Use Default Settings" = "Param. par défaut";
 
-"Use Stacks" = "Use Stacks";
 
 "Use Terminal service" = "Utiliser le service Terminal";
 
 "Use image" = "Image";
 
-"Username:" = "Username:";
 
-"Utilities" = "Utilities";
 
-"Verifying..." = "Verifying...";
 
-"Videos" = "Videos";
 
 "View" = "Affichage";
 
-"View Behavior" = "View Behavior";
 
 "Viewer" = "Visualisateur";
 
-"Volume Removed Unexpectedly" = "Volume Removed Unexpectedly";
 
-"Volumes" = "Volumes";
 
-"Wait the operations to terminate!" = "Wait the operations to terminate!";
 
-"WebDAV Connection Failed" = "WebDAV Connection Failed";
 
-"WebDAV Server" = "WebDAV Server";
 
-"WebDAV Server (Secure)" = "WebDAV Server (Secure)";
 
 "Window" = "Fenêtre";
 
 "Windows" = "Fenêtre";
 
-"Workspace Help" = "Workspace Help";
 
 "Workspace Preferences" = "Préférences de Workspace";
 
-"Workspace is logging out!" = "Workspace is logging out!";
 
 "Write" = "Ecrire";
 
-"Write Cancelled" = "Write Cancelled";
 
-"Write Complete" = "Write Complete";
 
-"Write ISO to “%@”?" = "Write ISO to “%@”?";
 
-"Write to Device" = "Write to Device";
 
-"Writing image" = "Writing image";
 
-"Writing image to device..." = "Writing image to device...";
 
-"X11 Server" = "X11 Server";
 
-"Yellow" = "Yellow";
 
 "Yes" = "Oui";
 
-"You are not allowed to umount\n"
-  = "You are not allowed to umount\n";
 
-"You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element." = "You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element.";
 
-"You can't create a new file in the Recycler!" = "You can't create a new file in the Recycler!";
 
-"You can't create a new folder in the Recycler!" = "You can't create a new folder in the Recycler!";
 
-"You can't do this in the Recycler!" = "You can't do this in the Recycler!";
 
 "You can't dock multiple paths!" = "Vous ne pouvez pas stocker plusieurs chemins d'accès !";
 
-"You can't duplicate files in the Recycler!" = "You can't duplicate files in the Recycler!";
 
-"You can't move objects with multiple parent paths!" = "You can't move objects with multiple parent paths!";
 
-"You can't open a document that is in the Recycler!" = "You can't open a document that is in the Recycler!";
 
 "You can't remove the last layer!" = "Vous ne pouvez supprimer le dernier espace de travail !";
 
-"You cannot eject the root filesystem" = "You cannot eject the root filesystem";
 
-"You cannot format the root filesystem." = "You cannot format the root filesystem.";
 
-"You do not have write permission\nfor"
-  = "You do not have write permission\nfor";
 
 "You have not write permission\nfor"
   = "Vous n'avez pas les droits d'écrire\npour";
@@ -1040,7 +747,6 @@
 "You have not write permission\nfor "
   = "Vous n'avez pas les droits d'écriture\n ";
 
-"Zoom" = "Zoom";
 
 "\nto the Recycler"
   = "\nvers la Corbeille";
@@ -1048,7 +754,6 @@
 "\nto: "
   = "\nvers : ";
 
-"a day" = "a day";
 
 "also apply to files inside selection" = "Appliquer aux sous-dossiers";
 
@@ -1056,19 +761,12 @@
 
 "application" = "Application";
 
-"arguments" = "arguments";
 
-"as Columns" = "as Columns";
 
-"as Gallery" = "as Gallery";
 
-"as Icons" = "as Icons";
 
-"as List" = "as List";
 
-"available" = "available";
 
-"can't create the Live Search folder" = "can't create the Live Search folder";
 
 "center" = "Centrer";
 
@@ -1086,11 +784,9 @@
 
 "date modified" = "Modifié";
 
-"ddbd connection died." = "ddbd connection died.";
 
 "during the file operations" = "lors des opérations sur fichier";
 
-"elements" = "elements";
 
 "ends with" = "finit par";
 
@@ -1104,7 +800,6 @@
 
 "free" = "de libre";
 
-"fswatcher notifications disabled!" = "fswatcher notifications disabled!";
 
 "greater than" = "supérieure à";
 
@@ -1120,7 +815,6 @@
 
 "is not" = "n'est pas";
 
-"is not a valid application!" = "is not a valid application!";
 
 "is today" = "aujourd'hui";
 
@@ -1128,44 +822,32 @@
 
 "items?" = "éléments ?";
 
-"kind" = "kind";
 
 "less than" = "inférieure à";
 
 "name" = "Le nom";
 
-"no autoupdate" = "no autoupdate";
 
 "of file operations" = "automatique des opérations sur fichier";
 
-"one hour" = "one hour";
 
-"one minute" = "one minute";
 
-"open" = "open";
 
 "owner" = "Le propriétaire";
 
 "plain file" = "Fichier standart";
 
-"recursive" = "recursive";
 
-"refuse to terminate." = "refuse to terminate.";
 
 "scale" = "Scale";
 
 "seconds." = "secondes.";
 
-"seems not a valid application!" = "seems not a valid application!";
 
 "size" = "Taille";
 
-"sshpass Not Installed" = "sshpass Not Installed";
 
-"sshpass is required for password-based SFTP authentication but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshpass\n• On Fedora/RHEL: sudo dnf install sshpass\n• On Arch: sudo pacman -S sshpass\n\nAlternatively, you can set up SSH key authentication to connect without a password."
-  = "sshpass is required for password-based SFTP authentication but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshpass\n• On Fedora/RHEL: sudo dnf install sshpass\n• On Arch: sudo pacman -S sshpass\n\nAlternatively, you can set up SSH key authentication to connect without a password.";
 
-"starting:" = "starting:";
 
 "starts with" = "commence par ";
 
@@ -1195,7 +877,6 @@
 
 "the last week" = "1 semaine";
 
-"the search tool connection died!" = "the search tool connection died!";
 
 "tile" = "Répéter";
 
@@ -1203,25 +884,17 @@
 
 "tool" = "Outil";
 
-"total" = "total";
 
 "type" = "Le type";
 
-"unable to launch the search task." = "unable to launch the search task.";
 
-"unable to launch the updater task." = "unable to launch the updater task.";
 
-"unknown" = "unknown";
 
 "unknown volume size" = "Taille du lecteur inconnue";
 
-"updater connection died!" = "updater connection died!";
 
 "use thumbnails" = "utiliser les vignettes";
 
 "with exactly" = "sont exactement";
 
 "without one of" = "n'ont pas l'un de";
-
-"xterm" = "xterm";
-

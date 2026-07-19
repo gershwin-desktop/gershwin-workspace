@@ -2,76 +2,42 @@
 
 " is already in use!" = " jam usiĝas.";
 
-"%d:%02d remaining" = "%d:%02d remaining";
 
-"%d:%02d:%02d remaining" = "%d:%02d:%02d remaining";
 
-"(failed to launch)" = "(failed to launch)";
 
-"(unlabeled)" = "(unlabeled)";
 
-"10" = "10";
 
-"10 minutes" = "10 minutes";
 
-"11" = "11";
 
-"12" = "12";
 
-"12 hours" = "12 hours";
 
-"13" = "13";
 
-"14" = "14";
 
-"15" = "15";
 
-"16" = "16";
 
-"2 hours" = "2 hours";
 
-"24" = "24";
 
-"28" = "28";
 
-"3 hours" = "3 hours";
 
-"30 minutes" = "30 minutes";
 
-"32" = "32";
 
-"36" = "36";
 
-"40" = "40";
 
-"48" = "48";
 
-"5 minutes" = "5 minutes";
 
-"6 hours" = "6 hours";
 
-"64" = "64";
 
 ": no such file or directory!" = ": neniu tiel dosiero aŭ dosierujo.";
 
 "A layer with this name is already present!" = "Tabulo kun ĉi tiu nomo jam ekzistas.";
 
-"AFP Server" = "AFP Server";
 
-"AFP volume mounting is not yet implemented." = "AFP volume mounting is not yet implemented.";
 
-"AVFS (A Virtual File System) is required to browse archive contents but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install avfs\n• On Fedora/RHEL: sudo dnf install avfs\n• On Arch: sudo pacman -S avfs\n• From source: https://avf.sourceforge.net/"
-  = "AVFS (A Virtual File System) is required to browse archive contents but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install avfs\n• On Fedora/RHEL: sudo dnf install avfs\n• On Arch: sudo pacman -S avfs\n• From source: https://avf.sourceforge.net/";
 
-"AVFS Error" = "AVFS Error";
 
-"AVFS Not Installed" = "AVFS Not Installed";
 
-"About %@" = "About %@";
 
-"About This Computer" = "About This Computer";
 
-"About Workspace" = "About Workspace";
 
 "Access Control" = "Alira kontrolo";
 
@@ -79,15 +45,12 @@
 
 "Activate context help" = "Aktivigu kunteksthelpon";
 
-"Add" = "Add";
 
 "Add Layer..." = "Nova tabulo...";
 
 "Add Tab..." = "Nova tabo...";
 
-"Already at the root directory" = "Already at the root directory";
 
-"An ISO write operation is already in progress for this device." = "An ISO write operation is already in progress for this device.";
 
 "Annotations" = "Notoj";
 
@@ -101,19 +64,12 @@
 
 "Are you sure that you want to remove this layer?" = "Ĉu vi estas certa ke vi volas forigi tiun tabulon?";
 
-"Are you sure you want to cancel?\n\nThe target device may be left in an inconsistent state and will need to be reformatted."
-  = "Are you sure you want to cancel?\n\nThe target device may be left in an inconsistent state and will need to be reformatted.";
 
-"Are you sure you want to open" = "Are you sure you want to open";
 
 "Are you sure you want to quit\nall applications and log out now?"
   = "Ĉu vi certas ke vi volas\nfinigi ĉiujn aplikojn kaj adiaŭi?";
 
-"Are you sure you want to quit\nall applications and restart now?"
-  = "Are you sure you want to quit\nall applications and restart now?";
 
-"Are you sure you want to quit\nall applications and shut down now?"
-  = "Are you sure you want to quit\nall applications and shut down now?";
 
 "Arrange in Front" = "Aranĝu antaŭen";
 
@@ -125,7 +81,6 @@
 
 "Autohide Tabbed Shelf" = "Aŭtomate kaŝu taban breton";
 
-"Back" = "Back";
 
 "Back Color" = "Funda farbo";
 
@@ -133,47 +88,30 @@
 
 "Background" = "Fono";
 
-"Background Color..." = "Background Color...";
 
 "Backgrounder connection died!" = "Fona konekto mortis.";
 
-"Blue" = "Blue";
 
-"Bottom" = "Bottom";
 
-"Bring All to Front" = "Bring All to Front";
 
-"Bring to Front" = "Bring to Front";
 
 "Browser" = "Krozilo";
 
-"Browsing" = "Browsing";
 
 "Calculate" = "Kalkulu";
 
-"Can't create the Desktop directory!" = "Can't create the Desktop directory!";
 
-"Can't edit a directory!" = "Can't edit a directory!";
 
-"Can't open " = "Can't open ";
 
 "Cancel" = "Rezignu";
 
-"Cancel Write" = "Cancel Write";
 
-"Cancel Write?" = "Cancel Write?";
 
-"Cancelling..." = "Cancelling...";
 
-"Cannot Mount" = "Cannot Mount";
 
-"Cannot access %@" = "Cannot access %@";
 
-"Cannot determine device for the selected mount point." = "Cannot determine device for the selected mount point.";
 
-"Cannot determine device information for the selected mount point." = "Cannot determine device information for the selected mount point.";
 
-"Cannot read information for the selected device." = "Cannot read information for the selected device.";
 
 "Cannot rename " = "Ne povas alinomi ";
 
@@ -185,46 +123,30 @@
 
 "Choose" = "Elektu";
 
-"Choose Image" = "Choose Image";
 
-"Classic" = "Classic";
 
-"Clean Up" = "Clean Up";
 
-"Clean Up By" = "Clean Up By";
 
 "Click 'Set Default' to set default application\nfor all documents with this extension"
   = "Klak ‹Igu aprioraĵon› per difini aprioran aplikon\nje ĉiuj dosieroj kun ĉi tiu finaĵo";
 
 "Close Window" = "Fermu fenestron";
 
-"Cloud Drive" = "Cloud Drive";
 
-"Color:" = "Color:";
 
-"Column Width" = "Column Width";
 
 "Columns Width" = "Kolonlarĝo";
 
-"Compress" = "Compress";
 
-"Compressing..." = "Compressing...";
 
-"Computer" = "Computer";
 
 "Confirmation" = "Konfirmaĵo";
 
-"Connect" = "Connect";
 
-"Connect to SFTP Server" = "Connect to SFTP Server";
 
-"Connect to Server..." = "Connect to Server...";
 
-"Connect to Server:" = "Connect to Server:";
 
-"Connect to WebDAV Server" = "Connect to WebDAV Server";
 
-"Connection Failed" = "Connection Failed";
 
 "Contents" = "Enhavo";
 
@@ -232,44 +154,29 @@
 
 "Continue" = "Daŭrigu";
 
-"Continue Writing" = "Continue Writing";
 
 "Copy" = "Kopiu";
 
-"Copy File" = "Copy File";
 
 "Copy from: " = "Kopiu el: ";
 
 "Copying" = "Kopiante";
 
-"Could not connect to %@.\n\nError: %@"
-  = "Could not connect to %@.\n\nError: %@";
 
-"Could not connect to %@\n\nCheck the hostname and try again."
-  = "Could not connect to %@\n\nCheck the hostname and try again.";
 
-"Could not create or access the %@ folder" = "Could not create or access the %@ folder";
 
-"Could not find formatdisk-helper. Please reinstall Workspace tools." = "Could not find formatdisk-helper. Please reinstall Workspace tools.";
 
-"Could not open URL:\n\n%@"
-  = "Could not open URL:\n\n%@";
 
 "Current color" = "Aktuala farbo";
 
-"Current selection" = "Current selection";
 
-"Customize Toolbar..." = "Customize Toolbar...";
 
 "Cut" = "Eltondu";
 
-"Cycle Through Windows" = "Cycle Through Windows";
 
 "Date" = "Dato";
 
-"Date Created" = "Date Created";
 
-"Date Modified" = "Date Modified";
 
 "Default Editor" = "Apriora redaktilo";
 
@@ -293,19 +200,14 @@
 
 "Do you really want to quit?" = "Ĉu vi vere volas fini?";
 
-"Dock" = "Dock";
 
 "Dock position:" = "Doka posicio:";
 
-"Documents" = "Documents";
 
-"Domains" = "Domains";
 
-"Done." = "Done.";
 
 "Double-click to open selected document(s)" = "Klaku duoble per malfermi la elektitajn dosierojn";
 
-"Downloads" = "Downloads";
 
 "Duplicate" = "Duobligu";
 
@@ -319,52 +221,32 @@
 
 "Editor" = "Tekstredaktilo";
 
-"Eject" = "Eject";
 
 "Empty Recycler" = "Malplenigu rubujon";
 
-"Empty Trash" = "Empty Trash";
 
 "Empty the Recycler?" = "Ĉu malplenigu la rubujon?";
 
-"Enclosing Folder" = "Enclosing Folder";
 
-"Enter Full Screen" = "Enter Full Screen";
 
-"Enter credentials for %@:" = "Enter credentials for %@:";
 
 "Erases all data on %@ and reformats as FAT32.
-" = "Erases all data on %@ and reformats as FAT32.
 ";
 
-"Erases all data on %@ and reformats as FAT32.\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone."
-  = "Erases all data on %@ and reformats as FAT32.\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone.";
 
 "Error" = "Eraro";
 
 "Execute" = "Ruli";
 
-"Extract" = "Extract";
 
-"Extracting..." = "Extracting...";
 
-"FUSE sshfs is required to mount SFTP network volumes but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshfs\n• On Fedora/RHEL: sudo dnf install fuse-sshfs\n• On Arch: sudo pacman -S sshfs"
-  = "FUSE sshfs is required to mount SFTP network volumes but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshfs\n• On Fedora/RHEL: sudo dnf install fuse-sshfs\n• On Arch: sudo pacman -S sshfs";
 
-"Failed to execute shutdown command." = "Failed to execute shutdown command.";
 
-"Failed to mount SFTP volume:\n\n%@"
-  = "Failed to mount SFTP volume:\n\n%@";
 
-"Failed to start the AVFS daemon. Please check that AVFS is properly installed." = "Failed to start the AVFS daemon. Please check that AVFS is properly installed.";
 
-"Failed to unmount %@." = "Failed to unmount %@.";
 
-"Failed to unmount %@: %@" = "Failed to unmount %@: %@";
 
-"Failed." = "Failed.";
 
-"Feedback" = "Feedback";
 
 "Fiend" = "Fantomo";
 
@@ -384,7 +266,6 @@
 
 "Files" = "Dosieroj";
 
-"Find" = "Find";
 
 "Find items with contents that match" = "Serĉu anoj kun egalaj enhavoj";
 
@@ -396,43 +277,28 @@
 
 "Folders" = "Dosierujoj";
 
-"Format" = "Format";
 
-"Format Complete" = "Format Complete";
 
-"Format Disk..." = "Format Disk...";
 
-"Format Failed" = "Format Failed";
 
-"Format “%@”?" = "Format “%@”?";
 
-"Formatting failed." = "Formatting failed.";
 
-"Forward" = "Forward";
 
 "From:" = "El:";
 
-"GNUstep Workspace Manager" = "GNUstep Workspace Manager";
 
 "General" = "Generaloj";
 
-"Gershwin Help" = "Gershwin Help";
 
-"Get Info" = "Get Info";
 
-"Go" = "Go";
 
 "Go backward" = "Reen";
 
 "Go forward" = "Antaŭen";
 
-"Go to Folder..." = "Go to Folder...";
 
-"Go to Folder:" = "Go to Folder:";
 
-"Green" = "Green";
 
-"Grey" = "Grey";
 
 "Group" = "Grupo";
 
@@ -440,7 +306,6 @@
 
 "Height:" = "Alto:";
 
-"Help" = "Help";
 
 "Help..." = "Helpo...";
 
@@ -460,21 +325,15 @@
 
 "Hide Recycler" = "Kaŝu rubujon";
 
-"Hide Sidebar" = "Hide Sidebar";
 
 "Hide Tabbed Shelf" = "Kaŝu taban breton";
 
-"Hide Toolbar" = "Hide Toolbar";
 
-"Hide Workspace" = "Hide Workspace";
 
 "History" = "Historio";
 
-"Home" = "Home";
 
-"ISO File Dropped" = "ISO File Dropped";
 
-"ISO Write Error" = "ISO Write Error";
 
 "Icon" = "Piktogramoj";
 
@@ -495,7 +354,6 @@
 
 "In:" = "En:";
 
-"Info" = "Info";
 
 "Info Panel..." = "Informpanelo...";
 
@@ -503,29 +361,21 @@
 
 "Invalid Contents" = "Malvalida enhavo";
 
-"Invalid URL format" = "Invalid URL format";
 
 "Invalid char in name" = "Malvalida signo en nomo";
 
-"Invalid mount point." = "Invalid mount point.";
 
 "Items" = "Anoj";
 
-"Keep in Dock" = "Keep in Dock";
 
-"Kernel" = "Kernel";
 
-"Keyboard Shortcuts" = "Keyboard Shortcuts";
 
 "Kill" = "Interrompi";
 
-"Kill applications" = "Kill applications";
 
 "Kind" = "Tipo";
 
-"Label" = "Label";
 
-"Label Color..." = "Label Color...";
 
 "Label Size" = "Surskriba grandeco";
 
@@ -533,7 +383,6 @@
 
 "Left" = "Maldekstre";
 
-"Legal & Regulatory" = "Legal & Regulatory";
 
 "Link" = "Ligiĝu";
 
@@ -547,37 +396,24 @@
 
 "Load" = "Ŝarĝu";
 
-"Local" = "Local";
 
-"Local User" = "Local User";
 
 "Log Out" = "Adiaŭu";
 
-"Log Out..." = "Log Out...";
 
-"Low Disk Space" = "Low Disk Space";
 
-"Make Alias" = "Make Alias";
 
-"Make thumbnail(s)" = "Make thumbnail(s)";
 
-"Memory" = "Memory";
 
 "Miniaturize Window" = "Miniaturiĝu fenestron";
 
-"Minimize" = "Minimize";
 
-"Model" = "Model";
 
-"Modern" = "Modern";
 
 "Modification date" = "Ŝanĝan daton";
 
-"Modules:" = "Modules:";
 
-"More Info..." = "More Info...";
 
-"Mount Failed" = "Mount Failed";
 
 "Move" = "Ŝovu";
 
@@ -587,23 +423,17 @@
 
 "Move to Recycler" = "Ĵetu en rubujon";
 
-"Move to Trash" = "Move to Trash";
 
 "Moving" = "Ŝovante";
 
-"Music" = "Music";
 
 "Name" = "Nomo";
 
 "Name only" = "Nur nomon";
 
-"Network" = "Network";
 
-"Network Location" = "Network Location";
 
-"Network Server" = "Network Server";
 
-"Network User" = "Network User";
 
 "New File" = "Nova dosiero";
 
@@ -611,13 +441,9 @@
 
 "New Layer" = "Nova tabulo";
 
-"New Live Search" = "New Live Search";
 
-"New Viewer" = "New Viewer";
 
-"New Workspace Window" = "New Workspace Window";
 
-"New to Gershwin? Get Started" = "New to Gershwin? Get Started";
 
 "No" = "Ne";
 
@@ -632,53 +458,39 @@
 
 "No Default Editor" = "Neniu apriora redaktilo";
 
-"No Finder modules! Quitting now." = "No Finder modules! Quitting now.";
 
 "No Tools Inspector" = "Neniu ila inspektanto";
 
 "No arguments!" = "Neniuj operandoj.";
 
-"No executable found!" = "No executable found!";
 
-"No name supplied!" = "No name supplied!";
 
-"No search criteria!" = "No search criteria!";
 
 "No selection!" = "Neniu selekto.";
 
-"None" = "None";
 
-"Not Implemented" = "Not Implemented";
 
-"Not an ISO or supported disk image file." = "Not an ISO or supported disk image file.";
 
 "Number of saved paths" = "Nombro de konservitaj indikoj";
 
 "OK" = "Konfirmu";
 
-"OS" = "OS";
 
 "Omnipresent" = "Ĉie ekzistanta";
 
 "Open" = "Malfermu";
 
-"Open With" = "Open With";
 
 "Open With..." = "Malfermu per...";
 
 "Open as Folder" = "Malfermu kiel dosierujo";
 
-"Open in Terminal" = "Open in Terminal";
 
 "Open these kinds of documents:" = "Malfermu ĉi tiujn dosiertipojn:";
 
-"Operation Failed" = "Operation Failed";
 
-"Operation In Progress" = "Operation In Progress";
 
-"Operation Preferences" = "Operation Preferences";
 
-"Orange" = "Orange";
 
 "Others" = "Alioj";
 
@@ -686,9 +498,7 @@
 
 "Owner:" = "Posedanto:";
 
-"Parent" = "Parent";
 
-"Password:" = "Password:";
 
 "Paste" = "Enmetu";
 
@@ -700,15 +510,11 @@
 
 "Permissions" = "Permesoj";
 
-"Pictures" = "Pictures";
 
-"Position:" = "Position:";
 
 "Preferences..." = "Agordaĝoj...";
 
-"Preparing..." = "Preparing...";
 
-"Print" = "Print";
 
 "Print..." = "Printu...";
 
@@ -716,16 +522,13 @@
 
 "Processes..." = "Procezoj...";
 
-"Processor" = "Processor";
 
-"Purple" = "Purple";
 
 "Push the \"Set Image\" button\nto set your DeskTop image.\nThe image must have the same\nsize of your screen."
   = "Klak la butonon «Difinu bildon»\nper difini la fonan bildon de la tabulo.\nLa bildo devas havi la saman\ngrandecon kiel via elkrano.";
 
 "Put Away" = "Restaŭrigu";
 
-"Quick Look \"item\"" = "Quick Look \"item\"";
 
 "Quit" = "Finu";
 
@@ -733,9 +536,7 @@
 
 "Read" = "Legi";
 
-"Recents" = "Recents";
 
-"Recursive" = "Recursive";
 
 "Recycle: " = "Alrubujiĝu: ";
 
@@ -743,23 +544,18 @@
 
 "Recycler: " = "Rubujo: ";
 
-"Red" = "Red";
 
-"Redo" = "Redo";
 
 "Released under the GNU General Public License 2.0" = "Publicita laŭ la GNU General Public License 2.0";
 
-"Remove" = "Remove";
 
 "Remove Current Layer" = "Forigu aktualan tabulon";
 
 "Remove Current Tab" = "Forigu aktualan tabon";
 
-"Remove from Dock" = "Remove from Dock";
 
 "Remove layer" = "Forigu tabulon";
 
-"Remove thumbnail(s)" = "Remove thumbnail(s)";
 
 "Rename Current Layer" = "Alinomu aktualan tabulon";
 
@@ -767,9 +563,7 @@
 
 "Rename Layer" = "Alinomu tabulon";
 
-"Restart" = "Restart";
 
-"Restart..." = "Restart...";
 
 "Revert" = "Remetu";
 
@@ -777,21 +571,14 @@
 
 "Role" = "Rolon";
 
-"Run" = "Run";
 
 "Run..." = "Rulu...";
 
-"SFTP Server" = "SFTP Server";
 
-"SSHFS Not Installed" = "SSHFS Not Installed";
 
-"Search" = "Search";
 
-"Search for items whose:" = "Search for items whose:";
 
-"Search in:" = "Search in:";
 
-"Searching in:" = "Searching in:";
 
 "See https://www.gnustep.org/experience/Workspace.html" = "Vide https://www.gnustep.org/experience/Workspace.html";
 
@@ -803,7 +590,6 @@
 
 "Set" = "Difinu";
 
-"Set Browsing as Default" = "Set Browsing as Default";
 
 "Set Color" = "Difinu farbon";
 
@@ -811,9 +597,7 @@
 
 "Set Image" = "Difinu bildon";
 
-"Set Spatial as Default" = "Set Spatial as Default";
 
-"Share" = "Share";
 
 "Shelf" = "Surfaco";
 
@@ -821,7 +605,6 @@
 
 "Show All" = "Montru ĉiujn";
 
-"Show Clipboard" = "Show Clipboard";
 
 "Show Desktop" = "Montru tablon";
 
@@ -831,29 +614,22 @@
 
 "Show History" = "Montru historion";
 
-"Show In File Viewer" = "Show In File Viewer";
 
 "Show Inspectors" = "Montru inspektantojn";
 
-"Show Preview" = "Show Preview";
 
-"Show Preview Options" = "Show Preview Options";
 
 "Show Recycler" = "Montru rubujon";
 
 "Show Tabbed Shelf" = "Montru taban breton";
 
-"Show View Options" = "Show View Options";
 
 "Show status window" = "Montru statusfenestron";
 
 "Shown files" = "Montrataj dosieroj";
 
-"Shut Down" = "Shut Down";
 
-"Shut Down..." = "Shut Down...";
 
-"Single Click Launch" = "Single Click Launch";
 
 "Size" = "Grandecon";
 
@@ -862,7 +638,6 @@
 "Some items have the same name;\ndo you want to sobstitute them?"
   = "Kelkaj anoj havas la saman nomon;\nĉu vi volas substitui ilin?";
 
-"Sort By" = "Sort By";
 
 "Sort by" = "Ordigu laŭ:";
 
@@ -873,11 +648,8 @@
 
 "Sorting Order" = "Ordo";
 
-"Spatial" = "Spatial";
 
-"Specific places" = "Specific places";
 
-"Start Dictation" = "Start Dictation";
 
 "Status Window" = "Statusfenestro";
 
@@ -885,30 +657,19 @@
 
 "Stop" = "Haltu";
 
-"Style:" = "Style:";
 
-"Supported URL schemes: sftp://, webdav://, webdavs://" = "Supported URL schemes: sftp://, webdav://, webdavs://";
 
-"Symbols" = "Symbols";
 
-"System" = "System";
 
-"System Disk" = "System Disk";
 
 "Tabbed Shelf" = "Taba breto";
 
-"Tags" = "Tags";
 
-"Target is not a physical device mount point." = "Target is not a physical device mount point.";
 
 "Terminal" = "Terminalo";
 
-"Terminal.app" = "Terminal.app";
 
-"The Desktop directory has been deleted! Quitting now!" = "The Desktop directory has been deleted! Quitting now!";
 
-"The ISO image has been successfully written to the device.\n\nThe new volume should appear on your desktop when you plug the device in."
-  = "The ISO image has been successfully written to the device.\n\nThe new volume should appear on your desktop when you plug the device in.";
 
 "The Operation connection died. File operations disabled!"
   = "La konekto al Operation mortis.\nDosiera operacioj malŝaltas.";
@@ -916,58 +677,40 @@
 "The Recycler connection died.\nDo you want to restart it?"
   = "La konekto al rubujon mortis.\nĈu vi volas relanĉi tiun?";
 
-"The Utilities folder could not be found at:\n\n%@"
-  = "The Utilities folder could not be found at:\n\n%@";
 
-"The disk was formatted as FAT32." = "The disk was formatted as FAT32.";
 
-"The following applications:" = "The following applications:";
 
 "The following volumes were removed without being properly ejected:
 
 %@
 
-" = "The following volumes were removed without being properly ejected:
 
 %@
 
 ";
 
-"The following volumes were removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes."
-  = "The following volumes were removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes.";
 
 "The fswatcher connection died.\nDo you want to restart it?"
   = "La konekto al fswatcher mortis.\nĈu vi volas relanĉi tiun?";
 
-"The mdextractor connection died.\nDo you want to restart it?"
-  = "The mdextractor connection died.\nDo you want to restart it?";
 
 "The method will apply to all the folders" = "La ordiga metodo aplikiĝos je ĉiuj dosierujoj";
 
 "The name " = "La nomo ";
 
-"The network service does not have a valid hostname." = "The network service does not have a valid hostname.";
 
-"The startup disk has less than 3%% free space.\n\n"
-  = "The startup disk has less than 3%% free space.\n\n";
 
-"The startup disk has less than 3%% free space.\n\nOnly %.1f%% (%llu MB) available."
-  = "The startup disk has less than 3%% free space.\n\nOnly %.1f%% (%llu MB) available.";
 
 "The volume at the following path was removed without being properly ejected:
 
 %@
 
-" = "The volume at the following path was removed without being properly ejected:
 
 %@
 
 ";
 
-"The volume at the following path was removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes."
-  = "The volume at the following path was removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes.";
 
-"The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use." = "The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use.";
 
 "This object is already present in this layer!" = "Ĉi tiu objekto jam ekzistas sur tiu tabulo.";
 
@@ -981,72 +724,51 @@
 
 "Tools Inspector" = "Ila inspektanto";
 
-"Transfer" = "Transfer";
 
 "Type" = "Tipo";
 
-"Type the command to execute:" = "Type the command to execute:";
 
-"Type the name or the path of the application" = "Type the name or the path of the application";
 
 "UNIX Permissions" = "UNIX-permesoj";
 
-"URL must include a hostname" = "URL must include a hostname";
 
-"URL must include a scheme (sftp://, webdav://, webdavs://)" = "URL must include a scheme (sftp://, webdav://, webdavs://)";
 
 "Uncheck the buttons to allow automatic confirmation" = "Malŝaltu opciojn por konfirmi";
 
-"Undo" = "Undo";
 
-"Unhide" = "Unhide";
 
-"Unmount failed." = "Unmount failed.";
 
-"Unmounting partitions..." = "Unmounting partitions...";
 
 "Unset Image" = "Maldifinu bildon";
 
 "Up" = "Supre";
 
-"Update now" = "Update now";
 
 "Use Default Settings" = "Uzu la aprioraĝojn";
 
-"Use Stacks" = "Use Stacks";
 
 "Use Terminal service" = "Uzu terminal-servon";
 
 "Use image" = "Uzu bildon";
 
-"Username:" = "Username:";
 
-"Utilities" = "Utilities";
 
 "Values will apply to the \nnew watchers from now, \nto the existing ones, after the first timeout"
   = "Valoroj aplikigos je\nnovaj observadaĵoj ekde nun,\nje nunaj post la unua templimigo.";
 
-"Verifying..." = "Verifying...";
 
-"Videos" = "Videos";
 
 "View" = "Rigardo";
 
-"View Behavior" = "View Behavior";
 
 "Viewer" = "Montrilo";
 
-"Volume Removed Unexpectedly" = "Volume Removed Unexpectedly";
 
-"Volumes" = "Volumes";
 
 "Wait the operations to terminate!" = "Bonvolu atendi ĝis la operacioj finiĝis.";
 
-"WebDAV Connection Failed" = "WebDAV Connection Failed";
 
-"WebDAV Server" = "WebDAV Server";
 
-"WebDAV Server (Secure)" = "WebDAV Server (Secure)";
 
 "Width:" = "Larĝo:";
 
@@ -1054,61 +776,37 @@
 
 "Windows" = "Fenestroj";
 
-"Workspace Help" = "Workspace Help";
 
 "Workspace Preferences" = "Workspace-agordoj";
 
-"Workspace is logging out!" = "Workspace is logging out!";
 
 "Write" = "Skribi";
 
-"Write Cancelled" = "Write Cancelled";
 
-"Write Complete" = "Write Complete";
 
-"Write ISO to “%@”?" = "Write ISO to “%@”?";
 
-"Write to Device" = "Write to Device";
 
-"Writing image" = "Writing image";
 
-"Writing image to device..." = "Writing image to device...";
 
-"X11 Server" = "X11 Server";
 
-"XTerm" = "XTerm";
 
-"Yellow" = "Yellow";
 
 "Yes" = "Jes";
 
-"You are not allowed to umount\n"
-  = "You are not allowed to umount\n";
 
-"You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element." = "You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element.";
 
-"You can't create a new file in the Recycler!" = "You can't create a new file in the Recycler!";
 
-"You can't create a new folder in the Recycler!" = "You can't create a new folder in the Recycler!";
 
-"You can't do this in the Recycler!" = "You can't do this in the Recycler!";
 
 "You can't dock multiple paths!" = "Vi ne povas doki pluroblajn dosierindikojn";
 
-"You can't duplicate files in the Recycler!" = "You can't duplicate files in the Recycler!";
 
-"You can't move objects with multiple parent paths!" = "You can't move objects with multiple parent paths!";
 
-"You can't open a document that is in the Recycler!" = "You can't open a document that is in the Recycler!";
 
 "You can't remove the last layer!" = "Vi ne povas forigi la lastan tabulon.";
 
-"You cannot eject the root filesystem" = "You cannot eject the root filesystem";
 
-"You cannot format the root filesystem." = "You cannot format the root filesystem.";
 
-"You do not have write permission\nfor"
-  = "You do not have write permission\nfor";
 
 "You have not write permission\nfor"
   = "Vi ne havas skribpermeson\nje";
@@ -1116,7 +814,6 @@
 "You have not write permission\nfor "
   = "Vi ne havas skribpermeson\nje ";
 
-"Zoom" = "Zoom";
 
 "\nto the Recycler"
   = "\nrubujon";
@@ -1124,178 +821,112 @@
 "\nto: "
   = "\nal: ";
 
-"a day" = "a day";
 
 "add" = "aldonu";
 
 "also apply to files inside selection" = "Apliku ankaŭ en elektitaj dosieroj";
 
-"annotations" = "annotations";
 
-"application" = "application";
 
 "arguments" = "argumentoj";
 
-"as Columns" = "as Columns";
 
-"as Gallery" = "as Gallery";
 
-"as Icons" = "as Icons";
 
-"as List" = "as List";
 
-"available" = "available";
 
 "blue" = "blua";
 
-"can't create the Live Search folder" = "can't create the Live Search folder";
 
 "center" = "centrigu";
 
-"contains" = "contains";
 
-"contains all of" = "contains all of";
 
-"contains not" = "contains not";
 
-"contains one of" = "contains one of";
 
-"contents" = "contents";
 
-"date created" = "date created";
 
-"date modified" = "date modified";
 
 "ddbd connection died." = "La konekto al ddbd mortis.";
 
 "during the file operations" = "statusfenestron dum dosieroperacioj";
 
-"elements" = "elements";
 
-"ends with" = "ends with";
 
 "error" = "eraro";
 
 "fit" = "adaptigu";
 
-"folder" = "folder";
 
-"free" = "free";
 
 "frequency" = "Frekvenco";
 
 "fswatcher notifications disabled!" = "fswatcher-notifikoj malŝaltigis.";
 
-"greater than" = "greater than";
 
 "green" = "verda";
 
-"includes" = "includes";
 
-"is" = "is";
 
-"is after" = "is after";
 
-"is before" = "is before";
 
-"is exactly" = "is exactly";
 
-"is not" = "is not";
 
-"is not a valid application!" = "is not a valid application!";
 
-"is today" = "is today";
 
-"is within" = "is within";
 
 "items" = "anoj";
 
-"items?" = "items?";
 
-"kind" = "kind";
 
-"less than" = "less than";
 
-"name" = "name";
 
-"no autoupdate" = "no autoupdate";
 
 "of file operations" = "dosieroperaciojn aŭtomate";
 
-"one hour" = "one hour";
 
-"one minute" = "one minute";
 
-"open" = "open";
 
-"owner" = "owner";
 
-"plain file" = "plain file";
 
-"recursive" = "recursive";
 
 "red" = "ruĝa";
 
-"refuse to terminate." = "refuse to terminate.";
 
 "remove" = "forigu";
 
-"scale" = "scale";
 
 "seconds." = "sekundoj.";
 
-"seems not a valid application!" = "seems not a valid application!";
 
-"size" = "size";
 
-"sshpass Not Installed" = "sshpass Not Installed";
 
-"sshpass is required for password-based SFTP authentication but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshpass\n• On Fedora/RHEL: sudo dnf install sshpass\n• On Arch: sudo pacman -S sshpass\n\nAlternatively, you can set up SSH key authentication to connect without a password."
-  = "sshpass is required for password-based SFTP authentication but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshpass\n• On Fedora/RHEL: sudo dnf install sshpass\n• On Arch: sudo pacman -S sshpass\n\nAlternatively, you can set up SSH key authentication to connect without a password.";
 
-"starting:" = "starting:";
 
-"starts with" = "starts with";
 
-"symbolic link" = "symbolic link";
 
 "that have no order specified" = "kiuj ne havas propran ordon enigitan.";
 
 "the Recycler" = "la rubujo";
 
-"the last 2 days" = "the last 2 days";
 
-"the last 2 months" = "the last 2 months";
 
-"the last 2 weeks" = "the last 2 weeks";
 
-"the last 3 days" = "the last 3 days";
 
-"the last 3 months" = "the last 3 months";
 
-"the last 3 weeks" = "the last 3 weeks";
 
-"the last 6 months" = "the last 6 months";
 
-"the last day" = "the last day";
 
-"the last month" = "the last month";
 
-"the last week" = "the last week";
 
-"the search tool connection died!" = "the search tool connection died!";
 
 "tile" = "kahelu";
 
 "timeout" = "Templimigo";
 
-"to use to open the current selection" = "to use to open the current selection";
 
-"tool" = "tool";
 
-"total" = "total";
 
-"type" = "type";
 
 "unable to contact Operation!" = "Ne povas konatiĝi Operation.";
 
@@ -1306,23 +937,15 @@
 "unable to contact fswatcher\nfswatcher notifications disabled!"
   = "Ne povas konatiĝi fswatcher\nfswacher-notifikoj malŝaltiĝas.";
 
-"unable to launch the search task." = "unable to launch the search task.";
 
-"unable to launch the updater task." = "unable to launch the updater task.";
 
-"unknown" = "unknown";
 
-"unknown volume size" = "unknown volume size";
 
-"updater connection died!" = "updater connection died!";
 
 "use thumbnails" = "montru antaŭrigardojn";
 
-"with exactly" = "with exactly";
 
 "with file:" = "apud dosiero:";
 
-"without one of" = "without one of";
 
 "xterm" = "xterm-komando";
-
