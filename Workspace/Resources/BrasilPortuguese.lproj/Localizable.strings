@@ -1,323 +1,2976 @@
-﻿/* Tradução feita por Tiago Ribeiro <tiagor@mac.com> */
+﻿/***
+BrasilPortuguese.lproj/Localizable.strings
+updated by make_strings 2026-07-19 18:00:37 +0200
+add comments above this one
+***/
 
-/* ----------------------- menu strings --------------------------- */
-/* main.m */
 
-"Info" = "Info";
-	"Info Panel..." = "Painel de Informações...";
-	"Preferences..." = "Preferências...";
-	"Help..." = "Ajuda...";
+/*** Keys found in multiple places ***/
 
+/* File: ../Workspace.m:263 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Preferences..." = "Preferências...";
+
+/* File: ../Workspace.m:295 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "File" = "Arquivo";
-	"Open" = "Abrir";
-	"Open as Folder" = "Abrir como Pasta";
-	"Edit File" = "Editar Arquivo";
-	"New Folder" = "Nova Pasta";
-	"New File" = "Novo Arquivo";
-	"Duplicate" = "Duplicar";	
-	"Destroy" = "Apagar";
-	"Empty Recycler" = "Esvaziar Lixo";
 
+/* File: ../Desktop/Dock/DockIcon.m:672 */
+/* File: ../Workspace.m:311 */
+/* File: ../Workspace.m:4497 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Open" = "Abrir";
+
+/* File: ../Workspace.m:319 */
+/* File: ../Workspace.m:320 */
+/* File: ../Workspace.m:4515 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Open as Folder" = "Abrir como Pasta";
+
+/* File: ../Workspace.m:302 */
+/* File: ../Workspace.m:303 */
+/* File: ../Workspace.m:304 */
+/* File: ../Workspace.m:4395 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"New Folder" = "Nova Pasta";
+
+/* File: ../Preferences/OperationPrefs.m:114 */
+/* File: ../Workspace.m:338 */
+/* File: ../Workspace.m:4651 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Duplicate" = "Duplicar";
+
+/* File: ../Preferences/OperationPrefs.m:115 */
+/* File: ../Workspace.m:356 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Destroy" = "Apagar";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:479 */
+/* File: ../Workspace.m:369 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Edit" = "Editar";
-	"Cut" = "Cortar";
-	"Copy" = "Copiar";
-	"Paste" = "Colar";
-	"Select All" = "Selecionar Tudo";
-		
+
+/* File: ../Workspace.m:381 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Cut" = "Cortar";
+
+/* File: ../Preferences/OperationPrefs.m:111 */
+/* File: ../Workspace.m:383 */
+/* File: ../Workspace.m:4585 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Copy" = "Copiar";
+
+/* File: ../Workspace.m:385 */
+/* File: ../Workspace.m:4405 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Paste" = "Colar";
+
+/* File: ../Workspace.m:387 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Select All" = "Selecionar Tudo";
+
+/* File: ../Workspace.m:403 */
+/* File: ../Workspace.m:786 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "View" = "Ver";
-	"Browser" = "Navegador";
-	"Icon" = "Icones";
-		
+
+/* File: ../Preferences/BrowserViewerPref.m:128 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Browser" = "Navegador";
+
+/* File: ../Workspace.m:656 */
+/* File: ../Workspace.m:666 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Tools" = "Ferramentas";
-	"Viewer" = "Visualizador";
-	"Inspectors" = "Inspetores";
-		"Show Inspectors" = "Mostrar Inspetores";
-		"Attributes" = "Atributos";
-		"Contents" = "Conteúdo";
-		"Tools" = "Ferramentas";	
-		"Permissions" = "Permissões";	
-	"Finder" = "Buscador";
-	"Processes..." = "Processos...";
-	"Fiend" = "Fiend";
-		"Show Fiend" = "Mostrar Fiend"; /* R// Arrumar esto */
-		"Hide Fiend" = "Ocultar Fiend";
-		"Add Layer..." = "Adicionar Camada...";
-		"Remove Current Layer" = "Remover Camada Atual";
-		"Rename Current Layer" = "Renomear Camada Atual";
-		"Layers" = "Camadas";
-	"DeskTop Shelf" = "DeskTop Shelf";	
-	"XTerm" = "XTerm";
-	
-"Windows" = "Janelas";
-	"Arrange in Front" = "Organizar à Frente";
-	"Miniaturize Window" = "Miniaturizar Janela";
-	"Close Window" = "Fechar Janela";
-	
+
+/* File: ../Workspace.m:660 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Inspectors" = "Inspetores";
+
+/* File: ../Workspace.m:663 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Show Inspectors" = "Mostrar Inspetores";
+
+/* File: ../Workspace.m:664 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Contents" = "Conteúdo";
+
+/* File: ../Finder/Finder.m:109 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Finder" = "Buscador";
+
+/* File: ../Workspace.m:325 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Close Window" = "Fechar Janela";
+
+/* File: ../Workspace.m:269 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Services" = "Serviços";
 
+/* File: ../Desktop/Dock/Dock.m:595 */
+/* File: ../Desktop/Dock/DockIcon.m:612 */
+/* File: ../Preferences/HiddenFilesPref.m:484 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Hide" = "Ocultar";
 
+/* File: ../Desktop/Dock/Dock.m:604 */
+/* File: ../Desktop/Dock/DockIcon.m:627 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Quit" = "Encerrar";
-	
-	
-	
-/* ----------------------- File Operations strings --------------------------- */
 
-/* Workspace.m */
-
-"GNUstep Workspace Manager" = "Gerenciador de DeskTop GNUstep";
-"See https://www.gnustep.org/experience/Workspace.html" = "Acesse https://www.gnustep.org/experience/Gworkspace.html";
-"Released under the GNU General Public License 2.0" = "Distribuido segundo a Licença Pública Geral GNU 2.0";
+/* File: ../Desktop/Dock/DockIcon.m:1024 */
+/* File: ../Desktop/Dock/DockIcon.m:1040 */
+/* File: ../Desktop/GWDesktopView.m:1507 */
+/* File: ../Preferences/HiddenFilesPref.m:442 */
+/* File: ../Workspace.m:2411 */
+/* File: ../Workspace.m:2461 */
+/* File: ../Workspace.m:2488 */
+/* File: ../Workspace.m:2594 */
+/* File: ../Workspace.m:2620 */
+/* File: ../Workspace.m:2709 */
+/* File: ../Workspace.m:3401 */
+/* File: ../Workspace.m:3417 */
+/* File: ../Workspace.m:3433 */
+/* File: ../Workspace.m:3674 */
+/* File: ../Workspace.m:3683 */
+/* File: ../Workspace.m:3696 */
+/* File: ../Workspace.m:3705 */
+/* File: ../Workspace.m:3840 */
+/* File: ../Workspace.m:3922 */
+/* File: ../Workspace.m:5679 */
+/* File: ../Workspace.m:5710 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Error" = "Erro";
-"You have not write permission\nfor" = "Não há permissões de escrita\npara"; /* R// ? */
+
+/* File: ../Preferences/HiddenFilesPref.m:439 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"You have not write permission\nfor" = "Não há permissões de escrita\npara";
+
+/* File: ../Desktop/Dock/DockIcon.m:1042 */
+/* File: ../Finder/LiveSearch/LSFolder.m:286 */
+/* File: ../Finder/LiveSearch/LSFolder.m:341 */
+/* File: ../Finder/LiveSearch/LSFolder.m:440 */
+/* File: ../Finder/LiveSearch/LSFolder.m:991 */
+/* File: ../Finder/SearchResults/SearchResults.m:317 */
+/* File: ../Finder/SearchResults/SearchResults.m:330 */
+/* File: ../Finder/SearchResults/SearchResults.m:636 */
+/* File: ../Finder/SearchResults/SearchResults.m:775 */
+/* File: ../Preferences/HiddenFilesPref.m:444 */
+/* File: ../Workspace.m:2413 */
+/* File: ../Workspace.m:2463 */
+/* File: ../Workspace.m:2490 */
+/* File: ../Workspace.m:2622 */
+/* File: ../Workspace.m:2711 */
+/* File: ../Workspace.m:5681 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Continue" = "Continuar";
 
-
-/* FileOperation.m */
-
+/* File: ../AVFSMount.m:553 */
+/* File: ../Desktop/Dock/DockIcon.m:989 */
+/* File: ../Desktop/Dock/DockIcon.m:1026 */
+/* File: ../Desktop/GWDesktopManager.m:264 */
+/* File: ../Desktop/GWDesktopManager.m:611 */
+/* File: ../Desktop/GWDesktopManager.m:654 */
+/* File: ../Desktop/GWDesktopManager.m:982 */
+/* File: ../Desktop/GWDesktopManager.m:992 */
+/* File: ../Desktop/GWDesktopView.m:569 */
+/* File: ../Desktop/GWDesktopView.m:1509 */
+/* File: ../Dialogs/Dialogs.m:166 */
+/* File: ../Dialogs/ExecuteController.m:59 */
+/* File: ../Dialogs/OpenWithController.m:78 */
+/* File: ../Dialogs/OpenWithController.m:141 */
+/* File: ../FileViewer/GWSpatialViewer.m:1445 */
+/* File: ../FileViewer/GWSpatialViewer.m:1458 */
+/* File: ../FileViewer/GWSpatialViewer.m:1471 */
+/* File: ../FileViewer/GWSpatialViewer.m:1485 */
+/* File: ../FileViewer/GWSpatialViewer.m:1499 */
+/* File: ../FileViewer/GWSpatialViewer.m:1520 */
+/* File: ../FileViewer/GWViewer.m:1380 */
+/* File: ../FileViewer/GWViewer.m:1405 */
+/* File: ../FileViewer/GWViewer.m:1418 */
+/* File: ../FileViewer/GWViewer.m:1431 */
+/* File: ../FileViewer/GWViewer.m:1445 */
+/* File: ../FileViewer/GWViewer.m:1459 */
+/* File: ../FileViewer/GWViewer.m:1480 */
+/* File: ../FileViewer/GWViewersManager.m:620 */
+/* File: ../FileViewer/GWViewersManager.m:632 */
+/* File: ../Finder/Finder.m:307 */
+/* File: ../Finder/Finder.m:767 */
+/* File: ../Finder/Finder.m:781 */
+/* File: ../Finder/Finder.m:810 */
+/* File: ../Finder/SearchResults/SearchResults.m:685 */
+/* File: ../Finder/SearchResults/SearchResults.m:693 */
+/* File: ../GSGlobalShortcutsManager.m:1279 */
+/* File: ../GWArchiveOperation.m:163 */
+/* File: ../ISOWrite/ISOWriteHandler.m:194 */
+/* File: ../ISOWrite/ISOWriteOperation.m:273 */
+/* File: ../ISOWrite/ISOWriteOperation.m:334 */
+/* File: ../ISOWrite/ISOWriteOperation.m:963 */
+/* File: ../LowDiskWarn.m:80 */
+/* File: ../Network/NetworkFSNode.m:457 */
+/* File: ../Network/NetworkVolumeManager.m:112 */
+/* File: ../Network/NetworkVolumeManager.m:158 */
+/* File: ../Network/NetworkVolumeManager.m:492 */
+/* File: ../Network/NetworkVolumeManager.m:624 */
+/* File: ../Network/NetworkVolumeManager.m:938 */
+/* File: ../Network/NetworkVolumeManager.m:1093 */
+/* File: ../Workspace.m:1117 */
+/* File: ../Workspace.m:1829 */
+/* File: ../Workspace.m:2009 */
+/* File: ../Workspace.m:2246 */
+/* File: ../Workspace.m:2596 */
+/* File: ../Workspace.m:2975 */
+/* File: ../Workspace.m:3079 */
+/* File: ../Workspace.m:3387 */
+/* File: ../Workspace.m:3403 */
+/* File: ../Workspace.m:3419 */
+/* File: ../Workspace.m:3435 */
+/* File: ../Workspace.m:3649 */
+/* File: ../Workspace.m:3656 */
+/* File: ../Workspace.m:3676 */
+/* File: ../Workspace.m:3685 */
+/* File: ../Workspace.m:3698 */
+/* File: ../Workspace.m:3707 */
+/* File: ../Workspace.m:3842 */
+/* File: ../Workspace.m:3922 */
+/* File: ../Workspace.m:4247 */
+/* File: ../Workspace.m:5423 */
+/* File: ../Workspace.m:5712 */
+/* File: ../Workspace.m:5727 */
+/* File: ../Workspace.m:5738 */
+/* File: ../Workspace.m:5762 */
+/* File: ../Workspace.m:5771 */
+/* File: ../WorkspaceApplication.m:162 */
+/* File: ../WorkspaceApplication.m:265 */
+/* File: ../WorkspaceApplication.m:352 */
+/* File: ../WorkspaceApplication.m:409 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "OK" = "OK";
+
+/* File: ../Dialogs/Dialogs.m:156 */
+/* File: ../Dialogs/ExecuteController.m:60 */
+/* File: ../Dialogs/RunExternalController.m:108 */
+/* File: ../FileViewer/GWViewer.m:1331 */
+/* File: ../FileViewer/GWViewersManager.m:537 */
+/* File: ../GWArchiveOperation.m:132 */
+/* File: ../ISOWrite/DeviceEraseConfirmation.m:116 */
+/* File: ../ISOWrite/ISOWriteHandler.m:253 */
+/* File: ../ISOWrite/ISOWriteHandler.m:273 */
+/* File: ../ISOWrite/ISOWriteProgressWindow.m:147 */
+/* File: ../Network/NetworkVolumeManager.m:1206 */
+/* File: ../Workspace.m:1735 */
+/* File: ../Workspace.m:4228 */
+/* File: ../WorkspaceApplication.m:1500 */
+/* File: ../WorkspaceApplication.m:1605 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Cancel" = "Cancelar";
+
+/* File: ../Preferences/OperationPrefs.m:110 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Move" = "Mover";
-"Move from: " = "Mover de: ";
-"\nto: " = "\npara: ";
-"Copy" = "Copiar";
-"Copy from: " = "Copiar de: ";
+
+/* File: ../Preferences/OperationPrefs.m:112 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Link" = "Vincular";
-"Link " = "Vincular ";
-"Delete" = "Apagar";
-"Delete the selected objects?" = "Apagar os objetos selecionados?";
-"Duplicate" = "Duplicar";
-"Duplicate the selected objects?" = "Duplicar os objetos selecionados?";
+
+/* File: ../ISOWrite/ISOWriteProgressWindow.m:85 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "From:" = "De:";
+
+/* File: ../ISOWrite/ISOWriteProgressWindow.m:99 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "To:" = "Para:";
-"In:" = "Em:";
-"Stop" = "Parar";
-"Pause" = "Pausar";
-"Moving" = "Movendo";
-"Copying" = "Copiando";
-"Linking" = "Vinculando";
-"Duplicating" = "Duplicando";
-"Destroying" = "Apagando";
-"File Operation Completed" = "Operação de Arquivos Completada";
-"Backgrounder connection died!" = "Conexção de segundo plano interrompida"; /* R// Jarl */
-"Some items have the same name;\ndo you want to substitute them?" = "Alguns ítens têm o mesmo\nnome; Deseja substituí-los?";
-"Error" = "Erro";
-"File Operation Error!" = "Erro na Operação de Arquivos!";
 
-
-/* ColumnIcon.m */
-
-"You have not write permission\nfor " = "Não há permissões de escrita\npara";
-"The name " = "O nome ";
-" is already in use!" = " já está sendo usado!";
-"Cannot rename " = "Não é possível renomear ";
-"Invalid char in name" = "Caractere inválido no nome";
-
-
-/* ----------------------- Inspectors strings --------------------------- */
-
-"Items" = "Itens";
-
-/* InspectorsWin.m */
-
-"Attributes" = "Atributos";
-"Contents" = "Conteúdo";
-"Tools" = "Ferramentas";
-"Access Control" = "Controle de Acesso";
-
-
-/* AttributesPanel.m */
-
-"Attributes" = "Atributos";
-"Attributes Inspector" = "Inspetor de Atributos";
-"Path:" = "Caminho:";
-"Link To:" = "Vincular a:";
-"Size:" = "Tamanho:";
-"Owner:" = "Proprietário:";
-"Group:" = "Grupo:";
-"Changed" = "Mudado";
-"Revert" = "Reverter";
-"OK" = "OK";
-
-
-/* ContentsPanel.m */
-
-"Contents" = "Conteúdo";
-"Contents Inspector" = "Inspetor de Conteúdo";
-"No Contents Inspector" = "Não há Inspetor de Conteúdo";
-"No Contents Inspector\nFor Multiple Selection" = "Não há Inspetor de\nConteúdo para\nmúltiplas seleções";
-
-
-/* FolderViewer.m */
-
-"Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder"
-  = "O método de ordenação se\naplica ao conteúdo da\npasta selecionada, e não\nà sua pasta mãe";
+/* File: ../Preferences/DefSortOrderPref.m:61 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Sort by" = "Ordenar por";
+
+/* File: ../Desktop/GWDesktopManager.m:1070 */
+/* File: ../FileViewer/GWSpatialViewer.m:1738 */
+/* File: ../FileViewer/GWViewer.m:1674 */
+/* File: ../Finder/LiveSearch/LSFolder.m:543 */
+/* File: ../Finder/SearchResults/SearchResults.m:132 */
+/* File: ../Preferences/DefSortOrderPref.m:64 */
+/* File: ../Workspace.m:532 */
+/* File: ../Workspace.m:554 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Name" = "Nome";
+
+/* File: ../Desktop/GWDesktopManager.m:1072 */
+/* File: ../FileViewer/GWSpatialViewer.m:1740 */
+/* File: ../FileViewer/GWViewer.m:1676 */
+/* File: ../Finder/LiveSearch/LSFolder.m:587 */
+/* File: ../Finder/SearchResults/SearchResults.m:176 */
+/* File: ../Preferences/DefSortOrderPref.m:65 */
+/* File: ../Workspace.m:465 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Type" = "Tipo";
+
+/* File: ../Preferences/DefSortOrderPref.m:66 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Date" = "Data";
+
+/* File: ../Desktop/GWDesktopManager.m:1074 */
+/* File: ../FileViewer/GWSpatialViewer.m:1742 */
+/* File: ../FileViewer/GWViewer.m:1678 */
+/* File: ../Finder/LiveSearch/LSFolder.m:576 */
+/* File: ../Finder/SearchResults/SearchResults.m:165 */
+/* File: ../Preferences/DefSortOrderPref.m:67 */
+/* File: ../Workspace.m:467 */
+/* File: ../Workspace.m:540 */
+/* File: ../Workspace.m:562 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Size" = "Tamanho";
+
+/* File: ../Desktop/GWDesktopManager.m:1078 */
+/* File: ../FileViewer/GWSpatialViewer.m:1746 */
+/* File: ../FileViewer/GWViewer.m:1682 */
+/* File: ../Preferences/DefSortOrderPref.m:68 */
+/* File: ../Workspace.m:471 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Owner" = "Proprietário";
-"Folder Inspector" = "Inspetor de Pastas";	
 
-
-/* ImageViewer.m */
-
-"Image Inspector" = "Inspetor de Imagens";
-
-
-/* AppViewer.m */
-
-"Open these kinds of documents:" = "Abrir estes tipos de documentos:";
-"Invalid Contents" = "Conteúdo Inválido";
-"App Inspector" = "Inspetor de Aplicações";
-
-
-/* PermissionsPanel.m */
-
-"UNIX Permissions" = "Permissões UNIX";
-"Access Control" = "Controle de Acesso";
-"Also apply to files inside selection" = "Aplicar também aos arquivos da seleção";
-
-
-/* ToolsPanel.m */
-
-"Tools" = "Ferramentas";
-"Tools Inspector" = "Inspetor de Ferramentas";
-"No Tools Inspector" = "Não há Inspetor de Ferramentas";
-"Set Default" = "Configurar como Padrão";
-
-
-/* AppsView.m */
-	
-"Double-click to open selected document(s)" =
-"Duplo-clique para abrir documentos selecionados";
-"Default:" = "Padrão:";
-"Path:" = "Caminho:";		
-"Click 'Set Default' to set default application\nfor all documents with this extension" 
-  ="Clique em 'Configurar como Padrão' para configurar a\naplicação a ser usada para todos\nos documentos com esta extensão";
-
-
-/* PermsBox.m */
-
-"Permissions" = "Permissões";
-"Read" = "Leitura";
+/* File: ../ISOWrite/DeviceEraseConfirmation.m:118 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Write" = "Escrita";
-"Execute" = "Execução";
-"Owner" = "Proprietário";
-"Group" = "Grupo";
-"Other" = "Outros";
 
-
-/* ----------------------- Processes strings --------------------------- */
-
-/* Processes.m */
-
-"Processes" = "Processos";
-"No Background Process" = "Não há Processos en Segundo Plano";
-"Kill" = "Matar";
-"Path: " = "Caminho: ";
-"Status: " = "Estado: ";
-
-
-/* ProcsView.m */
-
+/* File: ../FileViewer/GWViewerSidebar.m:828 */
+/* File: ../Workspace.m:639 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Applications" = "Aplicações";
-"Background" = "Segundo Plano"; /* R// revisar */
 
+/* File: ../Preferences/DesktopPref.m:117 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Background" = "Segundo Plano";
 
-/* ----------------------- Finder strings --------------------------- */
-
-/* Finder.m */
-
-"Finder" = "Buscador";
-"Find items with names that match" = "Buscar ítens com nomes que combinem";
-"Find items with contents that match" = "Buscar ítens com conteúdo que combine";
+/* File: ../Finder/Finder.m:766 */
+/* File: ../Finder/Finder.m:780 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "No selection!" = "Não há nenhuma seleção!";
-"No arguments!" = "Não há argumentos!";
 
-
-/* ----------------------- Fiend strings --------------------------- *\
-
-/* Fiend.m */
-
-"New Layer" = "Nova Camada";
-"A layer with this name is already present!" = "Já há uma camada com este nome!";
-"You can't remove the last layer!" = "Não é possível remover a última camada!";
-"Remove layer" = "Remover camada";
-"Are you sure that you want to remove this layer?" = "Você tem certeza de que deseja remover esta camada?";
-"Rename Layer" = "Renomear camada";
-"You can't dock multiple paths!" = "Não é possível agrupar múltiplos caminhos!";
-"This object is already present in this layer!" = "Este objeto já está nesta camada!";
-	
-			
-/* ----------------------- Preference strings --------------------------- */
-
-/* PreferencesWin.m */
-
+/* File: ../Desktop/GWDesktopView.m:1482 */
+/* File: ../Preferences/PrefController.m:101 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Workspace Preferences" = "Preferências do Workspace";
 
+/* File: ../Preferences/DefSortOrderPref.m:60 */
+/* File: ../Preferences/XTermPref.m:96 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Set" = "Configurar";
 
-/* BackWinPreferences.m */       
-
-"DeskTop Shelf" = "Shelf do DeskTop";	
-"DeskTop Color" = "Cor do DeskTop";
-"red" = "vermelho";
-"green" = "verde";
-"blue" = "azul";
-"Set Color" = "Configurar cor";
-"Push the \"Set Image\" button\nto set your DeskTop image.\nThe image must have the same\nsize of your screen." = "Pressione o botão \"Configurar Imagem\" para configurar sua\nimagem de fundo. A imagem deve ter o\nmesmo tamanho que a tela.";
-
-"Set Image" = "Configurar Imagem";
-"Unset Image" = "Remover Imagem";
-
-	
-/* DefaultXTerm.m */             
-	
-"Set" = "Configurar";	
-
-	
-/* BrowserViewsPreferences.m */  
-
+/* File: ../Preferences/BrowserViewerPref.m:113 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Column Width" = "Largura das Colunas";
-"Use Default Settings" = "Usar Ajustes-Padrão";	
-"Browser" = "Navegador";
-	
-	
-/* FileWatchingPreferences.m */  
 
-/* timeout */
-"File System Watching" = "Vigilancia do Sistema de Arquivos";
-"timeout" = "timeout";
-"frequency" = "frequência";
-"Values will apply to the \nnew watchers from now, \nto the existing ones, after the first timeout" = 
-"Os valores se aplicarão aos\n novos vigilantes a partir de agora,\ne aos já existentes, a partir do primeiro timeout";
-	
-	
-/* ShelfPreferences.m */
-	
-"Shelf" = "Shelf";
-	
-	
-/* DefaultEditor.m */            
+/* File: ../Preferences/BrowserViewerPref.m:114 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Use Default Settings" = "Usar Ajustes-Padrão";
 
+/* File: ../Preferences/DefEditorPref.m:101 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Default Editor" = "Editor Padrão";
+
+/* File: ../Preferences/DefEditorPref.m:59 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "No Default Editor" = "Não há Editor Padrão";
-"Choose..." = "Escolher...";
+
+/* File: ../Dialogs/OpenWithController.m:51 */
+/* File: ../Workspace.m:315 */
+/* File: ../Workspace.m:4555 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Open With" = "Open With";
+
+/* File: ../Dialogs/OpenWithController.m:52 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Type the name or the path of the application"
+  = "Type the name or the path of the application";
+
+/* File: ../Dialogs/OpenWithController.m:53 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"to use to open the current selection"
+  = "to use to open the current selection";
+
+/* File: ../Dialogs/RunExternalController.m:118 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Run" = "Run";
+
+/* File: ../Dialogs/RunExternalController.m:72 */
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Type the command to execute:" = "Type the command to execute:";
+
+/* File: ../Desktop/Dock/DockIcon.m:573 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:282 */
+/* Flag: untranslated */
+"Empty Trash" = "Empty Trash";
+
+/* File: ../Desktop/Dock/Dock.m:563 */
+/* Flag: untranslated */
+/* File: ../Desktop/Dock/DockIcon.m:594 */
+/* Flag: untranslated */
+"Show In File Viewer" = "Show In File Viewer";
+
+/* File: ../Desktop/Dock/Dock.m:597 */
+/* Flag: untranslated */
+/* File: ../Desktop/Dock/DockIcon.m:610 */
+/* Flag: untranslated */
+"Unhide" = "Unhide";
+
+/* File: ../Desktop/Dock/Dock.m:599 */
+/* Flag: untranslated */
+/* File: ../Desktop/Dock/DockIcon.m:619 */
+/* Flag: untranslated */
+"Bring to Front" = "Bring to Front";
+
+/* File: ../Desktop/Dock/Dock.m:569 */
+/* Flag: untranslated */
+/* File: ../Desktop/Dock/DockIcon.m:644 */
+/* Flag: untranslated */
+"Keep in Dock" = "Keep in Dock";
+
+/* File: ../Desktop/Dock/Dock.m:575 */
+/* Flag: untranslated */
+/* File: ../Desktop/Dock/DockIcon.m:655 */
+/* Flag: untranslated */
+/* File: ../Desktop/Dock/DockIcon.m:701 */
+/* Flag: untranslated */
+"Remove from Dock" = "Remove from Dock";
+
+/* File: ../Desktop/Dock/DockIcon.m:986 */
+/* Flag: untranslated */
+/* File: ../Desktop/GWDesktopManager.m:262 */
+/* Flag: untranslated */
+/* File: ../Desktop/GWDesktopManager.m:979 */
+/* Flag: untranslated */
+/* File: ../Desktop/GWDesktopManager.m:989 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1377 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewersManager.m:617 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewersManager.m:629 */
+/* Flag: untranslated */
+/* File: ../Finder/Finder.m:305 */
+/* Flag: untranslated */
+/* File: ../GSGlobalShortcutsManager.m:1278 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:1826 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:2006 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:2243 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:4244 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:5421 */
+/* Flag: untranslated */
+"error" = "error";
+
+/* File: ../Desktop/Dock/DockIcon.m:988 */
+/* Flag: untranslated */
+/* File: ../Desktop/GWDesktopManager.m:981 */
+/* Flag: untranslated */
+/* File: ../Desktop/GWDesktopManager.m:991 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1379 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewersManager.m:619 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewersManager.m:631 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:1828 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:2245 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:4246 */
+/* Flag: untranslated */
+"Can't open " = "Can't open ";
+
+/* File: ../Desktop/Dock/DockIcon.m:1025 */
+/* Flag: untranslated */
+/* File: ../Desktop/GWDesktopView.m:1508 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:2595 */
+/* Flag: untranslated */
+"You cannot eject the root filesystem"
+  = "You cannot eject the root filesystem";
+
+/* File: ../Desktop/Dock/DockIcon.m:1041 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:2412 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:2462 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:2489 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:2621 */
+/* Flag: untranslated */
+"You do not have write permission\nfor"
+  = "You do not have write permission\nfor";
+
+/* File: ../Desktop/GWDesktopManager.m:610 */
+/* Flag: untranslated */
+/* File: ../Desktop/GWDesktopManager.m:653 */
+/* Flag: untranslated */
+"The Desktop directory has been deleted! Quitting now!"
+  = "The Desktop directory has been deleted! Quitting now!";
+
+/* File: ../Desktop/GWDesktopManager.m:1076 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWSpatialViewer.m:1744 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1680 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:469 */
+/* Flag: untranslated */
+"Modification date" = "Modification date";
+
+/* File: ../Desktop/GWDesktopManager.m:1101 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWSpatialViewer.m:1778 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1714 */
+/* Flag: untranslated */
+/* File: ../Preferences/DesktopPref.m:136 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:497 */
+/* Flag: untranslated */
+"Left" = "Left";
+
+/* File: ../Dialogs/AboutController.m:60 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:255 */
+/* Flag: untranslated */
+"About This Computer" = "About This Computer";
+
+/* File: ../FileViewer/GWSpatialViewer.m:305 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:297 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:305 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:312 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1105 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1172 */
+/* Flag: untranslated */
+"System Disk" = "System Disk";
+
+/* File: ../FileViewer/GWSpatialViewer.m:764 */
+/* Flag: untranslated */
+/* File: ../Finder/Finder.m:742 */
+/* Flag: untranslated */
+/* File: ../Finder/LiveSearch/LSFolder.m:107 */
+/* Flag: untranslated */
+/* File: ../Finder/SearchResults/SearchResults.m:103 */
+/* Flag: untranslated */
+"elements" = "elements";
+
+/* File: ../FileViewer/GWSpatialViewer.m:782 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:853 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:871 */
+/* Flag: untranslated */
+"free" = "free";
+
+/* File: ../FileViewer/GWSpatialViewer.m:1444 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1404 */
+/* Flag: untranslated */
+"You can't open a document that is in the Recycler!"
+  = "You can't open a document that is in the Recycler!";
+
+/* File: ../FileViewer/GWSpatialViewer.m:1457 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWSpatialViewer.m:1470 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1417 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1430 */
+/* Flag: untranslated */
+"You can't do this in the Recycler!" = "You can't do this in the Recycler!";
+
+/* File: ../FileViewer/GWSpatialViewer.m:1484 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1444 */
+/* Flag: untranslated */
+"You can't create a new folder in the Recycler!"
+  = "You can't create a new folder in the Recycler!";
+
+/* File: ../FileViewer/GWSpatialViewer.m:1498 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1458 */
+/* Flag: untranslated */
+"You can't create a new file in the Recycler!"
+  = "You can't create a new file in the Recycler!";
+
+/* File: ../FileViewer/GWSpatialViewer.m:1519 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1479 */
+/* Flag: untranslated */
+"You can't duplicate files in the Recycler!"
+  = "You can't duplicate files in the Recycler!";
+
+/* File: ../FileViewer/GWSpatialViewer.m:1946 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1880 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:474 */
+/* Flag: untranslated */
+"Icon Size" = "Icon Size";
+
+/* File: ../FileViewer/GWSpatialViewer.m:1948 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1882 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:492 */
+/* Flag: untranslated */
+"Icon Position" = "Icon Position";
+
+/* File: ../FileViewer/GWSpatialViewer.m:1950 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1884 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:508 */
+/* Flag: untranslated */
+"Label Size" = "Label Size";
+
+/* File: ../FileViewer/GWSpatialViewer.m:1952 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1886 */
+/* Flag: untranslated */
+"Label Color..." = "Label Color...";
+
+/* File: ../FileViewer/GWSpatialViewer.m:1954 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewer.m:1888 */
+/* Flag: untranslated */
+"Background Color..." = "Background Color...";
+
+/* File: ../FileViewer/GWViewer.m:1326 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewersManager.m:532 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:1730 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:4223 */
+/* Flag: untranslated */
+"Are you sure you want to open" = "Are you sure you want to open";
+
+/* File: ../FileViewer/GWViewer.m:1327 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewersManager.m:533 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:1731 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:4224 */
+/* Flag: untranslated */
+"items?" = "items?";
+
+/* File: ../FileViewer/GWViewer.m:1332 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewersManager.m:538 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:1736 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:2952 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3266 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:4229 */
+/* Flag: untranslated */
+"Yes" = "Yes";
+
+/* File: ../FileViewer/GWViewerSidebar.m:836 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:617 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3483 */
+/* Flag: untranslated */
+"Documents" = "Documents";
+
+/* File: ../FileViewer/GWViewerSidebar.m:837 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:623 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3495 */
+/* Flag: untranslated */
+"Downloads" = "Downloads";
+
+/* File: ../FileViewer/GWViewerSidebar.m:838 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3501 */
+/* Flag: untranslated */
+"Music" = "Music";
+
+/* File: ../FileViewer/GWViewerSidebar.m:839 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3507 */
+/* Flag: untranslated */
+"Pictures" = "Pictures";
+
+/* File: ../FileViewer/GWViewerSidebar.m:840 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3513 */
+/* Flag: untranslated */
+"Videos" = "Videos";
+
+/* File: ../FileViewer/GWViewerSidebar.m:877 */
+/* Flag: untranslated */
+/* File: ../FileViewer/GWViewerSidebar.m:957 */
+/* Flag: untranslated */
+/* File: ../Network/NetworkFSNode.m:31 */
+/* Comment: Network virtual folder */
+/* Flag: untranslated */
+/* File: ../Workspace.m:634 */
+/* Flag: untranslated */
+"Network" = "Network";
+
+/* File: ../FileViewer/GWViewerSidebar.m:1121 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:4679 */
+/* Flag: untranslated */
+"Eject" = "Eject";
+
+/* File: ../Finder/Finder.m:226 */
+/* Flag: untranslated */
+/* File: ../Preferences/HiddenFilesPref.m:186 */
+/* Flag: untranslated */
+"Add" = "Add";
+
+/* File: ../Finder/Finder.m:227 */
+/* Flag: untranslated */
+/* File: ../Preferences/HiddenFilesPref.m:187 */
+/* Flag: untranslated */
+"Remove" = "Remove";
+
+/* File: ../Finder/Finder.m:315 */
+/* Flag: untranslated */
+/* File: ../Finder/Finder.m:323 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleName/FModuleName.m:143 */
+/* Flag: untranslated */
+"name" = "name";
+
+/* File: ../Finder/Finder.m:317 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleSize/FModuleSize.m:130 */
+/* Flag: untranslated */
+"size" = "size";
+
+/* File: ../Finder/Finder.m:318 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleOwner/FModuleOwner.m:131 */
+/* Flag: untranslated */
+"owner" = "owner";
+
+/* File: ../Finder/Finder.m:319 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:331 */
+/* Flag: untranslated */
+"date created" = "date created";
+
+/* File: ../Finder/Finder.m:320 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:333 */
+/* Flag: untranslated */
+"date modified" = "date modified";
+
+/* File: ../Finder/Finder.m:321 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleContents/FModuleContents.m:116 */
+/* Flag: untranslated */
+"contents" = "contents";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:554 */
+/* Flag: untranslated */
+/* File: ../Finder/SearchResults/SearchResults.m:143 */
+/* Flag: untranslated */
+"Parent" = "Parent";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:565 */
+/* Flag: untranslated */
+/* File: ../Finder/SearchResults/SearchResults.m:154 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:536 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:558 */
+/* Flag: untranslated */
+"Date Modified" = "Date Modified";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:990 */
+/* Flag: untranslated */
+/* File: ../Finder/SearchResults/SearchResults.m:774 */
+/* Flag: untranslated */
+"You can't move objects with multiple parent paths!"
+  = "You can't move objects with multiple parent paths!";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:149 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:151 */
+/* Flag: untranslated */
+"is today" = "is today";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:150 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:152 */
+/* Flag: untranslated */
+"is within" = "is within";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:151 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:153 */
+/* Flag: untranslated */
+"is before" = "is before";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:152 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:154 */
+/* Flag: untranslated */
+"is after" = "is after";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:153 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:155 */
+/* Flag: untranslated */
+"is exactly" = "is exactly";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:157 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:159 */
+/* Flag: untranslated */
+"the last day" = "the last day";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:158 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:160 */
+/* Flag: untranslated */
+"the last 2 days" = "the last 2 days";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:159 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:161 */
+/* Flag: untranslated */
+"the last 3 days" = "the last 3 days";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:160 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:162 */
+/* Flag: untranslated */
+"the last week" = "the last week";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:161 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:163 */
+/* Flag: untranslated */
+"the last 2 weeks" = "the last 2 weeks";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:162 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:164 */
+/* Flag: untranslated */
+"the last 3 weeks" = "the last 3 weeks";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:163 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:165 */
+/* Flag: untranslated */
+"the last month" = "the last month";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:164 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:166 */
+/* Flag: untranslated */
+"the last 2 months" = "the last 2 months";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:165 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:167 */
+/* Flag: untranslated */
+"the last 3 months" = "the last 3 months";
+
+/* File: ../Finder/Modules/FModuleCrDate/FModuleCrDate.m:166 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleModDate/FModuleModDate.m:168 */
+/* Flag: untranslated */
+"the last 6 months" = "the last 6 months";
+
+/* File: ../Finder/Modules/FModuleKind/FModuleKind.m:86 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleName/FModuleName.m:90 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleOwner/FModuleOwner.m:84 */
+/* Flag: untranslated */
+"is" = "is";
+
+/* File: ../Finder/Modules/FModuleKind/FModuleKind.m:87 */
+/* Flag: untranslated */
+/* File: ../Finder/Modules/FModuleOwner/FModuleOwner.m:85 */
+/* Flag: untranslated */
+"is not" = "is not";
+
+/* File: ../GWArchiveOperation.m:104 */
+/* Flag: untranslated */
+/* File: ../GWArchiveOperation.m:239 */
+/* Flag: untranslated */
+"Compressing..." = "Compressing...";
+
+/* File: ../GWArchiveOperation.m:105 */
+/* Flag: untranslated */
+/* File: ../GWArchiveOperation.m:271 */
+/* Flag: untranslated */
+"Extracting..." = "Extracting...";
+
+/* File: ../GWArchiveOperation.m:116 */
+/* Flag: untranslated */
+/* File: ../ISOWrite/ISOWriteProgressWindow.m:77 */
+/* Flag: untranslated */
+"Preparing..." = "Preparing...";
+
+/* File: ../GWArchiveOperation.m:252 */
+/* Flag: untranslated */
+/* File: ../GWArchiveOperation.m:284 */
+/* Flag: untranslated */
+"Done." = "Done.";
+
+/* File: ../GWArchiveOperation.m:253 */
+/* Flag: untranslated */
+/* File: ../GWArchiveOperation.m:285 */
+/* Flag: untranslated */
+"Failed." = "Failed.";
+
+/* File: ../GWUnmountHelper.m:55 */
+/* Flag: untranslated */
+/* File: ../ISOWrite/DiskFormatOperation.m:25 */
+/* Flag: untranslated */
+/* File: ../ISOWrite/DiskFormatOperation.m:214 */
+/* Flag: untranslated */
+"Invalid mount point." = "Invalid mount point.";
+
+/* File: ../History/History.m:59 */
+/* Flag: untranslated */
+/* File: ../Preferences/HistoryPref.m:87 */
+/* Flag: untranslated */
+"History" = "History";
+
+/* File: ../ISOWrite/DiskFormatOperation.m:194 */
+/* Flag: untranslated */
+/* File: ../ISOWrite/DiskFormatOperation.m:249 */
+/* Flag: untranslated */
+"Failed to unmount %@: %@" = "Failed to unmount %@: %@";
+
+/* File: ../ISOWrite/DiskFormatOperation.m:196 */
+/* Flag: untranslated */
+/* File: ../ISOWrite/DiskFormatOperation.m:251 */
+/* Flag: untranslated */
+"Failed to unmount %@." = "Failed to unmount %@.";
+
+/* File: ../ISOWrite/DiskFormatOperation.m:297 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:5757 */
+/* Flag: untranslated */
+"Formatting failed." = "Formatting failed.";
+
+/* File: ../ISOWrite/ISOWriteHandler.m:251 */
+/* Flag: untranslated */
+/* File: ../ISOWrite/ISOWriteHandler.m:271 */
+/* Flag: untranslated */
+"ISO File Dropped" = "ISO File Dropped";
+
+/* File: ../ISOWrite/ISOWriteHandler.m:255 */
+/* Flag: untranslated */
+/* File: ../ISOWrite/ISOWriteHandler.m:274 */
+/* Flag: untranslated */
+"Write to Device" = "Write to Device";
+
+/* File: ../Network/NetworkVolumeManager.m:503 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3725 */
+/* Flag: untranslated */
+"Connect to SFTP Server" = "Connect to SFTP Server";
+
+/* File: ../Preferences/DefEditorPref.m:100 */
+/* Flag: untranslated */
+/* File: ../Preferences/DesktopPref.m:130 */
+/* Flag: untranslated */
+"Choose" = "Choose";
+
+/* File: ../Preferences/DesktopPref.m:162 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:620 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3489 */
+/* Flag: untranslated */
+"Desktop" = "Desktop";
+
+/* File: ../Preferences/HiddenFilesPref.m:180 */
+/* Flag: untranslated */
+/* File: ../Preferences/HiddenFilesPref.m:188 */
+/* Flag: untranslated */
+"Activate changes" = "Activate changes";
+
+/* File: ../Preferences/IconsPref.m:61 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:500 */
+/* Flag: untranslated */
+"Thumbnails" = "Thumbnails";
+
+/* File: ../Preferences/OperationPrefs.m:69 */
+/* Flag: untranslated */
+/* File: ../Preferences/OperationPrefs.m:105 */
+/* Flag: untranslated */
+"Status Window" = "Status Window";
+
+/* File: ../Preferences/OperationPrefs.m:72 */
+/* Flag: untranslated */
+/* File: ../Preferences/OperationPrefs.m:109 */
+/* Flag: untranslated */
+"Confirmation" = "Confirmation";
+
+/* File: ../Preferences/XTermPref.m:97 */
+/* Flag: untranslated */
+/* File: ../Preferences/XTermPref.m:111 */
+/* Flag: untranslated */
+"Terminal" = "Terminal";
+
+/* File: ../WorkspaceApplication.m:161 */
+/* Flag: untranslated */
+/* File: ../WorkspaceApplication.m:264 */
+/* Flag: untranslated */
+/* File: ../WorkspaceApplication.m:351 */
+/* Flag: untranslated */
+/* File: ../WorkspaceApplication.m:408 */
+/* Flag: untranslated */
+"Workspace is logging out!" = "Workspace is logging out!";
+
+/* File: ../WorkspaceApplication.m:1497 */
+/* Flag: untranslated */
+/* File: ../WorkspaceApplication.m:1499 */
+/* Flag: untranslated */
+/* File: ../WorkspaceApplication.m:1602 */
+/* Flag: untranslated */
+"Log Out" = "Log Out";
+
+/* File: ../Workspace.m:276 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:277 */
+/* Flag: untranslated */
+"Hide Others" = "Hide Others";
+
+/* File: ../Workspace.m:331 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:4596 */
+/* Flag: untranslated */
+"Get Info" = "Get Info";
+
+/* File: ../Workspace.m:336 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:4636 */
+/* Flag: untranslated */
+"Compress" = "Compress";
+
+/* File: ../Workspace.m:364 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:4607 */
+/* Flag: untranslated */
+"Label" = "Label";
+
+/* File: ../Workspace.m:373 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:374 */
+/* Flag: untranslated */
+"Undo" = "Undo";
+
+/* File: ../Workspace.m:375 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:376 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:377 */
+/* Flag: untranslated */
+"Redo" = "Redo";
+
+/* File: ../Workspace.m:460 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:787 */
+/* Flag: untranslated */
+"Show" = "Show";
+
+/* File: ../Workspace.m:534 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:556 */
+/* Flag: untranslated */
+"Kind" = "Kind";
+
+/* File: ../Workspace.m:538 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:560 */
+/* Flag: untranslated */
+"Date Created" = "Date Created";
+
+/* File: ../Workspace.m:542 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:564 */
+/* Flag: untranslated */
+"Tags" = "Tags";
+
+/* File: ../Workspace.m:547 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:4417 */
+/* Flag: untranslated */
+"Clean Up" = "Clean Up";
+
+/* File: ../Workspace.m:551 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:4426 */
+/* Flag: untranslated */
+"Clean Up By" = "Clean Up By";
+
+/* File: ../Workspace.m:721 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3385 */
+/* Flag: untranslated */
+"Workspace Help" = "Workspace Help";
+
+/* File: ../Workspace.m:2953 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3267 */
+/* Flag: untranslated */
+"No" = "No";
+
+/* File: ../Workspace.m:3402 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3418 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3434 */
+/* Flag: untranslated */
+"Could not open URL:\n\n%@" = "Could not open URL:\n\n%@";
+
+/* File: ../Workspace.m:3647 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:3652 */
+/* Flag: untranslated */
+"Connection Failed" = "Connection Failed";
+
+/* File: ../Workspace.m:5725 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:5736 */
+/* Flag: untranslated */
+/* File: ../Workspace.m:5760 */
+/* Flag: untranslated */
+"Format Failed" = "Format Failed";
 
 
-/* IconViewsPreferences.m */
+/*** Unmatched/untranslated keys ***/
 
-"Title Width" = "Largura do Título";
+/* File: ../AVFSMount.m:544 */
+/* Flag: untranslated */
+"AVFS Not Installed" = "AVFS Not Installed";
+
+/* File: ../AVFSMount.m:551 */
+/* Flag: untranslated */
+"AVFS (A Virtual File System) is required to browse archive contents but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install avfs\n• On Fedora/RHEL: sudo dnf install avfs\n• On Arch: sudo pacman -S avfs\n• From source: https://avf.sourceforge.net/"
+  = "AVFS (A Virtual File System) is required to browse archive contents but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install avfs\n• On Fedora/RHEL: sudo dnf install avfs\n• On Arch: sudo pacman -S avfs\n• From source: https://avf.sourceforge.net/";
+
+/* File: ../Desktop/Dock/DockIcon.m:680 */
+/* Flag: untranslated */
+"New Viewer" = "New Viewer";
+
+/* File: ../Desktop/Dock/DockIcon.m:688 */
+/* Flag: untranslated */
+"Open in Terminal" = "Open in Terminal";
+
+/* File: ../Desktop/GWDesktopManager.m:263 */
+/* Flag: untranslated */
+"Can't create the Desktop directory!"
+  = "Can't create the Desktop directory!";
+
+/* File: ../Desktop/GWDesktopView.m:556 */
+/* Flag: untranslated */
+"The volume at the following path was removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes."
+  = "The volume at the following path was removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes.";
+
+/* File: ../Desktop/GWDesktopView.m:563 */
+/* Flag: untranslated */
+"The following volumes were removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes."
+  = "The following volumes were removed without being properly ejected:\n\n%@\n\nAlways eject removable volumes before unplugging them to prevent data loss and avoid crashes.";
+
+/* File: ../Desktop/GWDesktopView.m:567 */
+/* Flag: untranslated */
+"Volume Removed Unexpectedly" = "Volume Removed Unexpectedly";
+
+/* File: ../Dialogs/AboutController.m:105 */
+/* Flag: untranslated */
+"Model" = "Model";
+
+/* File: ../Dialogs/AboutController.m:105 */
+/* Flag: untranslated */
+"Processor" = "Processor";
+
+/* File: ../Dialogs/AboutController.m:105 */
+/* Flag: untranslated */
+"Memory" = "Memory";
+
+/* File: ../Dialogs/AboutController.m:105 */
+/* Flag: untranslated */
+"OS" = "OS";
+
+/* File: ../Dialogs/AboutController.m:105 */
+/* Flag: untranslated */
+"Kernel" = "Kernel";
+
+/* File: ../Dialogs/AboutController.m:105 */
+/* Flag: untranslated */
+"X11 Server" = "X11 Server";
+
+/* File: ../Dialogs/AboutController.m:166 */
+/* Flag: untranslated */
+"More Info..." = "More Info...";
+
+/* File: ../Dialogs/OpenWithController.m:77 */
+/* Flag: untranslated */
+"Can't edit a directory!" = "Can't edit a directory!";
+
+/* File: ../Dialogs/OpenWithController.m:140 */
+/* Flag: untranslated */
+"No executable found!" = "No executable found!";
+
+/* File: ../Dialogs/StartAppWin.m:63 */
+/* Flag: untranslated */
+"starting:" = "starting:";
+
+/* File: ../FileViewer/GWViewer.m:849 */
+/* Flag: untranslated */
+"total" = "total";
+
+/* File: ../FileViewer/GWViewer.m:851 */
+/* Flag: untranslated */
+"available" = "available";
+
+/* File: ../FileViewer/GWViewer.m:861 */
+/* Flag: untranslated */
+"unknown volume size" = "unknown volume size";
+
+/* File: ../FileViewer/GWViewerSidebar.m:807 */
+/* Flag: untranslated */
+"Network User" = "Network User";
+
+/* File: ../FileViewer/GWViewerSidebar.m:809 */
+/* Flag: untranslated */
+"Local User" = "Local User";
+
+/* File: ../FileViewer/GWViewerSidebar.m:862 */
+/* Flag: untranslated */
+"Domains" = "Domains";
+
+/* File: ../FileViewer/GWViewerSidebar.m:869 */
+/* Flag: untranslated */
+"Local" = "Local";
+
+/* File: ../FileViewer/GWViewerSidebar.m:885 */
+/* Flag: untranslated */
+"System" = "System";
+
+/* File: ../FileViewer/GWViewerSidebar.m:899 */
+/* Flag: untranslated */
+"Volumes" = "Volumes";
+
+/* File: ../Finder/Finder.m:220 */
+/* Flag: untranslated */
+"Search in:" = "Search in:";
+
+/* File: ../Finder/Finder.m:222 */
+/* Flag: untranslated */
+"Current selection" = "Current selection";
+
+/* File: ../Finder/Finder.m:224 */
+/* Flag: untranslated */
+"Specific places" = "Specific places";
+
+/* File: ../Finder/Finder.m:228 */
+/* Flag: untranslated */
+"Search for items whose:" = "Search for items whose:";
+
+/* File: ../Finder/Finder.m:229 */
+/* Flag: untranslated */
+"Recursive" = "Recursive";
+
+/* File: ../Finder/Finder.m:230 */
+/* Flag: untranslated */
+"Search" = "Search";
+
+/* File: ../Finder/Finder.m:306 */
+/* Flag: untranslated */
+"No Finder modules! Quitting now." = "No Finder modules! Quitting now.";
+
+/* File: ../Finder/Finder.m:316 */
+/* Flag: untranslated */
+"kind" = "kind";
+
+/* File: ../Finder/Finder.m:603 */
+/* Flag: untranslated */
+"open" = "open";
+
+/* File: ../Finder/Finder.m:809 */
+/* Flag: untranslated */
+"No search criteria!" = "No search criteria!";
+
+/* File: ../Finder/LiveSearch/LSFEditor.m:133 */
+/* Flag: untranslated */
+"Searching in:" = "Searching in:";
+
+/* File: ../Finder/LiveSearch/LSFEditor.m:134 */
+/* Flag: untranslated */
+"Modules:" = "Modules:";
+
+/* File: ../Finder/LiveSearch/LSFEditor.m:135 */
+/* Flag: untranslated */
+"recursive" = "recursive";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:285 */
+/* Flag: untranslated */
+"unable to launch the updater task." = "unable to launch the updater task.";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:439 */
+/* Flag: untranslated */
+"updater connection died!" = "updater connection died!";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:485 */
+/* Flag: untranslated */
+"no autoupdate" = "no autoupdate";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:487 */
+/* Flag: untranslated */
+"one minute" = "one minute";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:489 */
+/* Flag: untranslated */
+"5 minutes" = "5 minutes";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:491 */
+/* Flag: untranslated */
+"10 minutes" = "10 minutes";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:493 */
+/* Flag: untranslated */
+"30 minutes" = "30 minutes";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:495 */
+/* Flag: untranslated */
+"one hour" = "one hour";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:497 */
+/* Flag: untranslated */
+"2 hours" = "2 hours";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:499 */
+/* Flag: untranslated */
+"3 hours" = "3 hours";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:501 */
+/* Flag: untranslated */
+"6 hours" = "6 hours";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:503 */
+/* Flag: untranslated */
+"12 hours" = "12 hours";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:505 */
+/* Flag: untranslated */
+"a day" = "a day";
+
+/* File: ../Finder/LiveSearch/LSFolder.m:519 */
+/* Flag: untranslated */
+"Update now" = "Update now";
+
+/* File: ../Finder/Modules/FModuleAnnotations/FModuleAnnotations.m:87 */
+/* Flag: untranslated */
+"contains one of" = "contains one of";
+
+/* File: ../Finder/Modules/FModuleAnnotations/FModuleAnnotations.m:89 */
+/* Flag: untranslated */
+"contains all of" = "contains all of";
+
+/* File: ../Finder/Modules/FModuleAnnotations/FModuleAnnotations.m:91 */
+/* Flag: untranslated */
+"with exactly" = "with exactly";
+
+/* File: ../Finder/Modules/FModuleAnnotations/FModuleAnnotations.m:93 */
+/* Flag: untranslated */
+"without one of" = "without one of";
+
+/* File: ../Finder/Modules/FModuleAnnotations/FModuleAnnotations.m:141 */
+/* Flag: untranslated */
+"annotations" = "annotations";
+
+/* File: ../Finder/Modules/FModuleContents/FModuleContents.m:80 */
+/* Flag: untranslated */
+"includes" = "includes";
+
+/* File: ../Finder/Modules/FModuleKind/FModuleKind.m:91 */
+/* Flag: untranslated */
+"plain file" = "plain file";
+
+/* File: ../Finder/Modules/FModuleKind/FModuleKind.m:92 */
+/* Flag: untranslated */
+"folder" = "folder";
+
+/* File: ../Finder/Modules/FModuleKind/FModuleKind.m:93 */
+/* Flag: untranslated */
+"tool" = "tool";
+
+/* File: ../Finder/Modules/FModuleKind/FModuleKind.m:94 */
+/* Flag: untranslated */
+"symbolic link" = "symbolic link";
+
+/* File: ../Finder/Modules/FModuleKind/FModuleKind.m:95 */
+/* Flag: untranslated */
+"application" = "application";
+
+/* File: ../Finder/Modules/FModuleKind/FModuleKind.m:143 */
+/* Flag: untranslated */
+"type" = "type";
+
+/* File: ../Finder/Modules/FModuleName/FModuleName.m:88 */
+/* Flag: untranslated */
+"contains" = "contains";
+
+/* File: ../Finder/Modules/FModuleName/FModuleName.m:92 */
+/* Flag: untranslated */
+"contains not" = "contains not";
+
+/* File: ../Finder/Modules/FModuleName/FModuleName.m:94 */
+/* Flag: untranslated */
+"starts with" = "starts with";
+
+/* File: ../Finder/Modules/FModuleName/FModuleName.m:96 */
+/* Flag: untranslated */
+"ends with" = "ends with";
+
+/* File: ../Finder/Modules/FModuleSize/FModuleSize.m:83 */
+/* Flag: untranslated */
+"greater than" = "greater than";
+
+/* File: ../Finder/Modules/FModuleSize/FModuleSize.m:84 */
+/* Flag: untranslated */
+"less than" = "less than";
+
+/* File: ../Finder/SearchResults/SearchResults.m:316 */
+/* Flag: untranslated */
+"the search tool connection died!" = "the search tool connection died!";
+
+/* File: ../Finder/SearchResults/SearchResults.m:329 */
+/* Flag: untranslated */
+"unable to launch the search task." = "unable to launch the search task.";
+
+/* File: ../Finder/SearchResults/SearchResults.m:619 */
+/* Flag: untranslated */
+"New Live Search" = "New Live Search";
+
+/* File: ../Finder/SearchResults/SearchResults.m:635 */
+/* Flag: untranslated */
+"No name supplied!" = "No name supplied!";
+
+/* File: ../Finder/SearchResults/SearchResults.m:684 */
+/* Flag: untranslated */
+"can't create the Live Search folder"
+  = "can't create the Live Search folder";
+
+/* File: ../GSGlobalShortcutsManager.m:1282 */
+/* Flag: untranslated */
+"Failed to execute shutdown command."
+  = "Failed to execute shutdown command.";
+
+/* File: ../GWApplicationLauncher.m:89 */
+/* Comment: launcher exception fallback */
+/* Flag: untranslated */
+"(failed to launch)" = "(failed to launch)";
+
+/* File: ../GWArchiveOperation.m:144 */
+/* Flag: untranslated */
+"Cancelling..." = "Cancelling...";
+
+/* File: ../GWArchiveOperation.m:161 */
+/* Flag: untranslated */
+"Operation Failed" = "Operation Failed";
+
+/* File: ../GWUnmountHelper.m:140 */
+/* Flag: untranslated */
+"Unmount failed." = "Unmount failed.";
+
+/* File: ../ISOWrite/DeviceEraseConfirmation.m:82 */
+/* Flag: untranslated */
+"Write ISO to “%@”?" = "Write ISO to “%@”?";
+
+/* File: ../ISOWrite/DeviceEraseConfirmation.m:91 */
+/* Flag: untranslated */
+"Erases all data on %@ and writes “%@” (%@).\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone."
+  = "Erases all data on %@ and writes “%@” (%@).\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone.";
+
+/* File: ../ISOWrite/DeviceEraseConfirmation.m:99 */
+/* Flag: untranslated */
+"Format “%@”?" = "Format “%@”?";
+
+/* File: ../ISOWrite/DeviceEraseConfirmation.m:108 */
+/* Flag: untranslated */
+"Erases all data on %@ and reformats as FAT32.\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone."
+  = "Erases all data on %@ and reformats as FAT32.\n\nDevice: %@%@%@\n\nPartitions:\n%@\nThis cannot be undone.";
+
+/* File: ../ISOWrite/DeviceEraseConfirmation.m:119 */
+/* Flag: untranslated */
+"Format" = "Format";
+
+/* File: ../ISOWrite/DeviceEraseConfirmation.m:135 */
+/* Flag: untranslated */
+"(unlabeled)" = "(unlabeled)";
+
+/* File: ../ISOWrite/DeviceEraseConfirmation.m:136 */
+/* Flag: untranslated */
+"unknown" = "unknown";
+
+/* File: ../ISOWrite/DiskFormatOperation.m:33 */
+/* Flag: untranslated */
+"Cannot determine device for the selected mount point."
+  = "Cannot determine device for the selected mount point.";
+
+/* File: ../ISOWrite/DiskFormatOperation.m:46 */
+/* Flag: untranslated */
+"Cannot read information for the selected device."
+  = "Cannot read information for the selected device.";
+
+/* File: ../ISOWrite/DiskFormatOperation.m:265 */
+/* Flag: untranslated */
+"Could not find formatdisk-helper. Please reinstall Workspace tools."
+  = "Could not find formatdisk-helper. Please reinstall Workspace tools.";
+
+/* File: ../ISOWrite/ISOWriteHandler.m:147 */
+/* Flag: untranslated */
+"Not an ISO or supported disk image file."
+  = "Not an ISO or supported disk image file.";
+
+/* File: ../ISOWrite/ISOWriteHandler.m:152 */
+/* Flag: untranslated */
+"Target is not a physical device mount point."
+  = "Target is not a physical device mount point.";
+
+/* File: ../ISOWrite/ISOWriteHandler.m:192 */
+/* Flag: untranslated */
+"Operation In Progress" = "Operation In Progress";
+
+/* File: ../ISOWrite/ISOWriteHandler.m:193 */
+/* Flag: untranslated */
+"An ISO write operation is already in progress for this device."
+  = "An ISO write operation is already in progress for this device.";
+
+/* File: ../ISOWrite/ISOWriteHandler.m:254 */
+/* Flag: untranslated */
+"Copy File" = "Copy File";
+
+/* File: ../ISOWrite/ISOWriteOperation.m:271 */
+/* Flag: untranslated */
+"Write Cancelled" = "Write Cancelled";
+
+/* File: ../ISOWrite/ISOWriteOperation.m:272 */
+/* Flag: untranslated */
+"The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use."
+  = "The write operation was cancelled. The target device may be in an inconsistent state and should be reformatted before use.";
+
+/* File: ../ISOWrite/ISOWriteOperation.m:332 */
+/* Flag: untranslated */
+"ISO Write Error" = "ISO Write Error";
+
+/* File: ../ISOWrite/ISOWriteOperation.m:356 */
+/* Flag: untranslated */
+"Unmounting partitions..." = "Unmounting partitions...";
+
+/* File: ../ISOWrite/ISOWriteOperation.m:925 */
+/* Flag: untranslated */
+"Writing image to device..." = "Writing image to device...";
+
+/* File: ../ISOWrite/ISOWriteOperation.m:934 */
+/* Flag: untranslated */
+"Verifying..." = "Verifying...";
+
+/* File: ../ISOWrite/ISOWriteOperation.m:961 */
+/* Flag: untranslated */
+"Write Complete" = "Write Complete";
+
+/* File: ../ISOWrite/ISOWriteOperation.m:962 */
+/* Flag: untranslated */
+"The ISO image has been successfully written to the device.\n\nThe new volume should appear on your desktop when you plug the device in."
+  = "The ISO image has been successfully written to the device.\n\nThe new volume should appear on your desktop when you plug the device in.";
+
+/* File: ../ISOWrite/ISOWriteProgressWindow.m:67 */
+/* Flag: untranslated */
+"Writing image" = "Writing image";
+
+/* File: ../ISOWrite/ISOWriteProgressWindow.m:247 */
+/* Flag: untranslated */
+"%d:%02d:%02d remaining" = "%d:%02d:%02d remaining";
+
+/* File: ../ISOWrite/ISOWriteProgressWindow.m:251 */
+/* Flag: untranslated */
+"%d:%02d remaining" = "%d:%02d remaining";
+
+/* File: ../ISOWrite/ISOWriteProgressWindow.m:279 */
+/* Flag: untranslated */
+"Cancel Write?" = "Cancel Write?";
+
+/* File: ../ISOWrite/ISOWriteProgressWindow.m:280 */
+/* Flag: untranslated */
+"Are you sure you want to cancel?\n\nThe target device may be left in an inconsistent state and will need to be reformatted."
+  = "Are you sure you want to cancel?\n\nThe target device may be left in an inconsistent state and will need to be reformatted.";
+
+/* File: ../ISOWrite/ISOWriteProgressWindow.m:281 */
+/* Flag: untranslated */
+"Continue Writing" = "Continue Writing";
+
+/* File: ../ISOWrite/ISOWriteProgressWindow.m:282 */
+/* Flag: untranslated */
+"Cancel Write" = "Cancel Write";
+
+/* File: ../LowDiskWarn.m:74 */
+/* Flag: untranslated */
+"Low Disk Space" = "Low Disk Space";
+
+/* File: ../LowDiskWarn.m:77 */
+/* Flag: untranslated */
+"The startup disk has less than 3%% free space.\n\nOnly %.1f%% (%llu MB) available."
+  = "The startup disk has less than 3%% free space.\n\nOnly %.1f%% (%llu MB) available.";
+
+/* File: ../Network/NetworkFSNode.m:332 */
+/* Comment: Type for /Network */
+/* Flag: untranslated */
+"Network Location" = "Network Location";
+
+/* File: ../Network/NetworkFSNode.m:337 */
+/* Comment: Type for SFTP services */
+/* Flag: untranslated */
+"SFTP Server" = "SFTP Server";
+
+/* File: ../Network/NetworkFSNode.m:339 */
+/* Comment: Type for AFP services */
+/* Flag: untranslated */
+"AFP Server" = "AFP Server";
+
+/* File: ../Network/NetworkFSNode.m:342 */
+/* Comment: Type for WebDAVS services */
+/* Flag: untranslated */
+"WebDAV Server (Secure)" = "WebDAV Server (Secure)";
+
+/* File: ../Network/NetworkFSNode.m:344 */
+/* Comment: Type for WebDAV services */
+/* Flag: untranslated */
+"WebDAV Server" = "WebDAV Server";
+
+/* File: ../Network/NetworkFSNode.m:348 */
+/* Comment: Generic network server type */
+/* Flag: untranslated */
+"Network Server" = "Network Server";
+
+/* File: ../Network/NetworkFSNode.m:453 */
+/* Flag: untranslated */
+"Not Implemented" = "Not Implemented";
+
+/* File: ../Network/NetworkFSNode.m:455 */
+/* Flag: untranslated */
+"AFP volume mounting is not yet implemented."
+  = "AFP volume mounting is not yet implemented.";
+
+/* File: ../Network/NetworkVolumeManager.m:104 */
+/* Flag: untranslated */
+"SSHFS Not Installed" = "SSHFS Not Installed";
+
+/* File: ../Network/NetworkVolumeManager.m:110 */
+/* Flag: untranslated */
+"FUSE sshfs is required to mount SFTP network volumes but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshfs\n• On Fedora/RHEL: sudo dnf install fuse-sshfs\n• On Arch: sudo pacman -S sshfs"
+  = "FUSE sshfs is required to mount SFTP network volumes but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshfs\n• On Fedora/RHEL: sudo dnf install fuse-sshfs\n• On Arch: sudo pacman -S sshfs";
+
+/* File: ../Network/NetworkVolumeManager.m:149 */
+/* Flag: untranslated */
+"sshpass Not Installed" = "sshpass Not Installed";
+
+/* File: ../Network/NetworkVolumeManager.m:156 */
+/* Flag: untranslated */
+"sshpass is required for password-based SFTP authentication but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshpass\n• On Fedora/RHEL: sudo dnf install sshpass\n• On Arch: sudo pacman -S sshpass\n\nAlternatively, you can set up SSH key authentication to connect without a password."
+  = "sshpass is required for password-based SFTP authentication but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshpass\n• On Fedora/RHEL: sudo dnf install sshpass\n• On Arch: sudo pacman -S sshpass\n\nAlternatively, you can set up SSH key authentication to connect without a password.";
+
+/* File: ../Network/NetworkVolumeManager.m:488 */
+/* Flag: untranslated */
+"Cannot Mount" = "Cannot Mount";
+
+/* File: ../Network/NetworkVolumeManager.m:490 */
+/* Flag: untranslated */
+"The network service does not have a valid hostname."
+  = "The network service does not have a valid hostname.";
+
+/* File: ../Network/NetworkVolumeManager.m:619 */
+/* Flag: untranslated */
+"Mount Failed" = "Mount Failed";
+
+/* File: ../Network/NetworkVolumeManager.m:621 */
+/* Flag: untranslated */
+"Failed to mount SFTP volume:\n\n%@" = "Failed to mount SFTP volume:\n\n%@";
+
+/* File: ../Network/NetworkVolumeManager.m:934 */
+/* Flag: untranslated */
+"AVFS Error" = "AVFS Error";
+
+/* File: ../Network/NetworkVolumeManager.m:936 */
+/* Flag: untranslated */
+"Failed to start the AVFS daemon. Please check that AVFS is properly installed."
+  = "Failed to start the AVFS daemon. Please check that AVFS is properly installed.";
+
+/* File: ../Network/NetworkVolumeManager.m:1088 */
+/* Flag: untranslated */
+"WebDAV Connection Failed" = "WebDAV Connection Failed";
+
+/* File: ../Network/NetworkVolumeManager.m:1090 */
+/* Flag: untranslated */
+"Could not connect to %@.\n\nError: %@"
+  = "Could not connect to %@.\n\nError: %@";
+
+/* File: ../Network/NetworkVolumeManager.m:1157 */
+/* Flag: untranslated */
+"Enter credentials for %@:" = "Enter credentials for %@:";
+
+/* File: ../Network/NetworkVolumeManager.m:1167 */
+/* Flag: untranslated */
+"Username:" = "Username:";
+
+/* File: ../Network/NetworkVolumeManager.m:1184 */
+/* Flag: untranslated */
+"Password:" = "Password:";
+
+/* File: ../Network/NetworkVolumeManager.m:1199 */
+/* Flag: untranslated */
+"Connect" = "Connect";
+
+/* File: ../Preferences/DefEditorPref.m:115 */
+/* Flag: untranslated */
+"Editor" = "Editor";
+
+/* File: ../Preferences/DefEditorPref.m:141 */
+/* Flag: untranslated */
+"is not a valid application!" = "is not a valid application!";
+
+/* File: ../Preferences/DefEditorPref.m:181 */
+/* Flag: untranslated */
+"seems not a valid application!" = "seems not a valid application!";
+
+/* File: ../Preferences/DefSortOrderPref.m:62 */
+/* Flag: untranslated */
+"The method will apply to all the folders"
+  = "The method will apply to all the folders";
+
+/* File: ../Preferences/DefSortOrderPref.m:63 */
+/* Flag: untranslated */
+"that have no order specified" = "that have no order specified";
+
+/* File: ../Preferences/DefSortOrderPref.m:82 */
+/* Flag: untranslated */
+"Sorting Order" = "Sorting Order";
+
+/* File: ../Preferences/DesktopPref.m:118 */
+/* Flag: untranslated */
+"General" = "General";
+
+/* File: ../Preferences/DesktopPref.m:120 */
+/* Flag: untranslated */
+"Color:" = "Color:";
+
+/* File: ../Preferences/DesktopPref.m:122 */
+/* Flag: untranslated */
+"center" = "center";
+
+/* File: ../Preferences/DesktopPref.m:124 */
+/* Flag: untranslated */
+"fit" = "fit";
+
+/* File: ../Preferences/DesktopPref.m:126 */
+/* Flag: untranslated */
+"tile" = "tile";
+
+/* File: ../Preferences/DesktopPref.m:128 */
+/* Flag: untranslated */
+"scale" = "scale";
+
+/* File: ../Preferences/DesktopPref.m:129 */
+/* Flag: untranslated */
+"Use image" = "Use image";
+
+/* File: ../Preferences/DesktopPref.m:132 */
+/* Flag: untranslated */
+"Dock" = "Dock";
+
+/* File: ../Preferences/DesktopPref.m:133 */
+/* Flag: untranslated */
+"Show Dock" = "Show Dock";
+
+/* File: ../Preferences/DesktopPref.m:134 */
+/* Flag: untranslated */
+"Position:" = "Position:";
+
+/* File: ../Preferences/DesktopPref.m:138 */
+/* Flag: untranslated */
+"Right" = "Right";
+
+/* File: ../Preferences/DesktopPref.m:140 */
+/* Flag: untranslated */
+"Bottom" = "Bottom";
+
+/* File: ../Preferences/DesktopPref.m:141 */
+/* Flag: untranslated */
+"Style:" = "Style:";
+
+/* File: ../Preferences/DesktopPref.m:143 */
+/* Flag: untranslated */
+"Classic" = "Classic";
+
+/* File: ../Preferences/DesktopPref.m:145 */
+/* Flag: untranslated */
+"Modern" = "Modern";
+
+/* File: ../Preferences/DesktopPref.m:147 */
+/* Flag: untranslated */
+"Omnipresent" = "Omnipresent";
+
+/* File: ../Preferences/DesktopPref.m:148 */
+/* Flag: untranslated */
+"Single Click Launch" = "Single Click Launch";
+
+/* File: ../Preferences/DesktopPref.m:179 */
+/* Flag: untranslated */
+"Choose Image" = "Choose Image";
+
+/* File: ../Preferences/HiddenFilesPref.m:174 */
+/* Flag: untranslated */
+"Files" = "Files";
+
+/* File: ../Preferences/HiddenFilesPref.m:178 */
+/* Flag: untranslated */
+"Folders" = "Folders";
+
+/* File: ../Preferences/HiddenFilesPref.m:181 */
+/* Flag: untranslated */
+"Load" = "Load";
+
+/* File: ../Preferences/HiddenFilesPref.m:182 */
+/* Flag: untranslated */
+"Hidden files" = "Hidden files";
+
+/* File: ../Preferences/HiddenFilesPref.m:183 */
+/* Flag: untranslated */
+"Shown files" = "Shown files";
+
+/* File: ../Preferences/HiddenFilesPref.m:184 */
+/* Flag: untranslated */
+"Select and move the files to hide or to show"
+  = "Select and move the files to hide or to show";
+
+/* File: ../Preferences/HiddenFilesPref.m:185 */
+/* Flag: untranslated */
+"Hidden directories" = "Hidden directories";
+
+/* File: ../Preferences/HiddenFilesPref.m:203 */
+/* Flag: untranslated */
+"Hidden Files" = "Hidden Files";
+
+/* File: ../Preferences/HistoryPref.m:73 */
+/* Flag: untranslated */
+"Number of saved paths" = "Number of saved paths";
+
+/* File: ../Preferences/IconsPref.m:62 */
+/* Flag: untranslated */
+"use thumbnails" = "use thumbnails";
+
+/* File: ../Preferences/IconsPref.m:76 */
+/* Flag: untranslated */
+"Icons" = "Icons";
+
+/* File: ../Preferences/OperationPrefs.m:104 */
+/* Flag: untranslated */
+"Operation Preferences" = "Operation Preferences";
+
+/* File: ../Preferences/OperationPrefs.m:106 */
+/* Flag: untranslated */
+"Show status window" = "Show status window";
+
+/* File: ../Preferences/OperationPrefs.m:107 */
+/* Flag: untranslated */
+"Check this option to show a status window"
+  = "Check this option to show a status window";
+
+/* File: ../Preferences/OperationPrefs.m:108 */
+/* Flag: untranslated */
+"during the file operations" = "during the file operations";
+
+/* File: ../Preferences/OperationPrefs.m:113 */
+/* Flag: untranslated */
+"Recycler" = "Recycler";
+
+/* File: ../Preferences/OperationPrefs.m:116 */
+/* Flag: untranslated */
+"Uncheck the buttons to allow automatic confirmation"
+  = "Uncheck the buttons to allow automatic confirmation";
+
+/* File: ../Preferences/OperationPrefs.m:117 */
+/* Flag: untranslated */
+"of file operations" = "of file operations";
+
+/* File: ../Preferences/OperationPrefs.m:130 */
+/* Flag: untranslated */
+"File Operations" = "File Operations";
+
+/* File: ../Preferences/XTermPref.m:92 */
+/* Flag: untranslated */
+"Terminal.app" = "Terminal.app";
+
+/* File: ../Preferences/XTermPref.m:93 */
+/* Flag: untranslated */
+"Use Terminal service" = "Use Terminal service";
+
+/* File: ../Preferences/XTermPref.m:94 */
+/* Flag: untranslated */
+"xterm" = "xterm";
+
+/* File: ../Preferences/XTermPref.m:95 */
+/* Flag: untranslated */
+"arguments" = "arguments";
+
+/* File: ../Workspace.m:258 */
+/* Flag: untranslated */
+"About Workspace" = "About Workspace";
+
+/* File: ../Workspace.m:275 */
+/* Flag: untranslated */
+"Hide Workspace" = "Hide Workspace";
+
+/* File: ../Workspace.m:278 */
+/* Flag: untranslated */
+"Show All" = "Show All";
+
+/* File: ../Workspace.m:287 */
+/* Flag: untranslated */
+"Restart..." = "Restart...";
+
+/* File: ../Workspace.m:289 */
+/* Flag: untranslated */
+"Shut Down..." = "Shut Down...";
+
+/* File: ../Workspace.m:291 */
+/* Flag: untranslated */
+"Log Out..." = "Log Out...";
+
+/* File: ../Workspace.m:299 */
+/* Flag: untranslated */
+"New Workspace Window" = "New Workspace Window";
+
+/* File: ../Workspace.m:323 */
+/* Flag: untranslated */
+"Print" = "Print";
+
+/* File: ../Workspace.m:340 */
+/* Flag: untranslated */
+"Make Alias" = "Make Alias";
+
+/* File: ../Workspace.m:342 */
+/* Flag: untranslated */
+"Quick Look \"item\"" = "Quick Look \"item\"";
+
+/* File: ../Workspace.m:346 */
+/* Flag: untranslated */
+"Share" = "Share";
+
+/* File: ../Workspace.m:352 */
+/* Flag: untranslated */
+"Move to Trash" = "Move to Trash";
+
+/* File: ../Workspace.m:361 */
+/* Flag: untranslated */
+"Find" = "Find";
+
+/* File: ../Workspace.m:407 */
+/* Flag: untranslated */
+"as Icons" = "as Icons";
+
+/* File: ../Workspace.m:412 */
+/* Flag: untranslated */
+"as List" = "as List";
+
+/* File: ../Workspace.m:417 */
+/* Flag: untranslated */
+"as Columns" = "as Columns";
+
+/* File: ../Workspace.m:427 */
+/* Flag: untranslated */
+"Use Stacks" = "Use Stacks";
+
+/* File: ../Workspace.m:430 */
+/* Flag: untranslated */
+"View Behavior" = "View Behavior";
+
+/* File: ../Workspace.m:434 */
+/* Flag: untranslated */
+"Browsing" = "Browsing";
+
+/* File: ../Workspace.m:440 */
+/* Flag: untranslated */
+"Spatial" = "Spatial";
+
+/* File: ../Workspace.m:448 */
+/* Flag: untranslated */
+"Set Browsing as Default" = "Set Browsing as Default";
+
+/* File: ../Workspace.m:453 */
+/* Flag: untranslated */
+"Set Spatial as Default" = "Set Spatial as Default";
+
+/* File: ../Workspace.m:463 */
+/* Flag: untranslated */
+"Name only" = "Name only";
+
+/* File: ../Workspace.m:477 */
+/* Flag: untranslated */
+"24" = "24";
+
+/* File: ../Workspace.m:479 */
+/* Flag: untranslated */
+"28" = "28";
+
+/* File: ../Workspace.m:481 */
+/* Flag: untranslated */
+"32" = "32";
+
+/* File: ../Workspace.m:483 */
+/* Flag: untranslated */
+"36" = "36";
+
+/* File: ../Workspace.m:485 */
+/* Flag: untranslated */
+"40" = "40";
+
+/* File: ../Workspace.m:487 */
+/* Flag: untranslated */
+"48" = "48";
+
+/* File: ../Workspace.m:489 */
+/* Flag: untranslated */
+"64" = "64";
+
+/* File: ../Workspace.m:495 */
+/* Flag: untranslated */
+"Up" = "Up";
+
+/* File: ../Workspace.m:503 */
+/* Flag: untranslated */
+"Make thumbnail(s)" = "Make thumbnail(s)";
+
+/* File: ../Workspace.m:505 */
+/* Flag: untranslated */
+"Remove thumbnail(s)" = "Remove thumbnail(s)";
+
+/* File: ../Workspace.m:511 */
+/* Flag: untranslated */
+"10" = "10";
+
+/* File: ../Workspace.m:513 */
+/* Flag: untranslated */
+"11" = "11";
+
+/* File: ../Workspace.m:515 */
+/* Flag: untranslated */
+"12" = "12";
+
+/* File: ../Workspace.m:517 */
+/* Flag: untranslated */
+"13" = "13";
+
+/* File: ../Workspace.m:519 */
+/* Flag: untranslated */
+"14" = "14";
+
+/* File: ../Workspace.m:521 */
+/* Flag: untranslated */
+"15" = "15";
+
+/* File: ../Workspace.m:523 */
+/* Flag: untranslated */
+"16" = "16";
+
+/* File: ../Workspace.m:529 */
+/* Flag: untranslated */
+"Sort By" = "Sort By";
+
+/* File: ../Workspace.m:569 */
+/* Flag: untranslated */
+"Hide Sidebar" = "Hide Sidebar";
+
+/* File: ../Workspace.m:571 */
+/* Flag: untranslated */
+"Show Preview" = "Show Preview";
+
+/* File: ../Workspace.m:576 */
+/* Flag: untranslated */
+"Hide Toolbar" = "Hide Toolbar";
+
+/* File: ../Workspace.m:578 */
+/* Flag: untranslated */
+"Customize Toolbar..." = "Customize Toolbar...";
+
+/* File: ../Workspace.m:583 */
+/* Flag: untranslated */
+"Show View Options" = "Show View Options";
+
+/* File: ../Workspace.m:585 */
+/* Flag: untranslated */
+"Show Preview Options" = "Show Preview Options";
+
+/* File: ../Workspace.m:591 */
+/* Flag: untranslated */
+"Enter Full Screen" = "Enter Full Screen";
+
+/* File: ../Workspace.m:596 */
+/* Flag: untranslated */
+"Go" = "Go";
+
+/* File: ../Workspace.m:600 */
+/* Flag: untranslated */
+"Back" = "Back";
+
+/* File: ../Workspace.m:602 */
+/* Flag: untranslated */
+"Forward" = "Forward";
+
+/* File: ../Workspace.m:607 */
+/* Flag: untranslated */
+"Enclosing Folder" = "Enclosing Folder";
+
+/* File: ../Workspace.m:614 */
+/* Flag: untranslated */
+"Recents" = "Recents";
+
+/* File: ../Workspace.m:626 */
+/* Flag: untranslated */
+"Home" = "Home";
+
+/* File: ../Workspace.m:629 */
+/* Flag: untranslated */
+"Computer" = "Computer";
+
+/* File: ../Workspace.m:632 */
+/* Flag: untranslated */
+"Transfer" = "Transfer";
+
+/* File: ../Workspace.m:642 */
+/* Flag: untranslated */
+"Utilities" = "Utilities";
+
+/* File: ../Workspace.m:648 */
+/* Flag: untranslated */
+"Go to Folder..." = "Go to Folder...";
+
+/* File: ../Workspace.m:651 */
+/* Flag: untranslated */
+"Connect to Server..." = "Connect to Server...";
+
+/* File: ../Workspace.m:668 */
+/* Flag: untranslated */
+"Annotations" = "Annotations";
+
+/* File: ../Workspace.m:673 */
+/* Flag: untranslated */
+"Run..." = "Run...";
+
+/* File: ../Workspace.m:697 */
+/* Flag: untranslated */
+"Window" = "Window";
+
+/* File: ../Workspace.m:701 */
+/* Flag: untranslated */
+"Minimize" = "Minimize";
+
+/* File: ../Workspace.m:702 */
+/* Flag: untranslated */
+"Zoom" = "Zoom";
+
+/* File: ../Workspace.m:706 */
+/* Flag: untranslated */
+"Cycle Through Windows" = "Cycle Through Windows";
+
+/* File: ../Workspace.m:711 */
+/* Flag: untranslated */
+"Bring All to Front" = "Bring All to Front";
+
+/* File: ../Workspace.m:717 */
+/* Flag: untranslated */
+"Help" = "Help";
+
+/* File: ../Workspace.m:723 */
+/* Flag: untranslated */
+"Gershwin Help" = "Gershwin Help";
+
+/* File: ../Workspace.m:731 */
+/* Flag: untranslated */
+"Keyboard Shortcuts" = "Keyboard Shortcuts";
+
+/* File: ../Workspace.m:737 */
+/* Flag: untranslated */
+"New to Gershwin? Get Started" = "New to Gershwin? Get Started";
+
+/* File: ../Workspace.m:742 */
+/* Flag: untranslated */
+"Feedback" = "Feedback";
+
+/* File: ../Workspace.m:744 */
+/* Flag: untranslated */
+"Legal & Regulatory" = "Legal & Regulatory";
+
+/* File: ../Workspace.m:1116 */
+/* Flag: untranslated */
+"Wait the operations to terminate!" = "Wait the operations to terminate!";
+
+/* File: ../Workspace.m:2710 */
+/* Flag: untranslated */
+": no such file or directory!" = ": no such file or directory!";
+
+/* File: ../Workspace.m:2951 */
+/* Flag: untranslated */
+"The fswatcher connection died.\nDo you want to restart it?"
+  = "The fswatcher connection died.\nDo you want to restart it?";
+
+/* File: ../Workspace.m:2974 */
+/* Flag: untranslated */
+"fswatcher notifications disabled!" = "fswatcher notifications disabled!";
+
+/* File: ../Workspace.m:3078 */
+/* Flag: untranslated */
+"ddbd connection died." = "ddbd connection died.";
+
+/* File: ../Workspace.m:3265 */
+/* Flag: untranslated */
+"The mdextractor connection died.\nDo you want to restart it?"
+  = "The mdextractor connection died.\nDo you want to restart it?";
+
+/* File: ../Workspace.m:3355 */
+/* Flag: untranslated */
+"About %@" = "About %@";
+
+/* File: ../Workspace.m:3386 */
+/* Flag: untranslated */
+"You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element."
+  = "You can get help by pressing the Option key (the mouse cursor becomes a question mark) and then clicking on any user interface element.";
+
+/* File: ../Workspace.m:3469 */
+/* Flag: untranslated */
+"Cannot access %@" = "Cannot access %@";
+
+/* File: ../Workspace.m:3470 */
+/* Flag: untranslated */
+"Could not create or access the %@ folder"
+  = "Could not create or access the %@ folder";
+
+/* File: ../Workspace.m:3561 */
+/* Flag: untranslated */
+"Go to Folder:" = "Go to Folder:";
+
+/* File: ../Workspace.m:3654 */
+/* Flag: untranslated */
+"Could not connect to %@\n\nCheck the hostname and try again."
+  = "Could not connect to %@\n\nCheck the hostname and try again.";
+
+/* File: ../Workspace.m:3663 */
+/* Flag: untranslated */
+"Connect to Server:" = "Connect to Server:";
+
+/* File: ../Workspace.m:3675 */
+/* Flag: untranslated */
+"Invalid URL format" = "Invalid URL format";
+
+/* File: ../Workspace.m:3684 */
+/* Flag: untranslated */
+"URL must include a scheme (sftp://, webdav://, webdavs://)"
+  = "URL must include a scheme (sftp://, webdav://, webdavs://)";
+
+/* File: ../Workspace.m:3697 */
+/* Flag: untranslated */
+"Supported URL schemes: sftp://, webdav://, webdavs://"
+  = "Supported URL schemes: sftp://, webdav://, webdavs://";
+
+/* File: ../Workspace.m:3706 */
+/* Flag: untranslated */
+"URL must include a hostname" = "URL must include a hostname";
+
+/* File: ../Workspace.m:3726 */
+/* Flag: untranslated */
+"Connect to WebDAV Server" = "Connect to WebDAV Server";
+
+/* File: ../Workspace.m:3841 */
+/* Flag: untranslated */
+"The Utilities folder could not be found at:\n\n%@"
+  = "The Utilities folder could not be found at:\n\n%@";
+
+/* File: ../Workspace.m:3922 */
+/* Flag: untranslated */
+"Already at the root directory" = "Already at the root directory";
+
+/* File: ../Workspace.m:4626 */
+/* Flag: untranslated */
+"Extract" = "Extract";
+
+/* File: ../Workspace.m:4690 */
+/* Flag: untranslated */
+"Format Disk..." = "Format Disk...";
+
+/* File: ../Workspace.m:4721 */
+/* Flag: untranslated */
+"Move to Recycler" = "Move to Recycler";
+
+/* File: ../Workspace.m:4755 */
+/* Flag: untranslated */
+"None" = "None";
+
+/* File: ../Workspace.m:4756 */
+/* Flag: untranslated */
+"Grey" = "Grey";
+
+/* File: ../Workspace.m:4757 */
+/* Flag: untranslated */
+"Green" = "Green";
+
+/* File: ../Workspace.m:4758 */
+/* Flag: untranslated */
+"Purple" = "Purple";
+
+/* File: ../Workspace.m:4759 */
+/* Flag: untranslated */
+"Blue" = "Blue";
+
+/* File: ../Workspace.m:4760 */
+/* Flag: untranslated */
+"Yellow" = "Yellow";
+
+/* File: ../Workspace.m:4761 */
+/* Flag: untranslated */
+"Red" = "Red";
+
+/* File: ../Workspace.m:4762 */
+/* Flag: untranslated */
+"Orange" = "Orange";
+
+/* File: ../Workspace.m:5438 */
+/* Flag: untranslated */
+"Are you sure you want to quit\nall applications and restart now?"
+  = "Are you sure you want to quit\nall applications and restart now?";
+
+/* File: ../Workspace.m:5439 */
+/* Flag: untranslated */
+"Restart" = "Restart";
+
+/* File: ../Workspace.m:5446 */
+/* Flag: untranslated */
+"Are you sure you want to quit\nall applications and shut down now?"
+  = "Are you sure you want to quit\nall applications and shut down now?";
+
+/* File: ../Workspace.m:5447 */
+/* Flag: untranslated */
+"Shut Down" = "Shut Down";
+
+/* File: ../Workspace.m:5680 */
+/* Flag: untranslated */
+"You are not allowed to umount\n" = "You are not allowed to umount\n";
+
+/* File: ../Workspace.m:5711 */
+/* Flag: untranslated */
+"You cannot format the root filesystem."
+  = "You cannot format the root filesystem.";
+
+/* File: ../Workspace.m:5723 */
+/* Flag: untranslated */
+"Cannot determine device information for the selected mount point."
+  = "Cannot determine device information for the selected mount point.";
+
+/* File: ../Workspace.m:5769 */
+/* Flag: untranslated */
+"Format Complete" = "Format Complete";
+
+/* File: ../Workspace.m:5770 */
+/* Flag: untranslated */
+"The disk was formatted as FAT32." = "The disk was formatted as FAT32.";
+
+/* File: ../WorkspaceApplication.m:1523 */
+/* Flag: untranslated */
+"Are you sure you want to quit\nall applications and log out now?"
+  = "Are you sure you want to quit\nall applications and log out now?";
+
+/* File: ../WorkspaceApplication.m:1598 */
+/* Flag: untranslated */
+"The following applications:" = "The following applications:";
+
+/* File: ../WorkspaceApplication.m:1600 */
+/* Flag: untranslated */
+"refuse to terminate." = "refuse to terminate.";
+
+/* File: ../WorkspaceApplication.m:1604 */
+/* Flag: untranslated */
+"Kill applications" = "Kill applications";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
 "Icon View" = "Visualização por Icones";
 
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Info" = "Info";
 
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Info Panel..." = "Painel de Informações...";
 
-/* OpenWithController */
-"Open With" = "Open With";
-"Type the name or the path of the application" = "Type the name or the path of the application";
-"to use to open the current selection" = "to use to open the current selection";
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Help..." = "Ajuda...";
 
-/* RunExternalController.m */
-"Run" = "Run";
-"Type the command to execute:"="Type the command to execute:";
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Edit File" = "Editar Arquivo";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"New File" = "Novo Arquivo";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Empty Recycler" = "Esvaziar Lixo";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Icon" = "Icones";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Viewer" = "Visualizador";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Attributes" = "Atributos";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Permissions" = "Permissões";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Processes..." = "Processos...";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Fiend" = "Fiend";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Show Fiend" = "Mostrar Fiend";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Hide Fiend" = "Ocultar Fiend";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Add Layer..." = "Adicionar Camada...";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Remove Current Layer" = "Remover Camada Atual";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Rename Current Layer" = "Renomear Camada Atual";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Layers" = "Camadas";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"DeskTop Shelf" = "DeskTop Shelf";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"XTerm" = "XTerm";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Windows" = "Janelas";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Arrange in Front" = "Organizar à Frente";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Miniaturize Window" = "Miniaturizar Janela";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"GNUstep Workspace Manager" = "Gerenciador de DeskTop GNUstep";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"See https://www.gnustep.org/experience/Workspace.html"
+  = "Acesse https://www.gnustep.org/experience/Gworkspace.html";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Released under the GNU General Public License 2.0"
+  = "Distribuido segundo a Licença Pública Geral GNU 2.0";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Move from: " = "Mover de: ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"\nto: " = "\npara: ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Copy from: " = "Copiar de: ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Link " = "Vincular ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Delete" = "Apagar";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Delete the selected objects?" = "Apagar os objetos selecionados?";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Duplicate the selected objects?" = "Duplicar os objetos selecionados?";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"In:" = "Em:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Stop" = "Parar";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Pause" = "Pausar";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Moving" = "Movendo";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Copying" = "Copiando";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Linking" = "Vinculando";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Duplicating" = "Duplicando";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Destroying" = "Apagando";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"File Operation Completed" = "Operação de Arquivos Completada";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Backgrounder connection died!" = "Conexção de segundo plano interrompida";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Some items have the same name;\ndo you want to substitute them?"
+  = "Alguns ítens têm o mesmo\nnome; Deseja substituí-los?";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"File Operation Error!" = "Erro na Operação de Arquivos!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"You have not write permission\nfor " = "Não há permissões de escrita\npara";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"The name " = "O nome ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+" is already in use!" = " já está sendo usado!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Cannot rename " = "Não é possível renomear ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Invalid char in name" = "Caractere inválido no nome";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Items" = "Itens";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Access Control" = "Controle de Acesso";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Attributes Inspector" = "Inspetor de Atributos";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Path:" = "Caminho:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Link To:" = "Vincular a:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Size:" = "Tamanho:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Owner:" = "Proprietário:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Group:" = "Grupo:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Changed" = "Mudado";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Revert" = "Reverter";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Contents Inspector" = "Inspetor de Conteúdo";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No Contents Inspector" = "Não há Inspetor de Conteúdo";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No Contents Inspector\nFor Multiple Selection"
+  = "Não há Inspetor de\nConteúdo para\nmúltiplas seleções";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder"
+  = "O método de ordenação se\naplica ao conteúdo da\npasta selecionada, e não\nà sua pasta mãe";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Folder Inspector" = "Inspetor de Pastas";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Image Inspector" = "Inspetor de Imagens";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Open these kinds of documents:" = "Abrir estes tipos de documentos:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Invalid Contents" = "Conteúdo Inválido";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"App Inspector" = "Inspetor de Aplicações";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"UNIX Permissions" = "Permissões UNIX";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Also apply to files inside selection"
+  = "Aplicar também aos arquivos da seleção";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Tools Inspector" = "Inspetor de Ferramentas";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No Tools Inspector" = "Não há Inspetor de Ferramentas";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Set Default" = "Configurar como Padrão";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Double-click to open selected document(s)"
+  = "Duplo-clique para abrir documentos selecionados";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Default:" = "Padrão:";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Click 'Set Default' to set default application\nfor all documents with this extension"
+  = "Clique em 'Configurar como Padrão' para configurar a\naplicação a ser usada para todos\nos documentos com esta extensão";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Read" = "Leitura";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Execute" = "Execução";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Group" = "Grupo";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Other" = "Outros";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Processes" = "Processos";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No Background Process" = "Não há Processos en Segundo Plano";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Kill" = "Matar";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Path: " = "Caminho: ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Status: " = "Estado: ";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Find items with names that match" = "Buscar ítens com nomes que combinem";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Find items with contents that match"
+  = "Buscar ítens com conteúdo que combine";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"No arguments!" = "Não há argumentos!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"New Layer" = "Nova Camada";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"A layer with this name is already present!"
+  = "Já há uma camada com este nome!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"You can't remove the last layer!"
+  = "Não é possível remover a última camada!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Remove layer" = "Remover camada";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Are you sure that you want to remove this layer?"
+  = "Você tem certeza de que deseja remover esta camada?";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Rename Layer" = "Renomear camada";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"You can't dock multiple paths!"
+  = "Não é possível agrupar múltiplos caminhos!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"This object is already present in this layer!"
+  = "Este objeto já está nesta camada!";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"DeskTop Color" = "Cor do DeskTop";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"red" = "vermelho";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"green" = "verde";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"blue" = "azul";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Set Color" = "Configurar cor";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Push the \"Set Image\" button\nto set your DeskTop image.\nThe image must have the same\nsize of your screen."
+  = "Pressione o botão \"Configurar Imagem\" para configurar sua\nimagem de fundo. A imagem deve ter o\nmesmo tamanho que a tela.";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Set Image" = "Configurar Imagem";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Unset Image" = "Remover Imagem";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"File System Watching" = "Vigilancia do Sistema de Arquivos";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"timeout" = "timeout";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"frequency" = "frequência";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Values will apply to the \nnew watchers from now, \nto the existing ones, after the first timeout"
+  = "Os valores se aplicarão aos\n novos vigilantes a partir de agora,\ne aos já existentes, a partir do primeiro timeout";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Shelf" = "Shelf";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Choose..." = "Escolher...";
+
+/* File: <dummy>:0 */
+/* Flag: unmatched */
+"Title Width" = "Largura do Título";
+
+/* _() macro keys not parsed by make_strings */
+"as Gallery" = "as Gallery";
+"Check for disks" = "Check for disks";
+"Cloud Drive" = "Cloud Drive";
+"Go backward" = "Go backward";
+"Go forward" = "Go forward";
+"Show Clipboard" = "Show Clipboard";
+"Show History" = "Show History";
+"Start Dictation" = "Start Dictation";
+"Symbols" = "Symbols";
+"The startup disk has less than 3%% free space.\n\n" = "The startup disk has less than 3%% free space.\n\n";
+
+/* ---- missing keys added by fill-translations.sh ---- */
+"Erases all data on %@ and reformats as FAT32.
+" = "Erases all data on %@ and reformats as FAT32.
+";
+"Erases all data on %@ and writes “%@” (%@).
+" = "Erases all data on %@ and writes “%@” (%@).
+";
+"The following volumes were removed without being properly ejected:
+
+%@
+
+" = "The following volumes were removed without being properly ejected:
+
+%@
+
+";
+"The volume at the following path was removed without being properly ejected:
+
+%@
+
+" = "The volume at the following path was removed without being properly ejected:
+
+%@
+
+";
