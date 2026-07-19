@@ -69,7 +69,7 @@
 
 "About %@" = "About %@";
 
-"About This Computer" = "Dieser Computer";
+"About This Computer" = "\u00dcber diesen Computer";
 
 "About Workspace" = "\u00dcber Workspace";
 
@@ -339,7 +339,7 @@
 
 "Fiend" = "Fiend";
 
-"File" = "Datei";
+"File" = "Ablage";
 
 "File Operation Completed" = "Dateioperation vollständig";
 
