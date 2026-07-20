@@ -46,6 +46,7 @@
 typedef enum {
   TestActionNone = 0,
   TestActionAbout,
+  TestActionAboutComputer,
   TestActionShowHelp,
   TestActionAtCoordinate,
   TestActionInspect,
@@ -74,6 +75,7 @@ void printUsage(const char *programName) {
   fprintf(stderr, "Usage: %s [command] [options]\n\n", programName);
   fprintf(stderr, "Commands:\n");
   fprintf(stderr, "  about                Open the Workspace About box and extract text from it\n");
+  fprintf(stderr, "  aboutcomputer        Open the About This Computer window and extract text from it\n");
   fprintf(stderr, "  at-coordinate X Y    Show all UI elements at screen coordinates X, Y\n");
   fprintf(stderr, "  inspect              Interactively click on screen to inspect UI elements\n");
   fprintf(stderr, "  query [options]      Query UI state in various formats\n");
@@ -367,6 +369,79 @@ int openAboutBoxAndExtractText(void) {
         
       } @catch (NSException *exception) {
         fprintf(stderr, "Error: Failed to open About box.\n");
+        fprintf(stderr, "Exception: %s\n", [[exception reason] UTF8String]);
+        result = 1;
+      }
+    }
+  }
+  NS_HANDLER {
+    fprintf(stderr, "Error: Exception occurred during operation.\n");
+    fprintf(stderr, "Details: %s\n", [[localException reason] UTF8String]);
+    result = 1;
+  }
+  NS_ENDHANDLER
+  
+  [pool release];
+  return result;
+}
+
+int openAboutComputerAndExtractText(void) {
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  NSConnection *connection = nil;
+  id appDelegate = nil;
+  int result = 0;
+  
+  NS_DURING {
+    connection = [NSConnection connectionWithRegisteredName:@"Workspace" host:@""];
+    
+    if (connection == nil) {
+      fprintf(stderr, "Error: Cannot contact Workspace application.\n");
+      fprintf(stderr, "Make sure Workspace is running.\n");
+      result = 1;
+    } else {
+      appDelegate = [connection rootProxy];
+      
+      @try {
+        if ([appDelegate respondsToSelector:@selector(showAboutThisComputer:)]) {
+          [appDelegate performSelector:@selector(showAboutThisComputer:) withObject:nil];
+          fprintf(stdout, "About This Computer opened successfully.\n");
+        } else {
+          fprintf(stderr, "Error: Workspace does not support showAboutThisComputer:.\n");
+          result = 1;
+        }
+        
+        /* Wait a moment for the window to appear */
+        [[NSRunLoop currentRunLoop] runUntilDate:[NSDate dateWithTimeIntervalSinceNow:0.5]];
+        
+        /* Extract structured UI state as JSON */
+        fprintf(stdout, "\n--- UI State (JSON) ---\n");
+        
+        @try {
+          if ([appDelegate respondsToSelector:@selector(currentWindowHierarchyAsJSON)]) {
+            NSString *jsonStr = (NSString *)[appDelegate performSelector:@selector(currentWindowHierarchyAsJSON)];
+            if (jsonStr && [jsonStr isKindOfClass:[NSString class]]) {
+              fprintf(stdout, "%s\n", [jsonStr UTF8String]);
+            } else {
+              fprintf(stdout, "{ \"error\": \"Invalid response from Workspace\" }\n");
+            }
+          } else {
+            fprintf(stdout, "{\n");
+            fprintf(stdout, "  \"tool\": \"uitest\",\n");
+            fprintf(stdout, "  \"action\": \"showAboutComputer\",\n");
+            fprintf(stdout, "  \"status\": \"window_opened\",\n");
+            fprintf(stdout, "  \"note\": \"Workspace does not implement WorkspaceUITesting protocol\",\n");
+            fprintf(stdout, "  \"hint\": \"Start Workspace with -d or --debug flag to enable UI testing\"\n");
+            fprintf(stdout, "}\n");
+          }
+        } @catch (NSException *e) {
+          fprintf(stdout, "{\n");
+          fprintf(stdout, "  \"error\": \"Failed to retrieve UI state\",\n");
+          fprintf(stdout, "  \"exception\": \"%s\"\n", [[e reason] UTF8String]);
+          fprintf(stdout, "}\n");
+        }
+        
+      } @catch (NSException *exception) {
+        fprintf(stderr, "Error: Failed to open About This Computer.\n");
         fprintf(stderr, "Exception: %s\n", [[exception reason] UTF8String]);
         result = 1;
       }
@@ -1096,6 +1171,8 @@ int main(int argc, char** argv) {
     
     if ([command isEqualToString:@"about"]) {
       action = TestActionAbout;
+    } else if ([command isEqualToString:@"aboutcomputer"]) {
+      action = TestActionAboutComputer;
     } else if ([command isEqualToString:@"at-coordinate"] || [command isEqualToString:@"at"]) {
       action = TestActionAtCoordinate;
     } else if ([command isEqualToString:@"inspect"]) {
@@ -1142,6 +1219,10 @@ int main(int argc, char** argv) {
   switch (action) {
     case TestActionAbout:
       result = openAboutBoxAndExtractText();
+      break;
+      
+    case TestActionAboutComputer:
+      result = openAboutComputerAndExtractText();
       break;
       
     case TestActionAtCoordinate:
