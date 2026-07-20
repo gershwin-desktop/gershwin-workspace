@@ -200,6 +200,16 @@ class WorkspaceTestClient:
         # Extract and store the JSON response for later queries
         self._extract_json(stdout)
     
+    def open_about_computer_dialog(self) -> None:
+        """Open the About This Computer window."""
+        stdout, stderr, code = self._run_command("aboutcomputer")
+        
+        if code != 0:
+            raise CommandFailedError(f"Failed to open About This Computer: {stderr}")
+        
+        # Extract and store the JSON response for later queries
+        self._extract_json(stdout)
+    
     def query_ui_state(self) -> Dict[str, Any]:
         """
         Get the complete UI state as JSON.
@@ -1216,6 +1226,13 @@ def assert_about_opens() -> None:
     client = WorkspaceTestClient()
     client.open_about_dialog()
     client.assert_window_exists("About")
+
+
+def assert_about_computer_opens() -> None:
+    """Quick test: verify About This Computer window can be opened."""
+    client = WorkspaceTestClient()
+    client.open_about_computer_dialog()
+    client.assert_window_exists("About This Computer")
 
 
 def test_workspace_responding() -> bool:

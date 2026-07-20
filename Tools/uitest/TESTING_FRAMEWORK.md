@@ -18,6 +18,7 @@ The `uitest` tool provides direct command-line access to GUI testing capabilitie
 
 ```
 about                    Open the Workspace About box and extract UI state
+aboutcomputer            Open the About This Computer window and extract UI state
 at-coordinate X Y        Show all UI elements at screen coordinates X, Y
 query [options]          Query UI state (--json, --tree, or --text)
 run-script PATH          Run Python test script against Workspace
