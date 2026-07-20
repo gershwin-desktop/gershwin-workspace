@@ -663,6 +663,7 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
             // Find matching shortcut
             NSEnumerator *enumerator = [shortcuts keyEnumerator];
             NSString *keyCombo;
+            BOOL matched = NO;
             
             while ((keyCombo = [enumerator nextObject])) {
                 if ([self matchesEvent:&event.xkey withKeyCombo:keyCombo]) {
@@ -676,7 +677,23 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
                             command);
                         [self showCommandFailureAlert:command shortcut:keyCombo];
                     }
+                    matched = YES;
                     break;
+                }
+            }
+            
+            // If no shortcut matched, forward the event to the focused window
+            // so it reaches the intended application (e.g. Shift+T in a terminal).
+            // XGrabKey may intercept events with modifier mismatches on some
+            // X server configurations; discarding them would make keys vanish.
+            if (!matched) {
+                Window focused;
+                int revert;
+                XGetInputFocus(display, &focused, &revert);
+                if (focused != None && focused != rootWindow) {
+                    event.xkey.window = focused;
+                    XSendEvent(display, focused, True, KeyPressMask, &event);
+                    XFlush(display);
                 }
             }
         } else if (event.type == KeyRelease) {
