@@ -24,6 +24,7 @@ from .uitest import (
     AssertionFailedError,
     test_workspace_responding,
     assert_about_opens,
+    assert_about_computer_opens,
     run_tests,
     simple_tests,  # Backward compatibility
 )
@@ -37,6 +38,7 @@ __all__ = [
     "AssertionFailedError",
     "test_workspace_responding",
     "assert_about_opens",
+    "assert_about_computer_opens",
     "run_tests",
     "simple_tests",
 ]
