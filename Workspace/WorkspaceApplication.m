@@ -609,7 +609,7 @@
     GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
     
     /* Priority 1: Check if there's a known PID from a previous dock icon */
-    DockIcon *dockIcon = [[dtopManager dock] iconForApplicationName: appName];
+    DockIcon *dockIcon = [[dtopManager dock] iconForApplicationPath: appPath];
     pid_t knownPID = dockIcon ? [dockIcon appPID] : 0;
     BOOL hasWindows = NO;
     
@@ -829,7 +829,7 @@
     {
       /* Ensure undocked icons are cleared even if we did not track the app. */
       [self _cancelLaunchDotFallbackForPath: path name: name];
-      [[dtopManager dock] appTerminated: name];
+      [[dtopManager dock] appTerminated: path appName: name];
       GWDebugLog(@"appDidTerminate: \"%@\" not tracked; forcing dock cleanup.", name);
     }
 }
@@ -960,7 +960,7 @@
    * For apps launched via NSWorkspace (not our launcher), the GWLaunchedApp
    * was created in appWillLaunch: but may not have a PID yet. */
   if (appPID <= 0) {
-    DockIcon *icon = [[dtopManager dock] iconForApplicationName: name];
+    DockIcon *icon = [[dtopManager dock] iconForApplicationPath: path];
     if (icon) {
       appPID = [icon appPID];
     }
@@ -1042,7 +1042,7 @@
     [self applicationTerminated:app];
   } else {
     /* Just update the dock directly if we don't have a tracked app */
-    [[dtopManager dock] appTerminated:appName];
+    [[dtopManager dock] appTerminated:appPath appName:appName];
   }
 }
 
@@ -1202,7 +1202,7 @@
    
   if (app) {
     [app setHidden: YES];
-    [[dtopManager dock] appDidHide: name];
+    [[dtopManager dock] appDidHide: path appName: name];
   } else {
     GWDebugLog(@"appDidHide: \"%@\" unknown running application.", name);
   }
@@ -1217,7 +1217,7 @@
     
   if (app) {
     [app setHidden: NO];
-    [[dtopManager dock] appDidUnhide: name];
+    [[dtopManager dock] appDidUnhide: path appName: name];
     GWDebugLog(@"\"%@\" appDidUnhide", name);
   } else {
     GWDebugLog(@"appDidUnhide: \"%@\" unknown running application.", name);
@@ -1249,7 +1249,7 @@
     activeApplication = nil;
   }
   
-  [[dtopManager dock] appTerminated: [app name]];
+  [[dtopManager dock] appTerminated: [app path] appName: [app name]];
   GWDebugLog(@"\"%@\" applicationTerminated", [app name]);  
   [launchedApps removeObject: app];  
   
@@ -1466,7 +1466,7 @@
 
                   if (hidden)
                     {
-                      [[dtopManager dock] appDidHide: name];
+                      [[dtopManager dock] appDidHide: path appName: name];
                     }
           
                 }

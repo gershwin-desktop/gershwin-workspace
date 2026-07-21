@@ -337,7 +337,7 @@ static NSString *appNameForPID(pid_t pid)
   if (appName == nil)
     return nil;
 
-  DockIcon *icon = [_dock iconForApplicationName:appName];
+  DockIcon *icon = [_dock iconForApplicationPath:appName];
   if (icon == nil)
     {
       pid_t pid = pidForConnection(conn);

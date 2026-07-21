@@ -150,7 +150,7 @@ static DockServiceDBus *sharedDBusService = nil;
     }
 
   dispatch_async(dispatch_get_main_queue(), ^{
-    DockIcon *icon = [self.dock iconForApplicationName:appName];
+    DockIcon *icon = [self.dock iconForApplicationPath:appName];
     if (icon)
       {
         DockServiceApplyProperties(properties, icon);

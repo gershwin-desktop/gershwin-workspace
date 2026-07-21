@@ -263,7 +263,7 @@
 
 - (DockIcon *)addIconForApplicationAtPath:(NSString *)path
                                  withName:(NSString *)name
-                                  atIndex:(int)index
+                                  atIndex:(NSInteger)index
 {
   if (path == nil || [path length] == 0) {
     return nil;
@@ -308,7 +308,7 @@
 }
 
 - (void)addDraggedIcon:(NSData *)icondata
-               atIndex:(int)index
+               atIndex:(NSInteger)index
 {
   NSDictionary *dict = [NSUnarchiver unarchiveObjectWithData: icondata];
   NSString *name = [dict objectForKey: @"name"];
@@ -339,18 +339,21 @@
   [self saveDockConfiguration];
 }
 
-- (DockIcon *)iconForApplicationName:(NSString *)name
+- (DockIcon *)iconForApplicationPath:(NSString *)path
 {
   NSUInteger i;
-  
+
   for (i = 0; i < [icons count]; i++) {
     DockIcon *icon = [icons objectAtIndex: i];
-    
-    if ([[icon appName] isEqual: name]) {
+
+    if ([[icon path] isEqual: path]) {
+      return icon;
+    }
+    if ([[[icon path] stringByResolvingSymlinksInPath] isEqual: path]) {
       return icon;
     }
   }
-  
+
   return nil;
 }
 
@@ -421,14 +424,14 @@
      * appear in the Dock (e.g. WindowManager). */
     NSBundle *bundle = [NSBundle bundleWithPath: appPath];
     if ([[bundle objectForInfoDictionaryKey: @"GSSuppressAppIcon"] boolValue]) {
-      DockIcon *icon = [self iconForApplicationName: appName];
+      DockIcon *icon = [self iconForApplicationPath: appPath];
       if (icon) {
         [self removeIcon: icon];
       }
       return;
     }
 
-    DockIcon *icon = [self iconForApplicationName: appName];
+    DockIcon *icon = [self iconForApplicationPath: appPath];
   
     if (icon == nil) {
       icon = [self addIconForApplicationAtPath: appPath
@@ -470,14 +473,14 @@
      * appear in the Dock (e.g. WindowManager). */
     NSBundle *bundle = [NSBundle bundleWithPath: appPath];
     if ([[bundle objectForInfoDictionaryKey: @"GSSuppressAppIcon"] boolValue]) {
-      DockIcon *icon = [self iconForApplicationName: appName];
+      DockIcon *icon = [self iconForApplicationPath: appPath];
       if (icon) {
         [self removeIcon: icon];
       }
       return;
     }
 
-    DockIcon *icon = [self iconForApplicationName: appName];
+    DockIcon *icon = [self iconForApplicationPath: appPath];
 
     if (icon == nil) {
       icon = [self addIconForApplicationAtPath: appPath
@@ -513,11 +516,12 @@
   return nil;
 }
 
-- (void)appTerminated:(NSString *)appName
+- (void)appTerminated:(NSString *)appPath
+             appName:(NSString *)appName
 {
   if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
-    DockIcon *icon = [self iconForApplicationName: appName];
+    DockIcon *icon = [self iconForApplicationPath: appPath];
 
     if (icon) {
       [icon setAppPID: 0]; /* Clear PID on termination */
@@ -531,11 +535,12 @@
   }
 }
 
-- (void)appDidHide:(NSString *)appName
+- (void)appDidHide:(NSString *)appPath
+          appName:(NSString *)appName
 {
   if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
-    DockIcon *icon = [self iconForApplicationName: appName];
+    DockIcon *icon = [self iconForApplicationPath: appPath];
 
     if (icon) {
       [icon setAppHidden: YES];
@@ -543,11 +548,12 @@
   }
 }
 
-- (void)appDidUnhide:(NSString *)appName
+- (void)appDidUnhide:(NSString *)appPath
+            appName:(NSString *)appName
 {
   if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
-    DockIcon *icon = [self iconForApplicationName: appName];
+    DockIcon *icon = [self iconForApplicationPath: appPath];
 
     if (icon) {
       [icon setAppHidden: NO];

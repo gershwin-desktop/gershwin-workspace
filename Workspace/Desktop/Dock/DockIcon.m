@@ -132,6 +132,11 @@
   return self;
 }
 
+- (NSString *)path
+{
+  return [node path];
+}
+
 - (NSString *)appName
 {
   return appName;
@@ -582,7 +587,7 @@
     /* Workspace icon: use default menu behavior from superclass. */
     return [super menuForEvent: theEvent];
   } else if ([self isSpecialIcon] == NO) {
-    NSString *appPath = [ws fullPathForApplication: appName];
+    NSString *appPath = [self path];
     
     if (appPath) {
       CREATE_AUTORELEASE_POOL(arp);

@@ -83,6 +83,8 @@
           appName:(NSString *)aname
          iconSize:(int)isize;
 
+- (NSString *)path;
+
 - (NSString *)appName;
         
 - (void)setWsIcon:(BOOL)value;
