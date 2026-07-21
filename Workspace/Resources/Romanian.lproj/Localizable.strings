@@ -1,226 +1,684 @@
-﻿/* ----------------------- menu strings --------------------------- */
-/* main.m */
+/*** deduplicated by dedup-strings.py ***/
 
-"Info" = "Info";
-	"Info Panel..." = "Panou Informaþii...";
-	"Preferences..." = "Preferințe...";
-	"Help..." = "Ajutor...";
-
-"File" = "Fiºier";
-	"Open" = "Deschide";
-	"Open as Folder" = "Deschide ca Dosar";
-	"Edit File" = "Editeazã Fiºier";
-	"New Folder" = "Nou Dosar";
-	"New File" = "Nou Fiºier";
-	"Duplicate" = "Duplicheazã";	
-	"Destroy" = "Distruge";
-	"Empty Recycler" = "Goleºte Coºul";
-
-"Edit" = "Editare";
-	"Cut" = "Taie";
-	"Copy" = "Copiazã";
-	"Paste" = "Lipeºte";
-	"Select All" = "Selecteazã tot";
-		
-"View" = "Vezi ca";
-	"Browser" = "Browser";
-	"Icon" = "Icoane";
-		
-"Tools" = "Instrumente";
-	"Viewer" = "Viewer";
-	"Inspectors" = "Inspectoare";
-		"Show Inspectors" = "Aratã Inspectoarele";
-		"Attributes" = "Atribuþii";
-		"Contents" = "Conþinut";
-		"Tools" = "Instrumente";	
-		"Permissions" = "Permisii";	
-	"Finder" = "Finder";
-	"Processes..." = "Procese...";
-	"Fiend" = "Fiend";
-		"Show Fiend" = "Aratã Fiend-ul";
-		"Hide Fiend" = "Ascunde Fiend-ul";
-		"Add Layer..." = "Adaugã un Layer...";
-		"Remove Current Layer" = "Scoate Layer-ul Curent";
-		"Rename Current Layer" = "Redenumeºte Layer-ul Curent";
-		"Layers" = "Layers";
-	"DeskTop Shelf" = "DeskTop Shelf";	
-	"XTerm" = "XTerm";
-	
-"Windows" = "Ferestre";
-	"Arrange in Front" = "Adu în faþã";
-	"Miniaturize Window" = "Micºoreazã Fereastra";
-	"Close Window" = "Închide Fereastra";
-	
-"Services" = "Servicii";
-
-"Hide" = "Ascunde";
-
-"Quit" = "Ieºi";
-
-/* ----------------------- File Operations strings --------------------------- */
-
-/* Workspace.m */
-
-"GNUstep Workspace Manager" = "Workspace Manager-ul pentru GNUstep";
-"See https://www.gnustep.org/experience/Workspace.html" = "Vezi https://www.gnustep.org/experience/Gworkspace.html";
-"Released under the GNU General Public License 2.0" = "Publicat sub GNU General Public License 2.0";
-
-"Error" = "Eroare";
-"You have not write permission\nfor" = "Nu ai permisie de scriere\npentru";
-"Continue" = "Continuã";
-
-
-/* FileOperation.m */
-
-"OK" = "OK";
-"Cancel" = "Anuleazã";
-"Move" = "Miºca";
-"Move from: " = "Miºc de la: ";
-"\nto: " = "\nla: ";
-"Copy" = "Copiazã";
-"Copy from: " = "Copiez de la: ";
-"Link" = "Leagã";
-"Delete" = "ªterge";
-"Delete the selected objects?" = "ªterg obiectele selectate?";
-"Duplicate" = "Duplica";
-"Duplicate the selected objects?" = "Duplichez obiectele selectate?";
-"From:" = "De la:";
-"To:" = "La:";
-"In:" = "În:";
-"Stop" = "Stop";
-"Pause" = "Pauzã";
-"Moving" = "Miºc";
-"Copying" = "Copiez";
-"Linking" = "Leg";
-"Duplicating" = "Duplichez";
-"Destroying" = "ªterg";
-"File Operation Completed" = "Operazie Terminatã";
-"Backgrounder connection died!" = "Conexiunea cu Backgrounder-ul a cãzut!";
-"Some items have the same name;\ndo you want to sobstitute them?" = "Anumite elemente au acelaºi nume;\nvrei sã le înlocuieºti?";
-"Error" = "Eroare";
-"File Operation Error!" = "Eroare în operaþia pe fiºiere!";
-
-
-/* ColumnIcon.m */
-
-"You have not write permission\nfor " = "Nu ai permisie de scriere\npentru ";
-"The name " = "numele ";
 " is already in use!" = " e deja în uz!";
-"Cannot rename " = "Nu pot renumi ";
-"Invalid char in name" = "Caracter invalid în nume";
 
 
-/* ----------------------- Inspectors strings --------------------------- */
 
-"Items" = "Elemente";
 
-/* InspectorsWin.m */
 
-"Attributes" = "Atribuþii";
-"Contents" = "Conþinuturi";
-"Tools" = "Instrumente";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 "Access Control" = "Control Acces";
 
 
-/* AttributesPanel.m */
 
-"Attributes" = "Atribuþii";
-"Attributes Inspector" = "Inspector Atribuþii";
-"Path:" = "Path:";
-"Link To:" = "Link la:";
-"Size:" = "Dimensiuni:";
-"Owner:" = "Proprietar:";
-"Group:" = "Grup:";
-"Changed" = "Modificat";
-"Revert" = "Anuleazã";
-"OK" = "OK";
+"Add Layer..." = "Adaugã un Layer...";
 
 
-/* ContentsPanel.m */
-
-"Contents" = "Contenuti";
-"Contents Inspector" = "Inspector Conþinut";
-"No Contents Inspector" = "Nici un inspector";
-"No Contents Inspector\nFor Multiple Selection" = "Nici un inspector\npentru o selectare multiplã";
-
-
-/* FolderViewer.m */
-
-"Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder"
-  = "Ordonarea se aplică\nconþinutului dosarului selectat,\nNU directorului care îl conþine";
-"Sort by" = "Ordonare";
-"Name" = "Nume";
-"Type" = "Tip";
-"Date" = "Data";
-"Size" = "Dimensiuni";
-"Owner" = "Propr.";
-"Folder Inspector" = "Inspector Dosare";	
-
-
-/* ImageViewer.m */
-
-"Image Inspector" = "Inspector Imagini";
-
-
-/* AppViewer.m */
-
-"Open these kinds of documents:" = "Deschide acest tip de documente:";
-"Invalid Contents" = "Conþinut invalid";
-"App Inspector" = "Inspector App";
-
-
-/* PermissionsPanel.m */
-
-"UNIX Permissions" = "Permisii UNIX";
-"Access Control" = "Control Acces";
 "Also apply to files inside selection" = "Aplică și fișierelor dinãuntrul selectării";
 
 
-/* ToolsPanel.m */
 
-"Tools" = "Instrumente";
-"Tools Inspector" = "Inspector Instrumente";
-"No Tools Inspector" = "Nici un inspector";
-"Set Default" = "Set Default";
+"App Inspector" = "Inspector App";
 
 
-/* AppsView.m */
-	
-"Double-click to open selected document(s)" = "Douã-click pentru a deschide documentele selectate";	
-"Default:" = "Default:";	
-"Path:" = "Path:";
-"Click 'Set Default' to set default application\nfor all documents with this extension" 
+"Are you sure you want to cancel?
+
+The target device may be left in an inconsistent state and will need to be reformatted." = "Are you sure you want to cancel?
+
+The target device may be left in an inconsistent state and will need to be reformatted.";
+
+
+"Are you sure you want to quit
+all applications and log out now?" = "Are you sure you want to quit
+all applications and log out now?";
+
+"Are you sure you want to quit
+all applications and restart now?" = "Are you sure you want to quit
+all applications and restart now?";
+
+"Are you sure you want to quit
+all applications and shut down now?" = "Are you sure you want to quit
+all applications and shut down now?";
+
+"Arrange in Front" = "Adu în faþã";
+
+"Attributes" = "Atribuþii";
+
+"Attributes Inspector" = "Inspector Atribuþii";
+
+
+
+
+"Backgrounder connection died!" = "Conexiunea cu Backgrounder-ul a cãzut!";
+
+
+
+
+
+
+
+
+
+
+"Cancel" = "Anuleazã";
+
+
+
+
+
+
+
+
+
+"Cannot rename " = "Nu pot renumi ";
+
+"Changed" = "Modificat";
+
+
+
+
+
+
+
+
+"Click 'Set Default' to set default application\nfor all documents with this extension"
   = "'Set Default' pentru a seta app-ul default\npentru toate documentele cu aceastã extensie";
 
 
-/* PermsBox.m */
 
-"Permissions" = "Permisii";
-"Read" = "Citeºte";
-"Write" = "Scrie";
+
+
+
+
+
+
+
+
+
+
+
+
+
+"Contents Inspector" = "Inspector Conþinut";
+
+"Continue" = "Continuã";
+
+
+
+
+"Copy from: " = "Copiez de la: ";
+
+"Copying" = "Copiez";
+
+"Could not connect to %@
+
+Check the hostname and try again." = "Could not connect to %@
+
+Check the hostname and try again.";
+
+"Could not connect to %@.
+
+Error: %@" = "Could not connect to %@.
+
+Error: %@";
+
+
+
+
+
+
+
+
+"Date" = "Data";
+
+
+
+
+
+"Delete" = "ªterge";
+
+"Delete the selected objects?" = "ªterg obiectele selectate?";
+
+
+
+
+"Destroying" = "ªterg";
+
+
+
+
+
+"Double-click to open selected document(s)" = "Douã-click pentru a deschide documentele selectate";
+
+
+
+"Duplicate the selected objects?" = "Duplichez obiectele selectate?";
+
+"Duplicating" = "Duplichez";
+
+
+"Edit File" = "Editeazã Fiºier";
+
+
+
+"Empty Recycler" = "Golește Coșul";
+
+
+"Empty the Recycler?" = "Golesc Coșul?";
+
+
+
+
+"Erases all data on %@ and reformats as FAT32.
+";
+
+"Error" = "Eroare";
+
 "Execute" = "Executã";
-"Owner" = "Propr.";
+
+
+
+
+"Failed to mount SFTP volume:
+
+%@" = "Failed to mount SFTP volume:
+
+%@";
+
+
+
+
+
+
+
+"File Operation Completed" = "Operazie Terminatã";
+
+"File Operation Error!" = "Eroare în operaþia pe fiºiere!";
+
+
+
+
+
+"Folder Inspector" = "Inspector Dosare";
+
+
+
+
+
+
+
+
+
+"From:" = "De la:";
+
+"GNUstep Workspace Manager" = "Workspace Manager-ul pentru GNUstep";
+
+
+
+
+
+
+
+
+
+
+
 "Group" = "Grup";
+
+"Group:" = "Grup:";
+
+
+"Help..." = "Ajutor...";
+
+
+
+
+
+"Hide Fiend" = "Ascunde Fiend-ul";
+
+
+
+
+
+
+
+
+
+"Icon" = "Icoane";
+
+
+
+
+"Image Inspector" = "Inspector Imagini";
+
+"In" = "În";
+
+"In:" = "În:";
+
+
+"Info Panel..." = "Panou Informaþii...";
+
+
+"Invalid Contents" = "Conþinut invalid";
+
+
+"Invalid char in name" = "Caracter invalid în nume";
+
+
+"Items" = "Elemente";
+
+
+
+
+
+
+
+
+
+
+
+
+"Link" = "Leagã";
+
+"Link To:" = "Link la:";
+
+"Linking" = "Leg";
+
+
+
+
+
+
+
+
+
+
+"Miniaturize Window" = "Micºoreazã Fereastra";
+
+
+
+
+
+
+
+
+"Move" = "Miºca";
+
+"Move from the Recycler " = "Mut din coș ";
+
+"Move from: " = "Miºc de la: ";
+
+
+
+"Moving" = "Miºc";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"No Contents Inspector" = "Nici un inspector";
+
+"No Contents Inspector\nFor Multiple Selection"
+  = "Nici un inspector\npentru o selectare multiplã";
+
+
+
+"No Tools Inspector" = "Nici un inspector";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"Open these kinds of documents:" = "Deschide acest tip de documente:";
+
+
+
+
+
 "Other" = "Alþii";
 
-/* OpenWithController */
-"Open With" = "Deschis cu"
-"Type the name or the path of the application" = "Type the name or the path of the application";
-"to use to open the current selection" = "to use to open the current selection";
 
-/* RunExternalController.m */
-"Run" = "Run";
-"Type the command to execute:"="Type the command to execute:";
+"Owner:" = "Proprietar:";
 
 
-/* Recycler strings */
-"Recycle: " = "Coș: ";
-"Recycler: " = "Coș: ";
-"Recycler" = "Coș";
-"the Recycler" = "Coșul";
-"\nto the Recycler" = "\nîn coș";
-"Move from the Recycler " = "Mut din coș ";
-"In" = "În";
-"Empty Recycler" = "Golește Coșul";
-"Empty the Recycler?" = "Golesc Coșul?";
+
+
+
+"Pause" = "Pauzã";
+
+"Permissions" = "Permisii";
+
+
+
+
+
+
+"Processes..." = "Procese...";
+
+
+
 "Put Away" = "Pune la loc";
+
+"Quit" = "Ieºi";
+
+"Read" = "Citeºte";
+
+
+
+"Recycle: " = "Coș: ";
+
+"Recycler" = "Coș";
+
+"Recycler: " = "Coș: ";
+
+
+
+"Released under the GNU General Public License 2.0" = "Publicat sub GNU General Public License 2.0";
+
+
+"Remove Current Layer" = "Scoate Layer-ul Curent";
+
+
+
+"Rename Current Layer" = "Redenumeºte Layer-ul Curent";
+
+
+
+"Revert" = "Anuleazã";
+
+
+
+
+
+
+
+
+
+
+"See https://www.gnustep.org/experience/Workspace.html" = "Vezi https://www.gnustep.org/experience/Gworkspace.html";
+
+
+
+
+
+
+
+
+
+
+
+
+
+"Show Fiend" = "Aratã Fiend-ul";
+
+
+
+
+
+
+
+
+
+
+
+
+
+"Size:" = "Dimensiuni:";
+
+"Some items have the same name;\ndo you want to sobstitute them?"
+  = "Anumite elemente au acelaºi nume;\nvrei sã le înlocuieºti?";
+
+
+"Sort by" = "Ordonare";
+
+"Sort method applies to the\ncontents of the selected folder,\nNOT to its parent folder"
+  = "Ordonarea se aplică\nconþinutului dosarului selectat,\nNU directorului care îl conþine";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"The ISO image has been successfully written to the device.
+
+The new volume should appear on your desktop when you plug the device in." = "The ISO image has been successfully written to the device.
+
+The new volume should appear on your desktop when you plug the device in.";
+
+
+
+
+"The following volumes were removed without being properly ejected:
+
+%@
+
+
+%@
+
+";
+
+"The fswatcher connection died.
+Do you want to restart it?" = "The fswatcher connection died.
+Do you want to restart it?";
+
+"The mdextractor connection died.
+Do you want to restart it?" = "The mdextractor connection died.
+Do you want to restart it?";
+
+
+"The name " = "numele ";
+
+
+"The volume at the following path was removed without being properly ejected:
+
+%@
+
+
+%@
+
+";
+
+
+
+"To:" = "La:";
+
+
+"Tools Inspector" = "Inspector Instrumente";
+
+
+
+
+
+"UNIX Permissions" = "Permisii UNIX";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"Windows" = "Ferestre";
+
+
+
+
+"Write" = "Scrie";
+
+
+
+
+
+
+
+
+
+
+
+"You are not allowed to umount
+";
+
+
+
+
+
+
+
+
+
+
+"You do not have write permission
+for" = "You do not have write permission
+for";
+
+"You have not write permission\nfor"
+  = "Nu ai permisie de scriere\npentru";
+
+"You have not write permission\nfor "
+  = "Nu ai permisie de scriere\npentru ";
+
+
+"\nto the Recycler"
+  = "\nîn coș";
+
+"\nto: "
+  = "\nla: ";
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+"the Recycler" = "Coșul";

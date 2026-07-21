@@ -1131,8 +1131,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   [[self window] disableFlushWindow];
 
-  [self lockFocus];
-
   while ([theEvent type] != NSLeftMouseUp)
     {
       CREATE_AUTORELEASE_POOL (arp);
@@ -1149,19 +1147,12 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       r = NSMakeRect(x, y, w, h);
 
+      // Erase the previous rect via normal display machinery
+      [self setNeedsDisplayInRect: oldRect];
+      [[self window] displayIfNeeded];
 
-      // Erase the previous rect
-      if (transparentSelection)
-	{
-	  [self setNeedsDisplayInRect: oldRect];
-	  [[self window] displayIfNeeded];
-	}
-      else
-	{
-	  GWHighlightFrameRect(oldRect);
-	}
-
-      // Draw the new rect
+      // Draw the new rect via direct drawing (inside lockFocus, no mixing)
+      [self lockFocus];
       if (transparentSelection)
 	{
 	  [[NSColor darkGrayColor] set];
@@ -1173,6 +1164,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 	{
 	  GWHighlightFrameRect(r);
 	}
+      [self unlockFocus];
 
       oldRect = r;
 
@@ -1183,11 +1175,9 @@ static void GWHighlightFrameRect(NSRect aRect)
       DESTROY (arp);
     }
 
-  [self unlockFocus];
-
   [[self window] postEvent: theEvent atStart: NO];
 
-  // Erase the previous rect
+  // Erase the final selection rect via normal display
   [self setNeedsDisplayInRect: oldRect];
   [[self window] displayIfNeeded];
 
@@ -1933,6 +1923,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 {
   DESTROY (dragIcon);
   isDragTarget = NO;
+  [self setNeedsDisplay: YES];
 }
 
 - (BOOL)prepareForDragOperation:(id <NSDraggingInfo>)sender
@@ -1959,6 +1950,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSInteger i; // FIXME see if it can be made unsigned
 
   DESTROY (dragIcon);
+  [self setNeedsDisplay: YES];
 
   isDragTarget = NO;
 

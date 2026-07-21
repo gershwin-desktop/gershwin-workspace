@@ -39,6 +39,7 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <GNUstepGUI/GSInfoPanel.h>
 #import <GNUstepBase/GNUstep.h>
 #import <dispatch/dispatch.h>
 
@@ -1560,6 +1561,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       || sel_isEqual(action, @selector(hideOtherApplications:))
       || sel_isEqual(action, @selector(unhideAllApplications:))
       || sel_isEqual(action, @selector(orderFrontStandardAboutPanel:))
+      || sel_isEqual(action, @selector(orderFrontStandardInfoPanel:))
+      || sel_isEqual(action, @selector(orderFrontStandardInfoPanelWithOptions:))
+      || sel_isEqual(action, @selector(showInfo:))
+      || sel_isEqual(action, @selector(showAboutThisComputer:))
       || sel_isEqual(action, @selector(workspaceHelp:))
       || sel_isEqual(action, @selector(openGershwinHelp:))
       || sel_isEqual(action, @selector(openFeedback:))
@@ -3345,8 +3350,11 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (void)showInfo:(id)sender
 {
-  
-  [NSApp orderFrontStandardInfoPanel: self];
+  GSInfoPanel *panel = [[GSInfoPanel alloc] initWithDictionary: nil];
+  [panel setReleasedWhenClosed: YES];
+  [panel setTitle: [NSString stringWithFormat: _(@"About %@"),
+                             [[NSProcessInfo processInfo] processName]]];
+  [panel orderFront: self];
 }
 
 - (void)showPreferences:(id)sender
@@ -5067,6 +5075,24 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
       [iconView batchRepositionIcons: all toCenterPoints: centers];
     }
 
+  /* Invalidate old + new icon areas on the container BEFORE reverting
+   * frames for animation.  cleanupIconPositions + tile mark only the new
+   * positions dirty; reverting to old frames leaves stale dirty rects
+   * pointing at the wrong coordinates, causing screen artifacts. */
+  if (oldFrames && [iconView respondsToSelector: @selector(icons)])
+    {
+      for (id ic in [iconView icons])
+        {
+          NSString *name = [[ic node] name];
+          NSValue *oldVal = [oldFrames objectForKey: name];
+          if (oldVal)
+            {
+              [iconView setNeedsDisplayInRect: [oldVal rectValue]];
+              [iconView setNeedsDisplayInRect: [ic frame]];
+            }
+        }
+    }
+
   /* Animate icons smoothly from old positions to new positions */
   if (oldFrames && [iconView respondsToSelector: @selector(icons)])
     {
@@ -5105,11 +5131,29 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
           /* Don't release - NSAnimation releases itself on completion
            * via animatorDidStop (NSAnimation.m:990). External release
            * causes use-after-free in GSAnimator's dealloc chain. */
+
+          /* Flush dirty rects at every run loop iteration during the
+           * animation so intermediate icon positions are cleaned up.
+           * NSViewAnimation's setFrame: does not invalidate the prior
+           * frame on the container, leaving ghost pixels. */
+          if ([iconView respondsToSelector: @selector(displayIfNeeded)])
+            {
+              NSTimeInterval flushDuration = [animation duration] + 0.05;
+              NSTimer *flushTimer = [NSTimer scheduledTimerWithTimeInterval: 1.0/60.0
+                                                                     target: iconView
+                                                                   selector: @selector(displayIfNeeded)
+                                                                   userInfo: nil
+                                                                    repeats: YES];
+              [flushTimer performSelector: @selector(invalidate)
+                               withObject: nil
+                               afterDelay: flushDuration];
+              [iconView performSelector: @selector(display)
+                             withObject: nil
+                             afterDelay: flushDuration];
+            }
         }
     }
 
-  if ([iconView respondsToSelector: @selector(setNeedsDisplay:)])
-    [iconView setNeedsDisplay: YES];
 }
 
 - (void)compressFiles:(id)sender
