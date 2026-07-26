@@ -80,6 +80,8 @@ typedef enum DockStyle
 
 - (DockIcon *)iconForApplicationPath:(NSString *)path;
 
+- (DockIcon *)iconForApplicationName:(NSString *)name;
+
 - (DockIcon *)workspaceAppIcon;
 
 - (DockIcon *)trashIcon;

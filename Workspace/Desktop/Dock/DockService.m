@@ -342,7 +342,15 @@ static NSString *appNameForPID(pid_t pid)
   if (appPath == nil)
     appPath = [[NSWorkspace sharedWorkspace] fullPathForApplication:appName];
 
+  /* Try lookup by resolved path first (primary key) */
   DockIcon *icon = appPath ? [_dock iconForApplicationPath:appPath] : nil;
+
+  /* Fall back to name-based lookup — handles sudo re-exec where the
+   * resolved exe path has no .app bundle and fullPathForApplication
+   * may also fail (e.g. /usr/bin/sudo). */
+  if (icon == nil)
+    icon = [_dock iconForApplicationName:appName];
+
   if (icon == nil && appPath)
     {
       icon = [_dock addIconForApplicationAtPath:appPath withName:appName atIndex:-1];

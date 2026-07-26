@@ -357,6 +357,21 @@
   return nil;
 }
 
+- (DockIcon *)iconForApplicationName:(NSString *)name
+{
+  NSUInteger i;
+
+  for (i = 0; i < [icons count]; i++) {
+    DockIcon *icon = [icons objectAtIndex: i];
+
+    if ([[icon appName] isEqual: name]) {
+      return icon;
+    }
+  }
+
+  return nil;
+}
+
 - (DockIcon *)workspaceAppIcon
 {
   NSUInteger i;
