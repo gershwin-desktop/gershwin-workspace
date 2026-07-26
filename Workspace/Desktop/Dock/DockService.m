@@ -337,21 +337,19 @@ static NSString *appNameForPID(pid_t pid)
   if (appName == nil)
     return nil;
 
-  DockIcon *icon = [_dock iconForApplicationPath:appName];
-  if (icon == nil)
+  pid_t pid = pidForConnection(conn);
+  NSString *appPath = bundlePathForPID(pid);
+  if (appPath == nil)
+    appPath = [[NSWorkspace sharedWorkspace] fullPathForApplication:appName];
+
+  DockIcon *icon = appPath ? [_dock iconForApplicationPath:appPath] : nil;
+  if (icon == nil && appPath)
     {
-      pid_t pid = pidForConnection(conn);
-      NSString *appPath = bundlePathForPID(pid);
-      if (appPath == nil)
-        appPath = [[NSWorkspace sharedWorkspace] fullPathForApplication:appName];
-      if (appPath)
+      icon = [_dock addIconForApplicationAtPath:appPath withName:appName atIndex:-1];
+      if (icon)
         {
-          icon = [_dock addIconForApplicationAtPath:appPath withName:appName atIndex:-1];
-          if (icon)
-            {
-              [icon setLaunched:YES];
-              [_dock tile];
-            }
+          [icon setLaunched:YES];
+          [_dock tile];
         }
     }
   return icon;
