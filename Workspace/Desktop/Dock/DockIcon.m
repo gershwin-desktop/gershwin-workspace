@@ -243,6 +243,11 @@
 - (void)setAppPID:(pid_t)pid
 {
   appPID = pid;
+  if (pid > 0) {
+    [self setToolTip: [NSString stringWithFormat: @"%@ [%d]", appName, pid]];
+  } else {
+    [self setToolTip: appName];
+  }
 }
 
 - (pid_t)appPID
@@ -504,13 +509,24 @@
         if (launched == NO) {
           /* Launch the app if not already launched. Use the full path for proper resolution. */
           [ws launchApplication: nodePath];
-        } else if (apphidden) {
-          /* App is running but hidden; unhide and activate it */
-          [[Workspace gworkspace] unhideAppWithPath: nodePath andName: appName];
         } else {
-          /* App is already running and visible; just activate/raise it.
-           * Use PID if available for more robust window matching. */
-          [[Workspace gworkspace] activateAppWithPath: nodePath andName: appName pid: appPID];
+          /* Check if the process is still alive before acting on it */
+          if (appPID > 0) {
+            int result = kill(appPID, 0);
+            if ((result != 0) && (errno != EPERM)) {
+              [self setAppPID: 0];
+              [(Dock *)container removeIcon: self];
+              return;
+            }
+          }
+          if (apphidden) {
+            /* App is running but hidden; unhide and activate it */
+            [[Workspace gworkspace] unhideAppWithPath: nodePath andName: appName];
+          } else {
+            /* App is already running and visible; just activate/raise it.
+             * Use PID if available for more robust window matching. */
+            [[Workspace gworkspace] activateAppWithPath: nodePath andName: appName pid: appPID];
+          }
         }
       } else if ([node isDirectory]) {
         /* This is a folder icon in the Dock. Open it explicitly in a new viewer. */

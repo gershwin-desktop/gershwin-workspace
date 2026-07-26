@@ -1051,8 +1051,8 @@ static NSImage *branchImage;
   DESTROY (selection);
   DESTROY (selectionTitle);
   DESTROY (hostname);
-  DESTROY (tagColor);   // Reset label colour; will be re-evaluated on next draw
-  labelChecked = NO;    // New node — probe its label again on next draw
+  DESTROY (tagColor);
+  labelChecked = NO;
 
   ASSIGN (node, anode);
   ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
@@ -1066,6 +1066,14 @@ static NSImage *branchImage;
       hname = [FSNIcon getBestHostName];
       ASSIGN (hostname, hname);
     }
+
+  /* Reload label colour eagerly from the metadata provider,
+   * same as initForNode: does, rather than deferring to
+   * drawRect: — so colour labels survive updateIcons and
+   * other setNode: callers even if the view isn't redrawn. */
+  ASSIGN (tagColor,
+          [[[FSNodeRep sharedInstance] metadataProvider]
+            labelColorForPath: [anode path]]);
 
   if (extInfoType)
     {
