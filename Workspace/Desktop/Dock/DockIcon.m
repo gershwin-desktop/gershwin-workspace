@@ -34,6 +34,7 @@
 #import "GWDesktopManager.h"
 #import "Workspace.h"
 #import "FSNFunctions.h"
+#import "X11AppSupport.h"
 
 /* Forward declaration for loadLabelColorFromMetadata inherited from FSNIcon */
 @interface FSNIcon (DockIconForwardDecl)
@@ -514,9 +515,18 @@
           if (appPID > 0) {
             int result = kill(appPID, 0);
             if ((result != 0) && (errno != EPERM)) {
-              [self setAppPID: 0];
-              [(Dock *)container removeIcon: self];
-              return;
+              /* Process is dead — try to rediscover it by name in X11.
+               * Handles sudo re-exec (new PID), crash+restart, etc. */
+              GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+              NSArray *windows = [wm windowsMatchingName: appName];
+              if ([windows count] > 0) {
+                GWX11WindowInfo *info = [windows objectAtIndex: 0];
+                [self setAppPID: [info ownerPID]];
+              } else {
+                [self setAppPID: 0];
+                [(Dock *)container removeIcon: self];
+                return;
+              }
             }
           }
           if (apphidden) {
