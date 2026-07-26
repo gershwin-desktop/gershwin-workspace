@@ -508,35 +508,45 @@
       
       if ([node isApplication]) {
         if (launched == NO) {
-          /* Launch the app if not already launched. Use the full path for proper resolution. */
-          [ws launchApplication: nodePath];
-        } else {
-          /* Check if the process is still alive before acting on it */
-          if (appPID > 0) {
-            int result = kill(appPID, 0);
-            if ((result != 0) && (errno != EPERM)) {
-              /* Process is dead — try to rediscover it by name in X11.
-               * Handles sudo re-exec (new PID), crash+restart, etc. */
-              GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
-              NSArray *windows = [wm windowsMatchingName: appName];
-              if ([windows count] > 0) {
-                GWX11WindowInfo *info = [windows objectAtIndex: 0];
-                [self setAppPID: [info ownerPID]];
-              } else {
-                [self setAppPID: 0];
-                [(Dock *)container removeIcon: self];
-                return;
-              }
+          /* Check if the app is still running (sudo re-exec, etc.) before
+           * blindly launching a new instance — this prevents duplicate icons
+           * and redundant process creation when appTerminated: was called
+           * for the original PID but the app itself lives on. */
+          GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+          NSArray *windows = [wm windowsMatchingName: appName];
+          if ([windows count] > 0) {
+            GWX11WindowInfo *info = [windows objectAtIndex: 0];
+            [self setAppPID: [info ownerPID]];
+            launched = YES;
+          } else {
+            [ws launchApplication: nodePath];
+            return;
+          }
+        }
+
+        /* Verify the stored PID is still alive */
+        if (appPID > 0) {
+          int result = kill(appPID, 0);
+          if ((result != 0) && (errno != EPERM)) {
+            /* Process is dead — try to rediscover it by name in X11.
+             * Handles sudo re-exec (new PID), crash+restart, etc. */
+            GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+            NSArray *windows = [wm windowsMatchingName: appName];
+            if ([windows count] > 0) {
+              GWX11WindowInfo *info = [windows objectAtIndex: 0];
+              [self setAppPID: [info ownerPID]];
+            } else {
+              [self setAppPID: 0];
+              [(Dock *)container removeIcon: self];
+              return;
             }
           }
-          if (apphidden) {
-            /* App is running but hidden; unhide and activate it */
-            [[Workspace gworkspace] unhideAppWithPath: nodePath andName: appName];
-          } else {
-            /* App is already running and visible; just activate/raise it.
-             * Use PID if available for more robust window matching. */
-            [[Workspace gworkspace] activateAppWithPath: nodePath andName: appName pid: appPID];
-          }
+        }
+
+        if (apphidden) {
+          [[Workspace gworkspace] unhideAppWithPath: nodePath andName: appName];
+        } else {
+          [[Workspace gworkspace] activateAppWithPath: nodePath andName: appName pid: appPID];
         }
       } else if ([node isDirectory]) {
         /* This is a folder icon in the Dock. Open it explicitly in a new viewer. */
