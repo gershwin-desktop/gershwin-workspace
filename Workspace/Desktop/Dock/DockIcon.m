@@ -304,6 +304,26 @@
   return windowCheckResult;
 }
 
+- (void)refreshLaunchedState
+{
+  if (appPID <= 0)
+    return;
+
+  lastWindowCheck = 0;
+  BOOL hasWindows = [self hasVisibleWindows];
+
+  if (launched && !hasWindows)
+    {
+      launched = NO;
+      [self setNeedsDisplay: YES];
+    }
+  else if (!launched && hasWindows)
+    {
+      launched = YES;
+      [self setNeedsDisplay: YES];
+    }
+}
+
 - (void)setAppHidden:(BOOL)value
 {
   apphidden = value;

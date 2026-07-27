@@ -119,6 +119,8 @@
 
 - (BOOL)hasVisibleWindows;
 
+- (void)refreshLaunchedState;
+
 - (void)setAppHidden:(BOOL)value;
 
 - (BOOL)isAppHidden;

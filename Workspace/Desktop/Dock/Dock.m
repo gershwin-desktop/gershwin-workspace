@@ -63,6 +63,8 @@
 - (void)dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver: self];
+  [launchRefreshTimer invalidate];
+  launchRefreshTimer = nil;
   DockServiceStop();
 #if HAVE_DBUS
   DockServiceDBusStop();
@@ -210,6 +212,12 @@
 #if HAVE_DBUS
       DockServiceDBusStart(self);
 #endif
+
+      launchRefreshTimer = [NSTimer scheduledTimerWithTimeInterval: 2.0
+                                                            target: self
+                                                          selector: @selector(_launchRefreshTimerFired:)
+                                                          userInfo: nil
+                                                           repeats: YES];
     }
 
   return self;  
@@ -1666,6 +1674,14 @@
 - (BOOL)isDragTarget
 {
   return isDragTarget;
+}
+
+- (void)_launchRefreshTimerFired:(NSTimer *)timer
+{
+  for (DockIcon *icon in icons)
+    {
+      [icon refreshLaunchedState];
+    }
 }
 
 @end

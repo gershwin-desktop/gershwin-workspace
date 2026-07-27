@@ -57,6 +57,8 @@ typedef enum DockStyle
   NSInteger targetIndex;
   NSRect targetRect;
   
+  NSTimer *launchRefreshTimer;
+
   GWDesktopManager *manager; 
   Workspace *gw;
   NSFileManager *fm; 
