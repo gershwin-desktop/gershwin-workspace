@@ -27,6 +27,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#  include <sys/param.h>
+#  include <sys/mount.h>
+#endif
+
 /* Resolve our own executable's absolute path from argv[0] and PATH.
  * Returns nil on failure. */
 static NSString *resolveOwnPath(const char *argv0, NSArray *pathDirs)
@@ -186,12 +191,24 @@ int main(int argc, char **argv, char **env)
   }
 
   /* If the target is a device path (/dev/sda1), resolve it to the
-   * mount point from /proc/mounts.  Workspace compares against mount
+   * corresponding mount point.  Workspace compares against mount
    * points when suppressing the dialog, so a device path would never
-   * match.  This also works when running as root via sudo because
-   * /proc/mounts is world-readable. */
+   * match.  Uses /proc/mounts on Linux and getmntinfo on BSDs. */
   if (target && [target hasPrefix: @"/dev/"] && !unmountAll)
     {
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+      struct statfs *mntbuf;
+      int count = getmntinfo(&mntbuf, MNT_NOWAIT);
+      for (int i = 0; i < count; i++)
+        {
+          NSString *device = [NSString stringWithUTF8String: mntbuf[i].f_mntfromname];
+          if ([device isEqualToString: target])
+            {
+              target = [NSString stringWithUTF8String: mntbuf[i].f_mntonname];
+              break;
+            }
+        }
+#else
       NSString *procContent = [NSString stringWithContentsOfFile: @"/proc/mounts"
                                                         encoding: NSUTF8StringEncoding
                                                            error: NULL];
@@ -213,6 +230,7 @@ int main(int argc, char **argv, char **env)
                 }
             }
         }
+#endif
     }
 
   if (target && !unmountAll)
