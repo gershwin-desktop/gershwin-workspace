@@ -818,7 +818,39 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 
 - (BOOL)hasWindowsForPID:(pid_t)pid
 {
-    return [[self windowsForPID:pid] count] > 0;
+    if (pid <= 0) return NO;
+
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+
+    BOOL hasVisible = NO;
+
+    @try {
+        unsigned long count = 0;
+        Window *clients = [self getClientList:dpy count:&count];
+
+        if (clients) {
+            for (unsigned long i = 0; i < count && !hasVisible; i++) {
+                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
+                if (winPID == pid) {
+                    if ([self hasNetWmStateSkipTaskbar:dpy window:clients[i]])
+                        continue;
+                    XWindowAttributes attrs;
+                    if (XGetWindowAttributes(dpy, clients[i], &attrs)) {
+                        if (attrs.map_state == IsViewable) {
+                            hasVisible = YES;
+                        }
+                    }
+                }
+            }
+            XFree(clients);
+        }
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+
+    return hasVisible;
 }
 
 - (BOOL)hasWindowsMatchingName:(NSString *)name
