@@ -317,9 +317,17 @@
   GWLaunchedApp *launchedApp = [gw launchedAppWithPath: [self path] andName: appName];
 
   /* GNUstep apps with DO connection: lifecycle managed by DO,
-   * skip X11 window visibility check entirely. */
+   * skip X11 window visibility check entirely.
+   * Also restore launched if it was cleared by an earlier tick. */
   if (launchedApp && ![launchedApp isX11App])
-    return;
+    {
+      if (launched == NO)
+        {
+          launched = YES;
+          [self setNeedsDisplay: YES];
+        }
+      return;
+    }
 
   GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
 
