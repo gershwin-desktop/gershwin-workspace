@@ -59,6 +59,10 @@
   /* PID tracking for robust non-GNUstep app support */
   pid_t appPID;
 
+  /* Cached window visibility check */
+  NSTimeInterval lastWindowCheck;
+  BOOL windowCheckResult;
+
   /* Bounce animation tracking */
   BOOL isBouncing;
   NSTimer *bounceTimer;
@@ -112,6 +116,8 @@
 - (void)setAppPID:(pid_t)pid;
 
 - (pid_t)appPID;
+
+- (BOOL)hasVisibleWindows;
 
 - (void)setAppHidden:(BOOL)value;
 

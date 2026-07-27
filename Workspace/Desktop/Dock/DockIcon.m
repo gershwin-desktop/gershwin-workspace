@@ -106,6 +106,8 @@
     launched = NO;
     apphidden = NO;
     appPID = 0;
+    lastWindowCheck = 0;
+    windowCheckResult = NO;
     isDragMountpointOnly = NO;
     ejectIcon = nil;
 
@@ -251,6 +253,8 @@
   if (pid == appPID)
     return;
 
+  lastWindowCheck = 0;
+
   /* Unregister old PID from the kernel process monitor */
   if (appPID > 0)
     [[GWProcessMonitor sharedMonitor] removePID: appPID];
@@ -281,6 +285,23 @@
 - (pid_t)appPID
 {
   return appPID;
+}
+
+- (BOOL)hasVisibleWindows
+{
+  if (launched == NO)
+    return NO;
+
+  if (appPID <= 0)
+    return YES;
+
+  NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+  if ((now - lastWindowCheck) < 1.0)
+    return windowCheckResult;
+
+  lastWindowCheck = now;
+  windowCheckResult = [[GWX11WindowManager sharedManager] hasWindowsForPID: appPID];
+  return windowCheckResult;
 }
 
 - (void)setAppHidden:(BOOL)value
@@ -918,7 +939,7 @@ x += 6; \
       DRAWDOT([NSColor blackColor], [NSColor whiteColor], p);
   }
 
-    if (launched)
+    if (launched && [self hasVisibleWindows])
     {
       NSPoint p;
       p.x = (rect.size.width / 2) - 1;
