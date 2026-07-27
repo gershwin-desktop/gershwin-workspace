@@ -16,7 +16,17 @@ static NSString *GWTrimmedString(NSString *s)
   return [s stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
 }
 
+static NSMutableSet *inflightUnmounts = nil;
+
 @implementation GWUnmountHelper
+
++ (void)initialize
+{
+  if (inflightUnmounts == nil)
+    {
+      inflightUnmounts = [NSMutableSet new];
+    }
+}
 
 + (NSString *)findSudoPath
 {
@@ -146,8 +156,29 @@ static NSString *GWTrimmedString(NSString *s)
 + (void)unmountAndEjectPathAsync:(NSString *)mountPoint
                       completion:(void (^)(BOOL, NSString *))completion
 {
+  if (!mountPoint || [mountPoint length] == 0)
+    {
+      if (completion)
+        completion(NO, NSLocalizedString(@"Invalid mount point.", @""));
+      return;
+    }
+
+  /* Prevent concurrent unmount of the same path.  With async execution
+   * the main thread is no longer blocked, so a user could click eject
+   * multiple times, spawning many background threads — each launching
+   * its own sequence of umount commands. */
+  @synchronized (inflightUnmounts)
+    {
+      if ([inflightUnmounts containsObject:mountPoint])
+        {
+          NSDebugLLog(@"gwspace", @"GWUnmountHelper: unmount already in flight for %@, skipping", mountPoint);
+          return;
+        }
+      [inflightUnmounts addObject:mountPoint];
+    }
+
   NSDictionary *ctx = [NSDictionary dictionaryWithObjectsAndKeys:
-                                  mountPoint ?: @"", @"mountPoint",
+                                  mountPoint, @"mountPoint",
                                   [[completion copy] autorelease], @"completion",
                                   nil];
   [self performSelectorInBackground:@selector(_asyncUnmountThreadMain:)
@@ -166,6 +197,7 @@ static NSString *GWTrimmedString(NSString *s)
   NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
                                      [NSNumber numberWithBool:success], @"success",
                                      error ?: @"", @"error",
+                                     mountPoint, @"mountPoint",
                                      completion, @"completion",
                                      nil];
   [self performSelectorOnMainThread:@selector(_asyncUnmountCompletion:)
@@ -178,7 +210,14 @@ static NSString *GWTrimmedString(NSString *s)
 {
   BOOL success = [[result objectForKey:@"success"] boolValue];
   NSString *error = [result objectForKey:@"error"];
+  NSString *mountPoint = [result objectForKey:@"mountPoint"];
   void (^completion)(BOOL, NSString *) = [result objectForKey:@"completion"];
+
+  @synchronized (inflightUnmounts)
+    {
+      [inflightUnmounts removeObject:mountPoint];
+    }
+
   if (completion)
     {
       completion(success, error);
