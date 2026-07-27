@@ -88,6 +88,7 @@ GWIconPositionStore.m \
 Workspace.m \
 Workspace+UITesting.m \
 X11AppSupport.m \
+GWProcessMonitor.m \
 WorkspaceApplication.m \
 GWApplicationLauncher.m \
 GSGlobalShortcutsManager.m \

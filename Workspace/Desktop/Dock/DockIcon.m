@@ -35,6 +35,7 @@
 #import "Workspace.h"
 #import "FSNFunctions.h"
 #import "X11AppSupport.h"
+#import "GWProcessMonitor.h"
 
 /* Forward declaration for loadLabelColorFromMetadata inherited from FSNIcon */
 @interface FSNIcon (DockIconForwardDecl)
@@ -51,6 +52,10 @@
     [bounceTimer invalidate];
     bounceTimer = nil;
   }
+
+  if (appPID > 0)
+    [[GWProcessMonitor sharedMonitor] removePID: appPID];
+
   RELEASE (appName);
   RELEASE (highlightColor);
   RELEASE (darkerColor);
@@ -243,12 +248,34 @@
 
 - (void)setAppPID:(pid_t)pid
 {
+  if (pid == appPID)
+    return;
+
+  /* Unregister old PID from the kernel process monitor */
+  if (appPID > 0)
+    [[GWProcessMonitor sharedMonitor] removePID: appPID];
+
   appPID = pid;
-  if (pid > 0) {
-    [self setToolTip: [NSString stringWithFormat: @"%@ [%d]", appName, pid]];
-  } else {
-    [self setToolTip: appName];
-  }
+
+  if (pid > 0)
+    {
+      [self setToolTip: [NSString stringWithFormat: @"%@ [%d]", appName, pid]];
+
+      /* Register with kernel process monitor so we get notified the
+       * instant the process exits, rather than relying on poll-based
+       * kill() checks or NSWorkspace notifications. */
+      __block DockIcon *weakSelf = self;
+      [[GWProcessMonitor sharedMonitor] addPID: pid
+                                        token: appName
+                                     callback: ^(pid_t exitedPid, id token) {
+        [weakSelf setAppPID: 0];
+        [(Dock *)container removeIcon: weakSelf];
+      }];
+    }
+  else
+    {
+      [self setToolTip: appName];
+    }
 }
 
 - (pid_t)appPID
