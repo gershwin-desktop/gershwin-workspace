@@ -17,6 +17,24 @@ static NSString *GWTrimmedString(NSString *s)
 }
 
 static NSMutableSet *inflightUnmounts = nil;
+static NSString *umountPath = nil;
+static NSString *sudoPath = nil;
+
+static NSString *resolveInPath(NSString *name)
+{
+  NSString *pathEnv = [[[NSProcessInfo processInfo] environment] objectForKey:@"PATH"];
+  if (!pathEnv)
+    return name;
+
+  NSArray *dirs = [pathEnv componentsSeparatedByString:@":"];
+  for (NSString *dir in dirs)
+    {
+      NSString *full = [dir stringByAppendingPathComponent:name];
+      if ([[NSFileManager defaultManager] isExecutableFileAtPath:full])
+        return full;
+    }
+  return name;
+}
 
 @implementation GWUnmountHelper
 
@@ -25,13 +43,14 @@ static NSMutableSet *inflightUnmounts = nil;
   if (inflightUnmounts == nil)
     {
       inflightUnmounts = [NSMutableSet new];
+      umountPath = [resolveInPath(@"umount") copy];
+      sudoPath = [resolveInPath(@"sudo") copy];
     }
 }
 
 + (NSString *)findSudoPath
 {
-  /* Resolve via PATH; do not hardcode absolute paths to binaries. */
-  return @"sudo";
+  return sudoPath ?: @"sudo";
 }
 
 + (BOOL)unmountAndEjectPath:(NSString *)mountPoint
@@ -99,7 +118,7 @@ static NSMutableSet *inflightUnmounts = nil;
 
   /* First try unmount without sudo (works for user-mounted volumes). */
   NSString *lastOutput = nil;
-  unmounted = [self runCommand:@"umount" arguments:@[mountPoint] output:&lastOutput];
+  unmounted = [self runCommand:umountPath arguments:@[mountPoint] output:&lastOutput];
   if (unmounted) {
     NSDebugLLog(@"gwspace", @"GWUnmountHelper: umount succeeded (no sudo)");
     return YES;
