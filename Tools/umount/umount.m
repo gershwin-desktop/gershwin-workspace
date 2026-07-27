@@ -58,17 +58,35 @@ static NSString *resolveOwnPath(const char *argv0, NSArray *pathDirs)
   return selfPath;
 }
 
+static NSSet *gershwinToolDirs(void)
+{
+  static NSSet *dirs = nil;
+  static int once = 0;
+  if (!once) {
+    once = 1;
+    dirs = [[NSSet alloc] initWithObjects:
+      @"/System/Library/Tools", @"/Local/Library/Tools", nil];
+  }
+  return dirs;
+}
+
 /* Find the real system command on PATH.  Skips any candidate that is
- * the SAME FILE as ourselves (same device + inode), preventing infinite
- * recursion when multiple copies of this wrapper are on PATH. */
+ * the SAME FILE as ourselves (same device + inode) or that lives in
+ * one of our own tool directories, preventing infinite recursion
+ * when multiple copies of this wrapper are on PATH. */
 static NSString *findRealCommand(NSString *cmdName, NSArray *pathDirs,
                                  struct stat *selfStat)
 {
   NSFileManager *fm = [NSFileManager defaultManager];
+  NSSet *skipDirs = gershwinToolDirs();
 
   for (NSString *dir in pathDirs) {
     NSString *candidate = [dir stringByAppendingPathComponent: cmdName];
     if (![fm isExecutableFileAtPath: candidate]) continue;
+
+    /* Skip Gershwin tool directories — every copy of this wrapper
+     * lives there. */
+    if ([skipDirs containsObject: dir]) continue;
 
     /* Skip if this is the same file as ourselves. */
     if (selfStat) {
@@ -98,6 +116,15 @@ int main(int argc, char **argv, char **env)
     ? [NSString stringWithCString: pathCStr encoding: NSUTF8StringEncoding]
     : @"/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin";
   NSArray *pathDirs = [pathStr componentsSeparatedByString: @":"];
+  /* Strip trailing slashes from PATH entries — some systems add them. */
+  NSMutableArray *trimmed = [NSMutableArray arrayWithCapacity: [pathDirs count]];
+  for (NSString *d in pathDirs) {
+    while ([d hasSuffix: @"/"] && [d length] > 1) {
+      d = [d substringToIndex: [d length] - 1];
+    }
+    [trimmed addObject: d];
+  }
+  pathDirs = trimmed;
 
   /* Resolve our own path and stat ourselves so we can detect copies. */
   NSString *selfPath = resolveOwnPath(argv[0], pathDirs);

@@ -62,16 +62,4 @@
  */
 + (BOOL)unmountPath:(NSString *)mountPoint;
 
-/**
- * Asynchronously unmount and eject a volume at the given path.
- * Runs the unmount commands on a background thread so the main thread
- * is never blocked (prevents UI freeze when umount hangs on busy
- * devices, network timeouts, or sudo password prompts).
- *
- * @param mountPoint The path to unmount
- * @param completion Block called on the main thread with success/failure and error string
- */
-+ (void)unmountAndEjectPathAsync:(NSString *)mountPoint
-                      completion:(void (^)(BOOL success, NSString *error))completion;
-
 @end

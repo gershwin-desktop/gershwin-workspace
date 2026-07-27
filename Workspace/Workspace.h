@@ -333,7 +333,7 @@
 
 - (void)quickLook:(id)sender;
 
-- (void)unmountVolumeAtPath:(NSString *)path;
+- (BOOL)unmountVolumeAtPath:(NSString *)path;
 
 /* Directories under which removable / user-mounted volumes appear.
    Returns the per-user-resolved list in priority order:
