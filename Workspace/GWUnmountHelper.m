@@ -22,44 +22,28 @@ static NSString *GWTrimmedString(NSString *s)
 static NSMutableSet *inflightUnmounts = nil;
 static NSString *resolvedUmountPath = nil;
 static NSString *resolvedSudoPath = nil;
-static NSString *resolvedWhichPath = nil;
 
-/* Checked first, in this order.  Prevents picking up broken wrappers
- * from /System/Library/Tools/ or /Local/Library/Tools/. */
-static NSString * const standardPaths[] = {
+/* ONLY these directories are searched.  No $PATH fallback: non-standard
+ * locations like /System/Library/Tools/ or /Local/Library/Tools/ often
+ * contain broken wrapper scripts that spawn sub-processes instead of
+ * doing real work. */
+static NSString * const toolSearchPaths[] = {
   @"/usr/sbin",
   @"/usr/bin",
   @"/sbin",
   @"/bin",
 };
 
-static NSString *resolveInPath(NSString *name)
+static NSString *findSystemTool(NSString *name)
 {
-  for (unsigned i = 0; i < sizeof(standardPaths) / sizeof(standardPaths[0]); i++)
+  for (unsigned i = 0; i < sizeof(toolSearchPaths) / sizeof(toolSearchPaths[0]); i++)
     {
-      NSString *full = [standardPaths[i] stringByAppendingPathComponent:name];
+      NSString *full = [toolSearchPaths[i] stringByAppendingPathComponent:name];
       if ([[NSFileManager defaultManager] isExecutableFileAtPath:full])
         return full;
     }
-
-  NSString *pathEnv = [[[NSProcessInfo processInfo] environment] objectForKey:@"PATH"];
-  if (pathEnv)
-    {
-      NSArray *dirs = [pathEnv componentsSeparatedByString:@":"];
-      for (NSString *dir in dirs)
-        {
-          NSString *full = [dir stringByAppendingPathComponent:name];
-          if ([[NSFileManager defaultManager] isExecutableFileAtPath:full])
-            {
-              if (GWUMOUNT_VERBOSE)
-                NSLog(@"GWUnmountHelper: resolveInPath(%@) falling back to PATH entry: %@", name, full);
-              return full;
-            }
-        }
-    }
-  if (GWUMOUNT_VERBOSE)
-    NSLog(@"GWUnmountHelper: resolveInPath(%@) NOT FOUND in any standard dir or PATH, returning bare name", name);
-  return name;
+  NSLog(@"GWUnmountHelper: WARNING — %@ not found in any standard directory", name);
+  return nil;
 }
 
 @implementation GWUnmountHelper
@@ -69,17 +53,12 @@ static NSString *resolveInPath(NSString *name)
   if (inflightUnmounts == nil)
     {
       inflightUnmounts = [NSMutableSet new];
-      resolvedUmountPath = [resolveInPath(@"umount") copy];
-      resolvedSudoPath = [resolveInPath(@"sudo") copy];
-      resolvedWhichPath = [resolveInPath(@"which") copy];
+      resolvedUmountPath = [findSystemTool(@"umount") copy];
+      resolvedSudoPath = [findSystemTool(@"sudo") copy];
 
-      if (GWUMOUNT_VERBOSE)
-        {
-          NSLog(@"GWUnmountHelper: initialize resolved paths:");
-          NSLog(@"GWUnmountHelper:   umount -> %@", resolvedUmountPath);
-          NSLog(@"GWUnmountHelper:   sudo   -> %@", resolvedSudoPath);
-          NSLog(@"GWUnmountHelper:   which  -> %@", resolvedWhichPath);
-        }
+      NSLog(@"GWUnmountHelper: initialize — umount=%@ sudo=%@", 
+            resolvedUmountPath ?: @"(NOT FOUND)", 
+            resolvedSudoPath ?: @"(NOT FOUND)");
     }
 }
 
@@ -145,6 +124,12 @@ static NSString *resolveInPath(NSString *name)
     if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: NSWorkspace unmount failed, falling through to umount");
   }
 
+  if (resolvedUmountPath == nil) {
+    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: umount not available, aborting");
+    if (errorString) *errorString = NSLocalizedString(@"Unmount command not found.", @"");
+    return NO;
+  }
+
   NSString *lastOutput = nil;
 
   /* ----- step 1: umount (no sudo) ----- */
@@ -156,42 +141,49 @@ static NSString *resolveInPath(NSString *name)
     return YES;
   }
   if (GWUMOUNT_VERBOSE)
-    NSLog(@"GWUnmountHelper: step1 failed (status=non-zero) output=%@", GWTrimmedString(lastOutput));
+    NSLog(@"GWUnmountHelper: step1 failed output=%@", GWTrimmedString(lastOutput));
 
-  /* ----- step 2: sudo -A -E umount ----- */
-  if (GWUMOUNT_VERBOSE)
-    NSLog(@"GWUnmountHelper: step2: %@ -A -E %@ %@", resolvedSudoPath, resolvedUmountPath, mountPoint);
-  unmounted = [self runCommand:resolvedSudoPath arguments:@[@"-A", @"-E", resolvedUmountPath, mountPoint] output:&lastOutput];
-  if (unmounted) {
-    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: step2 succeeded");
-    return YES;
-  }
-  if (GWUMOUNT_VERBOSE)
-    NSLog(@"GWUnmountHelper: step2 failed output=%@", GWTrimmedString(lastOutput));
+  /* ----- step 2: sudo -n umount -----
+   * -n  = non-interactive (fail immediately if password required)
+   * Using absolute resolvedUmountPath so sudo never consults its
+   * own secure_path or the user's PATH for the umount binary. */
+  if (resolvedSudoPath) {
+    if (GWUMOUNT_VERBOSE)
+      NSLog(@"GWUnmountHelper: step2: %@ -n %@ %@", resolvedSudoPath, resolvedUmountPath, mountPoint);
+    unmounted = [self runCommand:resolvedSudoPath arguments:@[@"-n", resolvedUmountPath, mountPoint] output:&lastOutput];
+    if (unmounted) {
+      if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: step2 succeeded");
+      return YES;
+    }
+    if (GWUMOUNT_VERBOSE)
+      NSLog(@"GWUnmountHelper: step2 failed output=%@", GWTrimmedString(lastOutput));
 
-  /* ----- step 3: sudo -A -E umount -f ----- */
-  if (GWUMOUNT_VERBOSE)
-    NSLog(@"GWUnmountHelper: step3: %@ -A -E %@ -f %@", resolvedSudoPath, resolvedUmountPath, mountPoint);
-  unmounted = [self runCommand:resolvedSudoPath arguments:@[@"-A", @"-E", resolvedUmountPath, @"-f", mountPoint] output:&lastOutput];
-  if (unmounted) {
-    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: step3 succeeded");
-    return YES;
-  }
-  if (GWUMOUNT_VERBOSE)
-    NSLog(@"GWUnmountHelper: step3 failed output=%@", GWTrimmedString(lastOutput));
+    /* ----- step 3: sudo -n umount -f ----- */
+    if (GWUMOUNT_VERBOSE)
+      NSLog(@"GWUnmountHelper: step3: %@ -n %@ -f %@", resolvedSudoPath, resolvedUmountPath, mountPoint);
+    unmounted = [self runCommand:resolvedSudoPath arguments:@[@"-n", resolvedUmountPath, @"-f", mountPoint] output:&lastOutput];
+    if (unmounted) {
+      if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: step3 succeeded");
+      return YES;
+    }
+    if (GWUMOUNT_VERBOSE)
+      NSLog(@"GWUnmountHelper: step3 failed output=%@", GWTrimmedString(lastOutput));
 
 #if defined(__linux__)
-  /* ----- step 4: sudo -A -E umount -l (Linux only) ----- */
-  if (GWUMOUNT_VERBOSE)
-    NSLog(@"GWUnmountHelper: step4: %@ -A -E %@ -l %@", resolvedSudoPath, resolvedUmountPath, mountPoint);
-  unmounted = [self runCommand:resolvedSudoPath arguments:@[@"-A", @"-E", resolvedUmountPath, @"-l", mountPoint] output:&lastOutput];
-  if (unmounted) {
-    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: step4 succeeded");
-    return YES;
-  }
-  if (GWUMOUNT_VERBOSE)
-    NSLog(@"GWUnmountHelper: step4 failed output=%@", GWTrimmedString(lastOutput));
+    /* ----- step 4: sudo -n umount -l (Linux only) ----- */
+    if (GWUMOUNT_VERBOSE)
+      NSLog(@"GWUnmountHelper: step4: %@ -n %@ -l %@", resolvedSudoPath, resolvedUmountPath, mountPoint);
+    unmounted = [self runCommand:resolvedSudoPath arguments:@[@"-n", resolvedUmountPath, @"-l", mountPoint] output:&lastOutput];
+    if (unmounted) {
+      if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: step4 succeeded");
+      return YES;
+    }
+    if (GWUMOUNT_VERBOSE)
+      NSLog(@"GWUnmountHelper: step4 failed output=%@", GWTrimmedString(lastOutput));
 #endif
+  } else {
+    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: sudo not found, skipping steps 2-4");
+  }
 
   if (GWUMOUNT_VERBOSE)
     NSLog(@"GWUnmountHelper: ALL STEPS FAILED for %@ lastOutput=%@", mountPoint, GWTrimmedString(lastOutput));
