@@ -13,8 +13,7 @@ SUBPROJECTS = \
         uitest \
         isowrite-helper \
         formatdisk-helper \
-        eject \
-        umount
+        gw-unmount
 
 ifeq ($(with_squashfs),yes)
 SUBPROJECTS += appimage-icon-test

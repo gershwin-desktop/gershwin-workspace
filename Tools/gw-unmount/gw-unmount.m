@@ -1,9 +1,9 @@
 /*
- *  umount.m: CLI wrapper around the system umount command.
+ *  gw-unmount.m: CLI wrapper around the system umount/eject command.
  *
  *  Posts a distributed notification to the Workspace app so the
  *  "Volume Removed Unexpectedly" dialog is suppressed, then
- *  executes the real umount(8) with the same arguments.
+ *  executes the real umount(8) / eject(1) with the same arguments.
  *
  *  This program is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -32,8 +32,7 @@
 #  include <sys/mount.h>
 #endif
 
-/* Resolve our own executable's absolute path from argv[0] and PATH.
- * Returns nil on failure. */
+/* Resolve our own executable's absolute path from argv[0] and PATH. */
 static NSString *resolveOwnPath(const char *argv0, NSArray *pathDirs)
 {
   NSString *selfPath = nil;
@@ -76,9 +75,7 @@ static NSSet *gershwinToolDirs(void)
 }
 
 /* Find the real system command on PATH.  Skips any candidate that is
- * the SAME FILE as ourselves (same device + inode) or that lives in
- * one of our own tool directories, preventing infinite recursion
- * when multiple copies of this wrapper are on PATH. */
+ * the SAME FILE as ourselves or that lives in a Gershwin tool dir. */
 static NSString *findRealCommand(NSString *cmdName, NSArray *pathDirs,
                                  struct stat *selfStat)
 {
@@ -89,11 +86,8 @@ static NSString *findRealCommand(NSString *cmdName, NSArray *pathDirs,
     NSString *candidate = [dir stringByAppendingPathComponent: cmdName];
     if (![fm isExecutableFileAtPath: candidate]) continue;
 
-    /* Skip Gershwin tool directories — every copy of this wrapper
-     * lives there. */
     if ([skipDirs containsObject: dir]) continue;
 
-    /* Skip if this is the same file as ourselves. */
     if (selfStat) {
       struct stat candStat;
       if (stat([candidate fileSystemRepresentation], &candStat) == 0) {
@@ -110,18 +104,45 @@ static NSString *findRealCommand(NSString *cmdName, NSArray *pathDirs,
   return nil;
 }
 
+/* Standard fallback paths for umount/eject. */
+static NSString *findSystemTool(NSString *name)
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSArray *paths = @[
+    @"/bin", @"/usr/bin", @"/sbin", @"/usr/sbin", @"/usr/local/bin"
+  ];
+  for (NSString *dir in paths) {
+    NSString *candidate = [dir stringByAppendingPathComponent: name];
+    if ([fm isExecutableFileAtPath: candidate])
+      return candidate;
+  }
+  return nil;
+}
+
 int main(int argc, char **argv, char **env)
 {
   NSAutoreleasePool *pool = [NSAutoreleasePool new];
   NSFileManager *fm = [NSFileManager defaultManager];
 
-  /* Parse PATH — include /sbin and /usr/sbin for umount(8) */
+  /* Determine which command we were invoked as */
+  NSString *cmdName = nil;
+  if (argv[0]) {
+    const char *slash = strrchr(argv[0], '/');
+    cmdName = [NSString stringWithCString: (slash ? slash + 1 : argv[0])
+                                 encoding: NSUTF8StringEncoding];
+  }
+  if (!cmdName || [cmdName length] == 0)
+    cmdName = @"umount";
+
+  BOOL isEject = [cmdName isEqualToString: @"eject"];
+
+  /* Parse PATH */
   const char *pathCStr = getenv("PATH");
   NSString *pathStr = (pathCStr != NULL)
     ? [NSString stringWithCString: pathCStr encoding: NSUTF8StringEncoding]
     : @"/bin:/usr/bin:/sbin:/usr/sbin:/usr/local/bin";
   NSArray *pathDirs = [pathStr componentsSeparatedByString: @":"];
-  /* Strip trailing slashes from PATH entries — some systems add them. */
+  /* Strip trailing slashes from PATH entries */
   NSMutableArray *trimmed = [NSMutableArray arrayWithCapacity: [pathDirs count]];
   for (NSString *d in pathDirs) {
     while ([d hasSuffix: @"/"] && [d length] > 1) {
@@ -131,38 +152,25 @@ int main(int argc, char **argv, char **env)
   }
   pathDirs = trimmed;
 
-  /* Resolve our own path and stat ourselves so we can detect copies. */
+  /* Resolve our own path and stat ourselves */
   NSString *selfPath = resolveOwnPath(argv[0], pathDirs);
   struct stat selfStat;
   BOOL haveSelfStat = (selfPath
                        && stat([selfPath fileSystemRepresentation], &selfStat) == 0);
 
-  /* Find the real umount on PATH, skipping copies of ourselves. */
-  NSString *realUmount = findRealCommand(@"umount", pathDirs,
-                                          haveSelfStat ? &selfStat : NULL);
+  /* Find the real system command */
+  NSString *realCmd = findRealCommand(cmdName, pathDirs,
+                                       haveSelfStat ? &selfStat : NULL);
+  if (!realCmd)
+    realCmd = findSystemTool(cmdName);
 
-  if (!realUmount) {
-    NSArray *fallbacks = @[@"/bin/umount", @"/usr/bin/umount",
-                           @"/sbin/umount", @"/usr/sbin/umount",
-                           @"/usr/local/bin/umount"];
-    for (NSString *p in fallbacks) {
-      if ([fm isExecutableFileAtPath: p]) {
-        realUmount = p;
-        break;
-      }
-    }
-  }
-
-  if (!realUmount) {
-    fprintf(stderr, "umount: command not found\n");
+  if (!realCmd) {
+    fprintf(stderr, "%s: command not found\n", [cmdName UTF8String]);
     [pool release];
     return 127;
   }
 
-  /* Try to extract the mount point / device from argv so we can notify
-   * Workspace before calling the real umount.  The target is the first
-   * argument that does not start with '-'.  Skip -t, -O, etc. as they
-   * take a following value argument. */
+  /* Extract the target from argv */
   NSString *target = nil;
   BOOL skipNext = NO;
   for (int i = 1; i < argc; i++) {
@@ -175,25 +183,24 @@ int main(int argc, char **argv, char **env)
                                    encoding: NSUTF8StringEncoding];
       break;
     }
-    /* Options that consume the next argument */
+    /* Options that consume the next argument (umount) */
     if (strcmp(argv[i], "-t") == 0 || strcmp(argv[i], "-O") == 0) {
       skipNext = YES;
     }
   }
 
-  /* For umount -a (unmount all), we skip notifications. */
+  /* Skip notifications for umount -a (unmount all) */
   BOOL unmountAll = NO;
-  for (int i = 1; i < argc; i++) {
-    if (strcmp(argv[i], "-a") == 0) {
-      unmountAll = YES;
-      break;
+  if (!isEject) {
+    for (int i = 1; i < argc; i++) {
+      if (strcmp(argv[i], "-a") == 0) {
+        unmountAll = YES;
+        break;
+      }
     }
   }
 
-  /* If the target is a device path (/dev/sda1), resolve it to the
-   * corresponding mount point.  Workspace compares against mount
-   * points when suppressing the dialog, so a device path would never
-   * match.  Uses /proc/mounts on Linux and getmntinfo on BSDs. */
+  /* Resolve device paths to mount points */
   if (target && [target hasPrefix: @"/dev/"] && !unmountAll)
     {
 #if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
@@ -233,19 +240,15 @@ int main(int argc, char **argv, char **env)
 #endif
     }
 
+  /* Tell Workspace this unmount/eject is coming */
   if (target && !unmountAll)
     {
-      /* Tell Workspace this unmount is coming.  Use a local notification
-       * as the primary mechanism — it works even when running as root
-       * via sudo because NSDistributedNotificationCenter may not be able
-       * to reach the user's Workspace process across user boundaries. */
-      NSDictionary *info = [NSDictionary dictionaryWithObject: target
-                                                       forKey: @"GWUnmountPath"];
-
       NS_DURING
         {
           NSDistributedNotificationCenter *dnc;
           dnc = [NSDistributedNotificationCenter defaultCenter];
+          NSDictionary *info = [NSDictionary dictionaryWithObject: target
+                                                           forKey: @"GWUnmountPath"];
           [dnc postNotificationName: @"GWWorkspaceWillUnmountNotification"
                              object: nil
                            userInfo: info
@@ -253,68 +256,57 @@ int main(int argc, char **argv, char **env)
         }
       NS_HANDLER
         {
-          fprintf(stderr, "umount: distributed notification failed: %s\n",
+          fprintf(stderr, "%s: distributed notification failed: %s\n",
+                  [cmdName UTF8String],
                   [[localException reason] UTF8String]);
         }
       NS_ENDHANDLER
-
-      /* Write a flag file as backup so Workspace can discover this
-       * unmount even if the distributed notification is not received
-       * (e.g. if Workspace is not running or the notification arrives
-       * after the volume is already gone from the timer check). */
-      const char *flagPath = "/tmp/.gw-umount-flag";
-      FILE *f = fopen(flagPath, "w");
-      if (f) {
-        fprintf(f, "%s\n", [target UTF8String]);
-        fclose(f);
-      }
     }
 
-  /* Build the argument list for the real umount. */
+  /* Write flag file as backup (survives user/root boundary) */
+  if (target && !unmountAll) {
+    const char *flagPath = "/tmp/.gw-umount-flag";
+    FILE *f = fopen(flagPath, "w");
+    if (f) {
+      fprintf(f, "%s\n", [target UTF8String]);
+      fclose(f);
+    }
+  }
+
+  /* Build the argument list for the real command */
   const char **realArgv = malloc((argc + 1) * sizeof(char *));
-  realArgv[0] = [realUmount fileSystemRepresentation];
+  realArgv[0] = [realCmd fileSystemRepresentation];
   for (int i = 1; i < argc; i++) {
     realArgv[i] = argv[i];
   }
   realArgv[argc] = NULL;
 
-  /* Fork so we can do post-unmount cleanup (remove empty mountpoint). */
+  /* Fork so we can do post-unmount cleanup (remove empty mountpoint) */
   pid_t pid = fork();
   if (pid == 0) {
-    /* Child: exec the real umount */
-    execve([realUmount fileSystemRepresentation],
+    execve([realCmd fileSystemRepresentation],
            (char *const *)realArgv, env);
     _exit(127);
   } else if (pid > 0) {
-    /* Parent: wait for child */
     int status;
     waitpid(pid, &status, 0);
     int exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
 
-    if (exitCode == 0 && target && !unmountAll)
-      {
-        /* Remove empty mountpoint directory if it still exists */
-        BOOL isDir = NO;
-        if ([fm fileExistsAtPath: target isDirectory: &isDir] && isDir) {
-          NSArray *contents = [fm contentsOfDirectoryAtPath: target error: NULL];
-          if (contents && [contents count] == 0) {
-            rmdir([target fileSystemRepresentation]);
-          }
+    if (exitCode == 0 && target && !unmountAll) {
+      BOOL isDir = NO;
+      if ([fm fileExistsAtPath: target isDirectory: &isDir] && isDir) {
+        NSArray *contents = [fm contentsOfDirectoryAtPath: target error: NULL];
+        if (contents && [contents count] == 0) {
+          rmdir([target fileSystemRepresentation]);
         }
       }
-
-    /* NOTE: we do NOT clean up the flag file here.  Workspace consumes
-     * it in showMountedVolumes when it detects the volume removal.
-     * Cleaning it here would break the sudo umount case where the
-     * distributed notification (posted from root) does not reach the
-     * user's Workspace process — the flag file is the only mechanism
-     * that works across the user/root boundary. */
+    }
 
     free(realArgv);
     [pool release];
     return exitCode;
   } else {
-    fprintf(stderr, "umount: fork failed: %s\n", strerror(errno));
+    fprintf(stderr, "%s: fork failed: %s\n", [cmdName UTF8String], strerror(errno));
     free(realArgv);
     [pool release];
     return 1;
