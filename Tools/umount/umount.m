@@ -185,16 +185,29 @@ int main(int argc, char **argv, char **env)
     }
   }
 
-  /* Write a flag file BEFORE unmounting so Workspace can discover
-   * this unmount even if the distributed notification fails. */
-  if (target && !unmountAll) {
-    const char *flagPath = "/tmp/.gw-umount-flag";
-    FILE *f = fopen(flagPath, "w");
-    if (f) {
-      fprintf(f, "%s\n", [target UTF8String]);
-      fclose(f);
+  if (target && !unmountAll)
+    {
+      NSDistributedNotificationCenter *dnc = [NSDistributedNotificationCenter defaultCenter];
+      NSDictionary *info = [NSDictionary dictionaryWithObject: target
+                                                       forKey: @"GWUnmountPath"];
+
+      /* Tell Workspace this unmount is coming */
+      [dnc postNotificationName: @"GWWorkspaceWillUnmountNotification"
+                         object: nil
+                       userInfo: info
+             deliverImmediately: YES];
+
+      /* Write a flag file as backup so Workspace can discover this
+       * unmount even if the distributed notification is not received
+       * (e.g. if Workspace is not running or the notification arrives
+       * after the volume is already gone from the timer check). */
+      const char *flagPath = "/tmp/.gw-umount-flag";
+      FILE *f = fopen(flagPath, "w");
+      if (f) {
+        fprintf(f, "%s\n", [target UTF8String]);
+        fclose(f);
+      }
     }
-  }
 
   /* Build the argument list for the real umount. */
   const char **realArgv = malloc((argc + 1) * sizeof(char *));
@@ -217,16 +230,26 @@ int main(int argc, char **argv, char **env)
     waitpid(pid, &status, 0);
     int exitCode = WIFEXITED(status) ? WEXITSTATUS(status) : 1;
 
-    if (exitCode == 0 && target && !unmountAll) {
-      /* Remove empty mountpoint directory if it still exists */
-      BOOL isDir = NO;
-      if ([fm fileExistsAtPath: target isDirectory: &isDir] && isDir) {
-        NSArray *contents = [fm contentsOfDirectoryAtPath: target error: NULL];
-        if (contents && [contents count] == 0) {
-          rmdir([target fileSystemRepresentation]);
+    if (exitCode == 0 && target && !unmountAll)
+      {
+        /* Remove empty mountpoint directory if it still exists */
+        BOOL isDir = NO;
+        if ([fm fileExistsAtPath: target isDirectory: &isDir] && isDir) {
+          NSArray *contents = [fm contentsOfDirectoryAtPath: target error: NULL];
+          if (contents && [contents count] == 0) {
+            rmdir([target fileSystemRepresentation]);
+          }
         }
+
+        /* Tell Workspace the unmount completed */
+        NSDistributedNotificationCenter *dnc = [NSDistributedNotificationCenter defaultCenter];
+        NSDictionary *info = [NSDictionary dictionaryWithObject: target
+                                                         forKey: @"GWUnmountPath"];
+        [dnc postNotificationName: @"GWWorkspaceDidUnmountNotification"
+                           object: nil
+                         userInfo: info
+               deliverImmediately: YES];
       }
-    }
 
     free(realArgv);
     [pool release];
