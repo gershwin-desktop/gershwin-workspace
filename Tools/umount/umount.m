@@ -185,17 +185,60 @@ int main(int argc, char **argv, char **env)
     }
   }
 
+  /* If the target is a device path (/dev/sda1), resolve it to the
+   * mount point from /proc/mounts.  Workspace compares against mount
+   * points when suppressing the dialog, so a device path would never
+   * match.  This also works when running as root via sudo because
+   * /proc/mounts is world-readable. */
+  if (target && [target hasPrefix: @"/dev/"] && !unmountAll)
+    {
+      NSString *procContent = [NSString stringWithContentsOfFile: @"/proc/mounts"
+                                                        encoding: NSUTF8StringEncoding
+                                                           error: NULL];
+      if (procContent)
+        {
+          NSArray *lines = [procContent componentsSeparatedByString: @"\n"];
+          for (NSString *line in lines)
+            {
+              if ([line length] == 0) continue;
+              NSArray *parts = [line componentsSeparatedByString: @" "];
+              if ([parts count] >= 2)
+                {
+                  NSString *device = [parts objectAtIndex: 0];
+                  if ([device isEqualToString: target])
+                    {
+                      target = [parts objectAtIndex: 1];
+                      break;
+                    }
+                }
+            }
+        }
+    }
+
   if (target && !unmountAll)
     {
-      NSDistributedNotificationCenter *dnc = [NSDistributedNotificationCenter defaultCenter];
+      /* Tell Workspace this unmount is coming.  Use a local notification
+       * as the primary mechanism — it works even when running as root
+       * via sudo because NSDistributedNotificationCenter may not be able
+       * to reach the user's Workspace process across user boundaries. */
       NSDictionary *info = [NSDictionary dictionaryWithObject: target
                                                        forKey: @"GWUnmountPath"];
 
-      /* Tell Workspace this unmount is coming */
-      [dnc postNotificationName: @"GWWorkspaceWillUnmountNotification"
-                         object: nil
-                       userInfo: info
-             deliverImmediately: YES];
+      NS_DURING
+        {
+          NSDistributedNotificationCenter *dnc;
+          dnc = [NSDistributedNotificationCenter defaultCenter];
+          [dnc postNotificationName: @"GWWorkspaceWillUnmountNotification"
+                             object: nil
+                           userInfo: info
+                 deliverImmediately: YES];
+        }
+      NS_HANDLER
+        {
+          fprintf(stderr, "umount: distributed notification failed: %s\n",
+                  [[localException reason] UTF8String]);
+        }
+      NS_ENDHANDLER
 
       /* Write a flag file as backup so Workspace can discover this
        * unmount even if the distributed notification is not received
@@ -242,13 +285,23 @@ int main(int argc, char **argv, char **env)
         }
 
         /* Tell Workspace the unmount completed */
-        NSDistributedNotificationCenter *dnc = [NSDistributedNotificationCenter defaultCenter];
-        NSDictionary *info = [NSDictionary dictionaryWithObject: target
-                                                         forKey: @"GWUnmountPath"];
-        [dnc postNotificationName: @"GWWorkspaceDidUnmountNotification"
-                           object: nil
-                         userInfo: info
-               deliverImmediately: YES];
+        NS_DURING
+          {
+            NSDistributedNotificationCenter *dnc;
+            dnc = [NSDistributedNotificationCenter defaultCenter];
+            NSDictionary *info = [NSDictionary dictionaryWithObject: target
+                                                             forKey: @"GWUnmountPath"];
+            [dnc postNotificationName: @"GWWorkspaceDidUnmountNotification"
+                               object: nil
+                             userInfo: info
+                   deliverImmediately: YES];
+          }
+        NS_HANDLER
+          {
+            fprintf(stderr, "umount: distributed notification failed: %s\n",
+                    [[localException reason] UTF8String]);
+          }
+        NS_ENDHANDLER
       }
 
     free(realArgv);
