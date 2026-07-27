@@ -295,6 +295,13 @@
   if (appPID <= 0)
     return YES;
 
+  /* GNUstep apps with DO connection: lifecycle managed by DO,
+   * always show dot while launched (even without X11 windows). */
+  Workspace *gw = [Workspace gworkspace];
+  GWLaunchedApp *launchedApp = [gw launchedAppWithPath: [self path] andName: appName];
+  if (launchedApp && ![launchedApp isX11App])
+    return YES;
+
   NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
   if ((now - lastWindowCheck) < 1.0)
     return windowCheckResult;
@@ -306,6 +313,14 @@
 
 - (void)refreshLaunchedState
 {
+  Workspace *gw = [Workspace gworkspace];
+  GWLaunchedApp *launchedApp = [gw launchedAppWithPath: [self path] andName: appName];
+
+  /* GNUstep apps with DO connection: lifecycle managed by DO,
+   * skip X11 window visibility check entirely. */
+  if (launchedApp && ![launchedApp isX11App])
+    return;
+
   GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
 
   if (appPID <= 0)
