@@ -341,8 +341,7 @@ static AVFSMount *sharedInstance = nil;
     @"lha",     /* lha archives */
     @"lzh",     /* lzh archives (same as lha) */
     @"zoo",     /* zoo archives */
-    @"rpm",     /* RPM packages */
-    @"deb",     /* Debian packages */
+    /* Package formats are handled by OnDemand, not mounted as archives */
     @"jar",     /* Java archives (zip-based) */
     @"war",     /* Web application archives (zip-based) */
     @"ear",     /* Enterprise archives (zip-based) */
