@@ -8,6 +8,9 @@
 #import "GWUnmountHelper.h"
 #import <AppKit/AppKit.h>
 
+/* Set this env var to YES to get verbose NSLog output from this module. */
+#define GWUMOUNT_VERBOSE ([[[NSProcessInfo processInfo] environment] objectForKey:@"GWUMOUNT_VERBOSE"] != nil)
+
 static NSString *GWTrimmedString(NSString *s)
 {
   if (!s) {
@@ -17,12 +20,13 @@ static NSString *GWTrimmedString(NSString *s)
 }
 
 static NSMutableSet *inflightUnmounts = nil;
-static NSString *umountPath = nil;
-static NSString *sudoPath = nil;
+static NSString *resolvedUmountPath = nil;
+static NSString *resolvedSudoPath = nil;
+static NSString *resolvedWhichPath = nil;
 
-/* Preferred directories for system tools, checked before PATH entries
- * to avoid picking up broken wrappers from non-standard locations. */
-static NSString * const preferredPaths[] = {
+/* Checked first, in this order.  Prevents picking up broken wrappers
+ * from /System/Library/Tools/ or /Local/Library/Tools/. */
+static NSString * const standardPaths[] = {
   @"/usr/sbin",
   @"/usr/bin",
   @"/sbin",
@@ -31,9 +35,9 @@ static NSString * const preferredPaths[] = {
 
 static NSString *resolveInPath(NSString *name)
 {
-  for (unsigned i = 0; i < sizeof(preferredPaths) / sizeof(preferredPaths[0]); i++)
+  for (unsigned i = 0; i < sizeof(standardPaths) / sizeof(standardPaths[0]); i++)
     {
-      NSString *full = [preferredPaths[i] stringByAppendingPathComponent:name];
+      NSString *full = [standardPaths[i] stringByAppendingPathComponent:name];
       if ([[NSFileManager defaultManager] isExecutableFileAtPath:full])
         return full;
     }
@@ -46,9 +50,15 @@ static NSString *resolveInPath(NSString *name)
         {
           NSString *full = [dir stringByAppendingPathComponent:name];
           if ([[NSFileManager defaultManager] isExecutableFileAtPath:full])
-            return full;
+            {
+              if (GWUMOUNT_VERBOSE)
+                NSLog(@"GWUnmountHelper: resolveInPath(%@) falling back to PATH entry: %@", name, full);
+              return full;
+            }
         }
     }
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: resolveInPath(%@) NOT FOUND in any standard dir or PATH, returning bare name", name);
   return name;
 }
 
@@ -59,14 +69,23 @@ static NSString *resolveInPath(NSString *name)
   if (inflightUnmounts == nil)
     {
       inflightUnmounts = [NSMutableSet new];
-      umountPath = [resolveInPath(@"umount") copy];
-      sudoPath = [resolveInPath(@"sudo") copy];
+      resolvedUmountPath = [resolveInPath(@"umount") copy];
+      resolvedSudoPath = [resolveInPath(@"sudo") copy];
+      resolvedWhichPath = [resolveInPath(@"which") copy];
+
+      if (GWUMOUNT_VERBOSE)
+        {
+          NSLog(@"GWUnmountHelper: initialize resolved paths:");
+          NSLog(@"GWUnmountHelper:   umount -> %@", resolvedUmountPath);
+          NSLog(@"GWUnmountHelper:   sudo   -> %@", resolvedSudoPath);
+          NSLog(@"GWUnmountHelper:   which  -> %@", resolvedWhichPath);
+        }
     }
 }
 
 + (NSString *)findSudoPath
 {
-  return sudoPath ?: @"sudo";
+  return resolvedSudoPath ?: @"sudo";
 }
 
 + (BOOL)unmountAndEjectPath:(NSString *)mountPoint
@@ -95,18 +114,16 @@ static NSString *resolveInPath(NSString *name)
                error:(NSString **)errorString
 {
   if (!mountPoint || [mountPoint length] == 0) {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: Invalid mount point");
+    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: unmountPath called with nil/empty mountPoint");
     if (errorString) {
       *errorString = NSLocalizedString(@"Invalid mount point.", @"");
     }
     return NO;
   }
-  
-  if (devicePath) {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: Unmounting %@ from %@ (eject=%d)", devicePath, mountPoint, shouldEject);
-  } else {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: Unmounting %@ (eject=%d)", mountPoint, shouldEject);
-  }
+
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: unmountPath \"%@\" devicePath=\"%@\" eject=%d thread=%@",
+          mountPoint, devicePath, shouldEject, [NSThread currentThread]);
 
   /* Tell interested views (Desktop) that this unmount is expected. */
   NSDictionary *unmountInfo = [NSDictionary dictionaryWithObject:mountPoint forKey:@"NSDevicePath"];
@@ -114,70 +131,71 @@ static NSString *resolveInPath(NSString *name)
     postNotificationName:NSWorkspaceWillUnmountNotification
                   object:[NSWorkspace sharedWorkspace]
                 userInfo:unmountInfo];
-  
+
   BOOL unmounted = NO;
-  
-  /* For eject, try NSWorkspace unmountAndEjectDeviceAtPath first */
-  /* For unmount-only (ISO writing, CDROM burning prep), skip to umount command */
+
   if (shouldEject) {
     NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: trying NSWorkspace unmountAndEjectDeviceAtPath:%@", mountPoint);
     unmounted = [ws unmountAndEjectDeviceAtPath:mountPoint];
-    
     if (unmounted) {
-      NSDebugLLog(@"gwspace", @"GWUnmountHelper: Graceful unmount+eject succeeded");
+      if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: NSWorkspace unmount succeeded");
       return YES;
     }
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: Graceful unmount+eject failed, trying umount command");
-  } else {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: Unmount-only mode (no eject), using umount command");
+    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: NSWorkspace unmount failed, falling through to umount");
   }
 
-  /* First try unmount without sudo (works for user-mounted volumes). */
   NSString *lastOutput = nil;
-  unmounted = [self runCommand:umountPath arguments:@[mountPoint] output:&lastOutput];
-  if (unmounted) {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: umount succeeded (no sudo)");
-    return YES;
-  }
-  if (GWTrimmedString(lastOutput)) {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: umount (no sudo) failed: %@", GWTrimmedString(lastOutput));
-  }
 
-  /* Try with sudo umount command (askpass if configured via env). */
-  NSString *sudoPath = [self findSudoPath];
-  unmounted = [self runCommand:sudoPath arguments:@[@"-A", @"-E", @"umount", mountPoint] output:&lastOutput];
-  
+  /* ----- step 1: umount (no sudo) ----- */
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: step1: %@ %@", resolvedUmountPath, [mountPoint description]);
+  unmounted = [self runCommand:resolvedUmountPath arguments:@[mountPoint] output:&lastOutput];
   if (unmounted) {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: sudo umount succeeded");
+    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: step1 succeeded");
     return YES;
   }
-  
-  /* Try force unmount */
-  NSDebugLLog(@"gwspace", @"GWUnmountHelper: Normal unmount failed, trying force unmount (sudo umount -f)");
-  unmounted = [self runCommand:sudoPath arguments:@[@"-A", @"-E", @"umount", @"-f", mountPoint] output:&lastOutput];
-  
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: step1 failed (status=non-zero) output=%@", GWTrimmedString(lastOutput));
+
+  /* ----- step 2: sudo -A -E umount ----- */
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: step2: %@ -A -E %@ %@", resolvedSudoPath, resolvedUmountPath, mountPoint);
+  unmounted = [self runCommand:resolvedSudoPath arguments:@[@"-A", @"-E", resolvedUmountPath, mountPoint] output:&lastOutput];
   if (unmounted) {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: Force unmount succeeded");
+    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: step2 succeeded");
     return YES;
   }
-  
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: step2 failed output=%@", GWTrimmedString(lastOutput));
+
+  /* ----- step 3: sudo -A -E umount -f ----- */
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: step3: %@ -A -E %@ -f %@", resolvedSudoPath, resolvedUmountPath, mountPoint);
+  unmounted = [self runCommand:resolvedSudoPath arguments:@[@"-A", @"-E", resolvedUmountPath, @"-f", mountPoint] output:&lastOutput];
+  if (unmounted) {
+    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: step3 succeeded");
+    return YES;
+  }
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: step3 failed output=%@", GWTrimmedString(lastOutput));
 
 #if defined(__linux__)
-  /* Last resort: lazy unmount (Linux only) */
-  NSDebugLLog(@"gwspace", @"GWUnmountHelper: Force unmount failed, trying lazy unmount (sudo umount -l)");
-  unmounted = [self runCommand:sudoPath arguments:@[@"-A", @"-E", @"umount", @"-l", mountPoint] output:&lastOutput];
-
+  /* ----- step 4: sudo -A -E umount -l (Linux only) ----- */
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: step4: %@ -A -E %@ -l %@", resolvedSudoPath, resolvedUmountPath, mountPoint);
+  unmounted = [self runCommand:resolvedSudoPath arguments:@[@"-A", @"-E", resolvedUmountPath, @"-l", mountPoint] output:&lastOutput];
   if (unmounted) {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: Lazy unmount succeeded");
+    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: step4 succeeded");
     return YES;
   }
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: step4 failed output=%@", GWTrimmedString(lastOutput));
 #endif
-  
-  if (GWTrimmedString(lastOutput)) {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: ERROR - All unmount attempts failed for %@: %@", mountPoint, GWTrimmedString(lastOutput));
-  } else {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: ERROR - All unmount attempts failed for %@", mountPoint);
-  }
+
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: ALL STEPS FAILED for %@ lastOutput=%@", mountPoint, GWTrimmedString(lastOutput));
+
   if (errorString) {
     if (GWTrimmedString(lastOutput)) {
       *errorString = lastOutput;
@@ -193,23 +211,26 @@ static NSString *resolveInPath(NSString *name)
 {
   if (!mountPoint || [mountPoint length] == 0)
     {
+      if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: unmountAndEjectPathAsync called with nil/empty path");
       if (completion)
         completion(NO, NSLocalizedString(@"Invalid mount point.", @""));
       return;
     }
 
-  /* Prevent concurrent unmount of the same path.  With async execution
-   * the main thread is no longer blocked, so a user could click eject
-   * multiple times, spawning many background threads — each launching
-   * its own sequence of umount commands. */
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: unmountAndEjectPathAsync \"%@\"", mountPoint);
+
   @synchronized (inflightUnmounts)
     {
       if ([inflightUnmounts containsObject:mountPoint])
         {
-          NSDebugLLog(@"gwspace", @"GWUnmountHelper: unmount already in flight for %@, skipping", mountPoint);
+          if (GWUMOUNT_VERBOSE)
+            NSLog(@"GWUnmountHelper: inflight guard DROPPED duplicate unmount request for \"%@\"", mountPoint);
           return;
         }
       [inflightUnmounts addObject:mountPoint];
+      if (GWUMOUNT_VERBOSE)
+        NSLog(@"GWUnmountHelper: inflight guard added \"%@\" (count=%lu)", mountPoint, (unsigned long)[inflightUnmounts count]);
     }
 
   NSDictionary *ctx = [NSDictionary dictionaryWithObjectsAndKeys:
@@ -226,8 +247,14 @@ static NSString *resolveInPath(NSString *name)
   NSString *mountPoint = [ctx objectForKey:@"mountPoint"];
   void (^completion)(BOOL, NSString *) = [ctx objectForKey:@"completion"];
 
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: background thread started for \"%@\"", mountPoint);
+
   NSString *error = nil;
   BOOL success = [self unmountPath:mountPoint devicePath:nil eject:YES error:&error];
+
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: background thread done for \"%@\" success=%d error=%@", mountPoint, success, error);
 
   NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
                                      [NSNumber numberWithBool:success], @"success",
@@ -251,7 +278,12 @@ static NSString *resolveInPath(NSString *name)
   @synchronized (inflightUnmounts)
     {
       [inflightUnmounts removeObject:mountPoint];
+      if (GWUMOUNT_VERBOSE)
+        NSLog(@"GWUnmountHelper: inflight guard removed \"%@\" (count=%lu)", mountPoint, (unsigned long)[inflightUnmounts count]);
     }
+
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: completion on main thread success=%d error=\"%@\"", success, error);
 
   if (completion)
     {
@@ -266,34 +298,36 @@ static NSString *resolveInPath(NSString *name)
     *output = nil;
   }
   if (!launchPath || [launchPath length] == 0 || !arguments) {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: ERROR - Invalid parameters to runCommand");
+    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: runCommand called with nil launchPath or arguments");
     return NO;
   }
-  
+
+  if (GWUMOUNT_VERBOSE)
+    NSLog(@"GWUnmountHelper: runCommand launchPath=%@ args=%@", launchPath,
+          [arguments componentsJoinedByString:@" "]);
+
   NSTask *task = [[NSTask alloc] init];
   [task setLaunchPath:launchPath];
   [task setArguments:arguments];
 
-  /* Capture combined stdout/stderr for diagnostics and UI error strings. */
   NSPipe *pipe = [NSPipe pipe];
   [task setStandardOutput:pipe];
   [task setStandardError:pipe];
 
-  /* Ensure askpass works if configured by the session environment. */
   NSDictionary *env = [[NSProcessInfo processInfo] environment];
   if (env) {
     [task setEnvironment:env];
   }
-  
+
   BOOL success = NO;
   NSData *data = nil;
-  
+
   @try {
     [task launch];
 
-    /* Read pipe data incrementally while the process runs to prevent
-     * pipe buffer deadlock (when process output > 64KB pipe capacity,
-     * the process blocks writing and waitUntilExit hangs forever). */
+    if (GWUMOUNT_VERBOSE)
+      NSLog(@"GWUnmountHelper: process launched (pid=%d)", [task processIdentifier]);
+
     NSFileHandle *fh = [pipe fileHandleForReading];
     NSMutableData *accumulatedData = [NSMutableData data];
     NSData *chunk = nil;
@@ -304,11 +338,15 @@ static NSString *resolveInPath(NSString *name)
     data = accumulatedData;
 
     success = ([task terminationStatus] == 0);
+
+    if (GWUMOUNT_VERBOSE)
+      NSLog(@"GWUnmountHelper: process exited status=%d output-length=%lu", [task terminationStatus],
+            (unsigned long)[data length]);
+
   } @catch (NSException *e) {
-    NSDebugLLog(@"gwspace", @"GWUnmountHelper: Exception running command %@: %@", launchPath, e);
+    if (GWUMOUNT_VERBOSE) NSLog(@"GWUnmountHelper: exception running %@: %@", launchPath, e);
     success = NO;
   } @finally {
-    /* Ensure task is always released to prevent segfault */
     DESTROY(task);
   }
 
@@ -322,7 +360,7 @@ static NSString *resolveInPath(NSString *name)
     }
     DESTROY(s);
   }
-  
+
   return success;
 }
 
