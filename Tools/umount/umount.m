@@ -301,25 +301,17 @@ int main(int argc, char **argv, char **env)
             rmdir([target fileSystemRepresentation]);
           }
         }
+      }
 
-        /* Tell Workspace the unmount completed */
-        NS_DURING
-          {
-            NSDistributedNotificationCenter *dnc;
-            dnc = [NSDistributedNotificationCenter defaultCenter];
-            NSDictionary *info = [NSDictionary dictionaryWithObject: target
-                                                             forKey: @"GWUnmountPath"];
-            [dnc postNotificationName: @"GWWorkspaceDidUnmountNotification"
-                               object: nil
-                             userInfo: info
-                   deliverImmediately: YES];
-          }
-        NS_HANDLER
-          {
-            fprintf(stderr, "umount: distributed notification failed: %s\n",
-                    [[localException reason] UTF8String]);
-          }
-        NS_ENDHANDLER
+    /* Clean up the flag file.  Workspace normally consumes it in
+     * showMountedVolumes, but if the will-unmount notification triggers
+     * an early workspaceDidUnmountVolumeAtPath: that removes the volume
+     * from mountedVolumes, the timer check may skip the flag entirely,
+     * leaving it stale for the next mount cycle.  Clean it here in all
+     * cases (success or failure) to prevent stale entries. */
+    if (target && !unmountAll)
+      {
+        unlink("/tmp/.gw-umount-flag");
       }
 
     free(realArgv);
