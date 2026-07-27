@@ -5613,20 +5613,17 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   return roots;
 }
 
-- (BOOL)unmountVolumeAtPath:(NSString *)path
+- (void)unmountVolumeAtPath:(NSString *)path
 {
   if (!path) {
-    return NO;
+    return;
   }
   
   NSDebugLLog(@"gwspace", @"Workspace: Attempting to unmount volume at path: %@", path);
 
   /* Record this as a user-initiated unmount BEFORE doing anything else.
    * This is the authoritative record that showMountedVolumes checks to
-   * suppress the "Volume Removed Unexpectedly" dialog.
-   * Multiple covering mechanisms (expectedUnmountPaths in GWDesktopView,
-   * NSWorkspaceWillUnmountNotification) also exist, but this direct
-   * tracking is the guaranteed fallback that works on all platforms. */
+   * suppress the "Volume Removed Unexpectedly" dialog. */
   [self noteUserInitiatedUnmountAtPath: path];
   {
     id deskMgr = [GWDesktopManager desktopManager];
@@ -5653,37 +5650,47 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   
   if (isDiskImageVolume && volumeManager) {
     NSDebugLLog(@"gwspace", @"Workspace: Calling VolumeManager unmountPath for %@", path);
-    return [volumeManager unmountPath: path];
+    BOOL result = [volumeManager unmountPath: path];
+    if (!result) {
+      NSString *msg = NSLocalizedString(@"Unable to unmount volume", @"");
+      NSString *buttstr = NSLocalizedString(@"Continue", @"");
+      NSRunAlertPanel(NSLocalizedString(@"Error", @""), [NSString stringWithFormat: @"%@ \"%@\"!", msg, path], buttstr, nil, nil);
+    }
+    [dtopManager unlockVolumeAtPath: path];
+    return;
   }
   
   // Check if this is a network volume managed by NetworkVolumeManager
-  id networkVolumeManager = nil;
-  
   Class NetworkVolumeManagerClass = NSClassFromString(@"NetworkVolumeManager");
   if (NetworkVolumeManagerClass) {
-    networkVolumeManager = [NetworkVolumeManagerClass sharedManager];
+    id networkVolumeManager = [NetworkVolumeManagerClass sharedManager];
     if (networkVolumeManager && [networkVolumeManager respondsToSelector:@selector(unmountPath:)]) {
       NSSet *netPaths = [networkVolumeManager allMountedPaths];
       if ([netPaths containsObject: path]) {
         NSDebugLLog(@"gwspace", @"Workspace: Detected network volume at %@, using NetworkVolumeManager", path);
-        return [networkVolumeManager unmountPath: path];
+        BOOL result = [networkVolumeManager unmountPath: path];
+        if (!result) {
+          NSString *msg = NSLocalizedString(@"Unable to unmount network volume", @"");
+          NSString *buttstr = NSLocalizedString(@"Continue", @"");
+          NSRunAlertPanel(NSLocalizedString(@"Error", @""), [NSString stringWithFormat: @"%@ \"%@\"!", msg, path], buttstr, nil, nil);
+        }
+        [dtopManager unlockVolumeAtPath: path];
+        return;
       }
     }
   }
   
   // Use standard system unmount+eject for regular volumes (drag to trash)
-  NSDebugLLog(@"gwspace", @"Workspace: Using standard system unmount+eject for %@", path);
-  BOOL result = [GWUnmountHelper unmountAndEjectPath:path];
-  
-  if (!result) {
-    NSString *err = NSLocalizedString(@"Error", @"");
-    NSString *msg = NSLocalizedString(@"You are not allowed to umount\n", @"");
-    NSString *buttstr = NSLocalizedString(@"Continue", @"");
-    NSRunAlertPanel(err, [NSString stringWithFormat: @"%@ \"%@\"!\n", msg, path], buttstr, nil, nil);
-  }
-  
-  [dtopManager unlockVolumeAtPath: path];
-  return result;
+  NSDebugLLog(@"gwspace", @"Workspace: Using asynchronous unmount+eject for %@", path);
+  [GWUnmountHelper unmountAndEjectPathAsync: path completion: ^(BOOL result, NSString *errorMsg) {
+    if (!result) {
+      NSString *msg = NSLocalizedString(@"Unable to unmount volume", @"");
+      NSString *detail = errorMsg ? [NSString stringWithFormat: @"%@ \"%@\".\n%@", msg, path, errorMsg] 
+                                  : [NSString stringWithFormat: @"%@ \"%@\"!", msg, path];
+      NSRunAlertPanel(NSLocalizedString(@"Error", @""), detail, NSLocalizedString(@"Continue", @""), nil, nil);
+    }
+    [dtopManager unlockVolumeAtPath: path];
+  }];
 }
 
 - (void)formatSelectedMountPoints:(id)sender

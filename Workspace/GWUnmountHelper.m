@@ -143,6 +143,49 @@ static NSString *GWTrimmedString(NSString *s)
   return NO;
 }
 
++ (void)unmountAndEjectPathAsync:(NSString *)mountPoint
+                      completion:(void (^)(BOOL, NSString *))completion
+{
+  NSDictionary *ctx = [NSDictionary dictionaryWithObjectsAndKeys:
+                                  mountPoint ?: @"", @"mountPoint",
+                                  [[completion copy] autorelease], @"completion",
+                                  nil];
+  [self performSelectorInBackground:@selector(_asyncUnmountThreadMain:)
+                         withObject:ctx];
+}
+
++ (void)_asyncUnmountThreadMain:(NSDictionary *)ctx
+{
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  NSString *mountPoint = [ctx objectForKey:@"mountPoint"];
+  void (^completion)(BOOL, NSString *) = [ctx objectForKey:@"completion"];
+
+  NSString *error = nil;
+  BOOL success = [self unmountPath:mountPoint devicePath:nil eject:YES error:&error];
+
+  NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
+                                     [NSNumber numberWithBool:success], @"success",
+                                     error ?: @"", @"error",
+                                     completion, @"completion",
+                                     nil];
+  [self performSelectorOnMainThread:@selector(_asyncUnmountCompletion:)
+                         withObject:result
+                      waitUntilDone:NO];
+  [pool drain];
+}
+
++ (void)_asyncUnmountCompletion:(NSDictionary *)result
+{
+  BOOL success = [[result objectForKey:@"success"] boolValue];
+  NSString *error = [result objectForKey:@"error"];
+  void (^completion)(BOOL, NSString *) = [result objectForKey:@"completion"];
+  if (completion)
+    {
+      completion(success, error);
+      [completion release];
+    }
+}
+
 + (BOOL)runCommand:(NSString *)launchPath arguments:(NSArray *)arguments output:(NSString **)output
 {
   if (output) {
@@ -173,8 +216,19 @@ static NSString *GWTrimmedString(NSString *s)
   
   @try {
     [task launch];
+
+    /* Read pipe data incrementally while the process runs to prevent
+     * pipe buffer deadlock (when process output > 64KB pipe capacity,
+     * the process blocks writing and waitUntilExit hangs forever). */
+    NSFileHandle *fh = [pipe fileHandleForReading];
+    NSMutableData *accumulatedData = [NSMutableData data];
+    NSData *chunk = nil;
+    while ((chunk = [fh availableData]) && [chunk length] > 0) {
+      [accumulatedData appendData:chunk];
+    }
     [task waitUntilExit];
-    data = [[pipe fileHandleForReading] readDataToEndOfFile];
+    data = accumulatedData;
+
     success = ([task terminationStatus] == 0);
   } @catch (NSException *e) {
     NSDebugLLog(@"gwspace", @"GWUnmountHelper: Exception running command %@: %@", launchPath, e);
