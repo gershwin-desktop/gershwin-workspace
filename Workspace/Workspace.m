@@ -52,7 +52,7 @@
  * Used by showMountedVolumes to suppress the "Unexpectedly" dialog.
  * Paths are removed after a short timeout. */
 static NSMutableSet *recentUserUnmounts = nil;
-static NSTimeInterval recentUserUnmountTimeout = 5.0;
+static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "Dialogs.h"
 #import "AboutController.h"
 #import "OpenWithController.h"

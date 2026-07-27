@@ -444,7 +444,7 @@
   if ([volumesToRemove count] > 0)
     {
       NSMutableArray *unexpectedRemovals = [NSMutableArray arrayWithCapacity:1];
-      NSTimeInterval expectedUnmountTimeout = 60.0; // seconds
+      NSTimeInterval expectedUnmountTimeout = 2.0; // seconds
       NSDate *now = [NSDate date];
       
       for (i = 0; i < [volumesToRemove count]; i++)
