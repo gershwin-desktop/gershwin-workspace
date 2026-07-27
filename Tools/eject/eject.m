@@ -27,6 +27,11 @@
 #include <sys/wait.h>
 #include <unistd.h>
 
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+#  include <sys/param.h>
+#  include <sys/mount.h>
+#endif
+
 /* Resolve our own executable's directory so we can skip it
  * in the PATH search for the real command.  Portable across
  * Linux and BSD. */
@@ -60,17 +65,35 @@ static NSString *resolveOwnPath(const char *argv0, NSArray *pathDirs)
   return selfPath;
 }
 
+static NSSet *gershwinToolDirs(void)
+{
+  static NSSet *dirs = nil;
+  static int once = 0;
+  if (!once) {
+    once = 1;
+    dirs = [[NSSet alloc] initWithObjects:
+      @"/System/Library/Tools", @"/Local/Library/Tools", nil];
+  }
+  return dirs;
+}
+
 /* Find the real system command on PATH.  Skips any candidate that is
- * the SAME FILE as ourselves (same device + inode), preventing infinite
- * recursion when multiple copies of this wrapper are on PATH. */
+ * the SAME FILE as ourselves (same device + inode) or that lives in
+ * one of our own tool directories, preventing infinite recursion
+ * when multiple copies of this wrapper are on PATH. */
 static NSString *findRealCommand(NSString *cmdName, NSArray *pathDirs,
                                  struct stat *selfStat)
 {
   NSFileManager *fm = [NSFileManager defaultManager];
+  NSSet *skipDirs = gershwinToolDirs();
 
   for (NSString *dir in pathDirs) {
     NSString *candidate = [dir stringByAppendingPathComponent: cmdName];
     if (![fm isExecutableFileAtPath: candidate]) continue;
+
+    /* Skip Gershwin tool directories — every copy of this wrapper
+     * lives there. */
+    if ([skipDirs containsObject: dir]) continue;
 
     if (selfStat) {
       struct stat candStat;
@@ -99,6 +122,15 @@ int main(int argc, char **argv, char **env)
     ? [NSString stringWithCString: pathCStr encoding: NSUTF8StringEncoding]
     : @"/bin:/usr/bin:/usr/local/bin";
   NSArray *pathDirs = [pathStr componentsSeparatedByString: @":"];
+  /* Strip trailing slashes from PATH entries — some systems add them. */
+  NSMutableArray *trimmed = [NSMutableArray arrayWithCapacity: [pathDirs count]];
+  for (NSString *d in pathDirs) {
+    while ([d hasSuffix: @"/"] && [d length] > 1) {
+      d = [d substringToIndex: [d length] - 1];
+    }
+    [trimmed addObject: d];
+  }
+  pathDirs = trimmed;
 
   /* Resolve our own path and stat ourselves so we can detect copies. */
   NSString *selfPath = resolveOwnPath(argv[0], pathDirs);
@@ -137,6 +169,70 @@ int main(int argc, char **argv, char **env)
       break;
     }
   }
+
+  /* If the target is a device path (/dev/sda1), resolve it to the
+   * corresponding mount point.  Workspace compares against mount
+   * points when suppressing the dialog. */
+  if (target && [target hasPrefix: @"/dev/"])
+    {
+#if defined(__FreeBSD__) || defined(__OpenBSD__) || defined(__NetBSD__)
+      struct statfs *mntbuf;
+      int count = getmntinfo(&mntbuf, MNT_NOWAIT);
+      for (int i = 0; i < count; i++)
+        {
+          NSString *device = [NSString stringWithUTF8String: mntbuf[i].f_mntfromname];
+          if ([device isEqualToString: target])
+            {
+              target = [NSString stringWithUTF8String: mntbuf[i].f_mntonname];
+              break;
+            }
+        }
+#else
+      NSString *procContent = [NSString stringWithContentsOfFile: @"/proc/mounts"
+                                                        encoding: NSUTF8StringEncoding
+                                                           error: NULL];
+      if (procContent)
+        {
+          NSArray *lines = [procContent componentsSeparatedByString: @"\n"];
+          for (NSString *line in lines)
+            {
+              if ([line length] == 0) continue;
+              NSArray *parts = [line componentsSeparatedByString: @" "];
+              if ([parts count] >= 2)
+                {
+                  NSString *device = [parts objectAtIndex: 0];
+                  if ([device isEqualToString: target])
+                    {
+                      target = [parts objectAtIndex: 1];
+                      break;
+                    }
+                }
+            }
+        }
+#endif
+    }
+
+  /* Tell Workspace this unmount is coming */
+  if (target)
+    {
+      NS_DURING
+        {
+          NSDistributedNotificationCenter *dnc;
+          dnc = [NSDistributedNotificationCenter defaultCenter];
+          NSDictionary *info = [NSDictionary dictionaryWithObject: target
+                                                           forKey: @"GWUnmountPath"];
+          [dnc postNotificationName: @"GWWorkspaceWillUnmountNotification"
+                             object: nil
+                           userInfo: info
+                 deliverImmediately: YES];
+        }
+      NS_HANDLER
+        {
+          fprintf(stderr, "eject: distributed notification failed: %s\n",
+                  [[localException reason] UTF8String]);
+        }
+      NS_ENDHANDLER
+    }
 
   /* Write a flag file BEFORE ejecting so Workspace can discover this unmount. */
   if (target) {

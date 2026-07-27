@@ -303,16 +303,12 @@ int main(int argc, char **argv, char **env)
         }
       }
 
-    /* Clean up the flag file.  Workspace normally consumes it in
-     * showMountedVolumes, but if the will-unmount notification triggers
-     * an early workspaceDidUnmountVolumeAtPath: that removes the volume
-     * from mountedVolumes, the timer check may skip the flag entirely,
-     * leaving it stale for the next mount cycle.  Clean it here in all
-     * cases (success or failure) to prevent stale entries. */
-    if (target && !unmountAll)
-      {
-        unlink("/tmp/.gw-umount-flag");
-      }
+    /* NOTE: we do NOT clean up the flag file here.  Workspace consumes
+     * it in showMountedVolumes when it detects the volume removal.
+     * Cleaning it here would break the sudo umount case where the
+     * distributed notification (posted from root) does not reach the
+     * user's Workspace process — the flag file is the only mechanism
+     * that works across the user/root boundary. */
 
     free(realArgv);
     [pool release];
