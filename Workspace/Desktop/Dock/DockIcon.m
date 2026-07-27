@@ -306,16 +306,45 @@
 
 - (void)refreshLaunchedState
 {
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+
   if (appPID <= 0)
-    return;
+    {
+      NSArray *windows = [wm windowsMatchingName: appName];
+      if ([windows count] > 0)
+        {
+          GWX11WindowInfo *info = [windows objectAtIndex: 0];
+          [self setAppPID: [info ownerPID]];
+        }
+      else
+        {
+          if (launched)
+            {
+              launched = NO;
+              [self setNeedsDisplay: YES];
+            }
+          return;
+        }
+    }
 
   lastWindowCheck = 0;
   BOOL hasWindows = [self hasVisibleWindows];
 
   if (launched && !hasWindows)
     {
-      launched = NO;
-      [self setNeedsDisplay: YES];
+      NSArray *windows = [wm windowsMatchingName: appName];
+      if ([windows count] > 0)
+        {
+          GWX11WindowInfo *info = [windows objectAtIndex: 0];
+          [self setAppPID: [info ownerPID]];
+          lastWindowCheck = 0;
+          hasWindows = [self hasVisibleWindows];
+        }
+      if (!hasWindows)
+        {
+          launched = NO;
+          [self setNeedsDisplay: YES];
+        }
     }
   else if (!launched && hasWindows)
     {
