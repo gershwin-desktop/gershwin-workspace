@@ -20,18 +20,34 @@ static NSMutableSet *inflightUnmounts = nil;
 static NSString *umountPath = nil;
 static NSString *sudoPath = nil;
 
+/* Preferred directories for system tools, checked before PATH entries
+ * to avoid picking up broken wrappers from non-standard locations. */
+static NSString * const preferredPaths[] = {
+  @"/usr/sbin",
+  @"/usr/bin",
+  @"/sbin",
+  @"/bin",
+};
+
 static NSString *resolveInPath(NSString *name)
 {
-  NSString *pathEnv = [[[NSProcessInfo processInfo] environment] objectForKey:@"PATH"];
-  if (!pathEnv)
-    return name;
-
-  NSArray *dirs = [pathEnv componentsSeparatedByString:@":"];
-  for (NSString *dir in dirs)
+  for (unsigned i = 0; i < sizeof(preferredPaths) / sizeof(preferredPaths[0]); i++)
     {
-      NSString *full = [dir stringByAppendingPathComponent:name];
+      NSString *full = [preferredPaths[i] stringByAppendingPathComponent:name];
       if ([[NSFileManager defaultManager] isExecutableFileAtPath:full])
         return full;
+    }
+
+  NSString *pathEnv = [[[NSProcessInfo processInfo] environment] objectForKey:@"PATH"];
+  if (pathEnv)
+    {
+      NSArray *dirs = [pathEnv componentsSeparatedByString:@":"];
+      for (NSString *dir in dirs)
+        {
+          NSString *full = [dir stringByAppendingPathComponent:name];
+          if ([[NSFileManager defaultManager] isExecutableFileAtPath:full])
+            return full;
+        }
     }
   return name;
 }
