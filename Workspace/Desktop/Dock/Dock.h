@@ -84,6 +84,10 @@ typedef enum DockStyle
 
 - (DockIcon *)iconForApplicationName:(NSString *)name;
 
+- (void)setAppIsX11Only:(BOOL)value
+                forPath:(NSString *)path
+                   name:(NSString *)name;
+
 - (DockIcon *)workspaceAppIcon;
 
 - (DockIcon *)trashIcon;

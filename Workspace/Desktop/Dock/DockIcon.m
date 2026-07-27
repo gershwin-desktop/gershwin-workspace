@@ -106,6 +106,7 @@
     launched = NO;
     apphidden = NO;
     appPID = 0;
+    isX11OnlyApp = NO;
     lastWindowCheck = 0;
     windowCheckResult = NO;
     isDragMountpointOnly = NO;
@@ -287,19 +288,25 @@
   return appPID;
 }
 
+- (void)setIsX11OnlyApp:(BOOL)value
+{
+  isX11OnlyApp = value;
+}
+
+- (BOOL)isX11OnlyApp
+{
+  return isX11OnlyApp;
+}
+
 - (BOOL)hasVisibleWindows
 {
   if (launched == NO)
     return NO;
 
-  if (appPID <= 0)
+  if (isX11OnlyApp == NO)
     return YES;
 
-  /* GNUstep apps with DO connection: lifecycle managed by DO,
-   * always show dot while launched (even without X11 windows). */
-  Workspace *gw = [Workspace gworkspace];
-  GWLaunchedApp *launchedApp = [gw launchedAppWithPath: [self path] andName: appName];
-  if (launchedApp && ![launchedApp isX11App])
+  if (appPID <= 0)
     return YES;
 
   NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
@@ -313,20 +320,23 @@
 
 - (void)refreshLaunchedState
 {
-  Workspace *gw = [Workspace gworkspace];
-  GWLaunchedApp *launchedApp = [gw launchedAppWithPath: [self path] andName: appName];
-
-  /* GNUstep apps with DO connection: lifecycle managed by DO,
-   * skip X11 window visibility check entirely.
-   * Also restore launched if it was cleared by an earlier tick. */
-  if (launchedApp && ![launchedApp isX11App])
+  if (isX11OnlyApp == NO)
     {
-      if (launched == NO)
+      /* Auto-discover X11 apps that were running before dock restart.
+       * Only try when launched=YES and no PID (loaded from prefs). */
+      if (launched && appPID <= 0)
         {
-          launched = YES;
-          [self setNeedsDisplay: YES];
+          GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+          NSArray *windows = [wm windowsMatchingName: appName];
+          if ([windows count] > 0)
+            {
+              isX11OnlyApp = YES;
+              GWX11WindowInfo *info = [windows objectAtIndex: 0];
+              [self setAppPID: [info ownerPID]];
+            }
         }
-      return;
+      if (isX11OnlyApp == NO)
+        return;
     }
 
   GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
@@ -337,6 +347,7 @@
       if ([windows count] > 0)
         {
           GWX11WindowInfo *info = [windows objectAtIndex: 0];
+          isX11OnlyApp = YES;
           [self setAppPID: [info ownerPID]];
         }
       else
@@ -636,6 +647,7 @@
           NSArray *windows = [wm windowsMatchingName: appName];
           if ([windows count] > 0) {
             GWX11WindowInfo *info = [windows objectAtIndex: 0];
+            isX11OnlyApp = YES;
             [self setAppPID: [info ownerPID]];
             launched = YES;
           } else {
@@ -654,6 +666,7 @@
             NSArray *windows = [wm windowsMatchingName: appName];
             if ([windows count] > 0) {
               GWX11WindowInfo *info = [windows objectAtIndex: 0];
+              isX11OnlyApp = YES;
               [self setAppPID: [info ownerPID]];
             } else {
               [self setAppPID: 0];

@@ -380,6 +380,18 @@
   return nil;
 }
 
+- (void)setAppIsX11Only:(BOOL)value
+                forPath:(NSString *)path
+                   name:(NSString *)name
+{
+  DockIcon *icon = nil;
+  if (path)
+    icon = [self iconForApplicationPath: path];
+  if (icon == nil && name)
+    icon = [self iconForApplicationName: name];
+  [icon setIsX11OnlyApp: value];
+}
+
 - (DockIcon *)workspaceAppIcon
 {
   NSUInteger i;

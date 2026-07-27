@@ -58,6 +58,7 @@
 
   /* PID tracking for robust non-GNUstep app support */
   pid_t appPID;
+  BOOL isX11OnlyApp;
 
   /* Cached window visibility check */
   NSTimeInterval lastWindowCheck;
@@ -116,6 +117,10 @@
 - (void)setAppPID:(pid_t)pid;
 
 - (pid_t)appPID;
+
+- (void)setIsX11OnlyApp:(BOOL)value;
+
+- (BOOL)isX11OnlyApp;
 
 - (BOOL)hasVisibleWindows;
 

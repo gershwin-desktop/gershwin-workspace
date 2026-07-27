@@ -629,6 +629,7 @@
          to raise/unminimize its window immediately. */
       NSDebugLLog(@"gwspace", @"launchApplication: BLOCKED — X11 thinks '%@' is already running (knownPID=%d)", appName, knownPID);
       [[dtopManager dock] appDidLaunch: appPath appName: appName];
+      [[dtopManager dock] setAppIsX11Only: YES forPath: appPath name: appName];
       /* Activate the app to raise/unminimize its window immediately */
       [self activateAppWithPath: appPath andName: appName pid: knownPID];
       return YES;
@@ -856,6 +857,7 @@
     if ([app application] == nil && name && path) {
       pid_t pid = [app identifier] ? (pid_t)[[app identifier] intValue] : 0;
       [[dtopManager dock] appDidLaunch: path appName: name pid: pid];
+      [[dtopManager dock] setAppIsX11Only: YES forPath: path name: name];
       GWDebugLog(@"\"%@\" appDidBecomeActive -> dock notified (non-GNUstep)", name);
       [self _cancelLaunchDotFallbackForPath: path name: name];
     }
@@ -868,6 +870,7 @@
        is present. Ensure the dock shows the running dot. */
     if (name && path) {
       [[dtopManager dock] appDidLaunch: path appName: name];
+      [[dtopManager dock] setAppIsX11Only: YES forPath: path name: name];
       GWDebugLog(@"\"%@\" appDidBecomeActive (untracked) -> dock notified", name);
       [self _cancelLaunchDotFallbackForPath: path name: name];
     }
@@ -1013,6 +1016,7 @@
   /* Show dot if window found or final timeout with running process */
   if (shouldShowDot || (processRunning && retryCount >= 20)) {
     [[dtopManager dock] appDidLaunch:path appName:name pid:appPID];
+    [[dtopManager dock] setAppIsX11Only: YES forPath: path name: name];
     GWDebugLog(@"Fallback: showing dock dot for \"%@\" (retry %d, pid=%d)", name, retryCount, appPID);
   }
 
@@ -1055,6 +1059,7 @@
   
   GWDebugLog(@"X11 app windows appeared: %@ (%@) pid=%d", appName, appPath, pid);
   [[dtopManager dock] appDidLaunch:appPath appName:appName pid:pid];
+  [[dtopManager dock] setAppIsX11Only: YES forPath: appPath name: appName];
   
   /* Cancel any pending fallback timer */
   [self _cancelLaunchDotFallbackForPath:appPath name:appName];
