@@ -189,6 +189,11 @@ int main(int argc, char **argv, char **env)
     }
   }
 
+  /* Normalize target: strip trailing slashes */
+  while (target && [target hasSuffix: @"/"] && [target length] > 1) {
+    target = [target substringToIndex: [target length] - 1];
+  }
+
   /* Skip notifications for umount -a (unmount all) */
   BOOL unmountAll = NO;
   if (!isEject) {
