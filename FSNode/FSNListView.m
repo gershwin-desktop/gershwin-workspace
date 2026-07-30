@@ -39,6 +39,7 @@
 
 #define DOUBLE_CLICK_LIMIT 300
 #define EDIT_CLICK_LIMIT 1000
+#define FSNInfoDescriptionType 7
 
 static NSString *defaultColumns = @"{ \
   <*I0> = { \
@@ -266,6 +267,9 @@ static NSString *defaultColumns = @"{ \
     case FSNInfoExtendedType:
       [[column headerCell] setStringValue: extInfoType]; /* should come Localized from the ExtInfo bundle */
       break;
+    case FSNInfoDescriptionType:
+      [[column headerCell] setStringValue: NSLocalizedStringFromTableInBundle(@"Description", nil, [NSBundle bundleForClass:[FSNode class]], @"")];
+      break;
     default:
       [[column headerCell] setStringValue: NSLocalizedStringFromTableInBundle(@"Name", nil, [NSBundle bundleForClass:[FSNode class]], @"")];
       break;
@@ -273,6 +277,19 @@ static NSString *defaultColumns = @"{ \
 
   [listView addTableColumn: column];
   RELEASE (column);
+}
+
+- (void)addDescriptionColumn
+{
+  NSNumber *descId = [NSNumber numberWithInt: FSNInfoDescriptionType];
+  if ([listView tableColumnWithIdentifier: descId] != nil)
+    return;
+
+  NSMutableDictionary *info = [NSMutableDictionary dictionary];
+  [info setObject: descId forKey: @"identifier"];
+  [info setObject: [NSNumber numberWithFloat: 200] forKey: @"width"];
+  [info setObject: [NSNumber numberWithFloat: 50] forKey: @"minwidth"];
+  [self addColumn: info];
 }
 
 - (void)removeColumnWithIdentifier:(NSNumber *)identifier
@@ -512,6 +529,11 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
     case FSNInfoExtendedType:
       return [rep shownInfo];
       break;
+    case FSNInfoDescriptionType:
+      if ([nd isDirectory])
+        return GSDirectoryDescriptionForPath([nd path]);
+      return @"";
+      break;
     default:
       return [nd name];
       break;
@@ -718,7 +740,8 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
       if ([colsDescr count] == 0)
 	{
-	  [self createColumns: colsInfo];
+      [self createColumns: colsInfo];
+      [self addDescriptionColumn];
 
 	}
       else if ([colsDescr isEqual: colsInfo] == NO)
@@ -729,6 +752,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 	    }
 
 	  [self createColumns: colsInfo];
+          [self addDescriptionColumn];
 	}
     }
 

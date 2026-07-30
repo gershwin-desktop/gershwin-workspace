@@ -49,6 +49,7 @@ FSNode_HAS_RESOURCE_BUNDLE = yes
 FSNode_RESOURCE_FILES = \
     Resources/Images/* \
     Resources/*.lproj \
+    Resources/WellKnownDirectories.plist \
 
 # FSNode no longer references the Finder-metadata (GWMetadata) or .DS_Store
 # (DSStore) stacks directly — the application supplies those through the

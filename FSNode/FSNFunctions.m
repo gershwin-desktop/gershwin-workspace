@@ -438,3 +438,50 @@ FSNDrawLabelDot(NSRect dotRect, NSColor *color)
   [dp setLineWidth: 0.5];
   [dp stroke];
 }
+
+NSString *
+GSDirectoryDescriptionForPath(NSString *path)
+{
+  if ([path length] == 0)
+    return nil;
+
+  static NSDictionary *cached = nil;
+  static dispatch_once_t once;
+  dispatch_once(&once, ^{
+    NSBundle *bundle = [NSBundle bundleForClass: [FSNodeRep class]];
+    NSString *plistPath = [bundle pathForResource: @"WellKnownDirectories"
+                                          ofType: @"plist"];
+    NSDictionary *raw = [NSDictionary dictionaryWithContentsOfFile: plistPath];
+    if (raw == nil)
+      return;
+
+    NSMutableDictionary *expanded = [NSMutableDictionary dictionary];
+    NSString *home = NSHomeDirectory();
+    NSDictionary *domains = @{
+      @"$System":  @"/System",
+      @"$Local":   @"/Local",
+      @"$Network": @"/Network",
+      @"$User":    home
+    };
+
+    for (NSString *key in raw)
+    {
+      NSString *desc = [raw objectForKey: key];
+      NSString *resolved = key;
+      for (NSString *var in domains)
+      {
+        if ([resolved hasPrefix: var])
+        {
+          NSString *suffix = [resolved substringFromIndex: [var length]];
+          resolved = [[domains objectForKey: var] stringByAppendingString: suffix];
+          break;
+        }
+      }
+      [expanded setObject: desc forKey: resolved];
+    }
+
+    cached = [expanded copy];
+  });
+
+  return [cached objectForKey: path];
+}

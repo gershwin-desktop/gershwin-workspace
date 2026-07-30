@@ -368,6 +368,17 @@ static NSImage *branchImage;
 
       isLocked = [node isLocked];
 
+      /* Set tooltip to well-known directory description if applicable.
+         Must happen after setFrame: so the tooltip tracking rect has valid bounds. */
+      if (node && [node isDirectory])
+        {
+          NSString *desc = GSDirectoryDescriptionForPath([node path]);
+          if (desc)
+            {
+              [self setToolTip: desc];
+            }
+        }
+
       container = nil;
 
       isSelected = NO;
@@ -1086,6 +1097,16 @@ static NSImage *branchImage;
 
   [self setLocked: [node isLocked]];
   [self tile];
+
+  /* Set tooltip to well-known directory description if applicable */
+  if (node && [node isDirectory])
+    {
+      NSString *desc = GSDirectoryDescriptionForPath([node path]);
+      if (desc)
+        {
+          [self setToolTip: desc];
+        }
+    }
 }
 
 - (void)setNode:(FSNode *)anode
@@ -2349,6 +2370,19 @@ static NSImage *branchImage;
   else
     {
       [super mouseDown: theEvent];
+    }
+}
+
+- (void)viewDidMoveToWindow
+{
+  [super viewDidMoveToWindow];
+  if ([self window] && node && [node isDirectory])
+    {
+      NSString *desc = GSDirectoryDescriptionForPath([node path]);
+      if (desc)
+        {
+          [self setToolTip: desc];
+        }
     }
 }
 

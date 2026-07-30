@@ -43,6 +43,8 @@ NSString *GSDisplayNameForFilename(NSString *filename, GSFilenameExtensionDispla
 
 NSString *GSFilenameHiddenExtension(NSString *filename, GSFilenameExtensionDisplayMode mode);
 
+NSString *GSDirectoryDescriptionForPath(NSString *path);
+
 NSString *path_separator(void);
 
 BOOL isSubpathOfPath(NSString *p1, NSString *p2);

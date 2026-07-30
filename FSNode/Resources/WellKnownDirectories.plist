@@ -1,0 +1,530 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>/</key>
+  <string>Root of the filesystem hierarchy</string>
+  <key>/bin</key>
+  <string>Essential user command binaries needed in single-user mode (often a symlink to /usr/bin)</string>
+  <key>/boot</key>
+  <string>Boot loader files and kernel images needed to boot</string>
+  <key>/cdrom</key>
+  <string>Historical mount point for CD-ROM drives</string>
+  <key>/compat</key>
+  <string>Binary compatibility runtime for running software from other OS types</string>
+  <key>/dev</key>
+  <string>Device special files representing hardware and virtual devices</string>
+  <key>/etc</key>
+  <string>Host-specific system configuration files</string>
+  <key>/home</key>
+  <string>Home directories for regular users</string>
+  <key>/initrd</key>
+  <string>Temporary root filesystem used during early boot</string>
+  <key>/lib</key>
+  <string>Essential shared libraries and kernel modules (often a symlink to /usr/lib)</string>
+  <key>/lib32</key>
+  <string>32-bit shared libraries on 64-bit systems</string>
+  <key>/lib64</key>
+  <string>64-bit shared libraries</string>
+  <key>/libx32</key>
+  <string>x32 ABI libraries for x86-64 with 32-bit pointers</string>
+  <key>/lost+found</key>
+  <string>Recovered file fragments from filesystem corruption checks</string>
+  <key>/media</key>
+  <string>Mount points for removable media such as USB drives and optical discs</string>
+  <key>/mnt</key>
+  <string>Temporary mount points for manually mounted filesystems</string>
+  <key>/net</key>
+  <string>Automounted network filesystem shares</string>
+  <key>/nonexistent</key>
+  <string>Conventional home directory for system accounts needing none</string>
+  <key>/opt</key>
+  <string>Self-contained add-on application software packages</string>
+  <key>/proc</key>
+  <string>Process and kernel information as a virtual filesystem</string>
+  <key>/proc/bus</key>
+  <string>Bus device information for PCI and USB devices</string>
+  <key>/proc/fs</key>
+  <string>Filesystem-specific kernel parameters and status</string>
+  <key>/proc/irq</key>
+  <string>Interrupt request information per device</string>
+  <key>/proc/net</key>
+  <string>Network protocol and connection state information</string>
+  <key>/proc/scsi</key>
+  <string>SCSI device and driver information</string>
+  <key>/proc/self</key>
+  <string>Symbolic link to current process directory</string>
+  <key>/proc/sys</key>
+  <string>Kernel tunable parameters writable via sysctl</string>
+  <key>/proc/sysvipc</key>
+  <string>System V IPC status for shared memory, semaphores, and message queues</string>
+  <key>/proc/tty</key>
+  <string>TTY driver information and line discipline configuration</string>
+  <key>/rescue</key>
+  <string>Statically linked emergency recovery binaries for system repair</string>
+  <key>/root</key>
+  <string>Superuser's home directory</string>
+  <key>/run</key>
+  <string>Volatile runtime data such as PID files and sockets since system boot</string>
+  <key>/sbin</key>
+  <string>Essential system administration binaries required at boot time (often a symlink to /usr/sbin)</string>
+  <key>/selinux</key>
+  <string>SELinux securityfs virtual filesystem mount point</string>
+  <key>/srv</key>
+  <string>Site-specific service data served by default</string>
+  <key>/sys</key>
+  <string>Kernel and device information exposed as a virtual filesystem</string>
+  <key>/sys/block</key>
+  <string>Block device objects representing disks and partitions</string>
+  <key>/sys/bus</key>
+  <string>Bus type directories with device and driver links</string>
+  <key>/sys/class</key>
+  <string>Device classes grouped by function such as net, sound, and input</string>
+  <key>/sys/dev</key>
+  <string>Device tree organized by major and minor device numbers</string>
+  <key>/sys/devices</key>
+  <string>Actual kernel device hierarchy showing device topology</string>
+  <key>/sys/firmware</key>
+  <string>Firmware-specific information including ACPI and EFI tables</string>
+  <key>/sys/fs</key>
+  <string>Filesystem-related kernel objects such as cgroup and fuse</string>
+  <key>/sys/fs/cgroup</key>
+  <string>Control group hierarchy for resource limits and accounting</string>
+  <key>/sys/hypervisor</key>
+  <string>Hypervisor-specific information for virtualized environments</string>
+  <key>/sys/kernel</key>
+  <string>Kernel object attributes and configuration notes</string>
+  <key>/sys/module</key>
+  <string>Loaded kernel module parameters and information</string>
+  <key>/sys/power</key>
+  <string>Power management state and control for suspend and hibernate</string>
+  <key>/tmp</key>
+  <string>Temporary files that may be deleted on system reboot</string>
+  <key>/usr</key>
+  <string>Secondary hierarchy of user utilities, libraries, and documentation</string>
+  <key>/usr/bin</key>
+  <string>User-accessible command binaries for essential system commands</string>
+  <key>/usr/games</key>
+  <string>Game binaries provided by default</string>
+  <key>/usr/include</key>
+  <string>Public C and C++ header files</string>
+  <key>/usr/lib</key>
+  <string>Shared libraries, object files, and internal binaries for system programs</string>
+  <key>/usr/lib32</key>
+  <string>32-bit shared libraries on 64-bit multiarch Linux systems</string>
+  <key>/usr/lib64</key>
+  <string>64-bit shared libraries on multiarch systems</string>
+  <key>/usr/libexec</key>
+  <string>Internal helper binaries and daemons not directly invoked by users</string>
+  <key>/usr/local</key>
+  <string>Locally installed software not managed by system package manager</string>
+  <key>/usr/local/bin</key>
+  <string>Locally installed user command binaries</string>
+  <key>/usr/local/doc</key>
+  <string>Locally installed documentation files</string>
+  <key>/usr/local/etc</key>
+  <string>Locally installed configuration files</string>
+  <key>/usr/local/games</key>
+  <string>Locally installed game binaries</string>
+  <key>/usr/local/include</key>
+  <string>Locally installed C and C++ header files</string>
+  <key>/usr/local/lib</key>
+  <string>Locally installed shared libraries</string>
+  <key>/usr/local/libexec</key>
+  <string>Locally installed internal helper binaries</string>
+  <key>/usr/local/man</key>
+  <string>Locally installed manual pages</string>
+  <key>/usr/local/sbin</key>
+  <string>Locally installed system administration binaries</string>
+  <key>/usr/local/share</key>
+  <string>Locally installed architecture-independent shared data</string>
+  <key>/usr/local/src</key>
+  <string>Locally installed source code</string>
+  <key>/usr/sbin</key>
+  <string>System administration binaries not normally in the default user PATH</string>
+  <key>/usr/share</key>
+  <string>Architecture-independent shared data such as documentation, icons, and locale files</string>
+  <key>/usr/share/applications</key>
+  <string>.desktop files that register applications with the desktop environment</string>
+  <key>/usr/share/bash-completion</key>
+  <string>Bash programmable completion definitions</string>
+  <key>/usr/share/color</key>
+  <string>ICC color profile management information</string>
+  <key>/usr/share/dict</key>
+  <string>Word lists for spell checkers</string>
+  <key>/usr/share/doc</key>
+  <string>System documentation files</string>
+  <key>/usr/share/fonts</key>
+  <string>System-wide font files</string>
+  <key>/usr/share/icons</key>
+  <string>Shared icon theme data</string>
+  <key>/usr/share/info</key>
+  <string>GNU Info format documentation pages</string>
+  <key>/usr/share/locale</key>
+  <string>Locale and internationalization data files</string>
+  <key>/usr/share/man</key>
+  <string>Unix manual pages organized in sections man1 through man8</string>
+  <key>/usr/share/mime</key>
+  <string>MIME type definitions and associations</string>
+  <key>/usr/share/polkit-1</key>
+  <string>PolicyKit authorization action definitions</string>
+  <key>/usr/share/sounds</key>
+  <string>Sound theme files</string>
+  <key>/usr/share/terminfo</key>
+  <string>Terminal capability database for terminal emulators</string>
+  <key>/usr/share/themes</key>
+  <string>Desktop theme files for GTK and Qt applications</string>
+  <key>/usr/share/zoneinfo</key>
+  <string>Timezone information and rules database</string>
+  <key>/usr/src</key>
+  <string>System source code such as kernel headers</string>
+  <key>/usr/X11R6</key>
+  <string>X Window System version 11 release 6 files</string>
+  <key>/usr/X11R6/bin</key>
+  <string>X11 executables and utilities</string>
+  <key>/usr/X11R6/include/X11</key>
+  <string>X11 header files for compilation</string>
+  <key>/usr/X11R6/lib</key>
+  <string>X11 libraries and data files</string>
+  <key>/var</key>
+  <string>Variable data files such as logs, caches, and spools that change during system operation</string>
+  <key>/var/account</key>
+  <string>Process accounting logs</string>
+  <key>/var/backups</key>
+  <string>System backup files</string>
+  <key>/var/cache</key>
+  <string>Application cache data that can be regenerated</string>
+  <key>/var/cache/pkg</key>
+  <string>Cached package files downloaded by package manager</string>
+  <key>/var/crash</key>
+  <string>System crash dump files for debugging kernel panics</string>
+  <key>/var/db</key>
+  <string>Various database and registry files</string>
+  <key>/var/db/pkg</key>
+  <string>Package manager database of installed software</string>
+  <key>/var/empty</key>
+  <string>Empty directory used as a chroot jail for privilege-separated services</string>
+  <key>/var/ftp</key>
+  <string>Anonymous FTP server root directory</string>
+  <key>/var/games</key>
+  <string>Variable game state data such as high scores and save files</string>
+  <key>/var/lib</key>
+  <string>Dynamic data and persistent state information for installed packages</string>
+  <key>/var/local</key>
+  <string>Variable data for software installed in /usr/local</string>
+  <key>/var/lock</key>
+  <string>Lock files indicating that a resource is in use</string>
+  <key>/var/log</key>
+  <string>System and application log files</string>
+  <key>/var/log/audit</key>
+  <string>Audit daemon log files for security event tracking</string>
+  <key>/var/log/journal</key>
+  <string>Systemd journal binary log files</string>
+  <key>/var/log/samba</key>
+  <string>Samba file and print server log files</string>
+  <key>/var/mail</key>
+  <string>User mailbox files for incoming mail</string>
+  <key>/var/named</key>
+  <string>BIND DNS server zone data and configuration files</string>
+  <key>/var/opt</key>
+  <string>Variable data for software installed in /opt</string>
+  <key>/var/spool</key>
+  <string>Print and mail spool directories awaiting processing</string>
+  <key>/var/spool/at</key>
+  <string>Spooled jobs for at scheduler</string>
+  <key>/var/spool/cron</key>
+  <string>Spooled cron job files for scheduled tasks</string>
+  <key>/var/spool/lpd</key>
+  <string>LPD line-printer daemon print queues</string>
+  <key>/var/spool/mqueue</key>
+  <string>Queued outgoing mail messages</string>
+  <key>/var/spool/postfix</key>
+  <string>Postfix mail transfer agent queue directories</string>
+  <key>/var/spool/samba</key>
+  <string>Samba printer spool files</string>
+  <key>/var/tmp</key>
+  <string>Temporary files preserved across system reboots</string>
+  <key>/var/www</key>
+  <string>Default web server document root</string>
+  <key>/var/yp</key>
+  <string>NIS database files for network information services</string>
+
+  <key>/etc/X11</key>
+  <string>X Window System configuration files</string>
+  <key>/etc/X11/app-defaults</key>
+  <string>X11 application resource defaults</string>
+  <key>/etc/X11/xdm</key>
+  <string>X Display Manager configuration</string>
+  <key>/etc/X11/xinit</key>
+  <string>X11 client-side initialization scripts</string>
+  <key>/etc/X11/xkb</key>
+  <string>X11 keyboard layout configuration</string>
+  <key>/etc/X11/xorg.conf.d</key>
+  <string>X.org configuration snippets and hotplug settings</string>
+  <key>/etc/NetworkManager</key>
+  <string>NetworkManager connection profiles and settings</string>
+  <key>/etc/apache2</key>
+  <string>Apache HTTP server configuration on Debian-based systems</string>
+  <key>/etc/apt</key>
+  <string>APT package manager configuration on Debian-based systems</string>
+  <key>/etc/conf.d</key>
+  <string>Configuration snippets loaded by init scripts</string>
+  <key>/etc/cron.d</key>
+  <string>Per-application crontab fragment files</string>
+  <key>/etc/cron.daily</key>
+  <string>Scripts run daily by cron</string>
+  <key>/etc/cron.hourly</key>
+  <string>Scripts run hourly by cron</string>
+  <key>/etc/cron.monthly</key>
+  <string>Scripts run monthly by cron</string>
+  <key>/etc/cron.weekly</key>
+  <string>Scripts run weekly by cron</string>
+  <key>/etc/cups</key>
+  <string>CUPS printing system configuration files</string>
+  <key>/etc/dbus-1</key>
+  <string>D-Bus message bus system configuration</string>
+  <key>/etc/default</key>
+  <string>Default configuration values for various system services</string>
+  <key>/etc/defaults</key>
+  <string>Read-only default system configuration overridden by /etc (BSD)</string>
+  <key>/etc/devd</key>
+  <string>Device state change daemon configuration (FreeBSD)</string>
+  <key>/etc/fonts</key>
+  <string>Font configuration files for fontconfig</string>
+  <key>/etc/grub.d</key>
+  <string>GRUB bootloader configuration script fragments</string>
+  <key>/etc/httpd</key>
+  <string>Apache HTTP server configuration on RHEL-based systems</string>
+  <key>/etc/init.d</key>
+  <string>System V init script directory</string>
+  <key>/etc/jail.conf.d</key>
+  <string>FreeBSD jail configuration fragments</string>
+  <key>/etc/ld.so.conf.d</key>
+  <string>Dynamic linker configuration fragments for library search paths</string>
+  <key>/etc/logrotate.d</key>
+  <string>Log rotation configuration fragments</string>
+  <key>/etc/modprobe.d</key>
+  <string>Kernel module configuration fragments for modprobe</string>
+  <key>/etc/mysql</key>
+  <string>MySQL or MariaDB database server configuration</string>
+  <key>/etc/nginx</key>
+  <string>Nginx web server configuration</string>
+  <key>/etc/pam.d</key>
+  <string>Pluggable Authentication Modules configuration files</string>
+  <key>/etc/periodic</key>
+  <string>Daily, weekly, and monthly maintenance script directories (BSD)</string>
+  <key>/etc/pf.conf</key>
+  <string>Packet Filter firewall configuration (BSD)</string>
+  <key>/etc/pkg</key>
+  <string>Package manager configuration (FreeBSD)</string>
+  <key>/etc/polkit-1</key>
+  <string>PolicyKit authorization framework configuration</string>
+  <key>/etc/ppp</key>
+  <string>Point-to-Point Protocol configuration files</string>
+  <key>/etc/profile.d</key>
+  <string>Shell initialization script fragments sourced by system profile</string>
+  <key>/etc/rc.conf</key>
+  <string>System and daemon configuration file (BSD rc system)</string>
+  <key>/etc/rc.d</key>
+  <string>System service start and control scripts (BSD rc system)</string>
+  <key>/etc/samba</key>
+  <string>Samba file and print server configuration</string>
+  <key>/etc/security</key>
+  <string>PAM and system security configuration files</string>
+  <key>/etc/skel</key>
+  <string>Skeleton files and directories copied to new user home directories</string>
+  <key>/etc/ssh</key>
+  <string>SSH daemon and client configuration files</string>
+  <key>/etc/ssl</key>
+  <string>SSL and TLS certificate files and OpenSSL configuration</string>
+  <key>/etc/sudoers.d</key>
+  <string>Sudoers configuration fragments for granting privileges</string>
+  <key>/etc/sysctl.d</key>
+  <string>Kernel sysctl parameter configuration fragments</string>
+  <key>/etc/systemd</key>
+  <string>Systemd service manager unit and configuration files</string>
+  <key>/etc/udev</key>
+  <string>Device manager rules and configuration files</string>
+  <key>/etc/xml</key>
+  <string>XML system configuration such as catalog files</string>
+
+  <key>/usr/ports</key>
+  <string>FreeBSD Ports Collection source tree for building software from source</string>
+  <key>/usr/home</key>
+  <string>Historical user home directory root directory (FreeBSD)</string>
+  <key>/usr/obj</key>
+  <string>Architecture-specific build target tree from compiling system sources</string>
+  <key>/usr/tests</key>
+  <string>Test suite for verifying system functionality (FreeBSD)</string>
+  <key>/usr/compat</key>
+  <string>Binary compatibility libraries for foreign operating systems</string>
+  <key>/usr/freebsd-dist</key>
+  <string>FreeBSD distribution archives such as base.txz</string>
+  <key>/usr/pkg</key>
+  <string>NetBSD pkgsrc default installation prefix for third-party software</string>
+  <key>/usr/pkgsrc</key>
+  <string>NetBSD pkgsrc source tree for building software from source</string>
+  <key>/usr/xenocara</key>
+  <string>X11 Window System source tree (OpenBSD)</string>
+  <key>/usr/mdec</key>
+  <string>Boot-related executables and boot blocks (BSD)</string>
+
+  <key>$System</key>
+  <string>Immutable system-wide applications, libraries, and resources</string>
+  <key>$System/Applications</key>
+  <string>System-wide GUI applications installed by default</string>
+  <key>$System/Applications/Admin</key>
+  <string>System-wide administrator-only GUI applications</string>
+  <key>$System/Applications/Utilities</key>
+  <string>System-wide utility applications used for system maintenance</string>
+  <key>$System/Library</key>
+  <string>System-wide library resources, frameworks, and support files</string>
+  <key>$System/Library/Bundles</key>
+  <string>System-wide loadable bundles such as preference panes and thumbnailers</string>
+  <key>$System/Library/ColorPickers</key>
+  <string>System-wide color picker interface bundles</string>
+  <key>$System/Library/CoreServices</key>
+  <string>Core system service directories and support applications</string>
+  <key>$System/Library/Desktop Pictures</key>
+  <string>Desktop background image files</string>
+  <key>$System/Library/Documentation</key>
+  <string>System-wide documentation and man pages</string>
+  <key>$System/Library/Documentation/man</key>
+  <string>GNUstep man pages organized by section</string>
+  <key>$System/Library/DTDs</key>
+  <string>Document Type Definition files for XML and plist validation</string>
+  <key>$System/Library/Fonts</key>
+  <string>System-wide font files</string>
+  <key>$System/Library/Frameworks</key>
+  <string>System-wide framework bundles with headers, libraries, and resources</string>
+  <key>$System/Library/Headers</key>
+  <string>Public C and Objective-C header files for system frameworks and libraries</string>
+  <key>$System/Library/Images</key>
+  <string>System-wide image resources including icons and UI element graphics</string>
+  <key>$System/Library/KeyBindings</key>
+  <string>Keyboard binding definition files</string>
+  <key>$System/Library/Libraries</key>
+  <string>System-wide shared libraries and support files</string>
+  <key>$System/Library/Makefiles</key>
+  <string>GNUstep-make build system makefiles and configuration scripts</string>
+  <key>$System/Library/Menu</key>
+  <string>Menu definition files</string>
+  <key>$System/Library/MenuExtras</key>
+  <string>Menu extra bundles that add items to system menu bar</string>
+  <key>$System/Library/Network</key>
+  <string>Network configuration and location data</string>
+  <key>$System/Library/PostScript</key>
+  <string>PostScript printer description and support files</string>
+  <key>$System/Library/Preferences</key>
+  <string>System-wide configuration and defaults files</string>
+  <key>$System/Library/Receipts</key>
+  <string>Package installation receipt files</string>
+  <key>$System/Library/Scripts</key>
+  <string>System scripts</string>
+  <key>$System/Library/Services</key>
+  <string>System-wide service bundles providing functionality to other applications</string>
+  <key>$System/Library/Sound</key>
+  <string>Additional system sound data</string>
+  <key>$System/Library/Sounds</key>
+  <string>System-wide alert and interface sound files</string>
+  <key>$System/Library/Themes</key>
+  <string>System-wide theme bundles that control the look and feel</string>
+  <key>$System/Library/Tools</key>
+  <string>System-wide command-line tools</string>
+  <key>$System/Library/Tools/Admin</key>
+  <string>System-wide administrator-only command-line tools</string>
+  <key>$System/Library/User Template</key>
+  <string>Template directories for new user accounts</string>
+
+  <key>$Local</key>
+  <string>Machine-specific local applications, libraries, and resources</string>
+  <key>$Local/Applications</key>
+  <string>Locally installed GUI applications</string>
+  <key>$Local/Applications/Admin</key>
+  <string>Locally installed administrator-only GUI applications</string>
+  <key>$Local/Library</key>
+  <string>Locally installed library resources, tools, and support files</string>
+  <key>$Local/Library/ApplicationSupport</key>
+  <string>Locally installed application support data</string>
+  <key>$Local/Library/Bundles</key>
+  <string>Locally installed loadable bundles</string>
+  <key>$Local/Library/ColorPickers</key>
+  <string>Locally installed color picker bundles</string>
+  <key>$Local/Library/DirectoryServices</key>
+  <string>Locally installed directory service plugins</string>
+  <key>$Local/Library/Documentation</key>
+  <string>Locally installed documentation</string>
+  <key>$Local/Library/Fonts</key>
+  <string>Locally installed font files</string>
+  <key>$Local/Library/Frameworks</key>
+  <string>Locally installed framework bundles</string>
+  <key>$Local/Library/Headers</key>
+  <string>Locally installed C and Objective-C header files</string>
+  <key>$Local/Library/Images</key>
+  <string>Locally installed image resources</string>
+  <key>$Local/Library/KeyBindings</key>
+  <string>Locally installed keyboard binding files</string>
+  <key>$Local/Library/Libraries</key>
+  <string>Locally installed shared libraries</string>
+  <key>$Local/Library/Network</key>
+  <string>Locally installed network configuration data</string>
+  <key>$Local/Library/PostScript</key>
+  <string>Locally installed PostScript printer data</string>
+  <key>$Local/Library/Preferences</key>
+  <string>Locally installed configuration defaults</string>
+  <key>$Local/Library/Services</key>
+  <string>Locally installed service bundles</string>
+  <key>$Local/Library/Sound</key>
+  <string>Locally installed sound data</string>
+  <key>$Local/Library/Sounds</key>
+  <string>Locally installed sound files</string>
+  <key>$Local/Library/Themes</key>
+  <string>Locally installed theme bundles</string>
+  <key>$Local/Library/Tools</key>
+  <string>Locally installed command-line tools</string>
+  <key>$Local/Users</key>
+  <string>Local user home directories</string>
+
+  <key>$Network</key>
+  <string>Network-shared applications and library resources</string>
+  <key>$Network/Applications</key>
+  <string>Network-shared applications accessible across the local network</string>
+  <key>$Network/Library</key>
+  <string>Network-shared library resources accessible across the local network</string>
+
+  <key>$User</key>
+  <string>User's home directory with personal files and settings</string>
+  <key>$User/Desktop</key>
+  <string>Files and folders displayed on the desktop</string>
+  <key>$User/Documents</key>
+  <string>User's personal documents</string>
+  <key>$User/Downloads</key>
+  <string>Files downloaded from the internet</string>
+  <key>$User/Music</key>
+  <string>User's music and audio files</string>
+  <key>$User/Pictures</key>
+  <string>User's images and photographs</string>
+  <key>$User/Public</key>
+  <string>Files shared with other users</string>
+  <key>$User/Templates</key>
+  <string>Document templates for creating new files</string>
+  <key>$User/Videos</key>
+  <string>User's video files</string>
+  <key>$User/GNUstep</key>
+  <string>Personal user applications, libraries, and settings</string>
+  <key>$User/GNUstep/Applications</key>
+  <string>Per-user GUI applications</string>
+  <key>$User/GNUstep/Library</key>
+  <string>Per-user library resources and settings</string>
+  <key>$User/GNUstep/Library/Preferences</key>
+  <string>Per-user configuration defaults</string>
+  <key>$User/Library</key>
+  <string>User's library resources and application data</string>
+  <key>$User/Library/Preferences</key>
+  <string>Per-user application preferences and configuration files</string>
+  <key>$User/.config</key>
+  <string>Per-user application configuration files</string>
+  <key>$User/.local</key>
+  <string>Per-user local application data and installed programs</string>
+</dict>
+</plist>
