@@ -437,22 +437,25 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
               if (baseIcon == nil)
                 baseIcon = [[NSWorkspace sharedWorkspace] iconForFile: nodepath];
 
-	      if ([node isLink])
+	      if (baseIcon != nil)
 		{
-		  NSImage *linkIcon;
+		  if ([node isLink])
+		    {
+		      NSImage *linkIcon;
 
-		  linkIcon = [NSImage imageNamed:@"common_linkCursor"];
-		  baseIcon = [baseIcon copy];
-		  [baseIcon lockFocus];
-		  [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
-		  [baseIcon unlockFocus];
-		  [baseIcon autorelease];
-                  icon = [self cachedIconOfSize: size forKey: linkKey addBaseIcon: baseIcon];
+		      linkIcon = [NSImage imageNamed:@"common_linkCursor"];
+		      baseIcon = [baseIcon copy];
+		      [baseIcon lockFocus];
+		      [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
+		      [baseIcon unlockFocus];
+		      [baseIcon autorelease];
+		      icon = [self cachedIconOfSize: size forKey: linkKey addBaseIcon: baseIcon];
+		    }
+		  else
+		    {
+		      icon = [self cachedIconOfSize: size forKey: key addBaseIcon: baseIcon];
+		    }
 		}
-              else
-                {
-                  icon = [self cachedIconOfSize: size forKey: key addBaseIcon: baseIcon];
-                }
 	    }
 	}      
     }      
@@ -499,6 +502,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
                     
 {
   NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+  if (baseIcon == nil) return nil;
   NSSize icnsize = [baseIcon size];
   int basesize = 48;
   
