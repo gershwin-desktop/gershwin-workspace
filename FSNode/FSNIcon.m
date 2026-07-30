@@ -245,15 +245,9 @@ static NSImage *branchImage;
       selectable = YES;
       isLeaf = YES;
 
-      {
-        CGFloat sf = 1.0;
-        NSNumber *n = [[NSUserDefaults standardUserDefaults] objectForKey: @"GSScaleFactor"];
-        if (n) sf = [n floatValue];
-        if (sf < 1.0) sf = 1.0;
-        hlightRect = NSZeroRect;
-        hlightRect.size.width = ceil((iconSize + 6) * sf);
-        hlightRect.size.height = hlightRect.size.width;
-      }
+      hlightRect = NSZeroRect;
+      hlightRect.size.width = iconSize + 6;
+      hlightRect.size.height = hlightRect.size.width;
       hlightRect = NSIntegralRect(hlightRect);
       ASSIGN (highlightPath, [fsnodeRep highlightPathOfSize: hlightRect.size]);
 
