@@ -412,7 +412,6 @@ static GWDesktopManager *desktopManager = nil;
         {
           dockWindow = [[GWDockWindow alloc] initWithDockView: dock];
         }
-      [dock tile];
       [dockWindow showDock];
     }
 }
