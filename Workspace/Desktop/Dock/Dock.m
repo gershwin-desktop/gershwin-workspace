@@ -46,16 +46,18 @@
 #define ICN_INCR 4
 
 static CGFloat
-dockScaleFactor(void)
+sfactor(void)
 {
-  static CGFloat f = 0.0;
-  if (f == 0.0) {
+  static CGFloat sf = 0.0;
+  if (sf == 0.0) {
     NSNumber *n = [[NSUserDefaults standardUserDefaults] objectForKey: @"GSScaleFactor"];
-    f = (n != nil) ? [n floatValue] : 1.0;
-    if (f < 1.0) f = 1.0;
+    sf = (n != nil) ? [n floatValue] : 1.0;
+    if (sf < 1.0) sf = 1.0;
   }
-  return f;
+  return sf;
 }
+
+#define SCALE(v) ((int)ceil((v) * sfactor()))
 
 /* small category to access NSNUmericSearch through a selector */
 
@@ -89,7 +91,7 @@ dockScaleFactor(void)
 
 - (id)initForManager:(id)mngr
 {
-  self = [super initWithFrame: NSMakeRect(0, 0, 64, 64)];
+  self = [super initWithFrame: NSMakeRect(0, 0, SCALE(64), SCALE(64))];
   
   if (self)
     {
@@ -114,7 +116,7 @@ dockScaleFactor(void)
       ws = [NSWorkspace sharedWorkspace];
 
       icons = [NSMutableArray new];
-      iconSize = MAX_ICN_SIZE;
+      iconSize = SCALE(MAX_ICN_SIZE);
                                 
       dndSourceIcon = nil;
       isDragTarget = NO;
@@ -732,14 +734,13 @@ dockScaleFactor(void)
   NSRect rect = NSZeroRect;
   NSUInteger i;
 
-  CGFloat sf = dockScaleFactor();
-  iconSize = MAX_ICN_SIZE;
+  iconSize = SCALE(MAX_ICN_SIZE);
   
   icnrect.origin.x = 0;
   icnrect.origin.y = 0;
-  icnrect.size.width = ceil(ceil((CGFloat)iconSize / 3 * 4) * sf);
+  icnrect.size.width = ceil((CGFloat)iconSize / 3 * 4);
   icnrect.size.height = icnrect.size.width;
-  
+    
   rect.size.height = [icons count] * icnrect.size.height;
   if (targetIndex != -1) {
     rect.size.height += icnrect.size.height;
@@ -748,8 +749,8 @@ dockScaleFactor(void)
   maxheight -= (icnrect.size.height * 2);  
   
   while (rect.size.height > maxheight) {
-    iconSize -= ICN_INCR;
-    icnrect.size.height = ceil(ceil((CGFloat)iconSize / 3 * 4) * sf);
+    iconSize -= SCALE(ICN_INCR);
+    icnrect.size.height = ceil((CGFloat)iconSize / 3 * 4);
     icnrect.size.width = icnrect.size.height;
     rect.size.height = [icons count] * icnrect.size.height;
 
@@ -757,7 +758,7 @@ dockScaleFactor(void)
       rect.size.height += icnrect.size.height;
     }
       
-    if (iconSize <= MIN_ICN_SIZE) {
+    if (iconSize <= SCALE(MIN_ICN_SIZE)) {
       break;
     }
   }
