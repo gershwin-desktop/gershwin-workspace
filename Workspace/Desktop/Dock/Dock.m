@@ -236,6 +236,9 @@
   }
 
   path = [ws fullPathForApplication: wsname];
+  if (path == nil) {
+    path = [[NSBundle mainBundle] bundlePath];
+  }
   node = [FSNode nodeWithPath: path];
   
   icon = [[DockIcon alloc] initForNode: node 
