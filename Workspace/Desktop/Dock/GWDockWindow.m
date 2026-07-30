@@ -98,9 +98,18 @@
 - (void)showDock
 {
   [self orderFront: nil];
+  /*
+   * Re-assert the window level after ordering front; the windowing system
+   * can sometimes reset level after the initial order.
+   */
   [self setLevel: NSFloatingWindowLevel];
-  [dockView tile];
-  [self display];
+
+  /*
+   * Set X11 EWMH properties after the window is mapped so the window
+   * manager sees them and treats this as a DOCK window (dock layer,
+   * on all desktops, etc.).  This follows the same pattern used by
+   * XDesktopWindow for its X11 property setup.
+   */
   [self updateX11DockProperties];
   [self updateX11Strut];
 }

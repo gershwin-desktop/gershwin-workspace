@@ -46,7 +46,7 @@
 #define ICN_INCR 4
 
 static CGFloat
-sfactor(void)
+scaleFactor(void)
 {
   static CGFloat sf = 0.0;
   if (sf == 0.0) {
@@ -57,7 +57,7 @@ sfactor(void)
   return sf;
 }
 
-#define SCALE(v) ((int)ceil((v) * sfactor()))
+#define SCALE(v) ((int)ceil((v) * scaleFactor()))
 
 /* small category to access NSNUmericSearch through a selector */
 
@@ -91,7 +91,7 @@ sfactor(void)
 
 - (id)initForManager:(id)mngr
 {
-  self = [super initWithFrame: NSMakeRect(0, 0, SCALE(64), SCALE(64))];
+  self = [super initWithFrame: NSMakeRect(0, 0, 64, 64)];
   
   if (self)
     {
@@ -233,7 +233,7 @@ sfactor(void)
                                                           userInfo: nil
                                                            repeats: YES];
     }
-  
+
   return self;  
 }
 
@@ -738,7 +738,7 @@ sfactor(void)
   
   icnrect.origin.x = 0;
   icnrect.origin.y = 0;
-  icnrect.size.width = ceil((CGFloat)iconSize / 3 * 4);
+  icnrect.size.width = ceil(iconSize / 3 * 4);
   icnrect.size.height = icnrect.size.width;
     
   rect.size.height = [icons count] * icnrect.size.height;
@@ -750,7 +750,7 @@ sfactor(void)
   
   while (rect.size.height > maxheight) {
     iconSize -= SCALE(ICN_INCR);
-    icnrect.size.height = ceil((CGFloat)iconSize / 3 * 4);
+    icnrect.size.height = ceil(iconSize / 3 * 4);
     icnrect.size.width = icnrect.size.height;
     rect.size.height = [icons count] * icnrect.size.height;
 
@@ -795,7 +795,7 @@ sfactor(void)
       rect.origin.y = scrOriginY + ceil((scrrect.size.height - rect.size.height) / 2);
     }
 
-  NSDebugLLog(@"gwspace", @"Dock tile: iconSize=%d frame=%@ icons=%lu", iconSize, NSStringFromRect(rect), (unsigned long)[icons count]);
+  NSDebugLLog(@"gwspace", @"DEBUG: Dock tile - setting frame: %@, icons count: %lu", NSStringFromRect(rect), (unsigned long)[icons count]);
   
   /*
    * When the dock lives in its own GWDockWindow, resize the window to the
@@ -807,8 +807,8 @@ sfactor(void)
 
   if (inOwnDockWindow)
     {
-      [[self window] setFrame: rect display: NO];
-      [self setFrame: NSMakeRect(0, 0, rect.size.width, rect.size.height)];
+      [[self window] setFrame: rect display: YES];
+      [self setNeedsDisplay: YES];
     }
   else
     {
