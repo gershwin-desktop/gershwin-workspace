@@ -807,7 +807,8 @@ sfactor(void)
 
   if (inOwnDockWindow)
     {
-      [[self window] setFrame: rect display: YES];
+      [[self window] setFrame: rect display: NO];
+      [self setFrame: NSMakeRect(0, 0, rect.size.width, rect.size.height)];
     }
   else
     {
@@ -983,10 +984,11 @@ sfactor(void)
 
 - (void)drawRect:(NSRect)rect
 {
+  // NSLog(@"DEBUG: Dock drawRect called, rect: %@, superview: %@", NSStringFromRect(rect), [self superview]);
   [super drawRect: rect];
+
   [backColor set];
-  NSRectClip([self bounds]);
-  NSRectFill([self bounds]);
+  NSRectFill(rect);
 }
 
 @end

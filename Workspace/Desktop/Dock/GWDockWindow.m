@@ -99,6 +99,8 @@
 {
   [self orderFront: nil];
   [self setLevel: NSFloatingWindowLevel];
+  [dockView tile];
+  [self display];
   [self updateX11DockProperties];
   [self updateX11Strut];
 }
