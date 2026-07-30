@@ -45,6 +45,20 @@
 #define MIN_ICN_SIZE 16
 #define ICN_INCR 4
 
+static CGFloat
+scaleFactor(void)
+{
+  static CGFloat sf = 0.0;
+  if (sf == 0.0) {
+    NSNumber *n = [[NSUserDefaults standardUserDefaults] objectForKey: @"GSScaleFactor"];
+    sf = (n != nil) ? [n floatValue] : 1.0;
+    if (sf < 1.0) sf = 1.0;
+  }
+  return sf;
+}
+
+#define SCALE(v) ((int)ceil((v) * scaleFactor()))
+
 /* small category to access NSNUmericSearch through a selector */
 
 @interface NSString (NumericSort)
@@ -102,7 +116,7 @@
       ws = [NSWorkspace sharedWorkspace];
 
       icons = [NSMutableArray new];
-      iconSize = MAX_ICN_SIZE;
+      iconSize = SCALE(MAX_ICN_SIZE);
                                 
       dndSourceIcon = nil;
       isDragTarget = NO;
@@ -720,7 +734,7 @@
   NSRect rect = NSZeroRect;
   NSUInteger i;
 
-  iconSize = MAX_ICN_SIZE;
+  iconSize = SCALE(MAX_ICN_SIZE);
   
   icnrect.origin.x = 0;
   icnrect.origin.y = 0;
@@ -735,7 +749,7 @@
   maxheight -= (icnrect.size.height * 2);  
   
   while (rect.size.height > maxheight) {
-    iconSize -= ICN_INCR;
+    iconSize -= SCALE(ICN_INCR);
     icnrect.size.height = ceil(iconSize / 3 * 4);
     icnrect.size.width = icnrect.size.height;
     rect.size.height = [icons count] * icnrect.size.height;
@@ -744,7 +758,7 @@
       rect.size.height += icnrect.size.height;
     }
       
-    if (iconSize <= MIN_ICN_SIZE) {
+    if (iconSize <= SCALE(MIN_ICN_SIZE)) {
       break;
     }
   }
