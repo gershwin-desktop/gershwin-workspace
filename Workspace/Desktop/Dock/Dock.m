@@ -45,12 +45,17 @@
 #define MIN_ICN_SIZE 16
 #define ICN_INCR 4
 
-/* Returns GSScaleFactor (>= 1.0) for scaling dock cell frames on HiDPI. */
+/* Returns GSScaleFactor for scaling dock cell frames. Factors below 1.0 are
+ * honored (UI is scaled down); an unset or non-positive value means 1.0. */
 static inline CGFloat _dockScaleFactor(void)
 {
-  CGFloat sf = [[NSUserDefaults standardUserDefaults]
-                  floatForKey: @"GSScaleFactor"];
-  return (sf >= 1.0) ? sf : 1.0;
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  id val = [defaults objectForKey: @"GSScaleFactor"];
+  if (val == nil) {
+    return 1.0;
+  }
+  CGFloat sf = [val floatValue];
+  return (sf > 0.0) ? sf : 1.0;
 }
 
 /* Compute the cell (tile) dimension for a given icon size, scaled for HiDPI.
