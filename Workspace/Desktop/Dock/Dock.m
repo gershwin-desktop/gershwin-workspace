@@ -45,6 +45,24 @@
 #define MIN_ICN_SIZE 16
 #define ICN_INCR 4
 
+/* Returns GSScaleFactor (>= 1.0) for scaling dock cell frames on HiDPI. */
+static inline CGFloat _dockScaleFactor(void)
+{
+  CGFloat sf = [[NSUserDefaults standardUserDefaults]
+                  floatForKey: @"GSScaleFactor"];
+  return (sf >= 1.0) ? sf : 1.0;
+}
+
+/* Compute the cell (tile) dimension for a given icon size, scaled for HiDPI.
+ * The base formula is ceil(iconSize / 3 * 4).  On HiDPI displays the cell
+ * frame must be enlarged by GSScaleFactor so the dock occupies the correct
+ * physical area.  The icon IMAGE size stays unscaled (the rendering pipeline
+ * handles HiDPI). */
+static inline CGFloat _scaledCellSize(int iconSize)
+{
+  return ceil(iconSize / 3 * 4) * _dockScaleFactor();
+}
+
 /* small category to access NSNUmericSearch through a selector */
 
 @interface NSString (NumericSort)
@@ -241,12 +259,12 @@
   }
   node = [FSNode nodeWithPath: path];
   
-  icon = [[DockIcon alloc] initForNode: node 
+  icon = [[DockIcon alloc] initForNode: node
                                appName: wsname
                               iconSize: iconSize];
   [icon setHighlightColor: backColor];
-  [icon setWsIcon: YES];   
-  [icon setDocked: YES];   
+  [icon setWsIcon: YES];
+  [icon setDocked: YES];
   [icon setSingleClickLaunch: singleClickLaunch];
   [icons insertObject: icon atIndex: 0];
   [self addSubview: icon];
@@ -257,7 +275,7 @@
 {
   NSString *path = [manager trashPath];
   FSNode *node = [FSNode nodeWithPath: path];
-  DockIcon *icon = [[DockIcon alloc] initForNode: node 
+  DockIcon *icon = [[DockIcon alloc] initForNode: node
                                          appName: nil
                                         iconSize: iconSize];
 
@@ -289,7 +307,7 @@
     
     if ([node isApplication]) {
       int icnindex;
-      DockIcon *icon = [[DockIcon alloc] initForNode: node 
+      DockIcon *icon = [[DockIcon alloc] initForNode: node
                                              appName: name
                                             iconSize: iconSize];
       
@@ -716,48 +734,54 @@
   NSRect scrrect = [[[NSScreen screens] objectAtIndex:0] frame];
   int oldIcnSize = iconSize;
   CGFloat maxheight = scrrect.size.height;
-  NSRect icnrect = NSZeroRect;  
+  NSRect icnrect = NSZeroRect;
   NSRect rect = NSZeroRect;
   NSUInteger i;
-
   iconSize = MAX_ICN_SIZE;
-  
+  CGFloat sf = _dockScaleFactor();
+
+  /* Compute unscaled cell size (used for icon subview layout inside the view,
+   * where the backend's HiDPI transform is already active). */
   icnrect.origin.x = 0;
   icnrect.origin.y = 0;
   icnrect.size.width = ceil(iconSize / 3 * 4);
   icnrect.size.height = icnrect.size.width;
-    
-  rect.size.height = [icons count] * icnrect.size.height;
+
+  /* Use SCALED cell for the dock window frame (screen pixel coordinates). */
+  CGFloat scaledCell = icnrect.size.width * sf;
+
+  rect.size.height = [icons count] * scaledCell;
   if (targetIndex != -1) {
-    rect.size.height += icnrect.size.height;
+    rect.size.height += scaledCell;
   }
-  
-  maxheight -= (icnrect.size.height * 2);  
-  
+
+  maxheight -= (scaledCell * 2);
+
   while (rect.size.height > maxheight) {
     iconSize -= ICN_INCR;
     icnrect.size.height = ceil(iconSize / 3 * 4);
     icnrect.size.width = icnrect.size.height;
-    rect.size.height = [icons count] * icnrect.size.height;
+    scaledCell = icnrect.size.width * sf;
+    rect.size.height = [icons count] * scaledCell;
 
     if (targetIndex != -1) {
-      rect.size.height += icnrect.size.height;
+      rect.size.height += scaledCell;
     }
-      
+
     if (iconSize <= MIN_ICN_SIZE) {
       break;
     }
   }
- 
+
   if (position == DockPositionBottom)
   {
-    rect.size.width = [icons count] * icnrect.size.width;
-    rect.size.height = icnrect.size.height;
+    rect.size.width = [icons count] * scaledCell;
+    rect.size.height = scaledCell;
   }
   else
   {
-    rect.size.width = icnrect.size.width;
-    rect.size.height = [icons count] * icnrect.size.height;
+    rect.size.width = scaledCell;
+    rect.size.height = [icons count] * scaledCell;
   }
 
   // Offset by the primary screen's origin so the dock lands on the correct
@@ -805,10 +829,13 @@
       [self setFrame: rect];
     }
 
+  /* Icon subview frames use UNSCALED cell size (the view's internal
+   * coordinate system is already HiDPI-scaled by the backend).
+   * Icon image size also stays unscaled (48pt). */
   if (position == DockPositionBottom)
   {
     icnrect.origin.x = 0;
-    icnrect.origin.y = 0;  // ← RESET Y!
+    icnrect.origin.y = 0;
 
     for (i = 0; i < [icons count]; i++)
     {
@@ -826,7 +853,7 @@
   }
   else
    {
-    icnrect.origin.y = rect.size.height;  // ← ONLY for vertical layout
+    icnrect.origin.y = rect.size.height / sf;  // use unscaled height for layout
 
     for (i = 0; i < [icons count]; i++)
     {
