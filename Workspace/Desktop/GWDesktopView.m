@@ -64,8 +64,8 @@
 
 #define DEF_COLOR [NSColor colorWithCalibratedRed: 0.39 green: 0.51 blue: 0.57 alpha: 1.00]
 
-/* Current GSScaleFactor (1.0 when unset).  Used to keep the desktop picture
- * at a constant physical size independent of the scale factor. */
+/* Current GSScaleFactor (1.0 when unset).  The desktop icon grid grows and
+ * shrinks with it so icons keep a consistent, non-overlapping layout. */
 static CGFloat desktopScaleFactor(void)
 {
   CGFloat factor = 1.0;
@@ -77,6 +77,20 @@ static CGFloat desktopScaleFactor(void)
 
 
 @implementation GWDesktopView
+
+- (void)calculateGridSize
+{
+  [super calculateGridSize];
+
+  /* Scale the cell size with GSScaleFactor so icons (which render at
+   * iconSize * sf via the image compositing path) keep their grid spacing. */
+  CGFloat factor = desktopScaleFactor();
+  if (factor != 1.0)
+    {
+      gridSize.width *= factor;
+      gridSize.height *= factor;
+    }
+}
 
 - (void)dealloc
 {
@@ -101,20 +115,13 @@ static CGFloat desktopScaleFactor(void)
 
       manager = mngr;
 
-      // Span the full virtual desktop (union of all screens), divided by
-      // GSScaleFactor so the desktop keeps a constant physical size
-      // independent of the scale factor.
+      // Span the full virtual desktop (union of all screens) in physical
+      // pixels.  View drawing is 1:1, so the wallpaper and icon grid fill the
+      // whole screen at every scale factor.
       NSArray *screens = [NSScreen screens];
       screenFrame = [[screens objectAtIndex:0] frame];
       for (NSUInteger si = 1; si < [screens count]; si++) {
         screenFrame = NSUnionRect(screenFrame, [[screens objectAtIndex:si] frame]);
-      }
-      {
-        CGFloat factor = desktopScaleFactor();
-        screenFrame.origin.x /= factor;
-        screenFrame.origin.y /= factor;
-        screenFrame.size.width /= factor;
-        screenFrame.size.height /= factor;
       }
       [self setFrame: screenFrame];
 
@@ -155,9 +162,50 @@ static CGFloat desktopScaleFactor(void)
 
       [self getDesktopInfo];
       dragIcon = nil;
+
+      /* Render labels at labelTextSize * GSScaleFactor so text grows with the
+       * scale factor like the icon grid.  Layout (calculateGridSize) keeps the
+       * base font and scales via the grid override, so sizes stay consistent. */
+      [self applyScaledLabelFont];
+      [self applyScaledIconSize];
     }
 
   return self;
+}
+
+- (void)applyScaledIconSize
+{
+  CGFloat factor = desktopScaleFactor();
+  if (factor == 1.0)
+    return;
+
+  int scaled = (int)(iconSize * factor);
+  NSUInteger i;
+  for (i = 0; i < [icons count]; i++)
+    {
+      [[icons objectAtIndex: i] setIconSize: scaled];
+    }
+}
+
+- (void)applyScaledLabelFont
+{
+  CGFloat factor = desktopScaleFactor();
+  if (factor == 1.0)
+    return;
+
+  NSFont *scaledFont = [NSFont systemFontOfSize: (int)(labelTextSize * factor)];
+  NSUInteger i;
+  for (i = 0; i < [icons count]; i++)
+    {
+      [[icons objectAtIndex: i] setFont: scaledFont];
+    }
+  [nameEditor setFont: scaledFont];
+}
+
+- (void)setLabelTextSize:(int)size
+{
+  [super setLabelTextSize: size];
+  [self applyScaledLabelFont];
 }
 
 - (void)newVolumeMountedAtPath:(NSString *)vpath
@@ -673,16 +721,14 @@ static CGFloat desktopScaleFactor(void)
 
   /* The content view's origin in window coordinates is always (0,0);
    * only the size changes when the screen configuration changes. */
-  {
-    CGFloat factor = desktopScaleFactor();
-    screenFrame.origin.x /= factor;
-    screenFrame.origin.y /= factor;
-    screenFrame.size.width /= factor;
-    screenFrame.size.height /= factor;
-  }
   [self setFrame: NSMakeRect(0, 0, screenFrame.size.width, screenFrame.size.height)];
   _gridCached = NO;
-  [self tile];
+
+  /* Re-run "Clean Up" so icons re-flow into the grid and never land outside
+   * the visible space when the screen resolution or scale factor changes. */
+  [self cleanupIconPositions];
+  [self applyScaledLabelFont];
+  [self applyScaledIconSize];
   [self setNeedsDisplay: YES];
 }
 
@@ -943,6 +989,7 @@ static CGFloat desktopScaleFactor(void)
   BOOL changed = (size != iconSize);
 
   [super setIconSize: size];
+  [self applyScaledIconSize];
 
   /* Only rewrite ~/Desktop/.DS_Store (and fire the directory watcher) on a
    * real change — a same-value re-apply would trigger a needless refresh. */
@@ -1363,15 +1410,7 @@ static void GWHighlightFrameRect(NSRect aRect)
         {
           NSRect monFrame = [[screens objectAtIndex:si] frame];
           // Convert from screen coordinates to view-local coordinates
-          // (screenFrame.origin is the view's origin in screen coords),
-          // divided by GSScaleFactor like screenFrame above.
-          {
-            CGFloat factor = desktopScaleFactor();
-            monFrame.origin.x /= factor;
-            monFrame.origin.y /= factor;
-            monFrame.size.width /= factor;
-            monFrame.size.height /= factor;
-          }
+          // (screenFrame.origin is the view's origin in screen coords)
           NSRect localRect = NSMakeRect(monFrame.origin.x - screenFrame.origin.x,
                                         monFrame.origin.y - screenFrame.origin.y,
                                         monFrame.size.width,

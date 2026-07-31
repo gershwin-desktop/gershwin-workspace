@@ -45,6 +45,8 @@
 
 static GWDesktopManager *desktopManager = nil;
 
+static CGFloat lastScaleFactor = 1.0;
+
 @implementation GWDesktopManager
 
 + (GWDesktopManager *)desktopManager
@@ -93,6 +95,11 @@ static GWDesktopManager *desktopManager = nil;
 
     defaults = [NSUserDefaults standardUserDefaults];	
 
+    /* GNUstep loads the defaults lazily; synchronize up front so the first
+     * GSScaleFactor read (used when creating the desktop window below) sees
+     * the externally-written value instead of a stale one. */
+    [defaults synchronize];
+
     singleClickLaunch = [defaults boolForKey: @"singleclicklaunch"];
     defentry = [defaults objectForKey: @"dockposition"];
     dockPosition = defentry ? [defentry intValue] : DockPositionRight;
@@ -137,6 +144,19 @@ static GWDesktopManager *desktopManager = nil;
            selector: @selector(screenParametersDidChange:)
                name: NSApplicationDidChangeScreenParametersNotification
              object: nil];
+
+    /* React live to GSScaleFactor changes.  GNUstep only posts
+     * NSUserDefaultsDidChangeNotification for changes made in this process,
+     * so instead poll: synchronize re-reads external writes, then diff
+     * against the last seen value so unrelated changes are ignored. */
+    lastScaleFactor = [[NSUserDefaults standardUserDefaults] floatForKey: @"GSScaleFactor"];
+    if (lastScaleFactor == 0.0)
+      lastScaleFactor = 1.0;
+    [NSTimer scheduledTimerWithTimeInterval: 1.0
+                                     target: self
+                                   selector: @selector(checkScaleFactor:)
+                                   userInfo: nil
+                                    repeats: YES];
 
     [nc addObserver: self 
            selector: @selector(fileSystemWillChange:) 
@@ -420,6 +440,24 @@ static GWDesktopManager *desktopManager = nil;
 - (BOOL)dockActive
 {
   return !hidedock;
+}
+
+- (void)checkScaleFactor:(NSTimer *)timer
+{
+  /* GNUstep caches defaults per-process; synchronize re-reads the store so
+   * external writes (defaults tool, Display prefPane) become visible. */
+  [[NSUserDefaults standardUserDefaults] synchronize];
+
+  CGFloat factor = [[NSUserDefaults standardUserDefaults] floatForKey: @"GSScaleFactor"];
+  if (factor == 0.0)
+    factor = 1.0;
+
+  if (factor == lastScaleFactor)
+    return;
+
+  NSDebugLLog(@"gwspace", @"GSScaleFactor changed from %.3f to %.3f", lastScaleFactor, factor);
+  lastScaleFactor = factor;
+  [self screenParametersDidChange: nil];
 }
 
 - (void)screenParametersDidChange:(NSNotification *)notif
