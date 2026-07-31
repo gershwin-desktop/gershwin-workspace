@@ -64,6 +64,17 @@
 
 #define DEF_COLOR [NSColor colorWithCalibratedRed: 0.39 green: 0.51 blue: 0.57 alpha: 1.00]
 
+/* Current GSScaleFactor (1.0 when unset).  Used to keep the desktop picture
+ * at a constant physical size independent of the scale factor. */
+static CGFloat desktopScaleFactor(void)
+{
+  CGFloat factor = 1.0;
+  id val = [[NSUserDefaults standardUserDefaults] objectForKey: @"GSScaleFactor"];
+  if (val)
+    factor = [val floatValue];
+  return (factor != 1.0) ? factor : 1.0;
+}
+
 
 @implementation GWDesktopView
 
@@ -90,11 +101,20 @@
 
       manager = mngr;
 
-      // Span the full virtual desktop (union of all screens)
+      // Span the full virtual desktop (union of all screens), divided by
+      // GSScaleFactor so the desktop keeps a constant physical size
+      // independent of the scale factor.
       NSArray *screens = [NSScreen screens];
       screenFrame = [[screens objectAtIndex:0] frame];
       for (NSUInteger si = 1; si < [screens count]; si++) {
         screenFrame = NSUnionRect(screenFrame, [[screens objectAtIndex:si] frame]);
+      }
+      {
+        CGFloat factor = desktopScaleFactor();
+        screenFrame.origin.x /= factor;
+        screenFrame.origin.y /= factor;
+        screenFrame.size.width /= factor;
+        screenFrame.size.height /= factor;
       }
       [self setFrame: screenFrame];
 
@@ -653,6 +673,13 @@
 
   /* The content view's origin in window coordinates is always (0,0);
    * only the size changes when the screen configuration changes. */
+  {
+    CGFloat factor = desktopScaleFactor();
+    screenFrame.origin.x /= factor;
+    screenFrame.origin.y /= factor;
+    screenFrame.size.width /= factor;
+    screenFrame.size.height /= factor;
+  }
   [self setFrame: NSMakeRect(0, 0, screenFrame.size.width, screenFrame.size.height)];
   _gridCached = NO;
   [self tile];
@@ -1336,7 +1363,15 @@ static void GWHighlightFrameRect(NSRect aRect)
         {
           NSRect monFrame = [[screens objectAtIndex:si] frame];
           // Convert from screen coordinates to view-local coordinates
-          // (screenFrame.origin is the view's origin in screen coords)
+          // (screenFrame.origin is the view's origin in screen coords),
+          // divided by GSScaleFactor like screenFrame above.
+          {
+            CGFloat factor = desktopScaleFactor();
+            monFrame.origin.x /= factor;
+            monFrame.origin.y /= factor;
+            monFrame.size.width /= factor;
+            monFrame.size.height /= factor;
+          }
           NSRect localRect = NSMakeRect(monFrame.origin.x - screenFrame.origin.x,
                                         monFrame.origin.y - screenFrame.origin.y,
                                         monFrame.size.width,

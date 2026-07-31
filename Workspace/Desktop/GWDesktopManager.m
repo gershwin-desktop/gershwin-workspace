@@ -443,7 +443,7 @@ static GWDesktopManager *desktopManager = nil;
              fullFrame.origin.x, fullFrame.origin.y,
              fullFrame.size.width, fullFrame.size.height);
 
-  [win setFrame: fullFrame display: YES];
+  [win setFrame: [GWDesktopWindow desktopFullFrame] display: YES];
   [desktopView screenParametersDidChange];
   [self setReservedFrames];
 

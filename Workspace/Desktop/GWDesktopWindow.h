@@ -32,6 +32,7 @@
   id delegate;
 }
 
++ (NSRect)desktopFullFrame;
 - (void)activate;
 - (void)deactivate;
 - (void)setX11DesktopAtoms;

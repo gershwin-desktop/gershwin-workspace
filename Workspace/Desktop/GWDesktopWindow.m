@@ -33,19 +33,41 @@
 
 @implementation GWDesktopWindow
 
++ (NSRect)desktopFullFrame
+{
+  /* Union of all screen frames; width and height are divided by
+   * GSScaleFactor (like the menu bar does in Menu.app) so the desktop
+   * window keeps a constant physical size independent of the scale
+   * factor. */
+  NSArray *screens = [NSScreen screens];
+  NSRect fullFrame = [[screens objectAtIndex:0] frame];
+  for (NSUInteger i = 1; i < [screens count]; i++) {
+    fullFrame = NSUnionRect(fullFrame, [[screens objectAtIndex:i] frame]);
+  }
+
+  CGFloat factor = 1.0;
+  id val = [[NSUserDefaults standardUserDefaults] objectForKey: @"GSScaleFactor"];
+  if (val)
+    factor = [val floatValue];
+  if (factor != 1.0)
+    {
+      fullFrame.size.width /= factor;
+      fullFrame.size.height /= factor;
+    }
+
+  return fullFrame;
+}
+
 - (void)dealloc
 {
   [super dealloc];
 }
 
 - (id)init
-{	
+{
   // Compute the union of all screen frames so the desktop covers every monitor
-  NSArray *screens = [NSScreen screens];
-  NSRect fullFrame = [[screens objectAtIndex:0] frame];
-  for (NSUInteger i = 1; i < [screens count]; i++) {
-    fullFrame = NSUnionRect(fullFrame, [[screens objectAtIndex:i] frame]);
-  }
+  NSRect fullFrame = [GWDesktopWindow desktopFullFrame];
+
   self = [super initWithContentRect: fullFrame
                           styleMask: NSBorderlessWindowMask
 			    backing: NSBackingStoreBuffered
