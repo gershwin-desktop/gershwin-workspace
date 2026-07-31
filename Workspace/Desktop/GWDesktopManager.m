@@ -488,6 +488,37 @@ static CGFloat lastScaleFactor = 1.0;
   if (dock && hidedock == NO) {
     [dock tile];
   }
+
+  /* The GNUstep backend may still convert GNUstep -> X11 coordinates with the
+   * previous screen height right after a resolution change, misplacing the
+   * dock.  Re-tile once the backend has settled.  The Workspace's main run
+   * loop is frequently blocked in DO calls, so perform a delayed hop via a
+   * background thread instead of a run-loop timer. */
+  [self scheduleDockReTile];
+}
+
+- (void)scheduleDockReTile
+{
+  [NSThread detachNewThreadSelector: @selector(dockReTileThread:)
+                           toTarget: self
+                         withObject: nil];
+}
+
+- (void)dockReTileThread:(id)arg
+{
+  CREATE_AUTORELEASE_POOL (pool);
+  [NSThread sleepForTimeInterval: 0.6];
+  [self performSelectorOnMainThread: @selector(dockReTileOnMainThread)
+                        withObject: nil
+                     waitUntilDone: NO];
+  RELEASE (pool);
+}
+
+- (void)dockReTileOnMainThread
+{
+  if (dock && hidedock == NO) {
+    [dock tile];
+  }
 }
 
 - (void)setReservedFrames
