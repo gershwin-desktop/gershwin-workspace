@@ -35,25 +35,14 @@
 
 + (NSRect)desktopFullFrame
 {
-  /* Union of all screen frames; width and height are divided by
-   * GSScaleFactor (like the menu bar does in Menu.app) so the desktop
-   * window keeps a constant physical size independent of the scale
-   * factor. */
+  /* Union of all screen frames in physical (device) pixels.  Used when the
+   * window is repositioned with setFrame: (which is applied 1:1), so the
+   * desktop always covers every monitor. */
   NSArray *screens = [NSScreen screens];
   NSRect fullFrame = [[screens objectAtIndex:0] frame];
   for (NSUInteger i = 1; i < [screens count]; i++) {
     fullFrame = NSUnionRect(fullFrame, [[screens objectAtIndex:i] frame]);
   }
-
-  CGFloat factor = 1.0;
-  id val = [[NSUserDefaults standardUserDefaults] objectForKey: @"GSScaleFactor"];
-  if (val)
-    factor = [val floatValue];
-  if (factor != 1.0)
-    {
-      fullFrame.size.width /= factor;
-      fullFrame.size.height /= factor;
-    }
 
   return fullFrame;
 }
@@ -65,11 +54,13 @@
 
 - (id)init
 {
-  // Compute the union of all screen frames so the desktop covers every monitor
+  /* NSUnscaledWindowMask keeps the window's user space identical to its
+   * device pixels, so the desktop is always the full physical screen and the
+   * (undivided) desktop view and its icons are never scaled or clipped. */
   NSRect fullFrame = [GWDesktopWindow desktopFullFrame];
 
   self = [super initWithContentRect: fullFrame
-                          styleMask: NSBorderlessWindowMask
+                          styleMask: NSBorderlessWindowMask | NSUnscaledWindowMask
 			    backing: NSBackingStoreBuffered
                               defer: NO];
   if (self)
