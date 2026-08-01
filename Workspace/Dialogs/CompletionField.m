@@ -390,6 +390,19 @@ if ([path hasSuffix: pathSeparator] == NO) \
       return;
     }
 
+  /* Right Arrow at the end of the typed text confirms the grey completion:
+   * accept it (making it black) and move the caret to the very end.  Without
+   * this the arrow would step into the grey suffix and updateTypeahead would
+   * strip the suggestion instead of confirming it.  The event's characters
+   * carry the Unicode function-key character (0xF703) for arrow keys. */
+  if (completionSuffix
+      && [eventstr isEqualToString: [NSString stringWithFormat: @"%C",
+                                     (unichar)NSRightArrowFunctionKey]])
+    {
+      [self acceptCompletion];
+      return;
+    }
+
   if ([eventstr isEqual: @"\x1B"])
     {
       [controller completionFieldDidCancel: self];
