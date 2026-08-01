@@ -51,6 +51,7 @@
       [self setUsesFontPanel: NO];
       [self setUsesRuler: NO];
       [self setEditable: YES];
+      [self setAllowsUndo: YES];
       fm = [NSFileManager defaultManager];
       completionSuffix = nil;
       typedLength = 0;
@@ -74,6 +75,7 @@
     [self setUsesFontPanel: NO];
     [self setUsesRuler: NO];
     [self setEditable: YES];
+    [self setAllowsUndo: YES];
     fm = [NSFileManager defaultManager];
     completionSuffix = nil;
     typedLength = 0;
@@ -365,6 +367,52 @@
     {
       [self updateTypeahead];
     }
+}
+
+/* Handle Cmd+A/C/V/X/Z directly.  During modal dialogs the application's
+ * Edit menu items are disabled (their validation only enables them when a
+ * file viewer/desktop is the key window), so GNUstep's key-equivalent
+ * dispatch swallows these shortcuts without acting.  Handling them here on
+ * the field keeps standard text editing working inside the dialogs. */
+- (BOOL)performKeyEquivalent:(NSEvent *)theEvent
+{
+  if ([theEvent type] == NSKeyDown
+      && ([theEvent modifierFlags] & NSCommandKeyMask))
+    {
+      NSString *key = [theEvent charactersIgnoringModifiers];
+      if ([key length] == 1)
+        {
+          unichar c = [key characterAtIndex: 0];
+          switch (c)
+            {
+              case 'a':
+                [self selectAll: self];
+                return YES;
+              case 'c':
+                [self copy: self];
+                return YES;
+              case 'v':
+                [self paste: self];
+                return YES;
+              case 'x':
+                [self cut: self];
+                return YES;
+              case 'z':
+                if ([theEvent modifierFlags] & NSShiftKeyMask)
+                  {
+                    [[self undoManager] redo];
+                  }
+                else
+                  {
+                    [[self undoManager] undo];
+                  }
+                return YES;
+              default:
+                break;
+            }
+        }
+    }
+  return [super performKeyEquivalent: theEvent];
 }
 
 - (void)keyDown:(NSEvent *)theEvent
