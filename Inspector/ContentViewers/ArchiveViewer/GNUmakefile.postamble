@@ -1,0 +1,4 @@
+
+# Things to do after distcleaning
+after-distclean::
+	rm -f GNUmakefile
