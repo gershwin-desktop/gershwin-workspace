@@ -58,16 +58,6 @@ static inline CGFloat _dockScaleFactor(void)
   return (sf > 0.0) ? sf : 1.0;
 }
 
-/* Compute the cell (tile) dimension for a given icon size, scaled for HiDPI.
- * The base formula is ceil(iconSize / 3 * 4).  On HiDPI displays the cell
- * frame must be enlarged by GSScaleFactor so the dock occupies the correct
- * physical area.  The icon IMAGE size stays unscaled (the rendering pipeline
- * handles HiDPI). */
-static inline CGFloat _scaledCellSize(int iconSize)
-{
-  return ceil(iconSize / 3 * 4) * _dockScaleFactor();
-}
-
 /* small category to access NSNUmericSearch through a selector */
 
 @interface NSString (NumericSort)
@@ -755,22 +745,30 @@ static inline CGFloat _scaledCellSize(int iconSize)
   /* Use SCALED cell for the dock window frame (screen pixel coordinates). */
   CGFloat scaledCell = icnrect.size.width * sf;
 
-  rect.size.height = [icons count] * scaledCell;
-  if (targetIndex != -1) {
-    rect.size.height += scaledCell;
-  }
-
+  /* The dock fits on screen along the length of its bar: width for a bottom
+   * dock, height for a left/right dock.  Use the correct dimension so the
+   * fit loop does not shrink the icons of a bottom dock that is wide but
+   * only one cell tall. */
   maxheight -= (scaledCell * 2);
 
-  while (rect.size.height > maxheight) {
+  CGFloat barLength = [icons count] * scaledCell;
+  if (targetIndex != -1) {
+    barLength += scaledCell;
+  }
+
+  CGFloat maxBarLength = (position == DockPositionBottom)
+    ? scrrect.size.width
+    : maxheight;
+
+  while (barLength > maxBarLength) {
     iconSize -= ICN_INCR;
     icnrect.size.height = ceil(iconSize / 3 * 4);
     icnrect.size.width = icnrect.size.height;
     scaledCell = icnrect.size.width * sf;
-    rect.size.height = [icons count] * scaledCell;
+    barLength = [icons count] * scaledCell;
 
     if (targetIndex != -1) {
-      rect.size.height += scaledCell;
+      barLength += scaledCell;
     }
 
     if (iconSize <= MIN_ICN_SIZE) {
