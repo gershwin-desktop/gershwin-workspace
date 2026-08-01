@@ -86,6 +86,7 @@ GWFunctions.m \
 GWMetadataProvider.m \
 GWIconPositionStore.m \
 Workspace.m \
+AppDataTrash.m \
 Workspace+UITesting.m \
 X11AppSupport.m \
 GWProcessMonitor.m \

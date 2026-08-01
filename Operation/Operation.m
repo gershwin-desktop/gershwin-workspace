@@ -82,6 +82,13 @@
   FileOpInfo *info;
   NSUInteger i;
 
+  /* Allow an operation to override the defaults-based confirmation with an
+   * explicit value (e.g. "confirm" = NO when a more specific dialog such as
+   * AppDataTrash has already asked the user). */
+  id confirmOverride = [opdict objectForKey: @"confirm"];
+  if (confirmOverride != nil)
+    confirm = [confirmOverride boolValue];
+
   if (files == nil)
     {
       files = [NSArray arrayWithObject: @""];

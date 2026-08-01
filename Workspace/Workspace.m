@@ -54,6 +54,7 @@
 static NSMutableSet *recentUserUnmounts = nil;
 static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "Dialogs.h"
+#import "AppDataTrash.h"
 #import "AboutController.h"
 #import "OpenWithController.h"
 #import "RunExternalController.h"

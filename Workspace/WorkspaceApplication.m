@@ -35,6 +35,7 @@
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
 #import "Workspace.h"
+#import "AppDataTrash.h"
 #import "GWDesktopManager.h"
 #import "Dock.h"
 #import "DockIcon.h"
@@ -134,7 +135,7 @@
 	[opdict setObject: operation forKey: @"operation"];
       else
 	NSDebugLLog(@"gwspace", @"performFileOperation: operation can't be nil");
- 
+
       if (operation != nil)
 	[opdict setObject: source forKey: @"source"];
       else
@@ -147,6 +148,59 @@
 
       if (files != nil)
 	[opdict setObject: files forKey: @"files"];
+
+      /* When trashing application bundles, offer (once) to also move their
+       * related user data to the Trash.  This runs in the single choke point
+       * all recycle paths funnel through (shortcut, menu, drag-and-drop, Dock),
+       * so every way of trashing behaves identically. */
+      if ([operation isEqualToString: NSWorkspaceRecycleOperation]
+          && [destination isEqualToString: [self trashPath]]
+          && [files count])
+        {
+          NSMutableArray *appPaths = [NSMutableArray array];
+          NSString *promptName = nil;
+
+          for (NSString *file in files)
+            {
+              NSString *path = [source stringByAppendingPathComponent: file];
+              if ([AppDataTrash relatedUserDataPathsForApplicationAtPath: path] == nil)
+                continue;
+              [appPaths addObject: path];
+              if (promptName == nil)
+                promptName = [[path lastPathComponent] stringByDeletingPathExtension];
+            }
+
+          if ([appPaths count])
+            {
+              NSMutableArray *allRelated = [NSMutableArray array];
+              for (NSString *appPath in appPaths)
+                {
+                  NSArray *related =
+                    [AppDataTrash relatedUserDataPathsForApplicationAtPath: appPath];
+                  if (related)
+                    [allRelated addObjectsFromArray: related];
+                }
+
+              NSArray *pathsToMove = nil;
+              if ([AppDataTrash confirmTrashForApplicationNamed: promptName
+                                                  relatedPaths: allRelated
+                                                   pathsToMove: &pathsToMove] == NO)
+                return NO;
+
+              /* Our dialog already confirmed the trash; skip the generic
+               * Operation-framework confirmation dialog. */
+              [opdict setObject: [NSNumber numberWithBool: NO] forKey: @"confirm"];
+
+              [fileOpsManager performOperation: opdict];
+              *tag = 0;
+
+              if (pathsToMove && [pathsToMove count])
+                [AppDataTrash movePathsToTrash: pathsToMove];
+              RELEASE (pathsToMove);
+
+              return YES;
+            }
+        }
 
       [fileOpsManager performOperation: opdict];
 
