@@ -46,8 +46,55 @@
 
 - (id)initWithAppName:(NSString *)appName relatedPaths:(NSArray *)relPaths
 {
+  /* Compute the wrapped message height first so the window is tall enough for
+   * the text in every language (translations reflow, never clip). */
+  CGFloat maxWidth = METRICS_WIN_MIN_WIDTH * 2.0;
   CGFloat cw = METRICS_WIN_MIN_WIDTH;
-  CGFloat ch = 320;
+
+  /* Choose the window width from the longest path in the list, clamped
+   * between the minimum and maximum width.  Long paths widen the window so
+   * the full path is visible without scrolling; short ones keep it compact. */
+  {
+    NSFont *pathFont = [NSFont systemFontOfSize: 12];
+    CGFloat longest = 0;
+    for (NSString *p in relPaths)
+      {
+        NSSize s = [p sizeWithAttributes: @{ NSFontAttributeName: pathFont }];
+        if (s.width > longest)
+          longest = s.width;
+      }
+    CGFloat listNeeds = METRICS_TEXT_LEFT /* left margin + icon space */
+                        + 24 /* checkbox column */
+                        + 8 /* gap */
+                        + longest
+                        + 11 /* vertical scroller */
+                        + METRICS_CONTENT_SIDE_MARGIN /* right margin */;
+    cw = listNeeds;
+    if (cw < METRICS_WIN_MIN_WIDTH)
+      cw = METRICS_WIN_MIN_WIDTH;
+    if (cw > maxWidth)
+      cw = maxWidth;
+    cw = ceil(cw);
+  }
+
+  NSString *msg =
+    NSLocalizedString(@"Would you like to move the auxiliary data also to "
+                      @"the Trash?\nKeeping or removing the auxiliary data is "
+                      @"harmless.\nClick on an item to see a description.", @"");
+  CGFloat mw = cw - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
+  NSRect measure =
+    [msg boundingRectWithSize: NSMakeSize(mw, 1e6)
+                      options: NSStringDrawingUsesLineFragmentOrigin
+                   attributes: @{ NSFontAttributeName: METRICS_FONT_SYSTEM_REGULAR_11 }];
+  CGFloat mh = ceil(measure.size.height) + 2;
+
+  /* Height = top margin + title + gap + message + gap + list + gap + info
+   * label + gap + buttons + bottom margin. */
+  CGFloat listHeight = 130;
+  CGFloat ch = METRICS_CONTENT_TOP_MARGIN + 18 + METRICS_TITLE_MESSAGE_GAP
+               + mh + METRICS_SPACE_8 + listHeight + METRICS_SPACE_8
+               + 16 + METRICS_SPACE_16 + METRICS_BUTTON_HEIGHT
+               + METRICS_CONTENT_BOTTOM_MARGIN;
   NSRect r = NSMakeRect(0, 0, cw, ch);
 
   self = [super initWithContentRect: r
@@ -92,17 +139,33 @@
         [self setFrame: wf display: NO];
       }
 
+      /* Icon at top left (NSAlert metrics) */
+      {
+        NSButton *icoButton = [[NSButton alloc] initWithFrame:
+                                 NSMakeRect(METRICS_ICON_LEFT,
+                                            ch - METRICS_ICON_TOP - METRICS_ICON_SIDE,
+                                            METRICS_ICON_SIDE, METRICS_ICON_SIDE)];
+        [icoButton setBordered: NO];
+        [icoButton setEnabled: NO];
+        [[icoButton cell] setImageDimsWhenDisabled: NO];
+        [[icoButton cell] setImageScaling: NSImageScaleProportionallyUpOrDown];
+        [icoButton setImagePosition: NSImageOnly];
+        [icoButton setImage: [[NSApplication sharedApplication] applicationIconImage]];
+        [cv addSubview: icoButton];
+        RELEASE(icoButton);
+      }
+
       y = ch - METRICS_CONTENT_TOP_MARGIN;
 
-      /* Title label: System Regular 13 pt */
+      /* Title label: bold, to the right of the icon (NSAlert metrics) */
       titleField = [[NSTextField alloc] initWithFrame:
-                     NSMakeRect(METRICS_CONTENT_SIDE_MARGIN, y - 16,
-                                cw - 2 * METRICS_CONTENT_SIDE_MARGIN, 16)];
+                     NSMakeRect(METRICS_TEXT_LEFT, y - 18,
+                                cw - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN, 18)];
       [titleField setBackgroundColor: [NSColor windowBackgroundColor]];
       [titleField setBezeled: NO];
       [titleField setEditable: NO];
       [titleField setSelectable: NO];
-      [titleField setFont: METRICS_FONT_SYSTEM_REGULAR_13];
+      [titleField setFont: METRICS_FONT_SYSTEM_BOLD_13];
       [titleField setStringValue:
         [NSString stringWithFormat:
           NSLocalizedString(@"%@ has related auxiliary data.", @""),
@@ -110,32 +173,31 @@
       [cv addSubview: titleField];
       RELEASE(titleField);
 
-      y -= 16 + METRICS_TITLE_MESSAGE_GAP;
+      y -= 18 + METRICS_TITLE_MESSAGE_GAP;
 
-      /* Message label: System Regular 13 pt, wrapped across up to three
-       * lines (the question + the "click on an item" hint). */
+      /* Message: single wrapped text field (question, then "keeping or
+       * removing...", then the hint on separate lines).  Height was computed
+       * up front so translations reflow and never clip. */
       messageField = [[NSTextField alloc] initWithFrame:
-                       NSMakeRect(METRICS_CONTENT_SIDE_MARGIN, y - 56,
-                                  cw - 2 * METRICS_CONTENT_SIDE_MARGIN, 56)];
+                       NSMakeRect(METRICS_TEXT_LEFT, y - mh,
+                                  mw, mh)];
       [messageField setBackgroundColor: [NSColor windowBackgroundColor]];
       [messageField setBezeled: NO];
       [messageField setEditable: NO];
       [messageField setSelectable: NO];
-      [messageField setFont: METRICS_FONT_SYSTEM_REGULAR_13];
+      [messageField setFont: METRICS_FONT_SYSTEM_REGULAR_11];
+      [[messageField cell] setWraps: YES];
       [[messageField cell] setLineBreakMode: NSLineBreakByWordWrapping];
-      [messageField setStringValue:
-        NSLocalizedString(@"Would you like to move the auxiliary data also to the "
-                          @"Trash? Keeping or removing the auxiliary data is "
-                          @"harmless.\nClick on an item to see a description.", @"")];
+      [messageField setStringValue: msg];
       [cv addSubview: messageField];
       RELEASE(messageField);
 
-      y -= 56 + METRICS_SPACE_8;
+      y -= mh + METRICS_SPACE_8;
 
-      /* Scrollable list with a per-item checkbox column */
+      /* Scrollable list with a per-item checkbox column, below the message */
       scroll = [[NSScrollView alloc] initWithFrame:
-                 NSMakeRect(METRICS_CONTENT_SIDE_MARGIN, y - 130,
-                            cw - 2 * METRICS_CONTENT_SIDE_MARGIN, 130)];
+                 NSMakeRect(METRICS_TEXT_LEFT, y - listHeight,
+                            cw - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN, listHeight)];
       [scroll setHasVerticalScroller: YES];
       [scroll setBorderType: NSBezelBorder];
 
@@ -153,7 +215,7 @@
       RELEASE(checkColumn);
 
       pathColumn = [[NSTableColumn alloc] initWithIdentifier: @"path"];
-      [pathColumn setWidth: cw - 2 * METRICS_CONTENT_SIDE_MARGIN - 24 - 20];
+      [pathColumn setWidth: cw - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN - 24 - 20];
       [tableView addTableColumn: pathColumn];
       RELEASE(pathColumn);
 
@@ -182,13 +244,13 @@
         ASSIGN (toolTipTags, tags);
       }
 
-      y -= 130 + METRICS_SPACE_8;
+      y -= listHeight + METRICS_SPACE_8;
 
       /* Label below the list: shows the well-known directory description of
        * the selected item when a row is clicked; empty until then. */
       infoLabel = [[NSTextField alloc] initWithFrame:
-                    NSMakeRect(METRICS_CONTENT_SIDE_MARGIN, y - 16,
-                               cw - 2 * METRICS_CONTENT_SIDE_MARGIN, 16)];
+                    NSMakeRect(METRICS_TEXT_LEFT, y - 16,
+                               cw - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN, 16)];
       [infoLabel setBackgroundColor: [NSColor windowBackgroundColor]];
       [infoLabel setBezeled: NO];
       [infoLabel setEditable: NO];
