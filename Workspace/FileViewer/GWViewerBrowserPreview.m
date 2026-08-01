@@ -49,6 +49,11 @@
   [super dealloc];
 }
 
+- (void)setViewer:(id)aViewer
+{
+  viewer = aViewer;
+}
+
 /* Creates one inspector, keeping its view in the given array slot. */
 - (void)createInspector:(id *)inspector
               withClass:(Class)cls
@@ -128,9 +133,26 @@
 - (void)switchInspector:(id)sender
 {
   NSInteger index = [sender indexOfSelectedItem];
+  [self selectInspectorAtIndex: index];
+  if (viewer && [viewer respondsToSelector:
+                          @selector(previewPane:didSelectInspectorAtIndex:)])
+    {
+      [viewer previewPane: self didSelectInspectorAtIndex: index];
+    }
+}
+
+/* Selects the inspector at the given index, updating the popup and the
+ * content box.  Used both by the popup action and to restore a remembered
+ * selection for the view type. */
+- (void)selectInspectorAtIndex:(int)index
+{
   if (index < 0 || index >= [inspectorViews count])
     {
       return;
+    }
+  if (popUp && [popUp indexOfSelectedItem] != index)
+    {
+      [popUp selectItemAtIndex: index];
     }
   id view = [inspectorViews objectAtIndex: index];
   if (view == [NSNull null])

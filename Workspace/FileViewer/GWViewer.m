@@ -196,12 +196,6 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
         viewerPrefs = [NSDictionary new];
       }
     }
-
-    /* The "Show Inspector" toggle is a per-viewer preference; default off. */
-    showInspector = [defaults boolForKey: @"showInspector"];
-    if ((defEntry = [viewerPrefs objectForKey: @"showInspector"])) {
-      showInspector = [defEntry boolValue];
-    }
     
     /* View settings come from .DS_Store (tiered via the settings manager,
      * the single store shared with the spatial viewer) as primary, with the
@@ -239,6 +233,24 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
         else if ([viewTypeStr isEqual: @"Icon"])
           viewType = GWViewTypeIcon;
       }
+
+    /* The "Show Inspector" toggle and selected pane are remembered per view
+     * type (Icon/List/Columns), so e.g. columns view can show the inspector
+     * while icon view does not.  Keys are <key>_Icon / _List / _Browser. */
+    {
+      NSString *vtKey = [self _viewTypeKey];
+      NSString *shownKey = [@"showInspector_" stringByAppendingString: vtKey];
+      NSString *paneKey = [@"inspectorPane_" stringByAppendingString: vtKey];
+
+      showInspector = [defaults boolForKey: shownKey];
+      if ((defEntry = [viewerPrefs objectForKey: shownKey])) {
+        showInspector = [defEntry boolValue];
+      }
+      inspectorPane = 0;
+      if ((defEntry = [viewerPrefs objectForKey: paneKey])) {
+        inspectorPane = [defEntry intValue];
+      }
+    }
 
     if (dsInfo.loaded && dsInfo.hasSidebarWidth)
       {
@@ -540,9 +552,13 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
           pr = NSMakeRect(w - GW_PREVIEW_PANE_WIDTH, PREVIEW_PATHSCRH,
                           GW_PREVIEW_PANE_WIDTH, h - PREVIEW_PATHSCRH);
           previewPane = [[GWViewerBrowserPreview alloc] initWithFrame: pr];
+          [previewPane setViewer: self];
           [previewPane setAutoresizingMask: NSViewHeightSizable | NSViewMinXMargin];
           [lowBox addSubview: previewPane];
         }
+      /* Apply the remembered pane for the current view type (the pane may
+       * persist across view-type switches). */
+      [previewPane selectInspectorAtIndex: inspectorPane];
       nr = NSMakeRect(PREVIEW_XMARGIN, PREVIEW_PATHSCRH,
                       w - (PREVIEW_XMARGIN * 2) - GW_PREVIEW_PANE_WIDTH,
                       h - PREVIEW_PATHSCRH - PREVIEW_YMARGIN);
@@ -569,6 +585,35 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   return showInspector;
 }
 
+/* Canonical suffix for per-view-type inspector preferences. */
+- (NSString *)_viewTypeKey
+{
+  switch (viewType)
+    {
+      case GWViewTypeList:    return @"List";
+      case GWViewTypeBrowser: return @"Browser";
+      case GWViewTypeIcon:
+      default:                return @"Icon";
+    }
+}
+
+- (int)inspectorPaneIndex
+{
+  return inspectorPane;
+}
+
+- (void)setInspectorPaneIndex:(int)index
+{
+  if (inspectorPane != index)
+    {
+      inspectorPane = index;
+      if (previewPane && [previewPane respondsToSelector: @selector(selectInspectorAtIndex:)])
+        {
+          [previewPane selectInspectorAtIndex: index];
+        }
+    }
+}
+
 - (void)setInspectorShown:(BOOL)shown
 {
   if (showInspector != shown)
@@ -576,12 +621,23 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       showInspector = shown;
       [self updatePreviewPaneForCurrentType];
       [vwrwin display];
+      [self updateDefaults];
     }
 }
 
 - (void)toggleInspector:(id)sender
 {
   [self setInspectorShown: !showInspector];
+}
+
+- (void)previewPane:(GWViewerBrowserPreview *)pane
+  didSelectInspectorAtIndex:(int)index
+{
+  if (inspectorPane != index)
+    {
+      inspectorPane = index;
+      [self updateDefaults];
+    }
 }
 
 - (FSNode *)baseNode
@@ -1158,6 +1214,15 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
     [updatedprefs setObject: [NSNumber numberWithFloat: sidebarWidth]
                      forKey: @"sidebarwidth"];
+
+    /* Remember the inspector toggle and selected pane per view type. */
+    {
+      NSString *vtKey = [self _viewTypeKey];
+      [updatedprefs setObject: [NSNumber numberWithBool: showInspector]
+                       forKey: [@"showInspector_" stringByAppendingString: vtKey]];
+      [updatedprefs setObject: [NSNumber numberWithInt: inspectorPane]
+                       forKey: [@"inspectorPane_" stringByAppendingString: vtKey]];
+    }
 
     defEntry = [nodeView selectedPaths];
     if (defEntry) {
@@ -1777,7 +1842,23 @@ constrainMinCoordinate:(CGFloat)proposedMin
       
       [self updateDefaults];
 
-      /* Ensure the rightmost preview pane matches the new view type. */
+      /* Re-read the per-view-type inspector preference for the new view
+       * type, then ensure the rightmost preview pane matches it. */
+      {
+        NSString *vtKey = [self _viewTypeKey];
+        NSString *shownKey = [@"showInspector_" stringByAppendingString: vtKey];
+        NSString *paneKey = [@"inspectorPane_" stringByAppendingString: vtKey];
+        id entry;
+
+        showInspector = [[NSUserDefaults standardUserDefaults] boolForKey: shownKey];
+        if ((entry = [viewerPrefs objectForKey: shownKey])) {
+          showInspector = [entry boolValue];
+        }
+        inspectorPane = 0;
+        if ((entry = [viewerPrefs objectForKey: paneKey])) {
+          inspectorPane = [entry intValue];
+        }
+      }
       [self updatePreviewPaneForCurrentType];
       [nodeView resizeWithOldSuperviewSize: [nodeView bounds].size];
       [vwrwin display];

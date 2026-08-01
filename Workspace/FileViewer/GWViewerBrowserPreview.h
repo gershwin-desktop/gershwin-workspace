@@ -39,9 +39,21 @@
   NSBox *contentBox;
   NSMutableArray *inspectorViews;
   NSArray *currentPaths;
+
+  id viewer;
 }
 
+- (void)setViewer:(id)aViewer;
 - (void)showSelection:(NSArray *)paths;
 - (void)showContentsAt:(NSString *)path;
+- (void)selectInspectorAtIndex:(int)index;
 
+@end
+
+
+/* The viewer hosting the preview pane receives this when the user changes
+ * the inspector popup, so it can remember the selection per view type. */
+@interface NSObject (GWViewerBrowserPreviewDelegate)
+- (void)previewPane:(GWViewerBrowserPreview *)pane
+  didSelectInspectorAtIndex:(int)index;
 @end

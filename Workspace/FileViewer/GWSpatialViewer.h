@@ -51,6 +51,7 @@
   id nodeView;
   GWViewerBrowserPreview *previewPane;
   BOOL showInspector;
+  int inspectorPane;
 
   NSDictionary *viewerPrefs;
   NSString *viewType;
@@ -159,6 +160,9 @@
 - (void)toggleInspector:(id)sender;
 - (BOOL)isInspectorShown;
 - (void)setInspectorShown:(BOOL)shown;
+- (int)inspectorPaneIndex;
+- (void)setInspectorPaneIndex:(int)index;
+- (void)previewPane:(GWViewerBrowserPreview *)pane didSelectInspectorAtIndex:(int)index;
 
 @end
 

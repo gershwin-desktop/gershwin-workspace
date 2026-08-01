@@ -175,12 +175,6 @@
       }
     }
 
-    /* The "Show Inspector" toggle is a per-viewer preference; default off. */
-    showInspector = [defaults boolForKey: @"showInspector"];
-    if ((defEntry = [viewerPrefs objectForKey: @"showInspector"])) {
-      showInspector = [defEntry boolValue];
-    }
-
     // ================================================================
     // DS_Store Integration - Load view settings (spec §2)
     //   Tier 1: $FOLDER/.DS_Store
@@ -243,6 +237,24 @@
     }
 
     RETAIN (viewType);
+
+    /* The "Show Inspector" toggle and selected pane are remembered per view
+     * type (Icon/List/Columns), so e.g. columns view can show the inspector
+     * while icon view does not.  Keys are <key>_Icon / _List / _Browser. */
+    {
+      NSString *vtKey = [self _viewTypeKey];
+      NSString *shownKey = [@"showInspector_" stringByAppendingString: vtKey];
+      NSString *paneKey = [@"inspectorPane_" stringByAppendingString: vtKey];
+
+      showInspector = [defaults boolForKey: shownKey];
+      if ((defEntry = [viewerPrefs objectForKey: shownKey])) {
+        showInspector = [defEntry boolValue];
+      }
+      inspectorPane = 0;
+      if ((defEntry = [viewerPrefs objectForKey: paneKey])) {
+        inspectorPane = [defEntry intValue];
+      }
+    }
 
     ASSIGN (vwrwin, win);
     [vwrwin setReleasedWhenClosed: NO];
@@ -545,9 +557,13 @@
           pr = NSMakeRect(w - GW_PREVIEW_PANE_WIDTH, 0,
                           GW_PREVIEW_PANE_WIDTH, h - boxh);
           previewPane = [[GWViewerBrowserPreview alloc] initWithFrame: pr];
+          [previewPane setViewer: self];
           [previewPane setAutoresizingMask: NSViewHeightSizable | NSViewMinXMargin];
           [mainView addSubview: previewPane];
         }
+      /* Apply the remembered pane for the current view type (the pane may
+       * persist across view-type switches). */
+      [previewPane selectInspectorAtIndex: inspectorPane];
       sr = NSMakeRect(0, 0, w - GW_PREVIEW_PANE_WIDTH, h - boxh);
     }
   else
@@ -570,6 +586,33 @@
   return showInspector;
 }
 
+/* Canonical suffix for per-view-type inspector preferences. */
+- (NSString *)_viewTypeKey
+{
+  if ([viewType isEqualToString: @"List"])
+    return @"List";
+  if ([viewType isEqualToString: @"Browser"])
+    return @"Browser";
+  return @"Icon";
+}
+
+- (int)inspectorPaneIndex
+{
+  return inspectorPane;
+}
+
+- (void)setInspectorPaneIndex:(int)index
+{
+  if (inspectorPane != index)
+    {
+      inspectorPane = index;
+      if (previewPane && [previewPane respondsToSelector: @selector(selectInspectorAtIndex:)])
+        {
+          [previewPane selectInspectorAtIndex: index];
+        }
+    }
+}
+
 - (void)setInspectorShown:(BOOL)shown
 {
   if (showInspector != shown)
@@ -577,12 +620,23 @@
       showInspector = shown;
       [self updatePreviewPaneForCurrentType];
       [vwrwin display];
+      [self updateDefaults];
     }
 }
 
 - (void)toggleInspector:(id)sender
 {
   [self setInspectorShown: !showInspector];
+}
+
+- (void)previewPane:(GWViewerBrowserPreview *)pane
+  didSelectInspectorAtIndex:(int)index
+{
+  if (inspectorPane != index)
+    {
+      inspectorPane = index;
+      [self updateDefaults];
+    }
 }
 
 - (FSNode *)baseNode
@@ -1012,6 +1066,15 @@
                      forKey: @"singlenode"];
 
     [updatedprefs setObject: viewType forKey: @"viewtype"];
+
+    /* Remember the inspector toggle and selected pane per view type. */
+    {
+      NSString *vtKey = [self _viewTypeKey];
+      [updatedprefs setObject: [NSNumber numberWithBool: showInspector]
+                       forKey: [@"showInspector_" stringByAppendingString: vtKey]];
+      [updatedprefs setObject: [NSNumber numberWithInt: inspectorPane]
+                       forKey: [@"inspectorPane_" stringByAppendingString: vtKey]];
+    }
 
     defEntry = [viewerPrefs objectForKey: @"shelfheight"];
     if (defEntry) {
@@ -1793,7 +1856,24 @@
     
     [self updateDefaults];
     
-    /* Ensure the rightmost preview pane matches the new view type. */
+    /* Re-read the per-view-type inspector preference for the new view type,
+     * then ensure the rightmost preview pane matches it. */
+    {
+      NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+      NSString *vtKey = [self _viewTypeKey];
+      NSString *shownKey = [@"showInspector_" stringByAppendingString: vtKey];
+      NSString *paneKey = [@"inspectorPane_" stringByAppendingString: vtKey];
+      id entry;
+
+      showInspector = [defs boolForKey: shownKey];
+      if ((entry = [viewerPrefs objectForKey: shownKey])) {
+        showInspector = [entry boolValue];
+      }
+      inspectorPane = 0;
+      if ((entry = [viewerPrefs objectForKey: paneKey])) {
+        inspectorPane = [entry intValue];
+      }
+    }
     [self updatePreviewPaneForCurrentType];
     [vwrwin display];
 

@@ -63,6 +63,7 @@ typedef enum
    * "Show Inspector" toggle, in any view type. */
   GWViewerBrowserPreview *previewPane;
   BOOL showInspector;
+  int inspectorPane;
   
   NSDictionary *viewerPrefs;
   GWViewType viewType;
@@ -169,6 +170,9 @@ typedef enum
 - (void)toggleInspector:(id)sender;
 - (BOOL)isInspectorShown;
 - (void)setInspectorShown:(BOOL)shown;
+- (int)inspectorPaneIndex;
+- (void)setInspectorPaneIndex:(int)index;
+- (void)previewPane:(GWViewerBrowserPreview *)pane didSelectInspectorAtIndex:(int)index;
 
 - (void)updateDefaults;
 
