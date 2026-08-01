@@ -413,7 +413,17 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
 
 - (NSModalResponse)runModal
 {
-  [[NSApplication sharedApplication] runModalForWindow: self];
+  NSApplication *app = [NSApplication sharedApplication];
+
+  /* Play the alert sound the same way an NSAlert does under the Eau theme
+   * (EauAlertPanel beeps when runModal is entered).  This dialog is a plain
+   * NSWindow, so beep explicitly so users get the same audible cue. */
+  if ([app respondsToSelector: @selector(beep)])
+    {
+      [app performSelector: @selector(beep)];
+    }
+
+  [app runModalForWindow: self];
   return result;
 }
 
