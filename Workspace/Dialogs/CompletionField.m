@@ -274,7 +274,9 @@
           updatingTypeahead = YES;
           [self setString: newFull];
           updatingTypeahead = NO;
-          NSColor *grey = [NSColor disabledControlTextColor];
+          /* Light grey so the suggested completion is clearly distinct from
+           * the user's black typed text. */
+          NSColor *grey = [NSColor lightGrayColor];
           [self setTextColor: [NSColor textColor]
                       range: NSMakeRange(0, typedLength)];
           [self setTextColor: grey
@@ -315,6 +317,20 @@
       completionSuffix = nil;
       typedLength = [full length];
     }
+}
+
+/* Returns only the user's typed text, stripping any grey completion suffix.
+ * Used by dialogs to execute/open exactly what the user typed, not the
+ * suggested (grey) completion. */
+- (NSString *)typedText
+{
+  NSString *full = [self string];
+  if (completionSuffix && [completionSuffix length] > 0
+      && [full hasSuffix: completionSuffix])
+    {
+      return [full substringToIndex: [full length] - [completionSuffix length]];
+    }
+  return full;
 }
 
 /* Tab key completion for the current text (paths or app names). */
@@ -382,7 +398,8 @@ if ([path hasSuffix: pathSeparator] == NO) \
 
   if ([eventstr isEqual: @"\r"] && [[self string] length])
     {
-      [self acceptCompletion];
+      /* Execute only the user's typed text; the grey suggestion is not
+       * accepted on Return (use Tab to accept it first). */
       [controller completionFieldDidEndLine: self];
       return;
     }

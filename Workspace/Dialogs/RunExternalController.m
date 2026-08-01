@@ -190,9 +190,8 @@
 
 - (IBAction)okButtAction:(id)sender
 {
-  /* Accept any displayed grey completion so the full suggested command runs. */
-  [cfield acceptCompletion];
-  NSString *str = [cfield string];
+  /* Execute only the user's typed text, not the grey suggested completion. */
+  NSString *str = [cfield typedText];
   if ([str length])
     {
       NSString *command = nil;

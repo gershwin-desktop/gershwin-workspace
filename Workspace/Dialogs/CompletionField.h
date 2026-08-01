@@ -51,6 +51,10 @@
  * user's text. */
 - (void)acceptCompletion;
 
+/* Returns only the user's typed text, without any grey completion suffix.
+ * This is what dialogs should use when executing or opening something. */
+- (NSString *)typedText;
+
 @end
 
 

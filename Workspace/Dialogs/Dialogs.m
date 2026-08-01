@@ -187,7 +187,7 @@
 
 - (NSString *)getEditFieldText
 {
-  return [editField string];
+  return [editField typedText];
 }
 
 - (NSControlStateValue)switchButtonState
@@ -236,8 +236,7 @@
 {
   if (sender == okButt)
     {
-      [editField acceptCompletion];
-      if (validator && !validator([editField string]))
+      if (validator && !validator([editField typedText]))
         {
           [self shakeWindow];
           return;
