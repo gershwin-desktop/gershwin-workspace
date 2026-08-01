@@ -1070,6 +1070,34 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 - (NSImage *)gw_appImage_iconForFile: (NSString *)fullPath;
 @end
 
+/* Small helper class for the icon-refresh walk. */
+@interface AppImageIconProvider : NSObject
++ (void)reloadExperienceViewsInView: (NSView *)aView;
+@end
+
+@implementation AppImageIconProvider
+
+/* Recursively calls reloadContents (if implemented) on aView and its
+ * subviews, so list/browser views re-fetch icons after an AppImage icon
+ * finishes loading asynchronously. */
++ (void)reloadExperienceViewsInView: (NSView *)aView
+{
+  if (aView == nil)
+    return;
+
+  if ([aView respondsToSelector: @selector(reloadContents)]) {
+    [aView performSelector: @selector(reloadContents)];
+  }
+
+  NSArray *subviews = [aView subviews];
+  NSUInteger i;
+  for (i = 0; i < [subviews count]; i++) {
+    [self reloadExperienceViewsInView: [subviews objectAtIndex: i]];
+  }
+}
+
+@end
+
 @interface FSNodeRep (GWAppImageIconProvider)
 + (void)gw_installAppImageFSNodeSwizzle;
 - (NSImage *)gw_appImage_iconOfSize:(int)size forNode:(FSNode *)node;
@@ -1269,9 +1297,14 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
             [iconsCache setObject: updateDict forKey: key];
             [appImageLoadingState removeObjectForKey: key];
             
-            // Trigger redraw of all windows so FSNIcon views pick up the new icon
+            // Trigger a refresh of all windows.  Icon views (FSNIcon) pick the
+            // new icon up on redraw via the drawRect swizzle, but list views
+            // (FSNListView) cache the icon in their node reps, so they need a
+            // full reloadContents to re-fetch it.  Walk the view hierarchy and
+            // reload whatever supports it; fall back to a plain redraw.
             NSArray *windows = [NSApp windows];
             for (NSWindow *win in windows) {
+              [AppImageIconProvider reloadExperienceViewsInView: [win contentView]];
               [[win contentView] setNeedsDisplay: YES];
             }
           });
