@@ -28,6 +28,7 @@
 
 #import "AppearanceMetrics.h"
 #import "Dialogs.h"
+#import "CompletionField.h"
 
 
 @implementation GWDialogView
@@ -132,13 +133,14 @@
 
       y -= METRICS_SPACE_16;
 
-      /* Edit field: 22 px tall */
-      editField = [[NSTextField alloc] initWithFrame:
+      /* Edit field: 22 px tall, with grey typeahead completion */
+      editField = [[CompletionField alloc] initWithFrame:
                     NSMakeRect(METRICS_CONTENT_SIDE_MARGIN,
                                y - METRICS_TEXT_INPUT_FIELD_HEIGHT,
                                cw - 2 * METRICS_CONTENT_SIDE_MARGIN,
                                METRICS_TEXT_INPUT_FIELD_HEIGHT)];
-      [editField setStringValue: eText];
+      [editField setString: eText];
+      [editField setController: self];
       [cv addSubview: editField];
       RELEASE(editField);
 
@@ -185,7 +187,7 @@
 
 - (NSString *)getEditFieldText
 {
-  return [editField stringValue];
+  return [editField string];
 }
 
 - (NSControlStateValue)switchButtonState
@@ -234,7 +236,8 @@
 {
   if (sender == okButt)
     {
-      if (validator && !validator([editField stringValue]))
+      [editField acceptCompletion];
+      if (validator && !validator([editField string]))
         {
           [self shakeWindow];
           return;
@@ -248,6 +251,17 @@
 
   [[NSApplication sharedApplication] stopModal];
   [self orderOut: nil];
+}
+
+/* CompletionField protocol: accept and close on Return. */
+- (void)completionFieldDidEndLine:(id)afield
+{
+  [self buttonAction: okButt];
+}
+
+- (void)completionFieldDidCancel:(id)afield
+{
+  [self buttonAction: cancelButt];
 }
 
 @end

@@ -190,6 +190,8 @@
 
 - (IBAction)okButtAction:(id)sender
 {
+  /* Accept any displayed grey completion so the full suggested command runs. */
+  [cfield acceptCompletion];
   NSString *str = [cfield string];
   if ([str length])
     {
