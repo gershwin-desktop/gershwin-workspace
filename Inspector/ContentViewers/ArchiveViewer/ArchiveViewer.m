@@ -205,10 +205,132 @@
   return name;
 }
 
+/* Reads the payload of the currently selected entry into an NSData. */
+- (NSData *)dataOfCurrentEntryFromArchive:(struct archive *)a
+{
+  const void *buff;
+  size_t size;
+  la_int64_t offset;
+  int r;
+  NSMutableData *result = [NSMutableData data];
+
+  while ((r = archive_read_data_block (a, &buff, &size, &offset)) == ARCHIVE_OK)
+    {
+      [result appendBytes: buff length: size];
+    }
+
+  if (r == ARCHIVE_EOF)
+    {
+      return result;
+    }
+  return nil;
+}
+
+/* Adds a dictionary for one archive entry to the entries array. */
+- (void)addEntryDictForEntry:(struct archive_entry *)entry
+{
+  NSString *name;
+  NSMutableDictionary *dict;
+  NSDate *date;
+
+  name = [NSString stringWithUTF8String: archive_entry_pathname (entry)];
+  if (name == nil)
+    {
+      const char *p = archive_entry_pathname_utf8 (entry);
+      name = [NSString stringWithUTF8String: p];
+    }
+  if (name == nil)
+    {
+      name = @"";
+    }
+
+  dict = [NSMutableDictionary dictionary];
+  [dict setObject: name forKey: @"name"];
+  [dict setObject: [self typeNameForEntry: entry] forKey: @"type"];
+
+  if (archive_entry_size_is_set (entry))
+    {
+      [dict setObject: [self sizeDescription: archive_entry_size (entry)]
+               forKey: @"size"];
+    }
+  else
+    {
+      [dict setObject: @"" forKey: @"size"];
+    }
+
+  if (archive_entry_mtime_is_set (entry))
+    {
+      date = [NSDate dateWithTimeIntervalSince1970: archive_entry_mtime (entry)];
+      [dict setObject: date forKey: @"date"];
+    }
+
+  [entries addObject: dict];
+}
+
+/* Iterates over all entries of an open archive, appending them to the
+ * entries array.  A Debian package (ar archive whose first member is
+ * "debian-binary") is special-cased: its packaging members are skipped
+ * and the payload of the data.* member (data.tar.gz, data.tar.xz, etc.)
+ * is itself read as an archive and its contents listed instead. */
+- (BOOL)readAllEntriesFromArchive:(struct archive *)a
+{
+  struct archive_entry *entry;
+  BOOL isDeb = NO;
+  int r;
+
+  while ((r = archive_read_next_header (a, &entry)) == ARCHIVE_OK)
+    {
+      NSString *name = [NSString stringWithUTF8String:
+                         archive_entry_pathname (entry)];
+      if (name == nil)
+        {
+          name = @"";
+        }
+
+      if ([name isEqualToString: @"debian-binary"])
+        {
+          /* First member of a Debian package.  Remember and skip it. */
+          isDeb = YES;
+          archive_read_data_skip (a);
+          continue;
+        }
+
+      if (isDeb && [name hasPrefix: @"data."])
+        {
+          /* Read the data.* member's bytes and recurse into it as a
+           * nested archive so the user sees the actual files instead of
+           * the data.tar.* container. */
+          NSData *payload = [self dataOfCurrentEntryFromArchive: a];
+          if (payload)
+            {
+              [self readArchiveFromData: payload];
+            }
+          continue;
+        }
+
+      if (isDeb && ([name hasPrefix: @"control."] || [name hasPrefix: @"debian-"]))
+        {
+          /* Packaging metadata: not interesting for the user. */
+          archive_read_data_skip (a);
+          continue;
+        }
+
+      [self addEntryDictForEntry: entry];
+      archive_read_data_skip (a);
+
+      if ([entries count] > 100000)
+        {
+          break;
+        }
+    }
+
+  return ([entries count] > 0);
+}
+
 - (BOOL)readArchiveFromFile:(NSString *)path
 {
   struct archive *a;
-  struct archive_entry *entry;
+  BOOL ok;
   int r;
 
   [entries removeAllObjects];
@@ -227,64 +349,27 @@
       return NO;
     }
 
-  while ((r = archive_read_next_header (a, &entry)) == ARCHIVE_OK)
-    {
-      NSString *name;
-      NSMutableDictionary *dict;
-      NSDate *date;
-
-      name = [NSString stringWithUTF8String: archive_entry_pathname (entry)];
-      if (name == nil)
-        {
-          const char *p = archive_entry_pathname_utf8 (entry);
-          name = [NSString stringWithUTF8String: p];
-        }
-      if (name == nil)
-        {
-          name = @"";
-        }
-
-      dict = [NSMutableDictionary dictionary];
-      [dict setObject: name forKey: @"name"];
-      [dict setObject: [self typeNameForEntry: entry] forKey: @"type"];
-
-      if (archive_entry_size_is_set (entry))
-        {
-          [dict setObject: [self sizeDescription: archive_entry_size (entry)]
-                   forKey: @"size"];
-        }
-      else
-        {
-          [dict setObject: @"" forKey: @"size"];
-        }
-
-      if (archive_entry_mtime_is_set (entry))
-        {
-          date = [NSDate dateWithTimeIntervalSince1970: archive_entry_mtime (entry)];
-          [dict setObject: date forKey: @"date"];
-        }
-
-      [entries addObject: dict];
-
-      archive_read_data_skip (a);
-      if ([entries count] > 100000)
-        {
-          break;
-        }
-    }
+  ok = [self readAllEntriesFromArchive: a];
 
   archive_read_free (a);
 
-  return ([entries count] > 0);
+  return ok;
 }
 
 - (BOOL)readArchiveFromData:(NSData *)data
 {
   struct archive *a;
-  struct archive_entry *entry;
+  BOOL ok;
   int r;
 
-  [entries removeAllObjects];
+  /* Recursive call from a .deb data.* member: the outer entries array is
+   * shared, so do not clear it here.  Only the top-level call starts with
+   * an empty array (see displayData:/readArchiveFromFile:). */
+  BOOL isTopLevel = ([entries count] == 0);
+  if (isTopLevel)
+    {
+      [entries removeAllObjects];
+    }
 
   a = archive_read_new ();
   archive_read_support_filter_all (a);
@@ -297,55 +382,11 @@
       return NO;
     }
 
-  while ((r = archive_read_next_header (a, &entry)) == ARCHIVE_OK)
-    {
-      NSString *name;
-      NSMutableDictionary *dict;
-      NSDate *date;
-
-      name = [NSString stringWithUTF8String: archive_entry_pathname (entry)];
-      if (name == nil)
-        {
-          const char *p = archive_entry_pathname_utf8 (entry);
-          name = [NSString stringWithUTF8String: p];
-        }
-      if (name == nil)
-        {
-          name = @"";
-        }
-
-      dict = [NSMutableDictionary dictionary];
-      [dict setObject: name forKey: @"name"];
-      [dict setObject: [self typeNameForEntry: entry] forKey: @"type"];
-
-      if (archive_entry_size_is_set (entry))
-        {
-          [dict setObject: [self sizeDescription: archive_entry_size (entry)]
-                   forKey: @"size"];
-        }
-      else
-        {
-          [dict setObject: @"" forKey: @"size"];
-        }
-
-      if (archive_entry_mtime_is_set (entry))
-        {
-          date = [NSDate dateWithTimeIntervalSince1970: archive_entry_mtime (entry)];
-          [dict setObject: date forKey: @"date"];
-        }
-
-      [entries addObject: dict];
-
-      archive_read_data_skip (a);
-      if ([entries count] > 100000)
-        {
-          break;
-        }
-    }
+  ok = [self readAllEntriesFromArchive: a];
 
   archive_read_free (a);
 
-  return ([entries count] > 0);
+  return ok;
 }
 
 - (void)displayPath:(NSString *)path
