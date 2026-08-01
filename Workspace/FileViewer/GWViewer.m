@@ -31,6 +31,7 @@
 #import "GWViewer.h"
 #import "GWViewersManager.h"
 #import "GWViewerBrowser.h"
+#import "GWViewerBrowserPreview.h"
 #import "GWViewerIconsView.h"
 #import "GWViewerListView.h"
 #import "GWViewerWindow.h"
@@ -59,6 +60,11 @@
 #define MIN_SIDEBAR_WIDTH 120.0
 #define DEFAULT_SIDEBAR_WIDTH 160.0
 #define MAX_SIDEBAR_WIDTH 400.0
+
+/* Node view area insets (must stay in sync with createSubviews). */
+#define PREVIEW_XMARGIN 0
+#define PREVIEW_YMARGIN 0
+#define PREVIEW_PATHSCRH 46
 
 /* Helper function to get volume information using statvfs */
 static BOOL getVolumeInfo(const char *path, unsigned long long *total, 
@@ -100,6 +106,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   RELEASE (lastSelection);
   RELEASE (defaultsKeyStr);
   RELEASE (watchedNodes);
+  RELEASE (previewPane);
   RELEASE (vwrwin);
   RELEASE (viewerPrefs);
   RELEASE (history);
@@ -493,9 +500,56 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   [nviewScroll setAutoresizingMask: resizeMask];
   [lowBox addSubview: nviewScroll];
   RELEASE (nviewScroll);
-  
+
+  [self updatePreviewPaneForCurrentType];
+
   [vwrwin setContentView: split];
   RELEASE (split);
+}
+
+/* Adds or removes the rightmost "Contents" preview pane so it matches the
+ * current view type, and resizes the node view accordingly.  Browser view
+ * reserves one column width for the pane; all other views use the full
+ * width.  Called both at setup and whenever the view type changes, so
+ * switching view types always yields a consistent layout. */
+- (void)updatePreviewPaneForCurrentType
+{
+  NSRect low = [lowBox bounds];
+  CGFloat w = low.size.width;
+  CGFloat h = low.size.height;
+  NSRect nr, pr;
+
+  if (viewType == GWViewTypeBrowser)
+    {
+      if (previewPane == nil)
+        {
+          previewColWidth = resizeIncrement;
+          pr = NSMakeRect(w - previewColWidth, PREVIEW_PATHSCRH,
+                          previewColWidth, h - PREVIEW_PATHSCRH);
+          previewPane = [[GWViewerBrowserPreview alloc] initWithFrame: pr];
+          [previewPane setAutoresizingMask: NSViewHeightSizable | NSViewMinXMargin];
+          [lowBox addSubview: previewPane];
+          RELEASE (previewPane);
+        }
+      nr = NSMakeRect(PREVIEW_XMARGIN, PREVIEW_PATHSCRH,
+                      w - (PREVIEW_XMARGIN * 2) - previewColWidth,
+                      h - PREVIEW_PATHSCRH - PREVIEW_YMARGIN);
+      [nviewScroll setAutoresizingMask: NSViewNotSizable | NSViewHeightSizable];
+    }
+  else
+    {
+      if (previewPane)
+        {
+          [previewPane removeFromSuperview];
+          DESTROY (previewPane);
+        }
+      nr = NSMakeRect(PREVIEW_XMARGIN, PREVIEW_PATHSCRH,
+                      w - (PREVIEW_XMARGIN * 2), h - PREVIEW_PATHSCRH - PREVIEW_YMARGIN);
+      [nviewScroll setAutoresizingMask: NSViewNotSizable | NSViewWidthSizable | NSViewHeightSizable];
+    }
+
+  [nviewScroll setFrame: nr];
+  [nviewScroll setNeedsDisplay: YES];
 }
 
 - (FSNode *)baseNode
@@ -708,7 +762,13 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
   ASSIGN (lastSelection, newsel);
   [self updeateInfoLabels]; 
-    
+
+  /* Show the Contents inspector for the newly selected file in the
+   * rightmost browser preview pane. */
+  if (previewPane) {
+    [previewPane showSelection: newsel];
+  }
+
   node = [newsel objectAtIndex: 0];   
      
   if (([node isDirectory] == NO) || [node isPackage] || ([newsel count] > 1)) {
@@ -1001,7 +1061,11 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   [pathsScroll setDocumentView: nil];	  
 
   resizeIncrement = [(NSNumber *)[notification object] intValue];
-  r.size.width = (visibleCols * resizeIncrement);
+  previewColWidth = resizeIncrement;
+  /* In browser view the rightmost preview pane occupies one extra column
+   * of window width; other views fit exactly the visible columns. */
+  r.size.width = ((visibleCols + (viewType == GWViewTypeBrowser ? 1 : 0))
+                  * resizeIncrement);
   [vwrwin setFrame: r display: YES];  
   [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_WIN_H)];    
   [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
@@ -1276,6 +1340,12 @@ constrainMinCoordinate:(CGFloat)proposedMin
   if (nodeView) {
     [nodeView stopRepNameEditing];  
     [pathsView stopRepNameEditing];  
+
+    /* Keep the rightmost preview pane sized to the new window width. */
+    if (viewType == GWViewTypeBrowser) {
+      [self updatePreviewPaneForCurrentType];
+      [nodeView resizeWithOldSuperviewSize: [nodeView bounds].size];
+    }
 
     if ([nodeView isSingleNode]) {
       NSRect r = [[vwrwin contentView] bounds];
@@ -1663,6 +1733,11 @@ constrainMinCoordinate:(CGFloat)proposedMin
       [self selectionChanged: selection];
       
       [self updateDefaults];
+
+      /* Ensure the rightmost preview pane matches the new view type. */
+      [self updatePreviewPaneForCurrentType];
+      [nodeView resizeWithOldSuperviewSize: [nodeView bounds].size];
+      [vwrwin display];
     }
 }
 
