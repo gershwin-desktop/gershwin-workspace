@@ -461,13 +461,52 @@
   NSDictionary *userinfo;
   NSString *host;
 
+  /* Resolve the app's name and full path up front so that plain executables
+     (e.g. AppImages) can be launched even though they are not bundles. */
+  [self applicationName: &appName andPath: &appPath forName: appname];
+
   path = [ws locateApplicationBinary: appname];
   NSDebugLLog(@"gwspace", @"launchApplication:arguments: appname=%@ binary=%@ args=%@", appname, path, args);
 
   if (path == nil) {
-	  NSDebugLLog(@"gwspace", @"launchApplication: locateApplicationBinary returned nil for %@", appname);
-	  return NO;
-	}
+    NSFileManager *fm = [NSFileManager defaultManager];
+    BOOL isDir;
+
+    /* The app may not be known yet - regenerate the application list and
+       resolve again before giving up. */
+    if (appPath == nil) {
+      [ws findApplications];
+      [self applicationName: &appName andPath: &appPath forName: appname];
+    }
+
+    /* Not a GNUstep bundle - maybe an AppImage or other plain executable file.
+       Launch it directly, passing the file path as a plain argument instead of
+       the GNUstep -GSFilePath option. */
+    if (appPath != nil
+      && [fm fileExistsAtPath: appPath isDirectory: &isDir] && !isDir
+      && [fm isExecutableFileAtPath: appPath])
+      {
+        NSMutableArray *plain = [NSMutableArray arrayWithCapacity: [args count]];
+        unsigned int i;
+
+        for (i = 0; i < [args count]; i++)
+          {
+            NSString *arg = [args objectAtIndex: i];
+            if ([arg isEqualToString: @"-GSFilePath"] == NO)
+              {
+                [plain addObject: arg];
+              }
+          }
+        args = plain;
+        path = appPath;
+        NSDebugLLog(@"gwspace", @"launchApplication: launching plain executable %@ with args %@", path, args);
+      }
+    else
+      {
+        NSDebugLLog(@"gwspace", @"launchApplication: locateApplicationBinary returned nil for %@", appname);
+        return NO;
+      }
+  }
 
   /*
   * Try to ensure that apps we launch display in this workspace
