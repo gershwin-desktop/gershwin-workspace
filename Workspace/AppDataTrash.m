@@ -66,7 +66,13 @@
 
       checked = [[NSMutableArray alloc] initWithCapacity: [paths count]];
       for (i = 0; i < [paths count]; i++)
-        [checked addObject: [NSNumber numberWithInt: 1]];
+        {
+          /* Preference plists are unchecked by default so a user's settings
+           * are only moved if explicitly requested. */
+          NSString *p = [paths objectAtIndex: i];
+          int on = ([[p pathExtension] isEqualToString: @"plist"]) ? 0 : 1;
+          [checked addObject: [NSNumber numberWithInt: on]];
+        }
 
       cv = [[NSView alloc] initWithFrame: [self frame]];
       [self setContentView: cv];
