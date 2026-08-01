@@ -175,10 +175,10 @@ static CGFloat desktopScaleFactor(void)
 
 - (void)applyScaledIconSize
 {
+  /* Apply iconSize * factor to every icon.  When factor is 1.0 (or unset),
+   * reset back to the base iconSize so shrinking the scale factor restores
+   * the original size instead of leaving icons enlarged. */
   CGFloat factor = desktopScaleFactor();
-  if (factor == 1.0)
-    return;
-
   int scaled = (int)(iconSize * factor);
   NSUInteger i;
   for (i = 0; i < [icons count]; i++)
@@ -189,10 +189,9 @@ static CGFloat desktopScaleFactor(void)
 
 - (void)applyScaledLabelFont
 {
+  /* Apply labelTextSize * factor to every icon label.  When factor is 1.0
+   * (or unset), reset back to the base labelTextSize. */
   CGFloat factor = desktopScaleFactor();
-  if (factor == 1.0)
-    return;
-
   NSFont *scaledFont = [NSFont systemFontOfSize: (int)(labelTextSize * factor)];
   NSUInteger i;
   for (i = 0; i < [icons count]; i++)
@@ -1735,6 +1734,12 @@ static void GWHighlightFrameRect(NSRect aRect)
   [self tile];
   [self setNeedsDisplay: YES];
 
+  /* Desktop icons are created here directly (not via addRepForSubnode:), so
+   * apply GSScaleFactor to the newly loaded icons — otherwise a scale factor
+   * already set at launch leaves them at their unscaled size. */
+  [self applyScaledIconSize];
+  [self applyScaledLabelFont];
+
   if ([[NSUserDefaults standardUserDefaults] boolForKey: @"use_thumbnails"])
     {
       Thumbnailer *t = [Thumbnailer sharedThumbnailer];
@@ -2233,6 +2238,12 @@ static void GWHighlightFrameRect(NSRect aRect)
   [self addSubview: icon];
   RELEASE (icon);
   RELEASE (arp);
+
+  /* Apply GSScaleFactor to the newly added icon so desktop icons created
+   * after startup (or on launch with a scale factor already set) match the
+   * scaled size of icons created by applyScaledIconSize. */
+  [self applyScaledIconSize];
+  [self applyScaledLabelFont];
 
   return icon;
 }
