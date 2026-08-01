@@ -59,8 +59,10 @@ typedef enum
   GWViewerScrollView *nviewScroll;
   id nodeView;
   
-  /* Rightmost "Contents" preview pane, shown in browser (columns) view. */
+  /* Rightmost "Contents" preview pane, shown when the user enables the
+   * "Show Inspector" toggle, in any view type. */
   GWViewerBrowserPreview *previewPane;
+  BOOL showInspector;
   
   NSDictionary *viewerPrefs;
   GWViewType viewType;
@@ -71,7 +73,6 @@ typedef enum
 
   int visibleCols;
   int resizeIncrement;
-  int previewColWidth;
     
   FSNode *baseNode;
   NSArray *baseNodeArray;
@@ -164,6 +165,10 @@ typedef enum
 - (void)setHistoryPosition:(int)pos;
 
 - (void)columnsWidthChanged:(NSNotification *)notification;
+
+- (void)toggleInspector:(id)sender;
+- (BOOL)isInspectorShown;
+- (void)setInspectorShown:(BOOL)shown;
 
 - (void)updateDefaults;
 

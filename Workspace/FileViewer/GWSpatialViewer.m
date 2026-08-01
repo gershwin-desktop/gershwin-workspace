@@ -35,6 +35,7 @@
 #import "GWViewerWindow.h"
 #import "GWViewerScrollView.h"
 #import "GWViewerBrowser.h"
+#import "GWViewerBrowserPreview.h"
 #import "GWViewerIconsView.h"
 #import "GWSpatialIconsView.h"
 #import "GWViewerListView.h"
@@ -73,6 +74,7 @@
   RELEASE (rootViewerKey);
   RELEASE (watchedNodes);
   RELEASE (history);
+  RELEASE (previewPane);
   RELEASE (vwrwin);
   RELEASE (viewType);
   RELEASE (viewerPrefs);
@@ -171,6 +173,12 @@
       } else {
         viewerPrefs = [NSDictionary new];
       }
+    }
+
+    /* The "Show Inspector" toggle is a per-viewer preference; default off. */
+    showInspector = [defaults boolForKey: @"showInspector"];
+    if ((defEntry = [viewerPrefs objectForKey: @"showInspector"])) {
+      showInspector = [defEntry boolValue];
     }
 
     // ================================================================
@@ -510,6 +518,71 @@
   
   [vwrwin setContentView: mainView];
   RELEASE (mainView);
+
+  [self updatePreviewPaneForCurrentType];
+}
+
+/* Adds or removes the rightmost "Contents" preview pane according to the
+ * "Show Inspector" toggle, and resizes the scroll view accordingly.  When
+ * the toggle is on, the fixed GW_PREVIEW_PANE_WIDTH on the right is reserved
+ * for the pane in every view type; when off, the scroll view uses the full
+ * width.  Called both at setup and whenever the toggle or view type changes,
+ * so the layout always stays consistent.  The scroll view stays
+ * width-sizable and the preview pane is pinned to the right edge, so both
+ * track window width and the browser re-tiles its columns on resize. */
+- (void)updatePreviewPaneForCurrentType
+{
+  NSRect r = [mainView bounds];
+  CGFloat w = r.size.width;
+  CGFloat h = r.size.height;
+  int boxh = 16;
+  NSRect sr, pr;
+
+  if (showInspector)
+    {
+      if (previewPane == nil)
+        {
+          pr = NSMakeRect(w - GW_PREVIEW_PANE_WIDTH, 0,
+                          GW_PREVIEW_PANE_WIDTH, h - boxh);
+          previewPane = [[GWViewerBrowserPreview alloc] initWithFrame: pr];
+          [previewPane setAutoresizingMask: NSViewHeightSizable | NSViewMinXMargin];
+          [mainView addSubview: previewPane];
+        }
+      sr = NSMakeRect(0, 0, w - GW_PREVIEW_PANE_WIDTH, h - boxh);
+    }
+  else
+    {
+      if (previewPane)
+        {
+          [previewPane removeFromSuperview];
+          DESTROY (previewPane);
+        }
+      sr = NSMakeRect(0, 0, w, h - boxh);
+    }
+
+  [scroll setAutoresizingMask: NSViewNotSizable | NSViewWidthSizable | NSViewHeightSizable];
+  [scroll setFrame: sr];
+  [scroll setNeedsDisplay: YES];
+}
+
+- (BOOL)isInspectorShown
+{
+  return showInspector;
+}
+
+- (void)setInspectorShown:(BOOL)shown
+{
+  if (showInspector != shown)
+    {
+      showInspector = shown;
+      [self updatePreviewPaneForCurrentType];
+      [vwrwin display];
+    }
+}
+
+- (void)toggleInspector:(id)sender
+{
+  [self setInspectorShown: !showInspector];
 }
 
 - (FSNode *)baseNode
@@ -686,6 +759,21 @@
   ASSIGN (lastSelection, newsel);
   [self updeateInfoLabels]; 
     
+  /* Show the Contents inspector for the newly selected file in the
+   * rightmost browser preview pane.  Guarded: the inspector machinery must
+   * never break selection or opening of files. */
+  if (previewPane) {
+    NS_DURING
+      {
+        [previewPane showSelection: newsel];
+      }
+    NS_HANDLER
+      {
+        NSLog(@"[GWSpatialViewer] preview showSelection exception: %@", localException);
+      }
+    NS_ENDHANDLER
+  }
+
   node = [newsel objectAtIndex: 0];   
     
   if ([nodeView isSingleNode]) {    
@@ -878,7 +966,10 @@
   [scroll setDocumentView: nil];	
   
   resizeIncrement = [(NSNumber *)[notification object] intValue];
-  r.size.width = (visibleCols * resizeIncrement);
+  /* When the Inspector toggle is on, it occupies a fixed width of window
+   * space regardless of view type. */
+  r.size.width = ((visibleCols * resizeIncrement)
+                  + (showInspector ? GW_PREVIEW_PANE_WIDTH : 0));
   [vwrwin setFrame: r display: YES];  
   [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_W_HEIGHT)];    
   [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
@@ -1702,6 +1793,10 @@
     
     [self updateDefaults];
     
+    /* Ensure the rightmost preview pane matches the new view type. */
+    [self updatePreviewPaneForCurrentType];
+    [vwrwin display];
+
     NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
     NSDebugLLog(@"gwspace", @"║ setViewerType: COMPLETED SUCCESSFULLY -> %@", viewType);
     NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");

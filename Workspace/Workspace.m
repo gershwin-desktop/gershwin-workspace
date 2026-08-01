@@ -427,6 +427,13 @@ NSString *_pendingSystemActionTitle = nil;
   //[menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
+
+  /* Toggle the rightmost "Contents" inspector pane in every view type. */
+  menuItem = [menu addItemWithTitle:_(@"Show Inspector") action:@selector(toggleInspector:) keyEquivalent:@"i"];
+  [menuItem setTarget:self];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSControlKeyMask];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
   
   menuItem = [menu addItemWithTitle:_(@"Use Stacks") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
@@ -1595,50 +1602,42 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
 
   // === View type / behaviour — enabled whenever a viewer window exists ===
-  if (sel_isEqual(action, @selector(setViewerType:))) {
+  if (sel_isEqual(action, @selector(setViewerType:))
+      || sel_isEqual(action, @selector(setViewerBehaviour:))
+      || sel_isEqual(action, @selector(toggleInspector:))) {
       /* With a detached global menu (Menu.app) the viewer is not always the
        * key window when the menu validates, so resolve the target viewer from
        * the key window, else the main window, else the first live viewer.
        * Only when no viewer window exists at all (pure desktop context) are
        * these items greyed out. */
-      id viewer = nil;
-      if ([vwrsManager hasViewerWithWindow: [NSApp keyWindow]]) {
-        viewer = [vwrsManager viewerWithWindow: [NSApp keyWindow]];
-      } else if ([vwrsManager hasViewerWithWindow: [NSApp mainWindow]]) {
-        viewer = [vwrsManager viewerWithWindow: [NSApp mainWindow]];
-      } else {
-        NSArray *wins = [vwrsManager viewerWindows];
-        if ([wins count]) {
-          viewer = [vwrsManager viewerWithWindow: [wins objectAtIndex: 0]];
-        }
-      }
-      if (viewer && [viewer respondsToSelector: @selector(viewType)])
+      id viewer = [self _viewerForKeyWindow];
+      if (sel_isEqual(action, @selector(toggleInspector:)))
         {
-          GWViewType vtype = [viewer viewType];
-          [anItem setState: ([anItem tag] == vtype) ? NSOnState : NSOffState];
-          return YES;
+          if (viewer && [viewer respondsToSelector: @selector(isInspectorShown)])
+            {
+              [anItem setState: [viewer isInspectorShown] ? NSOnState : NSOffState];
+            }
+          return (viewer != nil);
+        }
+      if (sel_isEqual(action, @selector(setViewerType:)))
+        {
+          if (viewer && [viewer respondsToSelector: @selector(viewType)])
+            {
+              GWViewType vtype = [viewer viewType];
+              [anItem setState: ([anItem tag] == vtype) ? NSOnState : NSOffState];
+              return YES;
+            }
+        }
+      else if (sel_isEqual(action, @selector(setViewerBehaviour:)))
+        {
+          if (viewer && [viewer respondsToSelector: @selector(vtype)])
+            {
+              int vt = [viewer vtype];
+              [anItem setState: ([anItem tag] == vt) ? NSOnState : NSOffState];
+              return YES;
+            }
         }
       /* No viewer window: this is the desktop context. */
-      return NO;
-    }
-  if (sel_isEqual(action, @selector(setViewerBehaviour:))) {
-      id viewer = nil;
-      if ([vwrsManager hasViewerWithWindow: [NSApp keyWindow]]) {
-        viewer = [vwrsManager viewerWithWindow: [NSApp keyWindow]];
-      } else if ([vwrsManager hasViewerWithWindow: [NSApp mainWindow]]) {
-        viewer = [vwrsManager viewerWithWindow: [NSApp mainWindow]];
-      } else {
-        NSArray *wins = [vwrsManager viewerWindows];
-        if ([wins count]) {
-          viewer = [vwrsManager viewerWithWindow: [wins objectAtIndex: 0]];
-        }
-      }
-      if (viewer && [viewer respondsToSelector: @selector(vtype)])
-        {
-          int vt = [viewer vtype];
-          [anItem setState: ([anItem tag] == vt) ? NSOnState : NSOffState];
-          return YES;
-        }
       return NO;
     }
 
@@ -5573,6 +5572,22 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
    * the viewer is not always the key window when the item fires, which would
    * otherwise make this a silent no-op.  Only viewer windows get the new view
    * type; the desktop ignores the item entirely (disabled via validation). */
+  id viewer = [self _viewerForKeyWindow];
+  if (!viewer) {
+    NSDebugLLog(@"gwspace", @"setViewerType: no viewer for key/main window");
+    return;
+  }
+
+  if ([viewer respondsToSelector: @selector(setViewerType:)])
+    {
+      [viewer setViewerType: sender];
+    }
+}
+
+/* Resolves the target viewer the same way setViewerType: does, so menu
+ * actions and their validation agree on which viewer window is meant. */
+- (id)_viewerForKeyWindow
+{
   id viewer = [vwrsManager viewerWithWindow: [NSApp keyWindow]];
   if (!viewer) {
     viewer = [vwrsManager viewerWithWindow: [NSApp mainWindow]];
@@ -5583,14 +5598,15 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
       viewer = [vwrsManager viewerWithWindow: [wins objectAtIndex: 0]];
     }
   }
-  if (!viewer) {
-    NSDebugLLog(@"gwspace", @"setViewerType: no viewer for key/main window");
-    return;
-  }
+  return viewer;
+}
 
-  if ([viewer respondsToSelector: @selector(setViewerType:)])
+- (void)toggleInspector:(id)sender
+{
+  id viewer = [self _viewerForKeyWindow];
+  if (viewer && [viewer respondsToSelector: @selector(toggleInspector:)])
     {
-      [viewer setViewerType: sender];
+      [viewer toggleInspector: sender];
     }
 }
 

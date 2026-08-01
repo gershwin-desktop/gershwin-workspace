@@ -460,6 +460,8 @@
 
 "Info" = "Info";
 
+"Comments" = "Kommentare";
+
 "Info Panel..." = "Info Panel...";
 
 "Inspectors" = "Inspektoren";
@@ -786,6 +788,8 @@
 "Show In File Viewer" = "Im Dateibetrachter zeigen";
 
 "Show Inspectors" = "Inspektoren anzeigen";
+
+"Show Inspector" = "Inspektor zeigen";
 
 "Show Preview" = "Vorschau zeigen";
 

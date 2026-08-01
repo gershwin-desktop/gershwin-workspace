@@ -321,6 +321,8 @@
 
 - (void)setViewerType:(id)sender;
 
+- (void)toggleInspector:(id)sender;
+
 - (void)setDefaultBrowsingBehaviour:(id)sender;
 
 - (void)setDefaultSpatialBehaviour:(id)sender;

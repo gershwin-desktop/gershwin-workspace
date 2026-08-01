@@ -31,6 +31,7 @@
 @class FSNode;
 @class FSNodeRep;
 @class GWViewerWindow;
+@class GWViewerBrowserPreview;
 @class Workspace;
 @class NSView;
 @class NSTextField;
@@ -48,6 +49,8 @@
   GWViewerPathsPopUp *pathsPopUp;
   GWViewerScrollView *scroll;
   id nodeView;
+  GWViewerBrowserPreview *previewPane;
+  BOOL showInspector;
 
   NSDictionary *viewerPrefs;
   NSString *viewType;
@@ -152,6 +155,10 @@
 - (NSMutableArray *)history;
 - (int)historyPosition;
 - (void)setHistoryPosition:(int)pos;
+
+- (void)toggleInspector:(id)sender;
+- (BOOL)isInspectorShown;
+- (void)setInspectorShown:(BOOL)shown;
 
 @end
 

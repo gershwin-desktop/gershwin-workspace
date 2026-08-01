@@ -196,6 +196,12 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
         viewerPrefs = [NSDictionary new];
       }
     }
+
+    /* The "Show Inspector" toggle is a per-viewer preference; default off. */
+    showInspector = [defaults boolForKey: @"showInspector"];
+    if ((defEntry = [viewerPrefs objectForKey: @"showInspector"])) {
+      showInspector = [defEntry boolValue];
+    }
     
     /* View settings come from .DS_Store (tiered via the settings manager,
      * the single store shared with the spatial viewer) as primary, with the
@@ -507,11 +513,19 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   RELEASE (split);
 }
 
-/* Adds or removes the rightmost "Contents" preview pane so it matches the
- * current view type, and resizes the node view accordingly.  Browser view
- * reserves one column width for the pane; all other views use the full
- * width.  Called both at setup and whenever the view type changes, so
- * switching view types always yields a consistent layout. */
+/* Adds or removes the rightmost "Contents" preview pane according to the
+ * "Show Inspector" toggle, and resizes the node view accordingly.  When the
+ * toggle is on, the fixed GW_PREVIEW_PANE_WIDTH on the right is reserved for
+ * the pane in every view type; when off, the node view uses the full width.
+ * Called both at setup and whenever the toggle or view type changes, so the
+ * layout always stays consistent.
+ *
+ * While the inspector is shown, the node-view scroll view is NOT
+ * width-sizable: GNUstep autoresizing would make it absorb the whole window
+ * width change and grow over the pane.  Instead windowDidResize: lays it out
+ * explicitly at width - GW_PREVIEW_PANE_WIDTH, then asks the browser to
+ * re-tile its columns.  When the inspector is hidden the scroll view is
+ * width-sizable again to fill the window. */
 - (void)updatePreviewPaneForCurrentType
 {
   NSRect low = [lowBox bounds];
@@ -519,20 +533,18 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   CGFloat h = low.size.height;
   NSRect nr, pr;
 
-  if (viewType == GWViewTypeBrowser)
+  if (showInspector)
     {
       if (previewPane == nil)
         {
-          previewColWidth = resizeIncrement;
-          pr = NSMakeRect(w - previewColWidth, PREVIEW_PATHSCRH,
-                          previewColWidth, h - PREVIEW_PATHSCRH);
+          pr = NSMakeRect(w - GW_PREVIEW_PANE_WIDTH, PREVIEW_PATHSCRH,
+                          GW_PREVIEW_PANE_WIDTH, h - PREVIEW_PATHSCRH);
           previewPane = [[GWViewerBrowserPreview alloc] initWithFrame: pr];
           [previewPane setAutoresizingMask: NSViewHeightSizable | NSViewMinXMargin];
           [lowBox addSubview: previewPane];
-          RELEASE (previewPane);
         }
       nr = NSMakeRect(PREVIEW_XMARGIN, PREVIEW_PATHSCRH,
-                      w - (PREVIEW_XMARGIN * 2) - previewColWidth,
+                      w - (PREVIEW_XMARGIN * 2) - GW_PREVIEW_PANE_WIDTH,
                       h - PREVIEW_PATHSCRH - PREVIEW_YMARGIN);
       [nviewScroll setAutoresizingMask: NSViewNotSizable | NSViewHeightSizable];
     }
@@ -550,6 +562,26 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
   [nviewScroll setFrame: nr];
   [nviewScroll setNeedsDisplay: YES];
+}
+
+- (BOOL)isInspectorShown
+{
+  return showInspector;
+}
+
+- (void)setInspectorShown:(BOOL)shown
+{
+  if (showInspector != shown)
+    {
+      showInspector = shown;
+      [self updatePreviewPaneForCurrentType];
+      [vwrwin display];
+    }
+}
+
+- (void)toggleInspector:(id)sender
+{
+  [self setInspectorShown: !showInspector];
 }
 
 - (FSNode *)baseNode
@@ -764,9 +796,18 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   [self updeateInfoLabels]; 
 
   /* Show the Contents inspector for the newly selected file in the
-   * rightmost browser preview pane. */
+   * rightmost browser preview pane.  Guarded: the inspector machinery must
+   * never break selection or opening of files. */
   if (previewPane) {
-    [previewPane showSelection: newsel];
+    NS_DURING
+      {
+        [previewPane showSelection: newsel];
+      }
+    NS_HANDLER
+      {
+        NSLog(@"[GWViewer] preview showSelection exception: %@", localException);
+      }
+    NS_ENDHANDLER
   }
 
   node = [newsel objectAtIndex: 0];   
@@ -1061,11 +1102,10 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   [pathsScroll setDocumentView: nil];	  
 
   resizeIncrement = [(NSNumber *)[notification object] intValue];
-  previewColWidth = resizeIncrement;
-  /* In browser view the rightmost preview pane occupies one extra column
-   * of window width; other views fit exactly the visible columns. */
-  r.size.width = ((visibleCols + (viewType == GWViewTypeBrowser ? 1 : 0))
-                  * resizeIncrement);
+  /* When the Inspector toggle is on, it occupies a fixed width of window
+   * space regardless of view type. */
+  r.size.width = ((visibleCols * resizeIncrement)
+                  + (showInspector ? GW_PREVIEW_PANE_WIDTH : 0));
   [vwrwin setFrame: r display: YES];  
   [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_WIN_H)];    
   [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
@@ -1341,8 +1381,11 @@ constrainMinCoordinate:(CGFloat)proposedMin
     [nodeView stopRepNameEditing];  
     [pathsView stopRepNameEditing];  
 
-    /* Keep the rightmost preview pane sized to the new window width. */
-    if (viewType == GWViewTypeBrowser) {
+    /* Keep the rightmost preview pane sized to the new window width.  The
+     * scroll view is not width-sizable while the inspector is shown (see
+     * updatePreviewPaneForCurrentType), so resize it here and then let the
+     * browser re-tile its columns against the new clip view width. */
+    if (showInspector) {
       [self updatePreviewPaneForCurrentType];
       [nodeView resizeWithOldSuperviewSize: [nodeView bounds].size];
     }

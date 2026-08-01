@@ -1,12 +1,12 @@
 /*
  * GWViewerBrowserPreview.h
  *
- * Rightmost pane of the Miller columns in a browser viewer: shows the
- * "Contents" inspector (like the Contents tab of Get Info) for the
- * currently selected file.  It reuses the Inspector framework's Contents
- * class so every content viewer (images, text, archives, ...) works here
- * too.  The pane also acts as the minimal "inspector" adapter the
- * Contents class needs for watchers and window title updates.
+ * Rightmost pane of the browser viewer: shows the same information as the
+ * Get Info Inspector window, but in a compact fixed-width pane.  A popup
+ * button at the top switches between the Info, Contents and Comments
+ * inspectors, whose views are swapped in the content box below - exactly
+ * like the Inspector window.  It reuses the Inspector framework's
+ * Attributes (Info), Contents and Annotations (Comments) classes.
  *
  * Copyright (C) 2026 Free Software Foundation, Inc.
  *
@@ -21,10 +21,24 @@
 #import <AppKit/AppKit.h>
 
 @class Contents;
+@class Attributes;
+@class Annotations;
+
+/* Fixed width (in points) of the rightmost Contents preview pane shown
+ * beside the browser columns.  Shared by both the browsing GWViewer and
+ * the spatial GWSpatialViewer.  Set to 1.2x the original 200px column. */
+#define GW_PREVIEW_PANE_WIDTH 288.0
 
 @interface GWViewerBrowserPreview : NSView
 {
+  Attributes *info;
   Contents *contents;
+  Annotations *comments;
+
+  NSPopUpButton *popUp;
+  NSBox *contentBox;
+  NSMutableArray *inspectorViews;
+  NSArray *currentPaths;
 }
 
 - (void)showSelection:(NSArray *)paths;
