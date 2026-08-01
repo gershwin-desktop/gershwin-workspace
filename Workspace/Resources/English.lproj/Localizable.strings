@@ -100,15 +100,6 @@
 
 "Are you sure you want to open" = "Are you sure you want to open";
 
-"Are you sure you want to quit\nall applications and log out now?"
-  = "Are you sure you want to quit\nall applications and log out now?";
-
-"Are you sure you want to quit\nall applications and restart now?"
-  = "Are you sure you want to quit\nall applications and restart now?";
-
-"Are you sure you want to quit\nall applications and shut down now?"
-  = "Are you sure you want to quit\nall applications and shut down now?";
-
 "Arrange in Front" = "Arrange in Front";
 
 "Attributes" = "Attributes";
@@ -314,11 +305,6 @@
 "FUSE sshfs is required to mount SFTP network volumes but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshfs\n• On Fedora/RHEL: sudo dnf install fuse-sshfs\n• On Arch: sudo pacman -S sshfs"
   = "FUSE sshfs is required to mount SFTP network volumes but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshfs\n• On Fedora/RHEL: sudo dnf install fuse-sshfs\n• On Arch: sudo pacman -S sshfs";
 
-"Failed to execute shutdown command." = "Failed to execute shutdown command.";
-
-"Failed to mount SFTP volume:\n\n%@"
-  = "Failed to mount SFTP volume:\n\n%@";
-
 "Failed to start the AVFS daemon. Please check that AVFS is properly installed." = "Failed to start the AVFS daemon. Please check that AVFS is properly installed.";
 
 "Failed to unmount %@." = "Failed to unmount %@.";
@@ -470,10 +456,6 @@
 
 "Keyboard Shortcuts" = "Keyboard Shortcuts";
 
-"Kill applications" = "Kill applications";
-
-"Kind" = "Kind";
-
 "Label" = "Label";
 
 "Label Color..." = "Label Color...";
@@ -501,10 +483,6 @@
 "Local" = "Local";
 
 "Local User" = "Local User";
-
-"Log Out" = "Log Out";
-
-"Log Out..." = "Log Out...";
 
 "Low Disk Space" = "Low Disk Space";
 
@@ -709,10 +687,6 @@
 
 "Rename Layer" = "Rename Layer";
 
-"Restart" = "Restart";
-
-"Restart..." = "Restart...";
-
 "Revert" = "Revert";
 
 "Right" = "Right";
@@ -784,10 +758,6 @@
 "Show status window" = "Show status window";
 
 "Shown files" = "Shown files";
-
-"Shut Down" = "Shut Down";
-
-"Shut Down..." = "Shut Down...";
 
 "Single Click Launch" = "Single Click Launch";
 
@@ -955,10 +925,6 @@
 
 "Workspace Preferences" = "Workspace Preferences";
 
-"Workspace is logging out!" = "Workspace is logging out!";
-
-"Write" = "Write";
-
 "Write Cancelled" = "Write Cancelled";
 
 "Write Complete" = "Write Complete";
@@ -1118,10 +1084,6 @@
 "plain file" = "Plain file";
 
 "recursive" = "recursive";
-
-"refuse to terminate." = "refuse to terminate.";
-
-"scale" = "Scale";
 
 "seconds." = "seconds.";
 

@@ -173,11 +173,6 @@
   NSString *storedAppinfoPath;
   NSDistributedLock *storedAppinfoLock;
   
-  NSTimer *logoutTimer;
-  BOOL loggingout;
-  int autoLogoutDelay;
-  int maxLogoutDelay;  
-  int logoutDelay;
 }
 
 + (Workspace *)gworkspace;
@@ -368,16 +363,6 @@
 - (void)closeMainWin:(id)sender;
 #endif
 
-- (void)logout:(id)sender;
-
-- (void)restart:(id)sender;
-
-- (void)shutdown:(id)sender;
-
-- (BOOL)trySystemAction:(NSString *)actionType;
-
-- (void)executeSystemCommandAndReset;
-
 - (void)showAboutThisComputer:(id)sender;
 
 - (void)showInfo:(id)sender;
@@ -410,9 +395,6 @@
 - (void)performClose:(id)sender;
 
 - (void)emptyTrash:(id)sender;
-
-- (void)restart:(id)sender;
-- (void)shutdown:(id)sender;
 
 
 //
@@ -501,8 +483,6 @@
 - (BOOL)selectFiles:(NSArray *)fullPaths
 							inFileViewerRootedAtPath:(NSString *)rootFullpath;
 
-- (int)extendPowerOffBy:(int)requested;
-
 - (NSArray *)launchedApplications;
 
 - (NSDictionary *)activeApplication;
@@ -565,14 +545,6 @@
 - (void)updateStoredAppInfoWithLaunchedApps:(NSArray *)apps;
 
 - (void)checkLastRunningApps;
-
-- (void)startLogout;
-
-- (void)startLogoutRestartShutdownWithType:(NSString *)type message:(NSString *)message systemAction:(NSString *)systemActionTitle pendingCommand:(NSString *)pendingCommand;
-
-- (void)doLogoutRestartShutdown:(id)sender;
-
-- (void)terminateTasksForLogoutRestartShutdown:(id)sender;
 
 @end
 
@@ -676,8 +648,5 @@
 - (id)_workspaceApplication;
 
 @end
-
-extern NSString *_pendingSystemActionCommand;
-extern NSString *_pendingSystemActionTitle;
 
 #endif // GWORKSPACE_H

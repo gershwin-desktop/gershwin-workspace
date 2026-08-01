@@ -105,9 +105,6 @@ static NSString *defaultxterm = @"xterm";
 
 static Workspace *gworkspace = nil;
 
-NSString *_pendingSystemActionCommand = nil;
-NSString *_pendingSystemActionTitle = nil;
-
 /* Forward declarations for methods resolved at runtime on container/view objects.
  * Avoids method-not-found warnings when calling on `id` typed objects. */
 @interface NSObject (WorkspaceForwardDecls)
@@ -197,10 +194,6 @@ NSString *_pendingSystemActionTitle = nil;
   [[NSDistributedNotificationCenter defaultCenter] removeObserver: self];
   [wsnc removeObserver: self];
   [[NSNotificationCenter defaultCenter] removeObserver: self];
-  if (logoutTimer && [logoutTimer isValid]) {
-    [logoutTimer invalidate];
-    DESTROY (logoutTimer);
-  }
   DESTROY (ddbd);
   DESTROY (mdextractor);
   RELEASE (gwProcessName);
@@ -285,13 +278,6 @@ NSString *_pendingSystemActionTitle = nil;
   
   [mainMenu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [mainMenu addItemWithTitle:_(@"Restart...") action:@selector(restart:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [mainMenu addItemWithTitle:_(@"Shut Down...") action:@selector(shutdown:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [mainMenu addItemWithTitle:_(@"Log Out...") action:@selector(logout:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-
   // File menu
   menuItem = [mainMenu addItemWithTitle:_(@"File") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
@@ -1109,15 +1095,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)app 
 {
-  // Only allow termination for logout actions
-  // Disable this during development so that we can kill the app normally
-  /*
-  if (!loggingout) {
-    // Not a logout action, do not quit
-    return NSTerminateCancel;
-  }
-  */
-
   NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
   
 #define TEST_CLOSE(o, w) if ((o) && ([w isVisible])) [w close]
@@ -1131,11 +1108,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     return NSTerminateCancel;  
   }
 
-  if (logoutTimer && [logoutTimer isValid]) {
-    [logoutTimer invalidate];
-    DESTROY (logoutTimer);
-  }
-  
   // Stop global shortcuts manager if it was started
   if (globalShortcutsManager) {
     [globalShortcutsManager stop];
@@ -1206,7 +1178,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   /* Unmount all network volumes */
   [[NetworkVolumeManager sharedManager] unmountAll];
   		
-  // This is a logout - allow termination
   return NSTerminateNow; 
 }
 
@@ -1532,9 +1503,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if (sel_isEqual(action, @selector(activateContextHelp:))) {
     return ([NSHelpManager isContextHelpModeActive] == NO);
   }
-  if (sel_isEqual(action, @selector(logout:))) {
-    return !loggingout;
-  }
 
   // Cut/copy/paste for file operations
   if (sel_isEqual(action, @selector(cut:))
@@ -1565,7 +1533,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if (sel_isEqual(action, @selector(showViewer:))
       || sel_isEqual(action, @selector(runCommand:))
       || sel_isEqual(action, @selector(showFinder:))
-      || sel_isEqual(action, @selector(shutdown:))
       || sel_isEqual(action, @selector(showPreferences:))
       || sel_isEqual(action, @selector(terminate:))
       || sel_isEqual(action, @selector(hide:))
@@ -3356,14 +3323,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 		     [NSCharacterSet whitespaceAndNewlineCharacterSet]];
       [self openSelectedPaths: [NSArray arrayWithObject: path] newViewer: YES];
     }
-}
-
-//
-// Menu Operations
-//
-- (void)logout:(id)sender
-{
-  [self startLogout];
 }
 
 - (void)showAboutThisComputer:(id)sender
@@ -5298,180 +5257,6 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   return terminating;
 }
 
-static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
-{
-  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: timeout];
-
-  while ([task isRunning] && ([deadline timeIntervalSinceNow] > 0))
-    {
-      GWProcessStartupRunLoop(0.1);
-    }
-
-  return ![task isRunning];
-}
-
-- (BOOL)trySystemAction:(NSString *)actionType 
-{
-  // These arrays can be expanded with more commands if needed for other systems
-  // or if the current commands fail. The order is important - we try the most
-  // common commands first, and if they fail, we try alternatives.
-  NSArray *commands;
-  if ([actionType isEqualToString:@"restart"]) {
-    commands = [NSArray arrayWithObjects:
-      // systemd-based Linux (Debian with systemd)
-      [NSArray arrayWithObjects:@"/bin/systemctl", @"reboot", nil],
-      [NSArray arrayWithObjects:@"/usr/bin/systemctl", @"reboot", nil],
-      // Traditional Unix commands (BSD and Linux)
-      [NSArray arrayWithObjects:@"/sbin/reboot", nil],
-      [NSArray arrayWithObjects:@"/usr/sbin/reboot", nil],
-      [NSArray arrayWithObjects:@"/sbin/shutdown", @"-r", @"now", nil],
-      [NSArray arrayWithObjects:@"/usr/sbin/shutdown", @"-r", @"now", nil],
-      // With sudo as fallback (if LoginWindow isn't running as root)
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/bin/systemctl", @"reboot", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/bin/systemctl", @"reboot", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/reboot", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/sbin/reboot", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-r", @"now", nil], nil
-    ];
-  } else if ([actionType isEqualToString:@"shutdown"]) {
-    commands = [NSArray arrayWithObjects:
-      // systemd-based Linux (Debian with systemd)
-      [NSArray arrayWithObjects:@"/bin/systemctl", @"poweroff", nil],
-      [NSArray arrayWithObjects:@"/usr/bin/systemctl", @"poweroff", nil],
-      // Traditional Unix commands (BSD and Linux)
-      [NSArray arrayWithObjects:@"/sbin/poweroff", nil],
-      [NSArray arrayWithObjects:@"/usr/sbin/poweroff", nil],
-      [NSArray arrayWithObjects:@"/sbin/shutdown", @"-h", @"now", nil],
-      [NSArray arrayWithObjects:@"/usr/sbin/shutdown", @"-h", @"now", nil],
-      [NSArray arrayWithObjects:@"/sbin/shutdown", @"-p", @"now", nil],  // BSD-style with poweroff
-      [NSArray arrayWithObjects:@"/sbin/halt", @"-p", nil],  // Another BSD option
-      // With sudo as fallback (if LoginWindow isn't running as root)
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/bin/systemctl", @"poweroff", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/bin/systemctl", @"poweroff", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/poweroff", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/sbin/poweroff", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-h", @"now", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-p", @"now", nil], nil
-    ];
-  } else {
-    return NO;
-  }
-    
-  for (NSArray *cmd in commands) {
-    NSDebugLLog(@"gwspace", @"Attempting system action with command: %@", [cmd componentsJoinedByString:@" "]);
-    NSTask *task = [NSTask new];
-    AUTORELEASE(task);
-    [task setLaunchPath:[cmd objectAtIndex:0]];
-    if ([cmd count] > 1) {
-      [task setArguments:[cmd subarrayWithRange:NSMakeRange(1, [cmd count]-1)]];
-    }
-    
-    @try {
-      [task launch];
-      BOOL finished = GWWaitForTaskExit(task, 3.0);
-
-      if (!finished) {
-        NSDebugLLog(@"gwspace", @"System action command still running after timeout: %@. Assuming system will %@.", [cmd componentsJoinedByString:@" "], actionType);
-        return YES; // Don't block the UI waiting forever
-      }
-
-      if ([task terminationStatus] == 0) {
-        NSDebugLLog(@"gwspace", @"System action command launched successfully: %@", [cmd componentsJoinedByString:@" "]);        
-        return YES; // Command exited cleanly; system should now proceed
-      }
-
-      NSDebugLLog(@"gwspace", @"System action failed with command: %@, exit status: %d", [cmd componentsJoinedByString:@" "], [task terminationStatus]);
-      // Try next command
-    } @catch (NSException *e) {
-      NSDebugLLog(@"gwspace", @"System action failed with command: %@, error: %@", [cmd componentsJoinedByString:@" "], e);
-      // Try next command
-    }
-  }
-  
-  NSDebugLLog(@"gwspace", @"All system action commands failed for action type: %@", actionType);
-  return NO; // All failed
-}
-
-- (void)executeSystemCommandAndReset
-{
-  if (_pendingSystemActionCommand) {
-    NSString *actionType = [_pendingSystemActionCommand copy];
-    NSString *actionTitle = [_pendingSystemActionTitle copy];
-    NSDebugLLog(@"gwspace", @"Executing system command for action: %@", actionType);
-
-    NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:
-      actionType, @"action",
-      actionTitle ? actionTitle : (id)[NSNull null], @"title",
-      nil];
-
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-      [self _performSystemActionAsync:payload];
-    });
-
-    RELEASE(actionType);
-    RELEASE(actionTitle);
-  }
-}
-
-- (void)_performSystemActionAsync:(NSDictionary *)info
-{
-  NSAutoreleasePool *pool = [NSAutoreleasePool new];
-  NSString *actionType = [info objectForKey:@"action"];
-
-  BOOL success = [self trySystemAction: actionType];
-
-  NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
-    [NSNumber numberWithBool: success], @"success",
-    actionType, @"action",
-    [info objectForKey:@"title"], @"title",
-    nil];
-
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self _finalizeSystemAction:result];
-  });
-
-  RELEASE(pool);
-}
-
-- (void)_finalizeSystemAction:(NSDictionary *)result
-{
-  BOOL success = [[result objectForKey:@"success"] boolValue];
-  NSString *actionType = [result objectForKey:@"action"];
-  id titleObj = [result objectForKey:@"title"];
-  NSString *title = ([titleObj isKindOfClass:[NSNull class]]) ? nil : titleObj;
-
-  (void)title; // title currently unused but kept for potential UI messaging
-
-  if (!success) {
-    NSRunAlertPanel(NSLocalizedString(@"error", @""),
-                    [NSString stringWithFormat:@"Failed to execute %@ command. No suitable command found.", actionType],
-                    NSLocalizedString(@"OK", @""),
-                    nil,
-                    nil);
-  }
-
-  DESTROY(_pendingSystemActionCommand);
-  DESTROY(_pendingSystemActionTitle);
-  loggingout = NO;
-
-  NSDebugLLog(@"gwspace", @"System action attempt completed (success=%d). Application state reset. App will NOT quit.", success);
-}
-
-- (void)restart:(id)sender
-{
-    [[Workspace gworkspace] startLogoutRestartShutdownWithType:@"restart"
-        message:NSLocalizedString(@"Are you sure you want to quit\nall applications and restart now?", @"")
-        systemAction:NSLocalizedString(@"Restart", @"")
-        pendingCommand:@"restart"];
-}
-
-- (void)shutdown:(id)sender
-{
-    [[Workspace gworkspace] startLogoutRestartShutdownWithType:@"shutdown"
-        message:NSLocalizedString(@"Are you sure you want to quit\nall applications and shut down now?", @"")
-        systemAction:NSLocalizedString(@"Shut Down", @"")
-        pendingCommand:@"shutdown"];
-}
 
 - (void)createStandardUserDirectories
 {

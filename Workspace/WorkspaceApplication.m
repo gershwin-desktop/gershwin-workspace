@@ -49,77 +49,9 @@
 #include <errno.h>
 #include <limits.h>
 #include <unistd.h>
-#include <X11/Xlib.h>
-#include <X11/Xatom.h>
 
 @implementation Workspace (WorkspaceApplication)
 
-/*
- * Sever X client connections for all clients except this process.
- * This is a last-resort action used during logout to ensure X11 clients
- * cannot keep running by holding onto the display connection. We attempt
- * to read the _NET_WM_PID property for windows and issue XKillClient()
- * against windows owned by other processes. This is aggressive but useful
- * during logout to avoid stubborn X clients persisting.
- */
-- (void)severAllXClientsExceptSelf
-{
-  pid_t selfpid = getpid();
-  Display *dpy = XOpenDisplay(NULL);
-
-  if (dpy == NULL) {
-    NSDebugLLog(@"gwspace", @"severAllXClientsExceptSelf: could not open X display");
-    return;
-  }
-
-  Atom pidAtom = XInternAtom(dpy, "_NET_WM_PID", False);
-  Window root = DefaultRootWindow(dpy);
-
-  /* Depth-first traversal of the window tree */
-  NSMutableArray *stack = [NSMutableArray arrayWithObject: @(root)];
-
-  while ([stack count]) {
-    unsigned long w = [[stack lastObject] unsignedLongValue];
-    [stack removeLastObject];
-
-    Window root_ret, parent_ret;
-    Window *children = NULL;
-    unsigned int nchildren = 0;
-
-    if (XQueryTree(dpy, (Window)w, &root_ret, &parent_ret, &children, &nchildren)) {
-      for (unsigned int i = 0; i < nchildren; i++) {
-        [stack addObject: @((unsigned long)children[i])];
-      }
-      if (children) XFree(children);
-    }
-
-    if (pidAtom == None)
-      continue;
-
-    Atom actualType;
-    int actualFormat;
-    unsigned long nitems, bytes_after;
-    unsigned char *prop = NULL;
-    int status = XGetWindowProperty(dpy, (Window)w, pidAtom, 0, 1, False, XA_CARDINAL,
-                                    &actualType, &actualFormat, &nitems, &bytes_after, &prop);
-
-    if (status == Success && prop != NULL && nitems >= 1) {
-      unsigned long winpid = 0;
-
-      /* The property is stored as 32-bit CARDINALs; copy safely */
-      memcpy(&winpid, prop, sizeof(unsigned long));
-      XFree(prop);
-
-      if ((pid_t)winpid != selfpid && winpid != 0) {
-        XKillClient(dpy, (Window)w);
-        NSDebugLLog(@"gwspace", @"severAllXClientsExceptSelf: killed X client owning window 0x%lx (pid %lu)", w, winpid);
-      }
-    }
-  }
-
-  XFlush(dpy);
-  XCloseDisplay(dpy);
-}
 
 - (BOOL)performFileOperation:(NSString *)operation 
                       source:(NSString *)source 
@@ -127,14 +59,10 @@
                        files:(NSArray *)files 
                          tag:(NSInteger *)tag
 {
-  if (loggingout == NO)
-    {
       NSMutableDictionary *opdict = [NSMutableDictionary dictionary];
 
       if (operation != nil)
 	[opdict setObject: operation forKey: @"operation"];
-      else
-	NSDebugLLog(@"gwspace", @"performFileOperation: operation can't be nil");
 
       if (operation != nil)
 	[opdict setObject: source forKey: @"source"];
@@ -208,17 +136,7 @@
     
       return YES;
   
-    }
-  else
-    {
-      NSRunAlertPanel(nil, 
-		      NSLocalizedString(@"Workspace is logging out!", @""),
-		      NSLocalizedString(@"OK", @""), 
-		      nil, 
-		      nil);  
-    }
   
-  return NO;
 }
 
 - (BOOL)selectFile:(NSString *)fullPath
@@ -263,27 +181,6 @@
   return NO;
 }
 
-- (int)extendPowerOffBy:(int)requested
-{
-  int req = (int)(requested / 1000);
-  int ret;
-  
-  if (req > 0) {
-    ret = (req < maxLogoutDelay) ? req : maxLogoutDelay;
-  } else {
-    ret = 0;
-  }
-  
-  logoutDelay += ret;
-
-  if (logoutTimer && [logoutTimer isValid]) {
-    NSTimeInterval fireInterval = ([[logoutTimer fireDate] timeIntervalSinceNow] + ret);
-    [logoutTimer setFireDate: [NSDate dateWithTimeIntervalSinceNow: fireInterval]];
-  }
-  
-  return (ret * 1000);
-}
-
 - (NSArray *)launchedApplications
 {
   NSMutableArray *launched = [NSMutableArray array];
@@ -313,14 +210,6 @@
   GWLaunchedApp *app;
   id application;
 
-  if (loggingout) {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"Workspace is logging out!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-    return NO;
-  }
       
   if (appname == nil) {
     NSString *ext = [[fullPath pathExtension] lowercaseString];
@@ -400,14 +289,6 @@
   id application;
   NSArray	*args = nil;
 
-  if (loggingout) {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"Workspace is logging out!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-    return NO;
-  }
 
   [self applicationName: &appName andPath: &appPath forName: appname];
  
@@ -457,14 +338,6 @@
   GWLaunchedApp *app;
   id application;
 
-  if (loggingout) {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"Workspace is logging out!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-    return NO;
-  }
   
   if (name == nil) {
     NSWarnLog(@"No known applications for file extension '%@'", ext);
@@ -524,16 +397,6 @@
 
 - (void)initializeWorkspace
 {
-  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-
-  autoLogoutDelay = [defaults integerForKey: @"GSAutoLogoutDelay"];
-
-  maxLogoutDelay = [defaults integerForKey: @"GSMaxLogoutDelay"];
-  
-  if (autoLogoutDelay == 0) {
-    maxLogoutDelay = 30;
-  }  
-
   wsnc = [ws notificationCenter];
   
   [wsnc addObserver: self
@@ -572,10 +435,6 @@
 		         object: nil];    
     
   [self checkLastRunningApps];
-
-  logoutTimer = nil;
-  logoutDelay = 0;
-  loggingout = NO;
 
   // Init fallback timers dict for non-GNUstep apps' dock dot
   launchDotFallbacks = [NSMutableDictionary new];
@@ -1311,14 +1170,6 @@
   [[dtopManager dock] appTerminated: [app path] appName: [app name]];
   GWDebugLog(@"\"%@\" applicationTerminated", [app name]);  
   [launchedApps removeObject: app];  
-  
-  if (loggingout && ([launchedApps count] == 1)) {
-    GWLaunchedApp *app = [launchedApps objectAtIndex: 0];
-
-    if ([[app name] isEqual: gwProcessName]) {
-      [NSApp terminate: self];
-    }
-  }
 }
 
 - (GWLaunchedApp *)launchedAppWithPath:(NSString *)path
@@ -1543,161 +1394,6 @@
     }
 }
 
-- (void)startLogoutRestartShutdownWithType:(NSString *)type message:(NSString *)message systemAction:(NSString *)systemActionTitle pendingCommand:(NSString *)pendingCommand
-{
-  NSString *msg;
-
-  // Only set loggingout = YES for actual logout, not for restart/shutdown
-  loggingout = (pendingCommand == nil);
-  logoutDelay = 30;
- 
-  msg = message;
-
-  if (NSRunAlertPanel(        systemActionTitle ? systemActionTitle : NSLocalizedString(@"Log Out", @""),
-                      msg,
-                      systemActionTitle ? systemActionTitle : NSLocalizedString(@"Log Out", @""),
-                      NSLocalizedString(@"Cancel", @""),
-                      nil))
-    {
-      if (pendingCommand) {
-        // Set up for restart/shutdown
-        _pendingSystemActionCommand = pendingCommand;
-        _pendingSystemActionTitle = systemActionTitle;
-      }
-      [self doLogoutRestartShutdown:nil];
-    }
-  else
-    {
-      loggingout = NO;
-      if (pendingCommand) {
-        _pendingSystemActionCommand = nil;
-        _pendingSystemActionTitle = nil;
-      }
-    }
-}
-
-- (void)startLogout
-{
-  [self startLogoutRestartShutdownWithType:@"logout"
-                                   message:NSLocalizedString(@"Are you sure you want to quit\nall applications and log out now?", @"")
-                              systemAction:nil
-                             pendingCommand:nil];
-}
-
-- (void)doLogoutRestartShutdown:(id)sender
-{
-  NSMutableArray *launched = [NSMutableArray array];
-  GWLaunchedApp *gwapp = [self launchedAppWithPath: gwBundlePath andName: gwProcessName];
-  NSUInteger i;
-  
-  [launched addObjectsFromArray: launchedApps];
-  [launched removeObject: gwapp];
-
-  /* Sever X client connections now (except our own) so stubborn X11 apps
-     cannot keep the display connection alive and prevent logout. */
-  [self severAllXClientsExceptSelf];
-
-  for (i = 0; i < [launched count]; i++)
-    [[launched objectAtIndex: i] terminateApplication];
-
-  [launched removeAllObjects];
-  [launched addObjectsFromArray: launchedApps];
-  [launched removeObject: gwapp];
-    
-  if ([launched count])
-    {
-      ASSIGN (logoutTimer, [NSTimer scheduledTimerWithTimeInterval: logoutDelay
-                                                            target: self 
-                                                          selector: @selector(terminateTasksForLogoutRestartShutdown:) 
-                                                          userInfo: nil 
-                                                           repeats: NO]);
-    }
-  else
-    {
-      // For logout, terminate the app. For restart/shutdown, execute system command directly.
-      if (_pendingSystemActionCommand) {
-        // This is restart/shutdown - try system commands and reset state
-        [self executeSystemCommandAndReset];
-      } else {
-        // This is logout - terminate the app
-        [NSApp terminate: self];
-      }
-    }
-}
-
-- (void)terminateTasksForLogoutRestartShutdown:(id)sender
-{
-  BOOL canterminate = YES;
-
-  if ([launchedApps count] > 1)
-    {
-      NSMutableArray *launched = [NSMutableArray array];
-      GWLaunchedApp *gwapp = [self launchedAppWithPath: gwBundlePath andName: gwProcessName];
-      NSMutableString *appNames = [NSMutableString string];
-      NSString *msg = nil;
-      NSUInteger count;
-      NSUInteger i;
-
-      [launched addObjectsFromArray: launchedApps];
-      [launched removeObject: gwapp];
-    
-      count = [launched count];
-    
-      for (i = 0; i < count; i++)
-        {
-          GWLaunchedApp *app = [launched objectAtIndex: i];
-      
-          [appNames appendString: [app name]];
-
-          if (i < (count - 1))
-            [appNames appendString: @", "];
-        }
-    
-      msg = [NSString stringWithFormat: @"%@\n%@\n%@",
-                      NSLocalizedString(@"The following applications:", @""),
-                      appNames, 
-                      NSLocalizedString(@"refuse to terminate.", @"")];    
-
-      if (NSRunAlertPanel(_pendingSystemActionTitle ? _pendingSystemActionTitle : NSLocalizedString(@"Log Out", @""),
-                          msg,
-                          NSLocalizedString(@"Kill applications", @""),
-                          NSLocalizedString(@"Cancel", @""),
-                          nil))
-        {
-          /* First sever all X client connections so those apps cannot
-             keep the display connection and delay logout/termination. */
-          [self severAllXClientsExceptSelf];
-
-          for (i = 0; i < [launched count]; i++)
-            {
-              [[launched objectAtIndex: i] terminateTask];      
-            }    
-        }
-      else
-        {
-          canterminate = NO;
-        }
-    }
-  
-  if (canterminate)
-    {
-      // For logout, terminate the app. For restart/shutdown, execute system command directly.
-      if (_pendingSystemActionCommand) {
-        // This is restart/shutdown - try system commands and reset state
-        [self executeSystemCommandAndReset];
-      } else {
-        // This is logout - terminate the app
-        [NSApp terminate: self];
-      }
-    }
-  else
-    {
-      // Cannot terminate other apps - reset state
-      loggingout = NO;
-      DESTROY(_pendingSystemActionCommand);
-      DESTROY(_pendingSystemActionTitle);
-    }
-}
 
 
 

@@ -102,15 +102,6 @@
 
 "Are you sure you want to open" = "Wirklich ";
 
-"Are you sure you want to quit\nall applications and log out now?"
-  = "Sind sie sicher, dass Sie alle\nAnwendungen beenden und ausloggen wollen?";
-
-"Are you sure you want to quit\nall applications and restart now?"
-  = "Sind Sie sicher, dass Sie alle\nAnwendungen beenden und jetzt neu starten wollen?";
-
-"Are you sure you want to quit\nall applications and shut down now?"
-  = "Sind Sie sicher, dass Sie alle\nAnwendungen beenden und jetzt herunterfahren wollen?";
-
 "Arrange in Front" = "Im Vordergrund anordnen";
 
 "Ascent" = "Ansicht";
@@ -322,11 +313,6 @@
 "FUSE sshfs is required to mount SFTP network volumes but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshfs\n• On Fedora/RHEL: sudo dnf install fuse-sshfs\n• On Arch: sudo pacman -S sshfs"
   = "FUSE sshfs is required to mount SFTP network volumes but is not installed on your system.\n\nTo install it:\n• On Debian/Ubuntu: sudo apt-get install sshfs\n• On Fedora/RHEL: sudo dnf install fuse-sshfs\n• On Arch: sudo pacman -S sshfs";
 
-"Failed to execute shutdown command." = "Herunterfahrbefehl fehlgeschlagen.";
-
-"Failed to mount SFTP volume:\n\n%@"
-  = "SFTP-Volume konnte nicht eingeh\u00e4ngt werden:\n\n%@";
-
 "Failed to start the AVFS daemon. Please check that AVFS is properly installed." = "Failed to start the AVFS daemon. Please check that AVFS is properly installed.";
 
 "Failed to unmount %@." = "Auswerfen von %@ fehlgeschlagen.";
@@ -482,10 +468,6 @@
 
 "Keyboard Shortcuts" = "Tastaturk\u00fcrzel";
 
-"Kill applications" = "Anwendungen beenden";
-
-"Kind" = "Art";
-
 "Label" = "Etikett";
 
 "Label Color..." = "Etikettenfarbe...";
@@ -513,10 +495,6 @@
 "Local" = "Lokal";
 
 "Local User" = "Lokaler Benutzer";
-
-"Log Out" = "Ausloggen";
-
-"Log Out..." = "Ausloggen...";
 
 "Low Disk Space" = "Wenig Festplattenspeicher";
 
@@ -727,10 +705,6 @@
 
 "Rename Layer" = "Schicht umbenennen";
 
-"Restart" = "Neustarten";
-
-"Restart..." = "Neustarten...";
-
 "Revert" = "Zurücksetzen";
 
 "Right" = "Rechts";
@@ -808,10 +782,6 @@
 "Show status window" = "Statusfenster zeigen";
 
 "Shown files" = "Sichtbare Dateien";
-
-"Shut Down" = "Ausschalten";
-
-"Shut Down..." = "Ausschalten...";
 
 "Single Click Launch" = "Einzelklickstart";
 
@@ -985,10 +955,6 @@
 
 "Workspace Preferences" = "Workspace Grundeinstellungen";
 
-"Workspace is logging out!" = "Workspace loggt aus!";
-
-"Write" = "Schreiben";
-
 "Write Cancelled" = "Schreiben abgebrochen";
 
 "Write Complete" = "Schreiben abgeschlossen";
@@ -1150,10 +1116,6 @@
 "plain file" = "Datei";
 
 "recursive" = "rekursiv";
-
-"refuse to terminate." = "weigern sich zu beenden.";
-
-"scale" = "Skaliert";
 
 "seconds." = "Sekunden ausloggen.";
 
