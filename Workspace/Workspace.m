@@ -3559,8 +3559,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (void)goToFolder:(id)sender
 {
+  /* Start with an empty field so the user types the path (or relies on the
+   * grey typeahead suggestion); no pre-filled home directory. */
   GWDialog *dialog = [[GWDialog alloc] initWithTitle: _(@"Go to Folder:")
-                                             editText: NSHomeDirectory()
+                                             editText: @""
                                           switchTitle: nil];
   [dialog setValidator: ^BOOL(NSString *path) {
     if ([path length] == 0) return NO;
