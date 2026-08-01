@@ -259,6 +259,11 @@ static Workspace *gworkspace = nil;
   
   [mainMenu addItem:[NSMenuItem separatorItem]];
   
+  menuItem = [mainMenu addItemWithTitle:_(@"Empty Trash") action:@selector(emptyTrash:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
+  [mainMenu addItem:[NSMenuItem separatorItem]];
+  
   // Services submenu
   menuItem = [mainMenu addItemWithTitle:_(@"Services") action:NULL keyEquivalent:@""];
   services = AUTORELEASE ([NSMenu new]);
@@ -270,11 +275,6 @@ static Workspace *gworkspace = nil;
   [mainMenu addItemWithTitle:_(@"Hide Others") action:@selector(hideOtherApplications:) keyEquivalent:@"h"];
   [[mainMenu itemWithTitle:_(@"Hide Others")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSAlternateKeyMask];
   [mainMenu addItemWithTitle:_(@"Show All") action:@selector(unhideAllApplications:) keyEquivalent:@""];
-  
-  [mainMenu addItem:[NSMenuItem separatorItem]];
-  
-  menuItem = [mainMenu addItemWithTitle:_(@"Empty Trash") action:@selector(emptyTrash:) keyEquivalent:@""];
-  [menuItem setTarget:self];
   
   [mainMenu addItem:[NSMenuItem separatorItem]];
   
