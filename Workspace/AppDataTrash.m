@@ -10,6 +10,7 @@
 
 #import "AppDataTrash.h"
 #import "AppearanceMetrics.h"
+#import "FSNFunctions.h"
 
 #import <AppKit/AppKit.h>
 
@@ -17,12 +18,14 @@
  * its own checkbox.  GNUstep NSAlert has no accessory view, so build a small
  * window modeled on GWDialog, following the spacing rules in
  * AppearanceMetrics.h. */
-@interface AppDataTrashDialog : NSWindow <NSTableViewDataSource>
+@interface AppDataTrashDialog : NSWindow <NSTableViewDataSource, NSTableViewDelegate>
 {
   NSTableView *tableView;
+  NSTextField *infoLabel;
   NSButton *cancelButt, *okButt;
   NSArray *paths;
   NSMutableArray *checked;
+  NSArray *toolTipTags; /* row index -> NSToolTipTag */
   NSModalResponse result;
 }
 - (id)initWithAppName:(NSString *)appName relatedPaths:(NSArray *)paths;
@@ -37,13 +40,14 @@
 {
   RELEASE (paths);
   RELEASE (checked);
+  RELEASE (toolTipTags);
   [super dealloc];
 }
 
 - (id)initWithAppName:(NSString *)appName relatedPaths:(NSArray *)relPaths
 {
   CGFloat cw = METRICS_WIN_MIN_WIDTH;
-  CGFloat ch = 300;
+  CGFloat ch = 320;
   NSRect r = NSMakeRect(0, 0, cw, ch);
 
   self = [super initWithContentRect: r
@@ -100,30 +104,33 @@
       [titleField setSelectable: NO];
       [titleField setFont: METRICS_FONT_SYSTEM_REGULAR_13];
       [titleField setStringValue:
-        NSLocalizedString(@"Move related application data to the Trash?", @"")];
+        [NSString stringWithFormat:
+          NSLocalizedString(@"%@ has related auxiliary data.", @""),
+          appName]];
       [cv addSubview: titleField];
       RELEASE(titleField);
 
       y -= 16 + METRICS_TITLE_MESSAGE_GAP;
 
-      /* Message label: System Regular 13 pt, wrapped */
+      /* Message label: System Regular 13 pt, wrapped across up to three
+       * lines (the question + the "click on an item" hint). */
       messageField = [[NSTextField alloc] initWithFrame:
-                       NSMakeRect(METRICS_CONTENT_SIDE_MARGIN, y - 40,
-                                  cw - 2 * METRICS_CONTENT_SIDE_MARGIN, 40)];
+                       NSMakeRect(METRICS_CONTENT_SIDE_MARGIN, y - 56,
+                                  cw - 2 * METRICS_CONTENT_SIDE_MARGIN, 56)];
       [messageField setBackgroundColor: [NSColor windowBackgroundColor]];
       [messageField setBezeled: NO];
       [messageField setEditable: NO];
       [messageField setSelectable: NO];
       [messageField setFont: METRICS_FONT_SYSTEM_REGULAR_13];
+      [[messageField cell] setLineBreakMode: NSLineBreakByWordWrapping];
       [messageField setStringValue:
-        [NSString stringWithFormat:
-          NSLocalizedString(@"\"%@\" has related user data. Select the items to "
-                            @"move to the Trash:", @""),
-          appName]];
+        NSLocalizedString(@"Would you like to move the auxiliary data also to the "
+                          @"Trash? Keeping or removing the auxiliary data is "
+                          @"harmless.\nClick on an item to see a description.", @"")];
       [cv addSubview: messageField];
       RELEASE(messageField);
 
-      y -= 40 + METRICS_SPACE_8;
+      y -= 56 + METRICS_SPACE_8;
 
       /* Scrollable list with a per-item checkbox column */
       scroll = [[NSScrollView alloc] initWithFrame:
@@ -140,8 +147,6 @@
       checkCell = [[NSButtonCell alloc] init];
       [checkCell setButtonType: NSSwitchButton];
       [checkCell setEditable: YES];
-      [checkCell setTarget: self];
-      [checkCell setAction: @selector(checkboxClicked:)];
       [checkColumn setDataCell: checkCell];
       RELEASE(checkCell);
       [tableView addTableColumn: checkColumn];
@@ -153,13 +158,48 @@
       RELEASE(pathColumn);
 
       [tableView setDataSource: self];
+      [tableView setDelegate: self];
       [tableView setHeaderView: nil];
       [scroll setDocumentView: tableView];
       RELEASE(tableView);
       [cv addSubview: scroll];
       RELEASE(scroll);
 
-      y -= 130 + METRICS_SPACE_16;
+      /* Tooltip per row: a tracking rect for each row fires mouseEntered: as
+       * the cursor moves between lines, so the description updates to match
+       * the row currently hovered. */
+      {
+        NSMutableArray *tags = [NSMutableArray array];
+        NSInteger nRows = [tableView numberOfRows];
+        NSInteger r;
+        for (r = 0; r < nRows; r++)
+          {
+            NSToolTipTag t = [tableView addToolTipRect: [tableView rectOfRow: r]
+                                                 owner: self
+                                              userData: NULL];
+            [tags addObject: [NSNumber numberWithInteger: t]];
+          }
+        ASSIGN (toolTipTags, tags);
+      }
+
+      y -= 130 + METRICS_SPACE_8;
+
+      /* Label below the list: shows the well-known directory description of
+       * the selected item when a row is clicked; empty until then. */
+      infoLabel = [[NSTextField alloc] initWithFrame:
+                    NSMakeRect(METRICS_CONTENT_SIDE_MARGIN, y - 16,
+                               cw - 2 * METRICS_CONTENT_SIDE_MARGIN, 16)];
+      [infoLabel setBackgroundColor: [NSColor windowBackgroundColor]];
+      [infoLabel setBezeled: NO];
+      [infoLabel setEditable: NO];
+      [infoLabel setSelectable: NO];
+      [infoLabel setFont: METRICS_FONT_SYSTEM_REGULAR_11];
+      [infoLabel setTextColor: [NSColor secondaryLabelColor]];
+      [infoLabel setStringValue: @""];
+      [cv addSubview: infoLabel];
+      RELEASE(infoLabel);
+
+      y -= 16 + METRICS_SPACE_16;
 
       /* Buttons: right-aligned, default "Move to Trash" in the lower-right
        * corner, Cancel to its left (AppearanceMetrics ordering).  Size each
@@ -232,15 +272,81 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
   return [paths objectAtIndex: rowIndex];
 }
 
-- (void)checkboxClicked:(id)sender
+/* NSTableView calls this when a switch button cell is toggled, so clicking a
+ * checkbox updates our state instead of closing the dialog. */
+- (void)tableView:(NSTableView *)aTableView
+   setObjectValue:(id)anObject
+   forTableColumn:(NSTableColumn *)aTableColumn
+              row:(NSInteger)rowIndex
 {
-  NSInteger row = [tableView clickedRow];
-  if (row >= 0 && row < [checked count])
+  if ([[aTableColumn identifier] isEqual: @"check"]
+      && rowIndex >= 0 && rowIndex < [checked count])
     {
-      BOOL on = ([sender state] == NSOnState);
-      [checked replaceObjectAtIndex: row withObject: [NSNumber numberWithInt: on]];
-      [tableView reloadData];
+      [checked replaceObjectAtIndex: rowIndex
+                         withObject: anObject];
     }
+}
+
+/* Returns the description for the well-known directory that owns the given
+ * related-data path, or nil.  The path is something like
+ * .../Library/Caches/<app>; find the first ancestor that has a description. */
++ (NSString *)descriptionForRelatedPath:(NSString *)path
+{
+  if (path == nil)
+    return nil;
+
+  NSString *p = [path stringByDeletingLastPathComponent];
+  while (p && [p length] > 1)
+    {
+      NSString *desc = GSDirectoryDescriptionForPath(p);
+      if (desc)
+        return desc;
+      p = [p stringByDeletingLastPathComponent];
+    }
+  return nil;
+}
+
+/* When the user clicks a row, show the well-known directory description of
+ * that item in the label below the list.  Cleared when nothing is selected. */
+- (void)tableViewSelectionDidChange:(NSNotification *)aNotification
+{
+  NSInteger row = [tableView selectedRow];
+  if (row >= 0 && row < [paths count])
+    {
+      NSString *desc =
+        [AppDataTrashDialog descriptionForRelatedPath: [paths objectAtIndex: row]];
+      if (desc)
+        {
+          [infoLabel setStringValue: desc];
+          return;
+        }
+    }
+  [infoLabel setStringValue: @""];
+}
+
+/* GSToolTips owner: called for the tooltip rect added per row.  Maps the
+ * tracking tag back to its row and returns that row's description. */
+- (NSString *)view:(NSView *)view
+ stringForToolTip:(NSToolTipTag)tag
+            point:(NSPoint)point
+         userData:(void *)data
+{
+  NSUInteger i;
+  for (i = 0; i < [toolTipTags count]; i++)
+    {
+      if ([[toolTipTags objectAtIndex: i] integerValue] == tag)
+        {
+          if (i < [paths count])
+            {
+              NSString *desc =
+                [AppDataTrashDialog descriptionForRelatedPath: [paths objectAtIndex: i]];
+              if (desc)
+                return desc;
+            }
+          break;
+        }
+    }
+  return @"";
 }
 
 - (NSModalResponse)runModal
