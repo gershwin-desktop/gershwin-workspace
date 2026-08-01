@@ -583,14 +583,7 @@
 
 - (GWViewType)viewType
 {
-  if ([viewType isEqualToString: @"Browser"]) {
-    return GWViewTypeBrowser;
-  } else if ([viewType isEqualToString: @"Icon"]) {
-    return GWViewTypeIcon;
-  } else if ([viewType isEqualToString: @"List"]) {
-    return GWViewTypeList;
-  }
-  return GWViewTypeBrowser;
+  return [self GWViewTypeFromName: viewType];
 }
 
 - (BOOL)isRootViewer
@@ -1575,30 +1568,18 @@
 {
   NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
   NSDebugLLog(@"gwspace", @"║ setViewerType: CALLED");
-  
-  NSString *title = [sender title];
-  NSDebugLLog(@"gwspace", @"║ menu title: %@", title);
-  NSDebugLLog(@"gwspace", @"║ current viewType: %@", viewType);
-  
-  // Extract view type from title - handles various localizations
-  // Common patterns: "as List", "as Icon", "as Columns", etc.
-  // We check for the English keywords anywhere in the string
-  NSString *requestedType = nil;
-  NSString *upperTitle = [title uppercaseString];
-  
-  if ([upperTitle rangeOfString:@"BROWSER"].location != NSNotFound ||
-      [upperTitle rangeOfString:@"COLUMN"].location != NSNotFound) {
-    requestedType = @"Browser";
-  } else if ([upperTitle rangeOfString:@"ICON"].location != NSNotFound) {
-    requestedType = @"Icon";
-  } else if ([upperTitle rangeOfString:@"LIST"].location != NSNotFound) {
-    requestedType = @"List";
-  }
-  
+
+  // Resolve the requested view type through the shared helper, which prefers
+  // the sender's GWViewType tag and falls back to parsing the localized title
+  // (locale-safe; title parsing alone failed on e.g. German "als Spalten").
+  GWViewType requestedEnum = [self GWViewTypeFromSender: sender];
+  NSString *requestedType = [self GWViewTypeName: requestedEnum];
+
   NSDebugLLog(@"gwspace", @"║ extracted type: %@", requestedType);
-  
+  NSDebugLLog(@"gwspace", @"║ current viewType: %@", viewType);
+
   if (!requestedType) {
-    NSDebugLLog(@"gwspace", @"║ ERROR: Could not determine view type from title!");
+    NSDebugLLog(@"gwspace", @"║ ERROR: Could not determine view type from tag/title!");
     NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
     return;
   }

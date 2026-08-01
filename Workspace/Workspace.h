@@ -319,6 +319,8 @@
 
 - (void)setViewerBehaviour:(id)sender;
 
+- (void)setViewerType:(id)sender;
+
 - (void)setDefaultBrowsingBehaviour:(id)sender;
 
 - (void)setDefaultSpatialBehaviour:(id)sender;

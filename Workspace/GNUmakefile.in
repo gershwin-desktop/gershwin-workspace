@@ -103,9 +103,11 @@ Desktop/Dock/DockService.m \
 Desktop/Dock/GWDockWindow.m \
 FileViewer/GWViewersManager.m \
 FileViewer/GWViewer.m \
+FileViewer/GWViewTypeHelpers.m \
 FileViewer/GWSpatialViewer.m \
 FileViewer/GWViewerWindow.m \
 FileViewer/GWViewerBrowser.m \
+FileViewer/GWViewerBrowserPreview.m \
 FileViewer/GWViewerIconsView.m \
 FileViewer/GWViewerListView.m \
 FileViewer/NSTableView+DragFix.m \

@@ -43,6 +43,7 @@ typedef enum
 @class GWViewerScrollView;
 @class GWViewerIconsPath;
 @class GWViewerPathsScroll;
+@class GWViewerBrowserPreview;
 @class NSView;
 @class Workspace;
 
@@ -58,6 +59,9 @@ typedef enum
   GWViewerScrollView *nviewScroll;
   id nodeView;
   
+  /* Rightmost "Contents" preview pane, shown in browser (columns) view. */
+  GWViewerBrowserPreview *previewPane;
+  
   NSDictionary *viewerPrefs;
   GWViewType viewType;
 
@@ -67,6 +71,7 @@ typedef enum
 
   int visibleCols;
   int resizeIncrement;
+  int previewColWidth;
     
   FSNode *baseNode;
   NSArray *baseNodeArray;
@@ -196,6 +201,27 @@ typedef enum
 - (BOOL)validateItem:(id)menuItem;
 - (void)makeThumbnails:(id)sender;
 - (void)removeThumbnails:(id)sender;
+
+@end
+
+/* Shared view-type helpers used by both the browsing GWViewer and the
+ * spatial GWSpatialViewer.  The GWViewType enum is the canonical
+ * representation; the string names ("Icon"/"List"/"Browser") are only a
+ * legacy form used by GWSpatialViewer's defaults and DS_Store, so the
+ * conversion lives here once. */
+@interface NSObject (GWViewTypeHelpers)
+
+/* Converts a GWViewType enum to its legacy string name, or nil. */
+- (NSString *)GWViewTypeName:(GWViewType)type;
+
+/* Converts a legacy string name to a GWViewType, or 0 if unknown. */
+- (GWViewType)GWViewTypeFromName:(NSString *)name;
+
+/* Resolves the requested view type from a menu sender, preferring its tag
+ * (which carries the GWViewType) and falling back to parsing the localized
+ * title for senders that only provide a title.  Returns 0 if it cannot be
+ * determined. */
+- (GWViewType)GWViewTypeFromSender:(id)sender;
 
 @end
 
