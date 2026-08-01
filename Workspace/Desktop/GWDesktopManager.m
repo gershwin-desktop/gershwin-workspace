@@ -491,10 +491,34 @@ static CGFloat lastScaleFactor = 1.0;
 
   /* The GNUstep backend may still convert GNUstep -> X11 coordinates with the
    * previous screen height right after a resolution change, misplacing the
-   * dock.  Re-tile once the backend has settled.  The Workspace's main run
-   * loop is frequently blocked in DO calls, so perform a delayed hop via a
-   * background thread instead of a run-loop timer. */
+   * dock and the desktop window.  Re-position once the backend has settled.
+   * The Workspace's main run loop is frequently blocked in DO calls, so
+   * perform a delayed hop via a background thread instead of a run-loop
+   * timer. */
   [self scheduleDockReTile];
+  [self scheduleDesktopWindowRePosition];
+}
+
+- (void)scheduleDesktopWindowRePosition
+{
+  [NSThread detachNewThreadSelector: @selector(desktopWindowRePositionThread:)
+                           toTarget: self
+                         withObject: nil];
+}
+
+- (void)desktopWindowRePositionThread:(id)arg
+{
+  CREATE_AUTORELEASE_POOL (pool);
+  [NSThread sleepForTimeInterval: 0.6];
+  [self performSelectorOnMainThread: @selector(desktopWindowRePositionOnMainThread)
+                        withObject: nil
+                     waitUntilDone: NO];
+  RELEASE (pool);
+}
+
+- (void)desktopWindowRePositionOnMainThread
+{
+  [win setFrame: [GWDesktopWindow desktopFullFrame] display: YES];
 }
 
 - (void)scheduleDockReTile
