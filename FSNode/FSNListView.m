@@ -530,9 +530,7 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
       return [rep shownInfo];
       break;
     case FSNInfoDescriptionType:
-      if ([nd isDirectory])
-        return GSDirectoryDescriptionForPath([nd path]);
-      return @"";
+      return GSDirectoryDescriptionForPath([nd path]);
       break;
     default:
       return [nd name];

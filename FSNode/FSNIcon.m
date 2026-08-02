@@ -370,7 +370,7 @@ static NSImage *branchImage;
 
       /* Set tooltip to well-known directory description if applicable.
          Must happen after setFrame: so the tooltip tracking rect has valid bounds. */
-      if (node && [node isDirectory])
+      if (node)
         {
           NSString *desc = GSDirectoryDescriptionForPath([node path]);
           if (desc)
@@ -1099,7 +1099,7 @@ static NSImage *branchImage;
   [self tile];
 
   /* Set tooltip to well-known directory description if applicable */
-  if (node && [node isDirectory])
+  if (node)
     {
       NSString *desc = GSDirectoryDescriptionForPath([node path]);
       if (desc)
@@ -2376,7 +2376,7 @@ static NSImage *branchImage;
 - (void)viewDidMoveToWindow
 {
   [super viewDidMoveToWindow];
-  if ([self window] && node && [node isDirectory])
+  if ([self window] && node)
     {
       NSString *desc = GSDirectoryDescriptionForPath([node path]);
       if (desc)
