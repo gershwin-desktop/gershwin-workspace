@@ -65,6 +65,8 @@
 
 "directory" = "cartella";
 
+"document" = "documento";
+
 "elements" = "elementi";
 
 "error" = "errore";

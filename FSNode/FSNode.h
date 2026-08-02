@@ -158,6 +158,9 @@
 
 - (NSString *)typeDescription;
 
+/* Native GNUstep kind description for a plain file (extension-map based). */
+- (NSString *)typeDescriptionForPlainFile;
+
 - (NSDate *)creationDate;
 
 - (NSString *)crDateDescription;

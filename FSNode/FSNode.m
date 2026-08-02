@@ -636,11 +636,84 @@
   ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"symbolic link", nil, [NSBundle bundleForClass:[self class]], @""));
 }
 
+/* Native GNUstep description of the kind of a plain file, based on the
+   extension map that make_services builds (.GNUstepAppList).  Prefers the
+   human-readable type name an application declares for the extension
+   (e.g. "Text Document"), then the name of the application that opens the
+   file (e.g. "TextEdit document").  Returns nil if nothing is registered. */
+- (NSString *)typeDescriptionForPlainFile
+{
+  NSString *ext = [[path pathExtension] lowercaseString];
+  NSDictionary *apps;
+
+  if (ext == nil || [ext length] == 0)
+    {
+      return nil;
+    }
+  apps = [ws infoForExtension: ext];
+  if (apps == nil || [apps count] == 0)
+    {
+      return nil;
+    }
+
+  /* Prefer a declared human-readable type name from any application that
+     opens this kind of file (keys sorted for determinism). */
+  {
+    NSArray *names = [[apps allKeys] sortedArrayUsingSelector:
+      @selector(compare:)];
+    NSEnumerator *e = [names objectEnumerator];
+    NSString *appName;
+
+    while ((appName = [e nextObject]) != nil)
+      {
+        NSDictionary *typeInfo = [apps objectForKey: appName];
+        NSString *human = [typeInfo objectForKey: @"NSHumanReadableName"];
+        NSString *typeName;
+
+        if (human == nil)
+          {
+            human = [typeInfo objectForKey: @"NSTypeName"];
+          }
+        typeName = human;
+        if (typeName != nil && [typeName length] > 0)
+          {
+            return typeName;
+          }
+      }
+  }
+
+  /* Otherwise name the application that would open the file. */
+  {
+    NSString *appName = [ws getBestAppInRole: nil forExtension: ext];
+    NSString *doc = NSLocalizedStringFromTableInBundle(@"document", nil,
+      [NSBundle bundleForClass:[self class]], @"");
+
+    if (appName == nil)
+      {
+        appName = [[apps allKeys] objectAtIndex: 0];
+      }
+    if (appName != nil && [appName length] > 0)
+      {
+        appName = [appName stringByDeletingPathExtension];
+        return [NSString stringWithFormat: @"%@ %@", appName, doc];
+      }
+  }
+  return nil;
+}
+
 - (NSString *)typeDescription
 {
   if (typeDescription == nil) {
     if ([self isPlain]) {
-      ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"plain file", nil, [NSBundle bundleForClass:[self class]], @""));
+      NSString *desc = [self typeDescriptionForPlainFile];
+      if (desc != nil)
+        {
+          ASSIGN (typeDescription, desc);
+        }
+      else
+        {
+          ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"plain file", nil, [NSBundle bundleForClass:[self class]], @""));
+        }
     } else if ([self isDirectory]) {
       if ([self isApplication]) {
         ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"application", nil, [NSBundle bundleForClass:[self class]], @""));

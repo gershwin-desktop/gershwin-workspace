@@ -63,6 +63,8 @@
 
 "directory" = "directory";
 
+"document" = "document";
+
 "elements" = "elements";
 
 "error" = "error";
