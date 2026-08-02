@@ -157,13 +157,34 @@ jobs:
           cpu: 2
           mem: 4096
           prepare: |
-            pkg_add -I git
+            # pkg_add searches each PKG_PATH location in order. Using several
+            # mirrors keeps the job working through transient cdn.openbsd.org
+            # outages (which previously left gmake uninstalled and aborted
+            # "make corelibs" with "gmake: not found").
+            export PKG_PATH="https://ftp.openbsd.org/pub/OpenBSD/%v/packages/%a/:https://mirrors.gigenet.com/pub/OpenBSD/%v/packages/%a/:https://cdn.openbsd.org/pub/OpenBSD/%v/packages/%a/"
+            for i in 1 2 3 4 5; do
+              pkg_add -I git && exit 0
+              echo "pkg_add git failed (attempt $i), retrying..."
+              sleep 15
+            done
+            exit 1
           run: |
             set -e
             BASE="$(pwd)"
+            export PKG_PATH="https://ftp.openbsd.org/pub/OpenBSD/%v/packages/%a/:https://mirrors.gigenet.com/pub/OpenBSD/%v/packages/%a/:https://cdn.openbsd.org/pub/OpenBSD/%v/packages/%a/"
             git clone --depth 1 https://github.com/gershwin-desktop/gershwin-developer.git
             cd "$BASE/gershwin-developer"
             ./Library/Scripts/bootstrap.sh
+            # bootstrap.sh tolerates per-package pkg_add failures, so a transient
+            # mirror outage can leave required build tools missing. Verify the
+            # critical ones and retry to ride out mirror flakiness.
+            for i in 1 2 3 4 5; do
+              command -v gmake >/dev/null 2>&1 && break
+              echo "gmake missing after bootstrap (attempt $i), retrying pkg_add..."
+              pkg_add -I gmake || true
+              sleep 15
+            done
+            command -v gmake >/dev/null 2>&1 || { echo "FATAL: gmake not installed"; exit 1; }
             SKIP_REPOS="${{ env.SKIP_REPOS }}" ./Library/Scripts/checkout.sh
             ln -sfn "$BASE/gershwin-workspace" Library/Sources/gershwin-workspace
             make corelibs
