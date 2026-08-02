@@ -705,14 +705,23 @@
 {
   if (typeDescription == nil) {
     if ([self isPlain]) {
-      NSString *desc = [self typeDescriptionForPlainFile];
-      if (desc != nil)
+      if ([self isExecutable])
         {
-          ASSIGN (typeDescription, desc);
+          /* Files with the execute bit set are executables, regardless of
+             what application would open them. */
+          ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"executable", nil, [NSBundle bundleForClass:[self class]], @""));
         }
       else
         {
-          ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"plain file", nil, [NSBundle bundleForClass:[self class]], @""));
+          NSString *desc = [self typeDescriptionForPlainFile];
+          if (desc != nil)
+            {
+              ASSIGN (typeDescription, desc);
+            }
+          else
+            {
+              ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"plain file", nil, [NSBundle bundleForClass:[self class]], @""));
+            }
         }
     } else if ([self isDirectory]) {
       if ([self isApplication]) {

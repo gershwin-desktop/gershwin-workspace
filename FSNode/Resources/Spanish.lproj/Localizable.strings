@@ -61,7 +61,7 @@
 
 "character special" = "carácter special";
 
-"directory" = "directorio";
+"directory" = "carpeta";
 
 "document" = "documento";
 
@@ -69,11 +69,13 @@
 
 "error" = "error";
 
+"executable" = "ejecutable";
+
 "mount point" = "punto de montaje";
 
 "package" = "paquete";
 
-"plain file" = "archivo plano";
+"plain file" = "documento";
 
 "socket" = "enchufe";
 

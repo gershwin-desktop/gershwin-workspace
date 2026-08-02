@@ -69,11 +69,13 @@
 
 "error" = "erreur";
 
+"executable" = "exécutable";
+
 "mount point" = "point de montage";
 
 "package" = "paquet";
 
-"plain file" = "simple fichier";
+"plain file" = "document";
 
 "socket" = "socket";
 

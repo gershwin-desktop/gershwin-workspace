@@ -59,7 +59,7 @@
 
 "character special" = "zeichenorientiert";
 
-"directory" = "Verzeichnis";
+"directory" = "Ordner";
 
 "document" = "Dokument";
 
@@ -67,11 +67,13 @@
 
 "error" = "Fehler";
 
+"executable" = "Ausf\u00fchrbare Datei";
+
 "mount point" = "Einh\u00e4ngepunkt";
 
 "package" = "Paket";
 
-"plain file" = "Datei";
+"plain file" = "Dokument";
 
 "socket" = "Socket";
 

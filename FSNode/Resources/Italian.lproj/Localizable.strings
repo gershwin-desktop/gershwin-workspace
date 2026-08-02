@@ -71,11 +71,13 @@
 
 "error" = "errore";
 
+"executable" = "eseguibile";
+
 "mount point" = "mount point";
 
 "package" = "Pacchetto";
 
-"plain file" = "archivio semplice";
+"plain file" = "documento";
 
 "socket" = "socket";
 
