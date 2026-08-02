@@ -556,6 +556,20 @@ static NSString *nibName = @"Contents";
 - (NSData *)textContentsAtPath:(NSString *)path 
                 withAttributes:(NSDictionary *)attributes
 {
+  /* Never try to read special files (char/block devices, FIFOs, sockets).
+   * A blocking device like /dev/ptmx makes read() hang forever, freezing the
+   * Workspace when such a node is previewed. */
+  if (attributes)
+    {
+      NSString *fileType = [attributes fileType];
+      if (fileType == NSFileTypeCharacterSpecial
+          || fileType == NSFileTypeBlockSpecial
+          || fileType == NSFileTypeSocket
+          || fileType == NSFileTypeFifo
+          || fileType == NSFileTypeSymbolicLink)
+        return nil;
+    }
+
   unsigned long long nbytes = [attributes fileSize];
   NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath: path];
   NSData *data;

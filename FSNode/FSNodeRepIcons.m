@@ -29,6 +29,7 @@
 #import <AppKit/AppKit.h>
 #import <fcntl.h>
 #import <unistd.h>
+#import <sys/stat.h>
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
@@ -127,13 +128,26 @@ static unsigned char darkerLUT[256] = {
 static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 {
   unsigned char ident[16];
-  int fd = open([path fileSystemRepresentation], O_RDONLY);
+  int fd;
+  ssize_t rd;
+  struct stat st;
+
+  /* Only regular files can be AppImages.  Opening a device node or FIFO can
+   * block indefinitely (e.g. /dev/ptmx, a pipe with no writer), which would
+   * hang the Workspace when a directory such as /dev is displayed. */
+  if (stat([path fileSystemRepresentation], &st) != 0)
+    return NO;
+  if (!S_ISREG(st.st_mode))
+    return NO;
+
+  /* O_NONBLOCK so a slow file cannot stall the caller either. */
+  fd = open([path fileSystemRepresentation], O_RDONLY | O_NONBLOCK);
   if (fd < 0)
     {
       return NO;
     }
 
-  ssize_t rd = read(fd, ident, sizeof(ident));
+  rd = read(fd, ident, sizeof(ident));
   close(fd);
 
   if (rd < (ssize_t)sizeof(ident))

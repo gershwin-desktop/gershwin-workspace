@@ -7,6 +7,7 @@
 #define _GNU_SOURCE
 #import "GWProcessMonitor.h"
 #import <unistd.h>
+#import <fcntl.h>
 #import <poll.h>
 #import <signal.h>
 #import <pthread.h>
@@ -127,6 +128,19 @@
           [self release];
           return nil;
         }
+
+      /* The wakeup pipe is drained with a blocking read loop below; make the
+       * read end non-blocking so that read() returns EAGAIN (0 is never
+       * returned) instead of blocking forever once the queued bytes are
+       * consumed - the write end stays open for the lifetime of the monitor,
+       * so a blocking read would never see EOF.  This can hang the monitor
+       * thread (and the app's responsiveness) whenever a wakeup races with
+       * a directory scan such as opening /dev. */
+      {
+        int flags = fcntl(_wakeupPipe[0], F_GETFL, 0);
+        if (flags >= 0)
+          fcntl(_wakeupPipe[0], F_SETFL, flags | O_NONBLOCK);
+      }
 
       _running = YES;
       _monitorThread = [[NSThread alloc] initWithTarget:self
