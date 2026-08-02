@@ -66,6 +66,8 @@
   <string>Superuser's home directory</string>
   <key>/run</key>
   <string>Volatile runtime data such as PIDs and sockets since boot</string>
+  <key>/var/run</key>
+  <string>Runtime state files such as PIDs and sockets since boot (often a symlink to /run)</string>
   <key>/sbin</key>
   <string>Essential system administration binaries required at boot time (often a symlink to /usr/sbin)</string>
   <key>/selinux</key>

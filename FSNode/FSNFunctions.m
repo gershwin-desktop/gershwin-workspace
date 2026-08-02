@@ -483,5 +483,17 @@ GSDirectoryDescriptionForPath(NSString *path)
     cached = [expanded copy];
   });
 
-  return [cached objectForKey: path];
+  /* The description is keyed by the real path.  Many well-known directories
+   * are symlinks (e.g. /var/run -> /run, /bin -> /usr/bin) or a symlink
+   * chain thereof, so if the exact path is unknown, follow the symlinks and
+   * look up the target instead. */
+  NSString *desc = [cached objectForKey: path];
+  if (desc)
+    return desc;
+
+  NSString *resolved = [path stringByResolvingSymlinksInPath];
+  if (resolved && [resolved isEqualToString: path] == NO)
+    return [cached objectForKey: resolved];
+
+  return nil;
 }
