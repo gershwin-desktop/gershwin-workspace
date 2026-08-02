@@ -1,7 +1,8 @@
 /* VolumeManager.h
  *
- * Manages mounting and unmounting of disk image files (DMG, ISO, BIN, NRG, IMG, MDF)
- * using darling-dmg and fuseiso tools.
+ * Manages mounting and unmounting of disk image files (DMG, ISO, BIN, NRG, IMG, MDF).
+ * DMG files are mounted by trying darling-dmg first, then apfs-fuse as a fallback;
+ * ISO/BIN/NRG/IMG/MDF are handled by fuseiso.
  *
  * Also supports AVFS (A Virtual File System) for browsing archives and compressed
  * files (tar, tar.gz, tar.bz2, zip, rar, 7z, etc.) via FUSE.
@@ -86,6 +87,11 @@
  * Returns YES if darling-dmg is available
  */
 - (BOOL)isDarlingDmgAvailable;
+
+/**
+ * Returns YES if apfs-fuse is available
+ */
+- (BOOL)isApfsFuseAvailable;
 
 /**
  * Returns YES if fuseiso is available

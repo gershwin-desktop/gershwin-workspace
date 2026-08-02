@@ -157,19 +157,29 @@ static VolumeManager *sharedInstance = nil;
   return [self findToolInPath:@"darling-dmg" alternativeNames:nil] != nil;
 }
 
+- (BOOL)isApfsFuseAvailable
+{
+  return [self findToolInPath:@"apfs-fuse" alternativeNames:nil] != nil;
+}
+
 - (BOOL)isFuseisoAvailable
 {
   return [self findToolInPath:@"fuseiso" alternativeNames:nil] != nil;
 }
 
-- (void)showDarlingDmgNotInstalledAlert
+/* DMG mounting is provided by darling-dmg (HFS+/HFSX images) with apfs-fuse
+ * (APFS images) as a fallback. If neither is present we have no way to mount
+ * the file at all, so report both together rather than a tool-specific alert. */
+- (void)showNoDmgToolInstalledAlert
 {
   NSAlert *alert = [[NSAlert alloc] init];
-  [alert setMessageText:@"darling-dmg Not Installed"];
+  [alert setMessageText:@"DMG Mount Tool Not Installed"];
   [alert setInformativeText:
-    @"darling-dmg is required to mount DMG files but is not installed.\n\n"
-    @"To install darling-dmg, see:\n"
-    @"https://github.com/darlinghq/darling"];
+    @"Mounting DMG files requires darling-dmg (HFS+) or apfs-fuse (APFS),\n"
+    @"but neither is installed.\n\n"
+    @"To install them, see:\n"
+    @"https://github.com/darlinghq/darling-dmg\n"
+    @"https://github.com/sgan81/apfs-fuse"];
   [alert setAlertStyle:NSWarningAlertStyle];
   [alert addButtonWithTitle:@"OK"];
   [alert runModal];
@@ -430,6 +440,145 @@ static VolumeManager *sharedInstance = nil;
   }
 }
 
+/* Try to mount a DMG with one specific tool. Returns the mount point on
+ * success, or nil (leaving *errorOut describing the failure). A per-tool
+ * failure is recorded here so the caller can fall back to another tool and
+ * only surface an alert once every candidate has failed. */
+- (NSString *)mountDMGWithToolPath:(NSString *)toolPath
+                            file:(NSString *)dmgPath
+                       mountPoint:(NSString *)mountPoint
+                            error:(NSString **)errorOut
+{
+  if (errorOut) {
+    *errorOut = nil;
+  }
+
+  NSDebugLLog(@"gwspace", @"VolumeManager: Attempting DMG mount with %@ -> %@", toolPath, mountPoint);
+
+  NSTask *dmgTask = [[NSTask alloc] init];
+  [dmgTask setLaunchPath:toolPath];
+  [dmgTask setArguments:@[dmgPath, mountPoint]];
+
+  NSPipe *outPipe = [NSPipe pipe];
+  NSPipe *errPipe = [NSPipe pipe];
+  [dmgTask setStandardOutput:outPipe];
+  [dmgTask setStandardError:errPipe];
+
+  @try {
+    [dmgTask launch];
+
+    int waitCount = 0;
+    while (waitCount < 30 && ![self isMountPointActive:mountPoint]) {
+      usleep(100000);
+      waitCount++;
+    }
+
+    int taskPid = [dmgTask processIdentifier];
+    NSString *verifyError = nil;
+
+    if ([self isMountPointActive:mountPoint]) {
+      if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
+        NSDebugLLog(@"gwspace", @"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+        [dmgTask terminate];
+        sleep(1);
+        if ([dmgTask isRunning]) {
+          kill([dmgTask processIdentifier], SIGKILL);
+        }
+        [dmgTask release];
+        [fm removeItemAtPath:mountPoint error:nil];
+        if (errorOut) {
+          *errorOut = verifyError;
+        }
+        return nil;
+      }
+
+      [self registerDmgMount:dmgPath mountPoint:mountPoint pid:taskPid];
+      NSDebugLLog(@"gwspace", @"VolumeManager: Successfully mounted DMG at %@ (verified)", mountPoint);
+      [dmgTask release];
+      return mountPoint;
+    }
+
+    NSData *errData = [[errPipe fileHandleForReading] availableData];
+    NSString *errString = @"";
+    if (errData && [errData length] > 0) {
+      errString = [[[NSString alloc] initWithData:errData encoding:NSUTF8StringEncoding] autorelease];
+    }
+
+    NSData *outData = [[outPipe fileHandleForReading] availableData];
+    NSString *outString = @"";
+    if (outData && [outData length] > 0) {
+      outString = [[[NSString alloc] initWithData:outData encoding:NSUTF8StringEncoding] autorelease];
+    }
+
+    NSString *allOutput = [NSString stringWithFormat:@"%@ %@", outString, errString];
+
+    if ([allOutput containsString:@"Everything looks OK, disk mounted"] || [self isMountPointActive:mountPoint]) {
+      if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
+        NSDebugLLog(@"gwspace", @"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
+        [dmgTask terminate];
+        sleep(1);
+        if ([dmgTask isRunning]) {
+          kill([dmgTask processIdentifier], SIGKILL);
+        }
+        [dmgTask release];
+        [fm removeItemAtPath:mountPoint error:nil];
+        if (errorOut) {
+          *errorOut = verifyError;
+        }
+        return nil;
+      }
+
+      [self registerDmgMount:dmgPath mountPoint:mountPoint pid:taskPid];
+      NSDebugLLog(@"gwspace", @"VolumeManager: Successfully mounted DMG at %@ (verified)", mountPoint);
+      [dmgTask release];
+      return mountPoint;
+    }
+
+    [dmgTask terminate];
+    sleep(1);
+    if ([dmgTask isRunning]) {
+      kill([dmgTask processIdentifier], SIGKILL);
+    }
+    [dmgTask release];
+    [fm removeItemAtPath:mountPoint error:nil];
+
+    if (errorOut) {
+      *errorOut = allOutput;
+    }
+    return nil;
+  }
+  @catch (NSException *exception) {
+    NSDebugLLog(@"gwspace", @"VolumeManager: Exception during mount with %@: %@", toolPath, exception);
+    [dmgTask release];
+    [fm removeItemAtPath:mountPoint error:nil];
+    if (errorOut) {
+      *errorOut = [exception reason];
+    }
+    return nil;
+  }
+}
+
+/* Register a just-mounted DMG volume and notify observers. */
+- (void)registerDmgMount:(NSString *)dmgPath mountPoint:(NSString *)mountPoint pid:(int)taskPid
+{
+  [mountedVolumes setObject:mountPoint forKey:dmgPath];
+  [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:dmgPath];
+  [diskImageMountPoints addObject:mountPoint];
+
+  /* Register with desktop to show on desktop and in viewers */
+  [self registerVolumeWithDesktop:mountPoint isDiskImage:YES];
+
+  /* Notify filesystem observers */
+  NSString *parent = [mountPoint stringByDeletingLastPathComponent];
+  NSString *name = [mountPoint lastPathComponent];
+  [[NSNotificationCenter defaultCenter]
+    postNotificationName:@"GWFileSystemDidChangeNotification"
+                  object:@{@"operation": @"MountOperation",
+                          @"source": parent,
+                          @"destination": parent,
+                          @"files": @[name]}];
+}
+
 - (NSString *)mountDMGFile:(NSString *)dmgPath
 {
   NSString *existingMount = [self mountPointForImageFile:dmgPath];
@@ -442,163 +591,56 @@ static VolumeManager *sharedInstance = nil;
       [mountedVolumesPIDs removeObjectForKey:dmgPath];
     }
   }
-  
+
   if (![fm fileExistsAtPath:dmgPath]) {
     [self showErrorAlert:[NSString stringWithFormat:@"DMG file not found: %@", dmgPath]];
     return nil;
   }
-  
-  if (![self isDarlingDmgAvailable]) {
-    [self showDarlingDmgNotInstalledAlert];
-    return nil;
-  }
-  
-  NSString *mountPoint = [self createMountPointForDMG:dmgPath];
-  if (!mountPoint) {
-    [self showErrorAlert:@"Failed to create mount point"];
-    return nil;
-  }
-  
-  NSDebugLLog(@"gwspace", @"VolumeManager: Mounting DMG %@ at %@", dmgPath, mountPoint);
-  
-  NSTask *dmgTask = [[NSTask alloc] init];
+
+  /* Collect every DMG-capable tool that is available. darling-dmg handles
+   * HFS+/HFSX; apfs-fuse is the fallback for APFS images. We only give up
+   * (with a single combined alert) once both have failed or neither exists. */
+  NSMutableArray *toolPaths = [NSMutableArray array];
   NSString *darlingDmgPath = [self findToolInPath:@"darling-dmg" alternativeNames:nil];
-  if (!darlingDmgPath) {
-    [dmgTask release];
-    [self showErrorAlert:@"darling-dmg tool not found"];
+  if (darlingDmgPath) {
+    [toolPaths addObject:darlingDmgPath];
+  }
+  NSString *apfsFusePath = [self findToolInPath:@"apfs-fuse" alternativeNames:nil];
+  if (apfsFusePath) {
+    [toolPaths addObject:apfsFusePath];
+  }
+
+  if ([toolPaths count] == 0) {
+    [self showNoDmgToolInstalledAlert];
     return nil;
   }
-  
-  [dmgTask setLaunchPath:darlingDmgPath];
-  [dmgTask setArguments:@[dmgPath, mountPoint]];
-  
-  NSPipe *outPipe = [NSPipe pipe];
-  NSPipe *errPipe = [NSPipe pipe];
-  [dmgTask setStandardOutput:outPipe];
-  [dmgTask setStandardError:errPipe];
-  
-  @try {
-    [dmgTask launch];
-    
-    int waitCount = 0;
-    while (waitCount < 30 && ![self isMountPointActive:mountPoint]) {
-      usleep(100000);
-      waitCount++;
-    }
-    
-    int taskPid = [dmgTask processIdentifier];
-    if ([self isMountPointActive:mountPoint]) {
-      NSString *verifyError = nil;
-      if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
-        NSDebugLLog(@"gwspace", @"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
-        if ([dmgTask isRunning]) {
-          [dmgTask terminate];
-          sleep(1);
-          if ([dmgTask isRunning]) {
-            kill([dmgTask processIdentifier], SIGKILL);
-          }
-        }
-        [dmgTask release];
-        [fm removeItemAtPath:mountPoint error:nil];
-        [self showErrorAlert:[NSString stringWithFormat:@"Failed to mount DMG:\n%@", verifyError]];
-        return nil;
-      }
 
-      NSDebugLLog(@"gwspace", @"VolumeManager: Successfully mounted DMG at %@ (verified)", mountPoint);
-      
-      [mountedVolumes setObject:mountPoint forKey:dmgPath];
-      [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:dmgPath];
-      [diskImageMountPoints addObject:mountPoint];
-      
-      /* Register with desktop to show on desktop and in viewers */
-      [self registerVolumeWithDesktop:mountPoint isDiskImage:YES];
-      
-      /* Notify filesystem observers */
-      NSString *parent = [mountPoint stringByDeletingLastPathComponent];
-      NSString *name = [mountPoint lastPathComponent];
-      [[NSNotificationCenter defaultCenter]
-        postNotificationName:@"GWFileSystemDidChangeNotification"
-                      object:@{@"operation": @"MountOperation",
-                              @"source": parent,
-                              @"destination": parent,
-                              @"files": @[name]}];
-      
-      return mountPoint;
-    } else {
-      NSData *errData = [[errPipe fileHandleForReading] availableData];
-      NSString *errString = @"";
-      if (errData && [errData length] > 0) {
-        errString = [[[NSString alloc] initWithData:errData encoding:NSUTF8StringEncoding] autorelease];
-      }
-      
-      NSData *outData = [[outPipe fileHandleForReading] availableData];
-      NSString *outString = @"";
-      if (outData && [outData length] > 0) {
-        outString = [[[NSString alloc] initWithData:outData encoding:NSUTF8StringEncoding] autorelease];
-      }
-      
-      NSString *allOutput = [NSString stringWithFormat:@"%@ %@", outString, errString];
-      
-      if ([allOutput containsString:@"Everything looks OK, disk mounted"] || [self isMountPointActive:mountPoint]) {
-        NSString *verifyError = nil;
-        if (![self verifyMountPoint:mountPoint pid:taskPid error:&verifyError]) {
-          NSDebugLLog(@"gwspace", @"VolumeManager: Mount verification failed for %@: %@", mountPoint, verifyError);
-          if ([dmgTask isRunning]) {
-            [dmgTask terminate];
-            sleep(1);
-            if ([dmgTask isRunning]) {
-              kill([dmgTask processIdentifier], SIGKILL);
-            }
-          }
-          [dmgTask release];
-          [fm removeItemAtPath:mountPoint error:nil];
-          [self showErrorAlert:[NSString stringWithFormat:@"Failed to mount DMG:\n%@", verifyError]];
-          return nil;
-        }
+  NSString *mountPoint = nil;
+  NSMutableArray *failures = [NSMutableArray array];
 
-        NSDebugLLog(@"gwspace", @"VolumeManager: Successfully mounted DMG at %@ (verified)", mountPoint);
-        
-        [mountedVolumes setObject:mountPoint forKey:dmgPath];
-        [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:dmgPath];
-        [diskImageMountPoints addObject:mountPoint];
-        [self registerVolumeWithDesktop:mountPoint isDiskImage:YES];
-        
-        NSString *parent = [mountPoint stringByDeletingLastPathComponent];
-        NSString *name = [mountPoint lastPathComponent];
-        [[NSNotificationCenter defaultCenter]
-          postNotificationName:@"GWFileSystemDidChangeNotification"
-                        object:@{@"operation": @"MountOperation",
-                                @"source": parent,
-                                @"destination": parent,
-                                @"files": @[name]}];
-        
-        [dmgTask release];
-        return mountPoint;
-      }
-      
-      NSDebugLLog(@"gwspace", @"VolumeManager: Failed to mount DMG: %@", allOutput);
-      
-      if ([dmgTask isRunning]) {
-        [dmgTask terminate];
-        sleep(1);
-        if ([dmgTask isRunning]) {
-          kill([dmgTask processIdentifier], SIGKILL);
-        }
-      }
-      
-      [dmgTask release];
-      [fm removeItemAtPath:mountPoint error:nil];
-      [self showErrorAlert:[NSString stringWithFormat:@"Failed to mount DMG:\n%@", allOutput]];
+  for (NSString *toolPath in toolPaths) {
+    mountPoint = [self createMountPointForDMG:dmgPath];
+    if (!mountPoint) {
+      [self showErrorAlert:@"Failed to create mount point"];
       return nil;
     }
+
+    NSDebugLLog(@"gwspace", @"VolumeManager: Mounting DMG %@ with %@", dmgPath, toolPath);
+
+    NSString *toolError = nil;
+    NSString *result = [self mountDMGWithToolPath:toolPath file:dmgPath mountPoint:mountPoint error:&toolError];
+    if (result) {
+      return result;
+    }
+
+    NSString *toolName = [toolPath lastPathComponent];
+    [failures addObject:[NSString stringWithFormat:@"%@: %@", toolName, (toolError ? toolError : @"unknown error")]];
+    NSDebugLLog(@"gwspace", @"VolumeManager: %@ failed to mount %@", toolName, dmgPath);
   }
-  @catch (NSException *exception) {
-    NSDebugLLog(@"gwspace", @"VolumeManager: Exception during mount: %@", exception);
-    [dmgTask release];
-    [fm removeItemAtPath:mountPoint error:nil];
-    [self showErrorAlert:[NSString stringWithFormat:@"Exception: %@", [exception reason]]];
-    return nil;
-  }
+
+  [self showErrorAlert:[NSString stringWithFormat:@"Failed to mount DMG with all available tools:\n%@",
+                        [failures componentsJoinedByString:@"\n"]]];
+  return nil;
 }
 
 - (NSString *)mountISOFile:(NSString *)isoPath
