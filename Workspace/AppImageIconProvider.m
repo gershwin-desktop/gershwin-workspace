@@ -169,9 +169,21 @@ static AppImageSqfsFile *AppImageSqfsFileCreate(int fd,
 static BOOL AppImageHasType2Magic(const char *path)
 {
   unsigned char ident[16];
-  int fd = open(path, O_RDONLY);
+  int fd;
   ssize_t rd;
+  struct stat st;
 
+  /* Only regular files can be AppImages.  Opening a device node or FIFO can
+   * block indefinitely (e.g. /dev/tty, a pipe with no writer), which would
+   * hang the Workspace when a directory such as /dev is displayed. */
+  if (stat(path, &st) != 0)
+    return NO;
+  if (!S_ISREG(st.st_mode))
+    return NO;
+
+  /* O_NONBLOCK so a FIFO or slow device that is somehow a regular-class file
+   * cannot stall the caller either. */
+  fd = open(path, O_RDONLY | O_NONBLOCK);
   if (fd < 0) {
     return NO;
   }
@@ -1138,7 +1150,10 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
     NSString *nodepath = [node path];
     NSString *realPath = [nodepath stringByResolvingSymlinksInPath];
 
-    if (AppImageHasType2Magic([realPath fileSystemRepresentation])) {
+    /* Cheap extension gate before the magic probe (see iconOfSize:forNode:). */
+    if ((GWAppImagePathLooksLikeAppImage(nodepath)
+         || GWAppImagePathLooksLikeAppImage(realPath))
+        && AppImageHasType2Magic([realPath fileSystemRepresentation])) {
       // Check if the proper icon is now available
       FSNodeRep *fsnodeRepShared = [FSNodeRep sharedInstance];
       NSImage *currentIcon = [fsnodeRepShared iconOfSize: iconSize forNode: node];
@@ -1223,7 +1238,13 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
     NSString *nodepath = [node path];
     NSString *realPath = [nodepath stringByResolvingSymlinksInPath];
 
-    if (AppImageHasType2Magic([realPath fileSystemRepresentation])) {
+    /* Cheap extension gate first: only files that look like AppImages get the
+     * magic-byte probe, which would otherwise stat/open every file in a
+     * listing.  Check the original name too, so a symlink whose target has
+     * another name is still recognized by the link's own name. */
+    if ((GWAppImagePathLooksLikeAppImage(nodepath)
+         || GWAppImagePathLooksLikeAppImage(realPath))
+        && AppImageHasType2Magic([realPath fileSystemRepresentation])) {
       // Check if we have the proper icon cached
       NSString *key = realPath;
       NSMutableDictionary *iconDict = [iconsCache objectForKey: key];
