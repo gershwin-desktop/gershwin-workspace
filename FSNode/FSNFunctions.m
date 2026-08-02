@@ -439,6 +439,11 @@ FSNDrawLabelDot(NSRect dotRect, NSColor *color)
   [dp stroke];
 }
 
+NSString *GSDirectoryDescriptionForPath(NSString *path);
+static NSString *GSDirectoryDescriptionExactMatch(NSDictionary *cached,
+                                                  NSString *path);
+static BOOL GSDirectoryGlobMatch(NSString *pattern, NSString *string);
+
 NSString *
 GSDirectoryDescriptionForPath(NSString *path)
 {
@@ -491,10 +496,83 @@ GSDirectoryDescriptionForPath(NSString *path)
   NSString *resolved = [path stringByResolvingSymlinksInPath];
   if (resolved && [resolved isEqualToString: path] == NO)
     {
-      NSString *targetDesc = [cached objectForKey: resolved];
+      NSString *targetDesc = GSDirectoryDescriptionExactMatch(cached, resolved);
       if (targetDesc)
         return targetDesc;
     }
 
-  return [cached objectForKey: path];
+  return GSDirectoryDescriptionExactMatch(cached, path);
+}
+
+/* Exact match plus wildcard fallback: keys may contain '*' which matches
+ * any run of characters (e.g. "/dev/tty*" matches "/dev/tty0", and
+ * "/dev/nvme*n*p*" matches "/dev/nvme0n1p1").  When several wildcards
+ * match, the longest (most specific) key wins. */
+static NSString *GSDirectoryDescriptionExactMatch(NSDictionary *cached,
+                                                  NSString *path)
+{
+  NSString *exact = [cached objectForKey: path];
+  if (exact)
+    return exact;
+
+  NSString *bestKey = nil;
+  NSArray *keys = [cached allKeys];
+  NSUInteger i;
+  for (i = 0; i < [keys count]; i++)
+    {
+      NSString *key = [keys objectAtIndex: i];
+      if ([key rangeOfString: @"*"].location == NSNotFound)
+        continue;
+
+      if (GSDirectoryGlobMatch(key, path))
+        {
+          if (bestKey == nil || [key length] > [bestKey length])
+            bestKey = key;
+        }
+    }
+
+  if (bestKey)
+    return [cached objectForKey: bestKey];
+
+  return nil;
+}
+
+/* Classic '*' glob match (only '*' is special; '.' and '/' are literal). */
+static BOOL GSDirectoryGlobMatch(NSString *pattern, NSString *string)
+{
+  NSUInteger p = 0, s = 0;
+  NSUInteger starP = NSNotFound, starS = 0;
+  NSUInteger plen = [pattern length], slen = [string length];
+
+  while (s < slen)
+    {
+      unichar pc = (p < plen) ? [pattern characterAtIndex: p] : 0;
+      unichar sc = [string characterAtIndex: s];
+
+      if (pc == '*')
+        {
+          starP = p;
+          starS = s;
+          p++;
+        }
+      else if (pc == sc)
+        {
+          p++;
+          s++;
+        }
+      else if (starP != NSNotFound)
+        {
+          p = starP + 1;
+          s = ++starS;
+        }
+      else
+        {
+          return NO;
+        }
+    }
+
+  while (p < plen && [pattern characterAtIndex: p] == '*')
+    p++;
+
+  return (p == plen);
 }

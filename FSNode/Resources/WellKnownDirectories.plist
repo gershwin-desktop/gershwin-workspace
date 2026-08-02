@@ -14,6 +14,116 @@
   <string>Binary compatibility runtime for running software from other OS types</string>
   <key>/dev</key>
   <string>Hardware and virtual devices exposed as device nodes</string>
+
+  <key>/dev/block</key>
+  <string>Block device nodes by major:minor number</string>
+  <key>/dev/block/*</key>
+  <string>Block device node (disk or partition)</string>
+  <key>/dev/bus</key>
+  <string>Bus devices and protocols (e.g. USB, PCI)</string>
+  <key>/dev/bus/usb</key>
+  <string>USB device nodes</string>
+  <key>/dev/bus/usb/*</key>
+  <string>USB device node for a bus/device</string>
+  <key>/dev/char</key>
+  <string>Character device nodes by major:minor number</string>
+  <key>/dev/char/*</key>
+  <string>Character device node (serial, terminal, audio, ...)</string>
+  <key>/dev/disk</key>
+  <string>Disk device nodes (by-id, by-path, by-uuid, ...)</string>
+  <key>/dev/disk/by-id</key>
+  <string>Disk devices referenced by stable hardware identifier</string>
+  <key>/dev/disk/by-path</key>
+  <string>Disk devices referenced by physical connection path</string>
+  <key>/dev/disk/by-uuid</key>
+  <string>Disk devices referenced by filesystem UUID</string>
+  <key>/dev/disk/by-partuuid</key>
+  <string>Disk partitions referenced by partition UUID</string>
+  <key>/dev/disk/by-label</key>
+  <string>Disk devices referenced by filesystem label</string>
+  <key>/dev/dma_heap</key>
+  <string>DMA-buf heap devices for zero-copy buffer allocation</string>
+  <key>/dev/dma_heap/*</key>
+  <string>DMA-buf heap device node</string>
+  <key>/dev/dri</key>
+  <string>Direct Rendering Infrastructure devices (GPU, render nodes)</string>
+  <key>/dev/dri/*</key>
+  <string>Graphics device node (card, renderD, controlD)</string>
+  <key>/dev/input</key>
+  <string>Input device nodes (keyboards, mice, touchpads, joysticks)</string>
+  <key>/dev/input/*</key>
+  <string>Input event device node</string>
+  <key>/dev/mapper</key>
+  <string>Device-mapper targets (LVM, dm-crypt, ...)</string>
+  <key>/dev/mapper/*</key>
+  <string>Device-mapper logical volume or mapped device</string>
+  <key>/dev/net</key>
+  <string>Network device nodes</string>
+  <key>/dev/net/*</key>
+  <string>Network device node</string>
+  <key>/dev/pts</key>
+  <string>Pseudo-terminal slave devices</string>
+  <key>/dev/pts/*</key>
+  <string>Pseudo-terminal slave device for a terminal session</string>
+  <key>/dev/shm</key>
+  <string>POSIX shared memory objects (tmpfs)</string>
+  <key>/dev/shm/*</key>
+  <string>Shared memory object</string>
+  <key>/dev/snd</key>
+  <string>Sound card device nodes</string>
+  <key>/dev/snd/*</key>
+  <string>Sound device node (control, pcm, timer, midi)</string>
+  <key>/dev/v4l</key>
+  <string>Video4Linux device nodes (webcams, TV tuners)</string>
+  <key>/dev/v4l/*</key>
+  <string>Video4Linux device node (video, vbi, radio, ...)</string>
+  <key>/dev/vfio</key>
+  <string>VFIO device nodes for direct device passthrough</string>
+  <key>/dev/vfio/*</key>
+  <string>VFIO group device node</string>
+
+  <key>/dev/*</key>
+  <string>Device node (character, block, or link)</string>
+
+  <key>/dev/tty*</key>
+  <string>Terminal device (virtual console, serial line, or PTY master)</string>
+  <key>/dev/ttyS*</key>
+  <string>Serial port terminal device</string>
+  <key>/dev/vcs*</key>
+  <string>Virtual console screen memory</string>
+  <key>/dev/vcsa*</key>
+  <string>Virtual console screen memory with attributes</string>
+  <key>/dev/vcsu*</key>
+  <string>Virtual console screen memory in UTF-16</string>
+  <key>/dev/input/event*</key>
+  <string>Input event device (read raw device events)</string>
+  <key>/dev/input/mice</key>
+  <string>Combined mouse event device</string>
+  <key>/dev/drm_dp_aux*</key>
+  <string>DisplayPort auxiliary channel device</string>
+  <key>/dev/nvme*</key>
+  <string>NVMe controller or namespace device</string>
+  <key>/dev/nvme*n*</key>
+  <string>NVMe namespace (disk) device</string>
+  <key>/dev/nvme*n*p*</key>
+  <string>NVMe namespace partition</string>
+  <key>/dev/hidraw*</key>
+  <string>Raw HID device node</string>
+  <key>/dev/gpiochip*</key>
+  <string>GPIO chip device node</string>
+  <key>/dev/media*</key>
+  <string>Media controller device node</string>
+  <key>/dev/video*</key>
+  <string>Video capture device node</string>
+  <key>/dev/watchdog*</key>
+  <string>Hardware watchdog device node</string>
+  <key>/dev/rtc*</key>
+  <string>Real-time clock device node</string>
+  <key>/dev/ptp*</key>
+  <string>Precision Time Protocol (PTP) clock device</string>
+  <key>/dev/fb*</key>
+  <string>Framebuffer device node</string>
+
   <key>/etc</key>
   <string>Host-specific system configuration</string>
   <key>/home</key>
