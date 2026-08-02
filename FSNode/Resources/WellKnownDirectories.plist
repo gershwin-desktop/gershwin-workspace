@@ -5,7 +5,7 @@
   <key>/</key>
   <string>Root of the filesystem hierarchy</string>
   <key>/bin</key>
-  <string>Essential user command binaries needed in single-user mode (often a symlink to /usr/bin)</string>
+  <string>Essential user command binaries needed in single-user mode</string>
   <key>/boot</key>
   <string>Boot loader images needed to start the system</string>
   <key>/cdrom</key>
@@ -21,7 +21,7 @@
   <key>/initrd</key>
   <string>Temporary root filesystem used during early boot</string>
   <key>/lib</key>
-  <string>Essential shared libraries and kernel modules (often a symlink to /usr/lib)</string>
+  <string>Essential shared libraries and kernel modules</string>
   <key>/lib32</key>
   <string>32-bit shared libraries on 64-bit systems</string>
   <key>/lib64</key>
@@ -67,9 +67,9 @@
   <key>/run</key>
   <string>Volatile runtime data such as PIDs and sockets since boot</string>
   <key>/var/run</key>
-  <string>Runtime state files such as PIDs and sockets since boot (often a symlink to /run)</string>
+  <string>Runtime state files such as PIDs and sockets since boot</string>
   <key>/sbin</key>
-  <string>Essential system administration binaries required at boot time (often a symlink to /usr/sbin)</string>
+  <string>Essential system administration binaries required at boot time</string>
   <key>/selinux</key>
   <string>SELinux securityfs virtual filesystem mount point</string>
   <key>/srv</key>
