@@ -488,11 +488,15 @@ GSDirectoryDescriptionForPath(NSString *path)
     cached = [expanded copy];
   });
 
-  /* For a symlink (including a recursive chain), show the description of the
-   * target, since that is what the path really is.  Many well-known
-   * directories are symlinks (e.g. /var/run -> /run, /bin -> /usr/bin), and
-   * the plist is keyed by the real path.  Only fall back to the path's own
-   * entry when it is not a symlink (or the target has no description). */
+  /* Prefer a description for the path as given: e.g. /sys/class/net/wlan0 is
+   * a symlink into /sys/devices/..., but the class-specific description is
+   * far more useful than the generic device-tree one.  Only when the given
+   * path has no entry do we follow symlinks and use the target's description
+   * (which handles real symlinks such as /var/run -> /run). */
+  NSString *direct = GSDirectoryDescriptionExactMatch(cached, path);
+  if (direct)
+    return direct;
+
   NSString *resolved = [path stringByResolvingSymlinksInPath];
   if (resolved && [resolved isEqualToString: path] == NO)
     {
@@ -501,7 +505,7 @@ GSDirectoryDescriptionForPath(NSString *path)
         return targetDesc;
     }
 
-  return GSDirectoryDescriptionExactMatch(cached, path);
+  return nil;
 }
 
 /* Exact match plus wildcard fallback: keys may contain '*' which matches

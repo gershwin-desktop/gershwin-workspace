@@ -192,6 +192,208 @@
   <string>Bus type directories with device and driver links</string>
   <key>/sys/class</key>
   <string>Device classes grouped by function such as net, sound, and input</string>
+  <key>/sys/class/*</key>
+  <string>Device instance in this class</string>
+  <key>/sys/class/accel</key>
+  <string>Accelerator devices (e.g. compute/GPGPU accelerators)</string>
+  <key>/sys/class/accel/*</key>
+  <string>Accelerator device instance</string>
+  <key>/sys/class/backlight</key>
+  <string>Display backlight controls</string>
+  <key>/sys/class/backlight/*</key>
+  <string>Backlight control device</string>
+  <key>/sys/class/bdi</key>
+  <string>Backing-device information for storage writeback</string>
+  <key>/sys/class/block</key>
+  <string>Block devices (disks, partitions, loop devices)</string>
+  <key>/sys/class/block/*</key>
+  <string>Block device (disk or partition)</string>
+  <key>/sys/class/bluetooth</key>
+  <string>Bluetooth controllers and interfaces</string>
+  <key>/sys/class/bluetooth/*</key>
+  <string>Bluetooth adapter or HCI interface</string>
+  <key>/sys/class/bsg</key>
+  <string>Block SCSI generic devices</string>
+  <key>/sys/class/devcoredump</key>
+  <string>Device coredump captures for debugging</string>
+  <key>/sys/class/devfreq</key>
+  <string>Dynamic voltage and frequency scaling devices</string>
+  <key>/sys/class/devfreq/*</key>
+  <string>Device frequency scaling instance</string>
+  <key>/sys/class/devlink</key>
+  <string>Devlink device management interfaces</string>
+  <key>/sys/class/dma</key>
+  <string>DMA engine channels and controllers</string>
+  <key>/sys/class/dma_heap</key>
+  <string>DMA-buf heap devices</string>
+  <key>/sys/class/dma_heap/*</key>
+  <string>DMA-buf heap instance</string>
+  <key>/sys/class/dmi</key>
+  <string>Desktop Management Interface (DMI) system information</string>
+  <key>/sys/class/dmi/*</key>
+  <string>DMI system information entry</string>
+  <key>/sys/class/drm</key>
+  <string>Direct Rendering Manager devices (GPUs, connectors, encoders)</string>
+  <key>/sys/class/drm/*</key>
+  <string>DRM device or connector</string>
+  <key>/sys/class/drm_dp_aux_dev</key>
+  <string>DisplayPort auxiliary channel devices</string>
+  <key>/sys/class/drm_dp_aux_dev/*</key>
+  <string>DisplayPort AUX channel device</string>
+  <key>/sys/class/firmware</key>
+  <string>Firmware loader instances</string>
+  <key>/sys/class/firmware-attributes</key>
+  <string>Firmware attribute interface (e.g. ThinkPad firmware settings)</string>
+  <key>/sys/class/gpio</key>
+  <string>GPIO lines and controllers exposed via sysfs</string>
+  <key>/sys/class/gpio/*</key>
+  <string>GPIO controller or exported line</string>
+  <key>/sys/class/graphics</key>
+  <string>Framebuffer graphics devices</string>
+  <key>/sys/class/graphics/*</key>
+  <string>Framebuffer device (fbN)</string>
+  <key>/sys/class/hidraw</key>
+  <string>Raw HID device interfaces</string>
+  <key>/sys/class/hidraw/*</key>
+  <string>Raw HID device</string>
+  <key>/sys/class/hwmon</key>
+  <string>Hardware monitoring devices (temperatures, fans, voltages)</string>
+  <key>/sys/class/hwmon/*</key>
+  <string>Hardware monitor device</string>
+  <key>/sys/class/ieee80211</key>
+  <string>Wireless LAN (802.11) devices</string>
+  <key>/sys/class/ieee80211/*</key>
+  <string>Wireless device instance</string>
+  <key>/sys/class/input</key>
+  <string>Input devices (keyboards, mice, touchpads, joysticks)</string>
+  <key>/sys/class/input/*</key>
+  <string>Input device instance</string>
+  <key>/sys/class/iommu</key>
+  <string>IOMMU units and domains</string>
+  <key>/sys/class/leds</key>
+  <string>LED devices controllable via sysfs</string>
+  <key>/sys/class/leds/*</key>
+  <string>LED device</string>
+  <key>/sys/class/lirc</key>
+  <string>LIRC infra-red remote control devices</string>
+  <key>/sys/class/mei</key>
+  <string>Intel Management Engine (MEI) interfaces</string>
+  <key>/sys/class/mei/*</key>
+  <string>MEI device instance</string>
+  <key>/sys/class/mem</key>
+  <string>Memory device nodes (mem, kmem, null, port, ...)</string>
+  <key>/sys/class/misc</key>
+  <string>Miscellaneous device nodes</string>
+  <key>/sys/class/misc/*</key>
+  <string>Miscellaneous device</string>
+  <key>/sys/class/net</key>
+  <string>Network interfaces</string>
+  <key>/sys/class/net/*</key>
+  <string>Network interface (eth0, wlan0, lo, ...)</string>
+  <key>/sys/class/nvme</key>
+  <string>NVMe controllers</string>
+  <key>/sys/class/nvme/*</key>
+  <string>NVMe controller</string>
+  <key>/sys/class/nvme-generic</key>
+  <string>Generic NVMe device interfaces</string>
+  <key>/sys/class/nvme-subsystem</key>
+  <string>NVMe subsystems</string>
+  <key>/sys/class/pci_bus</key>
+  <string>PCI buses</string>
+  <key>/sys/class/phy</key>
+  <string>PHY (physical layer) devices</string>
+  <key>/sys/class/powercap</key>
+  <string>Power capping control groups (e.g. RAPL)</string>
+  <key>/sys/class/powercap/*</key>
+  <string>Power cap control group</string>
+  <key>/sys/class/power_supply</key>
+  <string>Power supplies (batteries, AC adapters, UPS)</string>
+  <key>/sys/class/power_supply/*</key>
+  <string>Power supply device</string>
+  <key>/sys/class/pps</key>
+  <string>Pulse-per-second clock devices</string>
+  <key>/sys/class/pps/*</key>
+  <string>PPS device instance</string>
+  <key>/sys/class/ptp</key>
+  <string>Precision Time Protocol clock devices</string>
+  <key>/sys/class/ptp/*</key>
+  <string>PTP clock device</string>
+  <key>/sys/class/pwm</key>
+  <string>Pulse-width modulation devices</string>
+  <key>/sys/class/pwm/*</key>
+  <string>PWM channel</string>
+  <key>/sys/class/rc</key>
+  <string>Remote control receiver devices</string>
+  <key>/sys/class/regulator</key>
+  <string>Voltage and current regulators</string>
+  <key>/sys/class/regulator/*</key>
+  <string>Regulator device</string>
+  <key>/sys/class/retimer</key>
+  <string>Signal retimer devices</string>
+  <key>/sys/class/rfkill</key>
+  <string>Radio frequency kill switches (WLAN, Bluetooth)</string>
+  <key>/sys/class/rfkill/*</key>
+  <string>RF kill switch device</string>
+  <key>/sys/class/rtc</key>
+  <string>Real-time clock devices</string>
+  <key>/sys/class/rtc/*</key>
+  <string>Real-time clock device</string>
+  <key>/sys/class/sound</key>
+  <string>Sound card devices</string>
+  <key>/sys/class/sound/*</key>
+  <string>Sound card device instance</string>
+  <key>/sys/class/spidev</key>
+  <string>SPI device interfaces</string>
+  <key>/sys/class/spi_master</key>
+  <string>SPI master controllers</string>
+  <key>/sys/class/thermal</key>
+  <string>Thermal zone and cooling devices</string>
+  <key>/sys/class/thermal/*</key>
+  <string>Thermal zone or cooling device</string>
+  <key>/sys/class/tpm</key>
+  <string>Trusted Platform Module devices</string>
+  <key>/sys/class/tpmrm</key>
+  <string>TPM resource manager devices</string>
+  <key>/sys/class/tty</key>
+  <string>Terminal devices</string>
+  <key>/sys/class/tty/*</key>
+  <string>Terminal device</string>
+  <key>/sys/class/typec</key>
+  <string>USB Type-C connector and port devices</string>
+  <key>/sys/class/typec/*</key>
+  <string>Type-C port or partner</string>
+  <key>/sys/class/typec_mux</key>
+  <string>USB Type-C mux devices</string>
+  <key>/sys/class/usbmisc</key>
+  <string>Miscellaneous USB devices</string>
+  <key>/sys/class/usb_role</key>
+  <string>USB role switch devices</string>
+  <key>/sys/class/usb_power_delivery</key>
+  <string>USB Power Delivery devices</string>
+  <key>/sys/class/vc</key>
+  <string>Virtual console devices</string>
+  <key>/sys/class/vc/*</key>
+  <string>Virtual console device</string>
+  <key>/sys/class/video4linux</key>
+  <string>Video4Linux devices</string>
+  <key>/sys/class/video4linux/*</key>
+  <string>Video4Linux device</string>
+  <key>/sys/class/virtio-ports</key>
+  <string>Virtio console/serial ports</string>
+  <key>/sys/class/vtconsole</key>
+  <string>Virtual console framebuffer drivers</string>
+  <key>/sys/class/wakeup</key>
+  <string>Wakeup event sources</string>
+  <key>/sys/class/wakeup/*</key>
+  <string>Wakeup source device</string>
+  <key>/sys/class/watchdog</key>
+  <string>Hardware watchdog devices</string>
+  <key>/sys/class/watchdog/*</key>
+  <string>Watchdog device</string>
+  <key>/sys/class/wmi_bus</key>
+  <string>WMI (Windows Management Instrumentation) bus devices</string>
+  <key>/sys/class/*/*</key>
+  <string>Device instance within its class</string>
   <key>/sys/dev</key>
   <string>Device tree organized by major and minor device numbers</string>
   <key>/sys/devices</key>
@@ -210,6 +412,115 @@
   <string>Loaded kernel module parameters and information</string>
   <key>/sys/power</key>
   <string>Power management state and control for suspend and hibernate</string>
+  <key>/sys/power/*</key>
+  <string>Power management control or state file</string>
+
+  <key>/sys/bus/*</key>
+  <string>Bus type directory (drivers and devices on this bus)</string>
+  <key>/sys/bus/acpi</key>
+  <string>ACPI bus (firmware devices and their drivers)</string>
+  <key>/sys/bus/cpu</key>
+  <string>CPU devices and topology</string>
+  <key>/sys/bus/gpio</key>
+  <string>GPIO bus devices</string>
+  <key>/sys/bus/i2c</key>
+  <string>I2C bus devices</string>
+  <key>/sys/bus/pci</key>
+  <string>PCI bus devices and drivers</string>
+  <key>/sys/bus/platform</key>
+  <string>Platform (memory-mapped) devices and drivers</string>
+  <key>/sys/bus/serio</key>
+  <string>Serio (PS/2, i8042) bus devices</string>
+  <key>/sys/bus/spi</key>
+  <string>SPI bus devices</string>
+  <key>/sys/bus/thunderbolt</key>
+  <string>Thunderbolt bus devices</string>
+  <key>/sys/bus/usb</key>
+  <string>USB bus devices and drivers</string>
+  <key>/sys/bus/virtio</key>
+  <string>Virtio bus devices</string>
+  <key>/sys/bus/*/devices</key>
+  <string>Devices on this bus</string>
+  <key>/sys/bus/*/drivers</key>
+  <string>Drivers bound to devices on this bus</string>
+  <key>/sys/bus/*/devices/*</key>
+  <string>Device on this bus</string>
+
+  <key>/sys/dev/*</key>
+  <string>Device node by major:minor number</string>
+  <key>/sys/dev/block</key>
+  <string>Block device nodes by major:minor</string>
+  <key>/sys/dev/block/*</key>
+  <string>Block device node</string>
+  <key>/sys/dev/char</key>
+  <string>Character device nodes by major:minor</string>
+  <key>/sys/dev/char/*</key>
+  <string>Character device node</string>
+
+  <key>/sys/devices/*</key>
+  <string>Device in the kernel device tree</string>
+  <key>/sys/devices/cpu</key>
+  <string>CPU cores and topology</string>
+  <key>/sys/devices/pci0000:00</key>
+  <string>PCI host bridge and its devices</string>
+  <key>/sys/devices/platform</key>
+  <string>Platform devices (memory-mapped peripherals)</string>
+  <key>/sys/devices/platform/*</key>
+  <string>Platform device instance</string>
+  <key>/sys/devices/system</key>
+  <string>System devices (cpu, memory, clock, ...)</string>
+  <key>/sys/devices/system/*</key>
+  <string>System device subsystem</string>
+  <key>/sys/devices/virtual</key>
+  <string>Virtual devices (software-created device nodes)</string>
+  <key>/sys/devices/virtual/*</key>
+  <string>Virtual device instance</string>
+
+  <key>/sys/firmware/*</key>
+  <string>Firmware information entry (ACPI, DMI, EFI, ...)</string>
+  <key>/sys/firmware/acpi</key>
+  <string>ACPI firmware tables and devices</string>
+  <key>/sys/firmware/dmi</key>
+  <string>DMI/ SMBIOS system information</string>
+  <key>/sys/firmware/efi</key>
+  <string>EFI firmware tables (efivars, runtime, ...)</string>
+  <key>/sys/firmware/memmap</key>
+  <string>Firmware-provided memory map</string>
+  <key>/sys/firmware/acpi/*</key>
+  <string>ACPI firmware entry</string>
+  <key>/sys/firmware/dmi/*</key>
+  <string>DMI/SMBIOS entry</string>
+
+  <key>/sys/fs/*</key>
+  <string>Filesystem kernel object (cgroup, fuse, bpf, ...)</string>
+  <key>/sys/fs/cgroup/*</key>
+  <string>Control group</string>
+
+  <key>/sys/kernel/*</key>
+  <string>Kernel attribute or object</string>
+  <key>/sys/kernel/debug</key>
+  <string>Kernel debugging interface (debugfs)</string>
+  <key>/sys/kernel/iommu_groups</key>
+  <string>IOMMU groups for device assignment</string>
+  <key>/sys/kernel/irq</key>
+  <string>Interrupt request settings per IRQ</string>
+  <key>/sys/kernel/mm</key>
+  <string>Memory management kernel attributes</string>
+  <key>/sys/kernel/slab</key>
+  <string>SLUB slab allocator caches</string>
+  <key>/sys/kernel/tracing</key>
+  <string>Kernel function tracing interface (ftrace)</string>
+  <key>/sys/kernel/debug/*</key>
+  <string>Debugfs entry</string>
+  <key>/sys/kernel/iommu_groups/*</key>
+  <string>IOMMU group</string>
+
+  <key>/sys/module/*</key>
+  <string>Loaded kernel module (parameters, sections)</string>
+
+  <key>/sys/block/*</key>
+  <string>Block device (disk or partition) sysfs object</string>
+
   <key>/tmp</key>
   <string>Temporary data that may be deleted on reboot</string>
   <key>/usr</key>
