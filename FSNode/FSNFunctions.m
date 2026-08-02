@@ -454,7 +454,7 @@ GSDirectoryDescriptionForPath(NSString *path)
   static dispatch_once_t once;
   dispatch_once(&once, ^{
     NSBundle *bundle = [NSBundle bundleForClass: [FSNodeRep class]];
-    NSString *plistPath = [bundle pathForResource: @"WellKnownDirectories"
+    NSString *plistPath = [bundle pathForResource: @"WellKnownLocations"
                                           ofType: @"plist"];
     NSDictionary *raw = [NSDictionary dictionaryWithContentsOfFile: plistPath];
     if (raw == nil)
