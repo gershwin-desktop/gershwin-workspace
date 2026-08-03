@@ -1495,11 +1495,8 @@ constrainMinCoordinate:(CGFloat)proposedMin
   if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
     NSArray *selection = [nodeView selectedNodes]; 
     NSUInteger count = (selection ? [selection count] : 0);
-    
-    if (count) {
-      NSMutableArray *dirs = [NSMutableArray array];
-      NSUInteger i;
 
+    if (count) {
       if (count > MAX_FILES_TO_OPEN_DIALOG) {
         NSString *msg1 = NSLocalizedString(@"Are you sure you want to open", @"");
         NSString *msg2 = NSLocalizedString(@"items?", @"");
@@ -1513,76 +1510,47 @@ constrainMinCoordinate:(CGFloat)proposedMin
         }
       }
 
+      /* Single selected folder in a single-node view with no modifier:
+       * navigate in place (no new window, no birth animation). */
+      if ((count == 1) && (newv == NO) && [nodeView isSingleNode]) {
+        FSNode *node = [selection objectAtIndex: 0];
+        if ([node isDirectory] && ([node isPackage] == NO)) {
+          [nodeView showContentsOfNode: node];
+          [self scrollToBeginning];
+          return;
+        }
+      }
+
+      /* Everything else: let each item open itself (folders open a viewer
+       * growing from the activated icon, other items launch their app). */
+      NSUInteger i;
       for (i = 0; i < count; i++) {
         FSNode *node = [selection objectAtIndex: i];
-
         NS_DURING
           {
-        if ([node isKindOfClass:[NetworkFSNode class]] && [(NetworkFSNode *)node isNetworkService]) {
-          /* Mount network service instead of treating it as a directory */
-          NSString *mountPoint = [(NetworkFSNode *)node openNetworkService];
-          if (mountPoint) {
-            FSNode *target = [FSNode nodeWithPath: mountPoint];
-            if (target && [target isValid]) {
-              [dirs addObject: target];
-            }
-          }
-        } else if ([node isDirectory]) {
-          if ([node isPackage]) {    
-            if ([node isApplication] == NO) {
-              [gworkspace openFile: [node path]];
-            } else {
-              [[NSWorkspace sharedWorkspace] launchApplication: [node path]];
-            }
-          } else {
-            [dirs addObject: node];
-          }
-        } else if ([node isPlain]) {
-          NSDebugLLog(@"gwspace", @"GWViewer: opening plain file: %@", [node path]);
-          [gworkspace openFile: [node path]];
-        } else if ([node isExecutable]) {
-          /* Handle executable items that aren't directories or plain files (e.g., network services) */
-          NSDebugLLog(@"gwspace", @"GWViewer: opening executable item: %@ (isDirectory: %d, isPlain: %d, isExecutable: %d)",
-                [node path], [node isDirectory], [node isPlain], [node isExecutable]);
-          [gworkspace openFile: [node path]];
-        } else {
-          NSDebugLLog(@"gwspace", @"GWViewer: node does not match any open condition (isDirectory: %d, isPlain: %d, isExecutable: %d): %@",
-                [node isDirectory], [node isPlain], [node isExecutable], [node path]);
-        }
+            [manager openNode: node fromViewer: self];
           }
         NS_HANDLER
           {
-            NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-                [NSString stringWithFormat: @"%@ %@!", 
+            NSRunAlertPanel(NSLocalizedString(@"error", @""),
+                [NSString stringWithFormat: @"%@ %@!",
                           NSLocalizedString(@"Can't open ", @""), [node name]],
-                                              NSLocalizedString(@"OK", @""), 
-                                              nil, 
-                                              nil);                                     
+                                              NSLocalizedString(@"OK", @""),
+                                              nil,
+                                              nil);
           }
         NS_ENDHANDLER
       }
-
-      if (([dirs count] == 1) && ([selection count] == 1)) {
-        if (newv == NO) {
-          if ([nodeView isSingleNode]) {
-            [nodeView showContentsOfNode: [dirs objectAtIndex: 0]];
-            [self scrollToBeginning];
-          }
-        } else {
-          [manager openAsFolderSelectionInViewer: self];
-        }
-      }
-
     } else if (newv) {
       [manager openAsFolderSelectionInViewer: self];
     }
-  
+
   } else {
-    NSRunAlertPanel(nil, 
+    NSRunAlertPanel(nil,
                   NSLocalizedString(@"You can't open a document that is in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
+					        NSLocalizedString(@"OK", @""),
+                  nil,
+                  nil);
   }
 }
 

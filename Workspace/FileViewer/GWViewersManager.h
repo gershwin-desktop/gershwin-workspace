@@ -125,6 +125,15 @@
 - (void)openSelectionInViewer:(id)viewer
                   closeSender:(BOOL)close;
 
+/* Canonical "open one item" entry point.  Every open action (double-click,
+ * Cmd-O, Open, Open as Folder, dock, desktop, Finder, DBus) funnels here.
+ * The item opens itself: a folder opens a viewer (growing from the source
+ * viewer's icon when available), everything else is handed to the system.
+ * When asFolder is YES, packages (e.g. .app bundles) are opened as plain
+ * folders instead of being launched. */
+- (void)openNode:(FSNode *)node fromViewer:(id)viewer asFolder:(BOOL)asFolder;
+- (void)openNode:(FSNode *)node fromViewer:(id)viewer;
+
 // Window open animation support (spatial Finder-like window birth)
 - (void)setPendingOpenAnimationRect:(NSRect)rect;
 - (void)setPendingOpenAnimationRectFromFocusedViewerForNode:(FSNode *)node;

@@ -405,14 +405,39 @@ static GWViewersManager *vwrsmanager = nil;
 // Set the pending birth-animation rect from the currently focused viewer
 // window, provided it shows (or has selected) the given node.  Used by open
 // paths that only know the target path (e.g. Workspace newViewerAtPath:) so
-// the new window still grows from the icon the user activated.
+// the new window still grows from the icon the user activated.  The desktop
+// window is treated as a viewer here too (its icons are NSViews).
 - (void)setPendingOpenAnimationRectFromFocusedViewerForNode:(FSNode *)node
 {
   if (node == nil) {
     return;
   }
+  /* A caller (e.g. the desktop) may already have set a pending rect for the
+   * activated icon; don't override it. */
+  if (hasPendingOpenAnimationRect) {
+    return;
+  }
   id keyWin = [NSApp keyWindow];
   id viewer = (keyWin != nil) ? [self viewerWithWindow: keyWin] : nil;
+
+  if (viewer == nil && keyWin != nil) {
+    /* Maybe the key window is the desktop. */
+    id desktopManager = [gworkspace desktopManager];
+    if (desktopManager && [desktopManager hasWindow: keyWin]) {
+      id nodeView = [desktopManager desktopView];
+      if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)]) {
+        id icon = [nodeView repOfSubnodePath: [node path]];
+        if (icon && [icon respondsToSelector: @selector(window)]) {
+          NSRect iconBounds = [icon bounds];
+          NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
+          NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
+          [self setPendingOpenAnimationRect: rectOnScreen];
+          return;
+        }
+      }
+    }
+  }
+
   if (viewer == nil) {
     viewer = ([viewers count] > 0) ? [viewers lastObject] : nil;
   }
@@ -580,6 +605,92 @@ static GWViewersManager *vwrsmanager = nil;
   }
 }
 
+// Open a viewer for the given folder node, growing from the source viewer's
+// icon when available.  Shared by openNode:fromViewer:asFolder: for both
+// regular folders and packages opened "as folder".
+- (void)openViewerForNode:(FSNode *)node fromViewer:(id)viewer
+{
+  if (viewer) {
+    [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
+  } else {
+    [self setPendingOpenAnimationRectFromFocusedViewerForNode: node];
+  }
+  int defaultType = [gworkspace defaultViewerType];
+  if (defaultType == SPATIAL) {
+    [self viewerOfType: SPATIAL
+              showType: nil
+               forNode: node
+         showSelection: NO
+        closeOldViewer: nil
+              forceNew: NO];
+  } else {
+    [self viewerForNode: node
+               showType: 0
+          showSelection: NO
+               forceNew: NO
+                withKey: nil];
+  }
+}
+
+// Canonical "open one item" entry point.  Every open action (double-click,
+// Cmd-O, Open, Open as Folder, dock, desktop, Finder, DBus) funnels here.
+// The item opens itself: a folder opens a viewer (growing from the source
+// viewer's icon when available), everything else is handed to the system.
+- (void)openNode:(FSNode *)node fromViewer:(id)viewer
+{
+  [self openNode: node fromViewer: viewer asFolder: NO];
+}
+
+- (void)openNode:(FSNode *)node fromViewer:(id)viewer asFolder:(BOOL)asFolder
+{
+  if (node == nil || [node hasValidPath] == NO)
+    {
+      NSRunAlertPanel(NSLocalizedString(@"error", @""),
+                      [NSString stringWithFormat: @"%@ %@!",
+                        NSLocalizedString(@"Can't open ", @""), [node name]],
+                      NSLocalizedString(@"OK", @""), nil, nil);
+      return;
+    }
+
+  /* Network services: mount instead of treating as directory */
+  if ([node respondsToSelector: @selector(isNetworkService)]
+      && [node performSelector: @selector(isNetworkService)])
+    {
+      NSString *mountPoint = [node performSelector: @selector(openNetworkService)];
+      if (mountPoint) {
+        FSNode *target = [FSNode nodeWithPath: mountPoint];
+        if (target && [target isValid]) {
+          [self openViewerForNode: target fromViewer: viewer];
+        }
+      }
+      return;
+    }
+
+  if ([node isDirectory])
+    {
+      if ([node isPackage] && (asFolder == NO))
+        {
+          if ([node isApplication] == NO)
+            [gworkspace openFile: [node path]];
+          else
+            [[NSWorkspace sharedWorkspace] launchApplication: [node path]];
+        }
+      else
+        {
+          /* Folder (or package opened as folder): open a viewer. */
+          [self openViewerForNode: node fromViewer: viewer];
+        }
+      return;
+    }
+
+  /* Plain file, application, or executable: hand to the system. */
+  if ([node isApplication]) {
+    [[NSWorkspace sharedWorkspace] launchApplication: [node path]];
+  } else {
+    [gworkspace openFile: [node path]];
+  }
+}
+
 - (void)openSelectionInViewer:(id)viewer
                   closeSender:(BOOL)close
 {
@@ -605,97 +716,33 @@ static GWViewersManager *vwrsmanager = nil;
   for (i = 0; i < count; i++)
     {
       FSNode *node = [[selreps objectAtIndex: i] node];
-      
+
       if ([node hasValidPath])
-        {            
+        {
           NS_DURING
             {
-              /* Network services: mount instead of treating as directory */
-              if ([node respondsToSelector: @selector(isNetworkService)]
-                  && [node performSelector: @selector(isNetworkService)])
-                {
-                  NSString *mountPoint = [node performSelector: @selector(openNetworkService)];
-                  if (mountPoint) {
-                    FSNode *target = [FSNode nodeWithPath: mountPoint];
-                    if (target && [target isValid]) {
-                      int defaultType = [gworkspace defaultViewerType];
-                      [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
-                      if (defaultType == SPATIAL) {
-                        [self viewerOfType: SPATIAL
-                                  showType: nil
-                                   forNode: target
-                             showSelection: NO
-                            closeOldViewer: nil
-                                  forceNew: NO];
-                      } else {
-                        [self viewerForNode: target
-                                   showType: 0
-                              showSelection: NO
-                                   forceNew: NO
-                                    withKey: nil];
-                      }
-                    }
-                  }
-                }
-              else if ([node isDirectory])
-                {
-                  if ([node isPackage])
-                    {    
-                      if ([node isApplication] == NO)
-                        [gworkspace openFile: [node path]];
-                      else
-                        [[NSWorkspace sharedWorkspace] launchApplication: [node path]];
-                    }
-                  else
-                    {
-                      // Use the default viewer type preference
-                      int defaultType = [gworkspace defaultViewerType];
-                      NSDebugLLog(@"gwspace", @"openSelectionInViewer: using default viewer type %d for folder %@", defaultType, [node path]);
-
-                      // Birth animation source rect from the activated icon
-                      [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
-
-                      if (defaultType == SPATIAL) {
-                        [self viewerOfType: SPATIAL
-                                  showType: nil
-                                   forNode: node
-                             showSelection: NO
-                            closeOldViewer: nil
-                                  forceNew: NO];
-                      } else {
-                        [self viewerForNode: node
-                                   showType: 0
-                              showSelection: NO
-                                   forceNew: NO
-                                    withKey: nil];
-                      }
-                    } 
-                }
-              else if ([node isPlain])
-                {        
-                  [gworkspace openFile: [node path]];
-                }
+              [self openNode: node fromViewer: viewer];
             }
           NS_HANDLER
             {
-              NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-                              [NSString stringWithFormat: @"%@ %@!", 
+              NSRunAlertPanel(NSLocalizedString(@"error", @""),
+                              [NSString stringWithFormat: @"%@ %@!",
                                         NSLocalizedString(@"Can't open ", @""), [node name]],
-                              NSLocalizedString(@"OK", @""), 
-                              nil, 
-                              nil);                                     
+                              NSLocalizedString(@"OK", @""),
+                              nil,
+                              nil);
             }
           NS_ENDHANDLER
-            
+
             }
       else
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-                          [NSString stringWithFormat: @"%@ %@!", 
+          NSRunAlertPanel(NSLocalizedString(@"error", @""),
+                          [NSString stringWithFormat: @"%@ %@!",
                                     NSLocalizedString(@"Can't open ", @""), [node name]],
-                          NSLocalizedString(@"OK", @""), 
-                          nil, 
-                          nil);                                     
+                          NSLocalizedString(@"OK", @""),
+                          nil,
+                          nil);
         }
     }
   
@@ -708,74 +755,30 @@ static GWViewersManager *vwrsmanager = nil;
 - (void)openAsFolderSelectionInViewer:(id)viewer
 {
   NSArray *selnodes = [[viewer nodeView] selectedNodes];
-  BOOL force = NO;
   NSUInteger i;
-  
+
   if ((selnodes == nil) || ([selnodes count] == 0))
     {
       selnodes = [NSArray arrayWithObject: [[viewer nodeView] shownNode]];
-      force = YES;
     }
-  
+
   for (i = 0; i < [selnodes count]; i++)
     {
       FSNode *node = [selnodes objectAtIndex: i];
-      
-      /* Network services: mount instead of treating as directory */
-      if ([node respondsToSelector: @selector(isNetworkService)]
-          && [node performSelector: @selector(isNetworkService)])
+      NS_DURING
         {
-          NSString *mountPoint = [node performSelector: @selector(openNetworkService)];
-          if (mountPoint) {
-            FSNode *target = [FSNode nodeWithPath: mountPoint];
-            if (target && [target isValid]) {
-              int defaultType = [gworkspace defaultViewerType];
-              [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
-              if (defaultType == SPATIAL) {
-                [self viewerOfType: SPATIAL
-                          showType: nil
-                           forNode: target
-                     showSelection: NO
-                    closeOldViewer: viewer
-                          forceNew: force];
-              } else {
-                [self viewerForNode: target
-                           showType: 0
-                      showSelection: NO
-                           forceNew: force
-                            withKey: nil];
-              }
-            }
-          }
+          [self openNode: node fromViewer: viewer asFolder: YES];
         }
-      // Use the default viewer type preference
-      else if ([node isDirectory])
+      NS_HANDLER
         {
-          int defaultType = [gworkspace defaultViewerType];
-          NSDebugLLog(@"gwspace", @"openAsFolderSelectionInViewer: using default viewer type %d for folder %@", defaultType, [node path]);
-
-          // Birth animation source rect from the activated icon
-          [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
-
-          if (defaultType == SPATIAL) {
-            [self viewerOfType: SPATIAL
-                      showType: nil
-                       forNode: node
-                 showSelection: NO
-                closeOldViewer: viewer
-                      forceNew: force];
-          } else {
-            [self viewerForNode: node
-                       showType: 0
-                  showSelection: NO
-                       forceNew: force
-                        withKey: nil];
-          }
+          NSRunAlertPanel(NSLocalizedString(@"error", @""),
+                          [NSString stringWithFormat: @"%@ %@!",
+                                    NSLocalizedString(@"Can't open ", @""), [node name]],
+                          NSLocalizedString(@"OK", @""),
+                          nil,
+                          nil);
         }
-      else if ([node isPlain])
-        {        
-          [gworkspace openFile: [node path]];
-        }
+      NS_ENDHANDLER
     }
 }
 

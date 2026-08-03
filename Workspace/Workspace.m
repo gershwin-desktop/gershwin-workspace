@@ -1260,38 +1260,13 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 - (void)newViewerAtPath:(NSString *)path
 {
   FSNode *targetNode = [FSNode nodeWithPath: path];
-  int defaultType = [self defaultViewerType];
 
-  NSDebugLLog(@"gwspace", @"newViewerAtPath: %@ using default viewer type: %d", path, defaultType);
+  NSDebugLLog(@"gwspace", @"newViewerAtPath: %@", path);
 
-  /* If a viewer window is focused and shows this node, derive the birth
-   * animation source rect from its icon so the new window grows from it
-   * (works for Cmd-O, Open, Open as Folder, double-click in any view). */
-  if (targetNode) {
-    [vwrsManager setPendingOpenAnimationRectFromFocusedViewerForNode: targetNode];
-  }
-
-  if (defaultType == SPATIAL) {
-    [vwrsManager viewerOfType: SPATIAL
-                     showType: nil
-                      forNode: targetNode
-                showSelection: NO
-               closeOldViewer: nil
-                     forceNew: NO];
-  } else {
-    /* Always create a root-based viewer so that all windows have the
-     * same capabilities: full shelf support, consistent app launching,
-     * and unrestricted navigation.  Then navigate to the target path. */
-    FSNode *rootNode = [FSNode nodeWithPath: path_separator()];
-    id viewer = [vwrsManager viewerForNode: rootNode
-                                  showType: 0
-                             showSelection: NO
-                                  forceNew: YES
-                                   withKey: nil];
-
-    if (viewer && ![path isEqual: path_separator()]) {
-      [viewer navigateToNode: targetNode];
-    }
+  /* Route through the canonical open: a folder opens a viewer (growing from
+   * the focused viewer's icon when it is shown there). */
+  if (targetNode && [targetNode hasValidPath]) {
+    [vwrsManager openNode: targetNode fromViewer: nil];
   }
 }
 
@@ -1738,22 +1713,23 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   
   for (i = 0; i < count; i++) {
     NSString *apath = [paths objectAtIndex: i];
-    
+
     /* Check if this is a network virtual path */
     if ([NetworkFSNode isNetworkPath:apath]) {
       FSNode *node = [FSNode nodeWithPath:apath];
-      
+
       if ([node isKindOfClass:[NetworkFSNode class]]) {
         NetworkFSNode *networkNode = (NetworkFSNode *)node;
-        
+
         if ([networkNode isNetworkService]) {
           /* This is a network service item - try to open/mount it */
           NSString *mountPoint = [networkNode openNetworkService];
-          
-          if (mountPoint) {
+
+          if (mountPoint && newv) {
             /* Successfully mounted or opened - show viewer at mount point */
-            if (newv) {
-              [self newViewerAtPath:mountPoint];
+            FSNode *target = [FSNode nodeWithPath: mountPoint];
+            if (target) {
+              [vwrsManager openNode: target fromViewer: nil];
             }
           }
           /* If mount failed, openNetworkService already showed an error */
@@ -1761,71 +1737,36 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         } else if ([networkNode isNetworkRoot]) {
           /* This is the /Network root - just open a viewer */
           if (newv) {
-            [self newViewerAtPath:apath];
+            [vwrsManager openNode: node fromViewer: nil];
           }
           continue;
         }
       }
     }
-    
+
     if ([fm fileExistsAtPath: apath]) {
-      NSString *defApp = nil, *type = nil;
+      FSNode *node = [FSNode nodeWithPath: apath];
+      if (node == nil || [node hasValidPath] == NO) {
+        continue;
+      }
 
       NS_DURING
         {
-	  [ws getInfoForFile: apath application: &defApp type: &type];     
-
-	  if (type != nil)
-	    {
-	      if ((type == NSDirectoryFileType) || (type == NSFilesystemFileType))
-		{
-      if (newv)
-        {
-          NSWindow *kwin = [NSApp keyWindow];
-          id nodeView = nil;
-
-          if (kwin && [vwrsManager hasViewerWithWindow: kwin])
-            {
-              nodeView = [[vwrsManager viewerWithWindow: kwin] nodeView];
-            }
-          else if (kwin && [dtopManager hasWindow: kwin])
-            {
-              nodeView = [dtopManager desktopView];
-            }
-
-          if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)])
-            {
-              id icon = [nodeView repOfSubnodePath: apath];
-              if (icon && [icon respondsToSelector: @selector(window)])
-                {
-                  NSRect iconBounds = [icon bounds];
-                  NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
-                  NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
-                  [vwrsManager setPendingOpenAnimationRect: rectOnScreen];
-                }
-            }
-
-          [self newViewerAtPath: apath];
-        }
-		}
-	      else if ((type == NSPlainFileType) || ([type isEqual: NSShellCommandFileType]))
-		{
-		  [self openFile: apath];
-		}
-	      else if (type == NSApplicationFileType)
-		{
-		  [ws launchApplication: apath];
-		}
-	    }
+          /* The canonical open: folders open a viewer (growing from the
+           * focused viewer's icon), everything else launches its app.  When
+           * newv is NO, directories are not opened at all. */
+          if (newv || [node isDirectory] == NO) {
+            [vwrsManager openNode: node fromViewer: nil];
+          }
         }
       NS_HANDLER
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-              [NSString stringWithFormat: @"%@ %@!", 
+          NSRunAlertPanel(NSLocalizedString(@"error", @""),
+              [NSString stringWithFormat: @"%@ %@!",
                NSLocalizedString(@"Can't open ", @""), [apath lastPathComponent]],
-                                            NSLocalizedString(@"OK", @""), 
-                                            nil, 
-                                            nil);                                     
+                                            NSLocalizedString(@"OK", @""),
+                                            nil,
+                                            nil);
         }
       NS_ENDHANDLER
     }
