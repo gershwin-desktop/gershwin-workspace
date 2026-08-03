@@ -260,10 +260,24 @@
     [info setHasSidebarWidth:YES];
   }
 
-  /* --- Per-file entries: icon positions (Iloc), label colors (lclr), comments (cmmt) --- */
+  /* --- Per-file entries: icon positions (Iloc), label colors (lclr), comments (cmmt) ---
+   * Scoped to this directory: icon positions are written keyed by
+   * "<key>/<filename>", so only entries with that prefix belong here. */
+  NSString *keyPrefix = [key stringByAppendingString:@"/"];
   NSArray *allFiles = [store allFilenames];
   for (NSString *filename in allFiles) {
     if ([filename isEqualToString:key]) continue;  /* dir-level entries */
+
+    NSString *bareName = filename;
+    if ([filename hasPrefix:keyPrefix]) {
+      bareName = [filename substringFromIndex:[keyPrefix length]];
+    } else {
+      /* Legacy bare-name entries (from writeIconPositions: before scoping)
+       * only apply when reading the volume root itself, where the key is
+       * "/" and the bare name is the child.  Otherwise skip foreign names. */
+      if ([key isEqualToString:@"/"] == NO && [filename rangeOfString:@"/"].location != NSNotFound)
+        continue;
+    }
 
     BOOL hasData = NO;
     DSStoreIconInfo *ii = nil;
@@ -276,7 +290,7 @@
         const uint8_t *b = (const uint8_t *)[data bytes];
         int32_t x = (int32_t)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
         int32_t y = (int32_t)((b[4] << 24) | (b[5] << 16) | (b[6] << 8) | b[7]);
-        if (!ii) ii = [DSStoreIconInfo infoForFilename:filename];
+        if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
         [ii setPosition:NSMakePoint((CGFloat)x, (CGFloat)y)];
         [ii setHasPosition:YES];
         hasData = YES;
@@ -286,7 +300,7 @@
     /* lclr: label color */
     DSStoreEntry *lclr = [store entryForFilename:filename code:@"lclr"];
     if (lclr && [[lclr type] isEqualToString:@"long"]) {
-      if (!ii) ii = [DSStoreIconInfo infoForFilename:filename];
+      if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
       [ii setLabelColor:(DSStoreLabelColor)[[lclr value] intValue]];
       [ii setHasLabelColor:YES];
       hasData = YES;
@@ -295,13 +309,13 @@
     /* cmmt: comments */
     DSStoreEntry *cmmt = [store entryForFilename:filename code:@"cmmt"];
     if (cmmt && [[cmmt type] isEqualToString:@"ustr"]) {
-      if (!ii) ii = [DSStoreIconInfo infoForFilename:filename];
+      if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
       [ii setComments:(NSString *)[cmmt value]];
       hasData = YES;
     }
 
     if (hasData && ii) {
-      [info setIconInfo:ii forFilename:filename];
+      [info setIconInfo:ii forFilename:bareName];
     }
   }
 
@@ -409,18 +423,22 @@
     if (e) [store setEntry:e];
   }
 
-  /* Write icon positions for child files */
+  /* Write icon positions for child files.  Key them by "<key>/<filename>" so
+   * they are scoped to this directory (the cache file is shared across all
+   * read-only directories of a volume, so bare filenames would collide) and so
+   * removeRecordForDirectoryPath: / the read side can match them. */
   NSDictionary *allIcons = [info allIconInfo];
   NSDebugLLog(@"gwspace", @"GWVolumeCache: writing %lu icon entries for %@",
               (unsigned long)[allIcons count], key);
   for (NSString *filename in allIcons) {
     DSStoreIconInfo *ii = [allIcons objectForKey:filename];
+    NSString *scopedName = [key stringByAppendingPathComponent:filename];
     NSDebugLLog(@"gwspace", @"GWVolumeCache:   file='%@' pos=%d lbl=%d",
                 filename, [ii hasPosition], [ii hasLabelColor]);
     if ([ii hasPosition]) {
-      DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:filename
-                                                             x:(int)[ii position].x
-                                                             y:(int)[ii position].y];
+      DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:scopedName
+                                                              x:(int)[ii position].x
+                                                              y:(int)[ii position].y];
       if (e) [store setEntry:e];
     }
     if ([ii comments]) {
@@ -509,15 +527,17 @@
 
   if (!store) return NO;
 
-  /* Write each icon position as an Iloc entry keyed by the child filename */
+  /* Write each icon position as an Iloc entry keyed by "<key>/<filename>" so
+   * entries are scoped to this directory (see writeInfo:forDirectoryPath:). */
   for (NSDictionary *pos in positions) {
     NSString *name = [pos objectForKey:@"name"];
     NSNumber *xVal = [pos objectForKey:@"x"];
     NSNumber *yVal = [pos objectForKey:@"y"];
     if (name && xVal && yVal) {
-      DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:name
-                                                             x:[xVal intValue]
-                                                             y:[yVal intValue]];
+      NSString *scopedName = [key stringByAppendingPathComponent:name];
+      DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:scopedName
+                                                              x:[xVal intValue]
+                                                              y:[yVal intValue]];
       if (e) [store setEntry:e];
     }
   }
