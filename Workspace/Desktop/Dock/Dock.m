@@ -493,7 +493,15 @@ static inline CGFloat _scaledCellSize(int iconSize)
     }
 
     DockIcon *icon = [self iconForApplicationPath: appPath];
-  
+
+    /* The same logical application may be reached via several paths (e.g.
+     * one bundle in /System/Applications and a second copy in
+     * /Local/Applications, or a symlink).  Reuse an existing icon by name so
+     * a launch never produces a duplicate bouncing icon. */
+    if (icon == nil && appName != nil) {
+      icon = [self iconForApplicationName: appName];
+    }
+
     if (icon == nil) {
       icon = [self addIconForApplicationAtPath: appPath
                                       withName: appName
@@ -543,6 +551,16 @@ static inline CGFloat _scaledCellSize(int iconSize)
 
     DockIcon *icon = [self iconForApplicationPath: appPath];
 
+    /* The same application may exist in several GNUstep domains (System,
+     * Local, ...) as separate bundles with different paths (e.g.
+     * /System/Applications/SudoAskPass.app and
+     * /Local/Applications/SudoAskPass.app).  iconForApplicationPath: only
+     * matches by exact path, so fall back to the app name to avoid showing
+     * a duplicate Dock icon for the same logical application. */
+    if (icon == nil && appName != nil) {
+      icon = [self iconForApplicationName: appName];
+    }
+
     if (icon == nil) {
       icon = [self addIconForApplicationAtPath: appPath
                                       withName: appName
@@ -583,6 +601,13 @@ static inline CGFloat _scaledCellSize(int iconSize)
   if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
     DockIcon *icon = [self iconForApplicationPath: appPath];
+
+    /* Fall back to the app name: the launch path may differ from the
+     * icon's path (domain copies / symlinks), otherwise the icon would
+     * remain in the Dock after the application quits. */
+    if (icon == nil && appName != nil) {
+      icon = [self iconForApplicationName: appName];
+    }
 
     if (icon) {
       [icon setAppPID: 0]; /* Clear PID on termination */
@@ -1673,8 +1698,10 @@ static inline CGFloat _scaledCellSize(int iconSize)
               for (i = 0; i < [icons count]; i++) {
                 DockIcon *checkIcon = [icons objectAtIndex: i];
 
-                if ([[checkIcon node] isEqual: node] 
-                            && [[checkIcon appName] isEqual: appName]) {
+                /* The same logical application can be reached via different
+                 * paths (domain copies, symlinks); match by name so dragging
+                 * it to the Dock never produces a duplicate icon. */
+                if ([[checkIcon appName] isEqual: appName]) {
                   RETAIN (checkIcon);
                   [icons removeObject: checkIcon];
                   [icons insertObject: checkIcon atIndex: targetIndex];

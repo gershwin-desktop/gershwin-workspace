@@ -12,6 +12,19 @@
 #import <signal.h>
 #import <pthread.h>
 #import <sys/syscall.h>
+#import <stdio.h>
+#import <string.h>
+
+#if defined(__linux__)
+#import <dirent.h>
+#else
+#import <sys/types.h>
+#import <sys/sysctl.h>
+#import <sys/proc.h>
+#if defined(__FreeBSD__)
+#import <sys/user.h>
+#endif
+#endif
 
 /* ------------------------------------------------------------------ */
 /* Platform detection                                                 */
@@ -37,6 +50,179 @@
 #endif
 
 #define GW_PMON_MAX_PIDS 256
+
+/* ------------------------------------------------------------------ */
+/* Process-table helpers for the poll-based liveness query.            */
+/* ------------------------------------------------------------------ */
+
+/* Returns YES if the given PID is alive (kill(pid,0) semantics). */
+static BOOL GWPIDAlive(pid_t pid)
+{
+  if (pid <= 0)
+    return NO;
+  int result = kill(pid, 0);
+  return (result == 0) || (errno == EPERM);
+}
+
+#if defined(__linux__)
+/* Returns YES if the given PID has at least one live (non-zombie) direct
+ * child.  We scan /proc once per bounce iteration, which is a handful of
+ * milliseconds; the alternative (event-driven child tracking) is far more
+ * complex and not worth it for a dock animation guard. */
+static BOOL GWPIDHasLiveChildInProc(pid_t pid)
+{
+  DIR *proc = opendir("/proc");
+  if (proc == NULL)
+    return NO;
+
+  struct dirent *entry;
+  BOOL found = NO;
+
+  while ((entry = readdir(proc)) != NULL)
+    {
+      if (entry->d_name[0] < '0' || entry->d_name[0] > '9')
+        continue;
+
+      char statPath[64];
+      snprintf(statPath, sizeof(statPath), "/proc/%s/stat", entry->d_name);
+
+      FILE *f = fopen(statPath, "r");
+      if (f == NULL)
+        continue;
+
+      char buf[512];
+      size_t n = fread(buf, 1, sizeof(buf) - 1, f);
+      fclose(f);
+      if (n == 0)
+        continue;
+      buf[n] = '\0';
+
+      /* stat format: "pid (comm) state ppid ..." — comm may itself contain
+       * ')' and spaces, so locate the last ')' and parse state + ppid after
+       * it.  We skip zombies ('Z') so an unreaped child does not keep the
+       * animation alive. */
+      char *closeParen = strrchr(buf, ')');
+      if (closeParen == NULL)
+        continue;
+
+      char state = '\0';
+      long long ppid = -1;
+      if (sscanf(closeParen + 1, " %c %lld", &state, &ppid) == 2)
+        {
+          if (ppid == (long long)pid && state != 'Z')
+            {
+              found = YES;
+              break;
+            }
+        }
+    }
+
+  closedir(proc);
+  return found;
+}
+#else /* !__linux__ */
+
+#if defined(__FreeBSD__) || defined(__NetBSD__)
+/* Returns YES if the given PID has a live (non-zombie) direct child.
+ * Uses sysctl(KERN_PROC_PPID) which enumerates processes by parent PID.
+ * On NetBSD the kinfo_proc2 structure is used via KERN_PROC2. */
+static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
+{
+#if defined(__FreeBSD__)
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PPID, pid};
+  struct kinfo_proc *kp = NULL;
+  size_t len = 0;
+#else /* __NetBSD__ */
+  int mib[6] = {CTL_KERN, KERN_PROC2, KERN_PROC_PPID, pid,
+                sizeof(struct kinfo_proc2), 0};
+  struct kinfo_proc2 *kp = NULL;
+  size_t len = 0;
+#endif
+
+  if (sysctl(mib, (sizeof(mib) / sizeof(mib[0])), NULL, &len, NULL, 0) != 0
+      || len == 0)
+    return NO;
+
+  kp = (void *)malloc(len);
+  if (kp == NULL)
+    return NO;
+
+  if (sysctl(mib, (sizeof(mib) / sizeof(mib[0])), kp, &len, NULL, 0) != 0)
+    {
+      free(kp);
+      return NO;
+    }
+
+  BOOL found = NO;
+  size_t count;
+
+#if defined(__FreeBSD__)
+  count = len / sizeof(struct kinfo_proc);
+  for (size_t i = 0; i < count; i++)
+    {
+      if (kp[i].ki_ppid == pid && kp[i].ki_stat != SZOMB)
+        {
+          found = YES;
+          break;
+        }
+    }
+#else
+  count = len / sizeof(struct kinfo_proc2);
+  for (size_t i = 0; i < count; i++)
+    {
+      if (kp[i].p_ppid == pid && kp[i].p_stat != SZOMB)
+        {
+          found = YES;
+          break;
+        }
+    }
+#endif
+
+  free(kp);
+  return found;
+}
+#elif defined(__OpenBSD__)
+static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
+{
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
+  struct kinfo_proc *kp = NULL;
+  size_t len = 0;
+
+  if (sysctl(mib, 4, NULL, &len, NULL, 0) != 0 || len == 0)
+    return NO;
+
+  kp = (void *)malloc(len);
+  if (kp == NULL)
+    return NO;
+
+  if (sysctl(mib, 4, kp, &len, NULL, 0) != 0)
+    {
+      free(kp);
+      return NO;
+    }
+
+  BOOL found = NO;
+  size_t count = len / sizeof(struct kinfo_proc);
+  for (size_t i = 0; i < count; i++)
+    {
+      if (kp[i].p_ppid == pid && kp[i].p_stat != SZOMB)
+        {
+          found = YES;
+          break;
+        }
+    }
+
+  free(kp);
+  return found;
+}
+#else
+static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
+{
+  return NO;
+}
+#endif /* __FreeBSD__ || __NetBSD__ / __OpenBSD__ / else */
+
+#endif /* __linux__ */
 
 /* ------------------------------------------------------------------ */
 /* Internal helper — wraps a callback invocation for main-thread dispatch */
@@ -475,6 +661,25 @@
             }
         }
     }
+}
+
+- (BOOL)processOrChildrenAlive:(pid_t)pid
+{
+  if (pid <= 0)
+    return NO;
+
+  /* The process itself is the common case. */
+  if (GWPIDAlive(pid))
+    return YES;
+
+  /* A dock icon is usually bound to a single PID, but some applications
+   * (e.g. launchers or sudo re-exec chains) run as a child of that PID, so
+   * also accept a live direct child of it. */
+#if defined(__linux__)
+  return GWPIDHasLiveChildInProc(pid);
+#else
+  return GWPIDHasLiveChildInBSD(pid);
+#endif
 }
 
 @end

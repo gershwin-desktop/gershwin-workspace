@@ -516,7 +516,21 @@
   if (!isBouncing) {
     return;
   }
-  
+
+  /* While the icon is bouncing we are waiting for the app to come up.  If
+   * the process (or a child of it) died - e.g. the launch failed - stop the
+   * animation and drop the icon instead of bouncing forever.  GWProcessMonitor
+   * normally removes the icon the instant the exact PID exits, but that only
+   * covers the registered PID; this poll covers launcher chains where the
+   * dock PID is a wrapper. */
+  if (appPID > 0
+      && [[GWProcessMonitor sharedMonitor] processOrChildrenAlive: appPID] == NO)
+    {
+      [self stopBouncing];
+      [(Dock *)container removeIcon: self];
+      return;
+    }
+
   /* Handle pause between bounces (500ms pause between iterations) */
   /* At 30fps (0.033s per frame), 500ms = ~15 frames */
   if (pauseCounter > 0) {

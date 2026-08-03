@@ -40,6 +40,14 @@
  */
 - (void)removePID:(pid_t)pid;
 
+/**
+ * Synchronously check whether a process or any direct child of it is still
+ * running.  Used as a lightweight poll (e.g. once per dock bounce iteration)
+ * as a complement to the event-driven addPID: monitoring, so a process that
+ * dies while an animation is in flight can be detected immediately.
+ */
+- (BOOL)processOrChildrenAlive:(pid_t)pid;
+
 @end
 
 #endif
