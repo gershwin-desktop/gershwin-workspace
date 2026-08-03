@@ -308,7 +308,7 @@ static GWViewersManager *vwrsmanager = nil;
        * -activate below maps the window. */
       [self setWindowBirthRect: startFrame
                     targetRect: endFrame
-                 animationType: 0   // GSWindowBirthAnimationOpen
+                 animationType: 0   // WindowBirthAnimationOpen
                      forWindow: win];
     }
 
@@ -359,6 +359,28 @@ static GWViewersManager *vwrsmanager = nil;
   pendingOpenAnimationRect = rect;
   hasPendingOpenAnimationRect = !NSEqualRects(rect, NSZeroRect);
   NSDebugLLog(@"gwspace", @"[Animation] hasPendingOpenAnimationRect = %d", hasPendingOpenAnimationRect);
+}
+
+// When opening a folder from a viewer (icon view, list view, path view, or a
+// spatial viewer), derive the birth-animation source rectangle from the
+// on-screen position of the icon the user activated, so the new window
+// visibly grows from it.  This mirrors what the desktop does for desktop
+// icons.  The node view may not expose the rep for every node type, so the
+// rect is only set when one is found.
+- (void)setPendingOpenAnimationRectFromViewer:(id)viewer forNode:(FSNode *)node
+{
+  id nodeView = [viewer nodeView];
+  if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)])
+    {
+      id icon = [nodeView repOfSubnodePath: [node path]];
+      if (icon && [icon respondsToSelector: @selector(window)])
+        {
+          NSRect iconBounds = [icon bounds];
+          NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
+          NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
+          [self setPendingOpenAnimationRect: rectOnScreen];
+        }
+    }
 }
 
 - (NSArray *)viewersForBaseNode:(FSNode *)node
@@ -559,6 +581,7 @@ static GWViewersManager *vwrsmanager = nil;
                     FSNode *target = [FSNode nodeWithPath: mountPoint];
                     if (target && [target isValid]) {
                       int defaultType = [gworkspace defaultViewerType];
+                      [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
                       if (defaultType == SPATIAL) {
                         [self viewerOfType: SPATIAL
                                   showType: nil
@@ -590,6 +613,9 @@ static GWViewersManager *vwrsmanager = nil;
                       // Use the default viewer type preference
                       int defaultType = [gworkspace defaultViewerType];
                       NSDebugLLog(@"gwspace", @"openSelectionInViewer: using default viewer type %d for folder %@", defaultType, [node path]);
+
+                      // Birth animation source rect from the activated icon
+                      [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
 
                       if (defaultType == SPATIAL) {
                         [self viewerOfType: SPATIAL
@@ -666,6 +692,7 @@ static GWViewersManager *vwrsmanager = nil;
             FSNode *target = [FSNode nodeWithPath: mountPoint];
             if (target && [target isValid]) {
               int defaultType = [gworkspace defaultViewerType];
+              [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
               if (defaultType == SPATIAL) {
                 [self viewerOfType: SPATIAL
                           showType: nil
@@ -688,6 +715,9 @@ static GWViewersManager *vwrsmanager = nil;
         {
           int defaultType = [gworkspace defaultViewerType];
           NSDebugLLog(@"gwspace", @"openAsFolderSelectionInViewer: using default viewer type %d for folder %@", defaultType, [node path]);
+
+          // Birth animation source rect from the activated icon
+          [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
 
           if (defaultType == SPATIAL) {
             [self viewerOfType: SPATIAL
@@ -1533,10 +1563,9 @@ static GWViewersManager *vwrsmanager = nil;
                targetRect:(NSRect)targetRect
             animationType:(int32_t)animationType
                  forWindow:(NSWindow *)window {
-  // Set X11 window property _GSWORKSPACE_WINDOW_BIRTH
+  // Set X11 window property _WINDOW_BIRTH
   // This will be read by WindowManager to perform the spatial birth animation.
   // Format: 9 x 32-bit integers (source x,y,w,h, target x,y,w,h, animationType)
-  // Per PRD.md section 8.
 
   if (!window) {
     NSDebugLLog(@"gwspace", @"[Animation] NULL window passed to setWindowBirthRect");
@@ -1606,8 +1635,14 @@ static GWViewersManager *vwrsmanager = nil;
   int32_t dstW = (int32_t)targetRect.size.width;
   int32_t dstH = (int32_t)targetRect.size.height;
 
-  // Build 9-int32 data array: source(x,y,w,h), target(x,y,w,h), animationType
-  int32_t data[9] = {srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, animationType};
+  // Build the 9-value data array: source(x,y,w,h), target(x,y,w,h), animationType
+  //
+  // XChangeProperty with format=32 reads the data as C `long` elements (8
+  // bytes on LP64), not int32.  Passing an int32 array here would make Xlib
+  // pick up every other 4-byte word, corrupting the property.  The X server
+  // stores the values as 32-bit, and the WindowManager reads them back as
+  // 32-bit — so a long[] source is correct on both sides.
+  long data[9] = {srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, animationType};
 
   // Error checking: validate parameters before calling X11
   if (!display || xwindow == 0) {
@@ -1618,9 +1653,9 @@ static GWViewersManager *vwrsmanager = nil;
   // Set error handler to catch X11 errors gracefully
   int (*oldHandler)(Display *, XErrorEvent *) = XSetErrorHandler(NULL);
 
-  Atom birthAtom = XInternAtom(display, "_GSWORKSPACE_WINDOW_BIRTH", False);
+  Atom birthAtom = XInternAtom(display, "_WINDOW_BIRTH", False);
   if (birthAtom == None) {
-    NSDebugLLog(@"gwspace", @"[Animation] Failed to intern _GSWORKSPACE_WINDOW_BIRTH atom");
+    NSDebugLLog(@"gwspace", @"[Animation] Failed to intern _WINDOW_BIRTH atom");
     XSetErrorHandler(oldHandler);
     return;
   }
