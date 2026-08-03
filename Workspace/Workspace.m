@@ -1555,6 +1555,27 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     return [self pasteboardHasValidContent];
   }
 
+  // Go To menu navigation commands are always available: they jump to a
+  // fixed location and never depend on the current selection or window.
+  if (sel_isEqual(action, @selector(goToComputer:))
+      || sel_isEqual(action, @selector(goToHome:))
+      || sel_isEqual(action, @selector(goToApplications:))
+      || sel_isEqual(action, @selector(goToUtilities:))
+      || sel_isEqual(action, @selector(goToDocuments:))
+      || sel_isEqual(action, @selector(goToDesktop:))
+      || sel_isEqual(action, @selector(goToDownloads:))
+      || sel_isEqual(action, @selector(goToMusic:))
+      || sel_isEqual(action, @selector(goToPictures:))
+      || sel_isEqual(action, @selector(goToVideos:))
+      || sel_isEqual(action, @selector(goToNetwork:))
+      || sel_isEqual(action, @selector(goToFolder:))
+      || sel_isEqual(action, @selector(connectToServer:))
+      || sel_isEqual(action, @selector(showHistory:))
+      || sel_isEqual(action, @selector(openParentFolder:)))
+    {
+      return YES;
+    }
+
   // Always-enabled app-level commands
   if (sel_isEqual(action, @selector(showViewer:))
       || sel_isEqual(action, @selector(runCommand:))
