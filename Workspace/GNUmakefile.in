@@ -101,8 +101,9 @@ Desktop/Dock/Dock.m \
 Desktop/Dock/DockIcon.m \
 Desktop/Dock/DockService.m \
 Desktop/Dock/GWDockWindow.m \
-FileViewer/GWViewersManager.m \
-FileViewer/GWViewer.m \
+ FileViewer/GWViewersManager.m \
+ FileViewer/GWViewerBase.m \
+ FileViewer/GWViewer.m \
 FileViewer/GWViewTypeHelpers.m \
 FileViewer/GWSpatialViewer.m \
 FileViewer/GWViewerWindow.m \

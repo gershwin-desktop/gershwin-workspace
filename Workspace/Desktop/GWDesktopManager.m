@@ -975,54 +975,35 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 {
   NSArray *selreps = [desktopView selectedReps];
   NSUInteger i;
-    
+
   for (i = 0; i < [selreps count]; i++) {
     FSNode *node = [[selreps objectAtIndex: i] node];
-        
-    if ([node hasValidPath]) {           
+
+    if ([node hasValidPath]) {
       NS_DURING
         {
-      if ([node isDirectory]) {
-        if ([node isPackage]) {    
-          if ([node isApplication] == NO) {
-            [gworkspace openFile: [node path]];
-          } else {
-            [ws launchApplication: [node path]];
-          }
-        } else {
-          // Set animation rect from the desktop icon
-          id icon = [desktopView repOfSubnodePath: [node path]];
-          if (icon && [icon respondsToSelector: @selector(window)])
-            {
-              NSRect iconBounds = [icon bounds];
-              NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
-              NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
-              [[gworkspace viewersManager] setPendingOpenAnimationRect: rectOnScreen];
-            }
-          [gworkspace newViewerAtPath: [node path]];
-        } 
-      } else if ([node isPlain]) {        
-        [gworkspace openFile: [node path]];
-      }
+          /* Canonical open: the desktop window is key, so the birth rect is
+           * derived from the desktop icon automatically. */
+          [[gworkspace viewersManager] openNode: node fromViewer: nil];
         }
       NS_HANDLER
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-              [NSString stringWithFormat: @"%@ %@!", 
+          NSRunAlertPanel(NSLocalizedString(@"error", @""),
+              [NSString stringWithFormat: @"%@ %@!",
                         NSLocalizedString(@"Can't open ", @""), [node name]],
-                                            NSLocalizedString(@"OK", @""), 
-                                            nil, 
-                                            nil);                                     
+                                            NSLocalizedString(@"OK", @""),
+                                            nil,
+                                            nil);
         }
       NS_ENDHANDLER
-      
+
     } else {
-      NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-          [NSString stringWithFormat: @"%@ %@!", 
+      NSRunAlertPanel(NSLocalizedString(@"error", @""),
+          [NSString stringWithFormat: @"%@ %@!",
                     NSLocalizedString(@"Can't open ", @""), [node name]],
-                                        NSLocalizedString(@"OK", @""), 
-                                        nil, 
-                                        nil);                                     
+                                        NSLocalizedString(@"OK", @""),
+                                        nil,
+                                        nil);
     }
   }
 }
@@ -1031,23 +1012,27 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 {
   NSArray *selnodes = [desktopView selectedNodes];
   unsigned i;
-    
+
   for (i = 0; i < [selnodes count]; i++) {
     FSNode *node = [selnodes objectAtIndex: i];
-        
-    if ([node isDirectory]) {
-      // Set animation rect from the desktop icon
-      id icon = [desktopView repOfSubnodePath: [node path]];
-      if (icon && [icon respondsToSelector: @selector(window)])
+
+    if ([node hasValidPath]) {
+      NS_DURING
         {
-          NSRect iconBounds = [icon bounds];
-          NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
-          NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
-          [[gworkspace viewersManager] setPendingOpenAnimationRect: rectOnScreen];
+          /* Force-open packages as folders, deriving the birth rect from the
+           * desktop icon. */
+          [[gworkspace viewersManager] openNode: node fromViewer: nil asFolder: YES];
         }
-      [gworkspace newViewerAtPath: [node path]];
-    } else if ([node isPlain]) {        
-      [gworkspace openFile: [node path]];
+      NS_HANDLER
+        {
+          NSRunAlertPanel(NSLocalizedString(@"error", @""),
+              [NSString stringWithFormat: @"%@ %@!",
+                        NSLocalizedString(@"Can't open ", @""), [node name]],
+                                            NSLocalizedString(@"OK", @""),
+                                            nil,
+                                            nil);
+        }
+      NS_ENDHANDLER
     }
   }
 }

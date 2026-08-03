@@ -23,7 +23,7 @@
  */
 
 #import <Foundation/Foundation.h>
-#import "GWViewer.h"
+#import "GWViewerBase.h"
 
 @class GWViewersManager;
 @class GWViewerPathsPopUp;
@@ -39,51 +39,23 @@
 @class DSStoreInfo;
 @class GWViewSettingsManager;
 
-@interface GWSpatialViewer : NSObject
+@interface GWSpatialViewer : GWViewerBase
 {
-  GWViewerWindow *vwrwin;
   NSView *mainView;
   NSView *topBox;
   NSTextField *elementsLabel;
   NSTextField *spaceLabel;
   GWViewerPathsPopUp *pathsPopUp;
   GWViewerScrollView *scroll;
-  id nodeView;
-  GWViewerBrowserPreview *previewPane;
-  BOOL showInspector;
-  int inspectorPane;
 
-  NSDictionary *viewerPrefs;
   NSString *viewType;
   BOOL rootviewer;
   NSNumber *rootViewerKey;
-
-  int visibleCols;
-  int resizeIncrement;
-
-  FSNode *baseNode;
-  NSArray *baseNodeArray;
-  NSArray *lastSelection;
-  NSMutableArray *watchedNodes;
-  
-  // History support (required by GWViewersManager)
-  NSMutableArray *history;
-  int historyPosition;
-
-  FSNodeRep *fsnodeRep;
 
   // .DS_Store view-settings persistence (full spec hierarchy)
   GWViewSettingsManager *_settingsManager;  // Orchestrates read/write (§2-3)
   DSStoreInfo *dsStoreInfo;                 // Current working copy of view settings
   NSString *dsStorePath;                    // Path to .DS_Store file being watched
-
-  BOOL invalidated;
-  BOOL closing;
-
-  GWViewersManager *manager;
-  Workspace *gworkspace;
-
-  NSNotificationCenter *nc;
 
   // X11 atom-based spatial path for WM titlebar popup
   GWX11SpatialPath *_x11Path;
@@ -93,17 +65,15 @@
          inWindow:(GWViewerWindow *)win
          showType:(NSString *)stype
     showSelection:(BOOL)showsel;
-- (void)createSubviews;
 - (FSNode *)baseNode;
+- (NSString *)defaultsKey;
 - (BOOL)isShowingNode:(FSNode *)anode;
 - (BOOL)isShowingPath:(NSString *)apath;
-- (void)reloadNodeContents;
-- (void)reloadFromNode:(FSNode *)anode;
+- (void)createSubviews;
 - (void)unloadFromNode:(FSNode *)anode;
 - (void)updateWindowTitle;
 
 - (GWViewerWindow *)win;
-- (id)nodeView;
 - (id)shelf;
 - (GWViewType)viewType;
 - (BOOL)isRootViewer;
@@ -112,31 +82,16 @@
 - (int)vtype;
 
 - (void)activate;
-- (void)deactivate;
-- (void)scrollToBeginning;
 - (void)invalidate;
-- (BOOL)invalidated;
-- (BOOL)isClosing;
-
-- (void)setOpened:(BOOL)opened
-        repOfNode:(FSNode *)anode;
 - (void)unselectAllReps;
 - (void)selectionChanged:(NSArray *)newsel;
 - (void)multipleNodeViewDidSelectSubNode:(FSNode *)node;
 - (void)setSelectableNodesRange:(NSRange)range;
 - (void)updeateInfoLabels;
 - (void)popUpAction:(id)sender;
-
 - (BOOL)involvedByFileOperation:(NSDictionary *)opinfo;
-- (void)nodeContentsWillChange:(NSDictionary *)info;
 - (void)nodeContentsDidChange:(NSDictionary *)info;
-
 - (void)watchedPathChanged:(NSDictionary *)info;
-- (NSArray *)watchedNodes;
-
-- (void)hideDotsFileChanged:(BOOL)hide;
-- (void)hiddenFilesChanged:(NSArray *)paths;
-
 - (void)columnsWidthChanged:(NSNotification *)notification;
 
 - (void)updateDefaults;
@@ -151,18 +106,6 @@
 - (void)applyDSStoreSettingsToBrowserView:(id)browserView;
 - (DSStoreInfo *)dsStoreInfo;
 - (GWViewSettingsManager *)settingsManager;
-
-// History support (required by GWViewersManager)
-- (NSMutableArray *)history;
-- (int)historyPosition;
-- (void)setHistoryPosition:(int)pos;
-
-- (void)toggleInspector:(id)sender;
-- (BOOL)isInspectorShown;
-- (void)setInspectorShown:(BOOL)shown;
-- (int)inspectorPaneIndex;
-- (void)setInspectorPaneIndex:(int)index;
-- (void)previewPane:(GWViewerBrowserPreview *)pane didSelectInspectorAtIndex:(int)index;
 
 @end
 

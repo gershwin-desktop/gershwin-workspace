@@ -1477,6 +1477,18 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     return NO;
   }
 
+  // "Set Browsing/Spatial as Default" are always available: they change the
+  // default viewer type for newly opened windows regardless of the current
+  // selection or window.
+  if (sel_isEqual(action, @selector(setDefaultBrowsingBehaviour:))
+      || sel_isEqual(action, @selector(setDefaultSpatialBehaviour:)))
+    {
+      BOOL isSpatial = sel_isEqual(action, @selector(setDefaultSpatialBehaviour:));
+      [anItem setState: ([self defaultViewerType] == (isSpatial ? SPATIAL : BROWSING))
+                       ? NSOnState : NSOffState];
+      return YES;
+    }
+
   // === App-level items handled directly by Workspace ===
 
   if (sel_isEqual(action, @selector(emptyTrash:))) {

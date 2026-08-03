@@ -24,14 +24,7 @@
 
 
 
-#import <Foundation/Foundation.h>
-
-typedef enum
-  {
-    GWViewTypeBrowser = 1,
-    GWViewTypeIcon,
-    GWViewTypeList
-  } GWViewType;
+#import "GWViewerBase.h"
 
 @class GWViewersManager;
 @class FSNode;
@@ -39,6 +32,8 @@ typedef enum
 @class GWViewerWindow;
 @class GWViewerSplit;
 @class GWViewerShelf;
+#import "GWViewerBase.h"
+
 @class GWViewerSidebar;
 @class GWViewerScrollView;
 @class GWViewerIconsPath;
@@ -47,9 +42,8 @@ typedef enum
 @class NSView;
 @class Workspace;
 
-@interface GWViewer : NSObject
+@interface GWViewer : GWViewerBase
 {
-  GWViewerWindow *vwrwin;
   GWViewerSplit *split;
   GWViewerSidebar *sidebar;
   float sidebarWidth;
@@ -57,41 +51,12 @@ typedef enum
   GWViewerPathsScroll *pathsScroll;
   GWViewerIconsPath *pathsView;
   GWViewerScrollView *nviewScroll;
-  id nodeView;
-  
-  /* Rightmost "Contents" preview pane, shown when the user enables the
-   * "Show Inspector" toggle, in any view type. */
-  GWViewerBrowserPreview *previewPane;
-  BOOL showInspector;
-  int inspectorPane;
-  
-  NSDictionary *viewerPrefs;
+
   GWViewType viewType;
 
   BOOL rootViewer; /* base path = root */
   BOOL firstRootViewer; /* special first viewer */
   NSString *defaultsKeyStr;
-
-  int visibleCols;
-  int resizeIncrement;
-    
-  FSNode *baseNode;
-  NSArray *baseNodeArray;
-  NSArray *lastSelection;  
-  NSMutableArray *watchedNodes;
-
-  FSNodeRep *fsnodeRep;
-
-  NSMutableArray *history;
-  int historyPosition;
-  
-  BOOL invalidated;
-  BOOL closing;
-  
-  GWViewersManager *manager;
-  Workspace *gworkspace;
-
-  NSNotificationCenter *nc;        
 }
 
 - (id)initForNode:(FSNode *)node
@@ -100,12 +65,10 @@ typedef enum
     showSelection:(BOOL)showsel
 	  withKey:(NSString *)key;
 
-- (void)createSubviews;
 - (FSNode *)baseNode;
 - (BOOL)isShowingNode:(FSNode *)anode;
 - (BOOL)isShowingPath:(NSString *)apath;
-- (void)reloadNodeContents;
-- (void)reloadFromNode:(FSNode *)anode;
+- (void)createSubviews;
 - (void)unloadFromNode:(FSNode *)anode;
 - (void)updateShownSelection;
 - (void)updateWindowTitle;
@@ -117,7 +80,6 @@ typedef enum
 - (void)openNodeInPlace:(FSNode *)newBase;
 
 - (GWViewerWindow *)win;
-- (id)nodeView;
 - (id)shelf;
 - (GWViewType)viewType;
 - (BOOL)isSpatial;
@@ -130,18 +92,11 @@ typedef enum
 - (NSString *)defaultsKey;
 
 - (void)activate;
-- (void)deactivate;
 - (void)tileViews;
 - (CGFloat)defaultSidebarWidth;
 - (void)setSidebarWidth:(CGFloat)w;
 - (void)reloadSidebar;
-- (void)scrollToBeginning;
 - (void)invalidate;
-- (BOOL)invalidated;
-- (BOOL)isClosing;
-
-- (void)setOpened:(BOOL)opened 
-        repOfNode:(FSNode *)anode;
 - (void)unselectAllReps;
 - (void)selectionChanged:(NSArray *)newsel;
 - (void)multipleNodeViewDidSelectSubNode:(FSNode *)node;
@@ -149,30 +104,10 @@ typedef enum
 - (void)shelfDidSelectIcon:(id)icon;
 - (void)setSelectableNodesRange:(NSRange)range;
 - (void)updeateInfoLabels;
-
 - (BOOL)involvedByFileOperation:(NSDictionary *)opinfo;
-- (void)nodeContentsWillChange:(NSDictionary *)info;
 - (void)nodeContentsDidChange:(NSDictionary *)info;
-
 - (void)watchedPathChanged:(NSDictionary *)info;
-- (NSArray *)watchedNodes;
-/* Return the last selection in the viewer (may be nil) */
-- (NSArray *)lastSelection;
-- (void)hideDotsFileChanged:(BOOL)hide;
-- (void)hiddenFilesChanged:(NSArray *)paths;
-
-- (NSMutableArray *)history;
-- (int)historyPosition;
-- (void)setHistoryPosition:(int)pos;
-
 - (void)columnsWidthChanged:(NSNotification *)notification;
-
-- (void)toggleInspector:(id)sender;
-- (BOOL)isInspectorShown;
-- (void)setInspectorShown:(BOOL)shown;
-- (int)inspectorPaneIndex;
-- (void)setInspectorPaneIndex:(int)index;
-- (void)previewPane:(GWViewerBrowserPreview *)pane didSelectInspectorAtIndex:(int)index;
 
 - (void)updateDefaults;
 

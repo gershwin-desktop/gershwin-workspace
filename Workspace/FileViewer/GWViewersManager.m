@@ -444,6 +444,17 @@ static GWViewersManager *vwrsmanager = nil;
   if (viewer != nil) {
     [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
   }
+  if (!hasPendingOpenAnimationRect) {
+    /* The focused (or last) viewer didn't show the node: scan all viewers
+     * so the icon can be found even if it lives in a non-focused window. */
+    NSUInteger i;
+    for (i = 0; i < [viewers count] && !hasPendingOpenAnimationRect; i++) {
+      id v = [viewers objectAtIndex: i];
+      if (v != viewer) {
+        [self setPendingOpenAnimationRectFromViewer: v forNode: node];
+      }
+    }
+  }
 }
 
 - (NSArray *)viewersForBaseNode:(FSNode *)node
@@ -677,7 +688,9 @@ static GWViewersManager *vwrsmanager = nil;
         }
       else
         {
-          /* Folder (or package opened as folder): open a viewer. */
+          /* Folder (or package opened as folder): open a viewer.  The default
+           * viewer type setting decides between a spatial window and a
+           * browsing window. */
           [self openViewerForNode: node fromViewer: viewer];
         }
       return;

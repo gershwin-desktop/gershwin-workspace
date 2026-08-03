@@ -92,10 +92,6 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 @implementation GWViewer
 
 /* Accessor for lastSelection used by GWViewerWindow quicklook guard */
-- (NSArray *)lastSelection
-{
-  return lastSelection;
-}
 
 - (void)dealloc
 {
@@ -580,10 +576,6 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   [nviewScroll setNeedsDisplay: YES];
 }
 
-- (BOOL)isInspectorShown
-{
-  return showInspector;
-}
 
 /* Canonical suffix for per-view-type inspector preferences. */
 - (NSString *)_viewTypeKey
@@ -597,48 +589,10 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
     }
 }
 
-- (int)inspectorPaneIndex
-{
-  return inspectorPane;
-}
 
-- (void)setInspectorPaneIndex:(int)index
-{
-  if (inspectorPane != index)
-    {
-      inspectorPane = index;
-      if (previewPane && [previewPane respondsToSelector: @selector(selectInspectorAtIndex:)])
-        {
-          [previewPane selectInspectorAtIndex: index];
-        }
-    }
-}
 
-- (void)setInspectorShown:(BOOL)shown
-{
-  if (showInspector != shown)
-    {
-      showInspector = shown;
-      [self updatePreviewPaneForCurrentType];
-      [vwrwin display];
-      [self updateDefaults];
-    }
-}
 
-- (void)toggleInspector:(id)sender
-{
-  [self setInspectorShown: !showInspector];
-}
 
-- (void)previewPane:(GWViewerBrowserPreview *)pane
-  didSelectInspectorAtIndex:(int)index
-{
-  if (inspectorPane != index)
-    {
-      inspectorPane = index;
-      [self updateDefaults];
-    }
-}
 
 - (FSNode *)baseNode
 {
@@ -658,10 +612,6 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   return [self isShowingNode: node];
 }
 
-- (void)reloadNodeContents
-{
-  [nodeView reloadContents];
-}
 
 - (void)reloadFromNode:(FSNode *)anode
 {
@@ -688,10 +638,6 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   return vwrwin;
 }
 
-- (id)nodeView
-{
-  return nodeView;
-}
 
 - (id)shelf
 {
@@ -734,10 +680,6 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   [self scrollToBeginning];
 }
 
-- (void)deactivate
-{
-  [vwrwin close];
-}
 
 - (void)tileViews
 {
@@ -790,41 +732,14 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   }
 }
 
-- (void)scrollToBeginning
-{
-  if ([nodeView isSingleNode]) {
-    [nodeView scrollSelectionToVisible];
-  }
-}
 
 - (void)invalidate
 {
   invalidated = YES;
 }
 
-- (BOOL)invalidated
-{
-  return invalidated;
-}
 
-- (BOOL)isClosing
-{
-  return closing;
-}
 
-- (void)setOpened:(BOOL)opened 
-        repOfNode:(FSNode *)anode
-{
-  id rep = [nodeView repOfSubnode: anode];
-
-  if (rep) {
-    [rep setOpened: opened];
-    
-    if ([nodeView isSingleNode]) { 
-      [rep select];
-    }
-  }
-}
 
 - (void)unselectAllReps
 {
@@ -1047,10 +962,6 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   return NO;
 }
 
-- (void)nodeContentsWillChange:(NSDictionary *)info
-{
-  [nodeView nodeContentsWillChange: info];
-}
 
 - (void)nodeContentsDidChange:(NSDictionary *)info
 {
@@ -1114,35 +1025,11 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   }
 }
 
-- (NSMutableArray *)history
-{
-  return history;
-}
 
-- (int)historyPosition
-{
-  return historyPosition;
-}
 
-- (void)setHistoryPosition:(int)pos
-{
-  historyPosition = pos;
-}
 
-- (NSArray *)watchedNodes
-{
-  return watchedNodes;
-}
 
-- (void)hideDotsFileChanged:(BOOL)hide
-{
-  [self reloadFromNode: baseNode];
-}
 
-- (void)hiddenFilesChanged:(NSArray *)paths
-{
-  [self reloadFromNode: baseNode];
-}
 
 - (void)columnsWidthChanged:(NSNotification *)notification
 {
@@ -1254,10 +1141,6 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   }
 }
 
-- (void)updateWindowTitle
-{
-  /* Intentionally empty - declared in header but not used in this implementation */
-}
 
 - (void)navigateToNode:(FSNode *)node
 {
@@ -1466,11 +1349,6 @@ constrainMinCoordinate:(CGFloat)proposedMin
   }
 }
 
-- (BOOL)windowShouldClose:(id)sender
-{
-  [manager updateDesktop];
-	return YES;
-}
 
 - (void)windowWillClose:(NSNotification *)aNotification
 {
@@ -1482,13 +1360,6 @@ constrainMinCoordinate:(CGFloat)proposedMin
   }
 }
 
-- (void)windowWillMiniaturize:(NSNotification *)aNotification
-{
-  NSImage *image = [fsnodeRep iconOfSize: 48 forNode: baseNode];
-
-  [vwrwin setMiniwindowImage: image];
-  [vwrwin setMiniwindowTitle: [baseNode name]];
-}
 
 - (void)openSelectionInNewViewer:(BOOL)newv
 {
@@ -1510,11 +1381,14 @@ constrainMinCoordinate:(CGFloat)proposedMin
         }
       }
 
-      /* Single selected folder in a single-node view with no modifier:
-       * navigate in place (no new window, no birth animation). */
-      if ((count == 1) && (newv == NO) && [nodeView isSingleNode]) {
+      /* Single selected folder with no modifier: navigate in place (no new
+       * window, no birth animation).  Works for single-node icon/list views
+       * and the columns (browser) view, which shows the folder's contents in
+       * the same window. */
+      if ((count == 1) && (newv == NO)) {
         FSNode *node = [selection objectAtIndex: 0];
-        if ([node isDirectory] && ([node isPackage] == NO)) {
+        if ([node isDirectory] && ([node isPackage] == NO)
+            && [nodeView respondsToSelector: @selector(showContentsOfNode:)]) {
           [nodeView showContentsOfNode: node];
           [self scrollToBeginning];
           return;
@@ -1554,123 +1428,15 @@ constrainMinCoordinate:(CGFloat)proposedMin
   }
 }
 
-- (void)openSelectionAsFolder
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [manager openAsFolderSelectionInViewer: self];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't do this in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)openSelectionWith
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [manager openWithSelectionInViewer: self];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't do this in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)newFolder
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [gworkspace newObjectAtPath: [[nodeView shownNode] path] 
-                    isDirectory: YES];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't create a new folder in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)newFile
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [gworkspace newObjectAtPath: [[nodeView shownNode] path] 
-                    isDirectory: NO];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't create a new file in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)duplicateFiles
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    NSArray *selection = [nodeView selectedNodes];
 
-    if (selection && [selection count]) {
-      if ([nodeView isSingleNode]) {
-        [gworkspace duplicateFiles];
-      } else if ([selection isEqual: baseNodeArray] == NO) {
-        [gworkspace duplicateFiles];
-      }
-    }
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't duplicate files in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)recycleFiles
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    NSArray *selection = [nodeView selectedNodes];
 
-    if (selection && [selection count]) {
-      if ([nodeView isSingleNode]) {
-        [gworkspace moveToTrash];
-      } else if ([selection isEqual: baseNodeArray] == NO) {
-        [gworkspace moveToTrash];
-      }
-    }
-  }
-}
 
-- (void)emptyTrash
-{
-  [gworkspace emptyTrash: nil];
-}
 
-- (void)deleteFiles
-{
-  NSArray *selection = [nodeView selectedNodes];
-
-  if (selection && [selection count]) {
-    if ([nodeView isSingleNode]) {
-      [gworkspace deleteFiles];
-    } else if ([selection isEqual: baseNodeArray] == NO) {
-      [gworkspace deleteFiles];
-    }
-  }
-}
-
-- (void)goBackwardInHistory
-{
-  [manager goBackwardInHistoryOfViewer: self];
-}
-
-- (void)goForwardInHistory
-{
-  [manager goForwardInHistoryOfViewer: self];
-}
 
 - (void)setViewerBehaviour:(id)sender
 {
@@ -1864,39 +1630,8 @@ constrainMinCoordinate:(CGFloat)proposedMin
   [nodeView updateNodeInfo: YES];
 }
 
-- (void)setIconsSize:(id)sender
-{
-  if ([nodeView respondsToSelector: @selector(setIconSize:)]) {
-    [(id <FSNodeRepContainer>)nodeView setIconSize: [[sender title] intValue]];
-    [self scrollToBeginning];
-    [nodeView updateNodeInfo: YES];
-  }
-}
 
-- (void)setIconsPosition:(id)sender
-{
-  if ([nodeView respondsToSelector: @selector(setIconPosition:)]) {
-    NSString *title = [sender title];
-    
-    if ([title isEqual: NSLocalizedString(@"Left", @"")]) {
-      [(id <FSNodeRepContainer>)nodeView setIconPosition: NSImageLeft];
-    } else {
-      [(id <FSNodeRepContainer>)nodeView setIconPosition: NSImageAbove];
-    }
-    
-    [self scrollToBeginning];
-    [nodeView updateNodeInfo: YES];
-  }
-}
 
-- (void)setLabelSize:(id)sender
-{
-  if ([nodeView respondsToSelector: @selector(setLabelTextSize:)]) {
-    [nodeView setLabelTextSize: [[sender title] intValue]];
-    [self scrollToBeginning];
-    [nodeView updateNodeInfo: YES];
-  }
-}
 
 - (void)chooseLabelColor:(id)sender
 {
@@ -2016,10 +1751,6 @@ constrainMinCoordinate:(CGFloat)proposedMin
   [gworkspace startXTermOnDirectory: path];
 }
 
-- (void)showAttributesInspector:(id)sender
-{
-  [gworkspace showAttributesInspector: sender];
-}
 
 - (BOOL)validateItem:(id)menuItem
 {
@@ -2070,29 +1801,14 @@ constrainMinCoordinate:(CGFloat)proposedMin
         return YES;
     } else if (sel_isEqual(action, @selector(openSelection:))) {
       if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-        BOOL canopen = YES;
-        NSUInteger i;
-
-        if (lastSelection && [lastSelection count] 
+        if (lastSelection && [lastSelection count]
                 && ([lastSelection isEqual: baseNodeArray] == NO)) {
-          for (i = 0; i < [lastSelection count]; i++) {
-            FSNode *node = [lastSelection objectAtIndex: i];
-
-            if ([node isDirectory] && ([node isPackage] == NO)) {
-              /* Allow network services (virtual directories that mount on open) */
-              if ([node respondsToSelector: @selector(isNetworkService)]
-                  && [(id)node isNetworkService]) {
-                continue;
-              }
-              canopen = NO;
-              break;      
-            }
-          }
-        } else {
-          canopen = NO;
+          /* A single folder can be opened in place (navigate); anything else
+           * opens in a new viewer/launches.  Multiple folders open several
+           * viewers. */
+          return YES;
         }
-
-        return canopen;
+        return NO;
       }
 
       return NO;

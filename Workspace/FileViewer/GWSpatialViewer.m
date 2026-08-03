@@ -581,10 +581,6 @@
   [scroll setNeedsDisplay: YES];
 }
 
-- (BOOL)isInspectorShown
-{
-  return showInspector;
-}
 
 /* Canonical suffix for per-view-type inspector preferences. */
 - (NSString *)_viewTypeKey
@@ -596,48 +592,10 @@
   return @"Icon";
 }
 
-- (int)inspectorPaneIndex
-{
-  return inspectorPane;
-}
 
-- (void)setInspectorPaneIndex:(int)index
-{
-  if (inspectorPane != index)
-    {
-      inspectorPane = index;
-      if (previewPane && [previewPane respondsToSelector: @selector(selectInspectorAtIndex:)])
-        {
-          [previewPane selectInspectorAtIndex: index];
-        }
-    }
-}
 
-- (void)setInspectorShown:(BOOL)shown
-{
-  if (showInspector != shown)
-    {
-      showInspector = shown;
-      [self updatePreviewPaneForCurrentType];
-      [vwrwin display];
-      [self updateDefaults];
-    }
-}
 
-- (void)toggleInspector:(id)sender
-{
-  [self setInspectorShown: !showInspector];
-}
 
-- (void)previewPane:(GWViewerBrowserPreview *)pane
-  didSelectInspectorAtIndex:(int)index
-{
-  if (inspectorPane != index)
-    {
-      inspectorPane = index;
-      [self updateDefaults];
-    }
-}
 
 - (FSNode *)baseNode
 {
@@ -662,10 +620,6 @@
   return [nodeView isShowingPath: apath];
 }
 
-- (void)reloadNodeContents
-{
-  [nodeView reloadContents];
-}
 
 - (void)networkServicesDidChange:(NSNotification *)notification
 {
@@ -698,10 +652,6 @@
   return vwrwin;
 }
 
-- (id)nodeView
-{
-  return nodeView;
-}
 
 - (id)shelf
 {
@@ -746,17 +696,7 @@
   [manager viewer: self didShowNode: baseNode];
 }
 
-- (void)deactivate
-{
-  [vwrwin close];
-}
 
-- (void)scrollToBeginning
-{
-  if ([nodeView isSingleNode]) {
-    [nodeView scrollSelectionToVisible];
-  }
-}
 
 - (void)invalidate
 {
@@ -764,29 +704,8 @@
   [self teardownDSStoreWatcher];
 }
 
-- (BOOL)invalidated
-{
-  return invalidated;
-}
 
-- (BOOL)isClosing
-{
-  return closing;
-}
 
-- (void)setOpened:(BOOL)opened 
-        repOfNode:(FSNode *)anode
-{
-  id rep = [nodeView repOfSubnode: anode];
-
-  if (rep) {
-    [rep setOpened: opened];
-    
-    if ([nodeView isSingleNode]) { 
-      [rep select];
-    }
-  }
-}
 
 - (void)unselectAllReps
 {
@@ -954,10 +873,6 @@
   return [nodeView involvedByFileOperation: opinfo];
 }
 
-- (void)nodeContentsWillChange:(NSDictionary *)info
-{
-  [nodeView nodeContentsWillChange: info];
-}
  
 - (void)nodeContentsDidChange:(NSDictionary *)info
 {
@@ -996,20 +911,8 @@
   }
 }
 
-- (NSArray *)watchedNodes
-{
-  return watchedNodes;
-}
 
-- (void)hideDotsFileChanged:(BOOL)hide
-{
-  [self reloadFromNode: baseNode];
-}
 
-- (void)hiddenFilesChanged:(NSArray *)paths
-{
-  [self reloadFromNode: baseNode];
-}
 
 - (void)columnsWidthChanged:(NSNotification *)notification
 {
@@ -1134,10 +1037,6 @@
 }
 
 
-- (void)updateWindowTitle
-{
-  /* Intentionally empty - declared in header but not used in this implementation */
-}
 
 //
 // DS_Store File Watching Methods
@@ -1464,23 +1363,8 @@
 
 #pragma mark - History Support
 
-- (NSMutableArray *)history
-{
-  if (!history) {
-    history = [NSMutableArray new];
-  }
-  return history;
-}
 
-- (int)historyPosition
-{
-  return historyPosition;
-}
 
-- (void)setHistoryPosition:(int)pos
-{
-  historyPosition = pos;
-}
 
 - (GWViewSettingsManager *)settingsManager
 {
@@ -1546,11 +1430,6 @@
   }
 }
 
-- (BOOL)windowShouldClose:(id)sender
-{
-  [manager updateDesktop];
-	return YES;
-}
 
 - (void)windowWillClose:(NSNotification *)aNotification
 {
@@ -1563,13 +1442,6 @@
   }
 }
 
-- (void)windowWillMiniaturize:(NSNotification *)aNotification
-{
-  NSImage *image = [fsnodeRep iconOfSize: 48 forNode: baseNode];
-
-  [vwrwin setMiniwindowImage: image];
-  [vwrwin setMiniwindowTitle: [baseNode name]];
-}
 
 - (void)windowDidResize:(NSNotification *)aNotification
 {
@@ -1595,123 +1467,15 @@
   }
 }
 
-- (void)openSelectionAsFolder
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [manager openAsFolderSelectionInViewer: self];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't do this in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)openSelectionWith
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [manager openWithSelectionInViewer: self];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't do this in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)newFolder
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [gworkspace newObjectAtPath: [[nodeView shownNode] path] 
-                    isDirectory: YES];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't create a new folder in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)newFile
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [gworkspace newObjectAtPath: [[nodeView shownNode] path] 
-                    isDirectory: NO];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't create a new file in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)duplicateFiles
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    NSArray *selection = [nodeView selectedNodes];
 
-    if (selection && [selection count]) {
-      if ([nodeView isSingleNode]) {
-        [gworkspace duplicateFiles];
-      } else if ([selection isEqual: baseNodeArray] == NO) {
-        [gworkspace duplicateFiles];
-      }
-    }
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't duplicate files in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)recycleFiles
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    NSArray *selection = [nodeView selectedNodes];
 
-    if (selection && [selection count]) {
-      if ([nodeView isSingleNode]) {
-        [gworkspace moveToTrash];
-      } else if ([selection isEqual: baseNodeArray] == NO) {
-        [gworkspace moveToTrash];
-      }
-    }
-  }
-}
 
-- (void)emptyTrash
-{
-  [gworkspace emptyTrash: nil];
-}
 
-- (void)deleteFiles
-{
-  NSArray *selection = [nodeView selectedNodes];
-
-  if (selection && [selection count]) {
-    if ([nodeView isSingleNode]) {
-      [gworkspace deleteFiles];
-    } else if ([selection isEqual: baseNodeArray] == NO) {
-      [gworkspace deleteFiles];
-    }
-  }
-}
-
-- (void)goBackwardInHistory
-{
-  [manager goBackwardInHistoryOfViewer: self];
-}
-
-- (void)goForwardInHistory
-{
-  [manager goForwardInHistoryOfViewer: self];
-}
 
 - (void)setViewerBehaviour:(id)sender
 {
@@ -1917,39 +1681,8 @@
   [nodeView updateNodeInfo: YES];
 }
 
-- (void)setIconsSize:(id)sender
-{
-  if ([nodeView respondsToSelector: @selector(setIconSize:)]) {
-    [(id <FSNodeRepContainer>)nodeView setIconSize: [[sender title] intValue]];
-    [self scrollToBeginning];
-    [nodeView updateNodeInfo: YES];
-  }
-}
 
-- (void)setIconsPosition:(id)sender
-{
-  if ([nodeView respondsToSelector: @selector(setIconPosition:)]) {
-    NSString *title = [sender title];
-    
-    if ([title isEqual: NSLocalizedString(@"Left", @"")]) {
-      [(id <FSNodeRepContainer>)nodeView setIconPosition: NSImageLeft];
-    } else {
-      [(id <FSNodeRepContainer>)nodeView setIconPosition: NSImageAbove];
-    }
-    
-    [self scrollToBeginning];
-    [nodeView updateNodeInfo: YES];
-  }
-}
 
-- (void)setLabelSize:(id)sender
-{
-  if ([nodeView respondsToSelector: @selector(setLabelTextSize:)]) {
-    [nodeView setLabelTextSize: [[sender title] intValue]];
-    [self scrollToBeginning];
-    [nodeView updateNodeInfo: YES];
-  }
-}
 
 - (void)chooseLabelColor:(id)sender
 {
@@ -2064,15 +1797,7 @@
   [gworkspace startXTermOnDirectory: path];
 }
 
-- (void)showAttributesInspector:(id)sender
-{
-  [gworkspace showAttributesInspector: sender];
-}
 
-- (NSArray *)lastSelection
-{
-  return lastSelection;
-}
 
 - (BOOL)validateItem:(id)menuItem
 {
