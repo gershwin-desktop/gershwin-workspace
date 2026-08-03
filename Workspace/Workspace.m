@@ -653,20 +653,7 @@ static Workspace *gworkspace = nil;
   menuItem = [mainMenu addItemWithTitle:_(@"Tools") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
   [mainMenu setSubmenu: menu forItem: menuItem];
-  
-  menuItem = [menu addItemWithTitle:_(@"Inspectors") action:NULL keyEquivalent:@""];
-  subMenu = AUTORELEASE ([NSMenu new]);
-  [menu setSubmenu: subMenu forItem: menuItem];
-  menuItem = [subMenu addItemWithTitle:_(@"Show Inspectors") action:NULL keyEquivalent:@""];
-  menuItem = [subMenu addItemWithTitle:_(@"Contents") action:@selector(showContentsInspector:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [subMenu addItemWithTitle:_(@"Tools") action:@selector(showToolsInspector:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [subMenu addItemWithTitle:_(@"Annotations") action:@selector(showAnnotationsInspector:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  
-  [menu addItem:[NSMenuItem separatorItem]];
-  
+
   menuItem = [menu addItemWithTitle:_(@"Run...") action:@selector(runCommand:) keyEquivalent:@"R"];
   [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask: NSCommandKeyMask | NSShiftKeyMask];
@@ -745,11 +732,41 @@ static Workspace *gworkspace = nil;
   [mainMenu update];
   [mainMenu setDelegate: self];
 
+  [self fixSubmenuContainerItems: mainMenu];
+
   [NSApp setServicesMenu: services];
   [NSApp setWindowsMenu: windows];
   [NSApp setMainMenu: mainMenu];    
   
   RELEASE (mainMenu);
+}
+
+/* GNUstep's menu auto-enabling disables items whose action resolves to no
+ * target.  Submenu container items ("Tools", "View", ...) have no action, so
+ * the whole menu title gets greyed out.  Give every container a real no-op
+ * action handled by Workspace so the title itself is never disabled; the
+ * individual items inside are still validated as usual. */
+- (void)fixSubmenuContainerItems:(NSMenu *)menu
+{
+  NSArray *items = [menu itemArray];
+  NSUInteger i;
+
+  for (i = 0; i < [items count]; i++) {
+    NSMenuItem *item = [items objectAtIndex: i];
+    NSMenu *submenu = [item submenu];
+
+    if (submenu) {
+      [item setAction: @selector(submenuAction:)];
+      [item setTarget: self];
+      [item setEnabled: YES];
+      [self fixSubmenuContainerItems: submenu];
+    }
+  }
+}
+
+/* No-op action for submenu container items (see fixSubmenuContainerItems:). */
+- (void)submenuAction:(id)sender
+{
 }
 
 - (void)applicationWillFinishLaunching:(NSNotification *)aNotification
@@ -1486,6 +1503,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       BOOL isSpatial = sel_isEqual(action, @selector(setDefaultSpatialBehaviour:));
       [anItem setState: ([self defaultViewerType] == (isSpatial ? SPATIAL : BROWSING))
                        ? NSOnState : NSOffState];
+      return YES;
+    }
+
+  // Submenu container items (menu titles) are never disabled.
+  if (sel_isEqual(action, @selector(submenuAction:)))
+    {
       return YES;
     }
 
