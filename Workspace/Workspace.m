@@ -1145,6 +1145,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   fswnotifications = NO;
   terminating = YES;
 
+  /* Write out any icon positions still waiting on the debounce timer. */
+  [[GWIconPositionStore sharedStore] flushPending];
+  
   [self updateDefaults];
   
   TEST_CLOSE (prefController, [prefController myWin]);

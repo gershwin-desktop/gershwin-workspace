@@ -20,4 +20,8 @@
 /* Convenience for a single file (top-left iloc CENTER coordinates). */
 - (void)saveIconPosition:(NSPoint)ilocCenter forFileAtPath:(NSString *)path;
 
+/* Immediately writes any position changes still waiting for the debounce.
+ * Safe to call from reads and at application termination. */
+- (void)flushPending;
+
 @end
