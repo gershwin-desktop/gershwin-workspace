@@ -271,7 +271,7 @@
 
 "Done." = "Fertig.";
 
-"Downloads" = "Heruntergeladen";
+"Downloads" = "Downloads";
 
 "Duplicate" = "Duplizieren";
 
@@ -421,7 +421,7 @@
 
 "History" = "Verlauf";
 
-"Home" = "Eigenes Verzeichnis";
+"Home" = "Benutzerordner";
 
 "ISO File Dropped" = "ISO-Datei abgelegt";
 
@@ -533,6 +533,8 @@
 "Moving" = "Verschiebe";
 
 "Music" = "Musik";
+
+"Kind" = "Typ";
 
 "Name" = "Name";
 
