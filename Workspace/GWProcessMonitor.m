@@ -122,34 +122,31 @@ static BOOL GWPIDHasLiveChildInProc(pid_t pid)
 }
 #else /* !__linux__ */
 
-#if defined(__FreeBSD__) || defined(__NetBSD__)
 /* Returns YES if the given PID has a live (non-zombie) direct child.
- * Uses sysctl(KERN_PROC_PPID) which enumerates processes by parent PID.
- * On NetBSD the kinfo_proc2 structure is used via KERN_PROC2. */
+ * Enumerates the whole process table with sysctl and filters by parent PID,
+ * because the KERN_PROC selectors on the BSDs (FreeBSD, OpenBSD, NetBSD)
+ * only filter by PID/PGRP/SESSION/TTY/UID and not by parent. */
 static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
 {
-#if defined(__FreeBSD__)
-  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PPID, pid};
-  struct kinfo_proc *kp = NULL;
-  size_t len = 0;
-#else /* __NetBSD__ */
-  int mib[6] = {CTL_KERN, KERN_PROC2, KERN_PROC_PPID, pid,
+#if defined(__NetBSD__)
+  int mib[6] = {CTL_KERN, KERN_PROC2, KERN_PROC_ALL, 0,
                 sizeof(struct kinfo_proc2), 0};
-  struct kinfo_proc2 *kp = NULL;
-  size_t len = 0;
+#else
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
 #endif
+  size_t len = 0;
 
   if (sysctl(mib, (sizeof(mib) / sizeof(mib[0])), NULL, &len, NULL, 0) != 0
       || len == 0)
     return NO;
 
-  kp = (void *)malloc(len);
-  if (kp == NULL)
+  void *buf = malloc(len);
+  if (buf == NULL)
     return NO;
 
-  if (sysctl(mib, (sizeof(mib) / sizeof(mib[0])), kp, &len, NULL, 0) != 0)
+  if (sysctl(mib, (sizeof(mib) / sizeof(mib[0])), buf, &len, NULL, 0) != 0)
     {
-      free(kp);
+      free(buf);
       return NO;
     }
 
@@ -158,6 +155,7 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
 
 #if defined(__FreeBSD__)
   count = len / sizeof(struct kinfo_proc);
+  const struct kinfo_proc *kp = buf;
   for (size_t i = 0; i < count; i++)
     {
       if (kp[i].ki_ppid == pid && kp[i].ki_stat != SZOMB)
@@ -166,8 +164,9 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
           break;
         }
     }
-#else
-  count = len / sizeof(struct kinfo_proc2);
+#elif defined(__OpenBSD__)
+  count = len / sizeof(struct kinfo_proc);
+  const struct kinfo_proc *kp = buf;
   for (size_t i = 0; i < count; i++)
     {
       if (kp[i].p_ppid == pid && kp[i].p_stat != SZOMB)
@@ -176,51 +175,26 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
           break;
         }
     }
+#elif defined(__NetBSD__)
+  count = len / sizeof(struct kinfo_proc2);
+  const struct kinfo_proc2 *kp = buf;
+  for (size_t i = 0; i < count; i++)
+    {
+      if (kp[i].p_ppid == pid && kp[i].p_stat != SZOMB)
+        {
+          found = YES;
+          break;
+        }
+    }
+#else
+  (void)len;
+  (void)buf;
+  (void)count;
 #endif
 
-  free(kp);
+  free(buf);
   return found;
 }
-#elif defined(__OpenBSD__)
-static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
-{
-  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_ALL, 0};
-  struct kinfo_proc *kp = NULL;
-  size_t len = 0;
-
-  if (sysctl(mib, 4, NULL, &len, NULL, 0) != 0 || len == 0)
-    return NO;
-
-  kp = (void *)malloc(len);
-  if (kp == NULL)
-    return NO;
-
-  if (sysctl(mib, 4, kp, &len, NULL, 0) != 0)
-    {
-      free(kp);
-      return NO;
-    }
-
-  BOOL found = NO;
-  size_t count = len / sizeof(struct kinfo_proc);
-  for (size_t i = 0; i < count; i++)
-    {
-      if (kp[i].p_ppid == pid && kp[i].p_stat != SZOMB)
-        {
-          found = YES;
-          break;
-        }
-    }
-
-  free(kp);
-  return found;
-}
-#else
-static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
-{
-  return NO;
-}
-#endif /* __FreeBSD__ || __NetBSD__ / __OpenBSD__ / else */
 
 #endif /* __linux__ */
 
