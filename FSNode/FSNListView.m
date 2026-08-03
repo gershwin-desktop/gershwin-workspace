@@ -483,6 +483,29 @@ static NSString *defaultColumns = @"{ \
   [listView setNeedsDisplayInRect: rect];
 }
 
+// On-screen rect of the given rep's icon, in screen coordinates.  Used for the
+// window birth animation so a new window opens growing from the clicked icon.
+// The icon sits at the left of the name column cell, so use that cell rect
+// rather than the full row (which would centre the birth on the row).
+- (NSRect)screenRectForRep:(FSNListViewNodeRep *)aRep
+{
+  NSUInteger row = [nodeReps indexOfObjectIdenticalTo: aRep];
+  if (row == NSNotFound || listView == nil || [listView window] == nil) {
+    return NSZeroRect;
+  }
+  NSRect cellRect = NSZeroRect;
+  NSNumber *num = [NSNumber numberWithInt: FSNInfoNameType];
+  unsigned col = [listView columnWithIdentifier: num];
+  if (col != (unsigned)NSNotFound) {
+    cellRect = [listView frameOfCellAtColumn: col row: row];
+  }
+  if (NSIsEmptyRect(cellRect)) {
+    cellRect = [listView rectOfRow: row];
+  }
+  NSRect rectInWindow = [listView convertRect: cellRect toView: nil];
+  return [[listView window] convertRectToScreen: rectInWindow];
+}
+
 - (id)desktopApp
 {
   return desktopApp;
@@ -2149,6 +2172,17 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 - (NSColor *)tagColor
 {
   return tagColor;
+}
+
+// On-screen rect of this rep's icon, used as the birth-animation source when
+// a new window is opened from a list view.
+- (NSRect)screenRect
+{
+  if (dataSource && [dataSource respondsToSelector: @selector(screenRectForRep:)])
+    {
+      return [dataSource screenRectForRep: self];
+    }
+  return NSZeroRect;
 }
 
 - (NSImage *)openIcon

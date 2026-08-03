@@ -1896,6 +1896,34 @@
   return nil;
 }
 
+// On-screen rect of the given browser cell, in screen coordinates.  Used for
+// the window birth animation so a new window opens growing from the clicked
+// cell in a columns (browser) view.
+- (NSRect)screenRectForCell:(FSNBrowserCell *)aCell
+{
+  if (aCell == nil) {
+    return NSZeroRect;
+  }
+  NSString *cellPath = [[aCell node] path];
+  if (cellPath == nil) {
+    return NSZeroRect;
+  }
+  NSString *parentPath = [cellPath stringByDeletingLastPathComponent];
+  FSNBrowserColumn *bc = [self columnWithPath: parentPath];
+  if (bc == nil || [bc window] == nil) {
+    return NSZeroRect;
+  }
+  NSMatrix *matrix = [bc cmatrix];
+  NSArray *cells = [matrix cells];
+  NSUInteger row = [cells indexOfObjectIdenticalTo: aCell];
+  if (row == NSNotFound) {
+    return NSZeroRect;
+  }
+  NSRect cellRect = [matrix cellFrameAtRow: row column: 0];
+  NSRect rectInWindow = [matrix convertRect: cellRect toView: nil];
+  return [[matrix window] convertRectToScreen: rectInWindow];
+}
+
 - (id)addRepForSubnode:(FSNode *)anode
 {
   return [self addRepForSubnodePath: [anode path]];

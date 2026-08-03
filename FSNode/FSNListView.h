@@ -283,6 +283,8 @@
 
 - (NSColor *)tagColor;
 
+- (NSRect)screenRect;
+
 @end
 
 

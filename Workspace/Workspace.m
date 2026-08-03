@@ -1264,6 +1264,13 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
   NSDebugLLog(@"gwspace", @"newViewerAtPath: %@ using default viewer type: %d", path, defaultType);
 
+  /* If a viewer window is focused and shows this node, derive the birth
+   * animation source rect from its icon so the new window grows from it
+   * (works for Cmd-O, Open, Open as Folder, double-click in any view). */
+  if (targetNode) {
+    [vwrsManager setPendingOpenAnimationRectFromFocusedViewerForNode: targetNode];
+  }
+
   if (defaultType == SPATIAL) {
     [vwrsManager viewerOfType: SPATIAL
                      showType: nil

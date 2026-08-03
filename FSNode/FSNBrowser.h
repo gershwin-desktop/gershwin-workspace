@@ -181,6 +181,7 @@
 - (void)updateIcons;
 - (id)repOfSubnode:(FSNode *)anode;
 - (id)repOfSubnodePath:(NSString *)apath;
+- (NSRect)screenRectForCell:(FSNBrowserCell *)aCell;
 - (id)addRepForSubnode:(FSNode *)anode;
 - (id)addRepForSubnodePath:(NSString *)apath;
 - (void)removeRepOfSubnode:(FSNode *)anode;

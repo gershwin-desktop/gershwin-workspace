@@ -36,6 +36,9 @@
 #import "GWViewerPrefs.h"
 #import "History.h"
 #import "FSNFunctions.h"
+#import "FSNListView.h"
+#import "FSNBrowser.h"
+#import "FSNBrowserCell.h"
 #import "Workspace.h"
 #import "GWDesktopManager.h"
 #import "NetworkVolumeManager.h"
@@ -361,26 +364,61 @@ static GWViewersManager *vwrsmanager = nil;
   NSDebugLLog(@"gwspace", @"[Animation] hasPendingOpenAnimationRect = %d", hasPendingOpenAnimationRect);
 }
 
-// When opening a folder from a viewer (icon view, list view, path view, or a
-// spatial viewer), derive the birth-animation source rectangle from the
-// on-screen position of the icon the user activated, so the new window
-// visibly grows from it.  This mirrors what the desktop does for desktop
-// icons.  The node view may not expose the rep for every node type, so the
-// rect is only set when one is found.
+// When opening a folder from a viewer (icon view, list view, path view, a
+// spatial viewer, or the columns/browser view), derive the birth-animation
+// source rectangle from the on-screen position of the icon the user
+// activated, so the new window visibly grows from it.  This mirrors what the
+// desktop does for desktop icons.  The node view may not expose the rep for
+// every node type, so the rect is only set when one is found.
 - (void)setPendingOpenAnimationRectFromViewer:(id)viewer forNode:(FSNode *)node
 {
   id nodeView = [viewer nodeView];
   if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)])
     {
       id icon = [nodeView repOfSubnodePath: [node path]];
-      if (icon && [icon respondsToSelector: @selector(window)])
-        {
-          NSRect iconBounds = [icon bounds];
-          NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
-          NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
-          [self setPendingOpenAnimationRect: rectOnScreen];
+      if (icon == nil) {
+        return;
+      }
+      NSRect rectOnScreen = NSZeroRect;
+      if ([icon isKindOfClass: [FSNListViewNodeRep class]]) {
+        // List view reps are plain objects, not views; they know their own
+        // on-screen icon rect.
+        rectOnScreen = [(FSNListViewNodeRep *)icon screenRect];
+      } else if ([icon isKindOfClass: [FSNBrowserCell class]]) {
+        // Browser (columns) view cells are plain objects, not views; the
+        // browser knows the cell's on-screen rect.
+        if ([nodeView respondsToSelector: @selector(screenRectForCell:)]) {
+          rectOnScreen = [(FSNBrowser *)nodeView screenRectForCell: (FSNBrowserCell *)icon];
         }
+      } else if ([icon respondsToSelector: @selector(window)]) {
+        // Icon / path view reps are NSViews.
+        NSRect iconBounds = [icon bounds];
+        NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
+        rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
+      }
+      if (!NSEqualRects(rectOnScreen, NSZeroRect)) {
+        [self setPendingOpenAnimationRect: rectOnScreen];
+      }
     }
+}
+
+// Set the pending birth-animation rect from the currently focused viewer
+// window, provided it shows (or has selected) the given node.  Used by open
+// paths that only know the target path (e.g. Workspace newViewerAtPath:) so
+// the new window still grows from the icon the user activated.
+- (void)setPendingOpenAnimationRectFromFocusedViewerForNode:(FSNode *)node
+{
+  if (node == nil) {
+    return;
+  }
+  id keyWin = [NSApp keyWindow];
+  id viewer = (keyWin != nil) ? [self viewerWithWindow: keyWin] : nil;
+  if (viewer == nil) {
+    viewer = ([viewers count] > 0) ? [viewers lastObject] : nil;
+  }
+  if (viewer != nil) {
+    [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
+  }
 }
 
 - (NSArray *)viewersForBaseNode:(FSNode *)node

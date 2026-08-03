@@ -127,6 +127,7 @@
 
 // Window open animation support (spatial Finder-like window birth)
 - (void)setPendingOpenAnimationRect:(NSRect)rect;
+- (void)setPendingOpenAnimationRectFromFocusedViewerForNode:(FSNode *)node;
 - (void)setWindowBirthRect:(NSRect)sourceRect
                targetRect:(NSRect)targetRect
             animationType:(int32_t)animationType
