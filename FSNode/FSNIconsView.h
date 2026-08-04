@@ -181,6 +181,13 @@
 - (NSDictionary *)customIconPositions;
 - (NSArray *)icons;
 
+/* The complete live layout: filename -> NSValue(NSPoint iloc) for every icon
+ * currently placed in this view (dragged/auto icons come from
+ * customIconPositions, restored manual icons from their placementData).  Used
+ * to persist the real on-screen layout on window close instead of re-reading
+ * a stale .DS_Store that may still carry foreign colliding positions. */
+- (NSDictionary *)liveIconPositions;
+
 /* Free-positioning icon repositioning */
 - (void)repositionIcon:(FSNIcon *)icon toCenterPoint:(NSPoint)point;
 

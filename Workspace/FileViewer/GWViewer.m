@@ -1127,6 +1127,15 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
         dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path] loadImmediately:NO];
       }
       [dsInfo takeValuesFromViewerPrefs:updatedprefs];
+      /* Persist the LIVE layout: an icon-position-honoring view knows exactly
+       * where every icon sits right now, so write that instead of whatever a
+       * stale .DS_Store (possibly with foreign colliding positions) had. */
+      if (viewType == GWViewTypeIcon
+          && [nodeView respondsToSelector: @selector(liveIconPositions)]) {
+        NSDictionary *live = [nodeView liveIconPositions];
+        if (live && [live count] > 0)
+          [dsInfo setLiveIconPositions: live];
+      }
       [sm writeSettings:dsInfo];
     }
 

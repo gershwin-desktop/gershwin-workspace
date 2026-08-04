@@ -216,6 +216,47 @@
  */
 - (void)setIconInfo:(DSStoreIconInfo *)iconInfo forFilename:(NSString *)filename;
 
+/* Replace the receiver's per-file icon positions with @p livePositions
+ * (filename -> NSValue(NSPoint) iloc), dropping any position the caller no
+ * longer displays.  Used to persist the live on-screen layout on window close
+ * rather than re-writing whatever a stale .DS_Store contained. */
+- (void)setLiveIconPositions:(NSDictionary *)livePositions;
+
+/* === Shared per-file entry helpers (used by DSStoreInfo and GWVolumeCache) === */
+
+/* Decode the Iloc/lclr/cmmt entries for @p filename from @p store into a
+ * DSStoreIconInfo (named @p bareName), or nil if the file has none of them. */
++ (DSStoreIconInfo *)iconInfoForFile:(NSString *)filename
+                            bareName:(NSString *)bareName
+                           fromStore:(DSStore *)store;
+
+/* Write a file's Iloc/lclr/cmmt entries into @p store (via setEntry:). */
++ (void)writeIconInfo:(DSStoreIconInfo *)ii
+             forFile:(NSString *)filename
+             toStore:(DSStore *)store;
+
+/* Prune per-file entries in @p store whose filename is not an on-disk child
+ * of @p directoryPath and not equal to @p keepPath (the directory's own
+ * record).  Drops ghost entries (renamed/removed files, or localized names a
+ * foreign Finder wrote) that would collide with live files on reopen.  No-op
+ * when @p directoryPath is not a real directory. */
++ (void)pruneNonChildEntriesInStore:(DSStore *)store
+                       forDirectory:(NSString *)directoryPath
+                           keepPath:(NSString *)keepPath;
+
+/* The names of the immediate children of @p directoryPath, or nil when it is
+ * not a readable directory.  Shared by the per-file ghost filtering. */
++ (NSSet *)childrenOfDirectory:(NSString *)directoryPath;
+
+/* Write every persisted setting of @p info into @p store under the given
+ * @p key: directory-level entries (view style, icon size, arrangement, label
+ * position, grid spacing, background, sidebar, window geometry bwsp/fwi0, list
+ * view lsvp) plus the per-file Iloc/lclr/cmmt entries.  Shared by
+ * -saveToPath: (key ".") and GWVolumeCache -writeInfo: (key = dir path). */
++ (void)writeStoreEntriesForInfo:(DSStoreInfo *)info
+                             key:(NSString *)key
+                         toStore:(DSStore *)store;
+
 // Coordinate conversion utilities for .DS_Store interoperability
 - (NSRect)gnustepWindowFrameForScreen:(NSScreen *)screen;
 - (NSPoint)gnustepPositionForDSStorePoint:(NSPoint)dsPoint 

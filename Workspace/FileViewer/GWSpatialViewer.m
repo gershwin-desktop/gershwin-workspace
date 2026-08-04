@@ -1013,6 +1013,15 @@
       ASSIGN(dsStoreInfo, current);
       [dsStoreInfo takeValuesFromViewerPrefs:updatedprefs];
 
+      /* Persist the LIVE layout: the spatial view knows exactly where every
+       * icon sits right now, so write that instead of whatever a stale
+       * .DS_Store (possibly with foreign colliding positions) had. */
+      if ([nodeView respondsToSelector: @selector(liveIconPositions)]) {
+        NSDictionary *live = [nodeView liveIconPositions];
+        if (live && [live count] > 0)
+          [dsStoreInfo setLiveIconPositions: live];
+      }
+
       // Write via the settings manager
       [_settingsManager writeSettings:dsStoreInfo];
     }

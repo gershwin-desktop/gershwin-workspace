@@ -91,6 +91,8 @@ main(void)
                       [NSString stringWithFormat: @"t_dsstore_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
+    [fm createFileAtPath: [dir stringByAppendingPathComponent: @"doc.txt"]
+                contents: [NSData data] attributes: nil];
 
     DSStoreInfo *w = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
     [w takeValuesFromViewerPrefs: @{ @"viewtype" : @"List",
@@ -205,6 +207,129 @@ main(void)
     [empty mergeMissingFieldsFromInfo: existing];
     PASS(empty.hasViewStyle && empty.hasWindowFrame && empty.hasIconSize,
          "merge: an empty receiver adopts all fields from existing");
+  }
+
+  /* --- read filters ghost per-file entries ---
+   * A foreign Finder (or a removed/renamed file) can leave an Iloc entry for
+   * a filename that is no longer an on-disk child of the directory.  Those
+   * ghosts collide with live files on reopen, so loading must drop them. */
+  {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                      [NSString stringWithFormat: @"t_dsstore_prune_%d", (int)getpid()]];
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [fm createFileAtPath: [dir stringByAppendingPathComponent: @"real.txt"]
+                contents: [NSData data] attributes: nil];
+
+    NSString *dsPath = [dir stringByAppendingPathComponent: @".DS_Store"];
+
+    DSStoreInfo *w = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
+    DSStoreIconInfo *real = [DSStoreIconInfo infoForFilename: @"real.txt"];
+    real.position = NSMakePoint(100, 100);
+    real.hasPosition = YES;
+    [w setIconInfo: real forFilename: @"real.txt"];
+    PASS([w saveToPath: dsPath], "ghost: initial save succeeds");
+
+    /* Inject a ghost entry for a non-existent file. */
+    {
+      DSStore *store = [DSStore createStoreAtPath: dsPath withEntries: nil];
+      [store load];
+      [store setEntry: [DSStoreEntry iconLocationEntryForFile: @"ghost.txt"
+                                                             x: 50 y: 50]];
+      [store save];
+    }
+    DSStoreInfo *rw = [DSStoreInfo infoForDirectoryPath: dir];
+    PASS(rw != nil && rw.loaded, "ghost: reload succeeds");
+    DSStoreIconInfo *ghost = [rw iconInfoForFilename: @"ghost.txt"];
+    PASS(ghost == nil || ![ghost hasPosition],
+         "ghost: non-existent file's Iloc is filtered on load");
+    DSStoreIconInfo *rkept = [rw iconInfoForFilename: @"real.txt"];
+    PASS(rkept != nil && [rkept hasPosition],
+         "ghost: real on-disk child's Iloc is kept");
+
+    /* Re-save: the write path must also prune the ghost from the file. */
+    [rw takeValuesFromViewerPrefs: @{ @"viewtype" : @"Icon" }];
+    PASS([rw saveToPath: dsPath], "ghost: re-save succeeds");
+    {
+      DSStore *chk = [DSStore storeWithPath: dsPath];
+      [chk load];
+      BOOL ghostGone =
+        ([chk entryForFilename: @"ghost.txt" code: @"Iloc"] == nil);
+      PASS(ghostGone, "ghost: write prunes the ghost entry from disk");
+      BOOL realKept =
+        ([chk entryForFilename: @"real.txt" code: @"Iloc"] != nil);
+      PASS(realKept, "ghost: write keeps the real on-disk child entry");
+    }
+
+    [fm removeFileAtPath: dir handler: nil];
+  }
+
+  /* liveIconPositions / setLiveIconPositions: a close-write must persist the
+   * live on-screen layout and DROP any foreign colliding/stale position. */
+  {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                      [NSString stringWithFormat: @"t_dsstore_live_%d", (int)getpid()]];
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [fm createFileAtPath: [dir stringByAppendingPathComponent: @"a.txt"]
+                contents: [NSData data] attributes: nil];
+    [fm createFileAtPath: [dir stringByAppendingPathComponent: @"b.txt"]
+                contents: [NSData data] attributes: nil];
+
+    NSString *dsPath = [dir stringByAppendingPathComponent: @".DS_Store"];
+
+    /* Seed with a stale colliding position for b.txt (a foreign Finder) and
+     * an entry for a file that no longer exists (ghost.txt). */
+    {
+      DSStoreInfo *w = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
+      DSStoreIconInfo *b = [DSStoreIconInfo infoForFilename: @"b.txt"];
+      b.position = NSMakePoint(80, 202);
+      b.hasPosition = YES;
+      [w setIconInfo: b forFilename: @"b.txt"];
+      DSStoreIconInfo *g = [DSStoreIconInfo infoForFilename: @"ghost.txt"];
+      g.position = NSMakePoint(80, 202);
+      g.hasPosition = YES;
+      [w setIconInfo: g forFilename: @"ghost.txt"];
+      PASS([w saveToPath: dsPath], "live: seed save succeeds");
+    }
+
+    /* Simulate the live layout: a.txt at (80,202), b.txt at (220,202). */
+    DSStoreInfo *info = [DSStoreInfo infoForDirectoryPath: dir];
+    PASS(info != nil && info.loaded, "live: reload succeeds");
+    [info setLiveIconPositions:
+      @{ @"a.txt": [NSValue valueWithPoint: NSMakePoint(80, 202)],
+         @"b.txt": [NSValue valueWithPoint: NSMakePoint(220, 202)] }];
+    NSArray *names = [info filenamesWithPositions];
+    PASS([names count] == 2
+         && [names containsObject: @"a.txt"]
+         && [names containsObject: @"b.txt"],
+         "live: setLiveIconPositions replaces the map (2 live files)");
+    DSStoreIconInfo *livA = [info iconInfoForFilename: @"a.txt"];
+    PASS(livA != nil && [livA hasPosition]
+         && (int)livA.position.x == 80 && (int)livA.position.y == 202,
+         "live: a.txt holds its live iloc");
+    PASS([info iconInfoForFilename: @"ghost.txt"] == nil,
+         "live: foreign ghost entry dropped by setLiveIconPositions");
+
+    /* After writing, on-disk must reflect the live layout only. */
+    PASS([info saveToPath: dsPath], "live: write succeeds");
+    {
+      DSStoreInfo *chk = [DSStoreInfo infoForDirectoryPath: dir];
+      NSArray *chkNames = [chk filenamesWithPositions];
+      PASS([chkNames count] == 2
+           && [chkNames containsObject: @"a.txt"]
+           && [chkNames containsObject: @"b.txt"]
+           && ![chkNames containsObject: @"ghost.txt"],
+           "live: on-disk holds only the live files after write");
+      DSStoreIconInfo *chkB = [chk iconInfoForFilename: @"b.txt"];
+      PASS(chkB != nil && [chkB hasPosition]
+           && (int)chkB.position.x == 220 && (int)chkB.position.y == 202,
+           "live: b.txt keeps its live iloc (no foreign collision)");
+    }
+
+    [fm removeFileAtPath: dir handler: nil];
   }
 
   [arp release];

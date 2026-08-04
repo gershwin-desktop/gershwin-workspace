@@ -1014,6 +1014,9 @@
     NSUInteger positionCount = 0;
     NSUInteger commentCount = 0;
     NSUInteger labelCount = 0;
+
+    /* On-disk children of this directory, used to drop ghost entries. */
+    NSSet *children = [DSStoreInfo childrenOfDirectory: _directoryPath];
     
     for (NSString *filename in filenames) {
         // Skip directory entry
@@ -1084,6 +1087,14 @@
         
         // Store the info if we have any data
         if (info) {
+            /* Skip ghost entries: a foreign Finder (or a removed/renamed
+             * file) can leave an Iloc/cmmt/lclr for a filename that is no
+             * longer a child of this directory.  Honoring it would place a
+             * nonexistent icon and, worse, collide with a live file that now
+             * has the same position.  Only keep entries whose name is an
+             * on-disk child (or the directory itself). */
+            if (children && [children containsObject: filename] == NO)
+                continue;   /* ghost - drop */
             [_iconInfoDict setObject:info forKey:filename];
         }
     }
@@ -1107,9 +1118,231 @@
     }
 }
 
+- (void)setLiveIconPositions:(NSDictionary *)livePositions
+{
+    /* Reset the icon-info map entirely, then re-add only the live icons with
+     * their positions, so a stale/foreign .DS_Store never survives a close. */
+    [_iconInfoDict removeAllObjects];
+    for (NSString *filename in livePositions) {
+        NSValue *v = [livePositions objectForKey: filename];
+        if (v == nil) continue;
+        NSPoint iloc = [v pointValue];
+        DSStoreIconInfo *ii = [DSStoreIconInfo infoForFilename: filename];
+        [ii setPosition: iloc];
+        [ii setHasPosition: YES];
+        [_iconInfoDict setObject: ii forKey: filename];
+    }
+}
+
 - (NSDictionary *)allIconInfo
 {
     return [NSDictionary dictionaryWithDictionary:_iconInfoDict];
+}
+
+/* === Shared per-file entry helpers (also used by GWVolumeCache) === */
+
++ (DSStoreIconInfo *)iconInfoForFile:(NSString *)filename
+                            bareName:(NSString *)bareName
+                           fromStore:(DSStore *)store
+{
+    DSStoreIconInfo *ii = nil;
+
+    /* Iloc: icon location - 16-byte blob, two 4-byte big-endian signed ints
+     * (the icon CENTER, origin at top-left of the window content area). */
+    DSStoreEntry *iloc = [store entryForFilename:filename code:@"Iloc"];
+    if (iloc && [[iloc type] isEqualToString:@"blob"]) {
+        NSData *data = (NSData *)[iloc value];
+        if ([data length] >= 8) {
+            const uint8_t *b = (const uint8_t *)[data bytes];
+            int32_t x = (int32_t)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
+            int32_t y = (int32_t)((b[4] << 24) | (b[5] << 16) | (b[6] << 8) | b[7]);
+            if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
+            [ii setPosition:NSMakePoint((CGFloat)x, (CGFloat)y)];
+            [ii setHasPosition:YES];
+        }
+    }
+
+    /* lclr: label color */
+    DSStoreEntry *lclr = [store entryForFilename:filename code:@"lclr"];
+    if (lclr && [[lclr type] isEqualToString:@"long"]) {
+        if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
+        [ii setLabelColor:(DSStoreLabelColor)[[lclr value] intValue]];
+        [ii setHasLabelColor:YES];
+    }
+
+    /* cmmt: comments */
+    DSStoreEntry *cmmt = [store entryForFilename:filename code:@"cmmt"];
+    if (cmmt && [[cmmt type] isEqualToString:@"ustr"]) {
+        if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
+        [ii setComments:(NSString *)[cmmt value]];
+    }
+
+    return ii;
+}
+
++ (void)writeIconInfo:(DSStoreIconInfo *)ii
+             forFile:(NSString *)filename
+             toStore:(DSStore *)store
+{
+    if ([ii hasPosition]) {
+        DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:filename
+                                                                x:(int)[ii position].x
+                                                                y:(int)[ii position].y];
+        if (e) [store setEntry:e];
+    }
+    if ([ii comments]) {
+        DSStoreEntry *e = [DSStoreEntry commentsEntryForFile:filename
+                                                    comments:[ii comments]];
+        if (e) [store setEntry:e];
+    }
+    if ([ii hasLabelColor]) {
+        DSStoreEntry *e = [DSStoreEntry labelColorEntryForFile:filename
+                                                          color:(int)[ii labelColor]];
+        if (e) [store setEntry:e];
+    }
+}
+
++ (NSSet *)childrenOfDirectory:(NSString *)directoryPath
+{
+    BOOL isDir = NO;
+    BOOL dirExists = [[NSFileManager defaultManager]
+                       fileExistsAtPath: directoryPath isDirectory: &isDir];
+    if (!(dirExists && isDir)) return nil;
+    NSArray *children = [[NSFileManager defaultManager]
+                          contentsOfDirectoryAtPath: directoryPath error: NULL];
+    if (children == nil) return nil;
+    return [NSSet setWithArray: children];
+}
+
++ (void)pruneNonChildEntriesInStore:(DSStore *)store
+                       forDirectory:(NSString *)directoryPath
+                           keepPath:(NSString *)keepPath
+{
+    NSSet *childSet = [self childrenOfDirectory: directoryPath];
+    if (childSet == nil) return;
+
+    NSArray *allFilenames = [store allFilenames];
+    for (NSString *fn in allFilenames) {
+        if ([fn isEqualToString: keepPath]) continue;
+        if ([fn isEqualToString: @"/"]) continue;   /* volume-root record */
+        if ([childSet containsObject: fn]) continue;  /* real child */
+        [store removeAllEntriesForFilename: fn];
+    }
+}
+
++ (void)writeStoreEntriesForInfo:(DSStoreInfo *)info
+                             key:(NSString *)key
+                         toStore:(DSStore *)store
+{
+    /* --- Directory-level entries --- */
+
+    /* View style */
+    if ([info hasViewStyle]) {
+        NSString *styleStr = @"icnv";
+        switch ([info viewStyle]) {
+            case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
+            case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
+            case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
+            case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
+            case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
+        }
+        DSStoreEntry *e = [DSStoreEntry viewStyleEntryForFile: key style: styleStr];
+        if (e) [store setEntry: e];
+    }
+
+    /* Icon size */
+    if ([info hasIconSize] && [info iconSize] > 0 && [info iconSize] <= 512) {
+        DSStoreEntry *e = [DSStoreEntry iconSizeEntryForFile: key size: [info iconSize]];
+        if (e) [store setEntry: e];
+    }
+
+    /* Icon arrangement */
+    if ([info hasIconArrangement]) {
+        int arr = ([info iconArrangement] == DSStoreIconArrangementGrid) ? 1 : 0;
+        DSStoreEntry *e = [DSStoreEntry iconArrangementEntryForFile: key arrangement: arr];
+        if (e) [store setEntry: e];
+    }
+
+    /* Label position */
+    if ([info hasLabelPosition]) {
+        int pos = ([info labelPosition] == DSStoreLabelPositionBottom) ? 0 : 1;
+        DSStoreEntry *e = [DSStoreEntry labelPositionEntryForFile: key position: pos];
+        if (e) [store setEntry: e];
+    }
+
+    /* Grid spacing */
+    if ([info hasGridSpacing] && [info gridSpacing] > 0) {
+        DSStoreEntry *e = [DSStoreEntry gridSpacingEntryForFile: key
+                                                        spacing: (int)[info gridSpacing]];
+        if (e) [store setEntry: e];
+    }
+
+    /* Background color */
+    if ([info backgroundType] == DSStoreBackgroundColor && [info backgroundColor]) {
+        CGFloat r, g, b, a;
+        [[info backgroundColor] getRed: &r green: &g blue: &b alpha: &a];
+        DSStoreEntry *e = [DSStoreEntry backgroundColorEntryForFile: key
+                                                                red: (int)(r * 65535.0)
+                                                              green: (int)(g * 65535.0)
+                                                               blue: (int)(b * 65535.0)];
+        if (e) [store setEntry: e];
+    }
+
+    /* Background image */
+    if ([info backgroundType] == DSStoreBackgroundPicture && [info backgroundImagePath]) {
+        DSStoreEntry *e = [DSStoreEntry backgroundImageEntryForFile: key
+                                                          imagePath: [info backgroundImagePath]];
+        if (e) [store setEntry: e];
+    }
+
+    /* Sidebar width */
+    if ([info hasSidebarWidth]) {
+        DSStoreEntry *e = [DSStoreEntry sidebarWidthEntryForFile: key width: [info sidebarWidth]];
+        if (e) [store setEntry: e];
+    }
+
+    /* Window geometry (bwsp + fwi0) */
+    if ([info hasWindowFrame]) {
+        NSRect dsFrame = [info dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
+        DSStoreEntry *bwsp = [DSStoreEntry browserWindowEntryForFile: key
+                                                       windowBounds: dsFrame
+                                                       sidebarWidth: [info sidebarWidth]];
+        if (bwsp) [store setEntry: bwsp];
+
+        NSString *styleStr = @"icnv";
+        switch ([info viewStyle]) {
+            case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
+            case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
+            case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
+            case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
+            case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
+        }
+        DSStoreEntry *fwi0 = [DSStoreEntry windowGeometryEntryForFile: key
+                                                                 rect: dsFrame
+                                                            viewStyle: styleStr];
+        if (fwi0) [store setEntry: fwi0];
+    }
+
+    /* List view settings (lsvp) - replaces the former lsvt/GRP0 scalars */
+    if ([info hasListTextSize] || [info hasListIconSize] || [info hasSortColumn]
+        || ([[info columnWidths] count] > 0)
+        || ([[info columnVisible] count] > 0)) {
+        DSStoreEntry *e = [DSStoreEntry listViewEntryForFile: key
+                                                  sortColumn: ([info hasSortColumn] ? [info sortColumn] : nil)
+                                                   ascending: [info sortAscending]
+                                                    textSize: ([info hasListTextSize] ? [info listTextSize] : 0)
+                                                    iconSize: ([info hasListIconSize] ? [info listIconSize] : 0)
+                                                columnWidths: [info columnWidths]
+                                               columnVisible: [info columnVisible]];
+        if (e) [store setEntry: e];
+    }
+
+    /* --- Per-file entries --- */
+    for (NSString *filename in [info allIconInfo]) {
+        [self writeIconInfo: [[info allIconInfo] objectForKey: filename]
+                    forFile: filename
+                    toStore: store];
+    }
 }
 
 - (BOOL)hasAnyIconPositions
@@ -1244,137 +1477,19 @@
 
   [store load];  /* Load existing entries so we merge, not replace */
 
-  /* --- Directory-level entries (filename = ".") --- */
+  /* --- Directory-level + per-file entries (keyed by ".") --- */
+  [DSStoreInfo writeStoreEntriesForInfo: self
+                                    key: @"."
+                                toStore: store];
 
-  /* View style */
-  if (_hasViewStyle) {
-    NSString *styleStr = @"icnv";
-    switch (_viewStyle) {
-      case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
-      case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
-      case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
-      case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
-      case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
-    }
-    DSStoreEntry *e = [DSStoreEntry viewStyleEntryForFile:@"." style:styleStr];
-    if (e) [store setEntry:e];
-  }
-
-  /* Icon size */
-  if (_hasIconSize && _iconSize > 0 && _iconSize <= 512) {
-    DSStoreEntry *e = [DSStoreEntry iconSizeEntryForFile:@"." size:_iconSize];
-    if (e) [store setEntry:e];
-  }
-
-  /* Icon arrangement */
-  if (_hasIconArrangement) {
-    int arr = (_iconArrangement == DSStoreIconArrangementGrid) ? 1 : 0;
-    DSStoreEntry *e = [DSStoreEntry iconArrangementEntryForFile:@"." arrangement:arr];
-    if (e) [store setEntry:e];
-  }
-
-  /* Label position */
-  if (_hasLabelPosition) {
-    int pos = (_labelPosition == DSStoreLabelPositionBottom) ? 0 : 1;
-    DSStoreEntry *e = [DSStoreEntry labelPositionEntryForFile:@"." position:pos];
-    if (e) [store setEntry:e];
-  }
-
-  /* Grid spacing */
-  if (_hasGridSpacing && _gridSpacing > 0) {
-    DSStoreEntry *e = [DSStoreEntry gridSpacingEntryForFile:@"." spacing:(int)_gridSpacing];
-    if (e) [store setEntry:e];
-  }
-
-  /* Background color */
-  if (_backgroundType == DSStoreBackgroundColor && _backgroundColor) {
-    CGFloat r, g, b, a;
-    [_backgroundColor getRed:&r green:&g blue:&b alpha:&a];
-    int ri = (int)(r * 65535.0);
-    int gi = (int)(g * 65535.0);
-    int bi = (int)(b * 65535.0);
-    DSStoreEntry *e = [DSStoreEntry backgroundColorEntryForFile:@"."
-                                                           red:ri
-                                                         green:gi
-                                                          blue:bi];
-    if (e) [store setEntry:e];
-  }
-
-  /* Background image */
-  if (_backgroundType == DSStoreBackgroundPicture && _backgroundImagePath) {
-    DSStoreEntry *e = [DSStoreEntry backgroundImageEntryForFile:@"."
-                                                     imagePath:_backgroundImagePath];
-    if (e) [store setEntry:e];
-  }
-
-  /* Sidebar width */
-  if (_hasSidebarWidth) {
-    DSStoreEntry *e = [DSStoreEntry sidebarWidthEntryForFile:@"." width:_sidebarWidth];
-    if (e) [store setEntry:e];
-  }
-
-  /* Window geometry (bwsp + fwi0) */
-  if (_hasWindowFrame) {
-    NSRect dsFrame = [self dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
-    DSStoreEntry *bwsp = [DSStoreEntry browserWindowEntryForFile: @"."
-                                                   windowBounds: dsFrame
-                                                   sidebarWidth: _sidebarWidth];
-    if (bwsp) [store setEntry: bwsp];
-
-    NSString *styleStr = @"icnv";
-    switch (_viewStyle) {
-      case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
-      case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
-      case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
-      case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
-      case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
-    }
-    DSStoreEntry *fwi0 = [DSStoreEntry windowGeometryEntryForFile: @"."
-                                                             rect: dsFrame
-                                                        viewStyle: styleStr];
-    if (fwi0) [store setEntry: fwi0];
-  }
-
-  /* List view settings (lsvp) - replaces the former lsvt/GRP0 scalars */
-  if (_hasListTextSize || _hasListIconSize || _hasSortColumn
-      || (_columnWidths && [_columnWidths count] > 0)
-      || (_columnVisible && [_columnVisible count] > 0)) {
-    DSStoreEntry *e = [DSStoreEntry listViewEntryForFile: @"."
-                                              sortColumn: (_hasSortColumn ? _sortColumn : nil)
-                                               ascending: _sortAscending
-                                                textSize: (_hasListTextSize ? _listTextSize : 0)
-                                                iconSize: (_hasListIconSize ? _listIconSize : 0)
-                                            columnWidths: _columnWidths
-                                           columnVisible: _columnVisible];
-    if (e) [store setEntry: e];
-  }
-
-  /* --- Per-file entries --- */
-  for (NSString *filename in _iconInfoDict) {
-    DSStoreIconInfo *info = [_iconInfoDict objectForKey:filename];
-
-    /* Icon position (Iloc) */
-    if (info.hasPosition) {
-      DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:filename
-                                                             x:(int)info.position.x
-                                                             y:(int)info.position.y];
-      if (e) [store setEntry:e];
-    }
-
-    /* Comment */
-    if (info.comments) {
-      DSStoreEntry *e = [DSStoreEntry commentsEntryForFile:filename
-                                                  comments:info.comments];
-      if (e) [store setEntry:e];
-    }
-
-    /* Label color */
-    if (info.hasLabelColor) {
-      DSStoreEntry *e = [DSStoreEntry labelColorEntryForFile:filename
-                                                       color:(int)info.labelColor];
-      if (e) [store setEntry:e];
-    }
-  }
+  /* Prune ghost per-file entries on write: remove Iloc/lclr/cmmt entries for
+   * files that are no longer on-disk children of this directory (renamed,
+   * removed, or localized standard-folder names written by a foreign Finder).
+   * Leaving them would collide with a live file that now has the same
+   * position; the folder's own record ("." / the path) is kept. */
+  [DSStoreInfo pruneNonChildEntriesInStore: store
+                              forDirectory: _directoryPath
+                                  keepPath: @"."];
 
   /* --- Write atomically --- */
   BOOL saved = [store save];

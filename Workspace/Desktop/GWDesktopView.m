@@ -1672,7 +1672,7 @@ static void GWHighlightFrameRect(NSRect aRect)
             FSNIconItemData *data = [icon placementData];
             if (data.placementMode == FSNIconPlacementModeManual) continue;
 
-            NSValue *v = [stored objectForKey: [[icon node] name]];
+            NSValue *v = [stored objectForKey: [[icon node] lastPathComponent]];
             if (v == nil) continue;
             NSPoint iloc = [v pointValue];
             if (iloc.x != 0 || iloc.y != 0)
@@ -1878,7 +1878,7 @@ static void GWHighlightFrameRect(NSRect aRect)
               for (NSUInteger j = 0; j < count; j++)
                 {
                   NSString *fname = [[sourcePaths objectAtIndex: j] lastPathComponent];
-                  if ([[nd name] isEqual: fname])
+                  if ([[nd lastPathComponent] isEqual: fname])
                     {
                       return NSDragOperationNone;
                     }

@@ -438,7 +438,10 @@ static void GWHighlightFrameRect(NSRect aRect)
   for (i = 0; i < count; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      NSString *filename = [[icon node] name];
+      /* Position keys use the never-translated on-disk name: .DS_Store /
+       * customIconPositions are keyed by the real filename, not the
+       * localized display name (FSNode.name may translate directories). */
+      NSString *filename = [[icon node] lastPathComponent];
       FSNIconItemData *data = [icon placementData];
       NSValue *posValue = honor ? [customIconPositions objectForKey: filename] : nil;
       NSPoint cellOrigin = NSZeroPoint;
@@ -553,7 +556,7 @@ static void GWHighlightFrameRect(NSRect aRect)
               for (j = 0; j < count; j++)
                 {
                   FSNIcon *otherIcon = [icons objectAtIndex: j];
-                  NSString *otherName = [[otherIcon node] name];
+                  NSString *otherName = [[otherIcon node] lastPathComponent];
                   FSNIconItemData *odata = [otherIcon placementData];
                   NSPoint otherCenter = NSZeroPoint;
                   BOOL hasPos = NO;
@@ -840,6 +843,46 @@ static void GWHighlightFrameRect(NSRect aRect)
   return customIconPositions;
 }
 
+- (NSDictionary *)liveIconPositions
+{
+  NSMutableDictionary *result = [NSMutableDictionary dictionary];
+  NSUInteger i;
+  for (i = 0; i < [icons count]; i++)
+    {
+      FSNIcon *icon = [icons objectAtIndex: i];
+      FSNode *nd = [icon node];
+      if (!nd) continue;
+      NSString *name = [nd lastPathComponent];
+      if (!name) continue;
+
+      NSPoint iloc;
+      BOOL has = NO;
+
+      /* Dragged / auto-placed icons live in customIconPositions. */
+      NSValue *v = [customIconPositions objectForKey: name];
+      if (v)
+        {
+          iloc = [v pointValue];
+          has = YES;
+        }
+      /* Restored manual icons carry their iloc on the placement data. */
+      else
+        {
+          FSNIconItemData *data = [icon placementData];
+          if (data.placementMode == FSNIconPlacementModeManual
+              && data.ilocPosition.x >= 0)
+            {
+              iloc = data.ilocPosition;
+              has = YES;
+            }
+        }
+
+      if (has)
+        [result setObject: [NSValue valueWithPoint: iloc] forKey: name];
+    }
+  return result;
+}
+
 - (NSArray *)icons
 {
   return icons;
@@ -866,7 +909,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       if (!nd) continue;
 
       NSString *folder = [[nd path] stringByDeletingLastPathComponent];
-      NSString *name = [nd name];
+      NSString *name = [nd lastPathComponent];
       if (!folder || !name) continue;
 
       NSValue *v = [customIconPositions objectForKey: name];
@@ -947,7 +990,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       data.ilocPosition = ilocPoint;
       data.placementMode = FSNIconPlacementModeManual;
 
-      NSString *name = [[icon node] name];
+      NSString *name = [[icon node] lastPathComponent];
       if (!customIconPositions)
         customIconPositions = [[NSMutableDictionary alloc] init];
       [customIconPositions setObject: [NSValue valueWithPoint: ilocPoint]
@@ -971,7 +1014,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
         NSString *fp = [nd path];
         NSString *folder = [fp stringByDeletingLastPathComponent];
-        NSString *name = [nd name];
+        NSString *name = [nd lastPathComponent];
         if (!folder || !name) continue;
 
         /* View-center -> DS_Store iloc (top-left); identity in a flipped view. */
@@ -1844,22 +1887,31 @@ static void GWHighlightFrameRect(NSRect aRect)
      * both provided by the injected position store (the app reads them via
      * the settings hierarchy).  Only fills icons not already positioned by
      * fdLocation.  Raw iloc (top-left) is stored; conversion to GNUstep
-     * bottom-left happens at tile time with the correct refH. */
+     * bottom-left happens at tile time with the correct refH.
+     *
+     * Deduplicate: a foreign Finder (or a stale write) can leave two files
+     * with the same iloc, which would stack them on top of each other.
+     * Only the first icon claiming a given iloc keeps it; later ones fall
+     * through to AUTO placement so nothing overlaps. */
     NSDictionary *stored =
       [[fsnodeRep iconPositionStore] storedIconPositionsForFolder: folderPath];
     if ([stored count])
       {
+        NSMutableSet *claimed = [NSMutableSet set];
         for (i = 0; i < [icons count]; i++)
           {
             FSNIcon *icon = [icons objectAtIndex: i];
             FSNIconItemData *data = [icon placementData];
             if (data.placementMode == FSNIconPlacementModeManual) continue;
 
-            NSValue *v = [stored objectForKey: [[icon node] name]];
+            NSValue *v = [stored objectForKey: [[icon node] lastPathComponent]];
             if (v == nil) continue;
             NSPoint iloc = [v pointValue];
             if (iloc.x != 0 || iloc.y != 0)
               {
+                NSString *key = [NSString stringWithFormat: @"%.0f,%.0f", iloc.x, iloc.y];
+                if ([claimed containsObject: key]) continue;  /* already taken */
+                [claimed addObject: key];
                 data.ilocPosition = iloc;
                 data.placementMode = FSNIconPlacementModeManual;
               }
@@ -2979,7 +3031,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 	      {
 		NSString *fname = [[sourcePaths objectAtIndex: j] lastPathComponent];
 
-		if ([[nd name] isEqual: fname])
+		if ([[nd lastPathComponent] isEqual: fname])
 		  {
 		    return NSDragOperationNone;
 		  }
