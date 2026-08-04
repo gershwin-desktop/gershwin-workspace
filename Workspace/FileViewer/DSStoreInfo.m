@@ -1177,6 +1177,41 @@
     return result;
 }
 
+- (NSRect)dsStoreWindowFrameForScreen:(NSScreen *)screen
+{
+    if (!_hasWindowFrame) {
+        return NSZeroRect;
+    }
+
+    /* Inverse of -gnustepWindowFrameForScreen:: the receiver's GNUstep frame
+     * (origin bottom-left) becomes the .DS_Store content-area rect (origin
+     * top-left, y is the top edge measured downward). */
+    if (screen == nil) {
+      screen = [DSStoreInfo safeMainScreen];
+    }
+    CGFloat screenHeight = [screen frame].size.height;
+    CGFloat dsStoreTop = screenHeight - _windowFrame.origin.y - _windowFrame.size.height;
+
+    NSRect result = NSMakeRect(_windowFrame.origin.x, dsStoreTop,
+                               _windowFrame.size.width, _windowFrame.size.height);
+
+    NSDebugLLog(@"gwspace", @"Inverse coordinate conversion:");
+    NSDebugLLog(@"gwspace", @"  GNUstep frame: %@", NSStringFromRect(_windowFrame));
+    NSDebugLLog(@"gwspace", @"  .DS_Store content area: top=%.0f left=%.0f width=%.0f height=%.0f",
+          dsStoreTop, _windowFrame.origin.x, _windowFrame.size.width, _windowFrame.size.height);
+
+    return result;
+}
+
++ (NSScreen *)safeMainScreen
+{
+  @try {
+    return [NSScreen mainScreen];
+  } @catch (NSException *e) {
+    return nil;
+  }
+}
+
 - (NSPoint)gnustepPositionForDSStorePoint:(NSPoint)dsPoint 
                            viewHeight:(CGFloat)viewHeight 
                            iconHeight:(CGFloat)iconHeight
@@ -1278,16 +1313,40 @@
     if (e) [store setEntry:e];
   }
 
-  /* List view text size */
-  if (_hasListTextSize) {
-    DSStoreEntry *e = [DSStoreEntry textSizeEntryForFile:@"." size:_listTextSize];
-    if (e) [store setEntry:e];
+  /* Window geometry (bwsp + fwi0) */
+  if (_hasWindowFrame) {
+    NSRect dsFrame = [self dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
+    DSStoreEntry *bwsp = [DSStoreEntry browserWindowEntryForFile: @"."
+                                                   windowBounds: dsFrame
+                                                   sidebarWidth: _sidebarWidth];
+    if (bwsp) [store setEntry: bwsp];
+
+    NSString *styleStr = @"icnv";
+    switch (_viewStyle) {
+      case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
+      case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
+      case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
+      case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
+      case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
+    }
+    DSStoreEntry *fwi0 = [DSStoreEntry windowGeometryEntryForFile: @"."
+                                                             rect: dsFrame
+                                                        viewStyle: styleStr];
+    if (fwi0) [store setEntry: fwi0];
   }
 
-  /* Sort column */
-  if (_hasSortColumn && _sortColumn) {
-    DSStoreEntry *e = [DSStoreEntry sortByEntryForFile:@"." sortBy:_sortColumn];
-    if (e) [store setEntry:e];
+  /* List view settings (lsvp) - replaces the former lsvt/GRP0 scalars */
+  if (_hasListTextSize || _hasListIconSize || _hasSortColumn
+      || (_columnWidths && [_columnWidths count] > 0)
+      || (_columnVisible && [_columnVisible count] > 0)) {
+    DSStoreEntry *e = [DSStoreEntry listViewEntryForFile: @"."
+                                              sortColumn: (_hasSortColumn ? _sortColumn : nil)
+                                               ascending: _sortAscending
+                                                textSize: (_hasListTextSize ? _listTextSize : 0)
+                                                iconSize: (_hasListIconSize ? _listIconSize : 0)
+                                            columnWidths: _columnWidths
+                                           columnVisible: _columnVisible];
+    if (e) [store setEntry: e];
   }
 
   /* --- Per-file entries --- */
@@ -1340,13 +1399,30 @@
 {
   if (!prefs) return;
 
-  /* Window geometry */
+  /* Window geometry.  Two forms are possible:
+   *   - GNUstep saved-frame string from [NSWindow stringWithSavedFrame]:
+   *     "<x> <y> <w> <h> ..." (space-separated; NSRectFromString cannot
+   *     parse it).
+   *   - the "{{x, y}, {w, h}}" form used by NSRectFromString.
+   * Try NSRectFromString first (covers the bracketed form), then fall back
+   * to scanning the first four integers (covers the saved-frame form). */
   NSString *geo = [prefs objectForKey:@"geometry"];
   if (geo && !(preserve && _hasWindowFrame)) {
-    NSRect frame = NSRectFromString(geo);
-    if (frame.size.width > 0 && frame.size.height > 0) {
-      _windowFrame = frame;
+    NSRect parsed = NSRectFromString(geo);
+    if (parsed.size.width > 0 && parsed.size.height > 0) {
+      _windowFrame = parsed;
       _hasWindowFrame = YES;
+    } else {
+      NSScanner *scanner = [NSScanner scannerWithString: geo];
+      int x = 0, y = 0, w = 0, h = 0;
+      BOOL ok = ([scanner scanInt: &x]
+                 && [scanner scanInt: &y]
+                 && [scanner scanInt: &w]
+                 && [scanner scanInt: &h]);
+      if (ok && w > 0 && h > 0) {
+        _windowFrame = NSMakeRect(x, y, w, h);
+        _hasWindowFrame = YES;
+      }
     }
   }
 
@@ -1395,6 +1471,44 @@
     _sidebarWidth = [sw intValue];
     _hasSidebarWidth = YES;
   }
+
+  /* List view sort column - reported by FSNListView as an FSNInfoType int.
+   * The workspace's list view only sorts ascending, so mirror that. */
+  id htc = [prefs objectForKey: @"hligh_table_col"];
+  if (htc && !(preserve && _hasSortColumn)) {
+    NSString *name = [DSStoreInfo sortColumnNameForInfoType: [htc intValue]];
+    if (name) {
+      [_sortColumn release];
+      _sortColumn = [name copy];
+      _hasSortColumn = YES;
+      _sortAscending = YES;
+    }
+  }
+
+  /* List view column widths - reported by FSNListView's columnsDescription
+   * keyed by the FSNInfoType identifier.  Translate to the Finder column
+   * names used by lsvp. */
+  NSDictionary *cols = [prefs objectForKey: @"list_view_columns"];
+  if (cols && [cols isKindOfClass: [NSDictionary class]]
+      && !(preserve && _columnWidths)) {
+    NSMutableDictionary *widths = [NSMutableDictionary dictionary];
+    for (NSString *key in cols) {
+      NSDictionary *col = [cols objectForKey: key];
+      if (![col isKindOfClass: [NSDictionary class]]) continue;
+      id identObj = [col objectForKey: @"identifier"];
+      id widthObj = [col objectForKey: @"width"];
+      if (!identObj || !widthObj) continue;
+      NSString *name = [DSStoreInfo sortColumnNameForInfoType: [identObj intValue]];
+      if (name) {
+        [widths setObject: [NSNumber numberWithFloat: [widthObj floatValue]]
+                   forKey: name];
+      }
+    }
+    if ([widths count] > 0) {
+      [_columnWidths release];
+      _columnWidths = [widths copy];
+    }
+  }
 }
 
 - (void)resetToDefaults
@@ -1419,6 +1533,97 @@
   [_iconInfoDict removeAllObjects];
 
   _loaded = NO;
+}
+
+- (void)mergeMissingFieldsFromInfo:(DSStoreInfo *)other
+{
+  if (other == nil) return;
+
+  if (!_hasWindowFrame && [other hasWindowFrame]) {
+    _windowFrame = [other windowFrame];
+    _hasWindowFrame = YES;
+  }
+  if (!_hasViewStyle && [other hasViewStyle]) {
+    _viewStyle = [other viewStyle];
+    _hasViewStyle = YES;
+  }
+  if (!_hasIconSize && [other hasIconSize]) {
+    _iconSize = [other iconSize];
+    _hasIconSize = YES;
+  }
+  if (!_hasIconArrangement && [other hasIconArrangement]) {
+    _iconArrangement = [other iconArrangement];
+    _hasIconArrangement = YES;
+  }
+  if (!_hasLabelPosition && [other hasLabelPosition]) {
+    _labelPosition = [other labelPosition];
+    _hasLabelPosition = YES;
+  }
+  if (!_hasGridSpacing && [other hasGridSpacing]) {
+    _gridSpacing = [other gridSpacing];
+    _hasGridSpacing = YES;
+  }
+  if (!_hasSidebarWidth && [other hasSidebarWidth]) {
+    _sidebarWidth = [other sidebarWidth];
+    _hasSidebarWidth = YES;
+  }
+  if (!_hasListTextSize && [other hasListTextSize]) {
+    _listTextSize = [other listTextSize];
+    _hasListTextSize = YES;
+  }
+  if (!_hasListIconSize && [other hasListIconSize]) {
+    _listIconSize = [other listIconSize];
+    _hasListIconSize = YES;
+  }
+  if (!_hasSortColumn && [other hasSortColumn]) {
+    [_sortColumn release];
+    _sortColumn = [[other sortColumn] copy];
+    _hasSortColumn = YES;
+    _sortAscending = [other sortAscending];
+  }
+  if (_columnWidths == nil && [other columnWidths]) {
+    [_columnWidths release];
+    _columnWidths = [[other columnWidths] copy];
+  }
+  if (_columnVisible == nil && [other columnVisible]) {
+    [_columnVisible release];
+    _columnVisible = [[other columnVisible] copy];
+  }
+
+  /* Background: only copy when the receiver has none at all. */
+  if ((_backgroundType == DSStoreBackgroundDefault && _backgroundColor == nil)
+      && [other backgroundType] != DSStoreBackgroundDefault) {
+    _backgroundType = [other backgroundType];
+    [_backgroundColor release];
+    _backgroundColor = [[other backgroundColor] retain];
+    [_backgroundImagePath release];
+    _backgroundImagePath = [[other backgroundImagePath] copy];
+  }
+
+  /* Per-file icon info: for entries the receiver lacks entirely, copy them
+   * wholesale; for entries present in both, fill in sub-fields the receiver
+   * did not touch (so e.g. a label-color-only write keeps existing positions
+   * and comments). */
+  NSDictionary *otherIcons = [other allIconInfo];
+  for (NSString *name in otherIcons) {
+    DSStoreIconInfo *oi = [otherIcons objectForKey: name];
+    DSStoreIconInfo *mine = [self iconInfoForFilename: name];
+    if (mine == nil) {
+      [self setIconInfo: oi forFilename: name];
+    } else {
+      if (![mine hasPosition] && [oi hasPosition]) {
+        [mine setPosition: [oi position]];
+        [mine setHasPosition: YES];
+      }
+      if ([mine comments] == nil && [oi comments]) {
+        [mine setComments: [oi comments]];
+      }
+      if (![mine hasLabelColor] && [oi hasLabelColor]) {
+        [mine setLabelColor: [oi labelColor]];
+        [mine setHasLabelColor: YES];
+      }
+    }
+  }
 }
 
 #pragma mark - Debugging

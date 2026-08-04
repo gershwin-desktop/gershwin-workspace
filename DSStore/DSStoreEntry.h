@@ -59,6 +59,12 @@
 // Label colors
 + (DSStoreEntry *)labelColorEntryForFile:(NSString *)filename color:(int)colorIndex;
 
+// Binary plist entries (bwsp, lsvp, ...) and legacy window geometry (fwi0)
++ (DSStoreEntry *)plistEntryForFile:(NSString *)filename code:(NSString *)code dictionary:(NSDictionary *)dictionary;
++ (DSStoreEntry *)browserWindowEntryForFile:(NSString *)filename windowBounds:(NSRect)windowBounds sidebarWidth:(int)sidebarWidth;
++ (DSStoreEntry *)windowGeometryEntryForFile:(NSString *)filename rect:(NSRect)rect viewStyle:(NSString *)viewStyle;
++ (DSStoreEntry *)listViewEntryForFile:(NSString *)filename sortColumn:(NSString *)sortColumn ascending:(BOOL)ascending textSize:(int)textSize iconSize:(int)iconSize columnWidths:(NSDictionary *)columnWidths columnVisible:(NSDictionary *)columnVisible;
+
 // Value extraction methods
 - (NSPoint)iconLocation;
 - (SimpleColor *)backgroundColor;

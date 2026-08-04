@@ -16,6 +16,7 @@
 #import <Foundation/Foundation.h>
 
 @class DSStoreInfo;
+@class DSStore;
 
 @interface GWVolumeCache : NSObject
 {
@@ -43,6 +44,14 @@
  * exists, or nil if there is no cached record for this directory.
  */
 - (DSStoreInfo *)readInfoForDirectoryPath:(NSString *)dirPath;
+
+/* Read one cache file's Iloc/lclr/cmmt and apply it under the bare name.
+ * Used by readInfoForDirectoryPath: (scoped entries are applied after legacy
+ * bare-name entries so the scoped value wins). */
+- (void)readPerFileEntry:(NSString *)filename
+                bareName:(NSString *)bareName
+               fromStore:(id)store
+                    into:(DSStoreInfo *)info;
 
 /**
  * Write (merge) the view settings from @p info into the cache,

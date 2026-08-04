@@ -261,66 +261,91 @@
   }
 
   /* --- Per-file entries: icon positions (Iloc), label colors (lclr), comments (cmmt) ---
-   * Scoped to this directory: icon positions are written keyed by
-   * "<key>/<filename>", so only entries with that prefix belong here. */
-  NSString *keyPrefix = [key stringByAppendingString:@"/"];
+   * The macOS Finder writes these keyed by BARE filename (verified against
+   * real Finder volume caches).  Caches written by older versions of this app
+   * may additionally carry scoped "<key>/<filename>" entries.  Prefer the
+   * bare-name form (the Mac convention and our new writes); only fall back to
+   * a scoped entry when no bare entry exists for that file. */
+  NSString *keyPrefix = ([key isEqualToString:@"/"])
+                          ? @"/"
+                          : [key stringByAppendingString:@"/"];
   NSArray *allFiles = [store allFilenames];
+
+  NSMutableArray *scopedFiles = [NSMutableArray array];
+  NSMutableArray *bareFiles = [NSMutableArray array];
   for (NSString *filename in allFiles) {
     if ([filename isEqualToString:key]) continue;  /* dir-level entries */
-
-    NSString *bareName = filename;
     if ([filename hasPrefix:keyPrefix]) {
-      bareName = [filename substringFromIndex:[keyPrefix length]];
+      [scopedFiles addObject:filename];
     } else {
-      /* Legacy bare-name entries (from writeIconPositions: before scoping)
-       * only apply when reading the volume root itself, where the key is
-       * "/" and the bare name is the child.  Otherwise skip foreign names. */
-      if ([key isEqualToString:@"/"] == NO && [filename rangeOfString:@"/"].location != NSNotFound)
-        continue;
+      [bareFiles addObject:filename];
     }
+  }
 
-    BOOL hasData = NO;
-    DSStoreIconInfo *ii = nil;
+  /* Pass 1: bare-name entries (Mac convention, authoritative). */
+  for (NSString *filename in bareFiles) {
+    if ([key isEqualToString:@"/"] == NO && [filename rangeOfString:@"/"].location != NSNotFound)
+      continue;
+    [self readPerFileEntry:filename bareName:filename fromStore:store into:info];
+  }
 
-    /* Iloc: icon location */
-    DSStoreEntry *iloc = [store entryForFilename:filename code:@"Iloc"];
-    if (iloc && [[iloc type] isEqualToString:@"blob"]) {
-      NSData *data = (NSData *)[iloc value];
-      if ([data length] >= 8) {
-        const uint8_t *b = (const uint8_t *)[data bytes];
-        int32_t x = (int32_t)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
-        int32_t y = (int32_t)((b[4] << 24) | (b[5] << 16) | (b[6] << 8) | b[7]);
-        if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
-        [ii setPosition:NSMakePoint((CGFloat)x, (CGFloat)y)];
-        [ii setHasPosition:YES];
-        hasData = YES;
-      }
-    }
-
-    /* lclr: label color */
-    DSStoreEntry *lclr = [store entryForFilename:filename code:@"lclr"];
-    if (lclr && [[lclr type] isEqualToString:@"long"]) {
-      if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
-      [ii setLabelColor:(DSStoreLabelColor)[[lclr value] intValue]];
-      [ii setHasLabelColor:YES];
-      hasData = YES;
-    }
-
-    /* cmmt: comments */
-    DSStoreEntry *cmmt = [store entryForFilename:filename code:@"cmmt"];
-    if (cmmt && [[cmmt type] isEqualToString:@"ustr"]) {
-      if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
-      [ii setComments:(NSString *)[cmmt value]];
-      hasData = YES;
-    }
-
-    if (hasData && ii) {
-      [info setIconInfo:ii forFilename:bareName];
+  /* Pass 2: legacy scoped entries - only fill files that got no bare entry. */
+  for (NSString *filename in scopedFiles) {
+    NSString *bareName = [filename substringFromIndex:[keyPrefix length]];
+    if ([info iconInfoForFilename: bareName] == nil) {
+      [self readPerFileEntry:filename bareName:bareName fromStore:store into:info];
     }
   }
 
   [info markAsLoaded];
   return info;
+}
+
+/* Read Iloc/lclr/cmmt for one cache filename and apply to @p info under the
+ * bare name. */
+- (void)readPerFileEntry:(NSString *)filename
+                bareName:(NSString *)bareName
+               fromStore:(DSStore *)store
+                    into:(DSStoreInfo *)info
+{
+  BOOL hasData = NO;
+  DSStoreIconInfo *ii = nil;
+
+  /* Iloc: icon location */
+  DSStoreEntry *iloc = [store entryForFilename:filename code:@"Iloc"];
+  if (iloc && [[iloc type] isEqualToString:@"blob"]) {
+    NSData *data = (NSData *)[iloc value];
+    if ([data length] >= 8) {
+      const uint8_t *b = (const uint8_t *)[data bytes];
+      int32_t x = (int32_t)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
+      int32_t y = (int32_t)((b[4] << 24) | (b[5] << 16) | (b[6] << 8) | b[7]);
+      if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
+      [ii setPosition:NSMakePoint((CGFloat)x, (CGFloat)y)];
+      [ii setHasPosition:YES];
+      hasData = YES;
+    }
+  }
+
+  /* lclr: label color */
+  DSStoreEntry *lclr = [store entryForFilename:filename code:@"lclr"];
+  if (lclr && [[lclr type] isEqualToString:@"long"]) {
+    if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
+    [ii setLabelColor:(DSStoreLabelColor)[[lclr value] intValue]];
+    [ii setHasLabelColor:YES];
+    hasData = YES;
+  }
+
+  /* cmmt: comments */
+  DSStoreEntry *cmmt = [store entryForFilename:filename code:@"cmmt"];
+  if (cmmt && [[cmmt type] isEqualToString:@"ustr"]) {
+    if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
+    [ii setComments:(NSString *)[cmmt value]];
+    hasData = YES;
+  }
+
+  if (hasData && ii) {
+    [info setIconInfo:ii forFilename:bareName];
+  }
 }
 
 - (BOOL)writeInfo:(DSStoreInfo *)info forDirectoryPath:(NSString *)dirPath
@@ -359,6 +384,18 @@
   }
 
   if (!store) return NO;
+
+  /* Merge, don't clobber: a caller may persist a partial DSStoreInfo (icon
+   * positions only, label colors only, ...).  Load the existing cached
+   * record for this directory and fold in any fields the incoming info does
+   * not carry, so window geometry / view settings survive partial writes.
+   * Without this the removeAllEntriesForFilename: below would drop them. */
+  {
+    DSStoreInfo *existing = [self readInfoForDirectoryPath: dirPath];
+    if (existing != nil && existing != info) {
+      [info mergeMissingFieldsFromInfo: existing];
+    }
+  }
 
   /* Remove any existing entries for this key (clean merge) */
   [store removeAllEntriesForFilename:key];
@@ -418,27 +455,59 @@
     if (e) [store setEntry:e];
   }
 
-  if ([info hasListTextSize]) {
-    DSStoreEntry *e = [DSStoreEntry textSizeEntryForFile:key size:[info listTextSize]];
-    if (e) [store setEntry:e];
+  /* Window geometry (bwsp + fwi0) */
+  if ([info hasWindowFrame]) {
+    NSRect dsFrame = [info dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
+    DSStoreEntry *bwsp = [DSStoreEntry browserWindowEntryForFile: key
+                                                   windowBounds: dsFrame
+                                                   sidebarWidth: [info sidebarWidth]];
+    if (bwsp) [store setEntry: bwsp];
+
+    NSString *styleStr = @"icnv";
+    switch ([info viewStyle]) {
+      case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
+      case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
+      case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
+      case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
+      case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
+    }
+    DSStoreEntry *fwi0 = [DSStoreEntry windowGeometryEntryForFile: key
+                                                             rect: dsFrame
+                                                        viewStyle: styleStr];
+    if (fwi0) [store setEntry: fwi0];
   }
 
-  /* Write icon positions for child files.  Key them by "<key>/<filename>" so
-   * they are scoped to this directory (the cache file is shared across all
-   * read-only directories of a volume, so bare filenames would collide) and so
-   * removeRecordForDirectoryPath: / the read side can match them. */
+  /* List view settings (lsvp) - replaces the former lsvt scalar */
+  if ([info hasListTextSize] || [info hasListIconSize] || [info hasSortColumn]
+      || ([info columnWidths] && [[info columnWidths] count] > 0)
+      || ([info columnVisible] && [[info columnVisible] count] > 0)) {
+    DSStoreEntry *e = [DSStoreEntry listViewEntryForFile: key
+                                              sortColumn: ([info hasSortColumn] ? [info sortColumn] : nil)
+                                               ascending: [info sortAscending]
+                                                textSize: ([info hasListTextSize] ? [info listTextSize] : 0)
+                                                iconSize: ([info hasListIconSize] ? [info listIconSize] : 0)
+                                            columnWidths: [info columnWidths]
+                                           columnVisible: [info columnVisible]];
+    if (e) [store setEntry: e];
+  }
+
+  /* Write icon positions for child files, keyed by BARE filename, matching
+   * the macOS Finder convention (verified against real Finder volume caches:
+   * directory window settings are keyed by full path, per-file Iloc entries
+   * by bare filename).  Older caches written by this app may still carry
+   * scoped "<key>/<filename>" entries; the read side prefers the bare form
+   * and falls back to those. */
   NSDictionary *allIcons = [info allIconInfo];
   NSDebugLLog(@"gwspace", @"GWVolumeCache: writing %lu icon entries for %@",
               (unsigned long)[allIcons count], key);
   for (NSString *filename in allIcons) {
     DSStoreIconInfo *ii = [allIcons objectForKey:filename];
-    NSString *scopedName = [key stringByAppendingPathComponent:filename];
     NSDebugLLog(@"gwspace", @"GWVolumeCache:   file='%@' pos=%d lbl=%d",
                 filename, [ii hasPosition], [ii hasLabelColor]);
     if ([ii hasPosition]) {
-      DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:scopedName
-                                                              x:(int)[ii position].x
-                                                              y:(int)[ii position].y];
+      DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:filename
+                                                               x:(int)[ii position].x
+                                                               y:(int)[ii position].y];
       if (e) [store setEntry:e];
     }
     if ([ii comments]) {
@@ -448,7 +517,7 @@
     }
     if ([ii hasLabelColor]) {
       DSStoreEntry *e = [DSStoreEntry labelColorEntryForFile:filename
-                                                       color:(int)[ii labelColor]];
+                                                        color:(int)[ii labelColor]];
       if (e) [store setEntry:e];
     }
   }
@@ -478,13 +547,17 @@
 
   [store removeAllEntriesForFilename:key];
 
-  /* Also remove any child-file entries from the cache that are
-   * icon positions for files in this directory.  We do this by
-   * checking if any filename starts with the key + "/". */
+  /* Also remove any legacy scoped child-file entries ("<key>/<filename>")
+   * written by older versions of this app.  Bare-name entries are NOT removed:
+   * they are volume-global (the Mac convention) and may belong to another
+   * directory.  The root "/" itself is already a "/" - do not build a "//"
+   * prefix. */
   NSArray *allFiles = [store allFilenames];
-  NSString *keyPrefix = [key stringByAppendingString:@"/"];
+  NSString *keyPrefix = ([key isEqualToString:@"/"])
+                          ? @"/"
+                          : [key stringByAppendingString:@"/"];
   for (NSString *fname in allFiles) {
-    if ([fname hasPrefix:keyPrefix]) {
+    if ([fname hasPrefix:keyPrefix] && [fname isEqualToString:key] == NO) {
       [store removeAllEntriesForFilename:fname];
     }
   }
@@ -527,17 +600,16 @@
 
   if (!store) return NO;
 
-  /* Write each icon position as an Iloc entry keyed by "<key>/<filename>" so
-   * entries are scoped to this directory (see writeInfo:forDirectoryPath:). */
+  /* Write each icon position as an Iloc entry keyed by BARE filename,
+   * matching the macOS Finder convention. */
   for (NSDictionary *pos in positions) {
     NSString *name = [pos objectForKey:@"name"];
     NSNumber *xVal = [pos objectForKey:@"x"];
     NSNumber *yVal = [pos objectForKey:@"y"];
     if (name && xVal && yVal) {
-      NSString *scopedName = [key stringByAppendingPathComponent:name];
-      DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:scopedName
-                                                              x:[xVal intValue]
-                                                              y:[yVal intValue]];
+      DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:name
+                                                               x:[xVal intValue]
+                                                               y:[yVal intValue]];
       if (e) [store setEntry:e];
     }
   }

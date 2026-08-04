@@ -285,15 +285,10 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
     }
     
     if (!geometryApplied) {
-      NSDebugLLog(@"gwspace", @"No valid DS_Store geometry, using fallback methods");
-      defEntry = [viewerPrefs objectForKey: @"geometry"];
-      if (defEntry) {
-        [vwrwin setFrameFromString: defEntry];
-      } else {
-        r = NSMakeRect(200, 200, resizeIncrement * 5, 600);
-        [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
-                 display: NO];
-      }
+      NSDebugLLog(@"gwspace", @"No DS_Store geometry, using cascade placement");
+      r = NSMakeRect(200, 200, resizeIncrement * 5, 600);
+      [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
+               display: NO];
     }
     
     r = [vwrwin frame];
@@ -1125,15 +1120,23 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
     // Save view settings to .DS_Store for Mac interoperability
     {
       GWViewSettingsManager *sm = [GWViewSettingsManager managerForDirectoryPath:[baseNode path]];
-      DSStoreInfo *dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path] loadImmediately:NO];
+      /* Reload current settings first so the write reflects any icon
+       * positions the position store persisted since the last load. */
+      DSStoreInfo *dsInfo = [sm readSettings];
+      if (dsInfo == nil) {
+        dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path] loadImmediately:NO];
+      }
       [dsInfo takeValuesFromViewerPrefs:updatedprefs];
       [sm writeSettings:dsInfo];
     }
 
     [baseNode checkWritable];
 
+    /* Window geometry lives in .DS_Store (interoperable), not in the
+     * user-defaults viewerPrefs; the .DS_Store write above already used it. */
     {
       NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+      [updatedprefs removeObjectForKey: @"geometry"];
       [defaults setObject: updatedprefs forKey: defaultsKeyStr];
     }
     

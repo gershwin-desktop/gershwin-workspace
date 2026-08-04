@@ -356,6 +356,112 @@ static uint64_t swapBytes64(uint64_t value) {
     return [[[DSStoreEntry alloc] initWithFilename:filename code:@"lclr" type:@"long" value:colorNumber] autorelease];
 }
 
+// Binary plist entries (bwsp, lsvp, ...) and legacy window geometry (fwi0)
+
++ (DSStoreEntry *)plistEntryForFile:(NSString *)filename code:(NSString *)code dictionary:(NSDictionary *)dictionary {
+    if (!dictionary) return nil;
+
+    NSError *error = nil;
+    NSData *plistData = [NSPropertyListSerialization dataWithPropertyList:dictionary
+                                                                   format:NSPropertyListBinaryFormat_v1_0
+                                                                  options:0
+                                                                    error:&error];
+    if (error || plistData == nil) {
+        NSDebugLLog(@"gwspace", @"DSStoreEntry: failed to encode %@ plist: %@",
+                    code, [error localizedDescription]);
+        return nil;
+    }
+
+    return [[[DSStoreEntry alloc] initWithFilename:filename
+                                              code:code
+                                              type:@"blob"
+                                             value:plistData] autorelease];
+}
+
++ (DSStoreEntry *)browserWindowEntryForFile:(NSString *)filename windowBounds:(NSRect)windowBounds sidebarWidth:(int)sidebarWidth {
+    NSMutableDictionary *settings = [NSMutableDictionary dictionary];
+    [settings setObject: NSStringFromRect(windowBounds) forKey: @"WindowBounds"];
+    if (sidebarWidth > 0) {
+        [settings setObject: [NSNumber numberWithInt: sidebarWidth] forKey: @"SidebarWidth"];
+    }
+    return [self plistEntryForFile: filename code: @"bwsp" dictionary: settings];
+}
+
++ (DSStoreEntry *)windowGeometryEntryForFile:(NSString *)filename rect:(NSRect)rect viewStyle:(NSString *)viewStyle {
+    /* fwi0: 16 bytes: top/left/bottom/right (2-byte big-endian each), then a
+     * 4-byte view-style 4CC, then 4 bytes of flags/unknown. */
+    NSMutableData *data = [NSMutableData dataWithCapacity:16];
+
+    uint16_t top    = swapInt16HostToBig((uint16_t)rect.origin.y);
+    uint16_t left   = swapInt16HostToBig((uint16_t)rect.origin.x);
+    uint16_t bottom = swapInt16HostToBig((uint16_t)(rect.origin.y + rect.size.height));
+    uint16_t right  = swapInt16HostToBig((uint16_t)(rect.origin.x + rect.size.width));
+
+    [data appendBytes:&top length:2];
+    [data appendBytes:&left length:2];
+    [data appendBytes:&bottom length:2];
+    [data appendBytes:&right length:2];
+
+    char style[4] = {'i', 'c', 'n', 'v'};
+    if (viewStyle) {
+        NSData *styleData = [viewStyle dataUsingEncoding:NSASCIIStringEncoding];
+        if ([styleData length] >= 4) {
+            [styleData getBytes:style length:4];
+        }
+    }
+    [data appendBytes:style length:4];
+
+    uint32_t flags = 0;
+    [data appendBytes:&flags length:4];
+
+    return [[[DSStoreEntry alloc] initWithFilename:filename code:@"fwi0" type:@"blob" value:data] autorelease];
+}
+
++ (DSStoreEntry *)listViewEntryForFile:(NSString *)filename sortColumn:(NSString *)sortColumn ascending:(BOOL)ascending textSize:(int)textSize iconSize:(int)iconSize columnWidths:(NSDictionary *)columnWidths columnVisible:(NSDictionary *)columnVisible {
+    NSMutableDictionary *settings = [NSMutableDictionary dictionary];
+
+    if (sortColumn) {
+        [settings setObject: sortColumn forKey: @"sortColumn"];
+        [settings setObject: [NSNumber numberWithBool: ascending] forKey: @"ascending"];
+    }
+    if (textSize > 0) {
+        [settings setObject: [NSNumber numberWithInt: textSize] forKey: @"textSize"];
+    }
+    if (iconSize > 0) {
+        [settings setObject: [NSNumber numberWithInt: iconSize] forKey: @"iconSize"];
+    }
+
+    NSMutableArray *columns = [NSMutableArray array];
+    NSMutableSet *seen = [NSMutableSet set];
+    for (NSString *identifier in columnVisible) {
+        [seen addObject: identifier];
+        NSMutableDictionary *col = [NSMutableDictionary dictionary];
+        [col setObject: identifier forKey: @"identifier"];
+        NSNumber *width = [columnWidths objectForKey: identifier];
+        if (width) {
+            [col setObject: width forKey: @"width"];
+        }
+        [col setObject: [NSNumber numberWithBool: [[columnVisible objectForKey: identifier] boolValue]]
+                forKey: @"visible"];
+        [columns addObject: col];
+    }
+    for (NSString *identifier in columnWidths) {
+        if ([seen containsObject: identifier]) continue;
+        NSMutableDictionary *col = [NSMutableDictionary dictionary];
+        [col setObject: identifier forKey: @"identifier"];
+        [col setObject: [columnWidths objectForKey: identifier] forKey: @"width"];
+        [col setObject: [NSNumber numberWithBool: YES] forKey: @"visible"];
+        [columns addObject: col];
+    }
+    if ([columns count] > 0) {
+        [settings setObject: columns forKey: @"columns"];
+    }
+
+    if ([settings count] == 0) return nil;
+
+    return [self plistEntryForFile: filename code: @"lsvp" dictionary: settings];
+}
+
 // Value extraction methods
 
 - (NSPoint)iconLocation {

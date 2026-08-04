@@ -45,6 +45,19 @@ main(void)
          "takeValuesFromViewerPrefs maps iconspos 'bottom' -> label position");
   }
 
+  /* --- GNUstep saved-frame geometry parsing (regression) ---
+   * [NSWindow stringWithSavedFrame] yields "450 531 516 300 0 0 1920 1058",
+   * which NSRectFromString cannot parse; the migration must accept it. */
+  {
+    DSStoreInfo *info =
+      [[[DSStoreInfo alloc] initWithDirectoryPath: @"/tmp/does-not-exist"] autorelease];
+    [info takeValuesFromViewerPrefs:
+      @{ @"geometry" : @"450 531 516 300 0 0  1920 1058 " }];
+    PASS(info.hasWindowFrame
+         && NSEqualRects(info.windowFrame, NSMakeRect(450, 531, 516, 300)),
+         "takeValuesFromViewerPrefs parses the GNUstep saved-frame string");
+  }
+
   /* --- per-icon Iloc position set/get --- */
   {
     DSStoreInfo *info =
@@ -80,8 +93,13 @@ main(void)
     [fm createDirectoryAtPath: dir attributes: nil];
 
     DSStoreInfo *w = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
-    [w takeValuesFromViewerPrefs: @{ @"viewtype" : @"Icon",
-                                     @"geometry" : NSStringFromRect(NSMakeRect(100, 150, 600, 400)) }];
+    [w takeValuesFromViewerPrefs: @{ @"viewtype" : @"List",
+                                     @"geometry" : NSStringFromRect(NSMakeRect(100, 150, 600, 400)),
+                                     @"hligh_table_col" : @2,   /* dateModified */
+                                     @"list_view_columns" : @{
+                                         @"0" : @{ @"identifier" : @0, @"width" : @220 },
+                                         @"2" : @{ @"identifier" : @2, @"width" : @140 }
+                                     } }];
     DSStoreIconInfo *icon =
       [[[DSStoreIconInfo alloc] initWithFilename: @"doc.txt"] autorelease];
     icon.position = NSMakePoint(80, 160);
@@ -94,12 +112,22 @@ main(void)
 
     DSStoreInfo *r = [DSStoreInfo infoForDirectoryPath: dir];
     PASS(r != nil && r.loaded, "the .DS_Store loads back from disk");
-    PASS(r.hasViewStyle && r.viewStyle == DSStoreViewStyleIcon,
+    PASS(r.hasViewStyle && r.viewStyle == DSStoreViewStyleList,
          "view style survives the on-disk round-trip");
     DSStoreIconInfo *ri = [r iconInfoForFilename: @"doc.txt"];
     PASS(ri != nil && [ri hasPosition]
          && NSEqualPoints([ri position], NSMakePoint(80, 160)),
          "per-icon Iloc position survives the on-disk round-trip");
+    PASS(r.hasWindowFrame
+         && NSEqualRects([r gnustepWindowFrameForScreen: [DSStoreInfo safeMainScreen]],
+                         NSMakeRect(100, 150, 600, 400)),
+         "window geometry (bwsp/fwi0) survives the on-disk round-trip");
+    PASS(r.hasSortColumn
+         && [r.sortColumn isEqualToString: @"dateModified"],
+         "list sort column survives the on-disk round-trip (lsvp)");
+    PASS(r.columnWidths != nil
+         && [[r.columnWidths objectForKey: @"dateModified"] floatValue] == 140.0,
+         "list column widths survive the on-disk round-trip (lsvp)");
 
     [fm removeFileAtPath: dir handler: nil];
   }
@@ -108,7 +136,6 @@ main(void)
   {
     DSStoreInfo *info =
       [[[DSStoreInfo alloc] initWithDirectoryPath: @"/tmp/does-not-exist"] autorelease];
-
     /* Existing (e.g. from the just-read .DS_Store): List + a window frame. */
     [info takeValuesFromViewerPrefs: @{ @"viewtype" : @"List",
                                         @"geometry" : NSStringFromRect(NSMakeRect(10, 20, 500, 300)) }];
@@ -134,6 +161,50 @@ main(void)
                  preservingExisting: NO];
     PASS(info.viewStyle == DSStoreViewStyleIcon,
          "no-preserve: view style IS overwritten (legacy behavior intact)");
+  }
+
+  /* --- mergeMissingFieldsFromInfo: partial writes must not clobber --- */
+  {
+    DSStoreInfo *existing =
+      [[[DSStoreInfo alloc] initWithDirectoryPath: @"/tmp/does-not-exist"] autorelease];
+    [existing takeValuesFromViewerPrefs: @{ @"viewtype" : @"Icon",
+                                            @"geometry" : NSStringFromRect(NSMakeRect(10, 20, 500, 300)),
+                                            @"iconsize" : @48 }];
+    DSStoreIconInfo *ei = [DSStoreIconInfo infoForFilename: @"a.txt"];
+    ei.position = NSMakePoint(30, 40);
+    ei.hasPosition = YES;
+    [existing setIconInfo: ei forFilename: @"a.txt"];
+
+    /* Partial write: only a label color for one file, nothing else set. */
+    DSStoreInfo *partial =
+      [[[DSStoreInfo alloc] initWithDirectoryPath: @"/tmp/does-not-exist"] autorelease];
+    DSStoreIconInfo *pi = [DSStoreIconInfo infoForFilename: @"a.txt"];
+    pi.labelColor = DSStoreLabelColorRed;
+    pi.hasLabelColor = YES;
+    [partial setIconInfo: pi forFilename: @"a.txt"];
+
+    [partial mergeMissingFieldsFromInfo: existing];
+
+    PASS(partial.hasViewStyle && partial.viewStyle == DSStoreViewStyleIcon,
+         "merge: missing view style is filled from existing");
+    PASS(partial.hasWindowFrame
+         && NSEqualRects(partial.windowFrame, NSMakeRect(10, 20, 500, 300)),
+         "merge: missing window frame is filled from existing");
+    PASS(partial.hasIconSize && partial.iconSize == 48,
+         "merge: missing icon size is filled from existing");
+
+    DSStoreIconInfo *m = [partial iconInfoForFilename: @"a.txt"];
+    PASS(m != nil && [m hasLabelColor] && [m labelColor] == DSStoreLabelColorRed,
+         "merge: the partial entry keeps its own label color");
+    PASS(m != nil && [m hasPosition] && NSEqualPoints([m position], NSMakePoint(30, 40)),
+         "merge: existing position is preserved under the same filename");
+
+    /* Merge into an empty receiver copies everything. */
+    DSStoreInfo *empty =
+      [[[DSStoreInfo alloc] initWithDirectoryPath: @"/tmp/does-not-exist"] autorelease];
+    [empty mergeMissingFieldsFromInfo: existing];
+    PASS(empty.hasViewStyle && empty.hasWindowFrame && empty.hasIconSize,
+         "merge: an empty receiver adopts all fields from existing");
   }
 
   [arp release];

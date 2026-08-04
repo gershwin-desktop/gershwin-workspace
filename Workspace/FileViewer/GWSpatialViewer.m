@@ -292,15 +292,10 @@
     }
     
     if (!geometryApplied) {
-      NSDebugLLog(@"gwspace", @"No valid DS_Store geometry, using fallback methods");
-      defEntry = [viewerPrefs objectForKey: @"geometry"];
-      if (defEntry) {
-        [vwrwin setFrameFromString: defEntry];
-      } else {
-        NSRect r = NSMakeRect(200, 200, resizeIncrement * 3, 300);
-        [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
-                 display: NO];
-      }
+      NSDebugLLog(@"gwspace", @"No DS_Store geometry, using cascade placement");
+      NSRect r = NSMakeRect(200, 200, resizeIncrement * 3, 300);
+      [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
+               display: NO];
     }
     
     // Log final window frame for verification
@@ -999,11 +994,36 @@
 
     [baseNode checkWritable];
 
-    /* Persist the non-DS_Store remainder (shelf, last selection, geometry
-     * fallback) to user defaults; view settings go to .DS_Store below.  The
-     * legacy per-folder .gwdir file is no longer written. */
+    // ================================================================
+    // Save view settings to .DS_Store (interoperability, spec §3)
+    //   Tier 1: Try $FOLDER/.DS_Store (if writable, not policy-blocked)
+    //   Tier 2: Fallback to per-volume cache
+    //   Tier 3: Clean cache on success
+    // ================================================================
+    if (_settingsManager) {
+      /* Reload the current settings first so the write reflects any icon
+       * positions the position store persisted since init (e.g. a drag or
+       * Clean Up).  Writing the init-time dsStoreInfo would clobber those
+       * with stale positions. */
+      DSStoreInfo *current = [_settingsManager readSettings];
+      if (current == nil) {
+        current = [DSStoreInfo infoForDirectoryPath: [baseNode path]
+                                    loadImmediately: NO];
+      }
+      ASSIGN(dsStoreInfo, current);
+      [dsStoreInfo takeValuesFromViewerPrefs:updatedprefs];
+
+      // Write via the settings manager
+      [_settingsManager writeSettings:dsStoreInfo];
+    }
+
+    /* Persist the non-DS_Store remainder (shelf, last selection) to user
+     * defaults; window geometry lives in .DS_Store (interoperable), so it is
+     * stripped from the persisted dict (the .DS_Store write above used it). */
     {
       NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+      [updatedprefs removeObjectForKey: @"geometry"];
 
       [defaults setObject: updatedprefs
                    forKey: GWViewerPrefsKey([baseNode path], YES,
@@ -1013,23 +1033,6 @@
        * shared entry so the one-shot read fallback can't later resurrect it. */
       [defaults removeObjectForKey:
         GWViewerLegacySharedPrefsKey([baseNode path], rootViewerKey)];
-    }
-
-    // ================================================================
-    // Save view settings to .DS_Store (interoperability, spec §3)
-    //   Tier 1: Try $FOLDER/.DS_Store (if writable, not policy-blocked)
-    //   Tier 2: Fallback to per-volume cache
-    //   Tier 3: Clean cache on success
-    // ================================================================
-    if (_settingsManager) {
-      // Update DSStoreInfo from the current preferences
-      if (dsStoreInfo == nil) {
-        ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath:[baseNode path]]);
-      }
-      [dsStoreInfo takeValuesFromViewerPrefs:updatedprefs];
-
-      // Write via the settings manager
-      [_settingsManager writeSettings:dsStoreInfo];
     }
 
     ASSIGN (viewerPrefs, [updatedprefs makeImmutableCopyOnFail: NO]);

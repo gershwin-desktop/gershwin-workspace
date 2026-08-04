@@ -194,6 +194,13 @@
  */
 - (void)resetToDefaults;
 
+/* Merge fields that the receiver does not have set (has* == NO / nil) from
+ * @p other.  Used when persisting a partial DSStoreInfo (e.g. icon positions
+ * only, or label colors only) into the per-volume cache so that fields the
+ * caller did not touch (window geometry, view style, ...) are preserved
+ * rather than clobbered. */
+- (void)mergeMissingFieldsFromInfo:(DSStoreInfo *)other;
+
 // Icon position access
 - (DSStoreIconInfo *)iconInfoForFilename:(NSString *)filename;
 - (NSDictionary *)allIconInfo;
@@ -214,6 +221,16 @@
 - (NSPoint)gnustepPositionForDSStorePoint:(NSPoint)dsPoint 
                            viewHeight:(CGFloat)viewHeight 
                            iconHeight:(CGFloat)iconHeight;
+
+/* Inverse of -gnustepWindowFrameForScreen:: express the receiver's GNUstep
+ * window frame as the .DS_Store content-area rect (origin top-left, y is the
+ * top edge measured downward from the top of the screen). */
+- (NSRect)dsStoreWindowFrameForScreen:(NSScreen *)screen;
+
+/* The main screen, or nil when the window server is unavailable (e.g. a
+ * headless test run).  Geometry conversion falls back to a zero-height screen
+ * in that case, which still round-trips because read and write share it. */
++ (NSScreen *)safeMainScreen;
 
 // Sort column conversion (DS_Store column name -> FSNInfoType)
 // Returns -1 if column name not recognized
