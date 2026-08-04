@@ -66,6 +66,7 @@ host_to_be16(uint8_t *bytes, uint16_t value)
 @synthesize finderInfo = _finderInfo;
 @synthesize resourceFork = _resourceFork;
 @synthesize finderComment = _finderComment;
+@synthesize userTagsData = _userTagsData;
 @synthesize forceSidecar = _forceSidecar;
 
 /* =================================================================
@@ -88,6 +89,7 @@ host_to_be16(uint8_t *bytes, uint16_t value)
   DESTROY(_finderInfo);
   DESTROY(_resourceFork);
   DESTROY(_finderComment);
+  DESTROY(_userTagsData);
   [super dealloc];
 }
 
@@ -97,6 +99,7 @@ host_to_be16(uint8_t *bytes, uint16_t value)
   [copy setFinderInfo: _finderInfo];
   [copy setResourceFork: _resourceFork];
   [copy setFinderComment: _finderComment];
+  [copy setUserTagsData: _userTagsData];
   copy.forceSidecar = _forceSidecar;
   return copy;
 }
@@ -222,7 +225,18 @@ host_to_be16(uint8_t *bytes, uint16_t value)
 - (NSInteger)labelNumber
 {
   [self parseIfNeeded];
-  return _parsed.labelNumber;
+  if (_parsed.labelNumber != GSFileLabelNone)
+    return _parsed.labelNumber;
+
+  /* Modern systems store tags only in _kMDItemUserTags and may not set the
+   * legacy fdFlags label bits.  Fall back to the first standard colour tag. */
+  for (NSString *tag in [self userTags])
+    {
+      GSFileLabel label = [GSFileMetadata labelForTagName: tag];
+      if (label != GSFileLabelNone)
+        return label;
+    }
+  return GSFileLabelNone;
 }
 
 /* =================================================================
@@ -345,12 +359,98 @@ host_to_be16(uint8_t *bytes, uint16_t value)
   if (label < 0 || label > 7)
     label = 0;
 
+  /* Capture the old label BEFORE setFinderFlags: recomputes it from the
+   * new flags (it derives labelNumber from the flag bits). */
+  NSString *old = [GSFileMetadata tagNameForLabel: (GSFileLabel)_parsed.labelNumber];
+  NSString *tag = [GSFileMetadata tagNameForLabel: (GSFileLabel)label];
+
   uint16_t flags = [self finderFlags];
   /* Clear the label bits (1-3), then set new value */
   flags &= ~GSFileFinderColorBits;
   flags |= (label << 1);
   [self setFinderFlags: flags];
   _parsed.labelNumber = label;
+
+  /* Keep the _kMDItemUserTags xattr in sync with the label: colour tags are
+   * shown via that attribute, not via .DS_Store.  See Apple File System
+   * Programming Guide:
+   * https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide/FileSystemOverview/FileSystemOverview.html
+   * Replace the standard tag that matches our label, and remove it when the
+   * label is cleared. */
+  NSMutableArray *tags = [[[self userTags] mutableCopy] autorelease];
+  if (tags == nil)
+    tags = [NSMutableArray array];
+  if (old && [tags containsObject: old])
+    [tags removeObject: old];
+  if (tag && ![tags containsObject: tag])
+    [tags addObject: tag];
+
+  [self setUserTags: ([tags count] ? tags : nil)];
+}
+
+/* =================================================================
+ * User tags (_kMDItemUserTags)
+ * ================================================================= */
+
++ (NSString *)tagNameForLabel:(GSFileLabel)label
+{
+  switch (label)
+    {
+      case GSFileLabelGrey:    return @"Gray";
+      case GSFileLabelGreen:   return @"Green";
+      case GSFileLabelPurple:  return @"Purple";
+      case GSFileLabelBlue:    return @"Blue";
+      case GSFileLabelYellow:  return @"Yellow";
+      case GSFileLabelRed:     return @"Red";
+      case GSFileLabelOrange:  return @"Orange";
+      case GSFileLabelNone:
+      default:                 return nil;
+    }
+}
+
++ (GSFileLabel)labelForTagName:(NSString *)tagName
+{
+  if ([tagName isEqualToString: @"Gray"])   return GSFileLabelGrey;
+  if ([tagName isEqualToString: @"Grey"])   return GSFileLabelGrey;
+  if ([tagName isEqualToString: @"Green"])  return GSFileLabelGreen;
+  if ([tagName isEqualToString: @"Purple"]) return GSFileLabelPurple;
+  if ([tagName isEqualToString: @"Blue"])   return GSFileLabelBlue;
+  if ([tagName isEqualToString: @"Yellow"]) return GSFileLabelYellow;
+  if ([tagName isEqualToString: @"Red"])    return GSFileLabelRed;
+  if ([tagName isEqualToString: @"Orange"]) return GSFileLabelOrange;
+  return GSFileLabelNone;
+}
+
+- (NSArray *)userTags
+{
+  NSData *raw = [self userTagsData];
+  if (raw == nil)
+    return nil;
+
+  id value = [NSPropertyListSerialization propertyListWithData: raw
+                                                       options: NSPropertyListImmutable
+                                                        format: NULL
+                                                         error: NULL];
+  if ([value isKindOfClass: [NSArray class]])
+    return (NSArray *)value;
+  return nil;
+}
+
+- (void)setUserTags:(NSArray *)tags
+{
+  if (tags == nil || [tags count] == 0)
+    {
+      [self setUserTagsData: nil];
+      return;
+    }
+  NSError *error = nil;
+  NSData *data = [NSPropertyListSerialization
+                   dataWithPropertyList: tags
+                                 format: NSPropertyListBinaryFormat_v1_0
+                                options: 0
+                                  error: &error];
+  if (error == nil)
+    [self setUserTagsData: data];
 }
 
 /* =================================================================
@@ -507,6 +607,22 @@ static NSMutableDictionary *_metadataCache = nil;
       }
   }
 
+  /* Read user tags (_kMDItemUserTags) via xattr */
+  {
+    const char *cpath = [path fileSystemRepresentation];
+    ssize_t size = gs_getxattr(cpath,
+                                [GSXATTR_USERTAGS UTF8String],
+                                NULL, 0);
+    if (size > 0)
+      {
+        NSMutableData *data = [NSMutableData dataWithLength: size];
+        gs_getxattr(cpath, [GSXATTR_USERTAGS UTF8String],
+                    [data mutableBytes], size);
+        md.userTagsData = data;
+        found = YES;
+      }
+  }
+
   /* If nothing found via xattrs, try sidecar */
   if (!found)
     {
@@ -576,6 +692,22 @@ static NSMutableDictionary *_metadataCache = nil;
         }
     }
 
+  /* Write user tags (_kMDItemUserTags).  Setting tags to nil removes the
+   * attribute entirely so a cleared label does not linger. */
+  if (_userTagsData && [_userTagsData length] > 0)
+    {
+      if (gs_setxattr(cpath, [GSXATTR_USERTAGS UTF8String],
+                       [_userTagsData bytes], [_userTagsData length],
+                       0) != 0)
+        {
+          NSDebugLLog(@"gwspace", @"GSFileMetadata: Could not write user-tags xattr for %@", path);
+        }
+    }
+  else if ([self userTagsData] == nil)
+    {
+      gs_removexattr(cpath, [GSXATTR_USERTAGS UTF8String]);
+    }
+
   /* Remove sidecar file if it exists (we're using xattrs now) */
   NSString *sidecarPath = [[self class] sidecarPathForFilePath: path];
   if ([[NSFileManager defaultManager] fileExistsAtPath: sidecarPath])
@@ -638,6 +770,10 @@ static NSMutableDictionary *_metadataCache = nil;
   if ([ad hasResourceFork])
     self.resourceFork = [ad resourceFork];
 
+  NSData *tags = [ad dataForEntry: GSAppleDoubleUserTags];
+  if (tags && [tags length] > 0)
+    self.userTagsData = tags;
+
   DESTROY(ad);
   return YES;
 }
@@ -655,6 +791,9 @@ static NSMutableDictionary *_metadataCache = nil;
 
   if (_resourceFork && [_resourceFork length] > 0)
     [ad setResourceFork: _resourceFork];
+
+  if (_userTagsData && [_userTagsData length] > 0)
+    [ad setEntry: GSAppleDoubleUserTags data: _userTagsData];
 
   NSData *result = [ad appleDoubleData];
   DESTROY(ad);
@@ -676,6 +815,9 @@ static NSMutableDictionary *_metadataCache = nil;
     md.finderInfo = [ad finderInfo];
   if ([ad hasResourceFork])
     md.resourceFork = [ad resourceFork];
+  NSData *tags = [ad dataForEntry: GSAppleDoubleUserTags];
+  if (tags && [tags length] > 0)
+    md.userTagsData = tags;
 
   DESTROY(ad);
   return md;
@@ -690,7 +832,7 @@ static NSMutableDictionary *_metadataCache = nil;
   if (![self hasCustomIcon])
     return nil;
 
-  if (!_resourceFork || [_resourceFork length] < 256)
+  if (!_resourceFork || [_resourceFork length] < 8)
     return nil;
 
   /*
@@ -762,6 +904,33 @@ static NSMutableDictionary *_metadataCache = nil;
   return nil;
 }
 
+- (void)setCustomIconData:(NSData *)icnsData
+{
+  if (icnsData == nil || [icnsData length] == 0)
+    {
+      [self clearCustomIcon];
+      return;
+    }
+
+  /* customIconData: scans the resource fork for the 'icns' magic, so storing
+   * the raw icns bytes verbatim is sufficient - no resource-map wrapping is
+   * needed for our own round-trip, and real icns containers start with 'icns'
+   * too. */
+  [self setResourceFork: icnsData];
+
+  uint16_t flags = [self finderFlags];
+  flags |= GSFileFinderHasCustomIcon;
+  [self setFinderFlags: flags];
+}
+
+- (void)clearCustomIcon
+{
+  uint16_t flags = [self finderFlags];
+  flags &= ~GSFileFinderHasCustomIcon;
+  [self setFinderFlags: flags];
+  [self setResourceFork: nil];
+}
+
 /* =================================================================
  * Utilities
  * ================================================================= */
@@ -784,9 +953,9 @@ static NSMutableDictionary *_metadataCache = nil;
 + (NSColor *)colorForLabel:(GSFileLabel)label
 {
   /*
-   * Finder label colours from fdFlags encoding:
-   *   0 = none, 1 = grey, 2 = green, 3 = purple,
-   *   4 = blue,  5 = yellow, 6 = red, 7 = orange
+   * Finder label colours from fdFlags / lclr encoding:
+   *   0 = none, 1 = red, 2 = orange, 3 = yellow,
+   *   4 = green, 5 = blue, 6 = purple, 7 = grey
    */
   switch (label)
     {

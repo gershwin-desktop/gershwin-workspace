@@ -1,8 +1,27 @@
-# Where Workspace stores view settings and icon positions
+# Finder metadata interoperability
 
-This document describes the persistence model of the Workspace file manager:
-which type of information is stored where, and how the pieces relate.  The
-goal is interoperability with macOS Finder where possible.
+## Intent
+
+Workspace aims to be **interoperable with Finder** in how it reads and writes
+metadata: a folder opened in Finder after Workspace modified it, and a folder
+opened in Workspace after Finder modified it, must show the same view settings,
+icon positions, labels, and other metadata.
+
+To achieve that, Workspace treats metadata the way the platform itself does:
+
+- **Per-file metadata travels with the object** (xattrs, resource fork).
+- **Folder presentation lives with the folder** (`.DS_Store`).
+- **Local fallback** is used only when the filesystem cannot be modified.
+
+Workspace stores each kind of data **where Finder stores it**, uses **Finder's
+on-disk encodings** (byte offsets, big-endian integers, plist formats, the
+same numeric label ordering), and behaves as a **cooperative editor**: it
+preserves metadata it does not own and never writes a file in a way Finder
+cannot read back.  Where Finder has no native mechanism, Workspace keeps its
+own storage out of the way (GNUstep user defaults for window-level state).
+
+This document describes the resulting persistence model: which type of
+information is stored where, and how the pieces relate.
 
 ## Overview
 
@@ -127,20 +146,44 @@ on-disk child of the directory is ignored.  Writes prune such entries too.
 ## 3. Per-file FinderInfo xattr
 
 Location: extended attribute `user.com.apple.FinderInfo` on each file or
-folder (32 bytes, the macOS FinderInfo record).
+folder (32 bytes, the `FileInfo`/`FolderInfo` finderInfo record).
 
-Holds per-file metadata that should travel with the file (Finder stores it the
-same way, so it interoperates):
+Holds per-file metadata that should travel with the file (stored the same way
+by the system, so it interoperates).  Field offsets follow the HFS+ `FileInfo`
+layout (big-endian):
 
-| Field | FinderInfo offset | Notes |
-| ----- | ----------------- | ----- |
-| Icon position (`fdLocation`) | h at bytes 10-11, v at bytes 12-13 | big-endian int16 |
-| Label color (finder flags `l4-7`) | bytes 8-9 (flags), bits 24-26 | |
-| Custom icon / resource fork | ResourceFork xattr (`user.com.apple.ResourceFork`) | |
+| Field | Offset | Notes |
+| ----- | ------ | ----- |
+| Type code (`fdType`) | 0-3 | FourCharCode |
+| Creator code (`fdCreator`) | 4-7 | FourCharCode |
+| Flags (`fdFlags`) | 8-9 | bit 0 `kIsOnDesk`, bits 1-3 label colour (`kColor` = 0x000E), bit 7 `kHasCustomIcon`, bit 8 `kIsStationery`, bit 9 `kNameLocked`, bit 11 `kIsInvisible`, bit 12 `kIsAlias` |
+| Icon position (`fdLocation`) | v at 10-11, h at 12-13 | big-endian int16; (-1,-1) = none |
+| Extended info / `fdFldr` | 14-31 | carried forward untouched |
 
-`GSFileMetadata` is the reader/writer.  Icon positions are stored here by
-`GWIconPositionStore writeBatch:` (Phase 2/3) alongside the `.DS_Store`
-update.  `(0,0)` and `(-1,-1)` are treated as "no position".
+`GSFileMetadata` is the reader/writer and patches only the fields it owns
+(the setters touch a single 2-byte range), so all other bytes survive a
+write.  Icon positions are stored here by `GWIconPositionStore writeBatch:`
+(Phase 2/3) alongside the `.DS_Store` Iloc update, matching the spec's "write
+both" behaviour.  `(0,0)` and `(-1,-1)` are treated as "no position".
+
+### Labels and tags
+
+- The label colour uses the **same numeric encoding** everywhere: the
+  `fdFlags` `kColor` field (bits 1-3), the `.DS_Store` `lclr` record, and
+  `GSFileLabel` / `DSStoreLabelColor` all agree on 1=Red, 2=Orange, 3=Yellow,
+  4=Green, 5=Blue, 6=Purple, 7=Grey (0=none).  `GSFileLabel` is deliberately
+  identical to `DSStoreLabelColor` so the two storage encodings never
+  disagree.
+- Setting a label writes both the `fdFlags` bits **and** the matching
+  standard tag in `com.apple.metadata:_kMDItemUserTags` (see section 5
+  below).  Reading prefers `fdFlags`; if that is unset it falls back to the
+  first standard colour tag in `_kMDItemUserTags`.
+
+### Custom icons
+
+Setting a custom icon (`setCustomIconData:`) writes the icns bytes into
+`user.com.apple.ResourceFork` and sets the `kHasCustomIcon` flag - the flag
+alone is not a complete custom icon.  `clearCustomIcon` drops both.
 
 ## 4. AppleDouble sidecars (fallback)
 
@@ -155,7 +198,20 @@ create orphan `._Schreibtisch`-style files for folders that do not exist).
 On xattr-capable filesystems, any existing sidecar is removed when metadata is
 written via xattr, so the two never diverge.
 
-## 5. GNUstep user defaults (viewer state)
+## 5. User tags
+
+Location: extended attribute `com.apple.metadata:_kMDItemUserTags` on each
+file - a binary plist array of tag-name strings (e.g. `Red`, `Green`, or
+arbitrary user names).
+
+Tags belong to the **file**, travel with it, and are **never** stored inside
+`.DS_Store`.  On filesystems without native xattrs they are carried in the
+AppleDouble sidecar.  `GSFileMetadata.userTags` / `setUserTags:` are the
+reader/writer; setting a label via `setLabelNumber:` also adds/removes the
+matching standard colour tag, and `labelNumber` falls back to a colour tag
+when the legacy `fdFlags` label bits are unset.
+
+## 6. GNUstep user defaults (viewer state)
 
 Location: user defaults (GNUstep preferences database), keys:
 

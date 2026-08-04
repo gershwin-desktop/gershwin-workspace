@@ -51,6 +51,9 @@ typedef NS_ENUM(uint32_t, GSAppleDoubleEntryID) {
   GSAppleDoubleIconBW        = 8,
   GSAppleDoubleFinderInfo    = 9,
   GSAppleDoubleIconColor     = 10,
+  /* Extended-attribute range used for _kMDItemUserTags on foreign
+   * filesystems (fallback only; the primary store is the xattr). */
+  GSAppleDoubleUserTags      = 0x9001,
 };
 
 /**

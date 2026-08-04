@@ -51,17 +51,24 @@ typedef NS_OPTIONS(uint16_t, GSFileFinderFlags) {
 };
 
 /*
- * Standard Finder label colours (0-7).
+ * Standard label colours (0-7), matching the on-disk encodings: the
+ * FinderInfo fdFlags kColor field (bits 1-3) and the .DS_Store lclr
+ * record both use 1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Blue, 6=Purple,
+ * 7=Grey (see TN1150 "Finder Info":
+ * https://developer.apple.com/library/archive/technotes/tn/tn1150.html,
+ * and the Finder Interface Reference for the value-to-colour mapping).
+ * GSFileLabel is deliberately identical to DSStoreLabelColor so the two
+ * storage encodings never disagree.
  */
 typedef NS_ENUM(NSInteger, GSFileLabel) {
   GSFileLabelNone    = 0,
-  GSFileLabelGrey    = 1,
-  GSFileLabelGreen   = 2,
-  GSFileLabelPurple  = 3,
-  GSFileLabelBlue    = 4,
-  GSFileLabelYellow  = 5,
-  GSFileLabelRed     = 6,
-  GSFileLabelOrange  = 7,
+  GSFileLabelRed     = 1,
+  GSFileLabelOrange  = 2,
+  GSFileLabelYellow  = 3,
+  GSFileLabelGreen   = 4,
+  GSFileLabelBlue    = 5,
+  GSFileLabelPurple  = 6,
+  GSFileLabelGrey    = 7,
 };
 
 /*
@@ -70,6 +77,7 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 #define GSXATTR_FINDERINFO       @"user.com.apple.FinderInfo"
 #define GSXATTR_RESOURCEFORK     @"user.com.apple.ResourceFork"
 #define GSXATTR_FINDERCOMMENT    @"user.com.apple.metadata:kMDItemFinderComment"
+#define GSXATTR_USERTAGS         @"user.com.apple.metadata:_kMDItemUserTags"
 #define GSXATTR_TEXTENCODING     @"user.com.apple.TextEncoding"
 #define GSXATTR_QUARANTINE       @"user.com.apple.quarantine"
 
@@ -89,6 +97,7 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
   NSData            *_finderInfo;       // 32 bytes, raw from xattr
   NSData            *_resourceFork;     // Resource fork data
   NSString          *_finderComment;    // Spotlight comment
+  NSData            *_userTagsData;     // raw _kMDItemUserTags plist
 
   /* Cached parsed properties (invalidated when _finderInfo changes) */
   struct {
@@ -130,13 +139,13 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 /** Raw Finder flags (fdFlags). */
 @property uint16_t finderFlags;
 
-/** File is locked (name locked in Finder). */
+/** File is locked (name locked). */
 @property (getter=isLocked) BOOL locked;
 
 /** File has a custom icon (check resource fork for icns data). */
 @property (getter=hasCustomIcon) BOOL customIcon;
 
-/** File is invisible in the Finder. */
+/** File is invisible. */
 @property (getter=isInvisible) BOOL invisible;
 
 /** File is an alias/symlink in Mac terms. */
@@ -159,6 +168,26 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  * Note: labelNumber 0 maps to GSFileLabelNone.
  */
 @property NSInteger labelNumber;
+
+/**
+ * User tags (_kMDItemUserTags), as an array of tag-name strings.
+ * Tags live in com.apple.metadata:_kMDItemUserTags (a binary plist array of
+ * strings); tags are never stored inside .DS_Store.  See Apple File System
+ * Programming Guide:
+ * https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide/FileSystemOverview/FileSystemOverview.html
+ * nil / empty means no tags.
+ */
+@property (copy) NSArray *userTags;
+
+/** Raw _kMDItemUserTags xattr value (binary plist), or nil when unset. */
+@property (copy) NSData *userTagsData;
+
+/** The standard tag name for a label (e.g. GSFileLabelRed -> "Red"),
+ *  or nil for GSFileLabelNone. */
++ (NSString *)tagNameForLabel:(GSFileLabel)label;
+
+/** The label for a standard tag name, or GSFileLabelNone. */
++ (GSFileLabel)labelForTagName:(NSString *)tagName;
 
 /* =================================================================
  * Read / Write
@@ -226,6 +255,20 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  * Returns the raw icns data if found, nil otherwise.
  */
 - (NSData *)customIconData;
+
+/**
+ * Set a custom icon from raw icns data.  Embeds the icns data in the
+ * resource fork and sets the kHasCustomIcon FinderInfo flag - per TN1150 a
+ * custom icon is not complete without the icon image in the fork:
+ * https://developer.apple.com/library/archive/technotes/tn/tn1150.html
+ */
+- (void)setCustomIconData:(NSData *)icnsData;
+
+/**
+ * Remove a custom icon: clear the kHasCustomIcon flag and drop the
+ * resource fork.
+ */
+- (void)clearCustomIcon;
 
 /**
  * Extract custom icon as an NSImage for display.

@@ -52,6 +52,7 @@
 #import "NetworkFSNode.h"
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
+#import "GSFileMetadata.h"
 #import "GWViewerPrefs.h"
 
 #define DEFAULT_INCR 150
@@ -1672,12 +1673,24 @@ constrainMinCoordinate:(CGFloat)proposedMin
       if ([node isEqual: baseNode]) continue;
 
       NSString *nodePath = [node path];
-      NSString *filename = [node name];
+      NSString *filename = [node lastPathComponent];  /* on-disk name */
 
       if ([nodePath hasPrefix: basePath])
         {
           filename = [nodePath substringFromIndex: [basePath length]];
         }
+
+      /* Also write the per-file FinderInfo label + _kMDItemUserTags tag, as
+       * the canonical setLabelForNodes: path does. */
+      {
+        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: nodePath];
+        if (md == nil)
+          {
+            md = [[[GSFileMetadata alloc] init] autorelease];
+          }
+        [md setLabelNumber: (GSFileLabel)labelColor];
+        [md writeToFileAtPath: nodePath error: NULL];
+      }
 
       DSStoreIconInfo *info = [dsInfo iconInfoForFilename: filename];
       if (!info)

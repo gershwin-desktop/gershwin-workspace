@@ -4750,16 +4750,17 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 {
   NSMenu *labelMenu = [[NSMenu alloc] initWithTitle: @""];
 
-  /* Label names in order of GSFileLabel enum (0-7) */
+  /* Label names in the shared GSFileLabel / DSStoreLabelColor order:
+   * 0=None, 1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Blue, 6=Purple, 7=Grey. */
   NSString *labelNames[] = {
     NSLocalizedString(@"None", @""),
-    NSLocalizedString(@"Grey", @""),
-    NSLocalizedString(@"Green", @""),
-    NSLocalizedString(@"Purple", @""),
-    NSLocalizedString(@"Blue", @""),
-    NSLocalizedString(@"Yellow", @""),
     NSLocalizedString(@"Red", @""),
     NSLocalizedString(@"Orange", @""),
+    NSLocalizedString(@"Yellow", @""),
+    NSLocalizedString(@"Green", @""),
+    NSLocalizedString(@"Blue", @""),
+    NSLocalizedString(@"Purple", @""),
+    NSLocalizedString(@"Grey", @""),
   };
 
   for (NSInteger i = 0; i < 8; i++)
@@ -4785,20 +4786,14 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
  */
 /**
  * Convert GSFileLabel (from xattr FinderInfo) to DSStoreLabelColor
- * (from .DS_Store lclr entries).  The two enums have different orderings.
+ * (from .DS_Store lclr entries).  Both enums use the same encoding
+ * (1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Blue, 6=Purple, 7=Grey), so the
+ * conversion is the identity; kept as a named function so the shared
+ * encoding is explicit at the call site.
  */
 static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 {
-  switch (gsLabel) {
-    case GSFileLabelNone:   return DSStoreLabelColorNone;
-    case GSFileLabelGrey:   return DSStoreLabelColorGrey;
-    case GSFileLabelGreen:  return DSStoreLabelColorGreen;
-    case GSFileLabelPurple: return DSStoreLabelColorPurple;
-    case GSFileLabelBlue:   return DSStoreLabelColorBlue;
-    case GSFileLabelYellow: return DSStoreLabelColorYellow;
-    case GSFileLabelRed:    return DSStoreLabelColorRed;
-    case GSFileLabelOrange: return DSStoreLabelColorOrange;
-  }
+  return (DSStoreLabelColor)gsLabel;
 }
 
 - (void)setLabelForNodes:(id)sender
