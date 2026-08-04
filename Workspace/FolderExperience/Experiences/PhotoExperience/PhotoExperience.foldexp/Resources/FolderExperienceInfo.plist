@@ -1,0 +1,4 @@
+{
+  Name = "Photos";
+  Description = "Shows photo folders with a slideshow";
+}
