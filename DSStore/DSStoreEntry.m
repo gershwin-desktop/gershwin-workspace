@@ -358,6 +358,40 @@ static uint64_t swapBytes64(uint64_t value) {
 
 // Binary plist entries (bwsp, lsvp, ...) and legacy window geometry (fwi0)
 
+/* Return the raw blob bytes of @p entry when it is a blob, else nil. */
+static NSData *blobValue(DSStoreEntry *entry)
+{
+  if (!entry) return nil;
+  if (![[entry type] isEqualToString: @"blob"]) return nil;
+  if (![[entry value] isKindOfClass: [NSData class]]) return nil;
+  return (NSData *)[entry value];
+}
+
+/* Copy @p src into a mutable blob, then overwrite the [@p at, @p at+len) range
+ * with @p patch.  Returns a new autoreleased entry of the given code/type. */
+
+/* Binary-plist entries: carry forward any keys not owned by Workspace. */
+static DSStoreEntry *patchedPlistEntry(NSString *filename, NSString *code,
+                                       DSStoreEntry *existing,
+                                       NSDictionary *owned)
+{
+  NSMutableDictionary *merged = [NSMutableDictionary dictionary];
+  NSData *src = blobValue(existing);
+  if (src)
+    {
+      NSDictionary *parsed =
+        [NSPropertyListSerialization propertyListWithData: src
+                                                  options: NSPropertyListImmutable
+                                                   format: NULL
+                                                    error: NULL];
+      if ([parsed isKindOfClass: [NSDictionary class]])
+        [merged addEntriesFromDictionary: parsed];
+    }
+  for (NSString *k in owned)
+    [merged setObject: [owned objectForKey: k] forKey: k];
+  return [DSStoreEntry plistEntryForFile: filename code: code dictionary: merged];
+}
+
 + (DSStoreEntry *)plistEntryForFile:(NSString *)filename code:(NSString *)code dictionary:(NSDictionary *)dictionary {
     if (!dictionary) return nil;
 
@@ -460,6 +494,156 @@ static uint64_t swapBytes64(uint64_t value) {
     if ([settings count] == 0) return nil;
 
     return [self plistEntryForFile: filename code: @"lsvp" dictionary: settings];
+}
+
+// === Preserving variants: modify only the fields Workspace owns ===
+
++ (DSStoreEntry *)iconLocationEntryForFile:(NSString *)filename x:(int)x y:(int)y preserving:(DSStoreEntry *)existing
+{
+    NSData *src = blobValue(existing);
+    if (src == nil || [src length] < 8)
+      return [self iconLocationEntryForFile: filename x: x y: y];
+
+    NSMutableData *patch = [NSMutableData dataWithCapacity: 8];
+    uint32_t xBig = swapInt32HostToBig(x);
+    uint32_t yBig = swapInt32HostToBig(y);
+    [patch appendBytes: &xBig length: 4];
+    [patch appendBytes: &yBig length: 4];
+
+    /* Keep every byte after offset 8 (the trailing 0xFF../flags tail). */
+    NSMutableData *data = [src mutableCopy];
+    if ([data length] < 16) [data setLength: 16];
+    [data replaceBytesInRange: NSMakeRange(0, 8) withBytes: [patch bytes]];
+
+    return [[[DSStoreEntry alloc] initWithFilename: filename
+                                              code: @"Iloc"
+                                              type: @"blob"
+                                             value: data] autorelease];
+}
+
++ (DSStoreEntry *)backgroundColorEntryForFile:(NSString *)filename red:(int)red green:(int)green blue:(int)blue preserving:(DSStoreEntry *)existing
+{
+    NSData *src = blobValue(existing);
+    if (src == nil || [src length] < 12)
+      return [self backgroundColorEntryForFile: filename red: red green: green blue: blue];
+
+    uint16_t redBig   = swapInt16HostToBig(red);
+    uint16_t greenBig = swapInt16HostToBig(green);
+    uint16_t blueBig  = swapInt16HostToBig(blue);
+
+    /* Patch only the RGB triplet (bytes 4-10); the "ClrB" tag, the reserved
+     * byte and any trailing bytes are carried forward untouched. */
+    NSMutableData *data = [src mutableCopy];
+    [data replaceBytesInRange: NSMakeRange(4, 2) withBytes: &redBig length: 2];
+    [data replaceBytesInRange: NSMakeRange(6, 2) withBytes: &greenBig length: 2];
+    [data replaceBytesInRange: NSMakeRange(8, 2) withBytes: &blueBig length: 2];
+
+    return [[[DSStoreEntry alloc] initWithFilename: filename
+                                              code: @"BKGD"
+                                              type: @"blob"
+                                             value: data] autorelease];
+}
+
++ (DSStoreEntry *)iconSizeEntryForFile:(NSString *)filename size:(int)size preserving:(DSStoreEntry *)existing
+{
+    NSData *src = blobValue(existing);
+    if (src == nil || [src length] < 14)
+      return [self iconSizeEntryForFile: filename size: size];
+
+    /* icvo: "icvo"(0-3) flags(4-11) size(12-13) arrangement(14-17) ...
+     * Only the icon size is Workspace-owned; everything else (including the
+     * arrangement 4CC and any future trailing fields) is carried forward. */
+    uint16_t sizeBig = swapInt16HostToBig((uint16_t)size);
+    NSMutableData *data = [src mutableCopy];
+    [data replaceBytesInRange: NSMakeRange(12, 2) withBytes: &sizeBig length: 2];
+
+    return [[[DSStoreEntry alloc] initWithFilename: filename
+                                              code: @"icvo"
+                                              type: @"blob"
+                                             value: data] autorelease];
+}
+
++ (DSStoreEntry *)windowGeometryEntryForFile:(NSString *)filename rect:(NSRect)rect viewStyle:(NSString *)viewStyle preserving:(DSStoreEntry *)existing
+{
+    NSData *src = blobValue(existing);
+    if (src == nil || [src length] < 12)
+      return [self windowGeometryEntryForFile: filename rect: rect viewStyle: viewStyle];
+
+    /* fwi0: top/left/bottom/right(0-7) style4CC(8-11) flags(12-15).
+     * Workspace owns the bounds and the view style; the trailing flags/unknown
+     * bytes are carried forward. */
+    uint16_t top    = swapInt16HostToBig((uint16_t)rect.origin.y);
+    uint16_t left   = swapInt16HostToBig((uint16_t)rect.origin.x);
+    uint16_t bottom = swapInt16HostToBig((uint16_t)(rect.origin.y + rect.size.height));
+    uint16_t right  = swapInt16HostToBig((uint16_t)(rect.origin.x + rect.size.width));
+
+    char style[4] = {'i', 'c', 'n', 'v'};
+    if (viewStyle) {
+        NSData *styleData = [viewStyle dataUsingEncoding:NSASCIIStringEncoding];
+        if ([styleData length] >= 4)
+            [styleData getBytes: style length: 4];
+    }
+
+    NSMutableData *data = [src mutableCopy];
+    if ([data length] < 16) [data setLength: 16];
+    [data replaceBytesInRange: NSMakeRange(0, 2) withBytes: &top length: 2];
+    [data replaceBytesInRange: NSMakeRange(2, 2) withBytes: &left length: 2];
+    [data replaceBytesInRange: NSMakeRange(4, 2) withBytes: &bottom length: 2];
+    [data replaceBytesInRange: NSMakeRange(6, 2) withBytes: &right length: 2];
+    [data replaceBytesInRange: NSMakeRange(8, 4) withBytes: style length: 4];
+
+    return [[[DSStoreEntry alloc] initWithFilename: filename
+                                              code: @"fwi0"
+                                              type: @"blob"
+                                             value: data] autorelease];
+}
+
++ (DSStoreEntry *)browserWindowEntryForFile:(NSString *)filename windowBounds:(NSRect)windowBounds sidebarWidth:(int)sidebarWidth preserving:(DSStoreEntry *)existing
+{
+    NSMutableDictionary *owned = [NSMutableDictionary dictionary];
+    [owned setObject: NSStringFromRect(windowBounds) forKey: @"WindowBounds"];
+    if (sidebarWidth > 0)
+      [owned setObject: [NSNumber numberWithInt: sidebarWidth] forKey: @"SidebarWidth"];
+    return patchedPlistEntry(filename, @"bwsp", existing, owned);
+}
+
++ (DSStoreEntry *)listViewEntryForFile:(NSString *)filename sortColumn:(NSString *)sortColumn ascending:(BOOL)ascending textSize:(int)textSize iconSize:(int)iconSize columnWidths:(NSDictionary *)columnWidths columnVisible:(NSDictionary *)columnVisible preserving:(DSStoreEntry *)existing
+{
+    NSMutableDictionary *owned = [NSMutableDictionary dictionary];
+    if (sortColumn) {
+        [owned setObject: sortColumn forKey: @"sortColumn"];
+        [owned setObject: [NSNumber numberWithBool: ascending] forKey: @"ascending"];
+    }
+    if (textSize > 0) [owned setObject: [NSNumber numberWithInt: textSize] forKey: @"textSize"];
+    if (iconSize > 0) [owned setObject: [NSNumber numberWithInt: iconSize] forKey: @"iconSize"];
+
+    /* Rebuild the columns array from Workspace-owned width/visibility data
+     * (same shape the plain factory writes); this is Workspace-owned because
+     * the values it encodes came from the caller, not from Finder. */
+    NSMutableArray *columns = [NSMutableArray array];
+    NSMutableSet *seen = [NSMutableSet set];
+    for (NSString *identifier in columnVisible) {
+        [seen addObject: identifier];
+        NSMutableDictionary *col = [NSMutableDictionary dictionary];
+        [col setObject: identifier forKey: @"identifier"];
+        NSNumber *width = [columnWidths objectForKey: identifier];
+        if (width) [col setObject: width forKey: @"width"];
+        [col setObject: [NSNumber numberWithBool: [[columnVisible objectForKey: identifier] boolValue]]
+                forKey: @"visible"];
+        [columns addObject: col];
+    }
+    for (NSString *identifier in columnWidths) {
+        if ([seen containsObject: identifier]) continue;
+        NSMutableDictionary *col = [NSMutableDictionary dictionary];
+        [col setObject: identifier forKey: @"identifier"];
+        [col setObject: [columnWidths objectForKey: identifier] forKey: @"width"];
+        [col setObject: [NSNumber numberWithBool: YES] forKey: @"visible"];
+        [columns addObject: col];
+    }
+    if ([columns count] > 0)
+        [owned setObject: columns forKey: @"columns"];
+
+    return patchedPlistEntry(filename, @"lsvp", existing, owned);
 }
 
 // Value extraction methods

@@ -25,3 +25,13 @@ t_GWViewSettingsManager_OBJC_FILES += ../../Workspace/FileViewer/DSStoreInfo.m \
                             ../../DSStore/DSBuddyAllocator.m \
                             ../../DSStore/SimpleColor.m
 t_GWViewSettingsManager_TOOL_LIBS += -lgnustep-gui
+
+# t_DSStorePreserve links the DSStore back-end as separate objects so it can
+# seed files with unknown/partial records and verify they survive a write
+# cycle.
+t_DSStorePreserve_OBJC_FILES += ../../DSStore/DSStore.m \
+                            ../../DSStore/DSStoreCodecs.m \
+                            ../../DSStore/DSStoreEntry.m \
+                            ../../DSStore/DSBuddyAllocator.m \
+                            ../../DSStore/SimpleColor.m
+t_DSStorePreserve_TOOL_LIBS += -lgnustep-gui

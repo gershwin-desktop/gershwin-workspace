@@ -1185,9 +1185,12 @@
              toStore:(DSStore *)store
 {
     if ([ii hasPosition]) {
-        DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:filename
-                                                                x:(int)[ii position].x
-                                                                y:(int)[ii position].y];
+        /* Patch the existing Iloc so Finder's trailing bytes are preserved. */
+        DSStoreEntry *old = [store entryForFilename: filename code: @"Iloc"];
+        DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile: filename
+                                                                x: (int)[ii position].x
+                                                                y: (int)[ii position].y
+                                                    preserving: old];
         if (e) [store setEntry:e];
     }
     if ([ii comments]) {
@@ -1250,9 +1253,13 @@
         if (e) [store setEntry: e];
     }
 
-    /* Icon size */
+    /* Icon size - patch the existing icvo if present, preserving unknown
+     * fields (arrangement, flags, future trailing bytes). */
     if ([info hasIconSize] && [info iconSize] > 0 && [info iconSize] <= 512) {
-        DSStoreEntry *e = [DSStoreEntry iconSizeEntryForFile: key size: [info iconSize]];
+        DSStoreEntry *existing = [store entryForFilename: key code: @"icvo"];
+        DSStoreEntry *e = [DSStoreEntry iconSizeEntryForFile: key
+                                                        size: [info iconSize]
+                                                  preserving: existing];
         if (e) [store setEntry: e];
     }
 
@@ -1277,14 +1284,16 @@
         if (e) [store setEntry: e];
     }
 
-    /* Background color */
+    /* Background color - patch existing BKGD, preserving tag/reserved bytes */
     if ([info backgroundType] == DSStoreBackgroundColor && [info backgroundColor]) {
         CGFloat r, g, b, a;
         [[info backgroundColor] getRed: &r green: &g blue: &b alpha: &a];
+        DSStoreEntry *existing = [store entryForFilename: key code: @"BKGD"];
         DSStoreEntry *e = [DSStoreEntry backgroundColorEntryForFile: key
                                                                 red: (int)(r * 65535.0)
                                                               green: (int)(g * 65535.0)
-                                                               blue: (int)(b * 65535.0)];
+                                                               blue: (int)(b * 65535.0)
+                                                          preserving: existing];
         if (e) [store setEntry: e];
     }
 
@@ -1301,12 +1310,15 @@
         if (e) [store setEntry: e];
     }
 
-    /* Window geometry (bwsp + fwi0) */
+    /* Window geometry (bwsp + fwi0) - patch existing records so unknown plist
+     * keys / trailing bytes written by Finder are carried forward. */
     if ([info hasWindowFrame]) {
         NSRect dsFrame = [info dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
+        DSStoreEntry *oldBwsp = [store entryForFilename: key code: @"bwsp"];
         DSStoreEntry *bwsp = [DSStoreEntry browserWindowEntryForFile: key
                                                        windowBounds: dsFrame
-                                                       sidebarWidth: [info sidebarWidth]];
+                                                       sidebarWidth: [info sidebarWidth]
+                                                         preserving: oldBwsp];
         if (bwsp) [store setEntry: bwsp];
 
         NSString *styleStr = @"icnv";
@@ -1317,23 +1329,28 @@
             case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
             case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
         }
+        DSStoreEntry *oldFwi0 = [store entryForFilename: key code: @"fwi0"];
         DSStoreEntry *fwi0 = [DSStoreEntry windowGeometryEntryForFile: key
                                                                  rect: dsFrame
-                                                            viewStyle: styleStr];
+                                                            viewStyle: styleStr
+                                                          preserving: oldFwi0];
         if (fwi0) [store setEntry: fwi0];
     }
 
-    /* List view settings (lsvp) - replaces the former lsvt/GRP0 scalars */
+    /* List view settings (lsvp) - patch existing, carrying forward unknown
+     * plist keys. */
     if ([info hasListTextSize] || [info hasListIconSize] || [info hasSortColumn]
         || ([[info columnWidths] count] > 0)
         || ([[info columnVisible] count] > 0)) {
+        DSStoreEntry *oldLsvp = [store entryForFilename: key code: @"lsvp"];
         DSStoreEntry *e = [DSStoreEntry listViewEntryForFile: key
                                                   sortColumn: ([info hasSortColumn] ? [info sortColumn] : nil)
                                                    ascending: [info sortAscending]
                                                     textSize: ([info hasListTextSize] ? [info listTextSize] : 0)
                                                     iconSize: ([info hasListIconSize] ? [info listIconSize] : 0)
                                                 columnWidths: [info columnWidths]
-                                               columnVisible: [info columnVisible]];
+                                               columnVisible: [info columnVisible]
+                                                  preserving: oldLsvp];
         if (e) [store setEntry: e];
     }
 

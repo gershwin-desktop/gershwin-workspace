@@ -65,6 +65,19 @@
 + (DSStoreEntry *)windowGeometryEntryForFile:(NSString *)filename rect:(NSRect)rect viewStyle:(NSString *)viewStyle;
 + (DSStoreEntry *)listViewEntryForFile:(NSString *)filename sortColumn:(NSString *)sortColumn ascending:(BOOL)ascending textSize:(int)textSize iconSize:(int)iconSize columnWidths:(NSDictionary *)columnWidths columnVisible:(NSDictionary *)columnVisible;
 
+// Preserving variants: like the plain factories, but when @p existing is a
+// non-nil entry for the same code, only the fields Workspace owns are
+// modified and every other byte/key is carried forward unchanged.  This is
+// what makes Workspace a cooperative editor of .DS_Store rather than its
+// owner: unknown fields in partially-understood records (icvo, fwi0, bwsp,
+// lsvp, BKGD, Iloc) must survive a save cycle.
++ (DSStoreEntry *)iconLocationEntryForFile:(NSString *)filename x:(int)x y:(int)y preserving:(DSStoreEntry *)existing;
++ (DSStoreEntry *)backgroundColorEntryForFile:(NSString *)filename red:(int)red green:(int)green blue:(int)blue preserving:(DSStoreEntry *)existing;
++ (DSStoreEntry *)iconSizeEntryForFile:(NSString *)filename size:(int)size preserving:(DSStoreEntry *)existing;
++ (DSStoreEntry *)windowGeometryEntryForFile:(NSString *)filename rect:(NSRect)rect viewStyle:(NSString *)viewStyle preserving:(DSStoreEntry *)existing;
++ (DSStoreEntry *)browserWindowEntryForFile:(NSString *)filename windowBounds:(NSRect)windowBounds sidebarWidth:(int)sidebarWidth preserving:(DSStoreEntry *)existing;
++ (DSStoreEntry *)listViewEntryForFile:(NSString *)filename sortColumn:(NSString *)sortColumn ascending:(BOOL)ascending textSize:(int)textSize iconSize:(int)iconSize columnWidths:(NSDictionary *)columnWidths columnVisible:(NSDictionary *)columnVisible preserving:(DSStoreEntry *)existing;
+
 // Value extraction methods
 - (NSPoint)iconLocation;
 - (SimpleColor *)backgroundColor;
