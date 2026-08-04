@@ -424,7 +424,7 @@ static Workspace *gworkspace = nil;
   menuItem = [menu addItemWithTitle:_(@"Use Stacks") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
-  menuItem = [menu addItemWithTitle:_(@"View Behavior") action:NULL keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Paradigm") action:NULL keyEquivalent:@""];
   subMenu = AUTORELEASE ([NSMenu new]);
   [menu setSubmenu: subMenu forItem: menuItem];
   

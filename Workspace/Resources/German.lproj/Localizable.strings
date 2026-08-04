@@ -184,7 +184,7 @@
 
 "Column Width" = "Spaltenbreite";
 
-"Compress" = "Packen";
+"Compress" = "Komprimieren";
 
 "Compressing..." = "Packe...";
 
@@ -931,9 +931,9 @@
 
 "Videos" = "Filme";
 
-"View" = "Ansicht";
+"View" = "Darstellung";
 
-"View Behavior" = "Ansichtsverhalten";
+"Paradigm" = "Paradigma";
 
 "Viewer" = "Betrachter";
 
