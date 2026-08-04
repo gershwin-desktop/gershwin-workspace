@@ -256,6 +256,95 @@ main(void)
     [fm removeFileAtPath: cachePath handler: nil];
   }
 
+  /* --- cooperative editor: the volume-cache write must not discard unknown
+   * record types for the directory key (forward compatibility) --- */
+  {
+    NSString *cachePath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                            [NSString stringWithFormat: @"t_gwvsm_preserve_%d.DS_Store",
+                                        (int)getpid()]];
+    [fm removeFileAtPath: cachePath handler: nil];
+
+    /* Seed an unknown 4CC record for the "/" key. */
+    NSData *unk = [NSData dataWithBytes: "\xCA\xFE\xBA\xBE" length: 4];
+    {
+      DSStore *store = [DSStore createStoreAtPath: cachePath withEntries: nil];
+      [store load];
+      [store setEntry: [[[DSStoreEntry alloc] initWithFilename: @"/"
+                                                          code: @"zzzz"
+                                                          type: @"blob"
+                                                         value: unk] autorelease]];
+      [store save];
+    }
+
+    /* A normal Workspace write (icon position for /usr) must preserve it. */
+    GWVolumeCache *vc =
+      [[[GWVolumeCache alloc] initWithCacheFilePath: cachePath] autorelease];
+    DSStoreInfo *w = [DSStoreInfo infoForDirectoryPath: @"/" loadImmediately: NO];
+    DSStoreIconInfo *wi = [DSStoreIconInfo infoForFilename: @"usr"];
+    wi.position = NSMakePoint(300, 150);
+    wi.hasPosition = YES;
+    [w setIconInfo: wi forFilename: @"usr"];
+    PASS([vc writeInfo: w forDirectoryPath: @"/"],
+         "volume cache: a Workspace write succeeds");
+
+    DSStore *chk = [DSStore storeWithPath: cachePath];
+    [chk load];
+    DSStoreEntry *unkE = [chk entryForFilename: @"/" code: @"zzzz"];
+    PASS(unkE != nil && [[unkE value] isEqual: unk],
+         "volume cache: unknown record type under the key survives the write");
+
+    [fm removeFileAtPath: cachePath handler: nil];
+  }
+
+  /* --- concurrent writers: a foreign change to a field Workspace does not
+   * touch survives a Workspace write through the facade (merge strategy) --- */
+  {
+    /* Simulate: Finder writes a window-geometry record + an unknown record
+     * into the folder .DS_Store; Workspace then writes only a new icon
+     * position.  Both Finder's records must survive. */
+    [fm createFileAtPath: [dir stringByAppendingPathComponent: @"a.txt"]
+                contents: [NSData data] attributes: nil];
+    [fm removeFileAtPath: [dir stringByAppendingPathComponent: @".DS_Store"] handler: nil];
+    NSData *unk = [NSData dataWithBytes: "\x01\x02\x03\x04\x05" length: 5];
+    {
+      DSStore *store = [DSStore createStoreAtPath:
+                         [dir stringByAppendingPathComponent: @".DS_Store"]
+                                     withEntries: nil];
+      [store load];
+      [store setEntry: [[[DSStoreEntry alloc] initWithFilename: @"."
+                                                          code: @"zzzz"
+                                                          type: @"blob"
+                                                         value: unk] autorelease]];
+      [store setEntry: [DSStoreEntry viewStyleEntryForFile: @"." style: @"clmv"]];
+      [store save];
+    }
+
+    /* Workspace writes an icon position for a.txt via the facade. */
+    GWViewSettingsManager *sm =
+      [[[GWViewSettingsManager alloc] initWithDirectoryPath: dir] autorelease];
+    DSStoreInfo *info = [sm readSettings];
+    DSStoreIconInfo *ii = [DSStoreIconInfo infoForFilename: @"a.txt"];
+    ii.position = NSMakePoint(100, 50);
+    ii.hasPosition = YES;
+    [info setIconInfo: ii forFilename: @"a.txt"];
+    PASS([sm writeSettings: info],
+         "concurrent: Workspace write through the facade succeeds");
+
+    /* Both Finder's records + Workspace's new position must be present. */
+    DSStore *chk = [DSStore storeWithPath:
+                     [dir stringByAppendingPathComponent: @".DS_Store"]];
+    [chk load];
+    DSStoreEntry *unkE = [chk entryForFilename: @"." code: @"zzzz"];
+    PASS(unkE != nil && [[unkE value] isEqual: unk],
+         "concurrent: Finder's unknown record survives the facade write");
+    DSStoreEntry *vstl = [chk entryForFilename: @"." code: @"vstl"];
+    PASS(vstl != nil && [[vstl value] isEqualToString: @"clmv"],
+         "concurrent: Finder's view style survives the facade write");
+    DSStoreEntry *iloc = [chk entryForFilename: @"a.txt" code: @"Iloc"];
+    PASS(iloc != nil && (int)[iloc iconLocation].x == 100,
+         "concurrent: Workspace's new icon position is present");
+  }
+
   [fm removeFileAtPath: dir handler: nil];
   [arp release];
   return 0;
