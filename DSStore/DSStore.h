@@ -126,6 +126,10 @@ extern "C" {
 - (void)setEntry:(DSStoreEntry *)entry;
 - (void)removeEntryForFilename:(NSString *)filename code:(NSString *)code;
 - (void)removeAllEntriesForFilename:(NSString *)filename;
+/* Remove every entry for @p filename whose code is in @p codes, keeping all
+ * other codes (unknown or not owned by the caller).  Used for a cooperative
+ * merge where only the caller's known records are replaced. */
+- (void)removeEntriesForFilename:(NSString *)filename codes:(NSSet *)codes;
 - (NSArray *)allFilenames;
 - (NSArray *)allCodesForFilename:(NSString *)filename;
 

@@ -1233,6 +1233,17 @@
     }
 }
 
++ (NSSet *)ownedDirectoryCodes
+{
+    /* The codes writeStoreEntriesForInfo: emits for a directory key.  Any
+     * other 4CC under the same key (written by Finder) is not owned and must
+     * survive a merge write. */
+    return [NSSet setWithObjects:
+              @"vstl", @"icvo", @"iarr", @"lblp", @"icsp",
+              @"BKGD", @"fwsw", @"bwsp", @"fwi0", @"lsvp",
+              nil];
+}
+
 + (void)writeStoreEntriesForInfo:(DSStoreInfo *)info
                              key:(NSString *)key
                          toStore:(DSStore *)store

@@ -370,8 +370,11 @@
     }
   }
 
-  /* Remove any existing entries for this key (clean merge) */
-  [store removeAllEntriesForFilename:key];
+  /* Remove the directory key's OWNED records (cooperative merge).  Only the
+   * 4CC codes Workspace writes are dropped; any unknown record type under the
+   * key that Finder wrote is preserved and carried forward. */
+  [store removeEntriesForFilename: key
+                            codes: [DSStoreInfo ownedDirectoryCodes]];
 
   NSDebugLLog(@"gwspace", @"GWVolumeCache: writing for %@ (key=%@, cache=%@)",
               dirPath, key, _cacheFilePath);

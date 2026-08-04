@@ -467,6 +467,47 @@ main(void)
     [fm removeFileAtPath: dir handler: nil];
   }
 
+  /* --- 11. integration: a directory-level unknown record (under ".") survives
+   * a saveToPath: that changes a different directory field --- */
+  {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                      [NSString stringWithFormat: @"t_preserve_dirunk_%d", (int)getpid()]];
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [fm createFileAtPath: [dir stringByAppendingPathComponent: @"a.txt"]
+                contents: [NSData data] attributes: nil];
+
+    NSString *dsPath = [dir stringByAppendingPathComponent: @".DS_Store"];
+    NSData *unk = [NSData dataWithBytes: "\x11\x22\x33\x44\x55\x66" length: 6];
+
+    /* Seed: unknown directory-level record + a view style. */
+    {
+      DSStore *store = [DSStore createStoreAtPath: dsPath withEntries: nil];
+      [store load];
+      [store setEntry: [[[DSStoreEntry alloc] initWithFilename: @"."
+                                                          code: @"zzzz"
+                                                          type: @"blob"
+                                                         value: unk] autorelease]];
+      [store setEntry: [DSStoreEntry viewStyleEntryForFile: @"." style: @"icnv"]];
+      [store save];
+    }
+
+    /* Change only the icon size through DSStoreInfo. */
+    DSStoreInfo *info = [DSStoreInfo infoForDirectoryPath: dir];
+    info.iconSize = 96;
+    info.hasIconSize = YES;
+    PASS([info saveToPath: dsPath], "dir-unknown: saveToPath succeeds");
+
+    DSStore *chk = [DSStore storeWithPath: dsPath];
+    [chk load];
+    DSStoreEntry *unkE = [chk entryForFilename: @"." code: @"zzzz"];
+    PASS(unkE != nil && [[unkE value] isEqual: unk],
+         "dir-unknown: unknown directory-level record survives saveToPath:");
+
+    [fm removeFileAtPath: dir handler: nil];
+  }
+
   [arp release];
   return 0;
 }

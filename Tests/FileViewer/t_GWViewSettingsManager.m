@@ -216,6 +216,46 @@ main(void)
     [fm removeFileAtPath: cachePath handler: nil];
   }
 
+  /* --- cooperative editor: the volume-cache write must not discard unknown
+   * record types for the directory key (forward compatibility) --- */
+  {
+    NSString *cachePath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                            [NSString stringWithFormat: @"t_gwvsm_preserve_%d.DS_Store",
+                                        (int)getpid()]];
+    [fm removeFileAtPath: cachePath handler: nil];
+
+    /* Seed an unknown 4CC record for the "/" key. */
+    NSData *unk = [NSData dataWithBytes: "\xCA\xFE\xBA\xBE" length: 4];
+    {
+      DSStore *store = [DSStore createStoreAtPath: cachePath withEntries: nil];
+      [store load];
+      [store setEntry: [[[DSStoreEntry alloc] initWithFilename: @"/"
+                                                          code: @"zzzz"
+                                                          type: @"blob"
+                                                         value: unk] autorelease]];
+      [store save];
+    }
+
+    /* A normal Workspace write (icon position for /usr) must preserve it. */
+    GWVolumeCache *vc =
+      [[[GWVolumeCache alloc] initWithCacheFilePath: cachePath] autorelease];
+    DSStoreInfo *w = [DSStoreInfo infoForDirectoryPath: @"/" loadImmediately: NO];
+    DSStoreIconInfo *wi = [DSStoreIconInfo infoForFilename: @"usr"];
+    wi.position = NSMakePoint(300, 150);
+    wi.hasPosition = YES;
+    [w setIconInfo: wi forFilename: @"usr"];
+    PASS([vc writeInfo: w forDirectoryPath: @"/"],
+         "volume cache: a Workspace write succeeds");
+
+    DSStore *chk = [DSStore storeWithPath: cachePath];
+    [chk load];
+    DSStoreEntry *unkE = [chk entryForFilename: @"/" code: @"zzzz"];
+    PASS(unkE != nil && [[unkE value] isEqual: unk],
+         "volume cache: unknown record type under the key survives the write");
+
+    [fm removeFileAtPath: cachePath handler: nil];
+  }
+
   [fm removeFileAtPath: dir handler: nil];
   [arp release];
   return 0;

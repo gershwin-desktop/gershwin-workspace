@@ -257,6 +257,11 @@
                              key:(NSString *)key
                          toStore:(DSStore *)store;
 
+/* The directory-level 4CC codes Workspace owns and may replace when writing
+ * under a given key.  Used to drop only the caller's records (not unknown
+ * Finder codes) before a cooperative merge write. */
++ (NSSet *)ownedDirectoryCodes;
+
 // Coordinate conversion utilities for .DS_Store interoperability
 - (NSRect)gnustepWindowFrameForScreen:(NSScreen *)screen;
 - (NSPoint)gnustepPositionForDSStorePoint:(NSPoint)dsPoint 

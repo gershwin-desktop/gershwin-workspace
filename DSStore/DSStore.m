@@ -1211,6 +1211,22 @@ static uint32_t swapBytes32(uint32_t x) {
     }
 }
 
+- (void)removeEntriesForFilename:(NSString *)filename codes:(NSSet *)codes {
+    NSMutableArray *toRemove = [NSMutableArray array];
+    
+    for (DSStoreEntry *entry in _entries) {
+        if ([[entry filename] isEqualToString:filename]
+            && [codes containsObject: [entry code]]) {
+            [toRemove addObject:entry];
+        }
+    }
+    
+    for (DSStoreEntry *entry in toRemove) {
+        [_entries removeObject:entry];
+        _dirty = YES;
+    }
+}
+
 - (NSArray *)allFilenames {
     NSMutableSet *filenames = [NSMutableSet set];
     

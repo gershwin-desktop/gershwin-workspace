@@ -255,8 +255,12 @@ Workspace owns and carry every other byte or plist key forward unchanged:
 
 `writeStoreEntriesForInfo:` (used by both `DSStoreInfo saveToPath:` and
 `GWVolumeCache writeInfo:`) looks up the existing entry and passes it to the
-`preserving:` factory, so unknown fields survive every write cycle.  Covered by
-`Tests/FileViewer/t_DSStorePreserve.m`.
+`preserving:` factory, so unknown fields survive every write cycle.  The
+volume-cache write additionally drops only Workspace's own directory-level
+codes (via `removeEntriesForFilename:codes:` with `ownedDirectoryCodes`)
+instead of removing every record under the key, so unknown record types
+written by Finder for the directory survive too.  Covered by
+`Tests/FileViewer/t_DSStorePreserve.m` and `t_GWViewSettingsManager.m`.
 
 ### Never normalize, never downgrade
 
