@@ -119,7 +119,6 @@ static AVFSMount *sharedInstance = nil;
     }
     [whichTask release];
   } @catch (NSException *e) {
-    NSDebugLLog(@"gwspace", @"AVFSMount: Exception searching for %@: %@", toolName, e);
     [whichTask release];
   }
   
@@ -161,7 +160,6 @@ static AVFSMount *sharedInstance = nil;
                                                       encoding:NSUTF8StringEncoding 
                                                          error:&readError];
   if (!mountsContent) {
-    NSDebugLLog(@"gwspace", @"AVFSMount: Could not read /proc/mounts: %@", readError);
     return NO;
   }
   
@@ -182,14 +180,12 @@ static AVFSMount *sharedInstance = nil;
 {
   /* Check if already running */
   if ([self isAvfsDaemonRunning]) {
-    NSDebugLLog(@"gwspace", @"AVFSMount: AVFS daemon already running at %@", avfsBasePath);
     return YES;
   }
   
   /* Check if avfsd is available */
   NSString *avfsdPath = [self findToolInPath:@"avfsd"];
   if (!avfsdPath) {
-    NSDebugLLog(@"gwspace", @"AVFSMount: avfsd not found in PATH");
     return NO;
   }
   
@@ -203,17 +199,13 @@ static AVFSMount *sharedInstance = nil;
        withIntermediateDirectories:YES 
                         attributes:nil 
                              error:&error]) {
-      NSDebugLLog(@"gwspace", @"AVFSMount: Failed to create AVFS base directory: %@", error);
       return NO;
     }
-    NSDebugLLog(@"gwspace", @"AVFSMount: Created AVFS base directory at %@", avfsBasePath);
   } else if (!isDir) {
-    NSDebugLLog(@"gwspace", @"AVFSMount: %@ exists but is not a directory", avfsBasePath);
     return NO;
   }
   
   /* Start the avfsd daemon */
-  NSDebugLLog(@"gwspace", @"AVFSMount: Starting AVFS daemon at %@", avfsBasePath);
   
   NSTask *avfsTask = [[NSTask alloc] init];
   [avfsTask setLaunchPath:avfsdPath];
@@ -236,7 +228,6 @@ static AVFSMount *sharedInstance = nil;
       waitCount++;
       
       if ([fm fileExistsAtPath:avfsstatPath]) {
-        NSDebugLLog(@"gwspace", @"AVFSMount: AVFS daemon started successfully");
         avfsDaemonRunning = YES;
         
         /* Enable symlink rewriting for better compatibility */
@@ -249,18 +240,10 @@ static AVFSMount *sharedInstance = nil;
     }
     
     /* Daemon didn't start in time */
-    NSData *errData = [[errPipe fileHandleForReading] availableData];
-    NSString *errString = @"";
-    if (errData && [errData length] > 0) {
-      errString = [[[NSString alloc] initWithData:errData encoding:NSUTF8StringEncoding] autorelease];
-    }
-    
-    NSDebugLLog(@"gwspace", @"AVFSMount: Failed to start AVFS daemon: %@", errString);
     [avfsTask release];
     return NO;
     
   } @catch (NSException *exception) {
-    NSDebugLLog(@"gwspace", @"AVFSMount: Exception starting daemon: %@", exception);
     [avfsTask release];
     return NO;
   }
@@ -269,7 +252,6 @@ static AVFSMount *sharedInstance = nil;
 - (BOOL)stopAvfsDaemon
 {
   if (![self isAvfsDaemonRunning]) {
-    NSDebugLLog(@"gwspace", @"AVFSMount: AVFS daemon not running");
     return YES;
   }
   
@@ -287,13 +269,11 @@ static AVFSMount *sharedInstance = nil;
       [unmountTask waitUntilExit];
       
       if ([unmountTask terminationStatus] == 0) {
-        NSDebugLLog(@"gwspace", @"AVFSMount: AVFS daemon stopped successfully");
         avfsDaemonRunning = NO;
         [unmountTask release];
         return YES;
       }
     } @catch (NSException *e) {
-      NSDebugLLog(@"gwspace", @"AVFSMount: Exception stopping daemon: %@", e);
     }
     [unmountTask release];
   }
@@ -311,18 +291,15 @@ static AVFSMount *sharedInstance = nil;
       [unmountTask waitUntilExit];
       
       if ([unmountTask terminationStatus] == 0) {
-        NSDebugLLog(@"gwspace", @"AVFSMount: AVFS daemon stopped via umountavfs");
         avfsDaemonRunning = NO;
         [unmountTask release];
         return YES;
       }
     } @catch (NSException *e) {
-      NSDebugLLog(@"gwspace", @"AVFSMount: Exception with umountavfs: %@", e);
     }
     [unmountTask release];
   }
   
-  NSDebugLLog(@"gwspace", @"AVFSMount: Failed to stop AVFS daemon");
   return NO;
 }
 
@@ -502,7 +479,6 @@ static AVFSMount *sharedInstance = nil;
   /* Verify the virtual path is accessible */
   BOOL isDir = NO;
   if ([fm fileExistsAtPath:virtualPath isDirectory:&isDir]) {
-    NSDebugLLog(@"gwspace", @"AVFSMount: Virtual path accessible: %@", virtualPath);
     return [AVFSMountResult successWithPath:virtualPath];
   }
   
@@ -510,7 +486,6 @@ static AVFSMount *sharedInstance = nil;
   usleep(200000); /* 200ms */
   
   if ([fm fileExistsAtPath:virtualPath isDirectory:&isDir]) {
-    NSDebugLLog(@"gwspace", @"AVFSMount: Virtual path accessible after delay: %@", virtualPath);
     return [AVFSMountResult successWithPath:virtualPath];
   }
   
@@ -518,18 +493,15 @@ static AVFSMount *sharedInstance = nil;
   NSError *listError = nil;
   NSArray *contents = [fm contentsOfDirectoryAtPath:virtualPath error:&listError];
   if (contents) {
-    NSDebugLLog(@"gwspace", @"AVFSMount: Virtual path accessible (contents listed): %@", virtualPath);
     return [AVFSMountResult successWithPath:virtualPath];
   }
   
   /* Check if it's a single-file decompression (not an archive) */
   if ([self fileTypeForExtension:[[path pathExtension] lowercaseString]] == AVFSFileTypeCompressed) {
     /* For compressed files like .gz, AVFS may return a single decompressed file */
-    NSDebugLLog(@"gwspace", @"AVFSMount: Compressed file, virtual path: %@", virtualPath);
     return [AVFSMountResult successWithPath:virtualPath];
   }
   
-  NSDebugLLog(@"gwspace", @"AVFSMount: Could not access virtual path: %@, error: %@", virtualPath, listError);
   return [AVFSMountResult failureWithError:
     [NSString stringWithFormat:@"Could not access archive: %@", 
       listError ? [listError localizedDescription] : @"Unknown error"]];

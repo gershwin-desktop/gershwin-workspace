@@ -193,8 +193,6 @@
 
 - (void)startWithConfirmation
 {
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Starting write operation for ISO: %@", _isoPath);
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Target device: %@", _devicePath);
   
   _state = ISOWriteStateValidating;
   
@@ -202,26 +200,20 @@
   NSFileManager *fm = [NSFileManager defaultManager];
   NSDictionary *attrs = [fm fileAttributesAtPath:_isoPath traverseLink:YES];
   if (!attrs) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: ERROR - Cannot read ISO file attributes");
     [self failWithError:@"Cannot read ISO file."];
     return;
   }
   _isoSize = [attrs fileSize];
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: ISO size: %llu bytes (%@)", _isoSize, [[self class] sizeDescription:_isoSize]);
   
   /* Get device info */
   _deviceInfo = [[BlockDeviceInfo infoForDevicePath:_devicePath] retain];
   if (!_deviceInfo || !_deviceInfo.isValid) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: ERROR - Cannot determine device information");
     [self failWithError:@"Cannot determine device information."];
     return;
   }
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Device info - size: %@, partitions: %lu", 
-        [_deviceInfo sizeDescription], (unsigned long)[[_deviceInfo mountedPartitions] count]);
   
   /* Check ISO fits */
   if (_isoSize > _deviceInfo.size) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: ERROR - ISO too large for device (%llu > %llu)", _isoSize, _deviceInfo.size);
     [self failWithError:[NSString stringWithFormat:
                          @"The ISO file (%@) is larger than the target device (%@).",
                          [[self class] sizeDescription:_isoSize],
@@ -232,23 +224,19 @@
   /* Safety check */
   NSString *safetyError = [_deviceInfo safetyCheckForWriting];
   if (safetyError) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: ERROR - Safety check failed: %@", safetyError);
     [self failWithError:safetyError];
     return;
   }
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Safety checks passed");
   
   _state = ISOWriteStateConfirming;
   
   /* Show confirmation dialog */
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Showing confirmation dialog to user");
   DeviceEraseConfirmation *confirmation = [DeviceEraseConfirmation confirmationForISOWriteWithISOPath:_isoPath
                                                                                              deviceInfo:_deviceInfo
                                                                                                 isoSize:_isoSize];
   NSInteger result = [confirmation runModal];
   
   if (result != NSModalResponseOK) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: User cancelled at confirmation dialog");
     _state = ISOWriteStateCancelled;
     if ([_delegate respondsToSelector:@selector(isoWriteOperationWasCancelled:)]) {
       [_delegate isoWriteOperationWasCancelled:self];
@@ -256,7 +244,6 @@
     return;
   }
   
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: User confirmed - proceeding with unmount and write");
   /* User confirmed - proceed with unmount and write */
   [self performUnmountAndWrite];
 }
@@ -323,7 +310,6 @@
         [_progressWindow close];
         DESTROY(_progressWindow);
       } @catch (NSException *e) {
-        NSDebugLLog(@"gwspace", @"ISOWriteOperation: Exception closing progress window: %@", e);
       }
     }
     
@@ -334,14 +320,12 @@
         NSLocalizedString(@"OK", @""),
         nil, nil, error ? error : @"Unknown error");
     } @catch (NSException *e) {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Exception showing alert: %@", e);
     }
     
     if ([_delegate respondsToSelector:@selector(isoWriteOperation:didFailWithError:)]) {
       @try {
         [_delegate isoWriteOperation:self didFailWithError:error];
       } @catch (NSException *e) {
-        NSDebugLLog(@"gwspace", @"ISOWriteOperation: Exception calling delegate: %@", e);
       }
     }
   });
@@ -349,7 +333,6 @@
 
 - (void)performUnmountAndWrite
 {
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Beginning unmount and write sequence");
   _state = ISOWriteStateUnmounting;
   
   /* Update status */
@@ -360,18 +343,14 @@
   [self showProgressWindow];
   
   /* Unmount all partitions on the device */
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Unmounting all partitions on device");
   BOOL unmountSuccess = [self unmountAllPartitions];
   
   if (!unmountSuccess) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: ERROR - Failed to unmount partitions");
     [self failWithError:@"Failed to unmount all partitions on the device. Some may be in use."];
     return;
   }
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: All partitions successfully unmounted");
   
   /* Start writing in background thread */
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Starting write thread");
   dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
     [self writeThread];
   });
@@ -420,7 +399,6 @@
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Write thread started");
   _state = ISOWriteStateWriting;
   _bytesWritten = 0;
   _startTime = [[NSDate date] retain];
@@ -449,7 +427,6 @@
         helperPath = [[NSString stringWithFormat:@"%@/Tools/isowrite-helper", 
                        NSHomeDirectory()] stringByExpandingTildeInPath];
         if (![[NSFileManager defaultManager] fileExistsAtPath:helperPath]) {
-          NSDebugLLog(@"gwspace", @"ISOWriteOperation: ERROR - isowrite-helper not found in any expected location");
           NSString *errorMsg = @"Could not find isowrite-helper tool. Please reinstall Workspace.";
           dispatch_async(dispatch_get_main_queue(), ^{
             [self failWithError:errorMsg];
@@ -462,7 +439,6 @@
   }
   
   if (!helperPath) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: ERROR - helperPath is nil after search");
     NSString *errorMsg = @"Internal error: helper path is nil";
     dispatch_async(dispatch_get_main_queue(), ^{
       [self failWithError:errorMsg];
@@ -471,11 +447,9 @@
     return;
   }
   
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Using helper tool at: %@", helperPath);
   
   /* Find sudo (may be in different locations on different OS) */
   NSString *sudoPath = [GWUnmountHelper findSudoPath];
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Launching helper tool with %@ -A -E", sudoPath);
   
   /* sudo strips LD_LIBRARY_PATH for security, so we need to wrap the helper
    * invocation to preserve the library path. Use bash -c to set it. */
@@ -488,7 +462,6 @@
   NSString *helperCommand = [NSString stringWithFormat:@"LD_LIBRARY_PATH=%@ '%@' '%@' '%@'",
                              ldPath, helperPath, _isoPath, _devicePath];
   
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Helper command: %@", helperCommand);
   
   NSTask *task = [[NSTask alloc] init];
   [task setLaunchPath:sudoPath];
@@ -499,7 +472,6 @@
   NSPipe *errorPipe = [[NSPipe pipe] retain];
   
   if (!outputPipe || !errorPipe) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: ERROR - Failed to create pipes");
     NSString *errorMsg = @"Failed to create communication pipes for write operation";
     dispatch_async(dispatch_get_main_queue(), ^{
       [self failWithError:errorMsg];
@@ -517,7 +489,6 @@
   NSFileHandle *errorHandle = [[errorPipe fileHandleForReading] retain];
   
   if (!errorHandle) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: ERROR - Failed to get error pipe handle");
     NSString *errorMsg = @"Failed to create pipe for monitoring write progress";
     dispatch_async(dispatch_get_main_queue(), ^{
       [self failWithError:errorMsg];
@@ -534,15 +505,12 @@
   volatile BOOL taskLaunched = NO;
   
   @try {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: About to launch task...");
     
     /* Get the file descriptor BEFORE launching task */
     int fd = [errorHandle fileDescriptor];
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Will monitor file descriptor %d", fd);
     
     [task launch];
     taskLaunched = YES;
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Task launched successfully");
     
     /* DO NOT ACCESS TASK OBJECT AGAIN - it can cause crashes */
     /* Just monitor the pipe until it closes */
@@ -571,7 +539,6 @@
       
       if (selectResult < 0) {
         if (errno == EINTR) continue; /* Interrupted, retry */
-        NSDebugLLog(@"gwspace", @"ISOWriteOperation: select() error: %s", strerror(errno));
         break;
       }
       
@@ -586,7 +553,6 @@
         if (!data || [data length] == 0) {
           /* Empty read might mean EOF - wait a bit to confirm */
           if (++consecutiveEmptyReads > 3) {
-            NSDebugLLog(@"gwspace", @"ISOWriteOperation: Pipe closed (EOF detected)");
             break;
           }
           usleep(50000); /* Wait 50ms */
@@ -594,7 +560,6 @@
         }
         consecutiveEmptyReads = 0; /* Reset on successful read */
       } @catch (NSException *readEx) {
-        NSDebugLLog(@"gwspace", @"ISOWriteOperation: Exception reading from pipe: %@", readEx);
         break;
       }
       
@@ -605,7 +570,6 @@
         for (NSString *line in lines) {
           if ([line length] == 0) continue;
           
-          NSDebugLLog(@"gwspace", @"isowrite-helper: %@", line);
           
           /* Parse progress updates: "PROGRESS: 45.2% (1234567 / 2700000 bytes)" */
           if ([line hasPrefix:@"PROGRESS:"]) {
@@ -632,11 +596,9 @@
       usleep(100000); /* Check every 100ms */
     }
     
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Pipe monitoring loop exited");
     
     /* DO NOT access task object - causes crashes. Just wait a moment for process to finish */
     if (taskLaunched) {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Waiting for task process to complete...");
       /* Give the process time to exit cleanly */
       int waitCount = 0;
       while (waitCount < 50) { /* Wait up to 5 seconds */
@@ -646,19 +608,15 @@
         /* Check if we got an error message - if so, stop waiting */
         if (errorMessage) break;
       }
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Wait period complete");
     }
     
     if (_cancelled) {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Write was cancelled");
       success = NO;
     } else if (errorMessage) {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Error detected: %@", errorMessage);
       success = NO;
     } else {
       /* No error message means success */
       _bytesWritten = _isoSize; /* Ensure we show 100% */
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Write appears successful");
     }
     
     /* Read any remaining output - pipe might still have buffered data */
@@ -668,16 +626,13 @@
         NSString *output = [[NSString alloc] initWithData:remainingData 
                                                   encoding:NSUTF8StringEncoding];
         if (output) {
-          NSDebugLLog(@"gwspace", @"isowrite-helper final output: %@", output);
           [output release];
         }
       }
     } @catch (NSException *readException) {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Exception reading final output: %@", readException);
     }
   }
   @catch (NSException *exception) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Exception launching helper: %@", exception);
     success = NO;
     if (!errorMessage) {
       errorMessage = [[NSString stringWithFormat:@"Failed to launch helper tool: %@", 
@@ -686,7 +641,6 @@
   }
   @finally {
     /* Clean up retained objects to prevent leaks */
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Cleaning up task resources...");
     
     DESTROY(errorHandle);
     DESTROY(errorPipe);
@@ -694,14 +648,11 @@
     
     /* Just release task - don't access it at all to avoid crashes */
     if (task) {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Releasing task object");
       DESTROY(task);
     }
     
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Resource cleanup complete");
   }
   
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Write operation completed. Success: %@", success ? @"YES" : @"NO");
   
   /* Stop progress timer */
   dispatch_sync(dispatch_get_main_queue(), ^{
@@ -709,13 +660,11 @@
   });
   
   if (_cancelled) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Write was cancelled by user");
     _state = ISOWriteStateCancelled;
     dispatch_async(dispatch_get_main_queue(), ^{
       [self writeWasCancelled];
     });
   } else if (!success) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Write failed");
     NSString *errorMsg = errorMessage ? errorMessage : @"Error writing to device.";
     dispatch_async(dispatch_get_main_queue(), ^{
       [self failWithError:errorMsg];
@@ -723,16 +672,13 @@
     DESTROY(errorMessage);
   } else {
     /* Trigger partition table rescan before verification/completion */
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Triggering partition table rescan");
     [self rescanPartitionTable];
     
     /* Optionally verify */
     if (_verifyAfterWrite) {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Starting verification");
       [self performVerification];
     } else {
       _state = ISOWriteStateCompleted;
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Write completed successfully");
       dispatch_async(dispatch_get_main_queue(), ^{
         [self writeDidComplete];
       });
@@ -753,7 +699,6 @@
    * 4. Wait for automount (same as ISO write completion)
    * 5. Eject disc after successful burn (optional)
    */
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Executing blockdev --rereadpt %@", _devicePath);
   
   NSString *sudoPath = [GWUnmountHelper findSudoPath];
   NSTask *task = [[NSTask alloc] init];
@@ -767,24 +712,19 @@
     [task waitUntilExit];
     int status = [task terminationStatus];
     if (status == 0) {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Partition table rescan successful");
     } else {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Partition table rescan returned status %d (may be normal)", status);
     }
   } @catch (NSException *e) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Partition rescan failed: %@", e);
   } @finally {
     DESTROY(task);
   }
   
   /* Give udev/systemd time to process the new partition table */
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Waiting for udev to process new partition table...");
   usleep(1000000); /* Wait 1 second */
 }
 
 - (void)performVerification
 {
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Beginning verification");
   _state = ISOWriteStateVerifying;
   
   dispatch_sync(dispatch_get_main_queue(), ^{
@@ -792,20 +732,16 @@
   });
   
   /* Verify by reading first 10MB, middle 10MB, and last 10MB for balance of speed vs thoroughness */
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Opening files for verification");
   NSFileHandle *isoHandle = [NSFileHandle fileHandleForReadingAtPath:_isoPath];
   int devFd = open([_devicePath UTF8String], O_RDONLY | O_DIRECT);
   
   if (!isoHandle || devFd < 0) {
     if (devFd < 0 && errno == EINVAL) {
       /* O_DIRECT not supported, try without it */
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: O_DIRECT not supported, retrying without it");
       devFd = open([_devicePath UTF8String], O_RDONLY);
     }
     
     if (!isoHandle || devFd < 0) {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: WARNING - Cannot open files for verification (isoHandle=%p, devFd=%d, errno=%d)", 
-            isoHandle, devFd, errno);
       _state = ISOWriteStateCompleted;
       dispatch_async(dispatch_get_main_queue(), ^{
         [self writeDidComplete];
@@ -814,14 +750,12 @@
       return;
     }
   }
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Files opened for verification");
   
   /* Allocate aligned buffer for direct I/O */
   size_t verifyChunkSize = 10 * 1024 * 1024;  /* 10 MB chunks */
   void *devBuffer = NULL;
   posix_memalign(&devBuffer, 4096, verifyChunkSize);
   if (!devBuffer) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: ERROR - Failed to allocate verification buffer");
     close(devFd);
     [isoHandle closeFile];
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -835,7 +769,6 @@
   
   /* Verify first 10MB */
   [self updateVerificationProgress:10.0 status:@"Verifying beginning of image..."];
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Verifying first 10MB");
   NSData *isoFirst = [isoHandle readDataOfLength:verifyChunkSize];
   ssize_t readBytes = read(devFd, devBuffer, verifyChunkSize);
   NSData *devFirst = [NSData dataWithBytes:devBuffer length:readBytes];
@@ -843,16 +776,13 @@
   if (![isoFirst isEqualToData:devFirst]) {
     allMatch = NO;
     failureLocation = @"beginning";
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: First 10MB verification: MISMATCH");
   } else {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: First 10MB verification: MATCH");
   }
   
   /* Verify middle 10MB */
   if (allMatch && _isoSize > verifyChunkSize * 2) {
     [self updateVerificationProgress:50.0 status:@"Verifying middle of image..."];
     unsigned long long middleOffset = (_isoSize / 2) - (verifyChunkSize / 2);
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Verifying middle 10MB at offset %llu", middleOffset);
     
     [isoHandle seekToFileOffset:middleOffset];
     NSData *isoMiddle = [isoHandle readDataOfLength:verifyChunkSize];
@@ -864,9 +794,7 @@
     if (![isoMiddle isEqualToData:devMiddle]) {
       allMatch = NO;
       failureLocation = @"middle";
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Middle 10MB verification: MISMATCH");
     } else {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Middle 10MB verification: MATCH");
     }
   }
   
@@ -874,7 +802,6 @@
   if (allMatch) {
     [self updateVerificationProgress:90.0 status:@"Verifying end of image..."];
     unsigned long long lastOffset = (_isoSize > verifyChunkSize) ? (_isoSize - verifyChunkSize) : 0;
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: Verifying last 10MB at offset %llu", lastOffset);
     
     [isoHandle seekToFileOffset:lastOffset];
     NSData *isoLast = [isoHandle readDataToEndOfFile];
@@ -886,9 +813,7 @@
     if (![isoLast isEqualToData:devLast]) {
       allMatch = NO;
       failureLocation = @"end";
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Last 10MB verification: MISMATCH");
     } else {
-      NSDebugLLog(@"gwspace", @"ISOWriteOperation: Last 10MB verification: MATCH");
     }
   }
   
@@ -897,7 +822,6 @@
   [isoHandle closeFile];
   
   if (!allMatch) {
-    NSDebugLLog(@"gwspace", @"ISOWriteOperation: ERROR - Verification failed at %@!", failureLocation);
     NSString *errorMsg = [NSString stringWithFormat:
                           @"Verification failed at %@ of image!\n\nThe written data does not match the ISO file. The device may be defective.",
                           failureLocation];
@@ -907,7 +831,6 @@
     return;
   }
   
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Verification successful");
   _state = ISOWriteStateCompleted;
   dispatch_async(dispatch_get_main_queue(), ^{
     [self writeDidComplete];
@@ -950,7 +873,6 @@
 
 - (void)writeDidComplete
 {
-  NSDebugLLog(@"gwspace", @"ISOWriteOperation: Write operation completed successfully");
   [_progressWindow close];
   
   if ([_delegate respondsToSelector:@selector(isoWriteOperationDidComplete:)]) {

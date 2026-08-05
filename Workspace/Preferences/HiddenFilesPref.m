@@ -63,7 +63,6 @@ if (sz.height < 0) sz.height = 0
   
   if (self) {
 		if ([NSBundle loadNibNamed: nibName owner: self] == NO) {
-      NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
     } else {
       NSArray *hpaths;
       NSArray *selection;

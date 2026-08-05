@@ -688,7 +688,6 @@ static NSMutableDictionary *_metadataCache = nil;
                        0) != 0)
         {
           /* Non-fatal: comment couldn't be written, but main metadata is OK */
-          NSDebugLLog(@"gwspace", @"GSFileMetadata: Could not write comment xattr for %@", path);
         }
     }
 
@@ -700,7 +699,6 @@ static NSMutableDictionary *_metadataCache = nil;
                        [_userTagsData bytes], [_userTagsData length],
                        0) != 0)
         {
-          NSDebugLLog(@"gwspace", @"GSFileMetadata: Could not write user-tags xattr for %@", path);
         }
     }
   else if ([self userTagsData] == nil)
@@ -899,8 +897,6 @@ static NSMutableDictionary *_metadataCache = nil;
    * or a simple PNG decoder for the embedded icon representations.
    * For initial implementation, fall back gracefully.
    */
-  NSDebugLLog(@"gwspace", @"GSFileMetadata: NSImage could not decode icns data (%lu bytes)",
-        (unsigned long)[icnsData length]);
   return nil;
 }
 

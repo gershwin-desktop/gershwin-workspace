@@ -83,7 +83,6 @@ static NSString *nibName = @"Contents";
 
       if ([NSBundle loadNibNamed: nibName owner: self] == NO)
         {
-          NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
           [NSApp terminate: self];
         }
 
@@ -255,7 +254,6 @@ static NSString *nibName = @"Contents";
   // No change in selection? leave current path
   if (currentPath && [currentPath isEqual:path])
     {
-      NSDebugLLog(@"gwspace", @"trying to redisplay %@", path);
       return;
     }
 

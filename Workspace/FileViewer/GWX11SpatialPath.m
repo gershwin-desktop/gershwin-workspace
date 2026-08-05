@@ -34,8 +34,6 @@ static int gwX11ErrorHandler(Display *dpy, XErrorEvent *event)
 {
   char errorText[256];
   XGetErrorText(dpy, event->error_code, errorText, sizeof(errorText));
-  NSDebugLLog(@"gwspace", @"GWX11SpatialPath X11 error: %s (request %d, error %d)",
-        errorText, event->request_code, event->error_code);
   return 0;
 }
 
@@ -156,8 +154,6 @@ static void ensureErrorHandler(void)
                   (unsigned char *)cpath, (int)strlen(cpath));
   XSync(dpy, False);
 
-  NSDebugLLog(@"gwspace", @"GWX11SpatialPath: Set %s on window 0x%lx to '%@'",
-              GW_ATOM_SPATIAL_PATH, (unsigned long)xid, path);
 
   XCloseDisplay(dpy);
 }
@@ -218,7 +214,6 @@ static void ensureErrorHandler(void)
 
   if (targetPath) {
     if ([targetPath length] > 0) {
-      NSDebugLLog(@"gwspace", @"GWX11SpatialPath: Navigate request to '%@'", targetPath);
       [self navigateToPath:targetPath];
     }
     RELEASE(targetPath);

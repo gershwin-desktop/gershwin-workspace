@@ -63,13 +63,11 @@ static NSMutableArray *activeOperations = nil;
 + (BOOL)isPhysicalDeviceNode:(FSNode *)node
 {
   if (!node) {
-    NSDebugLLog(@"gwspace", @"ISOWriteHandler: isPhysicalDeviceNode - node is nil");
     return NO;
   }
   
   /* The node must be a mount point */
   if (![node isMountPoint]) {
-    NSDebugLLog(@"gwspace", @"ISOWriteHandler: isPhysicalDeviceNode - %@ is not a mount point", [node path]);
     return NO;
   }
   
@@ -78,65 +76,53 @@ static NSMutableArray *activeOperations = nil;
   /* Get device path for this mount point (could be partition or raw device) */
   NSString *devicePath = [BlockDeviceInfo devicePathForMountPoint:path];
   if (!devicePath) {
-    NSDebugLLog(@"gwspace", @"ISOWriteHandler: isPhysicalDeviceNode - cannot find device for %@", path);
     return NO;
   }
   
-  NSDebugLLog(@"gwspace", @"ISOWriteHandler: isPhysicalDeviceNode - found device %@ for mountpoint %@", devicePath, path);
   
   /* Check it's a block device */
   struct stat st;
   if (stat([devicePath UTF8String], &st) != 0) {
-    NSDebugLLog(@"gwspace", @"ISOWriteHandler: isPhysicalDeviceNode - cannot stat %@: %s", devicePath, strerror(errno));
     return NO;
   }
   
   if (!S_ISBLK(st.st_mode)) {
-    NSDebugLLog(@"gwspace", @"ISOWriteHandler: isPhysicalDeviceNode - %@ is not a block device", devicePath);
     return NO;
   }
   
   /* If this is a partition, get the parent device */
   NSString *parentDevice = [BlockDeviceInfo parentDeviceForPartition:devicePath];
   if (parentDevice) {
-    NSDebugLLog(@"gwspace", @"ISOWriteHandler: isPhysicalDeviceNode - %@ is a partition, parent device is %@", devicePath, parentDevice);
     devicePath = parentDevice;
   }
   
   /* Get block device info for the parent/raw device */
   BlockDeviceInfo *info = [BlockDeviceInfo infoForDevicePath:devicePath];
   if (!info || !info.isValid) {
-    NSDebugLLog(@"gwspace", @"ISOWriteHandler: isPhysicalDeviceNode - cannot get info for %@", devicePath);
     return NO;
   }
   
   /* Don't allow writing to system disk */
   if (info.isSystemDisk) {
-    NSDebugLLog(@"gwspace", @"ISOWriteHandler: isPhysicalDeviceNode - %@ contains system partitions", devicePath);
     return NO;
   }
   
   /* Don't allow writing to read-only devices */
   if (info.isReadOnly) {
-    NSDebugLLog(@"gwspace", @"ISOWriteHandler: isPhysicalDeviceNode - %@ is read-only", devicePath);
     return NO;
   }
   
-  NSDebugLLog(@"gwspace", @"ISOWriteHandler: isPhysicalDeviceNode - %@ is suitable for ISO writing", devicePath);
   return YES;
 }
 
 + (BOOL)canHandleISODrop:(NSString *)isoPath ontoNode:(FSNode *)targetNode
 {
-  NSDebugLLog(@"gwspace", @"ISOWriteHandler: Validating drop of %@ onto %@", [isoPath lastPathComponent], [targetNode path]);
 
   NSString *reason = [self validationMessageForISODrop:isoPath ontoNode:targetNode];
   if (reason) {
-    NSDebugLLog(@"gwspace", @"ISOWriteHandler: Rejected - %@", reason);
     return NO;
   }
 
-  NSDebugLLog(@"gwspace", @"ISOWriteHandler: Validation passed - can handle this drop");
   return YES;
 }
 
@@ -172,7 +158,6 @@ static NSMutableArray *activeOperations = nil;
   /* Get device path for this mount point (might be partition) */
   NSString *mountedDevicePath = [BlockDeviceInfo devicePathForMountPoint:[targetNode path]];
   if (!mountedDevicePath) {
-    NSDebugLLog(@"gwspace", @"ISOWriteHandler: handleISODrop - cannot resolve device path");
     return NO;
   }
   
@@ -183,7 +168,6 @@ static NSMutableArray *activeOperations = nil;
     devicePath = mountedDevicePath;
   }
   
-  NSDebugLLog(@"gwspace", @"ISOWriteHandler: handleISODrop - resolved to physical device %@", devicePath);
   
   /* Check if we already have an operation for this device */
   for (ISOWriteOperation *op in activeOperations) {
@@ -199,7 +183,6 @@ static NSMutableArray *activeOperations = nil;
   
   /* Check if target filesystem is writable */
   BOOL targetIsWritable = [targetNode isWritable];
-  NSDebugLLog(@"gwspace", @"ISOWriteHandler: Target node %@ writable: %@", [targetNode path], targetIsWritable ? @"YES" : @"NO");
   
   /* Prompt user: "Write ISO to device or copy to folder?" */
   NSString *deviceName = [devicePath lastPathComponent];

@@ -42,7 +42,6 @@ int main(int argc, char** argv, char **env_c)
   
   if (argc < 2)
     {
-      NSDebugLLog(@"gwspace", @"no arguments supplied. exiting now.");
       [pool release];
       exit(0);
     }
@@ -63,7 +62,6 @@ int main(int argc, char** argv, char **env_c)
 
           if ([fm fileExistsAtPath: fullPath isDirectory: &isDir] == NO)
             {
-              NSDebugLLog(@"gwspace", @"%@ doesn't exist. exiting now.", fpath);
               [pool release];
               exit(0);
             }
@@ -73,7 +71,6 @@ int main(int argc, char** argv, char **env_c)
                                                                      host: @""];
       if (gworkspace == nil)
         {
-          NSDebugLLog(@"gwspace", @"can't contact Workspace via %@. exiting now.", fpath);
           [pool release];
           exit(0);
         }

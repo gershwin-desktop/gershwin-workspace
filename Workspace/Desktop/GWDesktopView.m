@@ -162,7 +162,6 @@ static CGFloat desktopScaleFactor(void)
 
 - (void)newVolumeMountedAtPath:(NSString *)vpath
 {
-  NSDebugLLog(@"gwspace", @"GWDesktopView: newVolumeMountedAtPath called for %@", vpath);
   FSNode *vnode = [FSNode nodeWithPath: vpath];
 
   [vnode setMountPoint: YES];
@@ -207,22 +206,18 @@ static CGFloat desktopScaleFactor(void)
     NSArray *vwrs = [[[Workspace gworkspace] viewersManager] viewersForBaseNode: parentNode];
     for (id viewer in vwrs)
       {
-        NSDebugLLog(@"gwspace", @"GWDesktopView: Navigating viewer %@ from %@ to %@",
-                    viewer, parentPath, vpath);
         NS_DURING
           {
             [viewer showContentsOfNode: volumeNode];
           }
         NS_HANDLER
           {
-            NSDebugLLog(@"gwspace", @"GWDesktopView: Exception navigating viewer: %@", localException);
           }
         NS_ENDHANDLER
       }
   }
 
   [self tile];
-  NSDebugLLog(@"gwspace", @"GWDesktopView: Added desktop icon for mount %@", vpath);
 }
 
 - (void)workspaceWillUnmountVolumeAtPath:(NSString *)vpath
@@ -230,7 +225,6 @@ static CGFloat desktopScaleFactor(void)
   if (vpath)
     {
       [expectedUnmountPaths setObject:[NSDate date] forKey:vpath];
-      NSDebugLLog(@"gwspace", @"GWDesktopView: Marked path as expected unmount: %@", vpath);
     }
   [self checkLockedReps];
 }
@@ -241,7 +235,6 @@ static CGFloat desktopScaleFactor(void)
   
   if (!vpath)
     {
-      NSDebugLLog(@"gwspace", @"GWDesktopView: workspaceDidUnmountVolumeAtPath called with nil path");
       return;
     }
   
@@ -270,7 +263,6 @@ static CGFloat desktopScaleFactor(void)
         }
       @catch (NSException *exception)
         {
-          NSDebugLLog(@"gwspace", @"Exception while removing icon for volume %@: %@", vpath, exception);
         }
     }
     
@@ -319,7 +311,6 @@ static CGFloat desktopScaleFactor(void)
   if (vpath)
     {
       [expectedUnmountPaths setObject:[NSDate date] forKey:vpath];
-      NSDebugLLog(@"gwspace", @"GWDesktopView: Externally marked path as expected unmount: %@", vpath);
     }
 }
 
@@ -378,7 +369,6 @@ static CGFloat desktopScaleFactor(void)
       v = [mountedVolumes objectAtIndex:i];
       if ([rvPaths indexOfObject:v] == NSNotFound)
 	{
-	  NSDebugLLog(@"gwspace", @"removing: %@", v);
 	  [volumesToRemove addObject:v];
 	}
     }
@@ -418,9 +408,6 @@ static CGFloat desktopScaleFactor(void)
               NSString *v = [volumesToRemove objectAtIndex: j];
               if ([procMounted containsObject: v])
                 {
-                  NSDebugLLog(@"gwspace",
-                    @"GWDesktopView: %@ is still mounted (found in /proc/mounts), not removing",
-                    v);
                   [volumesToRemove removeObjectAtIndex: j];
                 }
             }
@@ -451,7 +438,6 @@ static CGFloat desktopScaleFactor(void)
                       /* Mark as expected unmount and record in Workspace */
                       [expectedUnmountPaths setObject: [NSDate date] forKey: v];
                       [[Workspace gworkspace] noteUserInitiatedUnmountAtPath: v];
-                      NSDebugLLog(@"gwspace", @"GWDesktopView: CLI unmount flag matched for %@", v);
                     }
                 }
             }
@@ -478,17 +464,14 @@ static CGFloat desktopScaleFactor(void)
               && [now timeIntervalSinceDate:markedDate] < expectedUnmountTimeout)
             {
               /* This unmount was expected — suppress the warning. */
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Suppressing unexpected-unmount warning for %@ (expected)", v);
             }
           else if ([[[NetworkVolumeManager sharedManager] recentlyUnmountedPaths] containsObject: v])
             {
               /* Network volume unmounted through NetworkVolumeManager — suppress. */
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Suppressing unexpected-unmount warning for %@ (network)", v);
             }
           else if ([[Workspace gworkspace] isRecentUserUnmount: v])
             {
               /* User-initiated unmount via Workspace's unmountVolumeAtPath: — suppress. */
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Suppressing unexpected-unmount warning for %@ (user-initiated)", v);
             }
           else
             {
@@ -513,9 +496,6 @@ static CGFloat desktopScaleFactor(void)
                   if (r.location != NSNotFound)
                     {
                       /* The path appears in /proc/mounts — still mounted */
-                      NSDebugLLog(@"gwspace",
-                        @"GWDesktopView: Final check — %@ is still mounted, removing from unexpected",
-                        v);
                       [unexpectedRemovals removeObjectAtIndex: ri];
                       /* Also add to expected to prevent re-trigger next cycle */
                       [expectedUnmountPaths setObject: [NSDate date] forKey: v];
@@ -609,7 +589,6 @@ static CGFloat desktopScaleFactor(void)
         }
       @catch (NSException *exception)
         {
-          NSDebugLLog(@"gwspace", @"Exception while unmounting volume at %@: %@", v, exception);
         }
     }
 
@@ -656,20 +635,12 @@ static CGFloat desktopScaleFactor(void)
 - (void)screenParametersDidChange
 {
   NSArray *screens = [NSScreen screens];
-  NSDebugLLog(@"gwspace", @"desktop view screenParametersDidChange: %lu screen(s)",
-             (unsigned long)[screens count]);
 
   screenFrame = [[screens objectAtIndex:0] frame];
   for (NSUInteger si = 1; si < [screens count]; si++) {
     NSRect srect = [[screens objectAtIndex:si] frame];
-    NSDebugLLog(@"gwspace", @"  screen %lu frame: {{%g, %g}, {%g, %g}}",
-               (unsigned long)si, srect.origin.x, srect.origin.y,
-               srect.size.width, srect.size.height);
     screenFrame = NSUnionRect(screenFrame, srect);
   }
-  NSDebugLLog(@"gwspace", @"  union screenFrame: {{%g, %g}, {%g, %g}}",
-             screenFrame.origin.x, screenFrame.origin.y,
-             screenFrame.size.width, screenFrame.size.height);
 
   /* The content view's origin in window coordinates is always (0,0);
    * only the size changes when the screen configuration changes. */
@@ -1247,27 +1218,22 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       character = [characters characterAtIndex: 0];
 
-      NSDebugLLog(@"gwspace", @"GWDesktopView.keyDown: character=0x%x, flags=0x%x", character, flags);
 
       // Handle arrow keys with modifiers
       if (character == NSDownArrowFunctionKey)
         {
-          NSDebugLLog(@"gwspace", @"GWDesktopView: NSDownArrowFunctionKey pressed, flags=0x%x", flags);
           if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
             {
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Shift-Down detected - opening selection");
               [manager openSelectionInNewViewer: NO];
               return;
             }
           if ((flags & NSCommandKeyMask) && (flags & NSShiftKeyMask))
             {
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Command-Shift-Down detected - opening as folder");
               [manager openSelectionAsFolder];
               return;
             }
           if ((flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
             {
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Command-Down detected - opening selection");
               [manager openSelectionInNewViewer: NO];
               return;
             }

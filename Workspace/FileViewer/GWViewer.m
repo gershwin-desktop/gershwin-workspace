@@ -273,20 +273,20 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       NSRect dsGeometry = [dsInfo gnustepWindowFrameForScreen:[NSScreen mainScreen]];
       
       if (dsGeometry.size.width > 0 && dsGeometry.size.height > 0) {
-        NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-        NSDebugLLog(@"gwspace", @"║      APPLYING DS_STORE WINDOW GEOMETRY (GWViewer)                ║");
-        NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-        NSDebugLLog(@"gwspace", @"║ Mac frame: %@", NSStringFromRect(dsInfo.windowFrame));
-        NSDebugLLog(@"gwspace", @"║ GNUstep frame: %@", NSStringFromRect(dsGeometry));
-        NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
         
-        [vwrwin setFrame:dsGeometry display:NO];
+        /* dsGeometry is the CONTENT rect (DS_Store stores content area
+         * excluding the title bar; gnustepWindowFrameForScreen: flips to
+         * GNUstep bottom-left coords but stays content-sized).  Convert to
+         * the full window frame so the decoration height is added exactly
+         * once - same as GWSpatialViewer, and the inverse of the content
+         * rect we persist in updateDefaults. */
+        [vwrwin setFrame: [vwrwin frameRectForContentRect: dsGeometry]
+               display: NO];
         geometryApplied = YES;
       }
     }
     
     if (!geometryApplied) {
-      NSDebugLLog(@"gwspace", @"No DS_Store geometry, using cascade placement");
       r = NSMakeRect(200, 200, resizeIncrement * 5, 600);
       [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
                display: NO];
@@ -1066,7 +1066,6 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 {
   /* Refresh the network node's subnodes and reload the view */
   if ([baseNode isKindOfClass:[NetworkFSNode class]]) {
-    NSDebugLLog(@"gwspace", @"GWViewer: Network services changed, reloading contents");
     [self reloadNodeContents];
   }
 }
@@ -1115,7 +1114,17 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       [updatedprefs setObject: defEntry forKey: @"lastselection"];
     }
     
-    [updatedprefs setObject: [vwrwin stringWithSavedFrame] 
+    /* Persist the window's CONTENT rect, not the full frame: .DS_Store
+     * fwi0/bwsp stores the content area (excluding title bar/border), per
+     * the MozillaWiki DS_Store format notes and Finder behavior.  Storing
+     * stringWithSavedFrame (the full frame) would make restore add the
+     * decoration height again via frameRectForContentRect:, so the window
+     * would grow and drift upward on every open/close cycle.  The content
+     * rect is in GNUstep screen coords (bottom-left origin); the
+     * DS_Store coordinate conversion happens in
+     * dsStoreWindowFrameForScreen:. */
+    NSRect contentRect = [vwrwin contentRectForFrameRect: [vwrwin frame]];
+    [updatedprefs setObject: NSStringFromRect(contentRect)
                      forKey: @"geometry"];
 
     // Save view settings to .DS_Store for Mac interoperability

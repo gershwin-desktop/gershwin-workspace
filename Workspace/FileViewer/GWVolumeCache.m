@@ -63,14 +63,12 @@
 
   /* If the cache file doesn't exist, nothing to read */
   if (![self cacheFileExists]) {
-    NSDebugLLog(@"gwspace", @"GWVolumeCache: No cache file at %@", _cacheFilePath);
     return nil;
   }
 
   /* Open and parse */
   DSStore *store = [DSStore storeWithPath:_cacheFilePath];
   if (![store load]) {
-    NSDebugLLog(@"gwspace", @"GWVolumeCache: Failed to load %@", _cacheFilePath);
     return nil;
   }
 
@@ -99,7 +97,6 @@
   }
 
   if (!hasDirEntries && !hasFileEntries) {
-    NSDebugLLog(@"gwspace", @"GWVolumeCache: No cached record for %@", key);
     return nil;
   }
 
@@ -337,7 +334,6 @@
        withIntermediateDirectories:YES
                         attributes:nil
                              error:NULL]) {
-      NSDebugLLog(@"gwspace", @"GWVolumeCache: Cannot create cache dir %@", cacheDir);
       return NO;
     }
   }
@@ -347,7 +343,6 @@
   if ([fm fileExistsAtPath:_cacheFilePath]) {
     store = [DSStore storeWithPath:_cacheFilePath];
     if (![store load]) {
-      NSDebugLLog(@"gwspace", @"GWVolumeCache: Failed to load cache, creating new");
       store = [DSStore createStoreAtPath:_cacheFilePath withEntries:nil];
       if (store) [store load];
     }
@@ -376,8 +371,6 @@
   [store removeEntriesForFilename: key
                             codes: [DSStoreInfo ownedDirectoryCodes]];
 
-  NSDebugLLog(@"gwspace", @"GWVolumeCache: writing for %@ (key=%@, cache=%@)",
-              dirPath, key, _cacheFilePath);
 
   /* --- Write directory-level + per-file entries keyed by the dir path.
    * Per-file Iloc entries are keyed by BARE filename, matching the macOS
@@ -386,8 +379,6 @@
    * filename).  Older caches written by this app may still carry scoped
    * "<key>/<filename>" entries; the read side prefers the bare form and falls
    * back to those. --- */
-  NSDebugLLog(@"gwspace", @"GWVolumeCache: writing %lu icon entries for %@",
-              (unsigned long)[[info allIconInfo] count], key);
   [DSStoreInfo writeStoreEntriesForInfo: info
                                     key: key
                                 toStore: store];
@@ -402,9 +393,6 @@
                                   keepPath: key];
 
   BOOL saved = [store save];
-  NSDebugLLog(@"gwspace", @"GWVolumeCache: save %s for %@ (%lu entries)",
-              saved ? "OK" : "FAILED", dirPath,
-              (unsigned long)[[store entries] count]);
   return saved;
 }
 

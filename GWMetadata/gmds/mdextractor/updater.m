@@ -34,15 +34,9 @@
 
 #import "mdextractor.h"
 
-
-#define GWDebugLog(format, args...) \
-  do { if (GW_DEBUG_LOG) \
-    NSDebugLLog(@"gwspace", format , ## args); } while (0)
-
 #define EXECUTE_QUERY(q, r) \
 do { \
   if ([sqlite executeQuery: q] == NO) { \
-    NSDebugLLog(@"gwspace", @"error at: %@", q); \
     return r; \
   } \
 } while (0)
@@ -51,7 +45,6 @@ do { \
 do { \
   if ([sqlite executeQuery: q] == NO) { \
     [sqlite executeQuery: @"ROLLBACK"]; \
-    NSDebugLLog(@"gwspace", @"error at: %@", q); \
     return r; \
   } \
 } while (0)
@@ -59,7 +52,6 @@ do { \
 #define STATEMENT_EXECUTE_QUERY(s, r) \
 do { \
   if ([sqlite executeQueryWithStatement: s] == NO) { \
-    NSDebugLLog(@"gwspace", @"error at: %@", [s query]); \
     return r; \
   } \
 } while (0)
@@ -71,18 +63,15 @@ do { \
       setUpdating(NO); \
     } \
     [sqlite executeQuery: @"ROLLBACK"]; \
-    NSDebugLLog(@"gwspace", @"error at: %@", [s query]); \
     return r; \
   } \
 } while (0)
-
 
 #define SKIP_EXPIRE (1.0)
 #define LOST_PATHS_EXPIRE (60.0)
 #define LOST_PATHS_CHECK (30.0)
 #define SCHED_TIME (1.0)
 #define NOTIF_TIME (60.0)
-
 
 @implementation GMDSExtractor (updater)
 
@@ -106,7 +95,7 @@ do { \
     BOOL hasextractor = NO;
     int path_id;
     
-    EXECUTE_QUERY (@"BEGIN", NO); 
+    EXECUTE_QUERY (@"BEGIN", NO);
     setUpdating(YES);
      
     [ws getInfoForFile: path application: &app type: &type];  
@@ -138,17 +127,10 @@ do { \
       setUpdating(NO);
       [sqlite executeQuery: @"COMMIT"];
       
-      if (hasextractor) {
-        GWDebugLog(@"updated: %@", path);
-      } else {
-        GWDebugLog(@"no extractor for: %@", path);
-      }
-      
     } else {
       setUpdating(NO);
       [sqlite executeQuery: @"ROLLBACK"];
       [self logError: [NSString stringWithFormat: @"UPDATE %@", path]];
-      GWDebugLog(@"error updating at: %@", path);
       
       return NO;
     }
@@ -215,7 +197,6 @@ do { \
             }
             
             if (skip) { 
-              GWDebugLog(@"skipping (update) %@", subpath);
 
               if ([attributes fileType] == NSFileTypeDirectory) {
                 [enumerator skipDescendents];
@@ -224,11 +205,6 @@ do { \
             } else {
               if (failed) {
                 [self logError: [NSString stringWithFormat: @"UPDATE %@", subpath]];
-                GWDebugLog(@"error updating: %@", subpath);
-              } else if (hasextractor == NO) {
-                GWDebugLog(@"no extractor for: %@", subpath);
-              } else {
-                GWDebugLog(@"updated: %@", subpath);
               }
             }            
           }
@@ -431,7 +407,6 @@ do { \
     NSDate *stamp = [d objectForKey: @"stamp"];
     
     if ([stamp timeIntervalSinceDate: now] > LOST_PATHS_EXPIRE) {
-      GWDebugLog(@"removing expired lost path: %@ ", [d objectForKey: @"path"]);
       [lostPaths removeObjectAtIndex: i];
       count--;
       i--;
@@ -546,7 +521,6 @@ do { \
 
       if (caninsert) {
         [fswupdatePaths insertObject: dict atIndex: 0];
-        GWDebugLog(@"queueing: %@ - %@", path, event);
       }
     }
 
@@ -570,7 +544,6 @@ do { \
       if ([event isEqual: @"GWWatchedFileModified"]
             || [event isEqual: @"GWFileCreatedInWatchedDirectory"]) {
         if ([fm fileExistsAtPath: path]) {
-          GWDebugLog(@"db update: %@", path);
 
           if ([event isEqual: @"GWFileCreatedInWatchedDirectory"]) {
             /* 
@@ -579,13 +552,9 @@ do { \
                In this case, if "path" is a directory, we must add 
                also its contents.
             */
-            if ([self addPath: path] == NO) {
-              NSDebugLLog(@"gwspace", @"An error occurred while processing %@", path);
-            }                  
+            [self addPath: path];
           } else {
-            if ([self updatePath: path] == NO) {      
-              NSDebugLLog(@"gwspace", @"An error occurred while processing %@", path);
-            }        
+            [self updatePath: path];
           }          
           
         } else {
@@ -594,13 +563,11 @@ do { \
           [d setObject: path forKey: @"path"];
           [d setObject: [NSDate date] forKey: @"stamp"];
 
-          GWDebugLog(@"add lost path: %@", path);
           [lostPaths addObject: d];
         }
 
       } else if ([event isEqual: @"GWWatchedPathDeleted"]) {
         if ([fm fileExistsAtPath: path] == NO) {
-          GWDebugLog(@"db remove: %@", path);
           [self removePath: path];
         }
 
@@ -623,7 +590,6 @@ do { \
                 NSString *part = [lost substringFromIndex: pos];
                 NSString *newpath = [path stringByAppendingPathComponent: part];          
 
-                GWDebugLog(@"found lost path: %@", lost);          
 
                 [self removePath: lost];
 
@@ -635,21 +601,16 @@ do { \
                 } else {
                   [d setObject: newpath forKey: @"path"];
                   [d setObject: [NSDate date] forKey: @"stamp"];
-                  GWDebugLog(@"changed lost path: %@ to: %@", lost, newpath);    
                 }
               }
             }
 
-            GWDebugLog(@"db rename: %@ -> %@", oldpath, path);
 
-            if ([self updateRenamedPath: path 
-                                oldPath: oldpath 
-                            isDirectory: isdir] == NO) { 
-              NSDebugLLog(@"gwspace", @"An error occurred while processing %@", path);
-            }
+            [self updateRenamedPath: path
+                          oldPath: oldpath
+                      isDirectory: isdir];
 
           } else {
-            GWDebugLog(@"db update renamed: %@", path);
             [self addPath: path];      
           }
 
@@ -659,7 +620,6 @@ do { \
           [d setObject: path forKey: @"path"];
           [d setObject: [NSDate date] forKey: @"stamp"];
           [lostPaths addObject: d];
-          GWDebugLog(@"add lost path: %@", path);
         }
       }
 
@@ -733,10 +693,6 @@ do { \
                        
 	    [fswatcher registerClient: (id <FSWClientProtocol>)self 
                 isGlobalWatcher: YES];
-
-      NSDebugLLog(@"gwspace", @"fswatcher connected!");                
-    } else {
-      NSDebugLLog(@"gwspace", @"unable to contact fswatcher!");  
     }
   }
 }
@@ -753,8 +709,6 @@ do { \
 		                                  NSInternalInconsistencyException);
   RELEASE (fswatcher);
   fswatcher = nil;
-
-  NSDebugLLog(@"gwspace", @"The fswatcher connection died!");
 
   [NSTimer scheduledTimerWithTimeInterval: 5.0
 						                       target: self 
@@ -813,10 +767,6 @@ do { \
 	                   selector: @selector(ddbdConnectionDidDie:)
 		                     name: NSConnectionDidDieNotification
 		                   object: [ddbd connectionForProxy]];
-    
-      NSDebugLLog(@"gwspace", @"ddbd connected!");    
-    } else {
-      NSDebugLLog(@"gwspace", @"unable to contact ddbd!");  
     }
   }
 }
@@ -834,8 +784,6 @@ do { \
   RELEASE (ddbd);
   ddbd = nil;
 
-  NSDebugLLog(@"gwspace", @"The ddbd connection died!");
-
   [self connectDDBd];                
 }
 
@@ -849,7 +797,6 @@ do { \
               && (isDotFile(path) == NO)
               && inTreeFirstPartOfPath(path, includePathsTree)
               && (inTreeFirstPartOfPath(path, excludedPathsTree) == NO)) {
-      GWDebugLog(@"ddbd_update: %@", path);        
       [self updatePath: path];
     }
   }
@@ -952,7 +899,6 @@ do { \
         NSNumber *dbdate = [dbcontents objectForKey: path];
         
         if (dbdate == nil) {
-          GWDebugLog(@"schedule-add %@", path);
           [self addPath: path];
           
         } else {
@@ -960,7 +906,6 @@ do { \
           NSTimeInterval date = [[attrs fileModificationDate] timeIntervalSinceReferenceDate];
    
           if ((date - [dbdate floatValue]) > 10) {
-            GWDebugLog(@"schedule-update %@ ---- %f - %f", path, date, [dbdate floatValue]);
             [self updatePath: path];
           }
         }
@@ -972,7 +917,6 @@ do { \
         NSString *path = [dbpaths objectAtIndex: i];
     
         if ([contents containsObject: path] == NO) {
-          GWDebugLog(@"schedule-remove %@", path);
           [self removePath: path];
         }
       }
@@ -981,14 +925,12 @@ do { \
       [self removePath: dir];
       
       RETAIN (dir);
-      GWDebugLog(@"schedule-remove %@", dir);
       [directories removeObjectAtIndex: dirpos];
       count--;
       dirpos--;
         
       for (i = 0; i < count; i++) {
         if (subPathOfPath(dir, [directories objectAtIndex: i])) {
-          GWDebugLog(@"schedule-remove %@", [directories objectAtIndex: i]);
           [directories removeObjectAtIndex: i];
           count--;
           if (dirpos >= i) {
@@ -1000,7 +942,6 @@ do { \
       
       if (attributes) {
         [self addPath: dir];
-        GWDebugLog(@"schedule-remove->add %@", dir);
       }
       
       RELEASE (dir);

@@ -821,20 +821,6 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       [customIconPositions release];
       customIconPositions = [positions mutableCopy];
-      
-      NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-      NSDebugLLog(@"gwspace", @"║        CUSTOM ICON POSITIONS SET (DS_Store)                      ║");
-      NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-      NSDebugLLog(@"gwspace", @"║ Positions for %lu icons:", (unsigned long)[positions count]);
-      
-      for (NSString *filename in positions)
-        {
-          NSValue *posValue = [positions objectForKey:filename];
-          NSPoint pos = [posValue pointValue];
-          NSDebugLLog(@"gwspace", @"║   '%@' -> (%.0f, %.0f)", filename, pos.x, pos.y);
-        }
-      
-      NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
     }
 }
 
@@ -1047,9 +1033,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   if (!tagDict || [tagDict count] == 0)
     return;
     
-  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-  NSDebugLLog(@"gwspace", @"║        APPLYING TAG COLORS FROM DS_Store                         ║");
-  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
   
   for (FSNIcon *icon in icons)
     {
@@ -1061,12 +1044,10 @@ static void GWHighlightFrameRect(NSRect aRect)
           if (tagColor)
             {
               [icon setTagColor:tagColor];
-              NSDebugLLog(@"gwspace", @"║   '%@' -> tag color set", filename);
             }
         }
     }
   
-  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 - (void)setCommentsFromDictionary:(NSDictionary *)commentsDict
@@ -1074,9 +1055,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   if (!commentsDict || [commentsDict count] == 0)
     return;
     
-  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-  NSDebugLLog(@"gwspace", @"║        APPLYING SPOTLIGHT COMMENTS FROM DS_Store                 ║");
-  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
   
   for (FSNIcon *icon in icons)
     {
@@ -1088,12 +1066,10 @@ static void GWHighlightFrameRect(NSRect aRect)
           if (comment)
             {
               [icon setSpotlightComment:comment];
-              NSDebugLLog(@"gwspace", @"║   '%@' -> comment: '%@'", filename, comment);
             }
         }
     }
   
-  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 /* Returns the visible content width for determining virtual grid
@@ -3313,7 +3289,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 	}
       else
 	{
-	  NSDebugLLog(@"gwspace", @"Unexpected icon position in [FSNIconsView updateNameEditor]");
 	  return;
 	}
 

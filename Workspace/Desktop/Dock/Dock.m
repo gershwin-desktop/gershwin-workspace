@@ -162,7 +162,6 @@ static inline CGFloat _dockScaleFactor(void)
               
               /* Validate name exists */
               if (name == nil || [name length] == 0) {
-                GWDebugLog(@"Dock: skipping invalid entry (no name)");
                 continue;
               }
               
@@ -183,12 +182,10 @@ static inline CGFloat _dockScaleFactor(void)
 		        /* Keep this entry in the updated dict */
 		        [updatedDict setObject: appEntry forKey: index];
 		      } else {
-		        GWDebugLog(@"Dock: failed to create icon for app \"%@\" at path %@", name, path);
 		      }
 		    }
 		  NS_HANDLER
 		    {
-		      GWDebugLog(@"Dock: exception loading app \"%@\": %@", name, [localException reason]);
 		    }
 		  NS_ENDHANDLER
 		}
@@ -196,7 +193,6 @@ static inline CGFloat _dockScaleFactor(void)
 		{
 		  /* Application no longer exists - remove it from preferences */
 		  if (name) {
-		    GWDebugLog(@"Dock: app \"%@\" no longer exists at saved path; removing from dock.", name);
 		  }
 		}
 	    }
@@ -521,10 +517,8 @@ static inline CGFloat _dockScaleFactor(void)
                  pid:(pid_t)pid
 {
   if (appName != nil) {
-    NSDebugLLog(@"gwspace", @"DEBUG: Dock appDidLaunch for appName: %@", appName);
   } else
     {
-      NSDebugLLog(@"gwspace", @"DEBUG: Dock appDidLaunch for nil appName");
       return;
     }
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
@@ -825,7 +819,6 @@ static inline CGFloat _dockScaleFactor(void)
       rect.origin.y = scrOriginY + ceil((scrrect.size.height - rect.size.height) / 2);
     }
 
-  NSDebugLLog(@"gwspace", @"DEBUG: Dock tile - setting frame: %@, icons count: %lu", NSStringFromRect(rect), (unsigned long)[icons count]);
   
   /*
    * When the dock lives in its own GWDockWindow, resize the window to the
@@ -945,7 +938,6 @@ static inline CGFloat _dockScaleFactor(void)
 
 - (void)saveDockConfiguration
 {
-  NSDebugLLog(@"gwspace", @"DEBUG: Dock saveDockConfiguration");
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
   NSMutableDictionary *dict = [NSMutableDictionary dictionary];
   NSUInteger i;  
@@ -1385,7 +1377,6 @@ static inline CGFloat _dockScaleFactor(void)
         NSArray *sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
         
         if (!sourcePaths || [sourcePaths count] == 0) {
-          NSDebugLLog(@"gwspace", @"Dock: Drag rejected - empty filename pasteboard");
           return NSDragOperationNone;
         }
         

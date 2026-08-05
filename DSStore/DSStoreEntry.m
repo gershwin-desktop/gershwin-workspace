@@ -401,8 +401,6 @@ static DSStoreEntry *patchedPlistEntry(NSString *filename, NSString *code,
                                                                   options:0
                                                                     error:&error];
     if (error || plistData == nil) {
-        NSDebugLLog(@"gwspace", @"DSStoreEntry: failed to encode %@ plist: %@",
-                    code, [error localizedDescription]);
         return nil;
     }
 

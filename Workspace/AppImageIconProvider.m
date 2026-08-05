@@ -66,8 +66,6 @@ static int AppImageSqfsFileReadAt(sqfs_file_t *file,
   sqfs_u64 end = offset + size;
 
   if (offset >= self->physical_size) {
-    NSDebugLLog(@"gwspace", @"%@: read out of bounds: offset=%llu size=%zu limit=%llu", APPIMAGE_ICON_LOG_PREFIX,
-          (unsigned long long)offset, size, (unsigned long long)self->physical_size);
     return SQFS_ERROR_OUT_OF_BOUNDS;
   }
 
@@ -448,7 +446,6 @@ static off_t AppImageFindSquashfsOffsetViaElfSize(NSString *path)
   }
 
   if (AppImageValidateSquashfsOffset(fd, elfSize, (off_t)st.st_size)) {
-    NSDebugLLog(@"gwspace", @"%@: found squashfs offset via ELF size at %lld", APPIMAGE_ICON_LOG_PREFIX, (long long)elfSize);
     close(fd);
     return elfSize;
   }
@@ -646,7 +643,6 @@ static off_t AppImageFindSquashfsOffsetByScan(NSString *path)
     }
     if (AppImageSuperblockLooksValid(buffer, sizeof(buffer), fileSize, candidate)) {
       offset = candidate;
-      NSDebugLLog(@"gwspace", @"%@: found squashfs magic by scan at %lld", APPIMAGE_ICON_LOG_PREFIX, (long long)offset);
       break;
     }
   }
@@ -680,19 +676,12 @@ static NSData *AppImageReadFileDataFromInode(sqfs_data_reader_t *data_reader,
   }
 
   if (inode->base.type == SQFS_INODE_FILE) {
-    NSDebugLLog(@"gwspace", @"%@: inode file: size=%u fragment_index=%u", APPIMAGE_ICON_LOG_PREFIX,
-          inode->data.file.file_size, inode->data.file.fragment_index);
     if (inode->data.file.fragment_index != 0xffffffff && !fragmentTableReady) {
-      NSDebugLLog(@"gwspace", @"%@: skipping fragment-backed file without fragment table", APPIMAGE_ICON_LOG_PREFIX);
       return nil;
     }
     size = inode->data.file.file_size;
   } else if (inode->base.type == SQFS_INODE_EXT_FILE) {
-    NSDebugLLog(@"gwspace", @"%@: inode ext file: size=%llu fragment_index=%u", APPIMAGE_ICON_LOG_PREFIX,
-          (unsigned long long)inode->data.file_ext.file_size,
-          inode->data.file_ext.fragment_idx);
     if (inode->data.file_ext.fragment_idx != 0xffffffff && !fragmentTableReady) {
-      NSDebugLLog(@"gwspace", @"%@: skipping fragment-backed file without fragment table", APPIMAGE_ICON_LOG_PREFIX);
       return nil;
     }
     size = inode->data.file_ext.file_size;
@@ -712,7 +701,6 @@ static NSData *AppImageReadFileDataFromInode(sqfs_data_reader_t *data_reader,
                                                        NULL,
                                                        [targetPath UTF8String],
                                                        &resolved) == 0) {
-          NSDebugLLog(@"gwspace", @"%@: resolving symlink to %@", APPIMAGE_ICON_LOG_PREFIX, targetPath);
           NSData *resolvedData = AppImageReadFileDataFromInode(data_reader,
                                                                dir_reader,
                                                                resolved,
@@ -831,18 +819,6 @@ static BOOL AppImageDataIsUsableImage(NSData *data)
   return NO;
 }
 
-static void AppImageLogMagic(NSData *data, NSString *label)
-{
-  if (data == nil || [data length] < 4) {
-    return;
-  }
-  const unsigned char *bytes = [data bytes];
-  NSDebugLLog(@"gwspace", @"%@: %@ magic: %02x %02x %02x %02x", APPIMAGE_ICON_LOG_PREFIX,
-        label,
-        bytes[0], bytes[1], bytes[2], bytes[3]);
-}
-
-
 static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
 {
   AppImageSqfsFile *fallbackFile = NULL;
@@ -864,7 +840,6 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
 
   fd = open([appImagePath fileSystemRepresentation], O_RDONLY);
   if (fd < 0) {
-    NSDebugLLog(@"gwspace", @"%@: failed to open %@", APPIMAGE_ICON_LOG_PREFIX, appImagePath);
     return nil;
   }
 
@@ -890,40 +865,26 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
   } else {
     file = sqfs_open_file([tempSqfsPath fileSystemRepresentation], SQFS_FILE_OPEN_READ_ONLY);
     if (file == NULL) {
-      NSDebugLLog(@"gwspace", @"%@: failed to open temp squashfs image", APPIMAGE_ICON_LOG_PREFIX);
       close(fd);
       return nil;
     }
   }
 
   if (sqfs_super_read(&super, file) != 0) {
-    NSDebugLLog(@"gwspace", @"%@: failed to read squashfs superblock", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
-  NSDebugLLog(@"gwspace", @"%@: superblock: compression=%u block=%u flags=0x%04x fragments=%u", APPIMAGE_ICON_LOG_PREFIX,
-        (unsigned)super.compression_id, (unsigned)super.block_size,
-        (unsigned)super.flags, (unsigned)super.fragment_entry_count);
-  NSDebugLLog(@"gwspace", @"%@: superblock: bytes_used=%llu inode_table=%llu dir_table=%llu frag_table=%llu", APPIMAGE_ICON_LOG_PREFIX,
-        (unsigned long long)super.bytes_used,
-        (unsigned long long)super.inode_table_start,
-        (unsigned long long)super.directory_table_start,
-        (unsigned long long)super.fragment_table_start);
-  NSDebugLLog(@"gwspace", @"%@: superblock: root_inode_ref=%llu", APPIMAGE_ICON_LOG_PREFIX,
-        (unsigned long long)super.root_inode_ref);
 
   memset(&meta_cfg, 0, sizeof(meta_cfg));
   if (sqfs_compressor_config_init(&meta_cfg,
                                   (SQFS_COMPRESSOR)super.compression_id,
                                   SQFS_META_BLOCK_SIZE,
                                   0) != 0) {
-    NSDebugLLog(@"gwspace", @"%@: failed to init meta compressor config", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
   meta_cfg.flags |= SQFS_COMP_FLAG_UNCOMPRESS;
   if (sqfs_compressor_create(&meta_cfg, &meta_compressor) != 0) {
-    NSDebugLLog(@"gwspace", @"%@: failed to create meta compressor", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
@@ -932,13 +893,11 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
                                   (SQFS_COMPRESSOR)super.compression_id,
                                   super.block_size,
                                   0) != 0) {
-    NSDebugLLog(@"gwspace", @"%@: failed to init data compressor config", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
   data_cfg.flags |= SQFS_COMP_FLAG_UNCOMPRESS;
   if (sqfs_compressor_create(&data_cfg, &data_compressor) != 0) {
-    NSDebugLLog(@"gwspace", @"%@: failed to create data compressor", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
@@ -946,20 +905,17 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
     if (meta_compressor->read_options != NULL) {
       int opt_status = meta_compressor->read_options(meta_compressor, file);
       if (opt_status != 0) {
-        NSDebugLLog(@"gwspace", @"%@: failed to read meta compressor options (continuing)", APPIMAGE_ICON_LOG_PREFIX);
       }
     }
     if (data_compressor->read_options != NULL) {
       int opt_status = data_compressor->read_options(data_compressor, file);
       if (opt_status != 0) {
-        NSDebugLLog(@"gwspace", @"%@: failed to read data compressor options (continuing)", APPIMAGE_ICON_LOG_PREFIX);
       }
     }
   }
 
   dir_reader = sqfs_dir_reader_create(&super, meta_compressor, file, 0);
   if (dir_reader == NULL) {
-    NSDebugLLog(@"gwspace", @"%@: failed to create dir reader", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
@@ -968,15 +924,12 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
                                         data_compressor,
                                         0);
   if (data_reader == NULL) {
-    NSDebugLLog(@"gwspace", @"%@: failed to create data reader", APPIMAGE_ICON_LOG_PREFIX);
     goto cleanup;
   }
 
   if (super.fragment_entry_count > 0 && !fragmentTableReady) {
     int frag_status = sqfs_data_reader_load_fragment_table(data_reader, &super);
     if (frag_status != 0) {
-      NSDebugLLog(@"gwspace", @"%@: failed to load fragment table (err=%d); will skip fragment-backed files",
-            APPIMAGE_ICON_LOG_PREFIX, frag_status);
     } else {
       fragmentTableReady = YES;
     }
@@ -986,8 +939,6 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
     if (AppImageInodeNeedsFragmentTable(inode) && !fragmentTableReady) {
       int frag_status = sqfs_data_reader_load_fragment_table(data_reader, &super);
       if (frag_status != 0) {
-        NSDebugLLog(@"gwspace", @"%@: failed to load fragment table (err=%d); skipping fragment-backed file",
-              APPIMAGE_ICON_LOG_PREFIX, frag_status);
       } else {
         fragmentTableReady = YES;
       }
@@ -996,12 +947,9 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
     sqfs_free(inode);
     inode = NULL;
     if (iconData != nil) {
-      AppImageLogMagic(iconData, @".DirIcon");
       if (AppImageDataIsUsableImage(iconData)) {
-        NSDebugLLog(@"gwspace", @"%@: using .DirIcon from AppImage", APPIMAGE_ICON_LOG_PREFIX);
         goto cleanup;
       }
-      NSDebugLLog(@"gwspace", @"%@: .DirIcon is not a supported image; falling back", APPIMAGE_ICON_LOG_PREFIX);
       iconData = nil;
     }
   }
@@ -1050,18 +998,15 @@ static NSData *AppImageCopyIconData(NSString *path)
   }
 
   if (offset == 0) {
-    NSDebugLLog(@"gwspace", @"%@: unable to locate squashfs offset in %@", APPIMAGE_ICON_LOG_PREFIX, path);
     return nil;
   }
 
   iconData = AppImageExtractIconData(path, offset);
   if (iconData == nil) {
-    NSDebugLLog(@"gwspace", @"%@: no icon extracted from %@", APPIMAGE_ICON_LOG_PREFIX, path);
     return nil;
   }
 
   if (!AppImageDataIsUsableImage(iconData)) {
-    NSDebugLLog(@"gwspace", @"%@: extracted icon is not a supported image format", APPIMAGE_ICON_LOG_PREFIX);
     return nil;
   }
 
@@ -1128,7 +1073,6 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 
   Class cls = NSClassFromString(@"FSNIcon");
   if (cls == Nil) {
-    NSDebugLLog(@"gwspace", @"%@: FSNIcon not available for swizzle", APPIMAGE_ICON_LOG_PREFIX);
     return;
   }
 
@@ -1137,9 +1081,7 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 
   if (original && swizzled) {
     method_exchangeImplementations(original, swizzled);
-    NSDebugLLog(@"gwspace", @"%@: installed FSNIcon drawRect swizzle", APPIMAGE_ICON_LOG_PREFIX);
   } else {
-    NSDebugLLog(@"gwspace", @"%@: failed to install FSNIcon swizzle", APPIMAGE_ICON_LOG_PREFIX);
   }
 }
 
@@ -1191,7 +1133,6 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 
   Class cls = NSClassFromString(@"FSNodeRep");
   if (cls == Nil) {
-    NSDebugLLog(@"gwspace", @"%@: FSNodeRep not available for swizzle", APPIMAGE_ICON_LOG_PREFIX);
     return;
   }
 
@@ -1200,9 +1141,7 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 
   if (original && swizzled) {
     method_exchangeImplementations(original, swizzled);
-    NSDebugLLog(@"gwspace", @"%@: installed FSNodeRep iconOfSize swizzle", APPIMAGE_ICON_LOG_PREFIX);
   } else {
-    NSDebugLLog(@"gwspace", @"%@: failed to install FSNodeRep swizzle", APPIMAGE_ICON_LOG_PREFIX);
   }
 }
 
@@ -1217,7 +1156,6 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 
   Class cls = NSClassFromString(@"FSNIcon");
   if (cls == Nil) {
-    NSDebugLLog(@"gwspace", @"%@: FSNIcon not available for swizzle", APPIMAGE_ICON_LOG_PREFIX);
     return;
   }
 
@@ -1226,9 +1164,7 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 
   if (original && swizzled) {
     method_exchangeImplementations(original, swizzled);
-    NSDebugLLog(@"gwspace", @"%@: installed FSNIcon drawRect swizzle", APPIMAGE_ICON_LOG_PREFIX);
   } else {
-    NSDebugLLog(@"gwspace", @"%@: failed to install FSNIcon swizzle", APPIMAGE_ICON_LOG_PREFIX);
   }
 }
 
@@ -1386,9 +1322,7 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 
   if (original && swizzled) {
     method_exchangeImplementations(original, swizzled);
-    NSDebugLLog(@"gwspace", @"%@: installed NSWorkspace iconForFile swizzle", APPIMAGE_ICON_LOG_PREFIX);
   } else {
-    NSDebugLLog(@"gwspace", @"%@: failed to install swizzle (methods missing)", APPIMAGE_ICON_LOG_PREFIX);
   }
 }
 
@@ -1406,7 +1340,6 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
       if ([fileType isEqual: NSFileTypeSymbolicLink] == YES) {
         NSString *targetPath = [resolvedPath stringByResolvingSymlinksInPath];
         if (targetPath != nil && [targetPath isEqualToString: resolvedPath] == NO) {
-          NSDebugLLog(@"gwspace", @"%@: following symlink %@ -> %@", APPIMAGE_ICON_LOG_PREFIX, resolvedPath, targetPath);
           probePath = targetPath;
         }
       }
@@ -1414,24 +1347,18 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
       if ([fileType isEqual: NSFileTypeRegular] == YES
           || [fileType isEqual: NSFileTypeSymbolicLink] == YES) {
         if (AppImageHasType2Magic([probePath fileSystemRepresentation])) {
-          NSDebugLLog(@"gwspace", @"%@: AppImage detected at %@", APPIMAGE_ICON_LOG_PREFIX, probePath);
           NSData *iconData = AppImageCopyIconData(probePath);
           if (iconData != nil) {
             NSImage *image = [[[NSImage alloc] initWithData: iconData] autorelease];
             if (image != nil) {
-              NSDebugLLog(@"gwspace", @"%@: returning AppImage icon for %@", APPIMAGE_ICON_LOG_PREFIX, probePath);
               return image;
             }
-            NSDebugLLog(@"gwspace", @"%@: icon data decoded but image was nil for %@", APPIMAGE_ICON_LOG_PREFIX, probePath);
           }
         } else if (GWAppImagePathLooksLikeAppImage(resolvedPath)) {
-          NSDebugLLog(@"gwspace", @"%@: not detected as AppImage by magic: %@", APPIMAGE_ICON_LOG_PREFIX, resolvedPath);
         }
       } else if (GWAppImagePathLooksLikeAppImage(resolvedPath)) {
-        NSDebugLLog(@"gwspace", @"%@: path is not a regular file: %@", APPIMAGE_ICON_LOG_PREFIX, resolvedPath);
       }
     } else if (GWAppImagePathLooksLikeAppImage(resolvedPath)) {
-      NSDebugLLog(@"gwspace", @"%@: missing file attributes for %@", APPIMAGE_ICON_LOG_PREFIX, resolvedPath);
     }
   }
 

@@ -358,11 +358,8 @@ static GWViewersManager *vwrsmanager = nil;
 
 - (void)setPendingOpenAnimationRect:(NSRect)rect
 {
-  NSDebugLLog(@"gwspace", @"[Animation] setPendingOpenAnimationRect called: origin={%.0f,%.0f} size={%.0fx%.0f}",
-        rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
   pendingOpenAnimationRect = rect;
   hasPendingOpenAnimationRect = !NSEqualRects(rect, NSZeroRect);
-  NSDebugLLog(@"gwspace", @"[Animation] hasPendingOpenAnimationRect = %d", hasPendingOpenAnimationRect);
 }
 
 // When opening a folder from a viewer (icon view, list view, path view, a
@@ -937,7 +934,6 @@ static GWViewersManager *vwrsmanager = nil;
   if ([operation isEqual: @"UnmountOperation"]) {
     NSString *unmountedPath = [opinfo objectForKey: @"unmounted"];
     if (unmountedPath) {
-      NSDebugLLog(@"gwspace", @"GWViewersManager: fileSystemDidChange received UnmountOperation for %@", unmountedPath);
       [self closeViewersForUnmountedPath: unmountedPath];
       return;
     }
@@ -1186,7 +1182,6 @@ static GWViewersManager *vwrsmanager = nil;
 
   NSMutableArray *viewersToClose = [NSMutableArray array];
 
-  NSDebugLLog(@"gwspace", @"GWViewersManager: closeViewersForUnmountedPath: %@", unmountedPath);
 
   NSArray *vwCopy = [viewers copy];
   for (id viewer in vwCopy)
@@ -1196,7 +1191,6 @@ static GWViewersManager *vwrsmanager = nil;
           NSString *viewerPath = [[viewer baseNode] path];
           BOOL shouldClose = NO;
 
-          NSDebugLLog(@"gwspace", @"GWViewersManager:   viewer baseNode=%@", viewerPath);
 
           /* Check 1: baseNode is the unmounted path or a subdirectory of it.
            * This catches viewers opened directly at the volume path (spatial
@@ -1204,7 +1198,6 @@ static GWViewersManager *vwrsmanager = nil;
           if ([viewerPath isEqual: unmountedPath] || isSubpathOfPath(unmountedPath, viewerPath))
             {
               shouldClose = YES;
-              NSDebugLLog(@"gwspace", @"GWViewersManager:   -> match via baseNode");
             }
 
           /* Check 2: the viewer is currently showing the unmounted path or a
@@ -1215,12 +1208,10 @@ static GWViewersManager *vwrsmanager = nil;
           if (!shouldClose && [viewer isShowingPath: unmountedPath])
             {
               shouldClose = YES;
-              NSDebugLLog(@"gwspace", @"GWViewersManager:   -> match via isShowingPath");
             }
 
           if (shouldClose)
             {
-              NSDebugLLog(@"gwspace", @"GWViewersManager:   -> CLOSING");
               [viewer invalidate];
               [viewersToClose addObject: viewer];
             }
@@ -1229,7 +1220,6 @@ static GWViewersManager *vwrsmanager = nil;
 
   if ([viewersToClose count] > 0)
     {
-      NSDebugLLog(@"gwspace", @"GWViewersManager: closing %ld viewers", (long)[viewersToClose count]);
       [self closeInvalidViewers: viewersToClose];
     }
 
@@ -1266,13 +1256,6 @@ static GWViewersManager *vwrsmanager = nil;
       }
   }
 
-  NSDebugLLog(@"gwspace", @"GWViewersManager: mountedVolumesDidChange - currentVolumeSet has %ld entries, %ld viewers", 
-              (long)[currentVolumeSet count], (long)[viewers count]);
-  for (NSString *vol in currentVolumeSet)
-    {
-      NSDebugLLog(@"gwspace", @"GWViewersManager:   mounted: %@", vol);
-    }
-
   /* Iterate a copy of the viewers array to avoid crashes if
    * closeInvalidViewers: removes entries from the original array
    * during iteration (e.g. via closeViewersForUnmountedPath: called
@@ -1287,14 +1270,12 @@ static GWViewersManager *vwrsmanager = nil;
           NSString *vpath = [node path];
           if (vpath == nil) continue;
 
-          NSDebugLLog(@"gwspace", @"GWViewersManager:   viewer path=%@ isValid=%d", vpath, [node isValid]);
 
           if ([node isValid] == NO)
             {
               /* Path no longer exists at all (subdirectories on an unmounted
                * volume, or the volume itself on platforms where the mountpoint
                * directory disappears). */
-              NSDebugLLog(@"gwspace", @"GWViewersManager:   -> CLOSING (isValid=NO)");
               [viewer invalidate];
               [viewersToClose addObject: viewer];
             }
@@ -1309,7 +1290,6 @@ static GWViewersManager *vwrsmanager = nil;
                 {
                   if ([vpath isEqual: root] || [vpath hasPrefix: [root stringByAppendingString: @"/"]])
                     {
-                      NSDebugLLog(@"gwspace", @"GWViewersManager:     under mount root %@", root);
                       underMountRoot = YES;
                       break;
                     }
@@ -1322,7 +1302,6 @@ static GWViewersManager *vwrsmanager = nil;
                     {
                       if ([vpath isEqual: vol] || [vpath hasPrefix: [vol stringByAppendingString: @"/"]])
                         {
-                          NSDebugLLog(@"gwspace", @"GWViewersManager:     on mounted volume %@", vol);
                           onMountedVolume = YES;
                           break;
                         }
@@ -1338,7 +1317,6 @@ static GWViewersManager *vwrsmanager = nil;
                       NSSet *netPaths = [[NetworkVolumeManager sharedManager] allMountedPaths];
                       if ([netPaths containsObject: vpath])
                         {
-                          NSDebugLLog(@"gwspace", @"GWViewersManager:     on mounted network volume %@", vpath);
                           onMountedVolume = YES;
                         }
                       else
@@ -1349,8 +1327,6 @@ static GWViewersManager *vwrsmanager = nil;
                               NSString *npSlash = [np stringByAppendingString: @"/"];
                               if ([vpath hasPrefix: npSlash])
                                 {
-                                  NSDebugLLog(@"gwspace",
-                                    @"GWViewersManager:     under mounted network volume %@", np);
                                   onMountedVolume = YES;
                                   break;
                                 }
@@ -1378,8 +1354,6 @@ static GWViewersManager *vwrsmanager = nil;
                         {
                           if ([vol hasPrefix: vpn])
                             {
-                              NSDebugLLog(@"gwspace",
-                                @"GWViewersManager:     is parent of mounted volume %@", vol);
                               isParentOfMounted = YES;
                               break;
                             }
@@ -1392,8 +1366,6 @@ static GWViewersManager *vwrsmanager = nil;
                             {
                               if ([np hasPrefix: vpn])
                                 {
-                                  NSDebugLLog(@"gwspace",
-                                    @"GWViewersManager:     is parent of mounted network volume %@", np);
                                   isParentOfMounted = YES;
                                   break;
                                 }
@@ -1402,7 +1374,6 @@ static GWViewersManager *vwrsmanager = nil;
 
                       if (isParentOfMounted == NO)
                         {
-                          NSDebugLLog(@"gwspace", @"GWViewersManager:   -> CLOSING (not on any mounted volume)");
                           [viewer invalidate];
                           [viewersToClose addObject: viewer];
                         }
@@ -1410,17 +1381,14 @@ static GWViewersManager *vwrsmanager = nil;
                         {
                           /* Keep the viewer open — it is showing a parent of a
                            * mounted volume, which is still a valid location. */
-                          NSDebugLLog(@"gwspace", @"GWViewersManager:   -> KEEPING (parent of mounted volume)");
                         }
                     }
                   else
                     {
-                      NSDebugLLog(@"gwspace", @"GWViewersManager:   -> KEEPING (on mounted volume)");
                     }
                 }
               else
                 {
-                  NSDebugLLog(@"gwspace", @"GWViewersManager:   -> KEEPING (not under any mount root)");
                 }
             }
         }
@@ -1448,8 +1416,6 @@ static GWViewersManager *vwrsmanager = nil;
 
   if (volpath)
     [fnr addVolumeAt:volpath];
-  else
-    NSDebugLLog(@"gwspace", @"newVolumeMounted notification received with empty NSDevicePath");
 }
 - (void)mountedVolumeWillUnmount:(NSNotification *)notif
 {
@@ -1457,7 +1423,6 @@ static GWViewersManager *vwrsmanager = nil;
   NSString *volpath = [dict objectForKey:@"NSDevicePath"];
 
   if (!volpath) {
-    NSDebugLLog(@"gwspace", @"mountedVolumeWillUnmount notification received with empty NSDevicePath");
     return;
   }
 
@@ -1504,7 +1469,6 @@ static GWViewersManager *vwrsmanager = nil;
       }
     [viewersCopy2 release];
   } else {
-    NSDebugLLog(@"gwspace", @"mountedVolumeDidUnmount notification received with empty NSDevicePath");
   }
 }
 
@@ -1517,8 +1481,6 @@ static GWViewersManager *vwrsmanager = nil;
     closeOldViewer:(id)oldvwr
           forceNew:(BOOL)force
 {
-  NSDebugLLog(@"gwspace", @"viewerOfType:showType:forNode:showSelection:closeOldViewer:forceNew: called");
-  NSDebugLLog(@"gwspace", @"vtype=%u, node=%@, showsel=%d, force=%d", vtype, [node path], showsel, force);
 
   id viewer = nil;
   NSRect inheritedFrame = NSZeroRect;
@@ -1546,7 +1508,6 @@ static GWViewersManager *vwrsmanager = nil;
       viewer = [self viewerOfType: SPATIAL withBaseNode: node];
 
     if (viewer) {
-      NSDebugLLog(@"gwspace", @"Found existing spatial viewer, activating it");
       [viewer activate];
     } else {
       viewer = [self createViewerOfType: SPATIAL
@@ -1565,7 +1526,6 @@ static GWViewersManager *vwrsmanager = nil;
       viewer = [self viewerOfType: BROWSING withBaseNode: node];
 
     if (viewer) {
-      NSDebugLLog(@"gwspace", @"Found existing browsing viewer, activating it");
       [viewer activate];
     } else {
       viewer = [self createViewerOfType: BROWSING
@@ -1581,7 +1541,6 @@ static GWViewersManager *vwrsmanager = nil;
   /* Close the predecessor only now that its replacement exists and is
    * shown, so focus hands over cleanly. */
   if (oldvwr) {
-    NSDebugLLog(@"gwspace", @"Closing old viewer");
     [oldvwr deactivate];
     RELEASE (oldvwr);
   }
@@ -1686,7 +1645,6 @@ static GWViewersManager *vwrsmanager = nil;
   // Format: 9 x 32-bit integers (source x,y,w,h, target x,y,w,h, animationType)
 
   if (!window) {
-    NSDebugLLog(@"gwspace", @"[Animation] NULL window passed to setWindowBirthRect");
     return;
   }
 
@@ -1701,13 +1659,11 @@ static GWViewersManager *vwrsmanager = nil;
   // GSWindowAnimationEnabled only disables animation when explicitly set to NO.
   id animEnabled = [[NSUserDefaults standardUserDefaults] objectForKey:@"GSWindowAnimationEnabled"];
   if (animEnabled && [animEnabled boolValue] == NO) {
-    NSDebugLLog(@"gwspace", @"[Animation] Window animation disabled by GSWindowAnimationEnabled preference");
     return;
   }
   // Also respect the macOS-style Reduce Motion key
   if ([[NSUserDefaults standardUserDefaults] boolForKey:@"GSReduceMotion"] == YES) {
     animationType = 1; // NoAnimation
-    NSDebugLLog(@"gwspace", @"[Animation] Reduce Motion active, using NoAnimation type");
   }
 
 #ifdef __linux__
@@ -1716,25 +1672,21 @@ static GWViewersManager *vwrsmanager = nil;
     server = GSCurrentServer();
   }
   if (!server) {
-    NSDebugLLog(@"gwspace", @"[Animation] No display server available for window animation");
     return;
   }
 
   Display *display = (Display *)[server serverDevice];
   if (!display) {
-    NSDebugLLog(@"gwspace", @"[Animation] No X11 display available for animation property");
     return;
   }
 
   // windowDevice returns a Window ID (cast to void*), not a pointer to Window
   void *winptr = [server windowDevice:[window windowNumber]];
   if (!winptr) {
-    NSDebugLLog(@"gwspace", @"[Animation] No X11 window device for animation property");
     return;
   }
   Window xwindow = (Window)(uintptr_t)winptr;  // Cast directly, don't dereference
   if (xwindow == 0) {
-    NSDebugLLog(@"gwspace", @"[Animation] Invalid X11 window id for animation property");
     return;
   }
 
@@ -1742,7 +1694,6 @@ static GWViewersManager *vwrsmanager = nil;
   NSScreen *screen = [window screen];
   if (!screen) screen = [NSScreen mainScreen];
   if (!screen) {
-    NSDebugLLog(@"gwspace", @"[Animation] No screen available for window animation coordinate conversion");
     return;
   }
   NSRect screenFrame = [screen frame];
@@ -1771,7 +1722,6 @@ static GWViewersManager *vwrsmanager = nil;
 
   // Error checking: validate parameters before calling X11
   if (!display || xwindow == 0) {
-    NSDebugLLog(@"gwspace", @"[Animation] Invalid display or X window for setting birth rect");
     return;
   }
 
@@ -1780,7 +1730,6 @@ static GWViewersManager *vwrsmanager = nil;
 
   Atom birthAtom = XInternAtom(display, "_WINDOW_BIRTH_ANIMATION", False);
   if (birthAtom == None) {
-    NSDebugLLog(@"gwspace", @"[Animation] Failed to intern _WINDOW_BIRTH_ANIMATION atom");
     XSetErrorHandler(oldHandler);
     return;
   }
@@ -1788,7 +1737,6 @@ static GWViewersManager *vwrsmanager = nil;
   int status = XChangeProperty(display, xwindow, birthAtom, XA_CARDINAL, 32,
                                PropModeReplace, (unsigned char *)data, 9);
   if (status == BadWindow) {
-    NSDebugLLog(@"gwspace", @"[Animation] XChangeProperty failed: window %lu is invalid", (unsigned long)xwindow);
     XSetErrorHandler(oldHandler);
     return;
   }
@@ -1803,8 +1751,6 @@ static GWViewersManager *vwrsmanager = nil;
   XSync(display, False);
   XSetErrorHandler(oldHandler);
 
-  NSDebugLLog(@"gwspace", @"[Animation] setWindowBirthRect window=0x%lx src={%d,%d,%d,%d} dst={%d,%d,%d,%d} type=%d",
-        (unsigned long)xwindow, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, animationType);
 #endif
 }
 

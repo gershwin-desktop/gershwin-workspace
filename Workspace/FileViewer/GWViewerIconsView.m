@@ -115,12 +115,10 @@
       character = [characters characterAtIndex: 0];
     }
 
-  NSDebugLLog(@"gwspace", @"GWViewerIconsView.keyDown: character=0x%x, flags=0x%x", character, flags);
 
   // Handle Shift-Down = Open Selection
   if (character == NSDownArrowFunctionKey && (flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
     {
-      NSDebugLLog(@"gwspace", @"GWViewerIconsView: Shift-Down detected");
       [viewer openSelectionInNewViewer: NO];
       return;
     }
@@ -225,7 +223,6 @@
       NSArray *selection = [self selectedNodes];
       if (selection == nil || [selection count] == 0)
         {
-          NSDebugLLog(@"gwspace", @"GWViewerIconsView: No selection, selecting first item");
           // Let parent handle selection of first item
           [super keyDown: theEvent];
           return;
@@ -233,7 +230,6 @@
 
       if (character == '\r' && (flags & NSShiftKeyMask))
         {
-          NSDebugLLog(@"gwspace", @"GWViewerIconsView: Shift-Enter - opening as folder");
           [viewer openSelectionAsFolder];
           return;
         }

@@ -43,14 +43,12 @@ static DockServiceDBus *sharedDBusService = nil;
 {
   if (!self.dbusConnection || ![self.dbusConnection isConnected])
     {
-      NSDebugLLog(@"gwspace", @"DockServiceDBus: DBus not connected");
       return NO;
     }
 
   BOOL serviceRegistered = [self.dbusConnection registerService:@"com.canonical.Unity.LauncherEntry"];
   if (!serviceRegistered)
     {
-      NSDebugLLog(@"gwspace", @"DockServiceDBus: Failed to register com.canonical.Unity.LauncherEntry");
       return NO;
     }
 
@@ -60,7 +58,6 @@ static DockServiceDBus *sharedDBusService = nil;
               handler:self];
   if (!objectRegistered)
     {
-      NSDebugLLog(@"gwspace", @"DockServiceDBus: Failed to register object path");
       return NO;
     }
 
@@ -72,7 +69,6 @@ static DockServiceDBus *sharedDBusService = nil;
                                                 userInfo:nil
                                                  repeats:YES];
 
-  NSDebugLLog(@"gwspace", @"DockServiceDBus: Registered com.canonical.Unity.LauncherEntry on DBus");
   return YES;
 }
 
@@ -97,7 +93,6 @@ static DockServiceDBus *sharedDBusService = nil;
     }
   else
     {
-      NSDebugLLog(@"gwspace", @"DockServiceDBus: Unknown method: %@", method);
       [self sendErrorReply:message
                 errorName:"org.freedesktop.DBus.Error.UnknownMethod"
               errorMessage:[[NSString stringWithFormat:@"Unknown method: %@", method] UTF8String]];

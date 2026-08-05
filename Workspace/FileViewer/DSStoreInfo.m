@@ -267,33 +267,20 @@
 {
     NSString *dsStorePath = [_directoryPath stringByAppendingPathComponent:@".DS_Store"];
     
-    NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-    NSDebugLLog(@"gwspace", @"║             DS_STORE COMPREHENSIVE LOADING                       ║");
-    NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-    NSDebugLLog(@"gwspace", @"║ Directory: %@", _directoryPath);
-    NSDebugLLog(@"gwspace", @"║ DS_Store path: %@", dsStorePath);
     
     if (![[NSFileManager defaultManager] fileExistsAtPath:dsStorePath]) {
-        NSDebugLLog(@"gwspace", @"║ ✗ No .DS_Store file found");
-        NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
         return NO;
     }
     
-    NSDebugLLog(@"gwspace", @"║ ✓ Found .DS_Store file");
     
     DSStore *store = [DSStore storeWithPath:dsStorePath];
     if (![store load]) {
-        NSDebugLLog(@"gwspace", @"║ ✗ Failed to load .DS_Store file");
-        NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
         return NO;
     }
     
-    NSDebugLLog(@"gwspace", @"║ ✓ Successfully parsed .DS_Store");
-    NSDebugLLog(@"gwspace", @"╟──────────────────────────────────────────────────────────────────╢");
     
     // Get all entries to see what's available
     NSArray *allFilenames = [store allFilenames];
-    NSDebugLLog(@"gwspace", @"║ Files with entries: %lu", (unsigned long)[allFilenames count]);
     
     // Process directory-level entries (filename = ".")
     [self loadDirectoryEntriesFromStore:store];
@@ -303,11 +290,7 @@
     
     _loaded = YES;
     
-    NSDebugLLog(@"gwspace", @"╟──────────────────────────────────────────────────────────────────╢");
-    NSDebugLLog(@"gwspace", @"║                      LOADING COMPLETE                            ║");
-    NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
     
-    [self logAllInfo];
     
     return YES;
 }
@@ -415,10 +398,7 @@
 
 - (void)loadDirectoryEntriesFromStore:(DSStore *)store
 {
-    NSDebugLLog(@"gwspace", @"║ --- Directory-level entries (filename '.') ---");
     
-    NSArray *dirCodes = [store allCodesForFilename:@"."];
-    NSDebugLLog(@"gwspace", @"║ Available codes for directory: %@", dirCodes);
     
     // IMPORTANT: Format Preferences for Interoperability
     // Modern .DS_Store files use binary plist formats which are preferred:
@@ -442,8 +422,6 @@
     [self loadIconViewPlistFromStore:store];   // New format (try first)
     [self loadIconViewOptionsFromStore:store]; // Old format (fallback)
     
-    // Load grid/spacing options (icgo, icsp)
-    [self loadIconGridOptionsFromStore:store];
     
     // Load background settings (BKGD, bwsp)
     [self loadBackgroundFromStore:store];
@@ -462,7 +440,6 @@
     // Modern .DS_Store files use bwsp with WindowBounds instead
     
     if (_hasWindowFrame) {
-        NSDebugLLog(@"gwspace", @"║ ○ Skipping fwi0 (already have geometry from bwsp)");
         return;
     }
     
@@ -495,20 +472,10 @@
             _windowFrame = NSMakeRect(x, y, width, height);
             _hasWindowFrame = YES;
             
-            NSDebugLLog(@"gwspace", @"║ ✓ fwi0 (Window Geometry):");
-            NSDebugLLog(@"gwspace", @"║   Edges: top=%d left=%d bottom=%d right=%d", top, left, bottom, right);
-            NSDebugLLog(@"gwspace", @"║   Rect: x=%.0f y=%.0f w=%.0f h=%.0f", x, y, width, height);
             
-            // Log view style from bytes 8-11 if present
-            if ([data length] >= 12) {
-                char viewStyle[5] = {bytes[8], bytes[9], bytes[10], bytes[11], 0};
-                NSDebugLLog(@"gwspace", @"║   View style: %s", viewStyle);
-            }
         } else {
-            NSDebugLLog(@"gwspace", @"║ ⚠ fwi0 data too short: %lu bytes", (unsigned long)[data length]);
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No fwi0 (window geometry) entry");
     }
 }
 
@@ -521,28 +488,21 @@
         if ([style isEqualToString:@"icnv"]) {
             _viewStyle = DSStoreViewStyleIcon;
             _hasViewStyle = YES;
-            NSDebugLLog(@"gwspace", @"║ ✓ vstl (View Style): Icon view (icnv)");
         } else if ([style isEqualToString:@"Nlsv"]) {
             _viewStyle = DSStoreViewStyleList;
             _hasViewStyle = YES;
-            NSDebugLLog(@"gwspace", @"║ ✓ vstl (View Style): List view (Nlsv)");
         } else if ([style isEqualToString:@"clmv"]) {
             _viewStyle = DSStoreViewStyleColumn;
             _hasViewStyle = YES;
-            NSDebugLLog(@"gwspace", @"║ ✓ vstl (View Style): Column view (clmv)");
         } else if ([style isEqualToString:@"glyv"]) {
             _viewStyle = DSStoreViewStyleGallery;
             _hasViewStyle = YES;
-            NSDebugLLog(@"gwspace", @"║ ✓ vstl (View Style): Gallery view (glyv)");
         } else if ([style isEqualToString:@"Flwv"]) {
             _viewStyle = DSStoreViewStyleCoverflow;
             _hasViewStyle = YES;
-            NSDebugLLog(@"gwspace", @"║ ✓ vstl (View Style): Coverflow view (Flwv)");
         } else {
-            NSDebugLLog(@"gwspace", @"║ ⚠ vstl (View Style): Unknown style '%@'", style);
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No vstl (view style) entry");
     }
 }
 
@@ -555,7 +515,6 @@
     DSStoreEntry *entry = [store entryForFilename:@"." code:@"bwsp"];
     if (entry && [[entry type] isEqualToString:@"blob"]) {
         NSData *data = (NSData *)[entry value];
-        NSDebugLLog(@"gwspace", @"║ ✓ bwsp (Browser Window Settings - Modern): %lu bytes", (unsigned long)[data length]);
         
         NSError *error = nil;
         NSDictionary *plist = [NSPropertyListSerialization propertyListWithData:data
@@ -571,11 +530,7 @@
                 if (rect.size.width > 0 && rect.size.height > 0) {
                     _windowFrame = rect;
                     _hasWindowFrame = YES;
-                    NSDebugLLog(@"gwspace", @"║   ✓ Window bounds extracted: %@", windowBounds);
-                    NSDebugLLog(@"gwspace", @"║     Parsed as: x=%.0f y=%.0f w=%.0f h=%.0f", 
-                          rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
                 } else {
-                    NSDebugLLog(@"gwspace", @"║   ⚠ Window bounds string present but invalid");
                 }
             }
             
@@ -584,16 +539,11 @@
             if (sidebarWidthObj) {
                 _sidebarWidth = [sidebarWidthObj intValue];
                 _hasSidebarWidth = YES;
-                NSDebugLLog(@"gwspace", @"║   Sidebar width: %d", _sidebarWidth);
             }
             
-            NSDebugLLog(@"gwspace", @"║   Show sidebar: %@", [plist objectForKey:@"ShowSidebar"]);
-            NSDebugLLog(@"gwspace", @"║   Show toolbar: %@", [plist objectForKey:@"ShowToolbar"]);
         } else {
-            NSDebugLLog(@"gwspace", @"║   ⚠ Failed to parse bwsp as plist: %@", error);
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No bwsp (browser window settings) entry");
     }
 }
 
@@ -605,7 +555,6 @@
     
     // Skip if we already have settings from icvp (new format)
     if (_hasIconSize && _hasIconArrangement && _hasLabelPosition) {
-        NSDebugLLog(@"gwspace", @"║ ○ Skipping icvo (already have settings from icvp)");
         return;
     }
     
@@ -615,7 +564,6 @@
         const uint8_t *bytes = (const uint8_t *)[data bytes];
         NSUInteger len = [data length];
         
-        NSDebugLLog(@"gwspace", @"║ ✓ icvo (Icon View Options): %lu bytes", (unsigned long)len);
         
         // External docs specify two variants:
         // 1) "icvo" format: 4-byte magic + 8 unknown + 2-byte size + 4-byte arrangement ("none")
@@ -630,7 +578,6 @@
                 if (size > 0 && size <= 512) {
                     _iconSize = size;
                     _hasIconSize = YES;
-                    NSDebugLLog(@"gwspace", @"║   Format: icvo, Icon size: %d", _iconSize);
                 }
                 
                 // Arrangement at bytes 14-17
@@ -639,11 +586,9 @@
                     if (strcmp(arr, "none") == 0) {
                         _iconArrangement = DSStoreIconArrangementNone;
                         _hasIconArrangement = YES;
-                        NSDebugLLog(@"gwspace", @"║   Arrangement: none");
                     } else if (strcmp(arr, "grid") == 0) {
                         _iconArrangement = DSStoreIconArrangementGrid;
                         _hasIconArrangement = YES;
-                        NSDebugLLog(@"gwspace", @"║   Arrangement: grid");
                     }
                 }
             } else if (strcmp(magic, "icv4") == 0 && len >= 14) {
@@ -652,7 +597,6 @@
                 if (size > 0 && size <= 512) {
                     _iconSize = size;
                     _hasIconSize = YES;
-                    NSDebugLLog(@"gwspace", @"║   Format: icv4, Icon size: %d", _iconSize);
                 }
                 
                 // Arrangement at bytes 6-9
@@ -660,11 +604,9 @@
                 if (strcmp(arr, "none") == 0) {
                     _iconArrangement = DSStoreIconArrangementNone;
                     _hasIconArrangement = YES;
-                    NSDebugLLog(@"gwspace", @"║   Arrangement: none");
                 } else if (strcmp(arr, "grid") == 0) {
                     _iconArrangement = DSStoreIconArrangementGrid;
                     _hasIconArrangement = YES;
-                    NSDebugLLog(@"gwspace", @"║   Arrangement: grid");
                 }
                 
                 // Label position at bytes 10-13
@@ -673,19 +615,15 @@
                     if (strcmp(lbl, "botm") == 0) {
                         _labelPosition = DSStoreLabelPositionBottom;
                         _hasLabelPosition = YES;
-                        NSDebugLLog(@"gwspace", @"║   Label position: bottom");
                     } else if (strcmp(lbl, "rght") == 0) {
                         _labelPosition = DSStoreLabelPositionRight;
                         _hasLabelPosition = YES;
-                        NSDebugLLog(@"gwspace", @"║   Label position: right");
                     }
                 }
             } else {
-                NSDebugLLog(@"gwspace", @"║   ⚠ Unknown icvo format variant (magic: %s)", magic);
             }
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No icvo (icon view options) entry");
     }
 }
 
@@ -698,7 +636,6 @@
     DSStoreEntry *entry = [store entryForFilename:@"." code:@"icvp"];
     if (entry && [[entry type] isEqualToString:@"blob"]) {
         NSData *data = (NSData *)[entry value];
-        NSDebugLLog(@"gwspace", @"║ ✓ icvp (Icon View Plist): %lu bytes", (unsigned long)[data length]);
         
         // Try to parse as binary plist
         NSError *error = nil;
@@ -707,7 +644,6 @@
                                                                          format:NULL
                                                                           error:&error];
         if (plist && [plist isKindOfClass:[NSDictionary class]]) {
-            NSDebugLLog(@"gwspace", @"║   Parsed plist keys: %@", [plist allKeys]);
             
             // Extract icon size
             id sizeObj = [plist objectForKey:@"iconSize"];
@@ -716,7 +652,6 @@
                 if (size > 0 && size <= 512) {
                     _iconSize = size;
                     _hasIconSize = YES;
-                    NSDebugLLog(@"gwspace", @"║   Icon size from plist: %d", _iconSize);
                 }
             }
             
@@ -727,11 +662,9 @@
                 if ([arr isEqualToString:@"none"] || [arr isEqualToString:@"0"]) {
                     _iconArrangement = DSStoreIconArrangementNone;
                     _hasIconArrangement = YES;
-                    NSDebugLLog(@"gwspace", @"║   Arrangement from plist: none");
                 } else if ([arr isEqualToString:@"grid"]) {
                     _iconArrangement = DSStoreIconArrangementGrid;
                     _hasIconArrangement = YES;
-                    NSDebugLLog(@"gwspace", @"║   Arrangement from plist: grid");
                 }
             }
             
@@ -740,7 +673,6 @@
             if (spacingObj) {
                 _gridSpacing = [spacingObj floatValue];
                 _hasGridSpacing = YES;
-                NSDebugLLog(@"gwspace", @"║   Grid spacing from plist: %.1f", _gridSpacing);
             }
             
             // Extract label position
@@ -748,8 +680,6 @@
             if (labelObj) {
                 _labelPosition = [labelObj boolValue] ? DSStoreLabelPositionBottom : DSStoreLabelPositionRight;
                 _hasLabelPosition = YES;
-                NSDebugLLog(@"gwspace", @"║   Label position from plist: %@", 
-                      _labelPosition == DSStoreLabelPositionBottom ? @"bottom" : @"right");
             }
             
             // Extract background settings
@@ -760,7 +690,6 @@
             if (bgType == 2) {
                 // Picture background
                 _backgroundType = DSStoreBackgroundPicture;
-                NSDebugLLog(@"gwspace", @"║   Background type from plist: picture (2)");
                 
                 // Try to extract background image alias
                 id bgImageAlias = [plist objectForKey:@"backgroundImageAlias"];
@@ -771,10 +700,7 @@
                     if (resolvedPath) {
                         [_backgroundImagePath release];
                         _backgroundImagePath = [resolvedPath copy];
-                        NSDebugLLog(@"gwspace", @"║   Background image from alias: %@", _backgroundImagePath);
                     } else {
-                        NSDebugLLog(@"gwspace", @"║   ⚠ Could not resolve background image alias (%lu bytes)", 
-                              (unsigned long)[aliasData length]);
                     }
                 }
             } else if (bgType == 1) {
@@ -786,17 +712,13 @@
                     CGFloat b = [[plist objectForKey:@"backgroundColorBlue"] floatValue];
                     _backgroundColor = [[NSColor colorWithCalibratedRed:r green:g blue:b alpha:1.0] retain];
                     _backgroundType = DSStoreBackgroundColor;
-                    NSDebugLLog(@"gwspace", @"║   Background type from plist: color (1) R=%.2f G=%.2f B=%.2f", r, g, b);
                 }
             } else {
-                NSDebugLLog(@"gwspace", @"║   Background type from plist: default (0)");
             }
             
         } else {
-            NSDebugLLog(@"gwspace", @"║   ⚠ Failed to parse icvp as plist: %@", error);
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No icvp (icon view plist) entry");
     }
 }
 
@@ -811,7 +733,6 @@
             
             if (strncmp(bytes, "DefB", 4) == 0) {
                 _backgroundType = DSStoreBackgroundDefault;
-                NSDebugLLog(@"gwspace", @"║ ✓ BKGD: Default background (DefB)");
             } else if (strncmp(bytes, "ClrB", 4) == 0) {
                 _backgroundType = DSStoreBackgroundColor;
                 // External docs: 4CC "ClrB" + RGB in 6 bytes (2 bytes per channel, big-endian)
@@ -825,57 +746,20 @@
                     CGFloat b = bVal / 65535.0;
                     [_backgroundColor release];
                     _backgroundColor = [[NSColor colorWithCalibratedRed:r green:g blue:b alpha:1.0] retain];
-                    NSDebugLLog(@"gwspace", @"║ ✓ BKGD: Color (ClrB) R=0x%04x G=0x%04x B=0x%04x (%.3f, %.3f, %.3f)", 
-                          rVal, gVal, bVal, r, g, b);
                 }
             } else if (strncmp(bytes, "PctB", 4) == 0) {
                 _backgroundType = DSStoreBackgroundPicture;
-                NSDebugLLog(@"gwspace", @"║ ✓ BKGD: Picture background (PctB)");
                 
                 // Use DSStore's method to resolve the background image path
                 NSString *imagePath = [store backgroundImagePathForDirectory];
                 if (imagePath && [imagePath length] > 0) {
                     [_backgroundImagePath release];
                     _backgroundImagePath = [imagePath copy];
-                    NSDebugLLog(@"gwspace", @"║   Background image path: %@", _backgroundImagePath);
                 } else {
-                    NSDebugLLog(@"gwspace", @"║   ⚠ Could not resolve background image path");
                 }
             }
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No BKGD (background) entry");
-    }
-}
-
-- (void)loadIconGridOptionsFromStore:(DSStore *)store
-{
-    // icgo: Icon grid options (8 bytes, probably two 32-bit integers)
-    DSStoreEntry *entry = [store entryForFilename:@"." code:@"icgo"];
-    if (entry && [[entry type] isEqualToString:@"blob"]) {
-        NSData *data = (NSData *)[entry value];
-        if ([data length] >= 8) {
-            const uint8_t *bytes = (const uint8_t *)[data bytes];
-            uint32_t val1 = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
-            uint32_t val2 = (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
-            NSDebugLLog(@"gwspace", @"║ ✓ icgo (Icon Grid Options): %u, %u", val1, val2);
-        }
-    } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No icgo (icon grid options) entry");
-    }
-    
-    // icsp: Icon spacing (8 bytes)
-    entry = [store entryForFilename:@"." code:@"icsp"];
-    if (entry && [[entry type] isEqualToString:@"blob"]) {
-        NSData *data = (NSData *)[entry value];
-        if ([data length] >= 8) {
-            const uint8_t *bytes = (const uint8_t *)[data bytes];
-            // Usually mostly zeros except last two bytes
-            uint16_t spacing = (bytes[6] << 8) | bytes[7];
-            NSDebugLLog(@"gwspace", @"║ ✓ icsp (Icon Spacing): %u", spacing);
-        }
-    } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No icsp (icon spacing) entry");
     }
 }
 
@@ -893,7 +777,6 @@
     
     if (entry && [[entry type] isEqualToString:@"blob"]) {
         NSData *data = (NSData *)[entry value];
-        NSDebugLLog(@"gwspace", @"║ ✓ lsvp/lsvP (List View Properties): %lu bytes", (unsigned long)[data length]);
         
         NSError *error = nil;
         NSDictionary *plist = [NSPropertyListSerialization propertyListWithData:data
@@ -901,14 +784,12 @@
                                                                          format:NULL
                                                                           error:&error];
         if (plist && [plist isKindOfClass:[NSDictionary class]]) {
-            NSDebugLLog(@"gwspace", @"║   Parsed plist keys: %@", [plist allKeys]);
             
             // Text size (font size for list entries)
             id textSizeObj = [plist objectForKey:@"textSize"];
             if (textSizeObj && [textSizeObj respondsToSelector:@selector(intValue)]) {
                 _listTextSize = [textSizeObj intValue];
                 _hasListTextSize = YES;
-                NSDebugLLog(@"gwspace", @"║   Text size: %d", _listTextSize);
             }
             
             // Icon size (small icon size in list view)
@@ -916,7 +797,6 @@
             if (iconSizeObj && [iconSizeObj respondsToSelector:@selector(intValue)]) {
                 _listIconSize = [iconSizeObj intValue];
                 _hasListIconSize = YES;
-                NSDebugLLog(@"gwspace", @"║   Icon size: %d", _listIconSize);
             }
             
             // Sort column - the column used for sorting
@@ -925,14 +805,12 @@
                 [_sortColumn release];
                 _sortColumn = [(NSString *)sortColumnObj copy];
                 _hasSortColumn = YES;
-                NSDebugLLog(@"gwspace", @"║   Sort column: %@", _sortColumn);
             }
             
             // Sort ascending
             id ascendingObj = [plist objectForKey:@"ascending"];
             if (ascendingObj && [ascendingObj respondsToSelector:@selector(boolValue)]) {
                 _sortAscending = [ascendingObj boolValue];
-                NSDebugLLog(@"gwspace", @"║   Sort ascending: %@", _sortAscending ? @"YES" : @"NO");
             } else {
                 _sortAscending = YES;  // Default to ascending
             }
@@ -970,26 +848,20 @@
                 if ([widths count] > 0) {
                     [_columnWidths release];
                     _columnWidths = [widths copy];
-                    NSDebugLLog(@"gwspace", @"║   Column widths: %@", _columnWidths);
                 }
                 if ([visible count] > 0) {
                     [_columnVisible release];
                     _columnVisible = [visible copy];
-                    NSDebugLLog(@"gwspace", @"║   Column visibility: %@", _columnVisible);
                 }
             }
         } else {
-            NSDebugLLog(@"gwspace", @"║   ⚠ Failed to parse as plist: %@", error);
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No lsvp/lsvP (list view properties) entry");
     }
     
     // Check for legacy lsvo format (76 bytes)
     entry = [store entryForFilename:@"." code:@"lsvo"];
     if (entry && [[entry type] isEqualToString:@"blob"]) {
-        NSData *data = (NSData *)[entry value];
-        NSDebugLLog(@"gwspace", @"║ ✓ lsvo (List View Options - Legacy): %lu bytes", (unsigned long)[data length]);
         // TODO: Parse legacy format if needed for older DS_Store files
     }
 }
@@ -1001,19 +873,13 @@
     if (entry && [[entry type] isEqualToString:@"long"]) {
         _sidebarWidth = [[entry value] intValue];
         _hasSidebarWidth = YES;
-        NSDebugLLog(@"gwspace", @"║ ✓ fwsw (Sidebar Width): %d pixels", _sidebarWidth);
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No fwsw (sidebar width) entry");
     }
 }
 
 - (void)loadIconEntriesFromStore:(DSStore *)store filenames:(NSArray *)filenames
 {
-    NSDebugLLog(@"gwspace", @"║ --- Per-file entries (icon positions, comments, labels) ---");
     
-    NSUInteger positionCount = 0;
-    NSUInteger commentCount = 0;
-    NSUInteger labelCount = 0;
 
     /* On-disk children of this directory, used to drop ghost entries. */
     NSSet *children = [DSStoreInfo childrenOfDirectory: _directoryPath];
@@ -1044,9 +910,7 @@
                 }
                 info.position = NSMakePoint((CGFloat)x, (CGFloat)y);
                 info.hasPosition = YES;
-                positionCount++;
                 
-                NSDebugLLog(@"gwspace", @"║   Iloc '%@': (%d, %d) [icon center]", filename, x, y);
             }
         }
         
@@ -1057,8 +921,6 @@
                 info = [DSStoreIconInfo infoForFilename:filename];
             }
             info.comments = (NSString *)[cmmtEntry value];
-            commentCount++;
-            NSDebugLLog(@"gwspace", @"║   cmmt '%@': \"%@\"", filename, info.comments);
         }
         
         // Check for lclr (label color)
@@ -1070,19 +932,7 @@
             int32_t colorValue = [[lclrEntry value] intValue];
             info.labelColor = (DSStoreLabelColor)colorValue;
             info.hasLabelColor = YES;
-            labelCount++;
             
-            NSString *colorName = @"none";
-            switch (colorValue) {
-                case 1: colorName = @"red"; break;
-                case 2: colorName = @"orange"; break;
-                case 3: colorName = @"yellow"; break;
-                case 4: colorName = @"green"; break;
-                case 5: colorName = @"blue"; break;
-                case 6: colorName = @"purple"; break;
-                case 7: colorName = @"grey"; break;
-            }
-            NSDebugLLog(@"gwspace", @"║   lclr '%@': %d (%@)", filename, colorValue, colorName);
         }
         
         // Store the info if we have any data
@@ -1099,9 +949,6 @@
         }
     }
     
-    NSDebugLLog(@"gwspace", @"║ Total icon positions found: %lu", (unsigned long)positionCount);
-    NSDebugLLog(@"gwspace", @"║ Total comments found: %lu", (unsigned long)commentCount);
-    NSDebugLLog(@"gwspace", @"║ Total label colors found: %lu", (unsigned long)labelCount);
 }
 
 #pragma mark - Icon Position Access
@@ -1403,8 +1250,14 @@
         return NSZeroRect;
     }
     
-    // IMPORTANT: .DS_Store fwi0 stores the CONTENT AREA rect (excluding titlebar/chrome)
-    // 
+    // .DS_Store fwi0/bwsp stores the CONTENT AREA rect (excluding the title
+    // bar / chrome) - see the MozillaWiki DS_Store format notes ("the rect
+    // defining the content area of the window") and Finder behavior.  This is
+    // also what the OpenStep/Cocoa contentRectForFrameRect: convention calls
+    // the content rectangle, and what ICCCM WM_NORMAL_HINTS refers to as the
+    // client window size (excluding borders).  The frame (with decorations)
+    // is derived by the caller via [NSWindow frameRectForContentRect:].
+    //
     // .DS_Store format: origin at TOP-LEFT of screen
     // - _windowFrame.origin.y is the TOP edge of CONTENT area (distance from top of screen downward)
     // - Smaller y values = closer to top of screen
@@ -1429,11 +1282,6 @@
     NSRect result = NSMakeRect(_windowFrame.origin.x, gnustepY, 
                                _windowFrame.size.width, contentHeight);
     
-    NSDebugLLog(@"gwspace", @"Coordinate conversion:");
-    NSDebugLLog(@"gwspace", @"  .DS_Store content area: top=%.0f left=%.0f width=%.0f height=%.0f", 
-          dsStoreTop, _windowFrame.origin.x, _windowFrame.size.width, contentHeight);
-    NSDebugLLog(@"gwspace", @"  Screen height: %.0f", screenHeight);
-    NSDebugLLog(@"gwspace", @"  GNUstep content rect: %@", NSStringFromRect(result));
     
     return result;
 }
@@ -1444,9 +1292,13 @@
         return NSZeroRect;
     }
 
-    /* Inverse of -gnustepWindowFrameForScreen:: the receiver's GNUstep frame
-     * (origin bottom-left) becomes the .DS_Store content-area rect (origin
-     * top-left, y is the top edge measured downward). */
+    /* Inverse of -gnustepWindowFrameForScreen:: the receiver's GNUstep
+     * CONTENT rect (origin bottom-left) becomes the .DS_Store content-area
+     * rect (origin top-left, y is the top edge measured downward).  Both
+     * rects exclude the window decoration, matching the fwi0/bwsp format.
+     * Do NOT pass a full frame here: the decoration height would then be
+     * added a second time on restore (frameRectForContentRect:), making the
+     * window grow and drift upward every open/close cycle. */
     if (screen == nil) {
       screen = [DSStoreInfo safeMainScreen];
     }
@@ -1456,10 +1308,6 @@
     NSRect result = NSMakeRect(_windowFrame.origin.x, dsStoreTop,
                                _windowFrame.size.width, _windowFrame.size.height);
 
-    NSDebugLLog(@"gwspace", @"Inverse coordinate conversion:");
-    NSDebugLLog(@"gwspace", @"  GNUstep frame: %@", NSStringFromRect(_windowFrame));
-    NSDebugLLog(@"gwspace", @"  .DS_Store content area: top=%.0f left=%.0f width=%.0f height=%.0f",
-          dsStoreTop, _windowFrame.origin.x, _windowFrame.size.width, _windowFrame.size.height);
 
     return result;
 }
@@ -1492,14 +1340,10 @@
 {
   if (!dsStorePath || [dsStorePath length] == 0) return NO;
 
-  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-  NSDebugLLog(@"gwspace", @"║             DS_STORE WRITE: %@", dsStorePath);
-  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
 
   /* Build the DSStore object with all current settings */
   DSStore *store = [DSStore createStoreAtPath:dsStorePath withEntries:nil];
   if (!store) {
-    NSDebugLLog(@"gwspace", @"║ ✗ Failed to create DSStore for %@", dsStorePath);
     return NO;
   }
 
@@ -1522,12 +1366,9 @@
   /* --- Write atomically --- */
   BOOL saved = [store save];
   if (saved) {
-    NSDebugLLog(@"gwspace", @"║ ✓ Successfully wrote %@", dsStorePath);
   } else {
-    NSDebugLLog(@"gwspace", @"║ ✗ Failed to write %@", dsStorePath);
   }
 
-  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 
   return saved;
 }
@@ -1542,13 +1383,14 @@
 {
   if (!prefs) return;
 
-  /* Window geometry.  Two forms are possible:
-   *   - GNUstep saved-frame string from [NSWindow stringWithSavedFrame]:
-   *     "<x> <y> <w> <h> ..." (space-separated; NSRectFromString cannot
-   *     parse it).
-   *   - the "{{x, y}, {w, h}}" form used by NSRectFromString.
-   * Try NSRectFromString first (covers the bracketed form), then fall back
-   * to scanning the first four integers (covers the saved-frame form). */
+  /* Window geometry.  We persist the CONTENT rect (the area inside the title
+   * bar / border), because .DS_Store fwi0/bwsp stores the content area per
+   * the DS_Store format notes (MozillaWiki, forensiclunch).  Callers supply
+   * it either as a GNUstep NSStringFromRect value "{{x, y}, {w, h}}" or as a
+   * legacy "<x> <y> <w> <h>" space-separated string.  Both parse here; the
+   * rect is interpreted in GNUstep screen coords (bottom-left origin).  The
+   * final flip to DS_Store top-left coords happens in
+   * dsStoreWindowFrameForScreen: when writing. */
   NSString *geo = [prefs objectForKey:@"geometry"];
   if (geo && !(preserve && _hasWindowFrame)) {
     NSRect parsed = NSRectFromString(geo);
@@ -1808,75 +1650,6 @@
     [desc appendFormat:@"  iconPositions: %lu files\n", (unsigned long)[self filenamesWithPositions].count];
     
     return desc;
-}
-
-- (void)logAllInfo
-{
-    NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-    NSDebugLLog(@"gwspace", @"║                   DS_STORE INFO SUMMARY                          ║");
-    NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-    NSDebugLLog(@"gwspace", @"║ Directory: %@", _directoryPath);
-    NSDebugLLog(@"gwspace", @"╟──────────────────────────────────────────────────────────────────╢");
-    
-    if (_hasWindowFrame) {
-        NSDebugLLog(@"gwspace", @"║ Window Geometry: x=%.0f y=%.0f w=%.0f h=%.0f", 
-              _windowFrame.origin.x, _windowFrame.origin.y,
-              _windowFrame.size.width, _windowFrame.size.height);
-    } else {
-        NSDebugLLog(@"gwspace", @"║ Window Geometry: (not set)");
-    }
-    
-    if (_hasViewStyle) {
-        NSString *styleName = @"unknown";
-        switch (_viewStyle) {
-            case DSStoreViewStyleIcon: styleName = @"Icon"; break;
-            case DSStoreViewStyleList: styleName = @"List"; break;
-            case DSStoreViewStyleColumn: styleName = @"Column"; break;
-            case DSStoreViewStyleGallery: styleName = @"Gallery"; break;
-            case DSStoreViewStyleCoverflow: styleName = @"Coverflow"; break;
-        }
-        NSDebugLLog(@"gwspace", @"║ View Style: %@", styleName);
-    } else {
-        NSDebugLLog(@"gwspace", @"║ View Style: (not set, defaulting to Icon)");
-    }
-    
-    if (_hasIconSize) {
-        NSDebugLLog(@"gwspace", @"║ Icon Size: %d pixels", _iconSize);
-    } else {
-        NSDebugLLog(@"gwspace", @"║ Icon Size: (not set, using default)");
-    }
-    
-    if (_hasIconArrangement) {
-        NSDebugLLog(@"gwspace", @"║ Icon Arrangement: %@", 
-              _iconArrangement == DSStoreIconArrangementNone ? 
-              @"NONE (free positioning enabled)" : @"Grid (snapping enabled)");
-    } else {
-        NSDebugLLog(@"gwspace", @"║ Icon Arrangement: (not set)");
-    }
-    
-    if (_hasLabelPosition) {
-        NSDebugLLog(@"gwspace", @"║ Label Position: %@",
-              _labelPosition == DSStoreLabelPositionBottom ? @"Bottom" : @"Right");
-    }
-    
-    if (_backgroundColor) {
-        NSDebugLLog(@"gwspace", @"║ Background: Color - %@", _backgroundColor);
-    } else if (_backgroundImagePath) {
-        NSDebugLLog(@"gwspace", @"║ Background: Image - %@", _backgroundImagePath);
-    } else {
-        NSDebugLLog(@"gwspace", @"║ Background: Default");
-    }
-    
-    NSArray *positionedFiles = [self filenamesWithPositions];
-    NSDebugLLog(@"gwspace", @"╟──────────────────────────────────────────────────────────────────╢");
-    NSDebugLLog(@"gwspace", @"║ Icons with custom positions: %lu", (unsigned long)[positionedFiles count]);
-    
-    for (NSString *filename in positionedFiles) {
-        DSStoreIconInfo *info = [_iconInfoDict objectForKey:filename];
-        NSDebugLLog(@"gwspace", @"║   '%@' -> (%.0f, %.0f)", filename, info.position.x, info.position.y);
-    }
-    
-    NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 @end

@@ -41,7 +41,6 @@ static DBusHandlerResult dbusMessageFilterHandler(DBusConnection *connection,
                     
                     id handler = [self.messageHandlers objectForKey:key];
                     if (handler) {
-                        NSDebugLLog(@"gwspace", @"DBusConnection: Found handler for %@, calling handleIncomingMessage", key);
                         [self handleIncomingMessage:message];
                         return DBUS_HANDLER_RESULT_HANDLED;
                     }
@@ -60,19 +59,11 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
     @autoreleasepool {
         GNUDBusConnection *self = (__bridge GNUDBusConnection *)user_data;
         if (self) {
-            const char *path = dbus_message_get_path(message);
-            const char *interface = dbus_message_get_interface(message);
-            const char *member = dbus_message_get_member(message);
-            NSDebugLLog(@"gwspace", @"DBusConnection: C callback invoked for %s.%s on %s", 
-                  interface ? interface : "(null)", 
-                  member ? member : "(null)", 
-                  path ? path : "(null)");
             
             [self handleIncomingMessage:message];
             // Return HANDLED to prevent the default handler from sending UnknownObject error
             return DBUS_HANDLER_RESULT_HANDLED;
         }
-        NSDebugLLog(@"gwspace", @"DBusConnection: C callback invoked but self is NULL!");
     }
     return DBUS_HANDLER_RESULT_NOT_YET_HANDLED;
 }
@@ -117,13 +108,11 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
     
     self.connection = dbus_bus_get(DBUS_BUS_SESSION, &error);
     if (dbus_error_is_set(&error)) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Failed to connect to session bus: %s", error.message);
         dbus_error_free(&error);
         return NO;
     }
     
     if (!self.connection) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Failed to get session bus connection");
         return NO;
     }
     
@@ -132,13 +121,11 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
                                     dbusMessageFilterHandler,
                                     (__bridge void *)self,
                                     NULL)) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Failed to add message filter");
         dbus_connection_unref((DBusConnectionStruct *)self.connection);
         self.connection = NULL;
         return NO;
     }
     
-    NSDebugLLog(@"gwspace", @"DBusConnection: Added message filter");
     
     self.connected = YES;
     // NSLog(@"DBusConnection: Successfully connected to session bus");
@@ -174,7 +161,6 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
                                       &error);
     
     if (dbus_error_is_set(&error)) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Failed to register service %@: %s", serviceName, error.message);
         dbus_error_free(&error);
         return NO;
     }
@@ -182,22 +168,6 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
     if (result != DBUS_REQUEST_NAME_REPLY_PRIMARY_OWNER && 
         result != DBUS_REQUEST_NAME_REPLY_ALREADY_OWNER) {
         
-        const char *resultStr = "unknown";
-        switch (result) {
-            case DBUS_REQUEST_NAME_REPLY_IN_QUEUE:
-                resultStr = "IN_QUEUE (another service owns the name)";
-                break;
-            case DBUS_REQUEST_NAME_REPLY_EXISTS:
-                resultStr = "EXISTS (name already exists and DBUS_NAME_FLAG_DO_NOT_QUEUE was specified)";
-                break;
-            default:
-                resultStr = "unknown error";
-                break;
-        }
-        
-        NSDebugLLog(@"gwspace", @"DBusConnection: Failed to become owner of service %@ (result: %d - %s)", serviceName, result, resultStr);
-        NSDebugLLog(@"gwspace", @"DBusConnection: Another application may already be providing the AppMenu.Registrar service");
-        NSDebugLLog(@"gwspace", @"DBusConnection: This is normal if multiple menu applications are running");
         return NO;
     }
     
@@ -237,15 +207,12 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
                                                    (__bridge void *)self,
                                                    &error)) {
         if (dbus_error_is_set(&error)) {
-            NSDebugLLog(@"gwspace", @"DBusConnection: Failed to register object path %@: %s", objectPath, error.message);
             dbus_error_free(&error);
         } else {
-            NSDebugLLog(@"gwspace", @"DBusConnection: Failed to register object path %@ (unknown error)", objectPath);
         }
         return NO;
     }
     
-    NSDebugLLog(@"gwspace", @"DBusConnection: Registered handler for %@ on %@", interfaceName, objectPath);
     return YES;
 }
 
@@ -256,13 +223,11 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
      arguments:(NSArray *)arguments
 {
     if (!self.connected || !self.connection) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Cannot call method - not connected");
         return nil;
     }
     
     // Validate inputs
     if (!method || !serviceName || !objectPath || !interfaceName) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Cannot call method - invalid parameters");
         return nil;
     }
     
@@ -275,7 +240,6 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
                                                        [interfaceName UTF8String],
                                                        [method UTF8String]);
     if (!message) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Failed to create method call message");
         return nil;
     }
     
@@ -428,15 +392,11 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
     dbus_message_unref(message);
     
     if (dbus_error_is_set(&error)) {
-        NSString *errorMsg = [NSString stringWithUTF8String:error.message ? error.message : "Unknown error"];
-        NSDebugLLog(@"gwspace", @"DBusConnection: Method call failed for %@.%@ on %@%@: %@", 
-              interfaceName, method, serviceName, objectPath, errorMsg);
         dbus_error_free(&error);
         return nil;
     }
     
     if (!reply) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: No reply received");
         return nil;
     }
     
@@ -475,27 +435,8 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
         }
     } else if (messageType == DBUS_MESSAGE_TYPE_ERROR) {
         // Handle error replies
-        const char *errorName = dbus_message_get_error_name(reply);
-        NSString *errorNameStr = errorName ? [NSString stringWithUTF8String:errorName] : @"Unknown";
-        
-        // Try to get error message from reply arguments
-        NSString *errorMessage = @"";
-        DBusMessageIter iter;
-        if (dbus_message_iter_init(reply, &iter)) {
-            int argType = dbus_message_iter_get_arg_type(&iter);
-            if (argType == DBUS_TYPE_STRING) {
-                char *str;
-                dbus_message_iter_get_basic(&iter, &str);
-                errorMessage = str ? [NSString stringWithUTF8String:str] : @"";
-            }
-        }
-        
-        NSDebugLLog(@"gwspace", @"DBusConnection: Method call %@.%@ returned error '%@': %@", 
-              interfaceName, method, errorNameStr, errorMessage);
         result = nil;
     } else {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Unexpected message type %d for method call %@.%@", 
-              messageType, interfaceName, method);
         result = nil;
     }
     
@@ -522,7 +463,6 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
                                                        "org.gtk.Actions",
                                                        "Activate");
     if (!message) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Failed to create GTK Activate method call");
         return nil;
     }
     
@@ -611,14 +551,11 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
     dbus_message_unref(message);
     
     if (dbus_error_is_set(&error)) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: GTK Activate call failed for %@ on %@%@: %s", 
-              actionName, serviceName, objectPath, error.message);
         dbus_error_free(&error);
         return nil;
     }
     
     if (!reply) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: No reply received for GTK Activate call");
         return nil;
     }
     
@@ -633,7 +570,6 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
     
     switch (argType) {
         case DBUS_TYPE_INVALID:
-            NSDebugLLog(@"gwspace", @"DBusConnection: Invalid DBus type encountered");
             return nil;
             
         case DBUS_TYPE_STRING: {
@@ -760,7 +696,6 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
                 // NSLog(@"DBusConnection: Parsed dict entry: %@ -> %@", key, value);
                 return result;
             } else {
-                NSDebugLLog(@"gwspace", @"DBusConnection: Invalid dict entry (missing key or value)");
                 return nil;
             }
         }
@@ -776,7 +711,6 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
         }
         
         default:
-            NSDebugLLog(@"gwspace", @"DBusConnection: Unsupported DBus type: %c (%d)", (char)argType, argType);
             return nil;
     }
 }
@@ -804,7 +738,6 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
         }
     }
     @catch (NSException *exception) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Exception during message processing: %@", exception);
     }
 }
 
@@ -816,7 +749,6 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
 - (int)getFileDescriptor
 {
     if (!self.connected || !self.connection) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Cannot get file descriptor - not connected");
         return -1;
     }
     
@@ -827,16 +759,13 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
             // NSLog(@"DBusConnection: Got file descriptor: %d", fd);
             // Validate file descriptor
             if (fd < 0) {
-                NSDebugLLog(@"gwspace", @"DBusConnection: Invalid file descriptor: %d", fd);
                 return -1;
             }
             return fd;
         } else {
-            NSDebugLLog(@"gwspace", @"DBusConnection: Failed to get file descriptor");
             return -1;
         }
     } @catch (NSException *exception) {
-        NSDebugLLog(@"gwspace", @"DBusConnection: Exception getting file descriptor: %@", exception);
         return -1;
     }
 }
@@ -924,10 +853,8 @@ static DBusHandlerResult dbusObjectPathMessageHandler(DBusConnection *connection
 {
     const char *path = dbus_message_get_path(message);
     NSString *pathStr = [NSString stringWithUTF8String:path];
-    NSDebugLLog(@"gwspace", @"DBusConnection: Introspect request for path: %@", pathStr);
     
     NSString *introspectionXML = [self getIntrospectionXMLForPath:pathStr];
-    NSDebugLLog(@"gwspace", @"DBusConnection: Returning introspection XML:\n%@", introspectionXML);
     
     DBusMessage *reply = dbus_message_new_method_return(message);
     if (reply) {

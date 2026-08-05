@@ -142,7 +142,6 @@ static FSNodeRep *shared = nil;
       {
         if ([fm createDirectoryAtPath: libraryDir attributes: nil] == NO)
           {
-            NSDebugLLog(@"gwspace", @"Unable to create the Library directory. Quitting now");
             [NSApp terminate: self];
           }
       }
@@ -151,7 +150,6 @@ static FSNodeRep *shared = nil;
     
     if (([fm fileExistsAtPath: thumbnailDir isDirectory: &isdir] && isdir) == NO) {
       if ([fm createDirectoryAtPath: thumbnailDir attributes: nil] == NO) {
-        NSDebugLLog(@"gwspace", @"Unable to create the thumbnails directory. Quitting now");
         [NSApp terminate: self];
       }
     }
@@ -213,7 +211,6 @@ static FSNodeRep *shared = nil;
         			
 				for (j = 0; j < [loaded count]; j++) {
 					if ([name isEqual: [[loaded objectAtIndex: j] menuName]]) {
-            NSDebugLLog(@"gwspace", @"duplicate module \"%@\" at %@", name, bpath);
 						exists = YES;
 						break;
 					}
@@ -804,7 +801,6 @@ static FSNodeRep *shared = nil;
             }
           NS_HANDLER
             {
-          NSDebugLLog(@"gwspace", @"BAD IMAGE '%@'", tumbpath);
             }
           NS_ENDHANDLER
         }

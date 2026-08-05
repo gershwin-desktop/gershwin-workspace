@@ -193,7 +193,6 @@
     }
   else
     {
-      NSDebugLLog(@"gwspace", @"Invalid image: %@", path);
     }
   
   RELEASE (image);  

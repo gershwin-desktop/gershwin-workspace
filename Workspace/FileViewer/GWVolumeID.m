@@ -244,12 +244,9 @@ static NSString *stringForFSMagic(long magic)
        withIntermediateDirectories:YES
                         attributes:nil
                              error:&err]) {
-      NSDebugLLog(@"gwspace", @"GWVolumeID: Failed to create cache dir %@: %@",
-                  dir, err);
       return nil;
     }
   } else if (!isDir) {
-    NSDebugLLog(@"gwspace", @"GWVolumeID: Cache path exists but is not a directory: %@", dir);
     return nil;
   }
 

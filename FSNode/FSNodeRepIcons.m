@@ -211,7 +211,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	      icon = [[[NSImage alloc] initWithContentsOfFile: volumeIconPath] autorelease];
 	      if (icon == nil)
 		{
-		  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: Failed to load .VolumeIcon.icns from %@", volumeIconPath);
 		  /* Fallback to disk image check */
 		  key = nil;
 		}
@@ -233,7 +232,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	      if ([[FSNodeRep sharedInstance] isDiskImageVolume: nodepath])
 		{
 		  /* Use CD icon for disk image mounts (DMG, ISO, etc.) */
-		  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: isDiskImageVolume=YES for %@, using CD icon", nodepath);
 		  NSString *cdIconPath = [[NSBundle mainBundle] pathForImageResource: @"CD"];
 		  if (cdIconPath != nil)
 		    {
@@ -242,7 +240,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 		      icon = [[[NSImage alloc] initWithContentsOfFile: cdIconPath] autorelease];
 		      if (icon == nil)
 			{
-			  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: Failed to load CD icon from %@", cdIconPath);
 			  /* Fallback to generic disk icon */
 			  key = @"disk";
 			  baseIcon = hardDiskIcon;
@@ -261,7 +258,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 		  else
 		    {
 		      /* No CD.icns found, use generic disk icon */
-		      NSDebugLLog(@"gwspace", @"FSNodeRepIcons: CD.icns not found in bundle");
 		      key = @"disk";
 		      baseIcon = hardDiskIcon;
 		    }
@@ -269,7 +265,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	      else
 		{
 		  /* Regular disk mount (physical disk, SSHFS, etc.) - use disk icon */
-		  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: isDiskImageVolume=NO for %@, using hard disk icon", nodepath);
 
 		  /* Check if this is a network (FUSE) filesystem mount; use Network icon */
 		  NSImage *netIcon = [self networkIconForPath: nodepath];
@@ -341,7 +336,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 
               if (baseIcon == nil)
                 {
-                  NSDebugLLog(@"gwspace", @"no icon in cache for key %@ and no WS icon for %@", key, nodepath);
                 }
 
               if (baseIcon != nil)
@@ -476,7 +470,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 
   if (icon == nil)
     {
-      NSDebugLLog(@"gwspace", @"Warning: No icon found for %@", nodepath);
     }
 
   return icon;
@@ -984,7 +977,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
             }
           NS_HANDLER
             {
-          NSDebugLLog(@"gwspace", @"BAD IMAGE '%@'", tumbpath);
             }
           NS_ENDHANDLER
         }

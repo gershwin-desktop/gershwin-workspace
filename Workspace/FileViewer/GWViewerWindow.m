@@ -239,10 +239,8 @@
       return;
 
     case NSUpArrowFunctionKey:
-      NSDebugLLog(@"gwspace", @"GWViewerWindow: NSUpArrowFunctionKey pressed, flags=0x%x", flags);
       if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
 	{
-	  NSDebugLLog(@"gwspace", @"GWViewerWindow: Shift-Up detected");
 	  // Shift-Up = Open parent folder in new viewer
 	  id delegate = [self delegate];
 	  if ([delegate respondsToSelector: @selector(baseNode)])
@@ -321,10 +319,8 @@
       return;
 
     case NSDownArrowFunctionKey:
-      NSDebugLLog(@"gwspace", @"GWViewerWindow: NSDownArrowFunctionKey pressed, flags=0x%x", flags);
       if ((flags & NSCommandKeyMask) && (flags & NSShiftKeyMask))
 	{
-	  NSDebugLLog(@"gwspace", @"GWViewerWindow: Command-Shift-Down detected");
 	  // Command-Shift-Down = Open as Folder (alternative shortcut)
 	  [[self delegate] openSelectionAsFolder];
 	  return;
@@ -410,7 +406,6 @@
 
 - (void)performClose:(id)sender
 {
-  NSDebugLLog(@"gwspace", @"GWViewerWindow performClose: called for window: %@", [self title]);
   // Close the window
   [super performClose: sender];
 }

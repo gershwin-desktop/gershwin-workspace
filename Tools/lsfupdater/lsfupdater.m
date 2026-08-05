@@ -27,13 +27,6 @@
 #import "FinderModulesProtocol.h"
 #include "config.h"
 
-#ifndef GW_DEBUG_LOG
-#define GW_DEBUG_LOG 0
-#endif
-
-#define GWDebugLog(format, args...) \
-  do { if (GW_DEBUG_LOG) \
-    NSDebugLLog(@"gwspace", format , ## args); } while (0)
 
 BOOL subPathOfPath(NSString *p1, NSString *p2);
 
@@ -205,7 +198,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
     conn = [NSConnection connectionWithRegisteredName: cname host: nil];
 
     if (conn == nil) {
-      NSDebugLLog(@"gwspace", @"failed to contact the lsfolder - bye.");
       DESTROY (self);
       return self;
     } 
@@ -231,7 +223,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
   [nc removeObserver: self
 	              name: NSConnectionDidDieNotification
 	            object: [notification object]];
-  NSDebugLLog(@"gwspace", @"the lsfolder connection has been destroyed.");
   [self terminate];
 }
 
@@ -350,7 +341,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
   NSString *infopath = [lsfolder infoPath];
   NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: infopath];
   
-  GWDebugLog(@"setAutoupdate %i", value);  
 
   autoupdate = value;
   
@@ -381,7 +371,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
   if (autoupdateTmr && [autoupdateTmr isValid]) {
     [autoupdateTmr invalidate];
     DESTROY (autoupdateTmr);
-    GWDebugLog(@"removing autoupdateTmr");
   }
   
   if (autoupdate > 0) {
@@ -425,10 +414,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
     updateInterval = (autoupdate * 1.0) / count;
     interval = (updateInterval == 0) ? 0.1 : updateInterval;
 
-    GWDebugLog(@"\nresetTimer");
-    GWDebugLog(@"autoupdate %i", autoupdate);
-    GWDebugLog(@"dircount %i", dircount);  
-    GWDebugLog(@"updateInterval %.2f", updateInterval);
 
     autoupdateTmr = [NSTimer scheduledTimerWithTimeInterval: interval
                                target: self 
@@ -464,13 +449,11 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
   BOOL lsfdone = YES;
   int i;
 
-  GWDebugLog(@"starting fast update");
 
   [lsfolder clearFoundPaths];
   
   [self getFoundPaths];
 
-  GWDebugLog(@"got %lu found paths. checking...", (unsigned long)[foundPaths count]);
   
   [self checkFoundPaths];
   
@@ -493,7 +476,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
     }
   }
     
-  GWDebugLog(@"fast update done.");  
 
   if ([searchPaths count]) {
     ASSIGN (lastUpdate, [NSDate date]);
@@ -576,7 +558,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
   CREATE_AUTORELEASE_POOL(arp);
   NSArray *paths;
   
-  GWDebugLog(@"getting directories from the db...");
   
   if (norecursion) {
     paths = [NSArray array];
@@ -591,8 +572,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
         
     paths = [paths arrayByAddingObject: srcpath];
 
-    GWDebugLog(@"%lu directories", (unsigned long)[paths count]);
-    GWDebugLog(@"updating in %@", srcpath);    
     
     for (i = 0; i <= count; i++) {
       CREATE_AUTORELEASE_POOL(arp1);
@@ -607,7 +586,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
         NSTimeInterval interval = [lastUpdate timeIntervalSinceReferenceDate];
         mustcheck = ([self ddbdGetTimestampOfPath: dbpath] > interval);      
         if (mustcheck) {
-          GWDebugLog(@"metadata modification date changed at %@", dbpath);
         }
       }
       
@@ -619,7 +597,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
                       && ([foundPaths containsObject: dbpath] == NO)) {
           [foundPaths addObject: dbpath];
           [lsfolder addFoundPath: dbpath];
-          GWDebugLog(@"adding %@", dbpath);
         }
         
         contents = [fm directoryContentsAtPath: dbpath];
@@ -634,7 +611,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
                               && ([foundPaths containsObject: fpath] == NO)) {
             [foundPaths addObject: fpath];
             [lsfolder addFoundPath: fpath];
-            GWDebugLog(@"adding %@", fpath);
           }
 
           if (([attr fileType] == NSFileTypeDirectory) 
@@ -649,7 +625,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
                 if ([foundPaths containsObject: found] == NO) {
                   [foundPaths addObject: found];
                   [lsfolder addFoundPath: found];
-                  GWDebugLog(@"adding %@", found);
                 }
               }
             }
@@ -672,8 +647,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
     NSArray *founds;
     int i;
     
-    NSDebugLLog(@"gwspace", @"%@ not found in the db", srcpath);
-    NSDebugLLog(@"gwspace", @"performing full search in %@", srcpath);
   
     founds = [self fullSearchInDirectory: srcpath];
     
@@ -691,7 +664,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
     }
   }
   
-  GWDebugLog(@"searching done.");
   
   RELEASE (arp);
 }
@@ -867,9 +839,7 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
 		                     name: NSConnectionDidDieNotification
 		                   object: [ddbd connectionForProxy]];
                        
-      GWDebugLog(@"ddbd connected!");     
     } else {
-      NSDebugLLog(@"gwspace", @"unable to contact ddbd.");
       [lsfolder updaterError: @"unable to contact ddbd."];
     }
   }
@@ -1079,7 +1049,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
       NSTimeInterval interval = [lastUpdate timeIntervalSinceReferenceDate];
       mustcheck = ([self ddbdGetTimestampOfPath: directory] > interval);
       if (mustcheck) {
-        GWDebugLog(@"metadata modification date changed at %@", directory);
       }
     }
   
@@ -1133,7 +1102,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
       }  
     }
   
-    GWDebugLog(@"dirindex %i", dirindex);
   
     dirindex++;
     dircounter++;
@@ -1196,7 +1164,6 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
     } 
 
     fpathindex++;
-    GWDebugLog(@"checkNextFoundPath %i", fpathindex);
   }
 }
 
@@ -1215,7 +1182,6 @@ int main(int argc, char** argv)
       [[NSRunLoop currentRunLoop] run];
     }
   } else {
-    NSDebugLLog(@"gwspace", @"no connection name.");
   }
   
   RELEASE (pool);  

@@ -904,12 +904,9 @@ static Workspace *gworkspace = nil;
     
   dtopManager = [GWDesktopManager desktopManager];
     
-  NSDebugLLog(@"gwspace", @"DEBUG: Workspace init - no_desktop setting: %d", [defaults boolForKey: @"no_desktop"]);
   if ([defaults boolForKey: @"no_desktop"] == NO)
   { 
-    NSDebugLLog(@"gwspace", @"DEBUG: Workspace calling activateDesktop");
     [dtopManager activateDesktop];
-    NSDebugLLog(@"gwspace", @"DEBUG: Workspace activateDesktop returned");
 
   }
 
@@ -999,7 +996,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
   NS_HANDLER
     {
-      NSDebugLLog(@"gwspace", @"setServicesProvider: %@", localException);
     }
   NS_ENDHANDLER
 
@@ -1073,23 +1069,18 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if ([dtopManager isActive]) {
     globalShortcutsManager = [[GSGlobalShortcutsManager sharedManager] retain];
     if (![globalShortcutsManager startWithVerbose:YES]) {  // Enable verbose for debugging
-      NSDebugLLog(@"gwspace", @"Workspace: Warning - Global shortcuts manager failed to start");
       DESTROY(globalShortcutsManager);
     } else {
-      NSDebugLLog(@"gwspace", @"Workspace: Global shortcuts manager started successfully");
     }
   } else {
-    NSDebugLLog(@"gwspace", @"Workspace: Not the desktop instance - global shortcuts disabled");
   }
   
 #if HAVE_DBUS
   // Initialize and register the FileManager DBus interface
   fileManagerDBusInterface = [[FileManagerDBusInterface alloc] initWithWorkspace:self];
   if (![fileManagerDBusInterface registerOnDBus]) {
-    NSDebugLLog(@"gwspace", @"Workspace: Warning - Failed to register FileManager DBus interface");
     DESTROY(fileManagerDBusInterface);
   } else {
-    NSDebugLLog(@"gwspace", @"Workspace: FileManager DBus interface registered successfully");
     
     // Set up D-Bus file descriptor monitoring for asynchronous message handling
     // This ensures FileManager1 receives messages immediately without blocking
@@ -1102,12 +1093,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
                                                    name:NSFileHandleDataAvailableNotification
                                                  object:dbusFileHandle];
         [dbusFileHandle waitForDataInBackgroundAndNotify];
-        NSDebugLLog(@"gwspace", @"Workspace: D-Bus file descriptor monitoring enabled (fd: %d)", dbusFd);
       } else {
-        NSDebugLLog(@"gwspace", @"Workspace: Warning - Failed to create NSFileHandle for D-Bus fd");
       }
     } else {
-      NSDebugLLog(@"gwspace", @"Workspace: Warning - Failed to get D-Bus file descriptor");
     }
   }
 #endif
@@ -1166,7 +1154,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           NS_DURING
             [fswatcher unregisterClient: (id <FSWClientProtocol>)self];  
           NS_HANDLER
-            NSDebugLLog(@"gwspace", @"[Workspace shouldTerminateApplication] unregister fswatcher: %@", [localException description]);
           NS_ENDHANDLER
           DESTROY (fswatcher);
         }
@@ -1290,7 +1277,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 {
   FSNode *targetNode = [FSNode nodeWithPath: path];
 
-  NSDebugLLog(@"gwspace", @"newViewerAtPath: %@", path);
 
   /* Route through the canonical open: a folder opens a viewer (growing from
    * the focused viewer's icon when it is shown there). */
@@ -1488,8 +1474,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   [defaults setObject: [NSNumber numberWithInt: type] forKey: @"defaultViewerType"];
   [defaults synchronize];
 
-  NSDebugLLog(@"gwspace", @"Default viewer type set to: %d (%@)", type,
-        (type == SPATIAL) ? @"Spatial" : @"Browsing");
 }
 
 - (StartAppWin *)startAppWin
@@ -1868,49 +1852,40 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   BOOL success;
   NSURL *aURL;
 
-  NSDebugLLog(@"gwspace", @"Workspace openFile: called with path: %@", fullPath);
 
   /* Early ELF detection: catch executables regardless of the reported type
      so we can prompt the user before any external app (like TextEdit)
      opens the file. This mirrors the later ELF handling but runs first. */
   {
     NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
-    NSDebugLLog(@"gwspace", @"Workspace openFile: ELF detection - trying to open file handle");
     if (fh) {
       NSData *hdr = [fh readDataOfLength:4];
-      NSDebugLLog(@"gwspace", @"Workspace openFile: ELF detection - read %lu bytes", (unsigned long)[hdr length]);
       [fh closeFile];
       const unsigned char *bytes = (const unsigned char *)[hdr bytes];
       if ([hdr length] >= 4 && bytes[0] == 0x7f && bytes[1] == 'E' && bytes[2] == 'L' && bytes[3] == 'F') {
-        NSDebugLLog(@"gwspace", @"Workspace openFile: ELF magic detected!");
         NSError *err = nil;
         NSDictionary *attrs = [fm attributesOfItemAtPath: fullPath error: &err];
         if (attrs) {
           NSNumber *permNum = [attrs objectForKey: NSFilePosixPermissions];
           unsigned short perms = [permNum unsignedShortValue];
-          NSDebugLLog(@"gwspace", @"Workspace openFile: File permissions: 0o%o, owner-exec bit set: %s", perms, (perms & S_IXUSR) ? "YES" : "NO");
           if ((perms & S_IXUSR) != 0) {
             /* Already executable - launch directly without prompting */
-            NSDebugLLog(@"gwspace", @"Workspace openFile: ELF is already executable, launching directly");
             [self launchElfAndMonitor: fullPath];
             return YES;
           } else {
             /* Not executable - ask user to trust */
-            NSDebugLLog(@"gwspace", @"Workspace openFile: Owner-exec bit not set, showing trust prompt");
             NSAlert *alert = [[[NSAlert alloc] init] autorelease];
             [alert setMessageText: @"Trust This Application?"];
             [alert setInformativeText: [NSString stringWithFormat: @"Do you want to trust and run the application \"%@\"?", [fullPath lastPathComponent]]];
             [alert addButtonWithTitle: @"Cancel"];
             [alert addButtonWithTitle: @"Trust and Run"];
             NSInteger resp = [alert runModal];
-            NSDebugLLog(@"gwspace", @"Workspace openFile: User response to trust prompt: %ld (2=Trust, 1=Cancel)", (long)resp);
             if (resp == NSAlertSecondButtonReturn) {
               unsigned short newPerms = perms | S_IXUSR | S_IXGRP | S_IXOTH;
               NSDictionary *newAttrs = [NSDictionary dictionaryWithObject: [NSNumber numberWithUnsignedShort: newPerms]
                                                                    forKey: NSFilePosixPermissions];
               NSError *err2 = nil;
               BOOL ok = [fm setAttributes: newAttrs ofItemAtPath: fullPath error: &err2];
-              NSDebugLLog(@"gwspace", @"Workspace openFile: Set permissions result: %s", ok ? "success" : "failed");
               if (!ok) {
                 NSAlert *errAlert = [[[NSAlert alloc] init] autorelease];
                 [errAlert setMessageText: @"Error"];
@@ -1920,11 +1895,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
                 return NO;
               }
 
-              NSDebugLLog(@"gwspace", @"Workspace openFile: Launching ELF and monitoring");
               [self launchElfAndMonitor: fullPath];
               return YES;
             } else {
-              NSDebugLLog(@"gwspace", @"Workspace openFile: User declined to trust executable");
               return NO;
             }
           }
@@ -1963,7 +1936,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   }
 
   if (handleAsNetwork) {
-    NSDebugLLog(@"gwspace", @"Workspace openFile: detected network path");
 
     /* For network paths, we need to create the appropriate NetworkFSNode */
     NetworkFSNode *networkNode = nil;
@@ -1971,11 +1943,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     if ([fullPath isEqualToString:NetworkVirtualPath]) {
       /* This is the /Network root */
       networkNode = [NetworkFSNode networkRootNode];
-      NSDebugLLog(@"gwspace", @"Workspace openFile: created network root node");
     } else {
       /* This is a service under /Network - need to find the service item */
       NSString *serviceName = [fullPath lastPathComponent];
-      NSDebugLLog(@"gwspace", @"Workspace openFile: looking for service: %@", serviceName);
       
       NetworkServiceManager *manager = [NetworkServiceManager sharedManager];
       NSArray *services = [manager allServices];
@@ -1983,22 +1953,17 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       for (NetworkServiceItem *item in services) {
         if ([[item displayName] isEqualToString:serviceName]) {
           networkNode = [NetworkFSNode nodeWithServiceItem:item];
-          NSDebugLLog(@"gwspace", @"Workspace openFile: found matching service, created node");
           break;
         }
       }
       
       if (!networkNode) {
-        NSDebugLLog(@"gwspace", @"Workspace openFile: could not find service item for: %@", serviceName);
         return NO;
       }
     }
     
-    NSDebugLLog(@"gwspace", @"Workspace openFile: networkNode: %@ (class: %@)", networkNode, [networkNode class]);
-    NSDebugLLog(@"gwspace", @"Workspace openFile: networkNode: %@ (class: %@)", networkNode, [networkNode class]);
     
     if ([networkNode isNetworkService]) {
-      NSDebugLLog(@"gwspace", @"Workspace openFile: node is a network service, attempting to open/mount");
       /* This is a network service item - try to open/mount it */
       NSString *mountPoint = nil;
       
@@ -2008,7 +1973,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         }
       NS_HANDLER
         {
-          NSDebugLLog(@"gwspace", @"Workspace openFile: Exception during openNetworkService: %@", localException);
           NSRunAlertPanel(NSLocalizedString(@"error", @""), 
               [NSString stringWithFormat: @"Error mounting network service: %@", 
                [localException reason]],
@@ -2019,7 +1983,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         }
       NS_ENDHANDLER
       
-      NSDebugLLog(@"gwspace", @"Workspace openFile: openNetworkService returned: %@", mountPoint);
         
         if (mountPoint) {
           /* Successfully mounted - show viewer at mount point */
@@ -2029,21 +1992,17 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         /* If mount failed, openNetworkService already showed an error */
         return NO;
       } else if ([networkNode isNetworkRoot]) {
-        NSDebugLLog(@"gwspace", @"Workspace openFile: node is network root, opening viewer");
         /* This is the /Network root - just open a viewer */
         [self newViewerAtPath:fullPath];
         return YES;
       } else {
-        NSDebugLLog(@"gwspace", @"Workspace openFile: NetworkFSNode but not service or root");
       }
   } else {
-    NSDebugLLog(@"gwspace", @"Workspace openFile: NOT a network path");
   }
 
   /* Check if this is a disk image file */
   NSString *ext = [[fullPath pathExtension] lowercaseString];
   if ([ext isEqualToString:@"dmg"]) {
-    NSDebugLLog(@"gwspace", @"Workspace: Mounting DMG file: %@", fullPath);
     VolumeManager *volMgr = [VolumeManager sharedManager];
     NSString *mountPoint = [volMgr mountDMGFile:fullPath];
     if (mountPoint) {
@@ -2058,7 +2017,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
              [ext isEqualToString:@"mdf"] ||
              [ext isEqualToString:@"squashfs"] || [ext isEqualToString:@"sqsh"] ||
              [ext isEqualToString:@"sfs"]) {
-    NSDebugLLog(@"gwspace", @"Workspace: Mounting disk image file: %@", fullPath);
     VolumeManager *volMgr = [VolumeManager sharedManager];
     NSString *mountPoint = [volMgr mountFuseisoImage:fullPath];
     if (mountPoint) {
@@ -2079,7 +2037,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
    */
   VolumeManager *volMgr = [VolumeManager sharedManager];
   if ([volMgr isAvfsSupportedFile:fullPath]) {
-    NSDebugLLog(@"gwspace", @"Workspace: Opening archive via AVFS: %@", fullPath);
     NSString *virtualPath = [volMgr openAvfsArchive:fullPath];
     if (virtualPath) {
       /* Wait briefly for AVFS to process the archive */
@@ -2088,7 +2045,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       return YES;
     }
     /* If AVFS failed, fall through to try opening with an application */
-    NSDebugLLog(@"gwspace", @"Workspace: AVFS failed, falling through to application handler");
   }
 
   aURL = nil;
@@ -2104,7 +2060,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           NSString *appPath = [self applicationForCreatorCode: [md creatorCode]];
           if (appPath)
             {
-              NSDebugLLog(@"gwspace", @"Workspace openFile: Using creator code app: %@", appPath);
               return [[NSWorkspace sharedWorkspace] openFile: fullPath withApplication: appPath];
             }
         }
@@ -2147,12 +2102,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
               [copyMd setStationery: NO];
               [copyMd writeToFileAtPath: copyPath error: nil];
 
-              NSDebugLLog(@"gwspace", @"Workspace openFile: Stationery -> copy %@", copyPath);
               return [self openFile: copyPath];
             }
           else
             {
-              NSDebugLLog(@"gwspace", @"Workspace openFile: Stationery copy failed for %@", fullPath);
               return NO;
             }
         }
@@ -2333,12 +2286,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if (appName)
     {
       NSString *fullPath = [[NSWorkspace sharedWorkspace] fullPathForApplication: appName];
-      NSDebugLLog(@"gwspace", @"Workspace applicationForCreatorCode: code '%@' -> app '%@' -> path '%@'",
-                  codeStr, appName, fullPath);
       return fullPath;
     }
 
-  NSDebugLLog(@"gwspace", @"Workspace applicationForCreatorCode: no mapping for code '%@'", codeStr);
   return nil;
 }
 
@@ -2563,7 +2513,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           [kwin title], [kwin className]);
     [kwin close];
   } else {
-    NSDebugLLog(@"gwspace", @"Workspace performClose: no usable window!");
   }
 }
 
@@ -2643,7 +2592,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     recentUserUnmounts = [[NSMutableSet alloc] init];
   }
   [recentUserUnmounts addObject: path];
-  NSDebugLLog(@"gwspace", @"Workspace: Recorded user-initiated unmount: %@", path);
   
   /* Also mark on the desktop view directly, providing redundancy.
    * Use the class method to ensure we always get the valid singleton. */
@@ -2667,7 +2615,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSString *path = [userInfo objectForKey: @"GWUnmountPath"];
   if (!path) return;
   
-  NSDebugLLog(@"gwspace", @"Workspace: Received CLI unmount notification for %@", path);
   [self noteUserInitiatedUnmountAtPath: path];
 }
 
@@ -2679,7 +2626,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSString *path = [userInfo objectForKey: @"GWUnmountPath"];
   if (!path) return;
 
-  NSDebugLLog(@"gwspace", @"Workspace: Received CLI did-unmount notification for %@", path);
   [self noteUserInitiatedUnmountAtPath: path];
 
   /* Remove the desktop icon and update volumes list */
@@ -2693,7 +2639,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
     [[FSNodeRep sharedInstance] removeVolumeAt: path];
   } @catch (NSException *e) {
-    NSDebugLLog(@"gwspace", @"Workspace: Error clearing volume info from CLI unmount: %@", e);
   }
 }
 
@@ -2705,7 +2650,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 - (void)_cleanupRecentUnmount:(NSString *)path
 {
   [recentUserUnmounts removeObject: path];
-  NSDebugLLog(@"gwspace", @"Workspace: Cleaned up recent unmount record: %@", path);
 }
 
 - (BOOL)verifyFileAtPath:(NSString *)path
@@ -2925,7 +2869,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
                 isGlobalWatcher: NO];
     } else {
       fswnotifications = NO;
-      NSDebugLLog(@"gwspace", @"Workspace: unable to contact fswatcher; notifications disabled");
     }
   }
 }
@@ -2944,12 +2887,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     fswatcher = nil;
   } else if (fswatcher) {
     /* Mismatch or fswatcher already released; clean up anyway */
-    NSDebugLLog(@"gwspace", @"fswatcherConnectionDidDie: connection mismatch or stale proxy");
     RELEASE (fswatcher);
     fswatcher = nil;
   } else {
     /* fswatcher already nil; connection died notification is stale */
-    NSDebugLLog(@"gwspace", @"fswatcherConnectionDidDie: fswatcher already nil, ignoring stale notification");
     return;
   }
 
@@ -2990,17 +2931,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSDictionary *info = [NSUnarchiver unarchiveObjectWithData: dirinfo];
   NSString *event = [info objectForKey: @"event"];
 
-  NSDebugLLog(@"gwspace", @"DEBUG: Workspace watchedPathDidChange called");
-  NSDebugLLog(@"gwspace", @"DEBUG: event = %@", event);
-  NSDebugLLog(@"gwspace", @"DEBUG: path = %@", [info objectForKey: @"path"]);
-  NSDebugLLog(@"gwspace", @"DEBUG: files = %@", [info objectForKey: @"files"]);
 
   if ([event isEqual: @"GWFileDeletedInWatchedDirectory"]
             || [event isEqual: @"GWFileCreatedInWatchedDirectory"]) {
     NSString *path = [info objectForKey: @"path"];
 
     if ([path isEqual: trashPath]) {
-      NSDebugLLog(@"gwspace", @"DEBUG: Trash path changed, updating trash contents");
       [self _updateTrashContents];
     }
 
@@ -3012,7 +2948,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
   }
   
-  NSDebugLLog(@"gwspace", @"DEBUG: Posting GWFileWatcherFileDidChangeNotification");
 	[[NSNotificationCenter defaultCenter]
  				 postNotificationName: @"GWFileWatcherFileDidChangeNotification"
 	 								     object: info];  
@@ -3062,7 +2997,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 	}
       else
 	{
-    NSDebugLLog(@"gwspace", @"Workspace: unable to contact ddbd");
 	}
     }
 }  
@@ -3152,7 +3086,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 		                     name: NSConnectionDidDieNotification
 		                   object: [mdextractor connectionForProxy]];
     } else {
-      NSDebugLLog(@"gwspace", @"Workspace: unable to contact mdextractor");
     }
   }
 }
@@ -3182,7 +3115,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     
     // Register all queued watchers
     if ([watchedPaths count] > 0) {
-      NSDebugLLog(@"gwspace", @"Workspace: fswatcher connected, registering %lu queued path watchers", [watchedPaths count]);
       NSEnumerator *enumerator = [watchedPaths objectEnumerator];
       NSString *path;
       
@@ -3202,7 +3134,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
     [timer invalidate];
     fswnotifications = NO;
-    NSDebugLLog(@"gwspace", @"Workspace: fswatcher did not respond; notifications disabled");
   }
 }
 
@@ -3226,7 +3157,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   }
   if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
     [timer invalidate];
-    NSDebugLLog(@"gwspace", @"Workspace: ddbd did not respond");
   }
 }
 
@@ -3250,7 +3180,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   }
   if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
     [timer invalidate];
-    NSDebugLLog(@"gwspace", @"Workspace: mdextractor did not respond");
   }
 }
 
@@ -3513,7 +3442,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (void)goToNetwork:(id)sender
 {
-  NSDebugLLog(@"gwspace", @"Workspace: Opening Network browser");
   
   /* Start network service discovery if not already running */
   NetworkServiceManager *manager = [NetworkServiceManager sharedManager];
@@ -3637,10 +3565,8 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   
   if (mountPoint) {
     /* Successfully mounted - open it in a viewer */
-    NSDebugLLog(@"gwspace", @"Workspace: Successfully mounted at %@, opening viewer", mountPoint);
     [self openSelectedPaths:[NSArray arrayWithObject:mountPoint] newViewer:YES];
   } else {
-    NSDebugLLog(@"gwspace", @"Workspace: Mount failed");
     /* Show a detailed error from the mount operation, or a generic fallback */
     NSString *errorMessage = [result objectForKey:@"errorMessage"];
     if (errorMessage && [errorMessage length] > 0) {
@@ -3720,7 +3646,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       
       /* If no username in URL, prompt for credentials NOW (on main thread) */
       if (!username || [username length] == 0) {
-        NSDebugLLog(@"gwspace", @"Workspace: No username in URL, prompting user");
         
         NSString *dialogTitle = isSFTP ? NSLocalizedString(@"Connect to SFTP Server", @"")
                                        : NSLocalizedString(@"Connect to WebDAV Server", @"");
@@ -3729,15 +3654,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         if (creds) {
           username = [[creds objectForKey:@"username"] retain];
           password = [[creds objectForKey:@"password"] retain];
-          NSDebugLLog(@"gwspace", @"Workspace: User entered username: %@", username);
         } else {
-          NSDebugLLog(@"gwspace", @"Workspace: User cancelled connection");
           RELEASE(dialog);
           return;
         }
         
         if (!username || [username length] == 0) {
-          NSDebugLLog(@"gwspace", @"Workspace: No username provided");
           [password release];
           RELEASE(dialog);
           return;
@@ -3775,10 +3697,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       if (remotePath && [remotePath length] > 0) {
         [serviceItem setRemotePath:remotePath];
       }
-      
-      NSString *protocolName = isSFTP ? @"SFTP" : @"WebDAV";
-      NSDebugLLog(@"gwspace", @"Workspace: Connecting to %@ server: %@:%d (user: %@, path: %@)", 
-            protocolName, hostname, port, username ?: @"(prompt)", remotePath ?: @"/");
       
       /* Show a connecting dialog */
       NSPanel *progressPanel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 300, 100)
@@ -4847,8 +4765,6 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
       NSError *error = nil;
       if (![md writeToFileAtPath: path error: &error])
         {
-          NSDebugLLog(@"gwspace", @"setLabelForNodes: xattr write failed for %@: %@",
-                path, error);
         }
     }
 
@@ -4891,10 +4807,7 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
         GWViewSettingsManager *sm;
         sm = [GWViewSettingsManager managerForDirectoryPath: dirPath];
-        BOOL wrote = [sm writeSettings: dsInfo];
-        NSDebugLLog(@"gwspace", @"setLabelForNodes: wrote %s for %@ (%lu files)",
-                    wrote ? "OK" : "FAIL", dirPath,
-                    (unsigned long)[files count]);
+        [sm writeSettings: dsInfo];
       }
   }
 
@@ -5294,18 +5207,14 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
         {
           if ([fileManager createDirectoryAtPath:dirPath 
                                        attributes:nil]) {
-            NSDebugLLog(@"gwspace", @"Created standard directory: %@", dirPath);
           } else {
-            NSDebugLLog(@"gwspace", @"Failed to create directory: %@", dirPath);
           }
         }
       NS_HANDLER
         {
-          NSDebugLLog(@"gwspace", @"Error creating directory %@: %@", dirPath, [localException reason]);
         }
       NS_ENDHANDLER
     } else if (!isDirectory) {
-      NSDebugLLog(@"gwspace", @"Warning: %@ exists but is not a directory", dirPath);
     }
   }
 }
@@ -5315,7 +5224,6 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   /* The kind is carried by the item's tag (BROWSING/SPATIAL), not its title —
    * titles are localized, so comparing them broke on non-English locales. */
   unsigned int viewerType = (unsigned int)[sender tag];
-  NSDebugLLog(@"gwspace", @"setViewerBehaviour called, type=%u", viewerType);
 
   /* Resolve the source viewer from the key window, falling back to the main
    * window.  With a detached global menu (Menu.app) the viewer is not always
@@ -5326,21 +5234,17 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
     viewer = [vwrsManager viewerWithWindow: [NSApp mainWindow]];
   }
   if (!viewer) {
-    NSDebugLLog(@"gwspace", @"No viewer found for key/main window");
     return;
   }
 
   // Get the base node (current path) from the viewer
   FSNode *currentNode = [viewer baseNode];
   if (!currentNode) {
-    NSDebugLLog(@"gwspace", @"No base node found in viewer");
     return;
   }
 
-  NSDebugLLog(@"gwspace", @"Current path: %@", [currentNode path]);
 
   // Replace the current viewer window with one of the selected kind
-  NSDebugLLog(@"gwspace", @"Replacing viewer with type %u", viewerType);
 
   id newViewer = [vwrsManager replaceViewer: viewer
                              withViewerType: viewerType];
@@ -5348,12 +5252,9 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   if (newViewer) {
     /* viewerOfType:… already activates the new viewer; activating again here
      * would, for spatial, re-run viewer:didShowNode:. */
-    NSDebugLLog(@"gwspace", @"Successfully created new viewer for path %@", [currentNode path]);
   } else {
-    NSDebugLLog(@"gwspace", @"Failed to create new viewer");
   }
 
-  NSDebugLLog(@"gwspace", @"Finished processing viewer behavior change");
 }
 
 - (void)setViewerType:(id)sender
@@ -5370,7 +5271,6 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
    * type; the desktop ignores the item entirely (disabled via validation). */
   id viewer = [self _viewerForKeyWindow];
   if (!viewer) {
-    NSDebugLLog(@"gwspace", @"setViewerType: no viewer for key/main window");
     return;
   }
 
@@ -5408,7 +5308,6 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
 - (void)setDefaultBrowsingBehaviour:(id)sender
 {
-  NSDebugLLog(@"gwspace", @"Setting default viewer behavior to Browsing");
   [self setDefaultViewerType: BROWSING];
 
   NSRunAlertPanel(@"Default Viewer Set",
@@ -5418,7 +5317,6 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
 - (void)setDefaultSpatialBehaviour:(id)sender
 {
-  NSDebugLLog(@"gwspace", @"Setting default viewer behavior to Spatial");
   [self setDefaultViewerType: SPATIAL];
 
   NSRunAlertPanel(@"Default Viewer Set",
@@ -5490,7 +5388,6 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
     return NO;
   }
   
-  NSDebugLLog(@"gwspace", @"Workspace: Attempting to unmount volume at path: %@", path);
 
   /* Record this as a user-initiated unmount BEFORE doing anything else.
    * This is the authoritative record that showMountedVolumes checks to
@@ -5517,13 +5414,11 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
       isDiskImageVolume = [VolumeManagerClass isDiskImageMount:path];
       if (isDiskImageVolume) {
         volumeManager = [VolumeManagerClass sharedManager];
-        NSDebugLLog(@"gwspace", @"Workspace: Volume is managed by VolumeManager (disk image)");
       }
     }
   }
   
   if (isDiskImageVolume && volumeManager) {
-    NSDebugLLog(@"gwspace", @"Workspace: Calling VolumeManager unmountPath for %@", path);
     return [volumeManager unmountPath: path];
   }
   
@@ -5536,14 +5431,12 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
     if (networkVolumeManager && [networkVolumeManager respondsToSelector:@selector(unmountPath:)]) {
       NSSet *netPaths = [networkVolumeManager allMountedPaths];
       if ([netPaths containsObject: path]) {
-        NSDebugLLog(@"gwspace", @"Workspace: Detected network volume at %@, using NetworkVolumeManager", path);
         return [networkVolumeManager unmountPath: path];
       }
     }
   }
   
   // Use standard system unmount+eject for regular volumes (drag to trash)
-  NSDebugLLog(@"gwspace", @"Workspace: Using standard system unmount+eject for %@", path);
   BOOL result = [GWUnmountHelper unmountAndEjectPath:path];
   
   if (!result) {

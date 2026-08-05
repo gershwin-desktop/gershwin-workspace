@@ -290,6 +290,5 @@
 
 // Debugging
 - (NSString *)debugDescription;
-- (void)logAllInfo;
 
 @end

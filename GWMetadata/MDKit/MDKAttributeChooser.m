@@ -54,7 +54,6 @@ static NSString *nibName = @"MDKAttributeChooser";
     unsigned i;
     
 		if ([NSBundle loadNibNamed: nibName owner: self] == NO) {
-      NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
       DESTROY (self);
       return self;
     }

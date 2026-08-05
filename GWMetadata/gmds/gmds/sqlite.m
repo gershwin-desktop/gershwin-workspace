@@ -51,7 +51,6 @@ sqlite3 *opendbAtPath(NSString *path)
 
     if (([fm fileExistsAtPath: dbpath isDirectory: &isdir] &isdir) == NO) {
       if ([fm createDirectoryAtPath: dbpath attributes: nil] == NO) { 
-        NSDebugLLog(@"gwspace", @"unable to create: %@", dbpath);
         return NULL;
       }
     }
@@ -61,7 +60,6 @@ sqlite3 *opendbAtPath(NSString *path)
   dberr = sqlite3_open([dbpath fileSystemRepresentation], &db);
     
   if (dberr != SQLITE_OK) {
-    NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
 		return NULL;	    
   }
       
@@ -148,7 +146,6 @@ BOOL performWriteQuery(sqlite3 *db, NSString *query)
   err = sqlite3_prepare(db, qbuff, strlen(qbuff), &stmt, NULL);
   
   if (err != SQLITE_OK) {
-    NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
     return NO;
   }
   
@@ -161,17 +158,14 @@ BOOL performWriteQuery(sqlite3 *db, NSString *query)
     } else if (err == SQLITE_BUSY) {
       CREATE_AUTORELEASE_POOL(arp); 
       usleep(100000); // 0.1 seconds
-      NSDebugLLog(@"gwspace", @"retry %i", retry);
       RELEASE (arp);
 
       if (retry++ > MAX_RETRY) {
-        NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
         sqlite3_finalize(stmt);
 		    return NO;
       }
 
     } else {
-      NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
       sqlite3_finalize(stmt);
       return NO;
     }
@@ -202,17 +196,14 @@ char **resultsForQuery(sqlite3 *db, NSString *query, int *rows, int *cols)
       usleep(100000); // 0.1 seconds
       sqlite3_free_table(results);
       results = NULL;
-      NSDebugLLog(@"gwspace", @"retry %i", retry);
       RELEASE (arp);
 
       if (retry++ > MAX_RETRY) {
-        NSDebugLLog(@"gwspace", @"error %i", err);
 		    return NULL;
       }
 
     } else {
 		  sqlite3_free_table(results);
-      NSDebugLLog(@"gwspace", @"error %i", err);
 		  return NULL;
     }
   }

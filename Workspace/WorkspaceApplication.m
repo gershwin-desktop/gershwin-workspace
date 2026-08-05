@@ -67,7 +67,6 @@
       if (operation != nil)
 	[opdict setObject: source forKey: @"source"];
       else
-	NSDebugLLog(@"gwspace", @"performFileOperation: source is nil");
 
       if (destination == nil && [operation isEqualToString:NSWorkspaceRecycleOperation])
 	destination = [self trashPath];
@@ -466,7 +465,6 @@
   [self applicationName: &appName andPath: &appPath forName: appname];
 
   path = [ws locateApplicationBinary: appname];
-  NSDebugLLog(@"gwspace", @"launchApplication:arguments: appname=%@ binary=%@ args=%@", appname, path, args);
 
   if (path == nil) {
     NSFileManager *dfm = [NSFileManager defaultManager];
@@ -499,11 +497,9 @@
           }
         args = plain;
         path = appPath;
-        NSDebugLLog(@"gwspace", @"launchApplication: launching plain executable %@ with args %@", path, args);
       }
     else
       {
-        NSDebugLLog(@"gwspace", @"launchApplication: locateApplicationBinary returned nil for %@", appname);
         return NO;
       }
   }
@@ -551,7 +547,6 @@
     GWLaunchedApp *existing = [self launchedAppWithPath: appPath andName: appName];
     if (existing && [existing isRunning]) {
       /* Our tracked instance is running; don't launch again. Activate instead. */
-      GWDebugLog(@"App \"%@\" already running (tracked); activating instead of launching.", appName);
       [[dtopManager dock] appDidLaunch: appPath appName: appName];
       [self activateAppWithPath: appPath andName: appName];
       return YES;
@@ -574,12 +569,10 @@
       hasWindows = [wm hasWindowsMatchingName: appName];
     }
     
-    NSDebugLLog(@"gwspace", @"launchApplication: X11 check for '%@': knownPID=%d hasWindows=%d", appName, knownPID, hasWindows);
     if (hasWindows) {
       /* App is running somewhere on the system (possibly launched externally).
          Notify the Dock so the icon's "running" dot appears, and activate the app
          to raise/unminimize its window immediately. */
-      NSDebugLLog(@"gwspace", @"launchApplication: BLOCKED — X11 thinks '%@' is already running (knownPID=%d)", appName, knownPID);
       [[dtopManager dock] appDidLaunch: appPath appName: appName];
       [[dtopManager dock] setAppIsX11Only: YES forPath: appPath name: appName];
       /* Activate the app to raise/unminimize its window immediately */
@@ -599,16 +592,13 @@
 	                  userInfo: userinfo];
 
   /* Use GWApplicationLauncher to get same error handling as ELF binaries */
-  NSDebugLLog(@"gwspace", @"launchApplication: launching binary: %@ with args: %@", path, args);
   task = [[NSTask alloc] init];
   [task setLaunchPath:path];
   [task setArguments:args];
 
   BOOL launched = [GWApplicationLauncher launchAndMonitorTask:task];
-  NSDebugLLog(@"gwspace", @"launchApplication: launched=%d", launched);
 
   if (!launched) {
-    NSDebugLLog(@"gwspace", @"launchApplication: GWApplicationLauncher failed for %@", path);
     [task release];
     return NO;
   }
@@ -643,7 +633,6 @@
                                                  path: appPath
                                                   pid: pid
                                    windowSearchString: appName];
-      GWDebugLog(@"\"%@\" registered with X11AppManager at launch (pid=%d)", appName, pid);
     }
   }
   
@@ -659,7 +648,6 @@
   
   if (path && name) {
     [[dtopManager dock] appWillLaunch: path appName: name];
-    GWDebugLog(@"appWillLaunch: \"%@\" %@", name, path);
 
     /* Create a GWLaunchedApp entry now so the fallback timer
      * (_launchDotFallbackTimerFired:) can track the process.
@@ -671,7 +659,6 @@
                                                        checkRunning:NO];
       if (newApp) {
         [launchedApps addObject:newApp];
-        GWDebugLog(@"appWillLaunch: created GWLaunchedApp for \"%@\"", name);
       }
     }
 
@@ -679,7 +666,6 @@
     // process hasn't exited, show the dock dot anyway.
     [self _scheduleLaunchDotFallbackForPath: path name: name];
   } else {
-    GWDebugLog(@"appWillLaunch: unknown application!");
   }
 }
 
@@ -723,7 +709,6 @@
     pid_t dockPid = ident ? (pid_t)[ident intValue] : 0;
     [[dtopManager dock] appDidLaunch: path appName: name pid: dockPid];
     [self _cancelLaunchDotFallbackForPath: path name: name];
-    GWDebugLog(@"\"%@\" appDidLaunch (%@) [dock notified]", name, path);
 
     /* Register with X11AppManager for window activation on subsequent
      * Dock clicks.  This is needed for externally-launched apps (e.g.
@@ -738,7 +723,6 @@
                                                  path: path
                                                   pid: dockPid
                                    windowSearchString: name];
-      GWDebugLog(@"\"%@\" appDidLaunch (%@) [registered with X11AppManager, pid=%d]", name, path, dockPid);
     }
   }
 }
@@ -783,7 +767,6 @@
       /* Ensure undocked icons are cleared even if we did not track the app. */
       [self _cancelLaunchDotFallbackForPath: path name: name];
       [[dtopManager dock] appTerminated: path appName: name];
-      GWDebugLog(@"appDidTerminate: \"%@\" not tracked; forcing dock cleanup.", name);
     }
 }
 
@@ -803,27 +786,23 @@
     }
     
     activeApplication = app;
-    GWDebugLog(@"\"%@\" appDidBecomeActive", name);
 
     /* If this is a non-GNUstep app (no connection), show dock dot now. */
     if ([app application] == nil && name && path) {
       pid_t pid = [app identifier] ? (pid_t)[[app identifier] intValue] : 0;
       [[dtopManager dock] appDidLaunch: path appName: name pid: pid];
       [[dtopManager dock] setAppIsX11Only: YES forPath: path name: name];
-      GWDebugLog(@"\"%@\" appDidBecomeActive -> dock notified (non-GNUstep)", name);
       [self _cancelLaunchDotFallbackForPath: path name: name];
     }
 
   } else {
     activeApplication = nil;
-    GWDebugLog(@"appDidBecomeActive: \"%@\" unknown running application.", name);
 
     /* Heuristic: even if we don't track the app, activation implies a window
        is present. Ensure the dock shows the running dot. */
     if (name && path) {
       [[dtopManager dock] appDidLaunch: path appName: name];
       [[dtopManager dock] setAppIsX11Only: YES forPath: path name: name];
-      GWDebugLog(@"\"%@\" appDidBecomeActive (untracked) -> dock notified", name);
       [self _cancelLaunchDotFallbackForPath: path name: name];
     }
   }
@@ -969,7 +948,6 @@
   if (shouldShowDot || (processRunning && retryCount >= 20)) {
     [[dtopManager dock] appDidLaunch:path appName:name pid:appPID];
     [[dtopManager dock] setAppIsX11Only: YES forPath: path name: name];
-    GWDebugLog(@"Fallback: showing dock dot for \"%@\" (retry %d, pid=%d)", name, retryCount, appPID);
   }
 
   /* Clean up */
@@ -983,14 +961,12 @@
 - (void)x11AppDidLaunch:(NSString *)appName path:(NSString *)appPath pid:(pid_t)pid
 {
   if (appName == nil || appPath == nil) return;
-  GWDebugLog(@"X11 app launched: %@ (%@) pid=%d", appName, appPath, pid);
   [[dtopManager dock] appWillLaunch:appPath appName:appName pid:pid];
 }
 
 - (void)x11AppDidTerminate:(NSString *)appName path:(NSString *)appPath
 {
   if (appName == nil) return;
-  GWDebugLog(@"X11 app terminated: %@ (%@)", appName, appPath);
   
   /* Find and clean up the GWLaunchedApp entry */
   GWLaunchedApp *app = [self launchedAppWithPath:appPath andName:appName];
@@ -1009,7 +985,6 @@
   /* Get the PID from X11AppManager for more reliable tracking */
   pid_t pid = [[GWX11AppManager sharedManager] pidForX11App:appName];
   
-  GWDebugLog(@"X11 app windows appeared: %@ (%@) pid=%d", appName, appPath, pid);
   [[dtopManager dock] appDidLaunch:appPath appName:appName pid:pid];
   [[dtopManager dock] setAppIsX11Only: YES forPath: appPath name: appName];
   
@@ -1062,7 +1037,6 @@
     }
     
   } else {
-    GWDebugLog(@"appDidResignActive: \"%@\" unknown running application.", name);
   }
 }
 
@@ -1155,13 +1129,11 @@
   NSString *path = [info objectForKey: @"NSApplicationPath"];
   GWLaunchedApp *app = [self launchedAppWithPath: path andName: name];
   
-  GWDebugLog(@"appDidHide: %@", name);
    
   if (app) {
     [app setHidden: YES];
     [[dtopManager dock] appDidHide: path appName: name];
   } else {
-    GWDebugLog(@"appDidHide: \"%@\" unknown running application.", name);
   }
 }
 
@@ -1175,9 +1147,7 @@
   if (app) {
     [app setHidden: NO];
     [[dtopManager dock] appDidUnhide: path appName: name];
-    GWDebugLog(@"\"%@\" appDidUnhide", name);
   } else {
-    GWDebugLog(@"appDidUnhide: \"%@\" unknown running application.", name);
   }
 }
 
@@ -1201,13 +1171,11 @@
 
 - (void)applicationTerminated:(GWLaunchedApp *)app
 {
-  NSDebugLLog(@"gwspace", @"WorkspaceApplication applicationTerminated: %@", [app name]);
   if (app == activeApplication) {
     activeApplication = nil;
   }
   
   [[dtopManager dock] appTerminated: [app path] appName: [app name]];
-  GWDebugLog(@"\"%@\" applicationTerminated", [app name]);  
   [launchedApps removeObject: app];  
 }
 
@@ -1247,7 +1215,6 @@
 	      }
 	    NS_HANDLER
 	      {
-      NSDebugLLog(@"gwspace", @"Unable to break lock %@ ... %@", storedAppinfoLock, localException);
 	      }
 	    NS_ENDHANDLER
     }
@@ -1262,7 +1229,6 @@
 	  }
     
     if (sleeps >= 10) {
-      NSDebugLLog(@"gwspace", @"Unable to obtain lock %@", storedAppinfoLock);
       return nil;
 	  }
   }
@@ -1307,7 +1273,6 @@
             }
           NS_HANDLER
             {
-              NSDebugLLog(@"gwspace", @"Unable to break lock %@ ... %@", storedAppinfoLock, localException);
             }
           NS_ENDHANDLER
             }
@@ -1322,7 +1287,6 @@
 	  }
     
     if (sleeps >= 10) {
-      NSDebugLLog(@"gwspace", @"Unable to obtain lock %@", storedAppinfoLock);
       return;
 	  }
   }
@@ -1665,9 +1629,6 @@
     }
   NS_HANDLER
     {
-      NSDebugLLog(@"gwspace", @"Unable to activate %@ via DO", name);
-      NSDebugLLog(@"gwspace", @"Workspace caught exception %@: %@", 
-            [localException name], [localException reason]);
     }
   NS_ENDHANDLER
 
@@ -1718,9 +1679,6 @@
     }
   NS_HANDLER
     {
-      NSDebugLLog(@"gwspace", @"Unable to hide %@", name);
-      NSDebugLLog(@"gwspace", @"Workspace caught exception %@: %@", 
-            [localException name], [localException reason]);
     }
   NS_ENDHANDLER
 }    
@@ -1741,9 +1699,6 @@
     }
   NS_HANDLER
     {
-  NSDebugLLog(@"gwspace", @"Unable to unhide %@", name);
-  NSDebugLLog(@"gwspace", @"Workspace caught exception %@: %@", 
-	        [localException name], [localException reason]);
     }
   NS_ENDHANDLER
 }    
@@ -1764,8 +1719,6 @@
       }
     NS_HANDLER
       {
-    NSDebugLLog(@"gwspace", @"Workspace caught exception %@: %@", 
-	                      [localException name], [localException reason]);
       }
     NS_ENDHANDLER
   }
@@ -1833,8 +1786,6 @@
       }
     NS_HANDLER
       {
-    GWDebugLog(@"Workspace caught exception %@: %@", 
-	                      [localException name], [localException reason]);
       }
     NS_ENDHANDLER
   } else { 
@@ -1861,8 +1812,6 @@
       }
     NS_HANDLER
       {
-    GWDebugLog(@"Workspace caught exception %@: %@", 
-	                      [localException name], [localException reason]);
       }
     NS_ENDHANDLER
   }
@@ -1940,7 +1889,6 @@
     DESTROY (application);
     DESTROY (conn);
     
-    GWDebugLog(@"\"%@\" application connection did die", name);
 
     [gw applicationTerminated: self];
   }

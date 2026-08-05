@@ -29,13 +29,6 @@
 #include "dbschema.h"
 #include "config.h"
 
-#define GWDebugLog(format, args...) \
-  do { \
-    if (GW_DEBUG_LOG) { \
-      NSDebugLLog(@"gwspace", format , ## args); \
-    } \
-  } while (0)
-
 #define GWPrintfDebugLog(format, args...) \
   do { \
     if (GW_DEBUG_LOG) { \
@@ -235,7 +228,6 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
 
     if (([fm fileExistsAtPath: dbdir isDirectory: &isdir] &isdir) == NO) {
       if ([fm createDirectoryAtPath: dbdir attributes: nil] == NO) { 
-        NSDebugLLog(@"gwspace", @"unable to create: %@", dbdir);
         DESTROY (self);
         return self;
       }
@@ -245,7 +237,6 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
 
     if (([fm fileExistsAtPath: dbdir isDirectory: &isdir] &isdir) == NO) {
       if ([fm createDirectoryAtPath: dbdir attributes: nil] == NO) { 
-        NSDebugLLog(@"gwspace", @"unable to create: %@", dbdir);
         DESTROY (self);
         return self;
       }
@@ -255,7 +246,6 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
 
     if (([fm fileExistsAtPath: dbdir isDirectory: &isdir] &isdir) == NO) {
       if ([fm createDirectoryAtPath: dbdir attributes: nil] == NO) { 
-        NSDebugLLog(@"gwspace", @"unable to create: %@", dbdir);
         DESTROY (self);
         return self;
       }
@@ -275,7 +265,6 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
     [conn setDelegate: self];
     
     if ([conn registerName: @"gmds"] == NO) {
-	    NSDebugLLog(@"gwspace", @"unable to register with name server - quitting.");
 	    DESTROY (self);
 	    return self;
 	  }
@@ -326,11 +315,9 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
     ASSIGN (connectionName, ([NSString stringWithFormat: @"gmds_%lu", ln]));
 
     if ([conn registerName: connectionName] == NO) {
-      NSDebugLLog(@"gwspace", @"unable to register with name server - quitting.");
       exit(EXIT_FAILURE);
     }
 
-    GWDebugLog(@"connection name changed to %@", connectionName);
 
     ln++;
     connum = [NSNumber numberWithUnsignedLong: ln];
@@ -361,12 +348,10 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
 	             name: NSConnectionDidDieNotification
 	           object: newConnnection];
 
-    GWDebugLog(@"new client connection");
 
     return YES;
   } 
   
-  NSDebugLLog(@"gwspace", @"client connection already exists!");
   
   return NO;
 }
@@ -380,7 +365,6 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
 	            object: connection];
   
   if (connection == conn) {
-    NSDebugLLog(@"gwspace", @"[gmds connectionDidDie]: Error: gmds server root connection has been destroyed.");
     exit(EXIT_FAILURE);
   }
   
@@ -392,7 +376,6 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
   if ([clientInfo objectForKey: @"client"] == nil) { 
     [(id)remote setProtocolForProxy: @protocol(GMDSClientProtocol)];    
     [clientInfo setObject: remote forKey: @"client"];
-    GWDebugLog(@"new client registered");
   }
 }
 
@@ -402,7 +385,6 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
 
   if (client && (client == remote)) {
     [clientInfo removeObjectForKey: @"client"]; 
-    GWDebugLog(@"client unregistered");
     [self terminate]; 
   }
 }
@@ -426,16 +408,13 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
       } else if (err == SQLITE_BUSY) {
         CREATE_AUTORELEASE_POOL(arp); 
         usleep(100000); // 0.1 seconds
-        GWDebugLog(@"retry %i", retry);
         RELEASE (arp);
 
         if (retry++ > MAX_RETRY) {
-          NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
 		      break;
         }
 
       } else {
-        NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
         break;
       }
     }
@@ -535,25 +514,19 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
         [reslines addObject: line];
 
         if ([reslines count] == MAX_RES) {
-          GWDebugLog(@"SENDING");
 
           if ([self sendResults: reslines forQueryWithNumber: queryNumber]) {
-            GWDebugLog(@"SENT");
             [reslines removeAllObjects];
           } else {
-            GWDebugLog(@"INVALID!");
             break;
           }
         }
 
       } else {
         if (err == SQLITE_DONE) {
-          GWDebugLog(@"SENDING (last)");
 
           if ([self sendResults: reslines forQueryWithNumber: queryNumber]) {
-            GWDebugLog(@"SENT");
           } else {
-            GWDebugLog(@"INVALID!");
           }
 
           break;
@@ -561,16 +534,13 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
         } else if (err == SQLITE_BUSY) {
           CREATE_AUTORELEASE_POOL(arp); 
           usleep(100000); // 0.1 seconds
-          GWDebugLog(@"retry %i", retry);
           RELEASE (arp);
 
           if (retry++ > MAX_RETRY) {
-            NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
 		        break;
           }
 
         } else {
-          NSDebugLLog(@"gwspace", @"%i %s", err, sqlite3_errmsg(db));
           break;
         }
       }
@@ -579,7 +549,6 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
     sqlite3_finalize(stmt);
     
   } else {
-    NSDebugLLog(@"gwspace", @"%s", sqlite3_errmsg(db));
   }
   
   if (postqueries) {
@@ -623,15 +592,12 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
     if (db != NULL) {
       if (newdb) {
         if (sqlite3_exec(db, [db_schema UTF8String], NULL, 0, &err) != SQLITE_OK) {
-          NSDebugLLog(@"gwspace", @"unable to create the database at %@", dbpath);
           sqlite3_free(err); 
           return NO;    
         } else {
-          GWDebugLog(@"contents database created");
         }
       }
     } else {
-      NSDebugLLog(@"gwspace", @"unable to open the database at %@", dbpath);
       return NO;
     }    
     
@@ -658,9 +624,6 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
 
   /* only to avoid a compiler warning */
   if (0) {
-    NSDebugLLog(@"gwspace", @"%@", db_schema_tmp);
-    NSDebugLLog(@"gwspace", @"%@", user_db_schema);
-    NSDebugLLog(@"gwspace", @"%@", user_db_schema_tmp);
   }
 
   return YES;
@@ -677,10 +640,8 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
     GWPrintfDebugLog("executing: \"%s\" ... ", query);
 
     if (sqlite3_exec(db, query, NULL, 0, &err) != SQLITE_OK) {
-      NSDebugLLog(@"gwspace", @"error at %s", query);
 
       if (err != NULL) {
-        NSDebugLLog(@"gwspace", @"%s", err);
         sqlite3_free(err); 
       }
     } else {
@@ -718,7 +679,6 @@ static void attribute_score(sqlite3_context *context, int argc, sqlite3_value **
     sqlite3_close(db);
   }
   
-  NSDebugLLog(@"gwspace", @"exiting");
   
   exit(EXIT_SUCCESS);
 }

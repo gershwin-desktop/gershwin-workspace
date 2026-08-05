@@ -71,7 +71,6 @@ static void mdnsAbortHandler(int sig)
     BOOL classAvailable = (netServiceBrowserClass != nil);
 
     if (classAvailable) {
-      NSDebugLLog(@"gwspace", @"NetworkServiceManager: NSNetServiceBrowser class found, starting probe thread");
 
       /* Spin up a dedicated background thread with its own run loop
          for all NSNetServiceBrowser / NSNetService operations.
@@ -90,7 +89,6 @@ static void mdnsAbortHandler(int sig)
       [networkThread start];
     } else {
       mDNSAvailable = NO;
-      NSDebugLLog(@"gwspace", @"NetworkServiceManager: NSNetServiceBrowser class not available");
     }
   }
   return self;
@@ -140,7 +138,6 @@ static void mdnsAbortHandler(int sig)
 
       if (NSClassFromString(@"NSNetServiceBrowser") == nil) {
         mDNSAvailable = NO;
-        NSDebugLLog(@"gwspace", @"NetworkServiceManager: NSNetServiceBrowser class not available");
         mdnsProbeActive = 0;
         sigaction(SIGABRT, &oldAct, NULL);
         return;
@@ -165,7 +162,6 @@ static void mdnsAbortHandler(int sig)
                  withObject:nil
                  afterDelay:3.0];
 
-      NSDebugLLog(@"gwspace", @"NetworkServiceManager: network thread running");
 
       while (!threadShouldStop) {
         @autoreleasepool {
@@ -175,7 +171,6 @@ static void mdnsAbortHandler(int sig)
 
       mdnsProbeActive = 0;
       sigaction(SIGABRT, &oldAct, NULL);
-      NSDebugLLog(@"gwspace", @"NetworkServiceManager: network thread exiting normally");
     } else {
       /* ---- SIGABRT was caught ---- */
       mdnsProbeActive = 0;
@@ -214,16 +209,13 @@ static void mdnsAbortHandler(int sig)
   }
 
   if (!mDNSAvailable) {
-    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Cannot start browsing - mDNS-SD not available");
     return;
   }
 
   if (isSearching) {
-    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Already browsing for services");
     return;
   }
 
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Starting to browse for SFTP, AFP, and WebDAV services...");
 
   /* The primary safety net is the sigsetjmp/siglongjmp SIGABRT handler
      installed in -networkThreadMain, which catches C-level assert()
@@ -235,25 +227,21 @@ static void mdnsAbortHandler(int sig)
     sftpBrowser = [[NSNetServiceBrowser alloc] init];
     [sftpBrowser setDelegate:self];
     [sftpBrowser searchForServicesOfType:@"_sftp-ssh._tcp." inDomain:@"local."];
-    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _sftp-ssh._tcp. services");
 
     /* Start browsing for AFP over TCP services */
     afpBrowser = [[NSNetServiceBrowser alloc] init];
     [afpBrowser setDelegate:self];
     [afpBrowser searchForServicesOfType:@"_afpovertcp._tcp." inDomain:@"local."];
-    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _afpovertcp._tcp. services");
 
     /* Start browsing for WebDAV services (HTTP) */
     webdavBrowser = [[NSNetServiceBrowser alloc] init];
     [webdavBrowser setDelegate:self];
     [webdavBrowser searchForServicesOfType:@"_webdav._tcp." inDomain:@"local."];
-    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _webdav._tcp. services");
 
     /* Start browsing for WebDAV services (HTTPS) */
     webdavsBrowser = [[NSNetServiceBrowser alloc] init];
     [webdavsBrowser setDelegate:self];
     [webdavsBrowser searchForServicesOfType:@"_webdavs._tcp." inDomain:@"local."];
-    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Started searching for _webdavs._tcp. services");
 
     isSearching = YES;
   } @catch (NSException *exception) {
@@ -293,7 +281,6 @@ static void mdnsAbortHandler(int sig)
     return;
   }
 
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Stopping service browsing");
 
   /* Signal the background thread to exit */
   threadShouldStop = YES;
@@ -436,14 +423,11 @@ static void mdnsAbortHandler(int sig)
   @synchronized(services) {
     /* Check if we already have this service */
     if ([self existingServiceMatchingNetService:[item netService]] != nil) {
-      NSDebugLLog(@"gwspace", @"NetworkServiceManager: Service already exists: %@", [item displayName]);
       return;
     }
 
     [services addObject:item];
     added = [NSArray arrayWithObject:item];
-    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Added service: %@ (total: %lu)",
-          [item displayName], (unsigned long)[services count]);
   }
 
   /* Post notification on main thread */
@@ -467,8 +451,6 @@ static void mdnsAbortHandler(int sig)
     [[itemToRemove retain] autorelease];
     [services removeObject:itemToRemove];
     removed = [NSArray arrayWithObject:itemToRemove];
-    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Removed service: %@ (total: %lu)",
-          [itemToRemove displayName], (unsigned long)[services count]);
   }
 
   /* Post notification on main thread */
@@ -486,8 +468,6 @@ static void mdnsAbortHandler(int sig)
     item.addresses = [netService addresses];
     item.resolved = YES;
 
-    NSDebugLLog(@"gwspace", @"NetworkServiceManager: Resolved service: %@ -> %@:%d",
-          [item displayName], [item hostName], [item port]);
   }
 
   /* Post resolution notification on main thread */
@@ -521,39 +501,16 @@ static void mdnsAbortHandler(int sig)
 
 - (void)netServiceBrowserWillSearch:(NSNetServiceBrowser *)browser
 {
-  NSString *browserType;
-  if (browser == sftpBrowser) browserType = @"SFTP";
-  else if (browser == afpBrowser) browserType = @"AFP";
-  else if (browser == webdavBrowser) browserType = @"WebDAV";
-  else if (browser == webdavsBrowser) browserType = @"WebDAVS";
-  else browserType = @"Unknown";
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: %@ browser will search", browserType);
 }
 
 - (void)netServiceBrowserDidStopSearch:(NSNetServiceBrowser *)browser
 {
-  NSString *browserType;
-  if (browser == sftpBrowser) browserType = @"SFTP";
-  else if (browser == afpBrowser) browserType = @"AFP";
-  else if (browser == webdavBrowser) browserType = @"WebDAV";
-  else if (browser == webdavsBrowser) browserType = @"WebDAVS";
-  else browserType = @"Unknown";
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: %@ browser stopped searching", browserType);
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)browser
            didFindService:(NSNetService *)netService
                moreComing:(BOOL)moreComing
 {
-  NSString *browserType;
-  if (browser == sftpBrowser) browserType = @"SFTP";
-  else if (browser == afpBrowser) browserType = @"AFP";
-  else if (browser == webdavBrowser) browserType = @"WebDAV";
-  else if (browser == webdavsBrowser) browserType = @"WebDAVS";
-  else browserType = @"Unknown";
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: %@ browser found service: %@ (type: %@, domain: %@)",
-        browserType, [netService name], [netService type], [netService domain]);
-
   /* Create a service item and add it */
   NetworkServiceItem *item = [NetworkServiceItem itemWithNetService:netService];
   [self addServiceItem:item];
@@ -562,22 +519,12 @@ static void mdnsAbortHandler(int sig)
   [netService setDelegate:self];
   [netService resolveWithTimeout:10.0];
   [pendingResolutions addObject:netService];
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Starting resolution for: %@", [netService name]);
 }
 
 - (void)netServiceBrowser:(NSNetServiceBrowser *)browser
          didRemoveService:(NSNetService *)netService
                moreComing:(BOOL)moreComing
 {
-  NSString *browserType;
-  if (browser == sftpBrowser) browserType = @"SFTP";
-  else if (browser == afpBrowser) browserType = @"AFP";
-  else if (browser == webdavBrowser) browserType = @"WebDAV";
-  else if (browser == webdavsBrowser) browserType = @"WebDAVS";
-  else browserType = @"Unknown";
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: %@ browser removed service: %@",
-        browserType, [netService name]);
-
   [self removeServiceMatchingNetService:netService];
   [pendingResolutions removeObject:netService];
 }
@@ -585,22 +532,12 @@ static void mdnsAbortHandler(int sig)
 - (void)netServiceBrowser:(NSNetServiceBrowser *)browser
              didNotSearch:(NSDictionary *)errorDict
 {
-  NSString *browserType;
-  if (browser == sftpBrowser) browserType = @"SFTP";
-  else if (browser == afpBrowser) browserType = @"AFP";
-  else if (browser == webdavBrowser) browserType = @"WebDAV";
-  else if (browser == webdavsBrowser) browserType = @"WebDAVS";
-  else browserType = @"Unknown";
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: %@ browser failed to search: %@",
-        browserType, errorDict);
 }
 
 #pragma mark - NSNetServiceDelegate
 
 - (void)netServiceDidResolveAddress:(NSNetService *)netService
 {
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Service resolved: %@ -> %@:%ld",
-        [netService name], [netService hostName], (long)[netService port]);
 
   /* Find and update the corresponding item */
   @synchronized(services) {
@@ -630,8 +567,6 @@ static void mdnsAbortHandler(int sig)
 - (void)netService:(NSNetService *)netService
      didNotResolve:(NSDictionary *)errorDict
 {
-  NSDebugLLog(@"gwspace", @"NetworkServiceManager: Failed to resolve service %@: %@",
-        [netService name], errorDict);
 
   [pendingResolutions removeObject:netService];
 }

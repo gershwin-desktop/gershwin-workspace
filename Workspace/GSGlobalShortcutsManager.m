@@ -129,7 +129,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
                    name:@"GSGlobalShortcutsReEnable"
                  object:@"GlobalShortcuts"];
         
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Registered for distributed GlobalShortcuts notifications");
     }
     return self;
 }
@@ -148,31 +147,25 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     verbose = verboseLogging;
     
     if (![self setupX11]) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Failed to setup X11");
         return NO;
     }
     
     if (![self loadShortcuts]) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Failed to load shortcuts");
         [self stop];
         return NO;
     }
     
     if (![self grabKeys]) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Failed to grab keys");
         [self stop];
         return NO;
     }
     
     if (![self setupEventProcessing]) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Failed to setup event processing");
         [self stop];
         return NO;
     }
     
     running = YES;
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Started successfully with %lu shortcuts",
-        (unsigned long)[shortcuts count]);
     
     return YES;
 }
@@ -192,7 +185,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
             XCloseDisplay(display);
             display = NULL;
         }
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Stopped");
     }
 }
 
@@ -200,13 +192,11 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
 {
     display = XOpenDisplay(NULL);
     if (!display) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Could not open X11 display");
         return NO;
     }
     
     rootWindow = DefaultRootWindow(display);
     if (rootWindow == None) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Could not get root window");
         XCloseDisplay(display);
         display = NULL;
         return NO;
@@ -233,9 +223,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     XAllowEvents(display, AsyncBoth, CurrentTime);
     
     if (verbose) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: X11 setup complete");
-        NSDebugLLog(@"gwspace", @"  numlock_mask=0x%x, capslock_mask=0x%x, scrolllock_mask=0x%x",
-            numlock_mask, capslock_mask, scrolllock_mask);
     }
     
     return YES;
@@ -253,8 +240,7 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
             if (isAltSpaceCombo(k)) {
                 protectedKey = [k retain];
                 protectedShortcut = [[shortcuts objectForKey:k] retain];
-                if (verbose) NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Preserving existing Alt-Space shortcut during load: %@", k);
-                break;
+                if (verbose) break;
             }
         }
     }
@@ -281,16 +267,13 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     }
 
     if (!merged || [merged count] == 0) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: No configuration found");
-        NSDebugLLog(@"gwspace", @"  Create shortcuts using: defaults write %@ 'ctrl+shift+t' 'Terminal'", defaultsDomain);
         [shortcuts release];
         shortcuts = [[NSMutableDictionary alloc] init];
 
         // Restore protected Alt-Space if it existed
         if (protectedKey && protectedShortcut) {
             [shortcuts setObject:protectedShortcut forKey:protectedKey];
-            if (verbose) NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Restored protected Alt-Space shortcut: %@", protectedKey);
-            [protectedKey release];
+            if (verbose) [protectedKey release];
             [protectedShortcut release];
         }
 
@@ -329,25 +312,11 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     // Re-add protected Alt-Space if it existed and isn't in the newly loaded config
     if (protectedKey && protectedShortcut && ![shortcuts objectForKey:protectedKey]) {
         [shortcuts setObject:protectedShortcut forKey:protectedKey];
-        if (verbose) NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Restored protected Alt-Space shortcut: %@", protectedKey);
-        [protectedKey release];
+        if (verbose) [protectedKey release];
         [protectedShortcut release];
     }
 
     lastDefaultsModTime = time(NULL);
-    
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Loaded %lu shortcuts", 
-        (unsigned long)[shortcuts count]);
-    
-    if (verbose) {
-        NSEnumerator *enumerator = [shortcuts keyEnumerator];
-        NSString *key;
-        while ((key = [enumerator nextObject])) {
-            NSDictionary *shortcut = [shortcuts objectForKey:key];
-            NSString *command = [shortcut objectForKey:@"command"];
-            NSDebugLLog(@"gwspace", @"  %@ -> %@", key, command);
-        }
-    }
     
     [defaults release];
     return YES;
@@ -356,7 +325,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
 - (BOOL)grabKeys
 {
     int successCount = 0;
-    int totalShortcuts = [shortcuts count];
     
     NSEnumerator *enumerator = [shortcuts keyEnumerator];
     NSString *keyCombo;
@@ -366,9 +334,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
             successCount++;
         }
     }
-    
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Successfully grabbed %d of %d shortcuts",
-        successCount, totalShortcuts);
 
     // Grab Alt+W (Cmd+W in Gershwin) to handle window closing
     // at the X11 level before the window manager can intercept it.
@@ -389,7 +354,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     while ((keyCombo = [enumerator nextObject])) {
         if (isAltSpaceCombo(keyCombo)) {
             if (verbose) {
-                NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Preserving protected Alt-Space shortcut; not ungrabbing %@", keyCombo);
             }
             continue;
         }
@@ -422,13 +386,11 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     keyString = [parts objectAtIndex:[parts count] - 1];
     KeySym keysym = keysymFromName(keyString);
     if (keysym == NoSymbol) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Unknown key: %@", keyString);
         return NO;
     }
     
     KeyCode keycode = XKeysymToKeycode(display, keysym);
     if (keycode == 0) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Could not map keysym to keycode: %@", keyString);
         return NO;
     }
     
@@ -449,7 +411,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     }
     
     if (verbose) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Grabbed key combo: %@", keyCombo);
     }
     
     return YES;
@@ -460,7 +421,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     // Never ungrab the Alt-Space global shortcut once it has been registered
     if (isAltSpaceCombo(keyCombo)) {
         if (verbose) {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Not ungrabbing protected Alt-Space shortcut: %@", keyCombo);
         }
         return;
     }
@@ -468,7 +428,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     NSArray *parts = parseKeyCombo(keyCombo);
     if (!parts || [parts count] < 1) {
         if (verbose) {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Invalid key combo format: %@", keyCombo);
         }
         return;
     }
@@ -503,7 +462,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     
     if (!keyString) {
         if (verbose) {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: No key name found in: %@", keyCombo);
         }
         return;
     }
@@ -511,7 +469,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     KeySym keysym = keysymFromName(keyString);
     if (keysym == NoSymbol) {
         if (verbose) {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Unknown key name: %@", keyString);
         }
         return;
     }
@@ -519,7 +476,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     int keycode = XKeysymToKeycode(display, keysym);
     if (keycode == 0) {
         if (verbose) {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: No keycode for keysym: %s", XKeysymToString(keysym));
         }
         return;
     }
@@ -541,7 +497,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     }
     
     if (verbose) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Ungrabbed key combo: %@", keyCombo);
     }
 }
 
@@ -593,7 +548,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
                                                            userInfo:nil
                                                             repeats:YES] retain];
     
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Event processing timer started (50ms interval)");
     return YES;
 }
 
@@ -611,8 +565,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         
         if (event.type == KeyPress) {
             if (verbose) {
-                NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Key press: keycode=%d, state=0x%x",
-                    event.xkey.keycode, event.xkey.state);
             }
 
 
@@ -628,12 +580,8 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
                 if ([self matchesEvent:&event.xkey withKeyCombo:keyCombo]) {
                     NSDictionary *shortcutDict = [shortcuts objectForKey:keyCombo];
                     NSString *command = [shortcutDict objectForKey:@"command"];
-                    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Executing command for %@: %@",
-                        keyCombo, command);
                     
                     if (![self runCommand:command]) {
-                        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Warning: Failed to execute command: %@",
-                            command);
                         [self showCommandFailureAlert:command shortcut:keyCombo];
                     }
                     matched = YES;
@@ -662,18 +610,15 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
 - (BOOL)runCommand:(NSString *)command
 {
     if (!command || [command length] == 0) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Warning: Empty command");
         return NO;
     }
     
     if ([command length] > 1024) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Warning: Command too long (>1024 chars): %@", command);
         return NO;
     }
     
     NSArray *components = [command componentsSeparatedByString:@" "];
     if ([components count] == 0) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Warning: No command components");
         return NO;
     }
     
@@ -682,27 +627,21 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     // Security check - reject commands with dangerous characters
     NSCharacterSet *dangerousChars = [NSCharacterSet characterSetWithCharactersInString:@"`$;|&<>"];
     if ([command rangeOfCharacterFromSet:dangerousChars].location != NSNotFound) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Warning: Command contains potentially dangerous characters: %@",
-            command);
     }
     
     NSString *fullPath = [self findExecutableInPath:executable];
     
     if (!fullPath) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Warning: executable '%@' not found in PATH", executable);
         return NO;
     }
     
     if (verbose) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Found executable: %@ -> %@", executable, fullPath);
     }
     
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Attempting to execute command: %@", command);
     
     pid_t pid = fork();
     if (pid == 0) {
         // Child process
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Child process created for command: %@", command);
         setsid();
         
         // Close file descriptors
@@ -726,16 +665,12 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
             const char *shell = getenv("SHELL");
             if (!shell) shell = "/bin/sh";
             
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Grandchild executing: %s -c '%@'", shell, command);
             
             execl(shell, shell, "-c", [command UTF8String], (char *)NULL);
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: ERROR: execl failed for command: %@", command);
             _exit(127);
         } else if (grandchild > 0) {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Grandchild process %d started for command: %@", grandchild, command);
             _exit(0);
         } else {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: ERROR: Failed to create grandchild for command: %@", command);
             _exit(1);
         }
     } else if (pid > 0) {
@@ -748,22 +683,16 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
                 // Process already exited
                 return YES;
             } else {
-                NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Warning: waitpid failed for command: %@ (errno=%d)",
-                    command, errno);
                 return NO;
             }
         }
         
         if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Warning: child process exited with status %d for command: %@",
-                WEXITSTATUS(status), command);
             return NO;
         }
         
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Command executed successfully: %@", command);
         return YES;
     } else {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Error: failed to fork process for command: %@", command);
         return NO;
     }
 }
@@ -807,40 +736,30 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
 
 - (void)globalShortcutsConfigurationChanged:(NSNotification *)notification
 {
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Received GlobalShortcuts configuration changed notification");
     
     if (running) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Manager is running, processing new shortcuts data");
         
         // Extract shortcuts data directly from userInfo
         NSDictionary *userInfo = [notification userInfo];
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Received userInfo: %@", userInfo);
         
         NSNumber *shortcutCount = [userInfo objectForKey:@"shortcutCount"];
         NSArray *shortcutsArray = [userInfo objectForKey:@"shortcuts"];
         
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: shortcutCount = %@, shortcutsArray = %@", shortcutCount, shortcutsArray);
         
         if (shortcutCount) {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: New configuration has %@ shortcuts", shortcutCount);
         }
         
         if (shortcutsArray) {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Processing shortcuts data from IPC (no disk I/O needed)");
             [self processShortcutsData:shortcutsArray];
         } else {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: No shortcuts data in notification, falling back to plist read");
             [self reloadShortcutsIfChanged];
         }
     } else {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Manager not running, ignoring notification");
     }
 }
 
 - (void)processShortcutsData:(NSArray *)shortcutsArray
 {
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Processing %lu shortcuts from IPC data", (unsigned long)[shortcutsArray count]);
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Raw shortcuts array: %@", shortcutsArray);
 
     // Preserve any existing Alt-Space shortcut so it is not lost during reconfiguration
     NSString *protectedKey = nil;
@@ -852,8 +771,7 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
             if (isAltSpaceCombo(k)) {
                 protectedKey = [k retain];
                 protectedShortcut = [[shortcuts objectForKey:k] retain];
-                if (verbose) NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Found protected Alt-Space shortcut in current config: %@", k);
-                break;
+                if (verbose) break;
             }
         }
     }
@@ -867,25 +785,17 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     // Re-add the preserved Alt-Space shortcut if we found one
     if (protectedKey && protectedShortcut) {
         [shortcuts setObject:protectedShortcut forKey:protectedKey];
-        if (verbose) NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Preserved protected shortcut %@", protectedKey);
-        [protectedKey release];
+        if (verbose) [protectedKey release];
         [protectedShortcut release];
     }
     
     // Process the new shortcuts data
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Starting to process shortcuts...");
-    NSUInteger processedCount = 0;
     for (NSDictionary *shortcutDict in shortcutsArray) {
-        processedCount++;
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Processing shortcut %lu/%lu: %@", (unsigned long)processedCount, (unsigned long)[shortcutsArray count], shortcutDict);
         
         NSString *key = [shortcutDict objectForKey:@"key"];
         NSString *command = [shortcutDict objectForKey:@"command"];
         NSString *modifiersStr = [shortcutDict objectForKey:@"modifiers"];
         NSString *keyStr = [shortcutDict objectForKey:@"keyStr"];
-        
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Extracted - key: '%@', command: '%@', modifiers: '%@', keyStr: '%@'", 
-              key, command, modifiersStr, keyStr);
         
         if (key && command && modifiersStr && keyStr) {
             NSDictionary *shortcut = @{
@@ -894,31 +804,15 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
                 @"keyStr": keyStr
             };
             [shortcuts setObject:shortcut forKey:key];
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Successfully added shortcut %@ -> %@", key, command);
-        } else {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: ERROR - Skipping incomplete shortcut data: %@", shortcutDict);
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: key=%@, command=%@, modifiers=%@, keyStr=%@", key, command, modifiersStr, keyStr);
         }
-    }
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Finished processing shortcuts. Processed %lu shortcuts.", (unsigned long)processedCount);
-    
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Loaded %lu shortcuts from IPC data", (unsigned long)[shortcuts count]);
-    
-    // Debug: show what shortcuts we have before grabbing keys
-    for (NSString *key in shortcuts) {
-        NSDictionary *shortcut = [shortcuts objectForKey:key];
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: About to grab shortcut %@ (modifiers: %@, keyStr: %@) -> %@", 
-              key, [shortcut objectForKey:@"modifiers"], [shortcut objectForKey:@"keyStr"], [shortcut objectForKey:@"command"]);
     }
     
     // Grab the new keys
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Calling grabKeys to register new shortcuts...");
     [self grabKeys];
 }
 
 - (void)reloadShortcutsIfChanged
 {
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Checking if GlobalShortcuts configuration changed...");
     
     // Check if our GlobalShortcuts domain has changed
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
@@ -926,25 +820,18 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     
     NSDictionary *newConfig = [defaults persistentDomainForName:defaultsDomain];
     
-    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Current shortcuts count: %lu, New config count: %lu", 
-        (unsigned long)(shortcuts ? [shortcuts count] : 0), 
-        (unsigned long)(newConfig ? [newConfig count] : 0));
     
     // Compare with current shortcuts
     BOOL needsReload = NO;
     
     if (!shortcuts && !newConfig) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Both old and new configs are nil, no change");
         return;
     }
     
     if (!shortcuts || !newConfig) {
         needsReload = YES;
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Configuration changed (one is nil), reload needed");
     } else if ([shortcuts count] != [newConfig count]) {
         needsReload = YES;
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Shortcut count changed (%lu -> %lu), reload needed", 
-            (unsigned long)[shortcuts count], (unsigned long)[newConfig count]);
     } else {
         // Check if any key-command pairs have changed
         NSEnumerator *keyEnum = [shortcuts keyEnumerator];
@@ -955,8 +842,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
             
             if (!newCommand || ![oldCommand isEqualToString:newCommand]) {
                 needsReload = YES;
-                NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Command changed for %@: '%@' -> '%@'", 
-                    keyCombo, oldCommand, newCommand ?: @"(removed)");
                 break;
             }
         }
@@ -967,19 +852,16 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
             while ((keyCombo = [keyEnum nextObject])) {
                 if (![shortcuts objectForKey:keyCombo]) {
                     needsReload = YES;
-                    NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: New shortcut added: %@", keyCombo);
                     break;
                 }
             }
         }
         
         if (!needsReload) {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: No changes detected in GlobalShortcuts");
         }
     }
     
     if (needsReload) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Global shortcuts configuration changed, reloading");
         
         // Ungrab all current keys
         [self ungrabAllKeys];
@@ -988,13 +870,9 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         if ([self loadShortcuts]) {
             // Grab new keys
             if ([self grabKeys]) {
-                NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Successfully reloaded %lu shortcuts", 
-                    (unsigned long)[shortcuts count]);
             } else {
-                NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Warning: Failed to grab some keys after reload");
             }
         } else {
-            NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Error: Failed to reload shortcuts");
         }
     }
 }
@@ -1011,7 +889,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     while ((keyCombo = [enumerator nextObject])) {
         if (isAltSpaceCombo(keyCombo)) {
             if (verbose) {
-                NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Preserving protected Alt-Space key (%@) while ungrabbing other keys", keyCombo);
             }
             continue;
         }
@@ -1019,7 +896,6 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     }
 
     if (verbose) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Ungrabbed all non-protected keys");
     }
 }
 
@@ -1089,7 +965,6 @@ static int GWX11GrabErrorHandler(Display *dpy, XErrorEvent *ev)
     // GNUstep backend's event path (since the grabbing display OWNS these
     // windows). This overrides the window manager's root-window grab for
     // our windows, and the normal menu key-equivalent processing handles it.
-    int grabCount = 0;
     NSArray *appWindows = [NSApp windows];
     
     for (NSWindow *win in appWindows)
@@ -1110,7 +985,6 @@ static int GWX11GrabErrorHandler(Display *dpy, XErrorEvent *ev)
             XGrabKey(appDisplay, closeWindowKeyCode, modifiers[i], xwindow,
                      True, GrabModeAsync, GrabModeAsync);
         }
-        grabCount++;
     }
     
     XSync(appDisplay, False);
@@ -1118,8 +992,6 @@ static int GWX11GrabErrorHandler(Display *dpy, XErrorEvent *ev)
     // Restore previous error handler
     XSetErrorHandler(old_handler);
 
-    if (verbose) NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Grabbed Alt+W on %d windows via main display",
-        grabCount);
 }
 
 - (void)ungrabCloseWindowShortcut
@@ -1162,7 +1034,6 @@ static int GWX11GrabErrorHandler(Display *dpy, XErrorEvent *ev)
     closeWindowKeyCode = 0;
     closeWindowModifier = 0;
 
-    if (verbose) NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Ungrabbed Alt+W close window");
 }
 
 - (void)showCommandFailureAlert:(NSString *)command shortcut:(NSString *)shortcut
@@ -1184,20 +1055,16 @@ static int GWX11GrabErrorHandler(Display *dpy, XErrorEvent *ev)
 - (void)temporarilyDisableAllShortcuts:(NSNotification *)notification
 {
     if (running && shortcuts && [shortcuts count] > 0) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Temporarily disabling all shortcuts for key capture");
         [self ungrabAllKeys];
     } else {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Cannot disable shortcuts - not running or no shortcuts loaded");
     }
 }
 
 - (void)reEnableAllShortcuts:(NSNotification *)notification
 {
     if (running) {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Re-enabling all shortcuts after key capture");
         [self grabKeys];
     } else {
-        NSDebugLLog(@"gwspace", @"GSGlobalShortcutsManager: Cannot re-enable shortcuts - not running");
     }
 }
 

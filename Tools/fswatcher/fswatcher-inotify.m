@@ -27,9 +27,7 @@
 #include <unistd.h>
 #include <stdint.h>
 
-#define GWDebugLog(format, args...) \
-  do { if (GW_DEBUG_LOG) \
-    NSDebugLLog(@"gwspace", format , ## args); } while (0)
+
 
 static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 
@@ -175,7 +173,6 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
     
       if ([conn registerName: @"fswatcher"] == NO)
 	{
-	  NSDebugLLog(@"gwspace", @"unable to register with name server.");
 	  DESTROY (self);
 	  return self;
 	}
@@ -184,7 +181,6 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
   
       if (fd == -1)
 	{
-	  NSDebugLLog(@"gwspace", @"inotify_init() failed!");
 	  DESTROY (self);
 	  return self;  
 	}
@@ -193,7 +189,6 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
                                                   closeOnDealloc: YES];  
 
     if (inotifyHandle == nil) {
-      NSDebugLLog(@"gwspace", @"unable to create the inotify handle.");
       close(fd);
       DESTROY (self);
       return self;  
@@ -270,7 +265,6 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
 
   if (connection == conn)
     {
-      NSDebugLLog(@"gwspace", @"argh - fswatcher server root connection has been destroyed.");
       exit(EXIT_FAILURE);  
     }
   else
@@ -299,7 +293,6 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
 	  /* If there is nothing else using this process, and this is not
 	   * a daemon, then we can quietly terminate.
 	   */
-	  NSDebugLLog(@"gwspace", @"No more clients, shutting down.");
 	  exit(EXIT_SUCCESS);
 	}
     }
@@ -511,7 +504,6 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
   }
   
   if (watcher) {
-    GWDebugLog(@"watcher found; adding listener for: %@", path);
     [info addWatchedPath: path];
     [watcher addListener]; 
         
@@ -524,7 +516,6 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
                                                   [path UTF8String], mask);
       
       if (wd != -1) { 
-        GWDebugLog(@"add watcher for: %@", path);      
         [info addWatchedPath: path];
   	    watcher = [[Watcher alloc] initWithWatchedPath: path 
                                        watchDescriptor: wd
@@ -534,13 +525,10 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
         RELEASE (watcher);       
         
       } else {
-        NSDebugLLog(@"gwspace", @"Invalid watch descriptor returned by inotify_add_watch(). "
-                                                @"No watcher for: %@", path);  
       }    
     }
   }
   
-  GWDebugLog(@"watchers: %lu", (unsigned long)NSCountMapTable(watchers));
 }
 
 - (oneway void)client:(id <FSWClientProtocol>)client
@@ -561,12 +549,10 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
   }  
   
   if (watcher) {
-    GWDebugLog(@"remove listener for: %@", path);
     [info removeWatchedPath: path];    
   	[watcher removeListener];  
   }
   
-  GWDebugLog(@"watchers: %lu", (unsigned long)NSCountMapTable(watchers));
 }
 
 - (Watcher *)watcherForPath:(NSString *)path
@@ -586,12 +572,10 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
   
   if (wd != -1) {      
     if (inotify_rm_watch([inotifyHandle fileDescriptor], wd) != 0) {
-      NSDebugLLog(@"gwspace", @"error removing watch descriptor for: %@", path);
     }    
     NSMapRemove(watchDescrMap, (void *)(intptr_t)wd);      
   }
 
-  GWDebugLog(@"removed watcher for: %@", path); 
   
   RETAIN (path);
   NSMapRemove(watchers, path);  
@@ -639,7 +623,6 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
     
     [self notifyGlobalWatchingClients: notifdict];   
     
-    GWDebugLog(@"%@ MOVED to not indexable path", lastMovedPath);         
   }
 }
 
@@ -967,23 +950,19 @@ static inline BOOL isDotFile(NSString *path)
           
           if (type == IN_DELETE || type == IN_DELETE_SELF) {       
             [notifdict setObject: GWWatchedPathDeleted forKey: @"event"];
-            GWDebugLog(@"DELETE %@", fullpath); 
             
           } else if (type == IN_CREATE) {
             [notifdict setObject: GWFileCreatedInWatchedDirectory 
                           forKey: @"event"];        
-            GWDebugLog(@"CREATED %@", fullpath); 
                      
           } else if (type == IN_MODIFY 
                         || ((dirwatch == NO) && type == IN_CLOSE_WRITE)) {
             [notifdict setObject: GWWatchedFileModified forKey: @"event"];        
-            GWDebugLog(@"MODIFIED %@", fullpath); 
                  
           } else if (type == IN_MOVED_FROM || type == IN_MOVE_SELF) {  
             ASSIGN (lastMovedPath, fullpath);
             moveCookie = eventp->cookie;          
             notify = NO;
-            GWDebugLog(@"MOVE from indexable path: %@", fullpath);
             
             [NSTimer scheduledTimerWithTimeInterval: 0.1 
                                  target: self 
@@ -995,12 +974,10 @@ static inline BOOL isDotFile(NSString *path)
             if ((eventp->cookie == moveCookie) && (lastMovedPath != nil)) {
               [notifdict setObject: lastMovedPath forKey: @"oldpath"];
               [notifdict setObject: GWWatchedPathRenamed forKey: @"event"];
-              GWDebugLog(@"MOVED from: %@ to: %@", lastMovedPath, fullpath);
             
             } else {
               [notifdict setObject: GWFileCreatedInWatchedDirectory 
                             forKey: @"event"];             
-              GWDebugLog(@"MOVED from not indexable path: %@", fullpath); 
             }
             
             DESTROY (lastMovedPath);

@@ -61,7 +61,6 @@ static NSString *nibName = @"Tools";
   
       if ([NSBundle loadNibNamed: nibName owner: self] == NO)
         {
-          NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
           DESTROY (self);
           return self;
         } 

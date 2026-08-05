@@ -86,7 +86,6 @@
 
 - (void)activate
 {
-  NSDebugLLog(@"gwspace", @"DEBUG: GWDesktopWindow activate called - setting level and ordering front");
   [self setLevel: NSDesktopWindowLevel];
   [self orderFront: nil];
 
@@ -96,7 +95,6 @@
   // during applicationWillFinishLaunching:.
   [self setX11DesktopAtoms];
 
-  NSDebugLLog(@"gwspace", @"DEBUG: GWDesktopWindow is now visible: %d, level: %ld", [self isVisible], (long)[self level]);
 }
 
 - (void)setX11DesktopAtoms
