@@ -42,6 +42,7 @@
 #import "Workspace.h"
 #import "GWDesktopManager.h"
 #import "NetworkVolumeManager.h"
+#import "X11AppSupport.h"
 
 
 static GWViewersManager *vwrsmanager = nil;
@@ -402,6 +403,103 @@ static GWViewersManager *vwrsmanager = nil;
     }
 }
 
+/* Resolve the folder's CURRENT on-screen representation by identity: scan the
+ * key/focused viewer, then all viewers, then the desktop, for an icon, list
+ * cell, or browser cell showing the node.  Returns NSZeroRect when no visible
+ * representation can be found.  Used by the close animation so the window
+ * shrinks into wherever the folder icon is right now - even if the icon has
+ * moved, the view was recreated, or the user navigated away and back. */
+- (NSRect)resolveIconScreenRectForNode:(FSNode *)node
+{
+  if (node == nil) {
+    return NSZeroRect;
+  }
+  NSRect result = NSZeroRect;
+
+  /* The desktop may show the node regardless of which key window (e.g.
+   * when closing a folder window whose icon lives on the desktop). */
+  {
+    id desktopManager = [gworkspace desktopManager];
+    if (desktopManager && [desktopManager respondsToSelector: @selector(desktopView)]) {
+      id nodeView = [desktopManager desktopView];
+      if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)]) {
+        id icon = [nodeView repOfSubnodePath: [node path]];
+        if (icon && [icon respondsToSelector: @selector(window)]) {
+          NSRect iconBounds = [icon bounds];
+          NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
+          result = [[icon window] convertRectToScreen: rectInWindow];
+          if (!NSEqualRects(result, NSZeroRect)) {
+            NSWindow *win = [icon window];
+            if (win == nil || ![win isVisible] || [win isMiniaturized]) {
+              result = NSZeroRect;
+            }
+          }
+        }
+      }
+    }
+  }
+
+  id keyWin = [NSApp keyWindow];
+  id viewer = (keyWin != nil) ? [self viewerWithWindow: keyWin] : nil;
+  if (viewer == nil) {
+    viewer = ([viewers count] > 0) ? [viewers lastObject] : nil;
+  }
+  if (viewer != nil && NSEqualRects(result, NSZeroRect)) {
+    /* Only fall back to a viewer if the desktop did not already resolve the
+     * node's icon (the desktop may show the folder even when a viewer
+     * window is key, e.g. while closing that viewer). */
+    result = [self iconScreenRectFromViewer: viewer forNode: node];
+  }
+  if (NSEqualRects(result, NSZeroRect)) {
+    /* The focused (or last) viewer didn't show the node: scan all viewers so
+     * the icon can be found even if it lives in a non-focused window. */
+    NSUInteger i;
+    for (i = 0; i < [viewers count] && NSEqualRects(result, NSZeroRect); i++) {
+      id v = [viewers objectAtIndex: i];
+      if (v != viewer) {
+        result = [self iconScreenRectFromViewer: v forNode: node];
+      }
+    }
+  }
+  return result;
+}
+
+/* Extract the on-screen rect of a node's icon from a single viewer's node
+ * view, or NSZeroRect if not shown there or its window is not a usable
+ * animation target (hidden or minimized). */
+- (NSRect)iconScreenRectFromViewer:(id)viewer forNode:(FSNode *)node
+{
+  id nodeView = [viewer nodeView];
+  if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)]) {
+    id icon = [nodeView repOfSubnodePath: [node path]];
+    if (icon == nil) {
+      return NSZeroRect;
+    }
+    NSRect result = NSZeroRect;
+    if ([icon isKindOfClass: [FSNListViewNodeRep class]]) {
+      result = [(FSNListViewNodeRep *)icon screenRect];
+    } else if ([icon isKindOfClass: [FSNBrowserCell class]]) {
+      if ([nodeView respondsToSelector: @selector(screenRectForCell:)]) {
+        result = [(FSNBrowser *)nodeView screenRectForCell: (FSNBrowserCell *)icon];
+      }
+    } else if ([icon respondsToSelector: @selector(window)]) {
+      NSRect iconBounds = [icon bounds];
+      NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
+      result = [[icon window] convertRectToScreen: rectInWindow];
+    }
+    /* Only a folder icon on a visible, unminimized window is a valid close
+     * target; otherwise the animation would point at a hidden window. */
+    if (!NSEqualRects(result, NSZeroRect)) {
+      NSWindow *win = [icon respondsToSelector: @selector(window)] ? [icon window] : nil;
+      if (win == nil || ![win isVisible] || [win isMiniaturized]) {
+        return NSZeroRect;
+      }
+    }
+    return result;
+  }
+  return NSZeroRect;
+}
+
 // Set the pending birth-animation rect from the currently focused viewer
 // window, provided it shows (or has selected) the given node.  Used by open
 // paths that only know the target path (e.g. Workspace newViewerAtPath:) so
@@ -417,43 +515,9 @@ static GWViewersManager *vwrsmanager = nil;
   if (hasPendingOpenAnimationRect) {
     return;
   }
-  id keyWin = [NSApp keyWindow];
-  id viewer = (keyWin != nil) ? [self viewerWithWindow: keyWin] : nil;
-
-  if (viewer == nil && keyWin != nil) {
-    /* Maybe the key window is the desktop. */
-    id desktopManager = [gworkspace desktopManager];
-    if (desktopManager && [desktopManager hasWindow: keyWin]) {
-      id nodeView = [desktopManager desktopView];
-      if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)]) {
-        id icon = [nodeView repOfSubnodePath: [node path]];
-        if (icon && [icon respondsToSelector: @selector(window)]) {
-          NSRect iconBounds = [icon bounds];
-          NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
-          NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
-          [self setPendingOpenAnimationRect: rectOnScreen];
-          return;
-        }
-      }
-    }
-  }
-
-  if (viewer == nil) {
-    viewer = ([viewers count] > 0) ? [viewers lastObject] : nil;
-  }
-  if (viewer != nil) {
-    [self setPendingOpenAnimationRectFromViewer: viewer forNode: node];
-  }
-  if (!hasPendingOpenAnimationRect) {
-    /* The focused (or last) viewer didn't show the node: scan all viewers
-     * so the icon can be found even if it lives in a non-focused window. */
-    NSUInteger i;
-    for (i = 0; i < [viewers count] && !hasPendingOpenAnimationRect; i++) {
-      id v = [viewers objectAtIndex: i];
-      if (v != viewer) {
-        [self setPendingOpenAnimationRectFromViewer: v forNode: node];
-      }
-    }
+  NSRect rect = [self resolveIconScreenRectForNode: node];
+  if (!NSEqualRects(rect, NSZeroRect)) {
+    [self setPendingOpenAnimationRect: rect];
   }
 }
 
@@ -1616,13 +1680,20 @@ static GWViewersManager *vwrsmanager = nil;
 - (void)setWindowBirthRect:(NSRect)sourceRect
                targetRect:(NSRect)targetRect
             animationType:(int32_t)animationType
-                 forWindow:(NSWindow *)window {
-  // Set X11 window property _WINDOW_BIRTH
+                  forWindow:(NSWindow *)window {
+  // Set X11 window property _WINDOW_BIRTH_ANIMATION
   // This will be read by WindowManager to perform the spatial birth animation.
   // Format: 9 x 32-bit integers (source x,y,w,h, target x,y,w,h, animationType)
 
   if (!window) {
     NSDebugLLog(@"gwspace", @"[Animation] NULL window passed to setWindowBirthRect");
+    return;
+  }
+
+  /* Only use the birth property when the running WindowManager implements the
+   * protocol (advertises it in _NET_SUPPORTED); otherwise the property would
+   * linger unread. */
+  if (![[GWX11WindowManager sharedManager] windowManagerSupportsWindowAnimation]) {
     return;
   }
 
@@ -1707,9 +1778,9 @@ static GWViewersManager *vwrsmanager = nil;
   // Set error handler to catch X11 errors gracefully
   int (*oldHandler)(Display *, XErrorEvent *) = XSetErrorHandler(NULL);
 
-  Atom birthAtom = XInternAtom(display, "_WINDOW_BIRTH", False);
+  Atom birthAtom = XInternAtom(display, "_WINDOW_BIRTH_ANIMATION", False);
   if (birthAtom == None) {
-    NSDebugLLog(@"gwspace", @"[Animation] Failed to intern _WINDOW_BIRTH atom");
+    NSDebugLLog(@"gwspace", @"[Animation] Failed to intern _WINDOW_BIRTH_ANIMATION atom");
     XSetErrorHandler(oldHandler);
     return;
   }
@@ -1732,9 +1803,59 @@ static GWViewersManager *vwrsmanager = nil;
   XSync(display, False);
   XSetErrorHandler(oldHandler);
 
-  NSDebugLLog(@"gwspace", @"[Animation] Set birth rect on window %lu: src={%d,%d,%d,%d} dst={%d,%d,%d,%d} type=%d",
+  NSDebugLLog(@"gwspace", @"[Animation] setWindowBirthRect window=0x%lx src={%d,%d,%d,%d} dst={%d,%d,%d,%d} type=%d",
         (unsigned long)xwindow, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, animationType);
 #endif
+}
+
+/* Called from windowWillClose: before the window is ordered out.  Resolves the
+ * folder's CURRENT on-screen representation by identity (not by a stored view,
+ * which may have been recycled) and tells the WindowManager where to shrink
+ * the window toward.  If the folder can no longer be seen - parent closed,
+ * minimized, scrolled out of view, filtered, or on another Space - the zero
+ * rect makes the WindowManager fall back to a plain fade. */
+- (void)prepareCloseAnimationForViewer:(id)aviewer
+{
+  if (aviewer == nil) {
+    return;
+  }
+  FSNode *node = [aviewer baseNode];
+  if (node == nil) {
+    return;
+  }
+  NSWindow *window = [aviewer win];
+  if (window == nil) {
+    return;
+  }
+
+  /* Resolve the folder's current icon position by identity (the original view
+   * may have been recycled); fall back to a plain fade when the folder is no
+   * longer visible anywhere. */
+  NSRect target = [self resolveIconScreenRectForNode: node];
+
+  /* Ask the WindowManager to shrink+fade the window into the icon, or do a
+   * plain fade when no target is available.  Sent while the window is still
+   * mapped; the WM unmaps it when the animation completes.  Only sent when
+   * the running WM implements the protocol. */
+  if (![[GWX11WindowManager sharedManager] windowManagerSupportsWindowAnimation]) {
+    return;
+  }
+  GSDisplayServer *server = GSServerForWindow(window);
+  if (!server) {
+    server = GSCurrentServer();
+  }
+  if (!server) {
+    return;
+  }
+  void *winptr = [server windowDevice:[window windowNumber]];
+  if (!winptr) {
+    return;
+  }
+  unsigned long windowID = (unsigned long)(uintptr_t)winptr;
+  if (windowID != 0) {
+    [[GWX11WindowManager sharedManager] animateWindowClose: windowID
+                                                targetRect: target];
+  }
 }
 
 @end

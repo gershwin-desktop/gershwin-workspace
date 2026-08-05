@@ -141,7 +141,20 @@
                targetRect:(NSRect)targetRect
             animationType:(int32_t)animationType
                  forWindow:(NSWindow *)window;
-                  
+
+// Window close animation support (spatial window shrink).
+// Resolves the folder's CURRENT on-screen representation by identity (not by
+// a stored view) so the close animation shrinks the window into wherever the
+// folder icon is right now.  A nil/NSZeroRect target means "no visible
+// representation - use a plain fade".
+- (NSRect)resolveIconScreenRectForNode:(FSNode *)node;
+
+/* Resolve the folder's current icon rect for @p aviewer's window and ask the
+ * WindowManager to play the close animation toward it (shrink+fade), or a
+ * plain fade when no visible representation exists.  Called from
+ * windowWillClose: while the window is still mapped. */
+- (void)prepareCloseAnimationForViewer:(id)aviewer;
+                   
 - (void)openAsFolderSelectionInViewer:(id)viewer;
 
 - (void)openWithSelectionInViewer:(id)viewer;

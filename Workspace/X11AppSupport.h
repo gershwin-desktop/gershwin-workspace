@@ -226,6 +226,31 @@
  */
 - (BOOL)closeWindowsForPID:(pid_t)pid;
 
+/**
+ * Ask the WindowManager to play the close animation for a window:
+ * shrink+fade toward the folder icon's target rect, or a plain fade
+ * when no target is available.  Sends a _WINDOW_CLOSE_ANIMATION client
+ * message to the WM while the window is still mapped (the message name is
+ * deliberately vendor-neutral, like the _WINDOW_BIRTH_ANIMATION atoms, so the
+ * protocol could be standardized).
+ * @param windowID The X11 window ID
+ * @param targetRect Target screen rect in Cocoa (bottom-left origin), or
+ *                   NSZeroRect for a plain fade
+ * @return YES if the request was sent
+ */
+- (BOOL)animateWindowClose:(unsigned long)windowID
+               targetRect:(NSRect)targetRect;
+
+/**
+ * Whether the running WindowManager implements the window-animation protocol
+ * (it advertises _WINDOW_BIRTH_ANIMATION and _WINDOW_CLOSE_ANIMATION in its
+ * _NET_SUPPORTED property).  Workspace only sets the birth property / sends
+ * the close-animation message when this is true; otherwise it relies on its
+ * own plain fade so the window closes normally under a WM that does not
+ * consume these atoms.
+ */
+- (BOOL)windowManagerSupportsWindowAnimation;
+
 @end
 
 #pragma mark - X11 Application Manager

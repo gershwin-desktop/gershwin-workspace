@@ -943,6 +943,111 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return success;
 }
 
+/* Ask the WindowManager to play the close animation for @p windowID: a
+ * shrink+fade toward the folder icon's current position, or a plain fade
+ * when no target is available.  Sends a _WINDOW_CLOSE_ANIMATION client
+ * message to the WM while the window is still mapped; the WM unmaps the
+ * window itself when the animation completes, so the app's later orderOut is
+ * a harmless no-op.  The message name is vendor-neutral (like the
+ * _WINDOW_BIRTH_ANIMATION atoms) so the protocol could be standardized. */
+- (BOOL)animateWindowClose:(unsigned long)windowID
+               targetRect:(NSRect)targetRect
+{
+    if (windowID == 0) return NO;
+
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+
+    BOOL success = NO;
+
+    @try {
+        Window root = DefaultRootWindow(dpy);
+        Atom closeAnimAtom = XInternAtom(dpy, "_WINDOW_CLOSE_ANIMATION", False);
+        if (closeAnimAtom == None) {
+            return NO;
+        }
+
+        /* Convert the target rect from Cocoa (bottom-left origin) to X11 root
+         * coordinates (top-left origin), matching the birth protocol. */
+        long tx = 0, ty = 0, tw = 0, th = 0;
+        if (!NSEqualRects(targetRect, NSZeroRect)) {
+            NSScreen *screen = [NSScreen mainScreen];
+            NSRect screenFrame = [screen frame];
+            tx = (long)llround(targetRect.origin.x);
+            ty = (long)llround(screenFrame.size.height - targetRect.origin.y - targetRect.size.height);
+            tw = (long)llround(targetRect.size.width);
+            th = (long)llround(targetRect.size.height);
+        }
+
+        XEvent event;
+        memset(&event, 0, sizeof(event));
+        event.xclient.type = ClientMessage;
+        event.xclient.window = (Window)windowID;
+        event.xclient.message_type = closeAnimAtom;
+        event.xclient.format = 32;
+        /* data32: [0]=animationType (0=shrink-to-icon, 2=fade), [1..4]=x,y,w,h */
+        event.xclient.data.l[0] = NSEqualRects(targetRect, NSZeroRect) ? 2 : 0;
+        event.xclient.data.l[1] = tx;
+        event.xclient.data.l[2] = ty;
+        event.xclient.data.l[3] = tw;
+        event.xclient.data.l[4] = th;
+
+        /* Send to the root window with SubstructureRedirect|Notify so the WM
+         * receives it as a ClientMessage on the client window. */
+        XSendEvent(dpy, root, False,
+                   SubstructureRedirectMask | SubstructureNotifyMask,
+                   &event);
+        XFlush(dpy);
+        success = YES;
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+
+    return success;
+}
+
+/* Check whether the running WindowManager advertises the window-animation
+ * protocol in its _NET_SUPPORTED root-window property.  Workspace only sets
+ * _WINDOW_BIRTH_ANIMATION / sends _WINDOW_CLOSE_ANIMATION when the WM does; otherwise
+ * the window closes with a plain fade and no stale atoms are left behind. */
+- (BOOL)windowManagerSupportsWindowAnimation
+{
+    BOOL supported = NO;
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+
+    @try {
+        Window root = DefaultRootWindow(dpy);
+        Atom netSupported = XInternAtom(dpy, "_NET_SUPPORTED", False);
+        Atom birth = XInternAtom(dpy, "_WINDOW_BIRTH_ANIMATION", False);
+        Atom closeAnim = XInternAtom(dpy, "_WINDOW_CLOSE_ANIMATION", False);
+
+        Atom actual_type;
+        int actual_format;
+        unsigned long nitems, bytes_after;
+        unsigned char *data = NULL;
+
+        if (XGetWindowProperty(dpy, root, netSupported, 0, LONG_MAX, False,
+                               XA_ATOM, &actual_type, &actual_format,
+                               &nitems, &bytes_after, &data) == Success && data) {
+            Atom *atoms = (Atom *)data;
+            BOOL hasBirth = NO, hasCloseAnim = NO;
+            for (unsigned long i = 0; i < nitems; i++) {
+                if (atoms[i] == birth) hasBirth = YES;
+                if (atoms[i] == closeAnim) hasCloseAnim = YES;
+            }
+            supported = hasBirth && hasCloseAnim;
+            XFree(data);
+        }
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+
+    return supported;
+}
+
 @end
 
 #pragma mark - X11 Application Info

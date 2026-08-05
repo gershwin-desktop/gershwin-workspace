@@ -287,7 +287,11 @@
         NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
         
         [vwrwin setFrame:windowFrame display:YES];
-        [vwrwin makeKeyAndOrderFront:nil];
+        /* Do NOT map the window here: createViewerOfType: sets the
+         * _WINDOW_BIRTH_ANIMATION property after init, and -activate maps the window
+         * after that.  Mapping during init would make the WindowManager read
+         * the window before the birth property is written (a cross-connection
+         * race), so the open animation would never play. */
         geometryApplied = YES;
       }
     }
@@ -1448,6 +1452,10 @@
 {
   if (invalidated == NO) {
     closing = YES;
+    /* Resolve the folder's current icon position and tell the WindowManager
+     * to shrink the window into it as it closes (or fade when the folder is
+     * no longer visible). */
+    [manager prepareCloseAnimationForViewer: self];
     [self teardownDSStoreWatcher];
     [self updateDefaults];
     [vwrwin setDelegate: nil];

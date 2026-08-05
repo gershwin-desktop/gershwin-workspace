@@ -1367,6 +1367,10 @@ constrainMinCoordinate:(CGFloat)proposedMin
 {
   if (invalidated == NO) {
     closing = YES;
+    /* Resolve the folder's current icon position and tell the WindowManager
+     * to shrink the window into it as it closes (or fade when the folder is
+     * no longer visible). */
+    [manager prepareCloseAnimationForViewer: self];
     [self updateDefaults];
     [vwrwin setDelegate: nil];
     [manager viewerWillClose: self];
