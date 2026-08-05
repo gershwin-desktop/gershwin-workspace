@@ -9,6 +9,9 @@
 
 #import <Foundation/Foundation.h>
 
+/* Window is the X11 window id type used by the frame extent helpers below. */
+#include <X11/Xlib.h>
+
 /**
  * X11AppSupport provides native X11 window management for non-GNUstep
  * applications in the Dock.
@@ -250,6 +253,29 @@
  * consume these atoms.
  */
 - (BOOL)windowManagerSupportsWindowAnimation;
+
+/* Window frame extent helpers: read the WM's _NET_FRAME_EXTENTS (EWMH §5.17,
+ * the authoritative decoration sizes) and convert between the full window
+ * frame and the content rect (what .DS_Store stores) exactly, so a
+ * save/restore cycle is reversible.  See X11AppSupport.m. */
+- (BOOL)frameExtentsForWindow:(Window)xwindow
+                        left:(unsigned long *)left
+                       right:(unsigned long *)right
+                        top:(unsigned long *)top
+                     bottom:(unsigned long *)bottom;
+- (NSRect)frameRectForContent:(NSRect)content
+              extentsLeft:(unsigned long)l
+                     right:(unsigned long)r
+                      top:(unsigned long)t
+                   bottom:(unsigned long)b;
+
+/* Measure the CONTENT rect of a window in GNUstep screen coords (bottom-left
+ * origin) from its actual X11 client geometry (the client window is the
+ * content area; the WM wraps it in a frame).  This is exact where GNUstep's
+ * own frame tracking can be a couple of px off.  See X11AppSupport.m. */
+- (BOOL)contentRectFromXGeometry:(Window)xwindow
+                    screenHeight:(CGFloat)screenHeight
+                        outRect:(NSRect *)outRect;
 
 @end
 

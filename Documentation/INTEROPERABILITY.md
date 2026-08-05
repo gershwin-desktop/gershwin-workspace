@@ -245,6 +245,27 @@ from the defaults dictionary before saving.
     ghosts, and removes the stale volume-cache record on success.
 4.  The remaining non-`.DS_Store` fields go to user defaults.
 
+The window geometry is persisted as the **content rect** (the client area
+excluding the title bar and borders - the same convention Finder uses for
+`fwi0`/`bwsp`), measured from the actual X11 client window geometry
+(`GWX11WindowManager -contentRectFromXGeometry:`).  This is deliberately not
+GNUstep's `contentRectForFrameRect:` conversion, whose internal offset cache
+can disagree with the running window manager's real decoration sizes by a
+pixel, which would make a saved window grow and drift on every open/close
+cycle.
+
+### Restore on open (window geometry)
+
+On open, `GWViewer` / `GWSpatialViewer` build the full window frame from the
+saved content rect by adding the window manager's real `_NET_FRAME_EXTENTS`
+(EWMH §5.17, read via `GWX11WindowManager -frameExtentsForWindow:`) - the
+exact inverse of what `updateDefaults` saves, so a save/restore cycle is
+reversible.  During init the window is not yet mapped, so `_NET_FRAME_EXTENTS`
+may be absent; a placeholder frame (the WM's known decoration: a plain title
+bar with no pixel borders) is applied and then re-applied exactly in
+`activate` once the WM has framed the window and set the extents.  This uses
+GNUstep's standard geometry path, so it works with any EWMH window manager.
+
 ### Icon drag / Clean Up
 
 `FSNIconsView -batchRepositionIcons:` batches all moved icons by folder and

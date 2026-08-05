@@ -45,6 +45,8 @@
 #import "GWViewer.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
+#include <GNUstepGUI/GSDisplayServer.h>
+#import "X11AppSupport.h"
 #import "FSNodeRep.h"
 #import "FSNIcon.h"
 #import "FSNIconsView.h"
@@ -266,10 +268,55 @@
       
       // Validate geometry
       if (dsGeometry.size.width > 0 && dsGeometry.size.height > 0) {
-        // IMPORTANT: DS_Store stores CONTENT area (excluding titlebar)
-        // Convert content rect to full window frame rect
-        NSRect windowFrame = [vwrwin frameRectForContentRect:dsGeometry];
+        /* dsGeometry is the CONTENT rect in GNUstep coords (DS_Store stores
+         * content area excluding the title bar).  Convert to the full window
+         * frame using the WM's real _NET_FRAME_EXTENTS (the exact inverse of
+         * what updateDefaults saves).  The window is not mapped yet here, so
+         * _NET_FRAME_EXTENTS may be absent; the fallback (a plain title bar
+         * with no borders, our WM's known decoration) is only a placeholder -
+         * activate re-applies the exact frame with the real extents after the
+         * window is mapped. */
+        NSRect windowFrame = NSZeroRect;
+        unsigned long xl = 0, xr = 0, xt = 0, xb = 0;
+        Window xwin = 0;
+        GSDisplayServer *gsrv = GSServerForWindow(vwrwin);
+        if (!gsrv) gsrv = GSCurrentServer();
+        if (gsrv) {
+            void *winptr = [gsrv windowDevice:[vwrwin windowNumber]];
+            xwin = (Window)(uintptr_t)winptr;
+        }
+        BOOL gotExtents =
+            (xwin != 0
+             && [[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
+                                                                   left:&xl
+                                                                  right:&xr
+                                                                    top:&xt
+                                                                 bottom:&xb]);
+        if (gotExtents) {
+            windowFrame = [[GWX11WindowManager sharedManager] frameRectForContent:dsGeometry
+                                                                   extentsLeft:xl
+                                                                          right:xr
+                                                                           top:xt
+                                                                        bottom:xb];
+        } else {
+            /* Not mapped yet: GNUstep's frameRectForContentRect: would use a
+             * stale/guessed offset cache and give the wrong frame, so instead
+             * use the known decoration of our WM (22px title bar, no borders)
+             * as a placeholder.  activate corrects it with the real extents
+             * once the WM has framed the window. */
+            xl = 0; xr = 0; xt = 22; xb = 0;
+            windowFrame = [[GWX11WindowManager sharedManager] frameRectForContent:dsGeometry
+                                                                   extentsLeft:xl
+                                                                          right:xr
+                                                                           top:xt
+                                                                        bottom:xb];
+        }
         [vwrwin setFrame:windowFrame display:YES];
+        /* Remember the exact frame so activate can re-apply it after the
+         * window is mapped, when the WM has set _NET_FRAME_EXTENTS and
+         * GNUstep's own frame math is exact. */
+        pendingRestoreFrame = windowFrame;
+        hasPendingRestoreFrame = YES;
         /* Do NOT map the window here: createViewerOfType: sets the
          * _WINDOW_BIRTH_ANIMATION property after init, and -activate maps the window
          * after that.  Mapping during init would make the WindowManager read
@@ -646,6 +693,19 @@
     [vwrwin deminiaturize: nil];
   }
   [vwrwin makeKeyAndOrderFront: nil];
+
+  /* Re-apply the exact window frame now that the WM has framed the window and
+   * set _NET_FRAME_EXTENTS on it.  The setFrame: in init ran before the WM
+   * reparented the window, so GNUstep's styleoffsets: had to guess (or use a
+   * stale cached) decoration size and the window landed a couple of px off;
+   * re-applying the frame here lets GNUstep read the real extents and place
+   * the window exactly.  This uses GNUstep's standard geometry path, so it
+   * works with any EWMH WM. */
+  if (hasPendingRestoreFrame) {
+    hasPendingRestoreFrame = NO;
+    [vwrwin setFrame: pendingRestoreFrame display: YES];
+  }
+
   [manager viewer: self didShowNode: baseNode];
 }
 
@@ -950,12 +1010,31 @@
      * fwi0/bwsp stores the content area (excluding title bar/border), per
      * the MozillaWiki DS_Store format notes and Finder behavior.  Storing
      * stringWithSavedFrame (the full frame) would make restore add the
-     * decoration height again via frameRectForContentRect:, so the window
-     * would grow and drift upward on every open/close cycle.  The content
-     * rect is in GNUstep screen coords (bottom-left origin); the
-     * DS_Store coordinate conversion happens in
-     * dsStoreWindowFrameForScreen:. */
-    NSRect contentRect = [vwrwin contentRectForFrameRect: [vwrwin frame]];
+     * decoration height again, so the window would grow and drift upward on
+     * every open/close cycle.  We measure the content rect from the ACTUAL
+     * X geometry of the client window (EWMH §5.17), because GNUstep's
+     * tracked frame can include a stale clientBorder and be a couple of px
+     * wider/taller than the WM's real frame - using it would make the saved
+     * rect grow on every cycle.  The content rect is in GNUstep screen
+     * coords (bottom-left origin); the DS_Store coordinate conversion
+     * happens in dsStoreWindowFrameForScreen:. */
+    NSRect contentRect = NSZeroRect;
+    Window xwin = 0;
+    GSDisplayServer *gsrv = GSServerForWindow(vwrwin);
+    if (!gsrv) gsrv = GSCurrentServer();
+    if (gsrv) {
+        void *winptr = [gsrv windowDevice:[vwrwin windowNumber]];
+        xwin = (Window)(uintptr_t)winptr;
+    }
+    if (xwin != 0
+        && [[GWX11WindowManager sharedManager] contentRectFromXGeometry:xwin
+                                                    screenHeight:[[NSScreen mainScreen] frame].size.height
+                                                        outRect:&contentRect]) {
+        /* Measured from the real client window - exact. */
+    } else {
+        /* No X geometry available: fall back to GNUstep's own conversion. */
+        contentRect = [vwrwin contentRectForFrameRect: [vwrwin frame]];
+    }
     [updatedprefs setObject: NSStringFromRect(contentRect)
                      forKey: @"geometry"];
 

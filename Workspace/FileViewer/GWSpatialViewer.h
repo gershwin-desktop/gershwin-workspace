@@ -59,6 +59,15 @@
 
   // X11 atom-based spatial path for WM titlebar popup
   GWX11SpatialPath *_x11Path;
+
+  /* Full window frame (GNUstep bottom-left coords) to re-apply after the
+   * window is mapped.  GNUstep's setFrame: in init runs before the WM has
+   * framed the window, so it uses stale/guessed decoration offsets and the
+   * window lands a couple of px off; re-applying the exact frame after
+   * makeKeyAndOrderFront: (when the WM has set _NET_FRAME_EXTENTS) places it
+   * exactly and keeps it from drifting on every open/close cycle. */
+  NSRect pendingRestoreFrame;
+  BOOL hasPendingRestoreFrame;
 }
 
 - (id)initForNode:(FSNode *)node
