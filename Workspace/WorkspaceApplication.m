@@ -469,7 +469,7 @@
   NSDebugLLog(@"gwspace", @"launchApplication:arguments: appname=%@ binary=%@ args=%@", appname, path, args);
 
   if (path == nil) {
-    NSFileManager *fm = [NSFileManager defaultManager];
+    NSFileManager *dfm = [NSFileManager defaultManager];
     BOOL isDir;
 
     /* The app may not be known yet - regenerate the application list and
@@ -483,8 +483,8 @@
        Launch it directly, passing the file path as a plain argument instead of
        the GNUstep -GSFilePath option. */
     if (appPath != nil
-      && [fm fileExistsAtPath: appPath isDirectory: &isDir] && !isDir
-      && [fm isExecutableFileAtPath: appPath])
+      && [dfm fileExistsAtPath: appPath isDirectory: &isDir] && !isDir
+      && [dfm isExecutableFileAtPath: appPath])
       {
         NSMutableArray *plain = [NSMutableArray arrayWithCapacity: [args count]];
         unsigned int i;

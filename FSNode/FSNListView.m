@@ -39,7 +39,6 @@
 
 #define DOUBLE_CLICK_LIMIT 300
 #define EDIT_CLICK_LIMIT 1000
-#define FSNInfoDescriptionType 7
 
 static NSString *defaultColumns = @"{ \
   <*I0> = { \

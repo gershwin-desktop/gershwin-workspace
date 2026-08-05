@@ -71,8 +71,6 @@
 - (BOOL)isShowingPath:(NSString *)apath;
 - (void)createSubviews;
 - (void)unloadFromNode:(FSNode *)anode;
-- (void)updateWindowTitle;
-
 - (GWViewerWindow *)win;
 - (id)shelf;
 - (GWViewType)viewType;
@@ -116,29 +114,14 @@
 @interface GWSpatialViewer (GWViewerWindowDelegateMethods)
 
 - (void)openSelectionInNewViewer:(BOOL)newv;
-- (void)openSelectionAsFolder;
-- (void)openSelectionWith;
-- (void)newFolder;
-- (void)newFile;
-- (void)duplicateFiles;
-- (void)recycleFiles;
-- (void)emptyTrash;
-- (void)deleteFiles;
-- (void)goBackwardInHistory;
-- (void)goForwardInHistory;
 - (void)setViewerBehaviour:(id)sender;
 - (void)setViewerType:(id)sender;
 - (void)setShownType:(id)sender;
 - (void)setExtendedShownType:(id)sender;
-- (void)setIconsSize:(id)sender;
-- (void)setIconsPosition:(id)sender;
-- (void)setLabelSize:(id)sender;
 - (void)chooseLabelColor:(id)sender;
 - (void)chooseBackColor:(id)sender;
 - (void)selectAllInViewer;
 - (void)showTerminal;
-- (void)showAttributesInspector:(id)sender;
-- (NSArray *)lastSelection;
 - (BOOL)validateItem:(id)menuItem;
 
 @end

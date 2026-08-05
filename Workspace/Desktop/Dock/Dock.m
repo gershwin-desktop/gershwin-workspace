@@ -58,16 +58,6 @@ static inline CGFloat _dockScaleFactor(void)
   return (sf > 0.0) ? sf : 1.0;
 }
 
-/* Compute the cell (tile) dimension for a given icon size, scaled for HiDPI.
- * The base formula is ceil(iconSize / 3 * 4).  On HiDPI displays the cell
- * frame must be enlarged by GSScaleFactor so the dock occupies the correct
- * physical area.  The icon IMAGE size stays unscaled (the rendering pipeline
- * handles HiDPI). */
-static inline CGFloat _scaledCellSize(int iconSize)
-{
-  return ceil(iconSize / 3 * 4) * _dockScaleFactor();
-}
-
 /* small category to access NSNUmericSearch through a selector */
 
 @interface NSString (NumericSort)

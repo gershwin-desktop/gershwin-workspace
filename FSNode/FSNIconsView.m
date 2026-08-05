@@ -1402,8 +1402,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   while ([theEvent type] != NSLeftMouseUp)
     {
-      BOOL scrolled = NO;
-
       CREATE_AUTORELEASE_POOL (arp);
 
       theEvent = [NSApp nextEventMatchingMask: eventMask
@@ -1424,8 +1422,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 	{
 	  scrollPointToVisible(pp);
 	  CONVERT_CHECK;
-
-	  scrolled = YES;
 	}
 
       x = min(sp.x, pp.x);

@@ -24,6 +24,27 @@
 
 @implementation GWViewerBase
 
+/* Abstract hooks implemented by the concrete viewer classes (GWViewer and
+ * GWSpatialViewer).  GWViewerBase is never instantiated directly, so these
+ * raise if a subclass forgets to implement one. */
+- (void)updateDefaults
+{
+  [NSException raise: NSInternalInconsistencyException
+              format: @"%s not implemented by %@", __PRETTY_FUNCTION__, [self class]];
+}
+
+- (void)updatePreviewPaneForCurrentType
+{
+  [NSException raise: NSInternalInconsistencyException
+              format: @"%s not implemented by %@", __PRETTY_FUNCTION__, [self class]];
+}
+
+- (void)reloadFromNode:(FSNode *)anode
+{
+  [NSException raise: NSInternalInconsistencyException
+              format: @"%s not implemented by %@", __PRETTY_FUNCTION__, [self class]];
+}
+
 - (void)deactivate
 {
   [vwrwin close];
