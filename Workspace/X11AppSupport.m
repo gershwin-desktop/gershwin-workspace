@@ -1202,8 +1202,10 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (void)startMonitorTimer
 {
     if (monitorTimer == nil && [x11Apps count] > 0) {
-        /* Use faster initial polling (100ms) for quicker window detection */
-        monitorTimer = [NSTimer scheduledTimerWithTimeInterval:0.1
+        /* Poll for launched-app windows.  The window scans themselves run on a
+         * worker thread (see monitorTimerFired), so the 0.5s cadence is about
+         * detection latency, not main-thread load. */
+        monitorTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
                                                         target:self
                                                       selector:@selector(monitorTimerFired:)
                                                       userInfo:nil
@@ -1221,52 +1223,99 @@ static GWX11AppManager *sharedX11AppManager = nil;
 
 - (void)monitorTimerFired:(NSTimer *)timer
 {
-    GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
-    NSMutableArray *terminatedApps = [NSMutableArray array];
-    
+    /* Snapshot the registered apps on the main thread, then run the window
+     * scans on a worker thread.  windowsForPID:/windowsMatchingName: open X
+     * connections and issue synchronous round-trips per window; done on the
+     * main thread they can wedge the app under window churn (X11
+     * self-deadlock, the same class of bug as the DockIcon refresh). */
+    NSMutableArray *snapshot = [NSMutableArray array];
     for (NSString *appName in [x11Apps allKeys]) {
         GWX11AppInfo *info = [x11Apps objectForKey:appName];
         if (info == nil) continue;
-        
-        /* Check if process still exists */
-        if (![self processExists:info.pid]) {
-            [terminatedApps addObject:appName];
+        [snapshot addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+            info.appName ?: @"", @"name",
+            info.appPath ?: @"", @"path",
+            info.windowSearchString ?: @"", @"search",
+            [NSNumber numberWithInt: (int)info.pid], @"pid",
+            [NSNumber numberWithBool: info.hasWindowAppeared], @"appeared", nil]];
+    }
+    if ([snapshot count] == 0) {
+        [self stopMonitorTimer];
+        return;
+    }
+    [NSThread detachNewThreadSelector: @selector(monitorScanWorker:)
+                             toTarget: self
+                           withObject: snapshot];
+}
+
+/* Worker thread: check process liveness and run the X window scans for a
+ * snapshot of the registered apps.  Only immutable snapshot data is read, and
+ * GWX11WindowManager opens its own X connection per call, so this is safe off
+ * the main thread.  Results are applied back on the main thread. */
+- (void)monitorScanWorker:(NSArray *)appSnapshots
+{
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+    NSMutableArray *appeared = [NSMutableArray array];
+    NSMutableArray *terminated = [NSMutableArray array];
+
+    for (NSDictionary *snap in appSnapshots) {
+        NSString *appName = [snap objectForKey: @"name"];
+        NSString *appPath = [snap objectForKey: @"path"];
+        pid_t pid = (pid_t)[[snap objectForKey: @"pid"] intValue];
+        BOOL alreadyAppeared = [[snap objectForKey: @"appeared"] boolValue];
+
+        /* Check if the process still exists (cheap kill() probe). */
+        if (![self processExists:pid]) {
+            [terminated addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                appName ?: @"", @"name", appPath ?: @"", @"path", nil]];
             continue;
         }
-        
-        /* Check if windows have appeared for this app */
-        if (!info.hasWindowAppeared) {
-            /* Priority 1: Try to find windows by PID (most reliable) */
-            NSArray *windows = [wm windowsForPID:info.pid];
-            
-            /* Priority 2: Fall back to name matching if PID fails */
-            if ([windows count] == 0 && info.windowSearchString) {
-                windows = [wm windowsMatchingName:info.windowSearchString];
-            }
-            
-            if ([windows count] > 0) {
-                info.hasWindowAppeared = YES;
-                
-                if (delegate && [delegate respondsToSelector:@selector(x11AppWindowsDidAppear:path:)]) {
-                    [delegate x11AppWindowsDidAppear:info.appName path:info.appPath];
+
+        /* Check if windows have appeared for this app. */
+        if (!alreadyAppeared) {
+            NSArray *windows = [wm windowsForPID:pid];
+            if ([windows count] == 0) {
+                NSString *search = [snap objectForKey: @"search"];
+                if ([search length] > 0) {
+                    windows = [wm windowsMatchingName:search];
                 }
+            }
+            if ([windows count] > 0) {
+                [appeared addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                    appName ?: @"", @"name", appPath ?: @"", @"path", nil]];
             }
         }
     }
-    
-    /* Handle terminated apps */
-    for (NSString *appName in terminatedApps) {
+
+    NSDictionary *results = [NSDictionary dictionaryWithObjectsAndKeys:
+        appeared, @"appeared", terminated, @"terminated", nil];
+    [self performSelectorOnMainThread: @selector(applyMonitorResults:)
+                           withObject: results waitUntilDone: NO];
+    [pool drain];
+}
+
+/* Main thread: apply the worker's results. */
+- (void)applyMonitorResults:(NSDictionary *)results
+{
+    for (NSDictionary *app in [results objectForKey: @"appeared"]) {
+        NSString *appName = [app objectForKey: @"name"];
         GWX11AppInfo *info = [x11Apps objectForKey:appName];
-        if (info == nil) continue;
-        NSString *appPath = [[info.appPath retain] autorelease];
-        
+        /* A concurrent worker may already have handled this app. */
+        if (info == nil || info.hasWindowAppeared) continue;
+        info.hasWindowAppeared = YES;
+        if (delegate && [delegate respondsToSelector:@selector(x11AppWindowsDidAppear:path:)]) {
+            [delegate x11AppWindowsDidAppear:appName path:[app objectForKey: @"path"]];
+        }
+    }
+    for (NSDictionary *app in [results objectForKey: @"terminated"]) {
+        NSString *appName = [app objectForKey: @"name"];
+        NSString *appPath = [app objectForKey: @"path"];
         [x11Apps removeObjectForKey:appName];
-        
         if (delegate && [delegate respondsToSelector:@selector(x11AppDidTerminate:path:)]) {
             [delegate x11AppDidTerminate:appName path:appPath];
         }
     }
-    
     [self stopMonitorTimer];
 }
 

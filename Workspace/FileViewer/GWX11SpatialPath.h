@@ -10,6 +10,7 @@
  */
 
 #import <Foundation/Foundation.h>
+#import <X11/Xlib.h>
 
 @class FSNode;
 @class NSWindow;
@@ -19,6 +20,7 @@
   NSWindow *_window;
   NSString *_currentPath;
   NSTimer *_pollTimer;
+  Display *_dpy;   /* persistent X connection, reused across atom ops */
 }
 
 - (instancetype)initWithWindow:(NSWindow *)window path:(NSString *)path;
