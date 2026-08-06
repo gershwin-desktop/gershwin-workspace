@@ -274,7 +274,20 @@
                                         token: appName
                                      callback: ^(pid_t exitedPid, id token) {
         [weakSelf setAppPID: 0];
-        [(Dock *)container removeIcon: weakSelf];
+        /* A pinned icon must survive its app quitting - that is the whole
+         * point of pinning.  The kernel monitor only watches the registered
+         * PID, and apps launched through a shell-script .app wrapper (e.g.
+         * Chromium: Brave Origin.app) never get a matching appTerminated:
+         * call, so without this guard the monitor would yank the pinned icon
+         * out of the Dock the moment the app quits.  Mirror the docked-icon
+         * handling of appTerminated: - keep the icon, clear its running
+         * state. */
+        if (([weakSelf isDocked] == NO) && ([weakSelf isSpecialIcon] == NO)) {
+          [(Dock *)container removeIcon: weakSelf];
+        } else {
+          [weakSelf setAppHidden: NO];
+          [weakSelf setLaunched: NO];
+        }
       }];
     }
   else
@@ -603,7 +616,14 @@
       && [[GWProcessMonitor sharedMonitor] processOrChildrenAlive: appPID] == NO)
     {
       [self stopBouncing];
-      [(Dock *)container removeIcon: self];
+      /* Drop the icon only if it was never pinned; a docked icon stays
+       * (mirrors appTerminated:), it just stops showing as running. */
+      if (([self isDocked] == NO) && ([self isSpecialIcon] == NO)) {
+        [(Dock *)container removeIcon: self];
+      } else {
+        [self setAppPID: 0];
+        [self setLaunched: NO];
+      }
       return;
     }
 
@@ -759,7 +779,15 @@
               [self setAppPID: [info ownerPID]];
             } else {
               [self setAppPID: 0];
-              [(Dock *)container removeIcon: self];
+              /* A pinned icon must not vanish when its app is merely dead;
+               * clicking it should relaunch the app.  Only drop an unpinned
+               * icon whose process is gone. */
+              if (([self isDocked] == NO) && ([self isSpecialIcon] == NO)) {
+                [(Dock *)container removeIcon: self];
+                return;
+              }
+              launched = NO;
+              [ws launchApplication: nodePath];
               return;
             }
           }
