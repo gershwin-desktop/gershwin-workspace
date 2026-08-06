@@ -278,53 +278,20 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
         
         /* dsGeometry is the CONTENT rect (DS_Store stores content area
          * excluding the title bar; gnustepWindowFrameForScreen: flips to
-         * GNUstep bottom-left coords but stays content-sized).  Convert to
-         * the full window frame using the WM's real _NET_FRAME_EXTENTS so the
-         * decoration height is added exactly once and reversibly - the exact
-         * inverse of what updateDefaults saves.  The window is not mapped yet
-         * here, so _NET_FRAME_EXTENTS may be absent; the fallback (a plain
-         * title bar with no borders, our WM's known decoration) is only a
-         * placeholder - activate re-applies the exact frame with the real
-         * extents after the window is mapped. */
-        NSRect windowFrame = NSZeroRect;
-        unsigned long xl = 0, xr = 0, xt = 0, xb = 0;
-        Window xwin = 0;
-        GSDisplayServer *gsrv = GSServerForWindow(vwrwin);
-        if (!gsrv) gsrv = GSCurrentServer();
-        if (gsrv) {
-            void *winptr = [gsrv windowDevice:[vwrwin windowNumber]];
-            xwin = (Window)(uintptr_t)winptr;
-        }
-        if (xwin != 0
-            && [[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
-                                                                   left:&xl
-                                                                  right:&xr
-                                                                    top:&xt
-                                                                 bottom:&xb]) {
-            windowFrame = [[GWX11WindowManager sharedManager] frameRectForContent:dsGeometry
-                                                                   extentsLeft:xl
-                                                                          right:xr
-                                                                           top:xt
-                                                                        bottom:xb];
-        } else {
-            /* Not mapped yet: GNUstep's frameRectForContentRect: would use a
-             * stale/guessed offset cache and give the wrong frame, so instead
-             * use the known decoration of our WM (22px title bar, no borders)
-             * as a placeholder.  activate corrects it with the real extents
-             * once the WM has framed the window. */
-            xl = 0; xr = 0; xt = 22; xb = 0;
-            windowFrame = [[GWX11WindowManager sharedManager] frameRectForContent:dsGeometry
-                                                                   extentsLeft:xl
-                                                                          right:xr
-                                                                           top:xt
-                                                                        bottom:xb];
-        }
-        [vwrwin setFrame: windowFrame display: NO];
-        /* Remember the exact frame so activate can re-apply it after the
-         * window is mapped, when the WM has set _NET_FRAME_EXTENTS and
-         * GNUstep's own frame math is exact. */
-        pendingRestoreFrame = windowFrame;
+         * GNUstep bottom-left coords but stays content-sized).  Set the full
+         * frame now, BEFORE the window is mapped: the WindowManager reads the
+         * window geometry when it frames the window and plays the birth
+         * animation, so mapping a placeholder would grow the animation toward
+         * the wrong spot (bottom-left) and lay the content out for the wrong
+         * size.  frameRectForContentRect: uses the cached decoration offsets,
+         * which are exact once the compositor state has settled; activate
+         * later re-applies the frame with the WM's live _NET_FRAME_EXTENTS
+         * (exact), correcting any residual offset error mid-animation so it
+         * never drifts on repeated open/close cycles. */
+        pendingRestoreFrame = dsGeometry;
         hasPendingRestoreFrame = YES;
+        [vwrwin setFrame: [vwrwin frameRectForContentRect: dsGeometry]
+                 display: NO];
         geometryApplied = YES;
       }
     }
@@ -716,16 +683,55 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   }
   [vwrwin makeKeyAndOrderFront: nil];
 
-  /* Re-apply the exact window frame now that the WM has framed the window and
-   * set _NET_FRAME_EXTENTS on it.  The setFrame: in init ran before the WM
-   * reparented the window, so GNUstep's styleoffsets: had to guess (or use a
-   * stale cached) decoration size and the window landed a couple of px off;
-   * re-applying the frame here lets GNUstep read the real extents and place
-   * the window exactly.  This uses GNUstep's standard geometry path, so it
-   * works with any EWMH WM. */
+  /* Re-apply the saved content rect through GNUstep's own setFrame: now that
+   * the WM has framed the window and set _NET_FRAME_EXTENTS on it, GNUstep's
+   * frame math (styleoffsets: reads _NET_FRAME_EXTENTS first) is exact.  The
+   * frame set in init used the cached decoration offsets (correct position,
+   * size within a px) so the window maps and animates at its real geometry;
+   * this second pass corrects any residual offset error so the restore is
+   * pixel-exact, and because it happens while the birth animation is still
+   * playing the tiny correction is not visible.  setFrame: also keeps
+   * GNUstep's internal frame in sync with the real X client - a raw X
+   * placement would leave the two disagreeing.  The WM sets the extents
+   * asynchronously after mapping, so retry briefly until they appear; if they
+   * never do we hard-fail (report loudly) instead of placing at a guess. */
   if (hasPendingRestoreFrame) {
+    Window xwin = 0;
+    GSDisplayServer *gsrv = GSServerForWindow(vwrwin);
+    if (!gsrv) gsrv = GSCurrentServer();
+    if (gsrv) {
+      void *winptr = [gsrv windowDevice:[vwrwin windowNumber]];
+      xwin = (Window)(uintptr_t)winptr;
+    }
+    unsigned long l = 0, r = 0, t = 0, b = 0;
+    int attempts = 0;
+    while (xwin != 0 && attempts < 20
+           && ![[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
+                                                                 outLeft:&l
+                                                                outRight:&r
+                                                                 outTop:&t
+                                                              outBottom:&b]) {
+      [NSThread sleepForTimeInterval: 0.05];
+      attempts++;
+    }
+    if (xwin != 0 && attempts < 20) {
+      NSRect full = pendingRestoreFrame;
+      full.origin.x -= (CGFloat)l;
+      full.origin.y -= (CGFloat)b;
+      full.size.width += (CGFloat)l + (CGFloat)r;
+      full.size.height += (CGFloat)t + (CGFloat)b;
+      [vwrwin setFrame: full display: YES];
+    } else {
+      /* Hard fail: never place the window at a guessed size.  The WM writes
+       * _NET_FRAME_EXTENTS on the client when it frames the window; if it is
+       * still missing after the retries the decoration state is unknown, so
+       * leave the init geometry in place and report loudly instead of
+       * silently drifting on every open/close cycle. */
+      NSLog(@"ERROR: [GWViewer] frame extents missing for viewer window %@: "
+            @"xwin=%lu attempts=%d - restore not placed exactly",
+            vwrwin, (unsigned long)xwin, attempts);
+    }
     hasPendingRestoreFrame = NO;
-    [vwrwin setFrame: pendingRestoreFrame display: NO];
   }
 
   [self tileViews];

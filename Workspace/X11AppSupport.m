@@ -1046,63 +1046,6 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return supported;
 }
 
-/* Read the window's _NET_FRAME_EXTENTS (left, right, top, bottom), the
- * authoritative decoration sizes the WM reports (EWMH §5.17).  Returns NO
- * if the property is absent. */
-- (BOOL)frameExtentsForWindow:(Window)xwindow
-                        left:(unsigned long *)left
-                       right:(unsigned long *)right
-                         top:(unsigned long *)top
-                      bottom:(unsigned long *)bottom
-{
-    if (xwindow == 0 || !left || !right || !top || !bottom) return NO;
-    Display *dpy = [self openDisplay];
-    if (!dpy) return NO;
-    BOOL ok = NO;
-    @try {
-        Atom ext = XInternAtom(dpy, "_NET_FRAME_EXTENTS", False);
-        Atom actual_type;
-        int actual_format;
-        unsigned long nitems, bytes_after;
-        unsigned char *data = NULL;
-        int status = XGetWindowProperty(dpy, xwindow, ext, 0, 4, False, XA_CARDINAL,
-                               &actual_type, &actual_format, &nitems,
-                               &bytes_after, &data);
-        if (status == Success && data && nitems >= 4) {
-            unsigned long *vals = (unsigned long *)data;
-            *left = vals[0];
-            *right = vals[1];
-            *top = vals[2];
-            *bottom = vals[3];
-            ok = YES;
-        }
-        if (data) XFree(data);
-    }
-    @finally {
-        XCloseDisplay(dpy);
-    }
-    return ok;
-}
-
-/* Convert a GNUstep content rect (bottom-left origin, decorations excluded)
- * to the full window frame by adding the WM's _NET_FRAME_EXTENTS.  This uses
- * the WM's real extents, so a save/restore cycle is reversible - unlike
- * [NSWindow frameRectForContentRect:] whose internal offset cache can disagree
- * with the running WM by 1px, making the window drift on each cycle. */
-- (NSRect)frameRectForContent:(NSRect)content
-              extentsLeft:(unsigned long)l
-                     right:(unsigned long)r
-                      top:(unsigned long)t
-                   bottom:(unsigned long)b
-{
-    NSRect frame = content;
-    frame.origin.x -= l;
-    frame.origin.y -= b;
-    frame.size.width += l + r;
-    frame.size.height += t + b;
-    return frame;
-}
-
 /* Return the CONTENT rect of a window in GNUstep screen coords (bottom-left
  * origin), measured from the ACTUAL X geometry of the client window - not
  * GNUstep's tracked frame, which can include a stale clientBorder and be a
@@ -1134,6 +1077,46 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
             *outRect = content;
             ok = (attrs.width > 0 && attrs.height > 0);
         }
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+    return ok;
+}
+
+/* Read the WM's real _NET_FRAME_EXTENTS for a client window.  The WM writes
+ * this property on the client when it frames the window (XCBFrame
+ * decorateClientWindow / EWMHService updateNetFrameExtentsForWindow); before
+ * that the property is absent.  Returns NO if the extents are not readable
+ * (window not yet framed). */
+- (BOOL)frameExtentsForWindow:(Window)xwindow
+                      outLeft:(unsigned long *)l
+                     outRight:(unsigned long *)r
+                      outTop:(unsigned long *)t
+                   outBottom:(unsigned long *)b
+{
+    if (xwindow == 0) return NO;
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+    BOOL ok = NO;
+    @try {
+        Atom ext = XInternAtom(dpy, "_NET_FRAME_EXTENTS", False);
+        Atom actual_type;
+        int actual_format;
+        unsigned long nitems, bytes_after;
+        unsigned char *data = NULL;
+        if (XGetWindowProperty(dpy, xwindow, ext, 0, 4, False, XA_CARDINAL,
+                               &actual_type, &actual_format, &nitems,
+                               &bytes_after, &data) == Success
+            && data && nitems >= 4) {
+            unsigned long *vals = (unsigned long *)data;
+            if (l) *l = vals[0];
+            if (r) *r = vals[1];
+            if (t) *t = vals[2];
+            if (b) *b = vals[3];
+            ok = YES;
+        }
+        if (data) XFree(data);
     }
     @finally {
         XCloseDisplay(dpy);
