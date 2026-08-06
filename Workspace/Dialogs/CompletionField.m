@@ -33,6 +33,36 @@
 
 @implementation CompletionField
 
+/* Directory listing cache so typing does not rescan the application and PATH
+ * directories on every keystroke.  Keyed by directory path; the value is an
+ * array of the entry names.  A short TTL keeps it fresh. */
+#define COMPLETION_CACHE_TTL 10.0
+static NSMutableDictionary *completionCache = nil;
+static double completionCacheStamp = 0.0;
+
+static NSArray *CompletionCachedContents(NSFileManager *fm, NSString *dir)
+{
+  if (completionCache == nil)
+    completionCache = [NSMutableDictionary new];
+
+  double now = [[NSProcessInfo processInfo] systemUptime];
+  if (now - completionCacheStamp > COMPLETION_CACHE_TTL)
+    {
+      [completionCache removeAllObjects];
+      completionCacheStamp = now;
+    }
+
+  NSArray *cached = [completionCache objectForKey: dir];
+  if (cached == nil)
+    {
+      cached = [fm directoryContentsAtPath: dir];
+      if (cached == nil)
+        cached = [NSArray array];
+      [completionCache setObject: cached forKey: dir];
+    }
+  return cached;
+}
+
 - (void)dealloc
 {
   [completionSuffix release];
@@ -101,7 +131,7 @@
                                      inDir:(NSString *)dir
                             pathSeparator:(NSString *)sep
 {
-  NSArray *contents = [fm directoryContentsAtPath: dir];
+  NSArray *contents = CompletionCachedContents(fm, dir);
   if (contents == nil || [contents count] == 0)
     return nil;
 
@@ -173,13 +203,18 @@
     }
   else
     {
-      /* Application / command completion: search standard app paths and PATH */
+      /* Application completion: search the standard, LOCAL application
+       * directories.  PATH executables are deliberately NOT scanned here -
+       * doing the filesystem walk synchronously on every keystroke blocks
+       * the main thread (a slow or network-mounted PATH entry would wedge
+       * the whole app while typing); the full PATH completion is available
+       * via the Tab key (completeWithTab). */
       NSArray *appPaths = NSStandardApplicationPaths();
       NSString *completedApp = nil;
 
       for (NSString *dir in appPaths)
         {
-          NSArray *contents = [fm directoryContentsAtPath: dir];
+          NSArray *contents = CompletionCachedContents(fm, dir);
           for (NSString *name in contents)
             {
               if ([name hasPrefix: text] && ![name isEqualToString: text])
@@ -194,22 +229,31 @@
 
       if (completedApp)
         return completedApp;
+    }
 
-      /* Fall back to PATH executables */
-      NSString *pathEnv = [[[NSProcessInfo processInfo] environment] objectForKey: @"PATH"];
-      for (NSString *dir in [pathEnv componentsSeparatedByString: @":"])
+  return nil;
+}
+
+/* Completes from PATH executables as well; only used by explicit Tab
+ * completion, never during typing. */
+- (NSString *)completionForTextIncludingPath:(NSString *)text
+{
+  NSString *completed = [self completionForText: text];
+  if (completed)
+    return completed;
+
+  NSString *pathEnv = [[[NSProcessInfo processInfo] environment] objectForKey: @"PATH"];
+  for (NSString *dir in [pathEnv componentsSeparatedByString: @":"])
+    {
+      NSArray *contents = CompletionCachedContents(fm, dir);
+      for (NSString *name in contents)
         {
-          NSArray *contents = [fm directoryContentsAtPath: dir];
-          for (NSString *name in contents)
+          if ([name hasPrefix: text] && ![name isEqualToString: text])
             {
-              if ([name hasPrefix: text] && ![name isEqualToString: text])
-                {
-                  return name;
-                }
+              return name;
             }
         }
     }
-
   return nil;
 }
 
@@ -222,6 +266,7 @@
 {
   if (updatingTypeahead)
     return;
+  typeaheadPending = NO;
 
   NSString *full = [self string];
   NSUInteger fullLen = [full length];
@@ -349,7 +394,9 @@
   if ([str length] == 0)
     return;
 
-  NSString *completion = [self completionForText: str];
+  /* Tab completion may also consult the PATH (unlike the per-keystroke grey
+   * typeahead, which only scans the local application directories). */
+  NSString *completion = [self completionForTextIncludingPath: str];
   if (completion)
     {
       [self setString: completion];
@@ -360,12 +407,15 @@
 - (void)didChangeText
 {
   [super didChangeText];
-  /* setString: called from updateTypeahead re-enters didChangeText via the
-   * text storage notification; the guard prevents infinite recursion and
-   * prevents the inner call from stripping the suffix we just set. */
-  if (updatingTypeahead == NO)
+  /* Defer the grey typeahead out of the text-change callback.  Mutating the
+   * text storage with setString: from inside the edit notification (plus the
+   * per-keystroke directory scans) can wedge GNUstep's text system while the
+   * user types.  Coalesce: rapid keystrokes collapse into one update. */
+  if (updatingTypeahead == NO && typeaheadPending == NO)
     {
-      [self updateTypeahead];
+      typeaheadPending = YES;
+      [self performSelector: @selector(updateTypeahead)
+                 withObject: nil afterDelay: 0.05];
     }
 }
 
@@ -420,7 +470,6 @@ if ([path hasSuffix: pathSeparator] == NO) \
     }
 
   [super keyDown: theEvent];
-  [self updateTypeahead];
 }
 
 @end

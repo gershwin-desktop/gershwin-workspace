@@ -38,6 +38,10 @@
   /* Re-entrancy guard: setString: inside updateTypeahead would otherwise
    * re-enter didChangeText recursively. */
   BOOL updatingTypeahead;
+
+  /* Set while an updateTypeahead has been deferred to the run loop, so rapid
+   * typing coalesces into a single grey-suffix update. */
+  BOOL typeaheadPending;
 }
 
 - (void)setController:(id)aController;
