@@ -563,8 +563,9 @@ static Workspace *gworkspace = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Hide Sidebar") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Show Sidebar") action:@selector(toggleSidebar:) keyEquivalent:@""];
   [menuItem setTarget:self];
+  [menuItem setState: NSOnState];
   menuItem = [menu addItemWithTitle:_(@"Show Preview") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
@@ -1605,7 +1606,8 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   // === View type / behaviour — enabled whenever a viewer window exists ===
   if (sel_isEqual(action, @selector(setViewerType:))
       || sel_isEqual(action, @selector(setViewerBehaviour:))
-      || sel_isEqual(action, @selector(toggleInspector:))) {
+      || sel_isEqual(action, @selector(toggleInspector:))
+      || sel_isEqual(action, @selector(toggleSidebar:))) {
       /* With a detached global menu (Menu.app) the viewer is not always the
        * key window when the menu validates, so resolve the target viewer from
        * the key window, else the main window, else the first live viewer.
@@ -1619,6 +1621,20 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
               [anItem setState: [viewer isInspectorShown] ? NSOnState : NSOffState];
             }
           return (viewer != nil);
+        }
+      if (sel_isEqual(action, @selector(toggleSidebar:)))
+        {
+          /* The sidebar exists only in browsing viewers; spatial viewers do
+           * not respond, so the item is greyed out there.  Mirrors the
+           * Inspector item: fixed "Show Sidebar" title, checkmark when the
+           * sidebar is showing. */
+          if (viewer && [viewer respondsToSelector: @selector(toggleSidebar:)]
+              && [viewer respondsToSelector: @selector(isSidebarShown)])
+            {
+              [anItem setState: [viewer isSidebarShown] ? NSOnState : NSOffState];
+              return YES;
+            }
+          return NO;
         }
       if (sel_isEqual(action, @selector(setViewerType:)))
         {
@@ -5303,6 +5319,44 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   if (viewer && [viewer respondsToSelector: @selector(toggleInspector:)])
     {
       [viewer toggleInspector: sender];
+    }
+}
+
+- (void)toggleSidebar:(id)sender
+{
+  id viewer = [self _viewerForKeyWindow];
+  if (viewer && [viewer respondsToSelector: @selector(toggleSidebar:)])
+    {
+      [viewer toggleSidebar: sender];
+      /* Update the menu item checkmark right away so the item reflects the
+       * new state without waiting for the next menu validation (menu_invoke
+       * and the DSL's select menu resolve by the item's current title, which
+       * no longer changes). */
+      if ([viewer respondsToSelector: @selector(isSidebarShown)]) {
+        [self _setSidebarMenuItemState: [viewer isSidebarShown]];
+      }
+    }
+}
+
+/* Updates the checkmark of the "Show Sidebar" menu item to match the given
+ * state, so an in-process toggle (no menu display, no validation) still
+ * leaves the menu state consistent. */
+- (void)_setSidebarMenuItemState:(BOOL)shown
+{
+  SEL act = @selector(toggleSidebar:);
+  NSMenu *mainMenu = [NSApp mainMenu];
+  for (NSMenuItem *top in [mainMenu itemArray])
+    {
+      NSMenu *sub = [top submenu];
+      if (sub == nil) continue;
+      for (NSMenuItem *item in [sub itemArray])
+        {
+          if ([item action] == act)
+            {
+              [item setState: shown ? NSOnState : NSOffState];
+              return;
+            }
+        }
     }
 }
 

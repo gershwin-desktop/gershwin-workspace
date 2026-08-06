@@ -47,6 +47,7 @@
   GWViewerSplit *split;
   GWViewerSidebar *sidebar;
   float sidebarWidth;
+  BOOL showSidebar; /* sidebar visible in this browsing viewer */
   NSView *lowBox;
   GWViewerPathsScroll *pathsScroll;
   GWViewerIconsPath *pathsView;
@@ -103,6 +104,9 @@
 - (void)tileViews;
 - (CGFloat)defaultSidebarWidth;
 - (void)setSidebarWidth:(CGFloat)w;
+- (BOOL)isSidebarShown;
+- (void)toggleSidebar:(id)sender;
+- (void)setSidebarShown:(BOOL)shown;
 - (void)reloadSidebar;
 - (void)invalidate;
 - (void)unselectAllReps;

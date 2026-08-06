@@ -251,6 +251,16 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       }
     }
 
+    /* The sidebar toggle is remembered per view type, like the inspector. */
+    showSidebar = YES;
+    {
+      NSString *vtKey = [self _viewTypeKey];
+      NSString *sbKey = [@"showSidebar_" stringByAppendingString: vtKey];
+      if ((defEntry = [viewerPrefs objectForKey: sbKey])) {
+        showSidebar = [defEntry boolValue];
+      }
+    }
+
     if (dsInfo.loaded && dsInfo.hasSidebarWidth)
       {
         sidebarWidth = dsInfo.sidebarWidth;
@@ -746,6 +756,18 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   CGFloat h = r.size.height;
   CGFloat d = [split dividerThickness];
 
+  if (!showSidebar)
+    {
+      /* Sidebar hidden: hide the pane and let the content box fill the
+       * whole split.  The sidebar object stays alive so showing it again is
+       * instant (no reload). */
+      [sidebar setHidden: YES];
+      [lowBox setFrame: r];
+      return;
+    }
+
+  [sidebar setHidden: NO];
+
   if (sidebarWidth < MIN_SIDEBAR_WIDTH) sidebarWidth = MIN_SIDEBAR_WIDTH;
   if (sidebarWidth > MAX_SIDEBAR_WIDTH) sidebarWidth = MAX_SIDEBAR_WIDTH;
   if (sidebarWidth + d > w - MIN_SIDEBAR_WIDTH) {
@@ -769,6 +791,25 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   if (w == sidebarWidth) return;
   sidebarWidth = w;
   [self tileViews];
+}
+
+- (BOOL)isSidebarShown
+{
+  return showSidebar;
+}
+
+- (void)toggleSidebar:(id)sender
+{
+  [self setSidebarShown: !showSidebar];
+}
+
+- (void)setSidebarShown:(BOOL)shown
+{
+  if (showSidebar == shown) return;
+  showSidebar = shown;
+  [self tileViews];
+  [vwrwin display];
+  [self updateDefaults];
 }
 
 - (void)reloadSidebar
@@ -1164,6 +1205,8 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       NSString *vtKey = [self _viewTypeKey];
       [updatedprefs setObject: [NSNumber numberWithBool: showInspector]
                        forKey: [@"showInspector_" stringByAppendingString: vtKey]];
+      [updatedprefs setObject: [NSNumber numberWithBool: showSidebar]
+                       forKey: [@"showSidebar_" stringByAppendingString: vtKey]];
       [updatedprefs setObject: [NSNumber numberWithInt: inspectorPane]
                        forKey: [@"inspectorPane_" stringByAppendingString: vtKey]];
     }
