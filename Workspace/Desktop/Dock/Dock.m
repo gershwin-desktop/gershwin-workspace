@@ -1735,7 +1735,14 @@ static inline CGFloat _dockScaleFactor(void)
 {
   for (DockIcon *icon in icons)
     {
-      [icon refreshLaunchedState];
+      /* The X window scans (windowsMatchingName:/hasWindowsForPID:) open X
+       * connections and issue synchronous round-trips.  Done on the main
+       * thread they can wedge the app: while the main thread blocks in a
+       * synchronous X request it stops draining the GNUstep event queue, the X
+       * server gets stuck writing the accumulated events, and the reply never
+       * comes (X11 self-deadlock).  Run each icon's refresh on a worker
+       * thread; the state changes are applied back on the main thread. */
+      [icon refreshLaunchedStateAsync];
     }
 }
 

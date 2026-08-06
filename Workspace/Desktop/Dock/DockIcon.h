@@ -126,6 +126,12 @@
 
 - (void)refreshLaunchedState;
 
+/* Refresh the launched/pid state asynchronously: the X window scans run on a
+ * worker thread (they do synchronous X round-trips that would block the main
+ * thread and wedge the app), and the resulting state changes are applied back
+ * on the main thread. */
+- (void)refreshLaunchedStateAsync;
+
 - (void)setAppHidden:(BOOL)value;
 
 - (BOOL)isAppHidden;

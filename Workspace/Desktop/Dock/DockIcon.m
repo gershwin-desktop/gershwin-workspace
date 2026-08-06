@@ -320,69 +320,145 @@
 
 - (void)refreshLaunchedState
 {
-  if (isX11OnlyApp == NO)
+  /* Runs on the main thread.  The X scans themselves run on a worker thread
+   * (see refreshLaunchedStateAsync) so the main thread never blocks in a
+   * synchronous X round-trip; that is what wedges the app under window churn
+   * (the X server gets stuck writing accumulated events to the app's own
+   * connection while the main thread waits for a reply on a scan connection). */
+}
+
+- (void)refreshLaunchedStateAsync
+{
+  /* Capture the current state on the main thread, then hand it to a worker
+   * thread that does the X scans.  The worker's result is applied back here. */
+  NSDictionary *inputs = [NSDictionary dictionaryWithObjectsAndKeys:
+    [NSNumber numberWithBool: isX11OnlyApp], @"x11",
+    [NSNumber numberWithInt: (int)appPID], @"pid",
+    [NSNumber numberWithBool: launched], @"launched", nil];
+  [NSThread detachNewThreadSelector: @selector(refreshLaunchedStateWorker:)
+                           toTarget: self
+                         withObject: inputs];
+}
+
+/* Worker thread: run the X window scans and return the desired new state.
+ * Only immutable inputs are read (appName plus the captured snapshot), and the
+ * GWX11WindowManager opens its own X connection per call, so this is safe off
+ * the main thread. */
+- (void)refreshLaunchedStateWorker:(NSDictionary *)inputs
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  BOOL x11 = [[inputs objectForKey: @"x11"] boolValue];
+  pid_t pid = (pid_t)[[inputs objectForKey: @"pid"] intValue];
+  BOOL wasLaunched = [[inputs objectForKey: @"launched"] boolValue];
+
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  BOOL wantX11 = x11;
+  pid_t wantPID = pid;
+  BOOL wantLaunched = wasLaunched;
+  BOOL hasWindows = NO;
+
+  if (wantX11 == NO)
     {
-      /* Auto-discover X11 apps that were running before dock restart.
-       * Only try when launched=YES and no PID (loaded from prefs). */
-      if (launched && appPID <= 0)
+      /* Auto-discover X11 apps that were running before dock restart. */
+      if (wasLaunched && wantPID <= 0)
         {
-          GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
           NSArray *windows = [wm windowsMatchingName: appName];
           if ([windows count] > 0)
             {
-              isX11OnlyApp = YES;
-              GWX11WindowInfo *info = [windows objectAtIndex: 0];
-              [self setAppPID: [info ownerPID]];
+              wantX11 = YES;
+              wantPID = [[windows objectAtIndex: 0] ownerPID];
             }
         }
-      if (isX11OnlyApp == NO)
-        return;
-    }
-
-  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
-
-  if (appPID <= 0)
-    {
-      NSArray *windows = [wm windowsMatchingName: appName];
-      if ([windows count] > 0)
+      if (wantX11 == NO)
         {
-          GWX11WindowInfo *info = [windows objectAtIndex: 0];
-          isX11OnlyApp = YES;
-          [self setAppPID: [info ownerPID]];
-        }
-      else
-        {
-          if (launched)
-            {
-              launched = NO;
-              [self setNeedsDisplay: YES];
-            }
+          NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
+            [NSNumber numberWithBool: NO], @"x11",
+            [NSNumber numberWithInt: 0], @"pid",
+            [NSNumber numberWithBool: wasLaunched], @"launched",
+            [NSNumber numberWithBool: NO], @"changed",
+            [NSNumber numberWithBool: NO], @"haswindows", nil];
+          [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
+                                 withObject: result waitUntilDone: NO];
+          [pool drain];
           return;
         }
     }
 
-  lastWindowCheck = 0;
-  BOOL hasWindows = [self hasVisibleWindows];
-
-  if (launched && !hasWindows)
+  if (wantPID <= 0)
     {
       NSArray *windows = [wm windowsMatchingName: appName];
       if ([windows count] > 0)
         {
-          GWX11WindowInfo *info = [windows objectAtIndex: 0];
-          [self setAppPID: [info ownerPID]];
-          lastWindowCheck = 0;
-          hasWindows = [self hasVisibleWindows];
+          wantX11 = YES;
+          wantPID = [[windows objectAtIndex: 0] ownerPID];
         }
-      if (!hasWindows)
+      else
         {
-          launched = NO;
-          [self setNeedsDisplay: YES];
+          wantLaunched = NO;
+          NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
+            [NSNumber numberWithBool: YES], @"x11",
+            [NSNumber numberWithInt: 0], @"pid",
+            [NSNumber numberWithBool: wantLaunched], @"launched",
+            [NSNumber numberWithBool: (wantLaunched != wasLaunched)], @"changed",
+            [NSNumber numberWithBool: NO], @"haswindows", nil];
+          [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
+                                 withObject: result waitUntilDone: NO];
+          [pool drain];
+          return;
         }
     }
-  else if (!launched && hasWindows)
+
+  hasWindows = [wm hasWindowsForPID: wantPID];
+  if (wasLaunched && !hasWindows)
     {
-      launched = YES;
+      NSArray *windows = [wm windowsMatchingName: appName];
+      if ([windows count] > 0)
+        {
+          wantPID = [[windows objectAtIndex: 0] ownerPID];
+          hasWindows = [wm hasWindowsForPID: wantPID];
+        }
+      if (!hasWindows)
+        wantLaunched = NO;
+    }
+  else if (!wasLaunched && hasWindows)
+    {
+      wantLaunched = YES;
+    }
+
+  NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
+    [NSNumber numberWithBool: wantX11], @"x11",
+    [NSNumber numberWithInt: (int)wantPID], @"pid",
+    [NSNumber numberWithBool: wantLaunched], @"launched",
+    [NSNumber numberWithBool: (wantLaunched != wasLaunched || wantPID != pid)], @"changed",
+    [NSNumber numberWithBool: hasWindows], @"haswindows", nil];
+  [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
+                         withObject: result waitUntilDone: NO];
+  [pool drain];
+}
+
+/* Main thread: apply the worker's desired state. */
+- (void)applyLaunchedStateSnapshot:(NSDictionary *)snap
+{
+  BOOL wantX11 = [[snap objectForKey: @"x11"] boolValue];
+  pid_t wantPID = (pid_t)[[snap objectForKey: @"pid"] intValue];
+  BOOL wantLaunched = [[snap objectForKey: @"launched"] boolValue];
+  BOOL changed = [[snap objectForKey: @"changed"] boolValue];
+
+  /* Keep the hasVisibleWindows cache fresh with the worker's scan result. */
+  windowCheckResult = [[snap objectForKey: @"haswindows"] boolValue];
+  lastWindowCheck = [NSDate timeIntervalSinceReferenceDate];
+
+  if (wantX11 != isX11OnlyApp)
+    isX11OnlyApp = wantX11;
+  if (wantPID != appPID)
+    [self setAppPID: wantPID];
+  if (wantLaunched != launched)
+    {
+      launched = wantLaunched;
+      [self setNeedsDisplay: YES];
+    }
+  else if (changed)
+    {
       [self setNeedsDisplay: YES];
     }
 }
