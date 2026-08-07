@@ -71,6 +71,7 @@
   float bounceOffset;
   float bounceGravity;
   int pauseCounter;  /* Tracks pause between bounces (counts down in timer frames) */
+  NSTimeInterval bounceStart;  /* When the bounce began, for the launch timeout */
 
   /* Unity Launcher API state */
   int64_t badgeCount;

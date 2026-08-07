@@ -494,6 +494,7 @@
   isBouncing = YES;
   bounceVelocity = 6.32;  /* Initial upward velocity for 20px bounce height */
   bounceOffset = 0.0;
+  bounceStart = [NSDate timeIntervalSinceReferenceDate];
   
   /* Create a timer to update the animation 30 times per second (half as fast) */
   if (!bounceTimer) {
@@ -618,6 +619,26 @@
       [self stopBouncing];
       /* Drop the icon only if it was never pinned; a docked icon stays
        * (mirrors appTerminated:), it just stops showing as running. */
+      if (([self isDocked] == NO) && ([self isSpecialIcon] == NO)) {
+        [(Dock *)container removeIcon: self];
+      } else {
+        [self setAppPID: 0];
+        [self setLaunched: NO];
+      }
+      return;
+    }
+
+  /* A launch that fails leaves no process to watch: the launch notification
+   * fires before NSWorkspace checks the binary, appPID stays 0, and the
+   * dead-process check above is skipped - so the icon would bounce forever.
+   * Give the app a short grace period to spawn a process, then check by name
+   * on every iteration: a missing binary never spawns one, so the bounce
+   * stops a moment after the grace period instead of hopping indefinitely. */
+  if (appPID <= 0
+      && ([NSDate timeIntervalSinceReferenceDate] - bounceStart) > 2.0
+      && [[GWProcessMonitor sharedMonitor] processNamedAlive: appName] == NO)
+    {
+      [self stopBouncing];
       if (([self isDocked] == NO) && ([self isSpecialIcon] == NO)) {
         [(Dock *)container removeIcon: self];
       } else {

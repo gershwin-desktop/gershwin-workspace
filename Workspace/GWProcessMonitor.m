@@ -656,4 +656,86 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
 #endif
 }
 
+/* Returns YES if any live (non-zombie) process matches the given app name.
+ * Used for the Dock launch bounce when no PID was ever bound (a launch that
+ * failed before a process was created, e.g. a missing binary): there is no
+ * PID to watch, so fall back to a name scan. */
+- (BOOL)processNamedAlive:(NSString *)name
+{
+  if ([name length] == 0)
+    return NO;
+
+  NSString *want = [name lowercaseString];
+#if defined(__linux__)
+  DIR *proc = opendir("/proc");
+  if (proc == NULL)
+    return NO;
+
+  struct dirent *entry;
+  BOOL found = NO;
+  while ((entry = readdir(proc)) != NULL)
+    {
+      if (entry->d_name[0] < '0' || entry->d_name[0] > '9')
+        continue;
+
+      char commPath[64];
+      snprintf(commPath, sizeof(commPath), "/proc/%s/comm", entry->d_name);
+
+      FILE *f = fopen(commPath, "r");
+      if (f == NULL)
+        continue;
+
+      char comm[64];
+      size_t n = fread(comm, 1, sizeof(comm) - 1, f);
+      fclose(f);
+      if (n == 0)
+        continue;
+      comm[n] = '\0';
+
+      /* Strip the trailing newline that /proc/<pid>/comm carries. */
+      if (n > 0 && comm[n - 1] == '\n')
+        comm[n - 1] = '\0';
+
+      /* Skip zombies: an unreaped child must not keep the bounce alive. */
+      char statPath[64];
+      snprintf(statPath, sizeof(statPath), "/proc/%s/stat", entry->d_name);
+      FILE *sf = fopen(statPath, "r");
+      if (sf != NULL)
+        {
+          char sbuf[256];
+          size_t sn = fread(sbuf, 1, sizeof(sbuf) - 1, sf);
+          fclose(sf);
+          if (sn > 0)
+            {
+              sbuf[sn] = '\0';
+              char *closeParen = strrchr(sbuf, ')');
+              if (closeParen)
+                {
+                  char state = '\0';
+                  if (sscanf(closeParen + 1, " %c", &state) == 1 && state == 'Z')
+                    continue;
+                }
+            }
+        }
+
+      NSString *lower = [[NSString stringWithUTF8String: comm] lowercaseString];
+      /* Match the comm either exactly or as a substring of the app name
+       * (e.g. comm "chrome" for the app "Google Chrome"). */
+      if ([want rangeOfString: lower].location != NSNotFound)
+        {
+          found = YES;
+          break;
+        }
+    }
+  closedir(proc);
+  return found;
+#else
+  /* BSDs: fall back to pgrep -i -x; the dock bounce is a slow, rare path so
+   * a subprocess here is acceptable. */
+  NSString *cmd = [NSString stringWithFormat: @"pgrep -i -x %@ >/dev/null 2>&1",
+    name];
+  return WEXITSTATUS(system([cmd UTF8String])) == 0;
+#endif
+}
+
 @end

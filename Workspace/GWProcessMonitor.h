@@ -48,6 +48,13 @@
  */
 - (BOOL)processOrChildrenAlive:(pid_t)pid;
 
+/**
+ * Synchronously check whether any live process matches the given app name.
+ * Used by the Dock launch bounce when no PID was ever bound (a launch that
+ * failed before creating a process), where there is no PID to poll.
+ */
+- (BOOL)processNamedAlive:(NSString *)name;
+
 @end
 
 #endif
