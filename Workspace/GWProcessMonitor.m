@@ -12,6 +12,7 @@
 #import <signal.h>
 #import <pthread.h>
 #import <sys/syscall.h>
+#import <sys/wait.h>
 #import <stdio.h>
 #import <string.h>
 
