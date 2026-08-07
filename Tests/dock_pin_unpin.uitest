@@ -1,0 +1,35 @@
+#!/usr/bin/env run_uitest
+# Dock pin/unpin lifecycle: pin a running app, quit it, and verify the pinned
+# icon STAYS in the Dock (that is what pinning buys: the icon survives the app
+# quitting).  Then unpin and verify the icon is removed entirely, because the
+# app is no longer running.  The Dock lives inside the Workspace app, so
+# Workspace is the script's target whenever the context menu is involved.
+#
+# Run with: run_uitest Tests/dock_pin_unpin.uitest
+launch application "Processes"
+activate application "Workspace"
+wait until icon "Processes"
+
+# Self-healing start: if a previous run left Processes pinned, unpin it first.
+if icon "Processes" docked
+  context menu "Processes" "Remove from Dock"
+  wait 500ms
+end
+
+# 1. Pin the running app to the Dock.
+context menu "Processes" "Keep in Dock"
+assert icon "Processes" docked
+
+# 2. Quit the app - the pinned icon must remain in the Dock.
+activate application "Processes"
+select menu "Processes/Quit Processes"
+wait until not exists window "Process monitor"
+activate application "Workspace"
+assert icon "Processes" docked
+
+# 3. Unpin - with the app no longer running the icon is removed entirely.
+context menu "Processes" "Remove from Dock"
+wait until not exists icon "Processes"
+assert not exists icon "Processes"
+
+log "dock pin/unpin works"

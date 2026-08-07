@@ -1,0 +1,20 @@
+#!/usr/bin/env run_uitest
+# Opens the "About This Computer" panel and checks that the Processor and
+# Memory fields are shown.
+#
+# Works on both an English and a German Workspace, because the UITest engine
+# finds the window by its German title.
+#
+# Leaves the computer as it was found: the panel is closed again at the end.
+#
+# Run with: run_uitest Tests/ueber_diesen_computer.uitest
+activate application "Workspace"
+select menu "Workspace/Über diesen Computer"
+wait until window "Über diesen Computer"
+assert window "Über diesen Computer"
+assert text contains "Prozessor"
+assert text contains "Arbeitsspeicher"
+capture screenshot "/tmp/about_computer_de.png"
+close window "Über diesen Computer"
+wait until not exists window "Über diesen Computer"
+log "About panel shown"

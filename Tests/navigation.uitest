@@ -1,0 +1,53 @@
+#!/usr/bin/env run_uitest
+# Standard-folder navigation: the Go menu must open a viewer window for each
+# of the standard locations.  Exercises the menu, window open, and window close
+# paths.  Window titles are English; the engine localizes them (e.g. "Documents"
+# becomes "Dokumente", "System Disk" becomes "Systemfestplatte").
+#
+# The Desktop folder is not tested: its window title ("Schreibtisch"/"Desktop")
+# also matches the always-visible desktop window, so the close check cannot be
+# expressed.  Downloads and Movies are skipped too: their localized folder
+# names ("Heruntergeladen", "Videos") have no English mapping in the app.
+#
+# Leaves the computer as it was found: every window it opens is closed again.
+#
+# Run with: run_uitest Tests/navigation.uitest
+activate application "Workspace"
+
+select menu "Go/Documents"
+wait until window "Documents"
+assert window "Documents" frame constant
+close window "Documents"
+wait until not exists window "Documents"
+
+select menu "Go/Music"
+wait until window "Music"
+assert window "Music" frame constant
+close window "Music"
+wait until not exists window "Music"
+
+select menu "Go/Pictures"
+wait until window "Pictures"
+assert window "Pictures" frame constant
+close window "Pictures"
+wait until not exists window "Pictures"
+
+select menu "Go/Applications"
+wait until window "Applications"
+assert window "Applications" frame constant
+close window "Applications"
+wait until not exists window "Applications"
+
+select menu "Go/Utilities"
+wait until window "Utilities"
+assert window "Utilities" frame constant
+close window "Utilities"
+wait until not exists window "Utilities"
+
+select menu "Go/Computer"
+wait until window "System Disk"
+assert window "System Disk" frame constant
+close window "System Disk"
+wait until not exists window "System Disk"
+
+log "standard-folder navigation stable"
