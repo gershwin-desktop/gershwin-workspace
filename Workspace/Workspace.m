@@ -5330,7 +5330,7 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
       [viewer toggleSidebar: sender];
       /* Update the menu item checkmark right away so the item reflects the
        * new state without waiting for the next menu validation (menu_invoke
-       * and the DSL's select menu resolve by the item's current title, which
+       * and the UITest's select menu resolve by the item's current title, which
        * no longer changes). */
       if ([viewer respondsToSelector: @selector(isSidebarShown)]) {
         [self _setSidebarMenuItemState: [viewer isSidebarShown]];
