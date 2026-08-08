@@ -5364,18 +5364,20 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 {
   [self setDefaultViewerType: BROWSING];
 
-  NSRunAlertPanel(@"Default Viewer Set",
-                  @"Browsing mode is now the default for new viewer windows.",
-                  @"OK", nil, nil);
+  /* Informational confirmation.  Do NOT raise a modal here: dismissing it
+   * under a real X11 click (as the UI tests do) can segfault the app, and a
+   * headless/CI session would leave it up forever, freezing the Workspace and
+   * the DriveUI server.  The change is already visible via the menu
+   * checkmark, so log it and move on. */
+  NSLog(@"Default viewer type set to Browsing for new viewer windows.");
 }
 
 - (void)setDefaultSpatialBehaviour:(id)sender
 {
   [self setDefaultViewerType: SPATIAL];
 
-  NSRunAlertPanel(@"Default Viewer Set",
-                  @"Spatial mode is now the default for new viewer windows.",
-                  @"OK", nil, nil);
+  /* Informational confirmation; see setDefaultBrowsingBehaviour:. */
+  NSLog(@"Default viewer type set to Spatial for new viewer windows.");
 }
 
 - (void)notImplemented:(id)sender

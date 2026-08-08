@@ -21,13 +21,9 @@
 activate application "Workspace"
 
 # Switch the default viewer type to Browsing so the folder opens with a
-# sidebar; dismiss the confirmation alert by its "OK" button (the default
-# button lookup is unreliable for Eau alert panels).
+# sidebar.  The confirmation is non-blocking now (the change is shown by the
+# menu checkmark), so there is no alert to dismiss.
 select menu "View/View Behavior/Set Browsing as Default"
-wait until modal
-wait until button "OK"
-invoke button "OK"
-wait until not modal
 
 select menu "Go/Go to Folder..."
 wait until modal
@@ -62,14 +58,9 @@ invoke button "OK"
 wait until not modal
 assert window "${home}"
 
-# Restore the default viewer type, then close the window.  Dismiss the
-# confirmation alert by its "OK" button (the default button lookup is
-# unreliable for Eau alert panels).
+# Restore the default viewer type, then close the window.  The confirmation
+# is non-blocking now, so there is no alert to dismiss.
 select menu "View/View Behavior/Set Spatial as Default"
-wait until modal
-wait until button "OK"
-invoke button "OK"
-wait until not modal
 
 close window "${home}"
 wait until not exists window "${home}"
