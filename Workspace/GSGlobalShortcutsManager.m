@@ -1047,9 +1047,9 @@ static int GWX11GrabErrorHandler(Display *dpy, XErrorEvent *ev)
     [alert setAlertStyle:NSWarningAlertStyle];
     
     // Run the alert on the main thread since X11 event processing may be on a background thread
-    dispatch_async(dispatch_get_main_queue(), ^{
-        [alert runModal];
-    });
+    [alert performSelectorOnMainThread: @selector(runModal)
+                            withObject: nil
+                         waitUntilDone: NO];
 }
 
 - (void)temporarilyDisableAllShortcuts:(NSNotification *)notification

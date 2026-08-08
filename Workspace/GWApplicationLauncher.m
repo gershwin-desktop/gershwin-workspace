@@ -92,9 +92,9 @@
                                [NSNumber numberWithInt:-1], @"status",
                                reason, @"stderr",
                                nil];
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [self _showErrorAlert:errorInfo];
-    });
+    [self performSelectorOnMainThread: @selector(_showErrorAlert:)
+                           withObject: errorInfo
+                        waitUntilDone: NO];
     return NO;
   }
 }
@@ -135,9 +135,9 @@
                                [NSNumber numberWithInt:status], @"status",
                                s, @"stderr",
                                nil];
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [self _showErrorAlert:errorInfo];
-    });
+    [self performSelectorOnMainThread: @selector(_showErrorAlert:)
+                           withObject: errorInfo
+                        waitUntilDone: NO];
   } @finally {
     [pool drain];
   }

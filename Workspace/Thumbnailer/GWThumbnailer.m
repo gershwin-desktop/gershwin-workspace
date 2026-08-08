@@ -50,10 +50,14 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 + (Thumbnailer *)sharedThumbnailer
 {
   static Thumbnailer *instance = nil;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    instance = [[Thumbnailer allocWithZone:NULL] init];
-  });
+  /* GNUstep thread-safe singleton, no libdispatch. */
+  @synchronized ([Thumbnailer class])
+    {
+      if (instance == nil)
+        {
+          instance = [[Thumbnailer allocWithZone: NULL] init];
+        }
+    }
   return instance;
 }
 

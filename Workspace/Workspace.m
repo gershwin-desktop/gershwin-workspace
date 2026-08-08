@@ -3553,17 +3553,17 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSString *errorMessage = mountPoint ? nil : [volumeManager lastErrorMessage];
   
   /* Return to main thread to update UI */
-  dispatch_async(dispatch_get_main_queue(), ^{
-    NSMutableDictionary *resultDict = [NSMutableDictionary dictionaryWithObjectsAndKeys:
-                                 mountPoint ? mountPoint : [NSNull null], @"mountPoint",
-                                 progressPanel, @"progressPanel",
-                                 hostname, @"hostname",
-                                 nil];
-    if (errorMessage) {
-      [resultDict setObject:errorMessage forKey:@"errorMessage"];
-    }
-    [self finishMountOperation:resultDict];
-  });
+  NSMutableDictionary *resultDict = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+                               mountPoint ? mountPoint : [NSNull null], @"mountPoint",
+                               progressPanel, @"progressPanel",
+                               hostname, @"hostname",
+                               nil];
+  if (errorMessage) {
+    [resultDict setObject:errorMessage forKey:@"errorMessage"];
+  }
+  [self performSelectorOnMainThread: @selector(finishMountOperation:)
+                         withObject: resultDict
+                      waitUntilDone: NO];
   
   [mountInfo release];
   [pool release];

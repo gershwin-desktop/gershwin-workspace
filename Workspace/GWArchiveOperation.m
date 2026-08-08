@@ -257,10 +257,9 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
       return NO;
     }
 
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [progressBar setMaxValue: (double)totalItems];
-    [self updateProgress: 0.0 status: NSLocalizedString(@"Compressing...", @"")];
-  });
+  [self performSelectorOnMainThread: @selector(beginCompressProgress:)
+                         withObject: [NSNumber numberWithLongLong: totalItems]
+                      waitUntilDone: NO];
 
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
@@ -271,13 +270,25 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
   if (!ok)
     ASSIGN(error, compressError);
 
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self updateProgress: 100.0 status: (ok ? NSLocalizedString(@"Done.", @"")
-                                           : NSLocalizedString(@"Failed.", @""))];
-  });
+  [self performSelectorOnMainThread: @selector(finishCompressProgress:)
+                         withObject: [NSNumber numberWithBool: ok]
+                      waitUntilDone: NO];
 
   [pool release];
   return ok;
+}
+
+/* Main-thread halves of the compress progress updates. */
+- (void)beginCompressProgress:(NSNumber *)totalItemsNum
+{
+  [progressBar setMaxValue: [totalItemsNum doubleValue]];
+  [self updateProgress: 0.0 status: NSLocalizedString(@"Compressing...", @"")];
+}
+
+- (void)finishCompressProgress:(NSNumber *)okNum
+{
+  [self updateProgress: 100.0 status: ([okNum boolValue]
+    ? NSLocalizedString(@"Done.", @"") : NSLocalizedString(@"Failed.", @""))];
 }
 
 /* =================================================================
@@ -288,11 +299,9 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
 {
   NSString *archivePath = [paths objectAtIndex: 0];
 
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [progressBar setIndeterminate: YES];
-    [progressBar startAnimation: nil];
-    [self updateProgress: 0.0 status: NSLocalizedString(@"Extracting...", @"")];
-  });
+  [self performSelectorOnMainThread: @selector(beginExtractProgress)
+                         withObject: nil
+                      waitUntilDone: NO];
 
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   NSError *extractError = nil;
@@ -301,15 +310,28 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
   if (!ok)
     ASSIGN(error, extractError);
 
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [progressBar setIndeterminate: NO];
-    [progressBar stopAnimation: nil];
-    [self updateProgress: 100.0 status: (ok ? NSLocalizedString(@"Done.", @"")
-                                           : NSLocalizedString(@"Failed.", @""))];
-  });
+  [self performSelectorOnMainThread: @selector(finishExtractProgress:)
+                         withObject: [NSNumber numberWithBool: ok]
+                      waitUntilDone: NO];
   [pool release];
 
   return ok;
+}
+
+/* Main-thread halves of the extract progress updates. */
+- (void)beginExtractProgress
+{
+  [progressBar setIndeterminate: YES];
+  [progressBar startAnimation: nil];
+  [self updateProgress: 0.0 status: NSLocalizedString(@"Extracting...", @"")];
+}
+
+- (void)finishExtractProgress:(NSNumber *)okNum
+{
+  [progressBar setIndeterminate: NO];
+  [progressBar stopAnimation: nil];
+  [self updateProgress: 100.0 status: ([okNum boolValue]
+    ? NSLocalizedString(@"Done.", @"") : NSLocalizedString(@"Failed.", @""))];
 }
 
 @end

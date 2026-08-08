@@ -751,9 +751,9 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   }
 
   if (verified) {
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [self removableMediaPathsDidChange];
-    });
+    [self performSelectorOnMainThread: @selector(removableMediaPathsDidChange)
+                           withObject: nil
+                        waitUntilDone: NO];
   } else {
   }
 

@@ -250,9 +250,9 @@ typedef struct DBusConnection DBusConnectionStruct;
         
         // Open the folder in Workspace
         // Use the main thread to interact with the UI
-        dispatch_async(dispatch_get_main_queue(), ^{
-          [self openFolderOnMainThread:path];
-        });
+        [self performSelectorOnMainThread: @selector(openFolderOnMainThread:)
+                               withObject: path
+                            waitUntilDone: NO];
     }
 }
 
@@ -307,9 +307,9 @@ typedef struct DBusConnection DBusConnectionStruct;
     }
     
     // Open parent directories and select items
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [self showItemsOnMainThread:itemsByParent];
-    });
+    [self performSelectorOnMainThread: @selector(showItemsOnMainThread:)
+                           withObject: itemsByParent
+                        waitUntilDone: NO];
 }
 
 - (void)showItemsOnMainThread:(NSDictionary *)itemsByParent
@@ -374,9 +374,9 @@ typedef struct DBusConnection DBusConnectionStruct;
     }
     
     // Show properties for the items using the Inspector
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [self showPropertiesOnMainThread:paths];
-    });
+    [self performSelectorOnMainThread: @selector(showPropertiesOnMainThread:)
+                           withObject: paths
+                        waitUntilDone: NO];
 }
 
 - (void)showPropertiesOnMainThread:(NSArray *)paths
