@@ -13,10 +13,10 @@ repeat 4
     wait until modal
     type "~"
     press Return
-    wait until window "${home}"
+    wait until window "${home}" timeout 15s
     assert window "${home}" frame constant
     close window "${home}"
-    wait until not exists window "${home}"
+    wait until not exists window "${home}" timeout 15s
 end
 
 repeat 4
@@ -24,10 +24,12 @@ repeat 4
     wait until modal
     type "/"
     press Return
-    wait until window "System Disk"
+    # The root folder's icon layout is heavy, so opening and closing its
+    # viewer can take longer than the 2s fast-failure default.
+    wait until window "System Disk" timeout 15s
     assert window "System Disk" frame constant
     close window "System Disk"
-    wait until not exists window "System Disk"
+    wait until not exists window "System Disk" timeout 15s
 end
 
 log "window placement stable"

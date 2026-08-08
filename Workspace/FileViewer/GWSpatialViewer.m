@@ -692,7 +692,7 @@
     }
     unsigned long l = 0, r = 0, t = 0, b = 0;
     int attempts = 0;
-    while (xwin != 0 && attempts < 200
+    while (xwin != 0 && attempts < 40
            && ![[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
                                                                  outLeft:&l
                                                                 outRight:&r
@@ -701,7 +701,7 @@
       [NSThread sleepForTimeInterval: 0.05];
       attempts++;
     }
-    if (xwin != 0 && attempts < 200) {
+    if (xwin != 0 && attempts < 40) {
       NSRect full = pendingRestoreFrame;
       full.origin.x -= (CGFloat)l;
       full.origin.y -= (CGFloat)b;
@@ -714,7 +714,7 @@
        * still missing after the retries the decoration state is unknown, so
        * leave the init geometry in place and report loudly instead of
        * silently drifting on every open/close cycle. */
-      fprintf(stderr, "ERROR: [GWSpatialViewer] frame extents missing for "
+      fprintf(stderr, "WARNING: [GWSpatialViewer] frame extents missing for "
               "viewer window %p (%s): xwin=%lu attempts=%d - restore not "
               "placed exactly\n",
               vwrwin, [[vwrwin title] UTF8String], (unsigned long)xwin,

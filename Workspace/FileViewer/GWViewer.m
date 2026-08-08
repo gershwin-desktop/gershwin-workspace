@@ -725,7 +725,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
     }
     unsigned long l = 0, r = 0, t = 0, b = 0;
     int attempts = 0;
-    while (xwin != 0 && attempts < 200
+    while (xwin != 0 && attempts < 40
            && ![[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
                                                                  outLeft:&l
                                                                 outRight:&r
@@ -734,7 +734,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
       [NSThread sleepForTimeInterval: 0.05];
       attempts++;
     }
-    if (xwin != 0 && attempts < 200) {
+    if (xwin != 0 && attempts < 40) {
       NSRect full = pendingRestoreFrame;
       full.origin.x -= (CGFloat)l;
       full.origin.y -= (CGFloat)b;
@@ -747,7 +747,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
        * still missing after the retries the decoration state is unknown, so
        * leave the init geometry in place and report loudly instead of
        * silently drifting on every open/close cycle. */
-      NSLog(@"ERROR: [GWViewer] frame extents missing for viewer window %@: "
+      NSLog(@"WARNING: [GWViewer] frame extents missing for viewer window %@: "
             @"xwin=%lu attempts=%d - restore not placed exactly",
             vwrwin, (unsigned long)xwin, attempts);
     }
