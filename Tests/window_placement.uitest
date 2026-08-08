@@ -23,7 +23,7 @@ repeat 4
         close window "${home}"
     end
     wait until not exists window "${home}" timeout 15s
-    wait 1s
+    wait 100ms
 end
 
 repeat 4
@@ -40,7 +40,7 @@ repeat 4
         close window "System Disk"
     end
     wait until not exists window "System Disk" timeout 15s
-    wait 1s
+    wait 100ms
 end
 
 log "window placement stable"
