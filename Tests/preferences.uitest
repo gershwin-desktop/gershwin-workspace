@@ -1,7 +1,8 @@
 #!/usr/bin/env run_uitest
 # Preferences: the Workspace preferences window must open from the app menu and
-# close again.  The window title starts with the app name, so "Workspace"
-# matches it in both languages.
+# close again.  The window is matched by the localized "Preferences" part of its
+# title - matching "Workspace" would also match the app's own main window, so
+# the "no longer exists" check could never succeed.
 #
 # Leaves the computer as it was found: the preferences window is closed at the
 # end, and no setting is changed.
@@ -10,9 +11,9 @@
 activate application "Workspace"
 
 select menu "Workspace/Preferences..."
-wait until window "Workspace"
-assert window "Workspace"
-close window "Workspace"
-wait until not exists window "Workspace"
+wait until window "Preferences" timeout 10s
+assert window "Preferences"
+close window "Preferences"
+wait until not exists window "Preferences"
 
 log "preferences stable"
