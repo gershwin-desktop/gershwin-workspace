@@ -308,7 +308,13 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
     
     if (!geometryApplied) {
       r = NSMakeRect(200, 200, resizeIncrement * 5, 600);
-      [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
+      /* The default r is a CONTENT rect; frame it (add the title bar) exactly
+       * like the restore path does, so the default open and every reopen have
+       * the same frame.  Without this the first open's frame lacked the title
+       * while restores included it, and the frame-constant uitest saw a 22px
+       * jump on the second open. */
+      [vwrwin setFrame: [vwrwin frameRectForContentRect:
+        rectForWindow([manager viewerWindows], r, YES)]
                display: NO];
     }
     
