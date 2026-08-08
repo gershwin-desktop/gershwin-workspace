@@ -692,7 +692,7 @@
     }
     unsigned long l = 0, r = 0, t = 0, b = 0;
     int attempts = 0;
-    while (xwin != 0 && attempts < 20
+    while (xwin != 0 && attempts < 200
            && ![[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
                                                                  outLeft:&l
                                                                 outRight:&r
@@ -701,7 +701,7 @@
       [NSThread sleepForTimeInterval: 0.05];
       attempts++;
     }
-    if (xwin != 0 && attempts < 20) {
+    if (xwin != 0 && attempts < 200) {
       NSRect full = pendingRestoreFrame;
       full.origin.x -= (CGFloat)l;
       full.origin.y -= (CGFloat)b;
