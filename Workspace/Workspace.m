@@ -5394,8 +5394,12 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   } else {
     message = @"This feature is not yet implemented.";
   }
-  
-  NSRunAlertPanel(@"Not Implemented Yet", message, @"OK", nil, nil);
+
+  /* Informational only.  A blocking NSRunAlertPanel here would sit up
+   * forever on a headless/CI session (freezing the DriveUI server and every
+   * UI test) and dismissing it with a real X11 click can crash the app;
+   * log it instead. */
+  NSLog(@"Not implemented: %@", message);
   return;  // Explicit return to avoid noreturn inference
 }
 

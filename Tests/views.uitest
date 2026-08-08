@@ -49,13 +49,9 @@ select menu "View/Show Sidebar"
 wait until sidebar
 assert window "${home}"
 
-# The toolbar is not implemented yet: the menu item raises a "not implemented"
-# alert, which we dismiss explicitly.
+# The toolbar is not implemented yet: the menu item logs a "not implemented"
+# notice (non-blocking), so there is no alert to dismiss.
 select menu "View/Hide Toolbar"
-wait until modal
-wait until button "OK"
-invoke button "OK"
-wait until not modal
 assert window "${home}"
 
 # Restore the default viewer type, then close the window.  The confirmation
