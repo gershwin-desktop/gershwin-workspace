@@ -8,6 +8,9 @@
 # Run with: run_uitest Tests/window_placement.uitest
 activate application "Workspace"
 
+# The Workspace does a lot of DO work per open/close (menu server, process
+# monitor, DBus); the short settle between iterations keeps it from
+# overloading its DO connections under the rapid cycle.
 repeat 4
     select menu "Go/Go to Folder..."
     wait until modal
@@ -20,6 +23,7 @@ repeat 4
         close window "${home}"
     end
     wait until not exists window "${home}" timeout 15s
+    wait 1s
 end
 
 repeat 4
@@ -36,6 +40,7 @@ repeat 4
         close window "System Disk"
     end
     wait until not exists window "System Disk" timeout 15s
+    wait 1s
 end
 
 log "window placement stable"

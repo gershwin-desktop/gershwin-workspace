@@ -153,6 +153,14 @@ static void killOtherInstances(const char *myBasename, pid_t myPid)
 
 int main(int argc, char **argv, char **env)
 {
+    /* A DO write to a dead peer (an app the user closed, a crashed connection)
+     * raises SIGPIPE; GNUstep ignores it at NSObject init, but a library can
+     * reset it to SIG_DFL later, and then the default action terminates the
+     * Workspace mid-operation (a button click that sends a DO message crashed
+     * the app under the UI tests).  Ignore it here so a broken pipe is never
+     * fatal. */
+    signal(SIGPIPE, SIG_IGN);
+
     // Kill any other instances of this application FIRST, before anything else
     pid_t myPid = getpid();
     const char *myBasename = "Workspace";

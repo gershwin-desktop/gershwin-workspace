@@ -986,6 +986,13 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
+  /* A DO write to a dead or overloaded peer (an app the user closed, or the
+   * DO port churning under load) raises SIGPIPE; a library can reset the
+   * disposition to SIG_DFL after main(), whose default action terminates the
+   * Workspace mid-operation.  Re-assert the ignore here, after everything is
+   * loaded. */
+  signal(SIGPIPE, SIG_IGN);
+
   [self _swizzleGetInfoForFileForNoExtensionFiles];
 
   NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
