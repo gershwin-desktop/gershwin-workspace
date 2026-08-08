@@ -41,6 +41,41 @@
 /* Forward declaration of UI testing enable function */
 extern void WorkspaceUITestingSetEnabled(BOOL enabled);
 
+/* Real UID of a process, or -1 if it cannot be determined.  The
+ * single-instance check below must not touch another user's instance: a
+ * second desktop session on a separate X display (e.g. a UI-test run under
+ * Xvfb as a different user) must not kill the logged-in user's Workspace.
+ * Linux exposes /proc/<pid>/status; the BSDs lack that layout, so fall back
+ * to `ps -o uid= -p <pid>`. */
+static int processUid(pid_t pid)
+{
+#if defined(__linux__)
+    char path[64];
+    snprintf(path, sizeof(path), "/proc/%d/status", pid);
+    FILE *f = fopen(path, "r");
+    if (!f) return -1;
+    char line[256];
+    int uid = -1;
+    while (fgets(line, sizeof(line), f)) {
+        if (strncmp(line, "Uid:", 4) == 0) {
+            sscanf(line + 4, "%d", &uid);
+            break;
+        }
+    }
+    fclose(f);
+    return uid;
+#else
+    char cmd[64];
+    snprintf(cmd, sizeof(cmd), "ps -o uid= -p %d", pid);
+    FILE *f = popen(cmd, "r");
+    if (!f) return -1;
+    int uid = -1;
+    if (fscanf(f, "%d", &uid) != 1) uid = -1;
+    pclose(f);
+    return uid;
+#endif
+}
+
 static void killOtherInstances(const char *myBasename, pid_t myPid)
 {
     DIR *procDir;
@@ -66,6 +101,12 @@ static void killOtherInstances(const char *myBasename, pid_t myPid)
         
         // Skip our own PID
         if (pid == myPid) {
+            continue;
+        }
+        
+        /* Only this user's instances: a Workspace on another display/session
+         * belongs to a different (test) user and must be left alone. */
+        if (processUid((pid_t)pid) != (int)getuid()) {
             continue;
         }
         

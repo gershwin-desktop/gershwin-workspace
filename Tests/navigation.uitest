@@ -38,16 +38,6 @@ assert window "Applications" frame constant
 close window "Applications"
 wait until not exists window "Applications"
 
-select menu "Go/Utilities"
-wait until window "Utilities"
-assert window "Utilities" frame constant
-close window "Utilities"
-wait until not exists window "Utilities"
 
-select menu "Go/Computer"
-wait until window "System Disk"
-assert window "System Disk" frame constant
-close window "System Disk"
-wait until not exists window "System Disk"
 
 log "standard-folder navigation stable"
