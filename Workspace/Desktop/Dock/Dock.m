@@ -344,6 +344,18 @@ static inline CGFloat _dockScaleFactor(void)
 
 - (void)removeIcon:(DockIcon *)icon
 {
+  if (icon == nil) return;
+  /* Hold a strong reference for the whole removal.  An app-termination DO
+   * notification can otherwise arrive while the icon is being torn down and
+   * the object be deallocated under us (use-after-free in objc_msgSend - the
+   * Workspace crash that made menu_follows_app/window_placement flaky). */
+  [icon retain];
+  /* Idempotency: a duplicate app-terminated: (e.g. both the NSTask-exit and
+   * the DO-invalidation paths) must not re-remove an icon already gone. */
+  if ([icons indexOfObjectIdenticalTo: icon] == NSNotFound) {
+    [icon release];
+    return;
+  }
   [manager removeWatcherForPath: [[icon node] path]];
   
   if ([icon superview]) {
@@ -357,6 +369,7 @@ static inline CGFloat _dockScaleFactor(void)
   
   /* Persist the removal immediately */
   [self saveDockConfiguration];
+  [icon release];
 }
 
 - (DockIcon *)iconForApplicationPath:(NSString *)path

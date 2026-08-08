@@ -562,9 +562,10 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 {
   NS_DURING
   {
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-      [GWMounter mountRemovableMedia];
-    });
+    /* GNUstep thread, not libdispatch - see AppImageIconProvider. */
+    [NSThread detachNewThreadSelector: @selector(mountRemovableMedia)
+                             toTarget: [GWMounter class]
+                           withObject: nil];
   }
   NS_HANDLER
   {
@@ -695,10 +696,11 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
 - (void)verifyAndShowVolumeAtPath:(NSString *)mountRootPath
 {
-  /* Spawn a background task to perform verification so we don't block the main thread */
-  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-    [self verifyAndShowVolumeWorker:mountRootPath];
-  });
+  /* Spawn a background task to perform verification so we don't block the
+   * main thread (GNUstep thread, not libdispatch). */
+  [NSThread detachNewThreadSelector: @selector(verifyAndShowVolumeWorker:)
+                           toTarget: self
+                         withObject: mountRootPath];
 }
 
 - (void)verifyAndShowVolumeWorker:(NSString *)mountRootPath

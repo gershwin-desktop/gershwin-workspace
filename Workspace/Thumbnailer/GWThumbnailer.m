@@ -387,9 +387,12 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   if ([pathsInProcessing containsObject:path])
     return;
   [pathsInProcessing addObject:path];
-  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-    [self _makeThumbnails:path];
-  });
+  /* GNUstep thread, not libdispatch: a GCD worker thread running ObjC races
+   * the main thread's +load dispatch and crashes the app (GPF in libobjc's
+   * load_messages_insert) - the window_placement flake. */
+  [NSThread detachNewThreadSelector: @selector(_makeThumbnails:)
+                           toTarget: self
+                         withObject: path];
 }
 
 - (void)_removeThumbnails:(NSString *)path
@@ -453,9 +456,10 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   if ([pathsInProcessing containsObject:path])
     return;
   [pathsInProcessing addObject:path];
-  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-    [self _removeThumbnails:path];
-  });
+  /* GNUstep thread, not libdispatch; see makeThumbnails:. */
+  [NSThread detachNewThreadSelector: @selector(_removeThumbnails:)
+                           toTarget: self
+                         withObject: path];
 }
 
 - (BOOL)registerThumbnailData:(NSData *)data 

@@ -3751,10 +3751,11 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
                                  nil];
       [mountInfo retain];
       
-      /* Mount on a background thread to keep UI responsive */
-      dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [self performMountInBackground:mountInfo];
-      });
+      /* Mount on a background thread to keep UI responsive (GNUstep thread,
+       * not libdispatch - see AppImageIconProvider). */
+      [NSThread detachNewThreadSelector: @selector(performMountInBackground:)
+                               toTarget: self
+                             withObject: mountInfo];
       
       [serviceItem release];
     }

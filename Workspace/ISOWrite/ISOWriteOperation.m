@@ -350,10 +350,10 @@
     return;
   }
   
-  /* Start writing in background thread */
-  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-    [self writeThread];
-  });
+  /* Start writing in a background thread (GNUstep thread, not libdispatch). */
+  [NSThread detachNewThreadSelector: @selector(writeThread)
+                           toTarget: self
+                         withObject: nil];
 }
 
 - (BOOL)unmountAllPartitions
