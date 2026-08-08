@@ -16,6 +16,9 @@ repeat 4
     wait until window "${home}" timeout 15s
     assert window "${home}" frame constant
     close window "${home}"
+    if window "${home}" exists timeout 3s
+        close window "${home}"
+    end
     wait until not exists window "${home}" timeout 15s
 end
 
@@ -29,6 +32,9 @@ repeat 4
     wait until window "System Disk" timeout 15s
     assert window "System Disk" frame constant
     close window "System Disk"
+    if window "System Disk" exists timeout 3s
+        close window "System Disk"
+    end
     wait until not exists window "System Disk" timeout 15s
 end
 
