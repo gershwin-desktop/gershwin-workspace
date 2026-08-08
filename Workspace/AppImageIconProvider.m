@@ -1232,47 +1232,18 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
       
       // Start loading
       [appImageLoadingState setObject: [NSNumber numberWithBool: YES] forKey: key];
-      
-      // Start async loading
-      dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        NSImage *properIcon = [[NSWorkspace sharedWorkspace] iconForFile: realPath];
-        if (properIcon != nil) {
-          // Update cache with proper icon on main thread (resizing is done on main thread
-          // since NSImage lockFocus/unlockFocus may not be thread-safe in GNUstep)
-          dispatch_async(dispatch_get_main_queue(), ^{
-            // Resize to standard base size (48) before caching so positioning is consistent
-            NSImage *cachedIcon = properIcon;
-            NSSize icnsize = [cachedIcon size];
-            if ((icnsize.width > 48) || (icnsize.height > 48)) {
-              NSImage *resized = [self resizedIcon: cachedIcon ofSize: 48];
-              if (resized != nil) {
-                cachedIcon = resized;
-              }
-            }
-            NSMutableDictionary *updateDict = [NSMutableDictionary dictionary];
-            [updateDict setObject: cachedIcon forKey: [NSNumber numberWithInt: 48]];
-            [iconsCache setObject: updateDict forKey: key];
-            [appImageLoadingState removeObjectForKey: key];
-            
-            // Trigger a refresh of all windows.  Icon views (FSNIcon) pick the
-            // new icon up on redraw via the drawRect swizzle, but list views
-            // (FSNListView) cache the icon in their node reps, so they need a
-            // full reloadContents to re-fetch it.  Walk the view hierarchy and
-            // reload whatever supports it; fall back to a plain redraw.
-            NSArray *windows = [NSApp windows];
-            for (NSWindow *win in windows) {
-              [AppImageIconProvider reloadExperienceViewsInView: [win contentView]];
-              [[win contentView] setNeedsDisplay: YES];
-            }
-          });
-        } else {
-          // Loading failed, remove loading state
-          dispatch_async(dispatch_get_main_queue(), ^{
-            [appImageLoadingState removeObjectForKey: key];
-          });
-        }
-      });
-      
+
+      /* Async icon loading WITHOUT libdispatch: a GCD worker thread running
+       * ObjC (iconForFile: can load classes/bundles) races the main thread's
+       * +load dispatch and crashes the app (GPF in libobjc's
+       * load_messages_insert) - exactly what window_placement hit.  Use a
+       * GNUstep thread instead. */
+      NSDictionary *job = [NSDictionary dictionaryWithObjectsAndKeys:
+        realPath, @"path", key, @"key", nil];
+      [NSThread detachNewThreadSelector: @selector(gw_loadAppImageInBackgroundForPath:)
+                               toTarget: self
+                             withObject: job];
+
       // Return generic icon while loading
       NSImage *icon = [NSImage imageNamed: @"UnknownTool"];
       if (icon == nil) {
@@ -1295,6 +1266,66 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
   }
 
   return [self gw_appImage_iconOfSize: size forNode: node];
+}
+
+/* Background half of the async AppImage icon load.  Runs on a GNUstep thread
+ * (NOT libdispatch - a GCD thread doing ObjC can race the main thread's +load
+ * dispatch and crash in load_messages_insert).  iconForFile: is safe off the
+ * main thread; the cache update and window refresh are posted back to the main
+ * thread (NSImage lockFocus/resize is not thread-safe in GNUstep). */
+- (void)gw_loadAppImageInBackgroundForPath:(NSDictionary *)job
+{
+  @autoreleasepool
+    {
+      NSString *realPath = [job objectForKey: @"path"];
+      NSString *key = [job objectForKey: @"key"];
+      NSImage *properIcon = [[NSWorkspace sharedWorkspace] iconForFile: realPath];
+      NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:
+        key, @"key", (properIcon ? (id)properIcon : (id)[NSNull null]), @"icon", nil];
+      [self performSelectorOnMainThread: @selector(gw_loadAppImageFinished:)
+                             withObject: payload
+                          waitUntilDone: NO];
+    }
+}
+
+/* Main-thread half of the async AppImage icon load: cache the icon and
+ * refresh the windows. */
+- (void)gw_loadAppImageFinished:(NSDictionary *)payload
+{
+  NSString *key = [payload objectForKey: @"key"];
+  id iconObj = [payload objectForKey: @"icon"];
+  NSImage *properIcon = ([iconObj isKindOfClass: [NSNull class]]) ? nil : iconObj;
+  if (properIcon == nil)
+    {
+      [appImageLoadingState removeObjectForKey: key];
+      return;
+    }
+
+  /* Resize to standard base size (48) before caching so positioning is
+   * consistent. */
+  NSImage *cachedIcon = properIcon;
+  NSSize icnsize = [cachedIcon size];
+  if ((icnsize.width > 48) || (icnsize.height > 48))
+    {
+      NSImage *resized = [self resizedIcon: cachedIcon ofSize: 48];
+      if (resized != nil) cachedIcon = resized;
+    }
+  NSMutableDictionary *updateDict = [NSMutableDictionary dictionary];
+  [updateDict setObject: cachedIcon forKey: [NSNumber numberWithInt: 48]];
+  [iconsCache setObject: updateDict forKey: key];
+  [appImageLoadingState removeObjectForKey: key];
+
+  /* Trigger a refresh of all windows.  Icon views (FSNIcon) pick the new icon
+   * up on redraw via the drawRect swizzle, but list views (FSNListView) cache
+   * the icon in their node reps, so they need a full reloadContents to
+   * re-fetch it.  Walk the view hierarchy and reload whatever supports it;
+   * fall back to a plain redraw. */
+  NSArray *windows = [NSApp windows];
+  for (NSWindow *win in windows)
+    {
+      [AppImageIconProvider reloadExperienceViewsInView: [win contentView]];
+      [[win contentView] setNeedsDisplay: YES];
+    }
 }
 
 @end
