@@ -61,6 +61,12 @@
 
 @implementation GWSpatialViewer
 
+/* Last-known window decoration extents (left/right/top/bottom), learned from
+ * the first window the WM framed, so later windows are corrected to the same
+ * frame even when the WM is slow to set _NET_FRAME_EXTENTS. */
+static unsigned long lastExtents_[4];
+static BOOL hasLastExtents_ = NO;
+
 - (void)dealloc
 {
   [nc removeObserver: self];
@@ -692,7 +698,7 @@
     }
     unsigned long l = 0, r = 0, t = 0, b = 0;
     int attempts = 0;
-    while (xwin != 0 && attempts < 40
+    while (xwin != 0 && attempts < 20
            && ![[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
                                                                  outLeft:&l
                                                                 outRight:&r
@@ -701,25 +707,39 @@
       [NSThread sleepForTimeInterval: 0.05];
       attempts++;
     }
-    if (xwin != 0 && attempts < 40) {
+    if (xwin != 0 && attempts < 20) {
       NSRect full = pendingRestoreFrame;
       full.origin.x -= (CGFloat)l;
       full.origin.y -= (CGFloat)b;
       full.size.width += (CGFloat)l + (CGFloat)r;
       full.size.height += (CGFloat)t + (CGFloat)b;
       [vwrwin setFrame: full display: YES];
+      /* Remember the decoration extents so later windows can be corrected
+       * deterministically even when the WM is slow to set them. */
+      lastExtents_[0] = l; lastExtents_[1] = r; lastExtents_[2] = t; lastExtents_[3] = b;
+      hasLastExtents_ = YES;
     } else {
-      /* Hard fail: never place the window at a guessed size.  The WM writes
-       * _NET_FRAME_EXTENTS on the client when it frames the window; if it is
-       * still missing after the retries the decoration state is unknown, so
-       * leave the init geometry in place and report loudly instead of
-       * silently drifting on every open/close cycle. */
-      fprintf(stderr, "WARNING: [GWSpatialViewer] frame extents missing for "
-              "viewer window %p (%s): xwin=%lu attempts=%d - restore not "
-              "placed exactly\n",
-              vwrwin, [[vwrwin title] UTF8String], (unsigned long)xwin,
-              attempts);
-      fflush(stderr);
+      /* The WM did not set _NET_FRAME_EXTENTS within the retry window.  Fall
+       * back to the extents learned from an earlier framed window (they only
+       * change on a theme change) so the frame is corrected to the same value
+       * on every open - leaving the init frame made it vary by the title bar
+       * between opens, which the frame-constant uitest caught as a 22px
+       * placement change. */
+      if (hasLastExtents_) {
+        NSRect full = pendingRestoreFrame;
+        full.origin.x -= (CGFloat)lastExtents_[0];
+        full.origin.y -= (CGFloat)lastExtents_[3];
+        full.size.width += (CGFloat)lastExtents_[0] + (CGFloat)lastExtents_[1];
+        full.size.height += (CGFloat)lastExtents_[2] + (CGFloat)lastExtents_[3];
+        [vwrwin setFrame: full display: YES];
+      } else {
+        fprintf(stderr, "WARNING: [GWSpatialViewer] frame extents missing for "
+                "viewer window %p (%s): xwin=%lu attempts=%d - restore not "
+                "placed exactly\n",
+                vwrwin, [[vwrwin title] UTF8String], (unsigned long)xwin,
+                attempts);
+        fflush(stderr);
+      }
     }
     hasPendingRestoreFrame = NO;
   }
