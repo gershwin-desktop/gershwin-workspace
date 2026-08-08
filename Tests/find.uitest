@@ -9,9 +9,9 @@
 activate application "Workspace"
 
 select menu "File/Find"
-wait until window "Search"
-assert window "Search"
-close window "Search"
-wait until not exists window "Search"
+wait until window "Finder"
+assert window "Finder"
+close window "Finder"
+wait until not exists window "Finder"
 
 log "find stable"
