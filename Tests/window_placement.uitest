@@ -13,10 +13,10 @@ repeat 4
     wait until modal
     type "~"
     press Return
-    wait until window "admin"
-    assert window "admin" frame constant
-    close window "admin"
-    wait until not exists window "admin"
+    wait until window "${home}"
+    assert window "${home}" frame constant
+    close window "${home}"
+    wait until not exists window "${home}"
 end
 
 repeat 4

@@ -31,8 +31,8 @@ select menu "Go/Go to Folder..."
 wait until modal
 type "~"
 press Return
-wait until window "admin"
-assert window "admin"
+wait until window "${home}"
+assert window "${home}"
 
 # A browsing window carries a sidebar; make sure it is showing before we test
 # toggling it (a previous run may have left it hidden).
@@ -46,10 +46,10 @@ assert sidebar
 # window must survive both toggles.
 select menu "View/Show Sidebar"
 wait until not sidebar
-assert window "admin"
+assert window "${home}"
 select menu "View/Show Sidebar"
 wait until sidebar
-assert window "admin"
+assert window "${home}"
 
 # The toolbar is not implemented yet: the menu item raises a "not implemented"
 # alert, which we dismiss explicitly.
@@ -58,7 +58,7 @@ wait until modal
 wait until button "OK"
 invoke button "OK"
 wait until not modal
-assert window "admin"
+assert window "${home}"
 
 # Restore the default viewer type, then close the window.
 select menu "View/View Behavior/Set Spatial as Default"
@@ -66,7 +66,7 @@ wait until modal
 invoke default button
 wait until not modal
 
-close window "admin"
-wait until not exists window "admin"
+close window "${home}"
+wait until not exists window "${home}"
 
 log "sidebar toggling stable"
