@@ -1824,6 +1824,26 @@
   }
 }
 
+/* DO rootProxy for a registered app name, bounded.  The one-shot class
+ * convenience rootProxyForConnectionWithRegisteredName:host: runs the main
+ * run loop in NSConnectionReplyMode waiting for the reply with NO request
+ * timeout, so a wedged or dead peer (an app from a previous session whose DO
+ * registration lingers) hangs the Workspace's main thread at startup forever.
+ * That also freezes the DriveUI server (it posts to the main thread), which
+ * makes every UI test that activates the Workspace time out.  Look the name
+ * up first and bound rootProxy with a request timeout so a dead peer fails
+ * fast instead of blocking startup. */
+- (id)_boundedRootProxyForRegisteredName:(NSString *)aName host:(NSString *)aHost
+{
+  NSConnection *c = [NSConnection connectionWithRegisteredName: aName host: aHost];
+  if (c == nil)
+    {
+      return nil;
+    }
+  [c setRequestTimeout: 2.0];
+  return [c rootProxy];
+}
+
 - (void)connectApplication:(BOOL)showProgress
 {
   if (application == nil) {
@@ -1841,8 +1861,7 @@
 	    }
 	  }
   
-    app = [NSConnection rootProxyForConnectionWithRegisteredName: name
-                                                            host: host];
+    app = [self _boundedRootProxyForRegisteredName: name host: host];
 
     if (app) {
       NSConnection *c = [app connectionForProxy];
@@ -1864,7 +1883,7 @@
 
       // Non-blocking: try once quickly without UI, then return.
       GWProcessStartupRunLoop(0.05);
-      app = [NSConnection rootProxyForConnectionWithRegisteredName: name host: host];
+      app = [self _boundedRootProxyForRegisteredName: name host: host];
       if (app) {
         NSConnection *c = [app connectionForProxy];
         [nc addObserver: self
