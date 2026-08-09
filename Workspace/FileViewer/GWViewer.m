@@ -731,16 +731,23 @@ static BOOL hasLastExtents_ = NO;
     }
     unsigned long l = 0, r = 0, t = 0, b = 0;
     int attempts = 0;
+    /* The WM sets _NET_FRAME_EXTENTS asynchronously after framing the window.
+     * It can transiently exist with all-zero values (borders and titlebar not
+     * yet applied); treat zero top extents as "not framed yet" so the retry
+     * keeps polling instead of snapping to a title-bar-less frame - which on a
+     * quick reopen made the frame-constant uitest see a 22px jump between the
+     * first open (with title bar) and the second (without). */
     while (xwin != 0 && attempts < 20
-           && ![[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
-                                                                 outLeft:&l
-                                                                outRight:&r
-                                                                 outTop:&t
-                                                              outBottom:&b]) {
+           && !(t > 0
+                && [[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
+                                                                     outLeft:&l
+                                                                    outRight:&r
+                                                                     outTop:&t
+                                                                  outBottom:&b])) {
       [NSThread sleepForTimeInterval: 0.05];
       attempts++;
     }
-    if (xwin != 0 && attempts < 20) {
+    if (xwin != 0 && attempts < 20 && t > 0) {
       NSRect full = pendingRestoreFrame;
       full.origin.x -= (CGFloat)l;
       full.origin.y -= (CGFloat)b;

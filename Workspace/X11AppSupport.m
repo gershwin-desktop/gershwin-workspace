@@ -1110,11 +1110,18 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
                                &bytes_after, &data) == Success
             && data && nitems >= 4) {
             unsigned long *vals = (unsigned long *)data;
-            if (l) *l = vals[0];
-            if (r) *r = vals[1];
-            if (t) *t = vals[2];
-            if (b) *b = vals[3];
-            ok = YES;
+            /* A real frame has a positive top (the titlebar).  All-zero
+             * extents mean the WM has not framed the window yet (it sets the
+             * property before applying the decoration offsets); returning YES
+             * with zeros would make a caller snap to a title-bar-less frame.
+             */
+            if (nitems >= 4 && vals[2] > 0) {
+                if (l) *l = vals[0];
+                if (r) *r = vals[1];
+                if (t) *t = vals[2];
+                if (b) *b = vals[3];
+                ok = YES;
+            }
         }
         if (data) XFree(data);
     }
