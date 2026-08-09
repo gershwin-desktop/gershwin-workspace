@@ -87,6 +87,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "FSNIconsView.h"
 #import "GWMetadataProvider.h"
 #import "GWIconPositionStore.h"
+#import "GWAlignLogically.h"
 #import "GWArchiveOperation.h"
 #import "Network/NetworkFSNode.h"
 #import "Network/NetworkServiceManager.h"
@@ -560,6 +561,9 @@ static Workspace *gworkspace = nil;
   [menuItem setTarget:self]; [menuItem setTag: 3];
   menuItem = [subMenu addItemWithTitle:_(@"Tags") action:@selector(cleanUpBy:) keyEquivalent:@""];
   [menuItem setTarget:self]; [menuItem setTag: 0];
+  
+  menuItem = [menu addItemWithTitle:_(@"Arrange Logically") action:@selector(alignLogically:) keyEquivalent:@""];
+  [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
   
@@ -4386,6 +4390,14 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     RELEASE (cleanUpByItem);
   }
 
+  // Arrange Logically
+  menuItem = [NSMenuItem new];
+  [menuItem setTitle: NSLocalizedString(@"Arrange Logically", @"")];
+  [menuItem setTarget: self];
+  [menuItem setAction: @selector(alignLogically:)];
+  [menu addItem: menuItem];
+  RELEASE (menuItem);
+
   return [menu autorelease];
 }
 
@@ -4925,6 +4937,13 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
     [iconView setCustomIconPositions: nil];
 
   [self cleanUpWithSort: sortType iconView: iconView sortSelector: sortSel];
+}
+
+- (void)alignLogically:(id)sender
+{
+  id iconView = [self activeIconView];
+  if (!iconView) return;
+  [[GWAlignLogically sharedAligner] alignLogicallyInIconView: iconView];
 }
 
 - (void)cleanUpWithSort:(FSNInfoType)sortType iconView:(id)iconView sortSelector:(SEL)sortSel

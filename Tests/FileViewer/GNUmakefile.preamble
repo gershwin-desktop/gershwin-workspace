@@ -2,6 +2,12 @@
 # under test) find their headers under Workspace/FileViewer/.
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/FileViewer
 
+# t_GWAlignLogically compiles Workspace/GWAlignLogically.m in-process and
+# classifies real FSNode objects, so it needs the FSNode framework and the
+# Workspace + FSNode + GWMetadata header dirs on the include path.
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace -I../../FSNode -I../../GWMetadata
+t_GWAlignLogically_TOOL_LIBS += -lFSNode -lgnustep-gui
+
 # t_DSStoreInfo compiles DSStoreInfo.m in-process; its DSStore back-end lives
 # under DSStore/ and is linked as separate objects (avoids in-TU symbol
 # clashes).  DSStoreInfo references NSColor, so link gnustep-gui too.
