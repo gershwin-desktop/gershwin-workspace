@@ -24,11 +24,16 @@
 
 #import <AppKit/AppKit.h>
 #include <GNUstepGUI/GSDisplayServer.h>
-#ifdef __linux__
+/* X11 window-property access for the birth animation.  Kept unconditional:
+ * the Workspace app already links against X11 unconditionally and
+ * X11AppSupport.m includes these headers without any platform guard, so
+ * guarding this file with __linux__ alone silently disabled the birth
+ * animation on FreeBSD/NextBSD/OpenBSD while the X11-based close animation
+ * (which lives in X11AppSupport.m) kept working.
+ */
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <stdint.h>
-#endif
 #import "GWViewersManager.h"
 #import "GWViewer.h"
 #import "GWSpatialViewer.h"
@@ -1666,7 +1671,6 @@ static GWViewersManager *vwrsmanager = nil;
     animationType = 1; // NoAnimation
   }
 
-#ifdef __linux__
   GSDisplayServer *server = GSServerForWindow(window);
   if (!server) {
     server = GSCurrentServer();
@@ -1717,7 +1721,7 @@ static GWViewersManager *vwrsmanager = nil;
   // bytes on LP64), not int32.  Passing an int32 array here would make Xlib
   // pick up every other 4-byte word, corrupting the property.  The X server
   // stores the values as 32-bit, and the WindowManager reads them back as
-  // 32-bit — so a long[] source is correct on both sides.
+  // 32-bit - so a long[] source is correct on both sides.
   long data[9] = {srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH, animationType};
 
   // Error checking: validate parameters before calling X11
@@ -1751,7 +1755,6 @@ static GWViewersManager *vwrsmanager = nil;
   XSync(display, False);
   XSetErrorHandler(oldHandler);
 
-#endif
 }
 
 /* Called from windowWillClose: before the window is ordered out.  Resolves the
