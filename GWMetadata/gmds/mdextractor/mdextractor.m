@@ -39,8 +39,27 @@
 #define MAX_RETRY 1000
 #define UPDATE_COUNT 100
 
+#define EXECUTE_QUERY(q, r) \
+do { \
+  if ([sqlite executeQuery: q] == NO) { \
+    NSLog(@"error at: %@", q); \
+    return r; \
+  } \
+} while (0)
 
-  do { if (GW_DEBUG_LOG) \
+#define STATEMENT_EXECUTE_QUERY(s, r) \
+do { \
+  if ([sqlite executeQueryWithStatement: s] == NO) { \
+    NSLog(@"error at: %@", [s query]); \
+    return r; \
+  } \
+} while (0)
+
+static BOOL updating = NO;
+
+static void check_updating(sqlite3_context *context, int argc, sqlite3_value **argv)
+{
+  sqlite3_result_int(context, (int)updating);
 }
 
 static void path_exists(sqlite3_context *context, int argc, sqlite3_value **argv)
