@@ -1,6 +1,8 @@
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
 
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+
 APP_NAME = BadgeTest
 
 BadgeTest_OBJC_FILES = main.m
