@@ -709,6 +709,20 @@ static BOOL hasLastExtents_ = NO;
   }
   [vwrwin makeKeyAndOrderFront: nil];
 
+  /* Draw the content into the mapped window NOW, synchronously.  The
+   * WindowManager starts the birth animation zoom as soon as the window is
+   * mapped and scales the client window's live drawable; without an immediate
+   * display the backing is still empty (the transparency/grey of an
+   * undrawn window) for the whole zoom, and the frame-extents retry below
+   * blocks the main thread so the regular deferred draw would only happen
+   * after the animation has already finished.  Drawing right after the map
+   * populates the X drawable within milliseconds - far sooner than the first
+   * animation frame is composited - so the zoom shows the fully rendered
+   * window, exactly as it does in spatial mode.  A draw issued before the
+   * window is mapped is useless: XGetImage on an unmapped window fails, so
+   * the WindowManager can never see it. */
+  [vwrwin display];
+
   /* Re-apply the saved content rect through GNUstep's own setFrame: now that
    * the WM has framed the window and set _NET_FRAME_EXTENTS on it, GNUstep's
    * frame math (styleoffsets: reads _NET_FRAME_EXTENTS first) is exact.  The
