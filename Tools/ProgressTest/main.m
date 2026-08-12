@@ -7,16 +7,10 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 
-@protocol DockService
-- (void)setProgressValue:(double)value;
-- (void)setProgressVisible:(BOOL)visible;
-@end
-
 @interface ProgressTestDelegate : NSObject
 {
   NSWindow *window;
   NSProgressIndicator *indicator;
-  id proxy;
   NSTimer *timer;
   double progress;
   int direction;
@@ -32,20 +26,6 @@
     {
       progress = 0.0;
       direction = 1;
-
-      NSString *name = @"DockIcon";
-      NSConnection *conn;
-      conn = [NSConnection connectionWithRegisteredName:name host:nil];
-      if (conn)
-        {
-          proxy = [[conn rootProxy] retain];
-          [proxy setProgressValue:progress];
-          [proxy setProgressVisible:YES];
-        }
-      else
-        {
-          NSLog(@"Failed to connect to Dock service.");
-        }
     }
   return self;
 }
@@ -53,7 +33,6 @@
 - (void)dealloc
 {
   [timer invalidate];
-  [proxy release];
   [super dealloc];
 }
 
@@ -72,8 +51,6 @@
     }
 
   [indicator setDoubleValue:progress * 100.0];
-  [proxy setProgressValue:progress];
-  [proxy setProgressVisible:YES];
 }
 
 - (void)applicationDidFinishLaunching:(NSNotification *)notif
