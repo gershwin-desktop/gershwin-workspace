@@ -1,6 +1,7 @@
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 ifeq ($(findstring darwin, $(GNUSTEP_TARGET_OS)), darwin)
   TOOL_NAME = gmdfind
@@ -23,3 +24,4 @@ ADDITIONAL_INCLUDE_DIRS += -I../../../GWMetadata/MDKit
 include $(GNUSTEP_MAKEFILES)/tool.make
 
 -include GNUmakefile.postamble
+

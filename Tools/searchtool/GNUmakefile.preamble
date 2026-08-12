@@ -1,2 +1,3 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # Additional include directories the compiler should search
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace

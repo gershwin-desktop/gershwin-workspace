@@ -1,6 +1,7 @@
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 FRAMEWORK_NAME = Operation
 include Version
@@ -40,3 +41,4 @@ endif
 include $(GNUSTEP_MAKEFILES)/framework.make
 
 -include GNUmakefile.postamble
+

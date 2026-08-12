@@ -1,5 +1,6 @@
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 ifneq ($(with_squashfs),yes)
 	$(warning libsquashfs not found; appimage-icon-test disabled)
@@ -18,3 +19,4 @@ else
 
 	include $(GNUSTEP_MAKEFILES)/tool.make
 endif
+

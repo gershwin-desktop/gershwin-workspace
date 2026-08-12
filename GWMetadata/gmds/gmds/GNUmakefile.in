@@ -1,6 +1,7 @@
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 ADDITIONAL_INCLUDE_DIRS += @SQLITE_INCLUDE_DIRS@
 ADDITIONAL_LIB_DIRS += @SQLITE_LIB_DIRS@
@@ -21,4 +22,5 @@ include $(GNUSTEP_MAKEFILES)/tool.make
 include $(GNUSTEP_MAKEFILES)/aggregate.make
 
 -include GNUmakefile.postamble
+
 

@@ -6,6 +6,7 @@
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 LIBRARY_VAR  = DSSTORE
 LIBRARY_NAME = libDSStore
@@ -41,3 +42,4 @@ include $(GNUSTEP_MAKEFILES)/aggregate.make
 -include GNUmakefile.preamble
 -include GNUmakefile.local
 -include GNUmakefile.postamble
+

@@ -1,5 +1,6 @@
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 VERSION = 0.1
 
@@ -27,3 +28,4 @@ include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/application.make
 
 include GNUmakefile.postamble
+

@@ -1,6 +1,7 @@
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 # The application to be compiled
 TOOL_NAME = lsfupdater
@@ -20,4 +21,5 @@ ADDITIONAL_TOOL_LIBS += -lgnustep-gui $(SYSTEM_LIBS)
 include $(GNUSTEP_MAKEFILES)/tool.make
 
 -include GNUmakefile.postamble
+
 

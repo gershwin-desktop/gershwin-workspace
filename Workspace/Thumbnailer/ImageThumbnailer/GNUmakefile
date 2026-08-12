@@ -1,6 +1,7 @@
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 BUNDLE_NAME = ImageThumbnailer
 BUNDLE_EXTENSION = .thumb
@@ -19,4 +20,5 @@ ImageThumbnailer_PRINCIPAL_CLASS = ImageThumbnailer
 include $(GNUSTEP_MAKEFILES)/bundle.make
 
 -include GNUmakefile.postamble
+
 

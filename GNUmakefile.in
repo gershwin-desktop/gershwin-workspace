@@ -20,6 +20,7 @@ PACKAGE_NEEDS_CONFIGURE = YES
 PACKAGE_NAME = gworkspace
 export PACKAGE_NAME
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 VERSION = @PACKAGE_VERSION@
 SVN_MODULE_NAME = gworkspace
@@ -60,3 +61,4 @@ include $(GNUSTEP_MAKEFILES)/aggregate.make
 include GNUmakefile.postamble
 
 include $(GNUSTEP_MAKEFILES)/Master/nsis.make
+

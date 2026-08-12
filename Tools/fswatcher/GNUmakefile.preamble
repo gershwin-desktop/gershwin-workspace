@@ -1,3 +1,4 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # Additional flags to pass to the preprocessor
 # ADDITIONAL_CPPFLAGS += 
 
@@ -35,4 +36,5 @@ ifeq ($(WITH_INOTIFY),yes)
     # No extra libs provided by configure; assume inotify is available in libc (Linux/newer FreeBSD)
   endif
 endif
+
 

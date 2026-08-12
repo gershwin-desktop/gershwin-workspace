@@ -1,6 +1,7 @@
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 # Command-line utility for .DS_Store file manipulation
 TOOL_NAME = dsutil
@@ -38,3 +39,4 @@ after-install::
 -include GNUmakefile.preamble
 -include GNUmakefile.local
 -include GNUmakefile.postamble
+
