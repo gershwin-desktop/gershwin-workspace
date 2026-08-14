@@ -140,7 +140,7 @@ AC_SUBST(SQUASHFS_LIBS)
 AC_SUBST(SQUASHFS_CFLAGS)
 
 AC_ARG_ENABLE(gwmetadata,
-  [  --enable-gwmetadata     Enable GWMetadata], , [enable_gwmetadata=no])
+  [  --enable-gwmetadata     Enable GWMetadata], , [enable_gwmetadata=yes])
 
 if test "x$enable_gwmetadata" = "xyes"; then
   AC_CONFIG_SUBDIRS([GWMetadata])

@@ -3818,7 +3818,7 @@ if test ${enable_gwmetadata+y}
 then :
   enableval=$enable_gwmetadata;
 else case e in #(
-  e) enable_gwmetadata=no ;;
+  e) enable_gwmetadata=yes ;;
 esac
 fi
 
