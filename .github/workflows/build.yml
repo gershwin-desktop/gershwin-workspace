@@ -19,9 +19,13 @@ env:
   #   - the sibling apps        -> not needed to build corelibs + workspace
   # Everything else (libdispatch, libobjc2, tools-make, libs-base/gui/back,
   # gershwin-system, gershwin-components, gershwin-assets) is still cloned.
+  # NOTE: gershwin-systempreferences is deliberately NOT skipped.  The
+  # workspace MDIndexing prefPane links the PreferencePanes framework it
+  # installs; without it <PreferencePanes/PreferencePanes.h> is not found and
+  # the workspace build fails.  It is cloned here and built (via the
+  # workspace target, which builds systempreferences first) before workspace.
   SKIP_REPOS: >-
     gershwin-workspace
-    gershwin-systempreferences
     gershwin-eau-theme
     gershwin-terminal
     gershwin-textedit
