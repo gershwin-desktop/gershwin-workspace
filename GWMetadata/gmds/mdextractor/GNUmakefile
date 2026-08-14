@@ -14,6 +14,7 @@ mdextractor_TOOL_LIBS += -lgnustep-gui
 mdextractor_TOOL_LIBS += -L../../../GWMetadata/MDKit/MDKit.framework -lMDKit
 mdextractor_TOOL_LIBS += -L../../../DBKit/$(GNUSTEP_OBJ_DIR) -lDBKit
 mdextractor_TOOL_LIBS += -L../../../FSNode/FSNode.framework -lFSNode
+mdextractor_TOOL_LIBS += -ldispatch
 ADDITIONAL_INCLUDE_DIRS += -I../../../GWMetadata/MDKit
 ADDITIONAL_INCLUDE_DIRS += -I../../../GWMetadata/gmds
 ADDITIONAL_INCLUDE_DIRS += -I../../../DBKit
