@@ -31,7 +31,7 @@
 #import <GNUstepBase/GNUstep.h>
 #import "FSNFunctions.h"
 #import "FSNodeRep.h"
-#import <dispatch/dispatch.h>
+
 static GSFilenameExtensionDisplayMode _displayModeCache = -1;
 
 static NSString *defaultsPlistPath(void)
@@ -80,15 +80,21 @@ static void pollDefaults(void)
 
 static void ensureDisplayModeObserver(void)
 {
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    dispatch_source_t t = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0,
-                                                  dispatch_get_main_queue());
-    dispatch_source_set_timer(t, dispatch_time(DISPATCH_TIME_NOW, 1 * NSEC_PER_SEC),
-                              2 * NSEC_PER_SEC, 0);
-    dispatch_source_set_event_handler(t, ^{ pollDefaults(); });
-    dispatch_resume(t);
-  });
+  static BOOL observerScheduled = NO;
+
+  if (observerScheduled == NO)
+    {
+      observerScheduled = YES;
+      /* Poll the defaults plist for an external change of the display mode
+       * preference (e.g. written by the Workspace prefs panel).  A repeating
+       * timer on the main run loop replaces the old libdispatch source, so
+       * FSNode keeps no dependency on libdispatch/GCD. */
+      [NSTimer scheduledTimerWithTimeInterval: 2.0
+                                      repeats: YES
+                                        block: ^(NSTimer *timer) {
+                                          pollDefaults();
+                                        }];
+    }
 }
 
 static NSSet *packageExtensions(void)
@@ -450,42 +456,51 @@ GSDirectoryDescriptionForPath(NSString *path)
     return nil;
 
   static NSDictionary *cached = nil;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    NSBundle *bundle = [NSBundle bundleForClass: [FSNodeRep class]];
-    NSString *plistPath = [bundle pathForResource: @"WellKnownLocations"
-                                          ofType: @"plist"];
-    NSDictionary *raw = [NSDictionary dictionaryWithContentsOfFile: plistPath];
-    if (raw == nil)
-      return;
+  static BOOL cacheBuilt = NO;
 
-    NSMutableDictionary *expanded = [NSMutableDictionary dictionary];
-    NSString *home = NSHomeDirectory();
-    NSDictionary *domains = @{
-      @"$System":  @"/System",
-      @"$Local":   @"/Local",
-      @"$Network": @"/Network",
-      @"$User":    home
-    };
-
-    for (NSString *key in raw)
+  if (cacheBuilt == NO)
     {
-      NSString *desc = [raw objectForKey: key];
-      NSString *resolved = key;
-      for (NSString *var in domains)
-      {
-        if ([resolved hasPrefix: var])
+      /* Build the description table once.  The first caller initializes it;
+       * there is no libdispatch dependency (dispatch_once) here. */
+      cacheBuilt = YES;
+      NSBundle *bundle = [NSBundle bundleForClass: [FSNodeRep class]];
+      NSString *plistPath = [bundle pathForResource: @"WellKnownLocations"
+                                            ofType: @"plist"];
+      NSDictionary *raw = [NSDictionary dictionaryWithContentsOfFile: plistPath];
+      if (raw == nil)
         {
-          NSString *suffix = [resolved substringFromIndex: [var length]];
-          resolved = [[domains objectForKey: var] stringByAppendingString: suffix];
-          break;
+          cached = nil;
         }
-      }
-      [expanded setObject: desc forKey: resolved];
-    }
+      else
+        {
+          NSMutableDictionary *expanded = [NSMutableDictionary dictionary];
+          NSString *home = NSHomeDirectory();
+          NSDictionary *domains = @{
+            @"$System":  @"/System",
+            @"$Local":   @"/Local",
+            @"$Network": @"/Network",
+            @"$User":    home
+          };
 
-    cached = [expanded copy];
-  });
+          for (NSString *key in raw)
+            {
+              NSString *desc = [raw objectForKey: key];
+              NSString *resolved = key;
+              for (NSString *var in domains)
+                {
+                  if ([resolved hasPrefix: var])
+                    {
+                      NSString *suffix = [resolved substringFromIndex: [var length]];
+                      resolved = [[domains objectForKey: var] stringByAppendingString: suffix];
+                      break;
+                    }
+                }
+              [expanded setObject: desc forKey: resolved];
+            }
+
+          cached = [expanded copy];
+        }
+    }
 
   /* Prefer a description for the path as given: e.g. /sys/class/net/wlan0 is
    * a symlink into /sys/devices/..., but the class-specific description is

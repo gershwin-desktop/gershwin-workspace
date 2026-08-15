@@ -15,7 +15,6 @@ mdfind.m
 $(TOOL_NAME)_TOOL_LIBS += -L../../../GWMetadata/MDKit/MDKit.framework -lMDKit
 $(TOOL_NAME)_TOOL_LIBS += -L../../../DBKit/$(GNUSTEP_OBJ_DIR) -lDBKit
 $(TOOL_NAME)_TOOL_LIBS += -L../../../FSNode/FSNode.framework -lFSNode
-$(TOOL_NAME)_TOOL_LIBS += -ldispatch
 ADDITIONAL_INCLUDE_DIRS += -I../../../GWMetadata/MDKit
     				 
 -include GNUmakefile.preamble
