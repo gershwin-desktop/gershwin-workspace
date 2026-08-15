@@ -141,6 +141,8 @@ static MDFinder *mdfinder = nil;
   } else {
     ASSIGN (lastSaveDir, NSHomeDirectory());
   }
+  
+  [self newQuery: nil];
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)aNotification
