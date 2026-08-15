@@ -203,12 +203,10 @@ static NSArray *CompletionCachedContents(NSFileManager *fm, NSString *dir)
     }
   else
     {
-      /* Application completion: search the standard, LOCAL application
-       * directories.  PATH executables are deliberately NOT scanned here -
-       * doing the filesystem walk synchronously on every keystroke blocks
-       * the main thread (a slow or network-mounted PATH entry would wedge
-       * the whole app while typing); the full PATH completion is available
-       * via the Tab key (completeWithTab). */
+      /* Application completion: search the standard application directories
+       * first, then the PATH executables.  The directory-list cache keeps
+       * both fast, so completing command names while typing does not walk
+       * the filesystem on every keystroke (the original wedge). */
       NSArray *appPaths = NSStandardApplicationPaths();
       NSString *completedApp = nil;
 
@@ -229,6 +227,23 @@ static NSArray *CompletionCachedContents(NSFileManager *fm, NSString *dir)
 
       if (completedApp)
         return completedApp;
+
+      /* PATH executables, so the Run dialog also suggests commands while
+       * typing (not just on Tab). */
+      NSString *pathEnv = [[[NSProcessInfo processInfo] environment] objectForKey: @"PATH"];
+      for (NSString *dir in [pathEnv componentsSeparatedByString: @":"])
+        {
+          if ([dir length] == 0)
+            continue;
+          NSArray *contents = CompletionCachedContents(fm, dir);
+          for (NSString *name in contents)
+            {
+              if ([name hasPrefix: text] && ![name isEqualToString: text])
+                {
+                  return name;
+                }
+            }
+        }
     }
 
   return nil;
@@ -408,14 +423,30 @@ static NSArray *CompletionCachedContents(NSFileManager *fm, NSString *dir)
 {
   [super didChangeText];
   /* Defer the grey typeahead out of the text-change callback.  Mutating the
-   * text storage with setString: from inside the edit notification (plus the
-   * per-keystroke directory scans) can wedge GNUstep's text system while the
-   * user types.  Coalesce: rapid keystrokes collapse into one update. */
-  if (updatingTypeahead == NO && typeaheadPending == NO)
+   * text storage with setString: from inside the edit notification can wedge
+   * GNUstep's text system while the user types; coalesce rapid keystrokes
+   * into one update.  The update must also run while a MODAL dialog is up
+   * (Go to Folder... / Run... use runModal), so schedule it in the modal
+   * run-loop mode as well - a default-mode-only delayed selector never fires
+   * during a modal session, which would silently kill the typeahead. */
+  if (updatingTypeahead == NO)
     {
+      if (typeaheadPending)
+        {
+          /* A keystroke arrived before the deferred update fired: cancel and
+           * re-schedule so the completion is recomputed from the full text
+           * only after typing pauses (50ms of silence).  Firing mid-type
+           * would replace the string under the user's caret and garble the
+           * remaining keystrokes. */
+          [NSRunLoop cancelPreviousPerformRequestsWithTarget: self
+              selector: @selector(updateTypeahead) object: nil];
+        }
       typeaheadPending = YES;
       [self performSelector: @selector(updateTypeahead)
-                 withObject: nil afterDelay: 0.05];
+                 withObject: nil
+                 afterDelay: 0.05
+                    inModes: [NSArray arrayWithObjects:
+                      NSDefaultRunLoopMode, NSModalPanelRunLoopMode, nil]];
     }
 }
 
