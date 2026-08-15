@@ -142,7 +142,9 @@ static MDFinder *mdfinder = nil;
     ASSIGN (lastSaveDir, NSHomeDirectory());
   }
   
-  [self newQuery: nil];
+  if ([mdkwindows count] == 0) {
+    [self newQuery: nil];
+  }
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)aNotification
