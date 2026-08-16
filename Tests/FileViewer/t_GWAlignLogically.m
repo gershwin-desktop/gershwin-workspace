@@ -200,11 +200,20 @@ main(void)
     BOOL overlap = NO;
     NSMutableArray *rects = [NSMutableArray array];
     NSMutableArray *centers = [NSMutableArray array];
+    /* The layout clamps a label wider than the whole grid to the grid width
+     * (the viewport is the upper limit for the width of a line), so mirror
+     * that cap here when building each icon's box. */
+    CGFloat usableW = bounds.size.width - 2 * 14.0;
+    NSUInteger cols = (NSUInteger)floor(usableW / 92.0);
+    if (cols < 1) cols = 1;
+    if ((cols % 2) == 0) cols -= 1;
+    CGFloat gridW = cols * 92.0;
     for (GWAlignItem *item in items)
       {
         NSPoint c = [item center];
         [centers addObject: [NSValue valueWithPoint: c]];
         CGFloat w = [aligner cellWidthForItem: item base: 92.0 labelFont: nil];
+        if (w > gridW) w = gridW;
         NSRect r = NSMakeRect(c.x - w / 2.0, c.y - 24.0, w, 48.0);
         if (r.origin.x < 0 ||
             (r.origin.x + r.size.width) > bounds.size.width)
@@ -217,6 +226,32 @@ main(void)
     PASS(onCanvas, "placement keeps every icon within the canvas width");
     PASS(!overlap, "labels never overlap - long names widen their own row");
 
+    /* Every icon centre must fall on a shared grid line in BOTH axes: rows
+     * share a y line, columns share an x line.  Each role is placed on one
+     * grid whose columns are centred on the canvas centreline. */
+    {
+      CGFloat margin = 14.0;
+      CGFloat usableW = bounds.size.width - 2 * margin;
+      CGFloat pitch = 92.0;
+      NSUInteger cols = (NSUInteger)floor(usableW / pitch);
+      if (cols < 1) cols = 1;
+      if ((cols % 2) == 0) cols -= 1;
+      CGFloat gridW = cols * pitch;
+      CGFloat gridStartX = margin + (usableW - gridW) / 2.0;
+
+      BOOL onGridX = YES;
+      for (NSValue *v in centers)
+        {
+          CGFloat x = [v pointValue].x;
+          CGFloat colFloat = (x - gridStartX) / pitch - 0.5;
+          long col = (long)llround(colFloat);
+          if (col < 0 || col >= (long)cols
+              || fabs(colFloat - col) > 0.01)
+            onGridX = NO;
+        }
+      PASS(onGridX, "every icon centre falls on a shared vertical grid line");
+    }
+
     /* The README, the entry point, must sit exactly on the horizontal centre
      * of the canvas. */
     {
@@ -225,6 +260,69 @@ main(void)
         if ([[item name] isEqualToString: @"README.md"])
           readmeCentered = (fabs([item center].x - bounds.size.width / 2.0) < 1.0);
       PASS(readmeCentered, "README is centred horizontally");
+    }
+
+    /* A label wider than the whole grid is clamped to the grid width, so no
+     * line ever exceeds the viewport width (vertical-only scrolling). */
+    {
+      CGFloat usableW2 = bounds.size.width - 2 * 14.0;
+      NSUInteger cols2 = (NSUInteger)floor(usableW2 / 92.0);
+      if (cols2 < 1) cols2 = 1;
+      if ((cols2 % 2) == 0) cols2 -= 1;
+      CGFloat gridW2 = cols2 * 92.0;
+
+      FSNode *node = [FSNode nodeWithPath:
+                       [dir stringByAppendingPathComponent:
+                         @"a-name-far-too-long-to-ever-fit-inside-the-viewport-width-"
+                         @"and-keeps-growing-and-growing-beyond-every-reasonable-"
+                         @"column-count.txt"]];
+      GWAlignItem *wide = [[GWAlignItem alloc] init];
+      [wide setIcon: nil];
+      [wide setNode: node];
+      [wide setName: [node lastPathComponent]];
+      [wide setRole: GWAlignRoleDocumentation];
+      [wide setZone: GWAlignZoneReference];
+      [aligner composePositionsForItems: @[wide] bounds: bounds
+                              iconView: nil folderPath: dir];
+      CGFloat rawW = [aligner cellWidthForItem: wide base: 92.0
+                                     labelFont: nil];
+      CGFloat w = (rawW > gridW2) ? gridW2 : rawW;
+      CGFloat c = [wide center].x;
+      BOOL fits = (c - w / 2.0 >= 0)
+                  && (c + w / 2.0 <= bounds.size.width);
+      PASS(rawW > gridW2 && fits,
+           "labels wider than the grid are clamped to the viewport width");
+      [wide release];
+    }
+
+    /* The bulk zones (preparation, reference, secondary, technical) share one
+     * grid and pack to the column count, so after the entry band and the
+     * primary at most one row may hold fewer than three items.  A layout full
+     * of rows with only 1-2 icons is a failure. */
+    {
+      double slotH = 48.0 + 28.0;
+      double baseY = 14.0 + slotH / 2.0;
+      NSInteger maxRow = (NSInteger)(1400.0 / slotH) + 1;
+      NSUInteger *rowCount = calloc(maxRow + 1, sizeof(NSUInteger));
+      BOOL *isBulk = calloc(maxRow + 1, sizeof(BOOL));
+      for (GWAlignItem *item in items)
+        {
+          long r = (long)llround(([item center].y - baseY) / slotH);
+          if (r < 0 || r > maxRow) continue;
+          rowCount[r]++;
+          GWAlignZone z = [item zone];
+          if (z != GWAlignZoneEntry && z != GWAlignZoneExamples
+              && z != GWAlignZonePrimary)
+            isBulk[r] = YES;
+        }
+      NSInteger sparse = 0;
+      NSInteger r2;
+      for (r2 = 0; r2 <= maxRow; r2++)
+        if (isBulk[r2] && rowCount[r2] < 3)
+          sparse++;
+      PASS(sparse <= 1, "bulk rows are dense - at most one sparse row");
+      free(rowCount);
+      free(isBulk);
     }
 
     /* No more than one empty row: consecutive filled grid rows must not be

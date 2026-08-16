@@ -433,7 +433,9 @@ A GitHub repository may contain dozens of technically important files, but a hum
 
 # 11. Spatial Zones
 
-The canvas is divided into **semantic zones**, still aligned on a grid (can be staggered; can leave positions empty as needed)
+The canvas is divided into **semantic zones**, still aligned on the shared
+grid (every icon on both a row line and a column line; positions may be left
+empty for symmetry)
 
 Conceptually:
 
@@ -770,23 +772,48 @@ This distinction prevents the algorithm from becoming a glorified sorting functi
 
 # 19. Grid Alignment
 
-The output MUST be aligned to a grid. Every icon centre falls on a grid line;
-there are no free-form pixel offsets. Grid alignment is what makes the layout
-readable, predictable and easy to refine by hand.
+The output MUST be aligned to a grid. Every icon centre falls on a grid line -
+in BOTH axes: icons share the horizontal grid lines (rows) AND the vertical
+grid lines (columns). A role that fits a single column line has all its icons
+on that line, a role that fits several has them on shared column lines, so the
+whole composition reads as aligned in both directions. There are no free-form
+pixel offsets. Grid alignment is what makes the layout readable, predictable
+and easy to refine by hand.
 
-The grid MAY be a plain rectangular grid, or a staggered ("brick") grid in
-which every other row is shifted by half a cell so its icons sit "in between"
-the rows above and below. Staggering is encouraged for dense lower regions,
-where it makes a large group of icons read as hand-arranged rather than
-machine-tiled.
+Each semantic role is laid out on ONE shared grid with a single column pitch,
+so the icons of that role all share the same column lines. The grid has an ODD
+column count, centred on the canvas centreline, giving it a true centre column.
 
-Labels MUST never overlap. When a name is too long for the base cell, the row
-it sits in uses a wider pitch - a different grid - sized to the longest label
-in that row, so the long name keeps its full width and its neighbours move
-apart instead of being covered. Rows with short names keep the compact base
-pitch. Alternatively, the cell next to a long label MAY be left empty
-(positions open) so the label overhangs into space rather than a neighbour.
-Either way a long name must never cover another icon or label.
+Every row is centred on that centreline, so each line is as symmetric as the
+grid allows:
+
+* a row of ODD width sits its middle column on the centre column;
+* a row of EVEN width straddles the centreline, leaving its middle column
+  EMPTY so the two halves mirror each other - a grid position skipped for
+  symmetry.
+
+A row whose items fill fewer columns than the grid simply leaves the outer
+grid positions empty; positions are skipped for symmetry, never filled by
+nudging an icon off the grid.
+
+Labels MUST never overlap. When a name is too long for the base cell, the item
+reserves extra empty columns instead of widening the pitch: the long label
+overhangs into space rather than covering a neighbour, and every other item in
+the role keeps the same column lines. A reserved span is kept odd so the icon
+centre stays on a grid line.
+
+Rows are homogeneous: a row holds folders or files, never a mix. Every item in
+a row shares the SAME column span (the widest label in the row), so the spacing
+between all items in a row is identical; the widest items lead so an
+out-of-scale label isolates itself while equal-width neighbours still pack
+into full rows.
+
+The visible viewport width - the part of the viewport that is on screen
+without scrolling - is the upper limit for the width of a line: layout is
+vertical-scrolling only, so no line may ever exceed the width of the visible
+viewport.  A label wider than the whole grid is therefore clamped to the grid
+width; its box stays inside the visible viewport instead of overhanging the
+canvas edge.
 
 The human character of the layout therefore comes from the COMPOSITION - the
 semantic zones, the asymmetric grouping, the negative space left between
@@ -855,11 +882,14 @@ total. A composition that leaves large blank gaps between groups - or ends
 with rows of empty space - is a failure. Consecutive groups of icons are
 stacked with at most one empty row between them.
 
-Rows SHOULD hold a single file type: folders together on one row, files
-grouped by extension (`.png` with `.png`, `.md` with `.md`, and so on).  One
-type per row reads as tidy and hand-arranged.  Exceptions are allowed for
-symmetry (so a partial row stays centred) and for space saving (a type whose
-tail does not fill a row may share that row with the next type).
+Rows hold one kind: folders together on one row, every file together on
+another - a row never mixes folders and files.  One kind per row reads as
+tidy and hand-arranged.  A row is filled up to the grid's column count before
+advancing, so it stays dense; the empty positions that remain - the outer
+columns of a partial row, or the skipped centre column of an even row - are
+what keep every row symmetric about the canvas centreline.  Every item in a
+row shares one column span, so the spacing between the items of a row is
+identical.
 
 When many items exist, it MAY cluster them.
 

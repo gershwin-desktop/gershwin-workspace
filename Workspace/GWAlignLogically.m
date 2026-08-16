@@ -12,9 +12,15 @@
  * The spatial grammar is the classic one: entry material near the top, the
  * main object central, preparation (source/build) on the left, reference
  * (documentation/examples) on the right, secondary material lower down, and
- * technical machinery (dotfiles, CI) on the far periphery.  Layout is fully
- * deterministic: the only variation comes from a stable hash of the folder
- * path and item name, so the same directory always produces the same result.
+ * technical machinery (dotfiles, CI) on the far periphery.  Every semantic
+ * role is laid out on a SHARED grid: icons snap to the same row lines AND the
+ * same column lines, so the whole composition reads as aligned in both axes;
+ * each row is centred - an odd row sits on the centre column, an even row
+ * straddles it with the centre column left empty - so every line is as
+ * symmetric as the grid allows, and a long label reserves extra empty columns
+ * instead of widening the pitch.  Layout is fully deterministic: the only
+ * variation comes from a stable hash of the folder path and item name, so the
+ * same directory always produces the same result.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later OR BSD-2-Clause
  */
@@ -461,17 +467,40 @@ static BOOL GWNameIs(NSString *name, NSArray *names)
   return MAX(base, w + 8.0);
 }
 
-/* Lay the items out in centred rows, packing each row with as many items as
- * fit across the canvas and assigning every centre to the item's own grid
- * column.  Returns the number of grid rows consumed.
+/* How many grid columns an item needs so its label never covers a neighbour.
+ * The span is rounded UP and forced ODD: odd means the icon centre stays on a
+ * grid line (an even span would centre the icon between two columns).  The
+ * extra columns are left empty, so a long name overhangs into space. */
+static NSUInteger GWColumnSpanForWidth(CGFloat w, CGFloat pitch)
+{
+  NSUInteger s = (NSUInteger)ceil(w / pitch);
+  if (s < 1) s = 1;
+  if ((s % 2) == 0) s += 1;
+  return s;
+}
+
+/* Lay the items of one semantic role out on a SHARED grid: every icon snaps
+ * to the same vertical grid lines (columns) AND the same horizontal grid
+ * lines (rows), so the whole role reads as one aligned block.  Returns the
+ * number of grid rows consumed.
  *
- * A row holds a single file type (folders together, files by extension).  The
- * column pitch is the item's own width (icon + label), so long names get
- * extra room instead of overhanging their neighbour: a row with long labels
- * simply uses a wider pitch, i.e. a different grid, and never lets two labels
- * touch.  Rows are filled left-to-right before advancing, so the layout stays
- * dense - there is never more than one empty row - and every row is centred
- * so the whole composition stays symmetrical. */
+ * The grid has an ODD column count, centred on the canvas centreline, so the
+ * README and the primary object land exactly on the centre.  Each row is then
+ * centred on that centreline: a row whose items fill fewer columns than the
+ * grid simply leaves the outer grid positions empty.  A row with an even
+ * number of columns skips its CENTRE column so the two halves mirror each
+ * other exactly - symmetry is bought by skipping grid positions, never by
+ * nudging an icon off the grid.
+ *
+ * A label wider than the base column spans extra columns (odd count, so the
+ * icon centre stays on a grid line) and those columns are left empty; the
+ * long name overhangs into space instead of a neighbour.  Rows are packed
+ * densely - filled up to the grid's column count - but stay homogeneous: a
+ * row holds folders or files, never a mix.  Every item in a row shares the
+ * SAME column span (the widest label in the row), so the spacing between all
+ * items in a row is identical.  A label wider than the whole grid is clamped
+ * to the grid width: the visible viewport is the upper limit for the width of
+ * a line (layout is vertical-scrolling only).  Never more than one empty row. */
 - (NSUInteger)placeItemsOnGrid:(NSArray *)items
                       startRow:(NSUInteger)startRow
                          slotW:(CGFloat)baseSlotW
@@ -484,66 +513,178 @@ static BOOL GWNameIs(NSString *name, NSArray *names)
   if (n == 0) return 0;
   CGFloat margin = 14.0;
   CGFloat usableW = bounds.size.width - 2 * margin;
-  NSUInteger idx = 0, r = 0;
 
+  /* One column pitch for the whole group: the base slot, so short names keep
+   * the compact grid and every item in the role shares the same column lines.
+   * A name wider than the pitch reserves extra columns instead of widening
+   * the pitch. */
+  CGFloat pitch = baseSlotW;
+
+  /* ODD column count -> a true centre column on the canvas centreline. */
+  NSUInteger cols = (NSUInteger)floor(usableW / pitch);
+  if (cols < 1) cols = 1;
+  if ((cols % 2) == 0) cols -= 1;
+  NSUInteger centerCol = (cols - 1) / 2;
+  CGFloat gridW = cols * pitch;
+  CGFloat gridStartX = origin.x + (usableW - gridW) / 2.0;
+
+  /* Each item's column span, precomputed so packing and placement agree.  A
+   * span is capped at the grid width, and the label itself is capped there
+   * too: the visible viewport width is the upper limit for the width of a
+   * line (only vertical scrolling), so a name longer than the whole grid is
+   * clamped and its box never overhangs the visible viewport. */
+  NSUInteger *spans = calloc(n, sizeof(NSUInteger));
+  NSUInteger si;
+  for (si = 0; si < n; si++)
+    {
+      GWAlignItem *item = [items objectAtIndex: si];
+      CGFloat w = [self cellWidthForItem: item base: baseSlotW
+                              labelFont: labelFont];
+      if (w > gridW) w = gridW;
+      NSUInteger span = GWColumnSpanForWidth(w, pitch);
+      if (span > cols) span = cols;
+      spans[si] = span;
+    }
+
+  /* Reorder the items by kind, then by WIDEST span first.  A row keeps one
+   * column span for every item (uniform spacing), so a wide label sets the
+   * row's span; letting the widest items lead isolates them cleanly while
+   * equal-width neighbours pack into full rows - the layout stays dense and
+   * the spacing uniform.  Equal spans keep their importance order. */
+  {
+    NSMutableArray *bySpan = [NSMutableArray arrayWithCapacity: n];
+    for (si = 0; si < n; si++)
+      [bySpan addObject: [NSNumber numberWithUnsignedLong: si]];
+    [bySpan sortUsingComparator: ^NSComparisonResult(id a, id b)
+      {
+        NSUInteger ia = [(NSNumber *)a unsignedLongValue];
+        NSUInteger ib = [(NSNumber *)b unsignedLongValue];
+        NSString *ka = [self kindKeyForItem: [items objectAtIndex: ia]];
+        NSString *kb = [self kindKeyForItem: [items objectAtIndex: ib]];
+        NSComparisonResult kr = [ka compare: kb];
+        if (kr != NSOrderedSame) return kr;
+        if (spans[ia] > spans[ib]) return NSOrderedAscending;
+        if (spans[ia] < spans[ib]) return NSOrderedDescending;
+        if (ia < ib) return NSOrderedAscending;
+        if (ia > ib) return NSOrderedDescending;
+        return NSOrderedSame;
+      }];
+    NSMutableArray *reordered = [NSMutableArray arrayWithCapacity: n];
+    NSUInteger *spans2 = calloc(n, sizeof(NSUInteger));
+    for (si = 0; si < n; si++)
+      {
+        NSUInteger from = [[bySpan objectAtIndex: si] unsignedLongValue];
+        [reordered addObject: [items objectAtIndex: from]];
+        spans2[si] = spans[from];
+      }
+    items = reordered;
+    free(spans);
+    spans = spans2;
+  }
+
+  NSUInteger idx = 0, r = 0;
   while (idx < n)
     {
-      /* Pack the next row: one file type, up to the canvas width. */
+      /* Pack the next row: only items of the SAME kind (folders or files,
+       * never a mix - items are pre-sorted by kind so same-kind items are
+       * contiguous).  Every item in a row shares ONE column span, the widest
+       * in the row, so the spacing between all items in a row is identical;
+       * a row only grows when the shared span still fits the grid. */
+      NSString *rowKind = [self kindKeyForItem: [items objectAtIndex: idx]];
       NSMutableArray *rowItems = [NSMutableArray array];
-      NSString *rowKind = nil;
-      CGFloat rowW = 0;
-      while (idx < n)
+      NSUInteger maxSpan = 0;
+      NSUInteger probe = idx;
+      while (probe < n
+             && [[self kindKeyForItem: [items objectAtIndex: probe]]
+                  isEqualToString: rowKind])
         {
-          GWAlignItem *item = [items objectAtIndex: idx];
-          NSString *kind = [self kindKeyForItem: item];
-          if (rowKind && ![kind isEqualToString: rowKind]) break;
-          CGFloat w = [self cellWidthForItem: item base: baseSlotW
-                                  labelFont: labelFont];
-          if ([rowItems count] > 0 && rowW + w > usableW) break;
-          [rowItems addObject: item];
-          rowKind = kind;
-          rowW += w;
-          idx++;
+          NSUInteger s = spans[probe];
+          NSUInteger newMax = (s > maxSpan) ? s : maxSpan;
+          if (([rowItems count] + 1) * newMax > cols) break;
+          [rowItems addObject: [items objectAtIndex: probe]];
+          maxSpan = newMax;
+          probe++;
         }
+      NSUInteger rowSpan = [rowItems count] * maxSpan;
 
-      /* Centre the row, then place each item at its own pitch. */
-      CGFloat startX = origin.x + (usableW - rowW) / 2.0;
       CGFloat y = origin.y + (startRow + r) * slotH + slotH / 2.0;
-      CGFloat x = startX;
-      NSUInteger ri;
-      for (ri = 0; ri < [rowItems count]; ri++)
+
+      if ((rowSpan % 2) == 1)
         {
-          GWAlignItem *item = [rowItems objectAtIndex: ri];
-          CGFloat w = [self cellWidthForItem: item base: baseSlotW
-                                  labelFont: labelFont];
-          [item setCenter: NSMakePoint(x + w / 2.0, y)];
-          x += w;
+          /* Odd row: a contiguous block with its middle column on the centre
+           * column - no position is skipped.  Every item takes the shared
+           * span, so the icons are evenly spaced. */
+          NSUInteger col = centerCol - (rowSpan - 1) / 2;
+          NSUInteger ri;
+          for (ri = 0; ri < [rowItems count]; ri++)
+            {
+              GWAlignItem *item = [rowItems objectAtIndex: ri];
+              NSUInteger first = col;
+              NSUInteger last = col + maxSpan - 1;
+              CGFloat x = gridStartX + ((first + last) / 2.0 + 0.5) * pitch;
+              [item setCenter: NSMakePoint(x, y)];
+              col += maxSpan;
+            }
         }
+      else
+        {
+          /* Even row: split the items into two halves on either side of the
+           * centre column, which stays empty - exactly ONE grid position
+           * skipped between the halves, never two.  The halves are equal when
+           * the shared span is uniform, so the split is simply in the middle. */
+          NSUInteger leftCount = [rowItems count] / 2;
+          NSUInteger leftSpan = leftCount * maxSpan;
+
+          /* The row occupies rowSpan + 1 columns (the halves plus one empty
+           * column between them); centre that block on the centreline.  This
+           * keeps every icon inside the grid: rowSpan <= cols, so the block
+           * fits exactly within [0, cols-1] no matter where the split falls. */
+          NSUInteger blockStart = centerCol - rowSpan / 2;
+          NSUInteger col = blockStart;
+          NSUInteger ri;
+          for (ri = 0; ri < leftCount; ri++)
+            {
+              GWAlignItem *item = [rowItems objectAtIndex: ri];
+              NSUInteger first = col;
+              NSUInteger last = col + maxSpan - 1;
+              CGFloat x = gridStartX + ((first + last) / 2.0 + 0.5) * pitch;
+              [item setCenter: NSMakePoint(x, y)];
+              col += maxSpan;
+            }
+          col = blockStart + leftSpan + 1;
+          for (ri = leftCount; ri < [rowItems count]; ri++)
+            {
+              GWAlignItem *item = [rowItems objectAtIndex: ri];
+              NSUInteger first = col;
+              NSUInteger last = col + maxSpan - 1;
+              CGFloat x = gridStartX + ((first + last) / 2.0 + 0.5) * pitch;
+              [item setCenter: NSMakePoint(x, y)];
+              col += maxSpan;
+            }
+        }
+      idx = probe;
       r++;
     }
+  free(spans);
   return r;
 }
 
 /* Sort a zone's items by descending importance so the most important ones
  * fill the earlier grid cells. */
-/* The "kind" a file belongs to for row grouping: folders form one type, files
- * are grouped by extension.  Rows then stay homogeneous - one file type per
- * row - which reads as tidy and hand-arranged. */
+/* The "kind" an item belongs to for row grouping: folders form one type,
+ * every file another.  Rows then stay homogeneous - a row holds folders or
+ * files, never a mix - which reads as tidy and hand-arranged. */
 - (NSString *)kindKeyForItem:(GWAlignItem *)item
 {
   FSNode *node = [item node];
   if (node && [node isDirectory])
     return @"folder";
-  NSString *ext = [[item name] pathExtension];
-  if ([ext length] > 0)
-    return [ext lowercaseString];
   return @"file";
 }
 
-/* Sort a zone's items by kind (so every row holds one file type), then by
- * descending importance within a kind so the notable items lead the group.
- * When a kind's tail does not fill a row it shares the row with the next
- * kind - the space-saving exception to the one-type-per-row rule. */
+/* Sort a zone's items by kind (so every row holds folders or files, never a
+ * mix), then by descending importance within a kind so the notable items
+ * lead the group. */
 - (NSArray *)sortZoneItems:(NSArray *)items
 {
   return [items sortedArrayUsingComparator: ^(id a, id b)
@@ -577,8 +718,8 @@ static BOOL GWNameIs(NSString *name, NSArray *names)
   CGFloat slotH = iconSize + 28;
 
   /* The label font of the view, used to measure names so long labels get
-   * their own row pitch.  Unavailable in a headless context, in which case
-   * the estimate inside cellWidthForItem: is used. */
+   * extra empty grid columns.  Unavailable in a headless context, in which
+   * case the estimate inside cellWidthForItem: is used. */
   NSFont *labelFont = nil;
   int labelTextSize = 13;
   if ([iconView respondsToSelector: @selector(labelTextSize)])
@@ -647,23 +788,34 @@ static BOOL GWNameIs(NSString *name, NSArray *names)
                  labelFont: labelFont];
     }
 
-  /* Every remaining zone becomes a full-width band of rows (preparation,
-   * reference, secondary, technical, in that visual order).  A strict
-   * left/right split would waste half the canvas whenever one side dominates,
-   * so each band is centred across the whole width; the one-type-per-row
-   * grouping and the band order keep the semantic layering. */
+  /* Every remaining zone (preparation, reference, secondary, technical, in
+   * that visual order) flows into ONE shared grid, packed densely - a row is
+   * filled up to the grid's column count before advancing - so the bulk of
+   * the layout never degenerates into rows holding only one or two icons.
+   * Rows stay homogeneous (folders or files, never a mix) and every item in a
+   * row shares one column span, so the spacing is uniform.  A strict left/
+   * right split would waste half the canvas whenever one side dominates, so
+   * the shared grid is centred across the whole width; the per-zone kind
+   * grouping keeps the semantic layering within each kind. */
   static const GWAlignZone zoneOrder[] = {
     GWAlignZonePreparation, GWAlignZoneReference,
     GWAlignZoneSecondary, GWAlignZoneTechnical
   };
   NSUInteger zoneCount = sizeof(zoneOrder) / sizeof(zoneOrder[0]);
+  NSMutableArray *allRemaining = [NSMutableArray array];
   NSUInteger zi2;
   for (zi2 = 0; zi2 < zoneCount; zi2++)
     {
       GWAlignZone zone = zoneOrder[zi2];
       if ([zoneItems[zone] count] == 0)
         continue;
-      NSArray *sorted = [self sortZoneItems: zoneItems[zone]];
+      [allRemaining addObjectsFromArray: zoneItems[zone]];
+    }
+  if ([allRemaining count] > 0)
+    {
+      /* Sort the merged set by kind so folders form their own rows and files
+       * theirs - never mixed - then by descending importance within a kind. */
+      NSArray *sorted = [self sortZoneItems: allRemaining];
       row += [self placeItemsOnGrid: sorted startRow: row
                            slotW: slotW slotH: slotH origin: origin bounds: bounds
                  labelFont: labelFont];
@@ -739,6 +891,19 @@ static BOOL GWNameIs(NSString *name, NSArray *names)
 
   NSRect bounds = [iconView bounds];
   if (bounds.size.width < 80 || bounds.size.height < 80) return NO;
+
+  /* The layout is constrained to the VISIBLE viewport width: the enclosing
+   * scroll view's content width (up to date after autoresize, already
+   * accounting for sidebar/borders/scrollers).  The document view can be
+   * wider than what is on screen, and a line must never exceed the visible
+   * part - only vertical scrolling is wanted.  Height stays the document
+   * height; rows simply stack downward from the origin. */
+  if ([iconView respondsToSelector: @selector(windowContentWidthForLayout)])
+    {
+      CGFloat visibleW = [iconView windowContentWidthForLayout];
+      if (visibleW >= 80)
+        bounds.size.width = visibleW;
+    }
 
   /* DISCOVER + UNDERSTAND */
   NSMutableArray *items = [NSMutableArray arrayWithCapacity: count];
