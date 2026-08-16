@@ -1880,12 +1880,16 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSURL *aURL;
 
 
-  /* Early ELF detection: catch executables regardless of the reported type
-     so we can prompt the user before any external app (like TextEdit)
-     opens the file. This mirrors the later ELF handling but runs first. */
-  {
-    NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
-    if (fh) {
+/* Early ELF detection: catch executables regardless of the reported type
+      so we can prompt the user before any external app (like TextEdit)
+      opens the file. This mirrors the later ELF handling but runs first.
+      Only sniff regular files - opening a directory throws and would
+      abort the open. */
+   {
+     BOOL isDir = NO;
+     if ([fm fileExistsAtPath: fullPath isDirectory: &isDir] && isDir == NO) {
+     NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
+     if (fh) {
       NSData *hdr = [fh readDataOfLength:4];
       [fh closeFile];
       const unsigned char *bytes = (const unsigned char *)[hdr bytes];
@@ -1930,6 +1934,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           }
         }
       }
+    }
     }
   }
 
@@ -2145,8 +2150,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
    * This mirrors how archives are intercepted earlier: special-case before
    * falling through to the generic "open with application" handler.
+   * Only sniff regular files - packages (application bundles etc.) are
+   * directories, and opening them as a file throws.
    */
   if (type == NSPlainFileType) {
+    BOOL isDir = NO;
+    if ([fm fileExistsAtPath: fullPath isDirectory: &isDir] && isDir == NO) {
     NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
     if (fh) {
       NSData *hdr = [fh readDataOfLength:4];
@@ -2196,6 +2205,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           }
         }
       }
+    }
     }
   }
 
