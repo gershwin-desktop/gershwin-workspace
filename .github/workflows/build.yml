@@ -19,9 +19,13 @@ env:
   # whole stack: gershwin-developer is cloned at its dev branch, and BRANCH=dev
   # is handed to checkout.sh so every Gershwin repo that HAS a dev branch is
   # used at dev (repos without one silently fall back to their default branch).
-  # This mirrors the auto-detection gershwin-developer's own dev checkout.sh
-  # does for its own runs; we set it explicitly here because the FreeBSD and
-  # OpenBSD VMs do not inherit the runner's GITHUB_* variables.
+  # gershwin-developer's dev checkout.sh auto-detects a dev run and does this by
+  # itself, but only its dev copy does -- and a repo like this one clones
+  # gershwin-developer, so before this change it got the main copy, which has no
+  # such detection.  Cloning developer at dev is therefore the half that brings
+  # the dev-aware scaffolding in, and setting BRANCH explicitly is the half that
+  # makes the dev channel a property of this workflow rather than an implicit
+  # behaviour of whichever checkout.sh we happen to have cloned.
   # For main, master, or any other branch this is empty, which is identical to
   # not setting it at all -- those builds behave exactly as they did before.
   BRANCH: ${{ (github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev') && 'dev' || '' }}
