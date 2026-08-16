@@ -24,7 +24,8 @@
  * reserving extra empty columns instead of widening the grid.  Rows hold one
  * kind (folders or files, never a mix) with one column span each, so the
  * spacing within a row is uniform; a label wider than the visible viewport is
- * clamped to it, since layout is vertical-scrolling only.  Moves the icons and
+ * clamped to it, since layout is vertical-scrolling only.  Moves the icons
+ * (animating them smoothly from their previous positions, like Clean Up) and
  * persists the new positions through the same DS_Store path as Clean Up.
  * A GNUmakefile is treated like an application: it becomes the central subject
  * and receives a blue label.  Returns YES when positions were applied. */

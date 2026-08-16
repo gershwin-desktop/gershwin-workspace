@@ -1044,6 +1044,89 @@ static void GWHighlightFrameRect(NSRect aRect)
   }
 }
 
+/* Animate the icons from their pre-move frames to the current ones.  The
+ * caller snapshots the frames BEFORE moving (keyed by node name), moves the
+ * icons (which sets the new frames), then calls this.  We invalidate both the
+ * old and the new icon areas on the container BEFORE reverting the frames:
+ * the move only marked the new positions dirty, and reverting to the old
+ * frames leaves stale dirty rects pointing at the wrong coordinates. */
+- (void)animateIconsFromOldFrames:(NSDictionary *)oldFrames
+{
+  if (!oldFrames || [oldFrames count] == 0 || [icons count] == 0)
+    return;
+
+  /* Invalidate old + new icon areas on the container. */
+  NSUInteger i, count = [icons count];
+  for (i = 0; i < count; i++)
+    {
+      FSNIcon *ic = [icons objectAtIndex: i];
+      NSString *name = [[ic node] name];
+      NSValue *oldVal = [oldFrames objectForKey: name];
+      if (oldVal)
+        {
+          [self setNeedsDisplayInRect: [oldVal rectValue]];
+          [self setNeedsDisplayInRect: [ic frame]];
+        }
+    }
+
+  /* Animate icons smoothly from old positions to new positions */
+  NSMutableArray *animations = [NSMutableArray array];
+  for (i = 0; i < count; i++)
+    {
+      FSNIcon *ic = [icons objectAtIndex: i];
+      NSString *name = [[ic node] name];
+      NSValue *oldVal = [oldFrames objectForKey: name];
+      if (oldVal)
+        {
+          NSRect oldFrame = [oldVal rectValue];
+          NSRect newFrame = [ic frame];
+          if (!NSEqualRects(oldFrame, newFrame))
+            {
+              /* Set icon back to its old frame so NSViewAnimation has a
+               * visible starting position to interpolate from. */
+              [ic setFrame: oldFrame];
+              [animations addObject:
+                [NSDictionary dictionaryWithObjectsAndKeys:
+                  ic, NSViewAnimationTargetKey,
+                  [NSValue valueWithRect: oldFrame], NSViewAnimationStartFrameKey,
+                  [NSValue valueWithRect: newFrame], NSViewAnimationEndFrameKey,
+                  nil]];
+            }
+        }
+    }
+
+  if ([animations count] > 0)
+    {
+      NSViewAnimation *animation =
+        [[NSViewAnimation alloc] initWithViewAnimations: animations];
+      [animation setDuration: 0.35];
+      [animation setAnimationCurve: NSAnimationEaseInOut];
+      [animation setAnimationBlockingMode: NSAnimationNonblocking];
+      [animation startAnimation];
+      /* Don't release - NSAnimation releases itself on completion
+       * via animatorDidStop (NSAnimation.m:990). External release
+       * causes use-after-free in GSAnimator's dealloc chain. */
+
+      /* Flush dirty rects at every run loop iteration during the
+       * animation so intermediate icon positions are cleaned up.
+       * NSViewAnimation's setFrame: does not invalidate the prior
+       * frame on the container, leaving ghost pixels. */
+      NSTimeInterval flushDuration = [animation duration] + 0.05;
+      NSTimer *flushTimer =
+        [NSTimer scheduledTimerWithTimeInterval: 1.0 / 60.0
+                                         target: self
+                                       selector: @selector(displayIfNeeded)
+                                       userInfo: nil
+                                        repeats: YES];
+      [flushTimer performSelector: @selector(invalidate)
+                       withObject: nil
+                       afterDelay: flushDuration];
+      [self performSelector: @selector(display)
+                 withObject: nil
+                 afterDelay: flushDuration];
+    }
+}
+
 #pragma mark - DS_Store Tag Colors and Comments Support
 
 - (void)setTagColorsFromDictionary:(NSDictionary *)tagDict

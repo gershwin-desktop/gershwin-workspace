@@ -892,6 +892,17 @@ static NSUInteger GWColumnSpanForWidth(CGFloat w, CGFloat pitch)
   NSRect bounds = [iconView bounds];
   if (bounds.size.width < 80 || bounds.size.height < 80) return NO;
 
+  /* Snapshot the current frames keyed by node name before moving anything,
+   * so the reposition below can be animated smoothly from them. */
+  NSMutableDictionary *oldFrames = [NSMutableDictionary dictionaryWithCapacity: count];
+  NSUInteger i;
+  for (i = 0; i < count; i++)
+    {
+      FSNIcon *icon = [icons objectAtIndex: i];
+      [oldFrames setObject: [NSValue valueWithRect: [icon frame]]
+                    forKey: [[icon node] name]];
+    }
+
   /* The layout is constrained to the VISIBLE viewport width: the enclosing
    * scroll view's content width (up to date after autoresize, already
    * accounting for sidebar/borders/scrollers).  The document view can be
@@ -908,7 +919,6 @@ static NSUInteger GWColumnSpanForWidth(CGFloat w, CGFloat pitch)
   /* DISCOVER + UNDERSTAND */
   NSMutableArray *items = [NSMutableArray arrayWithCapacity: count];
   NSString *folderPath = nil;
-  NSUInteger i;
   for (i = 0; i < count; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
@@ -965,6 +975,11 @@ static NSUInteger GWColumnSpanForWidth(CGFloat w, CGFloat pitch)
   if ([iconView respondsToSelector: @selector(batchRepositionIcons:toCenterPoints:)])
     {
       [iconView batchRepositionIcons: icons toCenterPoints: centers];
+
+      /* Smoothly animate the icons from their pre-layout frames to the new
+       * grid positions, exactly like Clean Up does. */
+      if ([iconView respondsToSelector: @selector(animateIconsFromOldFrames:)])
+        [iconView animateIconsFromOldFrames: oldFrames];
       return YES;
     }
   return NO;

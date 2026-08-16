@@ -5036,83 +5036,15 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
       [iconView batchRepositionIcons: all toCenterPoints: centers];
     }
 
-  /* Invalidate old + new icon areas on the container BEFORE reverting
-   * frames for animation.  cleanupIconPositions + tile mark only the new
-   * positions dirty; reverting to old frames leaves stale dirty rects
-   * pointing at the wrong coordinates, causing screen artifacts. */
-  if (oldFrames && [iconView respondsToSelector: @selector(icons)])
+  /* Animate icons smoothly from old positions to new positions.  The shared
+   * method invalidates old + new icon areas on the container, reverts each
+   * icon to its pre-move frame so NSViewAnimation has a visible starting
+   * point, runs the nonblocking animation and flushes dirty rects while it
+   * plays (NSViewAnimation's setFrame: does not invalidate the prior frame,
+   * leaving ghost pixels without the flush). */
+  if (oldFrames && [iconView respondsToSelector: @selector(animateIconsFromOldFrames:)])
     {
-      for (id ic in [iconView icons])
-        {
-          NSString *name = [[ic node] name];
-          NSValue *oldVal = [oldFrames objectForKey: name];
-          if (oldVal)
-            {
-              [iconView setNeedsDisplayInRect: [oldVal rectValue]];
-              [iconView setNeedsDisplayInRect: [ic frame]];
-            }
-        }
-    }
-
-  /* Animate icons smoothly from old positions to new positions */
-  if (oldFrames && [iconView respondsToSelector: @selector(icons)])
-    {
-      NSMutableArray *animations = [NSMutableArray array];
-      for (id ic in [iconView icons])
-        {
-          NSString *name = [[ic node] name];
-          NSValue *oldVal = [oldFrames objectForKey: name];
-          if (oldVal)
-            {
-              NSRect oldFrame = [oldVal rectValue];
-              NSRect newFrame = [ic frame];
-              if (!NSEqualRects(oldFrame, newFrame))
-                {
-                  /* Set icon back to its old frame so NSViewAnimation
-                   * has a visible starting position to interpolate from. */
-                  [ic setFrame: oldFrame];
-                  [animations addObject:
-                    [NSDictionary dictionaryWithObjectsAndKeys:
-                      ic, NSViewAnimationTargetKey,
-                      [NSValue valueWithRect: oldFrame], NSViewAnimationStartFrameKey,
-                      [NSValue valueWithRect: newFrame], NSViewAnimationEndFrameKey,
-                      nil]];
-                }
-            }
-        }
-
-      if ([animations count] > 0)
-        {
-          NSViewAnimation *animation =
-            [[NSViewAnimation alloc] initWithViewAnimations: animations];
-          [animation setDuration: 0.35];
-          [animation setAnimationCurve: NSAnimationEaseInOut];
-          [animation setAnimationBlockingMode: NSAnimationNonblocking];
-          [animation startAnimation];
-          /* Don't release - NSAnimation releases itself on completion
-           * via animatorDidStop (NSAnimation.m:990). External release
-           * causes use-after-free in GSAnimator's dealloc chain. */
-
-          /* Flush dirty rects at every run loop iteration during the
-           * animation so intermediate icon positions are cleaned up.
-           * NSViewAnimation's setFrame: does not invalidate the prior
-           * frame on the container, leaving ghost pixels. */
-          if ([iconView respondsToSelector: @selector(displayIfNeeded)])
-            {
-              NSTimeInterval flushDuration = [animation duration] + 0.05;
-              NSTimer *flushTimer = [NSTimer scheduledTimerWithTimeInterval: 1.0/60.0
-                                                                     target: iconView
-                                                                   selector: @selector(displayIfNeeded)
-                                                                   userInfo: nil
-                                                                    repeats: YES];
-              [flushTimer performSelector: @selector(invalidate)
-                               withObject: nil
-                               afterDelay: flushDuration];
-              [iconView performSelector: @selector(display)
-                             withObject: nil
-                             afterDelay: flushDuration];
-            }
-        }
+      [iconView animateIconsFromOldFrames: oldFrames];
     }
 
 }

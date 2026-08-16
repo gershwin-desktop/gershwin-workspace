@@ -194,6 +194,12 @@
 /* Batch reposition — moves many icons at once, tiles once, persists once */
 - (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
 
+/* Smoothly animate the icons from the given pre-move frames to their current
+ * frames.  `oldFrames` maps each icon's node name (via -name) to an NSValue
+ * wrapping the NSRect it had before the caller moved it.  Call after the
+ * repositioning has applied the new frames.  No-op when the map is empty. */
+- (void)animateIconsFromOldFrames:(NSDictionary *)oldFrames;
+
 /* Persist the auto-assigned positions of icons just added to an open window
  * (call after -tile).  Honor-gated and empty-safe; browser views no-op. */
 - (void)persistStoredPositionsForIcons:(NSArray *)iconList;
