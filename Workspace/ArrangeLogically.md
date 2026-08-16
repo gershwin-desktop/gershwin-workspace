@@ -815,6 +815,13 @@ viewport.  A label wider than the whole grid is therefore clamped to the grid
 width; its box stays inside the visible viewport instead of overhanging the
 canvas edge.
 
+A placed icon is drawn with a frame up to 2x the width of its grid cell, so a
+long name renders fully instead of being clipped to one cell; the icon itself
+stays centred on the grid line.  Only placed (honoured) icons get this room -
+the AUTO grid packs cells tightly and has no spare columns.  The 2x cap keeps
+a label from ever stretching across more than two cells, so the reserved-span
+overhang above always has room for it.
+
 The human character of the layout therefore comes from the COMPOSITION - the
 semantic zones, the asymmetric grouping, the negative space left between
 groups - not from nudging individual icons off the grid.

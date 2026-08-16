@@ -3,3 +3,11 @@ GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # placement header (FSNIconPlacement.h).
 ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
 
+# clang 19 / binutils 2.44 regression: the ABI 2.2 .objc_init section always
+# references the __objc_constant_string section bounds, but the linker only
+# synthesizes those __start_/__stop_ symbols when the section exists.  A
+# Foundation-only test tool without constant strings then fails to link.
+# Defining them as 0 keeps the (empty) scan in the runtime a no-op.
+ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
+                      -Wl,--defsym=__stop___objc_constant_string=0
+

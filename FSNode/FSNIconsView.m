@@ -447,6 +447,19 @@ static void GWHighlightFrameRect(NSRect aRect)
       NSPoint cellOrigin = NSZeroPoint;
       BOOL placed = NO;
 
+      /* A wide label must not be clipped to the grid cell: give the icon a
+       * frame wide enough to draw its full title, up to 2x the cell width.
+       * Only honored (placed) icons get the room - the AUTO grid packs cells
+       * tightly and has no spare columns, and resets frameW below. */
+      float frameW = _cachedCellSize.width;
+      if ([icon respondsToSelector: @selector(labelTextWidth)])
+        {
+          float labelW = [icon labelTextWidth];
+          float maxW = _cachedCellSize.width * 2;
+          if (labelW > frameW)
+            frameW = (labelW < maxW) ? labelW : maxW;
+        }
+
       if (posValue)
         {
           /* customIconPositions stores iloc-style (DS_Store top-down)
@@ -455,7 +468,7 @@ static void GWHighlightFrameRect(NSRect aRect)
            * Uses _cachedCellSize so icons stay at their assigned grid
            * position even when gridSize.width varies with label width. */
           NSPoint center = [self viewCenterForIlocCenter: [posValue pointValue]];
-          cellOrigin.x = center.x - (_cachedCellSize.width / 2);
+          cellOrigin.x = center.x - (frameW / 2);
           cellOrigin.y = center.y - (_cachedCellSize.height / 2);
           placed = YES;
         }
@@ -467,7 +480,7 @@ static void GWHighlightFrameRect(NSRect aRect)
            * correct regardless of when showContentsOfNode ran.  A MANUAL
            * icon without iloc falls through to AUTO placement. */
           NSPoint center = [self viewCenterForIlocCenter: data.ilocPosition];
-          cellOrigin.x = center.x - (_cachedCellSize.width / 2);
+          cellOrigin.x = center.x - (frameW / 2);
           cellOrigin.y = center.y - (_cachedCellSize.height / 2);
           placed = YES;
         }
@@ -494,6 +507,11 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       if (!placed)
         {
+          /* AUTO cells are packed at the plain cell width; a wide-label icon
+           * that fell through to AUTO must not keep its widened frame or it
+           * would overlap the neighbours. */
+          frameW = _cachedCellSize.width;
+
           /* No usable saved position (none stored, or one rejected as
            * off-screen above): use the direction-aware grid enumerator to
            * place the icon in the next free grid cell.  Respects
@@ -659,7 +677,7 @@ static void GWHighlightFrameRect(NSRect aRect)
         }
 
       irects[i] = NSMakeRect(cellOrigin.x, cellOrigin.y,
-                              _cachedCellSize.width, _cachedCellSize.height);
+                              frameW, _cachedCellSize.height);
 
       if (NSEqualRects(irects[i], [icon frame]) == NO)
         {
@@ -1272,40 +1290,59 @@ static void GWHighlightFrameRect(NSRect aRect)
     if (nRows < neededRows) nRows = neededRows;
   }
 
-  /* Build a fresh enumerator. */
-  FSNPlacementEnumerator *e;
-  switch (_placementDirection)
-    {
-    case FSNPlacementDirectionTopToBottomRightToLeft:
-      e = [[FSNTopToBottomRightToLeftEnumerator alloc] initWithColumns: nCols rows: nRows];
-      break;
-    default:
-      e = [[FSNLeftToRightTopToBottomEnumerator alloc] initWithColumns: nCols rows: nRows];
-      break;
-    }
+  /* Each icon's label text width, capped at 2x the cell width (beyond that
+   * the label is truncated in FSNIcon tile:).  Clean Up must leave empty grid
+   * positions between two icons only when their label texts - which are what
+   * could overlap - would touch.  The cap mirrors the laid-out frame width,
+   * but a short label keeps its true width so a long label next to a short
+   * one does not waste an empty column. */
+  {
+    NSUInteger count = [icons count];
+    CGFloat *frameWs = calloc(count ? count : 1, sizeof(CGFloat));
+    NSUInteger ci;
+    for (ci = 0; ci < count; ci++)
+      {
+        FSNIcon *icon = [icons objectAtIndex: ci];
+        CGFloat fw = cellW;
+        if ([icon respondsToSelector: @selector(labelTextWidth)])
+          {
+            CGFloat lw = [icon labelTextWidth];
+            CGFloat maxW = cellW * 2;
+            fw = (lw < maxW) ? lw : maxW;
+          }
+        frameWs[ci] = fw;
+      }
 
-  [e reset];
-  FSNGridCell cell;
-  NSUInteger ci = 0;
-  while (ci < [icons count] && [e nextCell: &cell])
-    {
-      NSPoint gCenter = [self centerForGridCell: cell
-                                       cellSize: NSMakeSize(cellW, cellH)
-                                           gapX: gapX
-                                         origin: gOrigin];
-      FSNIcon *icon = [icons objectAtIndex: ci];
-      FSNIconItemData *data = [icon placementData];
-      data.ilocPosition = [self ilocCenterForViewCenter: gCenter];
-      data.placementMode = FSNIconPlacementModeManual;
-      NSRect f = NSMakeRect(gCenter.x - cellW / 2.0, gCenter.y - cellH / 2.0,
-                            cellW, cellH);
-      /* Invalidate old position so the container redraws its background. */
-      [self setNeedsDisplayInRect: [icon frame]];
-      [icon setFrame: NSIntegralRect(f)];
-      ci++;
-    }
+    /* Wide-label-aware grid cells: row-major leaves a column gap between
+     * consecutive icons, column-major lays out each row independently so a
+     * wide label only pushes apart its own row's neighbour.  This replaces
+     * the plain one-icon-per-cell enumerator so Clean Up never produces
+     * overlapping labels. */
+    FSNGridCell *cells = FSNPlacementCellsForWidths(count, frameWs,
+                                                    nCols, nRows,
+                                                    _placementDirection,
+                                                    cellW + gapX);
+    for (ci = 0; ci < count; ci++)
+      {
+        NSPoint gCenter = [self centerForGridCell: cells[ci]
+                                         cellSize: NSMakeSize(cellW, cellH)
+                                             gapX: gapX
+                                           origin: gOrigin];
+        FSNIcon *icon = [icons objectAtIndex: ci];
+        FSNIconItemData *data = [icon placementData];
+        data.ilocPosition = [self ilocCenterForViewCenter: gCenter];
+        data.placementMode = FSNIconPlacementModeManual;
+        NSRect f = NSMakeRect(gCenter.x - cellW / 2.0,
+                              gCenter.y - cellH / 2.0,
+                              cellW, cellH);
+        /* Invalidate old position so the container redraws its background. */
+        [self setNeedsDisplayInRect: [icon frame]];
+        [icon setFrame: NSIntegralRect(f)];
+      }
+    free(cells);
+    free(frameWs);
+  }
 
-  [e release];
   [self tile];
 }
 

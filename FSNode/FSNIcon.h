@@ -130,6 +130,11 @@
 
 - (void)tile;
 
+/* The width the label would need to draw its full (untruncated) title,
+ * including the label margin.  Used by the container to give a wide label
+ * a frame up to 2x the grid cell so the text is not clipped to one cell. */
+- (float)labelTextWidth;
+
 // DS_Store tag/label color support
 - (void)setTagColor:(NSColor *)color;
 - (NSColor *)tagColor;

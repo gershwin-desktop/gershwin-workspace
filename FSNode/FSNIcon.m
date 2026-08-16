@@ -427,6 +427,11 @@ static NSImage *branchImage;
   return icnBounds;
 }
 
+- (float)labelTextWidth
+{
+  return [label uncutTitleLenght] + [fsnodeRep labelMargin];
+}
+
 - (void)tile
 {
   NSRect frameRect = [self bounds];
