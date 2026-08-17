@@ -1,12 +1,12 @@
 #!/usr/bin/env run_uitest
 # Standard-folder navigation: the Go menu must open a viewer window for each
-# of the standard locations.  Exercises the menu, window open, and window close
-# paths.  Window titles are English; the engine localizes them (e.g. "Documents"
+# of the standard locations. Exercises the menu, window open, and window close
+# paths. Window titles are English; the engine localizes them (e.g. "Documents"
 # becomes "Dokumente", "System Disk" becomes "Systemfestplatte").
 #
 # The Desktop folder is not tested: its window title ("Schreibtisch"/"Desktop")
 # also matches the always-visible desktop window, so the close check cannot be
-# expressed.  Downloads and Movies are skipped too: their localized folder
+# expressed. Downloads and Movies are skipped too: their localized folder
 # names ("Heruntergeladen", "Videos") have no English mapping in the app.
 #
 # Leaves the computer as it was found: every window it opens is closed again.

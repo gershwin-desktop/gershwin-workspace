@@ -1,6 +1,6 @@
 #!/usr/bin/env run_uitest
 # Preferences: the Workspace preferences window must open from the app menu and
-# close again.  The window title starts with the app name, so "Workspace"
+# close again. The window title starts with the app name, so "Workspace"
 # matches it in both languages.
 #
 # Leaves the computer as it was found: the preferences window is closed at the

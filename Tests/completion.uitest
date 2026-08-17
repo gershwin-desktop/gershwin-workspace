@@ -1,15 +1,15 @@
 #!/usr/bin/env run_uitest
 # Go to Folder typeahead completion: the CompletionField must show its grey
-# completion suffix while the modal "Go to Folder" dialog is running.  The
+# completion suffix while the modal "Go to Folder" dialog is running. The
 # completion update is deferred by 50ms and is scheduled in both the default
 # and the modal panel run-loop mode - a default-mode-only deferred selector
 # never fires during a modal session, which silently killed the typeahead.
 #
 # Types a partial absolute path ("/Loc") and asserts the field text now holds
-# the completed path "/Local".  An absolute path is used instead of a tilde
+# the completed path "/Local". An absolute path is used instead of a tilde
 # path so the test also passes under the uitest harness, which runs with
 # HOME=/home/uitest (no ~/Library there); "/Loc" completes to /Local in any
-# home.  Menus and dialog are addressed by English title; the engine
+# home. Menus and dialog are addressed by English title; the engine
 # localizes them via the app, so the script runs on a German Workspace too.
 #
 # Leaves the computer as it was found: the dialog is cancelled at the end.

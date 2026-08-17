@@ -6,7 +6,7 @@
 # The sidebar exists only in browsing viewers, so the script switches the
 # default viewer type to Browsing, verifies, then restores it to Spatial.
 # Both switches pop a confirmation alert, which the script dismisses
-# explicitly with `invoke default button`.  Runs on the home folder (like
+# explicitly with `invoke default button`. Runs on the home folder (like
 # window_placement.uitest): the root disk's icon layout is too heavy for repeated
 # view operations and can wedge the app.
 #
@@ -21,7 +21,7 @@
 activate application "Workspace"
 
 # Switch the default viewer type to Browsing so the folder opens with a
-# sidebar.  The confirmation is non-blocking now (the change is shown by the
+# sidebar. The confirmation is non-blocking now (the change is shown by the
 # menu checkmark), so there is no alert to dismiss.
 select menu "View/View Behavior/Set Browsing as Default"
 
@@ -54,7 +54,7 @@ assert window "${home}"
 select menu "View/Hide Toolbar"
 assert window "${home}"
 
-# Restore the default viewer type, then close the window.  The confirmation
+# Restore the default viewer type, then close the window. The confirmation
 # is non-blocking now, so there is no alert to dismiss.
 select menu "View/View Behavior/Set Spatial as Default"
 

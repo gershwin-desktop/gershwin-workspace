@@ -1,8 +1,8 @@
 #!/usr/bin/env run_uitest
 # Window placement stability: a folder viewer window must open at the same
-# on-screen position every time.  Opens the home folder ("~") four times,
+# on-screen position every time. Opens the home folder ("~") four times,
 # asserting the window frame is identical on each open, then does the same for
-# the root folder ("/").  Menu and window names are English; the engine
+# the root folder ("/"). Menu and window names are English; the engine
 # localizes them via the app, so the script also runs on a German Workspace.
 #
 # Run with: run_uitest Tests/window_placement.uitest

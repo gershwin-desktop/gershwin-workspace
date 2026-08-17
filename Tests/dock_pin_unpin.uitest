@@ -1,8 +1,8 @@
 #!/usr/bin/env run_uitest
 # Dock pin/unpin lifecycle: pin a running app, quit it, and verify the pinned
 # icon STAYS in the Dock (that is what pinning buys: the icon survives the app
-# quitting).  Then unpin and verify the icon is removed entirely, because the
-# app is no longer running.  The Dock lives inside the Workspace app, so
+# quitting). Then unpin and verify the icon is removed entirely, because the
+# app is no longer running. The Dock lives inside the Workspace app, so
 # Workspace is the script's target whenever the context menu is involved.
 #
 # Run with: run_uitest Tests/dock_pin_unpin.uitest
