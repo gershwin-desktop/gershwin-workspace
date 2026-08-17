@@ -499,7 +499,15 @@ static BOOL hasLastExtents_ = NO;
 
   r = NSMakeRect(margin, 0, w - (margin * 2), h - boxh);
   scroll = [[GWViewerScrollView alloc] initWithFrame: r inViewer: self];
-  [scroll setBorderType: NSBezelBorder];
+  if ([viewType isEqual: @"Icon"])
+    {
+      [scroll setBorderType: NSNoBorder];
+      [scroll setDrawsTopSeparator: YES];
+    }
+  else
+    {
+      [scroll setBorderType: NSBezelBorder];
+    }
   hasScroller = [viewType isEqual: @"List"];
   [scroll setHasHorizontalScroller: YES];
   [scroll setHasVerticalScroller: hasScroller];
@@ -1580,6 +1588,8 @@ static BOOL hasLastExtents_ = NO;
       [scroll setAutohidesScrollers: NO];
       [scroll setHasHorizontalScroller: YES];
       [scroll setHasVerticalScroller: YES];
+      [scroll setBorderType: NSBezelBorder];
+      [scroll setDrawsTopSeparator: NO];
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
 		                            visibleColumns: visibleCols
@@ -1591,6 +1601,8 @@ static BOOL hasLastExtents_ = NO;
       ASSIGN (viewType, @"Browser");
       
     } else if ([requestedType isEqualToString:@"Icon"]) {
+      [scroll setBorderType: NSNoBorder];
+      [scroll setDrawsTopSeparator: YES];
       nodeView = [[GWSpatialIconsView alloc] initForViewer: self];
       [scroll setHasVerticalScroller: YES];
       ASSIGN (viewType, @"Icon");
@@ -1600,6 +1612,8 @@ static BOOL hasLastExtents_ = NO;
 
       nodeView = [[GWViewerListView alloc] initWithFrame: r forViewer: self];
       [scroll setHasVerticalScroller: YES];
+      [scroll setBorderType: NSBezelBorder];
+      [scroll setDrawsTopSeparator: NO];
       ASSIGN (viewType, @"List");
     }
 

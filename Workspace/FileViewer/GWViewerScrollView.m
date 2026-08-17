@@ -28,6 +28,11 @@
 #import "GWViewerScrollView.h"
 #import "GWViewer.h"
 
+/* 1px line drawn along the top edge of the viewport (see the class
+ * implementation at the bottom of this file). */
+@interface GWScrollViewTopSeparator : NSView
+@end
+
 @implementation GWViewerScrollView
 
 - (id)initWithFrame:(NSRect)frameRect
@@ -62,6 +67,70 @@
     nodeView = nil;
     [self unregisterDraggedTypes];
   }
+}
+
+- (void)setDrawsTopSeparator:(BOOL)flag
+{
+  if (drawsTopSeparator != flag)
+    {
+      drawsTopSeparator = flag;
+
+      if (flag)
+        {
+          if (topSeparator == nil)
+            {
+              /* NSScrollView is flipped (y grows downward), so the visual
+               * top edge is NSMinY(bounds).  Anchor against isFlipped to be
+               * safe rather than assuming an orientation. */
+              NSRect bounds = [self bounds];
+              CGFloat top = [self isFlipped] ? NSMinY(bounds) : NSMaxY(bounds);
+              topSeparator = [[GWScrollViewTopSeparator alloc]
+                initWithFrame: NSMakeRect(NSMinX(bounds), top - ([self isFlipped] ? 0 : 1),
+                                          NSWidth(bounds), 1)];
+              [topSeparator setAutoresizingMask:
+                NSViewWidthSizable | NSViewMinYMargin];
+              [self addSubview: topSeparator];
+            }
+        }
+      else
+        {
+          [topSeparator removeFromSuperview];
+          DESTROY (topSeparator);
+        }
+
+      [self setNeedsDisplay: YES];
+    }
+}
+
+- (BOOL)drawsTopSeparator
+{
+  return drawsTopSeparator;
+}
+
+- (void)dealloc
+{
+  DESTROY (topSeparator);
+  [super dealloc];
+}
+
+@end
+
+/* 1px line drawn along the top edge of the viewport, separating it from the
+ * path bar / top box above.  Added as the top-most subview because an
+ * unbordered NSScrollView's clip view covers the full bounds, which would
+ * hide a line drawn in drawRect.  hitTest returns nil so the strip never
+ * intercepts clicks meant for the icons underneath. */
+@implementation GWScrollViewTopSeparator
+
+- (void)drawRect:(NSRect)rect
+{
+  [[NSColor controlShadowColor] set];
+  NSRectFill(rect);
+}
+
+- (NSView *)hitTest:(NSPoint)aPoint
+{
+  return nil;
 }
 
 @end

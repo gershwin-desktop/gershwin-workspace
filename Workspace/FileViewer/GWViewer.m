@@ -538,7 +538,15 @@ static BOOL hasLastExtents_ = NO;
 
   r = NSMakeRect(xmargin, pathscrh, w - (xmargin * 2), h - pathscrh - ymargin);
   nviewScroll = [[GWViewerScrollView alloc] initWithFrame: r inViewer: self];
-  [nviewScroll setBorderType: NSBezelBorder];
+  if (viewType == GWViewTypeIcon)
+    {
+      [nviewScroll setBorderType: NSNoBorder];
+      [nviewScroll setDrawsTopSeparator: YES];
+    }
+  else
+    {
+      [nviewScroll setBorderType: NSBezelBorder];
+    }
   hasScroller = (viewType != GWViewTypeBrowser);
   [nviewScroll setHasHorizontalScroller: NO];
   [nviewScroll setHasVerticalScroller: hasScroller];
@@ -1680,6 +1688,8 @@ constrainMinCoordinate:(CGFloat)proposedMin
           [nviewScroll setAutohidesScrollers: NO];
           [nviewScroll setHasHorizontalScroller: YES];
           [nviewScroll setHasVerticalScroller: YES];
+          [nviewScroll setBorderType: NSBezelBorder];
+          [nviewScroll setDrawsTopSeparator: NO];
 
           nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                                       inViewer: self
@@ -1705,6 +1715,8 @@ constrainMinCoordinate:(CGFloat)proposedMin
 
           [nviewScroll setHasVerticalScroller: YES];
           [nviewScroll setHasHorizontalScroller: NO];
+          [nviewScroll setBorderType: NSNoBorder];
+          [nviewScroll setDrawsTopSeparator: YES];
 
           nodeView = [[GWViewerIconsView alloc] initForViewer: self];
       
@@ -1726,6 +1738,8 @@ constrainMinCoordinate:(CGFloat)proposedMin
 
           [nviewScroll setHasVerticalScroller: YES];
           [nviewScroll setHasHorizontalScroller: NO];
+          [nviewScroll setBorderType: NSBezelBorder];
+          [nviewScroll setDrawsTopSeparator: NO];
 
           nodeView = [[GWViewerListView alloc] initWithFrame: r forViewer: self];
 
