@@ -1292,17 +1292,23 @@ static BOOL hasLastExtents_ = NO;
         xwin = (Window)(uintptr_t)winptr;
       }
       if (xwin != 0
+          && [[GWX11WindowManager sharedManager] windowIsMappedAndFramed:xwin]
           && [[GWX11WindowManager sharedManager] contentRectFromXGeometry:xwin
-                                                  screenHeight:[[NSScreen mainScreen] frame].size.height
-                                                      outRect:&contentRect]) {
-        /* Measured from the real client window - exact. */
+                                                      screenHeight:[[NSScreen mainScreen] frame].size.height
+                                                          outRect:&contentRect]) {
+        /* Measured from a mapped, WM-framed client window - exact.  Only such
+         * a window has a settled position worth persisting: a ghost (never
+         * mapped) window or one caught mid-framing (extents not yet set)
+         * would otherwise be saved and poison the .DS_Store for every later
+         * open of the folder. */
+        [updatedprefs setObject: NSStringFromRect(contentRect)
+                         forKey: @"geometry"];
       } else {
-        /* No X geometry available: fall back to GNUstep's own conversion. */
-        contentRect = [vwrwin contentRectForFrameRect: [vwrwin frame]];
+        /* Window not in a persisting state: leave "geometry" out so the write
+         * below keeps the previously stored frame (takeValuesFromViewerPrefs:
+         * only sets the frame when "geometry" is present). */
       }
     }
-    [updatedprefs setObject: NSStringFromRect(contentRect)
-                     forKey: @"geometry"];
 
     // Save view settings to .DS_Store for Mac interoperability
     {

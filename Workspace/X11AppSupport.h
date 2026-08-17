@@ -270,6 +270,13 @@
                       outTop:(unsigned long *)t
                    outBottom:(unsigned long *)b;
 
+/* Whether a client window currently has a settled, persisted geometry: it
+ * must be mapped (IsViewable) and framed by the WM (_NET_FRAME_EXTENTS with a
+ * positive top).  An unmapped ghost window or one caught mid-framing (extents
+ * not yet set) sits at a transient/bogus position; callers should not persist
+ * geometry from such a window.  See X11AppSupport.m. */
+- (BOOL)windowIsMappedAndFramed:(Window)xwindow;
+
 @end
 
 #pragma mark - X11 Application Manager

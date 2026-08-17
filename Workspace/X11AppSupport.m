@@ -1131,6 +1131,36 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return ok;
 }
 
+/* Return YES only when the client window is mapped (IsViewable) AND framed by
+ * the WM (positive _NET_FRAME_EXTENTS top).  An unmapped window - e.g. a ghost
+ * that never got a place on screen - still answers XGetWindowAttributes, and a
+ * window caught mid-framing has no extents yet; persisting geometry from
+ * either would save a transient/bogus position into the .DS_Store and poison
+ * every later open of the folder.  See windowWillClose save paths. */
+- (BOOL)windowIsMappedAndFramed:(Window)xwindow
+{
+    if (xwindow == 0) return NO;
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+    BOOL mapped = NO;
+    @try {
+        XWindowAttributes attrs;
+        if (XGetWindowAttributes(dpy, xwindow, &attrs)) {
+            mapped = (attrs.map_state == IsViewable);
+        }
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+    if (!mapped) return NO;
+    /* Positive top extents mean the WM has framed the window; frameExtents
+     * for windows opens its own connection, so only call it once the cheap
+     * map-state check passed. */
+    return [self frameExtentsForWindow:xwindow
+                               outLeft:NULL outRight:NULL
+                                outTop:NULL outBottom:NULL];
+}
+
 @end
 
 #pragma mark - X11 Application Info
