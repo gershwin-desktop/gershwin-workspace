@@ -5,14 +5,19 @@
 # and the modal panel run-loop mode - a default-mode-only deferred selector
 # never fires during a modal session, which silently killed the typeahead.
 #
-# Types a partial absolute path ("/Loc") and asserts the field text now holds
-# the completed path "/Local". An absolute path is used instead of a tilde
-# path so the test also passes under the uitest harness, which runs with
-# HOME=/home/uitest (no ~/Library there); "/Loc" completes to /Local in any
-# home. Menus and dialog are addressed by English title; the engine
-# localizes them via the app, so the script runs on a German Workspace too.
+# Types a partial absolute path ("/Loc"), asserts the field now holds the
+# completed path "/Local" (black typed "/Loc" + grey suggested "al"), then
+# accepts the grey suggestion with Tab and executes the (now all-black) path
+# with Return, verifying a viewer for /Local opens. Pressing Return while the
+# grey suffix is still active must execute ONLY the black typed text, never
+# the grey suggestion - so the test accepts with Tab first, then confirms with
+# Return. An absolute path is used instead of a tilde path so the test also
+# passes under the uitest harness, which runs with HOME=/home/uitest (no
+# ~/Library there); "/Loc" completes to /Local in any home. Menus and dialog
+# are addressed by English title; the engine localizes them via the app, so
+# the script runs on a German Workspace too.
 #
-# Leaves the computer as it was found: the dialog is cancelled at the end.
+# Leaves the computer as it was found: the opened viewer is closed at the end.
 #
 # Run with: run_uitest Tests/completion.uitest
 activate application "Workspace"
@@ -26,7 +31,17 @@ type "/Loc"
 wait 300ms
 assert text contains "/Local"
 
-press Escape
+# Tab accepts the grey suggestion, making the whole "/Local" black.
+press Tab
+wait 200ms
+
+# Return executes only the black text (which Tab just made all-black): /Local.
+press Return
 wait until not modal
+wait until window "Local"
+assert window "Local" frame constant
+
+close window "Local"
+wait until not exists window "Local"
 
 log "go to folder completion stable"

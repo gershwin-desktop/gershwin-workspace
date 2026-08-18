@@ -24,6 +24,7 @@ assert icon "Processes" docked
 activate application "Processes"
 select menu "Processes/Quit Processes"
 wait until not exists window "Process monitor"
+assert not exists application "Processes"
 activate application "Workspace"
 assert icon "Processes" docked
 
