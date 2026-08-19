@@ -9,8 +9,12 @@
 activate application "Workspace"
 
 select menu "File/Find"
-wait until window "Finder"
-assert window "Finder"
+# The window-list match is transient on slow/loaded VMs (the find window
+# appears then vanishes again within ~70ms).  Wait on the widget tree - the
+# Search button inside the window - so we only succeed once the window is
+# actually built and stable, not merely mapped.
+wait until button "Search" in window "Finder" timeout 20s
+assert button "Search" in window "Finder"
 close window "Finder"
 wait until not exists window "Finder"
 
