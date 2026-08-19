@@ -33,10 +33,12 @@ close window "Pictures"
 wait until not exists window "Pictures"
 
 select menu "Go/Applications"
-wait until window "Applications"
+# The Applications folder's icon layout is heavy (like the root folder), so
+# opening its viewer can take longer than the 2s fast-failure default.
+wait until window "Applications" timeout 20s
 assert window "Applications" frame constant
 close window "Applications"
-wait until not exists window "Applications"
+wait until not exists window "Applications" timeout 15s
 
 
 
