@@ -159,33 +159,18 @@
     msg = [NSString stringWithFormat:@"The application \"%@\" exited with status %d.", [path lastPathComponent], [status intValue]];
   }
 
-  /* Truncate stderr: show first 5 and last 10 lines if long */
+  /* Never truncate or omit lines: the complete stderr is always shown,
+     long text is handled by gershwin-eau-theme. */
   NSString *detail = stderrOut ? stderrOut : @"";
-  NSArray *lines = [detail componentsSeparatedByCharactersInSet:[NSCharacterSet newlineCharacterSet]];
-  NSUInteger total = [lines count];
-  NSString *displayText = detail;
-  BOOL needsScrolling = NO;
-
-  if ([detail length] == 0) {
-    /* No stderr output — show a meaningful message instead of an empty view */
-    displayText = [NSString stringWithFormat:@"%@ has quit unexpectedly.", [path lastPathComponent]];
-  } else if (total > 15) {
-    needsScrolling = YES;
-    NSMutableArray *parts = [NSMutableArray array];
-    for (NSUInteger i = 0; i < 5; i++) [parts addObject:[lines objectAtIndex:i]];
-    NSUInteger omitted = total - 15;
-    [parts addObject:[NSString stringWithFormat:@"... %lu lines omitted ...", (unsigned long)omitted]];
-    for (NSUInteger i = total - 10; i < total; i++) [parts addObject:[lines objectAtIndex:i]];
-    displayText = [parts componentsJoinedByString:@"\n"];
-  }
+  BOOL hasOutput = ([detail length] > 0);
 
   NSAlert *alert = [[[NSAlert alloc] init] autorelease];
   [alert setMessageText:title];
   [alert setInformativeText:msg];
   [alert addButtonWithTitle:@"OK"];
-  if (needsScrolling) {
+  if (hasOutput) {
     NSTextView *tv = [[[NSTextView alloc] initWithFrame:NSMakeRect(0,0,400,200)] autorelease];
-    [tv setString:displayText];
+    [tv setString:detail];
     [tv setEditable:NO];
     [tv setSelectable:YES];
     NSScrollView *sv = [[[NSScrollView alloc] initWithFrame:NSMakeRect(0,0,400,200)] autorelease];
@@ -194,13 +179,13 @@
     if ([alert respondsToSelector:@selector(setAccessoryView:)]) {
       [(id)alert setAccessoryView:sv];
     } else {
-      /* Fallback: append truncated stderr to informative text if accessory
-         view isn't available on this platform/SDK. */
-      [alert setInformativeText:[NSString stringWithFormat:@"%@\n\n%@", msg, displayText]];
+      /* Fallback: append full stderr to informative text if accessory view
+         isn't available on this platform/SDK. */
+      [alert setInformativeText:[NSString stringWithFormat:@"%@\n\n%@", msg, detail]];
     }
-  } else if ([displayText length] > 0) {
-    /* Short output or fallback message — append to informative text */
-    [alert setInformativeText:[NSString stringWithFormat:@"%@\n\n%@", msg, displayText]];
+  } else {
+    /* No stderr output - show a meaningful message instead of an empty view */
+    [alert setInformativeText:[NSString stringWithFormat:@"%@\n\n%@ has quit unexpectedly.", msg, [path lastPathComponent]]];
   }
   [alert runModal];
 }
