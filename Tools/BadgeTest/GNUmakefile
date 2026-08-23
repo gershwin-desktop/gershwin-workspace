@@ -5,6 +5,11 @@ GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 APP_NAME = BadgeTest
 
+# Test helper app driven by UI tests, not a user-facing application; it
+# installs next to the other system helpers where run_uitest finds it while
+# keeping it out of /System/Applications.
+BadgeTest_INSTALL_DIR = /System/Library/CoreServices/Applications
+
 BadgeTest_OBJC_FILES = main.m
 
 BadgeTest_RESOURCE_FILES = Resources/Info-gnustep.plist
