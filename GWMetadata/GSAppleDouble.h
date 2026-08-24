@@ -77,6 +77,11 @@ typedef NS_ENUM(uint32_t, GSAppleDoubleEntryID) {
 @interface GSAppleDouble : NSObject <NSCopying>
 {
   NSMutableDictionary *_entries;  // NSNumber(entryID) -> NSData
+  NSMutableDictionary *_xattrs;   // NSString(name) -> NSData, from the
+                                  // Apple "ATTR" extended-attributes blob
+                                  // that macOS embeds inside entry ID 9
+                                  // when a file carries xattrs (e.g.
+                                  // com.apple.metadata:_kMDItemUserTags).
 }
 
 /**
@@ -139,6 +144,28 @@ typedef NS_ENUM(uint32_t, GSAppleDoubleEntryID) {
  * or nil if not present.
  */
 + (NSData *)resourceForkFromAppleDoubleData:(NSData *)data;
+
+/**
+ * Stage an extended attribute for emission.  When any xattr has been
+ * staged, -appleDoubleData switches from the classic layout (entry 9 =
+ * bare FinderInfo, entry 2 = resource fork) to the layout macOS writes
+ * for files carrying xattrs: entry 9 extends past the 32 FinderInfo
+ * bytes into an "ATTR" blob holding every staged xattr, which is what
+ * makes tags/comments readable on a real Mac after dot_clean/ditto.
+ *
+ * Keys use the raw macOS names (e.g. "com.apple.metadata:_kMDItemUserTags").
+ */
+- (void)setXattr:(NSData *)value forKey:(NSString *)name;
+
+/**
+ * Extended attributes carried in the Apple "ATTR" blob (entry ID 9,
+ * after the 32-byte FinderInfo + 2-byte padding) that macOS writes
+ * for files with xattrs.  Keys are xattr names (e.g.
+ * "com.apple.metadata:_kMDItemUserTags"); values are the raw xattr
+ * data.  nil when the blob is absent or empty.  The returned dictionary
+ * is a copy; mutate via -setXattr:forKey:.
+ */
+- (NSDictionary<NSString *, NSData *> *)extendedAttributes;
 
 @end
 

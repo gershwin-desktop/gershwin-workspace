@@ -92,7 +92,6 @@ do { \
     NSString *type = nil;
     id extractor = nil;
     BOOL failed = NO;
-    BOOL hasextractor = NO;
     int path_id;
     
     EXECUTE_QUERY (@"BEGIN", NO);
@@ -110,8 +109,6 @@ do { \
                           withAttributes: attributes];    
     
       if (extractor) {
-        hasextractor = YES;
-      
         if ([extractor extractMetadataAtPath: path
                                       withID: path_id
                                   attributes: attributes] == NO) {
@@ -158,7 +155,6 @@ do { \
         
           if (attributes) {          
             failed = NO;
-            hasextractor = NO;
             
             if (skip == NO) {
               NSString *app = nil;
@@ -179,8 +175,6 @@ do { \
                                     withAttributes: attributes];
     
                 if (extractor) {
-                  hasextractor = YES;
-
                   if ([extractor extractMetadataAtPath: subpath
                                                 withID: path_id
                                             attributes: attributes] == NO) {

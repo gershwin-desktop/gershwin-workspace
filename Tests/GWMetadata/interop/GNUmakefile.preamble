@@ -1,0 +1,11 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+# Extra include path so the in-process test source (compiled via #include
+# of the .m files under test) can find their headers under GWMetadata/.
+# interop/ sits one level deeper than Tests/GWMetadata, hence the extra "..".
+ADDITIONAL_INCLUDE_DIRS += -I../../../GWMetadata
+
+# GSFileMetadata references NSImage/NSColor (custom-icon / label helpers), so
+# this tool must link gnustep-gui (same rationale as t_GSFileMetadata).
+t_GSMetaDataInterop_TOOL_LIBS += -lgnustep-gui
+# GWMetaArchive pulls in libarchive for the zip-level interop checks.
+t_GSMetaDataInterop_TOOL_LIBS += -larchive

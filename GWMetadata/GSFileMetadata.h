@@ -35,19 +35,34 @@ typedef uint32_t GSOType;
  *
  * These match the classic Mac OS Finder flags.
  */
+/* Bit positions match Apple's canonical fdFlags (see CarbonCore Finder.h /
+ * TN1150): the Finder flag word is big-endian on disk.  These MUST agree
+ * with what macOS actually writes/reads - if they drift, Gershwin mis-parses
+ * real Mac files (and the interop fixtures silently encode the wrong bits).
+ *   kIsOnDesk      0x0001  bit 0
+ *   kColor         0x000E  bits 1-3 (label colour)
+ *   kIsShared      0x0040  bit 6
+ *   kHasNoINITs    0x0080  bit 7
+ *   kHasBeenInited 0x0100  bit 8
+ *   kHasCustomIcon 0x0400  bit 10
+ *   kIsStationery  0x0800  bit 11
+ *   kNameLocked    0x1000  bit 12
+ *   kHasBundle     0x2000  bit 13
+ *   kIsInvisible   0x4000  bit 14
+ *   kIsAlias       0x8000  bit 15 */
 typedef NS_OPTIONS(uint16_t, GSFileFinderFlags) {
   GSFileFinderIsOnDesk       = 1 << 0,
-  GSFileFinderColorFlag      = 1 << 1,   /* bit 1 + bits 2-3 = label */
+  GSFileFinderColorFlag      = 1 << 1,   /* bit 1 + bits 2-3 = label colour */
   GSFileFinderColorBits      = (1 << 1) | (1 << 2) | (1 << 3),
-  GSFileFinderIsShared       = 1 << 4,
-  GSFileFinderHasNoINITs     = 1 << 5,
-  GSFileFinderHasBeenInited  = 1 << 6,
-  GSFileFinderHasCustomIcon  = 1 << 7,
-  GSFileFinderIsStationery   = 1 << 8,
-  GSFileFinderIsNameLocked   = 1 << 9,
-  GSFileFinderHasBundle      = 1 << 10,
-  GSFileFinderIsInvisible    = 1 << 11,
-  GSFileFinderIsAlias        = 1 << 12,
+  GSFileFinderIsShared       = 1 << 6,   /* 0x0040 */
+  GSFileFinderHasNoINITs     = 1 << 7,   /* 0x0080 */
+  GSFileFinderHasBeenInited  = 1 << 8,   /* 0x0100 */
+  GSFileFinderHasCustomIcon  = 1 << 10,  /* 0x0400 kHasCustomIcon */
+  GSFileFinderIsStationery   = 1 << 11,  /* 0x0800 */
+  GSFileFinderIsNameLocked   = 1 << 12,  /* 0x1000 */
+  GSFileFinderHasBundle      = 1 << 13,  /* 0x2000 */
+  GSFileFinderIsInvisible    = 1 << 14,  /* 0x4000 kIsInvisible */
+  GSFileFinderIsAlias        = 1 << 15,  /* 0x8000 */
 };
 
 /*
@@ -98,6 +113,7 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
   NSData            *_resourceFork;     // Resource fork data
   NSString          *_finderComment;    // Spotlight comment
   NSData            *_userTagsData;     // raw _kMDItemUserTags plist
+  NSString          *_quarantine;       // com.apple.quarantine record
 
   /* Cached parsed properties (invalidated when _finderInfo changes) */
   struct {
@@ -214,6 +230,16 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 
 /** Raw _kMDItemUserTags xattr value (binary plist), or nil when unset. */
 @property (copy) NSData *userTagsData;
+
+/**
+ * Quarantine record (com.apple.quarantine), e.g.
+ * "0083;6a8c57fe;Safari;UUID".  Raw string form, exactly as stored;
+ * nil when unset.  Note macOS sanitizes quarantine data that arrives
+ * through AppleDouble ingestion (dot_clean/ditto) - untrusted records
+ * are rewritten to "0000;00000000;;", so string equality only holds on
+ * the pre-ingest bytes.
+ */
+@property (copy) NSString *quarantine;
 
 /** The standard tag name for a label (e.g. GSFileLabelRed -> "Red"),
  *  or nil for GSFileLabelNone. */
