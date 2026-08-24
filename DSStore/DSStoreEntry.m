@@ -185,11 +185,17 @@ static uint64_t swapBytes64(uint64_t value) {
     NSMutableData *locationData = [NSMutableData dataWithCapacity:16];
     uint32_t xBig = swapInt32HostToBig(x);
     uint32_t yBig = swapInt32HostToBig(y);
-    uint64_t unknown = 0xFFFFFFFFFFFF0000; // Standard unknown bytes
+    /* The 8 trailing bytes are a fixed signature written big-endian:
+     * 0xFFFFFFFF followed by 0xFFFF0000.  Storing it as a uint64_t and
+     * appending raw memory would put it down little-endian on x86, which
+     * macOS rejects, so write the two halves explicitly. */
+    uint32_t unknown1 = 0xFFFFFFFF;
+    uint32_t unknown2 = swapInt32HostToBig(0xFFFF0000);
     
     [locationData appendBytes:&xBig length:4];
     [locationData appendBytes:&yBig length:4];
-    [locationData appendBytes:&unknown length:8];
+    [locationData appendBytes:&unknown1 length:4];
+    [locationData appendBytes:&unknown2 length:4];
     
     return [[[DSStoreEntry alloc] initWithFilename:filename code:@"Iloc" type:@"blob" value:locationData] autorelease];
 }

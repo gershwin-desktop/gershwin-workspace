@@ -220,7 +220,7 @@ extern "C" {
                              iconHeight:(CGFloat)iconHeight;
 
 // Internal methods
-- (void)readBTreeNode:(DSBuddyBlock *)block address:(uint32_t)address isLeaf:(BOOL)isLeaf;
+- (void)readBTreeNode:(DSBuddyBlock *)block;
 
 @end
 
