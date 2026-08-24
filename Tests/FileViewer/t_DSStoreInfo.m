@@ -13,6 +13,7 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
+#import "GSFileMetadata.h"
 
 #include "../../Workspace/FileViewer/DSStoreInfo.m"
 
@@ -328,6 +329,52 @@ main(void)
            && (int)chkB.position.x == 220 && (int)chkB.position.y == 202,
            "live: b.txt keeps its live iloc (no foreign collision)");
     }
+
+    [fm removeFileAtPath: dir handler: nil];
+  }
+
+  /* --- folder FinderInfo DInfo fallback (spatial macOS channel) ---
+   * A folder may carry per-folder view/window state purely in its
+   * com.apple.FinderInfo DInfo with no .DS_Store at all.  DSStoreInfo must
+   * load from that fallback and must mirror back into it on save. */
+  {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+        [NSString stringWithFormat: @"t_fi_%d", (int)getpid()]];
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+
+    /* Write a folder FinderInfo (DInfo) carrying view=column + a window rect,
+     * with NO .DS_Store present - this is the classic macOS spatial case. */
+    GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
+    [md setViewStyleCodeForDirectory: @"clmv"];
+    [md setWindowBoundsForDirectory: NSMakeRect(50, 60, 400, 300)];
+    NSError *werr = nil;
+    PASS([md writeToFileAtPath: dir error: &werr],
+         "folder FinderInfo (DInfo) written via GSFileMetadata");
+    (void)werr;
+
+    /* DSStoreInfo should fall back to it when there is no .DS_Store. */
+    DSStoreInfo *info = [DSStoreInfo infoForDirectoryPath: dir];
+    PASS(info != nil && info.loaded, "FinderInfo-only folder loads");
+    PASS(info.hasViewStyle && info.viewStyle == DSStoreViewStyleColumn,
+         "view style read from folder FinderInfo fallback");
+    PASS(info.hasWindowFrame
+         && NSEqualRects(info.windowFrame, NSMakeRect(50, 60, 400, 300)),
+         "window geometry read from folder FinderInfo fallback");
+
+    /* Saving a different view/window must mirror into FinderInfo. */
+    [info takeValuesFromViewerPrefs: @{ @"viewtype" : @"List",
+                                        @"geometry" : NSStringFromRect(NSMakeRect(100, 150, 600, 400)) }];
+    PASS([info saveToPath: [dir stringByAppendingPathComponent: @".DS_Store"]],
+         "saveToPath writes .DS_Store and mirrors FinderInfo");
+    GSFileMetadata *re = [GSFileMetadata metadataForFileAtPath: dir];
+    PASS(re != nil && [[re viewStyleCodeForDirectory] isEqualToString: @"Nlsv"],
+         "save mirrors view style into folder FinderInfo");
+    NSRect expected = [info dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
+    NSRect got = [re windowBoundsForDirectory];
+    PASS(!NSEqualRects(got, NSZeroRect) && NSEqualRects(got, expected),
+         "save mirrors window geometry into folder FinderInfo");
 
     [fm removeFileAtPath: dir handler: nil];
   }

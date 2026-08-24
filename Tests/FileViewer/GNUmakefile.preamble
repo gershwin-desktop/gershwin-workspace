@@ -11,13 +11,18 @@ t_GWAlignLogically_TOOL_LIBS += -lFSNode -lgnustep-gui
 
 # t_DSStoreInfo compiles DSStoreInfo.m in-process; its DSStore back-end lives
 # under DSStore/ and is linked as separate objects (avoids in-TU symbol
-# clashes).  DSStoreInfo references NSColor, so link gnustep-gui too.
-ADDITIONAL_INCLUDE_DIRS += -I../../DSStore
+# clashes).  DSStoreInfo now also reads/writes the folder's FinderInfo via
+# GSFileMetadata (view style / window geometry fallback), so link those
+# sources too.  DSStoreInfo references NSColor, so link gnustep-gui too.
+ADDITIONAL_INCLUDE_DIRS += -I../../DSStore -I../../GWMetadata
 t_DSStoreInfo_OBJC_FILES += ../../DSStore/DSStore.m \
                             ../../DSStore/DSStoreCodecs.m \
                             ../../DSStore/DSStoreEntry.m \
                             ../../DSStore/DSBuddyAllocator.m \
-                            ../../DSStore/SimpleColor.m
+                            ../../DSStore/SimpleColor.m \
+                            ../../GWMetadata/GSFileMetadata.m \
+                            ../../GWMetadata/GSAppleDouble.m \
+                            ../../GWMetadata/GWMetaXattr.m
 t_DSStoreInfo_TOOL_LIBS += -lgnustep-gui
 
 # t_GWViewSettingsManager compiles the facade in-process; its collaborators

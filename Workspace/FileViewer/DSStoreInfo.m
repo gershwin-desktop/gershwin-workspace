@@ -6,6 +6,7 @@
 
 #import "DSStoreInfo.h"
 #import "DSStore.h"
+#import "GSFileMetadata.h"
 
 #pragma mark - DSStoreIconInfo Implementation
 
@@ -267,32 +268,34 @@
 {
     NSString *dsStorePath = [_directoryPath stringByAppendingPathComponent:@".DS_Store"];
     
-    
-    if (![[NSFileManager defaultManager] fileExistsAtPath:dsStorePath]) {
-        return NO;
+    DSStore *store = nil;
+    if ([[NSFileManager defaultManager] fileExistsAtPath:dsStorePath]) {
+        store = [DSStore storeWithPath:dsStorePath];
+        if (![store load]) {
+            store = nil;
+        }
     }
     
-    
-    DSStore *store = [DSStore storeWithPath:dsStorePath];
-    if (![store load]) {
-        return NO;
+    if (store) {
+        // Get all entries to see what's available
+        NSArray *allFilenames = [store allFilenames];
+        
+        // Process directory-level entries (filename = ".")
+        [self loadDirectoryEntriesFromStore:store];
+        
+        // Process per-file entries (icon positions, comments, etc.)
+        [self loadIconEntriesFromStore:store filenames:allFilenames];
     }
     
-    
-    // Get all entries to see what's available
-    NSArray *allFilenames = [store allFilenames];
-    
-    // Process directory-level entries (filename = ".")
-    [self loadDirectoryEntriesFromStore:store];
-    
-    // Process per-file entries (icon positions, comments, etc.)
-    [self loadIconEntriesFromStore:store filenames:allFilenames];
+    /* A folder may carry per-folder view/window state purely in its
+     * com.apple.FinderInfo DInfo (classic / spatial macOS channel) with no
+     * .DS_Store at all - consult that as a fallback regardless. */
+    [self loadFinderInfoFallback];
     
     _loaded = YES;
     
-    
-    
-    return YES;
+    /* "Loaded" means we found something in .DS_Store or in FinderInfo. */
+    return (_hasViewStyle || _hasWindowFrame || store != nil);
 }
 
 - (BOOL)reload
@@ -503,6 +506,42 @@
         } else {
         }
     } else {
+    }
+}
+
+/* Fall back to the folder's own com.apple.FinderInfo DInfo for per-folder view
+ * style / window geometry when the .DS_Store did not carry those values.  The
+ * DInfo layout (frView at bytes 14-15, frRect at bytes 0-7) is the classic /
+ * spatial macOS channel; reading it here means a folder whose view was set by
+ * Finder (or by Gershwin's own spatial writer) restores correctly even without
+ * a .DS_Store.  Only fills gaps - .DS_Store always wins when present. */
+- (void)loadFinderInfoFallback
+{
+    GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: _directoryPath];
+    if (md == nil)
+        return;
+
+    if (!_hasViewStyle) {
+        NSString *code = [md viewStyleCodeForDirectory];
+        if ([code isEqualToString: @"icnv"]) {
+            _viewStyle = DSStoreViewStyleIcon;     _hasViewStyle = YES;
+        } else if ([code isEqualToString: @"Nlsv"]) {
+            _viewStyle = DSStoreViewStyleList;     _hasViewStyle = YES;
+        } else if ([code isEqualToString: @"clmv"]) {
+            _viewStyle = DSStoreViewStyleColumn;   _hasViewStyle = YES;
+        } else if ([code isEqualToString: @"glyv"]) {
+            _viewStyle = DSStoreViewStyleGallery;  _hasViewStyle = YES;
+        } else if ([code isEqualToString: @"Flwv"]) {
+            _viewStyle = DSStoreViewStyleCoverflow; _hasViewStyle = YES;
+        }
+    }
+
+    if (!_hasWindowFrame) {
+        NSRect r = [md windowBoundsForDirectory];
+        if (!NSEqualRects(r, NSZeroRect)) {
+            _windowFrame = r;
+            _hasWindowFrame = YES;
+        }
     }
 }
 
@@ -1369,6 +1408,42 @@
   } else {
   }
 
+  /* Mirror per-folder view style + window geometry into the folder's own
+   * com.apple.FinderInfo DInfo (the classic / spatial macOS channel) so the
+   * values interoperate with Finder on systems that read it, and so Gershwin's
+   * own spatial viewer persists them.  Best-effort only: failures (e.g. a
+   * filesystem without xattr support) are logged and ignored; .DS_Store
+   * remains the primary on-disk channel.  Only written when we actually have a
+   * value, to avoid stamping a spurious zeroed FinderInfo on folders we know
+   * nothing about. */
+  if (saved && (_hasViewStyle || _hasWindowFrame)) {
+    GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: _directoryPath];
+    if (md == nil)
+      md = [[[GSFileMetadata alloc] init] autorelease];
+    if (md != nil) {
+      if (_hasViewStyle) {
+        NSString *styleStr = @"icnv";
+        switch (_viewStyle) {
+          case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
+          case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
+          case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
+          case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
+          case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
+        }
+        [md setViewStyleCodeForDirectory: styleStr];
+      }
+      if (_hasWindowFrame) {
+        NSRect dsFrame = [self dsStoreWindowFrameForScreen:
+                            [DSStoreInfo safeMainScreen]];
+        [md setWindowBoundsForDirectory: dsFrame];
+      }
+      NSError *fiErr = nil;
+      if ([md writeToFileAtPath: _directoryPath error: &fiErr] == NO && fiErr) {
+        NSLog(@"DSStoreInfo: FinderInfo write failed for %@: %@",
+              _directoryPath, fiErr);
+      }
+    }
+  }
 
   return saved;
 }
