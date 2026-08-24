@@ -193,6 +193,9 @@ extern "C" {
 - (NSArray *)visibleColumnsForDirectory;
 - (void)setVisibleColumnsForDirectory:(NSArray *)columns;
 
+/* Replace the list-view settings record (lsvp) wholesale. */
+- (void)setListViewSettings:(NSDictionary *)settings;
+
 // File metadata
 - (NSString *)commentsForFilename:(NSString *)filename;
 - (void)setCommentsForFilename:(NSString *)filename comments:(NSString *)comments;

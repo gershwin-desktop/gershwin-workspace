@@ -17,6 +17,11 @@ BOOL gDSStoreVerbose = NO;
 // Constants from .DS_Store format specification
 #define DSDB_MAGIC 0x44534442  // "DSDB"
 
+@interface DSStore (Private)
+- (NSMutableDictionary *)_lsvpDict;
+- (void)_setLsvpDict:(NSMutableDictionary *)d;
+@end
+
 @implementation DSStore
 
 + (id)storeWithPath:(NSString *)path {
@@ -598,12 +603,8 @@ BOOL gDSStoreVerbose = NO;
 }
 
 - (void)setListViewSettings:(NSDictionary *)settings {
-    DSStoreEntry *entry = [[DSStoreEntry alloc] initWithFilename:@"." 
-                                                            code:@"lsvp" 
-                                                            type:@"blob"
-                                                           value:settings];
-    [self setEntry:entry];
-    [entry release];
+    DSStoreEntry *entry = [DSStoreEntry plistEntryForFile:@"." code:@"lsvp" dictionary:settings];
+    if (entry) [self setEntry:entry];
 }
 
 // CRUD methods for all DS_Store field types
@@ -883,9 +884,30 @@ BOOL gDSStoreVerbose = NO;
     if (style && ![style isEqual:@"icnv"]) {
         return;
     }
-    
-    // Note: cvlc is a complex blob structure; this is a placeholder
-    // Real implementation would properly encode the column visibility blob
+    if (show) {
+        [self setEntry:[DSStoreEntry booleanEntryForFile:@"." code:@"cvlc" value:YES]];
+    } else {
+        [self removeEntryForFilename:@"." code:@"cvlc"];
+    }
+}
+
+- (NSMutableDictionary *)_lsvpDict {
+    DSStoreEntry *e = [self entryForFilename:@"." code:@"lsvp"];
+    if (e && [[e value] isKindOfClass:[NSData class]]) {
+        NSDictionary *d = [NSPropertyListSerialization propertyListWithData:(NSData *)[e value]
+                                                                     options:NSPropertyListImmutable
+                                                                      format:NULL
+                                                                       error:NULL];
+        if ([d isKindOfClass:[NSDictionary class]]) {
+            return [d mutableCopy];
+        }
+    }
+    return [NSMutableDictionary dictionary];
+}
+
+- (void)_setLsvpDict:(NSMutableDictionary *)d {
+    DSStoreEntry *e = [DSStoreEntry plistEntryForFile:@"." code:@"lsvp" dictionary:d];
+    if (e) [self setEntry:e];
 }
 
 - (int)columnWidthForDirectory:(NSString *)columnName {
@@ -894,13 +916,11 @@ BOOL gDSStoreVerbose = NO;
     if (style && ![style isEqual:@"icnv"]) {
         return 0;
     }
-    
-    // Column widths are stored in clwc (column list width code)
-    // Different columns have different codes or are stored in a blob
-    NSString *code = [NSString stringWithFormat:@"clw%@", columnName];
-    DSStoreEntry *entry = [self entryForFilename:@"." code:code];
-    if (entry) {
-        return [entry longValue];
+    NSDictionary *d = [self _lsvpDict];
+    for (NSDictionary *c in [d objectForKey:@"columns"]) {
+        if ([[c objectForKey:@"identifier"] isEqual:columnName]) {
+            return [[c objectForKey:@"width"] intValue];
+        }
     }
     return 0;
 }
@@ -911,11 +931,26 @@ BOOL gDSStoreVerbose = NO;
     if (style && ![style isEqual:@"icnv"]) {
         return;
     }
-    
-    NSString *code = [NSString stringWithFormat:@"clw%@", columnName];
-    DSStoreEntry *entry = [DSStoreEntry longEntryForFile:@"." code:code value:(int32_t)width];
-    [self setEntry:entry];
-    
+    NSMutableDictionary *d = [self _lsvpDict];
+    NSMutableArray *cols = [[d objectForKey:@"columns"] mutableCopy];
+    if (cols == nil) cols = [NSMutableArray array];
+    BOOL found = NO;
+    for (NSMutableDictionary *c in cols) {
+        if ([[c objectForKey:@"identifier"] isEqual:columnName]) {
+            [c setObject:[NSNumber numberWithInt:width] forKey:@"width"];
+            found = YES;
+            break;
+        }
+    }
+    if (!found) {
+        NSMutableDictionary *c = [NSMutableDictionary dictionary];
+        [c setObject:columnName forKey:@"identifier"];
+        [c setObject:[NSNumber numberWithInt:width] forKey:@"width"];
+        [c setObject:[NSNumber numberWithBool:YES] forKey:@"visible"];
+        [cols addObject:c];
+    }
+    [d setObject:cols forKey:@"columns"];
+    [self _setLsvpDict:d];
 }
 
 - (BOOL)columnVisibleForDirectory:(NSString *)columnName {
@@ -924,15 +959,12 @@ BOOL gDSStoreVerbose = NO;
     if (style && ![style isEqual:@"icnv"]) {
         return NO;
     }
-    
-    // Column visibility is typically stored in cvlc (column list code) as a blob
-    // or as individual boolean entries
-    NSString *code = [NSString stringWithFormat:@"cv%@", columnName];
-    DSStoreEntry *entry = [self entryForFilename:@"." code:code];
-    if (entry) {
-        return [entry booleanValue];
+    NSDictionary *d = [self _lsvpDict];
+    for (NSDictionary *c in [d objectForKey:@"columns"]) {
+        if ([[c objectForKey:@"identifier"] isEqual:columnName]) {
+            return [[c objectForKey:@"visible"] boolValue];
+        }
     }
-    // By default columns are usually visible
     return YES;
 }
 
@@ -942,11 +974,25 @@ BOOL gDSStoreVerbose = NO;
     if (style && ![style isEqual:@"icnv"]) {
         return;
     }
-    
-    NSString *code = [NSString stringWithFormat:@"cv%@", columnName];
-    DSStoreEntry *entry = [DSStoreEntry booleanEntryForFile:@"." code:code value:visible];
-    [self setEntry:entry];
-    
+    NSMutableDictionary *d = [self _lsvpDict];
+    NSMutableArray *cols = [[d objectForKey:@"columns"] mutableCopy];
+    if (cols == nil) cols = [NSMutableArray array];
+    BOOL found = NO;
+    for (NSMutableDictionary *c in cols) {
+        if ([[c objectForKey:@"identifier"] isEqual:columnName]) {
+            [c setObject:[NSNumber numberWithBool:visible] forKey:@"visible"];
+            found = YES;
+            break;
+        }
+    }
+    if (!found) {
+        NSMutableDictionary *c = [NSMutableDictionary dictionary];
+        [c setObject:columnName forKey:@"identifier"];
+        [c setObject:[NSNumber numberWithBool:visible] forKey:@"visible"];
+        [cols addObject:c];
+    }
+    [d setObject:cols forKey:@"columns"];
+    [self _setLsvpDict:d];
 }
 
 - (NSArray *)visibleColumnsForDirectory {
@@ -955,22 +1001,14 @@ BOOL gDSStoreVerbose = NO;
     if (style && ![style isEqual:@"icnv"]) {
         return nil;
     }
-    
-    // cvlc stores the list of columns and their properties
-    // This is a placeholder implementation
-    NSMutableArray *visibleColumns = [NSMutableArray array];
-    
-    // Standard column names
-    NSArray *standardColumns = [NSArray arrayWithObjects:
-        @"name", @"date", @"size", @"kind", @"label", @"version", @"comments", nil];
-    
-    for (NSString *column in standardColumns) {
-        if ([self columnVisibleForDirectory:column]) {
-            [visibleColumns addObject:column];
+    NSDictionary *d = [self _lsvpDict];
+    NSMutableArray *visible = [NSMutableArray array];
+    for (NSDictionary *c in [d objectForKey:@"columns"]) {
+        if ([[c objectForKey:@"visible"] boolValue]) {
+            [visible addObject:[c objectForKey:@"identifier"]];
         }
     }
-    
-    return visibleColumns;
+    return visible;
 }
 
 - (void)setVisibleColumnsForDirectory:(NSArray *)columns {
@@ -979,20 +1017,16 @@ BOOL gDSStoreVerbose = NO;
     if (style && ![style isEqual:@"icnv"]) {
         return;
     }
-    
-    // Set all columns as not visible first
-    NSArray *standardColumns = [NSArray arrayWithObjects:
-        @"name", @"date", @"size", @"kind", @"label", @"version", @"comments", nil];
-    
-    for (NSString *column in standardColumns) {
-        [self setColumnVisibleForDirectory:column visible:NO];
+    NSMutableDictionary *d = [self _lsvpDict];
+    NSMutableArray *cols = [NSMutableArray array];
+    for (NSString *name in columns) {
+        NSMutableDictionary *c = [NSMutableDictionary dictionary];
+        [c setObject:name forKey:@"identifier"];
+        [c setObject:[NSNumber numberWithBool:YES] forKey:@"visible"];
+        [cols addObject:c];
     }
-    
-    // Then make the specified columns visible
-    for (NSString *column in columns) {
-        [self setColumnVisibleForDirectory:column visible:YES];
-    }
-    
+    [d setObject:cols forKey:@"columns"];
+    [self _setLsvpDict:d];
 }
 
 - (NSString *)commentsForFilename:(NSString *)filename {

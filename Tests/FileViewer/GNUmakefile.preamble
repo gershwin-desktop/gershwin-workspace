@@ -61,3 +61,13 @@ t_DSStoreVTypes_OBJC_FILES += ../../DSStore/DSStore.m \
                             ../../DSStore/SimpleColor.m
 t_DSStoreVTypes_TOOL_LIBS += -lgnustep-gui
 
+# t_DSStoreRecordTypes exercises EVERY record type the writer supports
+# (folder self-entry settings + per-file records), round-tripped.  Links the
+# DSStore back-end.
+t_DSStoreRecordTypes_OBJC_FILES += ../../DSStore/DSStore.m \
+                            ../../DSStore/DSStoreCodecs.m \
+                            ../../DSStore/DSStoreEntry.m \
+                            ../../DSStore/DSBuddyAllocator.m \
+                            ../../DSStore/SimpleColor.m
+t_DSStoreRecordTypes_TOOL_LIBS += -lgnustep-gui
+
