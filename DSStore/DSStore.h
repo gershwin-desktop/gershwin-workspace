@@ -196,6 +196,14 @@ extern "C" {
 /* Replace the list-view settings record (lsvp) wholesale. */
 - (void)setListViewSettings:(NSDictionary *)settings;
 
+/* Window geometry.  Browser windows store their frame in the "bwsp" binary
+ * plist (WindowBounds + SidebarWidth); legacy/spatial windows in the "fwi0"
+ * 16-byte record (top/left/bottom/right + 4CC view style + flags). */
+- (NSDictionary *)listViewSettingsForDirectory;
+- (NSDictionary *)browserWindowDictionaryForDirectory;
+- (NSRect)browserWindowBoundsForDirectory;
+- (NSRect)windowGeometryRectForDirectory;
+
 // File metadata
 - (NSString *)commentsForFilename:(NSString *)filename;
 - (void)setCommentsForFilename:(NSString *)filename comments:(NSString *)comments;

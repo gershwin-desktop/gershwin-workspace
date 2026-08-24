@@ -52,6 +52,16 @@ t_DSStoreWriter_OBJC_FILES += ../../DSStore/DSStore.m \
                             ../../DSStore/SimpleColor.m
 t_DSStoreWriter_TOOL_LIBS += -lgnustep-gui
 
+# t_DSStoreInterop loads real Mac .DS_Store fixtures (Iloc only) and asserts
+# Gershwin parses them exactly, without inventing view/window records.  Links
+# the DSStore back-end as objects.
+t_DSStoreInterop_OBJC_FILES += ../../DSStore/DSStore.m \
+                            ../../DSStore/DSStoreCodecs.m \
+                            ../../DSStore/DSStoreEntry.m \
+                            ../../DSStore/DSBuddyAllocator.m \
+                            ../../DSStore/SimpleColor.m
+t_DSStoreInterop_TOOL_LIBS += -lgnustep-gui
+
 # t_DSStoreVTypes locks in multi-record-type writers: folder self-entry (vstl,
 # icvo, bwsp) plus child Iloc, round-tripped.  Links the DSStore back-end.
 t_DSStoreVTypes_OBJC_FILES += ../../DSStore/DSStore.m \
@@ -71,3 +81,13 @@ t_DSStoreRecordTypes_OBJC_FILES += ../../DSStore/DSStore.m \
                             ../../DSStore/SimpleColor.m
 t_DSStoreRecordTypes_TOOL_LIBS += -lgnustep-gui
 
+# t_DSStoreViewWindowInterop: every view style (vstl) round-trips, plus the
+# browser window frame (bwsp) and legacy window geometry (fwi0); and a real
+# Mac 10.6 .DS_Store is read without inventing view/window records.  Links the
+# DSStore back-end.
+t_DSStoreViewWindowInterop_OBJC_FILES += ../../DSStore/DSStore.m \
+                            ../../DSStore/DSStoreCodecs.m \
+                            ../../DSStore/DSStoreEntry.m \
+                            ../../DSStore/DSBuddyAllocator.m \
+                            ../../DSStore/SimpleColor.m
+t_DSStoreViewWindowInterop_TOOL_LIBS += -lgnustep-gui

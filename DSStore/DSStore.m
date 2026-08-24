@@ -594,12 +594,50 @@ BOOL gDSStoreVerbose = NO;
     if (!entry) {
         entry = [self entryForFilename:@"." code:@"lsvP"];
     }
-    
-    if (entry && ([[entry code] isEqualToString:@"lsvp"] || [[entry code] isEqualToString:@"lsvP"])) {
-        // The value should be a blob containing plist data - just return the raw value for now
-        return (NSDictionary *)[entry value];
+    if (entry && [[entry value] isKindOfClass:[NSData class]]) {
+        NSDictionary *d = [NSPropertyListSerialization propertyListWithData:(NSData *)[entry value]
+                                                                     options:NSPropertyListImmutable
+                                                                      format:NULL
+                                                                       error:NULL];
+        if ([d isKindOfClass:[NSDictionary class]]) return d;
     }
     return nil;
+}
+
+- (NSDictionary *)browserWindowDictionaryForDirectory {
+    DSStoreEntry *entry = [self entryForFilename:@"." code:@"bwsp"];
+    if (!entry) {
+        entry = [self entryForFilename:@"." code:@"pBBk"];
+    }
+    if (entry && [[entry value] isKindOfClass:[NSData class]]) {
+        NSDictionary *d = [NSPropertyListSerialization propertyListWithData:(NSData *)[entry value]
+                                                                     options:NSPropertyListImmutable
+                                                                      format:NULL
+                                                                       error:NULL];
+        if ([d isKindOfClass:[NSDictionary class]]) return d;
+    }
+    return nil;
+}
+
+- (NSRect)browserWindowBoundsForDirectory {
+    NSDictionary *d = [self browserWindowDictionaryForDirectory];
+    NSString *b = [d objectForKey:@"WindowBounds"];
+    if (b) return NSRectFromString(b);
+    return NSZeroRect;
+}
+
+- (NSRect)windowGeometryRectForDirectory {
+    DSStoreEntry *entry = [self entryForFilename:@"." code:@"fwi0"];
+    if (entry && [[entry value] isKindOfClass:[NSData class]] && [[entry value] length] >= 8) {
+        const unsigned char *fb = [(NSData *)[entry value] bytes];
+        /* stored big-endian: top/left/bottom/right (2 bytes each) */
+        uint16_t top    = (uint16_t)((fb[0] << 8) | fb[1]);
+        uint16_t left   = (uint16_t)((fb[2] << 8) | fb[3]);
+        uint16_t bottom = (uint16_t)((fb[4] << 8) | fb[5]);
+        uint16_t right  = (uint16_t)((fb[6] << 8) | fb[7]);
+        return NSMakeRect(left, top, right - left, bottom - top);
+    }
+    return NSZeroRect;
 }
 
 - (void)setListViewSettings:(NSDictionary *)settings {

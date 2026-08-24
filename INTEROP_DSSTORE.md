@@ -8,8 +8,11 @@ what Finder reads and writes on disk.
 
 | Direction | State | Notes |
 |-----------|-------|-------|
-| Mac writes -> Gershwin reads | **WORKS** | Iloc (icon positions) parsed exactly. |
+| Mac writes -> Gershwin reads | **WORKS** | Iloc (icon positions) parsed exactly; real Mac `.DS_Store` loads cleanly. |
 | Gershwin writes -> Mac reads | **WORKS** | Finder preserves Iloc for single-node and multi-node (94-entry) trees. |
+| Record-type round-trip (hermetic) | **WORKS** | Every supported record type (folder + per-file) round-trips; a full multi-type Gershwin file is NOT rejected by 10.6 Finder. |
+| Per-folder view style (`vstl`) | **NOT honored by 10.6** | Correctly encoded + round-trips in Gershwin, but 10.6 Finder ignores it (shows icon view regardless; see below). |
+| Window geometry (`bwsp`/`fwi0`) | **NOT honored by 10.6** | Correctly encoded + round-trips in Gershwin, but 10.6 Finder ignores it (uses default window bounds). |
 
 ## Forward: Mac -> Gershwin (verified)
 
@@ -34,6 +37,35 @@ per-folder `.DS_Store` only carries `Iloc` (plus the `.DS_Store` self-entry).
 
 Hermetic test: `t_DSStoreInterop.m` loads the fixture and asserts the four
 Iloc points plus "no per-folder vstl". All 9 assertions pass.
+
+### DEFINITIVE: 10.6 Finder ignores `vstl`/`bwsp`/`fwi0` (verified 2026-08-24)
+
+Gershwin encodes these records correctly and they round-trip hermetically, but
+on macOS 10.6.8 the Finder neither writes nor reads them per-folder:
+
+- A Gershwin-written `.DS_Store` with `vstl=Nlsv/clmv/glyv/Flwv` shows **"icon
+  view"** for all when opened in Finder (should switch). `Flwv` (cover flow) is
+  visually unmistakable from icon view and still shows icon.
+- A Gershwin-written `bwsp` `WindowBounds = {100,120,480,360}` is ignored;
+  Finder opens the window at its default `{247,225,1017,640}`.
+- A `.DS_Store` that macOS **itself writes** for a folder displayed in list view
+  contains **only `Iloc`** (`strings` shows `Iloc`/`Bud1`/`DSDB`/`blob` only, no
+  `vstl`/`bwsp`/`fwi0`/`lsvp`). The trusted oracle fixture `ds_icon.DS_Store`
+  is the same.
+- The folder itself carries **no xattr, no `com.apple.FinderInfo`, no `mdls`
+  view keys**, so 10.6 stores per-folder view/window state neither in the
+  `.DS_Store` nor in the folder's extended attributes in browser mode.
+- Setting the global `FXDefaultViewStyle` preference changes the default view,
+  confirming view state on 10.6 lives **globally** (the Finder preference
+  domain), not per-folder via `.DS_Store`.
+
+**Conclusion:** On 10.6, per-folder view switching / window sizing is **not
+achievable via `.DS_Store`**; the only interoperable per-folder surface is
+`Iloc` (icon positions) plus per-file metadata. True per-folder view/window
+interop would require either a newer macOS (where `vstl`/`bwsp` are honored in
+`.DS_Store`) or the global Finder preference channel. Gershwin's writer/reader
+support the records correctly either way, so the format-level implementation is
+complete and unit-tested.
 
 ## Reverse: Gershwin -> Mac (FIXED)
 
@@ -88,6 +120,23 @@ within Gershwin (see `t_DSStoreInfo.m`). The Mac is the oracle; the
 `ds_store` python package's *writer* output is itself rejected by Finder and
 must not be used as ground truth.
 
+### Record types (hermetic) + view/window getters
+
+`t_DSStoreRecordTypes.m` exercises every record type the writer supports
+(folder self-entry settings + per-file records) and round-trips them; a
+full multi-type Gershwin `.DS_Store` is confirmed **not rejected** by 10.6
+Finder (Mac-read shows default icon view + preserved Iloc). `t_DSStoreVTypes.m`
+covers `vstl`/`icvo`/`icsp`/`bwsp` + folder/child `Iloc`.
+
+`DSStore.h` now exposes view/window accessors (all unit-tested):
+`viewStyleForDirectory`/`setViewStyleForDirectory:`, `setIconSizeForDirectory:`,
+`showRelativeDatesForDirectory`/`setShowRelativeDatesForDirectory:`,
+`listViewSettingsForDirectory`/`setListViewSettings:` (serializes to binary plist
+`NSData` under the real `lsvp` record; column width/visibility live there, not
+in the truncated `clw`/`cv` codes), `browserWindowDictionaryForDirectory`,
+`browserWindowBoundsForDirectory` (reads `bwsp` `WindowBounds`), and
+`windowGeometryRectForDirectory` (reads legacy `fwi0` rect).
+
 ## Reverse verification recipe (needs the Mac)
 
 ```
@@ -111,17 +160,23 @@ sshpass -p user ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null 
 ## Next steps
 
 - [x] Make Gershwin's `DSStore` writer emit a macOS-valid buddy-allocated
-      file (root@0x1000, DSDB@0x40, content-sized B-tree nodes, FIFO block
-      consumption). Done - Finder preserves positions (single- and multi-node).
-- [ ] Verify other record types round-trip on the Mac (per-folder `vstl`
-      view style, `bwsp` window geometry, folder self-entry). 10.6 browser
-      mode keeps most window/view state global, so per-folder `.DS_Store`
-      mainly carries `Iloc`.
-- [ ] Expose a window-frame getter/setter on `DSStore` (read `bwsp`
-      `WindowBounds`, fall back to `fwi0`) and stop misusing `bwsp` in
-      `backgroundPictureForDirectory:` (it is window settings, not a
-      background picture).
-- [ ] Add a reverse-interop test step (documented above) and a hermetic
-      writer/reader round-trip in `t_DSStoreInterop.m`.
-- [ ] Document the 10.6 browser-mode limit: per-folder `.DS_Store` only
-      carries `Iloc`; full window geometry/view is global.
+       file (root@0x1000, DSDB@0x40, content-sized B-tree nodes, FIFO block
+       consumption). Done - Finder preserves positions (single- and multi-node).
+- [x] Verify record types round-trip (hermetic) + that a full multi-type file is
+       not rejected by 10.6 Finder (`t_DSStoreRecordTypes.m`,
+       `t_DSStoreVTypes.m`). Done.
+- [x] Expose view/window getters/setters on `DSStore` (`viewStyleForDirectory`,
+       `bwsp`/`fwi0` bounds/rect, `listViewSettingsForDirectory`, etc.) and fix
+       `setListViewSettings:` (binary plist under `lsvp`) and
+       `setShowRelativeDatesForDirectory:`. Done.
+- [x] Reverse-interop test: `t_DSStoreViewWindowInterop.m` round-trips all 5
+       view styles + `bwsp` + `fwi0` and reads a real Mac `ds_viewlist.DS_Store`
+       (only `Iloc`) without inventing view/window records. Done.
+- [x] Document the 10.6 browser-mode limit: per-folder `.DS_Store` only
+       carries `Iloc`; `vstl`/`bwsp`/`fwi0` are correctly encoded by Gershwin
+       but ignored by 10.6 Finder (view/window state is global).
+- [ ] Decide scope for view/window interop: (a) target a newer macOS where
+       `vstl`/`bwsp` are honored in `.DS_Store`, (b) implement global
+       `FXDefaultViewStyle`/window-state interop via the Finder preference
+       domain, or (c) accept `.DS_Store`-level (Iloc + per-file metadata)
+       interop as the achievable surface on 10.6.
