@@ -291,7 +291,11 @@
      * com.apple.FinderInfo DInfo (classic / spatial macOS channel) with no
      * .DS_Store at all - consult that as a fallback regardless. */
     [self loadFinderInfoFallback];
-    
+
+    /* Also consult the user's com.apple.finder.plist BrowserWindowState
+     * (the 10.6 per-folder store) for any remaining view/geometry gaps. */
+    [self loadFinderPlistFallback];
+
     _loaded = YES;
     
     /* "Loaded" means we found something in .DS_Store or in FinderInfo. */
@@ -542,6 +546,194 @@
             _windowFrame = r;
             _hasWindowFrame = YES;
         }
+    }
+}
+
+/* Fall back to the user's com.apple.finder.plist BrowserWindowState (the
+ * macOS Finder's per-folder view/window store on 10.6) for per-folder view
+ * style / window geometry when neither .DS_Store nor the folder FinderInfo
+ * supplied them.  Entries are keyed by path (TargetURL / TargetPath).  This is
+ * the ONLY per-folder channel a 10.6 Finder honours, so it is consulted last
+ * (lowest priority) after .DS_Store and FinderInfo.  Only fills gaps. */
+- (void)loadFinderPlistFallback
+{
+    NSString *plistPath = [[NSHomeDirectory()
+                              stringByAppendingPathComponent: @"Library/Preferences"]
+                             stringByAppendingPathComponent: @"com.apple.finder.plist"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if (![fm fileExistsAtPath: plistPath])
+        return;
+    NSData *data = [NSData dataWithContentsOfFile: plistPath];
+    if (data == nil)
+        return;
+    NSError *err = nil;
+    id plist = [NSPropertyListSerialization propertyListWithData: data
+             options: NSPropertyListImmutable format: NULL error: &err];
+    if (plist == nil || ![plist isKindOfClass: [NSDictionary class]])
+        return;
+    NSArray *states = [plist objectForKey: @"BrowserWindowState"];
+    if (![states isKindOfClass: [NSArray class]] || [states count] == 0)
+        return;
+
+    NSString *myPath = [_directoryPath stringByStandardizingPath];
+    for (NSDictionary *st in states) {
+        if (![st isKindOfClass: [NSDictionary class]])
+            continue;
+        NSString *matchPath = nil;
+        id tu = [st objectForKey: @"TargetURL"];
+        if ([tu isKindOfClass: [NSString class]] && [tu length])
+            matchPath = [[NSURL URLWithString: tu] path];
+        if (matchPath == nil) {
+            id tp = [st objectForKey: @"TargetPath"];
+            if ([tp isKindOfClass: [NSArray class]] && [tp count]) {
+                id last = [tp lastObject];
+                if ([last isKindOfClass: [NSString class]])
+                    matchPath = [[NSURL URLWithString: last] path];
+            }
+        }
+        if (matchPath == nil)
+            continue;
+        if (![[matchPath stringByStandardizingPath] isEqualToString: myPath])
+            continue;
+
+        if (!_hasViewStyle) {
+            id vs = [st objectForKey: @"ViewStyle"];
+            if ([vs isKindOfClass: [NSString class]]) {
+                if ([vs isEqualToString: @"Icon"])          { _viewStyle = DSStoreViewStyleIcon;      _hasViewStyle = YES; }
+                else if ([vs isEqualToString: @"List"])     { _viewStyle = DSStoreViewStyleList;      _hasViewStyle = YES; }
+                else if ([vs isEqualToString: @"Column"])   { _viewStyle = DSStoreViewStyleColumn;    _hasViewStyle = YES; }
+                else if ([vs isEqualToString: @"Flow"])     { _viewStyle = DSStoreViewStyleCoverflow; _hasViewStyle = YES; }
+                else if ([vs isEqualToString: @"Gallery"])  { _viewStyle = DSStoreViewStyleGallery;   _hasViewStyle = YES; }
+            }
+        }
+        if (!_hasWindowFrame) {
+            id wb = [st objectForKey: @"WindowBounds"];
+            if ([wb isKindOfClass: [NSString class]]) {
+                NSRect r = NSRectFromString(wb);
+                if (r.size.width > 0 && r.size.height > 0) {
+                    _windowFrame = r;
+                    _hasWindowFrame = YES;
+                }
+            }
+        }
+        break;
+    }
+}
+
+/* Mirror per-folder view style + window geometry into the user's
+ * com.apple.finder.plist BrowserWindowState (matched by path) so a macOS
+ * Finder that reads that plist (10.6 restores per-folder windows from it)
+ * picks up Gershwin's state.  Best-effort only.  Updates an existing entry or
+ * appends a new one, preserving the other keys of an existing entry. */
+- (void)writeFinderPlistEntry
+{
+    NSString *plistPath = [[NSHomeDirectory()
+                              stringByAppendingPathComponent: @"Library/Preferences"]
+                             stringByAppendingPathComponent: @"com.apple.finder.plist"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSMutableDictionary *plist = nil;
+    if ([fm fileExistsAtPath: plistPath]) {
+        NSData *data = [NSData dataWithContentsOfFile: plistPath];
+        if (data) {
+            NSError *e = nil;
+            id p = [NSPropertyListSerialization
+                     propertyListWithData: data
+                                  options: NSPropertyListMutableContainers
+                                   format: NULL error: &e];
+            if ([p isKindOfClass: [NSMutableDictionary class]])
+                plist = p;
+        }
+    }
+    if (plist == nil)
+        plist = [NSMutableDictionary dictionary];
+
+    NSMutableArray *states = [plist objectForKey: @"BrowserWindowState"];
+    if (![states isKindOfClass: [NSMutableArray class]]) {
+        states = [NSMutableArray array];
+        [plist setObject: states forKey: @"BrowserWindowState"];
+    }
+
+    NSString *myPath = [_directoryPath stringByStandardizingPath];
+    NSUInteger foundIdx = NSNotFound;
+    for (NSUInteger i = 0; i < [states count]; i++) {
+        id st = [states objectAtIndex: i];
+        if (![st isKindOfClass: [NSDictionary class]])
+            continue;
+        NSString *mp = nil;
+        id tu = [st objectForKey: @"TargetURL"];
+        if ([tu isKindOfClass: [NSString class]] && [tu length])
+            mp = [[NSURL URLWithString: tu] path];
+        if (mp == nil) {
+            id tp = [st objectForKey: @"TargetPath"];
+            if ([tp isKindOfClass: [NSArray class]] && [tp count]) {
+                id last = [tp lastObject];
+                if ([last isKindOfClass: [NSString class]])
+                    mp = [[NSURL URLWithString: last] path];
+            }
+        }
+        if (mp && [[mp stringByStandardizingPath] isEqualToString: myPath]) {
+            foundIdx = i;
+            break;
+        }
+    }
+
+    NSString *selfURL = [[NSURL fileURLWithPath: _directoryPath] absoluteString];
+    if (![selfURL hasSuffix: @"/"]) selfURL = [selfURL stringByAppendingString: @"/"];
+    NSString *parentURL = [[NSURL fileURLWithPath:
+                             [_directoryPath stringByDeletingLastPathComponent]]
+                            absoluteString];
+    if (![parentURL hasSuffix: @"/"]) parentURL = [parentURL stringByAppendingString: @"/"];
+
+    NSString *vs = @"Icon";
+    switch (_hasViewStyle ? _viewStyle : DSStoreViewStyleIcon) {
+        case DSStoreViewStyleIcon:      vs = @"Icon";    break;
+        case DSStoreViewStyleList:      vs = @"List";    break;
+        case DSStoreViewStyleColumn:    vs = @"Column";  break;
+        case DSStoreViewStyleCoverflow: vs = @"Flow";    break;
+        case DSStoreViewStyleGallery:   vs = @"Gallery"; break;
+        default:                        vs = @"Icon";    break;
+    }
+    NSRect dsFrame = [self dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
+    NSString *wb = [NSString stringWithFormat: @"{{%d, %d}, {%d, %d}}",
+                    (int)round(dsFrame.origin.x), (int)round(dsFrame.origin.y),
+                    (int)round(dsFrame.size.width), (int)round(dsFrame.size.height)];
+
+    NSMutableDictionary *entry = [NSMutableDictionary dictionary];
+    if (foundIdx != NSNotFound)
+        entry = [NSMutableDictionary dictionaryWithDictionary:
+                  [states objectAtIndex: foundIdx]];
+    [entry setObject: selfURL forKey: @"TargetURL"];
+    [entry setObject: [NSArray arrayWithObjects: parentURL, selfURL, nil]
+               forKey: @"TargetPath"];
+    [entry setObject: vs forKey: @"ViewStyle"];
+    [entry setObject: wb forKey: @"WindowBounds"];
+    [entry setObject: @YES forKey: @"ShowSidebar"];
+    [entry setObject: @YES forKey: @"ShowStatusBar"];
+    [entry setObject: @YES forKey: @"ShowToolbar"];
+    [entry setObject: @NO  forKey: @"ShowPathbar"];
+    [entry setObject: @192 forKey: @"SidebarWidth"];
+    NSString *scrollKey = (_hasViewStyle && _viewStyle == DSStoreViewStyleIcon)
+                              ? @"IconViewScrollOrigin" : @"ListViewScrollOrigin";
+    [entry setObject: [NSDictionary dictionaryWithObject: @"{0, 0}" forKey: scrollKey]
+               forKey: @"BrowserViewState"];
+
+    if (foundIdx != NSNotFound)
+        [states replaceObjectAtIndex: foundIdx withObject: entry];
+    else
+        [states addObject: entry];
+
+    [fm createDirectoryAtPath: [plistPath stringByDeletingLastPathComponent]
+      withIntermediateDirectories: YES attributes: nil error: NULL];
+    NSError *wErr = nil;
+    NSData *out = [NSPropertyListSerialization
+                    dataWithPropertyList: plist
+                                 format: NSPropertyListBinaryFormat_v1_0
+                                options: 0 error: &wErr];
+    if (out) {
+        if ([out writeToFile: plistPath options: NSDataWritingAtomic error: &wErr] == NO)
+            NSLog(@"DSStoreInfo: finder plist write failed: %@", wErr);
+    } else {
+        NSLog(@"DSStoreInfo: finder plist serialize failed: %@", wErr);
     }
 }
 
@@ -1443,6 +1635,11 @@
               _directoryPath, fiErr);
       }
     }
+
+    /* Mirror into the user's com.apple.finder.plist BrowserWindowState so a
+     * 10.6 macOS Finder (which restores per-folder windows from it) picks up
+     * Gershwin's view/window state.  Best-effort. */
+    [self writeFinderPlistEntry];
   }
 
   return saved;
