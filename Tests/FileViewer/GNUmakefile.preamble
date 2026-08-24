@@ -43,3 +43,21 @@ t_DSStorePreserve_OBJC_FILES += ../../DSStore/DSStore.m \
                             ../../DSStore/SimpleColor.m
 t_DSStorePreserve_TOOL_LIBS += -lgnustep-gui
 
+# t_DSStoreWriter exercises the writer end-to-end (build a file, read it back
+# with ds_store on the Mac oracle).  Links the DSStore back-end as objects.
+t_DSStoreWriter_OBJC_FILES += ../../DSStore/DSStore.m \
+                            ../../DSStore/DSStoreCodecs.m \
+                            ../../DSStore/DSStoreEntry.m \
+                            ../../DSStore/DSBuddyAllocator.m \
+                            ../../DSStore/SimpleColor.m
+t_DSStoreWriter_TOOL_LIBS += -lgnustep-gui
+
+# t_DSStoreVTypes locks in multi-record-type writers: folder self-entry (vstl,
+# icvo, bwsp) plus child Iloc, round-tripped.  Links the DSStore back-end.
+t_DSStoreVTypes_OBJC_FILES += ../../DSStore/DSStore.m \
+                            ../../DSStore/DSStoreCodecs.m \
+                            ../../DSStore/DSStoreEntry.m \
+                            ../../DSStore/DSBuddyAllocator.m \
+                            ../../DSStore/SimpleColor.m
+t_DSStoreVTypes_TOOL_LIBS += -lgnustep-gui
+
