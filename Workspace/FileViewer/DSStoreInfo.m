@@ -609,10 +609,23 @@
         if (!_hasWindowFrame) {
             id wb = [st objectForKey: @"WindowBounds"];
             if ([wb isKindOfClass: [NSString class]]) {
-                NSRect r = NSRectFromString(wb);
-                if (r.size.width > 0 && r.size.height > 0) {
-                    _windowFrame = r;
-                    _hasWindowFrame = YES;
+                NSRect full = NSRectFromString(wb);
+                if (full.size.width > 0 && full.size.height > 0) {
+                    /* The Mac stores WindowBounds as the FULL window frame
+                     * (title bar included); Gershwin's _windowFrame is the
+                     * content rect (matching .DS_Store fwi0/bwsp).  Shrink the
+                     * full frame to the content area so our window lands exactly
+                     * where the Mac's did.  Standard Mac title bar is 22pt; our
+                     * viewer windows observe the same delta. */
+                    static const CGFloat tb = 22.0;
+                    NSRect content = NSMakeRect(full.origin.x,
+                                               full.origin.y + tb,
+                                               full.size.width,
+                                               full.size.height - tb);
+                    if (content.size.height > 0) {
+                        _windowFrame = content;
+                        _hasWindowFrame = YES;
+                    }
                 }
             }
         }
@@ -693,10 +706,19 @@
         case DSStoreViewStyleGallery:   vs = @"Gallery"; break;
         default:                        vs = @"Icon";    break;
     }
-    NSRect dsFrame = [self dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
+    NSRect contentFrame = [self dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
+    /* Gershwin's _windowFrame (and dsStoreWindowFrameForScreen:) is the CONTENT
+     * rect; the Mac's WindowBounds is the FULL frame (incl. title bar).  Grow the
+     * content rect up by the title-bar height so the Mac renders the window where
+     * Gershwin had it.  Standard Mac title bar is 22pt. */
+    static const CGFloat tb = 22.0;
+    NSRect fullFrame = NSMakeRect(contentFrame.origin.x,
+                                  contentFrame.origin.y - tb,
+                                  contentFrame.size.width,
+                                  contentFrame.size.height + tb);
     NSString *wb = [NSString stringWithFormat: @"{{%d, %d}, {%d, %d}}",
-                    (int)round(dsFrame.origin.x), (int)round(dsFrame.origin.y),
-                    (int)round(dsFrame.size.width), (int)round(dsFrame.size.height)];
+                    (int)round(fullFrame.origin.x), (int)round(fullFrame.origin.y),
+                    (int)round(fullFrame.size.width), (int)round(fullFrame.size.height)];
 
     NSMutableDictionary *entry = [NSMutableDictionary dictionary];
     if (foundIdx != NSNotFound)

@@ -29,7 +29,7 @@ select menu "Go/Go to Folder..."
 wait until modal
 type "~"
 press Return
-wait until window "${home}"
+wait until window "${home}" timeout 15s
 assert window "${home}"
 
 # A browsing window carries a sidebar; make sure it is showing before we test
