@@ -74,13 +74,21 @@
   /* Tier 2: per-volume cache */
   if (_volumeCache) {
     info = [_volumeCache readInfoForDirectoryPath:_directoryPath];
-    if (info) {
-      return info;
-    }
   }
 
-  /* Tier 3: defaults — return a fresh, unloaded DSStoreInfo */
-  info = [DSStoreInfo infoForDirectoryPath:_directoryPath loadImmediately:NO];
+  /* Tier 3 / merge: whatever we resolved above (.DS_Store or volume cache),
+   * make sure it is loaded and consult the folder's own com.apple.FinderInfo
+   * DInfo (the classic / spatial macOS channel) for any view-style or
+   * window-geometry values the .DS_Store / cache did not supply.  When nothing
+   * was found at all, build a fresh info that loads .DS_Store + FinderInfo.
+   * (No .DS_Store exists on this path by the time we reach here, so re-loading
+   * a cache-resolved info only ever fills FinderInfo gaps, never clobbers the
+   * cache's own fields.) */
+  if (info != nil) {
+    [info load];
+  } else {
+    info = [DSStoreInfo infoForDirectoryPath:_directoryPath];
+  }
   return info;
 }
 
