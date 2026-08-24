@@ -305,6 +305,49 @@ main(void)
          "clearCustomIcon drops the resource fork");
   }
 
+  /* --- directory DInfo: view style + window bounds (spatial FinderInfo) --- */
+  {
+    GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
+
+    /* Default is unset. */
+    PASS([md viewStyleCodeForDirectory] == nil,
+         "viewStyleCodeForDirectory is nil on fresh metadata");
+    PASS(NSEqualRects([md windowBoundsForDirectory], NSZeroRect),
+         "windowBoundsForDirectory is NSZeroRect on fresh metadata");
+
+    /* Set per-folder view + window geometry. */
+    [md setViewStyleCodeForDirectory: @"Nlsv"];
+    [md setWindowBoundsForDirectory: NSMakeRect(100, 120, 360, 340)];
+
+    PASS([[md viewStyleCodeForDirectory] isEqualToString: @"Nlsv"],
+         "viewStyleCodeForDirectory round-trips 'Nlsv'");
+
+    /* frView must land at bytes 14-15 as big-endian 1 (list view). */
+    const uint8_t *b = [[md finderInfo] bytes];
+    uint16_t frView = (uint16_t)((b[14] << 8) | b[15]);
+    PASS(frView == 1, "frView written at bytes 14-15 as big-endian 1");
+
+    /* frRect (top,left,bottom,right) at bytes 0-7. */
+    int16_t top    = (int16_t)((b[0] << 8) | b[1]);
+    int16_t left   = (int16_t)((b[2] << 8) | b[3]);
+    int16_t bottom = (int16_t)((b[4] << 8) | b[5]);
+    int16_t right  = (int16_t)((b[6] << 8) | b[7]);
+    PASS(top == 120 && left == 100 && bottom == 460 && right == 460,
+         "frRect written at bytes 0-7 as big-endian (top,left,bottom,right)");
+
+    PASS(NSEqualRects([md windowBoundsForDirectory],
+                      NSMakeRect(100, 120, 360, 340)),
+         "windowBoundsForDirectory round-trips the set rect");
+
+    /* A different view code maps to a different frView. */
+    [md setViewStyleCodeForDirectory: @"clmv"];
+    PASS([[md viewStyleCodeForDirectory] isEqualToString: @"clmv"],
+         "viewStyleCodeForDirectory round-trips 'clmv'");
+    frView = (uint16_t)((((const uint8_t *)[[md finderInfo] bytes])[14] << 8)
+                        | ((const uint8_t *)[[md finderInfo] bytes])[15]);
+    PASS(frView == 2, "frView for 'clmv' is big-endian 2 (column view)");
+  }
+
   [arp release];
   return 0;
 }

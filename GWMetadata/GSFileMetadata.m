@@ -61,12 +61,42 @@ host_to_be16(uint8_t *bytes, uint16_t value)
   bytes[1] =  value       & 0xFF;
 }
 
+/*
+ * Map the numeric `frView` code stored in a directory's FinderInfo DInfo to
+ * the 4-character `vstl` view code used by `.DS_Store`, and back.  The numeric
+ * codes match the classic Mac OS Finder view enum (icon=0, list=1, column=2,
+ * cover-flow=4); gallery (glyv) is a newer addition.
+ */
+static uint16_t
+GSFinderInfoViewForStyleCode(NSString *code)
+{
+  if ([code isEqualToString: @"Nlsv"]) return 1;
+  if ([code isEqualToString: @"clmv"]) return 2;
+  if ([code isEqualToString: @"Flwv"]) return 4;
+  if ([code isEqualToString: @"glyv"]) return 5;
+  return 0; /* icnv / default = icon */
+}
+
+static NSString *
+GSStyleCodeForFinderInfoView(uint16_t frView)
+{
+  switch (frView)
+    {
+    case 1: return @"Nlsv";
+    case 2: return @"clmv";
+    case 4: return @"Flwv";
+    case 5: return @"glyv";
+    default: return @"icnv";
+    }
+}
+
 @implementation GSFileMetadata
 
 @synthesize finderInfo = _finderInfo;
 @synthesize resourceFork = _resourceFork;
 @synthesize finderComment = _finderComment;
 @synthesize userTagsData = _userTagsData;
+@synthesize quarantine = _quarantine;
 @synthesize forceSidecar = _forceSidecar;
 
 /* =================================================================
@@ -351,6 +381,61 @@ host_to_be16(uint8_t *bytes, uint16_t value)
       host_to_be16(bytes + 10, (uint16_t)(int16_t)position.y);
       host_to_be16(bytes + 12, (uint16_t)(int16_t)position.x);
       _parsed.iconPosition = position;
+    }
+}
+
+/* =================================================================
+ * Directory spatial view / window (FinderInfo DInfo)
+ * ================================================================= */
+
+- (NSString *)viewStyleCodeForDirectory
+{
+  [self parseIfNeeded];
+  if ([_finderInfo length] < 16)
+    return nil;
+  const uint8_t *bytes = [_finderInfo bytes];
+  uint16_t frView = be16_to_host(bytes + 14);
+  return GSStyleCodeForFinderInfoView(frView);
+}
+
+- (void)setViewStyleCodeForDirectory:(NSString *)code
+{
+  [self parseIfNeeded];
+  [self createFinderInfoIfNeeded];
+  if ([_finderInfo length] >= 16)
+    {
+      uint8_t *bytes = (uint8_t *)[(NSMutableData *)_finderInfo mutableBytes];
+      host_to_be16(bytes + 14, GSFinderInfoViewForStyleCode(code));
+    }
+}
+
+- (NSRect)windowBoundsForDirectory
+{
+  [self parseIfNeeded];
+  if ([_finderInfo length] < 8)
+    return NSZeroRect;
+  const uint8_t *bytes = [_finderInfo bytes];
+  int16_t top    = (int16_t)be16_to_host(bytes + 0);
+  int16_t left   = (int16_t)be16_to_host(bytes + 2);
+  int16_t bottom = (int16_t)be16_to_host(bytes + 4);
+  int16_t right  = (int16_t)be16_to_host(bytes + 6);
+  /* A zero rect means "unset" - the classic default window. */
+  if (top == 0 && left == 0 && bottom == 0 && right == 0)
+    return NSZeroRect;
+  return NSMakeRect(left, top, right - left, bottom - top);
+}
+
+- (void)setWindowBoundsForDirectory:(NSRect)bounds
+{
+  [self parseIfNeeded];
+  [self createFinderInfoIfNeeded];
+  if ([_finderInfo length] >= 8)
+    {
+      uint8_t *bytes = (uint8_t *)[(NSMutableData *)_finderInfo mutableBytes];
+      host_to_be16(bytes + 0, (uint16_t)(int16_t)bounds.origin.y);
+      host_to_be16(bytes + 2, (uint16_t)(int16_t)bounds.origin.x);
+      host_to_be16(bytes + 4, (uint16_t)(int16_t)(bounds.origin.y + bounds.size.height));
+      host_to_be16(bytes + 6, (uint16_t)(int16_t)(bounds.origin.x + bounds.size.width));
     }
 }
 

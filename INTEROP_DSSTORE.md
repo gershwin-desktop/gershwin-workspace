@@ -137,6 +137,28 @@ in the truncated `clw`/`cv` codes), `browserWindowDictionaryForDirectory`,
 `browserWindowBoundsForDirectory` (reads `bwsp` `WindowBounds`), and
 `windowGeometryRectForDirectory` (reads legacy `fwi0` rect).
 
+### Spatial channel: folder FinderInfo (`DInfo`)
+
+Per-folder view/window also lives in the folder's own `com.apple.FinderInfo`
+xattr as a `DInfo` structure: `frRect` (window bounds, bytes 0-7, four
+big-endian int16: top/left/bottom/right) and `frView` (view-style code, bytes
+14-15, big-endian int16).  `GSFileMetadata` now reads/writes these via
+`viewStyleCodeForDirectory`/`setViewStyleCodeForDirectory:` (mapped to the same
+`vstl` 4-char codes as `.DS_Store`: icnv=0, Nlsv=1, clmv=2, Flwv=4, glyv=5) and
+`windowBoundsForDirectory`/`setWindowBoundsForDirectory:`.  Covered by
+`t_GSFileMetadata.m` (asserts `frView` lands at bytes 14-15 and `frRect` at
+bytes 0-7, both big-endian).
+
+Verified on the Mac (2026-08-24): 10.6 browser-mode Finder **ignores** both
+`frView` and `frRect` for folders - a folder carrying `frView=0` (icon) still
+opens with the global default view, and window bounds always come from the
+default browser window, never from `frRect`/FinderInfo.  10.6 keeps per-folder
+view/window state in its private `com.apple.finder.plist` (`BrowserWindowState`,
+path-keyed), not in per-folder on-disk files.  The FinderInfo `DInfo` channel is
+the classic / spatial Finder mechanism (honoured by newer macOS and by
+Gershwin's own spatial viewer) - it is the correct thing to write, even though
+10.6's browser mode will not read it.
+
 ## Reverse verification recipe (needs the Mac)
 
 ```
@@ -175,8 +197,15 @@ sshpass -p user ssh -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null 
 - [x] Document the 10.6 browser-mode limit: per-folder `.DS_Store` only
        carries `Iloc`; `vstl`/`bwsp`/`fwi0` are correctly encoded by Gershwin
        but ignored by 10.6 Finder (view/window state is global).
-- [ ] Decide scope for view/window interop: (a) target a newer macOS where
-       `vstl`/`bwsp` are honored in `.DS_Store`, (b) implement global
-       `FXDefaultViewStyle`/window-state interop via the Finder preference
-       domain, or (c) accept `.DS_Store`-level (Iloc + per-file metadata)
-       interop as the achievable surface on 10.6.
+- [x] Implement the folder `FinderInfo` `DInfo` channel in `GSFileMetadata`
+       (`viewStyleCodeForDirectory`/`windowBoundsForDirectory` + setters, mapped
+       to the same `vstl` codes as `.DS_Store`); hermetic test in
+       `t_GSFileMetadata.m`. Done.  Mac-verified: 10.6 browser mode ignores
+       `frView`/`frRect` (uses private `com.apple.finder.plist`), so the
+       channel is correct but not 10.6-honored.
+- [ ] Decide scope for view/window interop on 10.6: (a) target a newer macOS
+       where `.DS_Store` `vstl`/`bwsp` and FinderInfo `DInfo` ARE honored,
+       (b) implement global `FXDefaultViewStyle`/window-state interop via the
+       Finder preference domain, or (c) accept `.DS_Store` + FinderInfo-level
+       (Iloc + per-file metadata + correct-by-spec view/window encoding) interop
+       as the achievable surface on 10.6.

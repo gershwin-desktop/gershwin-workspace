@@ -169,6 +169,39 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  */
 @property NSInteger labelNumber;
 
+/* =================================================================
+ * Directory spatial view / window (FinderInfo DInfo)
+ * -----------------------------------------------------------------
+ * For a DIRECTORY the 32-byte FinderInfo is laid out as a `DInfo`
+ * (not the file `FInfo`): bytes 0-7 are the window `frRect`
+ * (top, left, bottom, right as big-endian int16), bytes 8-9 the
+ * folder flags, bytes 10-13 the scroll point, and bytes 14-15 the
+ * `frView` view-style code.  These accessors read/write that layout
+ * and are only meaningful for folders; apply them to directory
+ * metadata, never to file metadata.
+ *
+ * The `frView` numeric code maps to the same 4-character view code
+ * used by `.DS_Store` `vstl` (icnv/Nlsv/clmv/Flwv/glyv) so the two
+ * channels stay consistent.  On macOS 10.6 the browser-mode Finder
+ * ignores these values (it keeps folder view/window state in its
+ * private preferences); they are honoured by the classic/spatial
+ * Finder and by newer macOS, and are used by Gershwin's own spatial
+ * viewer.
+ * ================================================================= */
+
+/** Per-folder view style as a `.DS_Store` `vstl` 4-char code
+ *  (icnv/Nlsv/clmv/Flwv/glyv), or nil when unset. */
+- (NSString *)viewStyleCodeForDirectory;
+
+/** Set the per-folder view style from a `vstl` 4-char code. */
+- (void)setViewStyleCodeForDirectory:(NSString *)code;
+
+/** Per-folder window bounds (frRect), or NSZeroRect when unset. */
+- (NSRect)windowBoundsForDirectory;
+
+/** Set the per-folder window bounds (frRect). */
+- (void)setWindowBoundsForDirectory:(NSRect)bounds;
+
 /**
  * User tags (_kMDItemUserTags), as an array of tag-name strings.
  * Tags live in com.apple.metadata:_kMDItemUserTags (a binary plist array of
