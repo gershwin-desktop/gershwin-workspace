@@ -107,17 +107,27 @@
     {
       id <GWorkspaceExtension> ext = [extensions objectAtIndex: i];
 
-      if ([ext respondsToSelector: @selector(extensionCanHandleNodes:)] == NO)
+      /* A misbehaving extension must never propagate an exception into
+       * Workspace (it would abort the app). Catch everything per-extension. */
+      @try
         {
-          continue;
+          if ([ext respondsToSelector: @selector(extensionCanHandleNodes:)] == NO)
+            {
+              continue;
+            }
+          if ([ext extensionCanHandleNodes: nodes] == NO)
+            {
+              continue;
+            }
+          if ([ext respondsToSelector: @selector(extensionAppendToContextMenu:forNodes:)])
+            {
+              [ext extensionAppendToContextMenu: menu forNodes: nodes];
+            }
         }
-      if ([ext extensionCanHandleNodes: nodes] == NO)
+      @catch (NSException *e)
         {
-          continue;
-        }
-      if ([ext respondsToSelector: @selector(extensionAppendToContextMenu:forNodes:)])
-        {
-          [ext extensionAppendToContextMenu: menu forNodes: nodes];
+          NSLog (@"GWExtensionsManager: extension %@ threw in "
+                 @"appendContextMenuItems: %@", ext, e);
         }
     }
 }
@@ -132,13 +142,21 @@
     {
       id <GWorkspaceExtension> ext = [extensions objectAtIndex: i];
 
-      if ([ext respondsToSelector: @selector(badgeImageForNode:)])
+      @try
         {
-          NSImage *img = [ext badgeImageForNode: node];
-          if (img != nil)
+          if ([ext respondsToSelector: @selector(badgeImageForNode:)])
             {
-              return img;
+              NSImage *img = [ext badgeImageForNode: node];
+              if (img != nil)
+                {
+                  return img;
+                }
             }
+        }
+      @catch (NSException *e)
+        {
+          NSLog (@"GWExtensionsManager: extension %@ threw in "
+                 @"badgeImageForNode: %@", ext, e);
         }
     }
 

@@ -18,6 +18,10 @@
   NSImage *gitBadge;
   NSWindow *outputWindow;
   NSTextView *outputTextView;
+  /* Tracks in-flight git tasks keyed by their stdout file handle (which we keep
+   * alive until completion).  Lets us drain output asynchronously and enforce
+   * a watchdog timeout without leaking the NSTask. */
+  NSMutableDictionary *pending;
 }
 
 - (NSString *)repoPathForNodes:(NSArray *)nodes;
@@ -26,7 +30,7 @@
 - (void)gitDiff:(id)sender;
 - (void)gitLog:(id)sender;
 
-- (void)runGit:(NSArray *)args title:(NSString *)title repo:(NSString *)repo;
+- (void)runGitCommand:(NSArray *)args title:(NSString *)title repo:(NSString *)repo;
 - (void)showGitOutput:(NSString *)output title:(NSString *)title;
 - (NSImage *)gitBadge;
 
