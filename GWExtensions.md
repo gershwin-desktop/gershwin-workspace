@@ -135,6 +135,62 @@ include $(GNUSTEP_MAKEFILES)/bundle.make
   Then `./configure` (or `make` with `PACKAGE_NEEDS_CONFIGURE=YES`) regenerates
   the root `GNUmakefile`, and a plain `make` builds your bundle.
 
+### Building out-of-tree (separate repo, no Workspace source)
+
+You do **not** need the Workspace or FSNode source trees to build a `.gwext`.
+The extension API is deliberately Workspace-free: the protocol imports only
+Foundation, AppKit, and `FSNode.h`, and everything you link against is already
+installed by the Gershwin stack in the SYSTEM domain.
+
+Prerequisites (all satisfied by an installed Gershwin system):
+
+- FSNode public headers:
+  `/System/Library/Frameworks/FSNode.framework/Headers/FSNode.h`
+- FSNode library: `/System/Library/Libraries/libFSNode.so`, so a bare
+  `-lFSNode` resolves with no `-L` workaround.
+
+The one piece not yet published as an installed header is `GWorkspaceExtension.h`
+(it still lives only in `Workspace/` source). Until it is installed, copy that
+single file into your project (it is 38 lines and has no Workspace-internal
+imports) and `#import` it locally. In-tree builds instead pass `-I../Workspace`.
+
+Standalone `GNUmakefile` (no `PACKAGE_NAME`, no root `GNUmakefile.in`, no
+`SUBPROJECTS` wiring — it is a self-contained bundle project):
+
+```make
+include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM        # always SYSTEM, never LOCAL
+
+BUNDLE_NAME = MyExtension
+MyExtension_PRINCIPAL_CLASS = MyExtension
+MyExtension_OBJC_FILES = MyExtension.m
+
+# FSNode is installed in SYSTEM, so a bare -lFSNode resolves.
+ADDITIONAL_GUI_LIBS += -lFSNode
+# FSNode public headers + your local copy of GWorkspaceExtension.h.
+ADDITIONAL_INCLUDE_DIRS += -I/System/Library/Frameworks/FSNode.framework/Headers
+ADDITIONAL_INCLUDE_DIRS += -I.              # for the copied GWorkspaceExtension.h
+
+BUNDLE_EXTENSION = .gwext
+BUNDLE_INSTALL_DIR = $(GNUSTEP_SYSTEM_LIBRARY)/Bundles
+
+include $(GNUSTEP_MAKEFILES)/bundle.make
+```
+
+Build and install from your repo:
+
+```sh
+make
+sudo make install GNUSTEP_INSTALLATION_DOMAIN=SYSTEM
+```
+
+Restart Workspace to load the new bundle. Compared with the in-tree template,
+the only differences are: no `PACKAGE_NAME = gworkspace`, no `-I../Workspace` /
+`-I../FSNode` sibling paths (use the installed FSNode include path instead), no
+root `GNUmakefile.in` / `SUBPROJECTS` registration, and no
+`-L../FSNode/FSNode.framework` workaround (unnecessary here because FSNode is
+installed).
+
 ### Principal class
 
 ```objc
