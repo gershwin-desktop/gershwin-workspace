@@ -60,7 +60,9 @@
         {
           NSString *bname = [bnames objectAtIndex: i];
 
-          if ([[bname pathExtension] isEqual: @"gwext"])
+          /* Match a dotted extension (.gwext) regardless of any other dots in
+           * the base name. */
+          if ([[bname lowercaseString] hasSuffix: @".gwext"])
             {
               NSString *bpath = [bundlesDir stringByAppendingPathComponent: bname];
               NSBundle *bundle = [NSBundle bundleWithPath: bpath];

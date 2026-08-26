@@ -70,4 +70,4 @@ oldtests.sum
 oldtests.log
 
 # Built GitContextMenu bundle output
-GitContextMenu/GitContextMenugwext/
+GitContextMenu/GitContextMenu.gwext/
