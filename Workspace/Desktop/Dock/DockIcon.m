@@ -1185,25 +1185,32 @@ x += 6; \
         FSNDrawLabelDot(dotRect, tagColor);
       }
 
-    /* Count badge (top-right) */
+    /* Count badge (top-right) - pill/capsule shape: a circle for single
+       digits that grows horizontally for longer numbers, mirroring the
+       TheLounge sidebar badge (capped at "99+"). */
     if (countVisible && badgeCount > 0)
       {
-        CGFloat badgeSize = 16;
-        CGFloat badgeX = drawPoint.x + icnBounds.size.width - badgeSize;
-        CGFloat badgeY = drawPoint.y + icnBounds.size.height - badgeSize;
-        NSRect badgeRect = NSMakeRect(badgeX, badgeY, badgeSize, badgeSize);
-        [[NSColor redColor] set];
-        [[NSBezierPath bezierPathWithOvalInRect:badgeRect] fill];
-        NSString *countStr = [NSString stringWithFormat:@"%lld",
-                                       (long long)badgeCount];
+        CGFloat h = 16;
+        NSString *countStr = (badgeCount > 99)
+          ? @"99+"
+          : [NSString stringWithFormat:@"%lld", (long long)badgeCount];
         NSDictionary *attrs = @{
           NSFontAttributeName: [NSFont boldSystemFontOfSize:10],
           NSForegroundColorAttributeName: [NSColor whiteColor]
         };
         NSSize strSize = [countStr sizeWithAttributes:attrs];
+        CGFloat pad = 6.0;
+        CGFloat w = strSize.width + pad * 2.0;
+        if (w < h) { w = h; }
+        CGFloat badgeX = drawPoint.x + icnBounds.size.width - w;
+        CGFloat badgeY = drawPoint.y + icnBounds.size.height - h;
+        NSRect badgeRect = NSMakeRect(badgeX, badgeY, w, h);
+        [[NSColor redColor] set];
+        [[NSBezierPath bezierPathWithRoundedRect:badgeRect
+                                         xRadius:h / 2.0 yRadius:h / 2.0] fill];
         NSPoint strPoint = NSMakePoint(
-          badgeX + (badgeSize - strSize.width) / 2,
-          badgeY + (badgeSize - strSize.height) / 2);
+          badgeX + (w - strSize.width) / 2,
+          badgeY + (h - strSize.height) / 2);
         [countStr drawAtPoint:strPoint withAttributes:attrs];
       }
 
