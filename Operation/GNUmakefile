@@ -31,7 +31,12 @@ LIBRARIES_DEPEND_UPON += $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
 # FileOpInfo's alias-record operation (WorkspaceCreateAliasOperation)
 # reuses the wire-format code from the FSNode framework.
 ADDITIONAL_INCLUDE_DIRS += -I../FSNode -I../../FSNode
-LIBRARIES_DEPEND_UPON += -lFSNode
+# Link against the in-tree FSNode framework explicitly: in a from-source CI
+# build FSNode is not installed, so gnustep-make's sibling-subproject path
+# propagation (triggered by ADDITIONAL_GUI_LIBS, not LIBRARIES_DEPEND_UPON)
+# does not add it here.  Mirror the Tools/* pattern that passes -L to the
+# framework directory.
+LIBRARIES_DEPEND_UPON += -L../FSNode/FSNode.framework -lFSNode
 
 ifeq ($(findstring darwin, $(GNUSTEP_TARGET_OS)), darwin)
   ifeq ($(OBJC_RUNTIME_LIB), gnu)
