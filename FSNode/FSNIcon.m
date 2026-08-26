@@ -1733,6 +1733,14 @@ static NSImage *branchImage;
 	      dragIcon = [fsnodeRep multipleSelectionIconOfSize: iconSize];
 	    }
 
+	  /* Command+Alternate drags create Alias records - mark the drag
+	   * with the alias arrow so the user can tell it from a copy or
+	   * symlink. */
+	  if (FSNLinkDropCreatesAlias())
+	    {
+	      dragIcon = FSNLinkBadgedImage(dragIcon);
+	    }
+
 	  /* Check if all selected paths are mountpoints and notify the Dock */
 	  [self notifyDockAboutDragWithPaths: selectedPaths];
 
@@ -2254,7 +2262,7 @@ static NSImage *branchImage;
 		operation = NSWorkspaceCopyOperation;
 		break;
 	      case NSDragOperationLink:
-		operation = NSWorkspaceLinkOperation;
+		operation = FSNLinkDropOperation();
 		break;
 	      default:
 		operation = NSWorkspaceCopyOperation;

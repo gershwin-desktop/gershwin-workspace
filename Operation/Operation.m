@@ -29,6 +29,7 @@
 #import "Operation.h"
 #import "FileOpInfo.h"
 #import "Functions.h"
+#import "FSNAlias.h"
 
 
 @implementation Operation
@@ -108,8 +109,9 @@
       || [operation isEqual: NSWorkspaceCopyOperation]
       || [operation isEqual: NSWorkspaceLinkOperation]
       || [operation isEqual: NSWorkspaceDuplicateOperation]
+      || [operation isEqual: FSNWorkspaceCreateAliasOperation]
       || [operation isEqual: NSWorkspaceRecycleOperation]
-      || [operation isEqual: NSWorkspaceDestroyOperation] 
+      || [operation isEqual: NSWorkspaceDestroyOperation]
       || [operation isEqual: @"WorkspaceRecycleOutOperation"])
     {
       opbase = source;
@@ -135,9 +137,10 @@
 	       || [operation isEqual: @"WorkspaceemptyTrashOperation"])
     {
       action = DESTROY;
-    } else if ([operation isEqual: NSWorkspaceCopyOperation] 
+    } else if ([operation isEqual: NSWorkspaceCopyOperation]
 	       || [operation isEqual: NSWorkspaceLinkOperation]
-	       || [operation isEqual: NSWorkspaceDuplicateOperation]) 
+	       || [operation isEqual: NSWorkspaceDuplicateOperation]
+	       || [operation isEqual: FSNWorkspaceCreateAliasOperation])
     {
       action = COPY;
     } else if ([operation isEqual: @"WorkspaceRenameOperation"])

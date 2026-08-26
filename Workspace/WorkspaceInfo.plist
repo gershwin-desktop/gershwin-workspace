@@ -16,7 +16,7 @@
       "Documentation and Help contents by:",
       "Dennis Leeuw <dleeuw@made-it.com>"
     );
-    URL = "https://www.github.com/gershwin-desktop/gershwin-desktop";
+    URL = "https://github.com/gershwin-desktop/gershwin-workspace";
     Copyright = "Workspace Copyright (C) 2003-2026 Free Software Foundation, Inc.";
     CopyrightDescription = "Released under the GNU General Public License 2.0 or later";
     NSIcon = "Workspace.png";

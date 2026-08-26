@@ -16,6 +16,7 @@
 #import "GWViewerSidebar.h"
 #import "GWViewer.h"
 #import "GWViewersManager.h"
+#import "FSNFunctions.h"
 #import "FSNode.h"
 #import "FSNodeRep.h"
 #import "NetworkFSNode.h"
@@ -448,7 +449,7 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
     } else if (sourceDragMask & NSDragOperationCopy) {
       operation = NSWorkspaceCopyOperation;
     } else if (sourceDragMask & NSDragOperationLink) {
-      operation = NSWorkspaceLinkOperation;
+      operation = FSNLinkDropOperation();
     }
   }
 

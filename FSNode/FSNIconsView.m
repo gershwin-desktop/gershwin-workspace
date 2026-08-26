@@ -3325,7 +3325,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 	    operation = NSWorkspaceCopyOperation;
 	    break;
 	  case NSDragOperationLink:
-	    operation = NSWorkspaceLinkOperation;
+	    operation = FSNLinkDropOperation();
 	    break;
 	  default:
 	    operation = NSWorkspaceCopyOperation;

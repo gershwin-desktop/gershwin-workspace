@@ -1465,10 +1465,12 @@ static void GWHighlightFrameRect(NSRect aRect)
                                            openWithTarget: [Workspace gworkspace]
                                               infoTarget: [Workspace gworkspace]
                                          duplicateTarget: [self window]
+                                         aliasTarget: [self window]
                                            recycleTarget: [self window]
                                              ejectTarget: self
                                               openAction: @selector(openSelection:)
                                          duplicateAction: @selector(duplicateFiles:)
+                                        aliasAction: @selector(makeAliasFiles:)
                                            recycleAction: @selector(recycleFiles:)
                                              ejectAction: @selector(ejectSelection:)
                                          includeOpenWith: YES];
@@ -2018,7 +2020,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 	}
       else if (sourceDragMask & NSDragOperationLink)
 	{
-	  operation = NSWorkspaceLinkOperation;
+	  operation = FSNLinkDropOperation();
 	}
       else
 	{

@@ -1,0 +1,4 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+# Extra include path so the in-process test source (compiled via #include of
+# FSNAlias.m) can find FSNAlias.h under ../../FSNode.
+ADDITIONAL_INCLUDE_DIRS += -I../../FSNode

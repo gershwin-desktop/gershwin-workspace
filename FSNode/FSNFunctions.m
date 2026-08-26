@@ -30,6 +30,7 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
 #import "FSNFunctions.h"
+#import "FSNAlias.h"
 #import "FSNodeRep.h"
 
 static GSFilenameExtensionDisplayMode _displayModeCache = -1;
@@ -345,16 +346,40 @@ double myrintf(double a)
 }
 
 
+BOOL
+FSNLinkDropCreatesAlias(void)
+{
+  NSUInteger flags = [NSEvent modifierFlags];
+
+  return (flags & NSCommandKeyMask) && (flags & NSAlternateKeyMask);
+}
+
+NSString *
+FSNLinkDropOperation(void)
+{
+  if (FSNLinkDropCreatesAlias())
+    {
+      return FSNWorkspaceCreateAliasOperation;
+    }
+  return NSWorkspaceLinkOperation;
+}
+
 NSDragOperation dragOperationForCurrentModifierFlags(void)
 {
   NSUInteger flags = [NSEvent modifierFlags];
 
-  /* Meta → Option → NSAlternateKeyMask → Copy */
+  /* Command+Alternate → Alias drop; the destination still negotiates
+   * NSDragOperationLink, FSNLinkDropOperation() tells the two apart. */
+  if ((flags & NSCommandKeyMask) && (flags & NSAlternateKeyMask))
+    {
+      return NSDragOperationLink;
+    }
+  /* Option → Copy */
   if (flags & NSAlternateKeyMask)
     {
       return NSDragOperationCopy;
     }
-  /* Alt → Command → NSCommandKeyMask → Link */
+  /* Command → Link */
   if (flags & NSCommandKeyMask)
     {
       return NSDragOperationLink;
@@ -362,6 +387,58 @@ NSDragOperation dragOperationForCurrentModifierFlags(void)
 
   /* No relevant modifier → let caller apply volume-based default */
   return NSDragOperationMove;
+}
+
+NSImage *
+FSNLinkBadgedImage(NSImage *image)
+{
+  NSSize size = [image size];
+  CGFloat badge = MAX(16.0, MIN(size.width, size.height) * 0.4);
+  NSImage *badged;
+
+  badged = [[NSImage alloc] initWithSize: size];
+  [badged lockFocus];
+  [image drawAtPoint: NSMakePoint(0, 0)
+	     fromRect: NSMakeRect(0, 0, size.width, size.height)
+	    operation: NSCompositeSourceOver
+	     fraction: 1.0];
+
+  /* Classic alias arrow in the lower-left corner: white outline,
+   * black shaft, pointing to the upper left. */
+  {
+    CGFloat x = badge * 0.15;
+    CGFloat y = x;
+    NSBezierPath *shaft = [NSBezierPath bezierPath];
+    NSBezierPath *arrowhead = [NSBezierPath bezierPath];
+    NSPoint head[3] = { NSMakePoint(x + badge * 0.0, y + badge * 0.9),
+			NSMakePoint(x + badge * 0.55, y + badge * 0.62),
+			NSMakePoint(x + badge * 0.28, y + badge * 0.35) };
+
+    /* Shaft: diagonal bar from lower right of the badge area up-left. */
+    [shaft moveToPoint: NSMakePoint(x + badge * 0.85, y + badge * 0.15)];
+    [shaft lineToPoint: NSMakePoint(x + badge * 0.25, y + badge * 0.75)];
+    [shaft setLineCapStyle: NSRoundLineCapStyle];
+
+    [[NSColor whiteColor] setStroke];
+    [shaft setLineWidth: badge * 0.34];
+    [shaft stroke];
+
+    [[NSColor blackColor] setStroke];
+    [shaft setLineWidth: badge * 0.2];
+    [shaft stroke];
+
+    /* Head: solid triangle at the upper-left end of the shaft. */
+    [arrowhead appendBezierPathWithPoints: head count: 3];
+    [arrowhead closePath];
+    [[NSColor whiteColor] setStroke];
+    [arrowhead setLineWidth: badge * 0.12];
+    [arrowhead stroke];
+    [[NSColor blackColor] setFill];
+    [arrowhead fill];
+  }
+
+  [badged unlockFocus];
+  return [badged autorelease];
 }
 
 /* --- Text Field Editing Error Messages */

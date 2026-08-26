@@ -22,7 +22,8 @@ FSNode_OBJC_FILES = \
          FSNListView.m \
          FSNPathComponentsViewer.m \
          FSNPlacementEnumerator.m \
-         FSNIconPlacement.m \
+          FSNIconPlacement.m \
+          FSNAlias.m \
 
 
 FSNode_HEADER_FILES = \
@@ -42,7 +43,8 @@ FSNode_HEADER_FILES = \
          FSNIconPlacement.h \
          FSNPlacementEnumerator.h \
          FSNMetadataProvider.h \
-         FSNIconPositionStore.h \
+          FSNIconPositionStore.h \
+          FSNAlias.h \
 
 
 FSNode_HAS_RESOURCE_BUNDLE = yes                                          

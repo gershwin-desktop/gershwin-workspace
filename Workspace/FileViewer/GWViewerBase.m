@@ -84,6 +84,27 @@
   }
 }
 
+- (void)makeAliasFiles
+{
+  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
+    NSArray *selection = [nodeView selectedNodes];
+
+    if (selection && [selection count]) {
+      if ([nodeView isSingleNode]) {
+        [gworkspace makeAliasFiles:nil];
+      } else if ([selection isEqual: baseNodeArray] == NO) {
+        [gworkspace makeAliasFiles:nil];
+      }
+    }
+  } else {
+    NSRunAlertPanel(nil,
+                  NSLocalizedString(@"You can't create aliases in the Recycler!", @""),
+					        NSLocalizedString(@"OK", @""), 
+                  nil, 
+                  nil);  
+  }
+}
+
 - (void)emptyTrash
 {
   [gworkspace emptyTrash: nil];

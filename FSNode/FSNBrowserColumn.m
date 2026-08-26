@@ -1489,7 +1489,7 @@ static id <DesktopApplication> desktopApp = nil;
 	    operation = NSWorkspaceCopyOperation;
 	    break;
 	  case NSDragOperationLink:
-	    operation = NSWorkspaceLinkOperation;
+	    operation = FSNLinkDropOperation();
 	    break;
 	  default:
 	    operation = NSWorkspaceCopyOperation;
@@ -1736,7 +1736,7 @@ static id <DesktopApplication> desktopApp = nil;
 		operation = NSWorkspaceCopyOperation;
 		break;
 	      case NSDragOperationLink:
-		operation = NSWorkspaceLinkOperation;
+		operation = FSNLinkDropOperation();
 		break;
 	      default:
 		operation = NSWorkspaceCopyOperation;

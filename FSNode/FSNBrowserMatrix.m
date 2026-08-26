@@ -42,10 +42,12 @@
                   openWithTarget:(id)openWithTarget
                      infoTarget:(id)infoTarget
                 duplicateTarget:(id)duplicateTarget
+                    aliasTarget:(id)aliasTarget
                   recycleTarget:(id)recycleTarget
                     ejectTarget:(id)ejectTarget
                      openAction:(SEL)openAction
                 duplicateAction:(SEL)duplicateAction
+                   aliasAction:(SEL)aliasAction
                   recycleAction:(SEL)recycleAction
                     ejectAction:(SEL)ejectAction
                includeOpenWith:(BOOL)includeOpenWith;
@@ -389,10 +391,12 @@
                                     openWithTarget: gw
                                        infoTarget: gw
                                   duplicateTarget: [self window]
-                                    recycleTarget: [self window]
+                                    aliasTarget: [self window]
+                                      recycleTarget: [self window]
                                       ejectTarget: [self window]
                                        openAction: @selector(openSelection:)
                                   duplicateAction: @selector(duplicateFiles:)
+                                    aliasAction: @selector(makeAliasFiles:)
                                     recycleAction: @selector(recycleFiles:)
                                       ejectAction: @selector(ejectVolumes:)
                                  includeOpenWith: YES];
@@ -453,6 +457,13 @@
 	  {
 	    return;
 	  }
+      }
+
+    /* Command+Alternate drags create Alias records - mark the drag with
+     * the alias arrow so the user can tell it from a copy or symlink. */
+    if (FSNLinkDropCreatesAlias())
+      {
+	dragIcon = FSNLinkBadgedImage(dragIcon);
       }
 
     dragPoint = [self convertPoint: dragPoint fromView: nil];

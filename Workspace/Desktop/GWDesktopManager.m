@@ -877,6 +877,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
     SEL action = [menuItem action];
 
     if (sel_isEqual(action, @selector(duplicateFiles:))
+                || sel_isEqual(action, @selector(makeAliasFiles:))
                 || sel_isEqual(action, @selector(recycleFiles:))
                       || sel_isEqual(action, @selector(deleteFiles:))) {
       return ([[desktopView selectedNodes] count] > 0);
@@ -1015,6 +1016,13 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 {
   if ([[desktopView selectedNodes] count]) {
     [gworkspace duplicateFiles];
+  }
+}
+
+- (void)makeAliasFiles
+{
+  if ([[desktopView selectedNodes] count]) {
+    [gworkspace makeAliasFiles:nil];
   }
 }
 

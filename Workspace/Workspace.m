@@ -46,6 +46,7 @@
 #import "GWFunctions.h"
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
+#import "FSNAlias.h"
 #import "Workspace.h"
 
 /* Set of paths the user has recently unmounted via the GUI.
@@ -325,7 +326,7 @@ static Workspace *gworkspace = nil;
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Duplicate") action:@selector(duplicateFiles:) keyEquivalent:@"d"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(notImplemented:) keyEquivalent:@"l"];
+  menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(makeAliasFiles:) keyEquivalent:@"l"];
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Quick Look \"item\"") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
@@ -808,7 +809,6 @@ static Workspace *gworkspace = nil;
    * depending on the metadata implementation directly. */
   [fsnodeRep setMetadataProvider: [GWMetadataProvider sharedProvider]];
   [fsnodeRep setIconPositionStore: [GWIconPositionStore sharedStore]];
-
 
   extendedInfo = [fsnodeRep availableExtendedInfoNames];
   menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"View", @"")] submenu];
@@ -1880,6 +1880,33 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSURL *aURL;
 
 
+/* Alias records (issue #71): opening a file that is an alias opens the
+   target the record resolves to, not the record itself. */
+  {
+    NSFileHandle *afh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
+    if (afh) {
+      NSData *hdr = [afh readDataOfLength:4];
+      [afh closeFile];
+      if ([FSNAlias isAliasData: hdr]) {
+        FSNAlias *alias = [[FSNAlias alloc]
+                            initWithData: [NSData dataWithContentsOfFile: fullPath]];
+        NSString *target = [alias resolvePath];
+        AUTORELEASE(alias);
+        if (target == nil) {
+          NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+          [alert setMessageText: @"Broken Alias"];
+          [alert setInformativeText: [NSString stringWithFormat:
+            @"The original of \"%@\" could not be found.",
+            [fullPath lastPathComponent]]];
+          [alert addButtonWithTitle: @"OK"];
+          [alert runModal];
+          return NO;
+        }
+        return [self openFile: target];
+      }
+    }
+  }
+
 /* Early ELF detection: catch executables regardless of the reported type
       so we can prompt the user before any external app (like TextEdit)
       opens the file. This mirrors the later ELF handling but runs first.
@@ -2440,9 +2467,45 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   [self performFileOperation: notifObj];
 }
 
-- (void)duplicateFiles
+/* Make Alias records (issue #71) for the current selection, in the
+   folder that contains it - mirroring Duplicate but writing alias
+   record files instead of copies. */
+- (void)makeAliasFiles:(id)sender
 {
   NSString *basePath;
+  NSMutableArray *files;
+  NSInteger tag;
+  NSUInteger i;
+
+  if ([selectedPaths count] == 0)
+    {
+      return;
+    }
+
+  basePath = [NSString stringWithString: [selectedPaths objectAtIndex: 0]];
+  basePath = [basePath stringByDeletingLastPathComponent];
+
+  if ([fm isWritableFileAtPath: basePath] == NO)
+    {
+      showAlertNoPermission([self class], basePath);
+      return;
+    }
+
+  files = [NSMutableArray array];
+  for (i = 0; i < [selectedPaths count]; i++)
+    {
+      [files addObject: [[selectedPaths objectAtIndex: i] lastPathComponent]];
+    }
+
+  [self performFileOperation: FSNWorkspaceCreateAliasOperation
+		      source: basePath
+		  destination: basePath
+			files: files
+			  tag: &tag];
+}
+
+- (void)duplicateFiles
+{  NSString *basePath;
   NSMutableArray *files;
   NSInteger tag;
   NSUInteger i;
@@ -4416,10 +4479,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
                   openWithTarget:(id)openWithTarget
                      infoTarget:(id)infoTarget
                 duplicateTarget:(id)duplicateTarget
+                    aliasTarget:(id)aliasTarget
                   recycleTarget:(id)recycleTarget
                     ejectTarget:(id)ejectTarget
                      openAction:(SEL)openAction
                 duplicateAction:(SEL)duplicateAction
+                   aliasAction:(SEL)aliasAction
                   recycleAction:(SEL)recycleAction
                     ejectAction:(SEL)ejectAction
                includeOpenWith:(BOOL)includeOpenWith
@@ -4609,7 +4674,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   // Only show Duplicate if not all mount points
   if (!allMountPoints) {
     [menu addItem: [NSMenuItem separatorItem]];
-    
+
     // Duplicate
     menuItem = [NSMenuItem new];
     [menuItem setTitle: NSLocalizedString(@"Duplicate", @"")];
@@ -4618,7 +4683,16 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     [menuItem setEnabled: YES];
     [menu addItem: menuItem];
     RELEASE (menuItem);
-    
+
+    // Make Alias (issue #71)
+    menuItem = [NSMenuItem new];
+    [menuItem setTitle: NSLocalizedString(@"Make Alias", @"")];
+    [menuItem setTarget: aliasTarget];
+    [menuItem setAction: aliasAction];
+    [menuItem setEnabled: YES];
+    [menu addItem: menuItem];
+    RELEASE (menuItem);
+
     [menu addItem: [NSMenuItem separatorItem]];
   }
   
@@ -4689,7 +4763,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     [menu addItem: menuItem];
     RELEASE (menuItem);
   }
-  
+   
   return AUTORELEASE (menu);
 }
 

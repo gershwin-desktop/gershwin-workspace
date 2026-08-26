@@ -53,6 +53,18 @@ BOOL pathsAreOnSameVolume(NSString *path1, NSString *path2);
 
 NSDragOperation dragOperationForCurrentModifierFlags(void);
 
+/* The file operation a link-flavoured drop should perform: a plain
+ * Command drag creates a Unix symlink, Command+Alternate creates an
+ * Alias record (issue #71). */
+NSString *FSNLinkDropOperation(void);
+
+/* YES while Command+Alternate are held - the "make alias" drop modifier. */
+BOOL FSNLinkDropCreatesAlias(void);
+
+/* Copy of image with the alias/link arrow badge in the lower-left
+ * corner; used as drag image for alias-creating drags. */
+NSImage *FSNLinkBadgedImage(NSImage *image);
+
 NSString *subtractFirstPartFromPath(NSString *path, NSString *firstpart);
 
 NSComparisonResult compareWithExtType(id r1, id r2, void *context);

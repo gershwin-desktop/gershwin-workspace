@@ -28,6 +28,11 @@ Operation_HEADER_FILES = \
 
 LIBRARIES_DEPEND_UPON += $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
 
+# FileOpInfo's alias-record operation (WorkspaceCreateAliasOperation)
+# reuses the wire-format code from the FSNode framework.
+ADDITIONAL_INCLUDE_DIRS += -I../FSNode -I../../FSNode
+LIBRARIES_DEPEND_UPON += -lFSNode
+
 ifeq ($(findstring darwin, $(GNUSTEP_TARGET_OS)), darwin)
   ifeq ($(OBJC_RUNTIME_LIB), gnu)
     SHARED_LD_POSTFLAGS += -lgnustep-base -lgnustep-gui

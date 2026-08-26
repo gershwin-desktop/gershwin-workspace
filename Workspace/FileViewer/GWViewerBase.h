@@ -78,6 +78,7 @@ typedef enum
 - (void)deactivate;
 - (void)deleteFiles;
 - (void)duplicateFiles;
+- (void)makeAliasFiles;
 - (void)emptyTrash;
 - (void)goBackwardInHistory;
 - (void)goForwardInHistory;

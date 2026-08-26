@@ -93,6 +93,11 @@
   [[self delegate] duplicateFiles];
 }
 
+- (void)makeAliasFiles:(id)sender
+{
+  [[self delegate] makeAliasFiles];
+}
+
 - (void)recycleFiles:(id)sender
 {
   [[self delegate] recycleFiles];

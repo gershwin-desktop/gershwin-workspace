@@ -172,6 +172,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath;
 - (void)newFolder;
 - (void)newFile;
 - (void)duplicateFiles;
+- (void)makeAliasFiles;
 - (void)recycleFiles;
 - (void)emptyTrash;
 - (void)deleteFiles;

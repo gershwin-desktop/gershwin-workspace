@@ -2022,6 +2022,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
       return [nodeView respondsToSelector: @selector(setBackgroundColor:)];
 
     } else if (sel_isEqual(action, @selector(duplicateFiles:))
+                    || sel_isEqual(action, @selector(makeAliasFiles:))
                     || sel_isEqual(action, @selector(recycleFiles:))
                         || sel_isEqual(action, @selector(deleteFiles:))) {
       if (lastSelection && [lastSelection count]

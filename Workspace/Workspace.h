@@ -258,6 +258,7 @@
             isDirectory:(BOOL)directory;
 
 - (void)duplicateFiles;
+- (void)makeAliasFiles:(id)sender;
 
 - (void)deleteFiles;
 
@@ -437,10 +438,12 @@
                   openWithTarget:(id)openWithTarget
                   infoTarget:(id)infoTarget
              duplicateTarget:(id)duplicateTarget
+                 aliasTarget:(id)aliasTarget
                recycleTarget:(id)recycleTarget
                  ejectTarget:(id)ejectTarget
                   openAction:(SEL)openAction
              duplicateAction:(SEL)duplicateAction
+                aliasAction:(SEL)aliasAction
                recycleAction:(SEL)recycleAction
                  ejectAction:(SEL)ejectAction
             includeOpenWith:(BOOL)includeOpenWith;

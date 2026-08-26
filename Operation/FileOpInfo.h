@@ -235,6 +235,7 @@
 - (void)doCopy;
 
 - (void)doLink;
+- (void)doAlias;
 
 - (void)doRemove;
 

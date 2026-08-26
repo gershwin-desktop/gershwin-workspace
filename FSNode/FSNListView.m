@@ -2085,7 +2085,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
                 operation = NSWorkspaceCopyOperation;
                 break;
               case NSDragOperationLink:
-                operation = NSWorkspaceLinkOperation;
+                operation = FSNLinkDropOperation();
                 break;
               default:
                 operation = NSWorkspaceCopyOperation;
@@ -2673,7 +2673,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 	    operation = NSWorkspaceCopyOperation;
 	    break;
 	  case NSDragOperationLink:
-	    operation = NSWorkspaceLinkOperation;
+	    operation = FSNLinkDropOperation();
 	    break;
 	  default:
 	    operation = NSWorkspaceCopyOperation;
@@ -2993,6 +2993,11 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
   if ([deleg respondsToSelector: @selector(tableView:dragImageForRows:)]) {
     NSImage *image = [deleg tableView: self dragImageForRows: dragRows];
     if (image) {
+      /* Command+Alternate drags create Alias records - mark the drag
+       * with the alias arrow. */
+      if (FSNLinkDropCreatesAlias()) {
+        image = FSNLinkBadgedImage(image);
+      }
       return image;
     }
   }

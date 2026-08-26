@@ -341,12 +341,12 @@ typedef enum FSNSelectionMask {
 - (void)viewer:(id)aviewer didShowNode:(FSNode *)node;
 
 - (void)openSelectionInViewer:(id)viewer
-                  closeSender:(BOOL)close;
-                  
+                   closeSender:(BOOL)close;
+                   
 @end
 
 
-@interface FSNodeRep : NSObject 
+@interface FSNodeRep : NSObject
 {
   NSArray *extInfoModules;
   

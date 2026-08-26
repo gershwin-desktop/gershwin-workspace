@@ -30,6 +30,7 @@
 #import <X11/Xatom.h>
 
 #import "GWDesktopWindow.h"
+#import "GWDesktopManager.h"
 
 @implementation GWDesktopWindow
 
@@ -167,6 +168,11 @@
 - (void)duplicateFiles:(id)sender
 {
   [delegate duplicateFiles];
+}
+
+- (void)makeAliasFiles:(id)sender
+{
+  [delegate makeAliasFiles];
 }
 
 - (void)recycleFiles:(id)sender
