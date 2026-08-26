@@ -175,7 +175,13 @@ int main(int argc, char **argv, char **env)
         }
     }
     
-    killOtherInstances(myBasename, myPid);
+    /* TEMP DEBUG HOOK (revert after debugging): when GW_NO_KILL_INSTANCES is
+     * set, skip the single-instance kill so a second Workspace can run under a
+     * debugger next to the live one without a kill-war. */
+    if (getenv("GW_NO_KILL_INSTANCES") == NULL)
+      {
+        killOtherInstances(myBasename, myPid);
+      }
     
 	CREATE_AUTORELEASE_POOL (pool);
   
