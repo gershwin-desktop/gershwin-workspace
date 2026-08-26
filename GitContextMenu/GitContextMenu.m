@@ -5,6 +5,7 @@
  */
 
 #import "GitContextMenu.h"
+#import "AppearanceMetrics.h"
 #import <AppKit/AppKit.h>
 
 /* Hard ceiling on how long a git invocation may run before we terminate it.
@@ -19,11 +20,28 @@
   DESTROY (gitBadge);
   DESTROY (outputWindow);
   DESTROY (pending);
+  DESTROY (taskLock);
+  DESTROY (spawnedTasks);
   [super dealloc];
 }
 
-/* A node is "handled" if any selected node is a directory containing a .git
- * subdirectory. */
+#pragma mark - Node selection helpers
+
+/* A node is "handled" if any selected node is a directory.  We then decide,
+ * per directory, whether it is a git repository (full menu) or a plain folder
+ * (Init / Clone). */
+- (BOOL)extensionCanHandleNodes:(NSArray *)nodes
+{
+  @try
+    {
+      return ([self directoryForNodes: nodes] != nil);
+    }
+  @catch (NSException *e)
+    {
+      return NO;
+    }
+}
+
 - (NSString *)repoPathForNodes:(NSArray *)nodes
 {
   @try
@@ -53,22 +71,42 @@
   return nil;
 }
 
-- (BOOL)extensionCanHandleNodes:(NSArray *)nodes
+/* First selected directory, skipping the internal .git folder.  Works for both
+ * repositories and plain folders (the latter for Init / Clone). */
+- (NSString *)directoryForNodes:(NSArray *)nodes
 {
   @try
     {
-      return ([self repoPathForNodes: nodes] != nil);
+      NSUInteger i;
+      for (i = 0; i < [nodes count]; i++)
+        {
+          FSNode *n = [nodes objectAtIndex: i];
+          if ([n isDirectory] == NO)
+            {
+              continue;
+            }
+          NSString *p = [n path];
+          if ([[p lastPathComponent] isEqualToString: @".git"])
+            {
+              continue;
+            }
+          return p;
+        }
     }
   @catch (NSException *e)
     {
-      return NO;
+      NSLog (@"GitContextMenu: directoryForNodes threw: %@", e);
     }
+
+  return nil;
 }
 
+#pragma mark - Menu assembly
+
 - (void)addItemWithTitle:(NSString *)title
-                  action:(SEL)action
-                  toMenu:(NSMenu *)menu
-                    repo:(NSString *)repo
+                   action:(SEL)action
+                   toMenu:(NSMenu *)menu
+                     repo:(NSString *)repo
 {
   NSMenuItem *item = [[NSMenuItem alloc] initWithTitle: title
                                                 action: action
@@ -80,30 +118,94 @@
 }
 
 - (void)extensionAppendToContextMenu:(NSMenu *)menu
-                           forNodes:(NSArray *)nodes
+                            forNodes:(NSArray *)nodes
 {
   @try
     {
       NSString *repo = [self repoPathForNodes: nodes];
 
-      if (repo == nil)
-        {
-          return;
-        }
+      [menu addItem: [NSMenuItem separatorItem]];
 
       NSMenuItem *gitItem = [[NSMenuItem alloc] initWithTitle: @"Git"
-                                                       action: nil
-                                                keyEquivalent: @""];
+                                                      action: nil
+                                               keyEquivalent: @""];
       NSMenu *gitMenu = [[NSMenu alloc] initWithTitle: @"Git"];
 
-      [self addItemWithTitle: @"Status" action: @selector(gitStatus:) toMenu: gitMenu repo: repo];
-      [self addItemWithTitle: @"Diff"   action: @selector(gitDiff:)   toMenu: gitMenu repo: repo];
-      [self addItemWithTitle: @"Log"    action: @selector(gitLog:)    toMenu: gitMenu repo: repo];
+      if (repo != nil)
+        {
+          [self addItemWithTitle: @"Status" action: @selector(gitStatus:)
+                          toMenu: gitMenu repo: repo];
+          [self addItemWithTitle: @"Diff" action: @selector(gitDiff:)
+                          toMenu: gitMenu repo: repo];
+          [self addItemWithTitle: @"Diff Staged" action: @selector(gitDiffStaged:)
+                          toMenu: gitMenu repo: repo];
+          [self addItemWithTitle: @"Log" action: @selector(gitLog:)
+                          toMenu: gitMenu repo: repo];
+
+          [gitMenu addItem: [NSMenuItem separatorItem]];
+
+          [self addItemWithTitle: @"Stage All" action: @selector(gitStageAll:)
+                          toMenu: gitMenu repo: repo];
+          [self addItemWithTitle: @"Unstage All" action: @selector(gitUnstageAll:)
+                          toMenu: gitMenu repo: repo];
+          [self addItemWithTitle: @"Commit..." action: @selector(gitCommit:)
+                          toMenu: gitMenu repo: repo];
+
+          [gitMenu addItem: [NSMenuItem separatorItem]];
+
+          [self addItemWithTitle: @"Pull" action: @selector(gitPull:)
+                          toMenu: gitMenu repo: repo];
+          [self addItemWithTitle: @"Push" action: @selector(gitPush:)
+                          toMenu: gitMenu repo: repo];
+          [self addItemWithTitle: @"Fetch" action: @selector(gitFetch:)
+                          toMenu: gitMenu repo: repo];
+
+          [gitMenu addItem: [NSMenuItem separatorItem]];
+
+          /* Branch submenu. */
+          NSMenuItem *branchItem = [[NSMenuItem alloc] initWithTitle: @"Branch"
+                                                              action: nil
+                                                       keyEquivalent: @""];
+          NSMenu *branchMenu = [[NSMenu alloc] initWithTitle: @"Branch"];
+          [self addItemWithTitle: @"Switch to Branch..." action: @selector(gitBranchSwitch:)
+                          toMenu: branchMenu repo: repo];
+          [self addItemWithTitle: @"New Branch..." action: @selector(gitBranchNew:)
+                          toMenu: branchMenu repo: repo];
+          [self addItemWithTitle: @"Delete Branch..." action: @selector(gitBranchDelete:)
+                          toMenu: branchMenu repo: repo];
+          [branchItem setSubmenu: branchMenu];
+          RELEASE (branchMenu);
+          [gitMenu addItem: branchItem];
+          RELEASE (branchItem);
+
+          [self addItemWithTitle: @"Stash" action: @selector(gitStash:)
+                          toMenu: gitMenu repo: repo];
+          [self addItemWithTitle: @"Pop Stash" action: @selector(gitStashPop:)
+                          toMenu: gitMenu repo: repo];
+
+          [gitMenu addItem: [NSMenuItem separatorItem]];
+
+          [self addItemWithTitle: @"Remotes..." action: @selector(gitRemotes:)
+                          toMenu: gitMenu repo: repo];
+          [self addItemWithTitle: @"Open Remote" action: @selector(gitOpenRemote:)
+                          toMenu: gitMenu repo: repo];
+          [self addItemWithTitle: @"Open Terminal Here" action: @selector(gitOpenTerminal:)
+                          toMenu: gitMenu repo: repo];
+        }
+      else
+        {
+          /* Plain folder: offer repository creation. */
+          NSString *dir = [self directoryForNodes: nodes];
+          [self addItemWithTitle: @"Initialize Repository Here"
+                           action: @selector(gitInit:)
+                           toMenu: gitMenu repo: dir];
+          [self addItemWithTitle: @"Clone..." action: @selector(gitClone:)
+                          toMenu: gitMenu repo: dir];
+        }
 
       [gitItem setSubmenu: gitMenu];
       RELEASE (gitMenu);
 
-      [menu addItem: [NSMenuItem separatorItem]];
       [menu addItem: gitItem];
       RELEASE (gitItem);
     }
@@ -131,14 +233,568 @@
                  repo: repo];
 }
 
+- (void)gitDiffStaged:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self runGitCommand: [NSArray arrayWithObjects: @"diff", @"--cached", nil]
+                title: @"Git Diff (staged)"
+                 repo: repo];
+}
+
 - (void)gitLog:(id)sender
 {
   NSString *repo = [sender representedObject];
-  [self runGitCommand: [NSArray arrayWithObjects: @"log", @"--oneline",
-                         @"-n", @"50", nil]
+  [self runGitCommand: [NSArray arrayWithObjects: @"log", @"--graph",
+                         @"--decorate", @"--oneline", @"-n", @"50", nil]
                 title: @"Git Log"
                  repo: repo];
 }
+
+- (void)gitStageAll:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self runGitCommand: [NSArray arrayWithObjects: @"add", @"-A", nil]
+                title: @"Git Stage All"
+                 repo: repo];
+}
+
+- (void)gitUnstageAll:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self runGitCommand: [NSArray arrayWithObjects: @"reset", nil]
+                title: @"Git Unstage All"
+                 repo: repo];
+}
+
+- (void)gitCommit:(id)sender
+{
+  /* Defer the modal dialog off the context-menu's own modal tracking loop.
+   * Starting a nested runModalForWindow: from inside that loop can deadlock or
+   * crash GNUstep, so we let the menu finish and run the dialog next pass. */
+  NSString *repo = [sender representedObject];
+  [self performSelector: @selector (deferredCommit:)
+               withObject: repo
+               afterDelay: 0.0];
+}
+
+- (void)deferredCommit:(NSString *)repo
+{
+  @try
+    {
+      BOOL stageAll = NO;
+      NSString *msg = [self commitDialogWithStageAll: &stageAll];
+
+      if (msg == nil)
+        {
+          return;   /* cancelled or empty message */
+        }
+
+      NSArray *commitArgs = [NSArray arrayWithObjects: @"commit", @"-m", msg, nil];
+
+      if (stageAll)
+        {
+          /* Chain: git add -A, then git commit -m. */
+          NSDictionary *then = [NSDictionary dictionaryWithObjectsAndKeys:
+            commitArgs, @"args", @"Git Commit", @"title", repo, @"repo", nil];
+          [self runGitCommand: [NSArray arrayWithObjects: @"add", @"-A", nil]
+                        title: @"Git Stage All"
+                         repo: repo
+                      thenRun: then];
+        }
+      else
+        {
+          [self runGitCommand: commitArgs title: @"Git Commit" repo: repo];
+        }
+    }
+  @catch (NSException *e)
+    {
+      NSLog (@"GitContextMenu: deferredCommit threw: %@", e);
+    }
+}
+
+- (void)gitPull:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self runGitCommand: [NSArray arrayWithObjects: @"pull", nil]
+                title: @"Git Pull"
+                 repo: repo];
+}
+
+- (void)gitPush:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self runGitCommand: [NSArray arrayWithObjects: @"push", nil]
+                title: @"Git Push"
+                 repo: repo];
+}
+
+- (void)gitFetch:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self runGitCommand: [NSArray arrayWithObjects: @"fetch", nil]
+                title: @"Git Fetch"
+                 repo: repo];
+}
+
+- (void)gitBranchSwitch:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self performSelector: @selector (deferredBranchSwitch:)
+               withObject: repo
+               afterDelay: 0.0];
+}
+
+- (void)deferredBranchSwitch:(NSString *)repo
+{
+  @try
+    {
+      NSString *name = [self promptWithTitle: @"Switch Branch"
+                                     message: @"Check out the branch:"
+                                defaultValue: @""];
+      if (name == nil)
+        {
+          return;
+        }
+      [self runGitCommand: [NSArray arrayWithObjects: @"checkout", name, nil]
+                    title: [NSString stringWithFormat: @"Git Checkout %@", name]
+                     repo: repo];
+    }
+  @catch (NSException *e)
+    {
+      NSLog (@"GitContextMenu: deferredBranchSwitch threw: %@", e);
+    }
+}
+
+- (void)gitBranchNew:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self performSelector: @selector (deferredBranchNew:)
+               withObject: repo
+               afterDelay: 0.0];
+}
+
+- (void)deferredBranchNew:(NSString *)repo
+{
+  @try
+    {
+      NSString *name = [self promptWithTitle: @"New Branch"
+                                     message: @"Create and check out the branch:"
+                                defaultValue: @""];
+      if (name == nil)
+        {
+          return;
+        }
+      [self runGitCommand: [NSArray arrayWithObjects: @"checkout", @"-b", name, nil]
+                    title: [NSString stringWithFormat: @"Git Create %@", name]
+                     repo: repo];
+    }
+  @catch (NSException *e)
+    {
+      NSLog (@"GitContextMenu: deferredBranchNew threw: %@", e);
+    }
+}
+
+- (void)gitBranchDelete:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self performSelector: @selector (deferredBranchDelete:)
+               withObject: repo
+               afterDelay: 0.0];
+}
+
+- (void)deferredBranchDelete:(NSString *)repo
+{
+  @try
+    {
+      NSString *name = [self promptWithTitle: @"Delete Branch"
+                                     message: @"Delete the branch:"
+                                defaultValue: @""];
+      if (name == nil)
+        {
+          return;
+        }
+      [self runGitCommand: [NSArray arrayWithObjects: @"branch", @"-d", name, nil]
+                    title: [NSString stringWithFormat: @"Git Delete %@", name]
+                     repo: repo];
+    }
+  @catch (NSException *e)
+    {
+      NSLog (@"GitContextMenu: deferredBranchDelete threw: %@", e);
+    }
+}
+
+- (void)gitStash:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self runGitCommand: [NSArray arrayWithObjects: @"stash", nil]
+                title: @"Git Stash"
+                 repo: repo];
+}
+
+- (void)gitStashPop:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self runGitCommand: [NSArray arrayWithObjects: @"stash", @"pop", nil]
+                title: @"Git Stash Pop"
+                 repo: repo];
+}
+
+- (void)gitRemotes:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self runGitCommand: [NSArray arrayWithObjects: @"remote", @"-v", nil]
+                title: @"Git Remotes"
+                 repo: repo];
+}
+
+- (void)gitOpenRemote:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self launchGit: [NSArray arrayWithObjects: @"remote", @"get-url", @"origin", nil]
+             title: @"Git Remote URL"
+              repo: repo
+           thenRun: nil
+        openRemote: YES];
+}
+
+- (void)gitOpenTerminal:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  @try
+    {
+      NSString *term = [self findTerminal];
+      if (term == nil)
+        {
+          [self showGitOutput: @"No terminal emulator found in PATH."
+                        title: @"Open Terminal"];
+          return;
+        }
+      NSTask *task = [[NSTask alloc] init];
+      [task setLaunchPath: term];
+      [task setCurrentDirectoryPath: repo];
+      [task launch];
+
+      /* Keep the task retained until it terminates.  Releasing our only
+       * reference while the child is still running would deallocate the
+       * NSTask, and GNUstep would then crash when it tries to notify the
+       * (freed) task on child exit. */
+      [taskLock lock];
+      if (spawnedTasks == nil)
+        {
+          spawnedTasks = [[NSMutableArray alloc] init];
+        }
+      [spawnedTasks addObject: task];
+      [taskLock unlock];
+
+      [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector (gitSpawnedTaskDidTerminate:)
+               name: NSTaskDidTerminateNotification
+             object: task];
+      RELEASE (task);
+    }
+  @catch (NSException *e)
+    {
+      [self showGitOutput: [NSString stringWithFormat:
+                             @"Could not open a terminal: %@",
+                             [e description]]
+                        title: @"Open Terminal"];
+    }
+}
+
+- (void)gitSpawnedTaskDidTerminate:(NSNotification *)note
+{
+  @try
+    {
+      NSTask *task = [note object];
+      [[NSNotificationCenter defaultCenter]
+        removeObserver: self
+                  name: NSTaskDidTerminateNotification
+                object: task];
+      [taskLock lock];
+      [spawnedTasks removeObject: task];
+      [taskLock unlock];
+    }
+  @catch (NSException *e)
+    {
+      NSLog (@"GitContextMenu: gitSpawnedTaskDidTerminate threw: %@", e);
+    }
+}
+
+- (void)gitInit:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self runGitCommand: [NSArray arrayWithObjects: @"init", nil]
+                title: @"Git Init"
+                 repo: repo];
+}
+
+- (void)gitClone:(id)sender
+{
+  NSString *repo = [sender representedObject];
+  [self performSelector: @selector (deferredClone:)
+               withObject: repo
+               afterDelay: 0.0];
+}
+
+- (void)deferredClone:(NSString *)repo
+{
+  @try
+    {
+      NSString *url = [self promptWithTitle: @"Clone Repository"
+                                    message: @"Repository URL to clone into this folder:"
+                               defaultValue: @""];
+      if (url == nil)
+        {
+          return;
+        }
+      [self runGitCommand: [NSArray arrayWithObjects: @"clone", url, nil]
+                    title: [NSString stringWithFormat: @"Git Clone %@", url]
+                     repo: repo];
+    }
+  @catch (NSException *e)
+    {
+      NSLog (@"GitContextMenu: deferredClone threw: %@", e);
+    }
+}
+
+#pragma mark - Dialogs
+
+/* End a custom modal dialog (see promptWithTitle:/commitDialogWithStageAll:).
+ * GNUstep's NSAlert does not implement -setAccessoryView:, so we build our own
+ * modal windows and drive them with -runModalForWindow:. */
+- (void)stopModalOK:(id)sender
+{
+  [NSApp stopModalWithCode: 1];
+}
+
+- (void)stopModalCancel:(id)sender
+{
+  [NSApp stopModalWithCode: 0];
+}
+
+/* Synchronous (runs on the main thread, invoked from a deferred action).
+ * Returns the entered string, or nil if cancelled / empty.  Layout follows
+ * AppearanceMetrics.h: 24px side / 15px top / 20px bottom margins, 22px text
+ * fields, 20px buttons, OK at lower-right with Cancel to its left. */
+- (NSString *)promptWithTitle:(NSString *)title
+                      message:(NSString *)message
+                 defaultValue:(NSString *)def
+{
+  @try
+    {
+      const CGFloat side = METRICS_CONTENT_SIDE_MARGIN;             /* 24 */
+      const CGFloat top = METRICS_CONTENT_TOP_MARGIN;               /* 15 */
+      const CGFloat bottom = METRICS_CONTENT_BOTTOM_MARGIN;         /* 20 */
+      const CGFloat msgH = 44.0;
+      const CGFloat fieldH = METRICS_TEXT_INPUT_FIELD_HEIGHT;       /* 22 */
+      const CGFloat btnH = METRICS_BUTTON_HEIGHT;                   /* 20 */
+      const CGFloat cw = 360.0 + 2.0 * side;                       /* 408 */
+      const CGFloat ch = top + msgH + METRICS_SPACE_16
+                       + fieldH + METRICS_SPACE_16 + btnH + bottom; /* 153 */
+
+      NSWindow *win = [[NSWindow alloc]
+        initWithContentRect: NSMakeRect (0, 0, cw, ch)
+                  styleMask: NSTitledWindowMask
+                    backing: NSBackingStoreBuffered
+                      defer: NO];
+      [win setTitle: title];
+      NSView *cv = [win contentView];
+      const CGFloat aw = cw - 2.0 * side;
+
+      NSTextField *msg =
+        [[NSTextField alloc] initWithFrame:
+          NSMakeRect (side, ch - top - msgH, aw, msgH)];
+      [msg setStringValue: message];
+      [msg setEditable: NO];
+      [msg setSelectable: NO];
+      [msg setDrawsBackground: NO];
+      [msg setBezeled: NO];
+      [[msg cell] setWraps: YES];
+      [msg setFont: METRICS_FONT_SYSTEM_REGULAR_13];
+      [msg setAutoresizingMask: NSViewWidthSizable | NSViewMinYMargin];
+      [cv addSubview: msg];
+
+      NSTextField *field =
+        [[NSTextField alloc] initWithFrame:
+          NSMakeRect (side, ch - top - msgH - METRICS_SPACE_16 - fieldH, aw, fieldH)];
+      [field setStringValue: (def ? def : @"")];
+      [field setFont: METRICS_FONT_SYSTEM_REGULAR_13];
+      [field setAutoresizingMask: NSViewWidthSizable | NSViewMinYMargin];
+      [cv addSubview: field];
+
+      const CGFloat btnW = METRICS_BUTTON_MIN_WIDTH;               /* 100 */
+
+      NSButton *ok =
+        [[NSButton alloc] initWithFrame:
+          NSMakeRect (cw - side - btnW, bottom, btnW, btnH)];
+      [ok setTitle: @"OK"];
+      [ok setKeyEquivalent: @"\r"];
+      [ok setTarget: self];
+      [ok setAction: @selector (stopModalOK:)];
+      [ok setAutoresizingMask: NSViewMinXMargin | NSViewMaxYMargin];
+      [cv addSubview: ok];
+
+      NSButton *cancel =
+        [[NSButton alloc] initWithFrame:
+          NSMakeRect (cw - side - 2.0 * btnW - METRICS_BUTTON_HORIZ_INTERSPACE,
+                      bottom, btnW, btnH)];
+      [cancel setTitle: @"Cancel"];
+      [cancel setTarget: self];
+      [cancel setAction: @selector (stopModalCancel:)];
+      [cancel setAutoresizingMask: NSViewMinXMargin | NSViewMaxYMargin];
+      [cv addSubview: cancel];
+
+      [win makeKeyAndOrderFront: nil];
+      NSInteger rc = [NSApp runModalForWindow: win];
+
+      NSString *result = nil;
+      if (rc == 1)
+        {
+          NSString *v = [field stringValue];
+          if ([v length] > 0)
+            {
+              result = AUTORELEASE ([v copy]);
+            }
+        }
+
+      RELEASE (cancel);
+      RELEASE (ok);
+      RELEASE (field);
+      RELEASE (msg);
+      RELEASE (win);
+      return result;
+    }
+  @catch (NSException *e)
+    {
+      return nil;
+    }
+}
+
+/* Commit dialog: an informative label, a "stage all first" checkbox, and a
+ * multiline message view.  Returns the message (copied, autoreleased) or nil if
+ * cancelled / empty.  Layout follows AppearanceMetrics.h (24/15/20 margins,
+ * 22px fields, 20px buttons, OK lower-right with Cancel to its left). */
+- (NSString *)commitDialogWithStageAll:(BOOL *)stageAllOut
+{
+  @try
+    {
+      const CGFloat side = METRICS_CONTENT_SIDE_MARGIN;             /* 24 */
+      const CGFloat top = METRICS_CONTENT_TOP_MARGIN;               /* 15 */
+      const CGFloat bottom = METRICS_CONTENT_BOTTOM_MARGIN;         /* 20 */
+      const CGFloat msgH = 22.0;
+      const CGFloat cbH = METRICS_RADIO_BUTTON_SIZE;                /* 18 */
+      const CGFloat tvH = 120.0;
+      const CGFloat btnH = METRICS_BUTTON_HEIGHT;                   /* 20 */
+      const CGFloat cw = 400.0 + 2.0 * side;                       /* 448 */
+      const CGFloat ch = top + msgH + METRICS_SPACE_16 + cbH
+                       + METRICS_SPACE_16 + tvH + METRICS_SPACE_16
+                       + btnH + bottom;                             /* 263 */
+
+      NSWindow *win = [[NSWindow alloc]
+        initWithContentRect: NSMakeRect (0, 0, cw, ch)
+                  styleMask: NSTitledWindowMask
+                    backing: NSBackingStoreBuffered
+                      defer: NO];
+      [win setTitle: @"Commit Changes"];
+      NSView *cv = [win contentView];
+      const CGFloat aw = cw - 2.0 * side;
+
+      NSTextField *msg =
+        [[NSTextField alloc] initWithFrame:
+          NSMakeRect (side, ch - top - msgH, aw, msgH)];
+      [msg setStringValue: @"Enter a commit message."];
+      [msg setEditable: NO];
+      [msg setSelectable: NO];
+      [msg setDrawsBackground: NO];
+      [msg setBezeled: NO];
+      [msg setFont: METRICS_FONT_SYSTEM_REGULAR_13];
+      [msg setAutoresizingMask: NSViewWidthSizable | NSViewMinYMargin];
+      [cv addSubview: msg];
+
+      NSButton *cb =
+        [[NSButton alloc] initWithFrame:
+          NSMakeRect (side, ch - top - msgH - METRICS_SPACE_16 - cbH, aw, cbH)];
+      [cb setButtonType: NSSwitchButton];
+      [cb setTitle: @"Stage all changes first (git add -A)"];
+      [cb setState: NSOnState];
+      [cb setFont: METRICS_FONT_SYSTEM_REGULAR_13];
+      [cb setAutoresizingMask: NSViewWidthSizable | NSViewMinYMargin];
+      [cv addSubview: cb];
+
+      NSScrollView *scroll =
+        [[NSScrollView alloc] initWithFrame:
+          NSMakeRect (side, ch - top - msgH - METRICS_SPACE_16 - cbH
+                      - METRICS_SPACE_16 - tvH, aw, tvH)];
+      [scroll setHasVerticalScroller: YES];
+      [scroll setHasHorizontalScroller: NO];
+      NSTextView *tv =
+        [[NSTextView alloc] initWithFrame: NSMakeRect (0, 0, aw, tvH)];
+      [tv setVerticallyResizable: YES];
+      [tv setMinSize: NSMakeSize (aw, tvH)];
+      [tv setMaxSize: NSMakeSize (aw, 100000)];
+      [tv setFont: METRICS_FONT_SYSTEM_REGULAR_13];
+      [scroll setDocumentView: tv];
+      [scroll setAutoresizingMask: NSViewWidthSizable | NSViewMinYMargin];
+      [cv addSubview: scroll];
+
+      const CGFloat btnW = METRICS_BUTTON_MIN_WIDTH;               /* 100 */
+
+      NSButton *ok =
+        [[NSButton alloc] initWithFrame:
+          NSMakeRect (cw - side - btnW, bottom, btnW, btnH)];
+      [ok setTitle: @"Commit"];
+      [ok setKeyEquivalent: @"\r"];
+      [ok setTarget: self];
+      [ok setAction: @selector (stopModalOK:)];
+      [ok setAutoresizingMask: NSViewMinXMargin | NSViewMaxYMargin];
+      [cv addSubview: ok];
+
+      NSButton *cancel =
+        [[NSButton alloc] initWithFrame:
+          NSMakeRect (cw - side - 2.0 * btnW - METRICS_BUTTON_HORIZ_INTERSPACE,
+                      bottom, btnW, btnH)];
+      [cancel setTitle: @"Cancel"];
+      [cancel setTarget: self];
+      [cancel setAction: @selector (stopModalCancel:)];
+      [cancel setAutoresizingMask: NSViewMinXMargin | NSViewMaxYMargin];
+      [cv addSubview: cancel];
+
+      [win makeKeyAndOrderFront: nil];
+      NSInteger rc = [NSApp runModalForWindow: win];
+
+      BOOL stageAll = ([cb state] == NSOnState);
+      NSString *msgText = nil;
+      if (rc == 1)
+        {
+          NSString *v = [tv string];
+          if ([v length] > 0)
+            {
+              msgText = AUTORELEASE ([v copy]);
+            }
+        }
+
+      if (stageAllOut)
+        {
+          *stageAllOut = stageAll;
+        }
+
+      RELEASE (cancel);
+      RELEASE (ok);
+      RELEASE (tv);
+      RELEASE (scroll);
+      RELEASE (cb);
+      RELEASE (msg);
+      RELEASE (win);
+      return msgText;
+    }
+  @catch (NSException *e)
+    {
+      return nil;
+    }
+}
+
+#pragma mark - Environment helpers
 
 /* Locate the git binary ourselves.  NSTask needs an absolute launch path, and
  * we must not assume /usr/bin/git exists on every platform.  Failing to find
@@ -171,12 +827,102 @@
   return nil;
 }
 
+/* Best-effort terminal emulator discovery.  We launch it with
+ * setCurrentDirectoryPath: so it opens in the repo, avoiding per-terminal
+ * flag differences. */
+- (NSString *)findTerminal
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *pathEnv = [[[NSProcessInfo processInfo] environment] objectForKey: @"PATH"];
+  NSArray *dirs = [pathEnv componentsSeparatedByString: @":"];
+  NSArray *candidates = [NSArray arrayWithObjects:
+    @"gnome-terminal", @"konsole", @"xfce4-terminal", @"lxterminal",
+    @"mate-terminal", @"terminator", @"alacritty", @"kitty", @"foot",
+    @"st", @"rxvt", @"urxvt", @"xterm", nil];
+  NSUInteger i, j;
+
+  for (i = 0; i < [candidates count]; i++)
+    {
+      NSString *name = [candidates objectAtIndex: i];
+      for (j = 0; j < [dirs count]; j++)
+        {
+          NSString *p = [[dirs objectAtIndex: j] stringByAppendingPathComponent: name];
+          if ([p length] > 0 && [fm isExecutableFileAtPath: p])
+            {
+              return p;
+            }
+        }
+    }
+
+  return nil;
+}
+
+/* Turn a git remote URL into something a browser can open.  Handles the
+ * common scp-like (git@host:path) and ssh:// forms; leaves http(s) alone. */
+- (NSString *)browserURLFromRemote:(NSString *)remote
+{
+  if (remote == nil)
+    {
+      return nil;
+    }
+
+  NSString *s = [remote stringByTrimmingCharactersInSet:
+    [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  if ([s hasSuffix: @"/"])
+    {
+      s = [s substringToIndex: [s length] - 1];
+    }
+  if ([s hasSuffix: @".git"])
+    {
+      s = [s substringToIndex: [s length] - 4];
+    }
+
+  if ([s hasPrefix: @"git@"])
+    {
+      /* git@host:path -> https://host/path */
+      NSString *rest = [s substringFromIndex: 4];
+      NSRange colon = [rest rangeOfString: @":"];
+      if (colon.location != NSNotFound)
+        {
+          NSString *host = [rest substringToIndex: colon.location];
+          NSString *path = [rest substringFromIndex: colon.location + 1];
+          s = [NSString stringWithFormat: @"https://%@/%@", host, path];
+        }
+    }
+  else if ([s hasPrefix: @"ssh://"])
+    {
+      NSString *rest = [s substringFromIndex: 6];
+      NSRange at = [rest rangeOfString: @"@"];
+      if (at.location != NSNotFound)
+        {
+          rest = [rest substringFromIndex: at.location + 1];
+        }
+      s = [NSString stringWithFormat: @"https://%@", rest];
+    }
+
+  return s;
+}
+
+#pragma mark - Async git runner
+
+- (void)runGitCommand:(NSArray *)args title:(NSString *)title repo:(NSString *)repo
+{
+  [self launchGit: args title: title repo: repo thenRun: nil openRemote: NO];
+}
+
+- (void)runGitCommand:(NSArray *)args title:(NSString *)title repo:(NSString *)repo thenRun:(NSDictionary *)then
+{
+  [self launchGit: args title: title repo: repo thenRun: then openRemote: NO];
+}
+
 /* Run git and present its output.  Crucially we read the child's output
  * asynchronously: reading the pipe only after waitUntilExit deadlocks once the
  * output exceeds the pipe buffer, which hangs (and on GNUstep crashes) the
  * main thread.  Everything here is wrapped so the bundle can never take down
- * Workspace. */
-- (void)runGitCommand:(NSArray *)args title:(NSString *)title repo:(NSString *)repo
+ * Workspace.  `then` (optional) chains a second command on success;
+ * `openRemote` (optional) parses the output as a remote URL and opens it
+ * instead of showing it. */
+- (void)launchGit:(NSArray *)args title:(NSString *)title repo:(NSString *)repo thenRun:(NSDictionary *)then openRemote:(BOOL)openRemote
 {
   @try
     {
@@ -206,6 +952,10 @@
       NSFileHandle *readHandle = [pipe fileHandleForReading];
       NSValue *key = [NSValue valueWithNonretainedObject: readHandle];
 
+      if (taskLock == nil)
+        {
+          taskLock = [[NSLock alloc] init];
+        }
       if (pending == nil)
         {
           pending = [[NSMutableDictionary alloc] init];
@@ -214,7 +964,17 @@
       NSMutableDictionary *info = [NSMutableDictionary dictionaryWithObjectsAndKeys:
         title, @"title", task, @"task", readHandle, @"handle",
         [NSNumber numberWithBool: NO], @"done", nil];
+      if (then != nil)
+        {
+          [info setObject: then forKey: @"then"];
+        }
+      [info setObject: [NSNumber numberWithBool: openRemote] forKey: @"openRemote"];
+
+      /* Serialize access: gitReadCompleted: runs on a background read thread
+       * and also touches pending, so every mutation must be locked. */
+      [taskLock lock];
       [pending setObject: info forKey: key];
+      [taskLock unlock];
 
       [[NSNotificationCenter defaultCenter]
         addObserver: self
@@ -245,96 +1005,219 @@
 
 - (void)gitReadCompleted:(NSNotification *)note
 {
+  /* This fires on the background read thread (GNUstep posts the completion
+   * notification from there), NOT the main thread.  So it must not touch
+   * shared state or UI directly.  We lock pending, capture everything we need,
+   * then deliver the result to the main thread for all side effects. */
   NSFileHandle *readHandle = [note object];
   NSValue *key = [NSValue valueWithNonretainedObject: readHandle];
-  NSMutableDictionary *info = [pending objectForKey: key];
+  NSData *data = [[note userInfo] objectForKey: NSFileHandleNotificationDataItem];
 
+  [taskLock lock];
+  NSMutableDictionary *info = [pending objectForKey: key];
   if (info == nil)
     {
+      [taskLock unlock];
       return;
     }
   if ([[info objectForKey: @"done"] boolValue])
     {
+      [taskLock unlock];
       return;
     }
   [info setObject: [NSNumber numberWithBool: YES] forKey: @"done"];
 
-  @try
+  /* Retain everything we still need BEFORE removing info from pending: once
+   * pending releases info, the objects it holds are freed, and touching them
+   * (as the previous version did) is a use-after-free crash. */
+  NSString *title = [[info objectForKey: @"title"] retain];
+  BOOL openRemote = [[info objectForKey: @"openRemote"] boolValue];
+  NSDictionary *then = [[info objectForKey: @"then"] retain];
+  NSTimer *timer = [[info objectForKey: @"timer"] retain];
+  NSTask *task = [info objectForKey: @"task"];
+  int status = 0;
+  if (task != nil && [task isRunning] == NO)
     {
-      [[NSNotificationCenter defaultCenter]
-        removeObserver: self
-                  name: NSFileHandleReadToEndOfFileCompletionNotification
-                object: readHandle];
-      NSTimer *timer = [info objectForKey: @"timer"];
-      if (timer != nil)
-        {
-          [timer invalidate];
-        }
-
-      NSTask *task = [info objectForKey: @"task"];
-      NSString *title = [info objectForKey: @"title"];
-      NSData *data = [[note userInfo] objectForKey: NSFileHandleNotificationDataItem];
-      NSString *output = [self stringFromData: data];
-
-      [pending removeObjectForKey: key];
-      DESTROY (task);
-
-      NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:
-        output, @"output", (title ? title : @"git"), @"title", nil];
-      [self performSelectorOnMainThread: @selector(presentOutput:)
-                              withObject: payload
-                           waitUntilDone: NO];
+      @try { status = [task terminationStatus]; } @catch (NSException *e) { status = 0; }
     }
-  @catch (NSException *e)
+
+  NSMutableDictionary *result = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+    [self stringFromData: data], @"output",
+    (title ? title : (NSString *)@"git"), @"title",
+    [NSNumber numberWithBool: openRemote], @"openRemote",
+    [NSNumber numberWithInt: status], @"status", nil];
+  if (then != nil)
     {
-      NSLog (@"GitContextMenu: gitReadCompleted threw: %@", e);
+      [result setObject: then forKey: @"then"];
     }
+
+  [pending removeObjectForKey: key];
+  [taskLock unlock];
+
+  [[NSNotificationCenter defaultCenter]
+    removeObserver: self
+              name: NSFileHandleReadToEndOfFileCompletionNotification
+            object: readHandle];
+  if (timer != nil)
+    {
+      [timer invalidate];
+    }
+
+  [timer release];
+  [then release];
+  [title release];
+  /* task is released when info is removed from pending; do not touch it. */
+
+  [self performSelectorOnMainThread: @selector (deliverGitResult:)
+                         withObject: result
+                      waitUntilDone: NO];
 }
 
 - (void)gitTimeout:(NSTimer *)timer
 {
+  /* gitTimeout: runs on the main thread (the watchdog timer), but gitReadCompleted:
+   * may be racing it from the background read thread, so lock pending. */
   NSValue *key = [timer userInfo];
-  NSMutableDictionary *info = [pending objectForKey: key];
 
+  [taskLock lock];
+  NSMutableDictionary *info = [pending objectForKey: key];
   if (info == nil)
     {
+      [taskLock unlock];
       return;
     }
   if ([[info objectForKey: @"done"] boolValue])
     {
+      [taskLock unlock];
       return;
     }
   [info setObject: [NSNumber numberWithBool: YES] forKey: @"done"];
 
+  /* Retain before removing info from pending (see gitReadCompleted:). */
+  NSString *title = [[info objectForKey: @"title"] retain];
+  NSFileHandle *readHandle = [[info objectForKey: @"handle"] retain];
+  NSTask *task = [[info objectForKey: @"task"] retain];
+
+  [pending removeObjectForKey: key];
+  [taskLock unlock];
+
   @try
     {
-      NSFileHandle *readHandle = [info objectForKey: @"handle"];
       [[NSNotificationCenter defaultCenter]
         removeObserver: self
                   name: NSFileHandleReadToEndOfFileCompletionNotification
                 object: readHandle];
 
-      NSTask *task = [info objectForKey: @"task"];
       if (task != nil && [task isRunning])
         {
           [task terminate];
         }
-
-      NSString *title = [info objectForKey: @"title"];
-      [pending removeObjectForKey: key];
-      DESTROY (task);
-
-      NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:
-        @"(git did not finish within the time limit)", @"output",
-        (title ? title : @"git"), @"title", nil];
-      [self performSelectorOnMainThread: @selector(presentOutput:)
-                              withObject: payload
-                           waitUntilDone: NO];
     }
   @catch (NSException *e)
     {
-      NSLog (@"GitContextMenu: gitTimeout threw: %@", e);
+      /* ignore - we are tearing the task down anyway */
     }
+
+  [self showGitOutput: @"(git did not finish within the time limit)"
+                title: (title ? title : (NSString *)@"git")];
+
+  [task release];
+  [readHandle release];
+  [title release];
+}
+
+/* Runs on the main thread (invoked via performSelectorOnMainThread from
+ * gitReadCompleted:).  All UI and any follow-up git task happen here. */
+- (void)deliverGitResult:(NSDictionary *)result
+{
+  @try
+    {
+      BOOL openRemote = [[result objectForKey: @"openRemote"] boolValue];
+      NSString *output = [result objectForKey: @"output"];
+      NSString *title = [result objectForKey: @"title"];
+      int status = [[result objectForKey: @"status"] intValue];
+      NSDictionary *then = [result objectForKey: @"then"];
+
+      if (openRemote)
+        {
+          [self handleRemoteOutput: output title: title];
+          return;
+        }
+
+      /* Chain a follow-up command on success. */
+      if (then != nil && status == 0)
+        {
+          [self launchGit: [then objectForKey: @"args"]
+                     title: [then objectForKey: @"title"]
+                      repo: [then objectForKey: @"repo"]
+                   thenRun: [then objectForKey: @"then"]
+                 openRemote: NO];
+        }
+
+      [self showGitOutput: output title: title];
+    }
+  @catch (NSException *e)
+    {
+      NSLog (@"GitContextMenu: deliverGitResult threw: %@", e);
+    }
+}
+
+- (void)handleRemoteOutput:(NSString *)output title:(NSString *)title
+{
+  @try
+    {
+      NSString *line = [self firstNonBlankLine: output];
+      NSString *url = [self browserURLFromRemote: line];
+
+      if (url == nil)
+        {
+          [self showGitOutput: output title: title];
+          return;
+        }
+
+      NSURL *u = [NSURL URLWithString: url];
+      if (u == nil)
+        {
+          [self showGitOutput: output title: title];
+          return;
+        }
+
+      BOOL ok = NO;
+      @try
+        {
+          ok = [[NSWorkspace sharedWorkspace] openURL: u];
+        }
+      @catch (NSException *e)
+        {
+          ok = NO;
+        }
+
+      if (ok == NO)
+        {
+          [self showGitOutput: output title: title];
+        }
+    }
+  @catch (NSException *e)
+    {
+      [self showGitOutput: output title: title];
+    }
+}
+
+- (NSString *)firstNonBlankLine:(NSString *)text
+{
+  NSArray *lines = [text componentsSeparatedByString: @"\n"];
+  NSUInteger i;
+  for (i = 0; i < [lines count]; i++)
+    {
+      NSString *l = [[lines objectAtIndex: i]
+        stringByTrimmingCharactersInSet:
+          [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+      if ([l length] > 0)
+        {
+          return l;
+        }
+    }
+  return nil;
 }
 
 - (NSString *)stringFromData:(NSData *)data
@@ -358,20 +1241,6 @@
   return AUTORELEASE (s);
 }
 
-/* Runs on the main thread so the output window is touched only there. */
-- (void)presentOutput:(NSDictionary *)payload
-{
-  @try
-    {
-      [self showGitOutput: [payload objectForKey: @"output"]
-                    title: [payload objectForKey: @"title"]];
-    }
-  @catch (NSException *e)
-    {
-      NSLog (@"GitContextMenu: showGitOutput threw: %@", e);
-    }
-}
-
 - (NSWindow *)outputWindow
 {
   @try
@@ -381,11 +1250,11 @@
           NSRect contentRect = NSMakeRect (0, 0, 600, 400);
 
           outputWindow = [[NSWindow alloc] initWithContentRect: contentRect
-                                                    styleMask: (NSTitledWindowMask
-                                                                | NSClosableWindowMask
-                                                                | NSResizableWindowMask)
-                                                      backing: NSBackingStoreBuffered
-                                                        defer: NO];
+                                                     styleMask: (NSTitledWindowMask
+                                                                 | NSClosableWindowMask
+                                                                 | NSResizableWindowMask)
+                                                       backing: NSBackingStoreBuffered
+                                                         defer: NO];
 
           NSScrollView *scroll = [[NSScrollView alloc] initWithFrame: contentRect];
           [scroll setHasVerticalScroller: YES];
