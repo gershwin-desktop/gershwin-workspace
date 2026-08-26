@@ -346,7 +346,20 @@ typedef enum FSNSelectionMask {
 @end
 
 
-@interface FSNodeRep : NSObject
+/* Generic, application-injected hook letting external bundles decorate the
+ * icon/label of a node (e.g. a git-repo badge) without FSNode knowing
+ * anything about the particular extension.  Mirrors the metadataProvider /
+ * iconPositionStore injection pattern already used by FSNodeRep. */
+@protocol FSNodeRepDecorationDelegate <NSObject>
+
+/* Return a small overlay image (e.g. 16x16) to draw on the node's icon, or
+ * nil for no badge.  Called from -setNode: and -updateIcons. */
+- (NSImage *)badgeImageForNode:(FSNode *)node;
+
+@end
+
+
+@interface FSNodeRep : NSObject 
 {
   NSArray *extInfoModules;
   
@@ -378,6 +391,7 @@ typedef enum FSNSelectionMask {
 
   id _metadataProvider;   /* id <FSNMetadataProvider>, set by the application */
   id _iconPositionStore;  /* id <FSNIconPositionStore>, set by the application */
+  id _decorationDelegate; /* id <FSNodeRepDecorationDelegate>, set by the application */
 }
 
 + (FSNodeRep *)sharedInstance;
@@ -391,6 +405,11 @@ typedef enum FSNSelectionMask {
  * the application; nil in a plain FSNode client (positions not persisted). */
 - (void)setIconPositionStore:(id)store;
 - (id)iconPositionStore;
+
+/* Decoration delegate (badge overlay for nodes).  Injected by the
+ * application; nil in a plain FSNode client. */
+- (void)setDecorationDelegate:(id<FSNodeRepDecorationDelegate>)delegate;
+- (id<FSNodeRepDecorationDelegate>)decorationDelegate;
 
 - (NSArray *)directoryContentsAtPath:(NSString *)path;
 

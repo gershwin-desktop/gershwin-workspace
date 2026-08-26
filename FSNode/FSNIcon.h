@@ -104,6 +104,9 @@
 
   // Pixel placement data
   FSNIconItemData *_placementData;
+
+  // Overlay badge from the application's decoration delegate (e.g. git repo)
+  NSImage *badgeImage;
 }
 
 @property (nonatomic, retain) FSNIconItemData *placementData;

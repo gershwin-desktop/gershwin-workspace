@@ -97,6 +97,7 @@ static NSImage *branchImage;
   RELEASE (tagColor);
   RELEASE (spotlightComment);
   RELEASE (_placementData);
+  RELEASE (badgeImage);
   [super dealloc];
 }
 
@@ -1056,6 +1057,17 @@ static NSImage *branchImage;
                                   dotSize, dotSize);
       FSNDrawLabelDot(dotRect, tagColor);
     }
+
+  /* Overlay badge from the decoration delegate (e.g. git repo), drawn last so
+   * it always sits on top, anchored to the top-right corner of the icon. */
+  if (badgeImage != nil)
+    {
+      NSSize bs = [badgeImage size];
+      CGFloat margin = 2.0;
+      NSPoint bp = NSMakePoint(icnBounds.origin.x + icnBounds.size.width - bs.width - margin,
+                               icnBounds.origin.y + icnBounds.size.height - bs.height - margin);
+      [badgeImage compositeToPoint: bp operation: NSCompositeSourceOver];
+    }
 }
 
 
@@ -1090,6 +1102,14 @@ static NSImage *branchImage;
   ASSIGN (tagColor,
           [[[FSNodeRep sharedInstance] metadataProvider]
             labelColorForPath: [anode path]]);
+
+  /* Overlay badge from the application's decoration delegate (e.g. a git
+   * repo indicator).  nil delegate or nil result means no badge. */
+  {
+    id <FSNodeRepDecorationDelegate> dd = [[FSNodeRep sharedInstance] decorationDelegate];
+    NSImage *b = (dd != nil) ? [dd badgeImageForNode: node] : nil;
+    ASSIGN (badgeImage, b);
+  }
 
   if (extInfoType)
     {

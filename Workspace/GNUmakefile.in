@@ -85,6 +85,7 @@ Workspace_OBJC_FILES = main.m \
 GWFunctions.m \
 GWMetadataProvider.m \
 GWIconPositionStore.m \
+GWExtensionsManager.m \
 GWAlignLogically.m \
 Workspace.m \
 AppDataTrash.m \

@@ -867,5 +867,15 @@ static FSNodeRep *shared = nil;
   return _iconPositionStore;
 }
 
+- (void)setDecorationDelegate:(id<FSNodeRepDecorationDelegate>)delegate
+{
+  _decorationDelegate = delegate;   /* not retained: the app owns its lifetime */
+}
+
+- (id<FSNodeRepDecorationDelegate>)decorationDelegate
+{
+  return _decorationDelegate;
+}
+
 @end
 

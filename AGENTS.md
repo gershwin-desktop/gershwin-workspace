@@ -4,10 +4,15 @@ GNUstep Objective-C aggregate project: Gershwin's Workspace Manager / file manag
 
 ## Build
 
-- `make` at the repo root aggregates SUBPROJECTS in order (DSStore, GSMetadata, FSNode, DBKit, Tools, Inspector, Operation, Workspace, GWMetadata); `PACKAGE_NEEDS_CONFIGURE=YES` reruns `./configure` as needed. `configure.ac` is the source; the root `configure`, root `GNUmakefile`, `Workspace/GNUmakefile` and `Tools/fswatcher/GNUmakefile` are generated and gitignored - edit the `GNUmakefile.in`/`configure.ac` templates instead.
+- `make` at the repo root aggregates SUBPROJECTS in order (DSStore, GSMetadata, FSNode, DBKit, Tools, Inspector, Operation, Workspace; `GWMetadata` is appended only when `BUILD_GWMETADATA=1`, from configure). `PACKAGE_NEEDS_CONFIGURE=YES` reruns `./configure` as needed. `configure.ac` is the source; the root `configure`, root `GNUmakefile`, `Workspace/GNUmakefile`, `Inspector/GNUmakefile` and `Tools/fswatcher/GNUmakefile` are generated and gitignored - edit the `GNUmakefile.in`/`configure.ac` templates instead.
 - Install is SYSTEM-domain only (`GNUSTEP_INSTALLATION_DOMAIN = SYSTEM` in every GNUmakefile): `sudo make install`. Never to LOCAL. After install, have the user restart Workspace, and verify nothing landed in `/Local`.
 - Zero build warnings is the bar (`-Wall`); run `make clean && make` before finishing. Must build on Linux, FreeBSD and OpenBSD.
 - libdispatch/GCD is unreliable - do not add new usage (existing use: `Workspace/AppImageIconProvider.m`).
+
+## Formatting and static analysis
+
+- `.clang-format` (Apple-style ObjC, 2-space indent, ColumnLimit 100) and `.clang-tidy` (Apple naming: CamelCase classes/constants, camelBack methods/vars, `_` private-member prefix) are enforced in-tree. Run `clang-format` on touched `.m`/`.h` files and `clang-tidy` before finishing; do not introduce formatting churn across unrelated files.
+- `.clangd` adds `-x objective-c -fblocks` and the `/System` include/framework paths so clangd resolves GNUstep headers. If clangd cannot find headers, source `GNUstep.sh` so `/System/Library/Headers` is on the path.
 
 ## Tests
 
@@ -23,3 +28,7 @@ Three independent layers:
 - No em-dash - plain hyphen; "WLAN", not "WiFi/Wi-Fi".
 - New files: `SPDX-License-Identifier: GPL-2.0-or-later OR BSD-2-Clause` (repo is GPLv2, dual-license style). Preserve FSF copyright headers in existing files.
 - GUI layout work: follow the gershwin-ui-metrics skill and `Workspace/AppearanceMetrics.h`.
+
+## Interop references
+
+- macOS interop (Finder `.DS_Store`, AppleDouble metadata, aliases, VNC testing) is documented in the root `INTEROP_*.md` files (`INTEROP_DSSTORE.md`, `INTEROP_ALIASES.md`, `INTEROP_TESTING.md`, `INTEROP_VNC_TESTING.md`). Read the relevant one before touching Finder-compatibility code.

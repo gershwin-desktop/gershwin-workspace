@@ -68,3 +68,6 @@ Tests/*/obj/
 .mcp.json
 oldtests.sum
 oldtests.log
+
+# Built GitContextMenu bundle output
+GitContextMenu/GitContextMenugwext/

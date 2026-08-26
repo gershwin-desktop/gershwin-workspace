@@ -88,6 +88,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "FSNIconsView.h"
 #import "GWMetadataProvider.h"
 #import "GWIconPositionStore.h"
+#import "GWExtensionsManager.h"
 #import "GWAlignLogically.h"
 #import "GWArchiveOperation.h"
 #import "Network/NetworkFSNode.h"
@@ -809,6 +810,10 @@ static Workspace *gworkspace = nil;
    * depending on the metadata implementation directly. */
   [fsnodeRep setMetadataProvider: [GWMetadataProvider sharedProvider]];
   [fsnodeRep setIconPositionStore: [GWIconPositionStore sharedStore]];
+  /* Let external .gwext bundles decorate nodes and extend the context menu. */
+  [fsnodeRep setDecorationDelegate: [GWExtensionsManager defaultManager]];
+  [[GWExtensionsManager defaultManager] loadExtensions];
+
 
   extendedInfo = [fsnodeRep availableExtendedInfoNames];
   menu = [[[NSApp mainMenu] itemWithTitle: NSLocalizedString(@"View", @"")] submenu];
@@ -4763,7 +4768,13 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     [menu addItem: menuItem];
     RELEASE (menuItem);
   }
-   
+  
+  /* Hand the assembled menu to any loaded extensions so they can append their
+   * own items (e.g. a git-repo bundle).  Extensions decide themselves whether
+   * they apply to the current selection. */
+  [[GWExtensionsManager defaultManager] appendContextMenuItems: menu
+                                                    forNodes: nodes];
+
   return AUTORELEASE (menu);
 }
 
