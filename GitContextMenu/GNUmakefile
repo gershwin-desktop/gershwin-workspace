@@ -15,8 +15,11 @@ GitContextMenu_OBJC_FILES = GitContextMenu.m
 GitContextMenu_RESOURCE_FILES =
 
 # FSNode types/headers (sibling subproject) and the generic extension protocol
-# header shipped in Workspace/.
-ADDITIONAL_GUI_LIBS += -lFSNode
+# header shipped in Workspace/.  Pass -L to the in-tree FSNode framework: in a
+# from-source CI build FSNode is not installed, and gnustep-make does not add
+# the sibling framework path for bundles (only for the main app), so the
+# explicit -L is required (matches the Tools/* and Operation patterns).
+ADDITIONAL_GUI_LIBS += -L../FSNode/FSNode.framework -lFSNode
 ADDITIONAL_INCLUDE_DIRS += -I../Workspace
 ADDITIONAL_INCLUDE_DIRS += -I../FSNode
 
