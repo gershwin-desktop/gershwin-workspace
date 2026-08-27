@@ -2454,8 +2454,17 @@
   NSUInteger refs = refsNum ? [refsNum unsignedIntegerValue] : 0;
   if (refs == 0)
     {
-      [(id <FSWatcherProtocol>)fswatcher client: (id <FSWClientProtocol>)self
-                                 addWatcherForPath: dir];
+      /* Defer the actual fswatcher send to the next run-loop pass.  A
+       * synchronous call here would pump the run loop (NSConnectionReplyMode)
+       * while watchLock is still held, letting a nested icon lifecycle
+       * re-enter -[GitContextMenu ensureWatcher] and deadlock the main thread
+       * on the non-recursive watchLock (seen when opening a folder that
+       * triggers a desktop reload, e.g. ~/Downloads).  NSDefaultRunLoopMode
+       * performers do not fire during a NSConnectionReplyMode reply wait, so
+       * this can never nest. */
+      [self performSelector: @selector (_deferredWatcherAddForArgs:)
+                   withObject: [NSArray arrayWithObjects: fswatcher, dir, nil]
+                   afterDelay: 0];
     }
   [watchedPaths setObject: [NSNumber numberWithUnsignedInteger: refs + 1]
                     forKey: dir];
@@ -2472,8 +2481,9 @@
     {
       if (fswatcher != nil)
         {
-          [(id <FSWatcherProtocol>)fswatcher client: (id <FSWClientProtocol>)self
-                               removeWatcherForPath: dir];
+          [self performSelector: @selector (_deferredWatcherRemoveForArgs:)
+                   withObject: [NSArray arrayWithObjects: fswatcher, dir, nil]
+                   afterDelay: 0];
         }
       [watchedPaths removeObjectForKey: dir];
       [dirRepoRoots removeObjectForKey: dir];
@@ -2484,6 +2494,40 @@
                        forKey: dir];
     }
   [watchLock unlock];
+}
+
+/* The fswatcher proxy sends are deferred (see addRepoWatch:/removeRepoWatch:) so
+ * they never run nested under watchLock while a NSConnection reply wait pumps the
+ * run loop.  The argument array carries (proxy, dir).  Wrapped in @try/@catch so a
+ * dead/flaky fswatcher cannot take down the Workspace main thread. */
+- (void)_deferredWatcherAddForArgs:(NSArray *)args
+{
+  @try
+    {
+      id proxy = [args objectAtIndex: 0];
+      NSString *dir = [args objectAtIndex: 1];
+      [(id <FSWatcherProtocol>)proxy client: (id <FSWClientProtocol>)self
+                           addWatcherForPath: dir];
+    }
+  @catch (NSException *e)
+    {
+      NSLog (@"GitContextMenu: deferred addWatcherForPath failed: %@", e);
+    }
+}
+
+- (void)_deferredWatcherRemoveForArgs:(NSArray *)args
+{
+  @try
+    {
+      id proxy = [args objectAtIndex: 0];
+      NSString *dir = [args objectAtIndex: 1];
+      [(id <FSWatcherProtocol>)proxy client: (id <FSWClientProtocol>)self
+                           removeWatcherForPath: dir];
+    }
+  @catch (NSException *e)
+    {
+      NSLog (@"GitContextMenu: deferred removeWatcherForPath failed: %@", e);
+    }
 }
 
 /* When a watched directory changes, re-scan its immediate children so that
