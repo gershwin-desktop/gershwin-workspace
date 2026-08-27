@@ -976,15 +976,21 @@
       [pending setObject: info forKey: key];
       [taskLock unlock];
 
-      [[NSNotificationCenter defaultCenter]
-        addObserver: self
-           selector: @selector(gitReadCompleted:)
-               name: NSFileHandleReadToEndOfFileCompletionNotification
-             object: readHandle];
-
-      /* Begin draining the pipe in the background before the process even
-       * starts, so a large diff can never block the child. */
-      [readHandle readToEndOfFileInBackgroundAndNotify];
+      /* Drain the pipe on a dedicated background thread.  We deliberately do
+       * NOT use NSFileHandleReadToEndOfFileCompletionNotification: GNUstep
+       * posts that notification from a background read thread, and our old
+       * code removed the observer from that same background thread.
+       * NSNotificationCenter is not safe to mutate (addObserver runs on the
+       * main thread in launchGit:, removeObserver on the read thread) from
+       * two threads, so the second git command's addObserver raced the first
+       * command's background-thread removeObserver and corrupted the center,
+       * crashing on the second invocation.  A plain read thread hands its
+       * result back to the main thread, so all pending/lock bookkeeping stays
+       * on the main thread. */
+      [NSThread detachNewThreadSelector: @selector(readGitOutputThread:)
+                               toTarget: self
+                             withObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                                           readHandle, @"handle", key, @"key", nil]];
 
       [task launch];
 
@@ -1003,80 +1009,116 @@
     }
 }
 
-- (void)gitReadCompleted:(NSNotification *)note
+- (void)readGitOutputThread:(NSDictionary *)args
 {
-  /* This fires on the background read thread (GNUstep posts the completion
-   * notification from there), NOT the main thread.  So it must not touch
-   * shared state or UI directly.  We lock pending, capture everything we need,
-   * then deliver the result to the main thread for all side effects. */
-  NSFileHandle *readHandle = [note object];
-  NSValue *key = [NSValue valueWithNonretainedObject: readHandle];
-  NSData *data = [[note userInfo] objectForKey: NSFileHandleNotificationDataItem];
+  /* Runs on a detached background thread.  Its only job is to block on the
+   * pipe until EOF (or the watchdog terminates the task, which closes the
+   * pipe), then hand the bytes back to the main thread.  It must not touch
+   * pending, the lock, or NSNotificationCenter - all of that happens on the
+   * main thread in gitReadThreadDone:. */
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  NSFileHandle *readHandle = [args objectForKey: @"handle"];
+  NSValue *key = [args objectForKey: @"key"];
+  NSData *data = nil;
+
+  @try
+    {
+      data = [readHandle readDataToEndOfFile];
+    }
+  @catch (NSException *e)
+    {
+      data = nil;
+    }
+  if (data == nil)
+    {
+      data = [NSData data];
+    }
+
+  [self performSelectorOnMainThread: @selector (gitReadThreadDone:)
+                         withObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                                       data, @"data", key, @"key", nil]
+                      waitUntilDone: NO];
+  [pool release];
+}
+
+- (void)gitReadThreadDone:(NSDictionary *)args
+{
+  /* Runs on the main thread.  Because the result is delivered here (not from
+   * a background-thread NSNotificationCenter callback), all access to pending
+   * and taskLock stays on the main thread - no cross-thread center mutation,
+   * no re-entrancy, no corruption across multiple git commands. */
+  NSData *data = [args objectForKey: @"data"];
+  NSValue *key = [args objectForKey: @"key"];
 
   [taskLock lock];
-  NSMutableDictionary *info = [pending objectForKey: key];
-  if (info == nil)
+  @try
+    {
+      NSMutableDictionary *info = [pending objectForKey: key];
+      if (info == nil)
+        {
+          return;
+        }
+      if ([[info objectForKey: @"done"] boolValue])
+        {
+          return;
+        }
+      [info setObject: [NSNumber numberWithBool: YES] forKey: @"done"];
+
+      /* Retain everything we still need BEFORE removing info from pending:
+       * once pending releases info, the objects it holds are freed, and
+       * touching them would be a use-after-free crash. */
+      NSString *title = [[info objectForKey: @"title"] retain];
+      BOOL openRemote = [[info objectForKey: @"openRemote"] boolValue];
+      NSDictionary *then = [[info objectForKey: @"then"] retain];
+      NSTimer *timer = [[info objectForKey: @"timer"] retain];
+      NSTask *task = [info objectForKey: @"task"];
+      int status = 0;
+      if (task != nil && [task isRunning] == NO)
+        {
+          @try { status = [task terminationStatus]; } @catch (NSException *e) { status = 0; }
+        }
+
+      NSMutableDictionary *result = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+        [self stringFromData: data], @"output",
+        (title ? title : (NSString *)@"git"), @"title",
+        [NSNumber numberWithBool: openRemote], @"openRemote",
+        [NSNumber numberWithInt: status], @"status", nil];
+      if (then != nil)
+        {
+          [result setObject: then forKey: @"then"];
+        }
+
+      [pending removeObjectForKey: key];
+
+      if (timer != nil)
+        {
+          [timer invalidate];
+        }
+      [timer release];
+      [then release];
+      [title release];
+      /* task is released when info is removed from pending; do not touch it. */
+
+      [self performSelectorOnMainThread: @selector (deliverGitResult:)
+                             withObject: result
+                          waitUntilDone: NO];
+    }
+  @catch (NSException *e)
+    {
+      NSLog (@"GitContextMenu: gitReadThreadDone threw: %@\n%@",
+             [e description], [e callStackSymbols]);
+    }
+  @finally
     {
       [taskLock unlock];
-      return;
     }
-  if ([[info objectForKey: @"done"] boolValue])
-    {
-      [taskLock unlock];
-      return;
-    }
-  [info setObject: [NSNumber numberWithBool: YES] forKey: @"done"];
-
-  /* Retain everything we still need BEFORE removing info from pending: once
-   * pending releases info, the objects it holds are freed, and touching them
-   * (as the previous version did) is a use-after-free crash. */
-  NSString *title = [[info objectForKey: @"title"] retain];
-  BOOL openRemote = [[info objectForKey: @"openRemote"] boolValue];
-  NSDictionary *then = [[info objectForKey: @"then"] retain];
-  NSTimer *timer = [[info objectForKey: @"timer"] retain];
-  NSTask *task = [info objectForKey: @"task"];
-  int status = 0;
-  if (task != nil && [task isRunning] == NO)
-    {
-      @try { status = [task terminationStatus]; } @catch (NSException *e) { status = 0; }
-    }
-
-  NSMutableDictionary *result = [NSMutableDictionary dictionaryWithObjectsAndKeys:
-    [self stringFromData: data], @"output",
-    (title ? title : (NSString *)@"git"), @"title",
-    [NSNumber numberWithBool: openRemote], @"openRemote",
-    [NSNumber numberWithInt: status], @"status", nil];
-  if (then != nil)
-    {
-      [result setObject: then forKey: @"then"];
-    }
-
-  [pending removeObjectForKey: key];
-  [taskLock unlock];
-
-  [[NSNotificationCenter defaultCenter]
-    removeObserver: self
-              name: NSFileHandleReadToEndOfFileCompletionNotification
-            object: readHandle];
-  if (timer != nil)
-    {
-      [timer invalidate];
-    }
-
-  [timer release];
-  [then release];
-  [title release];
-  /* task is released when info is removed from pending; do not touch it. */
-
-  [self performSelectorOnMainThread: @selector (deliverGitResult:)
-                         withObject: result
-                      waitUntilDone: NO];
 }
 
 - (void)gitTimeout:(NSTimer *)timer
 {
-  /* gitTimeout: runs on the main thread (the watchdog timer), but gitReadCompleted:
-   * may be racing it from the background read thread, so lock pending. */
+  /* gitTimeout: runs on the main thread (the watchdog timer).  It races
+   * gitReadThreadDone: (also main thread) only via the "done" flag, which is
+   * guarded by taskLock. */
   NSValue *key = [timer userInfo];
 
   [taskLock lock];
@@ -1093,9 +1135,8 @@
     }
   [info setObject: [NSNumber numberWithBool: YES] forKey: @"done"];
 
-  /* Retain before removing info from pending (see gitReadCompleted:). */
+  /* Retain before removing info from pending (see gitReadThreadDone:). */
   NSString *title = [[info objectForKey: @"title"] retain];
-  NSFileHandle *readHandle = [[info objectForKey: @"handle"] retain];
   NSTask *task = [[info objectForKey: @"task"] retain];
 
   [pending removeObjectForKey: key];
@@ -1103,11 +1144,6 @@
 
   @try
     {
-      [[NSNotificationCenter defaultCenter]
-        removeObserver: self
-                  name: NSFileHandleReadToEndOfFileCompletionNotification
-                object: readHandle];
-
       if (task != nil && [task isRunning])
         {
           [task terminate];
@@ -1119,15 +1155,14 @@
     }
 
   [self showGitOutput: @"(git did not finish within the time limit)"
-                title: (title ? title : (NSString *)@"git")];
+                 title: (title ? title : (NSString *)@"git")];
 
   [task release];
-  [readHandle release];
   [title release];
 }
 
 /* Runs on the main thread (invoked via performSelectorOnMainThread from
- * gitReadCompleted:).  All UI and any follow-up git task happen here. */
+ * gitReadThreadDone:).  All UI and any follow-up tasks happen here. */
 - (void)deliverGitResult:(NSDictionary *)result
 {
   @try
@@ -1250,11 +1285,19 @@
           NSRect contentRect = NSMakeRect (0, 0, 600, 400);
 
           outputWindow = [[NSWindow alloc] initWithContentRect: contentRect
-                                                     styleMask: (NSTitledWindowMask
-                                                                 | NSClosableWindowMask
-                                                                 | NSResizableWindowMask)
-                                                       backing: NSBackingStoreBuffered
-                                                         defer: NO];
+                                                      styleMask: (NSTitledWindowMask
+                                                                  | NSClosableWindowMask
+                                                                  | NSResizableWindowMask)
+                                                        backing: NSBackingStoreBuffered
+                                                          defer: NO];
+
+          /* NSWindow is releasedWhenClosed by default; closing the output
+           * window would then deallocate it while our ivars still point at it,
+           * leaving a dangling pointer that the next showGitOutput would touch
+           * and crash on.  windowWillClose: nils our references so a later
+           * showGitOutput: rebuilds a fresh window instead of touching a
+           * freed one. */
+          [outputWindow setDelegate: self];
 
           NSScrollView *scroll = [[NSScrollView alloc] initWithFrame: contentRect];
           [scroll setHasVerticalScroller: YES];
@@ -1279,6 +1322,19 @@
     }
 
   return outputWindow;
+}
+
+- (void)windowWillClose:(NSNotification *)note
+{
+  /* The output window was closed.  Drop our references so a later
+   * showGitOutput: rebuilds a fresh window instead of touching a
+   * deallocated one (NSWindow is releasedWhenClosed by default, so the
+   * window is freed once closed and the ivars would otherwise dangle). */
+  if ([note object] == outputWindow)
+    {
+      outputWindow = nil;
+      outputTextView = nil;
+    }
 }
 
 - (void)showGitOutput:(NSString *)output title:(NSString *)title
