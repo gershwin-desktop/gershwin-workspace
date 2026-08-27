@@ -441,6 +441,179 @@ FSNLinkBadgedImage(NSImage *image)
   return [badged autorelease];
 }
 
+NSImage *
+FSNGitBadgedImage(NSImage *image, NSImage *logo)
+{
+  if (image == nil)
+    {
+      return nil;
+    }
+
+  NSSize sz = [image size];
+
+  /* Read the base icon as a bitmap.  imageRepWithData: returns a rep whose
+   * bitmapData is read-only (it is backed by the TIFF buffer), so we must
+   * NOT write into it.  We copy the pixels into a bitmap WE allocate
+   * (writable) and apply the darkening while copying. */
+  NSBitmapImageRep *srcRep =
+    [NSBitmapImageRep imageRepWithData: [image TIFFRepresentation]];
+  if (srcRep == nil || [srcRep samplesPerPixel] < 3 || [srcRep isPlanar])
+    {
+      return [[image copy] autorelease];
+    }
+
+  /* No logo: nothing to overlay, return the original icon cheaply. */
+  if (logo == nil)
+    {
+      return [[image copy] autorelease];
+    }
+
+  NSInteger w = [srcRep pixelsWide];
+  NSInteger h = [srcRep pixelsHigh];
+
+  /* Half the icon, aspect-preserving.  Anchored toward the bottom via the
+   * golden ratio (badge centre at (1 - 1/phi) of the height from the bottom),
+   * then lifted a further 5% of the icon height. */
+  const CGFloat golden = 0.6180339887498949;
+      const CGFloat upShift = 0.10;   /* fraction of icon height to lift */
+  const CGFloat strength = 0.35;  /* subtle darkening where the logo is dark;
+                                   * white/transparent logo areas are left
+                                   * untouched (no hue shift). */
+  CGFloat badge = 0.5 * MIN (sz.width, sz.height);
+  NSSize ls = [logo size];
+  CGFloat scale = (ls.width > 0 && ls.height > 0)
+                    ? MIN (badge / ls.width, badge / ls.height)
+                    : 1.0;
+  CGFloat dw = ls.width * scale;
+  CGFloat dh = ls.height * scale;
+  CGFloat cx = sz.width / 2.0;
+  CGFloat cyFromBottom = sz.height * (1.0 - golden) + sz.height * upShift;
+  NSRect dest = NSMakeRect (cx - dw / 2.0, cyFromBottom - dh / 2.0, dw, dh);
+
+      /* Cache the logo's bitmap rep; the NSImage (from the extension) is reused
+       * for every git folder, so decode it only when it changes.  Both the
+       * cached rep and the logo must be RETAINED: they come from autoreleased
+       * calls, and a static must not hold a dangling pointer after the current
+       * autorelease pool drains (that dangling pointer was causing a crash on
+       * the second selection of a git folder). */
+      static NSBitmapImageRep *cachedLogoRep = nil;
+      static NSImage *cachedLogoImg = nil;
+      if (logo != cachedLogoImg)
+        {
+          [cachedLogoRep release];
+          cachedLogoRep =
+            [[NSBitmapImageRep imageRepWithData: [logo TIFFRepresentation]] retain];
+          [cachedLogoImg release];
+          cachedLogoImg = [logo retain];
+        }
+  NSBitmapImageRep *logoRep = cachedLogoRep;
+
+  if (logoRep == nil || [logoRep isPlanar] || [logoRep samplesPerPixel] < 1)
+    {
+      return [[image copy] autorelease];
+    }
+
+  /* Build a writable RGBA bitmap and copy the base icon into it, darkening
+   * only where the logo's own pixels are dark. */
+  NSBitmapImageRep *dstRep =
+    [[NSBitmapImageRep alloc] initWithBitmapDataPlanes: NULL
+                                            pixelsWide: w
+                                            pixelsHigh: h
+                                         bitsPerSample: 8
+                                       samplesPerPixel: 4
+                                              hasAlpha: YES
+                                              isPlanar: NO
+                                        colorSpaceName: NSDeviceRGBColorSpace
+                                           bytesPerRow: 0
+                                          bitsPerPixel: 0];
+
+  unsigned char *sdata = [srcRep bitmapData];
+  NSInteger sRow = [srcRep bytesPerRow];
+  NSInteger sSpp = [srcRep samplesPerPixel];
+  unsigned char *ddata = [dstRep bitmapData];
+  NSInteger dRow = [dstRep bytesPerRow];
+
+  NSInteger lw = [logoRep pixelsWide];
+  NSInteger lh = [logoRep pixelsHigh];
+  NSInteger lSpp = [logoRep samplesPerPixel];
+  NSInteger lRowBytes = [logoRep bytesPerRow];
+  unsigned char *ldata = [logoRep bitmapData];
+
+  NSInteger x0 = (NSInteger) floor (dest.origin.x);
+  NSInteger x1 = (NSInteger) ceil (dest.origin.x + dw);
+  NSInteger y0 = (NSInteger) floor (dest.origin.y);
+  NSInteger y1 = (NSInteger) ceil (dest.origin.y + dh);
+  x0 = MAX (0, x0); x1 = MIN (w, x1);
+  y0 = MAX (0, y0); y1 = MIN (h, y1);
+
+  NSInteger x;
+  for (x = 0; x < w; x++)
+    {
+      NSInteger y;
+      for (y = 0; y < h; y++)
+        {
+          /* src and dst are both top-down (row 0 = top).  The badge geometry
+           * is expressed y-up (0 = bottom), so convert for the logo lookup. */
+          unsigned char *sp = sdata + y * sRow + x * sSpp;
+          unsigned char *dp = ddata + y * dRow + x * 4;
+          unsigned char sa = (sSpp >= 4) ? sp[3] : 255;
+          CGFloat sr = sp[0];
+          CGFloat sg = sp[1];
+          CGFloat sb = sp[2];
+
+          if (x >= x0 && x < x1 && y >= y0 && y < y1)
+            {
+              NSInteger yUp = h - 1 - y;
+              CGFloat fx = (CGFloat) (x - dest.origin.x) / dw;
+              CGFloat fyUp = (CGFloat) (yUp - dest.origin.y) / dh;
+              NSInteger lx = (NSInteger) (fx * (lw - 1));
+              NSInteger lv = (NSInteger) ((1.0 - fyUp) * (lh - 1));
+              lx = MAX (0, MIN (lx, lw - 1));
+              lv = MAX (0, MIN (lv, lh - 1));
+
+              unsigned char *lp = ldata + lv * lRowBytes + lx * lSpp;
+              unsigned char la = (lSpp >= 4) ? lp[3] : 255;
+              CGFloat lr, lg, lb;
+              if (lSpp >= 3)
+                {
+                  lr = lp[0]; lg = lp[1]; lb = lp[2];
+                }
+              else if (lSpp == 2)
+                {
+                  lr = lg = lb = lp[0]; la = lp[1];
+                }
+              else
+                {
+                  lr = lg = lb = lp[0];
+                }
+              CGFloat lum = (0.299 * lr + 0.587 * lg + 0.114 * lb) / 255.0;
+              CGFloat alpha = la / 255.0;
+
+              /* Only the logo's own dark, opaque pixels darken the icon. */
+              CGFloat dark = (1.0 - lum) * alpha * strength;
+              if (dark > 0.0)
+                {
+                  sr *= (1.0 - dark);
+                  sg *= (1.0 - dark);
+                  sb *= (1.0 - dark);
+                }
+            }
+
+          dp[0] = (unsigned char) sr;
+          dp[1] = (unsigned char) sg;
+          dp[2] = (unsigned char) sb;
+          dp[3] = sa;
+        }
+    }
+
+  NSImage *result = [[NSImage alloc] initWithSize: sz];
+  [result addRepresentation: dstRep];
+  [dstRep release];
+  return [result autorelease];
+}
+
+NSString *FSNBadgeCountDidChangeNotification = @"FSNBadgeCountDidChangeNotification";
+
 /* --- Text Field Editing Error Messages */
 
 void showAlertNoPermission(Class c, NSString *name)

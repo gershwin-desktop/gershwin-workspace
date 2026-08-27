@@ -12,7 +12,7 @@ GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 BUNDLE_NAME = GitContextMenu
 GitContextMenu_PRINCIPAL_CLASS = GitContextMenu
 GitContextMenu_OBJC_FILES = GitContextMenu.m
-GitContextMenu_RESOURCE_FILES =
+GitContextMenu_RESOURCE_FILES = gitLogo.png
 
 # FSNode types/headers (sibling subproject) and the generic extension protocol
 # header shipped in Workspace/.  Pass -L to the in-tree FSNode framework: in a

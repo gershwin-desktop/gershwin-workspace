@@ -641,6 +641,7 @@ enable_option_checking=no
 ac_subst_vars='LTLIBOBJS
 LIBOBJS
 HAVE_LIBDISPATCH
+with_kqueue
 INOTIFY_LIBS
 with_inotify
 BUILD_GWMETADATA
@@ -707,6 +708,7 @@ enable_squashfs
 enable_gwmetadata
 enable_debug_log
 with_inotify
+with_kqueue
 enable_libdispatch
 with_dispatch_include
 with_dispatch_library
@@ -1352,6 +1354,8 @@ Optional Packages:
   --without-PACKAGE       do not use PACKAGE (same as --with-PACKAGE=no)
   --with-inotify          Force enable fswatcher-inotify
   --without-inotify       Force disable fswatcher-inotify
+  --with-kqueue           Force enable fswatcher-kqueue
+  --without-kqueue        Force disable fswatcher-kqueue
   --with-dispatch-include=PATH       Include path for dispatch header
   --with-dispatch-library=PATH       Library path for dispatch lib
 
@@ -3967,6 +3971,34 @@ then :
   withval=$with_inotify;
 fi
 
+
+
+
+
+#--------------------------------------------------------------------
+# fswatcher-kqueue - use on BSD systems that provide kqueue (<sys/event.h>).
+# Only relevant when inotify is not available.
+#--------------------------------------------------------------------
+with_kqueue=no
+
+       for ac_header in sys/event.h
+do :
+  ac_fn_c_check_header_compile "$LINENO" "sys/event.h" "ac_cv_header_sys_event_h" "$ac_includes_default"
+if test "x$ac_cv_header_sys_event_h" = xyes
+then :
+  printf "%s\n" "#define HAVE_SYS_EVENT_H 1" >>confdefs.h
+ with_kqueue=yes
+fi
+
+done
+
+# Allow manual override
+
+# Check whether --with-kqueue was given.
+if test ${with_kqueue+y}
+then :
+  withval=$with_kqueue;
+fi
 
 
 

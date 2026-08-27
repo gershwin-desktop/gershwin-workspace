@@ -163,4 +163,79 @@
   return nil;
 }
 
+- (NSInteger)badgeCountForNode:(FSNode *)node
+{
+  NSUInteger i;
+
+  for (i = 0; i < [extensions count]; i++)
+    {
+      id <GWorkspaceExtension> ext = [extensions objectAtIndex: i];
+
+      @try
+        {
+          if ([ext respondsToSelector: @selector(badgeCountForNode:)])
+            {
+              NSInteger c = [ext badgeCountForNode: node];
+              if (c != 0)
+                {
+                  return c;
+                }
+            }
+        }
+      @catch (NSException *e)
+        {
+          NSLog (@"GWExtensionsManager: extension %@ threw in "
+                @"badgeCountForNode: %@", ext, e);
+        }
+    }
+
+  return 0;
+}
+
+- (void)startWatchingNode:(FSNode *)node
+{
+  NSUInteger i;
+
+  for (i = 0; i < [extensions count]; i++)
+    {
+      id <GWorkspaceExtension> ext = [extensions objectAtIndex: i];
+
+      @try
+        {
+          if ([ext respondsToSelector: @selector(startWatchingNode:)])
+            {
+              [ext startWatchingNode: node];
+            }
+        }
+      @catch (NSException *e)
+        {
+          NSLog (@"GWExtensionsManager: extension %@ threw in "
+                 @"startWatchingNode: %@", ext, e);
+        }
+    }
+}
+
+- (void)stopWatchingNode:(FSNode *)node
+{
+  NSUInteger i;
+
+  for (i = 0; i < [extensions count]; i++)
+    {
+      id <GWorkspaceExtension> ext = [extensions objectAtIndex: i];
+
+      @try
+        {
+          if ([ext respondsToSelector: @selector(stopWatchingNode:)])
+            {
+              [ext stopWatchingNode: node];
+            }
+        }
+      @catch (NSException *e)
+        {
+          NSLog (@"GWExtensionsManager: extension %@ threw in "
+                 @"stopWatchingNode: %@", ext, e);
+        }
+    }
+}
+
 @end

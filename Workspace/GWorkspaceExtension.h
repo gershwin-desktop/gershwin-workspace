@@ -33,6 +33,16 @@
  * manager forwards badge requests from FSNode to extensions implementing it. */
 - (NSImage *)badgeImageForNode:(FSNode *)node;
 
+/* Count shown on a red corner badge (e.g. changed/unpushed file count).  Return
+ * 0 for none.  Mirrors -badgeCountForNode: in FSNodeRepDecorationDelegate. */
+- (NSInteger)badgeCountForNode:(FSNode *)node;
+
+/* Begin/end watching the node's backing repository for external changes so the
+ * count badge can refresh on demand.  Forwarded from FSNIcon via the extension
+ * manager; an extension implements these to start/stop file-system monitors. */
+- (void)startWatchingNode:(FSNode *)node;
+- (void)stopWatchingNode:(FSNode *)node;
+
 @end
 
 #endif // GWORKSPACE_EXTENSION_H

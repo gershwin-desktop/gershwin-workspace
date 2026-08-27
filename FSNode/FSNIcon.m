@@ -97,7 +97,8 @@ static NSImage *branchImage;
   RELEASE (tagColor);
   RELEASE (spotlightComment);
   RELEASE (_placementData);
-  RELEASE (badgeImage);
+  [self stopWatchingCurrentNode];
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
   [super dealloc];
 }
 
@@ -229,6 +230,14 @@ static NSImage *branchImage;
       ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
       drawicon = icon;
       selectedicon = nil;
+
+      [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector (gitBadgeCountChanged:)
+               name: FSNBadgeCountDidChangeNotification
+             object: nil];
+      [self updateBadgeCount];
+      [self startWatchingCurrentNode];
 
       /* Initialize placement data */
       _placementData = [[FSNIconItemData alloc] init];
@@ -1058,24 +1067,121 @@ static NSImage *branchImage;
       FSNDrawLabelDot(dotRect, tagColor);
     }
 
-  /* Overlay badge from the decoration delegate (e.g. git repo), drawn last so
-   * it always sits on top, anchored to the top-right corner of the icon. */
-  if (badgeImage != nil)
+  /* Red git change-count badge: a rounded pill with the number in white, drawn
+   * at the icon's top-right corner (>= 48px icons only), mirroring the Dock's
+   * app-icon badge.  The count arrives asynchronously; until then badgeCount is
+   * 0 / pending and nothing is drawn here. */
+  if (gitBadgeCount > 0 && iconSize >= 48)
     {
-      NSSize bs = [badgeImage size];
+      NSString *countStr = (gitBadgeCount > 99)
+        ? @"99+"
+        : [NSString stringWithFormat: @"%ld", (long) gitBadgeCount];
+      CGFloat badgeH = MAX (12.0, round ((CGFloat) iconSize * 0.34));
+      NSDictionary *attrs = @{
+        NSFontAttributeName: [NSFont boldSystemFontOfSize: badgeH * 0.6],
+        NSForegroundColorAttributeName: [NSColor whiteColor]
+      };
+      NSSize strSize = [countStr sizeWithAttributes: attrs];
+      CGFloat pad = badgeH * 0.375;
+      CGFloat badgeW = strSize.width + pad * 2.0;
+      if (badgeW < badgeH)
+        {
+          badgeW = badgeH;
+        }
       CGFloat margin = 2.0;
-      NSPoint bp = NSMakePoint(icnBounds.origin.x + icnBounds.size.width - bs.width - margin,
-                               icnBounds.origin.y + icnBounds.size.height - bs.height - margin);
-      [badgeImage compositeToPoint: bp operation: NSCompositeSourceOver];
+      NSRect badgeRect = NSMakeRect (
+        icnBounds.origin.x + icnBounds.size.width - badgeW - margin,
+        icnBounds.origin.y + icnBounds.size.height - badgeH - margin,
+        badgeW, badgeH);
+      [[NSColor redColor] set];
+      [[NSBezierPath bezierPathWithRoundedRect: badgeRect
+                                       xRadius: badgeH / 2.0
+                                       yRadius: badgeH / 2.0] fill];
+      NSPoint strPoint = NSMakePoint (
+        badgeRect.origin.x + (badgeW - strSize.width) / 2.0,
+        badgeRect.origin.y + (badgeH - strSize.height) / 2.0);
+      [countStr drawAtPoint: strPoint withAttributes: attrs];
     }
+
+  /* The git-repository badge (the git logo) is already baked into the icon
+   * image by FSNodeRep's iconOfSize:forNode:, so nothing else is drawn here. */
 }
 
 
 //
 // FSNodeRep protocol
 //
+
+/* Query the decoration delegate for the git change-count of this node.  Returns
+ * immediately: a known count (possibly 0) is stored, while an in-flight
+ * computation yields -1 and the badge is filled in later when
+ * gitBadgeCountChanged: fires.  Non-directories are skipped. */
+- (void)updateBadgeCount
+{
+  gitBadgeCount = 0;
+  if (node == nil || [node isDirectory] == NO)
+    {
+      return;
+    }
+  id dd = [fsnodeRep decorationDelegate];
+  if (dd != nil && [dd respondsToSelector: @selector (badgeCountForNode:)])
+    {
+      NSInteger c = [dd badgeCountForNode: node];
+      if (c > 0)
+        {
+          gitBadgeCount = c;
+        }
+    }
+}
+
+/* A background git count finished; if it was for this node, store it and
+ * redraw so the red badge appears without re-blocking the UI. */
+- (void)gitBadgeCountChanged:(NSNotification *)note
+{
+  NSString *path = [note object];
+  if (path == nil || node == nil || [[node path] isEqual: path] == NO)
+    {
+      return;
+    }
+  [self updateBadgeCount];
+  [self setNeedsDisplay: YES];
+}
+
+/* Ask the decoration delegate to begin/end watching this node's backing
+ * repository, so the count badge can refresh on external changes.  Guarded by
+ * respondsToSelector because not every decoration delegate implements watching
+ * (and the delegate may be nil while extensions are still loading). */
+- (void)startWatchingCurrentNode
+{
+  if (node == nil || [node isDirectory] == NO)
+    {
+      return;
+    }
+  id dd = [fsnodeRep decorationDelegate];
+  if (dd != nil && [dd respondsToSelector: @selector (startWatchingNode:)])
+    {
+      @try { [dd performSelector: @selector (startWatchingNode:) withObject: node]; }
+      @catch (NSException *e) { /* ignore: watching is best-effort */ }
+    }
+}
+
+- (void)stopWatchingCurrentNode
+{
+  if (node == nil || [node isDirectory] == NO)
+    {
+      return;
+    }
+  id dd = [fsnodeRep decorationDelegate];
+  if (dd != nil && [dd respondsToSelector: @selector (stopWatchingNode:)])
+    {
+      @try { [dd performSelector: @selector (stopWatchingNode:) withObject: node]; }
+      @catch (NSException *e) { /* ignore: watching is best-effort */ }
+    }
+}
+
 - (void)setNode:(FSNode *)anode
 {
+  [self stopWatchingCurrentNode];
   DESTROY (selection);
   DESTROY (selectionTitle);
   DESTROY (hostname);
@@ -1086,6 +1192,8 @@ static NSImage *branchImage;
   ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
   drawicon = icon;
   DESTROY (selectedicon);
+  [self updateBadgeCount];
+  [self startWatchingCurrentNode];
 
   if ([[node path] isEqual: path_separator()] && ([node isMountPoint] == NO))
     {
@@ -1100,16 +1208,12 @@ static NSImage *branchImage;
    * drawRect: — so colour labels survive updateIcons and
    * other setNode: callers even if the view isn't redrawn. */
   ASSIGN (tagColor,
-          [[[FSNodeRep sharedInstance] metadataProvider]
-            labelColorForPath: [anode path]]);
+           [[[FSNodeRep sharedInstance] metadataProvider]
+             labelColorForPath: [anode path]]);
 
-  /* Overlay badge from the application's decoration delegate (e.g. a git
-   * repo indicator).  nil delegate or nil result means no badge. */
-  {
-    id <FSNodeRepDecorationDelegate> dd = [[FSNodeRep sharedInstance] decorationDelegate];
-    NSImage *b = (dd != nil) ? [dd badgeImageForNode: node] : nil;
-    ASSIGN (badgeImage, b);
-  }
+  /* The git-repository badge (git logo) is baked into the icon image by
+   * FSNodeRep's iconOfSize:forNode:, so FSNIcon needs no separate badge
+   * handling here. */
 
   if (extInfoType)
     {

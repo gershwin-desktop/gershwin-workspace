@@ -356,6 +356,23 @@ typedef enum FSNSelectionMask {
  * nil for no badge.  Called from -setNode: and -updateIcons. */
 - (NSImage *)badgeImageForNode:(FSNode *)node;
 
+/* Return the number to show on a red count badge for this node (e.g. the count
+ * of changed / unpushed files in a git repository), or 0 for none.  Called only
+ * for icons rendered at 48px or larger. */
+- (NSInteger)badgeCountForNode:(FSNode *)node;
+
+@optional
+
+/* Tells the delegate that an icon for `node` is now on screen (or has been
+ * assigned to this node) so it can begin watching that node's backing
+ * repository for external changes.  Called from FSNIcon's init/setNode. */
+- (void)startWatchingNode:(FSNode *)node;
+
+/* Tells the delegate that an icon for `node` is going away (reused for another
+ * node, or deallocated) so it can stop watching.  Called from FSNIcon's
+ * setNode/dealloc. */
+- (void)stopWatchingNode:(FSNode *)node;
+
 @end
 
 

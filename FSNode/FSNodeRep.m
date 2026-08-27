@@ -50,7 +50,9 @@
 #endif
 #endif /* HAVE_SYSTYPES */
 #else 
-  #if	defined(HAVE_GETMNTENT) && defined (MNT_DIR)
+  #if	defined(HAVE_GETMNTENT) && defined (MNT_DIR) \
+	&& !defined(__FreeBSD__) && !defined(__NetBSD__) \
+	&& !defined(__OpenBSD__) && !defined(__DragonFly__)
     #if	defined(HAVE_MNTENT_H)
       #include <mntent.h>
     #elif defined(HAVE_SYS_MNTENT_H)

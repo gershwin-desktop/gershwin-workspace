@@ -102,11 +102,12 @@
   BOOL labelChecked;        // YES once metadata has been probed for a label
   NSString *spotlightComment;  // Spotlight comment from DS_Store (cmmt)
 
+  // Git change-count badge: the number drawn as a red pill in the icon's
+  // top-right corner (>= 48px icons only).  -1 while pending, >=0 once known.
+  NSInteger gitBadgeCount;
+
   // Pixel placement data
   FSNIconItemData *_placementData;
-
-  // Overlay badge from the application's decoration delegate (e.g. git repo)
-  NSImage *badgeImage;
 }
 
 @property (nonatomic, retain) FSNIconItemData *placementData;

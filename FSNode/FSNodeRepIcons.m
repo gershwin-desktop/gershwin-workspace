@@ -472,6 +472,25 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
     {
     }
 
+  /* Overlay a git-repository badge (the git logo) when the decoration
+   * delegate supplies one.  This covers every icon size and every view
+   * (icon, list, browser, desktop) because they all obtain their icons
+   * through this cache-backed method, and the logo image itself is cached by
+   * the extension.  Only directories can be git repositories, so the delegate
+   * lookup (a disk stat for .git) is skipped for plain files. */
+  if (icon != nil && [node isDirectory])
+    {
+      id dd = [[FSNodeRep sharedInstance] decorationDelegate];
+      if (dd != nil && [dd respondsToSelector: @selector (badgeImageForNode:)])
+        {
+          NSImage *logo = [dd badgeImageForNode: node];
+          if (logo != nil)
+            {
+              icon = FSNGitBadgedImage (icon, logo);
+            }
+        }
+    }
+
   return icon;
 }
 
