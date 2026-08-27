@@ -83,6 +83,12 @@ static NSImage *branchImage;
     {
       [self removeTrackingRect: trectTag];
     }
+  /* Stop watching and drop the badge observer BEFORE releasing node: both
+   * stopWatchingCurrentNode and gitBadgeCountChanged: dereference self.node,
+   * so releasing it first would be a use-after-free on every git-repo icon's
+   * deallocation (i.e. when a viewer showing such icons is closed). */
+  [self stopWatchingCurrentNode];
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
   RELEASE (node);
   RELEASE (hostname);
   RELEASE (selection);
@@ -97,8 +103,6 @@ static NSImage *branchImage;
   RELEASE (tagColor);
   RELEASE (spotlightComment);
   RELEASE (_placementData);
-  [self stopWatchingCurrentNode];
-  [[NSNotificationCenter defaultCenter] removeObserver: self];
   [super dealloc];
 }
 
