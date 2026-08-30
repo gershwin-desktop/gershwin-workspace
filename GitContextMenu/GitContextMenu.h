@@ -64,6 +64,13 @@
   NSMutableDictionary *watchedPaths;
   NSMutableDictionary *dirRepoRoots;
   NSLock *watchLock;
+  /* Batched watcher sends: rather than one timer per add/remove (which floods
+   * the run loop with 80 000+ timers when opening a large directory), all
+   * pending adds/removes are collected and flushed by a single one-shot timer.
+   * Guards: watchLock. */
+  NSMutableArray *_pendingWatcherAdds;
+  NSMutableArray *_pendingWatcherRemoves;
+  NSTimer *_watcherFlushTimer;
 
   /* Debounce: scheduleRecomputeForRepo: arms (or re-arms) a per-repo timer; the
    * timer only fires 200ms after the last change, so a burst of file-system

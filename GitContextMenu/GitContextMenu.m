@@ -53,6 +53,9 @@
       watchedPaths = [[NSMutableDictionary alloc] init];
       dirRepoRoots = [[NSMutableDictionary alloc] init];
       watchLock = [[NSLock alloc] init];
+      _pendingWatcherAdds = [[NSMutableArray alloc] init];
+      _pendingWatcherRemoves = [[NSMutableArray alloc] init];
+      _watcherFlushTimer = nil;
 
       recomputeTimers = [[NSMutableDictionary alloc] init];
       debounceLock = [[NSLock alloc] init];
@@ -2461,10 +2464,17 @@
        * on the non-recursive watchLock (seen when opening a folder that
        * triggers a desktop reload, e.g. ~/Downloads).  NSDefaultRunLoopMode
        * performers do not fire during a NSConnectionReplyMode reply wait, so
-       * this can never nest. */
-      [self performSelector: @selector (_deferredWatcherAddForArgs:)
-                   withObject: [NSArray arrayWithObjects: fswatcher, dir, nil]
-                   afterDelay: 0];
+       * this can never nest.  Batched into a single one-shot timer so we
+       * never flood the run loop with 80 000+ individual timers. */
+      [_pendingWatcherAdds addObject: [NSArray arrayWithObjects: fswatcher, dir, nil]];
+      if (_watcherFlushTimer == nil)
+        {
+          _watcherFlushTimer = [NSTimer scheduledTimerWithTimeInterval: 0
+                                                               target: self
+                                                             selector: @selector (_flushPendingWatcherOps)
+                                                             userInfo: nil
+                                                              repeats: NO];
+        }
     }
   [watchedPaths setObject: [NSNumber numberWithUnsignedInteger: refs + 1]
                     forKey: dir];
@@ -2481,9 +2491,15 @@
     {
       if (fswatcher != nil)
         {
-          [self performSelector: @selector (_deferredWatcherRemoveForArgs:)
-                   withObject: [NSArray arrayWithObjects: fswatcher, dir, nil]
-                   afterDelay: 0];
+          [_pendingWatcherRemoves addObject: [NSArray arrayWithObjects: fswatcher, dir, nil]];
+          if (_watcherFlushTimer == nil)
+            {
+              _watcherFlushTimer = [NSTimer scheduledTimerWithTimeInterval: 0
+                                                                   target: self
+                                                                 selector: @selector (_flushPendingWatcherOps)
+                                                                 userInfo: nil
+                                                                  repeats: NO];
+            }
         }
       [watchedPaths removeObjectForKey: dir];
       [dirRepoRoots removeObjectForKey: dir];
@@ -2496,37 +2512,48 @@
   [watchLock unlock];
 }
 
-/* The fswatcher proxy sends are deferred (see addRepoWatch:/removeRepoWatch:) so
- * they never run nested under watchLock while a NSConnection reply wait pumps the
- * run loop.  The argument array carries (proxy, dir).  Wrapped in @try/@catch so a
- * dead/flaky fswatcher cannot take down the Workspace main thread. */
-- (void)_deferredWatcherAddForArgs:(NSArray *)args
+/* Flush all pending watcher adds/removes in a single batch.  Each entry in the
+ * pending arrays is an NSArray of (proxy, path).  Runs outside watchLock so the
+ * sync DO calls can pump the run loop without nesting re-entrant watch acquisitions.
+ * One-shot timer; automatically cancelled after firing. */
+- (void)_flushPendingWatcherOps
 {
-  @try
-    {
-      id proxy = [args objectAtIndex: 0];
-      NSString *dir = [args objectAtIndex: 1];
-      [(id <FSWatcherProtocol>)proxy client: (id <FSWClientProtocol>)self
-                           addWatcherForPath: dir];
-    }
-  @catch (NSException *e)
-    {
-      NSLog (@"GitContextMenu: deferred addWatcherForPath failed: %@", e);
-    }
-}
+  NSArray *adds, *removes;
+  [watchLock lock];
+  adds = [_pendingWatcherAdds copy];
+  removes = [_pendingWatcherRemoves copy];
+  [_pendingWatcherAdds removeAllObjects];
+  [_pendingWatcherRemoves removeAllObjects];
+  _watcherFlushTimer = nil;
+  [watchLock unlock];
 
-- (void)_deferredWatcherRemoveForArgs:(NSArray *)args
-{
-  @try
+  for (NSArray *args in adds)
     {
-      id proxy = [args objectAtIndex: 0];
-      NSString *dir = [args objectAtIndex: 1];
-      [(id <FSWatcherProtocol>)proxy client: (id <FSWClientProtocol>)self
-                           removeWatcherForPath: dir];
+      @try
+        {
+          id proxy = [args objectAtIndex: 0];
+          NSString *dir = [args objectAtIndex: 1];
+          [(id <FSWatcherProtocol>)proxy client: (id <FSWClientProtocol>)self
+                               addWatcherForPath: dir];
+        }
+      @catch (NSException *e)
+        {
+          NSLog (@"GitContextMenu: deferred addWatcherForPath failed: %@", e);
+        }
     }
-  @catch (NSException *e)
+  for (NSArray *args in removes)
     {
-      NSLog (@"GitContextMenu: deferred removeWatcherForPath failed: %@", e);
+      @try
+        {
+          id proxy = [args objectAtIndex: 0];
+          NSString *dir = [args objectAtIndex: 1];
+          [(id <FSWatcherProtocol>)proxy client: (id <FSWClientProtocol>)self
+                               removeWatcherForPath: dir];
+        }
+      @catch (NSException *e)
+        {
+          NSLog (@"GitContextMenu: deferred removeWatcherForPath failed: %@", e);
+        }
     }
 }
 
