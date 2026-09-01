@@ -353,6 +353,12 @@ static NSString *appNameForPID(pid_t pid)
 
   if (icon == nil && appPath)
     {
+      /* Honor GSSuppressAppIcon — skip apps that declare they should not
+       * appear in the Dock (e.g. WindowManager). */
+      NSBundle *bundle = [NSBundle bundleWithPath:appPath];
+      if ([[bundle objectForInfoDictionaryKey:@"GSSuppressAppIcon"] boolValue])
+        return nil;
+
       icon = [_dock addIconForApplicationAtPath:appPath withName:appName atIndex:-1];
       if (icon)
         {
