@@ -158,6 +158,64 @@
 }
 
 
+- (NSString *)resolveMdnsHostname:(NSString *)aHostname
+{
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__)
+  if (!aHostname || ![aHostname hasSuffix:@".local"]) {
+    return nil;
+  }
+
+  NSTask *dnsTask = [[NSTask alloc] init];
+  NSPipe *outputPipe = [NSPipe pipe];
+  NSFileHandle *readHandle = [outputPipe fileHandleForReading];
+
+  [dnsTask setLaunchPath:@"/usr/bin/dns-sd"];
+  [dnsTask setArguments:@[@"-q", aHostname]];
+  [dnsTask setStandardOutput:outputPipe];
+  [dnsTask setStandardError:outputPipe];
+
+  @try {
+    [dnsTask launch];
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+      if ([dnsTask isRunning]) {
+        [dnsTask terminate];
+      }
+    });
+
+    [dnsTask waitUntilExit];
+
+    NSData *outputData = [readHandle readDataToEndOfFile];
+    NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
+
+    NSArray *lines = [output componentsSeparatedByString:@"\n"];
+    for (NSString *line in lines) {
+      NSArray *parts = [line componentsSeparatedByString:@" "];
+      if (parts.count >= 8) {
+        NSString *name = [parts objectAtIndex:5];
+        NSString *type = [parts objectAtIndex:6];
+        NSString *rdata = [parts objectAtIndex:7];
+        if ([name isEqualToString:aHostname] && [type isEqualToString:@"Addr"] && [rdata length] > 0) {
+          [dnsTask release];
+          [output release];
+          return rdata;
+        }
+      }
+    }
+  }
+  @catch (NSException *exception) {
+    NSLog(@"SFTPMount: dns-sd resolution failed: %@", exception);
+  }
+  @finally {
+    if ([dnsTask isRunning]) {
+      [dnsTask terminate];
+    }
+    [dnsTask release];
+  }
+#endif
+  return nil;
+}
+
 - (NSString *)detectHostKeyAlgorithmsForHost:(NSString *)host port:(int)p
 {
   if (!host || [host length] == 0) return nil;
@@ -453,18 +511,25 @@
   if (!hostname) {
     return [SFTPMountResult failureWithError:@"No hostname available"];
   }
-  
+
   /* Check if sshfs is available */
   if (![self isSshfsAvailable]) {
     return [SFTPMountResult failureWithError:@"sshfs is not installed"];
   }
-  
-  
+
+  /* Resolve .local hostnames on BSD using dns-sd.
+     sshfs needs an IP address for .local hostnames since the system's
+     resolver (gethostbyname/etc) may not support mDNS without nss-mdns.
+     We keep hostname for SSH config (host key verification) but use
+     resolved IP for the sshfs source argument. */
+  NSString *resolvedIP = [self resolveMdnsHostname:hostname];
+  NSString *sshfsHostname = (resolvedIP != nil) ? resolvedIP : hostname;
+
   /* Build sshfs arguments */
   NSMutableArray *args = [NSMutableArray array];
-  
-  /* Build connection string */
-  NSString *connectionHost = [NSString stringWithFormat:@"%@@%@", username, hostname];
+
+  /* Build connection string - use resolved IP for sshfs, original hostname for SSH config */
+  NSString *connectionHost = [NSString stringWithFormat:@"%@@%@", username, sshfsHostname];
   NSString *sshfsSource;
   
   if (remotePath && [remotePath length] > 0) {
@@ -502,11 +567,13 @@
      sshfs splits ALL -o values on commas, which breaks SSH options that
      contain comma-separated lists (PreferredAuthentications, Ciphers,
      KexAlgorithms, MACs, HostKeyAlgorithms, etc.).
-     The reliable solution is to write options to a temp SSH config file
+      The reliable solution is to write options to a temp SSH config file
      and use ssh_command to point ssh at it. */
 
-  /* Detect server host key algorithms */
-  NSString *detectedAlgs = [self detectHostKeyAlgorithmsForHost:hostname port:port];
+  /* Detect server host key algorithms - use resolved IP if available,
+     since .local hostnames may not be resolvable by system's standard resolver */
+  NSString *keyscanHost = (resolvedIP != nil) ? resolvedIP : hostname;
+  NSString *detectedAlgs = [self detectHostKeyAlgorithmsForHost:keyscanHost port:port];
   NSString *hostKeyAlgs;
   if (detectedAlgs && [detectedAlgs length] > 0) {
     hostKeyAlgs = [NSString stringWithFormat:@"+%@", detectedAlgs];
