@@ -485,10 +485,18 @@
   /* Keep sshfs in foreground mode so NSTask can monitor it */
   [args addObject:@"-f"];
   
-  /* Add verbose flags for debugging */
+  /* Add verbose flags for debugging.
+     Linux sshfs uses -v (stackable for more verbosity).
+     BSD/FreeBSD fuse uses -d for debug/verbose output.
+     On Linux -d also enables debug but has different semantics, so we
+     use -v -v -v on Linux and -d on BSD. */
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__)
+  [args addObject:@"-d"];
+#else
   [args addObject:@"-v"];
   [args addObject:@"-v"];
   [args addObject:@"-v"];
+#endif
   
   /* Build SSH options via a temporary SSH config file.
      sshfs splits ALL -o values on commas, which breaks SSH options that
