@@ -1187,13 +1187,22 @@ x += 6; \
 
     /* Count badge (top-right) - pill/capsule shape: a circle for single
        digits that grows horizontally for longer numbers, mirroring the
-       TheLounge sidebar badge (capped at "99+"). */
-    if (countVisible && badgeCount > 0)
+       TheLounge sidebar badge (capped at "99+").  For the Workspace icon,
+       drive the badge from the standard NSDockTile API so all apps can use
+       [NSApp dockTile] setBadgeLabel: without needing the custom DO service. */
+    NSString *badgeLabel = nil;
+    if (isWsIcon)
+      {
+        badgeLabel = [[NSApp dockTile] badgeLabel];
+      }
+    else if (countVisible && badgeCount > 0)
+      {
+        badgeLabel = (badgeCount > 99) ? @"99+" : [NSString stringWithFormat:@"%lld", (long long)badgeCount];
+      }
+    if (badgeLabel)
       {
         CGFloat h = 16;
-        NSString *countStr = (badgeCount > 99)
-          ? @"99+"
-          : [NSString stringWithFormat:@"%lld", (long long)badgeCount];
+        NSString *countStr = badgeLabel;
         NSDictionary *attrs = @{
           NSFontAttributeName: [NSFont boldSystemFontOfSize:10],
           NSForegroundColorAttributeName: [NSColor whiteColor]
