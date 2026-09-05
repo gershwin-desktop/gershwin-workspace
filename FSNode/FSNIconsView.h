@@ -28,6 +28,7 @@
 #import <AppKit/NSView.h>
 #import <AppKit/NSTextField.h>
 #import "FSNodeRep.h"
+#import "FSNFunctions.h"
 #import "FSNIconPlacement.h"
 
 @class NSColor;
@@ -51,6 +52,10 @@
   /* Bumped on every contents change; pending FSNIconLoader items carrying
    * an older generation are dropped. */
   NSInteger generation;
+
+  /* Last-seen filename-extension display mode: defaultsChanged: only needs
+   * to relabel icons when it actually changes. */
+  GSFilenameExtensionDisplayMode lastDisplayMode;
 
   NSImage *verticalImage;
   NSImage *horizontalImage;

@@ -167,6 +167,10 @@ static void GWHighlightFrameRect(NSRect aRect)
       defentry = [defaults objectForKey: @"iconposition"];
       iconPosition = defentry ? [defentry intValue] : DEF_ICN_POS;
 
+      /* Baseline for defaultsChanged: - only a real change of the extension
+       * display mode warrants relabeling every icon. */
+      lastDisplayMode = GSCurrentExtensionDisplayMode();
+
       defentry = [defaults objectForKey: @"fsn_info_type"];
       infoType = defentry ? [defentry intValue] : FSNInfoNameType;
       extInfoType = nil;
@@ -237,14 +241,31 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)defaultsChanged:(NSNotification *)not
 {
-  NSUInteger i;
-  for (i = 0; i < [icons count]; i++)
+  /* Only the filename-extension display mode changes what the icons show
+   * here (display names); icon size, label size and position are applied
+   * through their targeted setters.  Unrelated defaults writes - viewer
+   * windows persisting per-folder state on open, navigation and close,
+   * window geometry saves - land on this notification too, and re-tiling
+   * and repainting every icon in every icons view (the whole desktop)
+   * made it flicker for nothing. */
+  GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
+
+  if (mode == lastDisplayMode)
     {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      [icon setNodeInfoShowType: [icon nodeInfoShowType]];
-      [icon tile];
-      [icon setNeedsDisplay: YES];
+      return;
     }
+  lastDisplayMode = mode;
+
+  {
+    NSUInteger i;
+    for (i = 0; i < [icons count]; i++)
+      {
+        FSNIcon *icon = [icons objectAtIndex: i];
+        [icon setNodeInfoShowType: [icon nodeInfoShowType]];
+        [icon tile];
+        [icon setNeedsDisplay: YES];
+      }
+  }
 }
 
 - (void)sortIcons
@@ -1896,6 +1917,7 @@ static void GWHighlightFrameRect(NSRect aRect)
    * horizontally (icon grids grow mostly downward). */
   NSRect prefetchRect = NSInsetRect(vr, -vr.size.width, -2 * vr.size.height);
   NSUInteger i;
+  BOOL decoratedAny = NO;
 
   for (i = 0; i < [icons count]; i++)
     {
@@ -1910,6 +1932,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       if (NSIntersectsRect(fr, vr))
         {
           [icon decorate];
+          decoratedAny = YES;
         }
       else
         {
@@ -1920,7 +1943,10 @@ static void GWHighlightFrameRect(NSRect aRect)
         }
     }
 
-  if ([icons count])
+  /* Decorate already marks the icons it changed; only the background
+   * beneath newly decorated icons needs a repaint, so skip the full-view
+   * redraw when nothing was decorated (this runs on every scroll tick). */
+  if (decoratedAny)
     {
       [self setNeedsDisplay: YES];
     }

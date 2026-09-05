@@ -195,6 +195,7 @@
 
     viewer = nil;
     manager = nil;
+    lastDisplayMode = GSCurrentExtensionDisplayMode();
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(defaultsChanged:) name:NSUserDefaultsDidChangeNotification object:nil];
   }
@@ -204,8 +205,15 @@
 
 - (void)defaultsChanged:(NSNotification *)not
 {
-  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   NSInteger newSize;
+  GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
+  BOOL displayModeChanged = (mode != lastDisplayMode);
+
+  if (displayModeChanged)
+    {
+      lastDisplayMode = mode;
+    }
 
   if ([defaults objectForKey:@"NSFontSize"]) {
     newSize = [defaults integerForKey:@"NSFontSize"];
@@ -217,7 +225,14 @@
     }
   }
 
-  [self reloadExtensionDisplay];
+  /* Relabeling every cell of every column is only needed when the
+   * extension display mode changed; viewer windows persist per-folder
+   * state through NSUserDefaults on open, navigation and close, and each
+   * of those writes lands on this notification. */
+  if (displayModeChanged)
+    {
+      [self reloadExtensionDisplay];
+    }
 }
 
 - (void)reloadExtensionDisplay
