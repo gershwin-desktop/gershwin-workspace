@@ -2858,6 +2858,16 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
 
 - (void)dealloc
 {
+  /* Pending loader items keep the data source alive past this dealloc (the
+   * window is going away, the loader is not), while its observers and its
+   * unretained listView back-pointer die here.  Drop the items and the
+   * defaults observer now so a late notification cannot reach the dead
+   * table view through the surviving data source. */
+  [[FSNIconLoader sharedLoader] cancelClient: dsource];
+  [[NSNotificationCenter defaultCenter] removeObserver: dsource
+                                                  name: NSUserDefaultsDidChangeNotification
+                                                object: nil];
+
   RELEASE (charBuffer);
   RELEASE (dsource);
   [super dealloc];

@@ -40,6 +40,7 @@
 #import "FSNBrowserMatrix.h"
 #import "FSNBrowserCell.h"
 #import "FSNIcon.h"
+#import "FSNIconLoader.h"
 #import "FSNFunctions.h"
 
 
@@ -54,11 +55,22 @@
 
 - (void)dealloc
 {
+  NSUInteger i;
+
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   /* Do NOT clear scroller target/action here — the scroller is a subview
    * of the parent NSScrollView and may already be deallocated by the time
    * this dealloc runs (subviews are released before the document view).
    * releaseScroller is called separately while the view hierarchy is intact. */
+
+  /* Columns with pending loader items would outlive this dealloc (the items
+   * retain them); drop the items now so closing the window stops all
+   * deferred decoration work immediately. */
+  for (i = 0; i < [columns count]; i++)
+    {
+      [[FSNIconLoader sharedLoader] cancelClient: [columns objectAtIndex: i]];
+    }
+
   RELEASE (baseNode);
   RELEASE (extInfoType);
   RELEASE (lastSelection);
