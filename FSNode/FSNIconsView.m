@@ -94,6 +94,8 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)dealloc
 {
+  [[FSNIconLoader sharedLoader] cancelClient: self];
+
   [[NSNotificationCenter defaultCenter] removeObserver: self
                                                   name: NSUserDefaultsDidChangeNotification
                                                 object: nil];
@@ -101,6 +103,9 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       [[NSNotificationCenter defaultCenter] removeObserver: self
                                                       name: NSViewFrameDidChangeNotification
+                                                    object: _observedClipView];
+      [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                      name: NSViewBoundsDidChangeNotification
                                                     object: _observedClipView];
       _observedClipView = nil;
     }
@@ -1828,6 +1833,9 @@ static void GWHighlightFrameRect(NSRect aRect)
       [[NSNotificationCenter defaultCenter] removeObserver: self
                                                       name: NSViewFrameDidChangeNotification
                                                     object: _observedClipView];
+      [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                      name: NSViewBoundsDidChangeNotification
+                                                    object: _observedClipView];
       _observedClipView = nil;
     }
 
@@ -1843,6 +1851,13 @@ static void GWHighlightFrameRect(NSRect aRect)
                                                selector: @selector(clipViewFrameDidChange:)
                                                    name: NSViewFrameDidChangeNotification
                                                  object: _observedClipView];
+      /* Bounds changes (scrolling) drive lazy icon decoration of the
+       * icons that just scrolled into view. */
+      [(NSClipView *)_observedClipView setPostsBoundsChangedNotifications: YES];
+      [[NSNotificationCenter defaultCenter] addObserver: self
+                                               selector: @selector(clipViewBoundsDidChange:)
+                                                   name: NSViewBoundsDidChangeNotification
+                                                 object: _observedClipView];
     }
 
   if ([self superview])
@@ -1857,6 +1872,77 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (void)clipViewFrameDidChange:(NSNotification *)notif
 {
   [self tile];
+}
+
+/* Called when the enclosing NSClipView scrolls: decorate icons that just
+ * became visible. */
+- (void)clipViewBoundsDidChange:(NSNotification *)notif
+{
+  [self decorateVisibleIcons];
+}
+
+//
+// Lazy decoration (FSNIconLoader client)
+//
+
+/* Decorate the icons intersecting the visible rect synchronously (so the
+ * first paint is complete); every icon already queued itself (bulk) at
+ * creation, so the prefetch neighborhood is promoted to urgent and the
+ * rest simply stay queued. */
+- (void)decorateVisibleIcons
+{
+  NSRect vr = [self visibleRect];
+  /* Prefetch: extend the visible rect by two screens vertically and one
+   * horizontally (icon grids grow mostly downward). */
+  NSRect prefetchRect = NSInsetRect(vr, -vr.size.width, -2 * vr.size.height);
+  NSUInteger i;
+
+  for (i = 0; i < [icons count]; i++)
+    {
+      FSNIcon *icon = [icons objectAtIndex: i];
+      NSRect fr = [icon frame];
+
+      if ([icon isDecorated])
+        {
+          continue;
+        }
+
+      if (NSIntersectsRect(fr, vr))
+        {
+          [icon decorate];
+        }
+      else
+        {
+          [[FSNIconLoader sharedLoader]
+            enqueueNode: [icon node]
+                 client: icon
+                 urgent: NSIntersectsRect(fr, prefetchRect)];
+        }
+    }
+
+  if ([icons count])
+    {
+      [self setNeedsDisplay: YES];
+    }
+}
+
+- (NSInteger)fsnDecorationGeneration
+{
+  return generation;
+}
+
+- (BOOL)fsnLoaderDecorateNode:(FSNode *)anode
+{
+  FSNIcon *icon = [self repOfSubnode: anode];
+
+  if (icon == nil || [icon isDecorated])
+    {
+      return NO;
+    }
+
+  [icon decorate];
+
+  return YES;
 }
 
 - (void)drawRect:(NSRect)rect
@@ -1914,7 +2000,9 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (void)showContentsOfNode:(FSNode *)anode
 {
   CREATE_AUTORELEASE_POOL(arp);
-  NSArray *subNodes = [anode subNodes];
+  NSArray *snapshot = [fsnodeRep directorySnapshotAtPath: [anode path]];
+  NSArray *subNodes = [FSNode nodesFromDirectorySnapshot: snapshot
+                                                  parent: anode];
   NSUInteger i;
 
   for (i = 0; i < [icons count]; i++)
@@ -1925,6 +2013,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   editIcon = nil;
 
   ASSIGN (node, anode);
+  generation++;   /* pending loader items for the old contents are stale */
   [self readNodeInfo];
   _gridCached = NO; /* icon properties may have changed */
   [self calculateGridSize];
@@ -2013,6 +2102,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   [icons sortUsingSelector: [fsnodeRep compareSelectorForDirectory: [node path]]];
   [self tile];
+  [self decorateVisibleIcons];
 
   DESTROY (lastSelection);
   [self selectionDidChange];
@@ -2590,6 +2680,10 @@ static void GWHighlightFrameRect(NSRect aRect)
   [self addSubview: icon];
   RELEASE (icon);
   RELEASE (arp);
+
+  /* Newly created/moved-in files: decorate through the loader (urgent -
+   * it is a handful of items at most). */
+  [[FSNIconLoader sharedLoader] enqueueNode: anode client: self urgent: YES];
 
   return icon;
 }

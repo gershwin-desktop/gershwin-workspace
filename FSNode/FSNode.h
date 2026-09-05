@@ -31,8 +31,9 @@
 @class NSImage;
 @class NSBezierPath;
 @class FSNodeRep;
+@class FSNDirEntry;
 
-@interface FSNode : NSObject 
+@interface FSNode : NSObject
 {
   FSNode *parent;
   NSString *path;
@@ -43,7 +44,7 @@
   NSString *fileType;
   NSString *typeDescription;
   NSString *application;
-    
+
   unsigned long long filesize;
   NSDate *crDate;
   NSString *crDateDescription;
@@ -54,7 +55,7 @@
   NSNumber *ownerId;
   NSString *group;
   NSNumber *groupId;
-  
+
   struct nodeFlags {
     int readable;
     int writable;
@@ -71,7 +72,11 @@
     int package;
     int unknown;
   } flags;
-  
+
+  /* attributes not loaded yet (lazy node built from a directory snapshot);
+   * loaded on first access of any attribute-dependent accessor */
+  BOOL attributesDeferred;
+
   FSNodeRep *fsnodeRep;
   NSNotificationCenter *nc;
   NSFileManager *fm;
@@ -85,6 +90,22 @@
 
 - (id)initWithRelativePath:(NSString *)rpath
                     parent:(FSNode *)aparent;
+
+/* Lazy variant used by directory views: the node is built from a readdir
+ * snapshot entry (kind pre-seeded from d_type, attributes stat'ed only on
+ * first access of an attribute-dependent accessor).  Passing a nil entry
+ * is equivalent to initWithRelativePath:parent:. */
+- (id)initWithRelativePath:(NSString *)rpath
+                    parent:(FSNode *)aparent
+            snapshotEntry:(FSNDirEntry *)entry;
+
+/* Build lazy nodes for a whole directory snapshot (FSNDirEntry objects as
+ * returned by -[FSNodeRep directorySnapshotAtPath:]). */
++ (NSArray *)nodesFromDirectorySnapshot:(NSArray *)snapshot
+                                 parent:(FSNode *)aparent;
+
+/* Force-load deferred attributes (no-op when already loaded). */
+- (void)loadAttributesIfNeeded;
 
 - (BOOL)isEqualToNode:(FSNode *)anode;
 

@@ -39,12 +39,18 @@
 @class FSNIconNameEditor;
 @class FSNIconItemData;
 
-@interface FSNIconsView : NSView <NSTextFieldDelegate>
+#import "FSNIconLoader.h"
+
+@interface FSNIconsView : NSView <NSTextFieldDelegate, FSNDecorationClient>
 {
   FSNode *node;
   NSMutableArray *icons;
   FSNInfoType infoType;
   NSString *extInfoType;
+
+  /* Bumped on every contents change; pending FSNIconLoader items carrying
+   * an older generation are dropped. */
+  NSInteger generation;
 
   NSImage *verticalImage;
   NSImage *horizontalImage;

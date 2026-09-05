@@ -59,10 +59,14 @@
 
 - (void)reflectScrolledClipView:(NSClipView *)aClipView
 {
-  if (aClipView == [self contentView]) {
-    [column stopCellEditing];
-    [super reflectScrolledClipView: aClipView];
-  }
+  if (aClipView == [self contentView])
+    {
+      [column stopCellEditing];
+      [super reflectScrolledClipView: aClipView];
+      /* The visible row range changed: let the column decorate rows that
+       * just scrolled into view. */
+      [column visibleRowsChanged];
+    }
 }
 
 - (BOOL)acceptsFirstResponder

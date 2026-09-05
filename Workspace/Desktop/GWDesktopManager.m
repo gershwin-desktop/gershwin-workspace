@@ -685,7 +685,15 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
 - (void)thumbnailsDidChangeInPaths:(NSArray *)paths
 {
-  [[self desktopView] updateIcons];
+  /* Only reload when the desktop's own folder is affected.  The thumbnailer
+   * reports every directory it generated thumbnails for (e.g. ~/Downloads
+   * while a large download folder is being processed, one notification per
+   * batch); reloading the desktop icons for those repaints the whole
+   * desktop for nothing.  nil means "everything changed". */
+  if (paths == nil || [paths containsObject: [dskNode path]])
+    {
+      [[self desktopView] updateIcons];
+    }
 }
 
 - (void)removableMediaPathsDidChange

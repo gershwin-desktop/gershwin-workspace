@@ -37,7 +37,9 @@
 @class FSNListViewNodeRep;
 @class FSNListViewNameEditor;
 
-@interface FSNListViewDataSource : NSObject <NSTextFieldDelegate>
+#import "FSNIconLoader.h"
+
+@interface FSNListViewDataSource : NSObject <NSTextFieldDelegate, FSNDecorationClient>
 {
   FSNListView *listView;
 
@@ -45,6 +47,10 @@
   NSMutableArray *nodeReps;
   FSNInfoType hlighColId;
   NSString *extInfoType;
+
+  /* Bumped on every contents change; pending FSNIconLoader items carrying
+   * an older generation are dropped. */
+  NSInteger generation;
 
   NSArray *lastSelection;
 
@@ -262,6 +268,9 @@
   BOOL forceCopy;
   NSDragOperation negotiatedDragOp;
 
+  /* NO between initForNode: and -decorate (lazy icon loading). */
+  BOOL decorated;
+
   FSNListViewDataSource *dataSource;
   FSNodeRep *fsnodeRep;
 }
@@ -270,6 +279,12 @@
        dataSource:(FSNListViewDataSource *)fsnds;
 
 - (NSImage *)icon;
+
+/* Load the icon image and tag color for the node (deferred from init so a
+ * large directory fills lazily).  No-op when already decorated. */
+- (void)decorate;
+
+- (BOOL)isDecorated;
 
 - (NSImage *)openIcon;
 

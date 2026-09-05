@@ -50,6 +50,7 @@ typedef enum FSNSelectionMask {
 @class NSColor;
 @class NSBezierPath;
 @class NSFont;
+@class FSNDirEntry;
 
 @protocol FSNodeRep
 
@@ -429,6 +430,11 @@ typedef enum FSNSelectionMask {
 - (id<FSNodeRepDecorationDelegate>)decorationDelegate;
 
 - (NSArray *)directoryContentsAtPath:(NSString *)path;
+
+/* One readdir(3) pass returning FSNDirEntry objects (name + d_type kind),
+ * filtered exactly like -directoryContentsAtPath:.  Lets viewers lay out
+ * lazy-loaded cells without a stat() per entry. */
+- (NSArray *)directorySnapshotAtPath:(NSString *)path;
 
 - (int)labelMargin;
 

@@ -8,6 +8,8 @@ FRAMEWORK_NAME = FSNode
 
 FSNode_OBJC_FILES = \
          FSNode.m \
+         FSNDirEntry.m \
+         FSNIconLoader.m \
          FSNodeRep.m \
          FSNodeRepIcons.m \
          FSNFunctions.m \
@@ -28,6 +30,8 @@ FSNode_OBJC_FILES = \
 
 FSNode_HEADER_FILES = \
          FSNode.h \
+         FSNDirEntry.h \
+         FSNIconLoader.h \
          FSNodeRep.h \
          FSNFunctions.h \
          FSNTextCell.h \

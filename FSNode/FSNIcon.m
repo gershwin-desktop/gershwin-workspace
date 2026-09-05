@@ -79,6 +79,9 @@ static NSImage *branchImage;
 
 - (void)dealloc
 {
+  /* Drop pending loader items referencing self before anything else. */
+  [[FSNIconLoader sharedLoader] cancelClient: self];
+
   if (trectTag != -1)
     {
       [self removeTrackingRect: trectTag];
@@ -231,8 +234,11 @@ static NSImage *branchImage;
       selection = nil;
       selectionTitle = nil;
 
-      ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
-      drawicon = icon;
+      /* The icon image loads later via -decorate (FSNIconLoader): a large
+       * directory must not pay the icon pipeline per icon at fill time. */
+      icon = nil;
+      drawicon = nil;
+      decorated = NO;
       selectedicon = nil;
 
       [[NSNotificationCenter defaultCenter]
@@ -413,6 +419,15 @@ static NSImage *branchImage;
       [labelFrameColor retain];
 
       drawLabelBackground = NO;
+
+      /* The icon image loads through the FSNIconLoader instead of here, so
+       * a large directory fills without the per-icon pipeline.  Icons
+       * created outside a decorated container (desktop, shelf, dock,
+       * path components) are covered by this self-enqueue; containers that
+       * schedule decoration themselves just promote or dedup against it. */
+      [[FSNIconLoader sharedLoader] enqueueNode: anode
+                                         client: self
+                                         urgent: NO];
     }
 
   return self;
@@ -1193,8 +1208,11 @@ static NSImage *branchImage;
   labelChecked = NO;
 
   ASSIGN (node, anode);
-  ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
-  drawicon = icon;
+  if (decorated)
+    {
+      ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
+      drawicon = icon;
+    }
   DESTROY (selectedicon);
   [self updateBadgeCount];
   [self startWatchingCurrentNode];
@@ -1373,13 +1391,16 @@ static NSImage *branchImage;
 {
   iconSize = isize;
   icnBounds = NSMakeRect(0, 0, iconSize, iconSize);
-  if (selection == nil)
+  if (decorated)
     {
-      ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
-    }
-  else
-    {
-      ASSIGN (icon, [fsnodeRep multipleSelectionIconOfSize: iconSize]);
+      if (selection == nil)
+        {
+          ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
+        }
+      else
+        {
+          ASSIGN (icon, [fsnodeRep multipleSelectionIconOfSize: iconSize]);
+        }
     }
   drawicon = icon;
   DESTROY (selectedicon);
@@ -1398,6 +1419,50 @@ static NSImage *branchImage;
 - (int)iconSize
 {
   return iconSize;
+}
+
+- (void)decorate
+{
+  if (decorated || node == nil || selection != nil)
+    {
+      return;
+    }
+
+  ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
+  drawicon = icon;
+  decorated = YES;
+
+  /* The icon image may arrive after the last -tile (a lazy icon is laid
+   * out and tiled while its image is still nil), and tile computes the
+   * drawing point from [icon size].  Re-tile so the image is centered in
+   * its highlight rect instead of drawn from its bottom-left. */
+  [self tile];
+
+  [self setNeedsDisplay: YES];
+}
+
+- (BOOL)isDecorated
+{
+  return decorated;
+}
+
+//
+// FSNDecorationClient (self-decorate through the FSNIconLoader)
+//
+
+/* The loader item IS this icon, so there is no separate generation to
+ * track; staleness is covered by -dealloc (cancelClient) and the no-op
+ * -decorate when the state moved on. */
+- (NSInteger)fsnDecorationGeneration
+{
+  return 0;
+}
+
+- (BOOL)fsnLoaderDecorateNode:(FSNode *)anode
+{
+  [self decorate];
+
+  return YES;
 }
 
 - (void)setIconPosition:(NSCellImagePosition)ipos

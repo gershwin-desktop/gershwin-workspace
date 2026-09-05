@@ -130,6 +130,63 @@
     }
 }
 
+- (NSRange)visibleRowRange
+{
+  NSRange range = NSMakeRange(0, 0);
+  NSArray *cells = [self cells];
+
+  if (cells && [cells count])
+    {
+      NSRect vr = [self visibleRect];
+      float rowh = [self cellSize].height;
+      NSUInteger count = [cells count];
+      NSUInteger first, last, i;
+
+      if (rowh <= 0)
+        {
+          return range;
+        }
+
+      first = (NSUInteger)(vr.origin.y / rowh);
+      last = (NSUInteger)((vr.origin.y + vr.size.height) / rowh);
+
+      if (first >= count)
+        {
+          return range;
+        }
+
+      if (last >= count)
+        {
+          last = count - 1;
+        }
+
+      /* Include rows partially sticking out of the visible rect. */
+      for (i = first; i > 0; i--)
+        {
+          NSRect fr = [self cellFrameAtRow: i column: 0];
+          if (NSMaxY(fr) <= vr.origin.y)
+            {
+              break;
+            }
+          first = i - 1;
+        }
+
+      for (i = ((last + 1 < count) ? last + 1 : last); i < count; i++)
+        {
+          NSRect fr = [self cellFrameAtRow: i column: 0];
+          if (fr.origin.y >= NSMaxY(vr))
+            {
+              break;
+            }
+          last = i;
+        }
+
+      range = NSMakeRange(first, last - first + 1);
+    }
+
+  return range;
+}
+
 - (void)scrollToFirstPositionCell:(id)aCell withScrollTune:(float)vtune
 {
   NSRect vr, cr;

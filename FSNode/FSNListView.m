@@ -32,6 +32,8 @@
 #import "FSNTextCell.h"
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
+#import "FSNIconLoader.h"
+#import "FSNDirEntry.h"
 
 #define ICNSIZE (24)
 #define CELLS_HEIGHT (28.0)
@@ -72,6 +74,8 @@ static NSString *defaultColumns = @"{ \
 
 - (void)dealloc
 {
+  [[FSNIconLoader sharedLoader] cancelClient: self];
+
   [[NSNotificationCenter defaultCenter] removeObserver: self
                                                   name: NSUserDefaultsDidChangeNotification
                                                 object: nil];
@@ -82,6 +86,47 @@ static NSString *defaultColumns = @"{ \
   RELEASE (lastSelection);
 
   [super dealloc];
+}
+
+/* Current contents generation for FSNIconLoader stale detection. */
+- (NSInteger)fsnDecorationGeneration
+{
+  return generation;
+}
+
+/* FSNDecorationClient: load the decoration of one lazy rep. */
+- (BOOL)fsnLoaderDecorateNode:(FSNode *)anode
+{
+  FSNListViewNodeRep *rep = [self repOfSubnode: anode];
+
+  if (rep == nil || [rep isDecorated])
+    {
+      return NO;
+    }
+
+  [rep decorate];
+
+  return YES;
+}
+
+/* Queue every still-undecorated rep for the loader (bulk priority: the
+ * visible rows load synchronously in -willDisplayCell, this trickle just
+ * prewarms the rows ahead of the scroll position). */
+- (void)enqueueUndecoratedReps
+{
+  NSUInteger i;
+
+  for (i = 0; i < [nodeReps count]; i++)
+    {
+      FSNListViewNodeRep *rep = [nodeReps objectAtIndex: i];
+
+      if ([rep isDecorated] == NO)
+        {
+          [[FSNIconLoader sharedLoader] enqueueNode: [rep node]
+                                             client: self
+                                             urgent: NO];
+        }
+    }
 }
 
 - (id)initForListView:(FSNListView *)aview
@@ -630,6 +675,10 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
   FSNInfoType ident = [[aTableColumn identifier] intValue];
   FSNListViewNodeRep *rep = [nodeReps objectAtIndex: rowIndex];
 
+  /* The row is on screen now: complete its lazy decoration (icon, tag
+   * color) before the cell draws it. */
+  [rep decorate];
+
   if (ident == FSNInfoNameType)
     {
       FSNTextCell *cell = (FSNTextCell *)aCell;
@@ -712,7 +761,13 @@ mouseDownInHeaderOfTableColumn:(NSTableColumn *)tableColumn
   else
     {
       NSUInteger index = [[dragRows objectAtIndex: 0] unsignedIntegerValue];
-      return [[nodeReps objectAtIndex: index] icon];
+      FSNListViewNodeRep *rep = [nodeReps objectAtIndex: index];
+
+      /* A dragged row is on screen, so it is decorated already; keep the
+       * guard for safety. */
+      [rep decorate];
+
+      return [rep icon];
     }
 
   return nil;
@@ -778,8 +833,13 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
   [listView deselectAll: self];
 
-  nodes = [anode subNodes];
+  {
+    NSArray *snapshot = [fsnodeRep directorySnapshotAtPath: [anode path]];
+
+    nodes = [FSNode nodesFromDirectorySnapshot: snapshot parent: anode];
+  }
   [nodeReps removeAllObjects];
+  generation++;   /* pending loader items for the old contents are stale */
 
   for (i = 0; i < [nodes count]; i++)
     {
@@ -788,6 +848,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
   [self sortNodeReps];
   [listView reloadData];
+  [self enqueueUndecoratedReps];
 
   DESTROY (lastSelection);
   [self selectionDidChange];
@@ -1295,6 +1356,10 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
                                                          dataSource: self];
   [nodeReps addObject: rep];
   RELEASE (rep);
+
+  /* New rows (watcher events) decorate through the loader; visible rows
+   * also decorate synchronously in -willDisplayCell. */
+  [[FSNIconLoader sharedLoader] enqueueNode: anode client: self urgent: NO];
 
   return rep;
 }
@@ -2140,12 +2205,12 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
       fsnodeRep = [FSNodeRep sharedInstance];
 
       ASSIGN (node, anode);
-      ASSIGN (icon, [fsnodeRep iconOfSize: ICNSIZE forNode: node]);
 
-      /* Load Finder label color from the metadata provider */
-      ASSIGN (tagColor,
-              [[[FSNodeRep sharedInstance] metadataProvider]
-                labelColorForPath: [anode path]]);
+      /* The icon image and tag color load later via -decorate
+       * (FSNIconLoader): a large directory must not pay the icon pipeline
+       * per row at fill time. */
+      icon = nil;
+      decorated = NO;
 
       openicon = nil;
       lockedicon = nil;
@@ -2161,6 +2226,32 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     }
 
   return self;
+}
+
+- (void)decorate
+{
+  if (decorated || node == nil)
+    {
+      return;
+    }
+
+  ASSIGN (icon, [fsnodeRep iconOfSize: ICNSIZE forNode: node]);
+
+  /* Load Finder label color from the metadata provider */
+  ASSIGN (tagColor,
+          [[fsnodeRep metadataProvider] labelColorForPath: [node path]]);
+
+  decorated = YES;
+
+  /* No redraw request here: rows going on screen decorate synchronously in
+   * -willDisplayCell, and the loader trickle only prewarms rows that are
+   * not displayed (the window may even be closed by then - the data source
+   * is kept alive by its pending loader items, but the table view is not). */
+}
+
+- (BOOL)isDecorated
+{
+  return decorated;
 }
 
 - (NSImage *)icon
@@ -2239,7 +2330,10 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 - (void)setNode:(FSNode *)anode
 {
   ASSIGN (node, anode);
-  ASSIGN (icon, [fsnodeRep iconOfSize: ICNSIZE forNode: node]);
+  if (decorated)
+    {
+      ASSIGN (icon, [fsnodeRep iconOfSize: ICNSIZE forNode: node]);
+    }
   DESTROY (tagColor);
   [self setLocked: [node isLocked]];
 }

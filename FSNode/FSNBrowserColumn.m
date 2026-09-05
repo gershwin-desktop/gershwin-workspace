@@ -32,8 +32,14 @@
 #import "FSNBrowserScroll.h"
 #import "FSNBrowser.h"
 #import "FSNFunctions.h"
+#import "FSNIconLoader.h"
+#import "FSNDirEntry.h"
 
 #define ICON_CELL_HEIGHT 28
+
+/* How far past the visible rows the loader prefetches decoration, in
+ * screens (the "next few ones", like iOS table prefetching). */
+#define DECORATION_PREFETCH_SCREENS (2)
 
 #define CHECKRECT(rct) \
 if (rct.size.width < 0) rct.size.width = 0; \
@@ -49,6 +55,8 @@ static id <DesktopApplication> desktopApp = nil;
 
 - (void)dealloc
 {
+  [[FSNIconLoader sharedLoader] cancelClient: self];
+
   RELEASE (cellPrototype);
   RELEASE (shownNode);
   RELEASE (oldNode);
@@ -113,6 +121,7 @@ static id <DesktopApplication> desktopApp = nil;
       scroll = nil;
       matrix = nil;
       isLoaded = NO;
+      generation = 0;
 
       [self setFrame: rect];
 
@@ -245,6 +254,7 @@ static id <DesktopApplication> desktopApp = nil;
   DESTROY (shownNode);
   DESTROY (oldNode);
   isLoaded = NO;
+  generation++;   /* pending loader items for the old contents are stale */
 
   if (anode && [anode isValid])
     {
@@ -307,9 +317,10 @@ static id <DesktopApplication> desktopApp = nil;
 - (void)createRowsInMatrix
 {
   NSAutoreleasePool *pool;
-  NSArray *subNodes = [shownNode subNodes];
-  NSUInteger count = [subNodes count];
+  NSArray *snapshot = [fsnodeRep directorySnapshotAtPath: [shownNode path]];
+  NSUInteger count = [snapshot count];
   SEL compSel = [fsnodeRep compareSelectorForDirectory: [shownNode path]];
+  NSArray *subNodes;
   NSInteger i;
 
   if ([matrix numberOfColumns] > 0)
@@ -324,6 +335,11 @@ static id <DesktopApplication> desktopApp = nil;
 
   pool = [[NSAutoreleasePool alloc] init];
 
+  /* Lazy nodes from the readdir snapshot: no stat per entry.  Attribute
+   * based sort orders (kind/date/size/owner) pull the attributes during
+   * the sort itself, once per node, exactly like the eager path did. */
+  subNodes = [FSNode nodesFromDirectorySnapshot: snapshot parent: shownNode];
+
   [matrix addColumn];
 
   for (i = 0; i < count; ++i)
@@ -337,94 +353,87 @@ static id <DesktopApplication> desktopApp = nil;
       cell = [matrix cellAtRow: i column: 0];
       [cell setLoaded: YES];
       [cell setEnabled: YES];
-      [cell setNode: subnode nodeInfoType: infoType extendedType: extInfoType];
+      [cell setNodeBasic: subnode
+            nodeInfoType: infoType
+            extendedType: extInfoType];
 
-      if ([subnode isDirectory])
-	{
-	  if ([subnode isPackage])
-	    [cell setLeaf: YES];
-	  else
-	    [cell setLeaf: NO];
-	}
-      else
-	{
-	  [cell setLeaf: YES];
-	}
-
-      if (cellsIcon)
-	[cell setIcon];
+      /* Kind from the snapshot's d_type: directories stay navigable,
+       * everything else is a leaf until decoration refines it (packages,
+       * link targets). */
+      [cell setLeaf: ([subnode isDirectory] == NO)];
 
       [cell checkLocked];
     }
 
   [matrix sortUsingSelector: compSel];
   RELEASE (pool);
+
+  [self decorateVisibleCells];
 }
 
 - (void)addCellsWithNames:(NSArray *)names
 {
-  NSArray *subNodes = [shownNode subNodes];
+  NSString *dirpath = [shownNode path];
+  CREATE_AUTORELEASE_POOL(arp);
+  /* One readdir pass keeps the old "only names present in the (filtered)
+   * directory listing" semantics without listing nodes for the whole dir. */
+  NSArray *listing = [fsnodeRep directoryContentsAtPath: dirpath];
+  NSArray *selectedNodes = [self selectedNodes];
+  SEL compSel = [fsnodeRep compareSelectorForDirectory: dirpath];
+  NSUInteger i;
 
-  if ([subNodes count])
+  [matrix setIntercellSpacing: NSMakeSize(0, 0)];
+
+  for (i = 0; i < [names count]; i++)
     {
-      CREATE_AUTORELEASE_POOL(arp);
-      NSArray *selectedNodes = [self selectedNodes];
-      SEL compSel = [fsnodeRep compareSelectorForDirectory: [shownNode path]];
-      NSUInteger i;
+      NSString *name = [names objectAtIndex: i];
+      NSString *fpath = [dirpath stringByAppendingPathComponent: name];
+      FSNode *node;
+      FSNBrowserCell *cell;
 
-      [matrix setIntercellSpacing: NSMakeSize(0, 0)];
+      if ([listing containsObject: name] == NO)
+        {
+          continue;
+        }
 
-      for (i = 0; i < [names count]; i++)
-	{
-	  NSString *name = [names objectAtIndex: i];
-	  FSNode *node = [FSNode subnodeWithName: name inSubnodes: subNodes];
+      node = [FSNode nodeWithPath: fpath];
 
-	  if ([node isValid])
-	    {
-	      FSNBrowserCell *cell = [self cellOfNode: node];
+      if ([node isValid])
+        {
+          cell = [self cellWithPath: fpath];
 
-	      if (cell == nil)
-		{
-		  [matrix addRow];
-		  cell = [matrix cellAtRow: [[matrix cells] count] -1 column: 0];
+          if (cell == nil)
+            {
+              [matrix addRow];
+              cell = [matrix cellAtRow: [[matrix cells] count] -1 column: 0];
 
-		  [cell setLoaded: YES];
-		  [cell setEnabled: YES];
-		  [cell setNode: node nodeInfoType: infoType extendedType: extInfoType];
+              [cell setLoaded: YES];
+              [cell setEnabled: YES];
+              [cell setNodeBasic: node
+                    nodeInfoType: infoType
+                    extendedType: extInfoType];
 
-		  if ([node isDirectory])
-		    {
-		      if ([node isPackage])
-			[cell setLeaf: YES];
-		      else
-			[cell setLeaf: NO];
-		    }
-		  else
-		    {
-		      [cell setLeaf: YES];
-		    }
+              [cell setLeaf: ([node isDirectory] == NO)];
 
-		  if (cellsIcon)
-		    [cell setIcon];
+              [cell checkLocked];
 
-		  [cell checkLocked];
-		}
-	      else
-		{
-		  [cell setEnabled: YES];
-		}
-	    }
-	}
-
-      [matrix sortUsingSelector: compSel];
-      [self adjustMatrix];
-
-      if (selectedNodes)
-	[self selectCellsOfNodes: selectedNodes sendAction: NO];
-
-      [matrix setNeedsDisplay: YES];
-      RELEASE (arp);
+              [self decorateCell: cell];
+            }
+          else
+            {
+              [cell setEnabled: YES];
+            }
+        }
     }
+
+  [matrix sortUsingSelector: compSel];
+  [self adjustMatrix];
+
+  if (selectedNodes)
+    [self selectCellsOfNodes: selectedNodes sendAction: NO];
+
+  [matrix setNeedsDisplay: YES];
+  RELEASE (arp);
 }
 
 - (void)removeCellsWithNames:(NSArray *)names
@@ -1236,6 +1245,156 @@ static id <DesktopApplication> desktopApp = nil;
       [NSBezierPath strokeLineFromPoint: NSMakePoint(0, 0)
 				toPoint: NSMakePoint(0, rect.size.height)];
     }
+}
+
+//
+// Lazy decoration (FSNIconLoader client)
+//
+
+/* Decorate a single cell right now and redraw it when it is on screen.
+ * Completes icon, tag color, info line and the leaf flag (packages are
+ * leaves, links resolve to their target kind). */
+- (void)decorateCell:(FSNBrowserCell *)cell
+{
+  FSNode *node = [cell node];
+  BOOL leaf;
+  NSInteger row, col;
+
+  [cell decorate];
+
+  leaf = ([node isDirectory]) ? [node isPackage] : YES;
+
+  if (leaf != [cell isLeaf])
+    {
+      [cell setLeaf: leaf];
+    }
+
+  if ([matrix getRow: &row column: &col ofCell: cell])
+    {
+      [matrix setNeedsDisplayInRect: [matrix cellFrameAtRow: row column: 0]];
+    }
+}
+
+/* Enqueue every still-undecorated cell: the prefetch window (visible rows
+ * plus the next few screens) as urgent, the rest as bulk. */
+- (void)enqueueUndecoratedCells
+{
+  NSArray *cells = [matrix cells];
+  NSRange visible = [matrix visibleRowRange];
+  NSUInteger count = [cells count];
+  NSUInteger prefetchEnd;
+  NSUInteger i;
+
+  if (count == 0)
+    {
+      return;
+    }
+
+  prefetchEnd = NSMaxRange(visible)
+                  + (visible.length ? visible.length * DECORATION_PREFETCH_SCREENS
+                                    : DECORATION_PREFETCH_SCREENS * 20);
+  if (prefetchEnd > count)
+    {
+      prefetchEnd = count;
+    }
+
+  for (i = 0; i < count; i++)
+    {
+      FSNBrowserCell *cell = [cells objectAtIndex: i];
+
+      if ([cell isDecorated] == NO)
+        {
+          [[FSNIconLoader sharedLoader] enqueueNode: [cell node]
+                                             client: self
+                                             urgent: (i < prefetchEnd)];
+        }
+    }
+}
+
+/* Decorate the currently visible rows synchronously (bounded: a screenful)
+ * so the first paint is complete, then queue prefetch and the remainder.
+ * Called during the fill (before isLoaded is set) and from
+ * -visibleRowsChanged, so it must not gate on isLoaded. */
+- (void)decorateVisibleCells
+{
+  NSArray *cells;
+  NSRange visible;
+  NSUInteger count, i;
+
+  if (matrix == nil)
+    {
+      return;
+    }
+
+  cells = [matrix cells];
+  count = [cells count];
+  visible = [matrix visibleRowRange];
+
+  for (i = visible.location; i < NSMaxRange(visible) && i < count; i++)
+    {
+      [self decorateCell: [cells objectAtIndex: i]];
+    }
+
+  if (count > 0)
+    {
+      [matrix setNeedsDisplay: YES];
+    }
+
+  [self enqueueUndecoratedCells];
+}
+
+- (void)visibleRowsChanged
+{
+  NSArray *cells;
+  NSRange visible;
+  NSUInteger count, i;
+  BOOL decoratedNew = NO;
+
+  if (matrix == nil || isLoaded == NO)
+    {
+      return;
+    }
+
+  cells = [matrix cells];
+  count = [cells count];
+  visible = [matrix visibleRowRange];
+
+  for (i = visible.location; i < NSMaxRange(visible) && i < count; i++)
+    {
+      FSNBrowserCell *cell = [cells objectAtIndex: i];
+
+      if ([cell isDecorated] == NO)
+        {
+          [self decorateCell: cell];
+          decoratedNew = YES;
+        }
+    }
+
+  if (decoratedNew)
+    {
+      [matrix setNeedsDisplay: YES];
+    }
+
+  [self enqueueUndecoratedCells];
+}
+
+- (NSInteger)fsnDecorationGeneration
+{
+  return generation;
+}
+
+- (BOOL)fsnLoaderDecorateNode:(FSNode *)node
+{
+  FSNBrowserCell *cell = [self cellOfNode: node];
+
+  if (cell == nil || [cell isDecorated])
+    {
+      return NO;
+    }
+
+  [self decorateCell: cell];
+
+  return YES;
 }
 
 @end

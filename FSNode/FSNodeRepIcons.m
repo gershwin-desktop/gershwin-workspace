@@ -301,7 +301,9 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 
       // Check for a custom icon from Finder metadata (directories/packages/bundles)
       {
-        NSString *realDirPath = [nodepath stringByResolvingSymlinksInPath];
+        NSString *realDirPath = ([node isLink]
+                                   ? [nodepath stringByResolvingSymlinksInPath]
+                                   : nodepath);
         NSImage *customIcon = [[self metadataProvider] customIconForPath: realDirPath];
         if (customIcon)
           {
@@ -359,32 +361,36 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
     }  
   else
     { // NOT DIRECTORY
-      NSString *realPath;
+      /* Resolving symlinks costs a realpath() syscall per file; only pay
+       * it for links, where the target path is what thumbnails and custom
+       * icons are keyed by. */
+      NSString *realPath = ([node isLink]
+                              ? [nodepath stringByResolvingSymlinksInPath]
+                              : nodepath);
 
-      realPath = [nodepath stringByResolvingSymlinksInPath];
       if (usesThumbnails)
 	{
 	  icon = [self thumbnailForPath: realPath];
-      
+
 	  if (icon) {
 	    NSSize icnsize = [icon size];
 
 	    if ([node isLink])
 	      {
 		NSImage *linkIcon;
-		
+
 		linkIcon = [NSImage imageNamed:@"common_linkCursor"];
 		icon = [icon copy];
 		[icon lockFocus];
 		[linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
 		[icon unlockFocus];
 		[icon autorelease];
-	      }	    
-      
+	      }
+
 	    if ((icnsize.width > size) || (icnsize.height > size))
 	      {
 		return [self resizedIcon: icon ofSize: size];
-	      }  
+	      }
 	  }
 	}
       // no thumbnail found
@@ -392,11 +398,10 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
       // Check for a custom icon from Finder metadata (non-directory files)
       if (icon == nil)
         {
-          NSString *realMetadataPath = [nodepath stringByResolvingSymlinksInPath];
-          NSImage *customIcon = [[self metadataProvider] customIconForPath: realMetadataPath];
+          NSImage *customIcon = [[self metadataProvider] customIconForPath: realPath];
           if (customIcon)
             {
-              icon = [self cachedIconOfSize: size forKey: [realMetadataPath stringByAppendingString:@".customicon"] addBaseIcon: customIcon];
+              icon = [self cachedIconOfSize: size forKey: [realPath stringByAppendingString:@".customicon"] addBaseIcon: customIcon];
             }
         }
 
@@ -404,29 +409,32 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	{
           NSString *linkKey;
           NSString *ext = [[realPath pathExtension] lowercaseString];
-      
-    if (ext && [ext length])
-      {
-        if ([ext isEqualToString: @"appimage"] || FSNodeRepHasAppImageMagic(realPath))
-          {
-            key = realPath;
-          }
-        else
-          {
-            key = ext;
-          }
-      }
-    else
-      {
-        if (FSNodeRepHasAppImageMagic(realPath))
-          {
-            key = realPath;
-          }
-        else
-          {
-            key = @"unknown";
-          }
-      }
+
+	  /* The AppImage magic probe opens and reads the file; restrict it
+	   * to extension-less files and .appimage names so ordinary files
+	   * are keyed by extension without a per-file open(). */
+	  if (ext && [ext length])
+	    {
+	      if ([ext isEqualToString: @"appimage"])
+	        {
+	          key = realPath;
+	        }
+	      else
+	        {
+	          key = ext;
+	        }
+	    }
+	  else
+	    {
+	      if (FSNodeRepHasAppImageMagic(realPath))
+	        {
+	          key = realPath;
+	        }
+	      else
+	        {
+	          key = @"unknown";
+	        }
+	    }
           linkKey = nil;
           if ([node isLink])
             {

@@ -25,6 +25,7 @@
 #include <math.h>
 #include <string.h>
 #include <unistd.h>
+#include <limits.h>
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -1831,8 +1832,10 @@
  * registration lingers) hangs the Workspace's main thread at startup forever.
  * That also freezes the DriveUI server (it posts to the main thread), which
  * makes every UI test that activates the Workspace time out.  Look the name
- * up first and bound rootProxy with a request timeout so a dead peer fails
- * fast instead of blocking startup. */
+ * up first and bound rootProxy with request AND reply timeouts so a dead
+ * peer fails fast instead of blocking startup: requestTimeout bounds the
+ * send, replyTimeout bounds the wait for the rootproxy reply (whose default
+ * is five minutes). */
 - (id)_boundedRootProxyForRegisteredName:(NSString *)aName host:(NSString *)aHost
 {
   NSConnection *c = [NSConnection connectionWithRegisteredName: aName host: aHost];
@@ -1841,7 +1844,53 @@
       return nil;
     }
   [c setRequestTimeout: 2.0];
+  [c setReplyTimeout: 2.0];
   return [c rootProxy];
+}
+
+/* YES if the stored identifier is a live process whose executable lives
+ * inside the recorded application path.  A stale session entry can carry a
+ * PID that has since been reused by an unrelated process; connecting to
+ * such a name would stall startup for nothing, so reused or vanished PIDs
+ * are rejected before any DO handshake. */
+- (BOOL)identifierBelongsToApplication
+{
+  pid_t pid;
+
+  if (identifier == nil || (pid = (pid_t)[identifier intValue]) <= 0)
+    {
+      return NO;
+    }
+
+#if defined(__linux__)
+  {
+    char link[64];
+    char exe[PATH_MAX];
+    ssize_t len;
+    NSString *exePath;
+    NSString *dir;
+
+    snprintf(link, sizeof(link), "/proc/%d/exe", (int)pid);
+    len = readlink(link, exe, sizeof(exe) - 1);
+    if (len <= 0)
+      {
+        return NO;    /* process is gone */
+      }
+    exe[len] = '\0';
+
+    exePath = [NSString stringWithUTF8String: exe];
+    if (exePath == nil)
+      {
+        return NO;
+      }
+
+    dir = [path stringByStandardizingPath];
+    dir = [dir stringByDeletingLastPathComponent];
+    return [exePath hasPrefix: [dir stringByAppendingString: @"/"]];
+  }
+#else
+  return YES;   /* BSDs: fall back to the bounded DO handshake */
+#endif
 }
 
 - (void)connectApplication:(BOOL)showProgress
@@ -1850,7 +1899,15 @@
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
     NSString *host = [defaults stringForKey: @"NSHost"];
     id app = nil;
-    
+
+    /* The stored PID may have been reused by an unrelated process since the
+     * last session; skip the handshake entirely in that case. */
+    if (identifier != nil && ![self identifierBelongsToApplication])
+      {
+        DESTROY (task);
+        return;
+      }
+
     if (host == nil) {
 	    host = @"";
 	  } else {

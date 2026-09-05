@@ -29,6 +29,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/NSView.h>
 #import "FSNodeRep.h"
+#import "FSNIconLoader.h"
 
 @class NSImage;
 @class NSFont;
@@ -38,7 +39,7 @@
 @class FSNTextCell;
 @class FSNIconItemData;
 
-@interface FSNIcon : NSView <FSNodeRep>
+@interface FSNIcon : NSView <FSNodeRep, FSNDecorationClient>
 {
   FSNode *node;
   NSString *hostname;
@@ -80,6 +81,9 @@
   BOOL nameEdited;
   BOOL isLeaf;
   BOOL isLocked;
+
+  /* NO between initForNode: and -decorate (lazy icon loading). */
+  BOOL decorated;
   
   NSTimeInterval editstamp;  
 
@@ -129,6 +133,12 @@
 - (void)setSelectable:(BOOL)value;
 
 - (void)setSuppressSelectionDrawing:(BOOL)flag;
+
+/* Load the icon image for the node (deferred from init so a large
+ * directory fills lazily).  No-op when already decorated. */
+- (void)decorate;
+
+- (BOOL)isDecorated;
 
 - (NSRect)iconBounds;
 
