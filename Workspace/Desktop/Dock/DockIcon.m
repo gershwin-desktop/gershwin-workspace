@@ -220,6 +220,16 @@
   return (isWsIcon || isTrashIcon);
 }
 
+- (void)decorate
+{
+  if (isTrashIcon)
+    {
+      return;
+    }
+
+  [super decorate];
+}
+
 - (void)setDocked:(BOOL)value
 {
   docked = value;
