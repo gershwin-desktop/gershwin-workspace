@@ -1034,7 +1034,7 @@ static NSImage *branchImage;
           [[container backgroundColor] set];
         }
     }
-  if (icnPosition != NSImageOnly)
+  if (decorated && icnPosition != NSImageOnly)
     {
       if (nameEdited == NO)
         {
