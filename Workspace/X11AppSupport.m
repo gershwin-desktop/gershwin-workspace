@@ -6,12 +6,17 @@
 
 #import "X11AppSupport.h"
 #import <AppKit/AppKit.h>
+#import <GNUstepGUI/GSDisplayServer.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
 
 #include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <fcntl.h>
+#include <stddef.h>
 #include <signal.h>
 #include <unistd.h>
 #include <errno.h>
@@ -39,6 +44,59 @@ static void ensureX11ErrorHandler(void)
         XSetErrorHandler(gwX11ErrorHandler);
         x11ErrorHandlerInstalled = YES;
     }
+}
+
+#pragma mark - X11 I/O Error Logger
+
+/* Xlib's default I/O error handler only prints "X connection to ... broken"
+ * and exits.  That cannot tell a server-side kill apart from a descriptor
+ * clobbered inside this process, and Workspace keeps several connections of
+ * its own besides AppKit's.  So log which connection failed, the errno and
+ * what its descriptor refers to now, then hand over to the previous handler
+ * so the process still exits exactly as before. */
+static XIOErrorHandler gwPreviousIOErrorHandler = NULL;
+
+static NSString *gwDescribeDescriptor(int fd)
+{
+    struct sockaddr_un addr;
+    socklen_t len = sizeof(addr);
+
+    if (fcntl(fd, F_GETFD) == -1) {
+        return [NSString stringWithFormat:@"fd %d not open (%s)", fd, strerror(errno)];
+    }
+    memset(&addr, 0, sizeof(addr));
+    if (getpeername(fd, (struct sockaddr *)&addr, &len) != 0) {
+        return [NSString stringWithFormat:@"fd %d open, no peer (%s)", fd, strerror(errno)];
+    }
+    if (addr.sun_family != AF_UNIX) {
+        return [NSString stringWithFormat:@"fd %d peer address family %d", fd, (int)addr.sun_family];
+    }
+    /* Linux X servers also listen on an abstract socket, whose name starts
+     * with a NUL byte. */
+    if (addr.sun_path[0] == '\0' && len > offsetof(struct sockaddr_un, sun_path) + 1) {
+        return [NSString stringWithFormat:@"fd %d peer @%s", fd, addr.sun_path + 1];
+    }
+    return [NSString stringWithFormat:@"fd %d peer %s", fd, addr.sun_path];
+}
+
+static int gwX11IOErrorLogger(Display *dpy)
+{
+    int savedErrno = errno;
+    Display *appDisplay = (Display *)[GSCurrentServer() serverDevice];
+
+    NSLog(@"X11 I/O error on %@ connection %p (%s): errno %d (%s), %@, %@ thread\n%@",
+          (dpy == appDisplay) ? @"AppKit" : @"secondary",
+          dpy, DisplayString(dpy), savedErrno, strerror(savedErrno),
+          gwDescribeDescriptor(ConnectionNumber(dpy)),
+          [NSThread isMainThread] ? @"main" : @"background",
+          [NSThread callStackSymbols]);
+    errno = savedErrno;
+    return (gwPreviousIOErrorHandler != NULL) ? gwPreviousIOErrorHandler(dpy) : 0;
+}
+
+void GWInstallX11IOErrorLogger(void)
+{
+    gwPreviousIOErrorHandler = XSetIOErrorHandler(gwX11IOErrorLogger);
 }
 
 #pragma mark - GWX11WindowInfo Implementation

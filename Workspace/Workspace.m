@@ -795,6 +795,8 @@ static Workspace *gworkspace = nil;
   NSString *lockpath;
   NSUInteger i;
   
+  GWInstallX11IOErrorLogger();
+
   [self createMenu];
     
   [[self class] registerForServices];

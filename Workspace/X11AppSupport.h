@@ -390,4 +390,8 @@
 
 @end
 
+/* Log which X connection broke and why before Xlib exits the process.  Call
+ * once, after the AppKit display is open.  See X11AppSupport.m. */
+void GWInstallX11IOErrorLogger(void);
+
 #endif /* X11_APP_SUPPORT_H */
