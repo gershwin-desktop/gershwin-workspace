@@ -44,53 +44,8 @@
   self = [super initWithFrame: rect];
   
   if (self) {
-    NSBundle *bundle = [NSBundle bundleForClass: [self class]];
-    NSString *dictpath = [bundle pathForResource: @"categories" ofType: @"plist"];
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: dictpath];
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];  
-    NSDictionary *domain;    
-    NSArray *catnames;
-    unsigned i;
-    
-    if (dict == nil) {
-      [NSException raise: NSInternalInconsistencyException
-		              format: @"\"%@\" doesn't contain a dictionary!", dictpath];     
-    }
-    
-    [defaults synchronize];
-    domain = [defaults persistentDomainForName: @"MDKQuery"];
-    
-    if (domain == nil) {
-      domain = [NSDictionary dictionaryWithObject: dict forKey: @"categories"];
-      [defaults setPersistentDomain: domain forName: @"MDKQuery"];
-      [defaults synchronize];
-    
-    } else {
-      NSDictionary *catdict = [domain objectForKey: @"categories"]; 
-
-      if ((catdict == nil) || ([catdict count] == 0)) {      
-        NSMutableDictionary *mdom = [domain mutableCopy]; 
-        
-        [mdom setObject: dict forKey: @"categories"];
-        [defaults setPersistentDomain: mdom forName: @"MDKQuery"];
-        [defaults synchronize];
-        RELEASE (mdom);
-      }    
-    }
-    
-    categories = [[domain objectForKey: @"categories"] mutableCopy];
-    catnames = [categories keysSortedByValueUsingSelector: @selector(compareAccordingToIndex:)]; 
     catviews = [NSMutableArray new];
-    
-    for (i = 0; i < [catnames count]; i++) { 
-      NSString *catname = [catnames objectAtIndex: i];   
-      NSDictionary *catinfo = [categories objectForKey: catname];
-      CategoryView *cview = [[CategoryView alloc] initWithCategoryInfo: catinfo
-                                                              inEditor: self];
-      [catviews addObject: cview];
-      [self addSubview: cview];
-      RELEASE (cview);      
-    }
+    [self showSavedCategories];
   }
 
   return self;
@@ -145,6 +100,11 @@
   
   [defaults synchronize];
   domain = [[defaults persistentDomainForName: @"MDKQuery"] mutableCopy];
+  /* Showing the categories no longer seeds the domain, so saving can come
+     before MDKQuery has created it. */
+  if (domain == nil) {
+    domain = [NSMutableDictionary new];
+  }
   [domain setObject: newcat forKey: @"categories"];
   [defaults setPersistentDomain: domain forName: @"MDKQuery"];
   RELEASE (domain);  
@@ -160,16 +120,44 @@
 
 - (void)revertChanges
 {
-  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];  
-  NSDictionary *domain;    
+  [self showSavedCategories];
+  [self tile];
+  [mdindexing searchResultDidEndEditing];
+}
+
+/* Only reads: this view is built with the pane's main view, which a host
+   may load just to index its labels, and MDKQuery seeds the domain itself
+   when it first runs. */
+- (NSDictionary *)savedCategories
+{
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  NSDictionary *catdict;
+
+  [defaults synchronize];
+  catdict = [[defaults persistentDomainForName: @"MDKQuery"] objectForKey: @"categories"];
+
+  if ([catdict count] == 0) {
+    NSBundle *bundle = [NSBundle bundleForClass: [self class]];
+    NSString *dictpath = [bundle pathForResource: @"categories" ofType: @"plist"];
+
+    catdict = [NSDictionary dictionaryWithContentsOfFile: dictpath];
+
+    if (catdict == nil) {
+      [NSException raise: NSInternalInconsistencyException
+                  format: @"\"%@\" doesn't contain a dictionary!", dictpath];
+    }
+  }
+
+  return catdict;
+}
+
+- (void)showSavedCategories
+{
   NSArray *catnames;
   unsigned i;
 
-  [defaults synchronize];
-  domain = [defaults persistentDomainForName: @"MDKQuery"];
-  
   DESTROY (categories);
-  categories = [[domain objectForKey: @"categories"] mutableCopy];  
+  categories = [[self savedCategories] mutableCopy];
   catnames = [categories keysSortedByValueUsingSelector: @selector(compareAccordingToIndex:)]; 
 
   while ([catviews count]) { 
@@ -188,10 +176,6 @@
     [self addSubview: cview];
     RELEASE (cview);      
   }
-  
-  [self tile];
-  
-  [mdindexing searchResultDidEndEditing];
 }
 
 - (void)tile

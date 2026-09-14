@@ -62,17 +62,10 @@ BOOL isDotFile(NSString *path);
     CGFloat fonth;
     int index;
     NSString *str;
-    NSUInteger i;
     
     fm = [NSFileManager defaultManager];
     nc = [NSNotificationCenter defaultCenter];
     dnc = [NSDistributedNotificationCenter defaultCenter];
-    
-    indexedPaths = [NSMutableArray new];
-    excludedPaths = [NSMutableArray new];
-    excludedSuffixes = [NSMutableArray new];
-
-    [self readDefaults];
 
     index = [tabView indexOfTabViewItemWithIdentifier: @"paths"];
     [[tabView tabViewItemAtIndex: index] setLabel: NSLocalizedString(@"Paths", @"")];
@@ -99,23 +92,8 @@ BOOL isDotFile(NSString *path);
     [indexedMatrix setAllowsEmptySelection: YES];
     [indexedScroll setDocumentView: indexedMatrix];	
     RELEASE (indexedMatrix);
-
-    for (i = 0; i < [indexedPaths count]; i++) {
-      NSString *name = [indexedPaths objectAtIndex: i];
-      NSUInteger count = [[indexedMatrix cells] count];
-
-      [indexedMatrix insertRow: count];
-      cell = [indexedMatrix cellAtRow: count column: 0];   
-      [cell setStringValue: name];
-      [cell setLeaf: YES];  
-    }
-    
-    [self adjustMatrix: indexedMatrix];
-    [indexedMatrix sizeToCells]; 
-    [indexedMatrix setTarget: self]; 
-    [indexedMatrix setAction: @selector(indexedMatrixAction:)]; 
-
-    [indexedRemove setEnabled: ([[excludedMatrix cells] count] > 0)];
+    [indexedMatrix setTarget: self];
+    [indexedMatrix setAction: @selector(indexedMatrixAction:)];
 
     [excludedScroll setBorderType: NSBezelBorder];
     [excludedScroll setHasHorizontalScroller: YES];
@@ -132,23 +110,8 @@ BOOL isDotFile(NSString *path);
 	  [excludedMatrix setAllowsEmptySelection: YES];
 	  [excludedScroll setDocumentView: excludedMatrix];	
     RELEASE (excludedMatrix);
-
-    for (i = 0; i < [excludedPaths count]; i++) {
-      NSString *path = [excludedPaths objectAtIndex: i];
-      NSUInteger count = [[excludedMatrix cells] count];
-
-      [excludedMatrix insertRow: count];
-      cell = [excludedMatrix cellAtRow: count column: 0];   
-      [cell setStringValue: path];
-      [cell setLeaf: YES];  
-    }
-
-    [self adjustMatrix: excludedMatrix];    
-    [excludedMatrix sizeToCells]; 
-    [excludedMatrix setTarget: self]; 
-    [excludedMatrix setAction: @selector(excludedMatrixAction:)]; 
-
-    [excludedRemove setEnabled: ([[excludedMatrix cells] count] > 0)];
+    [excludedMatrix setTarget: self];
+    [excludedMatrix setAction: @selector(excludedMatrixAction:)];
 
     [suffixScroll setBorderType: NSBezelBorder];
     [suffixScroll setHasHorizontalScroller: YES];
@@ -165,26 +128,11 @@ BOOL isDotFile(NSString *path);
     [suffixMatrix setAllowsEmptySelection: YES];
     [suffixScroll setDocumentView: suffixMatrix];	
     RELEASE (suffixMatrix);
-
-    for (i = 0; i < [excludedSuffixes count]; i++) {
-      NSString *path = [excludedSuffixes objectAtIndex: i];
-      NSUInteger count = [[suffixMatrix cells] count];
-
-      [suffixMatrix insertRow: count];
-      cell = [suffixMatrix cellAtRow: count column: 0];   
-      [cell setStringValue: path];
-      [cell setLeaf: YES];  
-    }
-
-    [self adjustMatrix: suffixMatrix];    
-    [suffixMatrix sizeToCells]; 
-    [suffixMatrix setTarget: self]; 
+    [suffixMatrix setTarget: self];
     [suffixMatrix setAction: @selector(suffixMatrixAction:)]; 
 
     [suffixField setStringValue: @""];
     
-    [suffixRemove setEnabled: ([[suffixMatrix cells] count] > 0)];
-
     pathsUnselReply = NSUnselectNow;
     searchResultsReply = NSUnselectNow;
     loaded = YES;
@@ -192,8 +140,6 @@ BOOL isDotFile(NSString *path);
     [revertButton setEnabled: NO];
     [applyButton setEnabled: NO];
         
-    startAppWin = [[StartAppWin alloc] init];
-    
     [statusWindow setTitle: NSLocalizedString(@"Status", @"")];
     [statusWindow setFrameUsingName: @"mdindexing_status_win"];
     [statusWindow setDelegate: self];
@@ -241,11 +187,8 @@ BOOL isDotFile(NSString *path);
     
     indexedStatusPath = nil;
     errorLogPath = nil;
-    statusTimer = nil;    
-    [self setupDbPaths];
-    
+    statusTimer = nil;
     mdextractor = nil;
-    [self connectMDExtractor];
   }
 }
 
@@ -259,9 +202,29 @@ BOOL isDotFile(NSString *path);
   return NSUnselectCancel;
 }
 
+- (void)willSelect
+{
+  /* Settings are read here, not in -mainViewDidLoad, because a host may
+     load the main view without ever showing it (e.g. to index its labels).
+     Later selections keep the lists as they are: -shouldUnselect does not
+     let the pane go with unapplied path changes, and an unapplied indexing
+     switch must survive together with its enabled Apply button. */
+  if (wasSelected == NO) {
+    [self showSavedSettings];
+  }
+}
+
 - (void)didSelect
 {
-  if (mdextractor == nil) {
+  /* Contacting mdextractor can launch it and wait for it for seconds, and
+     the db paths setup creates directories and may raise alerts; none of
+     this belongs to a pane that is only loaded and never shown. */
+  if (wasSelected == NO) {
+    wasSelected = YES;
+    [self setupDbPaths];
+    [self connectMDExtractor];
+
+  } else if (mdextractor == nil) {
     if (NSRunAlertPanel(nil,
                       NSLocalizedString(@"The mdextractor connection died.\nDo you want to restart it?", @""),
                       NSLocalizedString(@"Yes", @""),
@@ -581,6 +544,11 @@ return; \
 
 - (IBAction)revertButtAction:(id)sender
 {
+  [self showSavedSettings];
+}
+
+- (void)showSavedSettings
+{
   id cell;
   NSUInteger i;
 
@@ -764,6 +732,11 @@ return; \
     
       cmd = [NSTask launchPathForTool: @"mdextractor"];    
                 
+      /* Its window is only needed when mdextractor has to be launched, so
+         loading it with the main view would be wasted work. */
+      if (startAppWin == nil) {
+        startAppWin = [[StartAppWin alloc] init];
+      }
       [startAppWin showWindowWithTitle: @"MDIndexing"
                                appName: @"mdextractor"
                              operation: NSLocalizedString(@"starting:", @"")

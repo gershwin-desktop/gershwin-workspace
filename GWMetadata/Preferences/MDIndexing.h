@@ -80,6 +80,7 @@
   IBOutlet id applyButton;
       
   BOOL loaded;
+  BOOL wasSelected;
   NSPreferencePaneUnselectReply pathsUnselReply;
 
   id mdextractor;
@@ -151,6 +152,8 @@
 - (void)readIndexedPathsStatus:(id)sender;
 
 - (void)readDefaults;
+
+- (void)showSavedSettings;
 
 - (void)applyChanges;
 
