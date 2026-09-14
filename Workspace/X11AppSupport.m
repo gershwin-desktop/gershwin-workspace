@@ -83,10 +83,13 @@ static int gwX11IOErrorLogger(Display *dpy)
 {
     int savedErrno = errno;
     Display *appDisplay = (Display *)[GSCurrentServer() serverDevice];
+    /* strerror() may return a shared buffer that gwDescribeDescriptor()
+     * overwrites, so capture the text before calling it. */
+    NSString *errnoText = [NSString stringWithUTF8String: strerror(savedErrno)];
 
-    NSLog(@"X11 I/O error on %@ connection %p (%s): errno %d (%s), %@, %@ thread\n%@",
+    NSLog(@"X11 I/O error on %@ connection %p (%s): errno %d (%@), %@, %@ thread\n%@",
           (dpy == appDisplay) ? @"AppKit" : @"secondary",
-          dpy, DisplayString(dpy), savedErrno, strerror(savedErrno),
+          dpy, DisplayString(dpy), savedErrno, errnoText,
           gwDescribeDescriptor(ConnectionNumber(dpy)),
           [NSThread isMainThread] ? @"main" : @"background",
           [NSThread callStackSymbols]);
