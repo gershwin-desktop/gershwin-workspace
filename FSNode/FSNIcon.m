@@ -1066,60 +1066,65 @@ static NSImage *branchImage;
       [drawicon dissolveToPoint: icnPoint fraction: 0.3];
     }
 
-  if (isLeaf == NO)
-    [[object_getClass(self) branchImage] compositeToPoint: brImgBounds.origin operation: NSCompositeSourceOver];
-
-  // Draw tag color indicator (from DS_Store lclr or FinderInfo fdFlags)
-  // Drawn last so it's always on top of everything, including the branch image.
-  // Lazily check the metadata provider if no colour has been set yet.
-  if (tagColor == nil)
-    [self loadLabelColorFromMetadata];
-
-  if (tagColor)
+  /* Gate all icon overlays on decorated so they appear atomically with the
+   * icon image, matching the label gating above. */
+  if (decorated)
     {
-      // Draw a small colored dot in the bottom-right corner of the icon
-      CGFloat dotSize = 10.0;
-      CGFloat dotMargin = 2.0;
-      NSRect dotRect = NSMakeRect(icnBounds.origin.x + icnBounds.size.width - dotSize - dotMargin,
-                                  icnBounds.origin.y + dotMargin,
-                                  dotSize, dotSize);
-      FSNDrawLabelDot(dotRect, tagColor);
-    }
+      if (isLeaf == NO)
+        [[object_getClass(self) branchImage] compositeToPoint: brImgBounds.origin
+                                                    operation: NSCompositeSourceOver];
 
-  /* Red git change-count badge: a rounded pill with the number in white, drawn
-   * at the icon's top-right corner (>= 48px icons only), mirroring the Dock's
-   * app-icon badge.  The count arrives asynchronously; until then badgeCount is
-   * 0 / pending and nothing is drawn here. */
-  if (gitBadgeCount > 0 && iconSize >= 48)
-    {
-      NSString *countStr = (gitBadgeCount > 99)
-        ? @"99+"
-        : [NSString stringWithFormat: @"%ld", (long) gitBadgeCount];
-      CGFloat badgeH = MAX (12.0, round ((CGFloat) iconSize * 0.34));
-      NSDictionary *attrs = @{
-        NSFontAttributeName: [NSFont boldSystemFontOfSize: badgeH * 0.6],
-        NSForegroundColorAttributeName: [NSColor whiteColor]
-      };
-      NSSize strSize = [countStr sizeWithAttributes: attrs];
-      CGFloat pad = badgeH * 0.375;
-      CGFloat badgeW = strSize.width + pad * 2.0;
-      if (badgeW < badgeH)
+      // Draw tag color indicator (from DS_Store lclr or FinderInfo fdFlags).
+      // Lazily check the metadata provider if no colour has been set yet.
+      if (tagColor == nil)
+        [self loadLabelColorFromMetadata];
+
+      if (tagColor)
         {
-          badgeW = badgeH;
+          // Small colored dot in the bottom-right corner of the icon
+          CGFloat dotSize = 10.0;
+          CGFloat dotMargin = 2.0;
+          NSRect dotRect = NSMakeRect(icnBounds.origin.x + icnBounds.size.width - dotSize - dotMargin,
+                                      icnBounds.origin.y + dotMargin,
+                                      dotSize, dotSize);
+          FSNDrawLabelDot(dotRect, tagColor);
         }
-      CGFloat margin = 2.0;
-      NSRect badgeRect = NSMakeRect (
-        icnBounds.origin.x + icnBounds.size.width - badgeW - margin,
-        icnBounds.origin.y + icnBounds.size.height - badgeH - margin,
-        badgeW, badgeH);
-      [[NSColor redColor] set];
-      [[NSBezierPath bezierPathWithRoundedRect: badgeRect
-                                       xRadius: badgeH / 2.0
-                                       yRadius: badgeH / 2.0] fill];
-      NSPoint strPoint = NSMakePoint (
-        badgeRect.origin.x + (badgeW - strSize.width) / 2.0,
-        badgeRect.origin.y + (badgeH - strSize.height) / 2.0);
-      [countStr drawAtPoint: strPoint withAttributes: attrs];
+
+      /* Red git change-count badge: a rounded pill with the number in white,
+       * drawn at the icon's top-right corner (>= 48px icons only), mirroring
+       * the Dock's app-icon badge.  The count arrives asynchronously; until
+       * then badgeCount is 0 / pending and nothing is drawn here. */
+      if (gitBadgeCount > 0 && iconSize >= 48)
+        {
+          NSString *countStr = (gitBadgeCount > 99)
+            ? @"99+"
+            : [NSString stringWithFormat: @"%ld", (long) gitBadgeCount];
+          CGFloat badgeH = MAX (12.0, round ((CGFloat) iconSize * 0.34));
+          NSDictionary *attrs = @{
+            NSFontAttributeName: [NSFont boldSystemFontOfSize: badgeH * 0.6],
+            NSForegroundColorAttributeName: [NSColor whiteColor]
+          };
+          NSSize strSize = [countStr sizeWithAttributes: attrs];
+          CGFloat pad = badgeH * 0.375;
+          CGFloat badgeW = strSize.width + pad * 2.0;
+          if (badgeW < badgeH)
+            {
+              badgeW = badgeH;
+            }
+          CGFloat margin = 2.0;
+          NSRect badgeRect = NSMakeRect (
+            icnBounds.origin.x + icnBounds.size.width - badgeW - margin,
+            icnBounds.origin.y + icnBounds.size.height - badgeH - margin,
+            badgeW, badgeH);
+          [[NSColor redColor] set];
+          [[NSBezierPath bezierPathWithRoundedRect: badgeRect
+                                           xRadius: badgeH / 2.0
+                                           yRadius: badgeH / 2.0] fill];
+          NSPoint strPoint = NSMakePoint (
+            badgeRect.origin.x + (badgeW - strSize.width) / 2.0,
+            badgeRect.origin.y + (badgeH - strSize.height) / 2.0);
+          [countStr drawAtPoint: strPoint withAttributes: attrs];
+        }
     }
 
   /* The git-repository badge (the git logo) is already baked into the icon
