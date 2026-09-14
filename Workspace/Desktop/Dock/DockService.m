@@ -21,6 +21,7 @@
 #import "DockService.h"
 #import "Dock.h"
 #import "DockIcon.h"
+#import "GWProcessOwnership.h"
 
 NSString * const kDockServiceName = @"DockIcon";
 
@@ -311,8 +312,13 @@ static NSString *appNameForPID(pid_t pid)
 {
   pid_t pid = pidForConnection(newConn);
   NSString *appName = nil;
-  if (pid > 0)
-    appName = appNameForPID(pid);
+
+  /* The DockIcon name is registered per user, so applications of this user's
+   * sessions on other X displays reach this Dock too. */
+  if ([GWProcessOwnership isProcessInCurrentSession: pid] == NO)
+    return NO;
+
+  appName = appNameForPID(pid);
   if (appName == nil || [appName length] == 0)
     {
       appName = [NSString stringWithFormat:@"pid-%d", (int)pid];

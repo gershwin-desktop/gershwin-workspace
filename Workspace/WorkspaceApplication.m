@@ -45,6 +45,7 @@
 #import "StartAppWin.h"
 #import "X11AppSupport.h"
 #import "GWApplicationLauncher.h"
+#import "GWProcessOwnership.h"
 // For checking whether a process identifier still exists
 #include <signal.h>
 #include <errno.h>
@@ -395,6 +396,33 @@
 
 @implementation Workspace (Applications)
 
+/* Workspace notifications arrive through the per-user distributed
+ * notification center, which this user's sessions on other X displays share;
+ * only those of this session may touch launchedApps and the Dock. */
+- (BOOL)_isSessionNotification:(NSNotification *)notif
+{
+  return [GWProcessOwnership isNotificationInfoInCurrentSession: [notif userInfo]];
+}
+
+/* A process that has terminated can no longer be attributed by its
+ * environment, so its termination is ours only when we track that pid. */
+- (BOOL)_isTrackedProcess:(NSNumber *)ident
+{
+  pid_t pid = (pid_t)[ident intValue];
+  NSUInteger i;
+
+  if (pid <= 0)
+    return NO;
+  for (i = 0; i < [launchedApps count]; i++)
+    {
+      GWLaunchedApp *app = [launchedApps objectAtIndex: i];
+
+      if ([[app identifier] intValue] == pid)
+        return YES;
+    }
+  return ([[dtopManager dock] iconForApplicationPID: pid] != nil);
+}
+
 - (void)initializeWorkspace
 {
   wsnc = [ws notificationCenter];
@@ -582,10 +610,14 @@
     }
   }
   
+  /* There is no process identifier yet to attribute this launch by, so name
+   * the display it is meant for (see _isSessionNotification:). */
   userinfo = [NSDictionary dictionaryWithObjectsAndKeys: appName, 
 			                                                   @"NSApplicationName",
 	                                                       appPath, 
                                                          @"NSApplicationPath",
+                                                         [GWProcessOwnership currentDisplay],
+                                                         GWLaunchDisplayKey,
 	                                                       nil];
                  
   [wsnc postNotificationName: NSWorkspaceWillLaunchApplicationNotification
@@ -647,7 +679,7 @@
   NSString *path = [info objectForKey: @"NSApplicationPath"];
   NSString *name = [info objectForKey: @"NSApplicationName"];
   
-  if (path && name) {
+  if (path && name && [self _isSessionNotification: notif]) {
     [[dtopManager dock] appWillLaunch: path appName: name];
 
     /* Create a GWLaunchedApp entry now so the fallback timer
@@ -676,7 +708,12 @@
   NSString *name = [info objectForKey: @"NSApplicationName"];
   NSString *path = [info objectForKey: @"NSApplicationPath"];
   NSNumber *ident = [info objectForKey: @"NSApplicationProcessIdentifier"];
-  GWLaunchedApp *app = [self launchedAppWithPath: path andName: name];
+  GWLaunchedApp *app;
+
+  if ([self _isSessionNotification: notif] == NO) {
+    return;
+  }
+  app = [self launchedAppWithPath: path andName: name];
 
   if (app) {
     [app setIdentifier: ident];
@@ -733,7 +770,13 @@
   NSDictionary *info = [notif userInfo];
   NSString *name = [info objectForKey: @"NSApplicationName"];
   NSString *path = [info objectForKey: @"NSApplicationPath"];
-  GWLaunchedApp *app = [self launchedAppWithPath: path andName: name];
+  GWLaunchedApp *app;
+
+  if ([self _isSessionNotification: notif] == NO
+      && [self _isTrackedProcess: [info objectForKey: @"NSApplicationProcessIdentifier"]] == NO) {
+    return;
+  }
+  app = [self launchedAppWithPath: path andName: name];
 
   /*
    * Relying solely on the connection death notification misses apps that
@@ -773,6 +816,9 @@
 
 - (void)appDidBecomeActive:(NSNotification *)notif
 {
+  if ([self _isSessionNotification: notif] == NO) {
+    return;
+  }
   NSDictionary *info = [notif userInfo];
   NSString *name = [info objectForKey: @"NSApplicationName"];
   NSString *path = [info objectForKey: @"NSApplicationPath"];
@@ -1025,6 +1071,9 @@
 
 - (void)appDidResignActive:(NSNotification *)notif
 {
+  if ([self _isSessionNotification: notif] == NO) {
+    return;
+  }
   NSDictionary *info = [notif userInfo];
   NSString *name = [info objectForKey: @"NSApplicationName"];
   NSString *path = [info objectForKey: @"NSApplicationPath"];
@@ -1125,6 +1174,9 @@
 
 - (void)appDidHide:(NSNotification *)notif
 {
+  if ([self _isSessionNotification: notif] == NO) {
+    return;
+  }
   NSDictionary *info = [notif userInfo];
   NSString *name = [info objectForKey: @"NSApplicationName"];
   NSString *path = [info objectForKey: @"NSApplicationPath"];
@@ -1140,6 +1192,9 @@
 
 - (void)appDidUnhide:(NSNotification *)notif
 {
+  if ([self _isSessionNotification: notif] == NO) {
+    return;
+  }
   NSDictionary *info = [notif userInfo];
   NSString *name = [info objectForKey: @"NSApplicationName"];
   NSString *path = [info objectForKey: @"NSApplicationPath"];
@@ -1362,8 +1417,14 @@
           NSString *name = [dict objectForKey: @"NSApplicationName"];
           NSString *path = [dict objectForKey: @"NSApplicationPath"];
           NSNumber *ident = [dict objectForKey: @"NSApplicationProcessIdentifier"];
-    
-          if (name && path && ident)
+          pid_t pid = (pid_t)[ident intValue];
+
+          /* The stored list is shared by all of this user's sessions; a live
+           * application on another X display is that session's to show.
+           * Dead entries still pass so that they get pruned below. */
+          if (name && path && ident
+              && ([GWProcessOwnership isProcessOwnedByCurrentUser: pid] == NO
+                  || [GWProcessOwnership isProcessInCurrentSession: pid]))
             {
               GWLaunchedApp *app = [GWLaunchedApp appWithApplicationPath: path
                                                          applicationName: name

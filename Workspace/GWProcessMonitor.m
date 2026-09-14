@@ -6,6 +6,7 @@
 
 #define _GNU_SOURCE
 #import "GWProcessMonitor.h"
+#import "GWProcessOwnership.h"
 #import <unistd.h>
 #import <fcntl.h>
 #import <poll.h>
@@ -657,7 +658,8 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
 #endif
 }
 
-/* Returns YES if any live (non-zombie) process matches the given app name.
+/* Returns YES if any live (non-zombie) process of this session (current user,
+ * current X display) matches the given app name.
  * Used for the Dock launch bounce when no PID was ever bound (a launch that
  * failed before a process was created, e.g. a missing binary): there is no
  * PID to watch, so fall back to a name scan. */
@@ -721,8 +723,11 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
 
       NSString *lower = [[NSString stringWithUTF8String: comm] lowercaseString];
       /* Match the comm either exactly or as a substring of the app name
-       * (e.g. comm "chrome" for the app "Google Chrome"). */
-      if ([want rangeOfString: lower].location != NSNotFound)
+       * (e.g. comm "chrome" for the app "Google Chrome").  A same-named
+       * process of another user or X display must not keep this session's
+       * icon bouncing. */
+      if ([want rangeOfString: lower].location != NSNotFound
+          && [GWProcessOwnership isProcessInCurrentSession: (pid_t)atoi(entry->d_name)])
         {
           found = YES;
           break;
@@ -731,11 +736,59 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
   closedir(proc);
   return found;
 #else
-  /* BSDs: fall back to pgrep -i -x; the dock bounce is a slow, rare path so
-   * a subprocess here is acceptable. */
-  NSString *cmd = [NSString stringWithFormat: @"pgrep -i -x %@ >/dev/null 2>&1",
-    name];
-  return WEXITSTATUS(system([cmd UTF8String])) == 0;
+  /* Only this user's processes can belong to this session, so let the kernel
+   * filter by uid; the process name must match exactly, case-insensitively. */
+#if defined(__FreeBSD__)
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_UID, (int)getuid()};
+  typedef struct kinfo_proc GWKProc;
+#elif defined(__OpenBSD__)
+  int mib[6] = {CTL_KERN, KERN_PROC, KERN_PROC_UID, (int)getuid(),
+                sizeof(struct kinfo_proc), 0};
+  typedef struct kinfo_proc GWKProc;
+#elif defined(__NetBSD__)
+  int mib[6] = {CTL_KERN, KERN_PROC2, KERN_PROC_UID, (int)getuid(),
+                sizeof(struct kinfo_proc2), 0};
+  typedef struct kinfo_proc2 GWKProc;
+#endif
+  u_int miblen = sizeof(mib) / sizeof(mib[0]);
+  size_t len = 0;
+
+  if (sysctl(mib, miblen, NULL, &len, NULL, 0) != 0 || len == 0)
+    return NO;
+  /* Room for processes started between the two calls. */
+  len += len / 8;
+  GWKProc *kp = malloc(len);
+  if (kp == NULL)
+    return NO;
+#if !defined(__FreeBSD__)
+  mib[5] = (int)(len / sizeof(GWKProc));
+#endif
+  if (sysctl(mib, miblen, kp, &len, NULL, 0) != 0)
+    {
+      free(kp);
+      return NO;
+    }
+
+  BOOL found = NO;
+  size_t count = len / sizeof(GWKProc);
+  for (size_t i = 0; i < count && found == NO; i++)
+    {
+#if defined(__FreeBSD__)
+      const char *comm = kp[i].ki_comm;
+      pid_t pid = kp[i].ki_pid;
+      BOOL zombie = (kp[i].ki_stat == SZOMB);
+#else
+      const char *comm = kp[i].p_comm;
+      pid_t pid = kp[i].p_pid;
+      BOOL zombie = (kp[i].p_stat == SZOMB);
+#endif
+      if (zombie == NO
+          && [[NSString stringWithUTF8String: comm] caseInsensitiveCompare: name] == NSOrderedSame
+          && [GWProcessOwnership isProcessInCurrentSession: pid])
+        found = YES;
+    }
+  free(kp);
+  return found;
 #endif
 }
 

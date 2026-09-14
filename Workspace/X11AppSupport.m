@@ -5,6 +5,7 @@
  */
 
 #import "X11AppSupport.h"
+#import "GWProcessOwnership.h"
 #import <AppKit/AppKit.h>
 #import <GNUstepGUI/GSDisplayServer.h>
 
@@ -529,7 +530,9 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
                     matches = YES;
                 }
 
-                if (matches) {
+                /* Other users' windows on this display are not this
+                 * session's applications. */
+                if (matches && [GWProcessOwnership isProcessOwnedByCurrentUser: winPID]) {
                     GWX11WindowInfo *info = [self infoForWindow:dpy window:clients[i]];
                     [windows addObject:info];
                 }
