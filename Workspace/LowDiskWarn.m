@@ -11,6 +11,67 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
 #include <sys/statvfs.h>
+#ifndef __linux__
+#include <sys/param.h>
+#include <sys/mount.h>
+#endif
+
+/* Overlay/union filesystem type names recognised across platforms. */
+static BOOL
+FSIsOverlayFSType(NSString *fstype)
+{
+  return [fstype isEqualToString: @"overlay"]
+      || [fstype isEqualToString: @"unionfs"]
+      || [fstype isEqualToString: @"aufs"]
+      || [fstype hasPrefix: @"fuse.overlay"]
+      || [fstype hasPrefix: @"fuse.unionfs"];
+}
+
+static BOOL
+FSIsOverlayRoot(void)
+{
+  /* overlay/unionfs merged roots are writable but backed by read-only
+   * lower layers (squashfs, iso9660).  statvfs reports the overlay's
+   * writable view, so ST_RDONLY is not set.  Detect this by looking
+   * up the "/" mount point's filesystem type. */
+
+#ifdef __linux__
+  /* Linux: read /proc/mounts for the "/" entry. */
+  NSString *mounts = [NSString stringWithContentsOfFile: @"/proc/mounts"
+                                              encoding: NSUTF8StringEncoding
+                                                 error: NULL];
+  if (mounts == nil)
+    return NO;
+
+  NSArray *lines = [mounts componentsSeparatedByString: @"\n"];
+  for (NSString *line in lines)
+    {
+      if ([line length] == 0)
+        continue;
+      NSArray *parts = [line componentsSeparatedByString: @" "];
+      if ([parts count] < 3)
+        continue;
+      NSString *target = [parts objectAtIndex: 1];
+      if ([target isEqualToString: @"/"])
+        {
+          return FSIsOverlayFSType([parts objectAtIndex: 2]);
+        }
+    }
+#else
+  /* BSDs / other: getmntinfo() populates struct statfs with f_fstypename. */
+  struct statfs *mnts = NULL;
+  int n = getmntinfo(&mnts, MNT_NOWAIT);
+  for (int i = 0; i < n; i++)
+    {
+      if (strcmp(mnts[i].f_mntonname, "/") == 0)
+        {
+          NSString *fstype = [NSString stringWithUTF8String: mnts[i].f_fstypename];
+          return FSIsOverlayFSType(fstype);
+        }
+    }
+#endif
+  return NO;
+}
 
 @implementation LowDiskWarn
 
@@ -52,8 +113,17 @@
 
   if (ret == 0)
     {
-      /* Skip read-only volumes (e.g. live/install media, overlay roots). */
+      /* Skip read-only volumes (e.g. live/install media). */
       if (buf.f_flag & ST_RDONLY)
+        {
+          checking = NO;
+          return;
+        }
+
+      /* Skip overlay/union roots (Live ISOs with writable overlay on
+       * read-only lower layers).  The overlay is writable so ST_RDONLY
+       * is not set, but free-space warnings are meaningless here. */
+      if (FSIsOverlayRoot())
         {
           checking = NO;
           return;
