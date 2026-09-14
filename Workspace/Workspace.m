@@ -209,6 +209,7 @@ static Workspace *gworkspace = nil;
   RELEASE (trashPath);
   RELEASE (watchedPaths);
   RELEASE (history);
+  RELEASE (infoPanel);
   RELEASE (openWithController);
   RELEASE (openWithMenu);
   RELEASE (vwrsManager);
@@ -3384,11 +3385,16 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (void)showInfo:(id)sender
 {
-  GSInfoPanel *panel = [[GSInfoPanel alloc] initWithDictionary: nil];
-  [panel setReleasedWhenClosed: YES];
-  [panel setTitle: [NSString stringWithFormat: _(@"About %@"),
-                             [[NSProcessInfo processInfo] processName]]];
-  [panel orderFront: self];
+  /* Build the panel only once: GSInfoPanel's init caches the localized
+     Info.plist dictionary without retaining it, so a second GSInfoPanel
+     in this process reads freed memory and crashes. */
+  if (infoPanel == nil) {
+    infoPanel = [[GSInfoPanel alloc] initWithDictionary: nil];
+    [infoPanel setReleasedWhenClosed: NO];
+    [infoPanel setTitle: [NSString stringWithFormat: _(@"About %@"),
+                                   [[NSProcessInfo processInfo] processName]]];
+  }
+  [infoPanel orderFront: self];
 }
 
 - (void)showPreferences:(id)sender

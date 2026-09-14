@@ -46,6 +46,7 @@
 @class Operation;
 @class GWViewer;
 @class PrefController;
+@class NSPanel;
 @class History;
 @class OpenWithController;
 @class RunExternalController;
@@ -121,6 +122,7 @@
   id mdextractor;
   
   PrefController *prefController;
+  NSPanel *infoPanel;
   
   History *history;
   int maxHistoryCache;
