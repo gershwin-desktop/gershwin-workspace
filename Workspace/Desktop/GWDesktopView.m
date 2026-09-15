@@ -883,9 +883,33 @@ static CGFloat desktopScaleFactor(void)
 
 - (void)updateDefaults
 {
-  /* All desktop state (positions, appearance, wallpaper) lives in
-   * DS_Store now.  This stub exists for backward compat with existing
-   * callers that invoke it after property changes. */
+  /* Icon layout lives in ~/Desktop/.DS_Store, but the background is not
+   * a property of that folder, so it stays in the defaults that
+   * -getDesktopInfo reads at launch. */
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  NSColor *rgbColor;
+  CGFloat red, green, blue, alpha;
+
+  rgbColor = [backColor colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
+  [rgbColor getRed: &red green: &green blue: &blue alpha: &alpha];
+  [desktopInfo setObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                             [NSNumber numberWithFloat: red], @"red",
+                             [NSNumber numberWithFloat: green], @"green",
+                             [NSNumber numberWithFloat: blue], @"blue",
+                             [NSNumber numberWithFloat: alpha], @"alpha",
+                             nil]
+                  forKey: @"backcolor"];
+
+  [desktopInfo setObject: [NSNumber numberWithBool: useBackImage]
+                  forKey: @"usebackimage"];
+  [desktopInfo setObject: [NSNumber numberWithInt: backImageStyle]
+                  forKey: @"imagestyle"];
+  if (imagePath != nil)
+    {
+      [desktopInfo setObject: imagePath forKey: @"imagepath"];
+    }
+
+  [defaults setObject: desktopInfo forKey: @"desktopinfo"];
 }
 
 /* Persist a changed icon-view setting to the desktop folder's .DS_Store via
