@@ -56,7 +56,6 @@ static NSString *nibName = @"PrefWindow";
     
   if(self) {
 		if ([NSBundle loadNibNamed: nibName owner: self] == NO) {
-      NSDebugLLog(@"gwspace", @"Preferences: failed to load %@!", nibName);
     } 
   }
   

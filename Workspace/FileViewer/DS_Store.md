@@ -285,7 +285,7 @@ GNUstep uses manual retain/release memory management:
 | DS_Store Code | Type | DSStoreInfo Property | Description |
 |---------------|------|---------------------|-------------|
 | `vstl` | `type` | `viewStyle` | View mode (icnv/Nlsv/clmv) |
-| `fwi0` | `blob` | `windowFrame` | Window position/size |
+| `fwi0` | `blob` | `windowFrame` | Window position/size (content rect, excluding title bar/borders) |
 | `bwsp` | `blob` | Multiple | Binary plist with window settings |
 | `icvo` | `blob` | Icon settings | Legacy icon view options |
 | `icvp` | `blob` | Icon settings | Modern icon view plist |

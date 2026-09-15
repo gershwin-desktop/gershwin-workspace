@@ -94,6 +94,8 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)dealloc
 {
+  [[FSNIconLoader sharedLoader] cancelClient: self];
+
   [[NSNotificationCenter defaultCenter] removeObserver: self
                                                   name: NSUserDefaultsDidChangeNotification
                                                 object: nil];
@@ -101,6 +103,9 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       [[NSNotificationCenter defaultCenter] removeObserver: self
                                                       name: NSViewFrameDidChangeNotification
+                                                    object: _observedClipView];
+      [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                      name: NSViewBoundsDidChangeNotification
                                                     object: _observedClipView];
       _observedClipView = nil;
     }
@@ -161,6 +166,10 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       defentry = [defaults objectForKey: @"iconposition"];
       iconPosition = defentry ? [defentry intValue] : DEF_ICN_POS;
+
+      /* Baseline for defaultsChanged: - only a real change of the extension
+       * display mode warrants relabeling every icon. */
+      lastDisplayMode = GSCurrentExtensionDisplayMode();
 
       defentry = [defaults objectForKey: @"fsn_info_type"];
       infoType = defentry ? [defentry intValue] : FSNInfoNameType;
@@ -232,14 +241,31 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)defaultsChanged:(NSNotification *)not
 {
-  NSUInteger i;
-  for (i = 0; i < [icons count]; i++)
+  /* Only the filename-extension display mode changes what the icons show
+   * here (display names); icon size, label size and position are applied
+   * through their targeted setters.  Unrelated defaults writes - viewer
+   * windows persisting per-folder state on open, navigation and close,
+   * window geometry saves - land on this notification too, and re-tiling
+   * and repainting every icon in every icons view (the whole desktop)
+   * made it flicker for nothing. */
+  GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
+
+  if (mode == lastDisplayMode)
     {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      [icon setNodeInfoShowType: [icon nodeInfoShowType]];
-      [icon tile];
-      [icon setNeedsDisplay: YES];
+      return;
     }
+  lastDisplayMode = mode;
+
+  {
+    NSUInteger i;
+    for (i = 0; i < [icons count]; i++)
+      {
+        FSNIcon *icon = [icons objectAtIndex: i];
+        [icon setNodeInfoShowType: [icon nodeInfoShowType]];
+        [icon tile];
+        [icon setNeedsDisplay: YES];
+      }
+  }
 }
 
 - (void)sortIcons
@@ -438,11 +464,27 @@ static void GWHighlightFrameRect(NSRect aRect)
   for (i = 0; i < count; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      NSString *filename = [[icon node] name];
+      /* Position keys use the never-translated on-disk name: .DS_Store /
+       * customIconPositions are keyed by the real filename, not the
+       * localized display name (FSNode.name may translate directories). */
+      NSString *filename = [[icon node] lastPathComponent];
       FSNIconItemData *data = [icon placementData];
       NSValue *posValue = honor ? [customIconPositions objectForKey: filename] : nil;
       NSPoint cellOrigin = NSZeroPoint;
       BOOL placed = NO;
+
+      /* A wide label must not be clipped to the grid cell: give the icon a
+       * frame wide enough to draw its full title, up to 2x the cell width.
+       * Only honored (placed) icons get the room - the AUTO grid packs cells
+       * tightly and has no spare columns, and resets frameW below. */
+      float frameW = _cachedCellSize.width;
+      if ([icon respondsToSelector: @selector(labelTextWidth)])
+        {
+          float labelW = [icon labelTextWidth];
+          float maxW = _cachedCellSize.width * 2;
+          if (labelW > frameW)
+            frameW = (labelW < maxW) ? labelW : maxW;
+        }
 
       if (posValue)
         {
@@ -452,7 +494,7 @@ static void GWHighlightFrameRect(NSRect aRect)
            * Uses _cachedCellSize so icons stay at their assigned grid
            * position even when gridSize.width varies with label width. */
           NSPoint center = [self viewCenterForIlocCenter: [posValue pointValue]];
-          cellOrigin.x = center.x - (_cachedCellSize.width / 2);
+          cellOrigin.x = center.x - (frameW / 2);
           cellOrigin.y = center.y - (_cachedCellSize.height / 2);
           placed = YES;
         }
@@ -464,7 +506,7 @@ static void GWHighlightFrameRect(NSRect aRect)
            * correct regardless of when showContentsOfNode ran.  A MANUAL
            * icon without iloc falls through to AUTO placement. */
           NSPoint center = [self viewCenterForIlocCenter: data.ilocPosition];
-          cellOrigin.x = center.x - (_cachedCellSize.width / 2);
+          cellOrigin.x = center.x - (frameW / 2);
           cellOrigin.y = center.y - (_cachedCellSize.height / 2);
           placed = YES;
         }
@@ -491,6 +533,11 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       if (!placed)
         {
+          /* AUTO cells are packed at the plain cell width; a wide-label icon
+           * that fell through to AUTO must not keep its widened frame or it
+           * would overlap the neighbours. */
+          frameW = _cachedCellSize.width;
+
           /* No usable saved position (none stored, or one rejected as
            * off-screen above): use the direction-aware grid enumerator to
            * place the icon in the next free grid cell.  Respects
@@ -553,7 +600,7 @@ static void GWHighlightFrameRect(NSRect aRect)
               for (j = 0; j < count; j++)
                 {
                   FSNIcon *otherIcon = [icons objectAtIndex: j];
-                  NSString *otherName = [[otherIcon node] name];
+                  NSString *otherName = [[otherIcon node] lastPathComponent];
                   FSNIconItemData *odata = [otherIcon placementData];
                   NSPoint otherCenter = NSZeroPoint;
                   BOOL hasPos = NO;
@@ -656,7 +703,7 @@ static void GWHighlightFrameRect(NSRect aRect)
         }
 
       irects[i] = NSMakeRect(cellOrigin.x, cellOrigin.y,
-                              _cachedCellSize.width, _cachedCellSize.height);
+                              frameW, _cachedCellSize.height);
 
       if (NSEqualRects(irects[i], [icon frame]) == NO)
         {
@@ -818,26 +865,52 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       [customIconPositions release];
       customIconPositions = [positions mutableCopy];
-      
-      NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-      NSDebugLLog(@"gwspace", @"║        CUSTOM ICON POSITIONS SET (DS_Store)                      ║");
-      NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-      NSDebugLLog(@"gwspace", @"║ Positions for %lu icons:", (unsigned long)[positions count]);
-      
-      for (NSString *filename in positions)
-        {
-          NSValue *posValue = [positions objectForKey:filename];
-          NSPoint pos = [posValue pointValue];
-          NSDebugLLog(@"gwspace", @"║   '%@' -> (%.0f, %.0f)", filename, pos.x, pos.y);
-        }
-      
-      NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
     }
 }
 
 - (NSDictionary *)customIconPositions
 {
   return customIconPositions;
+}
+
+- (NSDictionary *)liveIconPositions
+{
+  NSMutableDictionary *result = [NSMutableDictionary dictionary];
+  NSUInteger i;
+  for (i = 0; i < [icons count]; i++)
+    {
+      FSNIcon *icon = [icons objectAtIndex: i];
+      FSNode *nd = [icon node];
+      if (!nd) continue;
+      NSString *name = [nd lastPathComponent];
+      if (!name) continue;
+
+      NSPoint iloc;
+      BOOL has = NO;
+
+      /* Dragged / auto-placed icons live in customIconPositions. */
+      NSValue *v = [customIconPositions objectForKey: name];
+      if (v)
+        {
+          iloc = [v pointValue];
+          has = YES;
+        }
+      /* Restored manual icons carry their iloc on the placement data. */
+      else
+        {
+          FSNIconItemData *data = [icon placementData];
+          if (data.placementMode == FSNIconPlacementModeManual
+              && data.ilocPosition.x >= 0)
+            {
+              iloc = data.ilocPosition;
+              has = YES;
+            }
+        }
+
+      if (has)
+        [result setObject: [NSValue valueWithPoint: iloc] forKey: name];
+    }
+  return result;
 }
 
 - (NSArray *)icons
@@ -866,7 +939,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       if (!nd) continue;
 
       NSString *folder = [[nd path] stringByDeletingLastPathComponent];
-      NSString *name = [nd name];
+      NSString *name = [nd lastPathComponent];
       if (!folder || !name) continue;
 
       NSValue *v = [customIconPositions objectForKey: name];
@@ -947,7 +1020,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       data.ilocPosition = ilocPoint;
       data.placementMode = FSNIconPlacementModeManual;
 
-      NSString *name = [[icon node] name];
+      NSString *name = [[icon node] lastPathComponent];
       if (!customIconPositions)
         customIconPositions = [[NSMutableDictionary alloc] init];
       [customIconPositions setObject: [NSValue valueWithPoint: ilocPoint]
@@ -971,7 +1044,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
         NSString *fp = [nd path];
         NSString *folder = [fp stringByDeletingLastPathComponent];
-        NSString *name = [nd name];
+        NSString *name = [nd lastPathComponent];
         if (!folder || !name) continue;
 
         /* View-center -> DS_Store iloc (top-left); identity in a flipped view. */
@@ -997,6 +1070,89 @@ static void GWHighlightFrameRect(NSRect aRect)
   }
 }
 
+/* Animate the icons from their pre-move frames to the current ones.  The
+ * caller snapshots the frames BEFORE moving (keyed by node name), moves the
+ * icons (which sets the new frames), then calls this.  We invalidate both the
+ * old and the new icon areas on the container BEFORE reverting the frames:
+ * the move only marked the new positions dirty, and reverting to the old
+ * frames leaves stale dirty rects pointing at the wrong coordinates. */
+- (void)animateIconsFromOldFrames:(NSDictionary *)oldFrames
+{
+  if (!oldFrames || [oldFrames count] == 0 || [icons count] == 0)
+    return;
+
+  /* Invalidate old + new icon areas on the container. */
+  NSUInteger i, count = [icons count];
+  for (i = 0; i < count; i++)
+    {
+      FSNIcon *ic = [icons objectAtIndex: i];
+      NSString *name = [[ic node] name];
+      NSValue *oldVal = [oldFrames objectForKey: name];
+      if (oldVal)
+        {
+          [self setNeedsDisplayInRect: [oldVal rectValue]];
+          [self setNeedsDisplayInRect: [ic frame]];
+        }
+    }
+
+  /* Animate icons smoothly from old positions to new positions */
+  NSMutableArray *animations = [NSMutableArray array];
+  for (i = 0; i < count; i++)
+    {
+      FSNIcon *ic = [icons objectAtIndex: i];
+      NSString *name = [[ic node] name];
+      NSValue *oldVal = [oldFrames objectForKey: name];
+      if (oldVal)
+        {
+          NSRect oldFrame = [oldVal rectValue];
+          NSRect newFrame = [ic frame];
+          if (!NSEqualRects(oldFrame, newFrame))
+            {
+              /* Set icon back to its old frame so NSViewAnimation has a
+               * visible starting position to interpolate from. */
+              [ic setFrame: oldFrame];
+              [animations addObject:
+                [NSDictionary dictionaryWithObjectsAndKeys:
+                  ic, NSViewAnimationTargetKey,
+                  [NSValue valueWithRect: oldFrame], NSViewAnimationStartFrameKey,
+                  [NSValue valueWithRect: newFrame], NSViewAnimationEndFrameKey,
+                  nil]];
+            }
+        }
+    }
+
+  if ([animations count] > 0)
+    {
+      NSViewAnimation *animation =
+        [[NSViewAnimation alloc] initWithViewAnimations: animations];
+      [animation setDuration: 0.35];
+      [animation setAnimationCurve: NSAnimationEaseInOut];
+      [animation setAnimationBlockingMode: NSAnimationNonblocking];
+      [animation startAnimation];
+      /* Don't release - NSAnimation releases itself on completion
+       * via animatorDidStop (NSAnimation.m:990). External release
+       * causes use-after-free in GSAnimator's dealloc chain. */
+
+      /* Flush dirty rects at every run loop iteration during the
+       * animation so intermediate icon positions are cleaned up.
+       * NSViewAnimation's setFrame: does not invalidate the prior
+       * frame on the container, leaving ghost pixels. */
+      NSTimeInterval flushDuration = [animation duration] + 0.05;
+      NSTimer *flushTimer =
+        [NSTimer scheduledTimerWithTimeInterval: 1.0 / 60.0
+                                         target: self
+                                       selector: @selector(displayIfNeeded)
+                                       userInfo: nil
+                                        repeats: YES];
+      [flushTimer performSelector: @selector(invalidate)
+                       withObject: nil
+                       afterDelay: flushDuration];
+      [self performSelector: @selector(display)
+                 withObject: nil
+                 afterDelay: flushDuration];
+    }
+}
+
 #pragma mark - DS_Store Tag Colors and Comments Support
 
 - (void)setTagColorsFromDictionary:(NSDictionary *)tagDict
@@ -1004,9 +1160,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   if (!tagDict || [tagDict count] == 0)
     return;
     
-  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-  NSDebugLLog(@"gwspace", @"║        APPLYING TAG COLORS FROM DS_Store                         ║");
-  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
   
   for (FSNIcon *icon in icons)
     {
@@ -1018,12 +1171,10 @@ static void GWHighlightFrameRect(NSRect aRect)
           if (tagColor)
             {
               [icon setTagColor:tagColor];
-              NSDebugLLog(@"gwspace", @"║   '%@' -> tag color set", filename);
             }
         }
     }
   
-  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 - (void)setCommentsFromDictionary:(NSDictionary *)commentsDict
@@ -1031,9 +1182,6 @@ static void GWHighlightFrameRect(NSRect aRect)
   if (!commentsDict || [commentsDict count] == 0)
     return;
     
-  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-  NSDebugLLog(@"gwspace", @"║        APPLYING SPOTLIGHT COMMENTS FROM DS_Store                 ║");
-  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
   
   for (FSNIcon *icon in icons)
     {
@@ -1045,12 +1193,10 @@ static void GWHighlightFrameRect(NSRect aRect)
           if (comment)
             {
               [icon setSpotlightComment:comment];
-              NSDebugLLog(@"gwspace", @"║   '%@' -> comment: '%@'", filename, comment);
             }
         }
     }
   
-  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 /* Returns the visible content width for determining virtual grid
@@ -1253,38 +1399,59 @@ static void GWHighlightFrameRect(NSRect aRect)
     if (nRows < neededRows) nRows = neededRows;
   }
 
-  /* Build a fresh enumerator. */
-  FSNPlacementEnumerator *e;
-  switch (_placementDirection)
-    {
-    case FSNPlacementDirectionTopToBottomRightToLeft:
-      e = [[FSNTopToBottomRightToLeftEnumerator alloc] initWithColumns: nCols rows: nRows];
-      break;
-    default:
-      e = [[FSNLeftToRightTopToBottomEnumerator alloc] initWithColumns: nCols rows: nRows];
-      break;
-    }
+  /* Each icon's label text width, capped at 2x the cell width (beyond that
+   * the label is truncated in FSNIcon tile:).  Clean Up must leave empty grid
+   * positions between two icons only when their label texts - which are what
+   * could overlap - would touch.  The cap mirrors the laid-out frame width,
+   * but a short label keeps its true width so a long label next to a short
+   * one does not waste an empty column. */
+  {
+    NSUInteger count = [icons count];
+    CGFloat *frameWs = calloc(count ? count : 1, sizeof(CGFloat));
+    NSUInteger ci;
+    for (ci = 0; ci < count; ci++)
+      {
+        FSNIcon *icon = [icons objectAtIndex: ci];
+        CGFloat fw = cellW;
+        if ([icon respondsToSelector: @selector(labelTextWidth)])
+          {
+            CGFloat lw = [icon labelTextWidth];
+            CGFloat maxW = cellW * 2;
+            fw = (lw < maxW) ? lw : maxW;
+          }
+        frameWs[ci] = fw;
+      }
 
-  [e reset];
-  FSNGridCell cell;
-  NSUInteger ci = 0;
-  while (ci < [icons count] && [e nextCell: &cell])
-    {
-      NSPoint gCenter = [self centerForGridCell: cell
-                                       cellSize: NSMakeSize(cellW, cellH)
-                                           gapX: gapX
-                                         origin: gOrigin];
-      FSNIcon *icon = [icons objectAtIndex: ci];
-      FSNIconItemData *data = [icon placementData];
-      data.ilocPosition = [self ilocCenterForViewCenter: gCenter];
-      data.placementMode = FSNIconPlacementModeManual;
-      NSRect f = NSMakeRect(gCenter.x - cellW / 2.0, gCenter.y - cellH / 2.0,
-                            cellW, cellH);
-      [icon setFrame: NSIntegralRect(f)];
-      ci++;
-    }
+    /* Wide-label-aware grid cells: row-major leaves a column gap between
+     * consecutive icons, column-major lays out each row independently so a
+     * wide label only pushes apart its own row's neighbour.  This replaces
+     * the plain one-icon-per-cell enumerator so Clean Up never produces
+     * overlapping labels. */
+    FSNGridCell *cells = FSNPlacementCellsForWidths(count, frameWs,
+                                                    nCols, nRows,
+                                                    _placementDirection,
+                                                    cellW + gapX);
+    for (ci = 0; ci < count; ci++)
+      {
+        NSPoint gCenter = [self centerForGridCell: cells[ci]
+                                         cellSize: NSMakeSize(cellW, cellH)
+                                             gapX: gapX
+                                           origin: gOrigin];
+        FSNIcon *icon = [icons objectAtIndex: ci];
+        FSNIconItemData *data = [icon placementData];
+        data.ilocPosition = [self ilocCenterForViewCenter: gCenter];
+        data.placementMode = FSNIconPlacementModeManual;
+        NSRect f = NSMakeRect(gCenter.x - cellW / 2.0,
+                              gCenter.y - cellH / 2.0,
+                              cellW, cellH);
+        /* Invalidate old position so the container redraws its background. */
+        [self setNeedsDisplayInRect: [icon frame]];
+        [icon setFrame: NSIntegralRect(f)];
+      }
+    free(cells);
+    free(frameWs);
+  }
 
-  [e release];
   [self tile];
 }
 
@@ -1357,8 +1524,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   while ([theEvent type] != NSLeftMouseUp)
     {
-      BOOL scrolled = NO;
-
       CREATE_AUTORELEASE_POOL (arp);
 
       theEvent = [NSApp nextEventMatchingMask: eventMask
@@ -1379,8 +1544,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 	{
 	  scrollPointToVisible(pp);
 	  CONVERT_CHECK;
-
-	  scrolled = YES;
 	}
 
       x = min(sp.x, pp.x);
@@ -1390,38 +1553,23 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       r = NSMakeRect(x, y, w, h);
 
-      // Erase the previous rect
-      if (transparentSelection
-	  || (!transparentSelection && scrolled))
-	{
-	  [self setNeedsDisplayInRect: oldRect];
-	  [[self window] displayIfNeeded];
-	}
+      // Erase the previous rect via normal display machinery
+      [self setNeedsDisplayInRect: oldRect];
+      [[self window] displayIfNeeded];
 
-      // Draw the new rect
+      // Draw the new rect via direct drawing (inside lockFocus, no mixing)
       [self lockFocus];
 
       if (transparentSelection)
 	{
 	  [[NSColor darkGrayColor] set];
 	  NSFrameRect(r);
-	  if (transparentSelection)
-	    {
-	      [[[NSColor darkGrayColor] colorWithAlphaComponent: 0.33] set];
-	      NSRectFillUsingOperation(r, NSCompositeSourceOver);
-	    }
+	  [[[NSColor darkGrayColor] colorWithAlphaComponent: 0.33] set];
+	  NSRectFillUsingOperation(r, NSCompositeSourceOver);
 	}
       else
 	{
-	  if (!NSEqualRects(oldRect, r) && !scrolled)
-	    {
-	      GWHighlightFrameRect(oldRect);
-	      GWHighlightFrameRect(r);
-	    }
-	  else if (scrolled)
-	    {
-	      GWHighlightFrameRect(r);
-	    }
+	  GWHighlightFrameRect(r);
 	}
 
       [self unlockFocus];
@@ -1706,6 +1854,9 @@ static void GWHighlightFrameRect(NSRect aRect)
       [[NSNotificationCenter defaultCenter] removeObserver: self
                                                       name: NSViewFrameDidChangeNotification
                                                     object: _observedClipView];
+      [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                      name: NSViewBoundsDidChangeNotification
+                                                    object: _observedClipView];
       _observedClipView = nil;
     }
 
@@ -1721,6 +1872,13 @@ static void GWHighlightFrameRect(NSRect aRect)
                                                selector: @selector(clipViewFrameDidChange:)
                                                    name: NSViewFrameDidChangeNotification
                                                  object: _observedClipView];
+      /* Bounds changes (scrolling) drive lazy icon decoration of the
+       * icons that just scrolled into view. */
+      [(NSClipView *)_observedClipView setPostsBoundsChangedNotifications: YES];
+      [[NSNotificationCenter defaultCenter] addObserver: self
+                                               selector: @selector(clipViewBoundsDidChange:)
+                                                   name: NSViewBoundsDidChangeNotification
+                                                 object: _observedClipView];
     }
 
   if ([self superview])
@@ -1735,6 +1893,82 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (void)clipViewFrameDidChange:(NSNotification *)notif
 {
   [self tile];
+}
+
+/* Called when the enclosing NSClipView scrolls: decorate icons that just
+ * became visible. */
+- (void)clipViewBoundsDidChange:(NSNotification *)notif
+{
+  [self decorateVisibleIcons];
+}
+
+//
+// Lazy decoration (FSNIconLoader client)
+//
+
+/* Decorate the icons intersecting the visible rect synchronously (so the
+ * first paint is complete); every icon already queued itself (bulk) at
+ * creation, so the prefetch neighborhood is promoted to urgent and the
+ * rest simply stay queued. */
+- (void)decorateVisibleIcons
+{
+  NSRect vr = [self visibleRect];
+  /* Prefetch: extend the visible rect by two screens vertically and one
+   * horizontally (icon grids grow mostly downward). */
+  NSRect prefetchRect = NSInsetRect(vr, -vr.size.width, -2 * vr.size.height);
+  NSUInteger i;
+  BOOL decoratedAny = NO;
+
+  for (i = 0; i < [icons count]; i++)
+    {
+      FSNIcon *icon = [icons objectAtIndex: i];
+      NSRect fr = [icon frame];
+
+      if ([icon isDecorated])
+        {
+          continue;
+        }
+
+      if (NSIntersectsRect(fr, vr))
+        {
+          [icon decorate];
+          decoratedAny = YES;
+        }
+      else
+        {
+          [[FSNIconLoader sharedLoader]
+            enqueueNode: [icon node]
+                 client: icon
+                 urgent: NSIntersectsRect(fr, prefetchRect)];
+        }
+    }
+
+  /* Decorate already marks the icons it changed; only the background
+   * beneath newly decorated icons needs a repaint, so skip the full-view
+   * redraw when nothing was decorated (this runs on every scroll tick). */
+  if (decoratedAny)
+    {
+      [self setNeedsDisplay: YES];
+    }
+}
+
+- (NSInteger)fsnDecorationGeneration
+{
+  return generation;
+}
+
+- (BOOL)fsnLoaderDecorateNode:(FSNode *)anode
+{
+  FSNIcon *icon = [self repOfSubnode: anode];
+
+  if (icon == nil || [icon isDecorated])
+    {
+      return NO;
+    }
+
+  [icon decorate];
+
+  return YES;
 }
 
 - (void)drawRect:(NSRect)rect
@@ -1792,7 +2026,9 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (void)showContentsOfNode:(FSNode *)anode
 {
   CREATE_AUTORELEASE_POOL(arp);
-  NSArray *subNodes = [anode subNodes];
+  NSArray *snapshot = [fsnodeRep directorySnapshotAtPath: [anode path]];
+  NSArray *subNodes = [FSNode nodesFromDirectorySnapshot: snapshot
+                                                  parent: anode];
   NSUInteger i;
 
   for (i = 0; i < [icons count]; i++)
@@ -1803,6 +2039,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   editIcon = nil;
 
   ASSIGN (node, anode);
+  generation++;   /* pending loader items for the old contents are stale */
   [self readNodeInfo];
   _gridCached = NO; /* icon properties may have changed */
   [self calculateGridSize];
@@ -1857,22 +2094,31 @@ static void GWHighlightFrameRect(NSRect aRect)
      * both provided by the injected position store (the app reads them via
      * the settings hierarchy).  Only fills icons not already positioned by
      * fdLocation.  Raw iloc (top-left) is stored; conversion to GNUstep
-     * bottom-left happens at tile time with the correct refH. */
+     * bottom-left happens at tile time with the correct refH.
+     *
+     * Deduplicate: a foreign Finder (or a stale write) can leave two files
+     * with the same iloc, which would stack them on top of each other.
+     * Only the first icon claiming a given iloc keeps it; later ones fall
+     * through to AUTO placement so nothing overlaps. */
     NSDictionary *stored =
       [[fsnodeRep iconPositionStore] storedIconPositionsForFolder: folderPath];
     if ([stored count])
       {
+        NSMutableSet *claimed = [NSMutableSet set];
         for (i = 0; i < [icons count]; i++)
           {
             FSNIcon *icon = [icons objectAtIndex: i];
             FSNIconItemData *data = [icon placementData];
             if (data.placementMode == FSNIconPlacementModeManual) continue;
 
-            NSValue *v = [stored objectForKey: [[icon node] name]];
+            NSValue *v = [stored objectForKey: [[icon node] lastPathComponent]];
             if (v == nil) continue;
             NSPoint iloc = [v pointValue];
             if (iloc.x != 0 || iloc.y != 0)
               {
+                NSString *key = [NSString stringWithFormat: @"%.0f,%.0f", iloc.x, iloc.y];
+                if ([claimed containsObject: key]) continue;  /* already taken */
+                [claimed addObject: key];
                 data.ilocPosition = iloc;
                 data.placementMode = FSNIconPlacementModeManual;
               }
@@ -1882,6 +2128,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   [icons sortUsingSelector: [fsnodeRep compareSelectorForDirectory: [node path]]];
   [self tile];
+  [self decorateVisibleIcons];
 
   DESTROY (lastSelection);
   [self selectionDidChange];
@@ -2460,6 +2707,10 @@ static void GWHighlightFrameRect(NSRect aRect)
   RELEASE (icon);
   RELEASE (arp);
 
+  /* Newly created/moved-in files: decorate through the loader (urgent -
+   * it is a handful of items at most). */
+  [[FSNIconLoader sharedLoader] enqueueNode: anode client: self urgent: YES];
+
   return icon;
 }
 
@@ -2992,7 +3243,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 	      {
 		NSString *fname = [[sourcePaths objectAtIndex: j] lastPathComponent];
 
-		if ([[nd name] isEqual: fname])
+		if ([[nd lastPathComponent] isEqual: fname])
 		  {
 		    return NSDragOperationNone;
 		  }
@@ -3194,7 +3445,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 	    operation = NSWorkspaceCopyOperation;
 	    break;
 	  case NSDragOperationLink:
-	    operation = NSWorkspaceLinkOperation;
+	    operation = FSNLinkDropOperation();
 	    break;
 	  default:
 	    operation = NSWorkspaceCopyOperation;
@@ -3278,7 +3529,6 @@ static void GWHighlightFrameRect(NSRect aRect)
 	}
       else
 	{
-	  NSDebugLLog(@"gwspace", @"Unexpected icon position in [FSNIconsView updateNameEditor]");
 	  return;
 	}
 

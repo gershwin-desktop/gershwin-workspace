@@ -36,7 +36,8 @@ typedef enum FSNInfoType {
   FSNInfoSizeType = 3,
   FSNInfoOwnerType = 4,
   FSNInfoParentType = 5,
-  FSNInfoExtendedType = 6
+  FSNInfoExtendedType = 6,
+  FSNInfoDescriptionType = 7
 } FSNInfoType;
 
 typedef enum FSNSelectionMask {
@@ -49,6 +50,7 @@ typedef enum FSNSelectionMask {
 @class NSColor;
 @class NSBezierPath;
 @class NSFont;
+@class FSNDirEntry;
 
 @protocol FSNodeRep
 
@@ -340,8 +342,38 @@ typedef enum FSNSelectionMask {
 - (void)viewer:(id)aviewer didShowNode:(FSNode *)node;
 
 - (void)openSelectionInViewer:(id)viewer
-                  closeSender:(BOOL)close;
-                  
+                   closeSender:(BOOL)close;
+                   
+@end
+
+
+/* Generic, application-injected hook letting external bundles decorate the
+ * icon/label of a node (e.g. a git-repo badge) without FSNode knowing
+ * anything about the particular extension.  Mirrors the metadataProvider /
+ * iconPositionStore injection pattern already used by FSNodeRep. */
+@protocol FSNodeRepDecorationDelegate <NSObject>
+
+/* Return a small overlay image (e.g. 16x16) to draw on the node's icon, or
+ * nil for no badge.  Called from -setNode: and -updateIcons. */
+- (NSImage *)badgeImageForNode:(FSNode *)node;
+
+/* Return the number to show on a red count badge for this node (e.g. the count
+ * of changed / unpushed files in a git repository), or 0 for none.  Called only
+ * for icons rendered at 48px or larger. */
+- (NSInteger)badgeCountForNode:(FSNode *)node;
+
+@optional
+
+/* Tells the delegate that an icon for `node` is now on screen (or has been
+ * assigned to this node) so it can begin watching that node's backing
+ * repository for external changes.  Called from FSNIcon's init/setNode. */
+- (void)startWatchingNode:(FSNode *)node;
+
+/* Tells the delegate that an icon for `node` is going away (reused for another
+ * node, or deallocated) so it can stop watching.  Called from FSNIcon's
+ * setNode/dealloc. */
+- (void)stopWatchingNode:(FSNode *)node;
+
 @end
 
 
@@ -377,6 +409,7 @@ typedef enum FSNSelectionMask {
 
   id _metadataProvider;   /* id <FSNMetadataProvider>, set by the application */
   id _iconPositionStore;  /* id <FSNIconPositionStore>, set by the application */
+  id _decorationDelegate; /* id <FSNodeRepDecorationDelegate>, set by the application */
 }
 
 + (FSNodeRep *)sharedInstance;
@@ -391,7 +424,17 @@ typedef enum FSNSelectionMask {
 - (void)setIconPositionStore:(id)store;
 - (id)iconPositionStore;
 
+/* Decoration delegate (badge overlay for nodes).  Injected by the
+ * application; nil in a plain FSNode client. */
+- (void)setDecorationDelegate:(id<FSNodeRepDecorationDelegate>)delegate;
+- (id<FSNodeRepDecorationDelegate>)decorationDelegate;
+
 - (NSArray *)directoryContentsAtPath:(NSString *)path;
+
+/* One readdir(3) pass returning FSNDirEntry objects (name + d_type kind),
+ * filtered exactly like -directoryContentsAtPath:.  Lets viewers lay out
+ * lazy-loaded cells without a stat() per entry. */
+- (NSArray *)directorySnapshotAtPath:(NSString *)path;
 
 - (int)labelMargin;
 

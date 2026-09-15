@@ -1,5 +1,6 @@
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 SUBPROJECTS = \
         BadgeTest \
@@ -13,8 +14,7 @@ SUBPROJECTS = \
         uitest \
         isowrite-helper \
         formatdisk-helper \
-        eject \
-        umount
+        gw-unmount
 
 ifeq ($(with_squashfs),yes)
 SUBPROJECTS += appimage-icon-test
@@ -33,4 +33,5 @@ install-dsutil:
 	@$(MAKE) -C dsutil install TOOL_INSTALL_DIR=$(GNUSTEP_SYSTEM_LIBRARY)/Tools GNUSTEP_SYSTEM_LIBRARY=$(GNUSTEP_SYSTEM_LIBRARY) --no-print-directory
 
 -include GNUmakefile.postamble
+
 

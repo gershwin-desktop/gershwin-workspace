@@ -31,10 +31,15 @@
 {
   id viewer;
   id nodeView;
+  BOOL drawsTopSeparator;
+  NSView *topSeparator;
 }
 
 - (id)initWithFrame:(NSRect)frameRect
            inViewer:(id)aviewer;
+
+- (void)setDrawsTopSeparator:(BOOL)flag;
+- (BOOL)drawsTopSeparator;
 
 @end
 

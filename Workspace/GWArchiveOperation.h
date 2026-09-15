@@ -29,6 +29,9 @@
   BOOL           running;
   BOOL           cancelled;
   NSError       *error;
+  /* Set by the archive worker's main-thread completion to release the modal
+   * progress loop; only touched on the main thread. */
+  volatile BOOL *doneFlag;
 }
 
 /**

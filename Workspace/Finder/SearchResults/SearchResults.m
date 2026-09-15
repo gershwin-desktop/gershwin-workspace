@@ -80,7 +80,6 @@ static NSString *lsfname = @"LiveSearch.lsf";
     NSRect r;
       
 		if ([NSBundle loadNibNamed: nibName owner: self] == NO) {
-      NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
       DESTROY (self);
       return self;
     }

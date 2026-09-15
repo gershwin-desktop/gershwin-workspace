@@ -63,8 +63,6 @@
   if ([fm fileExistsAtPath:dotDSStore]) {
     info = [DSStoreInfo infoForDirectoryPath:_directoryPath];
     if ([info loaded]) {
-      NSDebugLLog(@"gwspace", @"GWViewSettingsManager: ✓ Read from per-folder .DS_Store for %@",
-                  _directoryPath);
       return info;
     }
     /* +infoForDirectoryPath: returns an autoreleased object — do NOT
@@ -76,16 +74,21 @@
   /* Tier 2: per-volume cache */
   if (_volumeCache) {
     info = [_volumeCache readInfoForDirectoryPath:_directoryPath];
-    if (info) {
-      NSDebugLLog(@"gwspace", @"GWViewSettingsManager: ✓ Read from per-volume cache for %@",
-                  _directoryPath);
-      return info;
-    }
   }
 
-  /* Tier 3: defaults — return a fresh, unloaded DSStoreInfo */
-  info = [DSStoreInfo infoForDirectoryPath:_directoryPath loadImmediately:NO];
-  NSDebugLLog(@"gwspace", @"GWViewSettingsManager: Using defaults for %@", _directoryPath);
+  /* Tier 3 / merge: whatever we resolved above (.DS_Store or volume cache),
+   * make sure it is loaded and consult the folder's own com.apple.FinderInfo
+   * DInfo (the classic / spatial macOS channel) for any view-style or
+   * window-geometry values the .DS_Store / cache did not supply.  When nothing
+   * was found at all, build a fresh info that loads .DS_Store + FinderInfo.
+   * (No .DS_Store exists on this path by the time we reach here, so re-loading
+   * a cache-resolved info only ever fills FinderInfo gaps, never clobbers the
+   * cache's own fields.) */
+  if (info != nil) {
+    [info load];
+  } else {
+    info = [DSStoreInfo infoForDirectoryPath:_directoryPath];
+  }
   return info;
 }
 
@@ -107,42 +110,25 @@
   if (canWriteFolder) {
     wroteFolder = [info saveToPath:dotDSStore];
     if (wroteFolder) {
-      NSDebugLLog(@"gwspace", @"GWViewSettingsManager: ✓ Wrote per-folder .DS_Store for %@",
-                  _directoryPath);
 
       /* Spec §3 step 3: cache cleanup — remove stale entry from cache */
       if (_volumeCache) {
         [_volumeCache removeRecordForDirectoryPath:_directoryPath];
       }
     } else {
-      NSDebugLLog(@"gwspace", @"GWViewSettingsManager: ⚠ Per-folder .DS_Store write failed for %@",
-                  _directoryPath);
     }
   } else {
-    NSString *reason = ![self isDirectoryWritable]
-                        ? @"directory not writable"
-                        : @"DSDontWriteNetworkStores blocks network writes";
-    NSDebugLLog(@"gwspace", @"GWViewSettingsManager: Skipping per-folder .DS_Store (%@) for %@",
-                reason, _directoryPath);
   }
 
   /* Spec §3 step 2: fallback to per-volume cache */
   if (!wroteFolder && _volumeCache) {
-    NSDebugLLog(@"gwspace", @"GWViewSettingsManager: cache path=%@ for %@",
-                [_volumeCache cacheFilePath], _directoryPath);
     BOOL wroteCache = [_volumeCache writeInfo:info forDirectoryPath:_directoryPath];
     if (wroteCache) {
-      NSDebugLLog(@"gwspace", @"GWViewSettingsManager: ✓ Wrote per-volume cache for %@",
-                  _directoryPath);
       return YES;
     } else {
-      NSDebugLLog(@"gwspace", @"GWViewSettingsManager: ✗ Failed cache write for %@",
-                  _directoryPath);
       return NO;
     }
   } else if (!wroteFolder) {
-    NSDebugLLog(@"gwspace", @"GWViewSettingsManager: ✗ No cache fallback for %@ (_volumeCache=%@)",
-                _directoryPath, _volumeCache);
   }
 
   return wroteFolder;

@@ -29,6 +29,7 @@
 #import <AppKit/AppKit.h>
 #import <fcntl.h>
 #import <unistd.h>
+#import <sys/stat.h>
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
@@ -127,13 +128,26 @@ static unsigned char darkerLUT[256] = {
 static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 {
   unsigned char ident[16];
-  int fd = open([path fileSystemRepresentation], O_RDONLY);
+  int fd;
+  ssize_t rd;
+  struct stat st;
+
+  /* Only regular files can be AppImages.  Opening a device node or FIFO can
+   * block indefinitely (e.g. /dev/ptmx, a pipe with no writer), which would
+   * hang the Workspace when a directory such as /dev is displayed. */
+  if (stat([path fileSystemRepresentation], &st) != 0)
+    return NO;
+  if (!S_ISREG(st.st_mode))
+    return NO;
+
+  /* O_NONBLOCK so a slow file cannot stall the caller either. */
+  fd = open([path fileSystemRepresentation], O_RDONLY | O_NONBLOCK);
   if (fd < 0)
     {
       return NO;
     }
 
-  ssize_t rd = read(fd, ident, sizeof(ident));
+  rd = read(fd, ident, sizeof(ident));
   close(fd);
 
   if (rd < (ssize_t)sizeof(ident))
@@ -197,7 +211,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	      icon = [[[NSImage alloc] initWithContentsOfFile: volumeIconPath] autorelease];
 	      if (icon == nil)
 		{
-		  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: Failed to load .VolumeIcon.icns from %@", volumeIconPath);
 		  /* Fallback to disk image check */
 		  key = nil;
 		}
@@ -219,7 +232,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	      if ([[FSNodeRep sharedInstance] isDiskImageVolume: nodepath])
 		{
 		  /* Use CD icon for disk image mounts (DMG, ISO, etc.) */
-		  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: isDiskImageVolume=YES for %@, using CD icon", nodepath);
 		  NSString *cdIconPath = [[NSBundle mainBundle] pathForImageResource: @"CD"];
 		  if (cdIconPath != nil)
 		    {
@@ -228,7 +240,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 		      icon = [[[NSImage alloc] initWithContentsOfFile: cdIconPath] autorelease];
 		      if (icon == nil)
 			{
-			  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: Failed to load CD icon from %@", cdIconPath);
 			  /* Fallback to generic disk icon */
 			  key = @"disk";
 			  baseIcon = hardDiskIcon;
@@ -247,7 +258,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 		  else
 		    {
 		      /* No CD.icns found, use generic disk icon */
-		      NSDebugLLog(@"gwspace", @"FSNodeRepIcons: CD.icns not found in bundle");
 		      key = @"disk";
 		      baseIcon = hardDiskIcon;
 		    }
@@ -255,7 +265,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	      else
 		{
 		  /* Regular disk mount (physical disk, SSHFS, etc.) - use disk icon */
-		  NSDebugLLog(@"gwspace", @"FSNodeRepIcons: isDiskImageVolume=NO for %@, using hard disk icon", nodepath);
 
 		  /* Check if this is a network (FUSE) filesystem mount; use Network icon */
 		  NSImage *netIcon = [self networkIconForPath: nodepath];
@@ -292,7 +301,9 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 
       // Check for a custom icon from Finder metadata (directories/packages/bundles)
       {
-        NSString *realDirPath = [nodepath stringByResolvingSymlinksInPath];
+        NSString *realDirPath = ([node isLink]
+                                   ? [nodepath stringByResolvingSymlinksInPath]
+                                   : nodepath);
         NSImage *customIcon = [[self metadataProvider] customIconForPath: realDirPath];
         if (customIcon)
           {
@@ -327,7 +338,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 
               if (baseIcon == nil)
                 {
-                  NSDebugLLog(@"gwspace", @"no icon in cache for key %@ and no WS icon for %@", key, nodepath);
                 }
 
               if (baseIcon != nil)
@@ -351,32 +361,36 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
     }  
   else
     { // NOT DIRECTORY
-      NSString *realPath;
+      /* Resolving symlinks costs a realpath() syscall per file; only pay
+       * it for links, where the target path is what thumbnails and custom
+       * icons are keyed by. */
+      NSString *realPath = ([node isLink]
+                              ? [nodepath stringByResolvingSymlinksInPath]
+                              : nodepath);
 
-      realPath = [nodepath stringByResolvingSymlinksInPath];
       if (usesThumbnails)
 	{
 	  icon = [self thumbnailForPath: realPath];
-      
+
 	  if (icon) {
 	    NSSize icnsize = [icon size];
 
 	    if ([node isLink])
 	      {
 		NSImage *linkIcon;
-		
+
 		linkIcon = [NSImage imageNamed:@"common_linkCursor"];
 		icon = [icon copy];
 		[icon lockFocus];
 		[linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
 		[icon unlockFocus];
 		[icon autorelease];
-	      }	    
-      
+	      }
+
 	    if ((icnsize.width > size) || (icnsize.height > size))
 	      {
 		return [self resizedIcon: icon ofSize: size];
-	      }  
+	      }
 	  }
 	}
       // no thumbnail found
@@ -384,11 +398,10 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
       // Check for a custom icon from Finder metadata (non-directory files)
       if (icon == nil)
         {
-          NSString *realMetadataPath = [nodepath stringByResolvingSymlinksInPath];
-          NSImage *customIcon = [[self metadataProvider] customIconForPath: realMetadataPath];
+          NSImage *customIcon = [[self metadataProvider] customIconForPath: realPath];
           if (customIcon)
             {
-              icon = [self cachedIconOfSize: size forKey: [realMetadataPath stringByAppendingString:@".customicon"] addBaseIcon: customIcon];
+              icon = [self cachedIconOfSize: size forKey: [realPath stringByAppendingString:@".customicon"] addBaseIcon: customIcon];
             }
         }
 
@@ -396,29 +409,32 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 	{
           NSString *linkKey;
           NSString *ext = [[realPath pathExtension] lowercaseString];
-      
-    if (ext && [ext length])
-      {
-        if ([ext isEqualToString: @"appimage"] || FSNodeRepHasAppImageMagic(realPath))
-          {
-            key = realPath;
-          }
-        else
-          {
-            key = ext;
-          }
-      }
-    else
-      {
-        if (FSNodeRepHasAppImageMagic(realPath))
-          {
-            key = realPath;
-          }
-        else
-          {
-            key = @"unknown";
-          }
-      }
+
+	  /* The AppImage magic probe opens and reads the file; restrict it
+	   * to extension-less files and .appimage names so ordinary files
+	   * are keyed by extension without a per-file open(). */
+	  if (ext && [ext length])
+	    {
+	      if ([ext isEqualToString: @"appimage"])
+	        {
+	          key = realPath;
+	        }
+	      else
+	        {
+	          key = ext;
+	        }
+	    }
+	  else
+	    {
+	      if (FSNodeRepHasAppImageMagic(realPath))
+	        {
+	          key = realPath;
+	        }
+	      else
+	        {
+	          key = @"unknown";
+	        }
+	    }
           linkKey = nil;
           if ([node isLink])
             {
@@ -437,29 +453,50 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
               if (baseIcon == nil)
                 baseIcon = [[NSWorkspace sharedWorkspace] iconForFile: nodepath];
 
-	      if ([node isLink])
+	      if (baseIcon != nil)
 		{
-		  NSImage *linkIcon;
+		  if ([node isLink])
+		    {
+		      NSImage *linkIcon;
 
-		  linkIcon = [NSImage imageNamed:@"common_linkCursor"];
-		  baseIcon = [baseIcon copy];
-		  [baseIcon lockFocus];
-		  [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
-		  [baseIcon unlockFocus];
-		  [baseIcon autorelease];
-                  icon = [self cachedIconOfSize: size forKey: linkKey addBaseIcon: baseIcon];
+		      linkIcon = [NSImage imageNamed:@"common_linkCursor"];
+		      baseIcon = [baseIcon copy];
+		      [baseIcon lockFocus];
+		      [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
+		      [baseIcon unlockFocus];
+		      [baseIcon autorelease];
+		      icon = [self cachedIconOfSize: size forKey: linkKey addBaseIcon: baseIcon];
+		    }
+		  else
+		    {
+		      icon = [self cachedIconOfSize: size forKey: key addBaseIcon: baseIcon];
+		    }
 		}
-              else
-                {
-                  icon = [self cachedIconOfSize: size forKey: key addBaseIcon: baseIcon];
-                }
 	    }
 	}      
     }      
 
   if (icon == nil)
     {
-      NSDebugLLog(@"gwspace", @"Warning: No icon found for %@", nodepath);
+    }
+
+  /* Overlay a git-repository badge (the git logo) when the decoration
+   * delegate supplies one.  This covers every icon size and every view
+   * (icon, list, browser, desktop) because they all obtain their icons
+   * through this cache-backed method, and the logo image itself is cached by
+   * the extension.  Only directories can be git repositories, so the delegate
+   * lookup (a disk stat for .git) is skipped for plain files. */
+  if (icon != nil && [node isDirectory])
+    {
+      id dd = [[FSNodeRep sharedInstance] decorationDelegate];
+      if (dd != nil && [dd respondsToSelector: @selector (badgeImageForNode:)])
+        {
+          NSImage *logo = [dd badgeImageForNode: node];
+          if (logo != nil)
+            {
+              icon = FSNGitBadgedImage (icon, logo);
+            }
+        }
     }
 
   return icon;
@@ -499,6 +536,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
                     
 {
   NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+  if (baseIcon == nil) return nil;
   NSSize icnsize = [baseIcon size];
   int basesize = 48;
   
@@ -565,22 +603,20 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
 - (NSImage *)trashIconOfSize:(int)size
 {
   NSSize icnsize = [trashIcon size];
-
-  if ((icnsize.width > size) || (icnsize.height > size)) {
+  if (icnsize.width == 0 || icnsize.height == 0) return trashIcon;
+  if ((icnsize.width != size) || (icnsize.height != size)) {
     return [self resizedIcon: trashIcon ofSize: size];
-  }  
-  
+  }
   return trashIcon;
 }
 
 - (NSImage *)trashFullIconOfSize:(int)size
 {
   NSSize icnsize = [trashFullIcon size];
-
-  if ((icnsize.width > size) || (icnsize.height > size)) {
+  if (icnsize.width == 0 || icnsize.height == 0) return trashFullIcon;
+  if ((icnsize.width != size) || (icnsize.height != size)) {
     return [self resizedIcon: trashFullIcon ofSize: size];
-  }  
-  
+  }
   return trashFullIcon;
 }
 
@@ -968,7 +1004,6 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
             }
           NS_HANDLER
             {
-          NSDebugLLog(@"gwspace", @"BAD IMAGE '%@'", tumbpath);
             }
           NS_ENDHANDLER
         }

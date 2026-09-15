@@ -29,6 +29,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/NSView.h>
 #import "FSNodeRep.h"
+#import "FSNIconLoader.h"
 
 @class NSImage;
 @class NSFont;
@@ -38,7 +39,7 @@
 @class FSNTextCell;
 @class FSNIconItemData;
 
-@interface FSNIcon : NSView <FSNodeRep>
+@interface FSNIcon : NSView <FSNodeRep, FSNDecorationClient>
 {
   FSNode *node;
   NSString *hostname;
@@ -80,6 +81,9 @@
   BOOL nameEdited;
   BOOL isLeaf;
   BOOL isLocked;
+
+  /* NO between initForNode: and -decorate (lazy icon loading). */
+  BOOL decorated;
   
   NSTimeInterval editstamp;  
 
@@ -101,6 +105,10 @@
   NSColor *tagColor;        // Label/tag color from DS_Store (lclr)
   BOOL labelChecked;        // YES once metadata has been probed for a label
   NSString *spotlightComment;  // Spotlight comment from DS_Store (cmmt)
+
+  // Git change-count badge: the number drawn as a red pill in the icon's
+  // top-right corner (>= 48px icons only).  -1 while pending, >=0 once known.
+  NSInteger gitBadgeCount;
 
   // Pixel placement data
   FSNIconItemData *_placementData;
@@ -126,9 +134,20 @@
 
 - (void)setSuppressSelectionDrawing:(BOOL)flag;
 
+/* Load the icon image for the node (deferred from init so a large
+ * directory fills lazily).  No-op when already decorated. */
+- (void)decorate;
+
+- (BOOL)isDecorated;
+
 - (NSRect)iconBounds;
 
 - (void)tile;
+
+/* The width the label would need to draw its full (untruncated) title,
+ * including the label margin.  Used by the container to give a wide label
+ * a frame up to 2x the grid cell so the text is not clipped to one cell. */
+- (float)labelTextWidth;
 
 // DS_Store tag/label color support
 - (void)setTagColor:(NSColor *)color;

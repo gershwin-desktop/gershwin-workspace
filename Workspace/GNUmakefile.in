@@ -85,9 +85,14 @@ Workspace_OBJC_FILES = main.m \
 GWFunctions.m \
 GWMetadataProvider.m \
 GWIconPositionStore.m \
+GWExtensionsManager.m \
+GWAlignLogically.m \
 Workspace.m \
+AppDataTrash.m \
 Workspace+UITesting.m \
 X11AppSupport.m \
+GWProcessMonitor.m \
+GWProcessOwnership.m \
 WorkspaceApplication.m \
 GWApplicationLauncher.m \
 GSGlobalShortcutsManager.m \
@@ -99,11 +104,14 @@ Desktop/Dock/Dock.m \
 Desktop/Dock/DockIcon.m \
 Desktop/Dock/DockService.m \
 Desktop/Dock/GWDockWindow.m \
-FileViewer/GWViewersManager.m \
-FileViewer/GWViewer.m \
+ FileViewer/GWViewersManager.m \
+ FileViewer/GWViewerBase.m \
+ FileViewer/GWViewer.m \
+FileViewer/GWViewTypeHelpers.m \
 FileViewer/GWSpatialViewer.m \
 FileViewer/GWViewerWindow.m \
 FileViewer/GWViewerBrowser.m \
+FileViewer/GWViewerBrowserPreview.m \
 FileViewer/GWViewerIconsView.m \
 FileViewer/GWViewerListView.m \
 FileViewer/NSTableView+DragFix.m \

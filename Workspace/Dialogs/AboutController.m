@@ -495,26 +495,33 @@ static AboutController *sharedController = nil;
 
 - (NSString *)x11VersionInfo 
 {
+  NSString *sessionType = [[[NSProcessInfo processInfo] environment] objectForKey:@"XDG_SESSION_TYPE"];
+  if ([sessionType isEqualToString:@"wayland"])
+    {
+      return @"Wayland";
+    }
   Display *dpy = XOpenDisplay(NULL);
-  if (!dpy) return @"Unknown";
+  if (!dpy) return sessionType ?: @"Unknown";
   const char *vendor = XServerVendor(dpy);
   int release = XVendorRelease(dpy);
   XCloseDisplay(dpy);
   
   NSString *vendorStr = [NSString stringWithUTF8String:vendor];
   NSString *displayName = nil;
-  if ([vendorStr rangeOfString:@"XLibre"].location != NSNotFound) {
-    displayName = @"XLibre";
-  } else if ([vendorStr rangeOfString:@"X.Org"].location != NSNotFound ||
-             [vendorStr rangeOfString:@"The X.Org Foundation"].location != NSNotFound) {
-    displayName = @"X.Org";
-  }
-  if (displayName) {
-    int major = release / 10000000;
-    int minor = (release % 10000000) / 100000;
-    int patch = (release % 100000) / 1000;
-    return [NSString stringWithFormat:@"%@ %d.%d.%d", displayName, major, minor, patch];
-  }
+  if ([vendorStr rangeOfString:@"X.Org"].location != NSNotFound ||
+      [vendorStr rangeOfString:@"The X.Org Foundation"].location != NSNotFound ||
+      [vendorStr rangeOfString:@"X.Org Foundation"].location != NSNotFound)
+    {
+      displayName = @"X.Org";
+    }
+  else if ([vendorStr rangeOfString:@"XLibre"].location != NSNotFound)
+    {
+      displayName = @"XLibre";
+    }
+  if (displayName)
+    {
+      return [NSString stringWithFormat:@"%@ %d", displayName, release];
+    }
   return [NSString stringWithFormat:@"%@ %d", vendorStr, release];
 }
 

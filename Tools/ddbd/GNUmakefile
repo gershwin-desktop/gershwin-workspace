@@ -3,6 +3,7 @@ PACKAGE_NEEDS_CONFIGURE = YES
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 SUBPROJECTS = MDModules 
 
@@ -27,4 +28,5 @@ include $(GNUSTEP_MAKEFILES)/aggregate.make
 include $(GNUSTEP_MAKEFILES)/tool.make
 
 -include GNUmakefile.postamble
+
 

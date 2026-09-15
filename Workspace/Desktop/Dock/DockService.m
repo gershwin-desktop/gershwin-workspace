@@ -21,6 +21,7 @@
 #import "DockService.h"
 #import "Dock.h"
 #import "DockIcon.h"
+#import "GWProcessOwnership.h"
 
 NSString * const kDockServiceName = @"DockIcon";
 
@@ -311,8 +312,13 @@ static NSString *appNameForPID(pid_t pid)
 {
   pid_t pid = pidForConnection(newConn);
   NSString *appName = nil;
-  if (pid > 0)
-    appName = appNameForPID(pid);
+
+  /* The DockIcon name is registered per user, so applications of this user's
+   * sessions on other X displays reach this Dock too. */
+  if ([GWProcessOwnership isProcessInCurrentSession: pid] == NO)
+    return NO;
+
+  appName = appNameForPID(pid);
   if (appName == nil || [appName length] == 0)
     {
       appName = [NSString stringWithFormat:@"pid-%d", (int)pid];
@@ -337,27 +343,39 @@ static NSString *appNameForPID(pid_t pid)
   if (appName == nil)
     return nil;
 
-  DockIcon *icon = [_dock iconForApplicationName:appName];
+  pid_t pid = pidForConnection(conn);
+  NSString *appPath = bundlePathForPID(pid);
+  if (appPath == nil)
+    appPath = [[NSWorkspace sharedWorkspace] fullPathForApplication:appName];
+
+  /* Try lookup by resolved path first (primary key) */
+  DockIcon *icon = appPath ? [_dock iconForApplicationPath:appPath] : nil;
+
+  /* Fall back to name-based lookup — handles sudo re-exec where the
+   * resolved exe path has no .app bundle and fullPathForApplication
+   * may also fail (e.g. /usr/bin/sudo). */
   if (icon == nil)
+    icon = [_dock iconForApplicationName:appName];
+
+  if (icon == nil && appPath)
     {
-      pid_t pid = pidForConnection(conn);
-      NSString *appPath = bundlePathForPID(pid);
-      if (appPath == nil)
-        appPath = [[NSWorkspace sharedWorkspace] fullPathForApplication:appName];
-      if (appPath)
+      /* Honor GSSuppressAppIcon — skip apps that declare they should not
+       * appear in the Dock (e.g. WindowManager). */
+      NSBundle *bundle = [NSBundle bundleWithPath:appPath];
+      if ([[bundle objectForInfoDictionaryKey:@"GSSuppressAppIcon"] boolValue])
+        return nil;
+
+      icon = [_dock addIconForApplicationAtPath:appPath withName:appName atIndex:-1];
+      if (icon)
         {
-          icon = [_dock addIconForApplicationAtPath:appPath withName:appName atIndex:-1];
-          if (icon)
-            {
-              [icon setLaunched:YES];
-              [_dock tile];
-            }
+          [icon setLaunched:YES];
+          [_dock tile];
         }
     }
   return icon;
 }
 
-- (void)setBadgeCount:(int64_t)count
+- (oneway void)setBadgeCount:(int64_t)count
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -367,7 +385,7 @@ static NSString *appNameForPID(pid_t pid)
     }
 }
 
-- (void)setCountVisible:(BOOL)visible
+- (oneway void)setCountVisible:(BOOL)visible
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -376,7 +394,7 @@ static NSString *appNameForPID(pid_t pid)
     }
 }
 
-- (void)setProgressValue:(double)value
+- (oneway void)setProgressValue:(double)value
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -386,7 +404,7 @@ static NSString *appNameForPID(pid_t pid)
     }
 }
 
-- (void)setProgressVisible:(BOOL)visible
+- (oneway void)setProgressVisible:(BOOL)visible
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -395,7 +413,7 @@ static NSString *appNameForPID(pid_t pid)
     }
 }
 
-- (void)setUrgent:(BOOL)urgent
+- (oneway void)setUrgent:(BOOL)urgent
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -404,7 +422,7 @@ static NSString *appNameForPID(pid_t pid)
     }
 }
 
-- (void)clearAll
+- (oneway void)clearAll
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -427,6 +445,11 @@ void DockServiceStart(id dock)
       NSConnection *conn = [NSConnection defaultConnection];
       [conn setRootObject:sharedService];
       [conn setDelegate:sharedService];
+      /* Only serving the default mode left clients unanswered while a menu
+       * or modal panel was open in Workspace.  The connections made for new
+       * clients copy these modes from this one. */
+      [conn addRequestMode:NSEventTrackingRunLoopMode];
+      [conn addRequestMode:NSModalPanelRunLoopMode];
       [conn registerName:kDockServiceName];
     }
 }

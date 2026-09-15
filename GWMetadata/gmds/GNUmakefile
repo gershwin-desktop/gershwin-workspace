@@ -1,6 +1,7 @@
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 SUBPROJECTS = \
 	gmds \
@@ -14,4 +15,5 @@ SUBPROJECTS = \
 include $(GNUSTEP_MAKEFILES)/aggregate.make
 
 include GNUmakefile.postamble
+
 

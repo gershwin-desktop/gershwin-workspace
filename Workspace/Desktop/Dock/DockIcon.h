@@ -58,6 +58,11 @@
 
   /* PID tracking for robust non-GNUstep app support */
   pid_t appPID;
+  BOOL isX11OnlyApp;
+
+  /* Cached window visibility check */
+  NSTimeInterval lastWindowCheck;
+  BOOL windowCheckResult;
 
   /* Bounce animation tracking */
   BOOL isBouncing;
@@ -66,6 +71,7 @@
   float bounceOffset;
   float bounceGravity;
   int pauseCounter;  /* Tracks pause between bounces (counts down in timer frames) */
+  NSTimeInterval bounceStart;  /* When the bounce began, for the launch timeout */
 
   /* Unity Launcher API state */
   int64_t badgeCount;
@@ -82,6 +88,8 @@
 - (id)initForNode:(FSNode *)anode
           appName:(NSString *)aname
          iconSize:(int)isize;
+
+- (NSString *)path;
 
 - (NSString *)appName;
         
@@ -110,6 +118,20 @@
 - (void)setAppPID:(pid_t)pid;
 
 - (pid_t)appPID;
+
+- (void)setIsX11OnlyApp:(BOOL)value;
+
+- (BOOL)isX11OnlyApp;
+
+- (BOOL)hasVisibleWindows;
+
+- (void)refreshLaunchedState;
+
+/* Refresh the launched/pid state asynchronously: the X window scans run on a
+ * worker thread (they do synchronous X round-trips that would block the main
+ * thread and wedge the app), and the resulting state changes are applied back
+ * on the main thread. */
+- (void)refreshLaunchedStateAsync;
 
 - (void)setAppHidden:(BOOL)value;
 

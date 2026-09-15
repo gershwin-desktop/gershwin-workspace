@@ -48,7 +48,6 @@ static NetworkVolumeManager *sharedInstance = nil;
     fm = [NSFileManager defaultManager];
     lastErrorMessage = nil;
     
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Initialized");
   }
   return self;
 }
@@ -85,14 +84,11 @@ static NetworkVolumeManager *sharedInstance = nil;
     [task release];
     
     if (status == 0) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: sshfs is available");
       return YES;
     } else {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: sshfs not found in PATH");
       return NO;
     }
   } @catch (NSException *exception) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Error checking for sshfs: %@", exception);
     [task release];
     return NO;
   }
@@ -130,14 +126,11 @@ static NetworkVolumeManager *sharedInstance = nil;
     [task release];
     
     if (status == 0) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: sshpass is available");
       return YES;
     } else {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: sshpass not found in PATH");
       return NO;
     }
   } @catch (NSException *exception) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Error checking for sshpass: %@", exception);
     [task release];
     return NO;
   }
@@ -215,7 +208,6 @@ static NetworkVolumeManager *sharedInstance = nil;
                                                       encoding:NSUTF8StringEncoding 
                                                          error:&readError];
   if (!mountsContent) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Could not read /proc/mounts: %@", readError);
     return nil;
   }
   
@@ -235,7 +227,6 @@ static NetworkVolumeManager *sharedInstance = nil;
     
     /* Check if this is an sshfs mount to our target server */
     if ([fstype isEqual:@"fuse.sshfs"] && [source hasPrefix:expectedPrefix]) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Found existing mount of %@ at %@", source, target);
       return target;
     }
   }
@@ -250,7 +241,6 @@ static NetworkVolumeManager *sharedInstance = nil;
 
   BOOL isDir;
   if (![fm fileExistsAtPath:networkDir isDirectory:&isDir] || !isDir) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: /Volumes does not exist or is not a directory");
     return nil;
   }
   
@@ -274,7 +264,6 @@ static NetworkVolumeManager *sharedInstance = nil;
     NSError *contentsError = nil;
     NSArray *contents = [fm contentsOfDirectoryAtPath:baseMountPoint error:&contentsError];
     if (!contentsError && [contents count] == 0) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Reusing empty directory at %@", baseMountPoint);
       mountPoint = baseMountPoint;
     }
   }
@@ -290,7 +279,6 @@ static NetworkVolumeManager *sharedInstance = nil;
         NSError *contentsError = nil;
         NSArray *contents = [fm contentsOfDirectoryAtPath:numberedMountPoint error:&contentsError];
         if (!contentsError && [contents count] == 0) {
-          NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Reusing empty directory at %@", numberedMountPoint);
           mountPoint = numberedMountPoint;
           foundEmpty = YES;
         }
@@ -308,7 +296,6 @@ static NetworkVolumeManager *sharedInstance = nil;
                     [NSString stringWithFormat:@"%@-%d", sanitizedName, counter]];
       counter++;
     }
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Creating new mount point at %@", mountPoint);
   }
   
   /* Create the mount point directory if it doesn't exist */
@@ -318,12 +305,10 @@ static NetworkVolumeManager *sharedInstance = nil;
        withIntermediateDirectories:YES 
                         attributes:nil 
                              error:&error]) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Failed to create mount point %@: %@", mountPoint, error);
       return nil;
     }
   }
   
-  NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Created mount point at %@", mountPoint);
   return mountPoint;
 }
 
@@ -339,14 +324,11 @@ static NetworkVolumeManager *sharedInstance = nil;
   /* Check if already mounted in our tracked mounts */
   NSString *existingMount = [self mountPointForService:serviceItem];
   if (existingMount) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Service %@ already mounted at %@ (tracked)", 
-          [serviceItem name], existingMount);
     return existingMount;
   }
   
   /* Get details early to check for existing system mounts */
   NSString *hostName = [serviceItem hostName];
-  int port = [serviceItem port];
   NSString *username = nil;
   
   /* First try to get username from TXT record */
@@ -371,8 +353,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   /* Check if this server is already mounted in the system (from previous session/crash) */
   NSString *existingSystemMount = [self findExistingMountForHost:hostName username:checkUsername];
   if (existingSystemMount) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Found existing system mount of %@ at %@", 
-          hostName, existingSystemMount);
     
     /* Verify the mount is still working */
     NSError *testError = nil;
@@ -380,7 +360,6 @@ static NetworkVolumeManager *sharedInstance = nil;
     
     if (!testError) {
       /* Mount is working - reuse it */
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Reusing existing working mount at %@", existingSystemMount);
       NSString *identifier = [serviceItem identifier];
       [mountedVolumes setObject:existingSystemMount forKey:identifier];
       /* Note: We don't store PID for existing mounts since we didn't start the process */
@@ -392,9 +371,7 @@ static NetworkVolumeManager *sharedInstance = nil;
           [vnode setMountPoint: YES];
         }
         [[FSNodeRep sharedInstance] addVolumeAt: existingSystemMount];
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: FSNodeRep volumes now: %@", [[FSNodeRep sharedInstance] volumes]);
       } @catch (NSException *e) {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Error marking existing mount: %@", e);
       }
 
       NSString *parent = [existingSystemMount stringByDeletingLastPathComponent];
@@ -409,7 +386,6 @@ static NetworkVolumeManager *sharedInstance = nil;
                       object:opinfo];
       
       /* Also notify desktop manager directly so the volume appears on the desktop */
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Notifying desktop manager directly for existing mount %@", existingSystemMount);
       id gworkspace = [Workspace gworkspace];
       if (gworkspace) {
         id desktopManager = [gworkspace desktopManager];
@@ -421,7 +397,6 @@ static NetworkVolumeManager *sharedInstance = nil;
       return existingSystemMount;
     } else {
       /* Mount exists but is not working - clean it up */
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Existing mount at %@ is stale, cleaning up", existingSystemMount);
       NSTask *umountTask = [[NSTask alloc] init];
       [umountTask setLaunchPath:@"/usr/bin/fusermount"];
       [umountTask setArguments:@[@"-u", existingSystemMount]];
@@ -429,12 +404,10 @@ static NetworkVolumeManager *sharedInstance = nil;
         [umountTask launch];
         [umountTask waitUntilExit];
         if ([umountTask terminationStatus] == 0) {
-          NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Successfully unmounted stale mount");
           /* Also try to remove the directory */
           [fm removeItemAtPath:existingSystemMount error:nil];
         }
       } @catch (NSException *e) {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Exception while cleaning up stale mount: %@", e);
       }
       [umountTask release];
       /* Wait a moment for cleanup to complete */
@@ -442,34 +415,8 @@ static NetworkVolumeManager *sharedInstance = nil;
     }
   }
   
-  /* Log TXT record data for debugging */
-  NSDebugLLog(@"gwspace", @"NetworkVolumeManager: === TXT Record Data for %@ ===", [serviceItem name]);
-  if (netService) {
-    NSData *txtData = [netService TXTRecordData];
-    if (txtData && [txtData length] > 0) {
-      NSDictionary *txtDict = [NSNetService dictionaryFromTXTRecordData:txtData];
-      if (txtDict) {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: TXT Record contains %lu keys:", (unsigned long)[txtDict count]);
-        for (NSString *key in txtDict) {
-          NSData *valueData = [txtDict objectForKey:key];
-          NSString *valueString = [[[NSString alloc] initWithData:valueData 
-                                                          encoding:NSUTF8StringEncoding] autorelease];
-          NSDebugLLog(@"gwspace", @"NetworkVolumeManager:   %@ = %@", key, valueString);
-        }
-      } else {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Failed to parse TXT record dictionary");
-      }
-    } else {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: No TXT record data available");
-    }
-  } else {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: No netService available");
-  }
-  NSDebugLLog(@"gwspace", @"NetworkVolumeManager: === End TXT Record Data ===");
-  
   /* Check if sshfs is available */
   if (![self isSshfsAvailable]) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: sshfs not available, showing alert");
     [self showSshfsNotInstalledAlert];
     return nil;
   }
@@ -483,7 +430,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   }
   
   if (!hostName || [hostName length] == 0) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Service has no hostname, cannot mount");
     NSAlert *alert = [[NSAlert alloc] init];
     [alert setMessageText:NSLocalizedString(@"Cannot Mount", @"")];
     [alert setInformativeText:NSLocalizedString(
@@ -497,7 +443,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   
   /* If no username provided AND no username in TXT record, prompt for it */
   if (!username || [username length] == 0) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: No username in TXT record, prompting user");
     
     NSDictionary *creds = [NetworkVolumeManager runCredentialsPanelWithTitle:
       NSLocalizedString(@"Connect to SFTP Server", @"") hostname: hostName];
@@ -505,14 +450,11 @@ static NetworkVolumeManager *sharedInstance = nil;
     if (creds) {
       username = [[creds objectForKey:@"username"] retain];
       password = [[creds objectForKey:@"password"] retain];
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: User entered username: %@", username);
     } else {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: User cancelled connection");
       return nil;
     }
     
     if (!username || [username length] == 0) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: No username provided");
       [password release];
       return nil;
     }
@@ -527,18 +469,14 @@ static NetworkVolumeManager *sharedInstance = nil;
       password = nil;
     }
   } else {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Using username from TXT record: %@", username);
   }
   
   /* Create mount point */
   NSString *mountPoint = [self createMountPointForService:serviceItem];
   if (!mountPoint) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Failed to create mount point");
     return nil;
   }
   
-  NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Will use username: %@, hostname: %@, port: %d", 
-        username, hostName, port);
   
   /* Use SFTPMount class to perform the mount */
   SFTPMount *mounter = [[SFTPMount alloc] init];
@@ -557,11 +495,8 @@ static NetworkVolumeManager *sharedInstance = nil;
     int pid = [result pid];
     if (pid > 0) {
       [mountedVolumesPIDs setObject:[NSNumber numberWithInt:pid] forKey:identifier];
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Stored sshfs PID %d for service %@", pid, identifier);
     }
 
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Successfully mounted %@ at %@", 
-          [serviceItem name], mountPoint);
 
     /* Mark the mount point in the FSNode cache so UI displays mountpoint icons */
     @try {
@@ -570,9 +505,7 @@ static NetworkVolumeManager *sharedInstance = nil;
         [vnode setMountPoint: YES];
       }
       [[FSNodeRep sharedInstance] addVolumeAt: mountPoint];
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: FSNodeRep volumes now: %@", [[FSNodeRep sharedInstance] volumes]);
     } @catch (NSException *e) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Error marking volume: %@", e);
     }
 
     /* Notify parent directory that a new entry has appeared so viewers refresh */
@@ -588,7 +521,6 @@ static NetworkVolumeManager *sharedInstance = nil;
                     object:opinfo];
     
     /* Also notify desktop manager directly so the volume appears on the desktop */
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Notifying desktop manager directly for mount %@", mountPoint);
     id gworkspace = [Workspace gworkspace];
     if (gworkspace) {
       id desktopManager = [gworkspace desktopManager];
@@ -601,7 +533,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   } else {
     /* Mount failed */
     NSString *errorMsg = [result errorMessage];
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Mount failed: %@", errorMsg);
     
     /* Remove the mount point directory on failure */
     [fm removeItemAtPath:mountPoint error:nil];
@@ -634,11 +565,9 @@ static NetworkVolumeManager *sharedInstance = nil;
 {
   NSString *mountPoint = [self mountPointForService:serviceItem];
   if (!mountPoint) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Service %@ is not mounted", [serviceItem name]);
     return NO;
   }
 
-  NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Unmounting %@ from %@", [serviceItem name], mountPoint);
   return [self unmountPath:mountPoint];
 }
 
@@ -683,7 +612,6 @@ static NetworkVolumeManager *sharedInstance = nil;
 
   /* Remove filesystem watchers to prevent "target is busy" errors */
   if (gworkspace) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Removing filesystem watchers for %@", path);
     [gworkspace removeWatcherForPath:path];
     
     /* Also try to remove watchers for any subdirectories that might be watched */
@@ -719,10 +647,8 @@ static NetworkVolumeManager *sharedInstance = nil;
                   object:[NSWorkspace sharedWorkspace]
                 userInfo:unmountInfo];
   
-  NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Sent will unmount notifications for %@", path);
 
   /* Wait for viewers to close and watchers to be removed to prevent "target is busy" */
-  NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Waiting for viewers and watchers to close...");
   usleep(2000000); // 2.0 seconds
 
   BOOL unmountSuccess = NO;
@@ -732,35 +658,27 @@ static NetworkVolumeManager *sharedInstance = nil;
     NSNumber *pidNumber = [mountedVolumesPIDs objectForKey:foundId];
     if (pidNumber) {
       int pid = [pidNumber intValue];
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Killing sshfs process %d for %@", pid, path);
       
       /* Send SIGTERM first, then SIGKILL if needed */
       if (kill(pid, SIGTERM) == 0) {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Sent SIGTERM to process %d", pid);
         /* Wait briefly for graceful shutdown */
         usleep(500000); /* 0.5 seconds */
         
         /* Check if process is still running */
         if (kill(pid, 0) == 0) {
           /* Process still exists, force kill */
-          NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Process %d still running, sending SIGKILL", pid);
           if (kill(pid, SIGKILL) == 0) {
-            NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Sent SIGKILL to process %d", pid);
           }
         } else {
-          NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Process %d terminated after SIGTERM", pid);
         }
         
         /* Wait a bit more for the FUSE filesystem to clean up */
         usleep(1000000); /* 1 second */
         
         unmountSuccess = YES;
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Successfully killed sshfs process %d", pid);
       } else {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Failed to kill process %d: %s", pid, strerror(errno));
         /* Process may already be dead or we don't have permission */
         if (errno == ESRCH) {
-          NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Process %d no longer exists", pid);
           unmountSuccess = YES; /* Process is gone, that's what we wanted */
         }
       }
@@ -769,7 +687,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   
   /* Also try fusermount as fallback/cleanup */
   if (!unmountSuccess) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Trying fusermount -u as fallback");
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"/usr/bin/fusermount"];
     [task setArguments:@[@"-u", path]];
@@ -782,10 +699,8 @@ static NetworkVolumeManager *sharedInstance = nil;
       [task release];
 
       if (status == 0) {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: fusermount succeeded");
         unmountSuccess = YES;
       } else {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: fusermount failed with status %d, trying alternative approaches", status);
         
         /* Try umount as alternative */
         NSTask *umountTask = [[NSTask alloc] init];
@@ -797,18 +712,14 @@ static NetworkVolumeManager *sharedInstance = nil;
           [umountTask waitUntilExit];
           
           if ([umountTask terminationStatus] == 0) {
-            NSDebugLLog(@"gwspace", @"NetworkVolumeManager: umount succeeded");
             unmountSuccess = YES;
           } else {
-            NSDebugLLog(@"gwspace", @"NetworkVolumeManager: umount failed with status %d", [umountTask terminationStatus]);
           }
         } @catch (NSException *e) {
-          NSDebugLLog(@"gwspace", @"NetworkVolumeManager: umount exception: %@", e);
         }
         [umountTask release];
       }
     } @catch (NSException *exception) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Exception while running fusermount: %@", exception);
       [task release];
     }
   }
@@ -832,7 +743,6 @@ static NetworkVolumeManager *sharedInstance = nil;
       }
       [[FSNodeRep sharedInstance] removeVolumeAt:path];
     } @catch (NSException *e) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Error clearing volume info: %@", e);
     }
 
     /* Attempt to remove empty mountpoint directory (non-recursively) */
@@ -843,24 +753,17 @@ static NetworkVolumeManager *sharedInstance = nil;
       if (contents && ([contents count] == 0)) {
         // Use rmdir (non-recursive) instead of removeItemAtPath
         if (rmdir([path fileSystemRepresentation]) == 0) {
-          NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Removed empty mount point %@", path);
           directoryRemoved = YES;
         } else {
-          NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Failed to remove mount point %@ (rmdir): %s", path, strerror(errno));
         }
       } else if (contentsErr) {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Could not read mount point contents %@: %@", path, contentsErr);
       } else {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Mount point %@ not empty (%lu items), leaving in place", 
-              path, (unsigned long)[contents count]);
       }
     } @catch (NSException *e) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Exception checking/removing mount point %@: %@", path, e);
     }
 
     /* Only remove desktop icon AFTER directory has been successfully removed */
     if (directoryRemoved) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Directory removed successfully, notifying desktop to remove icon for %@", path);
       
       /* Notify viewers to close and refresh parent directory */
       NSDictionary *opinfo = @{ @"operation": @"UnmountOperation",
@@ -874,7 +777,6 @@ static NetworkVolumeManager *sharedInstance = nil;
                       object:opinfo];
                       
       /* Also notify desktop manager directly so volume disappears from desktop */
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Notifying desktop manager directly for unmount %@", path);
       id gworkspace = [Workspace gworkspace];
       if (gworkspace) {
         id desktopManager = [gworkspace desktopManager];
@@ -883,14 +785,11 @@ static NetworkVolumeManager *sharedInstance = nil;
         }
       }
     } else {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Mount point not removed, keeping desktop icon for %@", path);
     }
                     
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Sent completion notification for unmount of %@", path);
 
     return YES;
   } else {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: All unmount attempts failed for %@", path);
     return NO;
   }
 }
@@ -907,7 +806,6 @@ static NetworkVolumeManager *sharedInstance = nil;
                         password:(NSString *)pass
 {
   if (!serviceItem) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: No service item provided for WebDAV mount");
     return nil;
   }
   
@@ -916,7 +814,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   /* Check if already mounted */
   NSString *existingPath = [webdavMounts objectForKey:identifier];
   if (existingPath) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: WebDAV service already accessible at %@", existingPath);
     return existingPath;
   }
   
@@ -929,7 +826,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   
   /* Ensure AVFS daemon is running */
   if (![avfs ensureAvfsDaemonRunning]) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Failed to start AVFS daemon for WebDAV");
     NSAlert *alert = [[NSAlert alloc] init];
     [alert setMessageText:NSLocalizedString(@"AVFS Error", @"")];
     [alert setInformativeText:NSLocalizedString(
@@ -948,7 +844,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   BOOL isSecure = [serviceItem isSecureWebDAV];
   
   if (!hostname || [hostname length] == 0) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: No hostname for WebDAV service");
     return nil;
   }
   
@@ -1049,7 +944,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   NSString *davPath = [NSString stringWithFormat:@"%@/#dav:%@:%@%@",
                        avfsBase, protocol, hostPart, pathPart];
   
-  NSDebugLLog(@"gwspace", @"NetworkVolumeManager: WebDAV AVFS path: %@", davPath);
   
   /* If we have credentials, write them to the dav_ctl file */
   if (username && [username length] > 0 && password && [password length] > 0) {
@@ -1067,12 +961,9 @@ static NetworkVolumeManager *sharedInstance = nil;
     if ([fm fileExistsAtPath:davCtlDir]) {
       [credentials writeToFile:davCtlPath atomically:NO encoding:NSUTF8StringEncoding error:&writeError];
       if (writeError) {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Warning - could not write WebDAV credentials: %@", writeError);
       } else {
-        NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Wrote WebDAV credentials to control file");
       }
     } else {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: dav_ctl directory not available, credentials will be requested by AVFS");
     }
   }
   
@@ -1081,7 +972,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   NSArray *contents = [fm contentsOfDirectoryAtPath:davPath error:&accessError];
   
   if (!contents && accessError) {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: WebDAV path not accessible: %@", accessError);
     
     /* Show error to user */
     NSAlert *alert = [[NSAlert alloc] init];
@@ -1096,7 +986,6 @@ static NetworkVolumeManager *sharedInstance = nil;
     return nil;
   }
   
-  NSDebugLLog(@"gwspace", @"NetworkVolumeManager: WebDAV service accessible at %@", davPath);
   
   /* Track this mount */
   [webdavMounts setObject:davPath forKey:identifier];
@@ -1111,7 +1000,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   for (NSString *identifier in identifiers) {
     NSString *mountPoint = [mountedVolumes objectForKey:identifier];
     
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Unmounting %@", mountPoint);
     
     NSTask *task = [[NSTask alloc] init];
     [task setLaunchPath:@"/usr/bin/fusermount"];
@@ -1125,8 +1013,6 @@ static NetworkVolumeManager *sharedInstance = nil;
       /* Remove the mount point directory */
       [fm removeItemAtPath:mountPoint error:nil];
     } @catch (NSException *exception) {
-      NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Exception while unmounting %@: %@", 
-            mountPoint, exception);
       [task release];
     }
   }
@@ -1218,7 +1104,6 @@ static NetworkVolumeManager *sharedInstance = nil;
   [connectButton release];
   [cancelButton release];
 
-  NSDebugLLog(@"gwspace", @"NetworkVolumeManager: Showing credentials panel");
   NSInteger result = [NSApp runModalForWindow:panel];
 
   NSDictionary *credentials = nil;
@@ -1230,9 +1115,7 @@ static NetworkVolumeManager *sharedInstance = nil;
                    enteredPassword, @"password", nil];
     [enteredUsername release];
     [enteredPassword release];
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: User entered username: %@", enteredUsername);
   } else {
-    NSDebugLLog(@"gwspace", @"NetworkVolumeManager: User cancelled credentials panel");
   }
 
   [usernameField release];

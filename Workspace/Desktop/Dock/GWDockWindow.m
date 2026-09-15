@@ -185,8 +185,6 @@
 
   XFlush(display);
 
-  NSDebugLLog(@"gwspace", @"GWDockWindow: set X11 dock properties on window 0x%lx",
-              (unsigned long)dockXWindow);
 }
 
 - (void)updateX11Strut
@@ -256,8 +254,6 @@
 
   XFlush(display);
 
-  NSDebugLLog(@"gwspace", @"GWDockWindow: set X11 strut (pos %d, size %@)",
-              pos, NSStringFromSize(windowFrame.size));
 }
 
 @end

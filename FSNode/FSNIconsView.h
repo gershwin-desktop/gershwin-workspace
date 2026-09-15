@@ -28,6 +28,7 @@
 #import <AppKit/NSView.h>
 #import <AppKit/NSTextField.h>
 #import "FSNodeRep.h"
+#import "FSNFunctions.h"
 #import "FSNIconPlacement.h"
 
 @class NSColor;
@@ -39,12 +40,22 @@
 @class FSNIconNameEditor;
 @class FSNIconItemData;
 
-@interface FSNIconsView : NSView <NSTextFieldDelegate>
+#import "FSNIconLoader.h"
+
+@interface FSNIconsView : NSView <NSTextFieldDelegate, FSNDecorationClient>
 {
   FSNode *node;
   NSMutableArray *icons;
   FSNInfoType infoType;
   NSString *extInfoType;
+
+  /* Bumped on every contents change; pending FSNIconLoader items carrying
+   * an older generation are dropped. */
+  NSInteger generation;
+
+  /* Last-seen filename-extension display mode: defaultsChanged: only needs
+   * to relabel icons when it actually changes. */
+  GSFilenameExtensionDisplayMode lastDisplayMode;
 
   NSImage *verticalImage;
   NSImage *horizontalImage;
@@ -181,11 +192,24 @@
 - (NSDictionary *)customIconPositions;
 - (NSArray *)icons;
 
+/* The complete live layout: filename -> NSValue(NSPoint iloc) for every icon
+ * currently placed in this view (dragged/auto icons come from
+ * customIconPositions, restored manual icons from their placementData).  Used
+ * to persist the real on-screen layout on window close instead of re-reading
+ * a stale .DS_Store that may still carry foreign colliding positions. */
+- (NSDictionary *)liveIconPositions;
+
 /* Free-positioning icon repositioning */
 - (void)repositionIcon:(FSNIcon *)icon toCenterPoint:(NSPoint)point;
 
 /* Batch reposition — moves many icons at once, tiles once, persists once */
 - (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
+
+/* Smoothly animate the icons from the given pre-move frames to their current
+ * frames.  `oldFrames` maps each icon's node name (via -name) to an NSValue
+ * wrapping the NSRect it had before the caller moved it.  Call after the
+ * repositioning has applied the new frames.  No-op when the map is empty. */
+- (void)animateIconsFromOldFrames:(NSDictionary *)oldFrames;
 
 /* Persist the auto-assigned positions of icons just added to an open window
  * (call after -tile).  Honor-gated and empty-safe; browser views no-op. */

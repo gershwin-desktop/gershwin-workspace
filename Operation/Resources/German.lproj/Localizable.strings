@@ -1,0 +1,74 @@
+/*** deduplicated by dedup-strings.py ***/
+
+": Directory Protected!" = ": Verzeichnis gesch\u00fctzt!";
+
+": no such file or directory!" = ": Datei oder Verzeichnis nicht gefunden!";
+
+"A fatal error occurred while dispatching the task!" = "Ein schwerwiegender Fehler ist beim Ausf\u00fchren der Aufgabe aufgetreten!";
+
+"Cancel" = "Abbrechen";
+
+"Continue" = "Fortfahren";
+
+"Copy" = "Kopieren";
+
+"Delete" = "L\u00f6schen";
+
+"Delete the selected objects?" = "Die ausgew\u00e4hlten Objekte l\u00f6schen?";
+
+"Destroy" = "Vernichten";
+
+"Duplicate" = "Duplizieren";
+
+"Duplicate the selected objects?" = "Die ausgew\u00e4hlten Objekte duplizieren?";
+
+"Empty the Recycler?" = "Papierkorb leeren?";
+
+"Error" = "Fehler";
+
+"File operation error:" = "Dateioperationsfehler:";
+
+"From:" = "Von:";
+
+"In:" = "In:";
+
+"Link" = "Link";
+
+"Move" = "Verschieben";
+
+"OK" = "OK";
+
+"Only older" = "Nur \u00e4ltere";
+
+"Pause" = "Pause";
+
+"Recycler" = "Papierkorb";
+
+"Some files are in use by another operation!" = "Einige Dateien werden von einer anderen Operation verwendet!";
+
+"Stop" = "Stopp";
+
+"To:" = "Nach:";
+
+"\nto the Recycler"
+  = "\nin den Papierkorb";
+
+"\nto: "
+  = "\nnach: ";
+
+"_copy" = "_copy";
+
+"executor connection died!" = "Executor-Verbindung abgebrochen!";
+
+"from" = "von";
+
+"from the Recycler" = "aus dem Papierkorb";
+
+"items" = "Elemente";
+
+"one item" = "ein Element";
+
+"the Recycler" = "der Papierkorb";
+
+"with file:" = "mit Datei:";
+

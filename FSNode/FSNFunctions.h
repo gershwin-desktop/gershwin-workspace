@@ -43,6 +43,8 @@ NSString *GSDisplayNameForFilename(NSString *filename, GSFilenameExtensionDispla
 
 NSString *GSFilenameHiddenExtension(NSString *filename, GSFilenameExtensionDisplayMode mode);
 
+NSString *GSDirectoryDescriptionForPath(NSString *path);
+
 NSString *path_separator(void);
 
 BOOL isSubpathOfPath(NSString *p1, NSString *p2);
@@ -50,6 +52,32 @@ BOOL isSubpathOfPath(NSString *p1, NSString *p2);
 BOOL pathsAreOnSameVolume(NSString *path1, NSString *path2);
 
 NSDragOperation dragOperationForCurrentModifierFlags(void);
+
+/* The file operation a link-flavoured drop should perform: a plain
+ * Command drag creates a Unix symlink, Command+Alternate creates an
+ * Alias record (issue #71). */
+NSString *FSNLinkDropOperation(void);
+
+/* YES while Command+Alternate are held - the "make alias" drop modifier. */
+BOOL FSNLinkDropCreatesAlias(void);
+
+/* Copy of image with the alias/link arrow badge in the lower-left
+ * corner; used as drag image for alias-creating drags. */
+NSImage *FSNLinkBadgedImage(NSImage *image);
+
+/* Copy of image marked as a git repository.  The logo is drawn at half the
+ * icon size, aspect-preserving, anchored toward the bottom using the golden
+ * ratio and lifted a further 5% of the icon height.  The icon is left
+ * unchanged except where the logo's OWN pixels are dark: those pixels are
+ * darkened (per-pixel, proportional to the logo's luminance and opacity), so
+ * the git wordmark reads as a subtle shadow on the icon with no hue shift.
+ * Used to mark git-repository folders.  `logo` may be any size. */
+NSImage *FSNGitBadgedImage(NSImage *image, NSImage *logo);
+
+/* Posted (object = the node's path, an NSString) by a decoration delegate when
+ * an asynchronously-computed badge count becomes available.  Icon views
+ * observe this to refresh the red count badge without blocking on the work. */
+extern NSString *FSNBadgeCountDidChangeNotification;
 
 NSString *subtractFirstPartFromPath(NSString *path, NSString *firstpart);
 

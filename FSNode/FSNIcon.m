@@ -79,10 +79,19 @@ static NSImage *branchImage;
 
 - (void)dealloc
 {
+  /* Drop pending loader items referencing self before anything else. */
+  [[FSNIconLoader sharedLoader] cancelClient: self];
+
   if (trectTag != -1)
     {
       [self removeTrackingRect: trectTag];
     }
+  /* Stop watching and drop the badge observer BEFORE releasing node: both
+   * stopWatchingCurrentNode and gitBadgeCountChanged: dereference self.node,
+   * so releasing it first would be a use-after-free on every git-repo icon's
+   * deallocation (i.e. when a viewer showing such icons is closed). */
+  [self stopWatchingCurrentNode];
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
   RELEASE (node);
   RELEASE (hostname);
   RELEASE (selection);
@@ -225,9 +234,20 @@ static NSImage *branchImage;
       selection = nil;
       selectionTitle = nil;
 
-      ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
-      drawicon = icon;
+      /* The icon image loads later via -decorate (FSNIconLoader): a large
+       * directory must not pay the icon pipeline per icon at fill time. */
+      icon = nil;
+      drawicon = nil;
+      decorated = NO;
       selectedicon = nil;
+
+      [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector (gitBadgeCountChanged:)
+               name: FSNBadgeCountDidChangeNotification
+             object: nil];
+      [self updateBadgeCount];
+      [self startWatchingCurrentNode];
 
       /* Initialize placement data */
       _placementData = [[FSNIconItemData alloc] init];
@@ -368,6 +388,17 @@ static NSImage *branchImage;
 
       isLocked = [node isLocked];
 
+      /* Set tooltip to well-known directory description if applicable.
+         Must happen after setFrame: so the tooltip tracking rect has valid bounds. */
+      if (node)
+        {
+          NSString *desc = GSDirectoryDescriptionForPath([node path]);
+          if (desc)
+            {
+              [self setToolTip: desc];
+            }
+        }
+
       container = nil;
 
       isSelected = NO;
@@ -388,6 +419,15 @@ static NSImage *branchImage;
       [labelFrameColor retain];
 
       drawLabelBackground = NO;
+
+      /* The icon image loads through the FSNIconLoader instead of here, so
+       * a large directory fills without the per-icon pipeline.  Icons
+       * created outside a decorated container (desktop, shelf, dock,
+       * path components) are covered by this self-enqueue; containers that
+       * schedule decoration themselves just promote or dedup against it. */
+      [[FSNIconLoader sharedLoader] enqueueNode: anode
+                                         client: self
+                                         urgent: NO];
     }
 
   return self;
@@ -414,6 +454,11 @@ static NSImage *branchImage;
 - (NSRect)iconBounds
 {
   return icnBounds;
+}
+
+- (float)labelTextWidth
+{
+  return [label uncutTitleLenght] + [fsnodeRep labelMargin];
 }
 
 - (void)tile
@@ -989,7 +1034,7 @@ static NSImage *branchImage;
           [[container backgroundColor] set];
         }
     }
-  if (icnPosition != NSImageOnly)
+  if (decorated && icnPosition != NSImageOnly)
     {
       if (nameEdited == NO)
         {
@@ -1021,43 +1066,161 @@ static NSImage *branchImage;
       [drawicon dissolveToPoint: icnPoint fraction: 0.3];
     }
 
-  if (isLeaf == NO)
-    [[object_getClass(self) branchImage] compositeToPoint: brImgBounds.origin operation: NSCompositeSourceOver];
-
-  // Draw tag color indicator (from DS_Store lclr or FinderInfo fdFlags)
-  // Drawn last so it's always on top of everything, including the branch image.
-  // Lazily check the metadata provider if no colour has been set yet.
-  if (tagColor == nil)
-    [self loadLabelColorFromMetadata];
-
-  if (tagColor)
+  /* Gate all icon overlays on decorated so they appear atomically with the
+   * icon image, matching the label gating above. */
+  if (decorated)
     {
-      // Draw a small colored dot in the bottom-right corner of the icon
-      CGFloat dotSize = 10.0;
-      CGFloat dotMargin = 2.0;
-      NSRect dotRect = NSMakeRect(icnBounds.origin.x + icnBounds.size.width - dotSize - dotMargin,
-                                  icnBounds.origin.y + dotMargin,
-                                  dotSize, dotSize);
-      FSNDrawLabelDot(dotRect, tagColor);
+      if (isLeaf == NO)
+        [[object_getClass(self) branchImage] compositeToPoint: brImgBounds.origin
+                                                    operation: NSCompositeSourceOver];
+
+      // Draw tag color indicator (from DS_Store lclr or FinderInfo fdFlags).
+      // Lazily check the metadata provider if no colour has been set yet.
+      if (tagColor == nil)
+        [self loadLabelColorFromMetadata];
+
+      if (tagColor)
+        {
+          // Small colored dot in the bottom-right corner of the icon
+          CGFloat dotSize = 10.0;
+          CGFloat dotMargin = 2.0;
+          NSRect dotRect = NSMakeRect(icnBounds.origin.x + icnBounds.size.width - dotSize - dotMargin,
+                                      icnBounds.origin.y + dotMargin,
+                                      dotSize, dotSize);
+          FSNDrawLabelDot(dotRect, tagColor);
+        }
+
+      /* Red git change-count badge: a rounded pill with the number in white,
+       * drawn at the icon's top-right corner (>= 48px icons only), mirroring
+       * the Dock's app-icon badge.  The count arrives asynchronously; until
+       * then badgeCount is 0 / pending and nothing is drawn here. */
+      if (gitBadgeCount > 0 && iconSize >= 48)
+        {
+          NSString *countStr = (gitBadgeCount > 99)
+            ? @"99+"
+            : [NSString stringWithFormat: @"%ld", (long) gitBadgeCount];
+          CGFloat badgeH = MAX (12.0, round ((CGFloat) iconSize * 0.34));
+          NSDictionary *attrs = @{
+            NSFontAttributeName: [NSFont boldSystemFontOfSize: badgeH * 0.6],
+            NSForegroundColorAttributeName: [NSColor whiteColor]
+          };
+          NSSize strSize = [countStr sizeWithAttributes: attrs];
+          CGFloat pad = badgeH * 0.375;
+          CGFloat badgeW = strSize.width + pad * 2.0;
+          if (badgeW < badgeH)
+            {
+              badgeW = badgeH;
+            }
+          CGFloat margin = 2.0;
+          NSRect badgeRect = NSMakeRect (
+            icnBounds.origin.x + icnBounds.size.width - badgeW - margin,
+            icnBounds.origin.y + icnBounds.size.height - badgeH - margin,
+            badgeW, badgeH);
+          [[NSColor redColor] set];
+          [[NSBezierPath bezierPathWithRoundedRect: badgeRect
+                                           xRadius: badgeH / 2.0
+                                           yRadius: badgeH / 2.0] fill];
+          NSPoint strPoint = NSMakePoint (
+            badgeRect.origin.x + (badgeW - strSize.width) / 2.0,
+            badgeRect.origin.y + (badgeH - strSize.height) / 2.0);
+          [countStr drawAtPoint: strPoint withAttributes: attrs];
+        }
     }
+
+  /* The git-repository badge (the git logo) is already baked into the icon
+   * image by FSNodeRep's iconOfSize:forNode:, so nothing else is drawn here. */
 }
 
 
 //
 // FSNodeRep protocol
 //
+
+/* Query the decoration delegate for the git change-count of this node.  Returns
+ * immediately: a known count (possibly 0) is stored, while an in-flight
+ * computation yields -1 and the badge is filled in later when
+ * gitBadgeCountChanged: fires.  Non-directories are skipped. */
+- (void)updateBadgeCount
+{
+  gitBadgeCount = 0;
+  if (node == nil || [node isDirectory] == NO)
+    {
+      return;
+    }
+  id dd = [fsnodeRep decorationDelegate];
+  if (dd != nil && [dd respondsToSelector: @selector (badgeCountForNode:)])
+    {
+      NSInteger c = [dd badgeCountForNode: node];
+      if (c > 0)
+        {
+          gitBadgeCount = c;
+        }
+    }
+}
+
+/* A background git count finished; if it was for this node, store it and
+ * redraw so the red badge appears without re-blocking the UI. */
+- (void)gitBadgeCountChanged:(NSNotification *)note
+{
+  NSString *path = [note object];
+  if (path == nil || node == nil || [[node path] isEqual: path] == NO)
+    {
+      return;
+    }
+  [self updateBadgeCount];
+  [self setNeedsDisplay: YES];
+}
+
+/* Ask the decoration delegate to begin/end watching this node's backing
+ * repository, so the count badge can refresh on external changes.  Guarded by
+ * respondsToSelector because not every decoration delegate implements watching
+ * (and the delegate may be nil while extensions are still loading). */
+- (void)startWatchingCurrentNode
+{
+  if (node == nil || [node isDirectory] == NO)
+    {
+      return;
+    }
+  id dd = [fsnodeRep decorationDelegate];
+  if (dd != nil && [dd respondsToSelector: @selector (startWatchingNode:)])
+    {
+      @try { [dd performSelector: @selector (startWatchingNode:) withObject: node]; }
+      @catch (NSException *e) { /* ignore: watching is best-effort */ }
+    }
+}
+
+- (void)stopWatchingCurrentNode
+{
+  if (node == nil || [node isDirectory] == NO)
+    {
+      return;
+    }
+  id dd = [fsnodeRep decorationDelegate];
+  if (dd != nil && [dd respondsToSelector: @selector (stopWatchingNode:)])
+    {
+      @try { [dd performSelector: @selector (stopWatchingNode:) withObject: node]; }
+      @catch (NSException *e) { /* ignore: watching is best-effort */ }
+    }
+}
+
 - (void)setNode:(FSNode *)anode
 {
+  [self stopWatchingCurrentNode];
   DESTROY (selection);
   DESTROY (selectionTitle);
   DESTROY (hostname);
-  DESTROY (tagColor);   // Reset label colour; will be re-evaluated on next draw
-  labelChecked = NO;    // New node — probe its label again on next draw
+  DESTROY (tagColor);
+  labelChecked = NO;
 
   ASSIGN (node, anode);
-  ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
-  drawicon = icon;
+  if (decorated)
+    {
+      ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
+      drawicon = icon;
+    }
   DESTROY (selectedicon);
+  [self updateBadgeCount];
+  [self startWatchingCurrentNode];
 
   if ([[node path] isEqual: path_separator()] && ([node isMountPoint] == NO))
     {
@@ -1066,6 +1229,18 @@ static NSImage *branchImage;
       hname = [FSNIcon getBestHostName];
       ASSIGN (hostname, hname);
     }
+
+  /* Reload label colour eagerly from the metadata provider,
+   * same as initForNode: does, rather than deferring to
+   * drawRect: — so colour labels survive updateIcons and
+   * other setNode: callers even if the view isn't redrawn. */
+  ASSIGN (tagColor,
+           [[[FSNodeRep sharedInstance] metadataProvider]
+             labelColorForPath: [anode path]]);
+
+  /* The git-repository badge (git logo) is baked into the icon image by
+   * FSNodeRep's iconOfSize:forNode:, so FSNIcon needs no separate badge
+   * handling here. */
 
   if (extInfoType)
     {
@@ -1078,6 +1253,16 @@ static NSImage *branchImage;
 
   [self setLocked: [node isLocked]];
   [self tile];
+
+  /* Set tooltip to well-known directory description if applicable */
+  if (node)
+    {
+      NSString *desc = GSDirectoryDescriptionForPath([node path]);
+      if (desc)
+        {
+          [self setToolTip: desc];
+        }
+    }
 }
 
 - (void)setNode:(FSNode *)anode
@@ -1211,13 +1396,16 @@ static NSImage *branchImage;
 {
   iconSize = isize;
   icnBounds = NSMakeRect(0, 0, iconSize, iconSize);
-  if (selection == nil)
+  if (decorated)
     {
-      ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
-    }
-  else
-    {
-      ASSIGN (icon, [fsnodeRep multipleSelectionIconOfSize: iconSize]);
+      if (selection == nil)
+        {
+          ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
+        }
+      else
+        {
+          ASSIGN (icon, [fsnodeRep multipleSelectionIconOfSize: iconSize]);
+        }
     }
   drawicon = icon;
   DESTROY (selectedicon);
@@ -1236,6 +1424,50 @@ static NSImage *branchImage;
 - (int)iconSize
 {
   return iconSize;
+}
+
+- (void)decorate
+{
+  if (decorated || node == nil || selection != nil)
+    {
+      return;
+    }
+
+  ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
+  drawicon = icon;
+  decorated = YES;
+
+  /* The icon image may arrive after the last -tile (a lazy icon is laid
+   * out and tiled while its image is still nil), and tile computes the
+   * drawing point from [icon size].  Re-tile so the image is centered in
+   * its highlight rect instead of drawn from its bottom-left. */
+  [self tile];
+
+  [self setNeedsDisplay: YES];
+}
+
+- (BOOL)isDecorated
+{
+  return decorated;
+}
+
+//
+// FSNDecorationClient (self-decorate through the FSNIconLoader)
+//
+
+/* The loader item IS this icon, so there is no separate generation to
+ * track; staleness is covered by -dealloc (cancelClient) and the no-op
+ * -decorate when the state moved on. */
+- (NSInteger)fsnDecorationGeneration
+{
+  return 0;
+}
+
+- (BOOL)fsnLoaderDecorateNode:(FSNode *)anode
+{
+  [self decorate];
+
+  return YES;
 }
 
 - (void)setIconPosition:(NSCellImagePosition)ipos
@@ -1699,6 +1931,14 @@ static NSImage *branchImage;
 	      dragIcon = [fsnodeRep multipleSelectionIconOfSize: iconSize];
 	    }
 
+	  /* Command+Alternate drags create Alias records - mark the drag
+	   * with the alias arrow so the user can tell it from a copy or
+	   * symlink. */
+	  if (FSNLinkDropCreatesAlias())
+	    {
+	      dragIcon = FSNLinkBadgedImage(dragIcon);
+	    }
+
 	  /* Check if all selected paths are mountpoints and notify the Dock */
 	  [self notifyDockAboutDragWithPaths: selectedPaths];
 
@@ -1801,37 +2041,28 @@ static NSImage *branchImage;
       NSString *droppedPath = [sourcePaths objectAtIndex: 0];
       Class handlerClass = NSClassFromString(@"ISOWriteHandler");
 
-      NSDebugLLog(@"gwspace", @"FSNIcon: Checking ISO drop: file=%@ onto mountpoint=%@", droppedPath, [node path]);
 
       if (!handlerClass) {
-        NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler class not available");
       } else if ([handlerClass respondsToSelector:@selector(validationMessageForISODrop:ontoNode:)]) {
         NSString *diag = [handlerClass validationMessageForISODrop:droppedPath ontoNode:node];
         if (diag == nil) {
-          NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler accepted drag - allowing drop");
           isDragTarget = YES;
           return NSDragOperationCopy;
         } else {
-          NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler rejected drop: %@", diag);
         }
       } else if ([handlerClass respondsToSelector: @selector(canHandleISODrop:ontoNode:)]) {
         if ([handlerClass canHandleISODrop: droppedPath ontoNode: node]) {
-          NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler accepted drag - allowing drop");
           isDragTarget = YES;
           return NSDragOperationCopy;
         } else {
-          NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler rejected drop (no diagnostic available)");
         }
       } else {
-        NSDebugLLog(@"gwspace", @"FSNIcon: ISO handler present but missing required selectors");
       }
     }
 
   if (selection || isLocked || ([node isDirectory] == NO)
       || (([node isWritable] == NO) && ([node isApplication] == NO)))
     {
-      NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - selection=%d isLocked=%d isDirectory=%d isWritable=%d isApp=%d [node=%@]",
-            selection != nil, isLocked, [node isDirectory], [node isWritable], [node isApplication], [node path]);
       return NSDragOperationNone;
     }
 
@@ -1839,7 +2070,6 @@ static NSImage *branchImage;
     {
       if ([node isSubnodeOfPath: [desktopApp trashPath]])
 	{
-	  NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - target is in trash [node=%@]", [node path]);
 	  return NSDragOperationNone;
 	}
     }
@@ -1850,13 +2080,11 @@ static NSImage *branchImage;
 	{
 	  if ([node isEqual: [container baseNode]] == NO)
 	    {
-	      NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - package not base node [node=%@]", [node path]);
 	      return NSDragOperationNone;
 	    }
 	}
       else
 	{
-	  NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - package without base node [node=%@]", [node path]);
 	  return NSDragOperationNone;
 	}
     }
@@ -1888,14 +2116,12 @@ static NSImage *branchImage;
 
   if (sourcePaths == nil)
     {
-    NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - no source paths in pasteboard [node=%@]", [node path]);
     return NSDragOperationNone;
     }
 
   count = [sourcePaths count];
   if (count == 0)
     {
-      NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - empty source paths [node=%@]", [node path]);
       return NSDragOperationNone;
     }
 
@@ -1926,13 +2152,11 @@ static NSImage *branchImage;
 
   if ([nodePath isEqual: fromPath])
     {
-      NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - source and destination are same [node=%@]", [node path]);
       return NSDragOperationNone;
     }
 
   if ([sourcePaths containsObject: nodePath])
     {
-      NSDebugLLog(@"gwspace", @"FSNIcon: Drag rejected - would create circular reference [node=%@]", [node path]);
       return NSDragOperationNone;
     }
 
@@ -2236,7 +2460,7 @@ static NSImage *branchImage;
 		operation = NSWorkspaceCopyOperation;
 		break;
 	      case NSDragOperationLink:
-		operation = NSWorkspaceLinkOperation;
+		operation = FSNLinkDropOperation();
 		break;
 	      default:
 		operation = NSWorkspaceCopyOperation;
@@ -2341,6 +2565,19 @@ static NSImage *branchImage;
   else
     {
       [super mouseDown: theEvent];
+    }
+}
+
+- (void)viewDidMoveToWindow
+{
+  [super viewDidMoveToWindow];
+  if ([self window] && node)
+    {
+      NSString *desc = GSDirectoryDescriptionForPath([node path]);
+      if (desc)
+        {
+          [self setToolTip: desc];
+        }
     }
 }
 

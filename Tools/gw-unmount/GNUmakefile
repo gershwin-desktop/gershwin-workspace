@@ -1,9 +1,11 @@
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
-TOOL_NAME = eject
+TOOL_NAME = umount eject
 
-eject_OBJC_FILES = eject.m
+umount_OBJC_FILES = gw-unmount.m
+eject_OBJC_FILES = gw-unmount.m
 
 -include GNUmakefile.preamble
 
@@ -12,3 +14,4 @@ eject_OBJC_FILES = eject.m
 include $(GNUSTEP_MAKEFILES)/tool.make
 
 -include GNUmakefile.postamble
+

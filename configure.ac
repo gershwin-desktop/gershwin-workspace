@@ -140,7 +140,7 @@ AC_SUBST(SQUASHFS_LIBS)
 AC_SUBST(SQUASHFS_CFLAGS)
 
 AC_ARG_ENABLE(gwmetadata,
-  [  --enable-gwmetadata     Enable GWMetadata], , [enable_gwmetadata=no])
+  [  --enable-gwmetadata     Enable GWMetadata], , [enable_gwmetadata=yes])
 
 if test "x$enable_gwmetadata" = "xyes"; then
   AC_CONFIG_SUBDIRS([GWMetadata])
@@ -201,9 +201,33 @@ AC_ARG_WITH(inotify,
   [  --with-inotify          Force enable fswatcher-inotify
   --without-inotify       Force disable fswatcher-inotify],
   [], [])
-  
+
 AC_SUBST(with_inotify)
 AC_SUBST(INOTIFY_LIBS)
+
+#--------------------------------------------------------------------
+# fswatcher-kqueue - use on BSD systems that provide kqueue (<sys/event.h>).
+# This is the native BSD watcher; prefer it over any inotify compatibility
+# shim so we do not build/link the Linux backend on *BSD.
+#--------------------------------------------------------------------
+with_kqueue=no
+
+AC_CHECK_HEADERS([sys/event.h], [with_kqueue=yes])
+
+# Allow manual override
+AC_ARG_WITH(kqueue,
+  [  --with-kqueue           Force enable fswatcher-kqueue
+  --without-kqueue        Force disable fswatcher-kqueue],
+  [], [])
+
+# When kqueue is available we want it, not inotify.  Disable inotify so the
+# GNUmakefile selects the kqueue backend and never links -linotify.
+if test "x$with_kqueue" = "xyes"; then
+  with_inotify=no
+  INOTIFY_LIBS=""
+fi
+
+AC_SUBST(with_kqueue)
 
 # Check for libdispatch
 #--------------------------------------------------------------------

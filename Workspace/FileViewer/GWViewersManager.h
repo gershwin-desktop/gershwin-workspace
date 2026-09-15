@@ -125,13 +125,36 @@
 - (void)openSelectionInViewer:(id)viewer
                   closeSender:(BOOL)close;
 
+/* Canonical "open one item" entry point.  Every open action (double-click,
+ * Cmd-O, Open, Open as Folder, dock, desktop, Finder, DBus) funnels here.
+ * The item opens itself: a folder opens a viewer (growing from the source
+ * viewer's icon when available), everything else is handed to the system.
+ * When asFolder is YES, packages (e.g. .app bundles) are opened as plain
+ * folders instead of being launched. */
+- (void)openNode:(FSNode *)node fromViewer:(id)viewer asFolder:(BOOL)asFolder;
+- (void)openNode:(FSNode *)node fromViewer:(id)viewer;
+
 // Window open animation support (spatial Finder-like window birth)
 - (void)setPendingOpenAnimationRect:(NSRect)rect;
+- (void)setPendingOpenAnimationRectFromFocusedViewerForNode:(FSNode *)node;
 - (void)setWindowBirthRect:(NSRect)sourceRect
                targetRect:(NSRect)targetRect
             animationType:(int32_t)animationType
                  forWindow:(NSWindow *)window;
-                  
+
+// Window close animation support (spatial window shrink).
+// Resolves the folder's CURRENT on-screen representation by identity (not by
+// a stored view) so the close animation shrinks the window into wherever the
+// folder icon is right now.  A nil/NSZeroRect target means "no visible
+// representation - use a plain fade".
+- (NSRect)resolveIconScreenRectForNode:(FSNode *)node;
+
+/* Resolve the folder's current icon rect for @p aviewer's window and ask the
+ * WindowManager to play the close animation toward it (shrink+fade), or a
+ * plain fade when no visible representation exists.  Called from
+ * windowWillClose: while the window is still mapped. */
+- (void)prepareCloseAnimationForViewer:(id)aviewer;
+                   
 - (void)openAsFolderSelectionInViewer:(id)viewer;
 
 - (void)openWithSelectionInViewer:(id)viewer;

@@ -1,3 +1,5 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+
 # Additional flags to pass to the preprocessor
 # ADDITIONAL_CPPFLAGS += 
 

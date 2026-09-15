@@ -119,7 +119,6 @@ static NSString *nibName = @"MDKWindow";
     } 
     
     if ([NSBundle loadNibNamed: nibName owner: self] == NO) {
-      NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
       DESTROY (self);
       return self;
     }  
@@ -1251,7 +1250,6 @@ static NSString *nibName = @"MDKWindow";
   }    
   
   if ([currentQuery buildQuery] == NO) {
-    NSDebugLLog(@"gwspace", @"unable to build \"%@\"", [currentQuery description]); 
     [NSApp terminate: self];
   } 
 

@@ -50,6 +50,11 @@ static NSString *nibName = @"Contents";
 
 - (void)dealloc
 {
+  /* Stop any background work of the currently displayed viewer first, while
+   * the viewer objects are still alive (they are retained by the ivars and
+   * the viewers array).  Dropping currentViewer first would make stopTasks
+   * a no-op and leave the task's notification observer dangling. */
+  [self stopTasks];
   RELEASE (viewers);
   RELEASE (currentPath);
   RELEASE (genericView);
@@ -78,7 +83,6 @@ static NSString *nibName = @"Contents";
 
       if ([NSBundle loadNibNamed: nibName owner: self] == NO)
         {
-          NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
           [NSApp terminate: self];
         }
 
@@ -250,7 +254,6 @@ static NSString *nibName = @"Contents";
   // No change in selection? leave current path
   if (currentPath && [currentPath isEqual:path])
     {
-      NSDebugLLog(@"gwspace", @"trying to redisplay %@", path);
       return;
     }
 
@@ -422,6 +425,17 @@ static NSString *nibName = @"Contents";
   return inspector;
 }
 
+/* Stops any background work of the currently displayed viewer (e.g. the
+ * GenericView `file` task, image loaders) so no notification observer is
+ * left pointing into freed memory when the inspector is torn down. */
+- (void)stopTasks
+{
+  if (currentViewer && [currentViewer respondsToSelector: @selector(stopTasks)])
+    {
+      [currentViewer stopTasks];
+    }
+}
+
 @end
 
 
@@ -540,6 +554,20 @@ static NSString *nibName = @"Contents";
 - (NSData *)textContentsAtPath:(NSString *)path 
                 withAttributes:(NSDictionary *)attributes
 {
+  /* Never try to read special files (char/block devices, FIFOs, sockets).
+   * A blocking device like /dev/ptmx makes read() hang forever, freezing the
+   * Workspace when such a node is previewed. */
+  if (attributes)
+    {
+      NSString *fileType = [attributes fileType];
+      if (fileType == NSFileTypeCharacterSpecial
+          || fileType == NSFileTypeBlockSpecial
+          || fileType == NSFileTypeSocket
+          || fileType == NSFileTypeFifo
+          || fileType == NSFileTypeSymbolicLink)
+        return nil;
+    }
+
   unsigned long long nbytes = [attributes fileSize];
   NSFileHandle *handle = [NSFileHandle fileHandleForReadingAtPath: path];
   NSData *data;
@@ -678,6 +706,16 @@ static NSString *nibName = @"Contents";
     {  
       [self showString: NSLocalizedString(@"No Contents Inspector", @"")];
     }        
+}
+
+/* Terminate the `file` task and drop its observer so no completion
+ * notification is delivered after this view goes away. */
+- (void)stopTasks
+{
+  [nc removeObserver: self];
+  if (task && [task isRunning]) {
+    [task terminate];
+  }
 }
 
 - (void)dataFromTask:(NSNotification *)notif

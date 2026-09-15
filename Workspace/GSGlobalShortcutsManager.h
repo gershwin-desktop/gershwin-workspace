@@ -25,16 +25,6 @@
     NSString *defaultsDomain;
     NSTimer *eventProcessingTimer;
 
-    // Power key handling
-    // Keycode for XF86PowerOff (0 if not available)
-    int powerKeyCode;
-    // Is the power key currently pressed?
-    BOOL powerKeyDown;
-    // Has the long-press action already triggered during this press?
-    BOOL powerKeyTriggered;
-    // Timer used to detect long-press (>5s)
-    NSTimer *powerKeyTimer;
-
     // Close window shortcut (Alt+W / Cmd+W in Gershwin)
     // Keycode for 'w' (0 if not available/initialized)
     int closeWindowKeyCode;

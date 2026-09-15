@@ -23,7 +23,7 @@
  */
 
 #import <Foundation/Foundation.h>
-#import "GWViewer.h"
+#import "GWViewerBase.h"
 
 @class GWViewersManager;
 @class GWViewerPathsPopUp;
@@ -31,6 +31,7 @@
 @class FSNode;
 @class FSNodeRep;
 @class GWViewerWindow;
+@class GWViewerBrowserPreview;
 @class Workspace;
 @class NSView;
 @class NSTextField;
@@ -38,68 +39,48 @@
 @class DSStoreInfo;
 @class GWViewSettingsManager;
 
-@interface GWSpatialViewer : NSObject
+@interface GWSpatialViewer : GWViewerBase
 {
-  GWViewerWindow *vwrwin;
   NSView *mainView;
   NSView *topBox;
   NSTextField *elementsLabel;
   NSTextField *spaceLabel;
   GWViewerPathsPopUp *pathsPopUp;
   GWViewerScrollView *scroll;
-  id nodeView;
 
-  NSDictionary *viewerPrefs;
   NSString *viewType;
   BOOL rootviewer;
   NSNumber *rootViewerKey;
-
-  int visibleCols;
-  int resizeIncrement;
-
-  FSNode *baseNode;
-  NSArray *baseNodeArray;
-  NSArray *lastSelection;
-  NSMutableArray *watchedNodes;
-  
-  // History support (required by GWViewersManager)
-  NSMutableArray *history;
-  int historyPosition;
-
-  FSNodeRep *fsnodeRep;
 
   // .DS_Store view-settings persistence (full spec hierarchy)
   GWViewSettingsManager *_settingsManager;  // Orchestrates read/write (§2-3)
   DSStoreInfo *dsStoreInfo;                 // Current working copy of view settings
   NSString *dsStorePath;                    // Path to .DS_Store file being watched
 
-  BOOL invalidated;
-  BOOL closing;
-
-  GWViewersManager *manager;
-  Workspace *gworkspace;
-
-  NSNotificationCenter *nc;
-
   // X11 atom-based spatial path for WM titlebar popup
   GWX11SpatialPath *_x11Path;
+
+  /* CONTENT rect (GNUstep bottom-left coords) to re-apply after the window is
+   * mapped.  The setFrame: in init runs before the WM has framed the window,
+   * when _NET_FRAME_EXTENTS is not yet available, so GNUstep guesses the
+   * decoration size; activate waits for the WM's real extents, converts to the
+   * full frame with them, and calls setFrame: - which is then exact and keeps
+   * GNUstep's frame bookkeeping in sync with the real X client. */
+  NSRect pendingRestoreFrame;
+  BOOL hasPendingRestoreFrame;
 }
 
 - (id)initForNode:(FSNode *)node
          inWindow:(GWViewerWindow *)win
          showType:(NSString *)stype
     showSelection:(BOOL)showsel;
-- (void)createSubviews;
 - (FSNode *)baseNode;
+- (NSString *)defaultsKey;
 - (BOOL)isShowingNode:(FSNode *)anode;
 - (BOOL)isShowingPath:(NSString *)apath;
-- (void)reloadNodeContents;
-- (void)reloadFromNode:(FSNode *)anode;
+- (void)createSubviews;
 - (void)unloadFromNode:(FSNode *)anode;
-- (void)updateWindowTitle;
-
 - (GWViewerWindow *)win;
-- (id)nodeView;
 - (id)shelf;
 - (GWViewType)viewType;
 - (BOOL)isRootViewer;
@@ -108,31 +89,16 @@
 - (int)vtype;
 
 - (void)activate;
-- (void)deactivate;
-- (void)scrollToBeginning;
 - (void)invalidate;
-- (BOOL)invalidated;
-- (BOOL)isClosing;
-
-- (void)setOpened:(BOOL)opened
-        repOfNode:(FSNode *)anode;
 - (void)unselectAllReps;
 - (void)selectionChanged:(NSArray *)newsel;
 - (void)multipleNodeViewDidSelectSubNode:(FSNode *)node;
 - (void)setSelectableNodesRange:(NSRange)range;
 - (void)updeateInfoLabels;
 - (void)popUpAction:(id)sender;
-
 - (BOOL)involvedByFileOperation:(NSDictionary *)opinfo;
-- (void)nodeContentsWillChange:(NSDictionary *)info;
 - (void)nodeContentsDidChange:(NSDictionary *)info;
-
 - (void)watchedPathChanged:(NSDictionary *)info;
-- (NSArray *)watchedNodes;
-
-- (void)hideDotsFileChanged:(BOOL)hide;
-- (void)hiddenFilesChanged:(NSArray *)paths;
-
 - (void)columnsWidthChanged:(NSNotification *)notification;
 
 - (void)updateDefaults;
@@ -148,11 +114,6 @@
 - (DSStoreInfo *)dsStoreInfo;
 - (GWViewSettingsManager *)settingsManager;
 
-// History support (required by GWViewersManager)
-- (NSMutableArray *)history;
-- (int)historyPosition;
-- (void)setHistoryPosition:(int)pos;
-
 @end
 
 
@@ -162,29 +123,14 @@
 @interface GWSpatialViewer (GWViewerWindowDelegateMethods)
 
 - (void)openSelectionInNewViewer:(BOOL)newv;
-- (void)openSelectionAsFolder;
-- (void)openSelectionWith;
-- (void)newFolder;
-- (void)newFile;
-- (void)duplicateFiles;
-- (void)recycleFiles;
-- (void)emptyTrash;
-- (void)deleteFiles;
-- (void)goBackwardInHistory;
-- (void)goForwardInHistory;
 - (void)setViewerBehaviour:(id)sender;
 - (void)setViewerType:(id)sender;
 - (void)setShownType:(id)sender;
 - (void)setExtendedShownType:(id)sender;
-- (void)setIconsSize:(id)sender;
-- (void)setIconsPosition:(id)sender;
-- (void)setLabelSize:(id)sender;
 - (void)chooseLabelColor:(id)sender;
 - (void)chooseBackColor:(id)sender;
 - (void)selectAllInViewer;
 - (void)showTerminal;
-- (void)showAttributesInspector:(id)sender;
-- (NSArray *)lastSelection;
 - (BOOL)validateItem:(id)menuItem;
 
 @end

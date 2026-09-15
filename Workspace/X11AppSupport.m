@@ -5,13 +5,19 @@
  */
 
 #import "X11AppSupport.h"
+#import "GWProcessOwnership.h"
 #import <AppKit/AppKit.h>
+#import <GNUstepGUI/GSDisplayServer.h>
 
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
 
 #include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/un.h>
+#include <fcntl.h>
+#include <stddef.h>
 #include <signal.h>
 #include <unistd.h>
 #include <errno.h>
@@ -27,8 +33,6 @@ static int gwX11ErrorHandler(Display *dpy, XErrorEvent *event)
 {
     char errorText[256];
     XGetErrorText(dpy, event->error_code, errorText, sizeof(errorText));
-    NSDebugLLog(@"gwspace", @"Workspace X11 error: %s (request %d, error %d)",
-          errorText, event->request_code, event->error_code);
     /* Return 0 to continue; the error is logged but doesn't crash */
     return 0;
 }
@@ -41,6 +45,62 @@ static void ensureX11ErrorHandler(void)
         XSetErrorHandler(gwX11ErrorHandler);
         x11ErrorHandlerInstalled = YES;
     }
+}
+
+#pragma mark - X11 I/O Error Logger
+
+/* Xlib's default I/O error handler only prints "X connection to ... broken"
+ * and exits.  That cannot tell a server-side kill apart from a descriptor
+ * clobbered inside this process, and Workspace keeps several connections of
+ * its own besides AppKit's.  So log which connection failed, the errno and
+ * what its descriptor refers to now, then hand over to the previous handler
+ * so the process still exits exactly as before. */
+static XIOErrorHandler gwPreviousIOErrorHandler = NULL;
+
+static NSString *gwDescribeDescriptor(int fd)
+{
+    struct sockaddr_un addr;
+    socklen_t len = sizeof(addr);
+
+    if (fcntl(fd, F_GETFD) == -1) {
+        return [NSString stringWithFormat:@"fd %d not open (%s)", fd, strerror(errno)];
+    }
+    memset(&addr, 0, sizeof(addr));
+    if (getpeername(fd, (struct sockaddr *)&addr, &len) != 0) {
+        return [NSString stringWithFormat:@"fd %d open, no peer (%s)", fd, strerror(errno)];
+    }
+    if (addr.sun_family != AF_UNIX) {
+        return [NSString stringWithFormat:@"fd %d peer address family %d", fd, (int)addr.sun_family];
+    }
+    /* Linux X servers also listen on an abstract socket, whose name starts
+     * with a NUL byte. */
+    if (addr.sun_path[0] == '\0' && len > offsetof(struct sockaddr_un, sun_path) + 1) {
+        return [NSString stringWithFormat:@"fd %d peer @%s", fd, addr.sun_path + 1];
+    }
+    return [NSString stringWithFormat:@"fd %d peer %s", fd, addr.sun_path];
+}
+
+static int gwX11IOErrorLogger(Display *dpy)
+{
+    int savedErrno = errno;
+    Display *appDisplay = (Display *)[GSCurrentServer() serverDevice];
+    /* strerror() may return a shared buffer that gwDescribeDescriptor()
+     * overwrites, so capture the text before calling it. */
+    NSString *errnoText = [NSString stringWithUTF8String: strerror(savedErrno)];
+
+    NSLog(@"X11 I/O error on %@ connection %p (%s): errno %d (%@), %@, %@ thread\n%@",
+          (dpy == appDisplay) ? @"AppKit" : @"secondary",
+          dpy, DisplayString(dpy), savedErrno, errnoText,
+          gwDescribeDescriptor(ConnectionNumber(dpy)),
+          [NSThread isMainThread] ? @"main" : @"background",
+          [NSThread callStackSymbols]);
+    errno = savedErrno;
+    return (gwPreviousIOErrorHandler != NULL) ? gwPreviousIOErrorHandler(dpy) : 0;
+}
+
+void GWInstallX11IOErrorLogger(void)
+{
+    gwPreviousIOErrorHandler = XSetIOErrorHandler(gwX11IOErrorLogger);
 }
 
 #pragma mark - GWX11WindowInfo Implementation
@@ -470,7 +530,9 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
                     matches = YES;
                 }
 
-                if (matches) {
+                /* Other users' windows on this display are not this
+                 * session's applications. */
+                if (matches && [GWProcessOwnership isProcessOwnedByCurrentUser: winPID]) {
                     GWX11WindowInfo *info = [self infoForWindow:dpy window:clients[i]];
                     [windows addObject:info];
                 }
@@ -818,7 +880,39 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 
 - (BOOL)hasWindowsForPID:(pid_t)pid
 {
-    return [[self windowsForPID:pid] count] > 0;
+    if (pid <= 0) return NO;
+
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+
+    BOOL hasVisible = NO;
+
+    @try {
+        unsigned long count = 0;
+        Window *clients = [self getClientList:dpy count:&count];
+
+        if (clients) {
+            for (unsigned long i = 0; i < count && !hasVisible; i++) {
+                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
+                if (winPID == pid) {
+                    if ([self hasNetWmStateSkipTaskbar:dpy window:clients[i]])
+                        continue;
+                    XWindowAttributes attrs;
+                    if (XGetWindowAttributes(dpy, clients[i], &attrs)) {
+                        if (attrs.map_state == IsViewable) {
+                            hasVisible = YES;
+                        }
+                    }
+                }
+            }
+            XFree(clients);
+        }
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+
+    return hasVisible;
 }
 
 - (BOOL)hasWindowsMatchingName:(NSString *)name
@@ -911,6 +1005,226 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return success;
 }
 
+/* Ask the WindowManager to play the close animation for @p windowID: a
+ * shrink+fade toward the folder icon's current position, or a plain fade
+ * when no target is available.  Sends a _WINDOW_CLOSE_ANIMATION client
+ * message to the WM while the window is still mapped; the WM unmaps the
+ * window itself when the animation completes, so the app's later orderOut is
+ * a harmless no-op.  The message name is vendor-neutral (like the
+ * _WINDOW_BIRTH_ANIMATION atoms) so the protocol could be standardized. */
+- (BOOL)animateWindowClose:(unsigned long)windowID
+               targetRect:(NSRect)targetRect
+{
+    if (windowID == 0) return NO;
+
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+
+    BOOL success = NO;
+
+    @try {
+        Window root = DefaultRootWindow(dpy);
+        Atom closeAnimAtom = XInternAtom(dpy, "_WINDOW_CLOSE_ANIMATION", False);
+        if (closeAnimAtom == None) {
+            return NO;
+        }
+
+        /* Convert the target rect from Cocoa (bottom-left origin) to X11 root
+         * coordinates (top-left origin), matching the birth protocol. */
+        long tx = 0, ty = 0, tw = 0, th = 0;
+        if (!NSEqualRects(targetRect, NSZeroRect)) {
+            NSScreen *screen = [NSScreen mainScreen];
+            NSRect screenFrame = [screen frame];
+            tx = (long)llround(targetRect.origin.x);
+            ty = (long)llround(screenFrame.size.height - targetRect.origin.y - targetRect.size.height);
+            tw = (long)llround(targetRect.size.width);
+            th = (long)llround(targetRect.size.height);
+        }
+
+        XEvent event;
+        memset(&event, 0, sizeof(event));
+        event.xclient.type = ClientMessage;
+        event.xclient.window = (Window)windowID;
+        event.xclient.message_type = closeAnimAtom;
+        event.xclient.format = 32;
+        /* data32: [0]=animationType (0=shrink-to-icon, 2=fade), [1..4]=x,y,w,h */
+        event.xclient.data.l[0] = NSEqualRects(targetRect, NSZeroRect) ? 2 : 0;
+        event.xclient.data.l[1] = tx;
+        event.xclient.data.l[2] = ty;
+        event.xclient.data.l[3] = tw;
+        event.xclient.data.l[4] = th;
+
+        /* Send to the root window with SubstructureRedirect|Notify so the WM
+         * receives it as a ClientMessage on the client window. */
+        XSendEvent(dpy, root, False,
+                   SubstructureRedirectMask | SubstructureNotifyMask,
+                   &event);
+        XFlush(dpy);
+        success = YES;
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+
+    return success;
+}
+
+/* Check whether the running WindowManager advertises the window-animation
+ * protocol in its _NET_SUPPORTED root-window property.  Workspace only sets
+ * _WINDOW_BIRTH_ANIMATION / sends _WINDOW_CLOSE_ANIMATION when the WM does; otherwise
+ * the window closes with a plain fade and no stale atoms are left behind. */
+- (BOOL)windowManagerSupportsWindowAnimation
+{
+    BOOL supported = NO;
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+
+    @try {
+        Window root = DefaultRootWindow(dpy);
+        Atom netSupported = XInternAtom(dpy, "_NET_SUPPORTED", False);
+        Atom birth = XInternAtom(dpy, "_WINDOW_BIRTH_ANIMATION", False);
+        Atom closeAnim = XInternAtom(dpy, "_WINDOW_CLOSE_ANIMATION", False);
+
+        Atom actual_type;
+        int actual_format;
+        unsigned long nitems, bytes_after;
+        unsigned char *data = NULL;
+
+        if (XGetWindowProperty(dpy, root, netSupported, 0, LONG_MAX, False,
+                               XA_ATOM, &actual_type, &actual_format,
+                               &nitems, &bytes_after, &data) == Success && data) {
+            Atom *atoms = (Atom *)data;
+            BOOL hasBirth = NO, hasCloseAnim = NO;
+            for (unsigned long i = 0; i < nitems; i++) {
+                if (atoms[i] == birth) hasBirth = YES;
+                if (atoms[i] == closeAnim) hasCloseAnim = YES;
+            }
+            supported = hasBirth && hasCloseAnim;
+            XFree(data);
+        }
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+
+    return supported;
+}
+
+/* Return the CONTENT rect of a window in GNUstep screen coords (bottom-left
+ * origin), measured from the ACTUAL X geometry of the client window - not
+ * GNUstep's tracked frame, which can include a stale clientBorder and be a
+ * few px off from the WM's real frame.  The client window is the content
+ * area (the WM wraps it in a frame), so its geometry is the content rect.
+ * Returns NO if geometry cannot be obtained. */
+- (BOOL)contentRectFromXGeometry:(Window)xwindow
+                         screenHeight:(CGFloat)screenHeight
+                             outRect:(NSRect *)outRect
+{
+    if (xwindow == 0 || !outRect) return NO;
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+    BOOL ok = NO;
+    @try {
+        XWindowAttributes attrs;
+        if (XGetWindowAttributes(dpy, xwindow, &attrs)) {
+            int root_x = 0, root_y = 0;
+            Window child;
+            XTranslateCoordinates(dpy, xwindow, DefaultRootWindow(dpy),
+                                  0, 0, &root_x, &root_y, &child);
+            /* The client window IS the content area: its root position and
+             * size.  GNUstep screen coords are bottom-left. */
+            NSRect content;
+            content.origin.x = root_x;
+            content.origin.y = screenHeight - root_y - attrs.height;
+            content.size.width = attrs.width;
+            content.size.height = attrs.height;
+            *outRect = content;
+            ok = (attrs.width > 0 && attrs.height > 0);
+        }
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+    return ok;
+}
+
+/* Read the WM's real _NET_FRAME_EXTENTS for a client window.  The WM writes
+ * this property on the client when it frames the window (XCBFrame
+ * decorateClientWindow / EWMHService updateNetFrameExtentsForWindow); before
+ * that the property is absent.  Returns NO if the extents are not readable
+ * (window not yet framed). */
+- (BOOL)frameExtentsForWindow:(Window)xwindow
+                      outLeft:(unsigned long *)l
+                     outRight:(unsigned long *)r
+                      outTop:(unsigned long *)t
+                   outBottom:(unsigned long *)b
+{
+    if (xwindow == 0) return NO;
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+    BOOL ok = NO;
+    @try {
+        Atom ext = XInternAtom(dpy, "_NET_FRAME_EXTENTS", False);
+        Atom actual_type;
+        int actual_format;
+        unsigned long nitems, bytes_after;
+        unsigned char *data = NULL;
+        if (XGetWindowProperty(dpy, xwindow, ext, 0, 4, False, XA_CARDINAL,
+                               &actual_type, &actual_format, &nitems,
+                               &bytes_after, &data) == Success
+            && data && nitems >= 4) {
+            unsigned long *vals = (unsigned long *)data;
+            /* A real frame has a positive top (the titlebar).  All-zero
+             * extents mean the WM has not framed the window yet (it sets the
+             * property before applying the decoration offsets); returning YES
+             * with zeros would make a caller snap to a title-bar-less frame.
+             */
+            if (nitems >= 4 && vals[2] > 0) {
+                if (l) *l = vals[0];
+                if (r) *r = vals[1];
+                if (t) *t = vals[2];
+                if (b) *b = vals[3];
+                ok = YES;
+            }
+        }
+        if (data) XFree(data);
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+    return ok;
+}
+
+/* Return YES only when the client window is mapped (IsViewable) AND framed by
+ * the WM (positive _NET_FRAME_EXTENTS top).  An unmapped window - e.g. a ghost
+ * that never got a place on screen - still answers XGetWindowAttributes, and a
+ * window caught mid-framing has no extents yet; persisting geometry from
+ * either would save a transient/bogus position into the .DS_Store and poison
+ * every later open of the folder.  See windowWillClose save paths. */
+- (BOOL)windowIsMappedAndFramed:(Window)xwindow
+{
+    if (xwindow == 0) return NO;
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+    BOOL mapped = NO;
+    @try {
+        XWindowAttributes attrs;
+        if (XGetWindowAttributes(dpy, xwindow, &attrs)) {
+            mapped = (attrs.map_state == IsViewable);
+        }
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+    if (!mapped) return NO;
+    /* Positive top extents mean the WM has framed the window; frameExtents
+     * for windows opens its own connection, so only call it once the cheap
+     * map-state check passed. */
+    return [self frameExtentsForWindow:xwindow
+                               outLeft:NULL outRight:NULL
+                                outTop:NULL outBottom:NULL];
+}
+
 @end
 
 #pragma mark - X11 Application Info
@@ -989,8 +1303,10 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (void)startMonitorTimer
 {
     if (monitorTimer == nil && [x11Apps count] > 0) {
-        /* Use faster initial polling (100ms) for quicker window detection */
-        monitorTimer = [NSTimer scheduledTimerWithTimeInterval:0.1
+        /* Poll for launched-app windows.  The window scans themselves run on a
+         * worker thread (see monitorTimerFired), so the 0.5s cadence is about
+         * detection latency, not main-thread load. */
+        monitorTimer = [NSTimer scheduledTimerWithTimeInterval:0.5
                                                         target:self
                                                       selector:@selector(monitorTimerFired:)
                                                       userInfo:nil
@@ -1008,52 +1324,99 @@ static GWX11AppManager *sharedX11AppManager = nil;
 
 - (void)monitorTimerFired:(NSTimer *)timer
 {
-    GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
-    NSMutableArray *terminatedApps = [NSMutableArray array];
-    
+    /* Snapshot the registered apps on the main thread, then run the window
+     * scans on a worker thread.  windowsForPID:/windowsMatchingName: open X
+     * connections and issue synchronous round-trips per window; done on the
+     * main thread they can wedge the app under window churn (X11
+     * self-deadlock, the same class of bug as the DockIcon refresh). */
+    NSMutableArray *snapshot = [NSMutableArray array];
     for (NSString *appName in [x11Apps allKeys]) {
         GWX11AppInfo *info = [x11Apps objectForKey:appName];
         if (info == nil) continue;
-        
-        /* Check if process still exists */
-        if (![self processExists:info.pid]) {
-            [terminatedApps addObject:appName];
+        [snapshot addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+            info.appName ?: @"", @"name",
+            info.appPath ?: @"", @"path",
+            info.windowSearchString ?: @"", @"search",
+            [NSNumber numberWithInt: (int)info.pid], @"pid",
+            [NSNumber numberWithBool: info.hasWindowAppeared], @"appeared", nil]];
+    }
+    if ([snapshot count] == 0) {
+        [self stopMonitorTimer];
+        return;
+    }
+    [NSThread detachNewThreadSelector: @selector(monitorScanWorker:)
+                             toTarget: self
+                           withObject: snapshot];
+}
+
+/* Worker thread: check process liveness and run the X window scans for a
+ * snapshot of the registered apps.  Only immutable snapshot data is read, and
+ * GWX11WindowManager opens its own X connection per call, so this is safe off
+ * the main thread.  Results are applied back on the main thread. */
+- (void)monitorScanWorker:(NSArray *)appSnapshots
+{
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+    NSMutableArray *appeared = [NSMutableArray array];
+    NSMutableArray *terminated = [NSMutableArray array];
+
+    for (NSDictionary *snap in appSnapshots) {
+        NSString *appName = [snap objectForKey: @"name"];
+        NSString *appPath = [snap objectForKey: @"path"];
+        pid_t pid = (pid_t)[[snap objectForKey: @"pid"] intValue];
+        BOOL alreadyAppeared = [[snap objectForKey: @"appeared"] boolValue];
+
+        /* Check if the process still exists (cheap kill() probe). */
+        if (![self processExists:pid]) {
+            [terminated addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                appName ?: @"", @"name", appPath ?: @"", @"path", nil]];
             continue;
         }
-        
-        /* Check if windows have appeared for this app */
-        if (!info.hasWindowAppeared) {
-            /* Priority 1: Try to find windows by PID (most reliable) */
-            NSArray *windows = [wm windowsForPID:info.pid];
-            
-            /* Priority 2: Fall back to name matching if PID fails */
-            if ([windows count] == 0 && info.windowSearchString) {
-                windows = [wm windowsMatchingName:info.windowSearchString];
-            }
-            
-            if ([windows count] > 0) {
-                info.hasWindowAppeared = YES;
-                
-                if (delegate && [delegate respondsToSelector:@selector(x11AppWindowsDidAppear:path:)]) {
-                    [delegate x11AppWindowsDidAppear:info.appName path:info.appPath];
+
+        /* Check if windows have appeared for this app. */
+        if (!alreadyAppeared) {
+            NSArray *windows = [wm windowsForPID:pid];
+            if ([windows count] == 0) {
+                NSString *search = [snap objectForKey: @"search"];
+                if ([search length] > 0) {
+                    windows = [wm windowsMatchingName:search];
                 }
+            }
+            if ([windows count] > 0) {
+                [appeared addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                    appName ?: @"", @"name", appPath ?: @"", @"path", nil]];
             }
         }
     }
-    
-    /* Handle terminated apps */
-    for (NSString *appName in terminatedApps) {
+
+    NSDictionary *results = [NSDictionary dictionaryWithObjectsAndKeys:
+        appeared, @"appeared", terminated, @"terminated", nil];
+    [self performSelectorOnMainThread: @selector(applyMonitorResults:)
+                           withObject: results waitUntilDone: NO];
+    [pool drain];
+}
+
+/* Main thread: apply the worker's results. */
+- (void)applyMonitorResults:(NSDictionary *)results
+{
+    for (NSDictionary *app in [results objectForKey: @"appeared"]) {
+        NSString *appName = [app objectForKey: @"name"];
         GWX11AppInfo *info = [x11Apps objectForKey:appName];
-        if (info == nil) continue;
-        NSString *appPath = [[info.appPath retain] autorelease];
-        
+        /* A concurrent worker may already have handled this app. */
+        if (info == nil || info.hasWindowAppeared) continue;
+        info.hasWindowAppeared = YES;
+        if (delegate && [delegate respondsToSelector:@selector(x11AppWindowsDidAppear:path:)]) {
+            [delegate x11AppWindowsDidAppear:appName path:[app objectForKey: @"path"]];
+        }
+    }
+    for (NSDictionary *app in [results objectForKey: @"terminated"]) {
+        NSString *appName = [app objectForKey: @"name"];
+        NSString *appPath = [app objectForKey: @"path"];
         [x11Apps removeObjectForKey:appName];
-        
         if (delegate && [delegate respondsToSelector:@selector(x11AppDidTerminate:path:)]) {
             [delegate x11AppDidTerminate:appName path:appPath];
         }
     }
-    
     [self stopMonitorTimer];
 }
 

@@ -90,6 +90,8 @@
 
 - (void)watchedPathDidChange:(NSDictionary *)info;
 
+- (void)stopTasks;
+
 - (id)inspector;
 
 @end

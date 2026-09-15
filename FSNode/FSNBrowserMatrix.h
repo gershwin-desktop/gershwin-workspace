@@ -55,6 +55,10 @@
 - (void)visibleCellsNodes:(NSArray **)nodes
           scrollTuneSpace:(float *)tspace;
 
+/* Range of rows currently visible in the clip view (empty when nothing is
+ * displayed yet). */
+- (NSRange)visibleRowRange;
+
 - (void)scrollToFirstPositionCell:(id)aCell withScrollTune:(float)vtune;
 
 - (void)selectIconOfCell:(id)aCell;

@@ -9,6 +9,9 @@
 
 #import <Foundation/Foundation.h>
 
+/* Window is the X11 window id type used by the frame extent helpers below. */
+#include <X11/Xlib.h>
+
 /**
  * X11AppSupport provides native X11 window management for non-GNUstep
  * applications in the Dock.
@@ -226,6 +229,54 @@
  */
 - (BOOL)closeWindowsForPID:(pid_t)pid;
 
+/**
+ * Ask the WindowManager to play the close animation for a window:
+ * shrink+fade toward the folder icon's target rect, or a plain fade
+ * when no target is available.  Sends a _WINDOW_CLOSE_ANIMATION client
+ * message to the WM while the window is still mapped (the message name is
+ * deliberately vendor-neutral, like the _WINDOW_BIRTH_ANIMATION atoms, so the
+ * protocol could be standardized).
+ * @param windowID The X11 window ID
+ * @param targetRect Target screen rect in Cocoa (bottom-left origin), or
+ *                   NSZeroRect for a plain fade
+ * @return YES if the request was sent
+ */
+- (BOOL)animateWindowClose:(unsigned long)windowID
+               targetRect:(NSRect)targetRect;
+
+/**
+ * Whether the running WindowManager implements the window-animation protocol
+ * (it advertises _WINDOW_BIRTH_ANIMATION and _WINDOW_CLOSE_ANIMATION in its
+ * _NET_SUPPORTED property).  Workspace only sets the birth property / sends
+ * the close-animation message when this is true; otherwise it relies on its
+ * own plain fade so the window closes normally under a WM that does not
+ * consume these atoms.
+ */
+- (BOOL)windowManagerSupportsWindowAnimation;
+
+/* Measure the CONTENT rect of a window in GNUstep screen coords (bottom-left
+ * origin) from its actual X11 client geometry (the client window is the
+ * content area; the WM wraps it in a frame).  This is exact where GNUstep's
+ * own frame tracking can be a couple of px off.  See X11AppSupport.m. */
+- (BOOL)contentRectFromXGeometry:(Window)xwindow
+                    screenHeight:(CGFloat)screenHeight
+                        outRect:(NSRect *)outRect;
+/* Read the WM's real _NET_FRAME_EXTENTS for a client window.  The extents are
+ * absent until the WM has framed the window, so callers must retry until this
+ * returns YES.  See X11AppSupport.m. */
+- (BOOL)frameExtentsForWindow:(Window)xwindow
+                      outLeft:(unsigned long *)l
+                     outRight:(unsigned long *)r
+                      outTop:(unsigned long *)t
+                   outBottom:(unsigned long *)b;
+
+/* Whether a client window currently has a settled, persisted geometry: it
+ * must be mapped (IsViewable) and framed by the WM (_NET_FRAME_EXTENTS with a
+ * positive top).  An unmapped ghost window or one caught mid-framing (extents
+ * not yet set) sits at a transient/bogus position; callers should not persist
+ * geometry from such a window.  See X11AppSupport.m. */
+- (BOOL)windowIsMappedAndFramed:(Window)xwindow;
+
 @end
 
 #pragma mark - X11 Application Manager
@@ -338,5 +389,9 @@
 - (BOOL)processExists:(pid_t)pid;
 
 @end
+
+/* Log which X connection broke and why before Xlib exits the process.  Call
+ * once, after the AppKit display is open.  See X11AppSupport.m. */
+void GWInstallX11IOErrorLogger(void);
 
 #endif /* X11_APP_SUPPORT_H */

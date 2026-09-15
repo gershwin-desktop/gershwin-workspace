@@ -25,9 +25,7 @@
 #import "fswatcher.h"
 #include "config.h"
 
-#define GWDebugLog(format, args...) \
-  do { if (GW_DEBUG_LOG) \
-    NSDebugLLog(@"gwspace", format , ## args); } while (0)
+
 
 static BOOL	is_daemon = NO;		/* Currently running as daemon.	 */
 static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
@@ -162,7 +160,6 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 
     if ([conn registerName: @"fswatcher"] == NO)
     {
-      NSDebugLLog(@"gwspace", @"unable to register with name server - quitting.");
       DESTROY (self);
       return self;
     }
@@ -216,10 +213,8 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 	              name: NSConnectionDidDieNotification
 	            object: connection];
 
-  NSDebugLLog(@"gwspace", @"Connection became invalid");
   if (connection == conn)
   {
-    NSDebugLLog(@"gwspace", @"argh - fswatcher server root connection has been destroyed.");
     exit(EXIT_FAILURE);
     
   } else
@@ -250,7 +245,6 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 	/* If there is nothing else using this process, and this is not
 	 * a daemon, then we can quietly terminate.
 	 */
-        NSDebugLLog(@"gwspace", @"No more clients, shutting down.");
         exit(EXIT_SUCCESS);
       }
   }
@@ -369,7 +363,6 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
     [info setClient: client];  
     [info setGlobal: global];
   }
-  NSDebugLLog(@"gwspace", @"register client %lu", (unsigned long)[clientsInfo count]);
 }
 
 - (oneway void)unregisterClient:(id <FSWClientProtocol>)client
@@ -465,13 +458,11 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
   }
   
   if (watcher) {
-    GWDebugLog(@"watcher found; adding listener for: %@", path);
     [info addWatchedPath: path];
     [watcher addListener]; 
         
   } else {
     if ([fm fileExistsAtPath: path]) {
-      GWDebugLog(@"add watcher for: %@", path);     
       [info addWatchedPath: path];
   	  watcher = [[Watcher alloc] initWithWatchedPath: path fswatcher: self];      
       NSMapInsert (watchers, path, watcher);
@@ -498,7 +489,6 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
   }  
     
   if (watcher && ([watcher isOld] == NO)) {
-    GWDebugLog(@"remove listener for: %@", path);
     [info removeWatchedPath: path];
   	[watcher removeListener];  
   }
@@ -529,7 +519,6 @@ static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 		[timer invalidate];
 	}
   
-  GWDebugLog(@"removed watcher for: %@", path);
   
   RETAIN (path);
   NSMapRemove(watchers, path);  
@@ -604,14 +593,12 @@ static inline BOOL isDotFile(NSString *path)
   if ([event isEqual: @"GWWatchedPathDeleted"] 
       && [self isGlobalValidPath: path])
     {
-      GWDebugLog(@"DELETE %@", path);
       [self notifyGlobalWatchingClients: info];
     
     }
   else if ([event isEqual: @"GWWatchedFileModified"] 
 	   && [self isGlobalValidPath: path])
     {
-      GWDebugLog(@"MODIFIED %@", path);
       [self notifyGlobalWatchingClients: info];    
     
     } 

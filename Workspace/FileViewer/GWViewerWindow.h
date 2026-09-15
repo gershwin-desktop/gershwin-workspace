@@ -39,6 +39,7 @@
 - (void)newFolder:(id)sender;
 - (void)newFile:(id)sender;
 - (void)duplicateFiles:(id)sender;
+- (void)makeAliasFiles:(id)sender;
 - (void)recycleFiles:(id)sender;
 - (void)deleteFiles:(id)sender;
 - (void)goBackwardInHistory:(id)sender;

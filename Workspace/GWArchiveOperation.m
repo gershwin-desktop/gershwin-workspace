@@ -174,32 +174,27 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
 
   running = YES;
 
-  /* Semaphore signalled on the main thread when the worker finishes. */
-  dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+  /* GNUstep-thread worker instead of libdispatch: a GCD worker thread running
+   * ObjC can race the main thread's +load dispatch and crash the app (GPF in
+   * libobjc's load_messages_insert).  The flag is only touched on the main
+   * thread (the worker posts doneWithSuccess: back here), so it needs no
+   * synchronization. */
+  volatile BOOL done = NO;
+  doneFlag = &done;
 
-  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-    BOOL ok;
-
-    if ([operationType isEqual: @"compress"])
-      ok = [self runCompress];
-    else
-      ok = [self runExtract];
-
-    dispatch_async(dispatch_get_main_queue(), ^{
-      [self doneWithSuccess: ok];
-      dispatch_semaphore_signal(sem);
-    });
-  });
+  [NSThread detachNewThreadSelector: @selector(runArchiveWorker:)
+                           toTarget: self
+                         withObject: nil];
 
   /* Present the progress panel as a proper modal session so events are
    * confined to it — the user can no longer trigger menu actions or other
    * windows mid-operation (the previous hand-pumped NSAnyEventMask loop
    * dispatched every event and was reentrant).  The archive work runs on a
-   * background queue; each iteration we advance the modal session, then run
-   * the default run-loop mode briefly so libdispatch's main-queue completion
-   * block can fire, and poll the semaphore for completion. */
+   * background thread; each iteration we advance the modal session, then run
+   * the default run-loop mode briefly so the completion posts to the main
+   * thread can fire, and poll the flag for completion. */
   NSModalSession session = [NSApp beginModalSessionForWindow: progressWindow];
-  while (dispatch_semaphore_wait(sem, DISPATCH_TIME_NOW) != 0)
+  while (!done)
     {
       if ([NSApp runModalSession: session] != NSRunContinuesResponse)
         break;
@@ -208,9 +203,37 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
     }
   [NSApp endModalSession: session];
 
-  dispatch_release(sem);
+  doneFlag = NULL;
 
   return (error == nil && !cancelled);
+}
+
+/* Archive worker — runs on a background thread (GNUstep thread, not
+ * libdispatch; see the caller).  Posts the result back to the main thread. */
+- (void)runArchiveWorker:(id)unused
+{
+  @autoreleasepool
+    {
+      BOOL ok;
+      if ([operationType isEqual: @"compress"])
+        ok = [self runCompress];
+      else
+        ok = [self runExtract];
+      NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
+        [NSNumber numberWithBool: ok], @"ok", nil];
+      [self performSelectorOnMainThread: @selector(archiveWorkerFinished:)
+                             withObject: result
+                          waitUntilDone: NO];
+    }
+}
+
+/* Main-thread half of the archive worker: finish the operation and release
+ * the modal progress loop. */
+- (void)archiveWorkerFinished:(NSDictionary *)result
+{
+  BOOL ok = [[result objectForKey: @"ok"] boolValue];
+  [self doneWithSuccess: ok];
+  if (doneFlag) *doneFlag = YES;
 }
 
 /* =================================================================
@@ -234,10 +257,9 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
       return NO;
     }
 
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [progressBar setMaxValue: (double)totalItems];
-    [self updateProgress: 0.0 status: NSLocalizedString(@"Compressing...", @"")];
-  });
+  [self performSelectorOnMainThread: @selector(beginCompressProgress:)
+                         withObject: [NSNumber numberWithLongLong: totalItems]
+                      waitUntilDone: NO];
 
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
@@ -248,13 +270,25 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
   if (!ok)
     ASSIGN(error, compressError);
 
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self updateProgress: 100.0 status: (ok ? NSLocalizedString(@"Done.", @"")
-                                           : NSLocalizedString(@"Failed.", @""))];
-  });
+  [self performSelectorOnMainThread: @selector(finishCompressProgress:)
+                         withObject: [NSNumber numberWithBool: ok]
+                      waitUntilDone: NO];
 
   [pool release];
   return ok;
+}
+
+/* Main-thread halves of the compress progress updates. */
+- (void)beginCompressProgress:(NSNumber *)totalItemsNum
+{
+  [progressBar setMaxValue: [totalItemsNum doubleValue]];
+  [self updateProgress: 0.0 status: NSLocalizedString(@"Compressing...", @"")];
+}
+
+- (void)finishCompressProgress:(NSNumber *)okNum
+{
+  [self updateProgress: 100.0 status: ([okNum boolValue]
+    ? NSLocalizedString(@"Done.", @"") : NSLocalizedString(@"Failed.", @""))];
 }
 
 /* =================================================================
@@ -265,11 +299,9 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
 {
   NSString *archivePath = [paths objectAtIndex: 0];
 
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [progressBar setIndeterminate: YES];
-    [progressBar startAnimation: nil];
-    [self updateProgress: 0.0 status: NSLocalizedString(@"Extracting...", @"")];
-  });
+  [self performSelectorOnMainThread: @selector(beginExtractProgress)
+                         withObject: nil
+                      waitUntilDone: NO];
 
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   NSError *extractError = nil;
@@ -278,15 +310,28 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
   if (!ok)
     ASSIGN(error, extractError);
 
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [progressBar setIndeterminate: NO];
-    [progressBar stopAnimation: nil];
-    [self updateProgress: 100.0 status: (ok ? NSLocalizedString(@"Done.", @"")
-                                           : NSLocalizedString(@"Failed.", @""))];
-  });
+  [self performSelectorOnMainThread: @selector(finishExtractProgress:)
+                         withObject: [NSNumber numberWithBool: ok]
+                      waitUntilDone: NO];
   [pool release];
 
   return ok;
+}
+
+/* Main-thread halves of the extract progress updates. */
+- (void)beginExtractProgress
+{
+  [progressBar setIndeterminate: YES];
+  [progressBar startAnimation: nil];
+  [self updateProgress: 0.0 status: NSLocalizedString(@"Extracting...", @"")];
+}
+
+- (void)finishExtractProgress:(NSNumber *)okNum
+{
+  [progressBar setIndeterminate: NO];
+  [progressBar stopAnimation: nil];
+  [self updateProgress: 100.0 status: ([okNum boolValue]
+    ? NSLocalizedString(@"Done.", @"") : NSLocalizedString(@"Failed.", @""))];
 }
 
 @end

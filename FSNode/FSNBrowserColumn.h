@@ -28,13 +28,14 @@
 #include <Foundation/Foundation.h>
 #include <AppKit/NSView.h>
 #include "FSNodeRep.h"
+#include "FSNIconLoader.h"
 
 @class FSNBrowser;
 @class FSNBrowserCell;
 @class FSNBrowserMatrix;
 @class FSNBrowserScroll;
 
-@interface FSNBrowserColumn : NSView 
+@interface FSNBrowserColumn : NSView <FSNDecorationClient>
 {
   FSNBrowserScroll *scroll;
   FSNBrowserMatrix *matrix;
@@ -54,10 +55,14 @@
   BOOL isDragTarget;
   BOOL forceCopy;
   NSDragOperation negotiatedDragOp;
-  
+
+  /* Bumped on every contents change; pending FSNIconLoader items carrying
+   * an older generation are dropped. */
+  NSInteger generation;
+
   FSNBrowser *browser;
   NSColor *backColor;
-  
+
   FSNodeRep *fsnodeRep;
 }
 
@@ -76,6 +81,10 @@
 - (void)showContentsOfNode:(FSNode *)anode;
 
 - (FSNode *)shownNode;
+
+/* The visible row range changed (scroll): decorate rows that just came
+ * into view.  Called by FSNBrowserScroll. */
+- (void)visibleRowsChanged;
 
 - (void)createRowsInMatrix;
 

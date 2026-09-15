@@ -17,11 +17,10 @@ BOOL gDSStoreVerbose = NO;
 // Constants from .DS_Store format specification
 #define DSDB_MAGIC 0x44534442  // "DSDB"
 
-// Byte swapping functions
-static uint32_t swapBytes32(uint32_t x) {
-    return ((x & 0xFF000000) >> 24) | ((x & 0x00FF0000) >> 8) |
-           ((x & 0x0000FF00) << 8)  | ((x & 0x000000FF) << 24);
-}
+@interface DSStore (Private)
+- (NSMutableDictionary *)_lsvpDict;
+- (void)_setLsvpDict:(NSMutableDictionary *)d;
+@end
 
 @implementation DSStore
 
@@ -123,7 +122,6 @@ static uint32_t swapBytes32(uint32_t x) {
     uint32_t offsetCount = [rootBlock readUInt32];
     uint32_t unknown2 __attribute__((unused)) = [rootBlock readUInt32];
     
-    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Root block: offsetCount=%u, unknown=%u", offsetCount, unknown2);
     
     // Read offset table (always 256 entries, padded with zeros)
     NSMutableArray *offsets = [NSMutableArray arrayWithCapacity:offsetCount];
@@ -131,13 +129,11 @@ static uint32_t swapBytes32(uint32_t x) {
         uint32_t offset = [rootBlock readUInt32];
         if (i < offsetCount) {
             [offsets addObject:[NSNumber numberWithUnsignedInt:offset]];
-            if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Offset[%u]: 0x%08x", i, offset);
         }
     }
     
     // Read TOC count
     uint32_t tocCount = [rootBlock readUInt32];
-    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"TOC count: %u", tocCount);
     
     // Parse ALL directory entries robustly (not just DSDB)
     NSMutableDictionary *directoryEntries = [NSMutableDictionary dictionaryWithCapacity:tocCount];
@@ -147,7 +143,6 @@ static uint32_t swapBytes32(uint32_t x) {
         uint32_t blockNum = [rootBlock readUInt32];
         
         NSString *name = [[NSString alloc] initWithData:nameData encoding:NSASCIIStringEncoding];
-        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"TOC[%u]: name='%@' -> block %u", i, name, blockNum);
         
         // Store ALL directory entries for future extensibility
         [directoryEntries setObject:[NSNumber numberWithUnsignedInt:blockNum] forKey:name];
@@ -159,13 +154,11 @@ static uint32_t swapBytes32(uint32_t x) {
     // Look for DSDB directory entry (robust approach)
     NSNumber *dsdbBlockNumObj = [directoryEntries objectForKey:@"DSDB"];
     if (!dsdbBlockNumObj) {
-        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"DSDB directory not found in TOC");
         return NO;
     }
     
     uint32_t dsdbBlockNum = [dsdbBlockNumObj unsignedIntValue];
     if (dsdbBlockNum >= [offsets count]) {
-        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"DSDB block number %u exceeds offset table size %lu", dsdbBlockNum, (unsigned long)[offsets count]);
         return NO;
     }
     
@@ -174,29 +167,26 @@ static uint32_t swapBytes32(uint32_t x) {
     uint32_t dsdbOffset = dsdbAddr & ~0x1F;  // Remove size bits
     uint32_t dsdbSize = 1 << (dsdbAddr & 0x1F);  // Extract size bits
     
-    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"DSDB block %u: addr=0x%08x, offset=0x%x, size=%u", dsdbBlockNum, dsdbAddr, dsdbOffset, dsdbSize);
     
     // Read DSDB superblock (NOTE: +4 for reference library file offset correction)
     DSBuddyBlock *dsdbBlock = [_allocator blockAtOffset:dsdbOffset + 4 size:dsdbSize];
     if (!dsdbBlock) {
-        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Failed to read DSDB block at offset %u", dsdbOffset + 4);
         return NO;
     }
     
-    // Read DSDB superblock header (5 uint32_t values)
+    // Read DSDB superblock header (5 uint32_t values).  The node count must
+    // still be read (even though unused) because readUInt32 advances the
+    // block's read position; skipping it would shift every later field.
     uint32_t rootAddress = [dsdbBlock readUInt32];
-    uint32_t levelsNumber = [dsdbBlock readUInt32];
+    uint32_t levelsNumber __attribute__((unused)) = [dsdbBlock readUInt32];
     uint32_t recordsNumber = [dsdbBlock readUInt32];
-    uint32_t nodesNumber = [dsdbBlock readUInt32];
+    uint32_t nodesNumber __attribute__((unused)) = [dsdbBlock readUInt32];
     uint32_t pageSize = [dsdbBlock readUInt32];
     
-    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"DSDB: rootAddr=%u levels=%u records=%u nodes=%u pageSize=%u",
-          rootAddress, levelsNumber, recordsNumber, nodesNumber, pageSize);
     
     [_entries removeAllObjects];
     
     if (recordsNumber == 0) {
-        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Empty B-tree");
         [dsdbBlock close];
         _isLoaded = YES;
         return YES;
@@ -212,23 +202,20 @@ static uint32_t swapBytes32(uint32_t x) {
         uint32_t btreeOffset = btreeAddr & ~0x1F;
         uint32_t btreeSize = 1 << (btreeAddr & 0x1F);
         
-        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"B-tree block %u: addr=0x%08x, offset=0x%x, size=%u", rootAddress, btreeAddr, btreeOffset, btreeSize);
         
         // Read B-tree data (+4 for file offset correction)
         DSBuddyBlock *btreeBlock = [_allocator blockAtOffset:btreeOffset + 4 size:btreeSize - 4];
         if (!btreeBlock) {
-            if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Failed to read B-tree block");
             return NO;
         }
         
         @try {
-            [self readBTreeNode:btreeBlock address:0 isLeaf:(levelsNumber <= 1)];
+            [self readBTreeNode:btreeBlock];
             _isLoaded = YES;
             [btreeBlock close];
             return YES;
         }
         @catch (NSException *exception) {
-            NSDebugLLog(@"gwspace", @"Error parsing B-tree: %@", [exception description]);
             [btreeBlock close];
             return NO;
         }
@@ -238,343 +225,303 @@ static uint32_t swapBytes32(uint32_t x) {
         NSUInteger btreeOffset = dsdbOffset + 4 + rootAddress;
         NSUInteger btreeSize = pageSize;  // Use pageSize from DSDB
         
-        if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"B-tree at relative offset %u (absolute 0x%lx), size=%lu", rootAddress, (unsigned long)btreeOffset, (unsigned long)btreeSize);
         
         // Read B-tree data
         DSBuddyBlock *btreeBlock = [_allocator blockAtOffset:btreeOffset size:btreeSize - 4];
         if (!btreeBlock) {
-            if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Failed to read B-tree block at relative offset");
             return NO;
         }
         
         @try {
-            [self readBTreeNode:btreeBlock address:0 isLeaf:(levelsNumber <= 1)];
+            [self readBTreeNode:btreeBlock];
             _isLoaded = YES;
             [btreeBlock close];
             return YES;
         }
         @catch (NSException *exception) {
-            NSDebugLLog(@"gwspace", @"Error parsing B-tree: %@", [exception description]);
             [btreeBlock close];
             return NO;
         }
     }
 }
 
-- (void)readBTreeNode:(DSBuddyBlock *)block address:(uint32_t)address isLeaf:(BOOL)isLeaf {
-    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Reading B-tree node at address 0x%x, isLeaf: %@", address, isLeaf ? @"YES" : @"NO");
-    
-    uint32_t nodeId = [block readUInt32];
+/* Reads one record (filename + code + type + value) and advances the
+ * block position.  Returns an autoreleased DSStoreEntry, or nil on a bad
+ * record length. */
+- (DSStoreEntry *)_readRecord:(DSBuddyBlock *)block
+{
+    uint32_t filenameLength = [block readUInt32];
+    if (filenameLength == 0 || filenameLength > 1024) {
+        return nil;
+    }
+    NSData *unicodeData = [block readBytes:filenameLength * 2];
+    NSString *filename = [[[NSString alloc] initWithData:unicodeData
+                                              encoding:NSUTF16BigEndianStringEncoding] autorelease];
+    NSData *codeData = [block readBytes:4];
+    NSString *code = [[[NSString alloc] initWithData:codeData
+                                          encoding:NSASCIIStringEncoding] autorelease];
+    NSData *typeData = [block readBytes:4];
+    NSString *type = [[[NSString alloc] initWithData:typeData
+                                          encoding:NSASCIIStringEncoding] autorelease];
+
+    id value = nil;
+    if ([type isEqualToString:@"bool"]) {
+        uint8_t boolVal = [block readUInt8];
+        value = [NSNumber numberWithBool:(boolVal != 0)];
+    } else if ([type isEqualToString:@"long"]) {
+        value = [NSNumber numberWithUnsignedInt:[block readUInt32]];
+    } else if ([type isEqualToString:@"shor"]) {
+        value = [NSNumber numberWithUnsignedShort:[block readUInt16]];
+    } else if ([type isEqualToString:@"blob"]) {
+        uint32_t blobLen = [block readUInt32];
+        if (blobLen > 0 && blobLen < 65536) {
+            value = [block readBytes:blobLen];
+        }
+    } else if ([type isEqualToString:@"ustr"]) {
+        uint32_t strLen = [block readUInt32];
+        if (strLen > 0 && strLen < 1024) {
+            NSData *strData = [block readBytes:strLen * 2];
+            value = [[[NSString alloc] initWithData:strData
+                                           encoding:NSUTF16BigEndianStringEncoding] autorelease];
+        }
+    } else if ([type isEqualToString:@"type"]) {
+        value = [[[NSString alloc] initWithData:[block readBytes:4]
+                                       encoding:NSASCIIStringEncoding] autorelease];
+    } else if ([type isEqualToString:@"comp"] || [type isEqualToString:@"dutc"]) {
+        value = [NSNumber numberWithUnsignedLongLong:[block readUInt64]];
+    } else {
+        uint32_t valueLen = [block readUInt32];
+        if (valueLen > 0 && valueLen < 65536) {
+            value = [block readBytes:valueLen];
+        }
+    }
+
+    return [[[DSStoreEntry alloc] initWithFilename:filename
+                                             code:code
+                                             type:type
+                                            value:value] autorelease];
+}
+
+- (void)readBTreeNode:(DSBuddyBlock *)block
+{
+    uint32_t nextNode = [block readUInt32];
     uint32_t recordsCount = [block readUInt32];
-    
-    if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Node ID: 0x%x, Records count: %u", nodeId, recordsCount);
-    
-    if (isLeaf) {
-        // Read leaf records (actual DS_Store entries)
+
+    /* Mirror ds_store's _traverse exactly.  A node is internal iff its
+     * nextNode word is non-zero; nextNode is the RIGHTMOST child (not a
+     * sibling).  Internal nodes store, for each of `recordsCount' pivots, a
+     * leading child block-number followed by the record; the rightmost child
+     * is reached via nextNode.  Leaf nodes store only records.  Pivots are
+     * real entries and are kept. */
+    if (nextNode != 0) {
         for (uint32_t i = 0; i < recordsCount; i++) {
-            if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Reading leaf record %u", i);
-            
-            uint32_t filenameLength = [block readUInt32];
-            if (filenameLength == 0 || filenameLength > 1024) {
-                if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Invalid filename length: %u", filenameLength);
-                break;
-            }
-            
-            NSData *unicodeData = [block readBytes:filenameLength * 2];
-            NSString *filename = [[NSString alloc] initWithData:unicodeData encoding:NSUTF16BigEndianStringEncoding];
-            
-            // Read code (4 bytes ASCII)
-            NSData *codeData = [block readBytes:4];
-            NSString *code = [[NSString alloc] initWithData:codeData encoding:NSASCIIStringEncoding];
-            
-            // Read type (4 bytes ASCII)  
-            NSData *typeData = [block readBytes:4];
-            NSString *type = [[NSString alloc] initWithData:typeData encoding:NSASCIIStringEncoding];
-            
-            if (gDSStoreVerbose) NSDebugLLog(@"gwspace", @"Entry: filename='%@', code='%@', type='%@'", filename, code, type);
-            
-            // Read value based on type
-            id value = nil;
-            if ([type isEqualToString:@"bool"]) {
-                uint8_t boolVal = [block readUInt8];
-                value = [NSNumber numberWithBool:(boolVal != 0)];
-            } else if ([type isEqualToString:@"long"]) {
-                uint32_t intVal = [block readUInt32];
-                value = [NSNumber numberWithUnsignedInt:intVal];
-            } else if ([type isEqualToString:@"shor"]) {
-                uint16_t shortVal = [block readUInt16];
-                value = [NSNumber numberWithUnsignedShort:shortVal];
-            } else if ([type isEqualToString:@"blob"]) {
-                uint32_t blobLen = [block readUInt32];
-                if (blobLen > 0 && blobLen < 65536) {
-                    value = [block readBytes:blobLen];
-                }
-            } else if ([type isEqualToString:@"ustr"]) {
-                uint32_t strLen = [block readUInt32];
-                if (strLen > 0 && strLen < 1024) {
-                    NSData *strData = [block readBytes:strLen * 2];
-                    value = [[NSString alloc] initWithData:strData encoding:NSUTF16BigEndianStringEncoding];
-                }
-            } else if ([type isEqualToString:@"type"]) {
-                NSData *typeValue = [block readBytes:4];
-                value = [[NSString alloc] initWithData:typeValue encoding:NSASCIIStringEncoding];
-            } else if ([type isEqualToString:@"comp"]) {
-                uint64_t longVal = [block readUInt64];
-                value = [NSNumber numberWithUnsignedLongLong:longVal];
-            } else if ([type isEqualToString:@"dutc"]) {
-                uint64_t longVal = [block readUInt64];
-                value = [NSNumber numberWithUnsignedLongLong:longVal];
-            } else {
-                // Unknown type - try to read as blob
-                uint32_t valueLen = [block readUInt32];
-                if (valueLen > 0 && valueLen < 65536) {
-                    value = [block readBytes:valueLen];
+            uint32_t childNum = [block readUInt32];
+            if (childNum != 0) {
+                uint32_t childAddr = [_allocator addressForBlock:childNum];
+                uint32_t childOffset = (childAddr & ~0x1FU) + 4;
+                uint32_t childSize = (1U << (childAddr & 0x1FU)) - 4;
+                DSBuddyBlock *childBlock = [_allocator blockAtOffset:childOffset
+                                                              size:childSize];
+                if (childBlock) {
+                    [self readBTreeNode:childBlock];
+                    [childBlock close];
                 }
             }
-            
-            DSStoreEntry *entry = [[DSStoreEntry alloc] initWithFilename:filename
-                                                                     code:code
-                                                                     type:type
-                                                                    value:value];
-            if (entry) {
-                [_entries addObject:entry];
-                [entry release];
+            DSStoreEntry *pivot = [self _readRecord:block];
+            if (pivot) {
+                [_entries addObject:pivot];
             }
-            [filename release];
-            [code release];
-            [type release];
-            if ([type isEqualToString:@"ustr"] || [type isEqualToString:@"type"]) {
-                [value release];
+        }
+        if (nextNode != 0) {
+            uint32_t sibAddr = [_allocator addressForBlock:nextNode];
+            uint32_t sibOffset = (sibAddr & ~0x1FU) + 4;
+            uint32_t sibSize = (1U << (sibAddr & 0x1FU)) - 4;
+            DSBuddyBlock *sibBlock = [_allocator blockAtOffset:sibOffset
+                                                        size:sibSize];
+            if (sibBlock) {
+                [self readBTreeNode:sibBlock];
+                [sibBlock close];
             }
         }
     } else {
-        // Read internal node pointers
         for (uint32_t i = 0; i < recordsCount; i++) {
-            NSDebugLLog(@"gwspace", @"Reading internal record %u", i);
-            
-            uint32_t childAddress = [block readUInt32];
-            uint32_t filenameLength = [block readUInt32];
-            
-            if (filenameLength > 0 && filenameLength < 1024) {
-                [block readBytes:filenameLength * 2]; // Skip the filename for internal nodes
-            }
-            
-            // Recursively read child node
-            if (childAddress != 0) {
-                NSDebugLLog(@"gwspace", @"Following child pointer to address 0x%x", childAddress);
-                
-                // Decode child address
-                uint32_t childOffset = childAddress & ~0x1F;
-                uint32_t childSizeBits = childAddress & 0x1F;
-                uint32_t childSize = 1 << childSizeBits;
-                
-                DSBuddyBlock *childBlock = [_allocator blockAtOffset:childOffset size:childSize];
-                if (childBlock) {
-                    [self readBTreeNode:childBlock address:childOffset isLeaf:YES]; // Assume next level is leaf for now
-                    [childBlock close];
-                }
+            DSStoreEntry *entry = [self _readRecord:block];
+            if (entry) {
+                [_entries addObject:entry];
             }
         }
     }
 }
 
-- (BOOL)save {
+- (BOOL)save
+{
     if (!_isLoaded) {
-        NSDebugLLog(@"gwspace", @"Cannot save unloaded store");
-        return NO;
-    }
-    
-    NSMutableData *fileData = [NSMutableData data];
-    
-    // Write the buddy allocator header
-    struct {
-        uint32_t magic1;        // 1
-        uint32_t magic2;        // "Bud1"
-        uint32_t rootOffset;    // 2048
-        uint32_t headerSize;    // 1264  
-        uint32_t rootOffset2;   // 2048 (duplicate)
-        uint32_t padding[4];    // Padding to align
-    } header;
-    
-    header.magic1 = swapBytes32(1);
-    header.magic2 = swapBytes32(0x42756431);  // "Bud1"
-    header.rootOffset = swapBytes32(2048);
-    header.headerSize = swapBytes32(2048);  // Changed to 2048
-    header.rootOffset2 = swapBytes32(2048);
-    // Write padding values directly as they appear in reference file
-    header.padding[0] = 0x0C100000;  // Will be stored as: 00 00 10 0c
-    header.padding[1] = 0x87000000;  // Will be stored as: 00 00 00 87  
-    header.padding[2] = 0x0B200000;  // Will be stored as: 00 00 20 0b
-    header.padding[3] = 0;
-    
-    [fileData appendBytes:&header length:sizeof(header)];
-    
-    // Pad to 2048 bytes for root block
-    NSUInteger paddingSize = 2048 - [fileData length];
-    char *padding = calloc(paddingSize, 1);
-    [fileData appendBytes:padding length:paddingSize];
-    free(padding);
-    
-    // Write root block (buddy allocator metadata) 
-    // NOTE: The reference library skips the first 4 bytes of the root block!
-    // So we need to write 4 dummy bytes first
-    uint32_t dummy = 0;
-    [fileData appendBytes:&dummy length:4];
-    
-    // Now write the actual root block content that reference library will read
-    // Match reference implementation structure exactly:
-    // - offset count (3) - like reference
-    // - unknown (varies) 
-    // - offset entries (3 real entries + 253 padding)
-    // - ToC count (1 for DSDB)
-    // - ToC entry: "DSDB" -> block number 1
-    // - Free lists (32 entries with counts + offsets)
-    
-    uint32_t offsetCount = swapBytes32(3);  // Like reference - 3 allocated blocks
-    uint32_t unknown = swapBytes32(0);      
-    
-    // Block addresses like reference:
-    // Block 0: 0x80b (offset=0x800, size=2048) - root block
-    // Block 1: 0x25 (offset=0x20, size=32) - DSDB superblock  
-    // Block 2: 0x200d (offset=0x2000, size=8192) - B-tree data
-    uint32_t rootBlockAddr = 0x800 | 11;  // 2048 = 2^11
-    uint32_t dsdbBlockAddr = 0x20 | 5;    // 32 = 2^5  
-    uint32_t btreeBlockAddr = 0x2000 | 13; // 8192 = 2^13
-    
-    [fileData appendBytes:&offsetCount length:4];
-    [fileData appendBytes:&unknown length:4];
-    
-    // 3 real offset entries + 253 zeros
-    uint32_t offset0 = swapBytes32(rootBlockAddr);
-    uint32_t offset1 = swapBytes32(dsdbBlockAddr);
-    uint32_t offset2 = swapBytes32(btreeBlockAddr);
-    [fileData appendBytes:&offset0 length:4];
-    [fileData appendBytes:&offset1 length:4];
-    [fileData appendBytes:&offset2 length:4];
-    
-    // 253 padding entries
-    for (int i = 3; i < 256; i++) {
-        uint32_t zero = 0;
-        [fileData appendBytes:&zero length:4];
-    }
-    
-    // ToC: 1 entry for DSDB
-    uint32_t tocCount = swapBytes32(1);
-    [fileData appendBytes:&tocCount length:4];
-    
-    // ToC entry: length (4) + "DSDB" + block_number (1 - like reference)
-    uint8_t nameLen = 4;
-    [fileData appendBytes:&nameLen length:1];
-    [fileData appendBytes:"DSDB" length:4];
-    uint32_t dsdbBlockNum = swapBytes32(1); // Block 1 like reference
-    [fileData appendBytes:&dsdbBlockNum length:4];
-    
-    // Free lists (32 entries matching reference pattern)
-    // Reference has specific pattern for buddy allocator
-    for (int i = 0; i < 5; i++) {
-        uint32_t freeCount = 0;
-        [fileData appendBytes:&freeCount length:4];
-    }
-    // Free blocks of various sizes
-    for (int i = 5; i < 31; i++) {
-        uint32_t freeCount = swapBytes32(1);
-        [fileData appendBytes:&freeCount length:4];
-        uint32_t freeOffset = swapBytes32(1 << i);
-        [fileData appendBytes:&freeOffset length:4];
-    }
-    // Last entry
-    uint32_t freeCount = 0;
-    [fileData appendBytes:&freeCount length:4];
-    
-    // Pad to end of root block (2048 bytes total)
-    NSUInteger currentSize = [fileData length] - 2048;
-    if (currentSize < 2048) {
-        NSUInteger remaining = 2048 - currentSize;
-        char *rootPadding = calloc(remaining, 1);
-        [fileData appendBytes:rootPadding length:remaining];
-        free(rootPadding);
-    }
-    
-    // Rewind to write DSDB block at offset 0x20 (before root block!)
-    NSUInteger dsdbStart = 0x20;
-    NSMutableData *tempData = [NSMutableData dataWithData:fileData];
-    
-    // Create DSDB superblock (32 bytes at offset 0x20)
-    uint32_t btreeRoot = swapBytes32(2);   // B-tree is in block 2 (not offset 20!)
-    uint32_t levels = swapBytes32(1);      // Single level (leaf only)
-    uint32_t records = swapBytes32([_entries count]);
-    uint32_t nodes = swapBytes32(1);       // Single node
-    uint32_t pageSize = swapBytes32(4096);
-    
-    // Insert DSDB block data at position 0x24 (like reference file with +4 offset)
-    NSMutableData *dsdbData = [NSMutableData data];
-    [dsdbData appendBytes:&btreeRoot length:4];
-    [dsdbData appendBytes:&levels length:4];
-    [dsdbData appendBytes:&records length:4];
-    [dsdbData appendBytes:&nodes length:4];
-    [dsdbData appendBytes:&pageSize length:4];
-    
-    // Pad DSDB block to 32 bytes
-    while ([dsdbData length] < 32) {
-        char zero = 0;
-        [dsdbData appendBytes:&zero length:1];
-    }
-    
-    // Replace data at position 0x24 (0x20 + 4 offset)
-    [tempData replaceBytesInRange:NSMakeRange(dsdbStart + 4, 32) withBytes:[dsdbData bytes] length:32];
-    fileData = tempData;
-    
-    // Pad to B-tree block start (0x2000)
-    NSUInteger btreeStart = 0x2000;
-    while ([fileData length] < btreeStart) {
-        char zero = 0;
-        [fileData appendBytes:&zero length:1];
-    }
-    
-    // Write 4 dummy bytes first (for reference format compatibility)
-    uint32_t btreeDummy = 0;
-    [fileData appendBytes:&btreeDummy length:4];
-    
-    // Write B-tree leaf node at 0x2000+4
-    uint32_t nodeType = swapBytes32(0);              // Leaf node (big-endian)
-    uint32_t entryCount = [_entries count];
-    uint32_t recordCount = swapBytes32(entryCount);  // Convert to big-endian
-    
-    NSDebugLLog(@"gwspace", @"DEBUG SAVE: Writing %u entries, swapped recordCount=0x%08x", entryCount, recordCount);
-    
-    [fileData appendBytes:&nodeType length:4];
-    [fileData appendBytes:&recordCount length:4];
-    
-    // Sort entries as required by .DS_Store format
-    NSArray *sortedEntries = [_entries sortedArrayUsingSelector:@selector(compare:)];
-    
-    // Write entries
-    for (DSStoreEntry *entry in sortedEntries) {
-        NSData *entryData = [entry encode];
-        if (entryData) {
-            [fileData appendData:entryData];
+        if (![self load]) {
+            return NO;
         }
     }
-    
-    // Pad to full B-tree block size (8192 bytes from 0x2000)
-    NSUInteger fullBtreeEnd = 0x2000 + 8192;
-    while ([fileData length] < fullBtreeEnd) {
-        char zero = 0;
-        [fileData appendBytes:&zero length:1];
-    }
-    
-    // Write to file
-    NSError *error = nil;
-    BOOL success = [fileData writeToFile:_filePath 
-                                 options:NSDataWritingAtomic 
-                                   error:&error];
-    
-    if (!success) {
-        NSDebugLLog(@"gwspace", @"Failed to write .DS_Store file: %@", [error localizedDescription]);
+
+    DSBuddyAllocator *alloc = [[DSBuddyAllocator alloc] initWithFile:_filePath];
+    if (![alloc openForWriting]) {
+        [alloc release];
         return NO;
     }
-    
-    NSDebugLLog(@"gwspace", @"Saved .DS_Store file: %@ (%lu bytes)", _filePath, (unsigned long)[fileData length]);
+
+    const uint32_t pageSize = 4096;
+
+    /* DSDB superblock (the B-tree's root pointer lives here). */
+    int superblk = [alloc allocate:20];
+    [alloc setTOCName:@"DSDB" blockNumber:superblk];
+
+    NSArray *entries = [_entries sortedArrayUsingSelector:@selector(compare:)];
+
+    int rootNode = 0;
+    uint32_t levels = 0, records = 0, nodes = 0;
+
+    if ([entries count] == 0) {
+        int leaf = [alloc allocate:256];   /* empty leaf node */
+        DSBuddyBlock *b = [alloc getBlock:leaf];
+        [b writeUInt32:0];   /* next node (leaf) */
+        [b writeUInt32:0];   /* record count */
+        [b zeroFill];
+        [b close];
+        rootNode = leaf;
+        /* Block 0 (reserved at 0x1000 in openForWriting) is the buddy root. */
+        [alloc setRootBlockAddress:0x100b];
+        levels = 0; records = 0; nodes = 1;
+    } else {
+        /* Build the B-tree from the sorted entries.  This is a faithful port
+         * of the reference `ds_store' (al45tair) algorithm, which emits files
+         * that macOS Finder reads unchanged. */
+        NSMutableArray *currentLevel = [NSMutableArray arrayWithArray:entries];
+        NSMutableArray *nextLevel = [NSMutableArray array];
+        NSMutableArray *levelNodes = [NSMutableArray array];
+        uint32_t ptrSize = 0;
+        NSUInteger nodeCount = 0;
+
+        while (YES) {
+            uint32_t total = 8;
+            NSMutableArray *nodesArr = [NSMutableArray array];
+            NSMutableArray *node = [NSMutableArray array];
+            for (DSStoreEntry *e in currentLevel) {
+                uint32_t newTotal = total + ptrSize + (uint32_t)[e byteLength];
+                if (newTotal > pageSize) {
+                    [nodesArr addObject:node];
+                    [nextLevel addObject:e];
+                    total = 8;
+                    node = [NSMutableArray array];
+                } else {
+                    total = newTotal;
+                    [node addObject:e];
+                }
+            }
+            if ([node count]) [nodesArr addObject:node];
+            nodeCount += [nodesArr count];
+            [levelNodes addObject:nodesArr];
+            if ([nodesArr count] == 1) break;
+            currentLevel = nextLevel;
+            nextLevel = [NSMutableArray array];
+            ptrSize = 4;
+        }
+
+        /* Allocate each B-tree node at its actual content size (rounded up
+         * to a buddy block).  macOS writes nodes at their real size, not at a
+         * fixed page_size, and Finder rejects files whose nodes are padded out
+         * to 8 KiB blocks.  A minimum of 256 bytes matches macOS's smallest
+         * node.  Internal nodes carry one extra 4-byte child pointer per
+         * record, leaf nodes do not. */
+        NSMutableArray *ptrs = [NSMutableArray arrayWithCapacity:nodeCount];
+        for (NSUInteger li = 0; li < [levelNodes count]; li++) {
+            NSArray *level = [levelNodes objectAtIndex:li];
+            BOOL isLeaf = (li == 0);
+            for (NSArray *node in level) {
+                uint32_t nodeSize = 8;  /* next + count header */
+                for (DSStoreEntry *e in node) {
+                    nodeSize += (uint32_t)[e byteLength];
+                    if (!isLeaf) nodeSize += 4;  /* child pointer per record */
+                }
+                if (nodeSize < 256) nodeSize = 256;
+                [ptrs addObject:[NSNumber numberWithInt:[alloc allocate:nodeSize]]];
+            }
+        }
+
+        NSMutableArray *pointers = [NSMutableArray array];
+        NSArray *prevPointers = nil;
+        for (NSArray *level in levelNodes) {
+            NSUInteger ppndx = 0;
+            NSUInteger idxInLevel = 0;
+            /* Consume blocks FIFO: ptrs were allocated leaf-first (level 0
+             * first), matching the order levels are written here, so the
+             * leaves map to the blocks reserved for them. */
+            NSMutableArray *lptrs = [NSMutableArray arrayWithArray:
+                [ptrs subarrayWithRange:NSMakeRange(0, [level count])]];
+            [ptrs removeObjectsInRange:NSMakeRange(0, [level count])];
+            for (NSArray *node in level) {
+                int ndx = [[lptrs objectAtIndex:idxInLevel] intValue];
+                DSBuddyBlock *b = [alloc getBlock:ndx];
+                if (prevPointers == nil) {
+                    [b writeUInt32:0];
+                    [b writeUInt32:(uint32_t)[node count]];
+                    for (DSStoreEntry *e in node) {
+                        [b writeBytes:[e encode]];
+                    }
+                } else {
+                    /* Internal node: an internal node with `len(node)' pivot
+                     * records references `len(node)+1' children.  The first
+                     * `len(node)' children are the left children of each pivot
+                     * (nodePtrs); the final, rightmost child is stored in the
+                     * node's nextNode word.  This exactly mirrors ds_store's
+                     * _save (next_node = prev_pointers[ppndx+len(node)]) and is
+                     * what macOS Finder expects: a B-tree whose internal node
+                     * carries count+1 children.  Child pointers and next_node
+                     * are BLOCK NUMBERS (indices into the allocator's offset
+                     * table), not addresses. */
+                    int nextNodeSlot = (ppndx + [node count] < [prevPointers count]) ?
+                        [[prevPointers objectAtIndex:(ppndx + [node count])] intValue] : 0;
+                    NSArray *nodePtrs = [prevPointers subarrayWithRange:
+                        NSMakeRange(ppndx, [node count])];
+                    [b writeUInt32:(uint32_t)nextNodeSlot];
+                    [b writeUInt32:(uint32_t)[node count]];
+                    for (NSUInteger k = 0; k < [node count]; k++) {
+                        DSStoreEntry *e = [node objectAtIndex:k];
+                        uint32_t childNum = [[nodePtrs objectAtIndex:k] intValue];
+                        [b writeUInt32:childNum];
+                        [b writeBytes:[e encode]];
+                    }
+                }
+                [b zeroFill];
+                [b close];
+                [pointers addObject:[NSNumber numberWithInt:ndx]];
+                ppndx += [node count];
+                idxInLevel++;
+            }
+            prevPointers = [NSArray arrayWithArray:pointers];
+            [pointers removeAllObjects];
+        }
+
+        rootNode = [[prevPointers objectAtIndex:0] intValue];
+        /* Block 0 (reserved at 0x1000 in openForWriting) is the buddy root. */
+        [alloc setRootBlockAddress:0x100b];
+        /* The DSDB superblock's `levels' field is the number of INTERNAL
+         * levels, i.e. (tree depth - 1).  A leaf-only tree is depth 1 and
+         * stores levels = 0, exactly as a real Mac .DS_Store does.  Finder
+         * rejects the file if this is off by one. */
+        levels = (int)[levelNodes count] - 1;
+        records = [entries count];
+        nodes = nodeCount;
+    }
+
+    DSBuddyBlock *s = [alloc getBlock:superblk];
+    [s writeUInt32:(uint32_t)rootNode];
+    [s writeUInt32:levels];
+    [s writeUInt32:records];
+    [s writeUInt32:nodes];
+    [s writeUInt32:pageSize];
+    [s zeroFill];
+    [s close];
+
+    [alloc flush];
+    [alloc release];
     return YES;
 }
 
@@ -647,21 +594,55 @@ static uint32_t swapBytes32(uint32_t x) {
     if (!entry) {
         entry = [self entryForFilename:@"." code:@"lsvP"];
     }
-    
-    if (entry && ([[entry code] isEqualToString:@"lsvp"] || [[entry code] isEqualToString:@"lsvP"])) {
-        // The value should be a blob containing plist data - just return the raw value for now
-        return (NSDictionary *)[entry value];
+    if (entry && [[entry value] isKindOfClass:[NSData class]]) {
+        NSDictionary *d = [NSPropertyListSerialization propertyListWithData:(NSData *)[entry value]
+                                                                     options:NSPropertyListImmutable
+                                                                      format:NULL
+                                                                       error:NULL];
+        if ([d isKindOfClass:[NSDictionary class]]) return d;
     }
     return nil;
 }
 
+- (NSDictionary *)browserWindowDictionaryForDirectory {
+    DSStoreEntry *entry = [self entryForFilename:@"." code:@"bwsp"];
+    if (!entry) {
+        entry = [self entryForFilename:@"." code:@"pBBk"];
+    }
+    if (entry && [[entry value] isKindOfClass:[NSData class]]) {
+        NSDictionary *d = [NSPropertyListSerialization propertyListWithData:(NSData *)[entry value]
+                                                                     options:NSPropertyListImmutable
+                                                                      format:NULL
+                                                                       error:NULL];
+        if ([d isKindOfClass:[NSDictionary class]]) return d;
+    }
+    return nil;
+}
+
+- (NSRect)browserWindowBoundsForDirectory {
+    NSDictionary *d = [self browserWindowDictionaryForDirectory];
+    NSString *b = [d objectForKey:@"WindowBounds"];
+    if (b) return NSRectFromString(b);
+    return NSZeroRect;
+}
+
+- (NSRect)windowGeometryRectForDirectory {
+    DSStoreEntry *entry = [self entryForFilename:@"." code:@"fwi0"];
+    if (entry && [[entry value] isKindOfClass:[NSData class]] && [[entry value] length] >= 8) {
+        const unsigned char *fb = [(NSData *)[entry value] bytes];
+        /* stored big-endian: top/left/bottom/right (2 bytes each) */
+        uint16_t top    = (uint16_t)((fb[0] << 8) | fb[1]);
+        uint16_t left   = (uint16_t)((fb[2] << 8) | fb[3]);
+        uint16_t bottom = (uint16_t)((fb[4] << 8) | fb[5]);
+        uint16_t right  = (uint16_t)((fb[6] << 8) | fb[7]);
+        return NSMakeRect(left, top, right - left, bottom - top);
+    }
+    return NSZeroRect;
+}
+
 - (void)setListViewSettings:(NSDictionary *)settings {
-    DSStoreEntry *entry = [[DSStoreEntry alloc] initWithFilename:@"." 
-                                                            code:@"lsvp" 
-                                                            type:@"blob"
-                                                           value:settings];
-    [self setEntry:entry];
-    [entry release];
+    DSStoreEntry *entry = [DSStoreEntry plistEntryForFile:@"." code:@"lsvp" dictionary:settings];
+    if (entry) [self setEntry:entry];
 }
 
 // CRUD methods for all DS_Store field types
@@ -923,9 +904,6 @@ static uint32_t swapBytes32(uint32_t x) {
     // Check if in spatial mode first
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
-        if (gDSStoreVerbose) {
-            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
-        }
         return NO;
     }
     
@@ -942,35 +920,45 @@ static uint32_t swapBytes32(uint32_t x) {
     // Check if in spatial mode first
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
-        if (gDSStoreVerbose) {
-            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
-        }
         return;
     }
-    
-    // Note: cvlc is a complex blob structure; this is a placeholder
-    // Real implementation would properly encode the column visibility blob
-    if (gDSStoreVerbose) {
-        NSDebugLLog(@"gwspace", @"Column view relative dates setting: %@", show ? @"YES" : @"NO");
+    if (show) {
+        [self setEntry:[DSStoreEntry booleanEntryForFile:@"." code:@"cvlc" value:YES]];
+    } else {
+        [self removeEntryForFilename:@"." code:@"cvlc"];
     }
+}
+
+- (NSMutableDictionary *)_lsvpDict {
+    DSStoreEntry *e = [self entryForFilename:@"." code:@"lsvp"];
+    if (e && [[e value] isKindOfClass:[NSData class]]) {
+        NSDictionary *d = [NSPropertyListSerialization propertyListWithData:(NSData *)[e value]
+                                                                     options:NSPropertyListImmutable
+                                                                      format:NULL
+                                                                       error:NULL];
+        if ([d isKindOfClass:[NSDictionary class]]) {
+            return [d mutableCopy];
+        }
+    }
+    return [NSMutableDictionary dictionary];
+}
+
+- (void)_setLsvpDict:(NSMutableDictionary *)d {
+    DSStoreEntry *e = [DSStoreEntry plistEntryForFile:@"." code:@"lsvp" dictionary:d];
+    if (e) [self setEntry:e];
 }
 
 - (int)columnWidthForDirectory:(NSString *)columnName {
     // Check if in spatial mode first
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
-        if (gDSStoreVerbose) {
-            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
-        }
         return 0;
     }
-    
-    // Column widths are stored in clwc (column list width code)
-    // Different columns have different codes or are stored in a blob
-    NSString *code = [NSString stringWithFormat:@"clw%@", columnName];
-    DSStoreEntry *entry = [self entryForFilename:@"." code:code];
-    if (entry) {
-        return [entry longValue];
+    NSDictionary *d = [self _lsvpDict];
+    for (NSDictionary *c in [d objectForKey:@"columns"]) {
+        if ([[c objectForKey:@"identifier"] isEqual:columnName]) {
+            return [[c objectForKey:@"width"] intValue];
+        }
     }
     return 0;
 }
@@ -979,39 +967,42 @@ static uint32_t swapBytes32(uint32_t x) {
     // Check if in spatial mode first
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
-        if (gDSStoreVerbose) {
-            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
-        }
         return;
     }
-    
-    NSString *code = [NSString stringWithFormat:@"clw%@", columnName];
-    DSStoreEntry *entry = [DSStoreEntry longEntryForFile:@"." code:code value:(int32_t)width];
-    [self setEntry:entry];
-    
-    if (gDSStoreVerbose) {
-        NSDebugLLog(@"gwspace", @"Set column width for '%@': %d", columnName, width);
+    NSMutableDictionary *d = [self _lsvpDict];
+    NSMutableArray *cols = [[d objectForKey:@"columns"] mutableCopy];
+    if (cols == nil) cols = [NSMutableArray array];
+    BOOL found = NO;
+    for (NSMutableDictionary *c in cols) {
+        if ([[c objectForKey:@"identifier"] isEqual:columnName]) {
+            [c setObject:[NSNumber numberWithInt:width] forKey:@"width"];
+            found = YES;
+            break;
+        }
     }
+    if (!found) {
+        NSMutableDictionary *c = [NSMutableDictionary dictionary];
+        [c setObject:columnName forKey:@"identifier"];
+        [c setObject:[NSNumber numberWithInt:width] forKey:@"width"];
+        [c setObject:[NSNumber numberWithBool:YES] forKey:@"visible"];
+        [cols addObject:c];
+    }
+    [d setObject:cols forKey:@"columns"];
+    [self _setLsvpDict:d];
 }
 
 - (BOOL)columnVisibleForDirectory:(NSString *)columnName {
     // Check if in spatial mode first
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
-        if (gDSStoreVerbose) {
-            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
-        }
         return NO;
     }
-    
-    // Column visibility is typically stored in cvlc (column list code) as a blob
-    // or as individual boolean entries
-    NSString *code = [NSString stringWithFormat:@"cv%@", columnName];
-    DSStoreEntry *entry = [self entryForFilename:@"." code:code];
-    if (entry) {
-        return [entry booleanValue];
+    NSDictionary *d = [self _lsvpDict];
+    for (NSDictionary *c in [d objectForKey:@"columns"]) {
+        if ([[c objectForKey:@"identifier"] isEqual:columnName]) {
+            return [[c objectForKey:@"visible"] boolValue];
+        }
     }
-    // By default columns are usually visible
     return YES;
 }
 
@@ -1019,74 +1010,61 @@ static uint32_t swapBytes32(uint32_t x) {
     // Check if in spatial mode first
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
-        if (gDSStoreVerbose) {
-            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
-        }
         return;
     }
-    
-    NSString *code = [NSString stringWithFormat:@"cv%@", columnName];
-    DSStoreEntry *entry = [DSStoreEntry booleanEntryForFile:@"." code:code value:visible];
-    [self setEntry:entry];
-    
-    if (gDSStoreVerbose) {
-        NSDebugLLog(@"gwspace", @"Set column '%@' visibility: %@", columnName, visible ? @"visible" : @"hidden");
+    NSMutableDictionary *d = [self _lsvpDict];
+    NSMutableArray *cols = [[d objectForKey:@"columns"] mutableCopy];
+    if (cols == nil) cols = [NSMutableArray array];
+    BOOL found = NO;
+    for (NSMutableDictionary *c in cols) {
+        if ([[c objectForKey:@"identifier"] isEqual:columnName]) {
+            [c setObject:[NSNumber numberWithBool:visible] forKey:@"visible"];
+            found = YES;
+            break;
+        }
     }
+    if (!found) {
+        NSMutableDictionary *c = [NSMutableDictionary dictionary];
+        [c setObject:columnName forKey:@"identifier"];
+        [c setObject:[NSNumber numberWithBool:visible] forKey:@"visible"];
+        [cols addObject:c];
+    }
+    [d setObject:cols forKey:@"columns"];
+    [self _setLsvpDict:d];
 }
 
 - (NSArray *)visibleColumnsForDirectory {
     // Check if in spatial mode first
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
-        if (gDSStoreVerbose) {
-            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
-        }
         return nil;
     }
-    
-    // cvlc stores the list of columns and their properties
-    // This is a placeholder implementation
-    NSMutableArray *visibleColumns = [NSMutableArray array];
-    
-    // Standard column names
-    NSArray *standardColumns = [NSArray arrayWithObjects:
-        @"name", @"date", @"size", @"kind", @"label", @"version", @"comments", nil];
-    
-    for (NSString *column in standardColumns) {
-        if ([self columnVisibleForDirectory:column]) {
-            [visibleColumns addObject:column];
+    NSDictionary *d = [self _lsvpDict];
+    NSMutableArray *visible = [NSMutableArray array];
+    for (NSDictionary *c in [d objectForKey:@"columns"]) {
+        if ([[c objectForKey:@"visible"] boolValue]) {
+            [visible addObject:[c objectForKey:@"identifier"]];
         }
     }
-    
-    return visibleColumns;
+    return visible;
 }
 
 - (void)setVisibleColumnsForDirectory:(NSArray *)columns {
     // Check if in spatial mode first
     NSString *style = [self viewStyleForDirectory];
     if (style && ![style isEqual:@"icnv"]) {
-        if (gDSStoreVerbose) {
-            NSDebugLLog(@"gwspace", @"Column view settings only available in spatial/icon view mode");
-        }
         return;
     }
-    
-    // Set all columns as not visible first
-    NSArray *standardColumns = [NSArray arrayWithObjects:
-        @"name", @"date", @"size", @"kind", @"label", @"version", @"comments", nil];
-    
-    for (NSString *column in standardColumns) {
-        [self setColumnVisibleForDirectory:column visible:NO];
+    NSMutableDictionary *d = [self _lsvpDict];
+    NSMutableArray *cols = [NSMutableArray array];
+    for (NSString *name in columns) {
+        NSMutableDictionary *c = [NSMutableDictionary dictionary];
+        [c setObject:name forKey:@"identifier"];
+        [c setObject:[NSNumber numberWithBool:YES] forKey:@"visible"];
+        [cols addObject:c];
     }
-    
-    // Then make the specified columns visible
-    for (NSString *column in columns) {
-        [self setColumnVisibleForDirectory:column visible:YES];
-    }
-    
-    if (gDSStoreVerbose) {
-        NSDebugLLog(@"gwspace", @"Set visible columns: %@", columns);
-    }
+    [d setObject:cols forKey:@"columns"];
+    [self _setLsvpDict:d];
 }
 
 - (NSString *)commentsForFilename:(NSString *)filename {
@@ -1191,7 +1169,6 @@ static uint32_t swapBytes32(uint32_t x) {
         _dirty = NO;
         return YES;
     } @catch (NSException *exception) {
-        NSDebugLLog(@"gwspace", @"Error saving DS_Store file: %@", [exception reason]);
         return NO;
     }
 }
@@ -1201,6 +1178,22 @@ static uint32_t swapBytes32(uint32_t x) {
     
     for (DSStoreEntry *entry in _entries) {
         if ([[entry filename] isEqualToString:filename]) {
+            [toRemove addObject:entry];
+        }
+    }
+    
+    for (DSStoreEntry *entry in toRemove) {
+        [_entries removeObject:entry];
+        _dirty = YES;
+    }
+}
+
+- (void)removeEntriesForFilename:(NSString *)filename codes:(NSSet *)codes {
+    NSMutableArray *toRemove = [NSMutableArray array];
+    
+    for (DSStoreEntry *entry in _entries) {
+        if ([[entry filename] isEqualToString:filename]
+            && [codes containsObject: [entry code]]) {
             [toRemove addObject:entry];
         }
     }

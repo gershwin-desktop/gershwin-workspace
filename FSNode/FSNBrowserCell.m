@@ -95,6 +95,7 @@ static NSString *dots = @"...";
       iconSelected = NO;
       isOpened = NO;
       nameEdited = NO;
+      decorated = NO;
       
       [self setAllowsMixedState: NO];
       
@@ -443,6 +444,60 @@ static NSString *dots = @"...";
   }
 
   [self setLocked: [node isLocked]];
+  decorated = YES;
+}
+
+- (void)setNodeBasic:(FSNode *)anode
+        nodeInfoType:(FSNInfoType)type
+        extendedType:(NSString *)exttype
+{
+  DESTROY (selection);
+  DESTROY (selectionTitle);
+  ASSIGN (node, anode);
+
+  showType = type;
+  DESTROY (extInfoType);
+  if (exttype)
+    ASSIGN (extInfoType, exttype);
+
+  DESTROY (infoCell);
+  DESTROY (icon);
+  DESTROY (selectedicon);
+  DESTROY (tagColor);
+  decorated = NO;
+
+  [self setStringValue: [node displayName]];
+  [self setLocked: NO];
+}
+
+- (void)decorate
+{
+  if (node == nil || decorated)
+    {
+      return;
+    }
+
+  [self setIcon];
+
+  [self setTagColor: [[[FSNodeRep sharedInstance] metadataProvider]
+                       labelColorForPath: [node path]]];
+
+  if (extInfoType)
+    {
+      [self setExtendedShowType: extInfoType];
+    }
+  else
+    {
+      [self setNodeInfoShowType: showType];
+    }
+
+  [self setLocked: [node isLocked]];
+  decorated = YES;
+}
+
+- (BOOL)isDecorated
+{
+  return decorated;
 }
 
 - (void)setNode:(FSNode *)anode
@@ -484,6 +539,7 @@ static NSString *dots = @"...";
       break;
     }
   }
+  decorated = YES;
 }
 
 - (BOOL)isShowingSelection
@@ -535,7 +591,11 @@ static NSString *dots = @"...";
 - (void)setIconSize:(int)isize
 {
   icnsize = isize;
-  [self setIcon];
+  /* Undecorated (lazy) cells load their icon at -decorate time. */
+  if (decorated)
+    {
+      [self setIcon];
+    }
 }
 
 - (int)iconSize
@@ -561,7 +621,7 @@ static NSString *dots = @"...";
 {
   showType = type;
   DESTROY (extInfoType);
-  
+
   if (selection) {
     [self setStringValue: selectionTitle];
     if (infoCell) {
@@ -569,17 +629,24 @@ static NSString *dots = @"...";
     }
     return;
   }
-  
+
   [self setStringValue: [node displayName]];
-  
+
+  if (decorated == NO)
+    {
+      /* Lazy cell: name only, the info line is built at -decorate time. */
+      DESTROY (infoCell);
+      return;
+    }
+
   if (showType == FSNInfoNameType) {
     DESTROY (infoCell);
   }
   else if (infoCell == nil)
     {
       NSFont *infoFont;
-      
-      infoFont = [[NSFontManager sharedFontManager] convertFont: [self font] 	 
+
+      infoFont = [[NSFontManager sharedFontManager] convertFont: [self font]
                                                     toHaveTrait: NSItalicFontMask];
       infoCell = [NSCell new];
       [infoCell setFont: infoFont];
@@ -606,19 +673,25 @@ static NSString *dots = @"...";
 - (BOOL)setExtendedShowType:(NSString *)type
 {
   ASSIGN (extInfoType, type);
-  showType = FSNInfoExtendedType;   
+  showType = FSNInfoExtendedType;
 
   [self setNodeInfoShowType: showType];
+
+  if (decorated == NO)
+    {
+      /* Lazy cell: extended info is resolved at -decorate time. */
+      return NO;
+    }
 
   if (selection == nil) {
     NSDictionary *info = [fsnodeRep extendedInfoOfType: type forNode: node];
 
     if (info) {
-      [infoCell setStringValue: [info objectForKey: @"labelstr"]]; 
+      [infoCell setStringValue: [info objectForKey: @"labelstr"]];
       return YES;
     }
-  } 
-  
+  }
+
   return NO;
 }
 

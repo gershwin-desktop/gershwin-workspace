@@ -556,8 +556,6 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
       /* Zip-Slip defense */
       if (!path_is_within(canonicalDest, destPath))
         {
-          NSDebugLLog(@"gwspace",
-            @"GWMetaArchive: rejecting unsafe archive entry '%@'", epath);
           archive_read_data_skip(a);
           continue;
         }
@@ -617,10 +615,7 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
           GSFileMetadata *md = [GSFileMetadata metadataFromAppleDoubleData: ad];
           if (md)
             {
-              NSError *we = nil;
-              if (![md writeToFileAtPath: destPath error: &we])
-                NSDebugLLog(@"gwspace", @"GWMetaArchive: failed to write xattr for %@: %@",
-                      destPath, we);
+              [md writeToFileAtPath: destPath error: NULL];
             }
         }
     }
