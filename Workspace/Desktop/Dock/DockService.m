@@ -375,7 +375,7 @@ static NSString *appNameForPID(pid_t pid)
   return icon;
 }
 
-- (void)setBadgeCount:(int64_t)count
+- (oneway void)setBadgeCount:(int64_t)count
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -385,7 +385,7 @@ static NSString *appNameForPID(pid_t pid)
     }
 }
 
-- (void)setCountVisible:(BOOL)visible
+- (oneway void)setCountVisible:(BOOL)visible
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -394,7 +394,7 @@ static NSString *appNameForPID(pid_t pid)
     }
 }
 
-- (void)setProgressValue:(double)value
+- (oneway void)setProgressValue:(double)value
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -404,7 +404,7 @@ static NSString *appNameForPID(pid_t pid)
     }
 }
 
-- (void)setProgressVisible:(BOOL)visible
+- (oneway void)setProgressVisible:(BOOL)visible
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -413,7 +413,7 @@ static NSString *appNameForPID(pid_t pid)
     }
 }
 
-- (void)setUrgent:(BOOL)urgent
+- (oneway void)setUrgent:(BOOL)urgent
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -422,7 +422,7 @@ static NSString *appNameForPID(pid_t pid)
     }
 }
 
-- (void)clearAll
+- (oneway void)clearAll
 {
   DockIcon *icon = [self iconForCaller];
   if (icon)
@@ -445,6 +445,11 @@ void DockServiceStart(id dock)
       NSConnection *conn = [NSConnection defaultConnection];
       [conn setRootObject:sharedService];
       [conn setDelegate:sharedService];
+      /* Only serving the default mode left clients unanswered while a menu
+       * or modal panel was open in Workspace.  The connections made for new
+       * clients copy these modes from this one. */
+      [conn addRequestMode:NSEventTrackingRunLoopMode];
+      [conn addRequestMode:NSModalPanelRunLoopMode];
       [conn registerName:kDockServiceName];
     }
 }
