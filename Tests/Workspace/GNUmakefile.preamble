@@ -1,3 +1,5 @@
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # In-process test sources (#include of the .m under test) live in Workspace/.
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace
+# GWApplicationLauncher.m builds its error alert from AppKit classes.
+t_GWApplicationLauncher_TOOL_LIBS += -lgnustep-gui

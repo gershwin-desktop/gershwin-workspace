@@ -92,9 +92,7 @@
                                [NSNumber numberWithInt:-1], @"status",
                                reason, @"stderr",
                                nil];
-    [self performSelectorOnMainThread: @selector(_showErrorAlert:)
-                           withObject: errorInfo
-                        waitUntilDone: NO];
+    [self _scheduleErrorAlert: errorInfo];
     return NO;
   }
 }
@@ -135,12 +133,31 @@
                                [NSNumber numberWithInt:status], @"status",
                                s, @"stderr",
                                nil];
-    [self performSelectorOnMainThread: @selector(_showErrorAlert:)
-                           withObject: errorInfo
-                        waitUntilDone: NO];
+    [self _scheduleErrorAlert: errorInfo];
   } @finally {
     [pool drain];
   }
+}
+
+/* Not -performSelectorOnMainThread:: the alert runs a modal loop, and a modal
+   loop started from inside a run loop performer keeps the other performers of
+   that pass - among them the window display performer - from firing, so no
+   window is redrawn until the alert is closed: its text does not scroll and
+   its buttons do not react visibly.  A timer fires outside that pass.  Only
+   the default mode, so that an alert never opens inside menu tracking or
+   inside another alert. */
++ (void)_scheduleErrorAlert:(NSDictionary *)info
+{
+  if (![NSThread isMainThread]) {
+    [self performSelectorOnMainThread: @selector(_scheduleErrorAlert:)
+                           withObject: info
+                        waitUntilDone: NO];
+    return;
+  }
+  [self performSelector: @selector(_showErrorAlert:)
+             withObject: info
+             afterDelay: 0.0
+                inModes: [NSArray arrayWithObject: NSDefaultRunLoopMode]];
 }
 
 + (void)_showErrorAlert:(NSDictionary *)info
