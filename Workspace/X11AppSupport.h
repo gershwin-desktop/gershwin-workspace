@@ -394,4 +394,18 @@
  * once, after the AppKit display is open.  See X11AppSupport.m. */
 void GWInstallX11IOErrorLogger(void);
 
+/* Whether the window under the pointer belongs to another application.
+ *
+ * AppKit cannot tell: [NSApp windows] knows only our own windows, and the
+ * X11 backend leaves +[NSWindow windowNumberAtPoint:...] and
+ * -[GSDisplayServer findWindowAt:...] as stubs that answer 0.  A
+ * free-position icon move needs the answer to become a file drag when the
+ * pointer reaches a window of another application: the Desktop view lies
+ * behind every window at NSDesktopWindowLevel, so the pointer never leaves
+ * it, and a viewer window can be covered just the same.
+ *
+ * Answers NO whenever it cannot tell, because the cost of a wrong YES is an
+ * icon move cancelled in the middle for no visible reason. */
+BOOL GWForeignWindowIsUnderPointer(void);
+
 #endif /* X11_APP_SUPPORT_H */

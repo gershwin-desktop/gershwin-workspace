@@ -42,6 +42,7 @@
 #import "GWViewersManager.h"
 #import "../Network/NetworkVolumeManager.h"
 #import "Thumbnailer/GWThumbnailer.h"
+#import "X11AppSupport.h"
 
 #define DEF_ICN_SIZE 48
 #define DEF_TEXT_SIZE 12
@@ -626,6 +627,14 @@ static CGFloat desktopScaleFactor(void)
     }
 }
 
+/* The Desktop view lies behind every other window on the screen, so a move
+   that has reached another application's window can only be told apart by
+   asking the window server. */
+- (BOOL)foreignWindowIsUnderPointer
+{
+  return GWForeignWindowIsUnderPointer();
+}
+
 - (void)dockPositionDidChange
 {
   [self tile];
@@ -1169,6 +1178,10 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       r = NSMakeRect(x, y, w, h);
 
+      /* Show what letting go now would select, before the redraw below
+	 picks the changed icons up together with the old band. */
+      [self previewSelectionInRect: r];
+
       // Erase the previous rect via normal display machinery
       [self setNeedsDisplayInRect: oldRect];
       [[self window] displayIfNeeded];
@@ -1219,13 +1232,19 @@ static void GWHighlightFrameRect(NSRect aRect)
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      NSRect iconBounds = [self convertRect: [icon iconBounds] fromView: icon];
+      /* The name is part of the icon as far as the user is concerned, so a
+	 band that only touches the label selects too. */
+      NSRect nodeBounds = [self convertRect: [icon nodeBounds] fromView: icon];
 
-      if (NSIntersectsRect(r, iconBounds))
+      if (NSIntersectsRect(r, nodeBounds))
 	{
 	  [icon select];
 	}
     }
+
+  /* Only now that the real selection draws the same highlight, so the
+     icons do not flash unselected in between. */
+  [self previewSelectionInRect: NSZeroRect];
 
   selectionMask = NSSingleSelectionMask;
 
@@ -2004,6 +2023,18 @@ static void GWHighlightFrameRect(NSRect aRect)
   sourcePaths = [[pb propertyListForType: NSFilenamesPboardType] mutableCopy];
   AUTORELEASE (sourcePaths);
 
+  /* Icons that live here coming back after the drag left the Desktop: put
+     them down where they were dropped instead of asking the file system to
+     move the files onto themselves. */
+  if (dragLocalIcon)
+    {
+      dragLocalIcon = NO;
+
+      if ([self repositionIconsOfPaths: sourcePaths
+                           atDropPoint: [sender draggingLocation]])
+        return;
+    }
+
 
 
   i = [sourcePaths count];
@@ -2064,6 +2095,9 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       [files addObject: [[sourcePaths objectAtIndex: i] lastPathComponent]];
     }
+
+  [self recordDropPositionsForFiles: files
+			    atPoint: [sender draggingLocation]];
 
   opDict = [NSMutableDictionary dictionary];
   [opDict setObject: operation forKey: @"operation"];

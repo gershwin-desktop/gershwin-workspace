@@ -44,6 +44,13 @@
 
 @implementation DockIcon
 
+/* A dock tile is wider than the image it holds, and all of it stands for the
+   application: a file dropped anywhere on the tile is opened with it. */
+- (BOOL)draggingPointIsOnNode:(id <NSDraggingInfo>)sender
+{
+  return YES;
+}
+
 - (void)dealloc
 {
   /* Stop bouncing and clean up timer */

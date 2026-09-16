@@ -45,6 +45,7 @@
 /* Forward declaration for batch repositioning called on container (FSNIconsView) */
 @interface NSView (FSNIconContainerMethods)
 - (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
+- (BOOL)foreignWindowIsUnderPointer;
 @end
 
 /* Forward declaration to expose class methods used for ISO drop handling */
@@ -72,6 +73,33 @@ typedef enum DockStyle
 static id <DesktopApplication> desktopApp = nil;
 
 static NSImage *branchImage;
+
+/* The file operation a negotiated drag operation stands for. */
+static NSString *FSNOperationForDragMask(NSDragOperation op)
+{
+  switch (op)
+    {
+      case NSDragOperationMove:
+	return NSWorkspaceMoveOperation;
+      case NSDragOperationLink:
+	return FSNLinkDropOperation();
+      case NSDragOperationCopy:
+      default:
+	return NSWorkspaceCopyOperation;
+    }
+}
+
+/* Redraws part of an icon view right away.  A moving icon has to show up
+ * under the pointer before the next mouse-moved event is read, and the drag
+ * loop does not return to the run loop that would otherwise redraw it. */
+static void FSNRedrawContainerRect(NSView *container, NSRect dirty)
+{
+  if (container == nil || NSIsEmptyRect(dirty))
+    return;
+
+  [container setNeedsDisplayInRect: dirty];
+  [container displayIfNeeded];
+}
 
 @implementation FSNIcon
 
@@ -456,6 +484,14 @@ static NSImage *branchImage;
   return icnBounds;
 }
 
+- (NSRect)nodeBounds
+{
+  if (icnPosition == NSImageOnly)
+    return icnBounds;
+
+  return NSUnionRect(icnBounds, labelRect);
+}
+
 - (float)labelTextWidth
 {
   return [label uncutTitleLenght] + [fsnodeRep labelMargin];
@@ -836,6 +872,7 @@ static NSImage *branchImage;
   BOOL onself = NO;
   NSEvent *nextEvent = nil;
   BOOL startdnd = NO;
+  BOOL editing = NO;
   NSSize offset;
 
   if (icnPosition == NSImageOnly)
@@ -904,18 +941,26 @@ static NSImage *branchImage;
 		{
 		  NSTimeInterval interval = ([theEvent timestamp] - editstamp);
 
+		  /* labelRect is in our own coordinates, so the hit test needs
+		   * the converted point: with the window location a click
+		   * anywhere on an icon near the window origin started
+		   * renaming, while clicking the name of any other icon
+		   * never did. */
 		  if ((interval > DOUBLE_CLICK_LIMIT)
-		      && [self mouse: location inRect: labelRect])
+		      && [self mouse: selfloc inRect: labelRect])
 		    {
 		      if ([container respondsToSelector: @selector(setNameEditorForRep:)])
 			{
 			  [container setNameEditorForRep: self];
+			  editing = YES;
 			}
 		    }
 		}
 	    }
 
-	  if (dndSource)
+	  /* Once the name editor is up the label belongs to the text field,
+	   * so a drag there selects text instead of moving the icon. */
+	  if (dndSource && (editing == NO))
 	    {
 	      while (1)
 		{
@@ -934,8 +979,10 @@ static NSImage *branchImage;
 		      break;
 
 		    }
-		  else if (([nextEvent type] == NSLeftMouseDragged)
-			   && ([self mouse: selfloc inRect: icnBounds]))
+		  /* Anywhere the press selects the icon also starts a drag:
+		   * requiring the image swallowed every drag begun on the
+		   * name, and with it the events until the mouse came up. */
+		  else if ([nextEvent type] == NSLeftMouseDragged)
 		    {
 		      NSPoint p = [nextEvent locationInWindow];
 		      offset = NSMakeSize(p.x - location.x, p.y - location.y);
@@ -956,15 +1003,15 @@ static NSImage *branchImage;
 	          && [container respondsToSelector: @selector(honorsSavedPositions)])
 	        canReposition = [(FSNIconsView *)container honorsSavedPositions];
 
+	      if ([container respondsToSelector: @selector(stopRepNameEditing)])
+		[container stopRepNameEditing];
+
 	      if (canReposition)
 		{
 		  [self repositionLocal: theEvent offset: offset];
 		}
 	      else
 		{
-		  if ([container respondsToSelector: @selector(stopRepNameEditing)])
-		    [container stopRepNameEditing];
-
 		  if ([container respondsToSelector: @selector(setFocusedRep:)])
 		    [container setFocusedRep: nil];
 
@@ -1015,7 +1062,7 @@ static NSImage *branchImage;
 
 - (void)drawRect:(NSRect)rect
 {
-  if (isSelected && !suppressSelectionDrawing)
+  if ((isSelected || selectionPreview) && !suppressSelectionDrawing)
     {
       [[NSColor selectedControlColor] set];
       [highlightPath fill];
@@ -1052,7 +1099,7 @@ static NSImage *branchImage;
 
   if (isLocked == NO)
     {
-      if (isOpened == NO)
+      if (isOpened == NO && beingDragged == NO)
         {
           [drawicon compositeToPoint: icnPoint operation: NSCompositeSourceOver];
         }
@@ -1725,6 +1772,258 @@ static NSImage *branchImage;
   return (gridIndex <= [aIcon gridIndex]) ? NSOrderedAscending : NSOrderedDescending;
 }
 
+- (BOOL)pointIsOnNode:(NSPoint)selfPoint
+{
+  if (icnPosition == NSImageOnly)
+    return [self mouse: selfPoint inRect: icnBounds];
+
+  return ([self mouse: selfPoint inRect: icnBounds]
+	  || [self mouse: selfPoint inRect: labelRect]);
+}
+
+- (void)setSelectionPreview:(BOOL)flag
+{
+  if (selectionPreview == flag)
+    return;
+
+  selectionPreview = flag;
+  [container setNeedsDisplayInRect: [self frame]];
+}
+
+- (void)setBeingDragged:(BOOL)flag
+{
+  if (beingDragged == flag)
+    return;
+
+  beingDragged = flag;
+  FSNRedrawContainerRect(container, [self frame]);
+}
+
+- (void)setDropHighlighted:(BOOL)flag
+{
+  if (flag)
+    {
+      if (selectedicon == nil)
+	ASSIGN (selectedicon, [fsnodeRep openFolderIconOfSize: iconSize forNode: node]);
+
+      if (drawicon == selectedicon)
+	return;
+
+      drawicon = selectedicon;
+    }
+  else
+    {
+      if (drawicon == icon)
+	return;
+
+      drawicon = icon;
+    }
+
+  FSNRedrawContainerRect(container, [self frame]);
+}
+
+/* Moves the dragged icons to their original frames offset by (dx, dy), as
+ * far as FSNClampedGroupDelta lets the group leave the container.
+ *
+ * Only the area the icons are leaving and the one they now cover is
+ * redrawn; redisplaying the window would redraw every icon in it for every
+ * mouse-moved event.  The vacated area is the icon's CURRENT frame, not its
+ * original one - after the first step those differ, and redrawing the
+ * original left the intermediate positions smeared on screen.
+ */
+static void FSNMoveDraggedIcons(NSView *container, NSArray *dragged,
+                                NSArray *frames, CGFloat dx, CGFloat dy)
+{
+  NSRect dirty = NSZeroRect;
+  NSRect group = NSZeroRect;
+  NSSize delta;
+  NSUInteger i, count = [dragged count];
+
+  for (i = 0; i < count; i++)
+    {
+      NSRect orig = [[frames objectAtIndex: i] rectValue];
+      group = (i == 0) ? orig : NSUnionRect(group, orig);
+    }
+  delta = FSNClampedGroupDelta(group, [container bounds], NSMakeSize(dx, dy));
+
+  for (i = 0; i < count; i++)
+    {
+      FSNIcon *ic = [dragged objectAtIndex: i];
+      NSRect orig = [[frames objectAtIndex: i] rectValue];
+
+      dirty = NSUnionRect(dirty, [ic frame]);
+      [ic setFrame: NSOffsetRect(orig, delta.width, delta.height)];
+      dirty = NSUnionRect(dirty, [ic frame]);
+    }
+
+  FSNRedrawContainerRect(container, dirty);
+}
+
+static void FSNSetIconsBeingDragged(NSArray *dragged, BOOL flag)
+{
+  NSUInteger i;
+
+  for (i = 0; i < [dragged count]; i++)
+    [[dragged objectAtIndex: i] setBeingDragged: flag];
+}
+
+/* Puts the dragged icons back where the gesture started.  -setFrame: does not
+ * redraw the superview, so the area the icons are leaving has to be redrawn
+ * explicitly or they stay painted at the dragged position. */
+static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
+                                   NSArray *frames)
+{
+  NSRect dirty = NSZeroRect;
+  NSUInteger i;
+
+  for (i = 0; i < [dragged count]; i++)
+    {
+      FSNIcon *ic = [dragged objectAtIndex: i];
+
+      dirty = NSUnionRect(dirty, [ic frame]);
+      [ic setFrame: [[frames objectAtIndex: i] rectValue]];
+      dirty = NSUnionRect(dirty, [ic frame]);
+    }
+
+  FSNRedrawContainerRect(container, dirty);
+}
+
+/* Whether the pointer has left this icon view for another drop target, which
+ * is what turns a free-position move into an external file drag.  Everything
+ * else has to keep the move alive: ending it mid-gesture snaps the icons back
+ * to where they started and the user loses the move, so this test only says
+ * YES for a target that can really take the drop.
+ *
+ * A window qualifies only when it is on screen and in front of ours.
+ * [NSApp windows] also hands out closed, hidden and miniaturized windows,
+ * whose stale frames used to abort moves over untouched desktop area, and
+ * windows on our own level sit behind us - ours took the click that started
+ * the drag.  This is the path by which a Desktop icon reaches a viewer window
+ * or the Dock: the Desktop view covers the whole screen at
+ * NSDesktopWindowLevel, so the pointer never leaves it.
+ * +windowNumberAtPoint: is no help - GNUstep implements it as a stub that
+ * always returns 0.
+ *
+ * Within our own window only a view that can itself take a file drop ends
+ * the move.  The info strip, the scrollers, the window border and the title
+ * bar take none, so a move that grazes them keeps going - that it did not
+ * was the most visible half of this: the icons snapped back although the
+ * pointer had never left the window. */
+- (BOOL)localDragReachedOtherTargetAt:(NSPoint)winLoc inWindow:(NSWindow *)win
+{
+  NSPoint mouseScreen = [NSEvent mouseLocation];
+  NSEnumerator *enumerator = [[NSApp windows] objectEnumerator];
+  NSWindow *w;
+  NSView *home;
+  NSView *hit;
+  NSView *v;
+
+  while ((w = [enumerator nextObject]) != nil)
+    {
+      NSString *cname = [w className];
+
+      if (w == win)
+        continue;
+      if ([w isVisible] == NO || [w isMiniaturized])
+        continue;
+      if ([w level] <= [win level])
+        continue;
+      /* Off-screen caches and tool tips are not places to drop a file. */
+      if ([cname hasPrefix: @"GSCache"] || [cname hasPrefix: @"GSTT"])
+        continue;
+      if (NSPointInRect(mouseScreen, [w frame]))
+        return YES;
+    }
+
+  if (NSPointInRect(mouseScreen, [win frame]) == NO)
+    return YES;
+
+  /* Windows of other applications are invisible to AppKit, so the container
+     asks the window server - it may well be one of those that covers our own
+     window here, and the Desktop lies behind every one of them. */
+  if ([container respondsToSelector: @selector(foreignWindowIsUnderPointer)]
+      && [container foreignWindowIsUnderPointer])
+    return YES;
+
+  home = [container enclosingScrollView];
+  if (home == nil)
+    home = container;
+
+  hit = [[[win contentView] superview] hitTest: winLoc];
+
+  /* Still over our own icon view (or the scroll view around it): the icons,
+   * which are drop targets themselves, are inside it. */
+  for (v = hit; v != nil; v = [v superview])
+    if (v == home)
+      return NO;
+
+  for (v = hit; v != nil; v = [v superview])
+    if ([[v registeredDraggedTypes] count] != 0)
+      return YES;
+
+  return NO;
+}
+
+/* The icon under the pointer that the dragged files could be filed into,
+ * nil when there is none.  Candidates are all siblings of what is being
+ * dragged, which is what makes the test this short: the long validation in
+ * -draggingEntered: guards drops that cross folders, and none of what it
+ * rules out - a folder into itself or into its own subtree, a name already
+ * taken by a directory over there, an unwritable source - can arise between
+ * siblings of one folder. */
+- (FSNIcon *)localDropTargetAtPoint:(NSPoint)containerPoint
+                          excluding:(NSArray *)dragged
+{
+  NSArray *reps;
+  NSUInteger i;
+
+  if ([container respondsToSelector: @selector(reps)] == NO)
+    return nil;
+
+  reps = [container reps];
+  for (i = 0; i < [reps count]; i++)
+    {
+      FSNIcon *ic = [reps objectAtIndex: i];
+      FSNode *nd;
+
+      if ([ic isKindOfClass: [FSNIcon class]] == NO)
+	continue;
+      if ([dragged containsObject: ic])
+	continue;
+      if ([ic pointIsOnNode: [ic convertPoint: containerPoint fromView: container]] == NO)
+	continue;
+
+      nd = [ic node];
+      if (([nd isDirectory] == NO) || [nd isLocked] || ([nd isWritable] == NO))
+	continue;
+      if ([nd isPackage] && ([nd isApplication] == NO))
+	continue;
+
+      return ic;
+    }
+
+  return nil;
+}
+
+/* File the dragged icons into the icon they were dropped on: hand them to it
+ * if it is an application, otherwise run the operation the held modifiers
+ * ask for.  Source and destination are in one folder, hence one volume, so a
+ * plain drag always moves. */
+- (void)finishLocalDrop:(NSArray *)dragged onIcon:(FSNIcon *)target
+{
+  NSMutableArray *paths = [NSMutableArray arrayWithCapacity: [dragged count]];
+  NSUInteger i;
+
+  for (i = 0; i < [dragged count]; i++)
+    [paths addObject: [[[dragged objectAtIndex: i] node] path]];
+
+  if ([[target node] isApplication])
+    [target openDroppedPaths: paths];
+  else
+    [target fileDroppedPaths: paths
+		   operation: FSNOperationForDragMask(dragOperationForCurrentModifierFlags())];
+}
+
 /*
  * Local icon repositioning (free positioning mode).
  * Moves ALL selected icons together, keeping labels visible.
@@ -1735,6 +2034,7 @@ static NSImage *branchImage;
   NSWindow *win = [self window];
   NSPoint startLoc = [firstEvent locationInWindow];
   NSEvent *event;
+  FSNIcon *dropTarget = nil;
   BOOL didMove = NO;
 
   /* Collect all selected icons and record their original frames */
@@ -1765,35 +2065,21 @@ static NSImage *branchImage;
    * delta, so this is a no-op there. */
   NSPoint startLocal = [container convertPoint: startLoc fromView: nil];
 
+  FSNSetIconsBeingDragged(allIcons, YES);
+
   /* Apply the initial offset from the drag-start event immediately.
    * The first drag event is consumed by mouseDown's while-loop before
-   * we're called, so we seed the movement here.
-   *
-   * Performance: invalidate ONLY the moved icons' old and new positions
-   * on the container rather than calling [win display] — that forces
-   * drawRect: on EVERY icon in the window regardless of whether it
-   * moved.  Using setNeedsDisplayInRect: + displayIfNeeded redraws
-   * only the affected areas (O(movedIcons) instead of O(totalIcons)). */
+   * we're called, so we seed the movement here. */
   {
     NSPoint seedEndLocal = [container convertPoint:
       NSMakePoint(startLoc.x + initialOffset.width,
                   startLoc.y + initialOffset.height) fromView: nil];
     CGFloat dx = seedEndLocal.x - startLocal.x;
     CGFloat dy = seedEndLocal.y - startLocal.y;
+
     if (fabs(dx) > 0.5 || fabs(dy) > 0.5)
       {
-        NSUInteger i;
-        for (i = 0; i < [allIcons count]; i++)
-          {
-            FSNIcon *ic = [allIcons objectAtIndex: i];
-            NSRect orig = [[origFrames objectAtIndex: i] rectValue];
-            NSRect drg = NSMakeRect(orig.origin.x + dx, orig.origin.y + dy,
-                                     orig.size.width, orig.size.height);
-            [container setNeedsDisplayInRect: orig];
-            [ic setFrame: drg];
-            [container setNeedsDisplayInRect: [ic frame]];
-          }
-        [container displayIfNeeded];
+        FSNMoveDraggedIcons(container, allIcons, origFrames, dx, dy);
         didMove = YES;
       }
   }
@@ -1808,70 +2094,61 @@ static NSImage *branchImage;
       if ([event type] == NSLeftMouseDragged)
         {
           NSPoint curLoc = [event locationInWindow];
-          NSRect containerBounds = [container bounds];
-          NSPoint localInContainer = [container convertPoint: curLoc fromView: nil];
+          NSPoint localInContainer;
 
-          /* If the drag leaves the container, convert to an external
-           * file drag. Restore original positions first.
-           * Also convert if the cursor is over a different window,
-           * e.g. dragging from the Desktop (which spans the full screen
-           * at NSDesktopWindowLevel -1000) to a Viewer window at
-           * NSNormalWindowLevel that sits on top of the Desktop.
-           * We cannot use +windowNumberAtPoint: — GNUstep implements
-           * it as a stub that always returns 0. */
-          BOOL shouldExternalize = !NSPointInRect(localInContainer, containerBounds);
-
-          if (!shouldExternalize)
+          /* Hand the gesture over to the file-drag machinery once the
+           * pointer has reached a drop target outside this icon view, and
+           * put the icons back where they started first. */
+          if ([self localDragReachedOtherTargetAt: curLoc inWindow: win])
             {
-              NSPoint mouseScreen = [NSEvent mouseLocation];
-              NSArray *appWindows = [NSApp windows];
-
-              for (NSWindow *w in appWindows)
-                {
-                  if (w == win)
-                    continue;
-                  if ([[w className] hasPrefix: @"GSCache"])
-                    continue;
-                  if (NSPointInRect(mouseScreen, [w frame])
-                      && [w level] >= [win level])
-                    {
-                      shouldExternalize = YES;
-                      break;
-                    }
-                }
-            }
-
-          if (shouldExternalize)
-            {
-              NSUInteger i;
-              for (i = 0; i < [allIcons count]; i++)
-                [[allIcons objectAtIndex: i] setFrame: [[origFrames objectAtIndex: i] rectValue]];
-
+              [dropTarget setDropHighlighted: NO];
+              FSNSetIconsBeingDragged(allIcons, NO);
+              FSNRestoreDraggedIcons(container, allIcons, origFrames);
               [self startExternalDragOnEvent: firstEvent withMouseOffset: initialOffset];
               return;
             }
 
-          /* Delta in container space (see startLocal above): correct for
-           * both the flipped spatial container and non-flipped ones.
-           * localInContainer is already [container convertPoint: curLoc
-           * fromView: nil], computed above for the bounds check. */
-          CGFloat dx = localInContainer.x - startLocal.x;
-          CGFloat dy = localInContainer.y - startLocal.y;
+          /* Reach the parts of a canvas larger than its viewport.  The
+           * deltas below are in container coordinates, which scrolling does
+           * not change, so this composes with the move. */
+          [container autoscroll: event];
 
-          NSUInteger i;
-          for (i = 0; i < [allIcons count]; i++)
-            {
-              FSNIcon *ic = [allIcons objectAtIndex: i];
-              NSRect orig = [[origFrames objectAtIndex: i] rectValue];
-              NSRect drg = NSMakeRect(orig.origin.x + dx, orig.origin.y + dy,
-                                       orig.size.width, orig.size.height);
-              [container setNeedsDisplayInRect: orig];
-              [ic setFrame: drg];
-              [container setNeedsDisplayInRect: [ic frame]];
-            }
-          [container displayIfNeeded];
+          /* Delta in container space (see startLocal above): correct for
+           * both the flipped spatial container and non-flipped ones. */
+          localInContainer = [container convertPoint: curLoc fromView: nil];
+
+          /* A folder under the pointer opens up to say that letting go here
+           * files the icons into it instead of leaving them on the spot. */
+          {
+            FSNIcon *hover = [self localDropTargetAtPoint: localInContainer
+                                                excluding: allIcons];
+
+            if (hover != dropTarget)
+              {
+                [dropTarget setDropHighlighted: NO];
+                dropTarget = hover;
+                [dropTarget setDropHighlighted: YES];
+              }
+          }
+
+          FSNMoveDraggedIcons(container, allIcons, origFrames,
+                              localInContainer.x - startLocal.x,
+                              localInContainer.y - startLocal.y);
           didMove = YES;
         }
+    }
+
+  FSNSetIconsBeingDragged(allIcons, NO);
+
+  /* Let go over a folder: the icons go back where they were and the files
+   * move into it.  A free-position drag never reaches the drag machinery, so
+   * this is the only place such a drop can be recognised. */
+  if (dropTarget)
+    {
+      [dropTarget setDropHighlighted: NO];
+      FSNRestoreDraggedIcons(container, allIcons, origFrames);
+      [self finishLocalDrop: allIcons onIcon: dropTarget];
+      return;
     }
 
   if (didMove && [container respondsToSelector: @selector(batchRepositionIcons:toCenterPoints:)])
@@ -1892,13 +2169,7 @@ static NSImage *branchImage;
     }
   else if (!didMove)
     {
-      /* No move — restore all original positions */
-      NSUInteger i;
-      for (i = 0; i < [allIcons count]; i++)
-        {
-          FSNIcon *ic = [allIcons objectAtIndex: i];
-          [ic setFrame: [[origFrames objectAtIndex: i] rectValue]];
-        }
+      FSNRestoreDraggedIcons(container, allIcons, origFrames);
     }
 }
 
@@ -2014,6 +2285,34 @@ static NSImage *branchImage;
 
 @implementation FSNIcon (DraggingDestination)
 
+/* The drag machinery picks its destination by view frame, and ours also
+ * covers the padding around the image and the name.  Only image and name
+ * stand for the node, so anywhere else the icon steps aside and lets the view
+ * behind it handle the drag: a drop in the padding around a plain file used
+ * to do nothing at all, and one in the padding around a folder went into that
+ * folder although nothing had highlighted to say so. */
+/* Only a container that implements the whole NSDraggingDestination sequence
+ * can be handed a drag: the path view, for one, answers -draggingUpdated:
+ * alone, and the rest of the sequence would be sent into nothing. */
+- (BOOL)containerTakesDrags
+{
+  return ([container respondsToSelector: @selector(draggingEntered:)]
+          && [container respondsToSelector: @selector(draggingUpdated:)]
+          && [container respondsToSelector: @selector(prepareForDragOperation:)]
+          && [container respondsToSelector: @selector(performDragOperation:)]
+          && [container respondsToSelector: @selector(concludeDragOperation:)]);
+}
+
+- (BOOL)draggingPointIsOnNode:(id <NSDraggingInfo>)sender
+{
+  NSPoint p = [self convertPoint: [sender draggingLocation] fromView: nil];
+
+  if (icnPosition == NSImageOnly)
+    return [self mouse: p inRect: icnBounds];
+
+  return ([self mouse: p inRect: icnBounds] || [self mouse: p inRect: labelRect]);
+}
+
 - (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
 {
   NSPasteboard *pb;
@@ -2026,6 +2325,13 @@ static NSImage *branchImage;
 
   isDragTarget = NO;
   onSelf = NO;
+
+  if ([self draggingPointIsOnNode: sender] == NO && [self containerTakesDrags])
+    {
+      dragProxied = YES;
+      return [container draggingEntered: sender];
+    }
+  dragProxied = NO;
 
   pb = [sender draggingPasteboard];
   sourcePaths = nil;
@@ -2277,19 +2583,33 @@ static NSImage *branchImage;
 - (NSDragOperation)draggingUpdated:(id <NSDraggingInfo>)sender
 {
   NSDragOperation sourceDragMask = dragOperationForCurrentModifierFlags();
-  NSPoint p = [self convertPoint: [sender draggingLocation] fromView: nil];
 
-  if ([self mouse: p inRect: icnBounds] == NO)
+  if ([self draggingPointIsOnNode: sender] == NO)
     {
       if (drawicon == selectedicon)
 	{
 	  drawicon = icon;
 	  [self setNeedsDisplay: YES];
 	}
+      /* The view behind us never saw the drag enter, so announce it there
+	 before asking it what it makes of the drag. */
+      if (dragProxied == NO && [self containerTakesDrags])
+	{
+	  isDragTarget = NO;
+	  dragProxied = YES;
+	  [container draggingEntered: sender];
+	}
       return [container draggingUpdated: sender];
     }
   else
     {
+      if (dragProxied)
+	{
+	  dragProxied = NO;
+	  [container draggingExited: sender];
+	  return [self draggingEntered: sender];
+	}
+
       if ((selectedicon == nil) && isDragTarget && (onSelf == NO))
 	{
 	  ASSIGN (selectedicon, [fsnodeRep openFolderIconOfSize: iconSize forNode: node]);
@@ -2347,6 +2667,12 @@ static NSImage *branchImage;
 {
   isDragTarget = NO;
 
+  if (dragProxied)
+    {
+      dragProxied = NO;
+      [container draggingExited: sender];
+    }
+
   if (onSelf == NO)
     {
       drawicon = icon;
@@ -2359,11 +2685,17 @@ static NSImage *branchImage;
 
 - (BOOL)prepareForDragOperation:(id <NSDraggingInfo>)sender
 {
+  if (dragProxied)
+    return [container prepareForDragOperation: sender];
+
   return isLocked ? NO : isDragTarget;
 }
 
 - (BOOL)performDragOperation:(id <NSDraggingInfo>)sender
 {
+  if (dragProxied)
+    return [container performDragOperation: sender];
+
   return isLocked ? NO : isDragTarget;
 }
 
@@ -2373,13 +2705,17 @@ static NSImage *branchImage;
   NSArray *sourcePaths;
   NSString *operation;
   NSString *source;
-  NSMutableArray *files;
-  NSMutableDictionary *opDict;
   NSString *trashPath;
-  NSUInteger i;
 
   isDragTarget = NO;
   operation = nil;
+
+  if (dragProxied)
+    {
+      dragProxied = NO;
+      [container concludeDragOperation: sender];
+      return;
+    }
 
   if (isLocked)
     {
@@ -2451,43 +2787,24 @@ static NSImage *branchImage;
 	}
       else
 	{
-	  switch (negotiatedDragOp)
-	    {
-	      case NSDragOperationMove:
-		operation = NSWorkspaceMoveOperation;
-		break;
-	      case NSDragOperationCopy:
-		operation = NSWorkspaceCopyOperation;
-		break;
-	      case NSDragOperationLink:
-		operation = FSNLinkDropOperation();
-		break;
-	      default:
-		operation = NSWorkspaceCopyOperation;
-		break;
-	    }
+	  operation = FSNOperationForDragMask(negotiatedDragOp);
 	}
 
-      files = [NSMutableArray arrayWithCapacity: 1];
-      for(i = 0; i < [sourcePaths count]; i++)
-	{
-	  [files addObject: [[sourcePaths objectAtIndex: i] lastPathComponent]];
-	}
-
-      opDict = [NSMutableDictionary dictionaryWithCapacity: 4];
-      [opDict setObject: operation forKey: @"operation"];
-      [opDict setObject: source forKey: @"source"];
-      [opDict setObject: [node path] forKey: @"destination"];
-      [opDict setObject: files forKey: @"files"];
-
-      [desktopApp performFileOperation: opDict];
-
+      [self fileDroppedPaths: sourcePaths operation: operation];
     }
   else
     {
-      for (i = 0; i < [sourcePaths count]; i++)
-	{
-	  NSString *path = [sourcePaths objectAtIndex: i];
+      [self openDroppedPaths: sourcePaths];
+    }
+}
+
+- (void)openDroppedPaths:(NSArray *)paths
+{
+  NSUInteger i;
+
+  for (i = 0; i < [paths count]; i++)
+    {
+      NSString *path = [paths objectAtIndex: i];
 
       NS_DURING
         {
@@ -2512,8 +2829,28 @@ static NSImage *branchImage;
                   nil);
         }
       NS_ENDHANDLER
-	}
     }
+}
+
+- (void)fileDroppedPaths:(NSArray *)paths operation:(NSString *)operation
+{
+  NSMutableArray *files = [NSMutableArray arrayWithCapacity: [paths count]];
+  NSMutableDictionary *opDict = [NSMutableDictionary dictionaryWithCapacity: 4];
+  NSUInteger i;
+
+  if ([paths count] == 0)
+    return;
+
+  for (i = 0; i < [paths count]; i++)
+    [files addObject: [[paths objectAtIndex: i] lastPathComponent]];
+
+  [opDict setObject: operation forKey: @"operation"];
+  [opDict setObject: [[paths objectAtIndex: 0] stringByDeletingLastPathComponent]
+	      forKey: @"source"];
+  [opDict setObject: [node path] forKey: @"destination"];
+  [opDict setObject: files forKey: @"files"];
+
+  [desktopApp performFileOperation: opDict];
 }
 
 @end

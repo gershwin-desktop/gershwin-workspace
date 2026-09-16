@@ -1070,6 +1070,147 @@ static void GWHighlightFrameRect(NSRect aRect)
   }
 }
 
+/* A drop does not bring files in: it starts a file operation, and the icons
+ * turn up later when the watcher reports the new names.  Writing the wanted
+ * positions now, keyed by name, is what makes -layoutIcons place each
+ * arriving icon where the user let go of it - by the time it could be asked,
+ * the drop location is long gone.  Several files are laid out in a row from
+ * the drop point, wrapping at the right edge, so they do not pile up on one
+ * spot.  A name that never arrives (the operation was cancelled, or the copy
+ * was renamed around a clash) leaves an unused entry, which nothing reads and
+ * nothing writes to disk. */
+- (void)recordDropPositionsForFiles:(NSArray *)names atPoint:(NSPoint)winPoint
+{
+  NSRect area;
+  NSPoint p;
+  CGFloat cellW, cellH, x, y;
+  NSUInteger i;
+
+  if ([self honorsSavedPositions] == NO || [names count] == 0)
+    return;
+
+  if (customIconPositions == nil)
+    customIconPositions = [[NSMutableDictionary alloc] init];
+
+  /* The same area -layoutIcons measures a stored position against: a view
+     that cannot scroll drops positions outside it and falls back to the
+     grid, so placing one there would be pointless. */
+  area = ([self enclosingScrollView] != nil) ? [self bounds] : [self usableContentRect];
+
+  cellW = (_cachedCellSize.width > 0) ? _cachedCellSize.width : gridSize.width;
+  cellH = (_cachedCellSize.height > 0) ? _cachedCellSize.height : gridSize.height;
+  if (cellW <= 0 || cellH <= 0)
+    return;
+
+  p = [self convertPoint: winPoint fromView: nil];
+  x = p.x;
+  y = p.y;
+
+  for (i = 0; i < [names count]; i++)
+    {
+      NSRect cell = NSMakeRect(x - cellW / 2, y - cellH / 2, cellW, cellH);
+      NSSize adjust = FSNClampedGroupDelta(cell, area, NSZeroSize);
+      NSPoint center = NSMakePoint(x + adjust.width, y + adjust.height);
+
+      [customIconPositions setObject:
+	 [NSValue valueWithPoint: [self ilocCenterForViewCenter: center]]
+			      forKey: [names objectAtIndex: i]];
+
+      x += cellW + COLUMN_GAP_X;
+      if ((x + cellW / 2) > NSMaxX(area))
+	{
+	  x = p.x;
+	  y += [self isFlipped] ? cellH : -cellH;
+	}
+    }
+}
+
+- (void)previewSelectionInRect:(NSRect)bandRect
+{
+  NSUInteger i;
+
+  for (i = 0; i < [icons count]; i++)
+    {
+      FSNIcon *icon = [icons objectAtIndex: i];
+      BOOL touched = NO;
+
+      /* The same test the band applies when it is let go, so the preview
+	 never promises a selection that does not happen. */
+      if (NSIsEmptyRect(bandRect) == NO)
+	touched = NSIntersectsRect(bandRect,
+				   [self convertRect: [icon nodeBounds] fromView: icon]);
+
+      [icon setSelectionPreview: touched];
+    }
+}
+
+- (BOOL)foreignWindowIsUnderPointer
+{
+  return NO;
+}
+
+- (BOOL)pathsAreAllOurIcons:(NSArray *)paths
+{
+  NSUInteger i;
+
+  if ([paths count] == 0)
+    return NO;
+
+  for (i = 0; i < [paths count]; i++)
+    if ([self repOfSubnodePath: [paths objectAtIndex: i]] == nil)
+      return NO;
+
+  return YES;
+}
+
+/* Icons of this view dropped back into it: that is a move inside the view,
+ * not a file operation.  The group goes down where it was dropped, keeping
+ * the icons' offsets to each other, and is persisted like any other move.
+ *
+ * Such a drop only happens when the drag left the view and came back - a
+ * move that stays inside never becomes a drag - and until now the Desktop
+ * answered it by asking the file system to move the files onto themselves,
+ * while the spatial view refused it and left the icons where they were. */
+- (BOOL)repositionIconsOfPaths:(NSArray *)paths atDropPoint:(NSPoint)winPoint
+{
+  NSMutableArray *dropped;
+  NSMutableArray *centers;
+  NSRect group = NSZeroRect;
+  NSPoint p;
+  NSSize delta;
+  NSUInteger i;
+
+  if ([self honorsSavedPositions] == NO || [self pathsAreAllOurIcons: paths] == NO)
+    return NO;
+
+  dropped = [NSMutableArray arrayWithCapacity: [paths count]];
+  for (i = 0; i < [paths count]; i++)
+    {
+      FSNIcon *icon = [self repOfSubnodePath: [paths objectAtIndex: i]];
+
+      group = (i == 0) ? [icon frame] : NSUnionRect(group, [icon frame]);
+      [dropped addObject: icon];
+    }
+
+  p = [self convertPoint: winPoint fromView: nil];
+  delta = FSNClampedGroupDelta(group, [self bounds],
+                               NSMakeSize(p.x - NSMidX(group),
+                                          p.y - NSMidY(group)));
+
+  centers = [NSMutableArray arrayWithCapacity: [dropped count]];
+  for (i = 0; i < [dropped count]; i++)
+    {
+      NSRect frm = [[dropped objectAtIndex: i] frame];
+
+      [centers addObject: [NSValue valueWithPoint:
+        NSMakePoint(NSMidX(frm) + delta.width, NSMidY(frm) + delta.height)]];
+    }
+
+  [self batchRepositionIcons: dropped toCenterPoints: centers];
+
+  return YES;
+}
+
 /* Animate the icons from their pre-move frames to the current ones.  The
  * caller snapshots the frames BEFORE moving (keyed by node name), moves the
  * icons (which sets the new frames), then calls this.  We invalidate both the
@@ -1553,6 +1694,10 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       r = NSMakeRect(x, y, w, h);
 
+      /* Show what letting go now would select, before the redraw below
+	 picks the changed icons up together with the old band. */
+      [self previewSelectionInRect: r];
+
       // Erase the previous rect via normal display machinery
       [self setNeedsDisplayInRect: oldRect];
       [[self window] displayIfNeeded];
@@ -1607,13 +1752,19 @@ static void GWHighlightFrameRect(NSRect aRect)
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      NSRect iconBounds = [self convertRect: [icon iconBounds] fromView: icon];
+      /* The name is part of the icon as far as the user is concerned, so a
+	 band that only touches the label selects too. */
+      NSRect nodeBounds = [self convertRect: [icon nodeBounds] fromView: icon];
 
-      if (NSIntersectsRect(selrect, iconBounds))
+      if (NSIntersectsRect(selrect, nodeBounds))
 	{
 	  [icon select];
 	}
     }
+
+  /* Only now that the real selection draws the same highlight, so the
+     icons do not flash unselected in between. */
+  [self previewSelectionInRect: NSZeroRect];
 
   selectionMask = NSSingleSelectionMask;
 
@@ -3194,6 +3345,17 @@ static void GWHighlightFrameRect(NSRect aRect)
       return NSDragOperationNone;
     }
 
+  /* Icons of this view coming back into it.  Accepting the drop here is what
+     makes it possible at all: the same-folder check below refuses it, and
+     -concludeDragOperation: answers it by moving the icons, not the files. */
+  if ([self honorsSavedPositions] && [self pathsAreAllOurIcons: sourcePaths])
+    {
+      isDragTarget = YES;
+      forceCopy = NO;
+      negotiatedDragOp = NSDragOperationMove;
+      return NSDragOperationMove;
+    }
+
   if ([node isWritable] == NO)
     {
       return NSDragOperationNone;
@@ -3426,6 +3588,12 @@ static void GWHighlightFrameRect(NSRect aRect)
       return;
     }
 
+  if ([self repositionIconsOfPaths: sourcePaths
+                       atDropPoint: [sender draggingLocation]])
+    {
+      return;
+    }
+
   source = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
 
   trashPath = [desktopApp trashPath];
@@ -3458,6 +3626,9 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       [files addObject: [[sourcePaths objectAtIndex: i] lastPathComponent]];
     }
+
+  [self recordDropPositionsForFiles: files
+			    atPoint: [sender draggingLocation]];
 
   opDict = [NSMutableDictionary dictionary];
   [opDict setObject: operation forKey: @"operation"];

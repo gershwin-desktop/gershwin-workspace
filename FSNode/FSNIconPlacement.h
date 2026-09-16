@@ -246,4 +246,42 @@ FSNIlocFromViewCenter(NSPoint center, CGFloat refHeight, BOOL flipped)
   return NSMakePoint(center.x, refHeight - center.y);
 }
 
+/* -----------------------------------------------------------------------
+ * Keeping a dragged group of icons inside its view.
+ *
+ * An icon put down outside the view's bounds gets a position the view can
+ * never show again, so the move is shifted back in.  One delta clamps the
+ * whole group, which keeps a multiple selection in formation when it meets
+ * an edge; a group taller or wider than the view is pinned to the view's
+ * lower/left edge in that axis.
+ * --------------------------------------------------------------------- */
+static inline NSSize
+FSNClampedGroupDelta(NSRect group, NSRect bounds, NSSize delta)
+{
+  NSRect moved = NSOffsetRect(group, delta.width, delta.height);
+  CGFloat over;
+
+  over = NSMaxX(moved) - NSMaxX(bounds);
+  if (over > 0)
+    {
+      delta.width -= over;
+      moved.origin.x -= over;
+    }
+  over = NSMinX(bounds) - NSMinX(moved);
+  if (over > 0)
+    delta.width += over;
+
+  over = NSMaxY(moved) - NSMaxY(bounds);
+  if (over > 0)
+    {
+      delta.height -= over;
+      moved.origin.y -= over;
+    }
+  over = NSMinY(bounds) - NSMinY(moved);
+  if (over > 0)
+    delta.height += over;
+
+  return delta;
+}
+
 #endif /* FSN_ICON_PLACEMENT_H */

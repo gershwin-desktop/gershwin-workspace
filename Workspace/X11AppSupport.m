@@ -1574,3 +1574,72 @@ static GWX11AppManager *sharedX11AppManager = nil;
 }
 
 @end
+
+#pragma mark - Window under the pointer
+
+BOOL GWForeignWindowIsUnderPointer(void)
+{
+    Display *dpy = (Display *)[GSCurrentServer() serverDevice];
+    Window root, rootRet = None, child = None, under;
+    int rx = 0, ry = 0, wx = 0, wy = 0;
+    unsigned int mask = 0;
+    pid_t pid = 0;
+
+    if (dpy == NULL)
+        return NO;
+
+    ensureX11ErrorHandler();
+
+    root = DefaultRootWindow(dpy);
+
+    /* The pointer itself rather than a stored event location: this is asked
+       while the button is down, and the answer has to match where the cursor
+       is now. */
+    if (!XQueryPointer(dpy, root, &rootRet, &child, &rx, &ry, &wx, &wy, &mask))
+        return NO;   /* pointer on another screen */
+    if (child == None)
+        return NO;   /* bare root: nothing there to drop on */
+
+    /* XQueryPointer reports the child of the root, which for a managed window
+       is the frame the window manager reparented it into.  Descend to the
+       window really under the pointer, then climb back up to whoever claims
+       ownership: _NET_WM_PID sits on the client window, which is somewhere
+       between the two. */
+    under = child;
+    for (;;) {
+        Window next = None;
+        int tx = 0, ty = 0;
+
+        if (!XTranslateCoordinates(dpy, root, under, rx, ry, &tx, &ty, &next))
+            break;
+        if (next == None)
+            break;
+        under = next;
+    }
+
+    for (;;) {
+        Window wroot = None, parent = None, *children = NULL;
+        unsigned int nchildren = 0;
+
+        pid = [[GWX11WindowManager sharedManager] getPIDForWindow: dpy
+                                                           window: under];
+        if (pid != 0 || under == root)
+            break;
+        if (!XQueryTree(dpy, under, &wroot, &parent, &children, &nchildren))
+            break;
+        if (children != NULL)
+            XFree(children);
+        if (parent == None || parent == under)
+            break;
+        under = parent;
+    }
+
+    if (pid == getpid())
+        return NO;
+
+    /* Nobody claims the window.  It is not ours as far as anyone can tell,
+       but say foreign only when the owner is actually known: an application
+       that sets no _NET_WM_PID must not make icon moves end at random, and
+       neither must our own windows should this GNUstep stop setting it. */
+    return (pid != 0);
+}

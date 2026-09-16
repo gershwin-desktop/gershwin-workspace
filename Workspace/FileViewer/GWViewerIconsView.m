@@ -32,6 +32,7 @@
 #import "GWViewersManager.h"
 #import "Workspace.h"
 #import "GWDesktopManager.h"
+#import "X11AppSupport.h"
 
 @implementation GWViewerIconsView
 
@@ -59,6 +60,13 @@
 /* The browser icon view auto-grids and reflows to the window width; it does
  * not honor or persist saved .DS_Store positions (those are for the spatial
  * view and the desktop). */
+/* Another application's window can cover this one, and AppKit does not see
+   it; the window server does. */
+- (BOOL)foreignWindowIsUnderPointer
+{
+  return GWForeignWindowIsUnderPointer();
+}
+
 - (BOOL)honorsSavedPositions
 {
   return NO;

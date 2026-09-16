@@ -77,6 +77,10 @@
   BOOL suppressSelectionDrawing;
   
   BOOL isOpened;
+  /* YES while the icon follows the pointer in a free-position move. */
+  BOOL beingDragged;
+  /* YES while a rubber band being dragged out would select the icon. */
+  BOOL selectionPreview;
   
   BOOL nameEdited;
   BOOL isLeaf;
@@ -92,6 +96,9 @@
   BOOL slideBack;
   int dragdelay;
   BOOL isDragTarget;
+  /* YES while a drag sits in this icon's frame but outside its image and
+     name, i.e. on the view behind it, which then gets the drag messages. */
+  BOOL dragProxied;
   BOOL forceCopy;
   NSDragOperation negotiatedDragOp;
   BOOL onApplication;
@@ -142,6 +149,29 @@
 
 - (NSRect)iconBounds;
 
+/* Image and name together: what the user sees of the node, and so what a
+   rubber-band selection has to touch to catch it. */
+- (NSRect)nodeBounds;
+
+/* Whether the point (in this icon's own coordinates) is on what stands for
+   the node - the image, or the name beside or below it.  The padding that
+   fills the rest of the frame does not. */
+- (BOOL)pointIsOnNode:(NSPoint)selfPoint;
+
+/* Show the open-folder image while a drag that has not left the icon view
+   hovers this icon, so the move into the folder is announced before the
+   mouse is released. */
+- (void)setDropHighlighted:(BOOL)flag;
+
+/* Ghost this icon while it is being moved, so whatever it passes over - a
+   folder opening up to take it - stays readable underneath. */
+- (void)setBeingDragged:(BOOL)flag;
+
+/* Draw the icon as selected without selecting it, while a rubber band that
+   would select it is still being dragged out.  Only marks the icon for
+   redisplay; the band's own loop does the drawing. */
+- (void)setSelectionPreview:(BOOL)flag;
+
 - (void)tile;
 
 /* The width the label would need to draw its full (untruncated) title,
@@ -174,6 +204,12 @@
 
 @interface FSNIcon (DraggingDestination)
 
+/* Whether a drag at this point is aimed at the node this icon shows.  The
+   image and the name are; the padding around them is not - there the icon
+   steps aside and the view behind it handles the drag.  Override to YES
+   where the whole tile stands for the node, as in the Dock. */
+- (BOOL)draggingPointIsOnNode:(id <NSDraggingInfo>)sender;
+
 - (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender;
 
 - (NSDragOperation)draggingUpdated:(id <NSDraggingInfo>)sender;
@@ -185,6 +221,14 @@
 - (BOOL)performDragOperation:(id <NSDraggingInfo>)sender;
 
 - (void)concludeDragOperation:(id <NSDraggingInfo>)sender;
+
+/* Carry out a drop on this icon: hand the paths to the application it stands
+   for, or run the named file operation with its folder as the destination.
+   Used by -concludeDragOperation: and by a drop that never left the icon
+   view, which the drag machinery therefore never hears about. */
+- (void)openDroppedPaths:(NSArray *)paths;
+
+- (void)fileDroppedPaths:(NSArray *)paths operation:(NSString *)operation;
 
 @end
 
