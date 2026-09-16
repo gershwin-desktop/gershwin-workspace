@@ -1604,6 +1604,11 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)mouseDown:(NSEvent *)theEvent
 {
+  [self selectNothingForBackgroundEvent: theEvent];
+}
+
+- (void)selectNothingForBackgroundEvent:(NSEvent *)theEvent
+{
   if ([theEvent modifierFlags] != NSShiftKeyMask)
     {
       selectionMask = NSSingleSelectionMask;
@@ -1615,6 +1620,20 @@ static void GWHighlightFrameRect(NSRect aRect)
       [self selectionDidChange];
       [self stopRepNameEditing];
     }
+}
+
+- (FSNIcon *)iconWithNodeAtWindowPoint:(NSPoint)location
+{
+  NSUInteger i;
+
+  for (i = 0; i < [icons count]; i++)
+    {
+      FSNIcon *icon = [icons objectAtIndex: i];
+
+      if ([icon pointIsOnNode: [icon convertPoint: location fromView: nil]])
+	return icon;
+    }
+  return nil;
 }
 
 - (void)mouseDragged:(NSEvent *)theEvent

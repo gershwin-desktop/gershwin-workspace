@@ -800,6 +800,14 @@ static void FSNRedrawContainerRect(NSView *container, NSRect dirty)
 {
   if ([theEvent type] == NSRightMouseDown)
     {
+      /* Beside the image and name a left click belongs to the view behind
+         the icon, so a right click there must not select the icon either. */
+      if ([self pointIsOnNode:
+	     [self convertPoint: [theEvent locationInWindow] fromView: nil]] == NO)
+	{
+	  return [container menuForEvent: theEvent];
+	}
+
       // Select the icon if it's not already selected so the context menu shows
       if (!isSelected && selectable)
         {

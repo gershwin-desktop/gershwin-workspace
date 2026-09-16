@@ -225,6 +225,15 @@
    redisplay; the caller redraws. */
 - (void)previewSelectionInRect:(NSRect)bandRect;
 
+/* What a click on the view's background does to the selection: drop it,
+   unless Shift extends it.  A right click there does the same before its
+   menu opens, so the menu acts on what the user sees selected. */
+- (void)selectNothingForBackgroundEvent:(NSEvent *)theEvent;
+
+/* The icon whose image or name is under the point (window coordinates) -
+   the part of an icon a click hits - or nil for the background. */
+- (FSNIcon *)iconWithNodeAtWindowPoint:(NSPoint)location;
+
 /* YES when every one of the paths is shown by an icon of this view. */
 - (BOOL)pathsAreAllOurIcons:(NSArray *)paths;
 

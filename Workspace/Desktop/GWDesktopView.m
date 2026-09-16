@@ -1119,7 +1119,9 @@ static CGFloat desktopScaleFactor(void)
   [self setSelectionMask: NSSingleSelectionMask];
 }
 
-- (void)mouseDown:(NSEvent *)theEvent
+/* The Desktop also clears the selection of spatial viewers, and leaves name
+ * editing alone, as its clicks always did. */
+- (void)selectNothingForBackgroundEvent:(NSEvent *)theEvent
 {
   if ([theEvent modifierFlags] != NSShiftKeyMask)
     {
@@ -1482,18 +1484,9 @@ static void GWHighlightFrameRect(NSRect aRect)
 {
   if ([theEvent type] == NSRightMouseDown) {
     NSPoint location = [theEvent locationInWindow];
-    NSPoint selfloc = [self convertPoint: location fromView: nil];
-    GWDesktopIcon *clickedIcon = nil;
-    NSUInteger i;
-
-    // Find which icon was clicked
-    for (i = 0; i < [icons count]; i++) {
-      GWDesktopIcon *icon = [icons objectAtIndex: i];
-      if ([self mouse: selfloc inRect: [icon frame]]) {
-        clickedIcon = icon;
-        break;
-      }
-    }
+    /* Only a click on an icon's image or name hits the icon, the same test
+       a left click goes through. */
+    FSNIcon *clickedIcon = [self iconWithNodeAtWindowPoint: location];
 
     if (clickedIcon) {
       NSArray *selnodes = [self selectedNodes];
@@ -1519,6 +1512,8 @@ static void GWHighlightFrameRect(NSRect aRect)
                                          includeOpenWith: YES];
     } else {
       // Right-clicked on empty desktop background
+      [self selectNothingForBackgroundEvent: theEvent];
+
       NSMenu *menu = [[Workspace gworkspace] emptySpaceContextMenuForViewer: [self window]];
 
       // Add Workspace Preferences (desktop-specific)

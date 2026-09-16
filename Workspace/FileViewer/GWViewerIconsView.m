@@ -96,22 +96,6 @@
   [viewer openSelectionInNewViewer: newv];
 }
 
-- (void)mouseDown:(NSEvent *)theEvent
-{
-  if ([theEvent modifierFlags] != NSShiftKeyMask)
-    {
-      selectionMask = NSSingleSelectionMask;
-      selectionMask |= FSNCreatingSelectionMask;
-      [self unselectOtherReps: nil];
-      selectionMask = NSSingleSelectionMask;
-    
-      DESTROY (lastSelection);
-      [self selectionDidChange];
-      [self stopRepNameEditing];
-   
-    }
-}
-
 - (void)keyDown:(NSEvent *)theEvent
 {
   unsigned flags = [theEvent modifierFlags];
@@ -264,7 +248,15 @@
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent
 {
   if ([theEvent type] == NSRightMouseDown) {
-    NSArray *selnodes = [self selectedNodes];
+    NSArray *selnodes;
+
+    /* A right click on the background first does what a left click there
+       does, so the menu is the empty-space one and not the menu of icons
+       the user has clicked away from. */
+    if ([self iconWithNodeAtWindowPoint: [theEvent locationInWindow]] == nil)
+      [self selectNothingForBackgroundEvent: theEvent];
+
+    selnodes = [self selectedNodes];
     
     if (selnodes && [selnodes count]) {
       return [[Workspace gworkspace] contextMenuForNodes: selnodes
