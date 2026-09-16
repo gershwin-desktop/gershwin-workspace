@@ -250,7 +250,16 @@ static GWViewersManager *vwrsmanager = nil;
   
   if ([selection count] > 0)
     {
-      [[viewer nodeView] selectRepsOfSubnodes: selection];  
+      id nodeView = [viewer nodeView];
+
+      [nodeView selectRepsOfSubnodes: selection];
+
+      /* Selecting alone leaves the scroll position untouched, so a reveal
+       * into an already-open viewer (a browser's "Show in folder" on a
+       * download, say) would land on an item nobody can see.  The browser
+       * scrolls its own matrix, hence the respondsToSelector guard. */
+      if ([nodeView respondsToSelector: @selector(scrollSelectionToVisible)])
+        [nodeView scrollSelectionToVisible];
     }
 }
 
