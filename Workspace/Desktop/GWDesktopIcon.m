@@ -27,12 +27,6 @@
 #include <Foundation/Foundation.h>
 #include <AppKit/AppKit.h>
 #include "GWDesktopIcon.h"
-#import "FSNIconsView.h"
-
-/* Forward declaration for repositionLocal:offset: inherited from FSNIcon */
-@interface FSNIcon (GWDesktopIconForwardDecl)
-- (void)repositionLocal:(NSEvent *)firstEvent offset:(NSSize)initialOffset;
-@end
 
 @implementation GWDesktopIcon
 
@@ -103,121 +97,14 @@
 
 - (void)mouseDown:(NSEvent *)theEvent
 {
-  NSWindow *win = [self window];
-  NSPoint location = [theEvent locationInWindow];
-  NSPoint selfloc = [self convertPoint: location fromView: nil];
-  BOOL onself = NO;
-  NSEvent *nextEvent = nil;
-  BOOL startdnd = NO;
-  NSSize offset;
+  /* Clicking an icon activates the Desktop window, as it always did here.
+   * Everything else is FSNIcon's handling, so Desktop icons are dragged,
+   * dropped and renamed exactly like icons in an icon view instead of
+   * following a copy of that code that fell behind it. */
+  [[self window] makeMainWindow];
+  [[self window] makeKeyWindow];
 
-  [win makeMainWindow];
-  [win makeKeyWindow];
-
-  if (icnPosition == NSImageOnly)
-    {
-      onself = [self mouse: selfloc inRect: icnBounds];
-    }
-  else
-    {
-      onself = ([self mouse: selfloc inRect: icnBounds]
-		|| [self mouse: selfloc inRect: labelRect]);
-    }
-
-  if (onself)
-    {
-      if (selectable == NO)
-	{
-	  return;
-	}
-
-      if ([theEvent clickCount] == 1)
-	{
-	  if (isSelected == NO) {
-	    [container stopRepNameEditing];
-	    [container repSelected: self];
-	  }
-      
-	  if ([theEvent modifierFlags] & NSShiftKeyMask)
-	    {
-	      [container setSelectionMask: FSNMultipleSelectionMask];
-         
-	      if (isSelected)
-		{
-		  if ([container selectionMask] == FSNMultipleSelectionMask)
-		    {
-		      [self unselect];
-		      [container selectionDidChange];
-		      return;
-		    }
-		}
-	      else
-		{
-		  [self select];
-		}
-        
-	    }
-	  else
-	    {
-	      [container setSelectionMask: NSSingleSelectionMask];
-        
-	      if (isSelected == NO)
-		{
-		  [self select];
-		}
-	    }
-    
-	  if (dndSource)
-	    {
-	      while (1)
-		{
-		  nextEvent = [win nextEventMatchingMask:
-				     NSLeftMouseUpMask | NSLeftMouseDraggedMask];
-
-		  if ([nextEvent type] == NSLeftMouseUp)
-		    {
-		      [win postEvent: nextEvent atStart: YES];
-		      break;
-
-		    }
-		  else if (([nextEvent type] == NSLeftMouseDragged)
-			   && ([self mouse: selfloc inRect: icnBounds]))
-		    {
-		      NSPoint p = [nextEvent locationInWindow];
-		      offset = NSMakeSize(p.x - location.x, p.y - location.y);
-		      startdnd = YES;
-		      break;
-		    }
-		}
-	    }
-
-	  if (startdnd == YES)
-	    {
-	      /* Same gate as FSNIcon: reposition only in position-honoring
-	       * containers (the desktop is one; this keeps the sites in sync). */
-	      BOOL canReposition =
-	        [container respondsToSelector: @selector(repositionIcon:toCenterPoint:)];
-	      if (canReposition
-	          && [container respondsToSelector: @selector(honorsSavedPositions)])
-	        canReposition = [(FSNIconsView *)container honorsSavedPositions];
-
-	      if (canReposition)
-	        [self repositionLocal: theEvent offset: offset];
-	      else
-	        {
-	          [container stopRepNameEditing];
-	          [self startExternalDragOnEvent: theEvent withMouseOffset: offset];
-	        }
-	    }
-
-	  editstamp = [theEvent timestamp];
-	}
-    
-    }
-  else
-    {
-      [container mouseDown: theEvent];
-    }
+  [super mouseDown: theEvent];
 }
 
 @end
