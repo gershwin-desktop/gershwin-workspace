@@ -105,6 +105,10 @@ static BOOL hasLastExtents_ = NO;
 - (void)dealloc
 {
   [nc removeObserver: self];
+  /* The window keeps the sidebar alive past this point, and a queued
+     notification (network services arrive from a background thread) would
+     otherwise make it message this freed viewer. */
+  [sidebar viewerWillDeallocate];
 
   RELEASE (baseNode);
   RELEASE (baseNodeArray);

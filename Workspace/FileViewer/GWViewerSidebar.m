@@ -692,6 +692,13 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   [super dealloc];
 }
 
+- (void)viewerWillDeallocate
+{
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
+  [NSObject cancelPreviousPerformRequestsWithTarget: self];
+  viewer = nil;
+}
+
 - (id)initWithFrame:(NSRect)frameRect
           forViewer:(id)vwr
 {

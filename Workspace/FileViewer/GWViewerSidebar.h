@@ -32,4 +32,9 @@
 - (void)reloadData;
 - (void)rebuildVolumesSection;
 
+/* Called by the owning viewer as it goes away: the window, and with it the
+   sidebar, can outlive the viewer, so the sidebar must stop reacting to
+   notifications and forget the viewer it does not retain. */
+- (void)viewerWillDeallocate;
+
 @end
