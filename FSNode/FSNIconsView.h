@@ -225,6 +225,12 @@
    redisplay; the caller redraws. */
 - (void)previewSelectionInRect:(NSRect)bandRect;
 
+/* Move the rubber band from one rect to the other, redrawing only the pixels
+   whose appearance changes.  Repainting the whole band on every mouse move
+   means recompositing the desktop background under it, which is far too slow
+   to follow the pointer. */
+- (void)redrawSelectionBandFrom:(NSRect)oldRect to:(NSRect)newRect;
+
 /* What a click on the view's background does to the selection: drop it,
    unless Shift extends it.  A right click there does the same before its
    menu opens, so the menu acts on what the user sees selected. */

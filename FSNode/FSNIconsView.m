@@ -1144,6 +1144,104 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
 }
 
+/* The part of "a" that "b" does not cover, as up to four rects. */
+static NSUInteger FSNSubtractRect(NSRect a, NSRect b, NSRect *out)
+{
+  NSRect isect = NSIntersectionRect(a, b);
+  NSUInteger n = 0;
+
+  if (NSIsEmptyRect(a))
+    return 0;
+
+  if (NSIsEmptyRect(isect))
+    {
+      out[0] = a;
+      return 1;
+    }
+
+  if (NSMinY(a) < NSMinY(isect))
+    out[n++] = NSMakeRect(NSMinX(a), NSMinY(a),
+			  NSWidth(a), NSMinY(isect) - NSMinY(a));
+  if (NSMaxY(isect) < NSMaxY(a))
+    out[n++] = NSMakeRect(NSMinX(a), NSMaxY(isect),
+			  NSWidth(a), NSMaxY(a) - NSMaxY(isect));
+  if (NSMinX(a) < NSMinX(isect))
+    out[n++] = NSMakeRect(NSMinX(a), NSMinY(isect),
+			  NSMinX(isect) - NSMinX(a), NSHeight(isect));
+  if (NSMaxX(isect) < NSMaxX(a))
+    out[n++] = NSMakeRect(NSMaxX(isect), NSMinY(isect),
+			  NSMaxX(a) - NSMaxX(isect), NSHeight(isect));
+
+  return n;
+}
+
+/* The one-point wide frame of aRect, as four rects. */
+static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
+{
+  if (NSIsEmptyRect(aRect))
+    return 0;
+
+  out[0] = NSMakeRect(NSMinX(aRect), NSMinY(aRect), NSWidth(aRect), 1.0);
+  out[1] = NSMakeRect(NSMinX(aRect), NSMaxY(aRect) - 1.0, NSWidth(aRect), 1.0);
+  out[2] = NSMakeRect(NSMinX(aRect), NSMinY(aRect), 1.0, NSHeight(aRect));
+  out[3] = NSMakeRect(NSMaxX(aRect) - 1.0, NSMinY(aRect), 1.0, NSHeight(aRect));
+
+  return 4;
+}
+
+- (void)redrawSelectionBandFrom:(NSRect)oldRect to:(NSRect)newRect
+{
+  NSRect dirty[16];
+  NSUInteger count = 0;
+  NSUInteger i;
+
+  if (NSEqualRects(oldRect, newRect))
+    return;
+
+  /* Where the band is growing or shrinking, plus where its frame was and
+     where it now is - everywhere else it looks the same as a moment ago. */
+  count += FSNSubtractRect(oldRect, newRect, dirty + count);
+  count += FSNSubtractRect(newRect, oldRect, dirty + count);
+  count += FSNFrameRects(oldRect, dirty + count);
+  count += FSNFrameRects(newRect, dirty + count);
+
+  for (i = 0; i < count; i++)
+    [self setNeedsDisplayInRect: dirty[i]];
+
+  [[self window] displayIfNeeded];
+
+  if (NSIsEmptyRect(newRect))
+    return;
+
+  [self lockFocus];
+  [NSGraphicsContext saveGraphicsState];
+
+  /* Clipping to what was just erased keeps the translucent fill from being
+     composited a second time over the part of the band that stayed put. */
+  {
+    NSBezierPath *clip = [NSBezierPath bezierPath];
+
+    for (i = 0; i < count; i++)
+      [clip appendBezierPathWithRect: dirty[i]];
+    [clip addClip];
+  }
+
+  if (transparentSelection)
+    {
+      [[NSColor darkGrayColor] set];
+      NSFrameRect(newRect);
+      [[[NSColor darkGrayColor] colorWithAlphaComponent: 0.33] set];
+      NSRectFillUsingOperation(newRect, NSCompositeSourceOver);
+    }
+  else
+    {
+      GWHighlightFrameRect(newRect);
+    }
+
+  [NSGraphicsContext restoreGraphicsState];
+  [self unlockFocus];
+}
+
 - (BOOL)foreignWindowIsUnderPointer
 {
   return NO;
@@ -1686,15 +1784,40 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       CREATE_AUTORELEASE_POOL (arp);
 
+      NSEvent *pendingUp = nil;
+
       theEvent = [NSApp nextEventMatchingMask: eventMask
 				    untilDate: future
 				       inMode: NSEventTrackingRunLoopMode
 				      dequeue: YES];
 
+      /* X11 delivers motion faster than the band can be redrawn, so only the
+	 newest position is acted on - but it is always acted on, even when the
+	 button has already come up behind it: that last position is the one
+	 the selection is taken from. */
+      while ([theEvent type] != NSLeftMouseUp)
+	{
+	  NSEvent *queued = [NSApp nextEventMatchingMask: eventMask
+					       untilDate: [NSDate distantPast]
+						  inMode: NSEventTrackingRunLoopMode
+						 dequeue: YES];
+	  if (queued == nil)
+	    break;
+	  if ([queued type] == NSLeftMouseUp)
+	    {
+	      pendingUp = queued;
+	      break;
+	    }
+	  theEvent = queued;
+	}
+
       if ([theEvent type] != NSPeriodic)
 	{
 	  p = [theEvent locationInWindow];
 	}
+
+      if (pendingUp != nil)
+	theEvent = pendingUp;
 
       CONVERT_CHECK;
 
@@ -1713,30 +1836,17 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       r = NSMakeRect(x, y, w, h);
 
+      if (NSEqualRects(r, oldRect))
+	{
+	  DESTROY (arp);
+	  continue;
+	}
+
       /* Show what letting go now would select, before the redraw below
 	 picks the changed icons up together with the old band. */
       [self previewSelectionInRect: r];
 
-      // Erase the previous rect via normal display machinery
-      [self setNeedsDisplayInRect: oldRect];
-      [[self window] displayIfNeeded];
-
-      // Draw the new rect via direct drawing (inside lockFocus, no mixing)
-      [self lockFocus];
-
-      if (transparentSelection)
-	{
-	  [[NSColor darkGrayColor] set];
-	  NSFrameRect(r);
-	  [[[NSColor darkGrayColor] colorWithAlphaComponent: 0.33] set];
-	  NSRectFillUsingOperation(r, NSCompositeSourceOver);
-	}
-      else
-	{
-	  GWHighlightFrameRect(r);
-	}
-
-      [self unlockFocus];
+      [self redrawSelectionBandFrom: oldRect to: r];
 
       oldRect = r;
 

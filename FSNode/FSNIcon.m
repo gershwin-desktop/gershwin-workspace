@@ -101,6 +101,21 @@ static void FSNRedrawContainerRect(NSView *container, NSRect dirty)
   [container displayIfNeeded];
 }
 
+/* Asking the window server what lies under the pointer costs several
+ * synchronous round trips, and motion arrives far faster than that: asking
+ * for every event alone makes a drag stutter.  Ten times a second is soon
+ * enough to notice the pointer reaching another application's window, and in
+ * between the last answer stands.  The answer is dropped when a drag starts
+ * so that no gesture begins on one left over from the previous one. */
+static NSTimeInterval foreignCheckTime = 0.0;
+static BOOL foreignCheckAnswer = NO;
+
+static void FSNForgetForeignWindowAnswer(void)
+{
+  foreignCheckTime = 0.0;
+  foreignCheckAnswer = NO;
+}
+
 @implementation FSNIcon
 
 @synthesize placementData = _placementData;
@@ -1070,7 +1085,11 @@ static void FSNRedrawContainerRect(NSView *container, NSRect dirty)
 
 - (void)drawRect:(NSRect)rect
 {
-  if ((isSelected || selectionPreview) && !suppressSelectionDrawing)
+  /* A dragged icon is a ghost floating over whatever the pointer is on.  Its
+   * selection plate is opaque, so painting that too would hide the folder the
+   * icon is about to be dropped on, drop highlight and all. */
+  if ((isSelected || selectionPreview) && !suppressSelectionDrawing
+      && (beingDragged == NO))
     {
       [[NSColor selectedControlColor] set];
       [highlightPath fill];
@@ -1847,6 +1866,9 @@ static void FSNMoveDraggedIcons(NSView *container, NSArray *dragged,
   NSSize delta;
   NSUInteger i, count = [dragged count];
 
+  if (count == 0)
+    return;
+
   for (i = 0; i < count; i++)
     {
       NSRect orig = [[frames objectAtIndex: i] rectValue];
@@ -1949,9 +1971,19 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
   /* Windows of other applications are invisible to AppKit, so the container
      asks the window server - it may well be one of those that covers our own
      window here, and the Desktop lies behind every one of them. */
-  if ([container respondsToSelector: @selector(foreignWindowIsUnderPointer)]
-      && [container foreignWindowIsUnderPointer])
-    return YES;
+  if ([container respondsToSelector: @selector(foreignWindowIsUnderPointer)])
+    {
+      NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+
+      if ((now - foreignCheckTime) >= 0.1)
+	{
+	  foreignCheckTime = now;
+	  foreignCheckAnswer = [container foreignWindowIsUnderPointer];
+	}
+
+      if (foreignCheckAnswer)
+	return YES;
+    }
 
   home = [container enclosingScrollView];
   if (home == nil)
@@ -2073,6 +2105,7 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
    * delta, so this is a no-op there. */
   NSPoint startLocal = [container convertPoint: startLoc fromView: nil];
 
+  FSNForgetForeignWindowAnswer();
   FSNSetIconsBeingDragged(allIcons, YES);
 
   /* Apply the initial offset from the drag-start event immediately.
@@ -2094,7 +2127,31 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
 
   while (1)
     {
+      NSEvent *pendingUp = nil;
+
       event = [win nextEventMatchingMask: NSLeftMouseDraggedMask | NSLeftMouseUpMask];
+
+      /* X11 delivers motion faster than the icons can be redrawn, so only the
+       * newest position is acted on - but it is always acted on, even when the
+       * button has already come up behind it.  That last position is the one
+       * that decides where the icons land and whether a folder takes them, so
+       * dropping it would lose the drop. */
+      while ([event type] != NSLeftMouseUp)
+        {
+          NSEvent *queued = [NSApp nextEventMatchingMask:
+                                     NSLeftMouseDraggedMask | NSLeftMouseUpMask
+                                               untilDate: [NSDate distantPast]
+                                                  inMode: NSEventTrackingRunLoopMode
+                                                 dequeue: YES];
+          if (queued == nil)
+            break;
+          if ([queued type] == NSLeftMouseUp)
+            {
+              pendingUp = queued;
+              break;
+            }
+          event = queued;
+        }
 
       if ([event type] == NSLeftMouseUp)
         break;
@@ -2144,6 +2201,9 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
                               localInContainer.y - startLocal.y);
           didMove = YES;
         }
+
+      if (pendingUp != nil)
+        break;
     }
 
   FSNSetIconsBeingDragged(allIcons, NO);

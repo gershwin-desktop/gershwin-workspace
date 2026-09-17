@@ -1137,11 +1137,6 @@ static CGFloat desktopScaleFactor(void)
     }
 }
 
-static void GWHighlightFrameRect(NSRect aRect)
-{
-  NSFrameRectWithWidthUsingOperation(aRect, 1.0, GSCompositeHighlight);
-}
-
 - (void)mouseDragged:(NSEvent *)theEvent
 {
   unsigned int eventMask = NSLeftMouseUpMask | NSLeftMouseDraggedMask;
@@ -1168,10 +1163,35 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       CREATE_AUTORELEASE_POOL (arp);
 
+      NSEvent *pendingUp = nil;
+
       theEvent = [[self window] nextEventMatchingMask: eventMask];
+
+      /* X11 delivers motion faster than the band can be redrawn, so only the
+	 newest position is acted on - but it is always acted on, even when the
+	 button has already come up behind it: that last position is the one
+	 the selection is taken from. */
+      while ([theEvent type] != NSLeftMouseUp)
+	{
+	  NSEvent *queued = [NSApp nextEventMatchingMask: eventMask
+					       untilDate: [NSDate distantPast]
+						  inMode: NSEventTrackingRunLoopMode
+						 dequeue: YES];
+	  if (queued == nil)
+	    break;
+	  if ([queued type] == NSLeftMouseUp)
+	    {
+	      pendingUp = queued;
+	      break;
+	    }
+	  theEvent = queued;
+	}
 
       locp = [theEvent locationInWindow];
       locp = [self convertPoint: locp fromView: nil];
+
+      if (pendingUp != nil)
+	theEvent = pendingUp;
 
       x = min(startp.x, locp.x);
       y = min(startp.y, locp.y);
@@ -1180,28 +1200,17 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       r = NSMakeRect(x, y, w, h);
 
+      if (NSEqualRects(r, oldRect))
+	{
+	  DESTROY (arp);
+	  continue;
+	}
+
       /* Show what letting go now would select, before the redraw below
 	 picks the changed icons up together with the old band. */
       [self previewSelectionInRect: r];
 
-      // Erase the previous rect via normal display machinery
-      [self setNeedsDisplayInRect: oldRect];
-      [[self window] displayIfNeeded];
-
-      // Draw the new rect via direct drawing (inside lockFocus, no mixing)
-      [self lockFocus];
-      if (transparentSelection)
-	{
-	  [[NSColor darkGrayColor] set];
-	  NSFrameRect(r);
-          [[[NSColor darkGrayColor] colorWithAlphaComponent: 0.33] set];
-          NSRectFillUsingOperation(r, NSCompositeSourceOver);
-	}
-      else
-	{
-	  GWHighlightFrameRect(r);
-	}
-      [self unlockFocus];
+      [self redrawSelectionBandFrom: oldRect to: r];
 
       oldRect = r;
 
