@@ -360,8 +360,10 @@ main(void)
     PASS(info.hasViewStyle && info.viewStyle == DSStoreViewStyleColumn,
          "view style read from folder FinderInfo fallback");
     PASS(info.hasWindowFrame
-         && NSEqualRects(info.windowFrame, NSMakeRect(50, 60, 400, 300)),
-         "window geometry read from folder FinderInfo fallback");
+         && NSEqualRects(info.windowFrame,
+                         [DSStoreInfo gnustepRectFromDSStoreRect:
+                            NSMakeRect(50, 60, 400, 300)]),
+         "window geometry read from folder FinderInfo fallback (GNUstep coords)");
 
     /* Saving a different view/window must mirror into FinderInfo. */
     [info takeValuesFromViewerPrefs: @{ @"viewtype" : @"List",

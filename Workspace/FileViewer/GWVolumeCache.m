@@ -116,7 +116,7 @@
       if (bounds) {
         NSRect r = NSRectFromString(bounds);
         if (r.size.width > 0 && r.size.height > 0) {
-          [info setWindowFrame:r];
+          [info setWindowFrame:[DSStoreInfo gnustepRectFromDSStoreRect:r]];
           [info setHasWindowFrame:YES];
         }
       }
@@ -140,7 +140,7 @@
         uint16_t bottom = (b[4] << 8) | b[5];
         uint16_t right  = (b[6] << 8) | b[7];
         NSRect r = NSMakeRect(left, top, right - left, bottom - top);
-        [info setWindowFrame:r];
+        [info setWindowFrame:[DSStoreInfo gnustepRectFromDSStoreRect:r]];
         [info setHasWindowFrame:YES];
       }
     }

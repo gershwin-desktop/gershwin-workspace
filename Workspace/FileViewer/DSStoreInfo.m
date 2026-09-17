@@ -476,7 +476,8 @@
             CGFloat width = right - left;
             CGFloat height = bottom - top;
             
-            _windowFrame = NSMakeRect(x, y, width, height);
+            _windowFrame = [DSStoreInfo gnustepRectFromDSStoreRect:
+                              NSMakeRect(x, y, width, height)];
             _hasWindowFrame = YES;
             
             
@@ -543,7 +544,7 @@
     if (!_hasWindowFrame) {
         NSRect r = [md windowBoundsForDirectory];
         if (!NSEqualRects(r, NSZeroRect)) {
-            _windowFrame = r;
+            _windowFrame = [DSStoreInfo gnustepRectFromDSStoreRect: r];
             _hasWindowFrame = YES;
         }
     }
@@ -623,7 +624,7 @@
                                                full.size.width,
                                                full.size.height - tb);
                     if (content.size.height > 0) {
-                        _windowFrame = content;
+                        _windowFrame = [DSStoreInfo gnustepRectFromDSStoreRect: content];
                         _hasWindowFrame = YES;
                     }
                 }
@@ -781,7 +782,7 @@
                 // Parse WindowBounds string format: "{{x, y}, {width, height}}"
                 NSRect rect = NSRectFromString(windowBounds);
                 if (rect.size.width > 0 && rect.size.height > 0) {
-                    _windowFrame = rect;
+                    _windowFrame = [DSStoreInfo gnustepRectFromDSStoreRect: rect];
                     _hasWindowFrame = YES;
                 } else {
                 }
@@ -1497,46 +1498,34 @@
 
 #pragma mark - Coordinate Conversion
 
+/* Every window rect this object holds is in GNUstep screen coordinates
+   (origin bottom-left), whatever it was loaded from: the .DS_Store fwi0/bwsp
+   rect, the folder FinderInfo or a viewer's own prefs all pass through
+   +gnustepRectFromDSStoreRect: on the way in.  One convention throughout is
+   what keeps a load-modify-save cycle from flipping the window: reading a
+   stored rect and writing it back out again used to hand the top-left value
+   to the save-time flip a second time, so the window came back mirrored
+   about the middle of the screen after something rewrote the record.
+
+   Both rects exclude the window decoration, matching the fwi0/bwsp format
+   (the .DS_Store rect is the content area); callers turn it into a full
+   frame with -frameRectForContentRect:. */
++ (NSRect)gnustepRectFromDSStoreRect:(NSRect)dsRect
+{
+  CGFloat screenHeight = [[DSStoreInfo safeMainScreen] frame].size.height;
+
+  return NSMakeRect(dsRect.origin.x,
+                    screenHeight - dsRect.origin.y - dsRect.size.height,
+                    dsRect.size.width, dsRect.size.height);
+}
+
 - (NSRect)gnustepWindowFrameForScreen:(NSScreen *)screen
 {
     if (!_hasWindowFrame) {
         return NSZeroRect;
     }
-    
-    // .DS_Store fwi0/bwsp stores the CONTENT AREA rect (excluding the title
-    // bar / chrome) - see the MozillaWiki DS_Store format notes ("the rect
-    // defining the content area of the window") and Finder behavior.  This is
-    // also what the OpenStep/Cocoa contentRectForFrameRect: convention calls
-    // the content rectangle, and what ICCCM WM_NORMAL_HINTS refers to as the
-    // client window size (excluding borders).  The frame (with decorations)
-    // is derived by the caller via [NSWindow frameRectForContentRect:].
-    //
-    // .DS_Store format: origin at TOP-LEFT of screen
-    // - _windowFrame.origin.y is the TOP edge of CONTENT area (distance from top of screen downward)
-    // - Smaller y values = closer to top of screen
-    // 
-    // GNUstep format: origin at BOTTOM-LEFT of screen
-    // - y is distance from bottom of screen upward
-    // - Larger y values = closer to top of screen
-    //
-    // This method returns the CONTENT AREA rect in GNUstep coordinates.
-    // The caller must convert to full window frame using [NSWindow frameRectForContentRect:]
-    //
-    // Conversion: gnustep_y = screenHeight - dsstore_top - content_height
-    CGFloat screenHeight = [screen frame].size.height;
-    
-    // _windowFrame.origin.y contains the TOP edge of content area from .DS_Store
-    CGFloat dsStoreTop = _windowFrame.origin.y;
-    CGFloat contentHeight = _windowFrame.size.height;
-    
-    // Calculate bottom edge position of content area in GNUstep coordinates
-    CGFloat gnustepY = screenHeight - dsStoreTop - contentHeight;
-    
-    NSRect result = NSMakeRect(_windowFrame.origin.x, gnustepY, 
-                               _windowFrame.size.width, contentHeight);
-    
-    
-    return result;
+
+    return _windowFrame;
 }
 
 - (NSRect)dsStoreWindowFrameForScreen:(NSScreen *)screen

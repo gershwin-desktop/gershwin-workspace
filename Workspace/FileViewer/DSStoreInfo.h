@@ -263,6 +263,13 @@
 + (NSSet *)ownedDirectoryCodes;
 
 // Coordinate conversion utilities for .DS_Store interoperability
+/* A window rect as stored in .DS_Store (origin top-left, y measured down)
+   converted to GNUstep screen coordinates (origin bottom-left).  Everything
+   that loads a stored rect goes through this, so the receiver's windowFrame
+   is always in GNUstep coordinates and the flip back to .DS_Store happens
+   once, at save time. */
++ (NSRect)gnustepRectFromDSStoreRect:(NSRect)dsRect;
+
 - (NSRect)gnustepWindowFrameForScreen:(NSScreen *)screen;
 - (NSPoint)gnustepPositionForDSStorePoint:(NSPoint)dsPoint 
                            viewHeight:(CGFloat)viewHeight 
