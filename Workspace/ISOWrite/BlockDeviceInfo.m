@@ -269,7 +269,6 @@
   }
 #endif
 
-  NSDebugLLog(@"gwspace", @"BlockDeviceInfo: Could not resolve device for mount point %@", normalizedMountPoint);
   return nil;
 }
 
@@ -437,19 +436,16 @@
 {
   struct stat st;
   if (stat([devicePath UTF8String], &st) != 0) {
-    NSDebugLLog(@"gwspace", @"BlockDeviceInfo: Cannot stat device %@: %s", devicePath, strerror(errno));
     return NO;
   }
   
 #ifdef __linux__
   if (!S_ISBLK(st.st_mode)) {
-    NSDebugLLog(@"gwspace", @"BlockDeviceInfo: %@ is not a block device", devicePath);
     return NO;
   }
 #else
   /* On BSD, device nodes may be character devices */
   if (!S_ISBLK(st.st_mode) && !S_ISCHR(st.st_mode)) {
-    NSDebugLLog(@"gwspace", @"BlockDeviceInfo: %@ is not a block or character device", devicePath);
     return NO;
   }
 #endif
@@ -471,7 +467,6 @@
 {
   int fd = open([_devicePath UTF8String], O_RDONLY);
   if (fd < 0) {
-    NSDebugLLog(@"gwspace", @"BlockDeviceInfo: Cannot open %@ for size query: %s", _devicePath, strerror(errno));
     /* On BSD, users may not have direct device node access; try sysctl fallback. */
 #if defined(__FreeBSD__) || defined(__DragonFly__)
     NSString *devName = _deviceName;
@@ -492,9 +487,7 @@
         size_t len = sizeof(mediasize);
         if (sysctlbyname([oid UTF8String], &mediasize, &len, NULL, 0) == 0 && len == sizeof(mediasize)) {
           _size = (unsigned long long)mediasize;
-          NSDebugLLog(@"gwspace", @"BlockDeviceInfo: Size via sysctl %@ = %llu", oid, _size);
         } else {
-          NSDebugLLog(@"gwspace", @"BlockDeviceInfo: sysctl size fallback failed for %@: %s", oid, strerror(errno));
         }
       }
     }
@@ -507,7 +500,6 @@
   if (ioctl(fd, BLKGETSIZE64, &size) == 0) {
     _size = size;
   } else {
-    NSDebugLLog(@"gwspace", @"BlockDeviceInfo: BLKGETSIZE64 failed for %@: %s", _devicePath, strerror(errno));
   }
 #else
   /* BSD: Use DIOCGMEDIASIZE or fall back to stat */
@@ -520,7 +512,6 @@
     if (fstat(fd, &st) == 0) {
       _size = st.st_size;
     } else {
-      NSDebugLLog(@"gwspace", @"BlockDeviceInfo: Cannot get device size for %@: %s", _devicePath, strerror(errno));
     }
   }
   #else
@@ -602,7 +593,6 @@
     [task launch];
     [task waitUntilExit];
   } @catch (NSException *e) {
-    NSDebugLLog(@"gwspace", @"BlockDeviceInfo: lsblk failed: %@", e);
     [task release];
     return;
   }
@@ -622,7 +612,6 @@
   NSError *error = nil;
   NSDictionary *json = [NSJSONSerialization JSONObjectWithData:data options:0 error:&error];
   if (error || !json) {
-    NSDebugLLog(@"gwspace", @"BlockDeviceInfo: Failed to parse lsblk JSON: %@", error);
     return;
   }
   

@@ -32,6 +32,7 @@
 @class NSString;
 @class NSTextField;
 @class NSButton;
+@class CompletionField;
 
 typedef BOOL (^GWDialogValidator)(NSString *editText);
 
@@ -47,7 +48,8 @@ typedef BOOL (^GWDialogValidator)(NSString *editText);
 @interface GWDialog : NSWindow
 {
   GWDialogView *dialogView;
-  NSTextField *titleField, *editField;
+  NSTextField *titleField;
+  CompletionField *editField;
   NSButton *switchButt;
   NSButton *cancelButt, *okButt;
   BOOL useSwitch;

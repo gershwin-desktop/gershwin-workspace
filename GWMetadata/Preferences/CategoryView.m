@@ -175,7 +175,6 @@
         break;
       }
     } 
-  }
         
   if (startdnd) {  
     NSPasteboard *pb = [NSPasteboard pasteboardWithName: NSDragPboard];	

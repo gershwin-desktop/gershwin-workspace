@@ -1,5 +1,6 @@
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 BUNDLE_NAME = MDIndexing
 BUNDLE_EXTENSION = .prefPane
@@ -32,6 +33,7 @@ include $(GNUSTEP_MAKEFILES)/bundle.make
 
 -include GNUmakefile.preamble
 include GNUmakefile.postamble
+
 
 
 

@@ -525,10 +525,12 @@
                                            openWithTarget: [Workspace gworkspace]
                                               infoTarget: [Workspace gworkspace]
                                          duplicateTarget: [viewer win]
+                                             aliasTarget: [viewer win]
                                            recycleTarget: [viewer win]
                                              ejectTarget: [viewer win]
                                               openAction: @selector(openSelection:)
                                          duplicateAction: @selector(duplicateFiles:)
+                                            aliasAction: @selector(makeAliasFiles:)
                                            recycleAction: @selector(recycleFiles:)
                                              ejectAction: @selector(ejectVolumes:)
                                         includeOpenWith: YES];

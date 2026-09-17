@@ -49,7 +49,6 @@ static NSString *nibName = @"XTermPref";
     {  
       if ([NSBundle loadNibNamed: nibName owner: self] == NO)
 	{
-	  NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
 	}
       else
 	{

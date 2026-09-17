@@ -30,6 +30,7 @@
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
+#import "FSNDirEntry.h"
 
 
 @implementation FSNode
@@ -63,15 +64,48 @@
 + (FSNode *)nodeWithRelativePath:(NSString *)rpath
                           parent:(FSNode *)aparent
 {
-  return AUTORELEASE ([[FSNode alloc] initWithRelativePath: rpath 
+  return AUTORELEASE ([[FSNode alloc] initWithRelativePath: rpath
                                                     parent: aparent]);
 }
 
 - (id)initWithRelativePath:(NSString *)rpath
                     parent:(FSNode *)aparent
-{    
+{
+  return [self initWithRelativePath: rpath
+                             parent: aparent
+                     snapshotEntry: nil];
+}
+
++ (NSArray *)nodesFromDirectorySnapshot:(NSArray *)snapshot
+                                 parent:(FSNode *)aparent
+{
+  CREATE_AUTORELEASE_POOL(arp);
+  NSMutableArray *nodes = [NSMutableArray array];
+  NSUInteger i;
+
+  for (i = 0; i < [snapshot count]; i++)
+    {
+      FSNDirEntry *entry = [snapshot objectAtIndex: i];
+      FSNode *node = [[FSNode alloc] initWithRelativePath: [entry name]
+                                                   parent: aparent
+                                           snapshotEntry: entry];
+
+      [nodes addObject: node];
+      RELEASE (node);
+    }
+
+  RETAIN (nodes);
+  RELEASE (arp);
+
+  return [[nodes autorelease] makeImmutableCopyOnFail: NO];
+}
+
+- (id)initWithRelativePath:(NSString *)rpath
+                    parent:(FSNode *)aparent
+            snapshotEntry:(FSNDirEntry *)entry
+{
   self = [super init];
-    
+
   if (self)
     {
       fsnodeRep = [FSNodeRep sharedInstance];
@@ -82,11 +116,11 @@
       ASSIGN (relativePath, rpath);
       lastPathComponent = [[relativePath lastPathComponent] retain];
       name = nil;
-    
+
       if (parent)
         {
           NSString *parentPath = [parent path];
-      
+
           if ([parentPath isEqual: path_separator()])
             {
               parentPath = @"";
@@ -98,7 +132,7 @@
         {
           ASSIGN (path, relativePath);
         }
-        
+
       flags.readable = -1;
       flags.writable = -1;
       flags.executable = -1;
@@ -123,14 +157,42 @@
 
       filesize = 0;
       permissions = 0;
-    
+
       fileType = nil;
       typeDescription = nil;
-    
+
       application = nil;
-                                      
-      attributes = [fm fileAttributesAtPath: path traverseLink: NO];
-      RETAIN (attributes);
+
+      attributesDeferred = (entry != nil);
+      attributes = nil;
+
+      if (entry)
+        {
+          /* Pre-seed the kind flags from the readdir snapshot so viewers
+           * can lay out cells without a stat(); the remaining flags stay
+           * uncomputed (-1) and get the full treatment on first access. */
+          switch ([entry kind])
+            {
+              case FSNDirEntryKindDirectory:
+                flags.directory = 1;
+                flags.plain = 0;
+                break;
+              case FSNDirEntryKindPlain:
+                flags.plain = 1;
+                flags.directory = 0;
+                break;
+              case FSNDirEntryKindLink:
+                flags.link = 1;
+                break;
+              default:
+                break;
+            }
+        }
+
+      if (attributesDeferred == NO)
+        {
+          attributes = [[fm fileAttributesAtPath: path traverseLink: NO] retain];
+        }
 
       /* we localize only directories which could be special */
       if ([self isDirectory])
@@ -138,8 +200,17 @@
       else
         ASSIGN (name, lastPathComponent);
     }
-    
+
   return self;
+}
+
+- (void)loadAttributesIfNeeded
+{
+  if (attributesDeferred)
+    {
+      attributesDeferred = NO;
+      attributes = [[fm fileAttributesAtPath: path traverseLink: NO] retain];
+    }
 }
 
 - (NSUInteger)hash
@@ -486,6 +557,8 @@
 
 - (NSString *)fileType
 {
+  [self loadAttributesIfNeeded];
+
   if (attributes && (fileType == nil)) {
     ASSIGN (fileType, [attributes fileType]);
   }
@@ -501,7 +574,7 @@
 }
 
 - (void)setTypeFlags
-{  
+{
   flags.plain = 0;
   flags.directory = 0;
   flags.link = 0;
@@ -512,6 +585,8 @@
   flags.application = 0;
   flags.package = 0;
   flags.unknown = 0;
+
+  [self loadAttributesIfNeeded];
 
   if (fileType == nil) {
     [self fileType];
@@ -636,11 +711,93 @@
   ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"symbolic link", nil, [NSBundle bundleForClass:[self class]], @""));
 }
 
+/* Native GNUstep description of the kind of a plain file, based on the
+   extension map that make_services builds (.GNUstepAppList).  Prefers the
+   human-readable type name an application declares for the extension
+   (e.g. "Text Document"), then the name of the application that opens the
+   file (e.g. "TextEdit document").  Returns nil if nothing is registered. */
+- (NSString *)typeDescriptionForPlainFile
+{
+  NSString *ext = [[path pathExtension] lowercaseString];
+  NSDictionary *apps;
+
+  if (ext == nil || [ext length] == 0)
+    {
+      return nil;
+    }
+  apps = [ws infoForExtension: ext];
+  if (apps == nil || [apps count] == 0)
+    {
+      return nil;
+    }
+
+  /* Prefer a declared human-readable type name from any application that
+     opens this kind of file (keys sorted for determinism). */
+  {
+    NSArray *names = [[apps allKeys] sortedArrayUsingSelector:
+      @selector(compare:)];
+    NSEnumerator *e = [names objectEnumerator];
+    NSString *appName;
+
+    while ((appName = [e nextObject]) != nil)
+      {
+        NSDictionary *typeInfo = [apps objectForKey: appName];
+        NSString *human = [typeInfo objectForKey: @"NSHumanReadableName"];
+        NSString *typeName;
+
+        if (human == nil)
+          {
+            human = [typeInfo objectForKey: @"NSTypeName"];
+          }
+        typeName = human;
+        if (typeName != nil && [typeName length] > 0)
+          {
+            return typeName;
+          }
+      }
+  }
+
+  /* Otherwise name the application that would open the file. */
+  {
+    NSString *appName = [ws getBestAppInRole: nil forExtension: ext];
+    NSString *doc = NSLocalizedStringFromTableInBundle(@"document", nil,
+      [NSBundle bundleForClass:[self class]], @"");
+
+    if (appName == nil)
+      {
+        appName = [[apps allKeys] objectAtIndex: 0];
+      }
+    if (appName != nil && [appName length] > 0)
+      {
+        appName = [appName stringByDeletingPathExtension];
+        return [NSString stringWithFormat: @"%@ %@", appName, doc];
+      }
+  }
+  return nil;
+}
+
 - (NSString *)typeDescription
 {
   if (typeDescription == nil) {
     if ([self isPlain]) {
-      ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"plain file", nil, [NSBundle bundleForClass:[self class]], @""));
+      if ([self isExecutable])
+        {
+          /* Files with the execute bit set are executables, regardless of
+             what application would open them. */
+          ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"executable", nil, [NSBundle bundleForClass:[self class]], @""));
+        }
+      else
+        {
+          NSString *desc = [self typeDescriptionForPlainFile];
+          if (desc != nil)
+            {
+              ASSIGN (typeDescription, desc);
+            }
+          else
+            {
+              ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"plain file", nil, [NSBundle bundleForClass:[self class]], @""));
+            }
+        }
     } else if ([self isDirectory]) {
       if ([self isApplication]) {
         ASSIGN (typeDescription, NSLocalizedStringFromTableInBundle(@"application", nil, [NSBundle bundleForClass:[self class]], @""));
@@ -669,6 +826,8 @@
 
 - (NSDate *)creationDate
 {
+  [self loadAttributesIfNeeded];
+
   if (attributes && (crDate == nil)) {
     ASSIGN (crDate, [attributes fileCreationDate]);
   }
@@ -695,6 +854,8 @@
 
 - (NSDate *)modificationDate
 {
+  [self loadAttributesIfNeeded];
+
   if (attributes && (modDate == nil)) {
     ASSIGN (modDate, [attributes fileModificationDate]);
   }
@@ -719,6 +880,8 @@
 
 - (unsigned long long)fileSize
 {
+  [self loadAttributesIfNeeded];
+
   if ((filesize == 0) && attributes) {
     filesize = [attributes fileSize];
   }
@@ -738,6 +901,8 @@
 
 - (NSString *)owner
 {
+  [self loadAttributesIfNeeded];
+
   if (attributes && (owner == nil)) {
     ASSIGN (owner, [attributes fileOwnerAccountName]);
   }
@@ -746,6 +911,8 @@
 
 - (NSNumber *)ownerId
 {
+  [self loadAttributesIfNeeded];
+
   if (attributes && (ownerId == nil)) {
     ASSIGN (ownerId, [attributes objectForKey: NSFileOwnerAccountID]);
   }
@@ -754,6 +921,8 @@
 
 - (NSString *)group
 {
+  [self loadAttributesIfNeeded];
+
   if (attributes && (group == nil)) {
     ASSIGN (group, [attributes fileGroupOwnerAccountName]);
   }
@@ -762,6 +931,8 @@
 
 - (NSNumber *)groupId
 {
+  [self loadAttributesIfNeeded];
+
   if (attributes && (groupId == nil)) {
     ASSIGN (groupId, [attributes objectForKey: NSFileGroupOwnerAccountID]);
   }
@@ -770,6 +941,8 @@
 
 - (unsigned long)permissions
 {
+  [self loadAttributesIfNeeded];
+
   if ((permissions == 0) && attributes) {
     permissions = [attributes filePosixPermissions];
   }
@@ -920,7 +1093,11 @@
 
 - (BOOL)isValid
 {
-  BOOL valid = (attributes != nil);
+  BOOL valid;
+
+  [self loadAttributesIfNeeded];
+
+  valid = (attributes != nil);
 
   if (valid) {
     valid = [fm fileExistsAtPath: path];
@@ -929,7 +1106,7 @@
       valid = ([fm fileAttributesAtPath: path traverseLink: NO] != nil);
     }
   }
-  
+
   return valid;
 }
 

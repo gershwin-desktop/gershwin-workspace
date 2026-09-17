@@ -53,7 +53,6 @@ static NSString *nibName = @"MDKAttributeView";
     int i;
   
 		if ([NSBundle loadNibNamed: nibName owner: self] == NO) {
-      NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
       DESTROY (self);
       return self;
     }
@@ -112,7 +111,6 @@ static NSString *nibName = @"MDKAttributeView";
     [editorBox setContentView: [editor editorView]];
     [mdkwindow editorStateDidChange: editor];
   } else {
-    NSDebugLLog(@"gwspace", @"Missing editor for attribute %@", [attribute name]);
   }
     
   [popUp selectItemWithTitle: [attribute menuName]];

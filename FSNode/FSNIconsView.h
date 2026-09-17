@@ -28,6 +28,7 @@
 #import <AppKit/NSView.h>
 #import <AppKit/NSTextField.h>
 #import "FSNodeRep.h"
+#import "FSNFunctions.h"
 #import "FSNIconPlacement.h"
 
 @class NSColor;
@@ -39,12 +40,22 @@
 @class FSNIconNameEditor;
 @class FSNIconItemData;
 
-@interface FSNIconsView : NSView <NSTextFieldDelegate>
+#import "FSNIconLoader.h"
+
+@interface FSNIconsView : NSView <NSTextFieldDelegate, FSNDecorationClient>
 {
   FSNode *node;
   NSMutableArray *icons;
   FSNInfoType infoType;
   NSString *extInfoType;
+
+  /* Bumped on every contents change; pending FSNIconLoader items carrying
+   * an older generation are dropped. */
+  NSInteger generation;
+
+  /* Last-seen filename-extension display mode: defaultsChanged: only needs
+   * to relabel icons when it actually changes. */
+  GSFilenameExtensionDisplayMode lastDisplayMode;
 
   NSImage *verticalImage;
   NSImage *horizontalImage;
@@ -181,11 +192,68 @@
 - (NSDictionary *)customIconPositions;
 - (NSArray *)icons;
 
+/* The complete live layout: filename -> NSValue(NSPoint iloc) for every icon
+ * currently placed in this view (dragged/auto icons come from
+ * customIconPositions, restored manual icons from their placementData).  Used
+ * to persist the real on-screen layout on window close instead of re-reading
+ * a stale .DS_Store that may still carry foreign colliding positions. */
+- (NSDictionary *)liveIconPositions;
+
 /* Free-positioning icon repositioning */
 - (void)repositionIcon:(FSNIcon *)icon toCenterPoint:(NSPoint)point;
 
 /* Batch reposition — moves many icons at once, tiles once, persists once */
 - (void)batchRepositionIcons:(NSArray *)icons toCenterPoints:(NSArray *)points;
+
+/* Remember where files a drop is about to bring in should be placed, so the
+   icons land where they were dropped instead of in the next free grid cell.
+   Keyed by file name; the files themselves appear later, when the file
+   operation has run and the watcher reports them. */
+- (void)recordDropPositionsForFiles:(NSArray *)names atPoint:(NSPoint)winPoint;
+
+/* Whether a window of another application lies under the pointer, which ends
+   a free-position icon move the same way one of our own windows does.  AppKit
+   cannot tell ([NSApp windows] knows only our own windows, and the X11
+   backend answers +windowNumberAtPoint: with a stub), so the application
+   overrides this where it can ask the window server; the default is NO, the
+   answer that keeps a move alive. */
+- (BOOL)foreignWindowIsUnderPointer;
+
+/* While a rubber band is dragged out, show which icons it would select:
+   every icon whose image or name the band touches is drawn selected.  Pass
+   NSZeroRect to take the preview away again.  Marks the icons that change for
+   redisplay; the caller redraws. */
+- (void)previewSelectionInRect:(NSRect)bandRect;
+
+/* Move the rubber band from one rect to the other, redrawing only the pixels
+   whose appearance changes.  Repainting the whole band on every mouse move
+   means recompositing the desktop background under it, which is far too slow
+   to follow the pointer. */
+- (void)redrawSelectionBandFrom:(NSRect)oldRect to:(NSRect)newRect;
+
+/* What a click on the view's background does to the selection: drop it,
+   unless Shift extends it.  A right click there does the same before its
+   menu opens, so the menu acts on what the user sees selected. */
+- (void)selectNothingForBackgroundEvent:(NSEvent *)theEvent;
+
+/* The icon whose image or name is under the point (window coordinates) -
+   the part of an icon a click hits - or nil for the background. */
+- (FSNIcon *)iconWithNodeAtWindowPoint:(NSPoint)location;
+
+/* YES when every one of the paths is shown by an icon of this view. */
+- (BOOL)pathsAreAllOurIcons:(NSArray *)paths;
+
+/* Put icons of this view that were dropped back into it down at the drop
+   point (winPoint is in window coordinates), and persist the new positions.
+   NO when the drop is not of that kind and has to be treated as a file
+   drop. */
+- (BOOL)repositionIconsOfPaths:(NSArray *)paths atDropPoint:(NSPoint)winPoint;
+
+/* Smoothly animate the icons from the given pre-move frames to their current
+ * frames.  `oldFrames` maps each icon's node name (via -name) to an NSValue
+ * wrapping the NSRect it had before the caller moved it.  Call after the
+ * repositioning has applied the new frames.  No-op when the map is empty. */
+- (void)animateIconsFromOldFrames:(NSDictionary *)oldFrames;
 
 /* Persist the auto-assigned positions of icons just added to an open window
  * (call after -tile).  Honor-gated and empty-safe; browser views no-op. */

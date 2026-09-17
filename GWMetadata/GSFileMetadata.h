@@ -35,33 +35,55 @@ typedef uint32_t GSOType;
  *
  * These match the classic Mac OS Finder flags.
  */
+/* Bit positions match Apple's canonical fdFlags (see CarbonCore Finder.h /
+ * TN1150): the Finder flag word is big-endian on disk.  These MUST agree
+ * with what macOS actually writes/reads - if they drift, Gershwin mis-parses
+ * real Mac files (and the interop fixtures silently encode the wrong bits).
+ *   kIsOnDesk      0x0001  bit 0
+ *   kColor         0x000E  bits 1-3 (label colour)
+ *   kIsShared      0x0040  bit 6
+ *   kHasNoINITs    0x0080  bit 7
+ *   kHasBeenInited 0x0100  bit 8
+ *   kHasCustomIcon 0x0400  bit 10
+ *   kIsStationery  0x0800  bit 11
+ *   kNameLocked    0x1000  bit 12
+ *   kHasBundle     0x2000  bit 13
+ *   kIsInvisible   0x4000  bit 14
+ *   kIsAlias       0x8000  bit 15 */
 typedef NS_OPTIONS(uint16_t, GSFileFinderFlags) {
   GSFileFinderIsOnDesk       = 1 << 0,
-  GSFileFinderColorFlag      = 1 << 1,   /* bit 1 + bits 2-3 = label */
+  GSFileFinderColorFlag      = 1 << 1,   /* bit 1 + bits 2-3 = label colour */
   GSFileFinderColorBits      = (1 << 1) | (1 << 2) | (1 << 3),
-  GSFileFinderIsShared       = 1 << 4,
-  GSFileFinderHasNoINITs     = 1 << 5,
-  GSFileFinderHasBeenInited  = 1 << 6,
-  GSFileFinderHasCustomIcon  = 1 << 7,
-  GSFileFinderIsStationery   = 1 << 8,
-  GSFileFinderIsNameLocked   = 1 << 9,
-  GSFileFinderHasBundle      = 1 << 10,
-  GSFileFinderIsInvisible    = 1 << 11,
-  GSFileFinderIsAlias        = 1 << 12,
+  GSFileFinderIsShared       = 1 << 6,   /* 0x0040 */
+  GSFileFinderHasNoINITs     = 1 << 7,   /* 0x0080 */
+  GSFileFinderHasBeenInited  = 1 << 8,   /* 0x0100 */
+  GSFileFinderHasCustomIcon  = 1 << 10,  /* 0x0400 kHasCustomIcon */
+  GSFileFinderIsStationery   = 1 << 11,  /* 0x0800 */
+  GSFileFinderIsNameLocked   = 1 << 12,  /* 0x1000 */
+  GSFileFinderHasBundle      = 1 << 13,  /* 0x2000 */
+  GSFileFinderIsInvisible    = 1 << 14,  /* 0x4000 kIsInvisible */
+  GSFileFinderIsAlias        = 1 << 15,  /* 0x8000 */
 };
 
 /*
- * Standard Finder label colours (0-7).
+ * Standard label colours (0-7), matching the on-disk encodings: the
+ * FinderInfo fdFlags kColor field (bits 1-3) and the .DS_Store lclr
+ * record both use 1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Blue, 6=Purple,
+ * 7=Grey (see TN1150 "Finder Info":
+ * https://developer.apple.com/library/archive/technotes/tn/tn1150.html,
+ * and the Finder Interface Reference for the value-to-colour mapping).
+ * GSFileLabel is deliberately identical to DSStoreLabelColor so the two
+ * storage encodings never disagree.
  */
 typedef NS_ENUM(NSInteger, GSFileLabel) {
   GSFileLabelNone    = 0,
-  GSFileLabelGrey    = 1,
-  GSFileLabelGreen   = 2,
-  GSFileLabelPurple  = 3,
-  GSFileLabelBlue    = 4,
-  GSFileLabelYellow  = 5,
-  GSFileLabelRed     = 6,
-  GSFileLabelOrange  = 7,
+  GSFileLabelRed     = 1,
+  GSFileLabelOrange  = 2,
+  GSFileLabelYellow  = 3,
+  GSFileLabelGreen   = 4,
+  GSFileLabelBlue    = 5,
+  GSFileLabelPurple  = 6,
+  GSFileLabelGrey    = 7,
 };
 
 /*
@@ -70,6 +92,7 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 #define GSXATTR_FINDERINFO       @"user.com.apple.FinderInfo"
 #define GSXATTR_RESOURCEFORK     @"user.com.apple.ResourceFork"
 #define GSXATTR_FINDERCOMMENT    @"user.com.apple.metadata:kMDItemFinderComment"
+#define GSXATTR_USERTAGS         @"user.com.apple.metadata:_kMDItemUserTags"
 #define GSXATTR_TEXTENCODING     @"user.com.apple.TextEncoding"
 #define GSXATTR_QUARANTINE       @"user.com.apple.quarantine"
 
@@ -89,6 +112,8 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
   NSData            *_finderInfo;       // 32 bytes, raw from xattr
   NSData            *_resourceFork;     // Resource fork data
   NSString          *_finderComment;    // Spotlight comment
+  NSData            *_userTagsData;     // raw _kMDItemUserTags plist
+  NSString          *_quarantine;       // com.apple.quarantine record
 
   /* Cached parsed properties (invalidated when _finderInfo changes) */
   struct {
@@ -130,13 +155,13 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 /** Raw Finder flags (fdFlags). */
 @property uint16_t finderFlags;
 
-/** File is locked (name locked in Finder). */
+/** File is locked (name locked). */
 @property (getter=isLocked) BOOL locked;
 
 /** File has a custom icon (check resource fork for icns data). */
 @property (getter=hasCustomIcon) BOOL customIcon;
 
-/** File is invisible in the Finder. */
+/** File is invisible. */
 @property (getter=isInvisible) BOOL invisible;
 
 /** File is an alias/symlink in Mac terms. */
@@ -159,6 +184,69 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  * Note: labelNumber 0 maps to GSFileLabelNone.
  */
 @property NSInteger labelNumber;
+
+/* =================================================================
+ * Directory spatial view / window (FinderInfo DInfo)
+ * -----------------------------------------------------------------
+ * For a DIRECTORY the 32-byte FinderInfo is laid out as a `DInfo`
+ * (not the file `FInfo`): bytes 0-7 are the window `frRect`
+ * (top, left, bottom, right as big-endian int16), bytes 8-9 the
+ * folder flags, bytes 10-13 the scroll point, and bytes 14-15 the
+ * `frView` view-style code.  These accessors read/write that layout
+ * and are only meaningful for folders; apply them to directory
+ * metadata, never to file metadata.
+ *
+ * The `frView` numeric code maps to the same 4-character view code
+ * used by `.DS_Store` `vstl` (icnv/Nlsv/clmv/Flwv/glyv) so the two
+ * channels stay consistent.  On macOS 10.6 the browser-mode Finder
+ * ignores these values (it keeps folder view/window state in its
+ * private preferences); they are honoured by the classic/spatial
+ * Finder and by newer macOS, and are used by Gershwin's own spatial
+ * viewer.
+ * ================================================================= */
+
+/** Per-folder view style as a `.DS_Store` `vstl` 4-char code
+ *  (icnv/Nlsv/clmv/Flwv/glyv), or nil when unset. */
+- (NSString *)viewStyleCodeForDirectory;
+
+/** Set the per-folder view style from a `vstl` 4-char code. */
+- (void)setViewStyleCodeForDirectory:(NSString *)code;
+
+/** Per-folder window bounds (frRect), or NSZeroRect when unset. */
+- (NSRect)windowBoundsForDirectory;
+
+/** Set the per-folder window bounds (frRect). */
+- (void)setWindowBoundsForDirectory:(NSRect)bounds;
+
+/**
+ * User tags (_kMDItemUserTags), as an array of tag-name strings.
+ * Tags live in com.apple.metadata:_kMDItemUserTags (a binary plist array of
+ * strings); tags are never stored inside .DS_Store.  See Apple File System
+ * Programming Guide:
+ * https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide/FileSystemOverview/FileSystemOverview.html
+ * nil / empty means no tags.
+ */
+@property (copy) NSArray *userTags;
+
+/** Raw _kMDItemUserTags xattr value (binary plist), or nil when unset. */
+@property (copy) NSData *userTagsData;
+
+/**
+ * Quarantine record (com.apple.quarantine), e.g.
+ * "0083;6a8c57fe;Safari;UUID".  Raw string form, exactly as stored;
+ * nil when unset.  Note macOS sanitizes quarantine data that arrives
+ * through AppleDouble ingestion (dot_clean/ditto) - untrusted records
+ * are rewritten to "0000;00000000;;", so string equality only holds on
+ * the pre-ingest bytes.
+ */
+@property (copy) NSString *quarantine;
+
+/** The standard tag name for a label (e.g. GSFileLabelRed -> "Red"),
+ *  or nil for GSFileLabelNone. */
++ (NSString *)tagNameForLabel:(GSFileLabel)label;
+
+/** The label for a standard tag name, or GSFileLabelNone. */
++ (GSFileLabel)labelForTagName:(NSString *)tagName;
 
 /* =================================================================
  * Read / Write
@@ -226,6 +314,20 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  * Returns the raw icns data if found, nil otherwise.
  */
 - (NSData *)customIconData;
+
+/**
+ * Set a custom icon from raw icns data.  Embeds the icns data in the
+ * resource fork and sets the kHasCustomIcon FinderInfo flag - per TN1150 a
+ * custom icon is not complete without the icon image in the fork:
+ * https://developer.apple.com/library/archive/technotes/tn/tn1150.html
+ */
+- (void)setCustomIconData:(NSData *)icnsData;
+
+/**
+ * Remove a custom icon: clear the kHasCustomIcon flag and drop the
+ * resource fork.
+ */
+- (void)clearCustomIcon;
 
 /**
  * Extract custom icon as an NSImage for display.

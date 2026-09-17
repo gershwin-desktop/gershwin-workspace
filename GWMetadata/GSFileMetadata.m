@@ -61,11 +61,42 @@ host_to_be16(uint8_t *bytes, uint16_t value)
   bytes[1] =  value       & 0xFF;
 }
 
+/*
+ * Map the numeric `frView` code stored in a directory's FinderInfo DInfo to
+ * the 4-character `vstl` view code used by `.DS_Store`, and back.  The numeric
+ * codes match the classic Mac OS Finder view enum (icon=0, list=1, column=2,
+ * cover-flow=4); gallery (glyv) is a newer addition.
+ */
+static uint16_t
+GSFinderInfoViewForStyleCode(NSString *code)
+{
+  if ([code isEqualToString: @"Nlsv"]) return 1;
+  if ([code isEqualToString: @"clmv"]) return 2;
+  if ([code isEqualToString: @"Flwv"]) return 4;
+  if ([code isEqualToString: @"glyv"]) return 5;
+  return 0; /* icnv / default = icon */
+}
+
+static NSString *
+GSStyleCodeForFinderInfoView(uint16_t frView)
+{
+  switch (frView)
+    {
+    case 1: return @"Nlsv";
+    case 2: return @"clmv";
+    case 4: return @"Flwv";
+    case 5: return @"glyv";
+    default: return @"icnv";
+    }
+}
+
 @implementation GSFileMetadata
 
 @synthesize finderInfo = _finderInfo;
 @synthesize resourceFork = _resourceFork;
 @synthesize finderComment = _finderComment;
+@synthesize userTagsData = _userTagsData;
+@synthesize quarantine = _quarantine;
 @synthesize forceSidecar = _forceSidecar;
 
 /* =================================================================
@@ -88,6 +119,8 @@ host_to_be16(uint8_t *bytes, uint16_t value)
   DESTROY(_finderInfo);
   DESTROY(_resourceFork);
   DESTROY(_finderComment);
+  DESTROY(_userTagsData);
+  DESTROY(_quarantine);
   [super dealloc];
 }
 
@@ -97,6 +130,8 @@ host_to_be16(uint8_t *bytes, uint16_t value)
   [copy setFinderInfo: _finderInfo];
   [copy setResourceFork: _resourceFork];
   [copy setFinderComment: _finderComment];
+  [copy setUserTagsData: _userTagsData];
+  [copy setQuarantine: _quarantine];
   copy.forceSidecar = _forceSidecar;
   return copy;
 }
@@ -222,7 +257,18 @@ host_to_be16(uint8_t *bytes, uint16_t value)
 - (NSInteger)labelNumber
 {
   [self parseIfNeeded];
-  return _parsed.labelNumber;
+  if (_parsed.labelNumber != GSFileLabelNone)
+    return _parsed.labelNumber;
+
+  /* Modern systems store tags only in _kMDItemUserTags and may not set the
+   * legacy fdFlags label bits.  Fall back to the first standard colour tag. */
+  for (NSString *tag in [self userTags])
+    {
+      GSFileLabel label = [GSFileMetadata labelForTagName: tag];
+      if (label != GSFileLabelNone)
+        return label;
+    }
+  return GSFileLabelNone;
 }
 
 /* =================================================================
@@ -340,10 +386,70 @@ host_to_be16(uint8_t *bytes, uint16_t value)
     }
 }
 
+/* =================================================================
+ * Directory spatial view / window (FinderInfo DInfo)
+ * ================================================================= */
+
+- (NSString *)viewStyleCodeForDirectory
+{
+  [self parseIfNeeded];
+  if ([_finderInfo length] < 16)
+    return nil;
+  const uint8_t *bytes = [_finderInfo bytes];
+  uint16_t frView = be16_to_host(bytes + 14);
+  return GSStyleCodeForFinderInfoView(frView);
+}
+
+- (void)setViewStyleCodeForDirectory:(NSString *)code
+{
+  [self parseIfNeeded];
+  [self createFinderInfoIfNeeded];
+  if ([_finderInfo length] >= 16)
+    {
+      uint8_t *bytes = (uint8_t *)[(NSMutableData *)_finderInfo mutableBytes];
+      host_to_be16(bytes + 14, GSFinderInfoViewForStyleCode(code));
+    }
+}
+
+- (NSRect)windowBoundsForDirectory
+{
+  [self parseIfNeeded];
+  if ([_finderInfo length] < 8)
+    return NSZeroRect;
+  const uint8_t *bytes = [_finderInfo bytes];
+  int16_t top    = (int16_t)be16_to_host(bytes + 0);
+  int16_t left   = (int16_t)be16_to_host(bytes + 2);
+  int16_t bottom = (int16_t)be16_to_host(bytes + 4);
+  int16_t right  = (int16_t)be16_to_host(bytes + 6);
+  /* A zero rect means "unset" - the classic default window. */
+  if (top == 0 && left == 0 && bottom == 0 && right == 0)
+    return NSZeroRect;
+  return NSMakeRect(left, top, right - left, bottom - top);
+}
+
+- (void)setWindowBoundsForDirectory:(NSRect)bounds
+{
+  [self parseIfNeeded];
+  [self createFinderInfoIfNeeded];
+  if ([_finderInfo length] >= 8)
+    {
+      uint8_t *bytes = (uint8_t *)[(NSMutableData *)_finderInfo mutableBytes];
+      host_to_be16(bytes + 0, (uint16_t)(int16_t)bounds.origin.y);
+      host_to_be16(bytes + 2, (uint16_t)(int16_t)bounds.origin.x);
+      host_to_be16(bytes + 4, (uint16_t)(int16_t)(bounds.origin.y + bounds.size.height));
+      host_to_be16(bytes + 6, (uint16_t)(int16_t)(bounds.origin.x + bounds.size.width));
+    }
+}
+
 - (void)setLabelNumber:(NSInteger)label
 {
   if (label < 0 || label > 7)
     label = 0;
+
+  /* Capture the old label BEFORE setFinderFlags: recomputes it from the
+   * new flags (it derives labelNumber from the flag bits). */
+  NSString *old = [GSFileMetadata tagNameForLabel: (GSFileLabel)_parsed.labelNumber];
+  NSString *tag = [GSFileMetadata tagNameForLabel: (GSFileLabel)label];
 
   uint16_t flags = [self finderFlags];
   /* Clear the label bits (1-3), then set new value */
@@ -351,6 +457,127 @@ host_to_be16(uint8_t *bytes, uint16_t value)
   flags |= (label << 1);
   [self setFinderFlags: flags];
   _parsed.labelNumber = label;
+
+  /* Keep the _kMDItemUserTags xattr in sync with the label: colour tags are
+   * shown via that attribute, not via .DS_Store.  See Apple File System
+   * Programming Guide:
+   * https://developer.apple.com/library/archive/documentation/FileManagement/Conceptual/FileSystemProgrammingGuide/FileSystemOverview/FileSystemOverview.html
+   * Replace the standard tag that matches our label, and remove it when the
+   * label is cleared. */
+  NSMutableArray *tags = [[[self userTags] mutableCopy] autorelease];
+  if (tags == nil)
+    tags = [NSMutableArray array];
+  if (old && [tags containsObject: old])
+    [tags removeObject: old];
+  if (tag && ![tags containsObject: tag])
+    [tags addObject: tag];
+
+  [self setUserTags: ([tags count] ? tags : nil)];
+}
+
+/* =================================================================
+ * User tags (_kMDItemUserTags)
+ * ================================================================= */
+
++ (NSString *)tagNameForLabel:(GSFileLabel)label
+{
+  switch (label)
+    {
+      case GSFileLabelGrey:    return @"Gray";
+      case GSFileLabelGreen:   return @"Green";
+      case GSFileLabelPurple:  return @"Purple";
+      case GSFileLabelBlue:    return @"Blue";
+      case GSFileLabelYellow:  return @"Yellow";
+      case GSFileLabelRed:     return @"Red";
+      case GSFileLabelOrange:  return @"Orange";
+      case GSFileLabelNone:
+      default:                 return nil;
+    }
+}
+
++ (GSFileLabel)labelForTagName:(NSString *)tagName
+{
+  if ([tagName isEqualToString: @"Gray"])   return GSFileLabelGrey;
+  if ([tagName isEqualToString: @"Grey"])   return GSFileLabelGrey;
+  if ([tagName isEqualToString: @"Green"])  return GSFileLabelGreen;
+  if ([tagName isEqualToString: @"Purple"]) return GSFileLabelPurple;
+  if ([tagName isEqualToString: @"Blue"])   return GSFileLabelBlue;
+  if ([tagName isEqualToString: @"Yellow"]) return GSFileLabelYellow;
+  if ([tagName isEqualToString: @"Red"])    return GSFileLabelRed;
+  if ([tagName isEqualToString: @"Orange"]) return GSFileLabelOrange;
+  return GSFileLabelNone;
+}
+
+- (NSArray *)userTags
+{
+  NSData *raw = [self userTagsData];
+  if (raw == nil)
+    return nil;
+
+  id value = [NSPropertyListSerialization propertyListWithData: raw
+                                                       options: NSPropertyListImmutable
+                                                        format: NULL
+                                                         error: NULL];
+  if ([value isKindOfClass: [NSArray class]])
+    return (NSArray *)value;
+  return nil;
+}
+
+- (void)setUserTags:(NSArray *)tags
+{
+  if (tags == nil || [tags count] == 0)
+    {
+      [self setUserTagsData: nil];
+      return;
+    }
+  NSError *error = nil;
+  NSData *data = [NSPropertyListSerialization
+                   dataWithPropertyList: tags
+                                 format: NSPropertyListBinaryFormat_v1_0
+                                options: 0
+                                  error: &error];
+  if (error == nil)
+    [self setUserTagsData: data];
+}
+
+/* Finder comment: macOS/Finder stores com.apple.metadata:kMDItemFinderComment
+ * as a binary plist (bplist00) wrapping an NSString - never raw UTF-8.  Older
+ * Gershwin revisions wrote raw UTF-8, which 10.6+ Finder cannot parse or
+ * display, so comments written by Gershwin were invisible on the Mac. */
+- (NSData *)_finderCommentToPlistData
+{
+  if (_finderComment == nil || [_finderComment length] == 0)
+    return nil;
+  NSData *data = [NSPropertyListSerialization
+                   dataWithPropertyList: _finderComment
+                                 format: NSPropertyListBinaryFormat_v1_0
+                                options: 0
+                                  error: NULL];
+  if (data == nil)
+    data = [_finderComment dataUsingEncoding: NSUTF8StringEncoding];
+  return data;
+}
+
++ (NSString *)_commentFromXattrData:(NSData *)fc
+{
+  if (fc == nil || [fc length] == 0)
+    return nil;
+  const unsigned char *b = [fc bytes];
+  BOOL isPlist = ([fc length] >= 8 && b[0] == 'b' && b[1] == 'p' && b[2] == 'l'
+                  && b[3] == 'i' && b[4] == 's' && b[5] == 't'
+                  && b[6] == '0' && b[7] == '0');
+  if (isPlist)
+    {
+      id plist = [NSPropertyListSerialization
+                   propertyListWithData: fc
+                                options: NSPropertyListImmutable
+                                 format: NULL
+                                  error: NULL];
+      if ([plist isKindOfClass: [NSString class]])
+        return (NSString *)plist;   /* autoreleased */
+    }
+  return [[[NSString alloc] initWithData: fc encoding: NSUTF8StringEncoding]
+           autorelease];
 }
 
 /* =================================================================
@@ -485,7 +712,7 @@ static NSMutableDictionary *_metadataCache = nil;
       }
   }
 
-  /* Read Finder comment via xattr */
+  /* Read Finder comment via xattr (binary plist, like macOS/Finder) */
   {
     const char *cpath = [path fileSystemRepresentation];
     ssize_t size = gs_getxattr(cpath,
@@ -496,14 +723,50 @@ static NSMutableDictionary *_metadataCache = nil;
         NSMutableData *data = [NSMutableData dataWithLength: size];
         gs_getxattr(cpath, [GSXATTR_FINDERCOMMENT UTF8String],
                     [data mutableBytes], size);
-        NSString *comment = [[NSString alloc] initWithData: data
-                                                  encoding: NSUTF8StringEncoding];
+        NSString *comment = [GSFileMetadata _commentFromXattrData: data];
         if (comment)
           {
             md.finderComment = comment;
-            RELEASE(comment);
           }
         found = YES;
+      }
+  }
+
+  /* Read user tags (_kMDItemUserTags) via xattr */
+  {
+    const char *cpath = [path fileSystemRepresentation];
+    ssize_t size = gs_getxattr(cpath,
+                                [GSXATTR_USERTAGS UTF8String],
+                                NULL, 0);
+    if (size > 0)
+      {
+        NSMutableData *data = [NSMutableData dataWithLength: size];
+        gs_getxattr(cpath, [GSXATTR_USERTAGS UTF8String],
+                    [data mutableBytes], size);
+        md.userTagsData = data;
+        found = YES;
+      }
+  }
+
+  /* Read quarantine record via xattr (plain UTF-8 string) */
+  {
+    const char *cpath = [path fileSystemRepresentation];
+    ssize_t size = gs_getxattr(cpath,
+                                [GSXATTR_QUARANTINE UTF8String],
+                                NULL, 0);
+    if (size > 0)
+      {
+        NSMutableData *data = [NSMutableData dataWithLength: size];
+        gs_getxattr(cpath, [GSXATTR_QUARANTINE UTF8String],
+                    [data mutableBytes], size);
+        NSString *q = [[NSString alloc] initWithData: data
+                                            encoding: NSUTF8StringEncoding];
+        if (q)
+          {
+            md.quarantine = q;
+            RELEASE(q);
+            found = YES;
+          }
       }
   }
 
@@ -563,17 +826,45 @@ static NSMutableDictionary *_metadataCache = nil;
         }
     }
 
-  /* Write Finder comment */
+  /* Write Finder comment as a binary plist, matching macOS/Finder's storage
+   * of com.apple.metadata:kMDItemFinderComment so 10.6+ Finder displays it. */
   if (_finderComment && [_finderComment length] > 0)
     {
-      NSData *commentData = [_finderComment dataUsingEncoding: NSUTF8StringEncoding];
-      if (gs_setxattr(cpath, [GSXATTR_FINDERCOMMENT UTF8String],
-                       [commentData bytes], [commentData length],
-                       0) != 0)
+      NSData *commentData = [self _finderCommentToPlistData];
+      if (commentData
+          && gs_setxattr(cpath, [GSXATTR_FINDERCOMMENT UTF8String],
+                         [commentData bytes], [commentData length],
+                         0) != 0)
         {
           /* Non-fatal: comment couldn't be written, but main metadata is OK */
-          NSDebugLLog(@"gwspace", @"GSFileMetadata: Could not write comment xattr for %@", path);
         }
+    }
+
+  /* Write user tags (_kMDItemUserTags).  Setting tags to nil removes the
+   * attribute entirely so a cleared label does not linger. */
+  if (_userTagsData && [_userTagsData length] > 0)
+    {
+      if (gs_setxattr(cpath, [GSXATTR_USERTAGS UTF8String],
+                       [_userTagsData bytes], [_userTagsData length],
+                       0) != 0)
+        {
+        }
+    }
+  else if ([self userTagsData] == nil)
+    {
+      gs_removexattr(cpath, [GSXATTR_USERTAGS UTF8String]);
+    }
+
+  /* Write quarantine record (plain UTF-8 string). */
+  if (_quarantine && [_quarantine length] > 0)
+    {
+      NSData *qData = [_quarantine dataUsingEncoding: NSUTF8StringEncoding];
+      gs_setxattr(cpath, [GSXATTR_QUARANTINE UTF8String],
+                   [qData bytes], [qData length], 0);
+    }
+  else
+    {
+      gs_removexattr(cpath, [GSXATTR_QUARANTINE UTF8String]);
     }
 
   /* Remove sidecar file if it exists (we're using xattrs now) */
@@ -638,6 +929,72 @@ static NSMutableDictionary *_metadataCache = nil;
   if ([ad hasResourceFork])
     self.resourceFork = [ad resourceFork];
 
+  NSData *tags = [ad dataForEntry: GSAppleDoubleUserTags];
+  if (tags && [tags length] > 0)
+    self.userTagsData = tags;
+
+  /* macOS AppleDouble stores xattrs (FinderInfo, ResourceFork, tags,
+   * Finder comment) inside an "ATTR" blob within entry 9.  Fall back to
+   * those when the classic entries above are absent.  Note the names here
+   * are the raw macOS xattr names (no "user." prefix), unlike the
+   * Gershwin xattr layer's GSXATTR_* constants. */
+  NSDictionary *xattrs = [ad extendedAttributes];
+  if (xattrs)
+    {
+      if (self.finderInfo == nil)
+        {
+          NSData *fi = [xattrs objectForKey: @"com.apple.FinderInfo"];
+          if (fi && [fi length] >= 32)
+            self.finderInfo = fi;
+        }
+      if (self.resourceFork == nil)
+        {
+          NSData *rf = [xattrs objectForKey: @"com.apple.ResourceFork"];
+          if (rf && [rf length] > 0)
+            self.resourceFork = rf;
+        }
+      if (self.userTagsData == nil)
+        {
+          NSData *ut = [xattrs objectForKey:
+            @"com.apple.metadata:_kMDItemUserTags"];
+          if (ut && [ut length] > 0)
+            self.userTagsData = ut;
+        }
+      if (self.finderComment == nil)
+        {
+          NSData *fc = [xattrs objectForKey:
+            @"com.apple.metadata:kMDItemFinderComment"];
+          if (fc && [fc length] > 0)
+            {
+              NSString *comment = [GSFileMetadata _commentFromXattrData: fc];
+              if (comment)
+                self.finderComment = comment;
+            }
+        }
+      if (self.quarantine == nil)
+        {
+          NSData *qd = [xattrs objectForKey: @"com.apple.quarantine"];
+          if (qd && [qd length] > 0)
+            {
+              /* copyfile pads the record with NULs in some variants;
+               * they are not part of the value. */
+              NSUInteger len = [qd length];
+              const char *bytes = [qd bytes];
+              while (len > 0 && bytes[len - 1] == 0)
+                len--;
+              NSData *trimmed = [qd subdataWithRange:
+                NSMakeRange(0, len)];
+              NSString *q = [[NSString alloc]
+                initWithData: trimmed encoding: NSUTF8StringEncoding];
+              if (q)
+                {
+                  self.quarantine = q;
+                  RELEASE(q);
+                }
+            }
+        }
+    }
+
   DESTROY(ad);
   return YES;
 }
@@ -655,6 +1012,28 @@ static NSMutableDictionary *_metadataCache = nil;
 
   if (_resourceFork && [_resourceFork length] > 0)
     [ad setResourceFork: _resourceFork];
+
+  /* Tags and the Finder comment are xattrs to macOS; staging them as
+   * such makes -appleDoubleData emit the ATTR-blob layout a real Mac
+   * writes, so dot_clean/ditto on macOS ingest them natively. */
+  if (_userTagsData && [_userTagsData length] > 0)
+    [ad setXattr: _userTagsData
+          forKey: @"com.apple.metadata:_kMDItemUserTags"];
+
+  if (_finderComment && [_finderComment length] > 0)
+    {
+      NSData *commentData = [self _finderCommentToPlistData];
+      if (commentData)
+        [ad setXattr: commentData
+              forKey: @"com.apple.metadata:kMDItemFinderComment"];
+    }
+
+  if (_quarantine && [_quarantine length] > 0)
+    {
+      NSData *qData = [_quarantine dataUsingEncoding: NSUTF8StringEncoding];
+      if (qData)
+        [ad setXattr: qData forKey: @"com.apple.quarantine"];
+    }
 
   NSData *result = [ad appleDoubleData];
   DESTROY(ad);
@@ -676,6 +1055,37 @@ static NSMutableDictionary *_metadataCache = nil;
     md.finderInfo = [ad finderInfo];
   if ([ad hasResourceFork])
     md.resourceFork = [ad resourceFork];
+  NSData *tags = [ad dataForEntry: GSAppleDoubleUserTags];
+  if (tags == nil || [tags length] == 0)
+    tags = [[ad extendedAttributes]
+              objectForKey: @"com.apple.metadata:_kMDItemUserTags"];
+  if (tags && [tags length] > 0)
+    md.userTagsData = tags;
+  NSData *commentData = [[ad extendedAttributes]
+    objectForKey: @"com.apple.metadata:kMDItemFinderComment"];
+  if (commentData && [commentData length] > 0)
+    {
+      NSString *comment = [self _commentFromXattrData: commentData];
+      if (comment)
+        md.finderComment = comment;
+    }
+  NSData *qData = [[ad extendedAttributes]
+    objectForKey: @"com.apple.quarantine"];
+  if (qData && [qData length] > 0)
+    {
+      NSUInteger len = [qData length];
+      const char *bytes = [qData bytes];
+      while (len > 0 && bytes[len - 1] == 0)
+        len--;
+      NSString *q = [[NSString alloc]
+        initWithData: [qData subdataWithRange: NSMakeRange(0, len)]
+            encoding: NSUTF8StringEncoding];
+      if (q)
+        {
+          md.quarantine = q;
+          RELEASE(q);
+        }
+    }
 
   DESTROY(ad);
   return md;
@@ -690,7 +1100,7 @@ static NSMutableDictionary *_metadataCache = nil;
   if (![self hasCustomIcon])
     return nil;
 
-  if (!_resourceFork || [_resourceFork length] < 256)
+  if (!_resourceFork || [_resourceFork length] < 8)
     return nil;
 
   /*
@@ -757,9 +1167,34 @@ static NSMutableDictionary *_metadataCache = nil;
    * or a simple PNG decoder for the embedded icon representations.
    * For initial implementation, fall back gracefully.
    */
-  NSDebugLLog(@"gwspace", @"GSFileMetadata: NSImage could not decode icns data (%lu bytes)",
-        (unsigned long)[icnsData length]);
   return nil;
+}
+
+- (void)setCustomIconData:(NSData *)icnsData
+{
+  if (icnsData == nil || [icnsData length] == 0)
+    {
+      [self clearCustomIcon];
+      return;
+    }
+
+  /* customIconData: scans the resource fork for the 'icns' magic, so storing
+   * the raw icns bytes verbatim is sufficient - no resource-map wrapping is
+   * needed for our own round-trip, and real icns containers start with 'icns'
+   * too. */
+  [self setResourceFork: icnsData];
+
+  uint16_t flags = [self finderFlags];
+  flags |= GSFileFinderHasCustomIcon;
+  [self setFinderFlags: flags];
+}
+
+- (void)clearCustomIcon
+{
+  uint16_t flags = [self finderFlags];
+  flags &= ~GSFileFinderHasCustomIcon;
+  [self setFinderFlags: flags];
+  [self setResourceFork: nil];
 }
 
 /* =================================================================
@@ -784,9 +1219,9 @@ static NSMutableDictionary *_metadataCache = nil;
 + (NSColor *)colorForLabel:(GSFileLabel)label
 {
   /*
-   * Finder label colours from fdFlags encoding:
-   *   0 = none, 1 = grey, 2 = green, 3 = purple,
-   *   4 = blue,  5 = yellow, 6 = red, 7 = orange
+   * Finder label colours from fdFlags / lclr encoding:
+   *   0 = none, 1 = red, 2 = orange, 3 = yellow,
+   *   4 = green, 5 = blue, 6 = purple, 7 = grey
    */
   switch (label)
     {

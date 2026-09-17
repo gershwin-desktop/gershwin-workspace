@@ -39,20 +39,23 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <GNUstepGUI/GSInfoPanel.h>
 #import <GNUstepBase/GNUstep.h>
 #import <dispatch/dispatch.h>
 
 #import "GWFunctions.h"
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
+#import "FSNAlias.h"
 #import "Workspace.h"
 
 /* Set of paths the user has recently unmounted via the GUI.
  * Used by showMountedVolumes to suppress the "Unexpectedly" dialog.
  * Paths are removed after a short timeout. */
 static NSMutableSet *recentUserUnmounts = nil;
-static NSTimeInterval recentUserUnmountTimeout = 5.0;
+static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "Dialogs.h"
+#import "AppDataTrash.h"
 #import "AboutController.h"
 #import "OpenWithController.h"
 #import "RunExternalController.h"
@@ -85,6 +88,8 @@ static NSTimeInterval recentUserUnmountTimeout = 5.0;
 #import "FSNIconsView.h"
 #import "GWMetadataProvider.h"
 #import "GWIconPositionStore.h"
+#import "GWExtensionsManager.h"
+#import "GWAlignLogically.h"
 #import "GWArchiveOperation.h"
 #import "Network/NetworkFSNode.h"
 #import "Network/NetworkServiceManager.h"
@@ -102,9 +107,6 @@ static NSString *defaulteditor = @"nedit.app";
 static NSString *defaultxterm = @"xterm";
 
 static Workspace *gworkspace = nil;
-
-NSString *_pendingSystemActionCommand = nil;
-NSString *_pendingSystemActionTitle = nil;
 
 /* Forward declarations for methods resolved at runtime on container/view objects.
  * Avoids method-not-found warnings when calling on `id` typed objects. */
@@ -195,10 +197,6 @@ NSString *_pendingSystemActionTitle = nil;
   [[NSDistributedNotificationCenter defaultCenter] removeObserver: self];
   [wsnc removeObserver: self];
   [[NSNotificationCenter defaultCenter] removeObserver: self];
-  if (logoutTimer && [logoutTimer isValid]) {
-    [logoutTimer invalidate];
-    DESTROY (logoutTimer);
-  }
   DESTROY (ddbd);
   DESTROY (mdextractor);
   RELEASE (gwProcessName);
@@ -211,6 +209,7 @@ NSString *_pendingSystemActionTitle = nil;
   RELEASE (trashPath);
   RELEASE (watchedPaths);
   RELEASE (history);
+  RELEASE (infoPanel);
   RELEASE (openWithController);
   RELEASE (openWithMenu);
   RELEASE (vwrsManager);
@@ -264,6 +263,11 @@ NSString *_pendingSystemActionTitle = nil;
   
   [mainMenu addItem:[NSMenuItem separatorItem]];
   
+  menuItem = [mainMenu addItemWithTitle:_(@"Empty Trash") action:@selector(emptyTrash:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
+  [mainMenu addItem:[NSMenuItem separatorItem]];
+  
   // Services submenu
   menuItem = [mainMenu addItemWithTitle:_(@"Services") action:NULL keyEquivalent:@""];
   services = AUTORELEASE ([NSMenu new]);
@@ -278,18 +282,6 @@ NSString *_pendingSystemActionTitle = nil;
   
   [mainMenu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [mainMenu addItemWithTitle:_(@"Empty Trash") action:@selector(emptyTrash:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  
-  [mainMenu addItem:[NSMenuItem separatorItem]];
-  
-  menuItem = [mainMenu addItemWithTitle:_(@"Restart...") action:@selector(restart:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [mainMenu addItemWithTitle:_(@"Shut Down...") action:@selector(shutdown:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [mainMenu addItemWithTitle:_(@"Log Out...") action:@selector(logout:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-
   // File menu
   menuItem = [mainMenu addItemWithTitle:_(@"File") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
@@ -336,7 +328,7 @@ NSString *_pendingSystemActionTitle = nil;
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Duplicate") action:@selector(duplicateFiles:) keyEquivalent:@"d"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(notImplemented:) keyEquivalent:@"l"];
+  menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(makeAliasFiles:) keyEquivalent:@"l"];
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Quick Look \"item\"") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
@@ -404,22 +396,32 @@ NSString *_pendingSystemActionTitle = nil;
   [mainMenu setSubmenu: menu forItem: menuItem];
   
   menuItem = [[NSMenuItem alloc] initWithTitle:_(@"as Icons") action:@selector(setViewerType:) keyEquivalent:@"1"];
+  [menuItem setTarget:self];
   [menuItem setTag:GWViewTypeIcon];
   [menuItem autorelease];
   [menu addItem:menuItem];
   
   menuItem = [[NSMenuItem alloc] initWithTitle:_(@"as List") action:@selector(setViewerType:) keyEquivalent:@"2"];
+  [menuItem setTarget:self];
   [menuItem setTag:GWViewTypeList];
   [menuItem autorelease];
   [menu addItem:menuItem];
 
   menuItem = [[NSMenuItem alloc] initWithTitle:_(@"as Columns") action:@selector(setViewerType:) keyEquivalent:@"3"];
+  [menuItem setTarget:self];
   [menuItem setTag:GWViewTypeBrowser];
   [menuItem autorelease];
   [menu addItem:menuItem];
   
   //menuItem = [menu addItemWithTitle:_(@"as Gallery") action:@selector(notImplemented:) keyEquivalent:@"4"];
   //[menuItem setTarget:self];
+  
+  [menu addItem:[NSMenuItem separatorItem]];
+
+  /* Toggle the rightmost "Contents" inspector pane in every view type. */
+  menuItem = [menu addItemWithTitle:_(@"Show Inspector") action:@selector(toggleInspector:) keyEquivalent:@"i"];
+  [menuItem setTarget:self];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSControlKeyMask];
   
   [menu addItem:[NSMenuItem separatorItem]];
   
@@ -563,10 +565,14 @@ NSString *_pendingSystemActionTitle = nil;
   menuItem = [subMenu addItemWithTitle:_(@"Tags") action:@selector(cleanUpBy:) keyEquivalent:@""];
   [menuItem setTarget:self]; [menuItem setTag: 0];
   
+  menuItem = [menu addItemWithTitle:_(@"Arrange Logically") action:@selector(alignLogically:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Hide Sidebar") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Show Sidebar") action:@selector(toggleSidebar:) keyEquivalent:@""];
   [menuItem setTarget:self];
+  [menuItem setState: NSOnState];
   menuItem = [menu addItemWithTitle:_(@"Show Preview") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
@@ -622,6 +628,15 @@ NSString *_pendingSystemActionTitle = nil;
   menuItem = [menu addItemWithTitle:_(@"Downloads") action:@selector(goToDownloads:) keyEquivalent:@"L"];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
   [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Music") action:@selector(goToMusic:) keyEquivalent:@"M"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Pictures") action:@selector(goToPictures:) keyEquivalent:@"P"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Videos") action:@selector(goToVideos:) keyEquivalent:@"V"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Home") action:@selector(goToHome:) keyEquivalent:@"H"];
   [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
@@ -655,20 +670,7 @@ NSString *_pendingSystemActionTitle = nil;
   menuItem = [mainMenu addItemWithTitle:_(@"Tools") action:NULL keyEquivalent:@""];
   menu = AUTORELEASE ([NSMenu new]);
   [mainMenu setSubmenu: menu forItem: menuItem];
-  
-  menuItem = [menu addItemWithTitle:_(@"Inspectors") action:NULL keyEquivalent:@""];
-  subMenu = AUTORELEASE ([NSMenu new]);
-  [menu setSubmenu: subMenu forItem: menuItem];
-  menuItem = [subMenu addItemWithTitle:_(@"Show Inspectors") action:NULL keyEquivalent:@""];
-  menuItem = [subMenu addItemWithTitle:_(@"Contents") action:@selector(showContentsInspector:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [subMenu addItemWithTitle:_(@"Tools") action:@selector(showToolsInspector:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  menuItem = [subMenu addItemWithTitle:_(@"Annotations") action:@selector(showAnnotationsInspector:) keyEquivalent:@""];
-  [menuItem setTarget:self];
-  
-  [menu addItem:[NSMenuItem separatorItem]];
-  
+
   menuItem = [menu addItemWithTitle:_(@"Run...") action:@selector(runCommand:) keyEquivalent:@"R"];
   [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask: NSCommandKeyMask | NSShiftKeyMask];
@@ -747,11 +749,41 @@ NSString *_pendingSystemActionTitle = nil;
   [mainMenu update];
   [mainMenu setDelegate: self];
 
+  [self fixSubmenuContainerItems: mainMenu];
+
   [NSApp setServicesMenu: services];
   [NSApp setWindowsMenu: windows];
   [NSApp setMainMenu: mainMenu];    
   
   RELEASE (mainMenu);
+}
+
+/* GNUstep's menu auto-enabling disables items whose action resolves to no
+ * target.  Submenu container items ("Tools", "View", ...) have no action, so
+ * the whole menu title gets greyed out.  Give every container a real no-op
+ * action handled by Workspace so the title itself is never disabled; the
+ * individual items inside are still validated as usual. */
+- (void)fixSubmenuContainerItems:(NSMenu *)menu
+{
+  NSArray *items = [menu itemArray];
+  NSUInteger i;
+
+  for (i = 0; i < [items count]; i++) {
+    NSMenuItem *item = [items objectAtIndex: i];
+    NSMenu *submenu = [item submenu];
+
+    if (submenu) {
+      [item setAction: @selector(submenuAction:)];
+      [item setTarget: self];
+      [item setEnabled: YES];
+      [self fixSubmenuContainerItems: submenu];
+    }
+  }
+}
+
+/* No-op action for submenu container items (see fixSubmenuContainerItems:). */
+- (void)submenuAction:(id)sender
+{
 }
 
 - (void)applicationWillFinishLaunching:(NSNotification *)aNotification
@@ -764,6 +796,8 @@ NSString *_pendingSystemActionTitle = nil;
   NSString *lockpath;
   NSUInteger i;
   
+  GWInstallX11IOErrorLogger();
+
   [self createMenu];
     
   [[self class] registerForServices];
@@ -779,6 +813,9 @@ NSString *_pendingSystemActionTitle = nil;
    * depending on the metadata implementation directly. */
   [fsnodeRep setMetadataProvider: [GWMetadataProvider sharedProvider]];
   [fsnodeRep setIconPositionStore: [GWIconPositionStore sharedStore]];
+  /* Let external .gwext bundles decorate nodes and extend the context menu. */
+  [fsnodeRep setDecorationDelegate: [GWExtensionsManager defaultManager]];
+  [[GWExtensionsManager defaultManager] loadExtensions];
 
 
   extendedInfo = [fsnodeRep availableExtendedInfoNames];
@@ -880,12 +917,9 @@ NSString *_pendingSystemActionTitle = nil;
     
   dtopManager = [GWDesktopManager desktopManager];
     
-  NSDebugLLog(@"gwspace", @"DEBUG: Workspace init - no_desktop setting: %d", [defaults boolForKey: @"no_desktop"]);
   if ([defaults boolForKey: @"no_desktop"] == NO)
   { 
-    NSDebugLLog(@"gwspace", @"DEBUG: Workspace calling activateDesktop");
     [dtopManager activateDesktop];
-    NSDebugLLog(@"gwspace", @"DEBUG: Workspace activateDesktop returned");
 
   }
 
@@ -964,6 +998,13 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (void)applicationDidFinishLaunching:(NSNotification *)aNotification
 {
+  /* A DO write to a dead or overloaded peer (an app the user closed, or the
+   * DO port churning under load) raises SIGPIPE; a library can reset the
+   * disposition to SIG_DFL after main(), whose default action terminates the
+   * Workspace mid-operation.  Re-assert the ignore here, after everything is
+   * loaded. */
+  signal(SIGPIPE, SIG_IGN);
+
   [self _swizzleGetInfoForFileForNoExtensionFiles];
 
   NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
@@ -975,7 +1016,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
   NS_HANDLER
     {
-      NSDebugLLog(@"gwspace", @"setServicesProvider: %@", localException);
     }
   NS_ENDHANDLER
 
@@ -1049,23 +1089,18 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if ([dtopManager isActive]) {
     globalShortcutsManager = [[GSGlobalShortcutsManager sharedManager] retain];
     if (![globalShortcutsManager startWithVerbose:YES]) {  // Enable verbose for debugging
-      NSDebugLLog(@"gwspace", @"Workspace: Warning - Global shortcuts manager failed to start");
       DESTROY(globalShortcutsManager);
     } else {
-      NSDebugLLog(@"gwspace", @"Workspace: Global shortcuts manager started successfully");
     }
   } else {
-    NSDebugLLog(@"gwspace", @"Workspace: Not the desktop instance - global shortcuts disabled");
   }
   
 #if HAVE_DBUS
   // Initialize and register the FileManager DBus interface
   fileManagerDBusInterface = [[FileManagerDBusInterface alloc] initWithWorkspace:self];
   if (![fileManagerDBusInterface registerOnDBus]) {
-    NSDebugLLog(@"gwspace", @"Workspace: Warning - Failed to register FileManager DBus interface");
     DESTROY(fileManagerDBusInterface);
   } else {
-    NSDebugLLog(@"gwspace", @"Workspace: FileManager DBus interface registered successfully");
     
     // Set up D-Bus file descriptor monitoring for asynchronous message handling
     // This ensures FileManager1 receives messages immediately without blocking
@@ -1078,12 +1113,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
                                                    name:NSFileHandleDataAvailableNotification
                                                  object:dbusFileHandle];
         [dbusFileHandle waitForDataInBackgroundAndNotify];
-        NSDebugLLog(@"gwspace", @"Workspace: D-Bus file descriptor monitoring enabled (fd: %d)", dbusFd);
       } else {
-        NSDebugLLog(@"gwspace", @"Workspace: Warning - Failed to create NSFileHandle for D-Bus fd");
       }
     } else {
-      NSDebugLLog(@"gwspace", @"Workspace: Warning - Failed to get D-Bus file descriptor");
     }
   }
 #endif
@@ -1097,15 +1129,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (NSApplicationTerminateReply)applicationShouldTerminate:(NSApplication *)app 
 {
-  // Only allow termination for logout actions
-  // Disable this during development so that we can kill the app normally
-  /*
-  if (!loggingout) {
-    // Not a logout action, do not quit
-    return NSTerminateCancel;
-  }
-  */
-
   NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
   
 #define TEST_CLOSE(o, w) if ((o) && ([w isVisible])) [w close]
@@ -1119,11 +1142,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     return NSTerminateCancel;  
   }
 
-  if (logoutTimer && [logoutTimer isValid]) {
-    [logoutTimer invalidate];
-    DESTROY (logoutTimer);
-  }
-  
   // Stop global shortcuts manager if it was started
   if (globalShortcutsManager) {
     [globalShortcutsManager stop];
@@ -1135,6 +1153,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   fswnotifications = NO;
   terminating = YES;
 
+  /* Write out any icon positions still waiting on the debounce timer. */
+  [[GWIconPositionStore sharedStore] flushPending];
+  
   [self updateDefaults];
   
   TEST_CLOSE (prefController, [prefController myWin]);
@@ -1153,7 +1174,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           NS_DURING
             [fswatcher unregisterClient: (id <FSWClientProtocol>)self];  
           NS_HANDLER
-            NSDebugLLog(@"gwspace", @"[Workspace shouldTerminateApplication] unregister fswatcher: %@", [localException description]);
           NS_ENDHANDLER
           DESTROY (fswatcher);
         }
@@ -1194,7 +1214,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   /* Unmount all network volumes */
   [[NetworkVolumeManager sharedManager] unmountAll];
   		
-  // This is a logout - allow termination
   return NSTerminateNow; 
 }
 
@@ -1277,31 +1296,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 - (void)newViewerAtPath:(NSString *)path
 {
   FSNode *targetNode = [FSNode nodeWithPath: path];
-  int defaultType = [self defaultViewerType];
 
-  NSDebugLLog(@"gwspace", @"newViewerAtPath: %@ using default viewer type: %d", path, defaultType);
 
-  if (defaultType == SPATIAL) {
-    [vwrsManager viewerOfType: SPATIAL
-                     showType: nil
-                      forNode: targetNode
-                showSelection: NO
-               closeOldViewer: nil
-                     forceNew: NO];
-  } else {
-    /* Always create a root-based viewer so that all windows have the
-     * same capabilities: full shelf support, consistent app launching,
-     * and unrestricted navigation.  Then navigate to the target path. */
-    FSNode *rootNode = [FSNode nodeWithPath: path_separator()];
-    id viewer = [vwrsManager viewerForNode: rootNode
-                                  showType: 0
-                             showSelection: NO
-                                  forceNew: YES
-                                   withKey: nil];
-
-    if (viewer && ![path isEqual: path_separator()]) {
-      [viewer navigateToNode: targetNode];
-    }
+  /* Route through the canonical open: a folder opens a viewer (growing from
+   * the focused viewer's icon when it is shown there). */
+  if (targetNode && [targetNode hasValidPath]) {
+    [vwrsManager openNode: targetNode fromViewer: nil];
   }
 }
 
@@ -1494,8 +1494,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   [defaults setObject: [NSNumber numberWithInt: type] forKey: @"defaultViewerType"];
   [defaults synchronize];
 
-  NSDebugLLog(@"gwspace", @"Default viewer type set to: %d (%@)", type,
-        (type == SPATIAL) ? @"Spatial" : @"Browsing");
 }
 
 - (StartAppWin *)startAppWin
@@ -1512,6 +1510,24 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     return NO;
   }
 
+  // "Set Browsing/Spatial as Default" are always available: they change the
+  // default viewer type for newly opened windows regardless of the current
+  // selection or window.
+  if (sel_isEqual(action, @selector(setDefaultBrowsingBehaviour:))
+      || sel_isEqual(action, @selector(setDefaultSpatialBehaviour:)))
+    {
+      BOOL isSpatial = sel_isEqual(action, @selector(setDefaultSpatialBehaviour:));
+      [anItem setState: ([self defaultViewerType] == (isSpatial ? SPATIAL : BROWSING))
+                       ? NSOnState : NSOffState];
+      return YES;
+    }
+
+  // Submenu container items (menu titles) are never disabled.
+  if (sel_isEqual(action, @selector(submenuAction:)))
+    {
+      return YES;
+    }
+
   // === App-level items handled directly by Workspace ===
 
   if (sel_isEqual(action, @selector(emptyTrash:))) {
@@ -1519,9 +1535,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   }
   if (sel_isEqual(action, @selector(activateContextHelp:))) {
     return ([NSHelpManager isContextHelpModeActive] == NO);
-  }
-  if (sel_isEqual(action, @selector(logout:))) {
-    return !loggingout;
   }
 
   // Cut/copy/paste for file operations
@@ -1549,17 +1562,41 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     return [self pasteboardHasValidContent];
   }
 
+  // Go To menu navigation commands are always available: they jump to a
+  // fixed location and never depend on the current selection or window.
+  if (sel_isEqual(action, @selector(goToComputer:))
+      || sel_isEqual(action, @selector(goToHome:))
+      || sel_isEqual(action, @selector(goToApplications:))
+      || sel_isEqual(action, @selector(goToUtilities:))
+      || sel_isEqual(action, @selector(goToDocuments:))
+      || sel_isEqual(action, @selector(goToDesktop:))
+      || sel_isEqual(action, @selector(goToDownloads:))
+      || sel_isEqual(action, @selector(goToMusic:))
+      || sel_isEqual(action, @selector(goToPictures:))
+      || sel_isEqual(action, @selector(goToVideos:))
+      || sel_isEqual(action, @selector(goToNetwork:))
+      || sel_isEqual(action, @selector(goToFolder:))
+      || sel_isEqual(action, @selector(connectToServer:))
+      || sel_isEqual(action, @selector(showHistory:))
+      || sel_isEqual(action, @selector(openParentFolder:)))
+    {
+      return YES;
+    }
+
   // Always-enabled app-level commands
   if (sel_isEqual(action, @selector(showViewer:))
       || sel_isEqual(action, @selector(runCommand:))
       || sel_isEqual(action, @selector(showFinder:))
-      || sel_isEqual(action, @selector(shutdown:))
       || sel_isEqual(action, @selector(showPreferences:))
       || sel_isEqual(action, @selector(terminate:))
       || sel_isEqual(action, @selector(hide:))
       || sel_isEqual(action, @selector(hideOtherApplications:))
       || sel_isEqual(action, @selector(unhideAllApplications:))
       || sel_isEqual(action, @selector(orderFrontStandardAboutPanel:))
+      || sel_isEqual(action, @selector(orderFrontStandardInfoPanel:))
+      || sel_isEqual(action, @selector(orderFrontStandardInfoPanelWithOptions:))
+      || sel_isEqual(action, @selector(showInfo:))
+      || sel_isEqual(action, @selector(showAboutThisComputer:))
       || sel_isEqual(action, @selector(workspaceHelp:))
       || sel_isEqual(action, @selector(openGershwinHelp:))
       || sel_isEqual(action, @selector(openFeedback:))
@@ -1585,32 +1622,59 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       return NO;
     }
 
-  // === View type / behaviour — always enabled, set checkmark ===
-  if (sel_isEqual(action, @selector(setViewerType:))) {
-      NSWindow *kwin = [NSApp keyWindow];
-      if (kwin && [vwrsManager hasViewerWithWindow: kwin])
+  // === View type / behaviour — enabled whenever a viewer window exists ===
+  if (sel_isEqual(action, @selector(setViewerType:))
+      || sel_isEqual(action, @selector(setViewerBehaviour:))
+      || sel_isEqual(action, @selector(toggleInspector:))
+      || sel_isEqual(action, @selector(toggleSidebar:))) {
+      /* With a detached global menu (Menu.app) the viewer is not always the
+       * key window when the menu validates, so resolve the target viewer from
+       * the key window, else the main window, else the first live viewer.
+       * Only when no viewer window exists at all (pure desktop context) are
+       * these items greyed out. */
+      id viewer = [self _viewerForKeyWindow];
+      if (sel_isEqual(action, @selector(toggleInspector:)))
         {
-          id viewer = [vwrsManager viewerWithWindow: kwin];
-          if ([viewer respondsToSelector: @selector(viewType)])
+          if (viewer && [viewer respondsToSelector: @selector(isInspectorShown)])
+            {
+              [anItem setState: [viewer isInspectorShown] ? NSOnState : NSOffState];
+            }
+          return (viewer != nil);
+        }
+      if (sel_isEqual(action, @selector(toggleSidebar:)))
+        {
+          /* The sidebar exists only in browsing viewers; spatial viewers do
+           * not respond, so the item is greyed out there.  Mirrors the
+           * Inspector item: fixed "Show Sidebar" title, checkmark when the
+           * sidebar is showing. */
+          if (viewer && [viewer respondsToSelector: @selector(toggleSidebar:)]
+              && [viewer respondsToSelector: @selector(isSidebarShown)])
+            {
+              [anItem setState: [viewer isSidebarShown] ? NSOnState : NSOffState];
+              return YES;
+            }
+          return NO;
+        }
+      if (sel_isEqual(action, @selector(setViewerType:)))
+        {
+          if (viewer && [viewer respondsToSelector: @selector(viewType)])
             {
               GWViewType vtype = [viewer viewType];
               [anItem setState: ([anItem tag] == vtype) ? NSOnState : NSOffState];
+              return YES;
             }
         }
-      return YES;
-    }
-  if (sel_isEqual(action, @selector(setViewerBehaviour:))) {
-      NSWindow *kwin = [NSApp keyWindow];
-      if (kwin && [vwrsManager hasViewerWithWindow: kwin])
+      else if (sel_isEqual(action, @selector(setViewerBehaviour:)))
         {
-          id viewer = [vwrsManager viewerWithWindow: kwin];
-          if ([viewer respondsToSelector: @selector(vtype)])
+          if (viewer && [viewer respondsToSelector: @selector(vtype)])
             {
               int vt = [viewer vtype];
               [anItem setState: ([anItem tag] == vt) ? NSOnState : NSOffState];
+              return YES;
             }
         }
-      return YES;
+      /* No viewer window: this is the desktop context. */
+      return NO;
     }
 
   // === Context-dependent file/viewer operations ===
@@ -1736,22 +1800,23 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   
   for (i = 0; i < count; i++) {
     NSString *apath = [paths objectAtIndex: i];
-    
+
     /* Check if this is a network virtual path */
     if ([NetworkFSNode isNetworkPath:apath]) {
       FSNode *node = [FSNode nodeWithPath:apath];
-      
+
       if ([node isKindOfClass:[NetworkFSNode class]]) {
         NetworkFSNode *networkNode = (NetworkFSNode *)node;
-        
+
         if ([networkNode isNetworkService]) {
           /* This is a network service item - try to open/mount it */
           NSString *mountPoint = [networkNode openNetworkService];
-          
-          if (mountPoint) {
+
+          if (mountPoint && newv) {
             /* Successfully mounted or opened - show viewer at mount point */
-            if (newv) {
-              [self newViewerAtPath:mountPoint];
+            FSNode *target = [FSNode nodeWithPath: mountPoint];
+            if (target) {
+              [vwrsManager openNode: target fromViewer: nil];
             }
           }
           /* If mount failed, openNetworkService already showed an error */
@@ -1759,71 +1824,36 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         } else if ([networkNode isNetworkRoot]) {
           /* This is the /Network root - just open a viewer */
           if (newv) {
-            [self newViewerAtPath:apath];
+            [vwrsManager openNode: node fromViewer: nil];
           }
           continue;
         }
       }
     }
-    
+
     if ([fm fileExistsAtPath: apath]) {
-      NSString *defApp = nil, *type = nil;
+      FSNode *node = [FSNode nodeWithPath: apath];
+      if (node == nil || [node hasValidPath] == NO) {
+        continue;
+      }
 
       NS_DURING
         {
-	  [ws getInfoForFile: apath application: &defApp type: &type];     
-
-	  if (type != nil)
-	    {
-	      if ((type == NSDirectoryFileType) || (type == NSFilesystemFileType))
-		{
-      if (newv)
-        {
-          NSWindow *kwin = [NSApp keyWindow];
-          id nodeView = nil;
-
-          if (kwin && [vwrsManager hasViewerWithWindow: kwin])
-            {
-              nodeView = [[vwrsManager viewerWithWindow: kwin] nodeView];
-            }
-          else if (kwin && [dtopManager hasWindow: kwin])
-            {
-              nodeView = [dtopManager desktopView];
-            }
-
-          if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)])
-            {
-              id icon = [nodeView repOfSubnodePath: apath];
-              if (icon && [icon respondsToSelector: @selector(window)])
-                {
-                  NSRect iconBounds = [icon bounds];
-                  NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
-                  NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
-                  [vwrsManager setPendingOpenAnimationRect: rectOnScreen];
-                }
-            }
-
-          [self newViewerAtPath: apath];
-        }
-		}
-	      else if ((type == NSPlainFileType) || ([type isEqual: NSShellCommandFileType]))
-		{
-		  [self openFile: apath];
-		}
-	      else if (type == NSApplicationFileType)
-		{
-		  [ws launchApplication: apath];
-		}
-	    }
+          /* The canonical open: folders open a viewer (growing from the
+           * focused viewer's icon), everything else launches its app.  When
+           * newv is NO, directories are not opened at all. */
+          if (newv || [node isDirectory] == NO) {
+            [vwrsManager openNode: node fromViewer: nil];
+          }
         }
       NS_HANDLER
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-              [NSString stringWithFormat: @"%@ %@!", 
+          NSRunAlertPanel(NSLocalizedString(@"error", @""),
+              [NSString stringWithFormat: @"%@ %@!",
                NSLocalizedString(@"Can't open ", @""), [apath lastPathComponent]],
-                                            NSLocalizedString(@"OK", @""), 
-                                            nil, 
-                                            nil);                                     
+                                            NSLocalizedString(@"OK", @""),
+                                            nil,
+                                            nil);
         }
       NS_ENDHANDLER
     }
@@ -1857,49 +1887,71 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   BOOL success;
   NSURL *aURL;
 
-  NSDebugLLog(@"gwspace", @"Workspace openFile: called with path: %@", fullPath);
 
-  /* Early ELF detection: catch executables regardless of the reported type
-     so we can prompt the user before any external app (like TextEdit)
-     opens the file. This mirrors the later ELF handling but runs first. */
+/* Alias records (issue #71): opening a file that is an alias opens the
+   target the record resolves to, not the record itself. */
   {
-    NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
-    NSDebugLLog(@"gwspace", @"Workspace openFile: ELF detection - trying to open file handle");
-    if (fh) {
+    NSFileHandle *afh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
+    if (afh) {
+      NSData *hdr = [afh readDataOfLength:4];
+      [afh closeFile];
+      if ([FSNAlias isAliasData: hdr]) {
+        FSNAlias *alias = [[FSNAlias alloc]
+                            initWithData: [NSData dataWithContentsOfFile: fullPath]];
+        NSString *target = [alias resolvePath];
+        AUTORELEASE(alias);
+        if (target == nil) {
+          NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+          [alert setMessageText: @"Broken Alias"];
+          [alert setInformativeText: [NSString stringWithFormat:
+            @"The original of \"%@\" could not be found.",
+            [fullPath lastPathComponent]]];
+          [alert addButtonWithTitle: @"OK"];
+          [alert runModal];
+          return NO;
+        }
+        return [self openFile: target];
+      }
+    }
+  }
+
+/* Early ELF detection: catch executables regardless of the reported type
+      so we can prompt the user before any external app (like TextEdit)
+      opens the file. This mirrors the later ELF handling but runs first.
+      Only sniff regular files - opening a directory throws and would
+      abort the open. */
+   {
+     BOOL isDir = NO;
+     if ([fm fileExistsAtPath: fullPath isDirectory: &isDir] && isDir == NO) {
+     NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
+     if (fh) {
       NSData *hdr = [fh readDataOfLength:4];
-      NSDebugLLog(@"gwspace", @"Workspace openFile: ELF detection - read %lu bytes", (unsigned long)[hdr length]);
       [fh closeFile];
       const unsigned char *bytes = (const unsigned char *)[hdr bytes];
       if ([hdr length] >= 4 && bytes[0] == 0x7f && bytes[1] == 'E' && bytes[2] == 'L' && bytes[3] == 'F') {
-        NSDebugLLog(@"gwspace", @"Workspace openFile: ELF magic detected!");
         NSError *err = nil;
         NSDictionary *attrs = [fm attributesOfItemAtPath: fullPath error: &err];
         if (attrs) {
           NSNumber *permNum = [attrs objectForKey: NSFilePosixPermissions];
           unsigned short perms = [permNum unsignedShortValue];
-          NSDebugLLog(@"gwspace", @"Workspace openFile: File permissions: 0o%o, owner-exec bit set: %s", perms, (perms & S_IXUSR) ? "YES" : "NO");
           if ((perms & S_IXUSR) != 0) {
             /* Already executable - launch directly without prompting */
-            NSDebugLLog(@"gwspace", @"Workspace openFile: ELF is already executable, launching directly");
             [self launchElfAndMonitor: fullPath];
             return YES;
           } else {
             /* Not executable - ask user to trust */
-            NSDebugLLog(@"gwspace", @"Workspace openFile: Owner-exec bit not set, showing trust prompt");
             NSAlert *alert = [[[NSAlert alloc] init] autorelease];
             [alert setMessageText: @"Trust This Application?"];
             [alert setInformativeText: [NSString stringWithFormat: @"Do you want to trust and run the application \"%@\"?", [fullPath lastPathComponent]]];
             [alert addButtonWithTitle: @"Cancel"];
             [alert addButtonWithTitle: @"Trust and Run"];
             NSInteger resp = [alert runModal];
-            NSDebugLLog(@"gwspace", @"Workspace openFile: User response to trust prompt: %ld (2=Trust, 1=Cancel)", (long)resp);
             if (resp == NSAlertSecondButtonReturn) {
               unsigned short newPerms = perms | S_IXUSR | S_IXGRP | S_IXOTH;
               NSDictionary *newAttrs = [NSDictionary dictionaryWithObject: [NSNumber numberWithUnsignedShort: newPerms]
                                                                    forKey: NSFilePosixPermissions];
               NSError *err2 = nil;
               BOOL ok = [fm setAttributes: newAttrs ofItemAtPath: fullPath error: &err2];
-              NSDebugLLog(@"gwspace", @"Workspace openFile: Set permissions result: %s", ok ? "success" : "failed");
               if (!ok) {
                 NSAlert *errAlert = [[[NSAlert alloc] init] autorelease];
                 [errAlert setMessageText: @"Error"];
@@ -1909,16 +1961,15 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
                 return NO;
               }
 
-              NSDebugLLog(@"gwspace", @"Workspace openFile: Launching ELF and monitoring");
               [self launchElfAndMonitor: fullPath];
               return YES;
             } else {
-              NSDebugLLog(@"gwspace", @"Workspace openFile: User declined to trust executable");
               return NO;
             }
           }
         }
       }
+    }
     }
   }
 
@@ -1952,7 +2003,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   }
 
   if (handleAsNetwork) {
-    NSDebugLLog(@"gwspace", @"Workspace openFile: detected network path");
 
     /* For network paths, we need to create the appropriate NetworkFSNode */
     NetworkFSNode *networkNode = nil;
@@ -1960,11 +2010,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     if ([fullPath isEqualToString:NetworkVirtualPath]) {
       /* This is the /Network root */
       networkNode = [NetworkFSNode networkRootNode];
-      NSDebugLLog(@"gwspace", @"Workspace openFile: created network root node");
     } else {
       /* This is a service under /Network - need to find the service item */
       NSString *serviceName = [fullPath lastPathComponent];
-      NSDebugLLog(@"gwspace", @"Workspace openFile: looking for service: %@", serviceName);
       
       NetworkServiceManager *manager = [NetworkServiceManager sharedManager];
       NSArray *services = [manager allServices];
@@ -1972,22 +2020,17 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       for (NetworkServiceItem *item in services) {
         if ([[item displayName] isEqualToString:serviceName]) {
           networkNode = [NetworkFSNode nodeWithServiceItem:item];
-          NSDebugLLog(@"gwspace", @"Workspace openFile: found matching service, created node");
           break;
         }
       }
       
       if (!networkNode) {
-        NSDebugLLog(@"gwspace", @"Workspace openFile: could not find service item for: %@", serviceName);
         return NO;
       }
     }
     
-    NSDebugLLog(@"gwspace", @"Workspace openFile: networkNode: %@ (class: %@)", networkNode, [networkNode class]);
-    NSDebugLLog(@"gwspace", @"Workspace openFile: networkNode: %@ (class: %@)", networkNode, [networkNode class]);
     
     if ([networkNode isNetworkService]) {
-      NSDebugLLog(@"gwspace", @"Workspace openFile: node is a network service, attempting to open/mount");
       /* This is a network service item - try to open/mount it */
       NSString *mountPoint = nil;
       
@@ -1997,7 +2040,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         }
       NS_HANDLER
         {
-          NSDebugLLog(@"gwspace", @"Workspace openFile: Exception during openNetworkService: %@", localException);
           NSRunAlertPanel(NSLocalizedString(@"error", @""), 
               [NSString stringWithFormat: @"Error mounting network service: %@", 
                [localException reason]],
@@ -2008,7 +2050,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         }
       NS_ENDHANDLER
       
-      NSDebugLLog(@"gwspace", @"Workspace openFile: openNetworkService returned: %@", mountPoint);
         
         if (mountPoint) {
           /* Successfully mounted - show viewer at mount point */
@@ -2018,21 +2059,17 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         /* If mount failed, openNetworkService already showed an error */
         return NO;
       } else if ([networkNode isNetworkRoot]) {
-        NSDebugLLog(@"gwspace", @"Workspace openFile: node is network root, opening viewer");
         /* This is the /Network root - just open a viewer */
         [self newViewerAtPath:fullPath];
         return YES;
       } else {
-        NSDebugLLog(@"gwspace", @"Workspace openFile: NetworkFSNode but not service or root");
       }
   } else {
-    NSDebugLLog(@"gwspace", @"Workspace openFile: NOT a network path");
   }
 
   /* Check if this is a disk image file */
   NSString *ext = [[fullPath pathExtension] lowercaseString];
   if ([ext isEqualToString:@"dmg"]) {
-    NSDebugLLog(@"gwspace", @"Workspace: Mounting DMG file: %@", fullPath);
     VolumeManager *volMgr = [VolumeManager sharedManager];
     NSString *mountPoint = [volMgr mountDMGFile:fullPath];
     if (mountPoint) {
@@ -2047,7 +2084,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
              [ext isEqualToString:@"mdf"] ||
              [ext isEqualToString:@"squashfs"] || [ext isEqualToString:@"sqsh"] ||
              [ext isEqualToString:@"sfs"]) {
-    NSDebugLLog(@"gwspace", @"Workspace: Mounting disk image file: %@", fullPath);
     VolumeManager *volMgr = [VolumeManager sharedManager];
     NSString *mountPoint = [volMgr mountFuseisoImage:fullPath];
     if (mountPoint) {
@@ -2068,7 +2104,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
    */
   VolumeManager *volMgr = [VolumeManager sharedManager];
   if ([volMgr isAvfsSupportedFile:fullPath]) {
-    NSDebugLLog(@"gwspace", @"Workspace: Opening archive via AVFS: %@", fullPath);
     NSString *virtualPath = [volMgr openAvfsArchive:fullPath];
     if (virtualPath) {
       /* Wait briefly for AVFS to process the archive */
@@ -2077,7 +2112,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       return YES;
     }
     /* If AVFS failed, fall through to try opening with an application */
-    NSDebugLLog(@"gwspace", @"Workspace: AVFS failed, falling through to application handler");
   }
 
   aURL = nil;
@@ -2093,7 +2127,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           NSString *appPath = [self applicationForCreatorCode: [md creatorCode]];
           if (appPath)
             {
-              NSDebugLLog(@"gwspace", @"Workspace openFile: Using creator code app: %@", appPath);
               return [[NSWorkspace sharedWorkspace] openFile: fullPath withApplication: appPath];
             }
         }
@@ -2136,12 +2169,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
               [copyMd setStationery: NO];
               [copyMd writeToFileAtPath: copyPath error: nil];
 
-              NSDebugLLog(@"gwspace", @"Workspace openFile: Stationery -> copy %@", copyPath);
               return [self openFile: copyPath];
             }
           else
             {
-              NSDebugLLog(@"gwspace", @"Workspace openFile: Stationery copy failed for %@", fullPath);
               return NO;
             }
         }
@@ -2154,8 +2185,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
    * This mirrors how archives are intercepted earlier: special-case before
    * falling through to the generic "open with application" handler.
+   * Only sniff regular files - packages (application bundles etc.) are
+   * directories, and opening them as a file throws.
    */
   if (type == NSPlainFileType) {
+    BOOL isDir = NO;
+    if ([fm fileExistsAtPath: fullPath isDirectory: &isDir] && isDir == NO) {
     NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
     if (fh) {
       NSData *hdr = [fh readDataOfLength:4];
@@ -2205,6 +2240,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           }
         }
       }
+    }
     }
   }
 
@@ -2322,12 +2358,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if (appName)
     {
       NSString *fullPath = [[NSWorkspace sharedWorkspace] fullPathForApplication: appName];
-      NSDebugLLog(@"gwspace", @"Workspace applicationForCreatorCode: code '%@' -> app '%@' -> path '%@'",
-                  codeStr, appName, fullPath);
       return fullPath;
     }
 
-  NSDebugLLog(@"gwspace", @"Workspace applicationForCreatorCode: no mapping for code '%@'", codeStr);
   return nil;
 }
 
@@ -2442,9 +2475,45 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   [self performFileOperation: notifObj];
 }
 
-- (void)duplicateFiles
+/* Make Alias records (issue #71) for the current selection, in the
+   folder that contains it - mirroring Duplicate but writing alias
+   record files instead of copies. */
+- (void)makeAliasFiles:(id)sender
 {
   NSString *basePath;
+  NSMutableArray *files;
+  NSInteger tag;
+  NSUInteger i;
+
+  if ([selectedPaths count] == 0)
+    {
+      return;
+    }
+
+  basePath = [NSString stringWithString: [selectedPaths objectAtIndex: 0]];
+  basePath = [basePath stringByDeletingLastPathComponent];
+
+  if ([fm isWritableFileAtPath: basePath] == NO)
+    {
+      showAlertNoPermission([self class], basePath);
+      return;
+    }
+
+  files = [NSMutableArray array];
+  for (i = 0; i < [selectedPaths count]; i++)
+    {
+      [files addObject: [[selectedPaths objectAtIndex: i] lastPathComponent]];
+    }
+
+  [self performFileOperation: FSNWorkspaceCreateAliasOperation
+		      source: basePath
+		  destination: basePath
+			files: files
+			  tag: &tag];
+}
+
+- (void)duplicateFiles
+{  NSString *basePath;
   NSMutableArray *files;
   NSInteger tag;
   NSUInteger i;
@@ -2552,7 +2621,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           [kwin title], [kwin className]);
     [kwin close];
   } else {
-    NSDebugLLog(@"gwspace", @"Workspace performClose: no usable window!");
   }
 }
 
@@ -2632,7 +2700,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     recentUserUnmounts = [[NSMutableSet alloc] init];
   }
   [recentUserUnmounts addObject: path];
-  NSDebugLLog(@"gwspace", @"Workspace: Recorded user-initiated unmount: %@", path);
   
   /* Also mark on the desktop view directly, providing redundancy.
    * Use the class method to ensure we always get the valid singleton. */
@@ -2656,7 +2723,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSString *path = [userInfo objectForKey: @"GWUnmountPath"];
   if (!path) return;
   
-  NSDebugLLog(@"gwspace", @"Workspace: Received CLI unmount notification for %@", path);
   [self noteUserInitiatedUnmountAtPath: path];
 }
 
@@ -2668,7 +2734,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSString *path = [userInfo objectForKey: @"GWUnmountPath"];
   if (!path) return;
 
-  NSDebugLLog(@"gwspace", @"Workspace: Received CLI did-unmount notification for %@", path);
   [self noteUserInitiatedUnmountAtPath: path];
 
   /* Remove the desktop icon and update volumes list */
@@ -2682,7 +2747,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
     [[FSNodeRep sharedInstance] removeVolumeAt: path];
   } @catch (NSException *e) {
-    NSDebugLLog(@"gwspace", @"Workspace: Error clearing volume info from CLI unmount: %@", e);
   }
 }
 
@@ -2694,7 +2758,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 - (void)_cleanupRecentUnmount:(NSString *)path
 {
   [recentUserUnmounts removeObject: path];
-  NSDebugLLog(@"gwspace", @"Workspace: Cleaned up recent unmount record: %@", path);
 }
 
 - (BOOL)verifyFileAtPath:(NSString *)path
@@ -2914,7 +2977,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
                 isGlobalWatcher: NO];
     } else {
       fswnotifications = NO;
-      NSDebugLLog(@"gwspace", @"Workspace: unable to contact fswatcher; notifications disabled");
     }
   }
 }
@@ -2933,12 +2995,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     fswatcher = nil;
   } else if (fswatcher) {
     /* Mismatch or fswatcher already released; clean up anyway */
-    NSDebugLLog(@"gwspace", @"fswatcherConnectionDidDie: connection mismatch or stale proxy");
     RELEASE (fswatcher);
     fswatcher = nil;
   } else {
     /* fswatcher already nil; connection died notification is stale */
-    NSDebugLLog(@"gwspace", @"fswatcherConnectionDidDie: fswatcher already nil, ignoring stale notification");
     return;
   }
 
@@ -2979,17 +3039,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSDictionary *info = [NSUnarchiver unarchiveObjectWithData: dirinfo];
   NSString *event = [info objectForKey: @"event"];
 
-  NSDebugLLog(@"gwspace", @"DEBUG: Workspace watchedPathDidChange called");
-  NSDebugLLog(@"gwspace", @"DEBUG: event = %@", event);
-  NSDebugLLog(@"gwspace", @"DEBUG: path = %@", [info objectForKey: @"path"]);
-  NSDebugLLog(@"gwspace", @"DEBUG: files = %@", [info objectForKey: @"files"]);
 
   if ([event isEqual: @"GWFileDeletedInWatchedDirectory"]
             || [event isEqual: @"GWFileCreatedInWatchedDirectory"]) {
     NSString *path = [info objectForKey: @"path"];
 
     if ([path isEqual: trashPath]) {
-      NSDebugLLog(@"gwspace", @"DEBUG: Trash path changed, updating trash contents");
       [self _updateTrashContents];
     }
 
@@ -3001,7 +3056,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
   }
   
-  NSDebugLLog(@"gwspace", @"DEBUG: Posting GWFileWatcherFileDidChangeNotification");
 	[[NSNotificationCenter defaultCenter]
  				 postNotificationName: @"GWFileWatcherFileDidChangeNotification"
 	 								     object: info];  
@@ -3051,7 +3105,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 	}
       else
 	{
-    NSDebugLLog(@"gwspace", @"Workspace: unable to contact ddbd");
 	}
     }
 }  
@@ -3141,7 +3194,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 		                     name: NSConnectionDidDieNotification
 		                   object: [mdextractor connectionForProxy]];
     } else {
-      NSDebugLLog(@"gwspace", @"Workspace: unable to contact mdextractor");
     }
   }
 }
@@ -3171,7 +3223,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     
     // Register all queued watchers
     if ([watchedPaths count] > 0) {
-      NSDebugLLog(@"gwspace", @"Workspace: fswatcher connected, registering %lu queued path watchers", [watchedPaths count]);
       NSEnumerator *enumerator = [watchedPaths objectEnumerator];
       NSString *path;
       
@@ -3191,7 +3242,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
     [timer invalidate];
     fswnotifications = NO;
-    NSDebugLLog(@"gwspace", @"Workspace: fswatcher did not respond; notifications disabled");
   }
 }
 
@@ -3215,7 +3265,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   }
   if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
     [timer invalidate];
-    NSDebugLLog(@"gwspace", @"Workspace: ddbd did not respond");
   }
 }
 
@@ -3239,7 +3288,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   }
   if ([[NSDate date] compare:deadline] != NSOrderedAscending) {
     [timer invalidate];
-    NSDebugLLog(@"gwspace", @"Workspace: mdextractor did not respond");
   }
 }
 
@@ -3330,14 +3378,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
 }
 
-//
-// Menu Operations
-//
-- (void)logout:(id)sender
-{
-  [self startLogout];
-}
-
 - (void)showAboutThisComputer:(id)sender
 {
   [[AboutController sharedController] showAboutWindow:sender];
@@ -3345,8 +3385,16 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (void)showInfo:(id)sender
 {
-  
-  [NSApp orderFrontStandardInfoPanel: self];
+  /* Build the panel only once: GSInfoPanel's init caches the localized
+     Info.plist dictionary without retaining it, so a second GSInfoPanel
+     in this process reads freed memory and crashes. */
+  if (infoPanel == nil) {
+    infoPanel = [[GSInfoPanel alloc] initWithDictionary: nil];
+    [infoPanel setReleasedWhenClosed: NO];
+    [infoPanel setTitle: [NSString stringWithFormat: _(@"About %@"),
+                                   [[NSProcessInfo processInfo] processName]]];
+  }
+  [infoPanel orderFront: self];
 }
 
 - (void)showPreferences:(id)sender
@@ -3507,7 +3555,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (void)goToNetwork:(id)sender
 {
-  NSDebugLLog(@"gwspace", @"Workspace: Opening Network browser");
   
   /* Start network service discovery if not already running */
   NetworkServiceManager *manager = [NetworkServiceManager sharedManager];
@@ -3550,8 +3597,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
 - (void)goToFolder:(id)sender
 {
+  /* Start with an empty field so the user types the path (or relies on the
+   * grey typeahead suggestion); no pre-filled home directory. */
   GWDialog *dialog = [[GWDialog alloc] initWithTitle: _(@"Go to Folder:")
-                                             editText: NSHomeDirectory()
+                                             editText: @""
                                           switchTitle: nil];
   [dialog setValidator: ^BOOL(NSString *path) {
     if ([path length] == 0) return NO;
@@ -3601,17 +3650,17 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSString *errorMessage = mountPoint ? nil : [volumeManager lastErrorMessage];
   
   /* Return to main thread to update UI */
-  dispatch_async(dispatch_get_main_queue(), ^{
-    NSMutableDictionary *resultDict = [NSMutableDictionary dictionaryWithObjectsAndKeys:
-                                 mountPoint ? mountPoint : [NSNull null], @"mountPoint",
-                                 progressPanel, @"progressPanel",
-                                 hostname, @"hostname",
-                                 nil];
-    if (errorMessage) {
-      [resultDict setObject:errorMessage forKey:@"errorMessage"];
-    }
-    [self finishMountOperation:resultDict];
-  });
+  NSMutableDictionary *resultDict = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+                               mountPoint ? mountPoint : [NSNull null], @"mountPoint",
+                               progressPanel, @"progressPanel",
+                               hostname, @"hostname",
+                               nil];
+  if (errorMessage) {
+    [resultDict setObject:errorMessage forKey:@"errorMessage"];
+  }
+  [self performSelectorOnMainThread: @selector(finishMountOperation:)
+                         withObject: resultDict
+                      waitUntilDone: NO];
   
   [mountInfo release];
   [pool release];
@@ -3629,10 +3678,8 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   
   if (mountPoint) {
     /* Successfully mounted - open it in a viewer */
-    NSDebugLLog(@"gwspace", @"Workspace: Successfully mounted at %@, opening viewer", mountPoint);
     [self openSelectedPaths:[NSArray arrayWithObject:mountPoint] newViewer:YES];
   } else {
-    NSDebugLLog(@"gwspace", @"Workspace: Mount failed");
     /* Show a detailed error from the mount operation, or a generic fallback */
     NSString *errorMessage = [result objectForKey:@"errorMessage"];
     if (errorMessage && [errorMessage length] > 0) {
@@ -3712,7 +3759,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       
       /* If no username in URL, prompt for credentials NOW (on main thread) */
       if (!username || [username length] == 0) {
-        NSDebugLLog(@"gwspace", @"Workspace: No username in URL, prompting user");
         
         NSString *dialogTitle = isSFTP ? NSLocalizedString(@"Connect to SFTP Server", @"")
                                        : NSLocalizedString(@"Connect to WebDAV Server", @"");
@@ -3721,15 +3767,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         if (creds) {
           username = [[creds objectForKey:@"username"] retain];
           password = [[creds objectForKey:@"password"] retain];
-          NSDebugLLog(@"gwspace", @"Workspace: User entered username: %@", username);
         } else {
-          NSDebugLLog(@"gwspace", @"Workspace: User cancelled connection");
           RELEASE(dialog);
           return;
         }
         
         if (!username || [username length] == 0) {
-          NSDebugLLog(@"gwspace", @"Workspace: No username provided");
           [password release];
           RELEASE(dialog);
           return;
@@ -3768,10 +3811,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         [serviceItem setRemotePath:remotePath];
       }
       
-      NSString *protocolName = isSFTP ? @"SFTP" : @"WebDAV";
-      NSDebugLLog(@"gwspace", @"Workspace: Connecting to %@ server: %@:%d (user: %@, path: %@)", 
-            protocolName, hostname, port, username ?: @"(prompt)", remotePath ?: @"/");
-      
       /* Show a connecting dialog */
       NSPanel *progressPanel = [[NSPanel alloc] initWithContentRect:NSMakeRect(0, 0, 300, 100)
                                                           styleMask:NSTitledWindowMask
@@ -3809,10 +3848,11 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
                                  nil];
       [mountInfo retain];
       
-      /* Mount on a background thread to keep UI responsive */
-      dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [self performMountInBackground:mountInfo];
-      });
+      /* Mount on a background thread to keep UI responsive (GNUstep thread,
+       * not libdispatch - see AppImageIconProvider). */
+      [NSThread detachNewThreadSelector: @selector(performMountInBackground:)
+                               toTarget: self
+                             withObject: mountInfo];
       
       [serviceItem release];
     }
@@ -4436,6 +4476,14 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     RELEASE (cleanUpByItem);
   }
 
+  // Arrange Logically
+  menuItem = [NSMenuItem new];
+  [menuItem setTitle: NSLocalizedString(@"Arrange Logically", @"")];
+  [menuItem setTarget: self];
+  [menuItem setAction: @selector(alignLogically:)];
+  [menu addItem: menuItem];
+  RELEASE (menuItem);
+
   return [menu autorelease];
 }
 
@@ -4444,10 +4492,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
                   openWithTarget:(id)openWithTarget
                      infoTarget:(id)infoTarget
                 duplicateTarget:(id)duplicateTarget
+                    aliasTarget:(id)aliasTarget
                   recycleTarget:(id)recycleTarget
                     ejectTarget:(id)ejectTarget
                      openAction:(SEL)openAction
                 duplicateAction:(SEL)duplicateAction
+                   aliasAction:(SEL)aliasAction
                   recycleAction:(SEL)recycleAction
                     ejectAction:(SEL)ejectAction
                includeOpenWith:(BOOL)includeOpenWith
@@ -4637,7 +4687,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   // Only show Duplicate if not all mount points
   if (!allMountPoints) {
     [menu addItem: [NSMenuItem separatorItem]];
-    
+
     // Duplicate
     menuItem = [NSMenuItem new];
     [menuItem setTitle: NSLocalizedString(@"Duplicate", @"")];
@@ -4646,7 +4696,16 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     [menuItem setEnabled: YES];
     [menu addItem: menuItem];
     RELEASE (menuItem);
-    
+
+    // Make Alias (issue #71)
+    menuItem = [NSMenuItem new];
+    [menuItem setTitle: NSLocalizedString(@"Make Alias", @"")];
+    [menuItem setTarget: aliasTarget];
+    [menuItem setAction: aliasAction];
+    [menuItem setEnabled: YES];
+    [menu addItem: menuItem];
+    RELEASE (menuItem);
+
     [menu addItem: [NSMenuItem separatorItem]];
   }
   
@@ -4718,6 +4777,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     RELEASE (menuItem);
   }
   
+  /* Hand the assembled menu to any loaded extensions so they can append their
+   * own items (e.g. a git-repo bundle).  Extensions decide themselves whether
+   * they apply to the current selection. */
+  [[GWExtensionsManager defaultManager] appendContextMenuItems: menu
+                                                    forNodes: nodes];
+
   return AUTORELEASE (menu);
 }
 
@@ -4742,16 +4807,17 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 {
   NSMenu *labelMenu = [[NSMenu alloc] initWithTitle: @""];
 
-  /* Label names in order of GSFileLabel enum (0-7) */
+  /* Label names in the shared GSFileLabel / DSStoreLabelColor order:
+   * 0=None, 1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Blue, 6=Purple, 7=Grey. */
   NSString *labelNames[] = {
     NSLocalizedString(@"None", @""),
-    NSLocalizedString(@"Grey", @""),
-    NSLocalizedString(@"Green", @""),
-    NSLocalizedString(@"Purple", @""),
-    NSLocalizedString(@"Blue", @""),
-    NSLocalizedString(@"Yellow", @""),
     NSLocalizedString(@"Red", @""),
     NSLocalizedString(@"Orange", @""),
+    NSLocalizedString(@"Yellow", @""),
+    NSLocalizedString(@"Green", @""),
+    NSLocalizedString(@"Blue", @""),
+    NSLocalizedString(@"Purple", @""),
+    NSLocalizedString(@"Grey", @""),
   };
 
   for (NSInteger i = 0; i < 8; i++)
@@ -4777,20 +4843,14 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
  */
 /**
  * Convert GSFileLabel (from xattr FinderInfo) to DSStoreLabelColor
- * (from .DS_Store lclr entries).  The two enums have different orderings.
+ * (from .DS_Store lclr entries).  Both enums use the same encoding
+ * (1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Blue, 6=Purple, 7=Grey), so the
+ * conversion is the identity; kept as a named function so the shared
+ * encoding is explicit at the call site.
  */
 static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 {
-  switch (gsLabel) {
-    case GSFileLabelNone:   return DSStoreLabelColorNone;
-    case GSFileLabelGrey:   return DSStoreLabelColorGrey;
-    case GSFileLabelGreen:  return DSStoreLabelColorGreen;
-    case GSFileLabelPurple: return DSStoreLabelColorPurple;
-    case GSFileLabelBlue:   return DSStoreLabelColorBlue;
-    case GSFileLabelYellow: return DSStoreLabelColorYellow;
-    case GSFileLabelRed:    return DSStoreLabelColorRed;
-    case GSFileLabelOrange: return DSStoreLabelColorOrange;
-  }
+  return (DSStoreLabelColor)gsLabel;
 }
 
 - (void)setLabelForNodes:(id)sender
@@ -4844,8 +4904,6 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
       NSError *error = nil;
       if (![md writeToFileAtPath: path error: &error])
         {
-          NSDebugLLog(@"gwspace", @"setLabelForNodes: xattr write failed for %@: %@",
-                path, error);
         }
     }
 
@@ -4888,10 +4946,7 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
         GWViewSettingsManager *sm;
         sm = [GWViewSettingsManager managerForDirectoryPath: dirPath];
-        BOOL wrote = [sm writeSettings: dsInfo];
-        NSDebugLLog(@"gwspace", @"setLabelForNodes: wrote %s for %@ (%lu files)",
-                    wrote ? "OK" : "FAIL", dirPath,
-                    (unsigned long)[files count]);
+        [sm writeSettings: dsInfo];
       }
   }
 
@@ -4987,6 +5042,13 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   [self cleanUpWithSort: sortType iconView: iconView sortSelector: sortSel];
 }
 
+- (void)alignLogically:(id)sender
+{
+  id iconView = [self activeIconView];
+  if (!iconView) return;
+  [[GWAlignLogically sharedAligner] alignLogicallyInIconView: iconView];
+}
+
 - (void)cleanUpWithSort:(FSNInfoType)sortType iconView:(id)iconView sortSelector:(SEL)sortSel
 {
   [[FSNodeRep sharedInstance] setDefaultSortOrder: (int)sortType];
@@ -5067,49 +5129,17 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
       [iconView batchRepositionIcons: all toCenterPoints: centers];
     }
 
-  /* Animate icons smoothly from old positions to new positions */
-  if (oldFrames && [iconView respondsToSelector: @selector(icons)])
+  /* Animate icons smoothly from old positions to new positions.  The shared
+   * method invalidates old + new icon areas on the container, reverts each
+   * icon to its pre-move frame so NSViewAnimation has a visible starting
+   * point, runs the nonblocking animation and flushes dirty rects while it
+   * plays (NSViewAnimation's setFrame: does not invalidate the prior frame,
+   * leaving ghost pixels without the flush). */
+  if (oldFrames && [iconView respondsToSelector: @selector(animateIconsFromOldFrames:)])
     {
-      NSMutableArray *animations = [NSMutableArray array];
-      for (id ic in [iconView icons])
-        {
-          NSString *name = [[ic node] name];
-          NSValue *oldVal = [oldFrames objectForKey: name];
-          if (oldVal)
-            {
-              NSRect oldFrame = [oldVal rectValue];
-              NSRect newFrame = [ic frame];
-              if (!NSEqualRects(oldFrame, newFrame))
-                {
-                  /* Set icon back to its old frame so NSViewAnimation
-                   * has a visible starting position to interpolate from. */
-                  [ic setFrame: oldFrame];
-                  [animations addObject:
-                    [NSDictionary dictionaryWithObjectsAndKeys:
-                      ic, NSViewAnimationTargetKey,
-                      [NSValue valueWithRect: oldFrame], NSViewAnimationStartFrameKey,
-                      [NSValue valueWithRect: newFrame], NSViewAnimationEndFrameKey,
-                      nil]];
-                }
-            }
-        }
-
-      if ([animations count] > 0)
-        {
-          NSViewAnimation *animation =
-            [[NSViewAnimation alloc] initWithViewAnimations: animations];
-          [animation setDuration: 0.35];
-          [animation setAnimationCurve: NSAnimationEaseInOut];
-          [animation setAnimationBlockingMode: NSAnimationNonblocking];
-          [animation startAnimation];
-          /* Don't release - NSAnimation releases itself on completion
-           * via animatorDidStop (NSAnimation.m:990). External release
-           * causes use-after-free in GSAnimator's dealloc chain. */
-        }
+      [iconView animateIconsFromOldFrames: oldFrames];
     }
 
-  if ([iconView respondsToSelector: @selector(setNeedsDisplay:)])
-    [iconView setNeedsDisplay: YES];
 }
 
 - (void)compressFiles:(id)sender
@@ -5229,180 +5259,6 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   return terminating;
 }
 
-static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
-{
-  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow: timeout];
-
-  while ([task isRunning] && ([deadline timeIntervalSinceNow] > 0))
-    {
-      GWProcessStartupRunLoop(0.1);
-    }
-
-  return ![task isRunning];
-}
-
-- (BOOL)trySystemAction:(NSString *)actionType 
-{
-  // These arrays can be expanded with more commands if needed for other systems
-  // or if the current commands fail. The order is important - we try the most
-  // common commands first, and if they fail, we try alternatives.
-  NSArray *commands;
-  if ([actionType isEqualToString:@"restart"]) {
-    commands = [NSArray arrayWithObjects:
-      // systemd-based Linux (Debian with systemd)
-      [NSArray arrayWithObjects:@"/bin/systemctl", @"reboot", nil],
-      [NSArray arrayWithObjects:@"/usr/bin/systemctl", @"reboot", nil],
-      // Traditional Unix commands (BSD and Linux)
-      [NSArray arrayWithObjects:@"/sbin/reboot", nil],
-      [NSArray arrayWithObjects:@"/usr/sbin/reboot", nil],
-      [NSArray arrayWithObjects:@"/sbin/shutdown", @"-r", @"now", nil],
-      [NSArray arrayWithObjects:@"/usr/sbin/shutdown", @"-r", @"now", nil],
-      // With sudo as fallback (if LoginWindow isn't running as root)
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/bin/systemctl", @"reboot", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/bin/systemctl", @"reboot", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/reboot", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/sbin/reboot", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-r", @"now", nil], nil
-    ];
-  } else if ([actionType isEqualToString:@"shutdown"]) {
-    commands = [NSArray arrayWithObjects:
-      // systemd-based Linux (Debian with systemd)
-      [NSArray arrayWithObjects:@"/bin/systemctl", @"poweroff", nil],
-      [NSArray arrayWithObjects:@"/usr/bin/systemctl", @"poweroff", nil],
-      // Traditional Unix commands (BSD and Linux)
-      [NSArray arrayWithObjects:@"/sbin/poweroff", nil],
-      [NSArray arrayWithObjects:@"/usr/sbin/poweroff", nil],
-      [NSArray arrayWithObjects:@"/sbin/shutdown", @"-h", @"now", nil],
-      [NSArray arrayWithObjects:@"/usr/sbin/shutdown", @"-h", @"now", nil],
-      [NSArray arrayWithObjects:@"/sbin/shutdown", @"-p", @"now", nil],  // BSD-style with poweroff
-      [NSArray arrayWithObjects:@"/sbin/halt", @"-p", nil],  // Another BSD option
-      // With sudo as fallback (if LoginWindow isn't running as root)
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/bin/systemctl", @"poweroff", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/bin/systemctl", @"poweroff", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/poweroff", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/usr/sbin/poweroff", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-h", @"now", nil],
-      [NSArray arrayWithObjects:@"sudo", @"-A", @"-E", @"/sbin/shutdown", @"-p", @"now", nil], nil
-    ];
-  } else {
-    return NO;
-  }
-    
-  for (NSArray *cmd in commands) {
-    NSDebugLLog(@"gwspace", @"Attempting system action with command: %@", [cmd componentsJoinedByString:@" "]);
-    NSTask *task = [NSTask new];
-    AUTORELEASE(task);
-    [task setLaunchPath:[cmd objectAtIndex:0]];
-    if ([cmd count] > 1) {
-      [task setArguments:[cmd subarrayWithRange:NSMakeRange(1, [cmd count]-1)]];
-    }
-    
-    @try {
-      [task launch];
-      BOOL finished = GWWaitForTaskExit(task, 3.0);
-
-      if (!finished) {
-        NSDebugLLog(@"gwspace", @"System action command still running after timeout: %@. Assuming system will %@.", [cmd componentsJoinedByString:@" "], actionType);
-        return YES; // Don't block the UI waiting forever
-      }
-
-      if ([task terminationStatus] == 0) {
-        NSDebugLLog(@"gwspace", @"System action command launched successfully: %@", [cmd componentsJoinedByString:@" "]);        
-        return YES; // Command exited cleanly; system should now proceed
-      }
-
-      NSDebugLLog(@"gwspace", @"System action failed with command: %@, exit status: %d", [cmd componentsJoinedByString:@" "], [task terminationStatus]);
-      // Try next command
-    } @catch (NSException *e) {
-      NSDebugLLog(@"gwspace", @"System action failed with command: %@, error: %@", [cmd componentsJoinedByString:@" "], e);
-      // Try next command
-    }
-  }
-  
-  NSDebugLLog(@"gwspace", @"All system action commands failed for action type: %@", actionType);
-  return NO; // All failed
-}
-
-- (void)executeSystemCommandAndReset
-{
-  if (_pendingSystemActionCommand) {
-    NSString *actionType = [_pendingSystemActionCommand copy];
-    NSString *actionTitle = [_pendingSystemActionTitle copy];
-    NSDebugLLog(@"gwspace", @"Executing system command for action: %@", actionType);
-
-    NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:
-      actionType, @"action",
-      actionTitle ? actionTitle : (id)[NSNull null], @"title",
-      nil];
-
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-      [self _performSystemActionAsync:payload];
-    });
-
-    RELEASE(actionType);
-    RELEASE(actionTitle);
-  }
-}
-
-- (void)_performSystemActionAsync:(NSDictionary *)info
-{
-  NSAutoreleasePool *pool = [NSAutoreleasePool new];
-  NSString *actionType = [info objectForKey:@"action"];
-
-  BOOL success = [self trySystemAction: actionType];
-
-  NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
-    [NSNumber numberWithBool: success], @"success",
-    actionType, @"action",
-    [info objectForKey:@"title"], @"title",
-    nil];
-
-  dispatch_async(dispatch_get_main_queue(), ^{
-    [self _finalizeSystemAction:result];
-  });
-
-  RELEASE(pool);
-}
-
-- (void)_finalizeSystemAction:(NSDictionary *)result
-{
-  BOOL success = [[result objectForKey:@"success"] boolValue];
-  NSString *actionType = [result objectForKey:@"action"];
-  id titleObj = [result objectForKey:@"title"];
-  NSString *title = ([titleObj isKindOfClass:[NSNull class]]) ? nil : titleObj;
-
-  (void)title; // title currently unused but kept for potential UI messaging
-
-  if (!success) {
-    NSRunAlertPanel(NSLocalizedString(@"error", @""),
-                    [NSString stringWithFormat:@"Failed to execute %@ command. No suitable command found.", actionType],
-                    NSLocalizedString(@"OK", @""),
-                    nil,
-                    nil);
-  }
-
-  DESTROY(_pendingSystemActionCommand);
-  DESTROY(_pendingSystemActionTitle);
-  loggingout = NO;
-
-  NSDebugLLog(@"gwspace", @"System action attempt completed (success=%d). Application state reset. App will NOT quit.", success);
-}
-
-- (void)restart:(id)sender
-{
-    [[Workspace gworkspace] startLogoutRestartShutdownWithType:@"restart"
-        message:NSLocalizedString(@"Are you sure you want to quit\nall applications and restart now?", @"")
-        systemAction:NSLocalizedString(@"Restart", @"")
-        pendingCommand:@"restart"];
-}
-
-- (void)shutdown:(id)sender
-{
-    [[Workspace gworkspace] startLogoutRestartShutdownWithType:@"shutdown"
-        message:NSLocalizedString(@"Are you sure you want to quit\nall applications and shut down now?", @"")
-        systemAction:NSLocalizedString(@"Shut Down", @"")
-        pendingCommand:@"shutdown"];
-}
 
 - (void)createStandardUserDirectories
 {
@@ -5429,18 +5285,14 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
         {
           if ([fileManager createDirectoryAtPath:dirPath 
                                        attributes:nil]) {
-            NSDebugLLog(@"gwspace", @"Created standard directory: %@", dirPath);
           } else {
-            NSDebugLLog(@"gwspace", @"Failed to create directory: %@", dirPath);
           }
         }
       NS_HANDLER
         {
-          NSDebugLLog(@"gwspace", @"Error creating directory %@: %@", dirPath, [localException reason]);
         }
       NS_ENDHANDLER
     } else if (!isDirectory) {
-      NSDebugLLog(@"gwspace", @"Warning: %@ exists but is not a directory", dirPath);
     }
   }
 }
@@ -5450,7 +5302,6 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   /* The kind is carried by the item's tag (BROWSING/SPATIAL), not its title —
    * titles are localized, so comparing them broke on non-English locales. */
   unsigned int viewerType = (unsigned int)[sender tag];
-  NSDebugLLog(@"gwspace", @"setViewerBehaviour called, type=%u", viewerType);
 
   /* Resolve the source viewer from the key window, falling back to the main
    * window.  With a detached global menu (Menu.app) the viewer is not always
@@ -5461,21 +5312,17 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
     viewer = [vwrsManager viewerWithWindow: [NSApp mainWindow]];
   }
   if (!viewer) {
-    NSDebugLLog(@"gwspace", @"No viewer found for key/main window");
     return;
   }
 
   // Get the base node (current path) from the viewer
   FSNode *currentNode = [viewer baseNode];
   if (!currentNode) {
-    NSDebugLLog(@"gwspace", @"No base node found in viewer");
     return;
   }
 
-  NSDebugLLog(@"gwspace", @"Current path: %@", [currentNode path]);
 
   // Replace the current viewer window with one of the selected kind
-  NSDebugLLog(@"gwspace", @"Replacing viewer with type %u", viewerType);
 
   id newViewer = [vwrsManager replaceViewer: viewer
                              withViewerType: viewerType];
@@ -5483,32 +5330,116 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   if (newViewer) {
     /* viewerOfType:… already activates the new viewer; activating again here
      * would, for spatial, re-run viewer:didShowNode:. */
-    NSDebugLLog(@"gwspace", @"Successfully created new viewer for path %@", [currentNode path]);
   } else {
-    NSDebugLLog(@"gwspace", @"Failed to create new viewer");
   }
 
-  NSDebugLLog(@"gwspace", @"Finished processing viewer behavior change");
+}
+
+- (void)setViewerType:(id)sender
+{
+  NSInteger tag = [sender tag];
+
+  if (tag <= 0)
+    return;
+
+  /* Resolve the viewer from the key window, falling back to the main window,
+   * then to the first live viewer.  With a detached global menu (Menu.app)
+   * the viewer is not always the key window when the item fires, which would
+   * otherwise make this a silent no-op.  Only viewer windows get the new view
+   * type; the desktop ignores the item entirely (disabled via validation). */
+  id viewer = [self _viewerForKeyWindow];
+  if (!viewer) {
+    return;
+  }
+
+  if ([viewer respondsToSelector: @selector(setViewerType:)])
+    {
+      [viewer setViewerType: sender];
+    }
+}
+
+/* Resolves the target viewer the same way setViewerType: does, so menu
+ * actions and their validation agree on which viewer window is meant. */
+- (id)_viewerForKeyWindow
+{
+  id viewer = [vwrsManager viewerWithWindow: [NSApp keyWindow]];
+  if (!viewer) {
+    viewer = [vwrsManager viewerWithWindow: [NSApp mainWindow]];
+  }
+  if (!viewer) {
+    NSArray *wins = [vwrsManager viewerWindows];
+    if ([wins count]) {
+      viewer = [vwrsManager viewerWithWindow: [wins objectAtIndex: 0]];
+    }
+  }
+  return viewer;
+}
+
+- (void)toggleInspector:(id)sender
+{
+  id viewer = [self _viewerForKeyWindow];
+  if (viewer && [viewer respondsToSelector: @selector(toggleInspector:)])
+    {
+      [viewer toggleInspector: sender];
+    }
+}
+
+- (void)toggleSidebar:(id)sender
+{
+  id viewer = [self _viewerForKeyWindow];
+  if (viewer && [viewer respondsToSelector: @selector(toggleSidebar:)])
+    {
+      [viewer toggleSidebar: sender];
+      /* Update the menu item checkmark right away so the item reflects the
+       * new state without waiting for the next menu validation (menu_invoke
+       * and the UITest's select menu resolve by the item's current title, which
+       * no longer changes). */
+      if ([viewer respondsToSelector: @selector(isSidebarShown)]) {
+        [self _setSidebarMenuItemState: [viewer isSidebarShown]];
+      }
+    }
+}
+
+/* Updates the checkmark of the "Show Sidebar" menu item to match the given
+ * state, so an in-process toggle (no menu display, no validation) still
+ * leaves the menu state consistent. */
+- (void)_setSidebarMenuItemState:(BOOL)shown
+{
+  SEL act = @selector(toggleSidebar:);
+  NSMenu *mainMenu = [NSApp mainMenu];
+  for (NSMenuItem *top in [mainMenu itemArray])
+    {
+      NSMenu *sub = [top submenu];
+      if (sub == nil) continue;
+      for (NSMenuItem *item in [sub itemArray])
+        {
+          if ([item action] == act)
+            {
+              [item setState: shown ? NSOnState : NSOffState];
+              return;
+            }
+        }
+    }
 }
 
 - (void)setDefaultBrowsingBehaviour:(id)sender
 {
-  NSDebugLLog(@"gwspace", @"Setting default viewer behavior to Browsing");
   [self setDefaultViewerType: BROWSING];
 
-  NSRunAlertPanel(@"Default Viewer Set",
-                  @"Browsing mode is now the default for new viewer windows.",
-                  @"OK", nil, nil);
+  /* Informational confirmation.  Do NOT raise a modal here: dismissing it
+   * under a real X11 click (as the UI tests do) can segfault the app, and a
+   * headless/CI session would leave it up forever, freezing the Workspace and
+   * the DriveUI server.  The change is already visible via the menu
+   * checkmark, so log it and move on. */
+  NSLog(@"Default viewer type set to Browsing for new viewer windows.");
 }
 
 - (void)setDefaultSpatialBehaviour:(id)sender
 {
-  NSDebugLLog(@"gwspace", @"Setting default viewer behavior to Spatial");
   [self setDefaultViewerType: SPATIAL];
 
-  NSRunAlertPanel(@"Default Viewer Set",
-                  @"Spatial mode is now the default for new viewer windows.",
-                  @"OK", nil, nil);
+  /* Informational confirmation; see setDefaultBrowsingBehaviour:. */
+  NSLog(@"Default viewer type set to Spatial for new viewer windows.");
 }
 
 - (void)notImplemented:(id)sender
@@ -5525,8 +5456,12 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
   } else {
     message = @"This feature is not yet implemented.";
   }
-  
-  NSRunAlertPanel(@"Not Implemented Yet", message, @"OK", nil, nil);
+
+  /* Informational only.  A blocking NSRunAlertPanel here would sit up
+   * forever on a headless/CI session (freezing the DriveUI server and every
+   * UI test) and dismissing it with a real X11 click can crash the app;
+   * log it instead. */
+  NSLog(@"Not implemented: %@", message);
   return;  // Explicit return to avoid noreturn inference
 }
 
@@ -5575,7 +5510,6 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
     return NO;
   }
   
-  NSDebugLLog(@"gwspace", @"Workspace: Attempting to unmount volume at path: %@", path);
 
   /* Record this as a user-initiated unmount BEFORE doing anything else.
    * This is the authoritative record that showMountedVolumes checks to
@@ -5602,13 +5536,11 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
       isDiskImageVolume = [VolumeManagerClass isDiskImageMount:path];
       if (isDiskImageVolume) {
         volumeManager = [VolumeManagerClass sharedManager];
-        NSDebugLLog(@"gwspace", @"Workspace: Volume is managed by VolumeManager (disk image)");
       }
     }
   }
   
   if (isDiskImageVolume && volumeManager) {
-    NSDebugLLog(@"gwspace", @"Workspace: Calling VolumeManager unmountPath for %@", path);
     return [volumeManager unmountPath: path];
   }
   
@@ -5621,14 +5553,12 @@ static BOOL GWWaitForTaskExit(NSTask *task, NSTimeInterval timeout)
     if (networkVolumeManager && [networkVolumeManager respondsToSelector:@selector(unmountPath:)]) {
       NSSet *netPaths = [networkVolumeManager allMountedPaths];
       if ([netPaths containsObject: path]) {
-        NSDebugLLog(@"gwspace", @"Workspace: Detected network volume at %@, using NetworkVolumeManager", path);
         return [networkVolumeManager unmountPath: path];
       }
     }
   }
   
   // Use standard system unmount+eject for regular volumes (drag to trash)
-  NSDebugLLog(@"gwspace", @"Workspace: Using standard system unmount+eject for %@", path);
   BOOL result = [GWUnmountHelper unmountAndEjectPath:path];
   
   if (!result) {

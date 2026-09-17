@@ -190,7 +190,8 @@
 
 - (IBAction)okButtAction:(id)sender
 {
-  NSString *str = [cfield string];
+  /* Execute only the user's typed text, not the grey suggested completion. */
+  NSString *str = [cfield typedText];
   if ([str length])
     {
       NSString *command = nil;
@@ -221,6 +222,36 @@
           else
             {
               checkedCommand = [self findExecutableInPATH:command];
+            }
+        }
+      /* The user may have typed an unquoted path containing spaces (e.g.
+       * "Brave Origin.app").  The first-token parse above split it at the
+       * first space and found no such command, so try progressively longer
+       * space-joined prefixes of the whole string: the longest prefix that
+       * resolves as an app or executable wins, and everything after it is
+       * the argument list. */
+      if (!checkedCommand)
+        {
+          NSArray *tokens = [str componentsSeparatedByCharactersInSet:
+            [NSCharacterSet whitespaceCharacterSet]];
+          NSUInteger i;
+          for (i = [tokens count]; i >= 1; i--)
+            {
+              NSString *candidate = [[tokens subarrayWithRange:
+                NSMakeRange (0, i)] componentsJoinedByString: @" "];
+              NSString *resolved = [self checkCommand: candidate];
+              if (!resolved
+                  && [[NSFileManager defaultManager] isExecutableFileAtPath: candidate])
+                resolved = candidate;
+              if (!resolved)
+                resolved = [self findExecutableInPATH: candidate];
+              if (resolved)
+                {
+                  checkedCommand = resolved;
+                  args = [tokens subarrayWithRange:
+                    NSMakeRange (i, [tokens count] - i)];
+                  break;
+                }
             }
         }
       if (checkedCommand)

@@ -94,10 +94,8 @@
                         PropModeReplace, (unsigned char *)&data, 1);
   XFlush(dpy);
 
-  NSDebugLLog(@"gwspace", @"DEBUG: XDesktopWindow activate called - setting level and ordering front");
   [self setLevel: NSDesktopWindowLevel];
   [self orderFront: nil];
-  NSDebugLLog(@"gwspace", @"DEBUG: XDesktopWindow is now visible: %d, level: %ld", [self isVisible], (long)[self level]);
 }
 
 - (void)deactivate

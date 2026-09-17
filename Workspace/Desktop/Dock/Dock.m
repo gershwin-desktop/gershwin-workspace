@@ -45,6 +45,19 @@
 #define MIN_ICN_SIZE 16
 #define ICN_INCR 4
 
+/* Returns GSScaleFactor for scaling dock cell frames. Factors below 1.0 are
+ * honored (UI is scaled down); an unset or non-positive value means 1.0. */
+static inline CGFloat _dockScaleFactor(void)
+{
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  id val = [defaults objectForKey: @"GSScaleFactor"];
+  if (val == nil) {
+    return 1.0;
+  }
+  CGFloat sf = [val floatValue];
+  return (sf > 0.0) ? sf : 1.0;
+}
+
 /* small category to access NSNUmericSearch through a selector */
 
 @interface NSString (NumericSort)
@@ -63,6 +76,8 @@
 - (void)dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver: self];
+  [launchRefreshTimer invalidate];
+  launchRefreshTimer = nil;
   DockServiceStop();
 #if HAVE_DBUS
   DockServiceDBusStop();
@@ -147,7 +162,6 @@
               
               /* Validate name exists */
               if (name == nil || [name length] == 0) {
-                GWDebugLog(@"Dock: skipping invalid entry (no name)");
                 continue;
               }
               
@@ -168,12 +182,10 @@
 		        /* Keep this entry in the updated dict */
 		        [updatedDict setObject: appEntry forKey: index];
 		      } else {
-		        GWDebugLog(@"Dock: failed to create icon for app \"%@\" at path %@", name, path);
 		      }
 		    }
 		  NS_HANDLER
 		    {
-		      GWDebugLog(@"Dock: exception loading app \"%@\": %@", name, [localException reason]);
 		    }
 		  NS_ENDHANDLER
 		}
@@ -181,7 +193,6 @@
 		{
 		  /* Application no longer exists - remove it from preferences */
 		  if (name) {
-		    GWDebugLog(@"Dock: app \"%@\" no longer exists at saved path; removing from dock.", name);
 		  }
 		}
 	    }
@@ -210,6 +221,12 @@
 #if HAVE_DBUS
       DockServiceDBusStart(self);
 #endif
+
+      launchRefreshTimer = [NSTimer scheduledTimerWithTimeInterval: 2.0
+                                                            target: self
+                                                          selector: @selector(_launchRefreshTimerFired:)
+                                                          userInfo: nil
+                                                           repeats: YES];
     }
 
   return self;  
@@ -228,14 +245,17 @@
   }
 
   path = [ws fullPathForApplication: wsname];
+  if (path == nil) {
+    path = [[NSBundle mainBundle] bundlePath];
+  }
   node = [FSNode nodeWithPath: path];
   
-  icon = [[DockIcon alloc] initForNode: node 
+  icon = [[DockIcon alloc] initForNode: node
                                appName: wsname
                               iconSize: iconSize];
   [icon setHighlightColor: backColor];
-  [icon setWsIcon: YES];   
-  [icon setDocked: YES];   
+  [icon setWsIcon: YES];
+  [icon setDocked: YES];
   [icon setSingleClickLaunch: singleClickLaunch];
   [icons insertObject: icon atIndex: 0];
   [self addSubview: icon];
@@ -246,7 +266,7 @@
 {
   NSString *path = [manager trashPath];
   FSNode *node = [FSNode nodeWithPath: path];
-  DockIcon *icon = [[DockIcon alloc] initForNode: node 
+  DockIcon *icon = [[DockIcon alloc] initForNode: node
                                          appName: nil
                                         iconSize: iconSize];
 
@@ -263,7 +283,7 @@
 
 - (DockIcon *)addIconForApplicationAtPath:(NSString *)path
                                  withName:(NSString *)name
-                                  atIndex:(int)index
+                                  atIndex:(NSInteger)index
 {
   if (path == nil || [path length] == 0) {
     return nil;
@@ -278,7 +298,7 @@
     
     if ([node isApplication]) {
       int icnindex;
-      DockIcon *icon = [[DockIcon alloc] initForNode: node 
+      DockIcon *icon = [[DockIcon alloc] initForNode: node
                                              appName: name
                                             iconSize: iconSize];
       
@@ -308,7 +328,7 @@
 }
 
 - (void)addDraggedIcon:(NSData *)icondata
-               atIndex:(int)index
+               atIndex:(NSInteger)index
 {
   NSDictionary *dict = [NSUnarchiver unarchiveObjectWithData: icondata];
   NSString *name = [dict objectForKey: @"name"];
@@ -324,6 +344,18 @@
 
 - (void)removeIcon:(DockIcon *)icon
 {
+  if (icon == nil) return;
+  /* Hold a strong reference for the whole removal.  An app-termination DO
+   * notification can otherwise arrive while the icon is being torn down and
+   * the object be deallocated under us (use-after-free in objc_msgSend - the
+   * Workspace crash that made menu_follows_app/window_placement flaky). */
+  [icon retain];
+  /* Idempotency: a duplicate app-terminated: (e.g. both the NSTask-exit and
+   * the DO-invalidation paths) must not re-remove an icon already gone. */
+  if ([icons indexOfObjectIdenticalTo: icon] == NSNotFound) {
+    [icon release];
+    return;
+  }
   [manager removeWatcherForPath: [[icon node] path]];
   
   if ([icon superview]) {
@@ -337,21 +369,52 @@
   
   /* Persist the removal immediately */
   [self saveDockConfiguration];
+  [icon release];
+}
+
+- (DockIcon *)iconForApplicationPath:(NSString *)path
+{
+  NSUInteger i;
+
+  for (i = 0; i < [icons count]; i++) {
+    DockIcon *icon = [icons objectAtIndex: i];
+
+    if ([[icon path] isEqual: path]) {
+      return icon;
+    }
+    if ([[[icon path] stringByResolvingSymlinksInPath] isEqual: path]) {
+      return icon;
+    }
+  }
+
+  return nil;
 }
 
 - (DockIcon *)iconForApplicationName:(NSString *)name
 {
   NSUInteger i;
-  
+
   for (i = 0; i < [icons count]; i++) {
     DockIcon *icon = [icons objectAtIndex: i];
-    
+
     if ([[icon appName] isEqual: name]) {
       return icon;
     }
   }
-  
+
   return nil;
+}
+
+- (void)setAppIsX11Only:(BOOL)value
+                forPath:(NSString *)path
+                   name:(NSString *)name
+{
+  DockIcon *icon = nil;
+  if (path)
+    icon = [self iconForApplicationPath: path];
+  if (icon == nil && name)
+    icon = [self iconForApplicationName: name];
+  [icon setIsX11OnlyApp: value];
 }
 
 - (DockIcon *)workspaceAppIcon
@@ -421,15 +484,23 @@
      * appear in the Dock (e.g. WindowManager). */
     NSBundle *bundle = [NSBundle bundleWithPath: appPath];
     if ([[bundle objectForInfoDictionaryKey: @"GSSuppressAppIcon"] boolValue]) {
-      DockIcon *icon = [self iconForApplicationName: appName];
+      DockIcon *icon = [self iconForApplicationPath: appPath];
       if (icon) {
         [self removeIcon: icon];
       }
       return;
     }
 
-    DockIcon *icon = [self iconForApplicationName: appName];
-  
+    DockIcon *icon = [self iconForApplicationPath: appPath];
+
+    /* The same logical application may be reached via several paths (e.g.
+     * one bundle in /System/Applications and a second copy in
+     * /Local/Applications, or a symlink).  Reuse an existing icon by name so
+     * a launch never produces a duplicate bouncing icon. */
+    if (icon == nil && appName != nil) {
+      icon = [self iconForApplicationName: appName];
+    }
+
     if (icon == nil) {
       icon = [self addIconForApplicationAtPath: appPath
                                       withName: appName
@@ -459,10 +530,8 @@
                  pid:(pid_t)pid
 {
   if (appName != nil) {
-    NSDebugLLog(@"gwspace", @"DEBUG: Dock appDidLaunch for appName: %@", appName);
   } else
     {
-      NSDebugLLog(@"gwspace", @"DEBUG: Dock appDidLaunch for nil appName");
       return;
     }
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
@@ -470,14 +539,24 @@
      * appear in the Dock (e.g. WindowManager). */
     NSBundle *bundle = [NSBundle bundleWithPath: appPath];
     if ([[bundle objectForInfoDictionaryKey: @"GSSuppressAppIcon"] boolValue]) {
-      DockIcon *icon = [self iconForApplicationName: appName];
+      DockIcon *icon = [self iconForApplicationPath: appPath];
       if (icon) {
         [self removeIcon: icon];
       }
       return;
     }
 
-    DockIcon *icon = [self iconForApplicationName: appName];
+    DockIcon *icon = [self iconForApplicationPath: appPath];
+
+    /* The same application may exist in several GNUstep domains (System,
+     * Local, ...) as separate bundles with different paths (e.g.
+     * /System/Applications/SudoAskPass.app and
+     * /Local/Applications/SudoAskPass.app).  iconForApplicationPath: only
+     * matches by exact path, so fall back to the app name to avoid showing
+     * a duplicate Dock icon for the same logical application. */
+    if (icon == nil && appName != nil) {
+      icon = [self iconForApplicationName: appName];
+    }
 
     if (icon == nil) {
       icon = [self addIconForApplicationAtPath: appPath
@@ -513,11 +592,19 @@
   return nil;
 }
 
-- (void)appTerminated:(NSString *)appName
+- (void)appTerminated:(NSString *)appPath
+             appName:(NSString *)appName
 {
   if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
-    DockIcon *icon = [self iconForApplicationName: appName];
+    DockIcon *icon = [self iconForApplicationPath: appPath];
+
+    /* Fall back to the app name: the launch path may differ from the
+     * icon's path (domain copies / symlinks), otherwise the icon would
+     * remain in the Dock after the application quits. */
+    if (icon == nil && appName != nil) {
+      icon = [self iconForApplicationName: appName];
+    }
 
     if (icon) {
       [icon setAppPID: 0]; /* Clear PID on termination */
@@ -531,11 +618,12 @@
   }
 }
 
-- (void)appDidHide:(NSString *)appName
+- (void)appDidHide:(NSString *)appPath
+          appName:(NSString *)appName
 {
   if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
-    DockIcon *icon = [self iconForApplicationName: appName];
+    DockIcon *icon = [self iconForApplicationPath: appPath];
 
     if (icon) {
       [icon setAppHidden: YES];
@@ -543,11 +631,12 @@
   }
 }
 
-- (void)appDidUnhide:(NSString *)appName
+- (void)appDidUnhide:(NSString *)appPath
+            appName:(NSString *)appName
 {
   if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
-    DockIcon *icon = [self iconForApplicationName: appName];
+    DockIcon *icon = [self iconForApplicationPath: appPath];
 
     if (icon) {
       [icon setAppHidden: NO];
@@ -672,48 +761,54 @@
   NSRect scrrect = [[[NSScreen screens] objectAtIndex:0] frame];
   int oldIcnSize = iconSize;
   CGFloat maxheight = scrrect.size.height;
-  NSRect icnrect = NSZeroRect;  
+  NSRect icnrect = NSZeroRect;
   NSRect rect = NSZeroRect;
   NSUInteger i;
-
   iconSize = MAX_ICN_SIZE;
-  
+  CGFloat sf = _dockScaleFactor();
+
+  /* Compute unscaled cell size (used for icon subview layout inside the view,
+   * where the backend's HiDPI transform is already active). */
   icnrect.origin.x = 0;
   icnrect.origin.y = 0;
   icnrect.size.width = ceil(iconSize / 3 * 4);
   icnrect.size.height = icnrect.size.width;
-    
-  rect.size.height = [icons count] * icnrect.size.height;
+
+  /* Use SCALED cell for the dock window frame (screen pixel coordinates). */
+  CGFloat scaledCell = icnrect.size.width * sf;
+
+  rect.size.height = [icons count] * scaledCell;
   if (targetIndex != -1) {
-    rect.size.height += icnrect.size.height;
+    rect.size.height += scaledCell;
   }
-  
-  maxheight -= (icnrect.size.height * 2);  
-  
+
+  maxheight -= (scaledCell * 2);
+
   while (rect.size.height > maxheight) {
     iconSize -= ICN_INCR;
     icnrect.size.height = ceil(iconSize / 3 * 4);
     icnrect.size.width = icnrect.size.height;
-    rect.size.height = [icons count] * icnrect.size.height;
+    scaledCell = icnrect.size.width * sf;
+    rect.size.height = [icons count] * scaledCell;
 
     if (targetIndex != -1) {
-      rect.size.height += icnrect.size.height;
+      rect.size.height += scaledCell;
     }
-      
+
     if (iconSize <= MIN_ICN_SIZE) {
       break;
     }
   }
- 
+
   if (position == DockPositionBottom)
   {
-    rect.size.width = [icons count] * icnrect.size.width;
-    rect.size.height = icnrect.size.height;
+    rect.size.width = [icons count] * scaledCell;
+    rect.size.height = scaledCell;
   }
   else
   {
-    rect.size.width = icnrect.size.width;
-    rect.size.height = [icons count] * icnrect.size.height;
+    rect.size.width = scaledCell;
+    rect.size.height = [icons count] * scaledCell;
   }
 
   // Offset by the primary screen's origin so the dock lands on the correct
@@ -737,7 +832,6 @@
       rect.origin.y = scrOriginY + ceil((scrrect.size.height - rect.size.height) / 2);
     }
 
-  NSDebugLLog(@"gwspace", @"DEBUG: Dock tile - setting frame: %@, icons count: %lu", NSStringFromRect(rect), (unsigned long)[icons count]);
   
   /*
    * When the dock lives in its own GWDockWindow, resize the window to the
@@ -761,10 +855,13 @@
       [self setFrame: rect];
     }
 
+  /* Icon subview frames use UNSCALED cell size (the view's internal
+   * coordinate system is already HiDPI-scaled by the backend).
+   * Icon image size also stays unscaled (48pt). */
   if (position == DockPositionBottom)
   {
     icnrect.origin.x = 0;
-    icnrect.origin.y = 0;  // ← RESET Y!
+    icnrect.origin.y = 0;
 
     for (i = 0; i < [icons count]; i++)
     {
@@ -782,7 +879,7 @@
   }
   else
    {
-    icnrect.origin.y = rect.size.height;  // ← ONLY for vertical layout
+    icnrect.origin.y = rect.size.height / sf;  // use unscaled height for layout
 
     for (i = 0; i < [icons count]; i++)
     {
@@ -854,7 +951,6 @@
 
 - (void)saveDockConfiguration
 {
-  NSDebugLLog(@"gwspace", @"DEBUG: Dock saveDockConfiguration");
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
   NSMutableDictionary *dict = [NSMutableDictionary dictionary];
   NSUInteger i;  
@@ -1294,7 +1390,6 @@
         NSArray *sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
         
         if (!sourcePaths || [sourcePaths count] == 0) {
-          NSDebugLLog(@"gwspace", @"Dock: Drag rejected - empty filename pasteboard");
           return NSDragOperationNone;
         }
         
@@ -1597,8 +1692,10 @@
               for (i = 0; i < [icons count]; i++) {
                 DockIcon *checkIcon = [icons objectAtIndex: i];
 
-                if ([[checkIcon node] isEqual: node] 
-                            && [[checkIcon appName] isEqual: appName]) {
+                /* The same logical application can be reached via different
+                 * paths (domain copies, symlinks); match by name so dragging
+                 * it to the Dock never produces a duplicate icon. */
+                if ([[checkIcon appName] isEqual: appName]) {
                   RETAIN (checkIcon);
                   [icons removeObject: checkIcon];
                   [icons insertObject: checkIcon atIndex: targetIndex];
@@ -1645,6 +1742,21 @@
 - (BOOL)isDragTarget
 {
   return isDragTarget;
+}
+
+- (void)_launchRefreshTimerFired:(NSTimer *)timer
+{
+  for (DockIcon *icon in icons)
+    {
+      /* The X window scans (windowsMatchingName:/hasWindowsForPID:) open X
+       * connections and issue synchronous round-trips.  Done on the main
+       * thread they can wedge the app: while the main thread blocks in a
+       * synchronous X request it stops draining the GNUstep event queue, the X
+       * server gets stuck writing the accumulated events, and the reply never
+       * comes (X11 self-deadlock).  Run each icon's refresh on a worker
+       * thread; the state changes are applied back on the main thread. */
+      [icon refreshLaunchedStateAsync];
+    }
 }
 
 @end

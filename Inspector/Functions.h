@@ -28,9 +28,7 @@
 @class NSString;
 @class NSMenuItem;
 
-#define GWDebugLog(format, args...) \
-  do { if (GW_DEBUG_LOG) \
-    NSDebugLLog(@"gwspace", format , ## args); } while (0)
+
 
 #ifndef MAKE_LABEL
 #define MAKE_LABEL(label, rect, str, align, release, view) { \

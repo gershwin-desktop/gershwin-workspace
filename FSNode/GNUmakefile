@@ -1,12 +1,15 @@
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 include Version
 
 FRAMEWORK_NAME = FSNode
 
 FSNode_OBJC_FILES = \
          FSNode.m \
+         FSNDirEntry.m \
+         FSNIconLoader.m \
          FSNodeRep.m \
          FSNodeRepIcons.m \
          FSNFunctions.m \
@@ -21,11 +24,14 @@ FSNode_OBJC_FILES = \
          FSNListView.m \
          FSNPathComponentsViewer.m \
          FSNPlacementEnumerator.m \
-         FSNIconPlacement.m \
+          FSNIconPlacement.m \
+          FSNAlias.m \
 
 
 FSNode_HEADER_FILES = \
          FSNode.h \
+         FSNDirEntry.h \
+         FSNIconLoader.h \
          FSNodeRep.h \
          FSNFunctions.h \
          FSNTextCell.h \
@@ -41,7 +47,8 @@ FSNode_HEADER_FILES = \
          FSNIconPlacement.h \
          FSNPlacementEnumerator.h \
          FSNMetadataProvider.h \
-         FSNIconPositionStore.h \
+          FSNIconPositionStore.h \
+          FSNAlias.h \
 
 
 FSNode_HAS_RESOURCE_BUNDLE = yes                                          
@@ -49,6 +56,7 @@ FSNode_HAS_RESOURCE_BUNDLE = yes
 FSNode_RESOURCE_FILES = \
     Resources/Images/* \
     Resources/*.lproj \
+    Resources/WellKnownLocations.plist \
 
 # FSNode no longer references the Finder-metadata (GWMetadata) or .DS_Store
 # (DSStore) stacks directly — the application supplies those through the
@@ -79,3 +87,4 @@ include $(GNUSTEP_MAKEFILES)/framework.make
 include $(GNUSTEP_MAKEFILES)/aggregate.make
 
 -include GNUmakefile.postamble
+

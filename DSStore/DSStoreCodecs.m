@@ -91,7 +91,6 @@ static uint64_t swap64(uint64_t x) {
                                                                    options:0
                                                                      error:&error];
     if (error) {
-        NSDebugLLog(@"gwspace", @"Error encoding plist: %@", [error localizedDescription]);
         return nil;
     }
     
@@ -105,7 +104,6 @@ static uint64_t swap64(uint64_t x) {
                                                           format:NULL
                                                            error:&error];
     if (error) {
-        NSDebugLLog(@"gwspace", @"Error decoding plist: %@", [error localizedDescription]);
         return nil;
     }
     

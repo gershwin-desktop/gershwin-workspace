@@ -42,6 +42,7 @@
 #import "GWViewersManager.h"
 #import "../Network/NetworkVolumeManager.h"
 #import "Thumbnailer/GWThumbnailer.h"
+#import "X11AppSupport.h"
 
 #define DEF_ICN_SIZE 48
 #define DEF_TEXT_SIZE 12
@@ -63,6 +64,17 @@
 #endif
 
 #define DEF_COLOR [NSColor colorWithCalibratedRed: 0.39 green: 0.51 blue: 0.57 alpha: 1.00]
+
+/* Current GSScaleFactor (1.0 when unset).  Used to keep the desktop picture
+ * at a constant physical size independent of the scale factor. */
+static CGFloat desktopScaleFactor(void)
+{
+  CGFloat factor = 1.0;
+  id val = [[NSUserDefaults standardUserDefaults] objectForKey: @"GSScaleFactor"];
+  if (val)
+    factor = [val floatValue];
+  return (factor != 1.0) ? factor : 1.0;
+}
 
 
 @implementation GWDesktopView
@@ -90,11 +102,20 @@
 
       manager = mngr;
 
-      // Span the full virtual desktop (union of all screens)
+      // Span the full virtual desktop (union of all screens), divided by
+      // GSScaleFactor so the desktop keeps a constant physical size
+      // independent of the scale factor.
       NSArray *screens = [NSScreen screens];
       screenFrame = [[screens objectAtIndex:0] frame];
       for (NSUInteger si = 1; si < [screens count]; si++) {
         screenFrame = NSUnionRect(screenFrame, [[screens objectAtIndex:si] frame]);
+      }
+      {
+        CGFloat factor = desktopScaleFactor();
+        screenFrame.origin.x /= factor;
+        screenFrame.origin.y /= factor;
+        screenFrame.size.width /= factor;
+        screenFrame.size.height /= factor;
       }
       [self setFrame: screenFrame];
 
@@ -142,7 +163,6 @@
 
 - (void)newVolumeMountedAtPath:(NSString *)vpath
 {
-  NSDebugLLog(@"gwspace", @"GWDesktopView: newVolumeMountedAtPath called for %@", vpath);
   FSNode *vnode = [FSNode nodeWithPath: vpath];
 
   [vnode setMountPoint: YES];
@@ -187,22 +207,18 @@
     NSArray *vwrs = [[[Workspace gworkspace] viewersManager] viewersForBaseNode: parentNode];
     for (id viewer in vwrs)
       {
-        NSDebugLLog(@"gwspace", @"GWDesktopView: Navigating viewer %@ from %@ to %@",
-                    viewer, parentPath, vpath);
         NS_DURING
           {
             [viewer showContentsOfNode: volumeNode];
           }
         NS_HANDLER
           {
-            NSDebugLLog(@"gwspace", @"GWDesktopView: Exception navigating viewer: %@", localException);
           }
         NS_ENDHANDLER
       }
   }
 
   [self tile];
-  NSDebugLLog(@"gwspace", @"GWDesktopView: Added desktop icon for mount %@", vpath);
 }
 
 - (void)workspaceWillUnmountVolumeAtPath:(NSString *)vpath
@@ -210,7 +226,6 @@
   if (vpath)
     {
       [expectedUnmountPaths setObject:[NSDate date] forKey:vpath];
-      NSDebugLLog(@"gwspace", @"GWDesktopView: Marked path as expected unmount: %@", vpath);
     }
   [self checkLockedReps];
 }
@@ -221,7 +236,6 @@
   
   if (!vpath)
     {
-      NSDebugLLog(@"gwspace", @"GWDesktopView: workspaceDidUnmountVolumeAtPath called with nil path");
       return;
     }
   
@@ -250,7 +264,6 @@
         }
       @catch (NSException *exception)
         {
-          NSDebugLLog(@"gwspace", @"Exception while removing icon for volume %@: %@", vpath, exception);
         }
     }
     
@@ -299,7 +312,6 @@
   if (vpath)
     {
       [expectedUnmountPaths setObject:[NSDate date] forKey:vpath];
-      NSDebugLLog(@"gwspace", @"GWDesktopView: Externally marked path as expected unmount: %@", vpath);
     }
 }
 
@@ -358,7 +370,6 @@
       v = [mountedVolumes objectAtIndex:i];
       if ([rvPaths indexOfObject:v] == NSNotFound)
 	{
-	  NSDebugLLog(@"gwspace", @"removing: %@", v);
 	  [volumesToRemove addObject:v];
 	}
     }
@@ -398,9 +409,6 @@
               NSString *v = [volumesToRemove objectAtIndex: j];
               if ([procMounted containsObject: v])
                 {
-                  NSDebugLLog(@"gwspace",
-                    @"GWDesktopView: %@ is still mounted (found in /proc/mounts), not removing",
-                    v);
                   [volumesToRemove removeObjectAtIndex: j];
                 }
             }
@@ -431,7 +439,6 @@
                       /* Mark as expected unmount and record in Workspace */
                       [expectedUnmountPaths setObject: [NSDate date] forKey: v];
                       [[Workspace gworkspace] noteUserInitiatedUnmountAtPath: v];
-                      NSDebugLLog(@"gwspace", @"GWDesktopView: CLI unmount flag matched for %@", v);
                     }
                 }
             }
@@ -444,7 +451,7 @@
   if ([volumesToRemove count] > 0)
     {
       NSMutableArray *unexpectedRemovals = [NSMutableArray arrayWithCapacity:1];
-      NSTimeInterval expectedUnmountTimeout = 60.0; // seconds
+      NSTimeInterval expectedUnmountTimeout = 2.0; // seconds
       NSDate *now = [NSDate date];
       
       for (i = 0; i < [volumesToRemove count]; i++)
@@ -458,17 +465,14 @@
               && [now timeIntervalSinceDate:markedDate] < expectedUnmountTimeout)
             {
               /* This unmount was expected — suppress the warning. */
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Suppressing unexpected-unmount warning for %@ (expected)", v);
             }
           else if ([[[NetworkVolumeManager sharedManager] recentlyUnmountedPaths] containsObject: v])
             {
               /* Network volume unmounted through NetworkVolumeManager — suppress. */
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Suppressing unexpected-unmount warning for %@ (network)", v);
             }
           else if ([[Workspace gworkspace] isRecentUserUnmount: v])
             {
               /* User-initiated unmount via Workspace's unmountVolumeAtPath: — suppress. */
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Suppressing unexpected-unmount warning for %@ (user-initiated)", v);
             }
           else
             {
@@ -493,9 +497,6 @@
                   if (r.location != NSNotFound)
                     {
                       /* The path appears in /proc/mounts — still mounted */
-                      NSDebugLLog(@"gwspace",
-                        @"GWDesktopView: Final check — %@ is still mounted, removing from unexpected",
-                        v);
                       [unexpectedRemovals removeObjectAtIndex: ri];
                       /* Also add to expected to prevent re-trigger next cycle */
                       [expectedUnmountPaths setObject: [NSDate date] forKey: v];
@@ -589,7 +590,6 @@
         }
       @catch (NSException *exception)
         {
-          NSDebugLLog(@"gwspace", @"Exception while unmounting volume at %@: %@", v, exception);
         }
     }
 
@@ -627,6 +627,14 @@
     }
 }
 
+/* The Desktop view lies behind every other window on the screen, so a move
+   that has reached another application's window can only be told apart by
+   asking the window server. */
+- (BOOL)foreignWindowIsUnderPointer
+{
+  return GWForeignWindowIsUnderPointer();
+}
+
 - (void)dockPositionDidChange
 {
   [self tile];
@@ -636,23 +644,22 @@
 - (void)screenParametersDidChange
 {
   NSArray *screens = [NSScreen screens];
-  NSDebugLLog(@"gwspace", @"desktop view screenParametersDidChange: %lu screen(s)",
-             (unsigned long)[screens count]);
 
   screenFrame = [[screens objectAtIndex:0] frame];
   for (NSUInteger si = 1; si < [screens count]; si++) {
     NSRect srect = [[screens objectAtIndex:si] frame];
-    NSDebugLLog(@"gwspace", @"  screen %lu frame: {{%g, %g}, {%g, %g}}",
-               (unsigned long)si, srect.origin.x, srect.origin.y,
-               srect.size.width, srect.size.height);
     screenFrame = NSUnionRect(screenFrame, srect);
   }
-  NSDebugLLog(@"gwspace", @"  union screenFrame: {{%g, %g}, {%g, %g}}",
-             screenFrame.origin.x, screenFrame.origin.y,
-             screenFrame.size.width, screenFrame.size.height);
 
   /* The content view's origin in window coordinates is always (0,0);
    * only the size changes when the screen configuration changes. */
+  {
+    CGFloat factor = desktopScaleFactor();
+    screenFrame.origin.x /= factor;
+    screenFrame.origin.y /= factor;
+    screenFrame.size.width /= factor;
+    screenFrame.size.height /= factor;
+  }
   [self setFrame: NSMakeRect(0, 0, screenFrame.size.width, screenFrame.size.height)];
   _gridCached = NO;
   [self tile];
@@ -885,9 +892,33 @@
 
 - (void)updateDefaults
 {
-  /* All desktop state (positions, appearance, wallpaper) lives in
-   * DS_Store now.  This stub exists for backward compat with existing
-   * callers that invoke it after property changes. */
+  /* Icon layout lives in ~/Desktop/.DS_Store, but the background is not
+   * a property of that folder, so it stays in the defaults that
+   * -getDesktopInfo reads at launch. */
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  NSColor *rgbColor;
+  CGFloat red, green, blue, alpha;
+
+  rgbColor = [backColor colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
+  [rgbColor getRed: &red green: &green blue: &blue alpha: &alpha];
+  [desktopInfo setObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                             [NSNumber numberWithFloat: red], @"red",
+                             [NSNumber numberWithFloat: green], @"green",
+                             [NSNumber numberWithFloat: blue], @"blue",
+                             [NSNumber numberWithFloat: alpha], @"alpha",
+                             nil]
+                  forKey: @"backcolor"];
+
+  [desktopInfo setObject: [NSNumber numberWithBool: useBackImage]
+                  forKey: @"usebackimage"];
+  [desktopInfo setObject: [NSNumber numberWithInt: backImageStyle]
+                  forKey: @"imagestyle"];
+  if (imagePath != nil)
+    {
+      [desktopInfo setObject: imagePath forKey: @"imagepath"];
+    }
+
+  [defaults setObject: desktopInfo forKey: @"desktopinfo"];
 }
 
 /* Persist a changed icon-view setting to the desktop folder's .DS_Store via
@@ -1088,7 +1119,9 @@
   [self setSelectionMask: NSSingleSelectionMask];
 }
 
-- (void)mouseDown:(NSEvent *)theEvent
+/* The Desktop also clears the selection of spatial viewers, and leaves name
+ * editing alone, as its clicks always did. */
+- (void)selectNothingForBackgroundEvent:(NSEvent *)theEvent
 {
   if ([theEvent modifierFlags] != NSShiftKeyMask)
     {
@@ -1102,11 +1135,6 @@
 
       [manager deselectInSpatialViewers];
     }
-}
-
-static void GWHighlightFrameRect(NSRect aRect)
-{
-  NSFrameRectWithWidthUsingOperation(aRect, 1.0, GSCompositeHighlight);
 }
 
 - (void)mouseDragged:(NSEvent *)theEvent
@@ -1131,16 +1159,39 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   [[self window] disableFlushWindow];
 
-  [self lockFocus];
-
   while ([theEvent type] != NSLeftMouseUp)
     {
       CREATE_AUTORELEASE_POOL (arp);
 
+      NSEvent *pendingUp = nil;
+
       theEvent = [[self window] nextEventMatchingMask: eventMask];
+
+      /* X11 delivers motion faster than the band can be redrawn, so only the
+	 newest position is acted on - but it is always acted on, even when the
+	 button has already come up behind it: that last position is the one
+	 the selection is taken from. */
+      while ([theEvent type] != NSLeftMouseUp)
+	{
+	  NSEvent *queued = [NSApp nextEventMatchingMask: eventMask
+					       untilDate: [NSDate distantPast]
+						  inMode: NSEventTrackingRunLoopMode
+						 dequeue: YES];
+	  if (queued == nil)
+	    break;
+	  if ([queued type] == NSLeftMouseUp)
+	    {
+	      pendingUp = queued;
+	      break;
+	    }
+	  theEvent = queued;
+	}
 
       locp = [theEvent locationInWindow];
       locp = [self convertPoint: locp fromView: nil];
+
+      if (pendingUp != nil)
+	theEvent = pendingUp;
 
       x = min(startp.x, locp.x);
       y = min(startp.y, locp.y);
@@ -1149,30 +1200,17 @@ static void GWHighlightFrameRect(NSRect aRect)
 
       r = NSMakeRect(x, y, w, h);
 
-
-      // Erase the previous rect
-      if (transparentSelection)
+      if (NSEqualRects(r, oldRect))
 	{
-	  [self setNeedsDisplayInRect: oldRect];
-	  [[self window] displayIfNeeded];
-	}
-      else
-	{
-	  GWHighlightFrameRect(oldRect);
+	  DESTROY (arp);
+	  continue;
 	}
 
-      // Draw the new rect
-      if (transparentSelection)
-	{
-	  [[NSColor darkGrayColor] set];
-	  NSFrameRect(r);
-          [[[NSColor darkGrayColor] colorWithAlphaComponent: 0.33] set];
-          NSRectFillUsingOperation(r, NSCompositeSourceOver);
-	}
-      else
-	{
-	  GWHighlightFrameRect(r);
-	}
+      /* Show what letting go now would select, before the redraw below
+	 picks the changed icons up together with the old band. */
+      [self previewSelectionInRect: r];
+
+      [self redrawSelectionBandFrom: oldRect to: r];
 
       oldRect = r;
 
@@ -1183,11 +1221,9 @@ static void GWHighlightFrameRect(NSRect aRect)
       DESTROY (arp);
     }
 
-  [self unlockFocus];
-
   [[self window] postEvent: theEvent atStart: NO];
 
-  // Erase the previous rect
+  // Erase the final selection rect via normal display
   [self setNeedsDisplayInRect: oldRect];
   [[self window] displayIfNeeded];
 
@@ -1207,13 +1243,19 @@ static void GWHighlightFrameRect(NSRect aRect)
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      NSRect iconBounds = [self convertRect: [icon iconBounds] fromView: icon];
+      /* The name is part of the icon as far as the user is concerned, so a
+	 band that only touches the label selects too. */
+      NSRect nodeBounds = [self convertRect: [icon nodeBounds] fromView: icon];
 
-      if (NSIntersectsRect(r, iconBounds))
+      if (NSIntersectsRect(r, nodeBounds))
 	{
 	  [icon select];
 	}
     }
+
+  /* Only now that the real selection draws the same highlight, so the
+     icons do not flash unselected in between. */
+  [self previewSelectionInRect: NSZeroRect];
 
   selectionMask = NSSingleSelectionMask;
 
@@ -1230,27 +1272,22 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       character = [characters characterAtIndex: 0];
 
-      NSDebugLLog(@"gwspace", @"GWDesktopView.keyDown: character=0x%x, flags=0x%x", character, flags);
 
       // Handle arrow keys with modifiers
       if (character == NSDownArrowFunctionKey)
         {
-          NSDebugLLog(@"gwspace", @"GWDesktopView: NSDownArrowFunctionKey pressed, flags=0x%x", flags);
           if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
             {
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Shift-Down detected - opening selection");
               [manager openSelectionInNewViewer: NO];
               return;
             }
           if ((flags & NSCommandKeyMask) && (flags & NSShiftKeyMask))
             {
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Command-Shift-Down detected - opening as folder");
               [manager openSelectionAsFolder];
               return;
             }
           if ((flags & NSCommandKeyMask) && !(flags & NSShiftKeyMask))
             {
-              NSDebugLLog(@"gwspace", @"GWDesktopView: Command-Down detected - opening selection");
               [manager openSelectionInNewViewer: NO];
               return;
             }
@@ -1346,7 +1383,15 @@ static void GWHighlightFrameRect(NSRect aRect)
         {
           NSRect monFrame = [[screens objectAtIndex:si] frame];
           // Convert from screen coordinates to view-local coordinates
-          // (screenFrame.origin is the view's origin in screen coords)
+          // (screenFrame.origin is the view's origin in screen coords),
+          // divided by GSScaleFactor like screenFrame above.
+          {
+            CGFloat factor = desktopScaleFactor();
+            monFrame.origin.x /= factor;
+            monFrame.origin.y /= factor;
+            monFrame.size.width /= factor;
+            monFrame.size.height /= factor;
+          }
           NSRect localRect = NSMakeRect(monFrame.origin.x - screenFrame.origin.x,
                                         monFrame.origin.y - screenFrame.origin.y,
                                         monFrame.size.width,
@@ -1448,18 +1493,9 @@ static void GWHighlightFrameRect(NSRect aRect)
 {
   if ([theEvent type] == NSRightMouseDown) {
     NSPoint location = [theEvent locationInWindow];
-    NSPoint selfloc = [self convertPoint: location fromView: nil];
-    GWDesktopIcon *clickedIcon = nil;
-    NSUInteger i;
-
-    // Find which icon was clicked
-    for (i = 0; i < [icons count]; i++) {
-      GWDesktopIcon *icon = [icons objectAtIndex: i];
-      if ([self mouse: selfloc inRect: [icon frame]]) {
-        clickedIcon = icon;
-        break;
-      }
-    }
+    /* Only a click on an icon's image or name hits the icon, the same test
+       a left click goes through. */
+    FSNIcon *clickedIcon = [self iconWithNodeAtWindowPoint: location];
 
     if (clickedIcon) {
       NSArray *selnodes = [self selectedNodes];
@@ -1474,15 +1510,19 @@ static void GWHighlightFrameRect(NSRect aRect)
                                            openWithTarget: [Workspace gworkspace]
                                               infoTarget: [Workspace gworkspace]
                                          duplicateTarget: [self window]
+                                         aliasTarget: [self window]
                                            recycleTarget: [self window]
                                              ejectTarget: self
                                               openAction: @selector(openSelection:)
                                          duplicateAction: @selector(duplicateFiles:)
+                                        aliasAction: @selector(makeAliasFiles:)
                                            recycleAction: @selector(recycleFiles:)
                                              ejectAction: @selector(ejectSelection:)
                                          includeOpenWith: YES];
     } else {
       // Right-clicked on empty desktop background
+      [self selectNothingForBackgroundEvent: theEvent];
+
       NSMenu *menu = [[Workspace gworkspace] emptySpaceContextMenuForViewer: [self window]];
 
       // Add Workspace Preferences (desktop-specific)
@@ -1647,7 +1687,7 @@ static void GWHighlightFrameRect(NSRect aRect)
             FSNIconItemData *data = [icon placementData];
             if (data.placementMode == FSNIconPlacementModeManual) continue;
 
-            NSValue *v = [stored objectForKey: [[icon node] name]];
+            NSValue *v = [stored objectForKey: [[icon node] lastPathComponent]];
             if (v == nil) continue;
             NSPoint iloc = [v pointValue];
             if (iloc.x != 0 || iloc.y != 0)
@@ -1853,7 +1893,7 @@ static void GWHighlightFrameRect(NSRect aRect)
               for (NSUInteger j = 0; j < count; j++)
                 {
                   NSString *fname = [[sourcePaths objectAtIndex: j] lastPathComponent];
-                  if ([[nd name] isEqual: fname])
+                  if ([[nd lastPathComponent] isEqual: fname])
                     {
                       return NSDragOperationNone;
                     }
@@ -1933,6 +1973,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 {
   DESTROY (dragIcon);
   isDragTarget = NO;
+  [self setNeedsDisplay: YES];
 }
 
 - (BOOL)prepareForDragOperation:(id <NSDraggingInfo>)sender
@@ -1959,6 +2000,7 @@ static void GWHighlightFrameRect(NSRect aRect)
   NSInteger i; // FIXME see if it can be made unsigned
 
   DESTROY (dragIcon);
+  [self setNeedsDisplay: YES];
 
   isDragTarget = NO;
 
@@ -1984,6 +2026,18 @@ static void GWHighlightFrameRect(NSRect aRect)
 
   sourcePaths = [[pb propertyListForType: NSFilenamesPboardType] mutableCopy];
   AUTORELEASE (sourcePaths);
+
+  /* Icons that live here coming back after the drag left the Desktop: put
+     them down where they were dropped instead of asking the file system to
+     move the files onto themselves. */
+  if (dragLocalIcon)
+    {
+      dragLocalIcon = NO;
+
+      if ([self repositionIconsOfPaths: sourcePaths
+                           atDropPoint: [sender draggingLocation]])
+        return;
+    }
 
 
 
@@ -2025,7 +2079,7 @@ static void GWHighlightFrameRect(NSRect aRect)
 	}
       else if (sourceDragMask & NSDragOperationLink)
 	{
-	  operation = NSWorkspaceLinkOperation;
+	  operation = FSNLinkDropOperation();
 	}
       else
 	{
@@ -2045,6 +2099,9 @@ static void GWHighlightFrameRect(NSRect aRect)
     {
       [files addObject: [[sourcePaths objectAtIndex: i] lastPathComponent]];
     }
+
+  [self recordDropPositionsForFiles: files
+			    atPoint: [sender draggingLocation]];
 
   opDict = [NSMutableDictionary dictionary];
   [opDict setObject: operation forKey: @"operation"];

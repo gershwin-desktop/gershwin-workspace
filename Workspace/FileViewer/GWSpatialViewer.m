@@ -29,12 +29,14 @@
 #import <AppKit/AppKit.h>
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
+#import "GSFileMetadata.h"
 #import "GWViewerPrefs.h"
 #import "GWSpatialViewer.h"
 #import "GWViewersManager.h"
 #import "GWViewerWindow.h"
 #import "GWViewerScrollView.h"
 #import "GWViewerBrowser.h"
+#import "GWViewerBrowserPreview.h"
 #import "GWViewerIconsView.h"
 #import "GWSpatialIconsView.h"
 #import "GWViewerListView.h"
@@ -43,6 +45,8 @@
 #import "GWViewer.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
+#include <GNUstepGUI/GSDisplayServer.h>
+#import "X11AppSupport.h"
 #import "FSNodeRep.h"
 #import "FSNIcon.h"
 #import "FSNIconsView.h"
@@ -56,6 +60,12 @@
 #define MIN_W_HEIGHT 180
 
 @implementation GWSpatialViewer
+
+/* Last-known window decoration extents (left/right/top/bottom), learned from
+ * the first window the WM framed, so later windows are corrected to the same
+ * frame even when the WM is slow to set _NET_FRAME_EXTENTS. */
+static unsigned long lastExtents_[4];
+static BOOL hasLastExtents_ = NO;
 
 - (void)dealloc
 {
@@ -73,6 +83,7 @@
   RELEASE (rootViewerKey);
   RELEASE (watchedNodes);
   RELEASE (history);
+  RELEASE (previewPane);
   RELEASE (vwrwin);
   RELEASE (viewType);
   RELEASE (viewerPrefs);
@@ -207,8 +218,6 @@
         [[NSUserDefaults standardUserDefaults] setObject: viewerPrefs
                                                   forKey: prefsname];
         [fmgr removeFileAtPath: legacyPath handler: nil];
-        NSDebugLLog(@"gwspace",
-          @"GWSpatialViewer: migrated legacy .gwdir at %@ into .DS_Store", legacyPath);
       }
     }
 
@@ -216,13 +225,7 @@
     viewType = [viewerPrefs objectForKey: @"viewtype"];
     
     if (dsStoreInfo.loaded && dsStoreInfo.hasViewStyle) {
-      NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-      NSDebugLLog(@"gwspace", @"║      APPLYING DS_STORE VIEW STYLE                                ║");
-      NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-      
       viewType = [DSStoreInfo viewTypeNameForViewStyle: dsStoreInfo.viewStyle];
-      NSDebugLLog(@"gwspace", @"║ View style from DS_Store: %@", viewType);
-      NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
     }
 
     if (viewType == nil) {
@@ -235,6 +238,24 @@
     }
 
     RETAIN (viewType);
+
+    /* The "Show Inspector" toggle and selected pane are remembered per view
+     * type (Icon/List/Columns), so e.g. columns view can show the inspector
+     * while icon view does not.  Keys are <key>_Icon / _List / _Browser. */
+    {
+      NSString *vtKey = [self _viewTypeKey];
+      NSString *shownKey = [@"showInspector_" stringByAppendingString: vtKey];
+      NSString *paneKey = [@"inspectorPane_" stringByAppendingString: vtKey];
+
+      showInspector = [defaults boolForKey: shownKey];
+      if ((defEntry = [viewerPrefs objectForKey: shownKey])) {
+        showInspector = [defEntry boolValue];
+      }
+      inspectorPane = 0;
+      if ((defEntry = [viewerPrefs objectForKey: paneKey])) {
+        inspectorPane = [defEntry intValue];
+      }
+    }
 
     ASSIGN (vwrwin, win);
     [vwrwin setReleasedWhenClosed: NO];
@@ -253,51 +274,45 @@
       
       // Validate geometry
       if (dsGeometry.size.width > 0 && dsGeometry.size.height > 0) {
-        NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-        NSDebugLLog(@"gwspace", @"║      APPLYING DS_STORE WINDOW GEOMETRY                           ║");
-        NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-        NSDebugLLog(@"gwspace", @"║ DS_Store content rect: %@", NSStringFromRect(dsStoreInfo.windowFrame));
-        NSDebugLLog(@"gwspace", @"║ GNUstep content rect: %@", NSStringFromRect(dsGeometry));
-        
-        // IMPORTANT: DS_Store stores CONTENT area (excluding titlebar)
-        // Convert content rect to full window frame rect
-        NSRect windowFrame = [vwrwin frameRectForContentRect:dsGeometry];
-        NSDebugLLog(@"gwspace", @"║ Full window frame: %@", NSStringFromRect(windowFrame));
-        NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
-        
-        [vwrwin setFrame:windowFrame display:YES];
-        [vwrwin makeKeyAndOrderFront:nil];
+        /* dsGeometry is the CONTENT rect in GNUstep coords (DS_Store stores
+         * content area excluding the title bar).  Set the full frame now,
+         * BEFORE the window is mapped: the WindowManager reads the window
+         * geometry when it frames the window and plays the birth animation,
+         * so mapping a placeholder would grow the animation toward the wrong
+         * spot (bottom-left) and lay the content out for the wrong size.
+         * frameRectForContentRect: uses the cached decoration offsets, which
+         * are exact once the compositor state has settled; activate later
+         * re-applies the frame with the WM's live _NET_FRAME_EXTENTS (exact),
+         * correcting any residual offset error mid-animation so it never
+         * drifts on repeated open/close cycles.
+         * Do NOT map the window here: createViewerOfType: sets the
+         * _WINDOW_BIRTH_ANIMATION property after init, and -activate maps the window
+         * after that.  Mapping during init would make the WindowManager read
+         * the window before the birth property is written (a cross-connection
+         * race), so the open animation would never play. */
+        pendingRestoreFrame = dsGeometry;
+        hasPendingRestoreFrame = YES;
+        [vwrwin setFrame: [vwrwin frameRectForContentRect: dsGeometry]
+                 display: NO];
         geometryApplied = YES;
       }
     }
     
     if (!geometryApplied) {
-      NSDebugLLog(@"gwspace", @"No valid DS_Store geometry, using fallback methods");
-      defEntry = [viewerPrefs objectForKey: @"geometry"];
-      if (defEntry) {
-        [vwrwin setFrameFromString: defEntry];
-      } else {
-        NSRect r = NSMakeRect(200, 200, resizeIncrement * 3, 300);
-        [vwrwin setFrame: rectForWindow([manager viewerWindows], r, YES) 
-                 display: NO];
-      }
+      NSRect r = NSMakeRect(200, 200, resizeIncrement * 3, 300);
+      NSRect content = rectForWindow([manager viewerWindows], r, YES);
+      /* Route the default through the same exact restore path: activate:
+       * reads the WM's live _NET_FRAME_EXTENTS and adds them to the content
+       * rect, so the frame includes the title bar exactly.  A bare
+       * frameRectForContentRect: cannot do this here - it relies on the
+       * cached decoration offsets, which are not populated before the first
+       * window of a session has been framed, so the first open would lack the
+       * title while every reopen had it (a 22px frame-constant failure). */
+      pendingRestoreFrame = content;
+      hasPendingRestoreFrame = YES;
+      [vwrwin setFrame: [vwrwin frameRectForContentRect: content]
+               display: NO];
     }
-    
-    // Log final window frame for verification
-    NSRect finalFrame = [vwrwin frame];
-    NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-    NSDebugLLog(@"gwspace", @"║      FINAL WINDOW FRAME VERIFICATION                          ║");
-    NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-    if (geometryApplied) {
-      NSDebugLLog(@"gwspace", @"║ Source: DS_Store geometry");
-      NSDebugLLog(@"gwspace", @"║ DS_Store frame: %@", NSStringFromRect(dsStoreInfo.windowFrame));
-      NSDebugLLog(@"gwspace", @"║ Final window frame: %@", NSStringFromRect(finalFrame));
-      NSDebugLLog(@"gwspace", @"║ Match: %@", NSEqualRects(dsGeometry, finalFrame) ? @"✓ YES" : @"⚠ NO (may differ due to screen constraints)");
-    } else {
-      NSDebugLLog(@"gwspace", @"║ Source: Fallback (preferences or default)");
-      NSDebugLLog(@"gwspace", @"║ Final window frame: %@", NSStringFromRect(finalFrame));
-    }
-    NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 
     if (rootviewer) {
       NSString *path = [baseNode path];
@@ -418,20 +433,8 @@
       NSString *spatialPath = [baseNode path];
       if (spatialPath) {
         _x11Path = [[GWX11SpatialPath alloc] initWithWindow:vwrwin path:spatialPath];
-        NSDebugLLog(@"gwspace", @"GWX11SpatialPath: Set spatial path atom to '%@'", spatialPath);
       }
     }
-    
-    NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-    NSDebugLLog(@"gwspace", @"║      GWSpatialViewer INITIALIZATION COMPLETE                     ║");
-    NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-    NSDebugLLog(@"gwspace", @"║ Final window frame: %@", NSStringFromRect([vwrwin frame]));
-    NSDebugLLog(@"gwspace", @"║ View type: %@", viewType);
-    NSDebugLLog(@"gwspace", @"║ DS_Store loaded: %@", dsStoreInfo.loaded ? @"YES" : @"NO");
-    if (dsStoreInfo.loaded) {
-      NSDebugLLog(@"gwspace", @"║ DS_Store icon positions: %lu", (unsigned long)[[dsStoreInfo filenamesWithPositions] count]);
-    }
-    NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
   }
   
   return self;
@@ -496,7 +499,15 @@
 
   r = NSMakeRect(margin, 0, w - (margin * 2), h - boxh);
   scroll = [[GWViewerScrollView alloc] initWithFrame: r inViewer: self];
-  [scroll setBorderType: NSBezelBorder];
+  if ([viewType isEqual: @"Icon"])
+    {
+      [scroll setBorderType: NSNoBorder];
+      [scroll setDrawsTopSeparator: YES];
+    }
+  else
+    {
+      [scroll setBorderType: NSBezelBorder];
+    }
   hasScroller = [viewType isEqual: @"List"];
   [scroll setHasHorizontalScroller: YES];
   [scroll setHasVerticalScroller: hasScroller];
@@ -510,7 +521,72 @@
   
   [vwrwin setContentView: mainView];
   RELEASE (mainView);
+
+  [self updatePreviewPaneForCurrentType];
 }
+
+/* Adds or removes the rightmost "Contents" preview pane according to the
+ * "Show Inspector" toggle, and resizes the scroll view accordingly.  When
+ * the toggle is on, the fixed GW_PREVIEW_PANE_WIDTH on the right is reserved
+ * for the pane in every view type; when off, the scroll view uses the full
+ * width.  Called both at setup and whenever the toggle or view type changes,
+ * so the layout always stays consistent.  The scroll view stays
+ * width-sizable and the preview pane is pinned to the right edge, so both
+ * track window width and the browser re-tiles its columns on resize. */
+- (void)updatePreviewPaneForCurrentType
+{
+  NSRect r = [mainView bounds];
+  CGFloat w = r.size.width;
+  CGFloat h = r.size.height;
+  int boxh = 16;
+  NSRect sr, pr;
+
+  if (showInspector)
+    {
+      if (previewPane == nil)
+        {
+          pr = NSMakeRect(w - GW_PREVIEW_PANE_WIDTH, 0,
+                          GW_PREVIEW_PANE_WIDTH, h - boxh);
+          previewPane = [[GWViewerBrowserPreview alloc] initWithFrame: pr];
+          [previewPane setViewer: self];
+          [previewPane setAutoresizingMask: NSViewHeightSizable | NSViewMinXMargin];
+          [mainView addSubview: previewPane];
+        }
+      /* Apply the remembered pane for the current view type (the pane may
+       * persist across view-type switches). */
+      [previewPane selectInspectorAtIndex: inspectorPane];
+      sr = NSMakeRect(0, 0, w - GW_PREVIEW_PANE_WIDTH, h - boxh);
+    }
+  else
+    {
+      if (previewPane)
+        {
+          [previewPane removeFromSuperview];
+          DESTROY (previewPane);
+        }
+      sr = NSMakeRect(0, 0, w, h - boxh);
+    }
+
+  [scroll setAutoresizingMask: NSViewNotSizable | NSViewWidthSizable | NSViewHeightSizable];
+  [scroll setFrame: sr];
+  [scroll setNeedsDisplay: YES];
+}
+
+
+/* Canonical suffix for per-view-type inspector preferences. */
+- (NSString *)_viewTypeKey
+{
+  if ([viewType isEqualToString: @"List"])
+    return @"List";
+  if ([viewType isEqualToString: @"Browser"])
+    return @"Browser";
+  return @"Icon";
+}
+
+
+
+
+
 
 - (FSNode *)baseNode
 {
@@ -535,16 +611,11 @@
   return [nodeView isShowingPath: apath];
 }
 
-- (void)reloadNodeContents
-{
-  [nodeView reloadContents];
-}
 
 - (void)networkServicesDidChange:(NSNotification *)notification
 {
   /* Refresh the network node's subnodes and reload the view */
   if ([baseNode isKindOfClass:[NetworkFSNode class]]) {
-    NSDebugLLog(@"gwspace", @"GWSpatialViewer: Network services changed, reloading contents");
     [self reloadNodeContents];
   }
 }
@@ -571,10 +642,6 @@
   return vwrwin;
 }
 
-- (id)nodeView
-{
-  return nodeView;
-}
 
 - (id)shelf
 {
@@ -583,14 +650,7 @@
 
 - (GWViewType)viewType
 {
-  if ([viewType isEqualToString: @"Browser"]) {
-    return GWViewTypeBrowser;
-  } else if ([viewType isEqualToString: @"Icon"]) {
-    return GWViewTypeIcon;
-  } else if ([viewType isEqualToString: @"List"]) {
-    return GWViewTypeList;
-  }
-  return GWViewTypeBrowser;
+  return [self GWViewTypeFromName: viewType];
 }
 
 - (BOOL)isRootViewer
@@ -623,20 +683,79 @@
     [vwrwin deminiaturize: nil];
   }
   [vwrwin makeKeyAndOrderFront: nil];
+
+  /* Re-apply the saved content rect through GNUstep's own setFrame: now that
+   * the WM has framed the window and set _NET_FRAME_EXTENTS on it, GNUstep's
+   * frame math (styleoffsets: reads _NET_FRAME_EXTENTS first) is exact.  The
+   * frame set in init used the cached decoration offsets (correct position,
+   * size within a px) so the window maps and animates at its real geometry;
+   * this second pass corrects any residual offset error so the restore is
+   * pixel-exact, and because it happens while the birth animation is still
+   * playing the tiny correction is not visible.  setFrame: also keeps
+   * GNUstep's internal frame in sync with the real X client - a raw X
+   * placement would leave the two disagreeing.  The WM sets the extents
+   * asynchronously after mapping, so retry briefly until they appear - never
+   * fall back to a guessed size. */
+  if (hasPendingRestoreFrame) {
+    Window xwin = 0;
+    GSDisplayServer *gsrv = GSServerForWindow(vwrwin);
+    if (!gsrv) gsrv = GSCurrentServer();
+    if (gsrv) {
+      void *winptr = [gsrv windowDevice:[vwrwin windowNumber]];
+      xwin = (Window)(uintptr_t)winptr;
+    }
+    unsigned long l = 0, r = 0, t = 0, b = 0;
+    int attempts = 0;
+    while (xwin != 0 && attempts < 20
+           && ![[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
+                                                                 outLeft:&l
+                                                                outRight:&r
+                                                                 outTop:&t
+                                                              outBottom:&b]) {
+      [NSThread sleepForTimeInterval: 0.05];
+      attempts++;
+    }
+    if (xwin != 0 && attempts < 20) {
+      NSRect full = pendingRestoreFrame;
+      full.origin.x -= (CGFloat)l;
+      full.origin.y -= (CGFloat)b;
+      full.size.width += (CGFloat)l + (CGFloat)r;
+      full.size.height += (CGFloat)t + (CGFloat)b;
+      [vwrwin setFrame: full display: YES];
+      /* Remember the decoration extents so later windows can be corrected
+       * deterministically even when the WM is slow to set them. */
+      lastExtents_[0] = l; lastExtents_[1] = r; lastExtents_[2] = t; lastExtents_[3] = b;
+      hasLastExtents_ = YES;
+    } else {
+      /* The WM did not set _NET_FRAME_EXTENTS within the retry window.  Fall
+       * back to the extents learned from an earlier framed window (they only
+       * change on a theme change) so the frame is corrected to the same value
+       * on every open - leaving the init frame made it vary by the title bar
+       * between opens, which the frame-constant uitest caught as a 22px
+       * placement change. */
+      if (hasLastExtents_) {
+        NSRect full = pendingRestoreFrame;
+        full.origin.x -= (CGFloat)lastExtents_[0];
+        full.origin.y -= (CGFloat)lastExtents_[3];
+        full.size.width += (CGFloat)lastExtents_[0] + (CGFloat)lastExtents_[1];
+        full.size.height += (CGFloat)lastExtents_[2] + (CGFloat)lastExtents_[3];
+        [vwrwin setFrame: full display: YES];
+      } else {
+        fprintf(stderr, "WARNING: [GWSpatialViewer] frame extents missing for "
+                "viewer window %p (%s): xwin=%lu attempts=%d - restore not "
+                "placed exactly\n",
+                vwrwin, [[vwrwin title] UTF8String], (unsigned long)xwin,
+                attempts);
+        fflush(stderr);
+      }
+    }
+    hasPendingRestoreFrame = NO;
+  }
+
   [manager viewer: self didShowNode: baseNode];
 }
 
-- (void)deactivate
-{
-  [vwrwin close];
-}
 
-- (void)scrollToBeginning
-{
-  if ([nodeView isSingleNode]) {
-    [nodeView scrollSelectionToVisible];
-  }
-}
 
 - (void)invalidate
 {
@@ -644,29 +763,8 @@
   [self teardownDSStoreWatcher];
 }
 
-- (BOOL)invalidated
-{
-  return invalidated;
-}
 
-- (BOOL)isClosing
-{
-  return closing;
-}
 
-- (void)setOpened:(BOOL)opened 
-        repOfNode:(FSNode *)anode
-{
-  id rep = [nodeView repOfSubnode: anode];
-
-  if (rep) {
-    [rep setOpened: opened];
-    
-    if ([nodeView isSingleNode]) { 
-      [rep select];
-    }
-  }
-}
 
 - (void)unselectAllReps
 {
@@ -693,6 +791,21 @@
   ASSIGN (lastSelection, newsel);
   [self updeateInfoLabels]; 
     
+  /* Show the Contents inspector for the newly selected file in the
+   * rightmost browser preview pane.  Guarded: the inspector machinery must
+   * never break selection or opening of files. */
+  if (previewPane) {
+    NS_DURING
+      {
+        [previewPane showSelection: newsel];
+      }
+    NS_HANDLER
+      {
+        NSLog(@"[GWSpatialViewer] preview showSelection exception: %@", localException);
+      }
+    NS_ENDHANDLER
+  }
+
   node = [newsel objectAtIndex: 0];   
     
   if ([nodeView isSingleNode]) {    
@@ -819,10 +932,6 @@
   return [nodeView involvedByFileOperation: opinfo];
 }
 
-- (void)nodeContentsWillChange:(NSDictionary *)info
-{
-  [nodeView nodeContentsWillChange: info];
-}
  
 - (void)nodeContentsDidChange:(NSDictionary *)info
 {
@@ -851,7 +960,6 @@
   
     // Check if this is a .DS_Store change
     if (dsStorePath && [path isEqualToString: dsStorePath]) {
-      NSDebugLLog(@"gwspace", @"║ DS_Store watcher: File changed, reloading settings");
       [self reapplyDSStoreSettings];
     }
     else if ([nodeView isShowingPath: path]) {
@@ -861,20 +969,8 @@
   }
 }
 
-- (NSArray *)watchedNodes
-{
-  return watchedNodes;
-}
 
-- (void)hideDotsFileChanged:(BOOL)hide
-{
-  [self reloadFromNode: baseNode];
-}
 
-- (void)hiddenFilesChanged:(NSArray *)paths
-{
-  [self reloadFromNode: baseNode];
-}
 
 - (void)columnsWidthChanged:(NSNotification *)notification
 {
@@ -885,7 +981,10 @@
   [scroll setDocumentView: nil];	
   
   resizeIncrement = [(NSNumber *)[notification object] intValue];
-  r.size.width = (visibleCols * resizeIncrement);
+  /* When the Inspector toggle is on, it occupies a fixed width of window
+   * space regardless of view type. */
+  r.size.width = ((visibleCols * resizeIncrement)
+                  + (showInspector ? GW_PREVIEW_PANE_WIDTH : 0));
   [vwrwin setFrame: r display: YES];  
   [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_W_HEIGHT)];    
   [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
@@ -929,6 +1028,15 @@
 
     [updatedprefs setObject: viewType forKey: @"viewtype"];
 
+    /* Remember the inspector toggle and selected pane per view type. */
+    {
+      NSString *vtKey = [self _viewTypeKey];
+      [updatedprefs setObject: [NSNumber numberWithBool: showInspector]
+                       forKey: [@"showInspector_" stringByAppendingString: vtKey]];
+      [updatedprefs setObject: [NSNumber numberWithInt: inspectorPane]
+                       forKey: [@"inspectorPane_" stringByAppendingString: vtKey]];
+    }
+
     defEntry = [viewerPrefs objectForKey: @"shelfheight"];
     if (defEntry) {
       [updatedprefs setObject: defEntry forKey: @"shelfheight"];
@@ -944,16 +1052,85 @@
       [updatedprefs setObject: defEntry forKey: @"lastselection"];
     }
 
-    [updatedprefs setObject: [vwrwin stringWithSavedFrame] 
-                     forKey: @"geometry"];
+    /* Persist the window's CONTENT rect, not the full frame: .DS_Store
+     * fwi0/bwsp stores the content area (excluding title bar/border), per
+     * the MozillaWiki DS_Store format notes and Finder behavior.  Storing
+     * stringWithSavedFrame (the full frame) would make restore add the
+     * decoration height again, so the window would grow and drift upward on
+     * every open/close cycle.  We measure the content rect from the ACTUAL
+     * X geometry of the client window (EWMH §5.17), because GNUstep's
+     * tracked frame can include a stale clientBorder and be a couple of px
+     * wider/taller than the WM's real frame - using it would make the saved
+     * rect grow on every cycle.  The content rect is in GNUstep screen
+     * coords (bottom-left origin); the DS_Store coordinate conversion
+     * happens in dsStoreWindowFrameForScreen:. */
+    NSRect contentRect = NSZeroRect;
+    Window xwin = 0;
+    GSDisplayServer *gsrv = GSServerForWindow(vwrwin);
+    if (!gsrv) gsrv = GSCurrentServer();
+    if (gsrv) {
+        void *winptr = [gsrv windowDevice:[vwrwin windowNumber]];
+        xwin = (Window)(uintptr_t)winptr;
+    }
+    if (xwin != 0
+        && [[GWX11WindowManager sharedManager] windowIsMappedAndFramed:xwin]
+        && [[GWX11WindowManager sharedManager] contentRectFromXGeometry:xwin
+                                                    screenHeight:[[NSScreen mainScreen] frame].size.height
+                                                        outRect:&contentRect]) {
+        /* Measured from a mapped, WM-framed client window - exact.  Only such
+         * a window has a settled position worth persisting: a ghost (never
+         * mapped) window or one caught mid-framing (extents not yet set)
+         * would otherwise be saved and poison the .DS_Store for every later
+         * open of the folder. */
+        [updatedprefs setObject: NSStringFromRect(contentRect)
+                         forKey: @"geometry"];
+    } else {
+        /* Window not in a persisting state: leave "geometry" out so the write
+         * below keeps the previously stored frame (takeValuesFromViewerPrefs:
+         * only sets the frame when "geometry" is present). */
+    }
 
     [baseNode checkWritable];
 
-    /* Persist the non-DS_Store remainder (shelf, last selection, geometry
-     * fallback) to user defaults; view settings go to .DS_Store below.  The
-     * legacy per-folder .gwdir file is no longer written. */
+    // ================================================================
+    // Save view settings to .DS_Store (interoperability, spec §3)
+    //   Tier 1: Try $FOLDER/.DS_Store (if writable, not policy-blocked)
+    //   Tier 2: Fallback to per-volume cache
+    //   Tier 3: Clean cache on success
+    // ================================================================
+    if (_settingsManager) {
+      /* Reload the current settings first so the write reflects any icon
+       * positions the position store persisted since init (e.g. a drag or
+       * Clean Up).  Writing the init-time dsStoreInfo would clobber those
+       * with stale positions. */
+      DSStoreInfo *current = [_settingsManager readSettings];
+      if (current == nil) {
+        current = [DSStoreInfo infoForDirectoryPath: [baseNode path]
+                                    loadImmediately: NO];
+      }
+      ASSIGN(dsStoreInfo, current);
+      [dsStoreInfo takeValuesFromViewerPrefs:updatedprefs];
+
+      /* Persist the LIVE layout: the spatial view knows exactly where every
+       * icon sits right now, so write that instead of whatever a stale
+       * .DS_Store (possibly with foreign colliding positions) had. */
+      if ([nodeView respondsToSelector: @selector(liveIconPositions)]) {
+        NSDictionary *live = [nodeView liveIconPositions];
+        if (live && [live count] > 0)
+          [dsStoreInfo setLiveIconPositions: live];
+      }
+
+      // Write via the settings manager
+      [_settingsManager writeSettings:dsStoreInfo];
+    }
+
+    /* Persist the non-DS_Store remainder (shelf, last selection) to user
+     * defaults; window geometry lives in .DS_Store (interoperable), so it is
+     * stripped from the persisted dict (the .DS_Store write above used it). */
     {
       NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+      [updatedprefs removeObjectForKey: @"geometry"];
 
       [defaults setObject: updatedprefs
                    forKey: GWViewerPrefsKey([baseNode path], YES,
@@ -965,32 +1142,11 @@
         GWViewerLegacySharedPrefsKey([baseNode path], rootViewerKey)];
     }
 
-    // ================================================================
-    // Save view settings to .DS_Store (interoperability, spec §3)
-    //   Tier 1: Try $FOLDER/.DS_Store (if writable, not policy-blocked)
-    //   Tier 2: Fallback to per-volume cache
-    //   Tier 3: Clean cache on success
-    // ================================================================
-    if (_settingsManager) {
-      // Update DSStoreInfo from the current preferences
-      if (dsStoreInfo == nil) {
-        ASSIGN(dsStoreInfo, [DSStoreInfo infoForDirectoryPath:[baseNode path]]);
-      }
-      [dsStoreInfo takeValuesFromViewerPrefs:updatedprefs];
-
-      // Write via the settings manager
-      [_settingsManager writeSettings:dsStoreInfo];
-    }
-
     ASSIGN (viewerPrefs, [updatedprefs makeImmutableCopyOnFail: NO]);
   }
 }
 
 
-- (void)updateWindowTitle
-{
-  /* Intentionally empty - declared in header but not used in this implementation */
-}
 
 //
 // DS_Store File Watching Methods
@@ -1009,7 +1165,6 @@
   // Check if .DS_Store exists and add filesystem watcher
   // Note: dsStoreInfo was already created in init, don't create it again
   if ([[NSFileManager defaultManager] fileExistsAtPath: dsStorePath]) {
-    NSDebugLLog(@"gwspace", @"║ DS_Store watcher: Monitoring %@", dsStorePath);
     
     // Add filesystem watcher for the .DS_Store file
     [gworkspace addWatcherForPath: dsStorePath];
@@ -1019,7 +1174,6 @@
 - (void)teardownDSStoreWatcher
 {
   if (dsStorePath) {
-    NSDebugLLog(@"gwspace", @"║ DS_Store watcher: Stopped monitoring");
     [gworkspace removeWatcherForPath: dsStorePath];
     RELEASE (dsStorePath);
     dsStorePath = nil;
@@ -1036,17 +1190,12 @@
   if (!dsStoreInfo) {
     dsStoreInfo = [[DSStoreInfo infoForDirectoryPath: [baseNode path]] retain];
   } else if (![dsStoreInfo reload]) {
-    NSDebugLLog(@"gwspace", @"║ DS_Store watcher: Failed to reload DS_Store");
     return;
   }
   
-  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-  NSDebugLLog(@"gwspace", @"║      DS_STORE WATCHER: UPDATING VIEW WITH NEW SETTINGS           ║");
-  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
   
   // Reapply icon size
   if (dsStoreInfo.hasIconSize && dsStoreInfo.iconSize > 0 && dsStoreInfo.iconSize <= 512) {
-    NSDebugLLog(@"gwspace", @"║ Updating icon size: %d", dsStoreInfo.iconSize);
     if ([nodeView respondsToSelector:@selector(setIconSize:)]) {
       [(FSNIconsView *)nodeView setIconSize:dsStoreInfo.iconSize];
     }
@@ -1054,8 +1203,6 @@
   
   // Reapply label position
   if (dsStoreInfo.hasLabelPosition) {
-    NSDebugLLog(@"gwspace", @"║ Updating label position: %@", 
-          dsStoreInfo.labelPosition == DSStoreLabelPositionBottom ? @"bottom" : @"right");
     if ([nodeView respondsToSelector:@selector(setIconPosition:)]) {
       NSCellImagePosition pos = (dsStoreInfo.labelPosition == DSStoreLabelPositionBottom) 
                                 ? NSImageAbove : NSImageLeft;
@@ -1065,7 +1212,6 @@
   
   // Reapply background color
   if (dsStoreInfo.backgroundType == DSStoreBackgroundColor && dsStoreInfo.backgroundColor) {
-    NSDebugLLog(@"gwspace", @"║ Updating background color: %@", dsStoreInfo.backgroundColor);
     if ([nodeView respondsToSelector:@selector(setBackgroundColor:)]) {
       [(FSNIconsView *)nodeView setBackgroundColor:dsStoreInfo.backgroundColor];
     }
@@ -1073,8 +1219,6 @@
   
   // Reapply free positioning if available
   if ([dsStoreInfo hasAnyIconPositions]) {
-    NSDebugLLog(@"gwspace", @"║ Updating icon positions: %lu items", 
-          (unsigned long)[[dsStoreInfo filenamesWithPositions] count]);
     
     NSMutableDictionary *iconPositions = [NSMutableDictionary dictionary];
     for (NSString *filename in [dsStoreInfo filenamesWithPositions]) {
@@ -1087,10 +1231,8 @@
     
     [(FSNIconsView *)nodeView setCustomIconPositions:iconPositions];
   } else {
-    NSDebugLLog(@"gwspace", @"║ Free positioning: disabled");
   }
   
-  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 - (DSStoreInfo *)dsStoreInfo
@@ -1108,23 +1250,15 @@
     return;
   }
   
-  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-  NSDebugLLog(@"gwspace", @"║      APPLYING DS_STORE ICON VIEW SETTINGS                        ║");
-  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-  
   // Apply icon size if available
   if (dsStoreInfo.hasIconSize && dsStoreInfo.iconSize > 0 && dsStoreInfo.iconSize <= 512) {
-    NSDebugLLog(@"gwspace", @"║ Setting icon size: %d", dsStoreInfo.iconSize);
     if ([iconView respondsToSelector:@selector(setIconSize:)]) {
       [(FSNIconsView *)iconView setIconSize:dsStoreInfo.iconSize];
-      NSDebugLLog(@"gwspace", @"║ Icon size applied. Current: %d", [(FSNIconsView *)iconView iconSize]);
     }
   }
   
   // Apply label position if available
   if (dsStoreInfo.hasLabelPosition) {
-    NSDebugLLog(@"gwspace", @"║ Setting label position: %@", 
-          dsStoreInfo.labelPosition == DSStoreLabelPositionBottom ? @"bottom" : @"right");
     if ([iconView respondsToSelector:@selector(setIconPosition:)]) {
       NSCellImagePosition pos = (dsStoreInfo.labelPosition == DSStoreLabelPositionBottom) 
                                 ? NSImageAbove : NSImageLeft;
@@ -1134,12 +1268,10 @@
   
   // Apply grid spacing if available
   if (dsStoreInfo.hasGridSpacing && dsStoreInfo.gridSpacing > 0) {
-    NSDebugLLog(@"gwspace", @"║ Setting grid spacing: %.1f", dsStoreInfo.gridSpacing);
   }
   
   // Apply background color if available
   if (dsStoreInfo.backgroundType == DSStoreBackgroundColor && dsStoreInfo.backgroundColor) {
-    NSDebugLLog(@"gwspace", @"║ Setting background color: %@", dsStoreInfo.backgroundColor);
     if ([iconView respondsToSelector:@selector(setBackgroundColor:)]) {
       [(FSNIconsView *)iconView setBackgroundColor:dsStoreInfo.backgroundColor];
     }
@@ -1147,18 +1279,12 @@
   
   // Apply background image if available
   if (dsStoreInfo.backgroundType == DSStoreBackgroundPicture && dsStoreInfo.backgroundImagePath) {
-    NSDebugLLog(@"gwspace", @"║ Setting background image: %@", dsStoreInfo.backgroundImagePath);
-    
     NSImage *bgImage = [[NSImage alloc] initWithContentsOfFile:dsStoreInfo.backgroundImagePath];
     if (bgImage) {
-      NSDebugLLog(@"gwspace", @"║   ✓ Background image loaded: %.0fx%.0f", 
-            [bgImage size].width, [bgImage size].height);
       if ([iconView respondsToSelector:@selector(setBackgroundImage:)]) {
         [(FSNIconsView *)iconView setBackgroundImage:bgImage];
       }
       [bgImage release];
-    } else {
-      NSDebugLLog(@"gwspace", @"║   ✗ Failed to load background image from: %@", dsStoreInfo.backgroundImagePath);
     }
   }
   
@@ -1187,7 +1313,6 @@
     
     // Apply tag colors
     if ([tagColors count] > 0) {
-      NSDebugLLog(@"gwspace", @"║ Applying %lu tag colors", (unsigned long)[tagColors count]);
       if ([iconView respondsToSelector:@selector(setTagColorsFromDictionary:)]) {
         [(FSNIconsView *)iconView setTagColorsFromDictionary:tagColors];
       }
@@ -1195,14 +1320,12 @@
     
     // Apply comments (shown as tooltips)
     if ([comments count] > 0) {
-      NSDebugLLog(@"gwspace", @"║ Applying %lu Spotlight comments", (unsigned long)[comments count]);
       if ([iconView respondsToSelector:@selector(setCommentsFromDictionary:)]) {
         [(FSNIconsView *)iconView setCommentsFromDictionary:comments];
       }
     }
   }
   
-  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 /**
@@ -1215,9 +1338,6 @@
     return;
   }
   
-  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-  NSDebugLLog(@"gwspace", @"║      APPLYING DS_STORE LIST VIEW SETTINGS                        ║");
-  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
   
   // List view settings from lsvp/lsvP plist:
   // - textSize: Font size for list text
@@ -1235,38 +1355,31 @@
   if (dsStoreInfo.hasSortColumn && dsStoreInfo.sortColumn) {
     int infoType = [DSStoreInfo infoTypeForSortColumnName:dsStoreInfo.sortColumn];
     if (infoType >= 0) {
-      NSDebugLLog(@"gwspace", @"║ Sort column: %@ -> FSNInfoType %d", dsStoreInfo.sortColumn, infoType);
       if ([dataSource respondsToSelector:@selector(setSortColumn:)]) {
         [(FSNListViewDataSource *)dataSource setSortColumn:(FSNInfoType)infoType];
       }
-    } else {
-      NSDebugLLog(@"gwspace", @"║ Sort column: %@ (unknown, not applied)", dsStoreInfo.sortColumn);
     }
   }
   
   // Apply list text size if available
   if (dsStoreInfo.hasListTextSize) {
-    NSDebugLLog(@"gwspace", @"║ List text size: %d", dsStoreInfo.listTextSize);
     // The list view uses the system font, so we would need to customize the table cells
     // This would require additional FSNListView modifications
   }
   
   // Apply list icon size if available
   if (dsStoreInfo.hasListIconSize) {
-    NSDebugLLog(@"gwspace", @"║ List icon size: %d", dsStoreInfo.listIconSize);
     // FSNListView uses fixed-size icons, would need row height adjustment
   }
   
   // Apply column widths if available
   if (dsStoreInfo.columnWidths && [dsStoreInfo.columnWidths count] > 0) {
-    NSDebugLLog(@"gwspace", @"║ Column widths from DS_Store:");
     for (NSString *columnName in dsStoreInfo.columnWidths) {
       NSNumber *widthNum = [dsStoreInfo.columnWidths objectForKey:columnName];
       float width = [widthNum floatValue];
       int infoType = [DSStoreInfo infoTypeForSortColumnName:columnName];
       if (infoType >= 0 && [dataSource respondsToSelector:@selector(setColumnWidth:forIdentifier:)]) {
         [dataSource setColumnWidth:width forIdentifier:(FSNInfoType)infoType];
-        NSDebugLLog(@"gwspace", @"║   %@ -> width %.0f", columnName, width);
       }
     }
   }
@@ -1274,13 +1387,10 @@
   // Apply tag colors and comments to list view items
   NSDictionary *iconInfoDict = [dsStoreInfo allIconInfo];
   if (iconInfoDict && [iconInfoDict count] > 0) {
-    NSDebugLLog(@"gwspace", @"║ Applying tag colors/comments to %lu list items", 
-          (unsigned long)[iconInfoDict count]);
     // FSNListViewNodeRep doesn't have tagColor/comment support yet
     // This would require additional FSNListViewNodeRep modifications
   }
   
-  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 /**
@@ -1293,9 +1403,6 @@
     return;
   }
   
-  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-  NSDebugLLog(@"gwspace", @"║      APPLYING DS_STORE BROWSER VIEW SETTINGS                     ║");
-  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
   
   // Browser view settings from DS_Store:
   // - clw{name}: Column width for named columns
@@ -1304,36 +1411,18 @@
   
   // Apply sidebar width if available (for split view scenarios)
   if (dsStoreInfo.hasSidebarWidth && dsStoreInfo.sidebarWidth > 0) {
-    NSDebugLLog(@"gwspace", @"║ Sidebar width from DS_Store: %d", dsStoreInfo.sidebarWidth);
     // Browser view in spatial mode doesn't have a sidebar, but log for reference
   }
   
   // TODO: Apply column widths when we add clw* parsing
   // TODO: Apply column visibility when we add cv* parsing
   
-  NSDebugLLog(@"gwspace", @"║ Browser view DS_Store settings: (not yet fully implemented)");
-  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 #pragma mark - History Support
 
-- (NSMutableArray *)history
-{
-  if (!history) {
-    history = [NSMutableArray new];
-  }
-  return history;
-}
 
-- (int)historyPosition
-{
-  return historyPosition;
-}
 
-- (void)setHistoryPosition:(int)pos
-{
-  historyPosition = pos;
-}
 
 - (GWViewSettingsManager *)settingsManager
 {
@@ -1399,16 +1488,15 @@
   }
 }
 
-- (BOOL)windowShouldClose:(id)sender
-{
-  [manager updateDesktop];
-	return YES;
-}
 
 - (void)windowWillClose:(NSNotification *)aNotification
 {
   if (invalidated == NO) {
     closing = YES;
+    /* Resolve the folder's current icon position and tell the WindowManager
+     * to shrink the window into it as it closes (or fade when the folder is
+     * no longer visible). */
+    [manager prepareCloseAnimationForViewer: self];
     [self teardownDSStoreWatcher];
     [self updateDefaults];
     [vwrwin setDelegate: nil];
@@ -1416,13 +1504,6 @@
   }
 }
 
-- (void)windowWillMiniaturize:(NSNotification *)aNotification
-{
-  NSImage *image = [fsnodeRep iconOfSize: 48 forNode: baseNode];
-
-  [vwrwin setMiniwindowImage: image];
-  [vwrwin setMiniwindowTitle: [baseNode name]];
-}
 
 - (void)windowDidResize:(NSNotification *)aNotification
 {
@@ -1448,123 +1529,15 @@
   }
 }
 
-- (void)openSelectionAsFolder
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [manager openAsFolderSelectionInViewer: self];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't do this in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)openSelectionWith
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [manager openWithSelectionInViewer: self];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't do this in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)newFolder
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [gworkspace newObjectAtPath: [[nodeView shownNode] path] 
-                    isDirectory: YES];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't create a new folder in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)newFile
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    [gworkspace newObjectAtPath: [[nodeView shownNode] path] 
-                    isDirectory: NO];
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't create a new file in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)duplicateFiles
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    NSArray *selection = [nodeView selectedNodes];
 
-    if (selection && [selection count]) {
-      if ([nodeView isSingleNode]) {
-        [gworkspace duplicateFiles];
-      } else if ([selection isEqual: baseNodeArray] == NO) {
-        [gworkspace duplicateFiles];
-      }
-    }
-  } else {
-    NSRunAlertPanel(nil, 
-                  NSLocalizedString(@"You can't duplicate files in the Recycler!", @""),
-					        NSLocalizedString(@"OK", @""), 
-                  nil, 
-                  nil);  
-  }
-}
 
-- (void)recycleFiles
-{
-  if ([[baseNode path] isEqual: [gworkspace trashPath]] == NO) {
-    NSArray *selection = [nodeView selectedNodes];
 
-    if (selection && [selection count]) {
-      if ([nodeView isSingleNode]) {
-        [gworkspace moveToTrash];
-      } else if ([selection isEqual: baseNodeArray] == NO) {
-        [gworkspace moveToTrash];
-      }
-    }
-  }
-}
 
-- (void)emptyTrash
-{
-  [gworkspace emptyTrash: nil];
-}
 
-- (void)deleteFiles
-{
-  NSArray *selection = [nodeView selectedNodes];
-
-  if (selection && [selection count]) {
-    if ([nodeView isSingleNode]) {
-      [gworkspace deleteFiles];
-    } else if ([selection isEqual: baseNodeArray] == NO) {
-      [gworkspace deleteFiles];
-    }
-  }
-}
-
-- (void)goBackwardInHistory
-{
-  [manager goBackwardInHistoryOfViewer: self];
-}
-
-- (void)goForwardInHistory
-{
-  [manager goForwardInHistoryOfViewer: self];
-}
 
 - (void)setViewerBehaviour:(id)sender
 {
@@ -1573,39 +1546,19 @@
 
 - (void)setViewerType:(id)sender
 {
-  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-  NSDebugLLog(@"gwspace", @"║ setViewerType: CALLED");
-  
-  NSString *title = [sender title];
-  NSDebugLLog(@"gwspace", @"║ menu title: %@", title);
-  NSDebugLLog(@"gwspace", @"║ current viewType: %@", viewType);
-  
-  // Extract view type from title - handles various localizations
-  // Common patterns: "as List", "as Icon", "as Columns", etc.
-  // We check for the English keywords anywhere in the string
-  NSString *requestedType = nil;
-  NSString *upperTitle = [title uppercaseString];
-  
-  if ([upperTitle rangeOfString:@"BROWSER"].location != NSNotFound ||
-      [upperTitle rangeOfString:@"COLUMN"].location != NSNotFound) {
-    requestedType = @"Browser";
-  } else if ([upperTitle rangeOfString:@"ICON"].location != NSNotFound) {
-    requestedType = @"Icon";
-  } else if ([upperTitle rangeOfString:@"LIST"].location != NSNotFound) {
-    requestedType = @"List";
-  }
-  
-  NSDebugLLog(@"gwspace", @"║ extracted type: %@", requestedType);
-  
+
+  // Resolve the requested view type through the shared helper, which prefers
+  // the sender's GWViewType tag and falls back to parsing the localized title
+  // (locale-safe; title parsing alone failed on e.g. German "als Spalten").
+  GWViewType requestedEnum = [self GWViewTypeFromSender: sender];
+  NSString *requestedType = [self GWViewTypeName: requestedEnum];
+
+
   if (!requestedType) {
-    NSDebugLLog(@"gwspace", @"║ ERROR: Could not determine view type from title!");
-    NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
     return;
   }
   
   if (![requestedType isEqualToString:viewType]) {
-    NSDebugLLog(@"gwspace", @"║ Switching: %@ -> %@", viewType, requestedType);
-    NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
     NSArray *selection = [nodeView selectedNodes];
     NSArray *reps = [nodeView reps];
     NSMutableArray *opennodes = [NSMutableArray array];
@@ -1635,6 +1588,8 @@
       [scroll setAutohidesScrollers: NO];
       [scroll setHasHorizontalScroller: YES];
       [scroll setHasVerticalScroller: YES];
+      [scroll setBorderType: NSBezelBorder];
+      [scroll setDrawsTopSeparator: NO];
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
 		                            visibleColumns: visibleCols
@@ -1646,6 +1601,8 @@
       ASSIGN (viewType, @"Browser");
       
     } else if ([requestedType isEqualToString:@"Icon"]) {
+      [scroll setBorderType: NSNoBorder];
+      [scroll setDrawsTopSeparator: YES];
       nodeView = [[GWSpatialIconsView alloc] initForViewer: self];
       [scroll setHasVerticalScroller: YES];
       ASSIGN (viewType, @"Icon");
@@ -1655,6 +1612,8 @@
 
       nodeView = [[GWViewerListView alloc] initWithFrame: r forViewer: self];
       [scroll setHasVerticalScroller: YES];
+      [scroll setBorderType: NSBezelBorder];
+      [scroll setDrawsTopSeparator: NO];
       ASSIGN (viewType, @"List");
     }
 
@@ -1721,12 +1680,28 @@
     
     [self updateDefaults];
     
-    NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-    NSDebugLLog(@"gwspace", @"║ setViewerType: COMPLETED SUCCESSFULLY -> %@", viewType);
-    NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
+    /* Re-read the per-view-type inspector preference for the new view type,
+     * then ensure the rightmost preview pane matches it. */
+    {
+      NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+      NSString *vtKey = [self _viewTypeKey];
+      NSString *shownKey = [@"showInspector_" stringByAppendingString: vtKey];
+      NSString *paneKey = [@"inspectorPane_" stringByAppendingString: vtKey];
+      id entry;
+
+      showInspector = [defs boolForKey: shownKey];
+      if ((entry = [viewerPrefs objectForKey: shownKey])) {
+        showInspector = [entry boolValue];
+      }
+      inspectorPane = 0;
+      if ((entry = [viewerPrefs objectForKey: paneKey])) {
+        inspectorPane = [entry intValue];
+      }
+    }
+    [self updatePreviewPaneForCurrentType];
+    [vwrwin display];
+
   } else {
-    NSDebugLLog(@"gwspace", @"║ Already in %@ view - no switch needed", viewType);
-    NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
   }
 }
 
@@ -1761,39 +1736,8 @@
   [nodeView updateNodeInfo: YES];
 }
 
-- (void)setIconsSize:(id)sender
-{
-  if ([nodeView respondsToSelector: @selector(setIconSize:)]) {
-    [(id <FSNodeRepContainer>)nodeView setIconSize: [[sender title] intValue]];
-    [self scrollToBeginning];
-    [nodeView updateNodeInfo: YES];
-  }
-}
 
-- (void)setIconsPosition:(id)sender
-{
-  if ([nodeView respondsToSelector: @selector(setIconPosition:)]) {
-    NSString *title = [sender title];
-    
-    if ([title isEqual: NSLocalizedString(@"Left", @"")]) {
-      [(id <FSNodeRepContainer>)nodeView setIconPosition: NSImageLeft];
-    } else {
-      [(id <FSNodeRepContainer>)nodeView setIconPosition: NSImageAbove];
-    }
-    
-    [self scrollToBeginning];
-    [nodeView updateNodeInfo: YES];
-  }
-}
 
-- (void)setLabelSize:(id)sender
-{
-  if ([nodeView respondsToSelector: @selector(setLabelTextSize:)]) {
-    [nodeView setLabelTextSize: [[sender title] intValue]];
-    [self scrollToBeginning];
-    [nodeView updateNodeInfo: YES];
-  }
-}
 
 - (void)chooseLabelColor:(id)sender
 {
@@ -1825,13 +1769,25 @@
       if ([node isEqual: baseNode]) continue;
 
       NSString *nodePath = [node path];
-      NSString *filename = [node name];
+      NSString *filename = [node lastPathComponent];  /* on-disk name */
 
       /* Get relative path for .DS_Store lookup */
       if ([nodePath hasPrefix: basePath])
         {
           filename = [nodePath substringFromIndex: [basePath length]];
         }
+
+      /* Also write the per-file FinderInfo label + _kMDItemUserTags tag, as
+       * the canonical setLabelForNodes: path does. */
+      {
+        GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: nodePath];
+        if (md == nil)
+          {
+            md = [[[GSFileMetadata alloc] init] autorelease];
+          }
+        [md setLabelNumber: (GSFileLabel)labelColor];
+        [md writeToFileAtPath: nodePath error: NULL];
+      }
 
       DSStoreIconInfo *info = [dsStoreInfo iconInfoForFilename: filename];
       if (!info)
@@ -1908,21 +1864,11 @@
   [gworkspace startXTermOnDirectory: path];
 }
 
-- (void)showAttributesInspector:(id)sender
-{
-  [gworkspace showAttributesInspector: sender];
-}
 
-- (NSArray *)lastSelection
-{
-  return lastSelection;
-}
 
 - (BOOL)validateItem:(id)menuItem
 {
   SEL action = [menuItem action];
-  NSString *actionName = NSStringFromSelector(action);
-  NSDebugLLog(@"gwspace", @"validateItem called: action=%@, menuItem=%@", actionName, menuItem);
 
   // Always enable view type/behaviour items regardless of key window
   if (sel_isEqual(action, @selector(setViewerType:)))
@@ -1955,6 +1901,7 @@
       return [nodeView respondsToSelector: @selector(setBackgroundColor:)];
 
     } else if (sel_isEqual(action, @selector(duplicateFiles:))
+                    || sel_isEqual(action, @selector(makeAliasFiles:))
                     || sel_isEqual(action, @selector(recycleFiles:))
                         || sel_isEqual(action, @selector(deleteFiles:))) {
       if (lastSelection && [lastSelection count]

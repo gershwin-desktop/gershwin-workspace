@@ -14,14 +14,17 @@
 
 extern NSString * const kDockServiceName;
 
+/* oneway: callers must never wait for the Dock.  The WindowManager reports
+ * its progress through this service, and while it waited for a reply it
+ * stopped drawing the screen. */
 @protocol DockService <NSObject>
 
-- (void)setBadgeCount:(int64_t)count;
-- (void)setCountVisible:(BOOL)visible;
-- (void)setProgressValue:(double)value;
-- (void)setProgressVisible:(BOOL)visible;
-- (void)setUrgent:(BOOL)urgent;
-- (void)clearAll;
+- (oneway void)setBadgeCount:(int64_t)count;
+- (oneway void)setCountVisible:(BOOL)visible;
+- (oneway void)setProgressValue:(double)value;
+- (oneway void)setProgressVisible:(BOOL)visible;
+- (oneway void)setUrgent:(BOOL)urgent;
+- (oneway void)clearAll;
 
 @end
 

@@ -40,6 +40,7 @@
 #import "FSNBrowserMatrix.h"
 #import "FSNBrowserCell.h"
 #import "FSNIcon.h"
+#import "FSNIconLoader.h"
 #import "FSNFunctions.h"
 
 
@@ -54,11 +55,22 @@
 
 - (void)dealloc
 {
+  NSUInteger i;
+
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   /* Do NOT clear scroller target/action here — the scroller is a subview
    * of the parent NSScrollView and may already be deallocated by the time
    * this dealloc runs (subviews are released before the document view).
    * releaseScroller is called separately while the view hierarchy is intact. */
+
+  /* Columns with pending loader items would outlive this dealloc (the items
+   * retain them); drop the items now so closing the window stops all
+   * deferred decoration work immediately. */
+  for (i = 0; i < [columns count]; i++)
+    {
+      [[FSNIconLoader sharedLoader] cancelClient: [columns objectAtIndex: i]];
+    }
+
   RELEASE (baseNode);
   RELEASE (extInfoType);
   RELEASE (lastSelection);
@@ -183,6 +195,7 @@
 
     viewer = nil;
     manager = nil;
+    lastDisplayMode = GSCurrentExtensionDisplayMode();
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(defaultsChanged:) name:NSUserDefaultsDidChangeNotification object:nil];
   }
@@ -192,8 +205,15 @@
 
 - (void)defaultsChanged:(NSNotification *)not
 {
-  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   NSInteger newSize;
+  GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
+  BOOL displayModeChanged = (mode != lastDisplayMode);
+
+  if (displayModeChanged)
+    {
+      lastDisplayMode = mode;
+    }
 
   if ([defaults objectForKey:@"NSFontSize"]) {
     newSize = [defaults integerForKey:@"NSFontSize"];
@@ -205,7 +225,14 @@
     }
   }
 
-  [self reloadExtensionDisplay];
+  /* Relabeling every cell of every column is only needed when the
+   * extension display mode changed; viewer windows persist per-folder
+   * state through NSUserDefaults on open, navigation and close, and each
+   * of those writes lands on this notification. */
+  if (displayModeChanged)
+    {
+      [self reloadExtensionDisplay];
+    }
 }
 
 - (void)reloadExtensionDisplay
@@ -349,7 +376,6 @@
         break;
       }
     } else {
-      NSDebugLLog(@"gwspace", @"Browser: unable to find cell '%@' in column %ld\n", [nd name], (long int)(column + i));
       break;
     }
     
@@ -1894,6 +1920,34 @@
   }
 
   return nil;
+}
+
+// On-screen rect of the given browser cell, in screen coordinates.  Used for
+// the window birth animation so a new window opens growing from the clicked
+// cell in a columns (browser) view.
+- (NSRect)screenRectForCell:(FSNBrowserCell *)aCell
+{
+  if (aCell == nil) {
+    return NSZeroRect;
+  }
+  NSString *cellPath = [[aCell node] path];
+  if (cellPath == nil) {
+    return NSZeroRect;
+  }
+  NSString *parentPath = [cellPath stringByDeletingLastPathComponent];
+  FSNBrowserColumn *bc = [self columnWithPath: parentPath];
+  if (bc == nil || [bc window] == nil) {
+    return NSZeroRect;
+  }
+  NSMatrix *matrix = [bc cmatrix];
+  NSArray *cells = [matrix cells];
+  NSUInteger row = [cells indexOfObjectIdenticalTo: aCell];
+  if (row == NSNotFound) {
+    return NSZeroRect;
+  }
+  NSRect cellRect = [matrix cellFrameAtRow: row column: 0];
+  NSRect rectInWindow = [matrix convertRect: cellRect toView: nil];
+  return [[matrix window] convertRectToScreen: rectInWindow];
 }
 
 - (id)addRepForSubnode:(FSNode *)anode

@@ -90,7 +90,6 @@ static Finder *finder = nil;
     NSUInteger i;
     
     if ([NSBundle loadNibNamed: nibName owner: self] == NO) {
-      NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
       DESTROY (self);
       return self;
     } 
@@ -195,7 +194,6 @@ static Finder *finder = nil;
 
         if ([fm fileExistsAtPath: lsfpath]) {
           if ([self addLiveSearchFolderWithPath: lsfpath createIndex: NO] != nil) {
-            GWDebugLog(@"added lsf with path %@", lsfpath);
           }
         }
       }
@@ -1022,15 +1020,12 @@ static Finder *finder = nil;
     
     if (found) {
       if (move) {
-        GWDebugLog(@"moved lsf with path %@ to path %@", [node path], [newnode path]);
         [folder setNode: newnode];
         
       } else if (copy) {
         [self addLiveSearchFolderWithPath: [newnode path] createIndex: NO];
-        GWDebugLog(@"added lsf with path %@", [newnode path]);
         
       } else if (remove) {
-        GWDebugLog(@"removed lsf with path %@", [node path]);
         [self removeLiveSearchFolder: folder];
         count--;
         i--;
@@ -1050,7 +1045,6 @@ static Finder *finder = nil;
     LSFolder *folder = [self lsfolderWithPath: [info objectForKey: @"path"]];
     
     if (folder) {
-      GWDebugLog(@"removed (watcher) lsf with path %@", [[folder node] path]);
       [self removeLiveSearchFolder: folder];
     }
   }
@@ -1198,7 +1192,6 @@ static Finder *finder = nil;
   }
   
   if (index) {
-    GWDebugLog(@"creating trees for lsf at %@", path);
   }
   
   return folder;

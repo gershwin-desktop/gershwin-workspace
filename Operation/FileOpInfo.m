@@ -28,6 +28,8 @@
 #import <GNUstepBase/GNUstep.h>
 #import <dispatch/dispatch.h>
 
+#import "FSNAlias.h"
+
 #import "FileOpInfo.h"
 #import "Operation.h"
 #import "Functions.h"
@@ -118,7 +120,6 @@ static NSString *nibName = @"FileOperationWin";
 	{
 	  if ([NSBundle loadNibNamed: nibName owner: self] == NO)
 	    {
-	      NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
 	      DESTROY (self);
 	      return self;
 	    }
@@ -303,6 +304,11 @@ static NSString *nibName = @"FileOperationWin";
           title = NSLocalizedString(@"Duplicate", @"");
           msg = NSLocalizedString(@"Duplicate the selected objects?", @"");
         }
+      else if ([type isEqual: FSNWorkspaceCreateAliasOperation])
+        {
+          title = NSLocalizedString(@"Make Alias", @"");
+          msg = NSLocalizedString(@"Create aliases of the selected objects?", @"");
+        }
       
       if (NSRunAlertPanel(title, msg, 
                           NSLocalizedString(@"OK", @""), 
@@ -419,7 +425,6 @@ static NSString *nibName = @"FileOperationWin";
   pFData = cachedProcessedFilesData;
   if (pFData == nil)
     {
-      NSDebugLLog(@"gwspace", @"removeProcessedFiles: no cached data available");
       return;
     }
   pFiles = [NSUnarchiver unarchiveObjectWithData: pFData];
@@ -1035,6 +1040,10 @@ shouldMakeNewConnection:(NSConnection*)newConn
     {
       [self doLink];
     }
+  else if ([operation isEqual: FSNWorkspaceCreateAliasOperation])
+    {
+      [self doAlias];
+    }
   else if ([operation isEqual: NSWorkspaceDestroyOperation]
 	   || [operation isEqual: @"WorkspaceemptyTrashOperation"])
     {
@@ -1172,23 +1181,61 @@ filename = [fileinfo objectForKey: @"name"];
 {
   while (1)
     {
-      CHECK_DONE;	
-      GET_FILENAME;    
-    
+      CHECK_DONE;
+      GET_FILENAME;
+
       if ((samename == NO) || (samename && [self removeExisting: fileinfo]))
 	{
 	  NSString *dst = [destination stringByAppendingPathComponent: filename];
 	  NSString *src = [source stringByAppendingPathComponent: filename];
-	  
+
 	  if ([fm createSymbolicLinkAtPath: dst pathContent: src])
 	    {
-	      [procfiles addObject: filename];	      
+	      [procfiles addObject: filename];
 	    }
 	}
-      [files removeObject: fileinfo];	   
-      RELEASE (fileinfo);     
+      [files removeObject: fileinfo];
+      RELEASE (fileinfo);
     }
-  
+
+  [fileOp cacheProcessedFiles: [self processedFiles]];
+  [fileOp sendDidChangeNotification];
+  if (([files count] == 0) || stopped)
+    {
+      [fileOp endOperation];
+    }
+  else if (paused)
+    {
+      [fileOp removeProcessedFiles];
+    }
+  [fileOp cleanUpExecutor];
+}
+
+/* Create Alias records (not symlinks) for each dropped/menu-selected
+ * file.  Alias creation writes one small record per file, so unlike the
+ * copy/move executors there is no per-byte progress to report. */
+- (void)doAlias
+{
+  while (1)
+    {
+      CHECK_DONE;
+      GET_FILENAME;
+
+      if ((samename == NO) || (samename && [self removeExisting: fileinfo]))
+	{
+	  NSString *src = [source stringByAppendingPathComponent: filename];
+	  NSString *aliasPath = [FSNAlias writeAliasFileForPath: src
+						    inDirectory: destination];
+
+	  if (aliasPath != nil)
+	    {
+	      [procfiles addObject: [aliasPath lastPathComponent]];
+	    }
+	}
+      [files removeObject: fileinfo];
+      RELEASE (fileinfo);
+    }
+
   [fileOp cacheProcessedFiles: [self processedFiles]];
   [fileOp sendDidChangeNotification];
   if (([files count] == 0) || stopped)

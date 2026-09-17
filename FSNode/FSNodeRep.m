@@ -24,6 +24,8 @@
  */
 
 #include <math.h>
+#include <dirent.h>
+#include <string.h>
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -34,6 +36,7 @@
 #import "ExtendedInfo.h"
 #import "config.h"
 #import "FSNMetadataProvider.h"
+#import "FSNDirEntry.h"
 
 
 #ifdef HAVE_GETMNTINFO
@@ -50,7 +53,9 @@
 #endif
 #endif /* HAVE_SYSTYPES */
 #else 
-  #if	defined(HAVE_GETMNTENT) && defined (MNT_DIR)
+  #if	defined(HAVE_GETMNTENT) && defined (MNT_DIR) \
+	&& !defined(__FreeBSD__) && !defined(__NetBSD__) \
+	&& !defined(__OpenBSD__) && !defined(__DragonFly__)
     #if	defined(HAVE_MNTENT_H)
       #include <mntent.h>
     #elif defined(HAVE_SYS_MNTENT_H)
@@ -65,18 +70,6 @@
 #define FONT_H_FACT (1.5)
 
 static FSNodeRep *shared = nil;
-
-@interface FSNodeRep (PrivateMethods)
-
-- (id)initSharedInstance;
-
-- (void)loadExtendedInfoModules;
-
-- (NSArray *)bundlesWithExtension:(NSString *)extension 
-			   inPath:(NSString *)path;
-
-@end
-
 
 @implementation FSNodeRep (PrivateMethods)
 
@@ -142,7 +135,6 @@ static FSNodeRep *shared = nil;
       {
         if ([fm createDirectoryAtPath: libraryDir attributes: nil] == NO)
           {
-            NSDebugLLog(@"gwspace", @"Unable to create the Library directory. Quitting now");
             [NSApp terminate: self];
           }
       }
@@ -151,7 +143,6 @@ static FSNodeRep *shared = nil;
     
     if (([fm fileExistsAtPath: thumbnailDir isDirectory: &isdir] && isdir) == NO) {
       if ([fm createDirectoryAtPath: thumbnailDir attributes: nil] == NO) {
-        NSDebugLLog(@"gwspace", @"Unable to create the thumbnails directory. Quitting now");
         [NSApp terminate: self];
       }
     }
@@ -213,7 +204,6 @@ static FSNodeRep *shared = nil;
         			
 				for (j = 0; j < [loaded count]; j++) {
 					if ([name isEqual: [[loaded objectAtIndex: j] menuName]]) {
-            NSDebugLLog(@"gwspace", @"duplicate module \"%@\" at %@", name, bpath);
 						exists = YES;
 						break;
 					}
@@ -306,7 +296,6 @@ static FSNodeRep *shared = nil;
   if ([fm fileExistsAtPath: hdnFilePath])
     hiddenNames = [[NSString stringWithContentsOfFile: hdnFilePath] componentsSeparatedByString: @"\n"];
 
-
   {
     NSMutableArray *filteredNames = [NSMutableArray array];
     NSUInteger i;
@@ -314,38 +303,133 @@ static FSNodeRep *shared = nil;
     for (i = 0; i < [fnames count]; i++)
       {
         NSString *fname = [fnames objectAtIndex: i];
-        NSString *fpath = [path stringByAppendingPathComponent: fname];
-        BOOL hidden = NO;
 
-        /* Always hide internal metadata files */
-        if ([fname hasPrefix: @"._"])
-          hidden = YES;
-        if ([fname isEqualToString: @"__MACOSX"])
-          hidden = YES;
-        if ([fname isEqualToString: @".DS_Store"])
-          hidden = YES;
-
-        if (!hidden && [fname hasPrefix: @"."] && hideSysFiles)
-          hidden = YES;
-
-        if (!hidden && hiddenNames && [hiddenNames containsObject: fname])
-          hidden = YES;
-
-        if (!hidden && [hiddenPaths containsObject: fpath])
-          hidden = YES;
-
-        if (!hidden && hideSysFiles)
+        if ([self isVisibleEntryName: fname
+                  inDirectoryAtPath: path
+                   withHiddenNames: hiddenNames])
           {
-            if ([self isFileInvisibleFromMetadataAtPath: fpath])
-              hidden = YES;
+            [filteredNames addObject: fname];
           }
-
-        if (!hidden)
-          [filteredNames addObject: fname];
       }
 
     return filteredNames;
   }
+}
+
+- (NSArray *)directorySnapshotAtPath:(NSString *)path
+{
+  CREATE_AUTORELEASE_POOL(arp);
+  NSMutableArray *entries = [NSMutableArray array];
+  NSString *hdnFilePath = [path stringByAppendingPathComponent: @".hidden"];
+  NSArray *hiddenNames = nil;
+  const char *cpath = [path fileSystemRepresentation];
+  DIR *dir;
+  struct dirent *dent;
+
+  if ([fm fileExistsAtPath: hdnFilePath])
+    hiddenNames = [[NSString stringWithContentsOfFile: hdnFilePath]
+                     componentsSeparatedByString: @"\n"];
+
+  dir = opendir(cpath);
+  if (dir == NULL)
+    {
+      RETAIN (entries);
+      RELEASE (arp);
+
+      return [[entries autorelease] makeImmutableCopyOnFail: NO];
+    }
+
+  while ((dent = readdir(dir)) != NULL)
+    {
+      NSString *fname;
+      FSNDirEntryKind kind;
+
+      if (dent->d_name[0] == '.'
+          && (dent->d_name[1] == '\0'
+              || (dent->d_name[1] == '.' && dent->d_name[2] == '\0')))
+        {
+          continue;
+        }
+
+      fname = [[NSString alloc] initWithBytes: dent->d_name
+                                       length: strlen(dent->d_name)
+                                     encoding: NSUTF8StringEncoding];
+      if (fname == nil)
+        {
+          fname = [NSString stringWithCString: dent->d_name];
+        }
+
+      if ([self isVisibleEntryName: fname
+                inDirectoryAtPath: path
+                 withHiddenNames: hiddenNames])
+        {
+          switch (dent->d_type)
+            {
+              case DT_DIR:
+                kind = FSNDirEntryKindDirectory;
+                break;
+              case DT_REG:
+                kind = FSNDirEntryKindPlain;
+                break;
+              case DT_LNK:
+                kind = FSNDirEntryKindLink;
+                break;
+              default:
+                kind = FSNDirEntryKindUnknown;
+                break;
+            }
+
+          [entries addObject: [[FSNDirEntry alloc] initWithName: fname
+                                                            kind: kind]];
+        }
+
+      [fname release];
+    }
+
+  closedir(dir);
+
+  [entries sortUsingSelector: @selector(compare:)];
+
+  RETAIN(entries);
+  RELEASE(arp);
+
+  return [[entries autorelease] makeImmutableCopyOnFail: NO];
+}
+
+/* Shared visibility filter for directory listings: YES if the entry is
+ * shown (not filtered by internal-metadata rules, .hidden, hidden paths or
+ * the hide-system-files preference). */
+- (BOOL)isVisibleEntryName:(NSString *)fname
+         inDirectoryAtPath:(NSString *)path
+          withHiddenNames:(NSArray *)hiddenNames
+{
+  NSString *fpath = [path stringByAppendingPathComponent: fname];
+  BOOL hidden = NO;
+
+  /* Always hide internal metadata files */
+  if ([fname hasPrefix: @"._"])
+    hidden = YES;
+  if ([fname isEqualToString: @"__MACOSX"])
+    hidden = YES;
+  if ([fname isEqualToString: @".DS_Store"])
+    hidden = YES;
+
+  if (!hidden && [fname hasPrefix: @"."] && hideSysFiles)
+    hidden = YES;
+
+  if (!hidden && hiddenNames && [hiddenNames containsObject: fname])
+    hidden = YES;
+
+  if (!hidden && [hiddenPaths containsObject: fpath])
+    hidden = YES;
+
+  if (!hidden && hideSysFiles)
+    {
+      if ([self isFileInvisibleFromMetadataAtPath: fpath])
+        hidden = YES;
+    }
+
+  return !hidden;
 }
 
 - (int)labelMargin
@@ -804,7 +888,6 @@ static FSNodeRep *shared = nil;
             }
           NS_HANDLER
             {
-          NSDebugLLog(@"gwspace", @"BAD IMAGE '%@'", tumbpath);
             }
           NS_ENDHANDLER
         }
@@ -869,6 +952,16 @@ static FSNodeRep *shared = nil;
 - (id)iconPositionStore
 {
   return _iconPositionStore;
+}
+
+- (void)setDecorationDelegate:(id<FSNodeRepDecorationDelegate>)delegate
+{
+  _decorationDelegate = delegate;   /* not retained: the app owns its lifetime */
+}
+
+- (id<FSNodeRepDecorationDelegate>)decorationDelegate
+{
+  return _decorationDelegate;
 }
 
 @end

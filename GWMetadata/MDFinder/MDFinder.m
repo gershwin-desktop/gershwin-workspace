@@ -141,6 +141,10 @@ static MDFinder *mdfinder = nil;
   } else {
     ASSIGN (lastSaveDir, NSHomeDirectory());
   }
+  
+  if ([mdkwindows count] == 0) {
+    [self newQuery: nil];
+  }
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)aNotification
@@ -538,7 +542,6 @@ static MDFinder *mdfinder = nil;
 
   if (self) {
 		if ([NSBundle loadNibNamed: @"StartAppWin" owner: self] == NO) {
-      NSDebugLLog(@"gwspace", @"failed to load StartAppWin!");
       DESTROY (self);
       return self;
     } else {

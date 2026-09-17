@@ -59,7 +59,6 @@ static NSString *nibName = @"DefEditorPref";
     ASSIGN (noEditorStr, NSLocalizedString(@"No Default Editor", @""));
   
 		if ([NSBundle loadNibNamed: nibName owner: self] == NO) {
-      NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
     } else {
 	    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];   
       NSString *editor = [defaults stringForKey: @"defaulteditor"];

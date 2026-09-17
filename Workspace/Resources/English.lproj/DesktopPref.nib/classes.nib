@@ -1,0 +1,76 @@
+{
+    IBClasses = (
+	{
+	    ACTIONS = {
+		chooseImage = id;
+		setColor = id;
+		setDockPosition = id;
+		setDockStyle = id;
+		setImage = id;
+		setImageStyle = id;
+		setOmnipresent = id;
+		setSingleClickLaunch = id;
+		setTShelfAutohide = id;
+		setUseImage = id;
+		setUsesDock = id;
+	    };
+	    CLASS = DesktopPref;
+	    LANGUAGE = ObjC;
+	    OUTLETS = {
+		chooseImageButt = id;
+		colorLabel = id;
+		colorWell = id;
+		dockBox = id;
+		dockPosLabel = id;
+		dockPosMatrix = id;
+		dockStyleLabel = id;
+		dockStyleMatrix = id;
+		gworkspace = id;
+		hideTShelfCheck = id;
+		imagePosMatrix = id;
+		imageView = id;
+		launchSingleClick = id;
+		omnipresentCheck = id;
+		prefbox = id;
+		tabView = id;
+		useDockCheck = id;
+		useImageSwitch = id;
+		win = id;
+	    };
+	    SUPERCLASS = NSObject;
+	},
+	{
+	    CLASS = ColorView;
+	    LANGUAGE = ObjC;
+	    SUPERCLASS = NSView;
+	},
+	{
+	    ACTIONS = {
+		initForController = id;
+	    };
+	    CLASS = ArrResizer;
+	    LANGUAGE = ObjC;
+	    SUPERCLASS = NSView;
+	},
+	{
+	    ACTIONS = {
+		chooseImage = id;
+		orderFrontFontPanel = id;
+		setColor = id;
+		setDockPosition = id;
+		setDockStyle = id;
+		setImage = id;
+		setImageStyle = id;
+		setOmnipresent = id;
+		setSingleClickLaunch = id;
+		setTShelfAutohide = id;
+		setUseImage = id;
+		setUsesDock = id;
+	    };
+	    CLASS = FirstResponder;
+	    LANGUAGE = ObjC;
+	    SUPERCLASS = NSObject;
+	}
+    );
+    IBVersion = 1;
+}

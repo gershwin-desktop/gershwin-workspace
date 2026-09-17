@@ -268,7 +268,6 @@ static NSMutableCharacterSet *skipSet = nil;
     [self setDefaultValues: info];
     
   } else {
-    NSDebugLLog(@"gwspace", @"failed to load %@!", nibname);
     DESTROY (self);
   }
   

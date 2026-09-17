@@ -32,6 +32,7 @@
 #import "GWViewersManager.h"
 #import "Workspace.h"
 #import "GWDesktopManager.h"
+#import "X11AppSupport.h"
 
 @implementation GWViewerIconsView
 
@@ -59,6 +60,13 @@
 /* The browser icon view auto-grids and reflows to the window width; it does
  * not honor or persist saved .DS_Store positions (those are for the spatial
  * view and the desktop). */
+/* Another application's window can cover this one, and AppKit does not see
+   it; the window server does. */
+- (BOOL)foreignWindowIsUnderPointer
+{
+  return GWForeignWindowIsUnderPointer();
+}
+
 - (BOOL)honorsSavedPositions
 {
   return NO;
@@ -88,22 +96,6 @@
   [viewer openSelectionInNewViewer: newv];
 }
 
-- (void)mouseDown:(NSEvent *)theEvent
-{
-  if ([theEvent modifierFlags] != NSShiftKeyMask)
-    {
-      selectionMask = NSSingleSelectionMask;
-      selectionMask |= FSNCreatingSelectionMask;
-      [self unselectOtherReps: nil];
-      selectionMask = NSSingleSelectionMask;
-    
-      DESTROY (lastSelection);
-      [self selectionDidChange];
-      [self stopRepNameEditing];
-   
-    }
-}
-
 - (void)keyDown:(NSEvent *)theEvent
 {
   unsigned flags = [theEvent modifierFlags];
@@ -115,12 +107,10 @@
       character = [characters characterAtIndex: 0];
     }
 
-  NSDebugLLog(@"gwspace", @"GWViewerIconsView.keyDown: character=0x%x, flags=0x%x", character, flags);
 
   // Handle Shift-Down = Open Selection
   if (character == NSDownArrowFunctionKey && (flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
     {
-      NSDebugLLog(@"gwspace", @"GWViewerIconsView: Shift-Down detected");
       [viewer openSelectionInNewViewer: NO];
       return;
     }
@@ -225,7 +215,6 @@
       NSArray *selection = [self selectedNodes];
       if (selection == nil || [selection count] == 0)
         {
-          NSDebugLLog(@"gwspace", @"GWViewerIconsView: No selection, selecting first item");
           // Let parent handle selection of first item
           [super keyDown: theEvent];
           return;
@@ -233,7 +222,6 @@
 
       if (character == '\r' && (flags & NSShiftKeyMask))
         {
-          NSDebugLLog(@"gwspace", @"GWViewerIconsView: Shift-Enter - opening as folder");
           [viewer openSelectionAsFolder];
           return;
         }
@@ -260,7 +248,15 @@
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent
 {
   if ([theEvent type] == NSRightMouseDown) {
-    NSArray *selnodes = [self selectedNodes];
+    NSArray *selnodes;
+
+    /* A right click on the background first does what a left click there
+       does, so the menu is the empty-space one and not the menu of icons
+       the user has clicked away from. */
+    if ([self iconWithNodeAtWindowPoint: [theEvent locationInWindow]] == nil)
+      [self selectNothingForBackgroundEvent: theEvent];
+
+    selnodes = [self selectedNodes];
     
     if (selnodes && [selnodes count]) {
       return [[Workspace gworkspace] contextMenuForNodes: selnodes
@@ -268,10 +264,12 @@
                                            openWithTarget: [Workspace gworkspace]
                                               infoTarget: [Workspace gworkspace]
                                          duplicateTarget: [viewer win]
+                                             aliasTarget: [viewer win]
                                            recycleTarget: [viewer win]
                                              ejectTarget: [viewer win]
                                               openAction: @selector(openSelection:)
                                          duplicateAction: @selector(duplicateFiles:)
+                                            aliasAction: @selector(makeAliasFiles:)
                                            recycleAction: @selector(recycleFiles:)
                                              ejectAction: @selector(ejectVolumes:)
                                         includeOpenWith: YES];

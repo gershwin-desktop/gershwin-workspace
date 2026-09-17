@@ -59,6 +59,9 @@
 
   BOOL nameEdited;
 
+  /* NO between -setNodeBasic: and -decorate (lazy-filled columns). */
+  BOOL decorated;
+
   FSNodeRep *fsnodeRep;
 }
 
@@ -76,6 +79,19 @@
 - (void)setTagColor:(NSColor *)color;
 
 - (NSColor *)tagColor;
+
+/* Lightweight setup for lazy-filled columns: node and name only - no icon,
+ * no info line, no tag color.  The column's decoration pass (visible rows
+ * first) completes the cell via -decorate. */
+- (void)setNodeBasic:(FSNode *)anode
+        nodeInfoType:(FSNInfoType)type
+        extendedType:(NSString *)exttype;
+
+/* Complete a lazily-set-up cell: icon, Finder tag color, info line and
+ * locked state.  No-op when already decorated or when no node is set. */
+- (void)decorate;
+
+- (BOOL)isDecorated;
 
 @end
 

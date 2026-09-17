@@ -9,7 +9,17 @@
 #import "GWViewSettingsManager.h"
 #import "DSStoreInfo.h"
 
+/* How long to wait after the last position change before writing everything
+ * to disk.  A drag or Clean Up moves many icons in quick succession; batching
+ * them into one write keeps the .DS_Store and per-file xattr writes coherent
+ * and avoids dozens of tiny writes per operation. */
+#define GW_ICON_POSITION_DEBOUNCE 0.35
+
 @implementation GWIconPositionStore
+{
+  NSMutableDictionary *_pendingFolders; /* folder path -> folder NSMutableArray of @[name,x,y] */
+  NSTimer *_flushTimer;
+}
 
 + (instancetype)sharedStore
 {
@@ -17,6 +27,52 @@
   if (shared == nil)
     shared = [[self alloc] init];
   return shared;
+}
+
+- (id)init
+{
+  self = [super init];
+  if (self)
+    {
+      _pendingFolders = [NSMutableDictionary new];
+      _flushTimer = nil;
+    }
+  return self;
+}
+
+- (void)dealloc
+{
+  [_flushTimer invalidate];
+  [_flushTimer release];
+  [_pendingFolders release];
+  [super dealloc];
+}
+
+/* Schedules (or reschedules) the debounce timer that flushes all pending
+ * position writes. */
+- (void)scheduleFlush
+{
+  [_flushTimer invalidate];
+  _flushTimer = [NSTimer scheduledTimerWithTimeInterval: GW_ICON_POSITION_DEBOUNCE
+                                                 target: self
+                                               selector: @selector(flushPending)
+                                               userInfo: nil
+                                                repeats: NO];
+}
+
+/* Flushes all pending position writes to disk in one go.  Public so callers
+ * (e.g. reads, app termination) can force a write without waiting for the
+ * debounce. */
+- (void)flushPending
+{
+  [_flushTimer invalidate];
+  _flushTimer = nil;
+
+  NSDictionary *folders = [_pendingFolders copy];
+  [_pendingFolders removeAllObjects];
+  for (NSString *folder in folders)
+    [self writeBatch: [folders objectForKey: folder] toFolder: folder];
+  [folders release];
 }
 
 /* Write one folder's batch of iloc entries (@[name, ilocX, ilocY]).
@@ -77,12 +133,42 @@
 
 - (void)saveIconPositionsByFolder:(NSDictionary *)positionsByFolder
 {
+  [self bufferPositionsByFolder: positionsByFolder];
+}
+
+/* Merge a folder's batch into the pending buffer and debounce the disk write.
+ * Later entries for the same file replace earlier ones (only the final
+ * position matters), so a multi-icon drag or Clean Up results in a single
+ * coherent write. */
+- (void)bufferPositionsByFolder:(NSDictionary *)positionsByFolder
+{
+  if ([positionsByFolder count] == 0)
+    return;
+
   for (NSString *folder in positionsByFolder)
-    [self writeBatch: [positionsByFolder objectForKey: folder] toFolder: folder];
+    {
+      NSArray *incoming = [positionsByFolder objectForKey: folder];
+      NSMutableDictionary *merged = [NSMutableDictionary dictionary];
+
+      /* Fold the new entries over any already-pending ones for this folder. */
+      NSArray *pending = [_pendingFolders objectForKey: folder];
+      for (NSArray *entry in pending)
+        [merged setObject: entry forKey: [entry objectAtIndex: 0]];
+
+      for (NSArray *entry in incoming)
+        [merged setObject: entry forKey: [entry objectAtIndex: 0]];
+
+      [_pendingFolders setObject: [merged allValues] forKey: folder];
+    }
+
+  [self scheduleFlush];
 }
 
 - (NSDictionary *)storedIconPositionsForFolder:(NSString *)folder
 {
+  /* Make sure any pending position writes are on disk before reading back. */
+  [self flushPending];
+
   NSMutableDictionary *result = [NSMutableDictionary dictionary];
   if (folder == nil)
     return result;
@@ -115,7 +201,9 @@
   NSArray *entry = @[name,
                      [NSNumber numberWithInt: (int)ilocCenter.x],
                      [NSNumber numberWithInt: (int)ilocCenter.y]];
-  [self writeBatch: [NSArray arrayWithObject: entry] toFolder: folder];
+  [self bufferPositionsByFolder:
+    [NSDictionary dictionaryWithObject: [NSArray arrayWithObject: entry]
+                                forKey: folder]];
 }
 
 @end

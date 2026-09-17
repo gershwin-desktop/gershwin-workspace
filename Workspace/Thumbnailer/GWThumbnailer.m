@@ -50,10 +50,14 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 + (Thumbnailer *)sharedThumbnailer
 {
   static Thumbnailer *instance = nil;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    instance = [[Thumbnailer allocWithZone:NULL] init];
-  });
+  /* GNUstep thread-safe singleton, no libdispatch. */
+  @synchronized ([Thumbnailer class])
+    {
+      if (instance == nil)
+        {
+          instance = [[Thumbnailer allocWithZone: NULL] init];
+        }
+    }
   return instance;
 }
 
@@ -67,10 +71,8 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   countInstances--;
 
   if (countInstances < 0)
-    NSDebugLLog(@"gwspace", @"Something went wrong!");
   if (countInstances == 0)
     {
-      NSDebugLLog(@"gwspace", @"Last thumbnailer instance, dealloc'ing");
       [[NSNotificationCenter defaultCenter] removeObserver: self];
 
       if (timer && [timer isValid])
@@ -120,7 +122,6 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 
     if (([fm fileExistsAtPath: thumbnailDir isDirectory: &isdir] && isdir) == NO) {
       if ([fm createDirectoryAtPath: thumbnailDir attributes: nil] == NO) {
-        NSDebugLLog(@"gwspace", @"no thumbnails directory");
         return nil;
       }
     }
@@ -156,7 +157,6 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 - (void)writeDictToFile
 {
   [dictLock lock];
-  NSDebugLLog(@"gwspace", @"(%d) writing to: %@", (int)countInstances, dictPath);
   [thumbsDict writeToFile: dictPath atomically: YES];
   [dictLock unlock];
 }
@@ -335,7 +335,6 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   NSAutoreleasePool *arp;
 
   arp = [NSAutoreleasePool new];
-  NSDebugLLog(@"gwspace", @"_makeThumbnails (%u): %@", (int)countInstances, path);
   added = [NSMutableArray array];
 
   if ([fm fileExistsAtPath: path isDirectory: &isdir] && isdir)
@@ -392,9 +391,12 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   if ([pathsInProcessing containsObject:path])
     return;
   [pathsInProcessing addObject:path];
-  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-    [self _makeThumbnails:path];
-  });
+  /* GNUstep thread, not libdispatch: a GCD worker thread running ObjC races
+   * the main thread's +load dispatch and crashes the app (GPF in libobjc's
+   * load_messages_insert) - the window_placement flake. */
+  [NSThread detachNewThreadSelector: @selector(_makeThumbnails:)
+                           toTarget: self
+                         withObject: path];
 }
 
 - (void)_removeThumbnails:(NSString *)path
@@ -458,9 +460,10 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   if ([pathsInProcessing containsObject:path])
     return;
   [pathsInProcessing addObject:path];
-  dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-    [self _removeThumbnails:path];
-  });
+  /* GNUstep thread, not libdispatch; see makeThumbnails:. */
+  [NSThread detachNewThreadSelector: @selector(_removeThumbnails:)
+                           toTarget: self
+                         withObject: path];
 }
 
 - (BOOL)registerThumbnailData:(NSData *)data 

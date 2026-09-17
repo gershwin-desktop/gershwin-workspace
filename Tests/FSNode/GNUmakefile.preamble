@@ -1,3 +1,40 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # Include path so the in-process test can find FSNode's Foundation-only
 # placement header (FSNIconPlacement.h).
 ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
+
+# clang 19 / binutils 2.44 regression: the ABI 2.2 .objc_init section always
+# references the __objc_constant_string section bounds, but the linker only
+# synthesizes those __start_/__stop_ symbols when the section exists.  A
+# Foundation-only test tool without constant strings then fails to link.
+# Defining them as 0 keeps the (empty) scan in the runtime a no-op.
+ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
+                      -Wl,--defsym=__stop___objc_constant_string=0
+
+
+# t_FSNDirectorySnapshot / t_FSNLazyAttributes exercise FSNodeRep's directory
+# snapshot and FSNode's lazy attribute loading.  The framework sources are
+# linked as separate objects (single class per object avoids in-TU symbol
+# clashes); gnustep-gui is needed because FSNode.m/FSNodeRep.m/FSNFunctions.m
+# reference NSWorkspace and NSImage.  ExtendedInfo.h is included by
+# FSNodeRep.m.
+ADDITIONAL_INCLUDE_DIRS += -I../../FSNode/ExtendedInfo
+t_FSNDirectorySnapshot_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
+                                     ../../FSNode/FSNFunctions.m \
+                                     ../../FSNode/FSNAlias.m \
+                                     ../../FSNode/FSNodeRep.m \
+                                     ../../FSNode/FSNodeRepIcons.m \
+                                     ../../FSNode/FSNode.m
+t_FSNDirectorySnapshot_TOOL_LIBS += -lgnustep-gui
+t_FSNLazyAttributes_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
+                                  ../../FSNode/FSNFunctions.m \
+                                  ../../FSNode/FSNAlias.m \
+                                  ../../FSNode/FSNodeRep.m \
+                                  ../../FSNode/FSNodeRepIcons.m \
+                                  ../../FSNode/FSNode.m
+t_FSNLazyAttributes_TOOL_LIBS += -lgnustep-gui
+
+# t_FSNIconLoader links the loader as a separate object; it imports AppKit
+# (run loop modes, timer) and needs -lgnustep-gui.
+t_FSNIconLoader_OBJC_FILES += ../../FSNode/FSNIconLoader.m
+t_FSNIconLoader_TOOL_LIBS += -lgnustep-gui

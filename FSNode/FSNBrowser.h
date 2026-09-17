@@ -29,6 +29,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/NSView.h>
 #import "FSNodeRep.h"
+#import "FSNFunctions.h"
 
 @class FSNBrowserColumn;
 @class FSNBrowserCell;
@@ -52,8 +53,12 @@
 
   BOOL cellsIcon;
   BOOL selColumn;
-  
+
   BOOL isLoaded;
+
+  /* Last-seen filename-extension display mode: defaultsChanged: only needs
+   * to relabel cells when it actually changes. */
+  GSFilenameExtensionDisplayMode lastDisplayMode;
     
   NSInteger visibleColumns;
   NSInteger lastColumnLoaded;
@@ -181,6 +186,7 @@
 - (void)updateIcons;
 - (id)repOfSubnode:(FSNode *)anode;
 - (id)repOfSubnodePath:(NSString *)apath;
+- (NSRect)screenRectForCell:(FSNBrowserCell *)aCell;
 - (id)addRepForSubnode:(FSNode *)anode;
 - (id)addRepForSubnodePath:(NSString *)apath;
 - (void)removeRepOfSubnode:(FSNode *)anode;

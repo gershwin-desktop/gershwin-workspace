@@ -1,0 +1,48 @@
+#!/usr/bin/env run_uitest
+# Window placement stability: a folder viewer window must open at the same
+# on-screen position every time. Opens the home folder ("~") four times,
+# asserting the window frame is identical on each open, then does the same for
+# the root folder ("/"). Menu and window names are English; the engine
+# localizes them via the app, so the script also runs on a German Workspace.
+#
+# Run with: run_uitest Tests/window_placement.uitest
+activate application "Workspace"
+
+# The Workspace does a lot of DO work per open/close (menu server, process
+# monitor, DBus); the settle between iterations keeps it from overloading its
+# DO connections under the rapid cycle.  On slow VMs (FreeBSD) the frame
+# constant assert can otherwise stall on an unresponsive DriveUI socket, so
+# give it a full second.
+repeat 4
+    select menu "Go/Go to Folder..."
+    wait until modal
+    type "~"
+    press Return
+    wait until window "${home}" timeout 15s
+    assert window "${home}" frame constant
+    close window "${home}"
+    if window "${home}" exists timeout 3s
+        close window "${home}"
+    end
+    wait until not exists window "${home}" timeout 15s
+    wait 1s
+end
+
+repeat 4
+    select menu "Go/Go to Folder..."
+    wait until modal
+    type "/"
+    press Return
+    # The root folder's icon layout is heavy, so opening and closing its
+    # viewer can take longer than the 2s fast-failure default.
+    wait until window "System Disk" timeout 15s
+    assert window "System Disk" frame constant
+    close window "System Disk"
+    if window "System Disk" exists timeout 3s
+        close window "System Disk"
+    end
+    wait until not exists window "System Disk" timeout 15s
+    wait 1s
+end
+
+log "window placement stable"

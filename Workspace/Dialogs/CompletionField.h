@@ -29,9 +29,35 @@
 {
   id fm;
   id controller;
+
+  /* Grey typeahead state: the completion suffix currently shown in grey
+   * after the user's text, and how much of the string is the user's input. */
+  NSString *completionSuffix;
+  NSUInteger typedLength;
+
+  /* Re-entrancy guard: setString: inside updateTypeahead would otherwise
+   * re-enter didChangeText recursively. */
+  BOOL updatingTypeahead;
+
+  /* Set while an updateTypeahead has been deferred to the run loop, so rapid
+   * typing coalesces into a single grey-suffix update. */
+  BOOL typeaheadPending;
 }
 
 - (void)setController:(id)aController;
+
+/* Returns the full completion for the given (user-typed) text, or nil when
+ * there is no unique completion.  Subclasses/controllers may override to
+ * provide their own completion source. */
+- (NSString *)completionForText:(NSString *)text;
+
+/* Accepts the currently displayed grey completion, making it part of the
+ * user's text. */
+- (void)acceptCompletion;
+
+/* Returns only the user's typed text, without any grey completion suffix.
+ * This is what dialogs should use when executing or opening something. */
+- (NSString *)typedText;
 
 @end
 

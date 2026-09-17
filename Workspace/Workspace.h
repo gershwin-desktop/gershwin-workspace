@@ -46,6 +46,7 @@
 @class Operation;
 @class GWViewer;
 @class PrefController;
+@class NSPanel;
 @class History;
 @class OpenWithController;
 @class RunExternalController;
@@ -121,6 +122,7 @@
   id mdextractor;
   
   PrefController *prefController;
+  NSPanel *infoPanel;
   
   History *history;
   int maxHistoryCache;
@@ -173,11 +175,6 @@
   NSString *storedAppinfoPath;
   NSDistributedLock *storedAppinfoLock;
   
-  NSTimer *logoutTimer;
-  BOOL loggingout;
-  int autoLogoutDelay;
-  int maxLogoutDelay;  
-  int logoutDelay;
 }
 
 + (Workspace *)gworkspace;
@@ -263,6 +260,7 @@
             isDirectory:(BOOL)directory;
 
 - (void)duplicateFiles;
+- (void)makeAliasFiles:(id)sender;
 
 - (void)deleteFiles;
 
@@ -319,6 +317,10 @@
 
 - (void)setViewerBehaviour:(id)sender;
 
+- (void)setViewerType:(id)sender;
+
+- (void)toggleInspector:(id)sender;
+
 - (void)setDefaultBrowsingBehaviour:(id)sender;
 
 - (void)setDefaultSpatialBehaviour:(id)sender;
@@ -364,16 +366,6 @@
 - (void)closeMainWin:(id)sender;
 #endif
 
-- (void)logout:(id)sender;
-
-- (void)restart:(id)sender;
-
-- (void)shutdown:(id)sender;
-
-- (BOOL)trySystemAction:(NSString *)actionType;
-
-- (void)executeSystemCommandAndReset;
-
 - (void)showAboutThisComputer:(id)sender;
 
 - (void)showInfo:(id)sender;
@@ -406,9 +398,6 @@
 - (void)performClose:(id)sender;
 
 - (void)emptyTrash:(id)sender;
-
-- (void)restart:(id)sender;
-- (void)shutdown:(id)sender;
 
 
 //
@@ -451,10 +440,12 @@
                   openWithTarget:(id)openWithTarget
                   infoTarget:(id)infoTarget
              duplicateTarget:(id)duplicateTarget
+                 aliasTarget:(id)aliasTarget
                recycleTarget:(id)recycleTarget
                  ejectTarget:(id)ejectTarget
                   openAction:(SEL)openAction
              duplicateAction:(SEL)duplicateAction
+                aliasAction:(SEL)aliasAction
                recycleAction:(SEL)recycleAction
                  ejectAction:(SEL)ejectAction
             includeOpenWith:(BOOL)includeOpenWith;
@@ -496,8 +487,6 @@
 
 - (BOOL)selectFiles:(NSArray *)fullPaths
 							inFileViewerRootedAtPath:(NSString *)rootFullpath;
-
-- (int)extendPowerOffBy:(int)requested;
 
 - (NSArray *)launchedApplications;
 
@@ -561,14 +550,6 @@
 - (void)updateStoredAppInfoWithLaunchedApps:(NSArray *)apps;
 
 - (void)checkLastRunningApps;
-
-- (void)startLogout;
-
-- (void)startLogoutRestartShutdownWithType:(NSString *)type message:(NSString *)message systemAction:(NSString *)systemActionTitle pendingCommand:(NSString *)pendingCommand;
-
-- (void)doLogoutRestartShutdown:(id)sender;
-
-- (void)terminateTasksForLogoutRestartShutdown:(id)sender;
 
 @end
 
@@ -672,8 +653,5 @@
 - (id)_workspaceApplication;
 
 @end
-
-extern NSString *_pendingSystemActionCommand;
-extern NSString *_pendingSystemActionTitle;
 
 #endif // GWORKSPACE_H

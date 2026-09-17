@@ -28,9 +28,7 @@
 #import "FSNode.h"
 #include "config.h"
 
-#define GWDebugLog(format, args...) \
-  do { if (GW_DEBUG_LOG) \
-    NSDebugLLog(@"gwspace", format , ## args); } while (0)
+
 
 static MDKQueryManager *queryManager = nil;
 
@@ -137,7 +135,6 @@ static MDKQueryManager *queryManager = nil;
 	    }
     NS_HANDLER
 	    {
-        NSDebugLLog(@"gwspace", @"%@", localException); 
         return NO;
 	    }
     NS_ENDHANDLER
@@ -181,9 +178,7 @@ static MDKQueryManager *queryManager = nil;
     
   if (query) {
     if ([query isUpdating]) {    
-      GWDebugLog(@"REMOVING UPDATING QUERY %lu", [queries count]);
     } else {    
-      GWDebugLog(@"REMOVING SIMPLE QUERY %lu", [queries count]);
     }
 
     if ([query isUpdating]) {
@@ -203,7 +198,6 @@ static MDKQueryManager *queryManager = nil;
       } else {
         [query updatingStarted];
         
-        GWDebugLog(@"PERFORMING UPDATE (2) %lu", [queries count]);
         
         [gmds performQuery: [query sqlUpdatesDescription]];
       }
@@ -279,10 +273,8 @@ static MDKQueryManager *queryManager = nil;
 		                   object: [gmds connectionForProxy]];
 
       [gmds registerClient: self];                              
-      NSDebugLLog(@"gwspace", @"gmds connected!");     
                        
     } else {
-      NSDebugLLog(@"gwspace", @"unable to contact gmds.");  
     }
   }  
 }
@@ -293,7 +285,6 @@ static MDKQueryManager *queryManager = nil;
 	                    name: NSConnectionDidDieNotification
 	                  object: [notif object]];
   DESTROY (gmds);
-  NSDebugLLog(@"gwspace", @"gmds connection died!");  
   [[NSRunLoop currentRunLoop] runUntilDate:
 		                    [NSDate dateWithTimeIntervalSinceNow: 1.0]];
   [self connectGMDs];
@@ -327,7 +318,6 @@ static MDKQueryManager *queryManager = nil;
       if ([queries containsObject: query] == NO) {
         [queries addObject: query];
     
-        GWDebugLog(@"INSERTING UPDATING QUERY %lu", [queries count]);
       }
       
     } else {
@@ -340,7 +330,6 @@ static MDKQueryManager *queryManager = nil;
   if (count && (count == [queries count])) {  
     MDKQuery *query = [queries lastObject];
     
-    GWDebugLog(@"PERFORMING UPDATE (1) %lu", [queries count]);
     
     [query updatingStarted];
     [gmds performQuery: [query sqlUpdatesDescription]];

@@ -85,7 +85,6 @@ static NSString *nibName = @"BrowserViewerPref";
     {
       if ([NSBundle loadNibNamed: nibName owner: self] == NO)
         {
-          NSDebugLLog(@"gwspace", @"failed to load %@!", nibName);
         }
       else
         { 

@@ -9,19 +9,39 @@ name: Build Gershwin Workspace
 
 on:
   push:
-    branches: [main]
+    branches: [main, dev]
   pull_request:
   workflow_dispatch:
 
 env:
+  # Dev channel.  When this run is "for dev" -- the branch pushed is dev, the PR
+  # head is dev, or the PR targets dev -- we build against the dev side of the
+  # whole stack: gershwin-developer is cloned at its dev branch, and BRANCH=dev
+  # is handed to checkout.sh so every Gershwin repo that HAS a dev branch is
+  # used at dev (repos without one silently fall back to their default branch).
+  # gershwin-developer's dev checkout.sh auto-detects a dev run and does this by
+  # itself, but only its dev copy does -- and a repo like this one clones
+  # gershwin-developer, so before this change it got the main copy, which has no
+  # such detection.  Cloning developer at dev is therefore the half that brings
+  # the dev-aware scaffolding in, and setting BRANCH explicitly is the half that
+  # makes the dev channel a property of this workflow rather than an implicit
+  # behaviour of whichever checkout.sh we happen to have cloned.
+  # For main, master, or any other branch this is empty, which is identical to
+  # not setting it at all -- those builds behave exactly as they did before.
+  BRANCH: ${{ (github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev') && 'dev' || '' }}
+
   # Repos Checkout.sh should NOT clone:
   #   - gershwin-workspace      -> provided by this repo's checkout (symlinked)
   #   - the sibling apps        -> not needed to build corelibs + workspace
   # Everything else (libdispatch, libobjc2, tools-make, libs-base/gui/back,
   # gershwin-system, gershwin-components, gershwin-assets) is still cloned.
+  # NOTE: gershwin-systempreferences is deliberately NOT skipped.  The
+  # workspace MDIndexing prefPane links the PreferencePanes framework it
+  # installs; without it <PreferencePanes/PreferencePanes.h> is not found and
+  # the workspace build fails.  It is cloned here and built (via the
+  # workspace target, which builds systempreferences first) before workspace.
   SKIP_REPOS: >-
     gershwin-workspace
-    gershwin-systempreferences
     gershwin-eau-theme
     gershwin-terminal
     gershwin-textedit
@@ -52,10 +72,12 @@ jobs:
           run: |
             set -e
             BASE="$(pwd)"
-            git clone --depth 1 https://github.com/gershwin-desktop/gershwin-developer.git
+            # Empty unless this is a dev run; see the BRANCH comment at the top.
+            BRANCH="${{ env.BRANCH }}"
+            git clone --depth 1 ${BRANCH:+--branch "$BRANCH"} https://github.com/gershwin-desktop/gershwin-developer.git
             cd "$BASE/gershwin-developer"
             ./Library/Scripts/bootstrap.sh
-            SKIP_REPOS="${{ env.SKIP_REPOS }}" ./Library/Scripts/checkout.sh
+            SKIP_REPOS="${{ env.SKIP_REPOS }}" BRANCH="$BRANCH" ./Library/Scripts/checkout.sh
             ln -sfn "$BASE/gershwin-workspace" Library/Sources/gershwin-workspace
             make corelibs
             make workspace
@@ -77,7 +99,9 @@ jobs:
           path: gershwin-workspace
 
       - name: Clone gershwin-developer
-        run: git clone --depth 1 https://github.com/gershwin-desktop/gershwin-developer.git
+        # $BRANCH comes from the workflow env above: "dev" on a dev run, empty
+        # otherwise, in which case this is the plain default-branch clone.
+        run: git clone --depth 1 ${BRANCH:+--branch "$BRANCH"} https://github.com/gershwin-desktop/gershwin-developer.git
 
       - name: Bootstrap
         working-directory: gershwin-developer
@@ -85,6 +109,7 @@ jobs:
 
       - name: Checkout sources (skip workspace and sibling apps)
         working-directory: gershwin-developer
+        # SKIP_REPOS and BRANCH are both inherited from the workflow env above.
         run: ./Library/Scripts/checkout.sh
 
       - name: Link workspace source under test
@@ -116,7 +141,9 @@ jobs:
           path: gershwin-workspace
 
       - name: Clone gershwin-developer
-        run: git clone --depth 1 https://github.com/gershwin-desktop/gershwin-developer.git
+        # $BRANCH comes from the workflow env above: "dev" on a dev run, empty
+        # otherwise, in which case this is the plain default-branch clone.
+        run: git clone --depth 1 ${BRANCH:+--branch "$BRANCH"} https://github.com/gershwin-desktop/gershwin-developer.git
 
       - name: Bootstrap
         working-directory: gershwin-developer
@@ -124,6 +151,7 @@ jobs:
 
       - name: Checkout sources (skip workspace and sibling apps)
         working-directory: gershwin-developer
+        # SKIP_REPOS and BRANCH are both inherited from the workflow env above.
         run: ./Library/Scripts/checkout.sh
 
       - name: Link workspace source under test
@@ -157,14 +185,37 @@ jobs:
           cpu: 2
           mem: 4096
           prepare: |
-            pkg_add -I git
+            # pkg_add searches each PKG_PATH location in order. Using several
+            # mirrors keeps the job working through transient cdn.openbsd.org
+            # outages (which previously left gmake uninstalled and aborted
+            # "make corelibs" with "gmake: not found").
+            export PKG_PATH="https://ftp.openbsd.org/pub/OpenBSD/%v/packages/%a/:https://mirrors.gigenet.com/pub/OpenBSD/%v/packages/%a/:https://cdn.openbsd.org/pub/OpenBSD/%v/packages/%a/"
+            for i in 1 2 3 4 5; do
+              pkg_add -I git && exit 0
+              echo "pkg_add git failed (attempt $i), retrying..."
+              sleep 15
+            done
+            exit 1
           run: |
             set -e
             BASE="$(pwd)"
-            git clone --depth 1 https://github.com/gershwin-desktop/gershwin-developer.git
+            export PKG_PATH="https://ftp.openbsd.org/pub/OpenBSD/%v/packages/%a/:https://mirrors.gigenet.com/pub/OpenBSD/%v/packages/%a/:https://cdn.openbsd.org/pub/OpenBSD/%v/packages/%a/"
+            # Empty unless this is a dev run; see the BRANCH comment at the top.
+            BRANCH="${{ env.BRANCH }}"
+            git clone --depth 1 ${BRANCH:+--branch "$BRANCH"} https://github.com/gershwin-desktop/gershwin-developer.git
             cd "$BASE/gershwin-developer"
             ./Library/Scripts/bootstrap.sh
-            SKIP_REPOS="${{ env.SKIP_REPOS }}" ./Library/Scripts/checkout.sh
+            # bootstrap.sh tolerates per-package pkg_add failures, so a transient
+            # mirror outage can leave required build tools missing. Verify the
+            # critical ones and retry to ride out mirror flakiness.
+            for i in 1 2 3 4 5; do
+              command -v gmake >/dev/null 2>&1 && break
+              echo "gmake missing after bootstrap (attempt $i), retrying pkg_add..."
+              pkg_add -I gmake || true
+              sleep 15
+            done
+            command -v gmake >/dev/null 2>&1 || { echo "FATAL: gmake not installed"; exit 1; }
+            SKIP_REPOS="${{ env.SKIP_REPOS }}" BRANCH="$BRANCH" ./Library/Scripts/checkout.sh
             ln -sfn "$BASE/gershwin-workspace" Library/Sources/gershwin-workspace
             make corelibs
             make workspace

@@ -42,10 +42,12 @@
                   openWithTarget:(id)openWithTarget
                      infoTarget:(id)infoTarget
                 duplicateTarget:(id)duplicateTarget
+                    aliasTarget:(id)aliasTarget
                   recycleTarget:(id)recycleTarget
                     ejectTarget:(id)ejectTarget
                      openAction:(SEL)openAction
                 duplicateAction:(SEL)duplicateAction
+                   aliasAction:(SEL)aliasAction
                   recycleAction:(SEL)recycleAction
                     ejectAction:(SEL)ejectAction
                includeOpenWith:(BOOL)includeOpenWith;
@@ -126,6 +128,63 @@
 	  *nodes = vnodes;
 	}
     }
+}
+
+- (NSRange)visibleRowRange
+{
+  NSRange range = NSMakeRange(0, 0);
+  NSArray *cells = [self cells];
+
+  if (cells && [cells count])
+    {
+      NSRect vr = [self visibleRect];
+      float rowh = [self cellSize].height;
+      NSUInteger count = [cells count];
+      NSUInteger first, last, i;
+
+      if (rowh <= 0)
+        {
+          return range;
+        }
+
+      first = (NSUInteger)(vr.origin.y / rowh);
+      last = (NSUInteger)((vr.origin.y + vr.size.height) / rowh);
+
+      if (first >= count)
+        {
+          return range;
+        }
+
+      if (last >= count)
+        {
+          last = count - 1;
+        }
+
+      /* Include rows partially sticking out of the visible rect. */
+      for (i = first; i > 0; i--)
+        {
+          NSRect fr = [self cellFrameAtRow: i column: 0];
+          if (NSMaxY(fr) <= vr.origin.y)
+            {
+              break;
+            }
+          first = i - 1;
+        }
+
+      for (i = ((last + 1 < count) ? last + 1 : last); i < count; i++)
+        {
+          NSRect fr = [self cellFrameAtRow: i column: 0];
+          if (fr.origin.y >= NSMaxY(vr))
+            {
+              break;
+            }
+          last = i;
+        }
+
+      range = NSMakeRange(first, last - first + 1);
+    }
+
+  return range;
 }
 
 - (void)scrollToFirstPositionCell:(id)aCell withScrollTune:(float)vtune
@@ -389,10 +448,12 @@
                                     openWithTarget: gw
                                        infoTarget: gw
                                   duplicateTarget: [self window]
-                                    recycleTarget: [self window]
+                                    aliasTarget: [self window]
+                                      recycleTarget: [self window]
                                       ejectTarget: [self window]
                                        openAction: @selector(openSelection:)
                                   duplicateAction: @selector(duplicateFiles:)
+                                    aliasAction: @selector(makeAliasFiles:)
                                     recycleAction: @selector(recycleFiles:)
                                       ejectAction: @selector(ejectVolumes:)
                                  includeOpenWith: YES];
@@ -453,6 +514,13 @@
 	  {
 	    return;
 	  }
+      }
+
+    /* Command+Alternate drags create Alias records - mark the drag with
+     * the alias arrow so the user can tell it from a copy or symlink. */
+    if (FSNLinkDropCreatesAlias())
+      {
+	dragIcon = FSNLinkBadgedImage(dragIcon);
       }
 
     dragPoint = [self convertPoint: dragPoint fromView: nil];

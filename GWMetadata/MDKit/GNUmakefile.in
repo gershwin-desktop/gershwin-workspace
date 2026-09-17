@@ -6,6 +6,7 @@ ADDITIONAL_LIB_DIRS += @SQLITE_LIB_DIRS@
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 FRAMEWORK_NAME = MDKit
 include Version
@@ -64,3 +65,4 @@ include $(GNUSTEP_MAKEFILES)/framework.make
 include $(GNUSTEP_MAKEFILES)/aggregate.make
 
 -include GNUmakefile.postamble
+

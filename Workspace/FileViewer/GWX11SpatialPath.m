@@ -27,15 +27,13 @@
 #define GW_ATOM_SPATIAL_NAVIGATE "_GW_SPATIAL_NAVIGATE"
 
 /* Polling interval for navigation requests (seconds) */
-#define GW_NAVIGATE_POLL_INTERVAL 0.5
+#define GW_NAVIGATE_POLL_INTERVAL 1.0
 
 /* Custom X error handler to prevent crashes from BadWindow */
 static int gwX11ErrorHandler(Display *dpy, XErrorEvent *event)
 {
   char errorText[256];
   XGetErrorText(dpy, event->error_code, errorText, sizeof(errorText));
-  NSDebugLLog(@"gwspace", @"GWX11SpatialPath X11 error: %s (request %d, error %d)",
-        errorText, event->request_code, event->error_code);
   return 0;
 }
 
@@ -114,6 +112,10 @@ static void ensureErrorHandler(void)
     _pollTimer = nil;
   }
   _window = nil;
+  if (_dpy) {
+    XCloseDisplay(_dpy);
+    _dpy = NULL;
+  }
 }
 
 #pragma mark - X11 Atom Operations
@@ -126,17 +128,25 @@ static void ensureErrorHandler(void)
   return (Window)[_window windowRef];
 }
 
-/* Open a temporary display connection for X11 operations */
-- (Display *)openDisplay
+/* A persistent X connection for the atom operations.  Opening and closing an X
+ * connection per operation (the previous behaviour) adds a handshake + sync
+ * round-trip to every atom read/write; the poll tick ran one of each every
+ * 0.5s on the main thread.  One connection is reused instead, closed in
+ * invalidate/dealloc.  Only the main thread uses this object, so the
+ * connection needs no locking. */
+- (Display *)display
 {
-  ensureErrorHandler();
-  return XOpenDisplay(NULL);
+  if (_dpy == NULL) {
+    ensureErrorHandler();
+    _dpy = XOpenDisplay(NULL);
+  }
+  return _dpy;
 }
 
 /* Set _GW_SPATIAL_PATH to the given path string */
 - (void)updateAtomWithPath:(NSString *)path
 {
-  Display *dpy = [self openDisplay];
+  Display *dpy = [self display];
   if (!dpy) {
     NSLog(@"GWX11SpatialPath: Cannot open display to set atom");
     return;
@@ -144,7 +154,6 @@ static void ensureErrorHandler(void)
 
   Window xid = [self x11Window];
   if (!xid) {
-    XCloseDisplay(dpy);
     return;
   }
 
@@ -155,30 +164,22 @@ static void ensureErrorHandler(void)
   XChangeProperty(dpy, xid, atom, utf8Atom, 8, PropModeReplace,
                   (unsigned char *)cpath, (int)strlen(cpath));
   XSync(dpy, False);
-
-  NSDebugLLog(@"gwspace", @"GWX11SpatialPath: Set %s on window 0x%lx to '%@'",
-              GW_ATOM_SPATIAL_PATH, (unsigned long)xid, path);
-
-  XCloseDisplay(dpy);
 }
 
 /* Delete _GW_SPATIAL_NAVIGATE to clear a stale request */
 - (void)clearNavigateAtom
 {
-  Display *dpy = [self openDisplay];
+  Display *dpy = [self display];
   if (!dpy) return;
 
   Window xid = [self x11Window];
   if (!xid) {
-    XCloseDisplay(dpy);
     return;
   }
 
   Atom atom = XInternAtom(dpy, GW_ATOM_SPATIAL_NAVIGATE, False);
   XDeleteProperty(dpy, xid, atom);
   XSync(dpy, False);
-
-  XCloseDisplay(dpy);
 }
 
 /* Poll for _GW_SPATIAL_NAVIGATE requests from the WM */
@@ -189,12 +190,15 @@ static void ensureErrorHandler(void)
     return;
   }
 
-  Display *dpy = [self openDisplay];
-  if (!dpy) return;
+  Display *dpy = [self display];
+  if (!dpy) {
+    /* Cannot reach the X server; stop polling rather than hammering it. */
+    [timer invalidate];
+    return;
+  }
 
   Window xid = [self x11Window];
   if (!xid) {
-    XCloseDisplay(dpy);
     return;
   }
 
@@ -214,11 +218,9 @@ static void ensureErrorHandler(void)
   }
 
   XSync(dpy, False);
-  XCloseDisplay(dpy);
 
   if (targetPath) {
     if ([targetPath length] > 0) {
-      NSDebugLLog(@"gwspace", @"GWX11SpatialPath: Navigate request to '%@'", targetPath);
       [self navigateToPath:targetPath];
     }
     RELEASE(targetPath);

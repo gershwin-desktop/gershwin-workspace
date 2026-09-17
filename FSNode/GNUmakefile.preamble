@@ -1,3 +1,4 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 # Additional flags to pass to the preprocessor
 ADDITIONAL_CPPFLAGS += 
@@ -19,4 +20,5 @@ ADDITIONAL_INCLUDE_DIRS += -IExtendedInfo -I..
 ADDITIONAL_INSTALL_DIRS +=
 
 LIBRARIES_DEPEND_UPON += -lm
+
 

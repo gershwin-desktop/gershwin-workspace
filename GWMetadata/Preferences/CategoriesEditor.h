@@ -48,6 +48,10 @@
 
 - (void)revertChanges;
 
+- (NSDictionary *)savedCategories;
+
+- (void)showSavedCategories;
+
 - (void)tile;
 
 @end

@@ -121,15 +121,12 @@
     [checkTask waitUntilExit];
     
     if ([checkTask terminationStatus] == 0) {
-      NSDebugLLog(@"gwspace", @"SFTPMount: sshfs is available");
       return YES;
     } else {
-      NSDebugLLog(@"gwspace", @"SFTPMount: sshfs not found in PATH");
       return NO;
     }
   }
   @catch (NSException *exception) {
-    NSDebugLLog(@"gwspace", @"SFTPMount: Error checking for sshfs: %@", exception);
     return NO;
   }
   @finally {
@@ -148,14 +145,11 @@
     
     BOOL available = ([checkTask terminationStatus] == 0);
     if (available) {
-      NSDebugLLog(@"gwspace", @"SFTPMount: sshpass is available");
     } else {
-      NSDebugLLog(@"gwspace", @"SFTPMount: sshpass not found");
     }
     return available;
   }
   @catch (NSException *exception) {
-    NSDebugLLog(@"gwspace", @"SFTPMount: Error checking for sshpass: %@", exception);
     return NO;
   }
   @finally {
@@ -164,6 +158,64 @@
 }
 
 
+- (NSString *)resolveMdnsHostname:(NSString *)aHostname
+{
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__)
+  if (!aHostname || ![aHostname hasSuffix:@".local"]) {
+    return nil;
+  }
+
+  NSTask *dnsTask = [[NSTask alloc] init];
+  NSPipe *outputPipe = [NSPipe pipe];
+  NSFileHandle *readHandle = [outputPipe fileHandleForReading];
+
+  [dnsTask setLaunchPath:@"/usr/bin/dns-sd"];
+  [dnsTask setArguments:@[@"-q", aHostname]];
+  [dnsTask setStandardOutput:outputPipe];
+  [dnsTask setStandardError:outputPipe];
+
+  @try {
+    [dnsTask launch];
+
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
+      if ([dnsTask isRunning]) {
+        [dnsTask terminate];
+      }
+    });
+
+    [dnsTask waitUntilExit];
+
+    NSData *outputData = [readHandle readDataToEndOfFile];
+    NSString *output = [[NSString alloc] initWithData:outputData encoding:NSUTF8StringEncoding];
+
+    NSArray *lines = [output componentsSeparatedByString:@"\n"];
+    for (NSString *line in lines) {
+      NSArray *parts = [line componentsSeparatedByString:@" "];
+      if (parts.count >= 8) {
+        NSString *name = [parts objectAtIndex:5];
+        NSString *type = [parts objectAtIndex:6];
+        NSString *rdata = [parts objectAtIndex:7];
+        if ([name isEqualToString:aHostname] && [type isEqualToString:@"Addr"] && [rdata length] > 0) {
+          [dnsTask release];
+          [output release];
+          return rdata;
+        }
+      }
+    }
+  }
+  @catch (NSException *exception) {
+    NSLog(@"SFTPMount: dns-sd resolution failed: %@", exception);
+  }
+  @finally {
+    if ([dnsTask isRunning]) {
+      [dnsTask terminate];
+    }
+    [dnsTask release];
+  }
+#endif
+  return nil;
+}
+
 - (NSString *)detectHostKeyAlgorithmsForHost:(NSString *)host port:(int)p
 {
   if (!host || [host length] == 0) return nil;
@@ -171,7 +223,6 @@
   NSString *sshKeyscan = @"/usr/bin/ssh-keyscan";
   NSFileManager *fm = [NSFileManager defaultManager];
   if (![fm isExecutableFileAtPath:sshKeyscan]) {
-    NSDebugLLog(@"gwspace", @"SFTPMount: ssh-keyscan not available at %@, skipping detection", sshKeyscan);
     return nil;
   }
 
@@ -251,7 +302,6 @@
     return joined;
   }
   @catch (NSException *e) {
-    NSDebugLLog(@"gwspace", @"SFTPMount: Exception while running ssh-keyscan: %@", e);
     [task release];
     return nil;
   }
@@ -373,7 +423,6 @@
   /* Check if mount point exists and is a directory */
   BOOL isDir = NO;
   if (![fm fileExistsAtPath:mpath isDirectory:&isDir] || !isDir) {
-    NSDebugLLog(@"gwspace", @"SFTPMount: Mount point %@ does not exist or is not a directory", mpath);
     return NO;
   }
   
@@ -381,7 +430,6 @@
   NSError *listError = nil;
   [fm contentsOfDirectoryAtPath:mpath error:&listError];
   if (listError) {
-    NSDebugLLog(@"gwspace", @"SFTPMount: Cannot access mount point %@: %@", mpath, listError);
     return NO;
   }
   
@@ -392,7 +440,6 @@
                                                        encoding:NSUTF8StringEncoding 
                                                           error:&readError];
   if (!mountsContent) {
-    NSDebugLLog(@"gwspace", @"SFTPMount: Could not read /proc/mounts: %@", readError);
     /* If we can access the mount point, assume it's correct even if we can't check /proc/mounts */
     return YES;
   }
@@ -416,21 +463,17 @@
         /* Verify the source contains the right hostname and username */
         NSString *expectedSourcePattern = [NSString stringWithFormat:@"%@@%@:", user, expectedHostname];
         if ([source hasPrefix:expectedSourcePattern]) {
-          NSDebugLLog(@"gwspace", @"SFTPMount: Mount point %@ is correctly mounted to %@", mpath, expectedHostname);
           return YES;
         } else {
-          NSDebugLLog(@"gwspace", @"SFTPMount: Mount point %@ is mounted but to different server: %@", mpath, source);
           return NO;
         }
       } else {
-        NSDebugLLog(@"gwspace", @"SFTPMount: Mount point %@ is mounted but not via sshfs (type: %@)", mpath, fstype);
         return NO;
       }
     }
   }
   
   /* Mount point not found in /proc/mounts - it's not actually mounted */
-  NSDebugLLog(@"gwspace", @"SFTPMount: Mount point %@ is not mounted", mpath);
   return NO;
 }
 
@@ -468,20 +511,25 @@
   if (!hostname) {
     return [SFTPMountResult failureWithError:@"No hostname available"];
   }
-  
+
   /* Check if sshfs is available */
   if (![self isSshfsAvailable]) {
     return [SFTPMountResult failureWithError:@"sshfs is not installed"];
   }
-  
-  NSDebugLLog(@"gwspace", @"SFTPMount: Mounting %@:%@ at %@", hostname, remotePath ?: @"~", mountPoint);
-  NSDebugLLog(@"gwspace", @"SFTPMount: Using username: %@, port: %d", username, port);
-  
+
+  /* Resolve .local hostnames on BSD using dns-sd.
+     sshfs needs an IP address for .local hostnames since the system's
+     resolver (gethostbyname/etc) may not support mDNS without nss-mdns.
+     We keep hostname for SSH config (host key verification) but use
+     resolved IP for the sshfs source argument. */
+  NSString *resolvedIP = [self resolveMdnsHostname:hostname];
+  NSString *sshfsHostname = (resolvedIP != nil) ? resolvedIP : hostname;
+
   /* Build sshfs arguments */
   NSMutableArray *args = [NSMutableArray array];
-  
-  /* Build connection string */
-  NSString *connectionHost = [NSString stringWithFormat:@"%@@%@", username, hostname];
+
+  /* Build connection string - use resolved IP for sshfs, original hostname for SSH config */
+  NSString *connectionHost = [NSString stringWithFormat:@"%@@%@", username, sshfsHostname];
   NSString *sshfsSource;
   
   if (remotePath && [remotePath length] > 0) {
@@ -502,20 +550,30 @@
   /* Keep sshfs in foreground mode so NSTask can monitor it */
   [args addObject:@"-f"];
   
-  /* Add verbose flags for debugging */
+  /* Add verbose flags for debugging.
+     Linux sshfs uses -v (stackable for more verbosity).
+     BSD/FreeBSD fuse uses -d for debug/verbose output.
+     On Linux -d also enables debug but has different semantics, so we
+     use -v -v -v on Linux and -d on BSD. */
+#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__)
+  [args addObject:@"-d"];
+#else
   [args addObject:@"-v"];
   [args addObject:@"-v"];
   [args addObject:@"-v"];
+#endif
   
   /* Build SSH options via a temporary SSH config file.
      sshfs splits ALL -o values on commas, which breaks SSH options that
      contain comma-separated lists (PreferredAuthentications, Ciphers,
      KexAlgorithms, MACs, HostKeyAlgorithms, etc.).
-     The reliable solution is to write options to a temp SSH config file
+      The reliable solution is to write options to a temp SSH config file
      and use ssh_command to point ssh at it. */
 
-  /* Detect server host key algorithms */
-  NSString *detectedAlgs = [self detectHostKeyAlgorithmsForHost:hostname port:port];
+  /* Detect server host key algorithms - use resolved IP if available,
+     since .local hostnames may not be resolvable by system's standard resolver */
+  NSString *keyscanHost = (resolvedIP != nil) ? resolvedIP : hostname;
+  NSString *detectedAlgs = [self detectHostKeyAlgorithmsForHost:keyscanHost port:port];
   NSString *hostKeyAlgs;
   if (detectedAlgs && [detectedAlgs length] > 0) {
     hostKeyAlgs = [NSString stringWithFormat:@"+%@", detectedAlgs];
@@ -562,7 +620,6 @@
                 encoding:NSUTF8StringEncoding
                    error:&configWriteError];
   if (configWriteError) {
-    NSDebugLLog(@"gwspace", @"SFTPMount: Failed to write SSH config file: %@", configWriteError);
     /* Fall back to basic options without comma-containing values */
     [args addObject:@"-o"];
     [args addObject:@"StrictHostKeyChecking=no"];
@@ -576,10 +633,8 @@
     /* Use ssh_command to pass the config file to ssh */
     [args addObject:@"-o"];
     [args addObject:[NSString stringWithFormat:@"ssh_command=ssh -F %@", tempSSHConfigFile]];
-    NSDebugLLog(@"gwspace", @"SFTPMount: Using SSH config: %@", tempSSHConfigFile);
   }
   
-  NSDebugLLog(@"gwspace", @"SFTPMount: sshfs command: sshfs %@", [args componentsJoinedByString:@" "]);
   
   /* Set up task */
   sshfsTask = [[NSTask alloc] init];
@@ -595,7 +650,6 @@
     /* NSTask will retain the file handle, do not retain it ourselves */
     [sshfsTask setStandardError:logHandle];
     [sshfsTask setStandardOutput:logHandle];
-    NSDebugLLog(@"gwspace", @"SFTPMount: Logging to: %@", sshfsLogPath);
   }
   
   /* Use sshpass if password is provided AND non-empty */
@@ -604,7 +658,6 @@
       return [SFTPMountResult failureWithError:@"sshpass is not installed. Cannot use password authentication. Please set up SSH keys instead."];
     }
     
-    NSDebugLLog(@"gwspace", @"SFTPMount: Using sshpass for password authentication");
     
     /* Create temporary password file */
     tempPasswordFile = [[NSTemporaryDirectory() stringByAppendingPathComponent:
@@ -616,7 +669,6 @@
                     error:&writeError];
     
     if (writeError) {
-      NSDebugLLog(@"gwspace", @"SFTPMount: Failed to write password file: %@", writeError);
       return [SFTPMountResult failureWithError:[NSString stringWithFormat:@"Failed to write password: %@", writeError]];
     }
     
@@ -634,7 +686,6 @@
     [sshfsTask setArguments:sshpassArgs];
   } else {
     /* No password - use SSH key authentication */
-    NSDebugLLog(@"gwspace", @"SFTPMount: Using SSH key authentication");
     /* Use /usr/bin/env so sshfs is resolved from $PATH */
     [sshfsTask setLaunchPath:@"/usr/bin/env"];
     NSMutableArray *envArgs = [NSMutableArray arrayWithObject:@"sshfs"];
@@ -648,7 +699,6 @@
   
   NS_DURING
     {
-      NSDebugLLog(@"gwspace", @"SFTPMount: Launching task...");
       
       /* If mount point already has something mounted, unmount it first */
       struct statfs statbuf;
@@ -665,7 +715,6 @@
                                                               encoding:NSUTF8StringEncoding 
                                                                  error:nil];
           if ([mountsContent rangeOfString:mountPoint].location != NSNotFound) {
-            NSDebugLLog(@"gwspace", @"SFTPMount: Mount point %@ is already mounted, attempting to unmount", mountPoint);
             NSTask *umountTask = [[NSTask alloc] init];
             [umountTask setLaunchPath:@"/usr/bin/fusermount"];
             [umountTask setArguments:@[@"-u", mountPoint]];
@@ -673,12 +722,9 @@
               [umountTask launch];
               [umountTask waitUntilExit];
               if ([umountTask terminationStatus] == 0) {
-                NSDebugLLog(@"gwspace", @"SFTPMount: Successfully unmounted old mount at %@", mountPoint);
               } else {
-                NSDebugLLog(@"gwspace", @"SFTPMount: Failed to unmount old mount at %@", mountPoint);
               }
             } @catch (NSException *e) {
-              NSDebugLLog(@"gwspace", @"SFTPMount: Exception unmounting: %@", e);
             }
             [umountTask release];
             /* Wait a moment for unmount to complete */
@@ -688,10 +734,7 @@
       }
       
       [sshfsTask launch];
-      int taskPid = [sshfsTask processIdentifier];
-      NSDebugLLog(@"gwspace", @"SFTPMount: Task launched with PID: %d", taskPid);
       
-      NSDebugLLog(@"gwspace", @"SFTPMount: Waiting for mount...");
       
       /* Wait up to 10 seconds for mount to become accessible */
       int maxAttempts = 20;
@@ -704,16 +747,13 @@
         
         /* Check if process is still running */
         if (![sshfsTask isRunning]) {
-          NSDebugLLog(@"gwspace", @"SFTPMount: Process exited unexpectedly!");
           status = [sshfsTask terminationStatus];
-          NSDebugLLog(@"gwspace", @"SFTPMount: Exit status: %d", status);
           
           /* Close handle to flush output */
           if (logHandle) {
             @try {
               [logHandle closeFile];
             } @catch (NSException *e) {
-              NSDebugLLog(@"gwspace", @"SFTPMount: Exception closing log handle: %@", e);
             }
             logHandle = nil;
           }
@@ -726,7 +766,6 @@
           if (!errorString || [errorString length] == 0) {
             errorString = @"sshfs exited unexpectedly with no error output";
           }
-          NSDebugLLog(@"gwspace", @"SFTPMount: Error output:\n%@", errorString);
           break;
         }
         
@@ -735,22 +774,18 @@
         [fm contentsOfDirectoryAtPath:mountPoint error:&listError];
         
         if (!listError) {
-          NSDebugLLog(@"gwspace", @"SFTPMount: Mount successful after %d attempts", attempt);
           mounted = YES;
           status = 0;
         } else {
-          NSDebugLLog(@"gwspace", @"SFTPMount: Mount attempt %d/%d - mount not ready", attempt, maxAttempts);
         }
       }
       
       if (!mounted && [sshfsTask isRunning]) {
-        NSDebugLLog(@"gwspace", @"SFTPMount: Mount did not become accessible, but process is running");
         status = 0;
       }
     }
   NS_HANDLER
     {
-      NSDebugLLog(@"gwspace", @"SFTPMount: Exception during launch: %@", localException);
       [fm removeItemAtPath:mountPoint error:nil];
       return [SFTPMountResult failureWithError:[NSString stringWithFormat:@"Failed to launch: %@", 
                                                                            [localException reason]]];
@@ -759,10 +794,8 @@
   
   /* Check result */
   if (status == 0 && [sshfsTask isRunning]) {
-    NSDebugLLog(@"gwspace", @"SFTPMount: Successfully mounted at %@", mountPoint);
     return [SFTPMountResult successWithPath:mountPoint pid:[sshfsTask processIdentifier]];
   } else {
-    NSDebugLLog(@"gwspace", @"SFTPMount: Mount failed - status: %d, running: %d", status, [sshfsTask isRunning]);
     
     if (!errorString) {
       errorString = @"Mount failed - unable to read error details";
@@ -774,7 +807,6 @@
         [sshfsTask terminate];
         [sshfsTask waitUntilExit];
       } @catch (NSException *e) {
-        NSDebugLLog(@"gwspace", @"SFTPMount: Exception terminating task: %@", e);
       }
     }
     
@@ -786,7 +818,6 @@
       [umountTask launch];
       [umountTask waitUntilExit];
     } @catch (NSException *e) {
-      NSDebugLLog(@"gwspace", @"SFTPMount: Cleanup exception: %@", e);
     }
     [umountTask release];
     
@@ -808,7 +839,6 @@
 
 - (BOOL)unmountPath:(NSString *)path
 {
-  NSDebugLLog(@"gwspace", @"SFTPMount: Unmounting %@", path);
   
   NSTask *umountTask = [[NSTask alloc] init];
   @try {
@@ -818,16 +848,13 @@
     [umountTask waitUntilExit];
     
     if ([umountTask terminationStatus] == 0) {
-      NSDebugLLog(@"gwspace", @"SFTPMount: Successfully unmounted %@", path);
       [[NSFileManager defaultManager] removeItemAtPath:path error:nil];
       return YES;
     } else {
-      NSDebugLLog(@"gwspace", @"SFTPMount: Unmount failed with status %d", [umountTask terminationStatus]);
       return NO;
     }
   }
   @catch (NSException *exception) {
-    NSDebugLLog(@"gwspace", @"SFTPMount: Unmount exception: %@", exception);
     return NO;
   }
   @finally {

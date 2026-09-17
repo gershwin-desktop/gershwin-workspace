@@ -126,6 +126,10 @@ extern "C" {
 - (void)setEntry:(DSStoreEntry *)entry;
 - (void)removeEntryForFilename:(NSString *)filename code:(NSString *)code;
 - (void)removeAllEntriesForFilename:(NSString *)filename;
+/* Remove every entry for @p filename whose code is in @p codes, keeping all
+ * other codes (unknown or not owned by the caller).  Used for a cooperative
+ * merge where only the caller's known records are replaced. */
+- (void)removeEntriesForFilename:(NSString *)filename codes:(NSSet *)codes;
 - (NSArray *)allFilenames;
 - (NSArray *)allCodesForFilename:(NSString *)filename;
 
@@ -189,6 +193,17 @@ extern "C" {
 - (NSArray *)visibleColumnsForDirectory;
 - (void)setVisibleColumnsForDirectory:(NSArray *)columns;
 
+/* Replace the list-view settings record (lsvp) wholesale. */
+- (void)setListViewSettings:(NSDictionary *)settings;
+
+/* Window geometry.  Browser windows store their frame in the "bwsp" binary
+ * plist (WindowBounds + SidebarWidth); legacy/spatial windows in the "fwi0"
+ * 16-byte record (top/left/bottom/right + 4CC view style + flags). */
+- (NSDictionary *)listViewSettingsForDirectory;
+- (NSDictionary *)browserWindowDictionaryForDirectory;
+- (NSRect)browserWindowBoundsForDirectory;
+- (NSRect)windowGeometryRectForDirectory;
+
 // File metadata
 - (NSString *)commentsForFilename:(NSString *)filename;
 - (void)setCommentsForFilename:(NSString *)filename comments:(NSString *)comments;
@@ -216,7 +231,7 @@ extern "C" {
                              iconHeight:(CGFloat)iconHeight;
 
 // Internal methods
-- (void)readBTreeNode:(DSBuddyBlock *)block address:(uint32_t)address isLeaf:(BOOL)isLeaf;
+- (void)readBTreeNode:(DSBuddyBlock *)block;
 
 @end
 

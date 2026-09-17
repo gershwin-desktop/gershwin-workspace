@@ -1,3 +1,4 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 # Additional flags to pass to the preprocessor
 ADDITIONAL_CPPFLAGS += 
@@ -26,4 +27,5 @@ ADDITIONAL_TOOL_LIBS +=
 
 # Additional directories to be created during installation
 ADDITIONAL_INSTALL_DIRS +=
+
 

@@ -194,6 +194,13 @@
  */
 - (void)resetToDefaults;
 
+/* Merge fields that the receiver does not have set (has* == NO / nil) from
+ * @p other.  Used when persisting a partial DSStoreInfo (e.g. icon positions
+ * only, or label colors only) into the per-volume cache so that fields the
+ * caller did not touch (window geometry, view style, ...) are preserved
+ * rather than clobbered. */
+- (void)mergeMissingFieldsFromInfo:(DSStoreInfo *)other;
+
 // Icon position access
 - (DSStoreIconInfo *)iconInfoForFilename:(NSString *)filename;
 - (NSDictionary *)allIconInfo;
@@ -209,11 +216,74 @@
  */
 - (void)setIconInfo:(DSStoreIconInfo *)iconInfo forFilename:(NSString *)filename;
 
+/* Replace the receiver's per-file icon positions with @p livePositions
+ * (filename -> NSValue(NSPoint) iloc), dropping any position the caller no
+ * longer displays.  Used to persist the live on-screen layout on window close
+ * rather than re-writing whatever a stale .DS_Store contained. */
+- (void)setLiveIconPositions:(NSDictionary *)livePositions;
+
+/* === Shared per-file entry helpers (used by DSStoreInfo and GWVolumeCache) === */
+
+/* Decode the Iloc/lclr/cmmt entries for @p filename from @p store into a
+ * DSStoreIconInfo (named @p bareName), or nil if the file has none of them. */
++ (DSStoreIconInfo *)iconInfoForFile:(NSString *)filename
+                            bareName:(NSString *)bareName
+                           fromStore:(DSStore *)store;
+
+/* Write a file's Iloc/lclr/cmmt entries into @p store (via setEntry:). */
++ (void)writeIconInfo:(DSStoreIconInfo *)ii
+             forFile:(NSString *)filename
+             toStore:(DSStore *)store;
+
+/* Prune per-file entries in @p store whose filename is not an on-disk child
+ * of @p directoryPath and not equal to @p keepPath (the directory's own
+ * record).  Drops ghost entries (renamed/removed files, or localized names a
+ * foreign Finder wrote) that would collide with live files on reopen.  No-op
+ * when @p directoryPath is not a real directory. */
++ (void)pruneNonChildEntriesInStore:(DSStore *)store
+                       forDirectory:(NSString *)directoryPath
+                           keepPath:(NSString *)keepPath;
+
+/* The names of the immediate children of @p directoryPath, or nil when it is
+ * not a readable directory.  Shared by the per-file ghost filtering. */
++ (NSSet *)childrenOfDirectory:(NSString *)directoryPath;
+
+/* Write every persisted setting of @p info into @p store under the given
+ * @p key: directory-level entries (view style, icon size, arrangement, label
+ * position, grid spacing, background, sidebar, window geometry bwsp/fwi0, list
+ * view lsvp) plus the per-file Iloc/lclr/cmmt entries.  Shared by
+ * -saveToPath: (key ".") and GWVolumeCache -writeInfo: (key = dir path). */
++ (void)writeStoreEntriesForInfo:(DSStoreInfo *)info
+                             key:(NSString *)key
+                         toStore:(DSStore *)store;
+
+/* The directory-level 4CC codes Workspace owns and may replace when writing
+ * under a given key.  Used to drop only the caller's records (not unknown
+ * Finder codes) before a cooperative merge write. */
++ (NSSet *)ownedDirectoryCodes;
+
 // Coordinate conversion utilities for .DS_Store interoperability
+/* A window rect as stored in .DS_Store (origin top-left, y measured down)
+   converted to GNUstep screen coordinates (origin bottom-left).  Everything
+   that loads a stored rect goes through this, so the receiver's windowFrame
+   is always in GNUstep coordinates and the flip back to .DS_Store happens
+   once, at save time. */
++ (NSRect)gnustepRectFromDSStoreRect:(NSRect)dsRect;
+
 - (NSRect)gnustepWindowFrameForScreen:(NSScreen *)screen;
 - (NSPoint)gnustepPositionForDSStorePoint:(NSPoint)dsPoint 
                            viewHeight:(CGFloat)viewHeight 
                            iconHeight:(CGFloat)iconHeight;
+
+/* Inverse of -gnustepWindowFrameForScreen:: express the receiver's GNUstep
+ * window frame as the .DS_Store content-area rect (origin top-left, y is the
+ * top edge measured downward from the top of the screen). */
+- (NSRect)dsStoreWindowFrameForScreen:(NSScreen *)screen;
+
+/* The main screen, or nil when the window server is unavailable (e.g. a
+ * headless test run).  Geometry conversion falls back to a zero-height screen
+ * in that case, which still round-trips because read and write share it. */
++ (NSScreen *)safeMainScreen;
 
 // Sort column conversion (DS_Store column name -> FSNInfoType)
 // Returns -1 if column name not recognized
@@ -227,6 +297,5 @@
 
 // Debugging
 - (NSString *)debugDescription;
-- (void)logAllInfo;
 
 @end

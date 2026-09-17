@@ -1,3 +1,4 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # Additional flags to pass to the preprocessor
 ADDITIONAL_CPPFLAGS +=
 
@@ -15,4 +16,5 @@ ADDITIONAL_LDFLAGS +=
 
 # Additional library directories the linker should search
 ADDITIONAL_LIB_DIRS += 
+
 

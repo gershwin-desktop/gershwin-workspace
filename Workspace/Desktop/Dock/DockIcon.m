@@ -34,6 +34,8 @@
 #import "GWDesktopManager.h"
 #import "Workspace.h"
 #import "FSNFunctions.h"
+#import "X11AppSupport.h"
+#import "GWProcessMonitor.h"
 
 /* Forward declaration for loadLabelColorFromMetadata inherited from FSNIcon */
 @interface FSNIcon (DockIconForwardDecl)
@@ -41,6 +43,13 @@
 @end
 
 @implementation DockIcon
+
+/* A dock tile is wider than the image it holds, and all of it stands for the
+   application: a file dropped anywhere on the tile is opened with it. */
+- (BOOL)draggingPointIsOnNode:(id <NSDraggingInfo>)sender
+{
+  return YES;
+}
 
 - (void)dealloc
 {
@@ -50,6 +59,10 @@
     [bounceTimer invalidate];
     bounceTimer = nil;
   }
+
+  if (appPID > 0)
+    [[GWProcessMonitor sharedMonitor] removePID: appPID];
+
   RELEASE (appName);
   RELEASE (highlightColor);
   RELEASE (darkerColor);
@@ -100,6 +113,9 @@
     launched = NO;
     apphidden = NO;
     appPID = 0;
+    isX11OnlyApp = NO;
+    lastWindowCheck = 0;
+    windowCheckResult = NO;
     isDragMountpointOnly = NO;
     ejectIcon = nil;
 
@@ -130,6 +146,11 @@
   }
 
   return self;
+}
+
+- (NSString *)path
+{
+  return [node path];
 }
 
 - (NSString *)appName
@@ -206,6 +227,16 @@
   return (isWsIcon || isTrashIcon);
 }
 
+- (void)decorate
+{
+  if (isTrashIcon)
+    {
+      return;
+    }
+
+  [super decorate];
+}
+
 - (void)setDocked:(BOOL)value
 {
   docked = value;
@@ -237,12 +268,229 @@
 
 - (void)setAppPID:(pid_t)pid
 {
+  if (pid == appPID)
+    return;
+
+  lastWindowCheck = 0;
+
+  /* Unregister old PID from the kernel process monitor */
+  if (appPID > 0)
+    [[GWProcessMonitor sharedMonitor] removePID: appPID];
+
   appPID = pid;
+
+  if (pid > 0)
+    {
+      [self setToolTip: [NSString stringWithFormat: @"%@ [%d]", appName, pid]];
+
+      /* Register with kernel process monitor so we get notified the
+       * instant the process exits, rather than relying on poll-based
+       * kill() checks or NSWorkspace notifications. */
+      __block DockIcon *weakSelf = self;
+      [[GWProcessMonitor sharedMonitor] addPID: pid
+                                        token: appName
+                                     callback: ^(pid_t exitedPid, id token) {
+        [weakSelf setAppPID: 0];
+        /* A pinned icon must survive its app quitting - that is the whole
+         * point of pinning.  The kernel monitor only watches the registered
+         * PID, and apps launched through a shell-script .app wrapper (e.g.
+         * Chromium: Brave Origin.app) never get a matching appTerminated:
+         * call, so without this guard the monitor would yank the pinned icon
+         * out of the Dock the moment the app quits.  Mirror the docked-icon
+         * handling of appTerminated: - keep the icon, clear its running
+         * state. */
+        if (([weakSelf isDocked] == NO) && ([weakSelf isSpecialIcon] == NO)) {
+          [(Dock *)container removeIcon: weakSelf];
+        } else {
+          [weakSelf setAppHidden: NO];
+          [weakSelf setLaunched: NO];
+        }
+      }];
+    }
+  else
+    {
+      [self setToolTip: appName];
+    }
 }
 
 - (pid_t)appPID
 {
   return appPID;
+}
+
+- (void)setIsX11OnlyApp:(BOOL)value
+{
+  isX11OnlyApp = value;
+}
+
+- (BOOL)isX11OnlyApp
+{
+  return isX11OnlyApp;
+}
+
+- (BOOL)hasVisibleWindows
+{
+  if (launched == NO)
+    return NO;
+
+  if (isX11OnlyApp == NO)
+    return YES;
+
+  if (appPID <= 0)
+    return YES;
+
+  NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+  if ((now - lastWindowCheck) < 1.0)
+    return windowCheckResult;
+
+  lastWindowCheck = now;
+  windowCheckResult = [[GWX11WindowManager sharedManager] hasWindowsForPID: appPID];
+  return windowCheckResult;
+}
+
+- (void)refreshLaunchedState
+{
+  /* Runs on the main thread.  The X scans themselves run on a worker thread
+   * (see refreshLaunchedStateAsync) so the main thread never blocks in a
+   * synchronous X round-trip; that is what wedges the app under window churn
+   * (the X server gets stuck writing accumulated events to the app's own
+   * connection while the main thread waits for a reply on a scan connection). */
+}
+
+- (void)refreshLaunchedStateAsync
+{
+  /* Capture the current state on the main thread, then hand it to a worker
+   * thread that does the X scans.  The worker's result is applied back here. */
+  NSDictionary *inputs = [NSDictionary dictionaryWithObjectsAndKeys:
+    [NSNumber numberWithBool: isX11OnlyApp], @"x11",
+    [NSNumber numberWithInt: (int)appPID], @"pid",
+    [NSNumber numberWithBool: launched], @"launched", nil];
+  [NSThread detachNewThreadSelector: @selector(refreshLaunchedStateWorker:)
+                           toTarget: self
+                         withObject: inputs];
+}
+
+/* Worker thread: run the X window scans and return the desired new state.
+ * Only immutable inputs are read (appName plus the captured snapshot), and the
+ * GWX11WindowManager opens its own X connection per call, so this is safe off
+ * the main thread. */
+- (void)refreshLaunchedStateWorker:(NSDictionary *)inputs
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  BOOL x11 = [[inputs objectForKey: @"x11"] boolValue];
+  pid_t pid = (pid_t)[[inputs objectForKey: @"pid"] intValue];
+  BOOL wasLaunched = [[inputs objectForKey: @"launched"] boolValue];
+
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  BOOL wantX11 = x11;
+  pid_t wantPID = pid;
+  BOOL wantLaunched = wasLaunched;
+  BOOL hasWindows = NO;
+
+  if (wantX11 == NO)
+    {
+      /* Auto-discover X11 apps that were running before dock restart. */
+      if (wasLaunched && wantPID <= 0)
+        {
+          NSArray *windows = [wm windowsMatchingName: appName];
+          if ([windows count] > 0)
+            {
+              wantX11 = YES;
+              wantPID = [[windows objectAtIndex: 0] ownerPID];
+            }
+        }
+      if (wantX11 == NO)
+        {
+          NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
+            [NSNumber numberWithBool: NO], @"x11",
+            [NSNumber numberWithInt: 0], @"pid",
+            [NSNumber numberWithBool: wasLaunched], @"launched",
+            [NSNumber numberWithBool: NO], @"changed",
+            [NSNumber numberWithBool: NO], @"haswindows", nil];
+          [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
+                                 withObject: result waitUntilDone: NO];
+          [pool drain];
+          return;
+        }
+    }
+
+  if (wantPID <= 0)
+    {
+      NSArray *windows = [wm windowsMatchingName: appName];
+      if ([windows count] > 0)
+        {
+          wantX11 = YES;
+          wantPID = [[windows objectAtIndex: 0] ownerPID];
+        }
+      else
+        {
+          wantLaunched = NO;
+          NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
+            [NSNumber numberWithBool: YES], @"x11",
+            [NSNumber numberWithInt: 0], @"pid",
+            [NSNumber numberWithBool: wantLaunched], @"launched",
+            [NSNumber numberWithBool: (wantLaunched != wasLaunched)], @"changed",
+            [NSNumber numberWithBool: NO], @"haswindows", nil];
+          [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
+                                 withObject: result waitUntilDone: NO];
+          [pool drain];
+          return;
+        }
+    }
+
+  hasWindows = [wm hasWindowsForPID: wantPID];
+  if (wasLaunched && !hasWindows)
+    {
+      NSArray *windows = [wm windowsMatchingName: appName];
+      if ([windows count] > 0)
+        {
+          wantPID = [[windows objectAtIndex: 0] ownerPID];
+          hasWindows = [wm hasWindowsForPID: wantPID];
+        }
+      if (!hasWindows)
+        wantLaunched = NO;
+    }
+  else if (!wasLaunched && hasWindows)
+    {
+      wantLaunched = YES;
+    }
+
+  NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
+    [NSNumber numberWithBool: wantX11], @"x11",
+    [NSNumber numberWithInt: (int)wantPID], @"pid",
+    [NSNumber numberWithBool: wantLaunched], @"launched",
+    [NSNumber numberWithBool: (wantLaunched != wasLaunched || wantPID != pid)], @"changed",
+    [NSNumber numberWithBool: hasWindows], @"haswindows", nil];
+  [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
+                         withObject: result waitUntilDone: NO];
+  [pool drain];
+}
+
+/* Main thread: apply the worker's desired state. */
+- (void)applyLaunchedStateSnapshot:(NSDictionary *)snap
+{
+  BOOL wantX11 = [[snap objectForKey: @"x11"] boolValue];
+  pid_t wantPID = (pid_t)[[snap objectForKey: @"pid"] intValue];
+  BOOL wantLaunched = [[snap objectForKey: @"launched"] boolValue];
+  BOOL changed = [[snap objectForKey: @"changed"] boolValue];
+
+  /* Keep the hasVisibleWindows cache fresh with the worker's scan result. */
+  windowCheckResult = [[snap objectForKey: @"haswindows"] boolValue];
+  lastWindowCheck = [NSDate timeIntervalSinceReferenceDate];
+
+  if (wantX11 != isX11OnlyApp)
+    isX11OnlyApp = wantX11;
+  if (wantPID != appPID)
+    [self setAppPID: wantPID];
+  if (wantLaunched != launched)
+    {
+      launched = wantLaunched;
+      [self setNeedsDisplay: YES];
+    }
+  else if (changed)
+    {
+      [self setNeedsDisplay: YES];
+    }
 }
 
 - (void)setAppHidden:(BOOL)value
@@ -263,6 +511,7 @@
   isBouncing = YES;
   bounceVelocity = 6.32;  /* Initial upward velocity for 20px bounce height */
   bounceOffset = 0.0;
+  bounceStart = [NSDate timeIntervalSinceReferenceDate];
   
   /* Create a timer to update the animation 30 times per second (half as fast) */
   if (!bounceTimer) {
@@ -374,7 +623,48 @@
   if (!isBouncing) {
     return;
   }
-  
+
+  /* While the icon is bouncing we are waiting for the app to come up.  If
+   * the process (or a child of it) died - e.g. the launch failed - stop the
+   * animation and drop the icon instead of bouncing forever.  GWProcessMonitor
+   * normally removes the icon the instant the exact PID exits, but that only
+   * covers the registered PID; this poll covers launcher chains where the
+   * dock PID is a wrapper. */
+  if (appPID > 0
+      && [[GWProcessMonitor sharedMonitor] processOrChildrenAlive: appPID] == NO)
+    {
+      [self stopBouncing];
+      /* Drop the icon only if it was never pinned; a docked icon stays
+       * (mirrors appTerminated:), it just stops showing as running. */
+      if (([self isDocked] == NO) && ([self isSpecialIcon] == NO)) {
+        [(Dock *)container removeIcon: self];
+      } else {
+        [self setAppPID: 0];
+        [self setLaunched: NO];
+      }
+      return;
+    }
+
+  /* A launch that fails leaves no process to watch: the launch notification
+   * fires before NSWorkspace checks the binary, appPID stays 0, and the
+   * dead-process check above is skipped - so the icon would bounce forever.
+   * Give the app a short grace period to spawn a process, then check by name
+   * on every iteration: a missing binary never spawns one, so the bounce
+   * stops a moment after the grace period instead of hopping indefinitely. */
+  if (appPID <= 0
+      && ([NSDate timeIntervalSinceReferenceDate] - bounceStart) > 2.0
+      && [[GWProcessMonitor sharedMonitor] processNamedAlive: appName] == NO)
+    {
+      [self stopBouncing];
+      if (([self isDocked] == NO) && ([self isSpecialIcon] == NO)) {
+        [(Dock *)container removeIcon: self];
+      } else {
+        [self setAppPID: 0];
+        [self setLaunched: NO];
+      }
+      return;
+    }
+
   /* Handle pause between bounces (500ms pause between iterations) */
   /* At 30fps (0.033s per frame), 500ms = ~15 frames */
   if (pauseCounter > 0) {
@@ -491,20 +781,59 @@
       
       /* Safety check: ensure we have a valid path and name */
       if (nodePath == nil || appName == nil) {
-        NSDebugLLog(@"gwspace", @"DockIcon mouseUp: missing path or appName");
         return;
       }
       
       if ([node isApplication]) {
         if (launched == NO) {
-          /* Launch the app if not already launched. Use the full path for proper resolution. */
-          [ws launchApplication: nodePath];
-        } else if (apphidden) {
-          /* App is running but hidden; unhide and activate it */
+          /* Check if the app is still running (sudo re-exec, etc.) before
+           * blindly launching a new instance — this prevents duplicate icons
+           * and redundant process creation when appTerminated: was called
+           * for the original PID but the app itself lives on. */
+          GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+          NSArray *windows = [wm windowsMatchingName: appName];
+          if ([windows count] > 0) {
+            GWX11WindowInfo *info = [windows objectAtIndex: 0];
+            isX11OnlyApp = YES;
+            [self setAppPID: [info ownerPID]];
+            launched = YES;
+          } else {
+            [ws launchApplication: nodePath];
+            return;
+          }
+        }
+
+        /* Verify the stored PID is still alive */
+        if (appPID > 0) {
+          int result = kill(appPID, 0);
+          if ((result != 0) && (errno != EPERM)) {
+            /* Process is dead — try to rediscover it by name in X11.
+             * Handles sudo re-exec (new PID), crash+restart, etc. */
+            GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+            NSArray *windows = [wm windowsMatchingName: appName];
+            if ([windows count] > 0) {
+              GWX11WindowInfo *info = [windows objectAtIndex: 0];
+              isX11OnlyApp = YES;
+              [self setAppPID: [info ownerPID]];
+            } else {
+              [self setAppPID: 0];
+              /* A pinned icon must not vanish when its app is merely dead;
+               * clicking it should relaunch the app.  Only drop an unpinned
+               * icon whose process is gone. */
+              if (([self isDocked] == NO) && ([self isSpecialIcon] == NO)) {
+                [(Dock *)container removeIcon: self];
+                return;
+              }
+              launched = NO;
+              [ws launchApplication: nodePath];
+              return;
+            }
+          }
+        }
+
+        if (apphidden) {
           [[Workspace gworkspace] unhideAppWithPath: nodePath andName: appName];
         } else {
-          /* App is already running and visible; just activate/raise it.
-           * Use PID if available for more robust window matching. */
           [[Workspace gworkspace] activateAppWithPath: nodePath andName: appName pid: appPID];
         }
       } else if ([node isDirectory]) {
@@ -582,7 +911,7 @@
     /* Workspace icon: use default menu behavior from superclass. */
     return [super menuForEvent: theEvent];
   } else if ([self isSpecialIcon] == NO) {
-    NSString *appPath = [ws fullPathForApplication: appName];
+    NSString *appPath = [self path];
     
     if (appPath) {
       CREATE_AUTORELEASE_POOL(arp);
@@ -850,7 +1179,7 @@ x += 6; \
       DRAWDOT([NSColor blackColor], [NSColor whiteColor], p);
   }
 
-    if (launched)
+    if (launched && [self hasVisibleWindows])
     {
       NSPoint p;
       p.x = (rect.size.width / 2) - 1;
@@ -873,25 +1202,41 @@ x += 6; \
         FSNDrawLabelDot(dotRect, tagColor);
       }
 
-    /* Count badge (top-right) */
-    if (countVisible && badgeCount > 0)
+    /* Count badge (top-right) - pill/capsule shape: a circle for single
+       digits that grows horizontally for longer numbers, mirroring the
+       TheLounge sidebar badge (capped at "99+").  For the Workspace icon,
+       drive the badge from the standard NSDockTile API so all apps can use
+       [NSApp dockTile] setBadgeLabel: without needing the custom DO service. */
+    NSString *badgeLabel = nil;
+    if (isWsIcon)
       {
-        CGFloat badgeSize = 16;
-        CGFloat badgeX = drawPoint.x + icnBounds.size.width - badgeSize;
-        CGFloat badgeY = drawPoint.y + icnBounds.size.height - badgeSize;
-        NSRect badgeRect = NSMakeRect(badgeX, badgeY, badgeSize, badgeSize);
-        [[NSColor redColor] set];
-        [[NSBezierPath bezierPathWithOvalInRect:badgeRect] fill];
-        NSString *countStr = [NSString stringWithFormat:@"%lld",
-                                       (long long)badgeCount];
+        badgeLabel = [[NSApp dockTile] badgeLabel];
+      }
+    else if (countVisible && badgeCount > 0)
+      {
+        badgeLabel = (badgeCount > 99) ? @"99+" : [NSString stringWithFormat:@"%lld", (long long)badgeCount];
+      }
+    if (badgeLabel)
+      {
+        CGFloat h = 16;
+        NSString *countStr = badgeLabel;
         NSDictionary *attrs = @{
           NSFontAttributeName: [NSFont boldSystemFontOfSize:10],
           NSForegroundColorAttributeName: [NSColor whiteColor]
         };
         NSSize strSize = [countStr sizeWithAttributes:attrs];
+        CGFloat pad = 6.0;
+        CGFloat w = strSize.width + pad * 2.0;
+        if (w < h) { w = h; }
+        CGFloat badgeX = drawPoint.x + icnBounds.size.width - w;
+        CGFloat badgeY = drawPoint.y + icnBounds.size.height - h;
+        NSRect badgeRect = NSMakeRect(badgeX, badgeY, w, h);
+        [[NSColor redColor] set];
+        [[NSBezierPath bezierPathWithRoundedRect:badgeRect
+                                         xRadius:h / 2.0 yRadius:h / 2.0] fill];
         NSPoint strPoint = NSMakePoint(
-          badgeX + (badgeSize - strSize.width) / 2,
-          badgeY + (badgeSize - strSize.height) / 2);
+          badgeX + (w - strSize.width) / 2,
+          badgeY + (h - strSize.height) / 2);
         [countStr drawAtPoint:strPoint withAttributes:attrs];
       }
 

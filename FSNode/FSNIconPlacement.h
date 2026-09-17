@@ -10,6 +10,7 @@
 #define FSN_ICON_PLACEMENT_H
 
 #import <Foundation/Foundation.h>
+#import <math.h>
 
 /* -----------------------------------------------------------------------
  * Placement mode — who owns the icon's position.
@@ -103,6 +104,95 @@ NSStringFromFSNGridCell(FSNGridCell cell)
 }
 
 /* -----------------------------------------------------------------------
+ * Wide-label-aware grid cells for Clean Up.
+ *
+ * Clean Up packs icons one per grid cell, but layoutIcons widens a placed
+ * icon's frame up to 2x the cell width when its label is long, so two icons
+ * in adjacent cells can end up with overlapping frames/labels.  These helpers
+ * compute grid cells that leave empty positions between such icons.
+ * --------------------------------------------------------------------- */
+
+/* Grid columns needed between two icons whose laid-out frames are fw0 and
+ * fw1 wide, at column pitch `pitch` (cellW + gapX).  Frames are centered on
+ * the cell centers, so the centers must be at least (fw0 + fw1)/2 apart.
+ * Minimum one column. */
+static inline NSUInteger
+FSNSkipColumnsForFrames(CGFloat fw0, CGFloat fw1, CGFloat pitch)
+{
+  CGFloat need = (fw0 + fw1) / 2.0;
+  NSUInteger skip = (NSUInteger)ceil(need / pitch);
+  return (skip < 1) ? 1 : skip;
+}
+
+/* Grid cells for `count` icons with laid-out frame widths `fw`, placed in
+ * `direction` order.  Row-major places icons left-to-right and wraps at
+ * `nCols`, growing rows downward, advancing `FSNSkipColumnsForFrames` cells
+ * between consecutive icons.  Column-major fills the rightmost column top to
+ * bottom first, then the next column to the left, but lays out each ROW
+ * independently (starting at the right grid edge), so a wide label only
+ * pushes apart the horizontally-adjacent icon in its own row, clamped at the
+ * left edge.  Returns a malloc'd array of `count` cells (caller frees). */
+static inline FSNGridCell *
+FSNPlacementCellsForWidths(NSUInteger count, const CGFloat *fw,
+                           NSUInteger nCols, NSUInteger nRows,
+                           FSNPlacementDirection direction, CGFloat pitch)
+{
+  FSNGridCell *cells = calloc(count ? count : 1, sizeof(FSNGridCell));
+  if (count == 0)
+    return cells;
+
+  if (direction == FSNPlacementDirectionTopToBottomRightToLeft)
+    {
+      /* Column-major reading order: the rightmost column fills top to bottom
+       * first, then the next column to the left.  Each ROW is laid out
+       * independently, starting at the right grid edge and advancing left by
+       * the skip of each horizontally-adjacent pair, clamped at the left
+       * edge.  A wide label therefore pushes only its own row's neighbour
+       * apart, never every row of the column. */
+      NSUInteger perCol = (nRows > 0) ? nRows : 1;
+      NSUInteger r, idx;
+      for (r = 0; r < perCol; r++)
+        {
+          NSUInteger col = (nCols > 0) ? nCols - 1 : 0;
+          BOOL first = YES;
+          for (idx = r; idx < count; idx += perCol)
+            {
+              if (!first)
+                {
+                  NSUInteger skip = FSNSkipColumnsForFrames(fw[idx - perCol],
+                                                            fw[idx], pitch);
+                  col = (col >= skip) ? (col - skip) : 0;
+                }
+              cells[idx] = FSNGridCellMake(col, r);
+              first = NO;
+            }
+        }
+      return cells;
+    }
+
+  /* Row-major: left-to-right, wrapping at nCols. */
+  {
+    NSUInteger col = 0, row = 0;
+    NSUInteger i;
+    for (i = 0; i < count; i++)
+      {
+        cells[i] = FSNGridCellMake(col, row);
+        if (i + 1 < count)
+          {
+            NSUInteger skip = FSNSkipColumnsForFrames(fw[i], fw[i + 1], pitch);
+            col += skip;
+            while (nCols > 0 && col >= nCols)
+              {
+                col -= nCols;
+                row++;
+              }
+          }
+      }
+  }
+  return cells;
+}
+
+/* -----------------------------------------------------------------------
  * FSNIconItemData — per-icon persistent placement state.
  *
  * Each FSNIcon owns one of these.  The position is stored in exactly one
@@ -154,6 +244,44 @@ FSNIlocFromViewCenter(NSPoint center, CGFloat refHeight, BOOL flipped)
   if (flipped)
     return center;
   return NSMakePoint(center.x, refHeight - center.y);
+}
+
+/* -----------------------------------------------------------------------
+ * Keeping a dragged group of icons inside its view.
+ *
+ * An icon put down outside the view's bounds gets a position the view can
+ * never show again, so the move is shifted back in.  One delta clamps the
+ * whole group, which keeps a multiple selection in formation when it meets
+ * an edge; a group taller or wider than the view is pinned to the view's
+ * lower/left edge in that axis.
+ * --------------------------------------------------------------------- */
+static inline NSSize
+FSNClampedGroupDelta(NSRect group, NSRect bounds, NSSize delta)
+{
+  NSRect moved = NSOffsetRect(group, delta.width, delta.height);
+  CGFloat over;
+
+  over = NSMaxX(moved) - NSMaxX(bounds);
+  if (over > 0)
+    {
+      delta.width -= over;
+      moved.origin.x -= over;
+    }
+  over = NSMinX(bounds) - NSMinX(moved);
+  if (over > 0)
+    delta.width += over;
+
+  over = NSMaxY(moved) - NSMaxY(bounds);
+  if (over > 0)
+    {
+      delta.height -= over;
+      moved.origin.y -= over;
+    }
+  over = NSMinY(bounds) - NSMinY(moved);
+  if (over > 0)
+    delta.height += over;
+
+  return delta;
 }
 
 #endif /* FSN_ICON_PLACEMENT_H */

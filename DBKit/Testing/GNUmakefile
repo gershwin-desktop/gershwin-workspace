@@ -1,5 +1,6 @@
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 TOOL_NAME = dbtest
 
@@ -20,4 +21,5 @@ ADDITIONAL_LIB_DIRS += -lDBKit
 include $(GNUSTEP_MAKEFILES)/tool.make
 
 -include GNUmakefile.postamble
+
 

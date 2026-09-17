@@ -7,17 +7,11 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 
-@protocol DockService
-- (void)setBadgeCount:(int64_t)count;
-- (void)setCountVisible:(BOOL)visible;
-@end
-
 @interface BadgeTestDelegate : NSObject
 {
   NSWindow *window;
   NSTextField *label;
   int count;
-  id proxy;
 }
 @end
 
@@ -29,34 +23,23 @@
   if (self)
     {
       count = 5;
-
-      NSString *name = @"DockIcon";
-      NSConnection *conn;
-      conn = [NSConnection connectionWithRegisteredName:name host:nil];
-      if (conn)
-        {
-          proxy = [[conn rootProxy] retain];
-          [proxy setBadgeCount:count];
-          [proxy setCountVisible:(count > 0)];
-        }
-      else
-        {
-          NSLog(@"Failed to connect to Dock service.");
-        }
+      [self applyBadge];
     }
   return self;
 }
 
-- (void)dealloc
-{
-  [proxy release];
-  [super dealloc];
-}
-
 - (void)applyBadge
 {
-  [proxy setBadgeCount:count];
-  [proxy setCountVisible:(count > 0)];
+  NSDockTile *tile = [NSApp dockTile];
+  if (count > 0)
+    {
+      NSString *str = (count > 99) ? @"99+" : [NSString stringWithFormat:@"%d", count];
+      [tile setBadgeLabel:str];
+    }
+  else
+    {
+      [tile setBadgeLabel:nil];
+    }
   [label setIntValue:count];
 }
 

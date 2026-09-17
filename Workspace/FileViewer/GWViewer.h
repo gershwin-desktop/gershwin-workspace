@@ -24,14 +24,7 @@
 
 
 
-#import <Foundation/Foundation.h>
-
-typedef enum
-  {
-    GWViewTypeBrowser = 1,
-    GWViewTypeIcon,
-    GWViewTypeList
-  } GWViewType;
+#import "GWViewerBase.h"
 
 @class GWViewersManager;
 @class FSNode;
@@ -39,52 +32,41 @@ typedef enum
 @class GWViewerWindow;
 @class GWViewerSplit;
 @class GWViewerShelf;
+#import "GWViewerBase.h"
+
 @class GWViewerSidebar;
 @class GWViewerScrollView;
 @class GWViewerIconsPath;
 @class GWViewerPathsScroll;
+@class GWViewerBrowserPreview;
 @class NSView;
 @class Workspace;
 
-@interface GWViewer : NSObject
+@interface GWViewer : GWViewerBase
 {
-  GWViewerWindow *vwrwin;
   GWViewerSplit *split;
   GWViewerSidebar *sidebar;
   float sidebarWidth;
+  BOOL showSidebar; /* sidebar visible in this browsing viewer */
   NSView *lowBox;
   GWViewerPathsScroll *pathsScroll;
   GWViewerIconsPath *pathsView;
   GWViewerScrollView *nviewScroll;
-  id nodeView;
-  
-  NSDictionary *viewerPrefs;
+
   GWViewType viewType;
 
   BOOL rootViewer; /* base path = root */
   BOOL firstRootViewer; /* special first viewer */
   NSString *defaultsKeyStr;
 
-  int visibleCols;
-  int resizeIncrement;
-    
-  FSNode *baseNode;
-  NSArray *baseNodeArray;
-  NSArray *lastSelection;  
-  NSMutableArray *watchedNodes;
-
-  FSNodeRep *fsnodeRep;
-
-  NSMutableArray *history;
-  int historyPosition;
-  
-  BOOL invalidated;
-  BOOL closing;
-  
-  GWViewersManager *manager;
-  Workspace *gworkspace;
-
-  NSNotificationCenter *nc;        
+  /* CONTENT rect (GNUstep bottom-left coords) to re-apply after the window is
+   * mapped.  The setFrame: in init runs before the WM has framed the window,
+   * when _NET_FRAME_EXTENTS is not yet available, so GNUstep guesses the
+   * decoration size; activate waits for the WM's real extents, converts to the
+   * full frame with them, and calls setFrame: - which is then exact and keeps
+   * GNUstep's frame bookkeeping in sync with the real X client. */
+  NSRect pendingRestoreFrame;
+  BOOL hasPendingRestoreFrame;
 }
 
 - (id)initForNode:(FSNode *)node
@@ -93,15 +75,12 @@ typedef enum
     showSelection:(BOOL)showsel
 	  withKey:(NSString *)key;
 
-- (void)createSubviews;
 - (FSNode *)baseNode;
 - (BOOL)isShowingNode:(FSNode *)anode;
 - (BOOL)isShowingPath:(NSString *)apath;
-- (void)reloadNodeContents;
-- (void)reloadFromNode:(FSNode *)anode;
+- (void)createSubviews;
 - (void)unloadFromNode:(FSNode *)anode;
 - (void)updateShownSelection;
-- (void)updateWindowTitle;
 - (void)navigateToNode:(FSNode *)node;
 
 /* Re-base the viewer window to a new node (sidebar navigation).
@@ -110,7 +89,6 @@ typedef enum
 - (void)openNodeInPlace:(FSNode *)newBase;
 
 - (GWViewerWindow *)win;
-- (id)nodeView;
 - (id)shelf;
 - (GWViewType)viewType;
 - (BOOL)isSpatial;
@@ -123,18 +101,14 @@ typedef enum
 - (NSString *)defaultsKey;
 
 - (void)activate;
-- (void)deactivate;
 - (void)tileViews;
 - (CGFloat)defaultSidebarWidth;
 - (void)setSidebarWidth:(CGFloat)w;
+- (BOOL)isSidebarShown;
+- (void)toggleSidebar:(id)sender;
+- (void)setSidebarShown:(BOOL)shown;
 - (void)reloadSidebar;
-- (void)scrollToBeginning;
 - (void)invalidate;
-- (BOOL)invalidated;
-- (BOOL)isClosing;
-
-- (void)setOpened:(BOOL)opened 
-        repOfNode:(FSNode *)anode;
 - (void)unselectAllReps;
 - (void)selectionChanged:(NSArray *)newsel;
 - (void)multipleNodeViewDidSelectSubNode:(FSNode *)node;
@@ -142,22 +116,9 @@ typedef enum
 - (void)shelfDidSelectIcon:(id)icon;
 - (void)setSelectableNodesRange:(NSRange)range;
 - (void)updeateInfoLabels;
-
 - (BOOL)involvedByFileOperation:(NSDictionary *)opinfo;
-- (void)nodeContentsWillChange:(NSDictionary *)info;
 - (void)nodeContentsDidChange:(NSDictionary *)info;
-
 - (void)watchedPathChanged:(NSDictionary *)info;
-- (NSArray *)watchedNodes;
-/* Return the last selection in the viewer (may be nil) */
-- (NSArray *)lastSelection;
-- (void)hideDotsFileChanged:(BOOL)hide;
-- (void)hiddenFilesChanged:(NSArray *)paths;
-
-- (NSMutableArray *)history;
-- (int)historyPosition;
-- (void)setHistoryPosition:(int)pos;
-
 - (void)columnsWidthChanged:(NSNotification *)notification;
 
 - (void)updateDefaults;
@@ -171,31 +132,38 @@ typedef enum
 @interface GWViewer (GWViewerWindowDelegateMethods)
 
 - (void)openSelectionInNewViewer:(BOOL)newv;
-- (void)openSelectionAsFolder;
-- (void)openSelectionWith;
-- (void)newFolder;
-- (void)newFile;
-- (void)duplicateFiles;
-- (void)recycleFiles;
-- (void)emptyTrash;
-- (void)deleteFiles;
-- (void)goBackwardInHistory;
-- (void)goForwardInHistory;
 - (void)setViewerBehaviour:(id)sender;
 - (void)setViewerType:(id)sender;
 - (void)setShownType:(id)sender;
 - (void)setExtendedShownType:(id)sender;
-- (void)setIconsSize:(id)sender;
-- (void)setIconsPosition:(id)sender;
-- (void)setLabelSize:(id)sender;
 - (void)chooseLabelColor:(id)sender;
 - (void)chooseBackColor:(id)sender;
 - (void)selectAllInViewer;
 - (void)showTerminal;
-- (void)showAttributesInspector:(id)sender;
 - (BOOL)validateItem:(id)menuItem;
 - (void)makeThumbnails:(id)sender;
 - (void)removeThumbnails:(id)sender;
+
+@end
+
+/* Shared view-type helpers used by both the browsing GWViewer and the
+ * spatial GWSpatialViewer.  The GWViewType enum is the canonical
+ * representation; the string names ("Icon"/"List"/"Browser") are only a
+ * legacy form used by GWSpatialViewer's defaults and DS_Store, so the
+ * conversion lives here once. */
+@interface NSObject (GWViewTypeHelpers)
+
+/* Converts a GWViewType enum to its legacy string name, or nil. */
+- (NSString *)GWViewTypeName:(GWViewType)type;
+
+/* Converts a legacy string name to a GWViewType, or 0 if unknown. */
+- (GWViewType)GWViewTypeFromName:(NSString *)name;
+
+/* Resolves the requested view type from a menu sender, preferring its tag
+ * (which carries the GWViewType) and falling back to parsing the localized
+ * title for senders that only provide a title.  Returns 0 if it cannot be
+ * determined. */
+- (GWViewType)GWViewTypeFromSender:(id)sender;
 
 @end
 

@@ -1,0 +1,4 @@
+{
+   Name = "Archive Inspector";
+   Description = "Displays the contents of an archive file";
+}

@@ -1,6 +1,7 @@
 
 PACKAGE_NAME = gworkspace
 include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 # The application to be compiled
 TOOL_NAME = uitest
@@ -19,3 +20,4 @@ uitest_LIBS_DEPEND_UPON += -lgnustep-gui -lgnustep-base
 include $(GNUSTEP_MAKEFILES)/tool.make
 
 -include GNUmakefile.postamble
+

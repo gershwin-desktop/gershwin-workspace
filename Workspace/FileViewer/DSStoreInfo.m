@@ -6,6 +6,7 @@
 
 #import "DSStoreInfo.h"
 #import "DSStore.h"
+#import "GSFileMetadata.h"
 
 #pragma mark - DSStoreIconInfo Implementation
 
@@ -267,49 +268,38 @@
 {
     NSString *dsStorePath = [_directoryPath stringByAppendingPathComponent:@".DS_Store"];
     
-    NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-    NSDebugLLog(@"gwspace", @"║             DS_STORE COMPREHENSIVE LOADING                       ║");
-    NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-    NSDebugLLog(@"gwspace", @"║ Directory: %@", _directoryPath);
-    NSDebugLLog(@"gwspace", @"║ DS_Store path: %@", dsStorePath);
-    
-    if (![[NSFileManager defaultManager] fileExistsAtPath:dsStorePath]) {
-        NSDebugLLog(@"gwspace", @"║ ✗ No .DS_Store file found");
-        NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
-        return NO;
+    DSStore *store = nil;
+    if ([[NSFileManager defaultManager] fileExistsAtPath:dsStorePath]) {
+        store = [DSStore storeWithPath:dsStorePath];
+        if (![store load]) {
+            store = nil;
+        }
     }
     
-    NSDebugLLog(@"gwspace", @"║ ✓ Found .DS_Store file");
-    
-    DSStore *store = [DSStore storeWithPath:dsStorePath];
-    if (![store load]) {
-        NSDebugLLog(@"gwspace", @"║ ✗ Failed to load .DS_Store file");
-        NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
-        return NO;
+    if (store) {
+        // Get all entries to see what's available
+        NSArray *allFilenames = [store allFilenames];
+        
+        // Process directory-level entries (filename = ".")
+        [self loadDirectoryEntriesFromStore:store];
+        
+        // Process per-file entries (icon positions, comments, etc.)
+        [self loadIconEntriesFromStore:store filenames:allFilenames];
     }
     
-    NSDebugLLog(@"gwspace", @"║ ✓ Successfully parsed .DS_Store");
-    NSDebugLLog(@"gwspace", @"╟──────────────────────────────────────────────────────────────────╢");
-    
-    // Get all entries to see what's available
-    NSArray *allFilenames = [store allFilenames];
-    NSDebugLLog(@"gwspace", @"║ Files with entries: %lu", (unsigned long)[allFilenames count]);
-    
-    // Process directory-level entries (filename = ".")
-    [self loadDirectoryEntriesFromStore:store];
-    
-    // Process per-file entries (icon positions, comments, etc.)
-    [self loadIconEntriesFromStore:store filenames:allFilenames];
-    
+    /* A folder may carry per-folder view/window state purely in its
+     * com.apple.FinderInfo DInfo (classic / spatial macOS channel) with no
+     * .DS_Store at all - consult that as a fallback regardless. */
+    [self loadFinderInfoFallback];
+
+    /* Also consult the user's com.apple.finder.plist BrowserWindowState
+     * (the 10.6 per-folder store) for any remaining view/geometry gaps. */
+    [self loadFinderPlistFallback];
+
     _loaded = YES;
     
-    NSDebugLLog(@"gwspace", @"╟──────────────────────────────────────────────────────────────────╢");
-    NSDebugLLog(@"gwspace", @"║                      LOADING COMPLETE                            ║");
-    NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
-    
-    [self logAllInfo];
-    
-    return YES;
+    /* "Loaded" means we found something in .DS_Store or in FinderInfo. */
+    return (_hasViewStyle || _hasWindowFrame || store != nil);
 }
 
 - (BOOL)reload
@@ -415,10 +405,7 @@
 
 - (void)loadDirectoryEntriesFromStore:(DSStore *)store
 {
-    NSDebugLLog(@"gwspace", @"║ --- Directory-level entries (filename '.') ---");
     
-    NSArray *dirCodes = [store allCodesForFilename:@"."];
-    NSDebugLLog(@"gwspace", @"║ Available codes for directory: %@", dirCodes);
     
     // IMPORTANT: Format Preferences for Interoperability
     // Modern .DS_Store files use binary plist formats which are preferred:
@@ -442,8 +429,6 @@
     [self loadIconViewPlistFromStore:store];   // New format (try first)
     [self loadIconViewOptionsFromStore:store]; // Old format (fallback)
     
-    // Load grid/spacing options (icgo, icsp)
-    [self loadIconGridOptionsFromStore:store];
     
     // Load background settings (BKGD, bwsp)
     [self loadBackgroundFromStore:store];
@@ -462,7 +447,6 @@
     // Modern .DS_Store files use bwsp with WindowBounds instead
     
     if (_hasWindowFrame) {
-        NSDebugLLog(@"gwspace", @"║ ○ Skipping fwi0 (already have geometry from bwsp)");
         return;
     }
     
@@ -492,23 +476,14 @@
             CGFloat width = right - left;
             CGFloat height = bottom - top;
             
-            _windowFrame = NSMakeRect(x, y, width, height);
+            _windowFrame = [DSStoreInfo gnustepRectFromDSStoreRect:
+                              NSMakeRect(x, y, width, height)];
             _hasWindowFrame = YES;
             
-            NSDebugLLog(@"gwspace", @"║ ✓ fwi0 (Window Geometry):");
-            NSDebugLLog(@"gwspace", @"║   Edges: top=%d left=%d bottom=%d right=%d", top, left, bottom, right);
-            NSDebugLLog(@"gwspace", @"║   Rect: x=%.0f y=%.0f w=%.0f h=%.0f", x, y, width, height);
             
-            // Log view style from bytes 8-11 if present
-            if ([data length] >= 12) {
-                char viewStyle[5] = {bytes[8], bytes[9], bytes[10], bytes[11], 0};
-                NSDebugLLog(@"gwspace", @"║   View style: %s", viewStyle);
-            }
         } else {
-            NSDebugLLog(@"gwspace", @"║ ⚠ fwi0 data too short: %lu bytes", (unsigned long)[data length]);
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No fwi0 (window geometry) entry");
     }
 }
 
@@ -521,28 +496,267 @@
         if ([style isEqualToString:@"icnv"]) {
             _viewStyle = DSStoreViewStyleIcon;
             _hasViewStyle = YES;
-            NSDebugLLog(@"gwspace", @"║ ✓ vstl (View Style): Icon view (icnv)");
         } else if ([style isEqualToString:@"Nlsv"]) {
             _viewStyle = DSStoreViewStyleList;
             _hasViewStyle = YES;
-            NSDebugLLog(@"gwspace", @"║ ✓ vstl (View Style): List view (Nlsv)");
         } else if ([style isEqualToString:@"clmv"]) {
             _viewStyle = DSStoreViewStyleColumn;
             _hasViewStyle = YES;
-            NSDebugLLog(@"gwspace", @"║ ✓ vstl (View Style): Column view (clmv)");
         } else if ([style isEqualToString:@"glyv"]) {
             _viewStyle = DSStoreViewStyleGallery;
             _hasViewStyle = YES;
-            NSDebugLLog(@"gwspace", @"║ ✓ vstl (View Style): Gallery view (glyv)");
         } else if ([style isEqualToString:@"Flwv"]) {
             _viewStyle = DSStoreViewStyleCoverflow;
             _hasViewStyle = YES;
-            NSDebugLLog(@"gwspace", @"║ ✓ vstl (View Style): Coverflow view (Flwv)");
         } else {
-            NSDebugLLog(@"gwspace", @"║ ⚠ vstl (View Style): Unknown style '%@'", style);
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No vstl (view style) entry");
+    }
+}
+
+/* Fall back to the folder's own com.apple.FinderInfo DInfo for per-folder view
+ * style / window geometry when the .DS_Store did not carry those values.  The
+ * DInfo layout (frView at bytes 14-15, frRect at bytes 0-7) is the classic /
+ * spatial macOS channel; reading it here means a folder whose view was set by
+ * Finder (or by Gershwin's own spatial writer) restores correctly even without
+ * a .DS_Store.  Only fills gaps - .DS_Store always wins when present. */
+- (void)loadFinderInfoFallback
+{
+    GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: _directoryPath];
+    if (md == nil)
+        return;
+
+    if (!_hasViewStyle) {
+        NSString *code = [md viewStyleCodeForDirectory];
+        if ([code isEqualToString: @"icnv"]) {
+            _viewStyle = DSStoreViewStyleIcon;     _hasViewStyle = YES;
+        } else if ([code isEqualToString: @"Nlsv"]) {
+            _viewStyle = DSStoreViewStyleList;     _hasViewStyle = YES;
+        } else if ([code isEqualToString: @"clmv"]) {
+            _viewStyle = DSStoreViewStyleColumn;   _hasViewStyle = YES;
+        } else if ([code isEqualToString: @"glyv"]) {
+            _viewStyle = DSStoreViewStyleGallery;  _hasViewStyle = YES;
+        } else if ([code isEqualToString: @"Flwv"]) {
+            _viewStyle = DSStoreViewStyleCoverflow; _hasViewStyle = YES;
+        }
+    }
+
+    if (!_hasWindowFrame) {
+        NSRect r = [md windowBoundsForDirectory];
+        if (!NSEqualRects(r, NSZeroRect)) {
+            _windowFrame = [DSStoreInfo gnustepRectFromDSStoreRect: r];
+            _hasWindowFrame = YES;
+        }
+    }
+}
+
+/* Fall back to the user's com.apple.finder.plist BrowserWindowState (the
+ * macOS Finder's per-folder view/window store on 10.6) for per-folder view
+ * style / window geometry when neither .DS_Store nor the folder FinderInfo
+ * supplied them.  Entries are keyed by path (TargetURL / TargetPath).  This is
+ * the ONLY per-folder channel a 10.6 Finder honours, so it is consulted last
+ * (lowest priority) after .DS_Store and FinderInfo.  Only fills gaps. */
+- (void)loadFinderPlistFallback
+{
+    NSString *plistPath = [[NSHomeDirectory()
+                              stringByAppendingPathComponent: @"Library/Preferences"]
+                             stringByAppendingPathComponent: @"com.apple.finder.plist"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    if (![fm fileExistsAtPath: plistPath])
+        return;
+    NSData *data = [NSData dataWithContentsOfFile: plistPath];
+    if (data == nil)
+        return;
+    NSError *err = nil;
+    id plist = [NSPropertyListSerialization propertyListWithData: data
+             options: NSPropertyListImmutable format: NULL error: &err];
+    if (plist == nil || ![plist isKindOfClass: [NSDictionary class]])
+        return;
+    NSArray *states = [plist objectForKey: @"BrowserWindowState"];
+    if (![states isKindOfClass: [NSArray class]] || [states count] == 0)
+        return;
+
+    NSString *myPath = [_directoryPath stringByStandardizingPath];
+    for (NSDictionary *st in states) {
+        if (![st isKindOfClass: [NSDictionary class]])
+            continue;
+        NSString *matchPath = nil;
+        id tu = [st objectForKey: @"TargetURL"];
+        if ([tu isKindOfClass: [NSString class]] && [tu length])
+            matchPath = [[NSURL URLWithString: tu] path];
+        if (matchPath == nil) {
+            id tp = [st objectForKey: @"TargetPath"];
+            if ([tp isKindOfClass: [NSArray class]] && [tp count]) {
+                id last = [tp lastObject];
+                if ([last isKindOfClass: [NSString class]])
+                    matchPath = [[NSURL URLWithString: last] path];
+            }
+        }
+        if (matchPath == nil)
+            continue;
+        if (![[matchPath stringByStandardizingPath] isEqualToString: myPath])
+            continue;
+
+        if (!_hasViewStyle) {
+            id vs = [st objectForKey: @"ViewStyle"];
+            if ([vs isKindOfClass: [NSString class]]) {
+                if ([vs isEqualToString: @"Icon"])          { _viewStyle = DSStoreViewStyleIcon;      _hasViewStyle = YES; }
+                else if ([vs isEqualToString: @"List"])     { _viewStyle = DSStoreViewStyleList;      _hasViewStyle = YES; }
+                else if ([vs isEqualToString: @"Column"])   { _viewStyle = DSStoreViewStyleColumn;    _hasViewStyle = YES; }
+                else if ([vs isEqualToString: @"Flow"])     { _viewStyle = DSStoreViewStyleCoverflow; _hasViewStyle = YES; }
+                else if ([vs isEqualToString: @"Gallery"])  { _viewStyle = DSStoreViewStyleGallery;   _hasViewStyle = YES; }
+            }
+        }
+        if (!_hasWindowFrame) {
+            id wb = [st objectForKey: @"WindowBounds"];
+            if ([wb isKindOfClass: [NSString class]]) {
+                NSRect full = NSRectFromString(wb);
+                if (full.size.width > 0 && full.size.height > 0) {
+                    /* The Mac stores WindowBounds as the FULL window frame
+                     * (title bar included); Gershwin's _windowFrame is the
+                     * content rect (matching .DS_Store fwi0/bwsp).  Shrink the
+                     * full frame to the content area so our window lands exactly
+                     * where the Mac's did.  Standard Mac title bar is 22pt; our
+                     * viewer windows observe the same delta. */
+                    static const CGFloat tb = 22.0;
+                    NSRect content = NSMakeRect(full.origin.x,
+                                               full.origin.y + tb,
+                                               full.size.width,
+                                               full.size.height - tb);
+                    if (content.size.height > 0) {
+                        _windowFrame = [DSStoreInfo gnustepRectFromDSStoreRect: content];
+                        _hasWindowFrame = YES;
+                    }
+                }
+            }
+        }
+        break;
+    }
+}
+
+/* Mirror per-folder view style + window geometry into the user's
+ * com.apple.finder.plist BrowserWindowState (matched by path) so a macOS
+ * Finder that reads that plist (10.6 restores per-folder windows from it)
+ * picks up Gershwin's state.  Best-effort only.  Updates an existing entry or
+ * appends a new one, preserving the other keys of an existing entry. */
+- (void)writeFinderPlistEntry
+{
+    NSString *plistPath = [[NSHomeDirectory()
+                              stringByAppendingPathComponent: @"Library/Preferences"]
+                             stringByAppendingPathComponent: @"com.apple.finder.plist"];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSMutableDictionary *plist = nil;
+    if ([fm fileExistsAtPath: plistPath]) {
+        NSData *data = [NSData dataWithContentsOfFile: plistPath];
+        if (data) {
+            NSError *e = nil;
+            id p = [NSPropertyListSerialization
+                     propertyListWithData: data
+                                  options: NSPropertyListMutableContainers
+                                   format: NULL error: &e];
+            if ([p isKindOfClass: [NSMutableDictionary class]])
+                plist = p;
+        }
+    }
+    if (plist == nil)
+        plist = [NSMutableDictionary dictionary];
+
+    NSMutableArray *states = [plist objectForKey: @"BrowserWindowState"];
+    if (![states isKindOfClass: [NSMutableArray class]]) {
+        states = [NSMutableArray array];
+        [plist setObject: states forKey: @"BrowserWindowState"];
+    }
+
+    NSString *myPath = [_directoryPath stringByStandardizingPath];
+    NSUInteger foundIdx = NSNotFound;
+    for (NSUInteger i = 0; i < [states count]; i++) {
+        id st = [states objectAtIndex: i];
+        if (![st isKindOfClass: [NSDictionary class]])
+            continue;
+        NSString *mp = nil;
+        id tu = [st objectForKey: @"TargetURL"];
+        if ([tu isKindOfClass: [NSString class]] && [tu length])
+            mp = [[NSURL URLWithString: tu] path];
+        if (mp == nil) {
+            id tp = [st objectForKey: @"TargetPath"];
+            if ([tp isKindOfClass: [NSArray class]] && [tp count]) {
+                id last = [tp lastObject];
+                if ([last isKindOfClass: [NSString class]])
+                    mp = [[NSURL URLWithString: last] path];
+            }
+        }
+        if (mp && [[mp stringByStandardizingPath] isEqualToString: myPath]) {
+            foundIdx = i;
+            break;
+        }
+    }
+
+    NSString *selfURL = [[NSURL fileURLWithPath: _directoryPath] absoluteString];
+    if (![selfURL hasSuffix: @"/"]) selfURL = [selfURL stringByAppendingString: @"/"];
+    NSString *parentURL = [[NSURL fileURLWithPath:
+                             [_directoryPath stringByDeletingLastPathComponent]]
+                            absoluteString];
+    if (![parentURL hasSuffix: @"/"]) parentURL = [parentURL stringByAppendingString: @"/"];
+
+    NSString *vs = @"Icon";
+    switch (_hasViewStyle ? _viewStyle : DSStoreViewStyleIcon) {
+        case DSStoreViewStyleIcon:      vs = @"Icon";    break;
+        case DSStoreViewStyleList:      vs = @"List";    break;
+        case DSStoreViewStyleColumn:    vs = @"Column";  break;
+        case DSStoreViewStyleCoverflow: vs = @"Flow";    break;
+        case DSStoreViewStyleGallery:   vs = @"Gallery"; break;
+        default:                        vs = @"Icon";    break;
+    }
+    NSRect contentFrame = [self dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
+    /* Gershwin's _windowFrame (and dsStoreWindowFrameForScreen:) is the CONTENT
+     * rect; the Mac's WindowBounds is the FULL frame (incl. title bar).  Grow the
+     * content rect up by the title-bar height so the Mac renders the window where
+     * Gershwin had it.  Standard Mac title bar is 22pt. */
+    static const CGFloat tb = 22.0;
+    NSRect fullFrame = NSMakeRect(contentFrame.origin.x,
+                                  contentFrame.origin.y - tb,
+                                  contentFrame.size.width,
+                                  contentFrame.size.height + tb);
+    NSString *wb = [NSString stringWithFormat: @"{{%d, %d}, {%d, %d}}",
+                    (int)round(fullFrame.origin.x), (int)round(fullFrame.origin.y),
+                    (int)round(fullFrame.size.width), (int)round(fullFrame.size.height)];
+
+    NSMutableDictionary *entry = [NSMutableDictionary dictionary];
+    if (foundIdx != NSNotFound)
+        entry = [NSMutableDictionary dictionaryWithDictionary:
+                  [states objectAtIndex: foundIdx]];
+    [entry setObject: selfURL forKey: @"TargetURL"];
+    [entry setObject: [NSArray arrayWithObjects: parentURL, selfURL, nil]
+               forKey: @"TargetPath"];
+    [entry setObject: vs forKey: @"ViewStyle"];
+    [entry setObject: wb forKey: @"WindowBounds"];
+    [entry setObject: @YES forKey: @"ShowSidebar"];
+    [entry setObject: @YES forKey: @"ShowStatusBar"];
+    [entry setObject: @YES forKey: @"ShowToolbar"];
+    [entry setObject: @NO  forKey: @"ShowPathbar"];
+    [entry setObject: @192 forKey: @"SidebarWidth"];
+    NSString *scrollKey = (_hasViewStyle && _viewStyle == DSStoreViewStyleIcon)
+                              ? @"IconViewScrollOrigin" : @"ListViewScrollOrigin";
+    [entry setObject: [NSDictionary dictionaryWithObject: @"{0, 0}" forKey: scrollKey]
+               forKey: @"BrowserViewState"];
+
+    if (foundIdx != NSNotFound)
+        [states replaceObjectAtIndex: foundIdx withObject: entry];
+    else
+        [states addObject: entry];
+
+    [fm createDirectoryAtPath: [plistPath stringByDeletingLastPathComponent]
+      withIntermediateDirectories: YES attributes: nil error: NULL];
+    NSError *wErr = nil;
+    NSData *out = [NSPropertyListSerialization
+                    dataWithPropertyList: plist
+                                 format: NSPropertyListBinaryFormat_v1_0
+                                options: 0 error: &wErr];
+    if (out) {
+        if ([out writeToFile: plistPath options: NSDataWritingAtomic error: &wErr] == NO)
+            NSLog(@"DSStoreInfo: finder plist write failed: %@", wErr);
+    } else {
+        NSLog(@"DSStoreInfo: finder plist serialize failed: %@", wErr);
     }
 }
 
@@ -555,7 +769,6 @@
     DSStoreEntry *entry = [store entryForFilename:@"." code:@"bwsp"];
     if (entry && [[entry type] isEqualToString:@"blob"]) {
         NSData *data = (NSData *)[entry value];
-        NSDebugLLog(@"gwspace", @"║ ✓ bwsp (Browser Window Settings - Modern): %lu bytes", (unsigned long)[data length]);
         
         NSError *error = nil;
         NSDictionary *plist = [NSPropertyListSerialization propertyListWithData:data
@@ -569,13 +782,9 @@
                 // Parse WindowBounds string format: "{{x, y}, {width, height}}"
                 NSRect rect = NSRectFromString(windowBounds);
                 if (rect.size.width > 0 && rect.size.height > 0) {
-                    _windowFrame = rect;
+                    _windowFrame = [DSStoreInfo gnustepRectFromDSStoreRect: rect];
                     _hasWindowFrame = YES;
-                    NSDebugLLog(@"gwspace", @"║   ✓ Window bounds extracted: %@", windowBounds);
-                    NSDebugLLog(@"gwspace", @"║     Parsed as: x=%.0f y=%.0f w=%.0f h=%.0f", 
-                          rect.origin.x, rect.origin.y, rect.size.width, rect.size.height);
                 } else {
-                    NSDebugLLog(@"gwspace", @"║   ⚠ Window bounds string present but invalid");
                 }
             }
             
@@ -584,16 +793,11 @@
             if (sidebarWidthObj) {
                 _sidebarWidth = [sidebarWidthObj intValue];
                 _hasSidebarWidth = YES;
-                NSDebugLLog(@"gwspace", @"║   Sidebar width: %d", _sidebarWidth);
             }
             
-            NSDebugLLog(@"gwspace", @"║   Show sidebar: %@", [plist objectForKey:@"ShowSidebar"]);
-            NSDebugLLog(@"gwspace", @"║   Show toolbar: %@", [plist objectForKey:@"ShowToolbar"]);
         } else {
-            NSDebugLLog(@"gwspace", @"║   ⚠ Failed to parse bwsp as plist: %@", error);
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No bwsp (browser window settings) entry");
     }
 }
 
@@ -605,7 +809,6 @@
     
     // Skip if we already have settings from icvp (new format)
     if (_hasIconSize && _hasIconArrangement && _hasLabelPosition) {
-        NSDebugLLog(@"gwspace", @"║ ○ Skipping icvo (already have settings from icvp)");
         return;
     }
     
@@ -615,7 +818,6 @@
         const uint8_t *bytes = (const uint8_t *)[data bytes];
         NSUInteger len = [data length];
         
-        NSDebugLLog(@"gwspace", @"║ ✓ icvo (Icon View Options): %lu bytes", (unsigned long)len);
         
         // External docs specify two variants:
         // 1) "icvo" format: 4-byte magic + 8 unknown + 2-byte size + 4-byte arrangement ("none")
@@ -630,7 +832,6 @@
                 if (size > 0 && size <= 512) {
                     _iconSize = size;
                     _hasIconSize = YES;
-                    NSDebugLLog(@"gwspace", @"║   Format: icvo, Icon size: %d", _iconSize);
                 }
                 
                 // Arrangement at bytes 14-17
@@ -639,11 +840,9 @@
                     if (strcmp(arr, "none") == 0) {
                         _iconArrangement = DSStoreIconArrangementNone;
                         _hasIconArrangement = YES;
-                        NSDebugLLog(@"gwspace", @"║   Arrangement: none");
                     } else if (strcmp(arr, "grid") == 0) {
                         _iconArrangement = DSStoreIconArrangementGrid;
                         _hasIconArrangement = YES;
-                        NSDebugLLog(@"gwspace", @"║   Arrangement: grid");
                     }
                 }
             } else if (strcmp(magic, "icv4") == 0 && len >= 14) {
@@ -652,7 +851,6 @@
                 if (size > 0 && size <= 512) {
                     _iconSize = size;
                     _hasIconSize = YES;
-                    NSDebugLLog(@"gwspace", @"║   Format: icv4, Icon size: %d", _iconSize);
                 }
                 
                 // Arrangement at bytes 6-9
@@ -660,11 +858,9 @@
                 if (strcmp(arr, "none") == 0) {
                     _iconArrangement = DSStoreIconArrangementNone;
                     _hasIconArrangement = YES;
-                    NSDebugLLog(@"gwspace", @"║   Arrangement: none");
                 } else if (strcmp(arr, "grid") == 0) {
                     _iconArrangement = DSStoreIconArrangementGrid;
                     _hasIconArrangement = YES;
-                    NSDebugLLog(@"gwspace", @"║   Arrangement: grid");
                 }
                 
                 // Label position at bytes 10-13
@@ -673,19 +869,15 @@
                     if (strcmp(lbl, "botm") == 0) {
                         _labelPosition = DSStoreLabelPositionBottom;
                         _hasLabelPosition = YES;
-                        NSDebugLLog(@"gwspace", @"║   Label position: bottom");
                     } else if (strcmp(lbl, "rght") == 0) {
                         _labelPosition = DSStoreLabelPositionRight;
                         _hasLabelPosition = YES;
-                        NSDebugLLog(@"gwspace", @"║   Label position: right");
                     }
                 }
             } else {
-                NSDebugLLog(@"gwspace", @"║   ⚠ Unknown icvo format variant (magic: %s)", magic);
             }
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No icvo (icon view options) entry");
     }
 }
 
@@ -698,7 +890,6 @@
     DSStoreEntry *entry = [store entryForFilename:@"." code:@"icvp"];
     if (entry && [[entry type] isEqualToString:@"blob"]) {
         NSData *data = (NSData *)[entry value];
-        NSDebugLLog(@"gwspace", @"║ ✓ icvp (Icon View Plist): %lu bytes", (unsigned long)[data length]);
         
         // Try to parse as binary plist
         NSError *error = nil;
@@ -707,7 +898,6 @@
                                                                          format:NULL
                                                                           error:&error];
         if (plist && [plist isKindOfClass:[NSDictionary class]]) {
-            NSDebugLLog(@"gwspace", @"║   Parsed plist keys: %@", [plist allKeys]);
             
             // Extract icon size
             id sizeObj = [plist objectForKey:@"iconSize"];
@@ -716,7 +906,6 @@
                 if (size > 0 && size <= 512) {
                     _iconSize = size;
                     _hasIconSize = YES;
-                    NSDebugLLog(@"gwspace", @"║   Icon size from plist: %d", _iconSize);
                 }
             }
             
@@ -727,11 +916,9 @@
                 if ([arr isEqualToString:@"none"] || [arr isEqualToString:@"0"]) {
                     _iconArrangement = DSStoreIconArrangementNone;
                     _hasIconArrangement = YES;
-                    NSDebugLLog(@"gwspace", @"║   Arrangement from plist: none");
                 } else if ([arr isEqualToString:@"grid"]) {
                     _iconArrangement = DSStoreIconArrangementGrid;
                     _hasIconArrangement = YES;
-                    NSDebugLLog(@"gwspace", @"║   Arrangement from plist: grid");
                 }
             }
             
@@ -740,7 +927,6 @@
             if (spacingObj) {
                 _gridSpacing = [spacingObj floatValue];
                 _hasGridSpacing = YES;
-                NSDebugLLog(@"gwspace", @"║   Grid spacing from plist: %.1f", _gridSpacing);
             }
             
             // Extract label position
@@ -748,8 +934,6 @@
             if (labelObj) {
                 _labelPosition = [labelObj boolValue] ? DSStoreLabelPositionBottom : DSStoreLabelPositionRight;
                 _hasLabelPosition = YES;
-                NSDebugLLog(@"gwspace", @"║   Label position from plist: %@", 
-                      _labelPosition == DSStoreLabelPositionBottom ? @"bottom" : @"right");
             }
             
             // Extract background settings
@@ -760,7 +944,6 @@
             if (bgType == 2) {
                 // Picture background
                 _backgroundType = DSStoreBackgroundPicture;
-                NSDebugLLog(@"gwspace", @"║   Background type from plist: picture (2)");
                 
                 // Try to extract background image alias
                 id bgImageAlias = [plist objectForKey:@"backgroundImageAlias"];
@@ -771,10 +954,7 @@
                     if (resolvedPath) {
                         [_backgroundImagePath release];
                         _backgroundImagePath = [resolvedPath copy];
-                        NSDebugLLog(@"gwspace", @"║   Background image from alias: %@", _backgroundImagePath);
                     } else {
-                        NSDebugLLog(@"gwspace", @"║   ⚠ Could not resolve background image alias (%lu bytes)", 
-                              (unsigned long)[aliasData length]);
                     }
                 }
             } else if (bgType == 1) {
@@ -786,17 +966,13 @@
                     CGFloat b = [[plist objectForKey:@"backgroundColorBlue"] floatValue];
                     _backgroundColor = [[NSColor colorWithCalibratedRed:r green:g blue:b alpha:1.0] retain];
                     _backgroundType = DSStoreBackgroundColor;
-                    NSDebugLLog(@"gwspace", @"║   Background type from plist: color (1) R=%.2f G=%.2f B=%.2f", r, g, b);
                 }
             } else {
-                NSDebugLLog(@"gwspace", @"║   Background type from plist: default (0)");
             }
             
         } else {
-            NSDebugLLog(@"gwspace", @"║   ⚠ Failed to parse icvp as plist: %@", error);
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No icvp (icon view plist) entry");
     }
 }
 
@@ -811,7 +987,6 @@
             
             if (strncmp(bytes, "DefB", 4) == 0) {
                 _backgroundType = DSStoreBackgroundDefault;
-                NSDebugLLog(@"gwspace", @"║ ✓ BKGD: Default background (DefB)");
             } else if (strncmp(bytes, "ClrB", 4) == 0) {
                 _backgroundType = DSStoreBackgroundColor;
                 // External docs: 4CC "ClrB" + RGB in 6 bytes (2 bytes per channel, big-endian)
@@ -825,57 +1000,20 @@
                     CGFloat b = bVal / 65535.0;
                     [_backgroundColor release];
                     _backgroundColor = [[NSColor colorWithCalibratedRed:r green:g blue:b alpha:1.0] retain];
-                    NSDebugLLog(@"gwspace", @"║ ✓ BKGD: Color (ClrB) R=0x%04x G=0x%04x B=0x%04x (%.3f, %.3f, %.3f)", 
-                          rVal, gVal, bVal, r, g, b);
                 }
             } else if (strncmp(bytes, "PctB", 4) == 0) {
                 _backgroundType = DSStoreBackgroundPicture;
-                NSDebugLLog(@"gwspace", @"║ ✓ BKGD: Picture background (PctB)");
                 
                 // Use DSStore's method to resolve the background image path
                 NSString *imagePath = [store backgroundImagePathForDirectory];
                 if (imagePath && [imagePath length] > 0) {
                     [_backgroundImagePath release];
                     _backgroundImagePath = [imagePath copy];
-                    NSDebugLLog(@"gwspace", @"║   Background image path: %@", _backgroundImagePath);
                 } else {
-                    NSDebugLLog(@"gwspace", @"║   ⚠ Could not resolve background image path");
                 }
             }
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No BKGD (background) entry");
-    }
-}
-
-- (void)loadIconGridOptionsFromStore:(DSStore *)store
-{
-    // icgo: Icon grid options (8 bytes, probably two 32-bit integers)
-    DSStoreEntry *entry = [store entryForFilename:@"." code:@"icgo"];
-    if (entry && [[entry type] isEqualToString:@"blob"]) {
-        NSData *data = (NSData *)[entry value];
-        if ([data length] >= 8) {
-            const uint8_t *bytes = (const uint8_t *)[data bytes];
-            uint32_t val1 = (bytes[0] << 24) | (bytes[1] << 16) | (bytes[2] << 8) | bytes[3];
-            uint32_t val2 = (bytes[4] << 24) | (bytes[5] << 16) | (bytes[6] << 8) | bytes[7];
-            NSDebugLLog(@"gwspace", @"║ ✓ icgo (Icon Grid Options): %u, %u", val1, val2);
-        }
-    } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No icgo (icon grid options) entry");
-    }
-    
-    // icsp: Icon spacing (8 bytes)
-    entry = [store entryForFilename:@"." code:@"icsp"];
-    if (entry && [[entry type] isEqualToString:@"blob"]) {
-        NSData *data = (NSData *)[entry value];
-        if ([data length] >= 8) {
-            const uint8_t *bytes = (const uint8_t *)[data bytes];
-            // Usually mostly zeros except last two bytes
-            uint16_t spacing = (bytes[6] << 8) | bytes[7];
-            NSDebugLLog(@"gwspace", @"║ ✓ icsp (Icon Spacing): %u", spacing);
-        }
-    } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No icsp (icon spacing) entry");
     }
 }
 
@@ -893,7 +1031,6 @@
     
     if (entry && [[entry type] isEqualToString:@"blob"]) {
         NSData *data = (NSData *)[entry value];
-        NSDebugLLog(@"gwspace", @"║ ✓ lsvp/lsvP (List View Properties): %lu bytes", (unsigned long)[data length]);
         
         NSError *error = nil;
         NSDictionary *plist = [NSPropertyListSerialization propertyListWithData:data
@@ -901,14 +1038,12 @@
                                                                          format:NULL
                                                                           error:&error];
         if (plist && [plist isKindOfClass:[NSDictionary class]]) {
-            NSDebugLLog(@"gwspace", @"║   Parsed plist keys: %@", [plist allKeys]);
             
             // Text size (font size for list entries)
             id textSizeObj = [plist objectForKey:@"textSize"];
             if (textSizeObj && [textSizeObj respondsToSelector:@selector(intValue)]) {
                 _listTextSize = [textSizeObj intValue];
                 _hasListTextSize = YES;
-                NSDebugLLog(@"gwspace", @"║   Text size: %d", _listTextSize);
             }
             
             // Icon size (small icon size in list view)
@@ -916,7 +1051,6 @@
             if (iconSizeObj && [iconSizeObj respondsToSelector:@selector(intValue)]) {
                 _listIconSize = [iconSizeObj intValue];
                 _hasListIconSize = YES;
-                NSDebugLLog(@"gwspace", @"║   Icon size: %d", _listIconSize);
             }
             
             // Sort column - the column used for sorting
@@ -925,14 +1059,12 @@
                 [_sortColumn release];
                 _sortColumn = [(NSString *)sortColumnObj copy];
                 _hasSortColumn = YES;
-                NSDebugLLog(@"gwspace", @"║   Sort column: %@", _sortColumn);
             }
             
             // Sort ascending
             id ascendingObj = [plist objectForKey:@"ascending"];
             if (ascendingObj && [ascendingObj respondsToSelector:@selector(boolValue)]) {
                 _sortAscending = [ascendingObj boolValue];
-                NSDebugLLog(@"gwspace", @"║   Sort ascending: %@", _sortAscending ? @"YES" : @"NO");
             } else {
                 _sortAscending = YES;  // Default to ascending
             }
@@ -970,26 +1102,20 @@
                 if ([widths count] > 0) {
                     [_columnWidths release];
                     _columnWidths = [widths copy];
-                    NSDebugLLog(@"gwspace", @"║   Column widths: %@", _columnWidths);
                 }
                 if ([visible count] > 0) {
                     [_columnVisible release];
                     _columnVisible = [visible copy];
-                    NSDebugLLog(@"gwspace", @"║   Column visibility: %@", _columnVisible);
                 }
             }
         } else {
-            NSDebugLLog(@"gwspace", @"║   ⚠ Failed to parse as plist: %@", error);
         }
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No lsvp/lsvP (list view properties) entry");
     }
     
     // Check for legacy lsvo format (76 bytes)
     entry = [store entryForFilename:@"." code:@"lsvo"];
     if (entry && [[entry type] isEqualToString:@"blob"]) {
-        NSData *data = (NSData *)[entry value];
-        NSDebugLLog(@"gwspace", @"║ ✓ lsvo (List View Options - Legacy): %lu bytes", (unsigned long)[data length]);
         // TODO: Parse legacy format if needed for older DS_Store files
     }
 }
@@ -1001,19 +1127,16 @@
     if (entry && [[entry type] isEqualToString:@"long"]) {
         _sidebarWidth = [[entry value] intValue];
         _hasSidebarWidth = YES;
-        NSDebugLLog(@"gwspace", @"║ ✓ fwsw (Sidebar Width): %d pixels", _sidebarWidth);
     } else {
-        NSDebugLLog(@"gwspace", @"║ ○ No fwsw (sidebar width) entry");
     }
 }
 
 - (void)loadIconEntriesFromStore:(DSStore *)store filenames:(NSArray *)filenames
 {
-    NSDebugLLog(@"gwspace", @"║ --- Per-file entries (icon positions, comments, labels) ---");
     
-    NSUInteger positionCount = 0;
-    NSUInteger commentCount = 0;
-    NSUInteger labelCount = 0;
+
+    /* On-disk children of this directory, used to drop ghost entries. */
+    NSSet *children = [DSStoreInfo childrenOfDirectory: _directoryPath];
     
     for (NSString *filename in filenames) {
         // Skip directory entry
@@ -1041,9 +1164,7 @@
                 }
                 info.position = NSMakePoint((CGFloat)x, (CGFloat)y);
                 info.hasPosition = YES;
-                positionCount++;
                 
-                NSDebugLLog(@"gwspace", @"║   Iloc '%@': (%d, %d) [icon center]", filename, x, y);
             }
         }
         
@@ -1054,8 +1175,6 @@
                 info = [DSStoreIconInfo infoForFilename:filename];
             }
             info.comments = (NSString *)[cmmtEntry value];
-            commentCount++;
-            NSDebugLLog(@"gwspace", @"║   cmmt '%@': \"%@\"", filename, info.comments);
         }
         
         // Check for lclr (label color)
@@ -1067,30 +1186,23 @@
             int32_t colorValue = [[lclrEntry value] intValue];
             info.labelColor = (DSStoreLabelColor)colorValue;
             info.hasLabelColor = YES;
-            labelCount++;
             
-            NSString *colorName = @"none";
-            switch (colorValue) {
-                case 1: colorName = @"red"; break;
-                case 2: colorName = @"orange"; break;
-                case 3: colorName = @"yellow"; break;
-                case 4: colorName = @"green"; break;
-                case 5: colorName = @"blue"; break;
-                case 6: colorName = @"purple"; break;
-                case 7: colorName = @"grey"; break;
-            }
-            NSDebugLLog(@"gwspace", @"║   lclr '%@': %d (%@)", filename, colorValue, colorName);
         }
         
         // Store the info if we have any data
         if (info) {
+            /* Skip ghost entries: a foreign Finder (or a removed/renamed
+             * file) can leave an Iloc/cmmt/lclr for a filename that is no
+             * longer a child of this directory.  Honoring it would place a
+             * nonexistent icon and, worse, collide with a live file that now
+             * has the same position.  Only keep entries whose name is an
+             * on-disk child (or the directory itself). */
+            if (children && [children containsObject: filename] == NO)
+                continue;   /* ghost - drop */
             [_iconInfoDict setObject:info forKey:filename];
         }
     }
     
-    NSDebugLLog(@"gwspace", @"║ Total icon positions found: %lu", (unsigned long)positionCount);
-    NSDebugLLog(@"gwspace", @"║ Total comments found: %lu", (unsigned long)commentCount);
-    NSDebugLLog(@"gwspace", @"║ Total label colors found: %lu", (unsigned long)labelCount);
 }
 
 #pragma mark - Icon Position Access
@@ -1107,9 +1219,259 @@
     }
 }
 
+- (void)setLiveIconPositions:(NSDictionary *)livePositions
+{
+    /* Reset the icon-info map entirely, then re-add only the live icons with
+     * their positions, so a stale/foreign .DS_Store never survives a close. */
+    [_iconInfoDict removeAllObjects];
+    for (NSString *filename in livePositions) {
+        NSValue *v = [livePositions objectForKey: filename];
+        if (v == nil) continue;
+        NSPoint iloc = [v pointValue];
+        DSStoreIconInfo *ii = [DSStoreIconInfo infoForFilename: filename];
+        [ii setPosition: iloc];
+        [ii setHasPosition: YES];
+        [_iconInfoDict setObject: ii forKey: filename];
+    }
+}
+
 - (NSDictionary *)allIconInfo
 {
     return [NSDictionary dictionaryWithDictionary:_iconInfoDict];
+}
+
+/* === Shared per-file entry helpers (also used by GWVolumeCache) === */
+
++ (DSStoreIconInfo *)iconInfoForFile:(NSString *)filename
+                            bareName:(NSString *)bareName
+                           fromStore:(DSStore *)store
+{
+    DSStoreIconInfo *ii = nil;
+
+    /* Iloc: icon location - 16-byte blob, two 4-byte big-endian signed ints
+     * (the icon CENTER, origin at top-left of the window content area). */
+    DSStoreEntry *iloc = [store entryForFilename:filename code:@"Iloc"];
+    if (iloc && [[iloc type] isEqualToString:@"blob"]) {
+        NSData *data = (NSData *)[iloc value];
+        if ([data length] >= 8) {
+            const uint8_t *b = (const uint8_t *)[data bytes];
+            int32_t x = (int32_t)((b[0] << 24) | (b[1] << 16) | (b[2] << 8) | b[3]);
+            int32_t y = (int32_t)((b[4] << 24) | (b[5] << 16) | (b[6] << 8) | b[7]);
+            if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
+            [ii setPosition:NSMakePoint((CGFloat)x, (CGFloat)y)];
+            [ii setHasPosition:YES];
+        }
+    }
+
+    /* lclr: label color */
+    DSStoreEntry *lclr = [store entryForFilename:filename code:@"lclr"];
+    if (lclr && [[lclr type] isEqualToString:@"long"]) {
+        if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
+        [ii setLabelColor:(DSStoreLabelColor)[[lclr value] intValue]];
+        [ii setHasLabelColor:YES];
+    }
+
+    /* cmmt: comments */
+    DSStoreEntry *cmmt = [store entryForFilename:filename code:@"cmmt"];
+    if (cmmt && [[cmmt type] isEqualToString:@"ustr"]) {
+        if (!ii) ii = [DSStoreIconInfo infoForFilename:bareName];
+        [ii setComments:(NSString *)[cmmt value]];
+    }
+
+    return ii;
+}
+
++ (void)writeIconInfo:(DSStoreIconInfo *)ii
+             forFile:(NSString *)filename
+             toStore:(DSStore *)store
+{
+    if ([ii hasPosition]) {
+        /* Patch the existing Iloc so Finder's trailing bytes are preserved. */
+        DSStoreEntry *old = [store entryForFilename: filename code: @"Iloc"];
+        DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile: filename
+                                                                x: (int)[ii position].x
+                                                                y: (int)[ii position].y
+                                                    preserving: old];
+        if (e) [store setEntry:e];
+    }
+    if ([ii comments]) {
+        DSStoreEntry *e = [DSStoreEntry commentsEntryForFile:filename
+                                                    comments:[ii comments]];
+        if (e) [store setEntry:e];
+    }
+    if ([ii hasLabelColor]) {
+        DSStoreEntry *e = [DSStoreEntry labelColorEntryForFile:filename
+                                                          color:(int)[ii labelColor]];
+        if (e) [store setEntry:e];
+    }
+}
+
++ (NSSet *)childrenOfDirectory:(NSString *)directoryPath
+{
+    BOOL isDir = NO;
+    BOOL dirExists = [[NSFileManager defaultManager]
+                       fileExistsAtPath: directoryPath isDirectory: &isDir];
+    if (!(dirExists && isDir)) return nil;
+    NSArray *children = [[NSFileManager defaultManager]
+                          contentsOfDirectoryAtPath: directoryPath error: NULL];
+    if (children == nil) return nil;
+    return [NSSet setWithArray: children];
+}
+
++ (void)pruneNonChildEntriesInStore:(DSStore *)store
+                       forDirectory:(NSString *)directoryPath
+                           keepPath:(NSString *)keepPath
+{
+    NSSet *childSet = [self childrenOfDirectory: directoryPath];
+    if (childSet == nil) return;
+
+    NSArray *allFilenames = [store allFilenames];
+    for (NSString *fn in allFilenames) {
+        if ([fn isEqualToString: keepPath]) continue;
+        if ([fn isEqualToString: @"/"]) continue;   /* volume-root record */
+        if ([childSet containsObject: fn]) continue;  /* real child */
+        [store removeAllEntriesForFilename: fn];
+    }
+}
+
++ (NSSet *)ownedDirectoryCodes
+{
+    /* The codes writeStoreEntriesForInfo: emits for a directory key.  Any
+     * other 4CC under the same key (written by Finder) is not owned and must
+     * survive a merge write. */
+    return [NSSet setWithObjects:
+              @"vstl", @"icvo", @"iarr", @"lblp", @"icsp",
+              @"BKGD", @"fwsw", @"bwsp", @"fwi0", @"lsvp",
+              nil];
+}
+
++ (void)writeStoreEntriesForInfo:(DSStoreInfo *)info
+                             key:(NSString *)key
+                         toStore:(DSStore *)store
+{
+    /* --- Directory-level entries --- */
+
+    /* View style */
+    if ([info hasViewStyle]) {
+        NSString *styleStr = @"icnv";
+        switch ([info viewStyle]) {
+            case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
+            case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
+            case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
+            case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
+            case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
+        }
+        DSStoreEntry *e = [DSStoreEntry viewStyleEntryForFile: key style: styleStr];
+        if (e) [store setEntry: e];
+    }
+
+    /* Icon size - patch the existing icvo if present, preserving unknown
+     * fields (arrangement, flags, future trailing bytes). */
+    if ([info hasIconSize] && [info iconSize] > 0 && [info iconSize] <= 512) {
+        DSStoreEntry *existing = [store entryForFilename: key code: @"icvo"];
+        DSStoreEntry *e = [DSStoreEntry iconSizeEntryForFile: key
+                                                        size: [info iconSize]
+                                                  preserving: existing];
+        if (e) [store setEntry: e];
+    }
+
+    /* Icon arrangement */
+    if ([info hasIconArrangement]) {
+        int arr = ([info iconArrangement] == DSStoreIconArrangementGrid) ? 1 : 0;
+        DSStoreEntry *e = [DSStoreEntry iconArrangementEntryForFile: key arrangement: arr];
+        if (e) [store setEntry: e];
+    }
+
+    /* Label position */
+    if ([info hasLabelPosition]) {
+        int pos = ([info labelPosition] == DSStoreLabelPositionBottom) ? 0 : 1;
+        DSStoreEntry *e = [DSStoreEntry labelPositionEntryForFile: key position: pos];
+        if (e) [store setEntry: e];
+    }
+
+    /* Grid spacing */
+    if ([info hasGridSpacing] && [info gridSpacing] > 0) {
+        DSStoreEntry *e = [DSStoreEntry gridSpacingEntryForFile: key
+                                                        spacing: (int)[info gridSpacing]];
+        if (e) [store setEntry: e];
+    }
+
+    /* Background color - patch existing BKGD, preserving tag/reserved bytes */
+    if ([info backgroundType] == DSStoreBackgroundColor && [info backgroundColor]) {
+        CGFloat r, g, b, a;
+        [[info backgroundColor] getRed: &r green: &g blue: &b alpha: &a];
+        DSStoreEntry *existing = [store entryForFilename: key code: @"BKGD"];
+        DSStoreEntry *e = [DSStoreEntry backgroundColorEntryForFile: key
+                                                                red: (int)(r * 65535.0)
+                                                              green: (int)(g * 65535.0)
+                                                               blue: (int)(b * 65535.0)
+                                                          preserving: existing];
+        if (e) [store setEntry: e];
+    }
+
+    /* Background image */
+    if ([info backgroundType] == DSStoreBackgroundPicture && [info backgroundImagePath]) {
+        DSStoreEntry *e = [DSStoreEntry backgroundImageEntryForFile: key
+                                                          imagePath: [info backgroundImagePath]];
+        if (e) [store setEntry: e];
+    }
+
+    /* Sidebar width */
+    if ([info hasSidebarWidth]) {
+        DSStoreEntry *e = [DSStoreEntry sidebarWidthEntryForFile: key width: [info sidebarWidth]];
+        if (e) [store setEntry: e];
+    }
+
+    /* Window geometry (bwsp + fwi0) - patch existing records so unknown plist
+     * keys / trailing bytes written by Finder are carried forward. */
+    if ([info hasWindowFrame]) {
+        NSRect dsFrame = [info dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
+        DSStoreEntry *oldBwsp = [store entryForFilename: key code: @"bwsp"];
+        DSStoreEntry *bwsp = [DSStoreEntry browserWindowEntryForFile: key
+                                                       windowBounds: dsFrame
+                                                       sidebarWidth: [info sidebarWidth]
+                                                         preserving: oldBwsp];
+        if (bwsp) [store setEntry: bwsp];
+
+        NSString *styleStr = @"icnv";
+        switch ([info viewStyle]) {
+            case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
+            case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
+            case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
+            case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
+            case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
+        }
+        DSStoreEntry *oldFwi0 = [store entryForFilename: key code: @"fwi0"];
+        DSStoreEntry *fwi0 = [DSStoreEntry windowGeometryEntryForFile: key
+                                                                 rect: dsFrame
+                                                            viewStyle: styleStr
+                                                          preserving: oldFwi0];
+        if (fwi0) [store setEntry: fwi0];
+    }
+
+    /* List view settings (lsvp) - patch existing, carrying forward unknown
+     * plist keys. */
+    if ([info hasListTextSize] || [info hasListIconSize] || [info hasSortColumn]
+        || ([[info columnWidths] count] > 0)
+        || ([[info columnVisible] count] > 0)) {
+        DSStoreEntry *oldLsvp = [store entryForFilename: key code: @"lsvp"];
+        DSStoreEntry *e = [DSStoreEntry listViewEntryForFile: key
+                                                  sortColumn: ([info hasSortColumn] ? [info sortColumn] : nil)
+                                                   ascending: [info sortAscending]
+                                                    textSize: ([info hasListTextSize] ? [info listTextSize] : 0)
+                                                    iconSize: ([info hasListIconSize] ? [info listIconSize] : 0)
+                                                columnWidths: [info columnWidths]
+                                               columnVisible: [info columnVisible]
+                                                  preserving: oldLsvp];
+        if (e) [store setEntry: e];
+    }
+
+    /* --- Per-file entries --- */
+    for (NSString *filename in [info allIconInfo]) {
+        [self writeIconInfo: [[info allIconInfo] objectForKey: filename]
+                    forFile: filename
+                    toStore: store];
+    }
 }
 
 - (BOOL)hasAnyIconPositions
@@ -1136,45 +1498,69 @@
 
 #pragma mark - Coordinate Conversion
 
+/* Every window rect this object holds is in GNUstep screen coordinates
+   (origin bottom-left), whatever it was loaded from: the .DS_Store fwi0/bwsp
+   rect, the folder FinderInfo or a viewer's own prefs all pass through
+   +gnustepRectFromDSStoreRect: on the way in.  One convention throughout is
+   what keeps a load-modify-save cycle from flipping the window: reading a
+   stored rect and writing it back out again used to hand the top-left value
+   to the save-time flip a second time, so the window came back mirrored
+   about the middle of the screen after something rewrote the record.
+
+   Both rects exclude the window decoration, matching the fwi0/bwsp format
+   (the .DS_Store rect is the content area); callers turn it into a full
+   frame with -frameRectForContentRect:. */
++ (NSRect)gnustepRectFromDSStoreRect:(NSRect)dsRect
+{
+  CGFloat screenHeight = [[DSStoreInfo safeMainScreen] frame].size.height;
+
+  return NSMakeRect(dsRect.origin.x,
+                    screenHeight - dsRect.origin.y - dsRect.size.height,
+                    dsRect.size.width, dsRect.size.height);
+}
+
 - (NSRect)gnustepWindowFrameForScreen:(NSScreen *)screen
 {
     if (!_hasWindowFrame) {
         return NSZeroRect;
     }
-    
-    // IMPORTANT: .DS_Store fwi0 stores the CONTENT AREA rect (excluding titlebar/chrome)
-    // 
-    // .DS_Store format: origin at TOP-LEFT of screen
-    // - _windowFrame.origin.y is the TOP edge of CONTENT area (distance from top of screen downward)
-    // - Smaller y values = closer to top of screen
-    // 
-    // GNUstep format: origin at BOTTOM-LEFT of screen
-    // - y is distance from bottom of screen upward
-    // - Larger y values = closer to top of screen
-    //
-    // This method returns the CONTENT AREA rect in GNUstep coordinates.
-    // The caller must convert to full window frame using [NSWindow frameRectForContentRect:]
-    //
-    // Conversion: gnustep_y = screenHeight - dsstore_top - content_height
+
+    return _windowFrame;
+}
+
+- (NSRect)dsStoreWindowFrameForScreen:(NSScreen *)screen
+{
+    if (!_hasWindowFrame) {
+        return NSZeroRect;
+    }
+
+    /* Inverse of -gnustepWindowFrameForScreen:: the receiver's GNUstep
+     * CONTENT rect (origin bottom-left) becomes the .DS_Store content-area
+     * rect (origin top-left, y is the top edge measured downward).  Both
+     * rects exclude the window decoration, matching the fwi0/bwsp format.
+     * Do NOT pass a full frame here: the decoration height would then be
+     * added a second time on restore (frameRectForContentRect:), making the
+     * window grow and drift upward every open/close cycle. */
+    if (screen == nil) {
+      screen = [DSStoreInfo safeMainScreen];
+    }
     CGFloat screenHeight = [screen frame].size.height;
-    
-    // _windowFrame.origin.y contains the TOP edge of content area from .DS_Store
-    CGFloat dsStoreTop = _windowFrame.origin.y;
-    CGFloat contentHeight = _windowFrame.size.height;
-    
-    // Calculate bottom edge position of content area in GNUstep coordinates
-    CGFloat gnustepY = screenHeight - dsStoreTop - contentHeight;
-    
-    NSRect result = NSMakeRect(_windowFrame.origin.x, gnustepY, 
-                               _windowFrame.size.width, contentHeight);
-    
-    NSDebugLLog(@"gwspace", @"Coordinate conversion:");
-    NSDebugLLog(@"gwspace", @"  .DS_Store content area: top=%.0f left=%.0f width=%.0f height=%.0f", 
-          dsStoreTop, _windowFrame.origin.x, _windowFrame.size.width, contentHeight);
-    NSDebugLLog(@"gwspace", @"  Screen height: %.0f", screenHeight);
-    NSDebugLLog(@"gwspace", @"  GNUstep content rect: %@", NSStringFromRect(result));
-    
+    CGFloat dsStoreTop = screenHeight - _windowFrame.origin.y - _windowFrame.size.height;
+
+    NSRect result = NSMakeRect(_windowFrame.origin.x, dsStoreTop,
+                               _windowFrame.size.width, _windowFrame.size.height);
+
+
     return result;
+}
+
++ (NSScreen *)safeMainScreen
+{
+  @try {
+    return [NSScreen mainScreen];
+  } @catch (NSException *e) {
+    return nil;
+  }
 }
 
 - (NSPoint)gnustepPositionForDSStorePoint:(NSPoint)dsPoint 
@@ -1196,136 +1582,76 @@
 {
   if (!dsStorePath || [dsStorePath length] == 0) return NO;
 
-  NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-  NSDebugLLog(@"gwspace", @"║             DS_STORE WRITE: %@", dsStorePath);
-  NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
 
   /* Build the DSStore object with all current settings */
   DSStore *store = [DSStore createStoreAtPath:dsStorePath withEntries:nil];
   if (!store) {
-    NSDebugLLog(@"gwspace", @"║ ✗ Failed to create DSStore for %@", dsStorePath);
     return NO;
   }
 
   [store load];  /* Load existing entries so we merge, not replace */
 
-  /* --- Directory-level entries (filename = ".") --- */
+  /* --- Directory-level + per-file entries (keyed by ".") --- */
+  [DSStoreInfo writeStoreEntriesForInfo: self
+                                    key: @"."
+                                toStore: store];
 
-  /* View style */
-  if (_hasViewStyle) {
-    NSString *styleStr = @"icnv";
-    switch (_viewStyle) {
-      case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
-      case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
-      case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
-      case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
-      case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
-    }
-    DSStoreEntry *e = [DSStoreEntry viewStyleEntryForFile:@"." style:styleStr];
-    if (e) [store setEntry:e];
-  }
-
-  /* Icon size */
-  if (_hasIconSize && _iconSize > 0 && _iconSize <= 512) {
-    DSStoreEntry *e = [DSStoreEntry iconSizeEntryForFile:@"." size:_iconSize];
-    if (e) [store setEntry:e];
-  }
-
-  /* Icon arrangement */
-  if (_hasIconArrangement) {
-    int arr = (_iconArrangement == DSStoreIconArrangementGrid) ? 1 : 0;
-    DSStoreEntry *e = [DSStoreEntry iconArrangementEntryForFile:@"." arrangement:arr];
-    if (e) [store setEntry:e];
-  }
-
-  /* Label position */
-  if (_hasLabelPosition) {
-    int pos = (_labelPosition == DSStoreLabelPositionBottom) ? 0 : 1;
-    DSStoreEntry *e = [DSStoreEntry labelPositionEntryForFile:@"." position:pos];
-    if (e) [store setEntry:e];
-  }
-
-  /* Grid spacing */
-  if (_hasGridSpacing && _gridSpacing > 0) {
-    DSStoreEntry *e = [DSStoreEntry gridSpacingEntryForFile:@"." spacing:(int)_gridSpacing];
-    if (e) [store setEntry:e];
-  }
-
-  /* Background color */
-  if (_backgroundType == DSStoreBackgroundColor && _backgroundColor) {
-    CGFloat r, g, b, a;
-    [_backgroundColor getRed:&r green:&g blue:&b alpha:&a];
-    int ri = (int)(r * 65535.0);
-    int gi = (int)(g * 65535.0);
-    int bi = (int)(b * 65535.0);
-    DSStoreEntry *e = [DSStoreEntry backgroundColorEntryForFile:@"."
-                                                           red:ri
-                                                         green:gi
-                                                          blue:bi];
-    if (e) [store setEntry:e];
-  }
-
-  /* Background image */
-  if (_backgroundType == DSStoreBackgroundPicture && _backgroundImagePath) {
-    DSStoreEntry *e = [DSStoreEntry backgroundImageEntryForFile:@"."
-                                                     imagePath:_backgroundImagePath];
-    if (e) [store setEntry:e];
-  }
-
-  /* Sidebar width */
-  if (_hasSidebarWidth) {
-    DSStoreEntry *e = [DSStoreEntry sidebarWidthEntryForFile:@"." width:_sidebarWidth];
-    if (e) [store setEntry:e];
-  }
-
-  /* List view text size */
-  if (_hasListTextSize) {
-    DSStoreEntry *e = [DSStoreEntry textSizeEntryForFile:@"." size:_listTextSize];
-    if (e) [store setEntry:e];
-  }
-
-  /* Sort column */
-  if (_hasSortColumn && _sortColumn) {
-    DSStoreEntry *e = [DSStoreEntry sortByEntryForFile:@"." sortBy:_sortColumn];
-    if (e) [store setEntry:e];
-  }
-
-  /* --- Per-file entries --- */
-  for (NSString *filename in _iconInfoDict) {
-    DSStoreIconInfo *info = [_iconInfoDict objectForKey:filename];
-
-    /* Icon position (Iloc) */
-    if (info.hasPosition) {
-      DSStoreEntry *e = [DSStoreEntry iconLocationEntryForFile:filename
-                                                             x:(int)info.position.x
-                                                             y:(int)info.position.y];
-      if (e) [store setEntry:e];
-    }
-
-    /* Comment */
-    if (info.comments) {
-      DSStoreEntry *e = [DSStoreEntry commentsEntryForFile:filename
-                                                  comments:info.comments];
-      if (e) [store setEntry:e];
-    }
-
-    /* Label color */
-    if (info.hasLabelColor) {
-      DSStoreEntry *e = [DSStoreEntry labelColorEntryForFile:filename
-                                                       color:(int)info.labelColor];
-      if (e) [store setEntry:e];
-    }
-  }
+  /* Prune ghost per-file entries on write: remove Iloc/lclr/cmmt entries for
+   * files that are no longer on-disk children of this directory (renamed,
+   * removed, or localized standard-folder names written by a foreign Finder).
+   * Leaving them would collide with a live file that now has the same
+   * position; the folder's own record ("." / the path) is kept. */
+  [DSStoreInfo pruneNonChildEntriesInStore: store
+                              forDirectory: _directoryPath
+                                  keepPath: @"."];
 
   /* --- Write atomically --- */
   BOOL saved = [store save];
   if (saved) {
-    NSDebugLLog(@"gwspace", @"║ ✓ Successfully wrote %@", dsStorePath);
   } else {
-    NSDebugLLog(@"gwspace", @"║ ✗ Failed to write %@", dsStorePath);
   }
 
-  NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
+  /* Mirror per-folder view style + window geometry into the folder's own
+   * com.apple.FinderInfo DInfo (the classic / spatial macOS channel) so the
+   * values interoperate with Finder on systems that read it, and so Gershwin's
+   * own spatial viewer persists them.  Best-effort only: failures (e.g. a
+   * filesystem without xattr support) are logged and ignored; .DS_Store
+   * remains the primary on-disk channel.  Only written when we actually have a
+   * value, to avoid stamping a spurious zeroed FinderInfo on folders we know
+   * nothing about. */
+  if (saved && (_hasViewStyle || _hasWindowFrame)) {
+    GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: _directoryPath];
+    if (md == nil)
+      md = [[[GSFileMetadata alloc] init] autorelease];
+    if (md != nil) {
+      if (_hasViewStyle) {
+        NSString *styleStr = @"icnv";
+        switch (_viewStyle) {
+          case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
+          case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
+          case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
+          case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
+          case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
+        }
+        [md setViewStyleCodeForDirectory: styleStr];
+      }
+      if (_hasWindowFrame) {
+        NSRect dsFrame = [self dsStoreWindowFrameForScreen:
+                            [DSStoreInfo safeMainScreen]];
+        [md setWindowBoundsForDirectory: dsFrame];
+      }
+      NSError *fiErr = nil;
+      if ([md writeToFileAtPath: _directoryPath error: &fiErr] == NO && fiErr) {
+        NSLog(@"DSStoreInfo: FinderInfo write failed for %@: %@",
+              _directoryPath, fiErr);
+      }
+    }
+
+    /* Mirror into the user's com.apple.finder.plist BrowserWindowState so a
+     * 10.6 macOS Finder (which restores per-folder windows from it) picks up
+     * Gershwin's view/window state.  Best-effort. */
+    [self writeFinderPlistEntry];
+  }
 
   return saved;
 }
@@ -1340,13 +1666,31 @@
 {
   if (!prefs) return;
 
-  /* Window geometry */
+  /* Window geometry.  We persist the CONTENT rect (the area inside the title
+   * bar / border), because .DS_Store fwi0/bwsp stores the content area per
+   * the DS_Store format notes (MozillaWiki, forensiclunch).  Callers supply
+   * it either as a GNUstep NSStringFromRect value "{{x, y}, {w, h}}" or as a
+   * legacy "<x> <y> <w> <h>" space-separated string.  Both parse here; the
+   * rect is interpreted in GNUstep screen coords (bottom-left origin).  The
+   * final flip to DS_Store top-left coords happens in
+   * dsStoreWindowFrameForScreen: when writing. */
   NSString *geo = [prefs objectForKey:@"geometry"];
   if (geo && !(preserve && _hasWindowFrame)) {
-    NSRect frame = NSRectFromString(geo);
-    if (frame.size.width > 0 && frame.size.height > 0) {
-      _windowFrame = frame;
+    NSRect parsed = NSRectFromString(geo);
+    if (parsed.size.width > 0 && parsed.size.height > 0) {
+      _windowFrame = parsed;
       _hasWindowFrame = YES;
+    } else {
+      NSScanner *scanner = [NSScanner scannerWithString: geo];
+      int x = 0, y = 0, w = 0, h = 0;
+      BOOL ok = ([scanner scanInt: &x]
+                 && [scanner scanInt: &y]
+                 && [scanner scanInt: &w]
+                 && [scanner scanInt: &h]);
+      if (ok && w > 0 && h > 0) {
+        _windowFrame = NSMakeRect(x, y, w, h);
+        _hasWindowFrame = YES;
+      }
     }
   }
 
@@ -1395,6 +1739,44 @@
     _sidebarWidth = [sw intValue];
     _hasSidebarWidth = YES;
   }
+
+  /* List view sort column - reported by FSNListView as an FSNInfoType int.
+   * The workspace's list view only sorts ascending, so mirror that. */
+  id htc = [prefs objectForKey: @"hligh_table_col"];
+  if (htc && !(preserve && _hasSortColumn)) {
+    NSString *name = [DSStoreInfo sortColumnNameForInfoType: [htc intValue]];
+    if (name) {
+      [_sortColumn release];
+      _sortColumn = [name copy];
+      _hasSortColumn = YES;
+      _sortAscending = YES;
+    }
+  }
+
+  /* List view column widths - reported by FSNListView's columnsDescription
+   * keyed by the FSNInfoType identifier.  Translate to the Finder column
+   * names used by lsvp. */
+  NSDictionary *cols = [prefs objectForKey: @"list_view_columns"];
+  if (cols && [cols isKindOfClass: [NSDictionary class]]
+      && !(preserve && _columnWidths)) {
+    NSMutableDictionary *widths = [NSMutableDictionary dictionary];
+    for (NSString *key in cols) {
+      NSDictionary *col = [cols objectForKey: key];
+      if (![col isKindOfClass: [NSDictionary class]]) continue;
+      id identObj = [col objectForKey: @"identifier"];
+      id widthObj = [col objectForKey: @"width"];
+      if (!identObj || !widthObj) continue;
+      NSString *name = [DSStoreInfo sortColumnNameForInfoType: [identObj intValue]];
+      if (name) {
+        [widths setObject: [NSNumber numberWithFloat: [widthObj floatValue]]
+                   forKey: name];
+      }
+    }
+    if ([widths count] > 0) {
+      [_columnWidths release];
+      _columnWidths = [widths copy];
+    }
+  }
 }
 
 - (void)resetToDefaults
@@ -1419,6 +1801,97 @@
   [_iconInfoDict removeAllObjects];
 
   _loaded = NO;
+}
+
+- (void)mergeMissingFieldsFromInfo:(DSStoreInfo *)other
+{
+  if (other == nil) return;
+
+  if (!_hasWindowFrame && [other hasWindowFrame]) {
+    _windowFrame = [other windowFrame];
+    _hasWindowFrame = YES;
+  }
+  if (!_hasViewStyle && [other hasViewStyle]) {
+    _viewStyle = [other viewStyle];
+    _hasViewStyle = YES;
+  }
+  if (!_hasIconSize && [other hasIconSize]) {
+    _iconSize = [other iconSize];
+    _hasIconSize = YES;
+  }
+  if (!_hasIconArrangement && [other hasIconArrangement]) {
+    _iconArrangement = [other iconArrangement];
+    _hasIconArrangement = YES;
+  }
+  if (!_hasLabelPosition && [other hasLabelPosition]) {
+    _labelPosition = [other labelPosition];
+    _hasLabelPosition = YES;
+  }
+  if (!_hasGridSpacing && [other hasGridSpacing]) {
+    _gridSpacing = [other gridSpacing];
+    _hasGridSpacing = YES;
+  }
+  if (!_hasSidebarWidth && [other hasSidebarWidth]) {
+    _sidebarWidth = [other sidebarWidth];
+    _hasSidebarWidth = YES;
+  }
+  if (!_hasListTextSize && [other hasListTextSize]) {
+    _listTextSize = [other listTextSize];
+    _hasListTextSize = YES;
+  }
+  if (!_hasListIconSize && [other hasListIconSize]) {
+    _listIconSize = [other listIconSize];
+    _hasListIconSize = YES;
+  }
+  if (!_hasSortColumn && [other hasSortColumn]) {
+    [_sortColumn release];
+    _sortColumn = [[other sortColumn] copy];
+    _hasSortColumn = YES;
+    _sortAscending = [other sortAscending];
+  }
+  if (_columnWidths == nil && [other columnWidths]) {
+    [_columnWidths release];
+    _columnWidths = [[other columnWidths] copy];
+  }
+  if (_columnVisible == nil && [other columnVisible]) {
+    [_columnVisible release];
+    _columnVisible = [[other columnVisible] copy];
+  }
+
+  /* Background: only copy when the receiver has none at all. */
+  if ((_backgroundType == DSStoreBackgroundDefault && _backgroundColor == nil)
+      && [other backgroundType] != DSStoreBackgroundDefault) {
+    _backgroundType = [other backgroundType];
+    [_backgroundColor release];
+    _backgroundColor = [[other backgroundColor] retain];
+    [_backgroundImagePath release];
+    _backgroundImagePath = [[other backgroundImagePath] copy];
+  }
+
+  /* Per-file icon info: for entries the receiver lacks entirely, copy them
+   * wholesale; for entries present in both, fill in sub-fields the receiver
+   * did not touch (so e.g. a label-color-only write keeps existing positions
+   * and comments). */
+  NSDictionary *otherIcons = [other allIconInfo];
+  for (NSString *name in otherIcons) {
+    DSStoreIconInfo *oi = [otherIcons objectForKey: name];
+    DSStoreIconInfo *mine = [self iconInfoForFilename: name];
+    if (mine == nil) {
+      [self setIconInfo: oi forFilename: name];
+    } else {
+      if (![mine hasPosition] && [oi hasPosition]) {
+        [mine setPosition: [oi position]];
+        [mine setHasPosition: YES];
+      }
+      if ([mine comments] == nil && [oi comments]) {
+        [mine setComments: [oi comments]];
+      }
+      if (![mine hasLabelColor] && [oi hasLabelColor]) {
+        [mine setLabelColor: [oi labelColor]];
+        [mine setHasLabelColor: YES];
+      }
+    }
+  }
 }
 
 #pragma mark - Debugging
@@ -1460,75 +1933,6 @@
     [desc appendFormat:@"  iconPositions: %lu files\n", (unsigned long)[self filenamesWithPositions].count];
     
     return desc;
-}
-
-- (void)logAllInfo
-{
-    NSDebugLLog(@"gwspace", @"╔══════════════════════════════════════════════════════════════════╗");
-    NSDebugLLog(@"gwspace", @"║                   DS_STORE INFO SUMMARY                          ║");
-    NSDebugLLog(@"gwspace", @"╠══════════════════════════════════════════════════════════════════╣");
-    NSDebugLLog(@"gwspace", @"║ Directory: %@", _directoryPath);
-    NSDebugLLog(@"gwspace", @"╟──────────────────────────────────────────────────────────────────╢");
-    
-    if (_hasWindowFrame) {
-        NSDebugLLog(@"gwspace", @"║ Window Geometry: x=%.0f y=%.0f w=%.0f h=%.0f", 
-              _windowFrame.origin.x, _windowFrame.origin.y,
-              _windowFrame.size.width, _windowFrame.size.height);
-    } else {
-        NSDebugLLog(@"gwspace", @"║ Window Geometry: (not set)");
-    }
-    
-    if (_hasViewStyle) {
-        NSString *styleName = @"unknown";
-        switch (_viewStyle) {
-            case DSStoreViewStyleIcon: styleName = @"Icon"; break;
-            case DSStoreViewStyleList: styleName = @"List"; break;
-            case DSStoreViewStyleColumn: styleName = @"Column"; break;
-            case DSStoreViewStyleGallery: styleName = @"Gallery"; break;
-            case DSStoreViewStyleCoverflow: styleName = @"Coverflow"; break;
-        }
-        NSDebugLLog(@"gwspace", @"║ View Style: %@", styleName);
-    } else {
-        NSDebugLLog(@"gwspace", @"║ View Style: (not set, defaulting to Icon)");
-    }
-    
-    if (_hasIconSize) {
-        NSDebugLLog(@"gwspace", @"║ Icon Size: %d pixels", _iconSize);
-    } else {
-        NSDebugLLog(@"gwspace", @"║ Icon Size: (not set, using default)");
-    }
-    
-    if (_hasIconArrangement) {
-        NSDebugLLog(@"gwspace", @"║ Icon Arrangement: %@", 
-              _iconArrangement == DSStoreIconArrangementNone ? 
-              @"NONE (free positioning enabled)" : @"Grid (snapping enabled)");
-    } else {
-        NSDebugLLog(@"gwspace", @"║ Icon Arrangement: (not set)");
-    }
-    
-    if (_hasLabelPosition) {
-        NSDebugLLog(@"gwspace", @"║ Label Position: %@",
-              _labelPosition == DSStoreLabelPositionBottom ? @"Bottom" : @"Right");
-    }
-    
-    if (_backgroundColor) {
-        NSDebugLLog(@"gwspace", @"║ Background: Color - %@", _backgroundColor);
-    } else if (_backgroundImagePath) {
-        NSDebugLLog(@"gwspace", @"║ Background: Image - %@", _backgroundImagePath);
-    } else {
-        NSDebugLLog(@"gwspace", @"║ Background: Default");
-    }
-    
-    NSArray *positionedFiles = [self filenamesWithPositions];
-    NSDebugLLog(@"gwspace", @"╟──────────────────────────────────────────────────────────────────╢");
-    NSDebugLLog(@"gwspace", @"║ Icons with custom positions: %lu", (unsigned long)[positionedFiles count]);
-    
-    for (NSString *filename in positionedFiles) {
-        DSStoreIconInfo *info = [_iconInfoDict objectForKey:filename];
-        NSDebugLLog(@"gwspace", @"║   '%@' -> (%.0f, %.0f)", filename, info.position.x, info.position.y);
-    }
-    
-    NSDebugLLog(@"gwspace", @"╚══════════════════════════════════════════════════════════════════╝");
 }
 
 @end
