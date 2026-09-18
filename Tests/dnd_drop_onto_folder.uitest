@@ -1,0 +1,74 @@
+#!/usr/bin/env run_uitest
+# Dropping a file icon onto a folder icon in a spatial viewer must ask before
+# moving anything, must leave the file alone when the user cancels, and must
+# move it into the folder when the user agrees: the icon then leaves the source
+# window and shows up in the folder's own window.
+#
+# The drop is aimed with `drag "A" onto "B"`, which presses on the first icon
+# and releases over the centre of the second, so the script does not depend on
+# icon size or grid spacing.  The confirmation is answered with real clicks,
+# as a user would: invoking the panel's buttons in-process closes it without
+# the move ever happening, which would let the Cancel check pass vacuously.
+#
+# Leaves the computer as it was found: the scratch folder is removed and every
+# window the script opens is closed again.
+#
+# Run with: run_uitest Tests/dnd_drop_onto_folder.uitest
+activate application "Workspace"
+
+# Self-healing start: a run that stopped half way leaves its windows open, and
+# they would go on showing the folder as it was before the fixture is rebuilt.
+if window "Target"
+  close window "Target"
+  wait until not exists window "Target"
+end
+if window "uitest-dnd-${home}"
+  close window "uitest-dnd-${home}"
+  wait until not exists window "uitest-dnd-${home}"
+end
+
+# Spatial viewers take the free-position drag path this test is about.
+select menu "View/View Behavior/Set Spatial as Default"
+
+# Fixture: a scratch folder holding a file and a folder to drop it on, made
+# unique per user.  The harness runs it itself so a failed setup stops the
+# test right here instead of surfacing later as a timeout.
+shell "rm -rf /tmp/uitest-dnd-${home} && mkdir -p /tmp/uitest-dnd-${home}/Target && touch /tmp/uitest-dnd-${home}/dragme.txt"
+
+select menu "Go/Go to Folder..."
+wait until modal
+type "/tmp/uitest-dnd-${home}"
+press Return
+wait until window "uitest-dnd-${home}" timeout 15s
+wait until "dragme.txt" in window "uitest-dnd-${home}"
+wait until "Target" in window "uitest-dnd-${home}"
+
+# 1. Cancelling the confirmation must leave the file where it was.
+drag "dragme.txt" onto "Target" in window "uitest-dnd-${home}"
+wait until modal
+click button "Cancel"
+wait until not exists modal
+assert "dragme.txt" in window "uitest-dnd-${home}"
+shell "test -e /tmp/uitest-dnd-${home}/dragme.txt && test ! -e /tmp/uitest-dnd-${home}/Target/dragme.txt"
+
+# 2. Agreeing moves the file into the folder.
+drag "dragme.txt" onto "Target" in window "uitest-dnd-${home}"
+wait until modal
+click button "OK"
+# The move runs on a file operation thread and reaches the window through
+# the file system watcher, so allow it a moment.
+wait until not exists "dragme.txt" in window "uitest-dnd-${home}" timeout 10s
+shell "test -e /tmp/uitest-dnd-${home}/Target/dragme.txt && test ! -e /tmp/uitest-dnd-${home}/dragme.txt"
+
+doubleclick "Target" in window "uitest-dnd-${home}"
+wait until window "Target" timeout 15s
+wait until "dragme.txt" in window "Target" timeout 10s
+assert "dragme.txt" in window "Target"
+
+close window "Target"
+wait until not exists window "Target"
+close window "uitest-dnd-${home}"
+wait until not exists window "uitest-dnd-${home}"
+shell "rm -rf /tmp/uitest-dnd-${home}"
+
+log "drop onto a folder asks first, honours Cancel and moves on OK"

@@ -1,0 +1,47 @@
+#!/usr/bin/env run_uitest
+# Dropping a file icon onto a folder icon on the Desktop must ask before moving
+# anything, must leave the file alone when the user cancels, and must move it
+# into the folder when the user agrees.  The Desktop has its own icon view, so
+# this path is separate from the one in a viewer window
+# (dnd_drop_onto_folder.uitest).
+#
+# The drop is aimed with `drag "A" onto "B"`, which presses on the first icon
+# and releases over the centre of the second, so the script does not depend on
+# where the Desktop happens to place the new icons.  The confirmation is
+# answered with real clicks, as a user would.
+#
+# The icons live on the Desktop only while the script runs.  Their names are
+# unique to this test, so they are matched without a window scope.
+#
+# Leaves the computer as it was found: both scratch items are removed.
+#
+# Run with: run_uitest Tests/dnd_drop_onto_desktop_folder.uitest
+activate application "Workspace"
+
+# Fixture on the Desktop.  The harness runs it itself so a failed setup stops
+# the test right here instead of surfacing later as a timeout.
+shell "rm -rf ~/Desktop/uitest-dnd-target ~/Desktop/uitest-dnd-file.txt && mkdir ~/Desktop/uitest-dnd-target && touch ~/Desktop/uitest-dnd-file.txt"
+
+# New files reach the Desktop through the file system watcher.
+wait until "uitest-dnd-file.txt" timeout 10s
+wait until "uitest-dnd-target" timeout 10s
+
+# 1. Cancelling the confirmation must leave the file where it was.
+drag "uitest-dnd-file.txt" onto "uitest-dnd-target"
+wait until modal
+click button "Cancel"
+wait until not exists modal
+assert "uitest-dnd-file.txt"
+shell "test -e ~/Desktop/uitest-dnd-file.txt && test ! -e ~/Desktop/uitest-dnd-target/uitest-dnd-file.txt"
+
+# 2. Agreeing moves the file into the folder.
+drag "uitest-dnd-file.txt" onto "uitest-dnd-target"
+wait until modal
+click button "OK"
+wait until not exists "uitest-dnd-file.txt" timeout 10s
+shell "test -e ~/Desktop/uitest-dnd-target/uitest-dnd-file.txt && test ! -e ~/Desktop/uitest-dnd-file.txt"
+
+shell "rm -rf ~/Desktop/uitest-dnd-target ~/Desktop/uitest-dnd-file.txt"
+wait until not exists "uitest-dnd-target" timeout 10s
+
+log "drop onto a Desktop folder asks first, honours Cancel and moves on OK"
