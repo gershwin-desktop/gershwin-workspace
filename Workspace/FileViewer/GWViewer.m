@@ -765,12 +765,12 @@ static BOOL hasLastExtents_ = NO;
      * quick reopen made the frame-constant uitest see a 22px jump between the
      * first open (with title bar) and the second (without). */
     while (xwin != 0 && attempts < 20
-           && !(t > 0
-                && [[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
-                                                                     outLeft:&l
-                                                                    outRight:&r
+           && !([[GWX11WindowManager sharedManager] frameExtentsForWindow:xwin
+                                                                    outLeft:&l
+                                                                   outRight:&r
                                                                      outTop:&t
-                                                                  outBottom:&b])) {
+                                                                  outBottom:&b]
+                && t > 0)) {
       [NSThread sleepForTimeInterval: 0.05];
       attempts++;
     }
