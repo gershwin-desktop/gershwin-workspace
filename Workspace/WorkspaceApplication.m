@@ -1227,12 +1227,39 @@
 
 - (void)applicationTerminated:(GWLaunchedApp *)app
 {
+  NSMutableArray *gone;
+  NSUInteger i;
+
+  /* The same termination arrives on several paths (connection death, task
+   * end, workspace notification), and whatever runs the run loop in between
+   * - the Dock update, the release of the app's proxy to the dead process -
+   * can let another path finish the app while this one still uses it.  Keep
+   * it alive until we are done, and handle it only once. */
+  AUTORELEASE (RETAIN (app));
+
   if (app == activeApplication) {
     activeApplication = nil;
   }
-  
+
+  if ([launchedApps indexOfObjectIdenticalTo: app] == NSNotFound) {
+    return;
+  }
+
+  /* Take the entries out before anything can run the run loop, and let them
+   * go only later: releasing one releases its proxy, which talks to the dead
+   * process and would let re-entered code see the list half updated. */
+  gone = [NSMutableArray array];
+  i = [launchedApps count];
+  while (i-- > 0) {
+    GWLaunchedApp *entry = [launchedApps objectAtIndex: i];
+
+    if ([entry isEqual: app]) {
+      [gone addObject: entry];
+      [launchedApps removeObjectAtIndex: i];
+    }
+  }
+
   [[dtopManager dock] appTerminated: [app path] appName: [app name]];
-  [launchedApps removeObject: app];  
 }
 
 - (GWLaunchedApp *)launchedAppWithPath:(NSString *)path
