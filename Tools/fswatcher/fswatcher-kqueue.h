@@ -142,9 +142,18 @@
 
 - (void)notifyGlobalWatchingClients:(NSDictionary *)info;
 
+- (BOOL)isGlobalValidPath:(NSString *)path;
+
 /* Runs on the main thread (marshalled from the kqueue monitor thread) so the
  * client DO proxies are invoked on the thread that created them. */
 - (void)deliverNotification:(NSDictionary *)info;
+
+- (void)deliverChangesInDirectory:(Watcher *)watcher;
+
+- (void)deliverFiles:(NSArray *)files
+         inDirectory:(NSString *)path
+               event:(NSString *)event
+         globalEvent:(NSString *)globalEvent;
 
 /* kqueue monitor loop, run on a dedicated background thread. */
 - (void)kqueueLoop;
@@ -157,6 +166,10 @@
   NSString *watchedPath;
   int watchDescriptor;
   BOOL isdir;
+  /* Names in the watched directory as of the last event.  kqueue only says
+   * that a directory changed, not which entries, so the change is found by
+   * comparing listings.  Main thread only. */
+  NSSet *contents;
   int listeners;
   FSWatcher *fswatcher;
 }
@@ -176,6 +189,11 @@
 - (int)watchDescriptor;
 
 - (BOOL)isDirWatcher;
+
+/* Re-reads the directory and returns the entries that appeared and vanished
+ * since the previous call.  Returns NO when the directory cannot be read. */
+- (BOOL)getCreatedFiles:(NSArray **)created
+           deletedFiles:(NSArray **)deleted;
 
 @end
 

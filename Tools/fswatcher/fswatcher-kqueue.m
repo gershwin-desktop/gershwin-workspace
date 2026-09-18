@@ -31,6 +31,8 @@
 static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
 
 static NSString *GWWatchedPathDeleted = @"GWWatchedPathDeleted";
+static NSString *GWFileDeletedInWatchedDirectory = @"GWFileDeletedInWatchedDirectory";
+static NSString *GWFileCreatedInWatchedDirectory = @"GWFileCreatedInWatchedDirectory";
 static NSString *GWWatchedFileModified = @"GWWatchedFileModified";
 
 
@@ -217,7 +219,7 @@ static NSString *GWWatchedFileModified = @"GWWatchedFileModified";
 }
 
 - (BOOL)connection:(NSConnection *)ancestor
-             shouldMakeNewConnection:(NSConnection *)newConn;
+             shouldMakeNewConnection:(NSConnection *)newConn
 {
   FSWClientInfo *info = [FSWClientInfo new];
 
@@ -548,22 +550,24 @@ static NSString *GWWatchedFileModified = @"GWWatchedFileModified";
   }
 }
 
+/* The other thread may drop the watcher from the maps (and so free it) while
+ * the caller still uses it, hence the retain under the lock. */
 - (Watcher *)watcherForPath:(NSString *)path
 {
   Watcher *w;
   [watchersLock lock];
-  w = (Watcher *)NSMapGet(watchers, path);
+  w = RETAIN ((Watcher *)NSMapGet(watchers, path));
   [watchersLock unlock];
-  return w;
+  return AUTORELEASE (w);
 }
 
 - (Watcher *)watcherWithWatchDescriptor:(int)fd
 {
   Watcher *w;
   [watchersLock lock];
-  w = (Watcher *)NSMapGet(watchDescrMap, (void *)(intptr_t)fd);
+  w = RETAIN ((Watcher *)NSMapGet(watchDescrMap, (void *)(intptr_t)fd));
   [watchersLock unlock];
-  return w;
+  return AUTORELEASE (w);
 }
 
 - (void)removeWatcher:(Watcher *)watcher
@@ -617,28 +621,100 @@ static NSString *GWWatchedFileModified = @"GWWatchedFileModified";
   }
 }
 
+- (BOOL)isGlobalValidPath:(NSString *)path
+{
+  return (([excludedSuffixes containsObject:
+             [[path pathExtension] lowercaseString]] == NO)
+          && (isDotFile(path) == NO)
+          && inTreeFirstPartOfPath(path, includePathsTree)
+          && (inTreeFirstPartOfPath(path, excludePathsTree) == NO));
+}
+
 /* Runs on the main thread (marshalled from the kqueue monitor thread) so the
  * client DO proxies are used on the thread that created them. */
 - (void)deliverNotification:(NSDictionary *)info
 {
   NSString *path = [info objectForKey: @"path"];
+  Watcher *watcher = [self watcherForPath: path];
+
+  /* Viewers and the Desktop only pick up entries that are named as created
+   * or deleted; a bare "directory modified" would leave them stale. */
+  if ([[info objectForKey: @"event"] isEqual: GWWatchedFileModified]
+      && [watcher isDirWatcher]) {
+    [self deliverChangesInDirectory: watcher];
+    return;
+  }
 
   [self notifyClients: info];
 
-  if (([excludedSuffixes containsObject:
-         [[path pathExtension] lowercaseString]] == NO)
-      && (isDotFile(path) == NO)
-      && inTreeFirstPartOfPath(path, includePathsTree)
-      && (inTreeFirstPartOfPath(path, excludePathsTree) == NO)) {
+  if ([self isGlobalValidPath: path]) {
     [self notifyGlobalWatchingClients: info];
+  }
+}
+
+- (void)deliverChangesInDirectory:(Watcher *)watcher
+{
+  NSString *path = [watcher watchedPath];
+  NSArray *created = nil;
+  NSArray *deleted = nil;
+
+  if ([watcher getCreatedFiles: &created deletedFiles: &deleted]
+      && ([created count] > 0 || [deleted count] > 0)) {
+    [self deliverFiles: deleted
+           inDirectory: path
+                 event: GWFileDeletedInWatchedDirectory
+           globalEvent: GWWatchedPathDeleted];
+    [self deliverFiles: created
+           inDirectory: path
+                 event: GWFileCreatedInWatchedDirectory
+           globalEvent: GWFileCreatedInWatchedDirectory];
+    return;
+  }
+
+  /* No entry came or went: something inside an entry changed. */
+  [self notifyClients: [NSDictionary dictionaryWithObjectsAndKeys:
+                                       path, @"path",
+                                       GWWatchedFileModified, @"event",
+                                       nil]];
+}
+
+/* Directory watchers get one notification naming all files; global watchers
+ * (the metadata indexer) want one per full path, as the other backends send. */
+- (void)deliverFiles:(NSArray *)files
+         inDirectory:(NSString *)path
+               event:(NSString *)event
+         globalEvent:(NSString *)globalEvent
+{
+  NSUInteger i;
+
+  if ([files count] == 0) {
+    return;
+  }
+
+  [self notifyClients: [NSDictionary dictionaryWithObjectsAndKeys:
+                                       path, @"path",
+                                       event, @"event",
+                                       files, @"files",
+                                       nil]];
+
+  for (i = 0; i < [files count]; i++) {
+    NSString *fullpath = [path stringByAppendingPathComponent:
+                                 [files objectAtIndex: i]];
+
+    if ([self isGlobalValidPath: fullpath]) {
+      [self notifyGlobalWatchingClients:
+              [NSDictionary dictionaryWithObjectsAndKeys:
+                              fullpath, @"path",
+                              globalEvent, @"event",
+                              nil]];
+    }
   }
 }
 
 - (void)kqueueLoop
 {
-  CREATE_AUTORELEASE_POOL(pool);
-
   while (1) {
+    CREATE_AUTORELEASE_POOL(pool);
     struct kevent ev;
     int n;
 
@@ -647,20 +723,18 @@ static NSString *GWWatchedFileModified = @"GWWatchedFileModified";
      * kevent() on the same kq, which is safe. */
     n = kevent(kq, NULL, 0, &ev, 1, NULL);
 
-    if (n < 0) {
-      if (errno == EINTR) {
-        continue;
-      }
+    if (n < 0 && errno != EINTR) {
+      RELEASE (pool);
       break;
     }
-    if (n == 0) {
-      continue;
+    if (n > 0) {
+      [self handleKevent: &ev];
     }
 
-    [self handleKevent: &ev];
+    /* A pool per event: the loop never returns, so one pool around it would
+     * keep every notification ever sent. */
+    RELEASE (pool);
   }
-
-  RELEASE (pool);
 }
 
 - (void)handleKevent:(struct kevent *)ev
@@ -735,6 +809,7 @@ static inline BOOL isDotFile(NSString *path)
 - (void)dealloc
 {
   RELEASE (watchedPath);
+  RELEASE (contents);
   [super dealloc];
 }
 
@@ -751,6 +826,10 @@ static inline BOOL isDotFile(NSString *path)
     ASSIGN (watchedPath, path);
     watchDescriptor = wdesc;
     isdir = ([attributes fileType] == NSFileTypeDirectory);
+    if (isdir) {
+      contents = [[NSSet alloc] initWithArray:
+                                  [fm directoryContentsAtPath: path]];
+    }
     listeners = 1;
     fswatcher = fsw;
   }
@@ -789,6 +868,32 @@ static inline BOOL isDotFile(NSString *path)
 - (BOOL)isDirWatcher
 {
   return isdir;
+}
+
+- (BOOL)getCreatedFiles:(NSArray **)created
+           deletedFiles:(NSArray **)deleted
+{
+  NSArray *listing = [[NSFileManager defaultManager]
+                       directoryContentsAtPath: watchedPath];
+  NSSet *current;
+  NSMutableSet *added;
+  NSMutableSet *removed;
+
+  if (listing == nil) {
+    return NO;
+  }
+
+  current = [NSSet setWithArray: listing];
+  added = [NSMutableSet setWithSet: current];
+  [added minusSet: contents];
+  removed = [NSMutableSet setWithSet: contents];
+  [removed minusSet: current];
+
+  ASSIGN (contents, current);
+  *created = [added allObjects];
+  *deleted = [removed allObjects];
+
+  return YES;
 }
 
 @end
