@@ -42,11 +42,15 @@ drag "dragme.txt" onto "Inner" in window "Outer" hold 1500ms
 wait until modal
 click button "OK"
 wait until not exists modal
-shell "test -e /tmp/uitest-spring-${home}/Outer/Inner/dragme.txt && test ! -e /tmp/uitest-spring-${home}/Outer/dragme.txt"
 
 # The window the item went into stays where it is.
 wait until window "Inner"
 assert not exists window "Outer"
+
+# The move runs on a file operation thread and reaches the window through
+# the file system watcher, so the item shows up a moment after the OK.
+wait until "dragme.txt" in window "Inner" timeout 10s
+shell "test -e /tmp/uitest-spring-${home}/Outer/Inner/dragme.txt && test ! -e /tmp/uitest-spring-${home}/Outer/dragme.txt"
 
 close window "Inner"
 wait until not exists window "Inner"
