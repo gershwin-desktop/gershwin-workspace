@@ -227,6 +227,74 @@
   return (isWsIcon || isTrashIcon);
 }
 
+- (BOOL)isFolderIcon
+{
+  return ([self isSpecialIcon] == NO) && [node isDirectory]
+    && ([node isPackage] == NO);
+}
+
+- (BOOL)isApplicationIcon
+{
+  return ([self isSpecialIcon] == NO) && [node isApplication];
+}
+
+- (void)bringApplicationForward
+{
+  if (apphidden) {
+    [[Workspace gworkspace] unhideAppWithPath: [node path] andName: appName];
+  } else {
+    [[Workspace gworkspace] activateAppWithPath: [node path]
+                                        andName: appName
+                                            pid: appPID];
+  }
+}
+
+- (BOOL)springOpensItself
+{
+  return [self isApplicationIcon] && launched;
+}
+
+- (void)springOpen
+{
+  [self bringApplicationForward];
+}
+
+- (void)showDropHighlight:(BOOL)lit
+{
+  /* While the icon flashes before springing open, the flash owns the
+   * highlight; the drag updates in between would undo each step. */
+  if (springFlashing)
+    return;
+
+  if (lit)
+    [self select];
+  else
+    [self unselect];
+}
+
+- (void)setSpringHighlightVisible:(BOOL)visible
+{
+  BOOL lit;
+
+  if (springFlashing == NO)
+    {
+      springRestingLit = isSelected;
+      springFlashing = YES;
+    }
+
+  lit = visible ? springRestingLit : (springRestingLit == NO);
+  if (visible)
+    springFlashing = NO;
+
+  if (lit)
+    [self select];
+  else
+    [self unselect];
+
+  /* The drag loop does not return to the run loop that would redraw. */
+  [container displayIfNeeded];
+}
+
 - (void)decorate
 {
   if (isTrashIcon)
@@ -776,7 +844,9 @@
   if (theEvent == nil) return;
   
   if ([theEvent clickCount] >= minimumLaunchClicks) {
-    if ([self isSpecialIcon] == NO) {
+    if ([self isFolderIcon]) {
+      [[Workspace gworkspace] newViewerAtPath: [node path]];
+    } else if ([self isSpecialIcon] == NO) {
       NSString *nodePath = [node path];
       
       /* Safety check: ensure we have a valid path and name */
@@ -831,14 +901,7 @@
           }
         }
 
-        if (apphidden) {
-          [[Workspace gworkspace] unhideAppWithPath: nodePath andName: appName];
-        } else {
-          [[Workspace gworkspace] activateAppWithPath: nodePath andName: appName pid: appPID];
-        }
-      } else if ([node isDirectory]) {
-        /* This is a folder icon in the Dock. Open it explicitly in a new viewer. */
-        [[Workspace gworkspace] newViewerAtPath: nodePath];
+        [self bringApplicationForward];
       }
     } else if (isWsIcon) {
       [[GWDesktopManager desktopManager] showRootViewer];
@@ -910,6 +973,35 @@
   } else if (isWsIcon) {
     /* Workspace icon: use default menu behavior from superclass. */
     return [super menuForEvent: theEvent];
+  } else if ([self isFolderIcon]) {
+    NSMenu *menu = AUTORELEASE ([[NSMenu alloc] initWithTitle: [node name]]);
+    NSString *path = [node path];
+    NSMenuItem *item;
+
+    item = AUTORELEASE ([NSMenuItem new]);
+    [item setTitle: NSLocalizedString(@"Open", @"")];
+    [item setTarget: (Dock *)container];
+    [item setAction: @selector(iconMenuAction:)];
+    [item setRepresentedObject: path];
+    [menu addItem: item];
+
+    item = AUTORELEASE ([NSMenuItem new]);
+    [item setTitle: NSLocalizedString(@"Show In File Viewer", @"")];
+    [item setTarget: (Dock *)container];
+    [item setAction: @selector(iconMenuAction:)];
+    [item setRepresentedObject: path];
+    [menu addItem: item];
+
+    [menu addItem: [NSMenuItem separatorItem]];
+
+    item = AUTORELEASE ([NSMenuItem new]);
+    [item setTitle: NSLocalizedString(@"Remove from Dock", @"")];
+    [item setTarget: (Dock *)container];
+    [item setAction: @selector(iconMenuAction:)];
+    [item setRepresentedObject: self];
+    [menu addItem: item];
+
+    return menu;
   } else if ([self isSpecialIcon] == NO) {
     NSString *appPath = [self path];
     
@@ -988,51 +1080,6 @@
         }
       } 
       
-      RELEASE (arp);
-      return AUTORELEASE (menu);
-    } else if ([node isDirectory]) {
-      /* Folder context menu */
-      CREATE_AUTORELEASE_POOL(arp);
-      NSMenu *menu = [[NSMenu alloc] initWithTitle: [node name]];
-      NSMenuItem *item;
-      NSString *path = [node path];
-
-      item = [NSMenuItem new];
-      [item setTitle: NSLocalizedString(@"Open", @"")];
-      [item setTarget: [Workspace gworkspace]];
-      [item setAction: @selector(newViewerAtPath:)];
-      [item setRepresentedObject: path];
-      [menu addItem: item];
-      RELEASE (item);
-
-      item = [NSMenuItem new];
-      [item setTitle: NSLocalizedString(@"New Viewer", @"")];
-      [item setTarget: [Workspace gworkspace]];
-      [item setAction: @selector(newViewerAtPath:)];
-      [item setRepresentedObject: path];
-      [menu addItem: item];
-      RELEASE (item);
-
-      item = [NSMenuItem new];
-      [item setTitle: NSLocalizedString(@"Open in Terminal", @"")];
-      [item setTarget: [Workspace gworkspace]];
-      [item setAction: @selector(openTerminal:)];
-      [item setRepresentedObject: path];
-      [menu addItem: item];
-      RELEASE (item);
-
-      [menu addItem: [NSMenuItem separatorItem]];
-
-      if (docked) {
-        item = [NSMenuItem new];
-        [item setTarget: (Dock *)container];
-        [item setAction: @selector(iconMenuAction:)];
-        [item setTitle: NSLocalizedString(@"Remove from Dock", @"")];
-        [item setRepresentedObject: self];
-        [menu addItem: item];
-        RELEASE (item);
-      }
-
       RELEASE (arp);
       return AUTORELEASE (menu);
     }
@@ -1260,11 +1307,68 @@ x += 6; \
   }
 }
 
+/* Items dropped on a folder in the Dock go into it - unless they are
+ * already there, or the folder is one of them or inside one. */
+- (BOOL)folderAcceptsDraggedPaths:(NSArray *)paths
+{
+  NSString *target = [node path];
+  NSUInteger i;
+
+  if ([paths count] == 0 || [node isWritable] == NO)
+    return NO;
+  if ([[[paths objectAtIndex: 0] stringByDeletingLastPathComponent] isEqual: target])
+    return NO;
+
+  for (i = 0; i < [paths count]; i++)
+    {
+      NSString *dragged = [paths objectAtIndex: i];
+
+      if ([target isEqual: dragged]
+          || [target hasPrefix: [dragged stringByAppendingString: @"/"]])
+        return NO;
+    }
+
+  [self showDropHighlight: YES];
+  return YES;
+}
+
+- (void)fileDraggedPathsIntoFolder:(NSArray *)paths
+{
+  NSString *source = [[paths objectAtIndex: 0] stringByDeletingLastPathComponent];
+  NSString *operation;
+
+  if ([source isEqual: [[GWDesktopManager desktopManager] trashPath]])
+    {
+      operation = @"WorkspaceRecycleOutOperation";
+    }
+  else
+    {
+      switch (dragOperationForCurrentModifierFlags())
+        {
+          case NSDragOperationCopy:
+            operation = NSWorkspaceCopyOperation;
+            break;
+          case NSDragOperationLink:
+            operation = FSNLinkDropOperation();
+            break;
+          default:
+            /* Where the items cannot be removed from, they are copied. */
+            operation = [fm isWritableFileAtPath: source]
+              ? NSWorkspaceMoveOperation : NSWorkspaceCopyOperation;
+            break;
+        }
+    }
+
+  [self fileDroppedPaths: paths operation: operation];
+}
+
 - (BOOL)acceptsDraggedPaths:(NSArray *)paths
 {
   unsigned i;
 
-  if ([self isSpecialIcon] == NO) {
+  if ([self isFolderIcon]) {
+    return [self folderAcceptsDraggedPaths: paths];
+  } else if ([self isSpecialIcon] == NO) {
     for (i = 0; i < [paths count]; i++) {
       NSString *path = [paths objectAtIndex: i];
       FSNode *nod = [FSNode nodeWithPath: path];
@@ -1274,7 +1378,7 @@ x += 6; \
       }
     }
 
-    [self select]; 
+    [self showDropHighlight: YES]; 
     return YES;
     
   } else if (isTrashIcon) {
@@ -1298,7 +1402,7 @@ x += 6; \
     }
       
     if (accept) {
-      [self select];
+      [self showDropHighlight: YES];
     }
   
     return accept;
@@ -1312,8 +1416,12 @@ x += 6; \
   NSUInteger i;
   
   [self unselect];
-        
-  if ([self isSpecialIcon] == NO)
+
+  if ([self isFolderIcon])
+    {
+      [self fileDraggedPathsIntoFolder: paths];
+    }
+  else if ([self isSpecialIcon] == NO)
     {
       for (i = 0; i < [paths count]; i++)
         {

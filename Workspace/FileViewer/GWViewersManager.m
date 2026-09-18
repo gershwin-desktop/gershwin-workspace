@@ -2071,25 +2071,13 @@ typedef enum
 
 @implementation GWViewersManager (SpringLoading)
 
-- (id)viewerForWindow:(NSWindow *)window
-{
-  NSUInteger i;
-
-  for (i = 0; i < [viewers count]; i++)
-    {
-      id vwr = [viewers objectAtIndex: i];
-
-      if ([vwr win] == window)
-        return vwr;
-    }
-
-  return nil;
-}
-
-- (BOOL)springLoader:(FSNSpringLoader *)loader mayOpenNode:(FSNode *)node
+- (BOOL)springLoader:(FSNSpringLoader *)loader
+         mayOpenNode:(FSNode *)node
+              inView:(NSView *)view
 {
   NSString *trash = [gworkspace trashPath];
   NSString *path = [node path];
+  id shownBy = [self viewerWithWindow: [view window]];
 
   /* The Trash only ever takes drops; neither it nor anything in it opens
    * under a drag. */
@@ -2103,6 +2091,17 @@ typedef enum
       && [node performSelector: @selector(isNetworkService)])
     return NO;
 
+  /* The folder the window shows already - the last part of its path bar,
+   * its own entry in the sidebar - would only flash. */
+  if (shownBy != nil)
+    {
+      FSNode *shown = [shownBy respondsToSelector: @selector(shownNode)]
+        ? [shownBy shownNode] : [shownBy baseNode];
+
+      if ([[shown path] isEqual: path])
+        return NO;
+    }
+
   return YES;
 }
 
@@ -2111,7 +2110,7 @@ typedef enum
           fromView:(NSView *)view
 {
   GWSpringToken *token = AUTORELEASE ([GWSpringToken new]);
-  id source = [self viewerForWindow: [view window]];
+  id source = [self viewerWithWindow: [view window]];
   id viewer;
 
   /* A browsing window follows the drag in place, as it does when the

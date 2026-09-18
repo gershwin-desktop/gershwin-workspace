@@ -41,6 +41,8 @@
 #import "DockServiceDBus.h"
 #endif
 
+/* Room for the line between the applications and the folders and Trash. */
+#define DIVIDER_SIZE 12
 #define MAX_ICN_SIZE 48
 #define MIN_ICN_SIZE 16
 #define ICN_INCR 4
@@ -122,6 +124,7 @@ static inline CGFloat _dockScaleFactor(void)
       dragdelay = 0;
       targetIndex = -1;
       targetRect = NSZeroRect;
+      folderTargetIndex = -1;
     
       pbTypes = [NSArray arrayWithObjects: NSFilenamesPboardType,
 			 @"DockIconPboardType",
@@ -205,6 +208,7 @@ static inline CGFloat _dockScaleFactor(void)
 	  }
 	}
 
+      [self loadDockedFolders];
       [self createTrashIcon];
 
       /* Register for drag notifications */
@@ -306,10 +310,13 @@ static inline CGFloat _dockScaleFactor(void)
         return nil;
       }
 
+      /* Applications stay before the divider, whatever index they are
+       * given: past it are the folders and the Trash. */
       if (index == -1) {
-        icnindex = ([icons count]) ? ([icons count] - 1) : 0;
+        icnindex = [self firstDocumentIndex];
       } else {
         icnindex = (index < [icons count]) ? (index + 1) : [icons count];
+        icnindex = MIN (icnindex, [self firstDocumentIndex]);
       }
 
       [icon setHighlightColor: backColor];
@@ -325,6 +332,93 @@ static inline CGFloat _dockScaleFactor(void)
   }
   
   return nil;
+}
+
+/* Where the section of folders and the Trash begins. */
+- (NSUInteger)firstDocumentIndex
+{
+  NSUInteger i;
+
+  for (i = 0; i < [icons count]; i++)
+    {
+      DockIcon *icon = [icons objectAtIndex: i];
+
+      if ([icon isFolderIcon] || [icon isTrashIcon])
+        return i;
+    }
+
+  return [icons count];
+}
+
+- (NSUInteger)trashIndex
+{
+  NSUInteger i = [icons indexOfObjectIdenticalTo: [self trashIcon]];
+
+  return (i == NSNotFound) ? [icons count] : i;
+}
+
+- (DockIcon *)folderIconForPath:(NSString *)path
+{
+  NSUInteger i;
+
+  for (i = 0; i < [icons count]; i++)
+    {
+      DockIcon *icon = [icons objectAtIndex: i];
+
+      if ([icon isFolderIcon] && [[icon path] isEqual: path])
+        return icon;
+    }
+
+  return nil;
+}
+
+- (DockIcon *)addFolderIconAtPath:(NSString *)path
+                          atIndex:(NSUInteger)index
+{
+  FSNode *node = [FSNode nodeWithPath: path];
+  NSUInteger first = [self firstDocumentIndex];
+  NSUInteger last = [self trashIndex];
+  DockIcon *icon;
+
+  if (node == nil || [node isValid] == NO
+      || [node isDirectory] == NO || [node isPackage])
+    return nil;
+
+  /* The name as it is, extension and all: it is not an application's. */
+  icon = [[DockIcon alloc] initForNode: node
+                               appName: [node name]
+                              iconSize: iconSize];
+  if (icon == nil)
+    return nil;
+
+  index = MAX (first, MIN (index, last));
+
+  [icon setHighlightColor: backColor];
+  [icon setSingleClickLaunch: singleClickLaunch];
+  [icon setDocked: YES];
+  [icons insertObject: icon atIndex: index];
+  [self addSubview: icon];
+  RELEASE (icon);
+
+  /* Told when the folder is deleted or moved away, like an application. */
+  [manager addWatcherForPath: path];
+
+  return icon;
+}
+
+- (void)loadDockedFolders
+{
+  NSArray *paths = [[NSUserDefaults standardUserDefaults] arrayForKey: @"folders"];
+  NSUInteger i;
+
+  for (i = 0; i < [paths count]; i++)
+    {
+      NSString *path = [paths objectAtIndex: i];
+
+      if ([path isKindOfClass: [NSString class]]
+          && [self folderIconForPath: path] == nil)
+        [self addFolderIconAtPath: path atIndex: [icons count]];
+    }
 }
 
 - (void)addDraggedIcon:(NSData *)icondata
@@ -379,6 +473,10 @@ static inline CGFloat _dockScaleFactor(void)
   for (i = 0; i < [icons count]; i++) {
     DockIcon *icon = [icons objectAtIndex: i];
 
+    /* A kept folder is never an application, whatever it is called. */
+    if ([icon isFolderIcon]) {
+      continue;
+    }
     if ([[icon path] isEqual: path]) {
       return icon;
     }
@@ -397,7 +495,7 @@ static inline CGFloat _dockScaleFactor(void)
   for (i = 0; i < [icons count]; i++) {
     DockIcon *icon = [icons objectAtIndex: i];
 
-    if ([[icon appName] isEqual: name]) {
+    if ([icon isFolderIcon] == NO && [[icon appName] isEqual: name]) {
       return icon;
     }
   }
@@ -654,6 +752,9 @@ static inline CGFloat _dockScaleFactor(void)
     NSString *basePath = [path stringByDeletingLastPathComponent];
   
     [gw selectFile: path inFileViewerRootedAtPath: basePath];
+
+  } else if ([title isEqual: NSLocalizedString(@"Open", @"")]) {
+    [gw newViewerAtPath: representedObject];
   
   } else if ([title isEqual: NSLocalizedString(@"Keep in Dock", @"")]) {
     DockIcon *icon = (DockIcon *)representedObject;
@@ -764,8 +865,18 @@ static inline CGFloat _dockScaleFactor(void)
   NSRect icnrect = NSZeroRect;
   NSRect rect = NSZeroRect;
   NSUInteger i;
+  NSUInteger docs = [self firstDocumentIndex];
+  /* Only a Dock with something on both sides is divided. */
+  BOOL divided = (docs > 0) && (docs < [icons count]);
+  CGFloat dividerLength = divided ? DIVIDER_SIZE : 0;
+  /* The icons, and the gaps opened where a dragged item would go. */
+  CGFloat slots = [icons count] + ((targetIndex != -1) ? 1 : 0)
+                                + ((folderTargetIndex != -1) ? 1 : 0);
   iconSize = MAX_ICN_SIZE;
   CGFloat sf = _dockScaleFactor();
+
+  dividerRect = NSZeroRect;
+  folderGapRect = NSZeroRect;
 
   /* Compute unscaled cell size (used for icon subview layout inside the view,
    * where the backend's HiDPI transform is already active). */
@@ -777,10 +888,7 @@ static inline CGFloat _dockScaleFactor(void)
   /* Use SCALED cell for the dock window frame (screen pixel coordinates). */
   CGFloat scaledCell = icnrect.size.width * sf;
 
-  rect.size.height = [icons count] * scaledCell;
-  if (targetIndex != -1) {
-    rect.size.height += scaledCell;
-  }
+  rect.size.height = slots * scaledCell + dividerLength * sf;
 
   maxheight -= (scaledCell * 2);
 
@@ -789,11 +897,7 @@ static inline CGFloat _dockScaleFactor(void)
     icnrect.size.height = ceil(iconSize / 3 * 4);
     icnrect.size.width = icnrect.size.height;
     scaledCell = icnrect.size.width * sf;
-    rect.size.height = [icons count] * scaledCell;
-
-    if (targetIndex != -1) {
-      rect.size.height += scaledCell;
-    }
+    rect.size.height = slots * scaledCell + dividerLength * sf;
 
     if (iconSize <= MIN_ICN_SIZE) {
       break;
@@ -802,13 +906,13 @@ static inline CGFloat _dockScaleFactor(void)
 
   if (position == DockPositionBottom)
   {
-    rect.size.width = [icons count] * scaledCell;
+    rect.size.width = slots * scaledCell + dividerLength * sf;
     rect.size.height = scaledCell;
   }
   else
   {
     rect.size.width = scaledCell;
-    rect.size.height = [icons count] * scaledCell;
+    rect.size.height = slots * scaledCell + dividerLength * sf;
   }
 
   // Offset by the primary screen's origin so the dock lands on the correct
@@ -870,6 +974,18 @@ static inline CGFloat _dockScaleFactor(void)
       if (oldIcnSize != iconSize)
        [icon setIconSize: iconSize];
 
+      if (divided && (i == docs))
+        {
+          dividerRect = NSMakeRect(icnrect.origin.x, 0,
+                                   dividerLength, icnrect.size.height);
+          icnrect.origin.x += dividerLength;
+        }
+      if ((NSInteger)i == folderTargetIndex)
+        {
+          folderGapRect = icnrect;
+          icnrect.origin.x += icnrect.size.width;
+        }
+
       [icon setFrame: icnrect];
       icnrect.origin.x += icnrect.size.width;
 
@@ -887,6 +1003,18 @@ static inline CGFloat _dockScaleFactor(void)
 
       if (oldIcnSize != iconSize)
         [icon setIconSize: iconSize];
+
+      if (divided && (i == docs))
+        {
+          icnrect.origin.y -= dividerLength;
+          dividerRect = NSMakeRect(0, icnrect.origin.y,
+                                   icnrect.size.width, dividerLength);
+        }
+      if ((NSInteger)i == folderTargetIndex)
+        {
+          icnrect.origin.y -= icnrect.size.height;
+          folderGapRect = icnrect;
+        }
 
       icnrect.origin.y -= icnrect.size.height;
       [icon setFrame: icnrect];
@@ -949,17 +1077,18 @@ static inline CGFloat _dockScaleFactor(void)
   }
 }
 
-- (void)saveDockConfiguration
+/* Applications by their place in the Dock, as they have always been kept;
+ * folders in their own list, in order. */
+- (NSDictionary *)dockedApplicationEntries
 {
-  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
   NSMutableDictionary *dict = [NSMutableDictionary dictionary];
-  NSUInteger i;  
+  NSUInteger i;
 
   for (i = 0; i < [icons count]; i++)
     {
-      DockIcon *icon = [icons objectAtIndex: i];    
+      DockIcon *icon = [icons objectAtIndex: i];
 
-      if (([icon isSpecialIcon] == NO) && [icon isDocked])
+      if ([icon isApplicationIcon] && [icon isDocked])
 	{
 	  /* Save both name and path so non-GNUstep apps can be restored */
 	  NSMutableDictionary *appEntry = [NSMutableDictionary dictionary];
@@ -969,19 +1098,44 @@ static inline CGFloat _dockScaleFactor(void)
 	}
     }
 
-  [defaults setObject: dict forKey: @"applications"];
+  return dict;
+}
+
+- (NSArray *)dockedFolderPaths
+{
+  NSMutableArray *paths = [NSMutableArray array];
+  NSUInteger i;
+
+  for (i = 0; i < [icons count]; i++)
+    {
+      DockIcon *icon = [icons objectAtIndex: i];
+
+      if ([icon isFolderIcon] && [icon isDocked])
+        [paths addObject: [icon path]];
+    }
+
+  return paths;
+}
+
+- (void)saveDockConfiguration
+{
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
+
+  [defaults setObject: [self dockedApplicationEntries] forKey: @"applications"];
+  [defaults setObject: [self dockedFolderPaths] forKey: @"folders"];
   [defaults synchronize];
 }
 
 - (void)updateDefaults
 {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
-  NSMutableDictionary *dict = [NSMutableDictionary dictionary];
   NSUInteger i;  
 
   [defaults setObject: [NSNumber numberWithInt: style]
                forKey: @"dockstyle"];
   [defaults setBool: singleClickLaunch forKey: @"singleclicklaunch"];
+  [defaults setObject: [self dockedApplicationEntries] forKey: @"applications"];
+  [defaults setObject: [self dockedFolderPaths] forKey: @"folders"];
 
   for (i = 0; i < [icons count]; i++)
     {
@@ -989,19 +1143,12 @@ static inline CGFloat _dockScaleFactor(void)
 
       if (([icon isSpecialIcon] == NO) && [icon isDocked])
 	{
-	  /* Save both name and path so non-GNUstep apps can be restored */
-	  NSMutableDictionary *appEntry = [NSMutableDictionary dictionary];
-	  [appEntry setObject: [icon appName] forKey: @"name"];
-	  [appEntry setObject: [[icon node] path] forKey: @"path"];
-	  [dict setObject: appEntry forKey: [[NSNumber numberWithInt: i] stringValue]];
 	  [manager removeWatcherForPath: [[icon node] path]];
 	}
 
       [icon setSingleClickLaunch: singleClickLaunch];
     }
 
-  [defaults setObject: dict forKey: @"applications"];
-  
   [manager removeWatcherForPath: [manager trashPath]];
 }
 
@@ -1027,6 +1174,22 @@ static inline CGFloat _dockScaleFactor(void)
 
   [backColor set];
   NSRectFill(rect);
+
+  if (NSIsEmptyRect(dividerRect) == NO)
+    {
+      NSRect line;
+
+      /* A line across the Dock, short of its edges. */
+      if (position == DockPositionBottom)
+        line = NSMakeRect(NSMidX(dividerRect) - 1, NSMinY(dividerRect) + 8,
+                          2, NSHeight(dividerRect) - 16);
+      else
+        line = NSMakeRect(NSMinX(dividerRect) + 8, NSMidY(dividerRect) - 1,
+                          NSWidth(dividerRect) - 16, 2);
+
+      [[backColor shadowWithLevel: 0.4] set];
+      NSRectFill(line);
+    }
 }
 
 @end
@@ -1342,6 +1505,196 @@ static inline CGFloat _dockScaleFactor(void)
 
 @implementation Dock (DraggingDestination)
 
+/* The paths of a drag that could be kept in the Dock: folders, and only
+ * folders, from outside it. */
+- (NSArray *)draggedFolderPaths:(id <NSDraggingInfo>)sender
+{
+  NSPasteboard *pb = [sender draggingPasteboard];
+  NSArray *paths;
+  NSUInteger i;
+
+  if (dndSourceIcon != nil || [[pb types] containsObject: @"DockIconPboardType"])
+    return nil;
+
+  paths = [FSNSpringLoader draggedPathsOfDraggingInfo: sender];
+  if ([paths count] == 0)
+    return nil;
+
+  for (i = 0; i < [paths count]; i++)
+    {
+      FSNode *nd = [FSNode nodeWithPath: [paths objectAtIndex: i]];
+
+      if ([nd isDirectory] == NO || [nd isPackage])
+        return nil;
+    }
+
+  return paths;
+}
+
+/* Where dragged folders would be kept with the pointer at p, or -1 when
+ * letting go there does something else.  The middle of a folder takes the
+ * items into it and the middle of the Trash throws them away; between
+ * icons they are kept.  Among the applications they can only be kept at
+ * the start of the folders. */
+- (NSInteger)folderInsertionIndexAtPoint:(NSPoint)p
+{
+  NSUInteger docs = [self firstDocumentIndex];
+  DockIcon *icon;
+  NSRect r;
+  CGFloat along;
+  NSUInteger i;
+
+  /* The gap the icons moved apart for stays: the pointer is in it. */
+  if (folderTargetIndex != -1 && NSPointInRect(p, folderGapRect))
+    return folderTargetIndex;
+  if (NSPointInRect(p, dividerRect))
+    return docs;
+
+  icon = [self iconContainingPoint: p];
+  if (icon == nil || [icon isWsIcon])
+    return -1;
+
+  i = [icons indexOfObjectIdenticalTo: icon];
+  r = [icon frame];
+  /* How far into the icon the pointer is, in the order the icons go. */
+  along = (position == DockPositionBottom)
+    ? (p.x - NSMinX(r)) / NSWidth(r)
+    : (NSMaxY(r) - p.y) / NSHeight(r);
+
+  if ([icon isFolderIcon])
+    {
+      if (along < 0.25)
+        return i;
+      if (along > 0.75)
+        return i + 1;
+      return -1;
+    }
+  if ([icon isTrashIcon])
+    return (along < 0.25) ? (NSInteger)i : -1;
+
+  return (along < 0.25 || along > 0.75) ? (NSInteger)docs : -1;
+}
+
+/* Opens or moves the gap for dragged folders.  Returns whether the drag is
+ * over a place that keeps them. */
+- (BOOL)trackFolderInsertion:(id <NSDraggingInfo>)sender
+{
+  NSInteger index = -1;
+
+  if ([self draggedFolderPaths: sender] != nil)
+    index = [self folderInsertionIndexAtPoint:
+                    [self convertPoint: [sender draggingLocation] fromView: nil]];
+
+  if (index != folderTargetIndex)
+    {
+      folderTargetIndex = index;
+      [self tile];
+    }
+
+  return (index != -1);
+}
+
+/* The Dock keeps a reference to the folder; nothing is moved or copied. */
+- (NSDragOperation)keepingOperation:(id <NSDraggingInfo>)sender
+{
+  NSDragOperation mask = [sender draggingSourceOperationMask];
+
+  if (mask & NSDragOperationLink)
+    return NSDragOperationLink;
+  if (mask & NSDragOperationGeneric)
+    return NSDragOperationGeneric;
+  return mask & NSDragOperationCopy;
+}
+
+- (void)keepDraggedFolders:(id <NSDraggingInfo>)sender
+{
+  NSArray *paths = [self draggedFolderPaths: sender];
+  NSInteger index = folderTargetIndex;
+  NSUInteger i;
+
+  folderTargetIndex = -1;
+
+  for (i = 0; i < [paths count]; i++)
+    {
+      NSString *path = [paths objectAtIndex: i];
+      DockIcon *kept = [self folderIconForPath: path];
+
+      if (kept != nil)
+        {
+          /* Already in the Dock: it moves to where it was dropped. */
+          NSUInteger at = [icons indexOfObjectIdenticalTo: kept];
+
+          RETAIN (kept);
+          [icons removeObjectAtIndex: at];
+          if ((NSInteger)at < index)
+            index--;
+          [icons insertObject: kept atIndex: index];
+          RELEASE (kept);
+          index++;
+        }
+      else if ([self addFolderIconAtPath: path atIndex: index] != nil)
+        {
+          index++;
+        }
+    }
+
+  [self saveDockConfiguration];
+}
+
+/* Applications and folders each keep to their own side of the divider. */
+- (BOOL)icon:(DockIcon *)a sharesSectionWith:(DockIcon *)b
+{
+  return ([a isFolderIcon] && [b isFolderIcon])
+    || ([a isApplicationIcon] && [b isApplicationIcon]);
+}
+
+/* A dragged application is added after the application under the pointer,
+ * or after the last one when the pointer is past them. */
+- (NSInteger)applicationTargetIndexForIndex:(NSUInteger)index
+{
+  NSUInteger docs = [self firstDocumentIndex];
+
+  return (index < docs) ? (NSInteger)index : (NSInteger)docs - 1;
+}
+
+/* A file drag resting on an icon springs it open: a running application
+ * comes to the front, the Workspace icon opens the System Disk, a folder
+ * opens. */
+- (void)trackSpringForDrag:(id <NSDraggingInfo>)sender
+{
+  NSPoint p = [self convertPoint: [sender draggingLocation] fromView: nil];
+  DockIcon *icon = nil;
+  FSNode *springNode;
+
+  /* Between icons, where a folder is about to be kept, nothing opens. */
+  if (folderTargetIndex == -1)
+    icon = [self iconContainingPoint: p];
+
+  if (icon != springIcon)
+    {
+      [[FSNSpringLoader sharedLoader] pointerLeftView: springIcon];
+      springIcon = icon;
+    }
+
+  if (icon == nil || [icon isTrashIcon])
+    return;
+
+  springNode = [icon isWsIcon] ? [FSNode nodeWithPath: path_separator()]
+                               : [icon node];
+
+  [[FSNSpringLoader sharedLoader]
+    pointerRestsOnNode: springNode
+                inView: icon
+               flasher: icon
+          draggedPaths: [FSNSpringLoader draggedPathsOfDraggingInfo: sender]];
+}
+
+- (void)leaveSpringIcon
+{
+  [[FSNSpringLoader sharedLoader] pointerLeftView: springIcon];
+  springIcon = nil;
+}
+
 - (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
 {
   NSPoint location = [sender draggingLocation];
@@ -1361,6 +1714,10 @@ static inline CGFloat _dockScaleFactor(void)
     }
   }
 
+  if ([self trackFolderInsertion: sender]) {
+    return [self keepingOperation: sender];
+  }
+
   location = [self convertPoint: location fromView: nil];
   icon = [self iconContainingPoint: location];
                  
@@ -1368,7 +1725,8 @@ static inline CGFloat _dockScaleFactor(void)
     NSUInteger index = [icons indexOfObjectIdenticalTo: icon];
         
     if (dndSourceIcon && ([sender draggingSource] == dndSourceIcon)) {
-      if (icon != dndSourceIcon) {
+      if ((icon != dndSourceIcon)
+          && [self icon: icon sharesSectionWith: dndSourceIcon]) {
         RETAIN (dndSourceIcon);
         [icons removeObject: dndSourceIcon];
         [icons insertObject: dndSourceIcon atIndex: index];
@@ -1382,7 +1740,7 @@ static inline CGFloat _dockScaleFactor(void)
       
       if ([[pb types] containsObject: @"DockIconPboardType"]) {
         if ([icon isTrashIcon] == NO) {
-          targetIndex = index;        
+          targetIndex = [self applicationTargetIndexForIndex: index];
           return NSDragOperationMove;
         }
         
@@ -1406,7 +1764,7 @@ static inline CGFloat _dockScaleFactor(void)
             }
           }
           
-          targetIndex = index;
+          targetIndex = [self applicationTargetIndexForIndex: index];
           /* Decide operation based on source writability */
           {
             NSString *fromPath = [path stringByDeletingLastPathComponent];
@@ -1470,7 +1828,7 @@ static inline CGFloat _dockScaleFactor(void)
             if ([icon isTrashIcon]) {
               [icon setIsDragMountpointOnly: NO];
             }
-            [icon unselect];
+            [icon showDropHighlight: NO];
           }
         }
       }
@@ -1486,6 +1844,15 @@ static inline CGFloat _dockScaleFactor(void)
 {
   NSPoint location;
   DockIcon *icon;
+  BOOL keeping = [self trackFolderInsertion: sender];
+
+  [self trackSpringForDrag: sender];
+
+  if (keeping) {
+    isDragTarget = YES;
+    [self unselectOtherReps: nil];
+    return [self keepingOperation: sender];
+  }
  
   if (dragdelay < 2) {
     dragdelay++;
@@ -1523,7 +1890,8 @@ static inline CGFloat _dockScaleFactor(void)
     NSUInteger index = [icons indexOfObjectIdenticalTo: icon];
 
     if (dndSourceIcon && ([sender draggingSource] == dndSourceIcon)) {
-      if ((icon != dndSourceIcon) && ([icon isSpecialIcon] == NO)) {
+      if ((icon != dndSourceIcon)
+          && [self icon: icon sharesSectionWith: dndSourceIcon]) {
         RETAIN (dndSourceIcon);
         [icons removeObject: dndSourceIcon];
         [icons insertObject: dndSourceIcon atIndex: index];
@@ -1537,8 +1905,10 @@ static inline CGFloat _dockScaleFactor(void)
       NSPasteboard *pb = [sender draggingPasteboard];
 
       if (pb && [[pb types] containsObject: @"DockIconPboardType"]) {
-        if ((targetIndex != index) && ([icon isTrashIcon] == NO)) {
-          targetIndex = index;
+        NSInteger appTarget = [self applicationTargetIndexForIndex: index];
+
+        if ((targetIndex != appTarget) && ([icon isTrashIcon] == NO)) {
+          targetIndex = appTarget;
           [self tile];
           return NSDragOperationMove;
         }
@@ -1584,11 +1954,12 @@ static inline CGFloat _dockScaleFactor(void)
               return NSDragOperationNone;
             }
           } else {
-            [icon unselect];
+            [icon showDropHighlight: NO];
           }
 
-        } else if ((targetIndex != index) && ([icon isTrashIcon] == NO)) {
-          targetIndex = index;
+        } else if (([icon isTrashIcon] == NO)
+                   && (targetIndex != [self applicationTargetIndexForIndex: index])) {
+          targetIndex = [self applicationTargetIndexForIndex: index];
           [self tile]; 
           return NSDragOperationMove;
         } 
@@ -1603,6 +1974,12 @@ static inline CGFloat _dockScaleFactor(void)
 {
   NSUInteger i;
   
+  [self leaveSpringIcon];
+  if (folderTargetIndex != -1) {
+    folderTargetIndex = -1;
+    [self tile];
+  }
+
   isDragTarget = NO;  
   dragdelay = 0;
   forceCopy = NO;
@@ -1641,6 +2018,18 @@ static inline CGFloat _dockScaleFactor(void)
 - (void)concludeDragOperation:(id <NSDraggingInfo>)sender
 {
   NSUInteger i;
+
+  [self leaveSpringIcon];
+
+  if (folderTargetIndex != -1) {
+    [self keepDraggedFolders: sender];
+    [self unselectOtherReps: nil];
+    isDragTarget = NO;
+    targetIndex = -1;
+    targetRect = NSZeroRect;
+    [self tile];
+    return;
+  }
   
   /* Reset the mountpoint flag on all trash icons */
   for (i = 0; i < [icons count]; i++) {
@@ -1748,6 +2137,8 @@ static inline CGFloat _dockScaleFactor(void)
 {
   for (DockIcon *icon in icons)
     {
+      if ([icon isFolderIcon])
+        continue;
       /* The X window scans (windowsMatchingName:/hasWindowsForPID:) open X
        * connections and issue synchronous round-trips.  Done on the main
        * thread they can wedge the app: while the main thread blocks in a

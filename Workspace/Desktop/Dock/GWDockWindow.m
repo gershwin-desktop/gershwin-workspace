@@ -28,6 +28,7 @@
 #include <GNUstepGUI/GSDisplayServer.h>
 
 #import "Dock.h"
+#import "FSNSpringLoader.h"
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 
@@ -36,6 +37,14 @@
 - (void)dealloc
 {
   [super dealloc];
+}
+
+/* A drop on the Dock ends a drag like one anywhere else: the loader closes
+ * what sprang open on the way, and must know before the drop is handled. */
+- (void)sendEvent:(NSEvent *)theEvent
+{
+  [[FSNSpringLoader sharedLoader] noteEvent: theEvent inWindow: self];
+  [super sendEvent: theEvent];
 }
 
 - (instancetype)initWithDockView:(Dock *)aDock

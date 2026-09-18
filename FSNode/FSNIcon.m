@@ -2251,7 +2251,11 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
   NSPoint curLoc = NSMakePoint(startLoc.x + initialOffset.width,
                                startLoc.y + initialOffset.height);
   NSPoint lastLoc = NSMakePoint(-1, -1);
-  NSUInteger mask = NSLeftMouseDraggedMask | NSLeftMouseUpMask | NSPeriodicMask;
+  /* The window server's requests to redraw come as application events:
+   * left in the queue until the drag ends, every window the dragged icons
+   * passed over kept whatever had been on the screen there. */
+  NSUInteger mask = NSLeftMouseDraggedMask | NSLeftMouseUpMask | NSPeriodicMask
+    | NSAppKitDefinedMask;
   FSNSpringLoader *loader = [FSNSpringLoader sharedLoader];
   FSNIconDragSession *session;
   NSView *home;
@@ -2296,7 +2300,8 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
 
   session = AUTORELEASE ([[FSNIconDragSession alloc] initWithIcons: allIcons
                                                             source: self
-                                                          inWindow: win]);
+                                                          inWindow: win
+                                                         grabPoint: startLoc]);
 
   FSNForgetForeignWindowAnswer();
   FSNRaiseDraggedIcons(container, allIcons);
@@ -2337,6 +2342,11 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
           : [NSDate distantFuture]
                                     inMode: NSEventTrackingRunLoopMode
                                    dequeue: YES];
+      if ([event type] == NSAppKitDefined)
+        {
+          [NSApp sendEvent: event];
+          continue;
+        }
 
       /* X11 delivers motion faster than the icons can be redrawn, so only the
        * newest position is acted on - but it is always acted on, even when the
@@ -2356,6 +2366,11 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
                                         dequeue: YES];
           if (queued == nil)
             break;
+          if ([queued type] == NSAppKitDefined)
+            {
+              [NSApp sendEvent: queued];
+              continue;
+            }
           if ([queued type] == NSLeftMouseUp)
             {
               pendingUp = queued;

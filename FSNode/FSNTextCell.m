@@ -292,7 +292,11 @@
     {
       NSString *fitted = nil;
 
-      if ([uncutTitle sizeWithAttributes: fontAttr].width > textlength)
+      /* Measured here too: a table view hands its cells their text through
+       * -setObjectValue:, past -setStringValue:, and a title never measured
+       * was drawn in a box of no height. */
+      titlesize = [uncutTitle sizeWithAttributes: fontAttr];
+      if (titlesize.width > textlength)
         {
           if (dateCell)
             fitted = [self cutDateTitle: uncutTitle toFitWidth: textlength];

@@ -19,6 +19,7 @@
 #import "FSNFunctions.h"
 #import "FSNode.h"
 #import "FSNodeRep.h"
+#import "FSNSpringLoader.h"
 #import "NetworkFSNode.h"
 #import "NetworkServiceManager.h"
 #import "NetworkServiceItem.h"
@@ -60,6 +61,10 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 @interface GWSidebarOutlineView : NSOutlineView
 {
   NSInteger dragHighlightRow;
+  /* The row a drag rests on, which springs its folder open. */
+  NSInteger springRow;
+  BOOL springFlashing;
+  BOOL springRestingLit;
 }
 - (NSRect)ejectRectForRow:(NSInteger)row;
 - (void)drawEjectGlyphInRect:(NSRect)r;
@@ -72,6 +77,7 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   self = [super initWithFrame: frameRect];
   if (self) {
     dragHighlightRow = -1;
+    springRow = -1;
   }
   return self;
 }
@@ -208,9 +214,16 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 @end
 
 
+@interface GWSidebarOutlineView (DraggingDestination) <FSNSpringFlashing>
+- (void)showDragHighlightRow:(NSInteger)row;
+- (void)setDragHighlightRow:(NSInteger)row;
+- (FSNode *)springNodeAtRow:(NSInteger)row;
+- (void)leaveSpringRow;
+@end
+
 @implementation GWSidebarOutlineView (DraggingDestination)
 
-- (void)setDragHighlightRow:(NSInteger)row
+- (void)showDragHighlightRow:(NSInteger)row
 {
   if (dragHighlightRow != row) {
     NSInteger oldRow = dragHighlightRow;
@@ -222,6 +235,70 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
       [self setNeedsDisplayInRect: [self rectOfRow: row]];
     }
   }
+}
+
+- (void)setDragHighlightRow:(NSInteger)row
+{
+  /* While a row flashes before springing open, the flash owns the
+   * highlight; the drag updates in between would undo each step. */
+  if (springFlashing)
+    return;
+
+  [self showDragHighlightRow: row];
+}
+
+/* The folder a row stands for, whether or not the drag could be dropped
+ * there: resting on the folder the items come from springs it open all the
+ * same.  A network service only has a folder once it is mounted. */
+- (FSNode *)springNodeAtRow:(NSInteger)row
+{
+  id item;
+  NSString *path = nil;
+  FSNode *node;
+
+  if (row < 0)
+    return nil;
+
+  item = [self itemAtRow: row];
+  if (item == nil || [item isHeader])
+    return nil;
+
+  if ([item itemKind] == GWSidebarItemNetwork) {
+    id svc = [item userInfo];
+
+    if (svc && [svc isKindOfClass: [NetworkServiceItem class]]) {
+      path = [[NetworkVolumeManager sharedManager] mountPointForService: svc];
+    }
+  } else {
+    path = [item path];
+  }
+
+  if ([path length] == 0)
+    return nil;
+
+  node = [FSNode nodeWithPath: path];
+  return ([node isValid] && [node isDirectory]) ? node : nil;
+}
+
+- (void)setSpringHighlightVisible:(BOOL)visible
+{
+  BOOL lit;
+
+  if (springRow < 0 || springRow >= [self numberOfRows])
+    return;
+
+  if (springFlashing == NO)
+    {
+      springRestingLit = (dragHighlightRow == springRow);
+      springFlashing = YES;
+    }
+
+  lit = visible ? springRestingLit : (springRestingLit == NO);
+  if (visible)
+    springFlashing = NO;
+
+  [self showDragHighlightRow: lit ? springRow : -1];
+  [self displayIfNeeded];
 }
 
 - (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
@@ -347,18 +424,43 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 - (NSDragOperation)draggingUpdated:(id <NSDraggingInfo>)sender
 {
   NSDragOperation op = [self draggingEntered: sender];
+  NSInteger row = [self rowAtPoint: [self convertPoint: [sender draggingLocation]
+                                               fromView: nil]];
+  FSNode *springNode = [self springNodeAtRow: row];
+
   if (op != NSDragOperationNone) {
-    NSInteger row = [self rowAtPoint: [self convertPoint: [sender draggingLocation]
-                                                 fromView: nil]];
     [self setDragHighlightRow: row];
   } else {
     [self setDragHighlightRow: -1];
   }
+
+  if (springNode != nil) {
+    if (row != springRow) {
+      springRow = row;
+      springFlashing = NO;
+    }
+    [[FSNSpringLoader sharedLoader]
+      pointerRestsOnNode: springNode
+                  inView: self
+                 flasher: self
+            draggedPaths: [FSNSpringLoader draggedPathsOfDraggingInfo: sender]];
+  } else {
+    [self leaveSpringRow];
+  }
+
   return op;
+}
+
+- (void)leaveSpringRow
+{
+  [[FSNSpringLoader sharedLoader] pointerLeftView: self];
+  springRow = -1;
+  springFlashing = NO;
 }
 
 - (void)draggingExited:(id <NSDraggingInfo>)sender
 {
+  [self leaveSpringRow];
   [self setDragHighlightRow: -1];
 }
 
@@ -374,6 +476,7 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 
 - (void)concludeDragOperation:(id <NSDraggingInfo>)sender
 {
+  [self leaveSpringRow];
   [self setDragHighlightRow: -1];
 
   NSInteger row = [self rowAtPoint: [self convertPoint: [sender draggingLocation]

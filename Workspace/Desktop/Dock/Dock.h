@@ -56,6 +56,15 @@ typedef enum DockStyle
   int dragdelay;
   NSInteger targetIndex;
   NSRect targetRect;
+
+  /* Where folders dragged to the Dock would be kept, while the drag is
+   * over a place that keeps them; -1 otherwise. */
+  NSInteger folderTargetIndex;
+  NSRect folderGapRect;
+  /* Between the applications and the folders and Trash. */
+  NSRect dividerRect;
+  /* The icon a file drag rests on, which springs open. */
+  DockIcon *springIcon;
   
   NSTimer *launchRefreshTimer;
 
@@ -77,6 +86,11 @@ typedef enum DockStyle
 
 - (void)addDraggedIcon:(NSData *)icondata
                atIndex:(NSInteger)index;
+
+/* Keeps a folder in the Dock.  Folders live between the divider and the
+ * Trash; the index is clamped into that section. */
+- (DockIcon *)addFolderIconAtPath:(NSString *)path
+                          atIndex:(NSUInteger)index;
 
 - (void)removeIcon:(DockIcon *)icon;
 

@@ -17,6 +17,10 @@ static const NSTimeInterval FSNWindowOrderLifetime = 0.25;
 
 static NSInteger FSNIconDragSequence = 0;
 
+/* The alpha, in 256ths, up to which the X backend leaves a pixel out of a
+ * window's shape (ALPHA_THRESHOLD in libs-back's XGServerWindow.m). */
+static const CGFloat FSNShapeAlphaThreshold = 158;
+
 
 @interface FSNIconDragSession (Private)
 - (void)buildImage;
@@ -33,13 +37,28 @@ static NSInteger FSNIconDragSequence = 0;
 - (id)initWithIcons:(NSArray *)draggedIcons
              source:(id)sourceIcon
            inWindow:(NSWindow *)window
+          grabPoint:(NSPoint)grabPoint
 {
   self = [super init];
 
   if (self)
     {
       NSMutableArray *p = [NSMutableArray arrayWithCapacity: [draggedIcons count]];
+      NSRect group = NSZeroRect;
       NSUInteger i;
+
+      /* Taken now, while the pointer and the icons are where the gesture
+       * began: by the time the icons leave their view, the last position
+       * they were drawn at can be a frame behind the pointer. */
+      for (i = 0; i < [draggedIcons count]; i++)
+        {
+          NSView *icon = [draggedIcons objectAtIndex: i];
+          NSRect r = [icon convertRect: [icon bounds] toView: nil];
+
+          group = (i == 0) ? r : NSUnionRect(group, r);
+        }
+      grabOffset = NSMakePoint(grabPoint.x - group.origin.x,
+                               grabPoint.y - group.origin.y);
 
       ASSIGN (icons, draggedIcons);
       ASSIGN (source, sourceIcon);
@@ -280,46 +299,85 @@ static NSInteger FSNIconDragSequence = 0;
 @implementation FSNIconDragSession (Private)
 
 /* The icons as they look in their view, side by side as they are placed
- * there, and where on that picture the pointer holds them. */
+ * there. */
 - (void)buildImage
 {
+  NSView *container = [[icons objectAtIndex: 0] superview];
   NSRect group = NSZeroRect;
-  NSPoint pointer;
+  NSBitmapImageRep *bitmap;
+  NSImage *picture;
   NSUInteger i;
 
+  /* In the icons' own view, whose units are points: window coordinates are
+   * device pixels, which differ from points at a scale factor other than 1,
+   * and the picture would come out that much too big. */
   for (i = 0; i < [icons count]; i++)
     {
-      NSView *icon = [icons objectAtIndex: i];
-      NSRect r = [icon convertRect: [icon bounds] toView: nil];
+      NSRect r = [[icons objectAtIndex: i] frame];
 
       group = (i == 0) ? r : NSUnionRect(group, r);
     }
 
-  ASSIGN (image, AUTORELEASE ([[NSImage alloc] initWithSize: group.size]));
-  /* A clear background is what lets the window be shaped like the icons. */
-  [image setBackgroundColor: [NSColor clearColor]];
+  picture = AUTORELEASE ([[NSImage alloc] initWithSize: group.size]);
+  [picture setBackgroundColor: [NSColor clearColor]];
 
   /* Each icon's own picture is transparent around it: caching the view
-   * would bring the window background along, and the shaped window would
-   * then be a rectangle.  Drawn as it looks at rest, not as the ghost of a
-   * moving icon: a window without a compositor can only show or hide a
-   * pixel. */
-  [image lockFocus];
+   * would bring the window background along.  Drawn as it looks at rest,
+   * not as the ghost of a moving icon: a window without a compositor can
+   * only show or hide a pixel. */
+  [picture lockFocus];
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      NSRect r = [icon convertRect: [icon bounds] toView: nil];
+      NSRect r = [icon frame];
+      CGFloat y = [container isFlipped]
+        ? NSMaxY(group) - NSMaxY(r) : r.origin.y - group.origin.y;
 
-      [[icon restingLookImage] drawAtPoint: NSMakePoint(r.origin.x - group.origin.x,
-                                                         r.origin.y - group.origin.y)
+      [[icon restingLookImage] drawAtPoint: NSMakePoint(r.origin.x - group.origin.x, y)
                                   fromRect: NSZeroRect
                                  operation: NSCompositeSourceOver
                                   fraction: 1.0];
     }
-  [image unlockFocus];
+  /* The window is shaped after the picture's transparency, and the window
+   * server can only read that from a bitmap: from the cached picture it
+   * got none, the window stayed a rectangle and showed whatever had been
+   * on the screen beneath it. */
+  bitmap = AUTORELEASE ([[NSBitmapImageRep alloc] initWithFocusedViewRect:
+    NSMakeRect(0, 0, group.size.width, group.size.height)]);
+  [picture unlockFocus];
 
-  pointer = [sourceWindow mouseLocationOutsideOfEventStream];
-  grabOffset = NSMakePoint(pointer.x - group.origin.x, pointer.y - group.origin.y);
+  /* Without a compositor a pixel of the window is either shown or not, and
+   * a shown pixel that is only partly covered - a name's translucent plate,
+   * the soft edge of an icon - has nothing beneath it to blend with: it
+   * showed leftovers of the screen.  Every pixel is made one or the other,
+   * cut where the window server cuts the shape. */
+  {
+    NSColor *base = [NSColor whiteColor];
+    NSInteger x, y;
+
+    for (y = 0; y < [bitmap pixelsHigh]; y++)
+      {
+        for (x = 0; x < [bitmap pixelsWide]; x++)
+          {
+            NSColor *c = [bitmap colorAtX: x y: y];
+            CGFloat a = [c alphaComponent];
+
+            if (a * 256 <= FSNShapeAlphaThreshold)
+              c = [NSColor colorWithDeviceRed: 0 green: 0 blue: 0 alpha: 0];
+            else if (a < 1.0)
+              c = [base blendedColorWithFraction: a
+                                         ofColor: [c colorWithAlphaComponent: 1.0]];
+            else
+              continue;
+
+            [bitmap setColor: c atX: x y: y];
+          }
+      }
+  }
+
+  ASSIGN (image, AUTORELEASE ([[NSImage alloc] initWithSize: group.size]));
+  [image setBackgroundColor: [NSColor clearColor]];
+  [image addRepresentation: bitmap];
 }
 
 - (void)showOverlayAtScreenPoint:(NSPoint)p
@@ -332,9 +390,13 @@ static NSInteger FSNIconDragSequence = 0;
       NSRect frame = NSMakeRect(origin.x, origin.y,
                                 [image size].width, [image size].height);
 
+      /* Made the way GNUstep makes its own drag window: drawn straight to
+       * the screen and shaped before it first shows.  Shown unshaped even
+       * once, it went on showing, around the icons, whatever had been on
+       * the screen when it appeared. */
       overlay = [[NSWindow alloc] initWithContentRect: frame
                                             styleMask: NSBorderlessWindowMask
-                                              backing: NSBackingStoreBuffered
+                                              backing: NSBackingStoreNonretained
                                                 defer: NO];
       [overlay setReleasedWhenClosed: NO];
       /* The level GNUstep's own drag image uses, above every window. */
@@ -347,9 +409,9 @@ static NSInteger FSNIconDragSequence = 0;
       [view setImage: image];
       [overlay setContentView: view];
 
-      [overlay orderFront: nil];
       [GSServerForWindow(overlay) restrictWindow: [overlay windowNumber]
                                          toImage: image];
+      [overlay orderFront: nil];
     }
   else
     {

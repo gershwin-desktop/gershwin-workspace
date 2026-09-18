@@ -33,8 +33,21 @@
  * Whatever it did is handed back as a token, and undoing the token must put
  * things back the way they were - but never close a window that was open
  * before the drag. */
+/* Something that is not a folder can spring open too - an application
+ * whose windows come to the front so the drag can go on into one of them.
+ * Such a view says itself whether it can, and does it; nothing it does is
+ * undone when the drag moves on. */
+@protocol FSNSpringOpening <NSObject>
+- (BOOL)springOpensItself;
+- (void)springOpen;
+@end
+
 @protocol FSNSpringLoaderDelegate <NSObject>
-- (BOOL)springLoader:(FSNSpringLoader *)loader mayOpenNode:(FSNode *)node;
+/* The view is where the folder was found: a window need not spring open the
+ * folder it already shows. */
+- (BOOL)springLoader:(FSNSpringLoader *)loader
+         mayOpenNode:(FSNode *)node
+              inView:(NSView *)view;
 - (id)springLoader:(FSNSpringLoader *)loader
           openNode:(FSNode *)node
           fromView:(NSView *)view;

@@ -59,7 +59,10 @@ static const NSTimeInterval FSNSpringWatchdogPeriod = 0.1;
 
 
 @interface FSNSpringLoader (Private)
-- (BOOL)canSpringNode:(FSNode *)node draggedPaths:(NSArray *)paths;
+- (BOOL)canSpringNode:(FSNode *)node
+               inView:(NSView *)view
+         draggedPaths:(NSArray *)paths;
+- (BOOL)viewOpensItself:(NSView *)view;
 - (void)disarm;
 - (void)fire;
 - (NSInteger)indexOfLastEntryForWindow:(NSWindow *)window;
@@ -170,7 +173,9 @@ static const NSTimeInterval FSNSpringWatchdogPeriod = 0.1;
 
       /* Decided once per folder rather than on every update: the answer
        * needs the file system, and updates come every 30ms. */
-      firedForArmedNode = ([self canSpringNode: node draggedPaths: paths] == NO);
+      firedForArmedNode = ([self canSpringNode: node
+                                        inView: view
+                                  draggedPaths: paths] == NO);
 
       if (firedForArmedNode == NO)
         [self startWatchdog];
@@ -295,15 +300,26 @@ static const NSTimeInterval FSNSpringWatchdogPeriod = 0.1;
 
 @implementation FSNSpringLoader (Private)
 
+- (BOOL)viewOpensItself:(NSView *)view
+{
+  return [view conformsToProtocol: @protocol(FSNSpringOpening)]
+    && [(id <FSNSpringOpening>)view springOpensItself];
+}
+
 /* A node opens for a drag when it is a folder one can look into, and is
  * neither one of the dragged items nor inside one: nothing could be dropped
  * there. */
-- (BOOL)canSpringNode:(FSNode *)node draggedPaths:(NSArray *)paths
+- (BOOL)canSpringNode:(FSNode *)node
+               inView:(NSView *)view
+         draggedPaths:(NSArray *)paths
 {
   NSFileManager *fm = [NSFileManager defaultManager];
   NSString *path;
   FSNode *target;
   NSUInteger i;
+
+  if ([self viewOpensItself: view])
+    return YES;
 
   if (node == nil || [node isValid] == NO)
     return NO;
@@ -328,7 +344,9 @@ static const NSTimeInterval FSNSpringWatchdogPeriod = 0.1;
         return NO;
     }
 
-  return (delegate == nil) || [delegate springLoader: self mayOpenNode: target];
+  return (delegate == nil) || [delegate springLoader: self
+                                          mayOpenNode: target
+                                               inView: view];
 }
 
 - (void)disarm
@@ -355,6 +373,15 @@ static const NSTimeInterval FSNSpringWatchdogPeriod = 0.1;
    * window moving in place builds new icons - so nothing may talk to the
    * old view or its flasher afterwards. */
   DESTROY (flasher);
+
+  /* Asked again, not remembered from arming: an application can quit
+   * while the pointer rests on it. */
+  if ([self viewOpensItself: armedView])
+    {
+      [(id <FSNSpringOpening>)armedView springOpen];
+      lastActivity = [NSDate timeIntervalSinceReferenceDate];
+      return;
+    }
 
   /* Springing from a window drops whatever was sprung beyond it before: the
    * drag has left that branch.  From a window outside the chain, the whole

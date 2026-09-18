@@ -30,7 +30,9 @@
 @class NSColor;
 @class NSImage;
 
-@interface DockIcon : FSNIcon
+/* A running application springs open by bringing its windows forward, so a
+ * file drag can go on into one of them. */
+@interface DockIcon : FSNIcon <FSNSpringOpening>
 {
   NSString *appName;
 
@@ -55,6 +57,11 @@
     
   NSImage *dragIcon;
   BOOL isDndSourceIcon;
+
+  /* The flash before springing open inverts the highlight the icon has
+   * while the drag rests on it. */
+  BOOL springFlashing;
+  BOOL springRestingLit;
 
   /* PID tracking for robust non-GNUstep app support */
   pid_t appPID;
@@ -104,6 +111,14 @@
 - (BOOL)isTrashIcon;
 
 - (BOOL)isSpecialIcon;
+
+/* A folder kept in the Dock, in the section before the Trash. */
+- (BOOL)isFolderIcon;
+
+- (BOOL)isApplicationIcon;
+
+/* The highlight that says a drop here would be taken. */
+- (void)showDropHighlight:(BOOL)lit;
 
 - (void)setDocked:(BOOL)value;
 

@@ -45,9 +45,12 @@
   NSTimeInterval windowOrderTime;
 }
 
+/* grabPoint is where the pointer took hold of the icons, in the window's
+ * base coordinates, while they are still where they were. */
 - (id)initWithIcons:(NSArray *)draggedIcons
              source:(id)sourceIcon
-           inWindow:(NSWindow *)window;
+           inWindow:(NSWindow *)window
+          grabPoint:(NSPoint)grabPoint;
 
 /* The paths of the dragged icons' nodes. */
 - (NSArray *)paths;
