@@ -5,43 +5,51 @@
 # and the modal panel run-loop mode - a default-mode-only deferred selector
 # never fires during a modal session, which silently killed the typeahead.
 #
-# Types a partial absolute path ("/Loc"), asserts the field now holds the
-# completed path "/Local" (black typed "/Loc" + grey suggested "al"), then
-# accepts the grey suggestion with Tab and executes the (now all-black) path
-# with Return, verifying a viewer for /Local opens. Pressing Return while the
-# grey suffix is still active must execute ONLY the black typed text, never
-# the grey suggestion - so the test accepts with Tab first, then confirms with
-# Return. An absolute path is used instead of a tilde path so the test also
-# passes under the uitest harness, which runs with HOME=/home/uitest (no
-# ~/Library there); "/Loc" completes to /Local in any home. Menus and dialog
-# are addressed by English title; the engine localizes them via the app, so
-# the script runs on a German Workspace too.
+# Types a partial path to a folder the test creates ("Compl"), waits until the
+# field holds the completed name "Completed" (black typed "Compl" + grey
+# suggested "eted"), then accepts the grey suggestion with Tab and executes
+# the (now all-black) path with Return, verifying a viewer for that folder
+# opens. Pressing Return while the grey suffix is still active must execute
+# ONLY the black typed text, never the grey suggestion - so the test accepts
+# with Tab first, then confirms with Return. The folder is the test's own
+# fixture: a system folder such as /Local need not exist on every machine.
+# Menus and dialog are addressed by English title; the engine localizes them
+# via the app, so the script runs on a German Workspace too.
 #
-# Leaves the computer as it was found: the opened viewer is closed at the end.
+# Leaves the computer as it was found: the opened viewer is closed and the
+# fixture removed at the end.
 #
 # Run with: run_uitest Tests/completion.uitest
 activate application "Workspace"
 
+# Self-healing start: a run that stopped half way leaves its viewer open.
+if window "Completed"
+  close window "Completed"
+  wait until not exists window "Completed"
+end
+
+shell "rm -rf /tmp/uitest-completion-${home} && mkdir -p /tmp/uitest-completion-${home}/Completed"
+
 select menu "Go/Go to Folder..."
 wait until modal
 
-type "/Loc"
-# The grey suffix is appended by a deferred update (50ms), so settle before
-# querying the field's text.
-wait 300ms
-assert text contains "/Local"
+type "/tmp/uitest-completion-${home}/Compl"
+# The grey suffix is appended by a deferred update, so wait for it.
+wait until "/tmp/uitest-completion-${home}/Completed" timeout 5s
+assert text contains "/tmp/uitest-completion-${home}/Completed"
 
-# Tab accepts the grey suggestion, making the whole "/Local" black.
+# Tab accepts the grey suggestion, making the whole path black.
 press Tab
 wait 200ms
 
-# Return executes only the black text (which Tab just made all-black): /Local.
+# Return executes only the black text (which Tab just made all-black).
 press Return
 wait until not modal
-wait until window "Local"
-assert window "Local" frame constant
+wait until window "Completed"
+assert window "Completed" frame constant
 
-close window "Local"
-wait until not exists window "Local"
+close window "Completed"
+wait until not exists window "Completed"
+shell "rm -rf /tmp/uitest-completion-${home}"
 
 log "go to folder completion stable"
