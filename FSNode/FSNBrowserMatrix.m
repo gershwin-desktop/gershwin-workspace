@@ -653,6 +653,8 @@
 
       [self checkReturnValueForCell: cell withDraggingInfo: sender];
 
+      [self dragRestsOnCell: cell draggingInfo: sender];
+
       if (dragOperation == NSDragOperationNone)
 	{
 	  dndTarget = nil;
@@ -662,13 +664,69 @@
       return dragOperation;
     }
 
+  [self dragLeftCells];
   return NSDragOperationNone;
 }
 
 - (void)draggingExited:(id <NSDraggingInfo>)sender
 {
+  [self dragLeftCells];
   [self unSelectIconsOfCellsDifferentFrom: nil];
   dndTarget = nil;
+}
+
+/* A folder the drag rests on springs open: the browser then shows its
+ * contents in the next column.  Reported by the matrix when its cells take
+ * drops, and by its column when only the column as a whole does. */
+- (void)dragRestsOnCell:(FSNBrowserCell *)cell
+           draggingInfo:(id <NSDraggingInfo>)sender
+{
+  if (cell != springCell)
+    springFlashing = NO;
+  springCell = cell;
+
+  [[FSNSpringLoader sharedLoader]
+    pointerRestsOnNode: [cell node]
+		inView: self
+	       flasher: self
+	  draggedPaths: [FSNSpringLoader draggedPathsOfDraggingInfo: sender]];
+}
+
+- (void)dragLeftCells
+{
+  [[FSNSpringLoader sharedLoader] pointerLeftView: self];
+  springCell = nil;
+  springFlashing = NO;
+}
+
+/* The flash before a folder springs open inverts the look its cell rests
+ * in - lit when it takes the drop, plain when not - and then restores it. */
+- (void)setSpringHighlightVisible:(BOOL)visible
+{
+  NSInteger row, col;
+  BOOL lit;
+
+  if (springCell == nil || [[self cells] containsObject: springCell] == NO)
+    return;
+
+  if (springFlashing == NO)
+    {
+      springRestingLit = (dndTarget == springCell);
+      springFlashing = YES;
+    }
+
+  lit = visible ? springRestingLit : (springRestingLit == NO);
+  if (visible)
+    springFlashing = NO;
+
+  if (lit)
+    [springCell selectIcon];
+  else
+    [springCell unselectIcon];
+
+  [self getRow: &row column: &col ofCell: springCell];
+  [self setNeedsDisplayInRect: [self cellFrameAtRow: row column: col]];
+  [self displayIfNeeded];
 }
 
 - (BOOL)prepareForDragOperation:(id <NSDraggingInfo>)sender

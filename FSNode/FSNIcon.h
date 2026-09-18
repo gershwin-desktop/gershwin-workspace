@@ -30,6 +30,7 @@
 #import <AppKit/NSView.h>
 #import "FSNodeRep.h"
 #import "FSNIconLoader.h"
+#import "FSNSpringLoader.h"
 
 @class NSImage;
 @class NSFont;
@@ -39,7 +40,7 @@
 @class FSNTextCell;
 @class FSNIconItemData;
 
-@interface FSNIcon : NSView <FSNodeRep, FSNDecorationClient>
+@interface FSNIcon : NSView <FSNodeRep, FSNDecorationClient, FSNSpringFlashing>
 {
   FSNode *node;
   NSString *hostname;
@@ -50,6 +51,9 @@
   NSImage *icon;
   NSImage *selectedicon;
   NSImage *drawicon;
+  /* The look a folder rested in when it started to flash before springing
+     open; not retained, it is icon or selectedicon. */
+  NSImage *springRestingIcon;
   int iconSize;
   NSRect icnBounds;
   NSPoint icnPoint;
@@ -79,6 +83,8 @@
   BOOL isOpened;
   /* YES while the icon follows the pointer in a free-position move. */
   BOOL beingDragged;
+  /* The ghost drawn while beingDragged, rendered once for the whole move. */
+  NSImage *draggedLook;
   /* YES while a rubber band being dragged out would select the icon. */
   BOOL selectionPreview;
   
@@ -166,6 +172,10 @@
 /* Ghost this icon while it is being moved, so whatever it passes over - a
    folder opening up to take it - stays readable underneath. */
 - (void)setBeingDragged:(BOOL)flag;
+
+/* A picture of the icon as it looks at rest - full image, name, no
+ * selection plate - to drag around. */
+- (NSImage *)restingLookImage;
 
 /* Draw the icon as selected without selecting it, while a rubber band that
    would select it is still being dragged out.  Only marks the icon for

@@ -43,6 +43,7 @@
 
   int cellsHeight;
   BOOL cellsIcon;
+  BOOL acceptsDnd;
     
   FSNode *shownNode;
   FSNode *oldNode;
@@ -70,6 +71,7 @@
             atIndex:(NSInteger)ind
       cellPrototype:(FSNBrowserCell *)acell
           cellsIcon:(BOOL)cicon
+         acceptsDnd:(BOOL)dnd
        nodeInfoType:(FSNInfoType)type
        extendedType:(NSString *)exttype          
     backgroundColor:(NSColor *)acolor;

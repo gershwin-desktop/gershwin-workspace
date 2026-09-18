@@ -33,6 +33,7 @@
 #import "FSNTextCell.h"
 #import "FSNode.h"
 #import "FSNFunctions.h"
+#import "FSNIconDragSession.h"
 #import "FSNMetadataProvider.h"
 #import "FSNIconPlacement.h"
 #import "FSNIconsView.h"
@@ -89,6 +90,17 @@ static NSString *FSNOperationForDragMask(NSDragOperation op)
     }
 }
 
+/* The rect grown to whole pixels of its window, whose base coordinates are
+ * device pixels.  At a fractional scale factor a rect's edge can fall inside
+ * a pixel, and a redraw clipped there blends that pixel row half old, half
+ * new: a line is left across whatever the edge cut through. */
+static NSRect FSNPixelAlignedRect(NSView *view, NSRect r)
+{
+  NSRect w = NSIntegralRect([view convertRect: r toView: nil]);
+
+  return [view convertRect: w fromView: nil];
+}
+
 /* Redraws part of an icon view right away.  A moving icon has to show up
  * under the pointer before the next mouse-moved event is read, and the drag
  * loop does not return to the run loop that would otherwise redraw it. */
@@ -97,7 +109,7 @@ static void FSNRedrawContainerRect(NSView *container, NSRect dirty)
   if (container == nil || NSIsEmptyRect(dirty))
     return;
 
-  [container setNeedsDisplayInRect: dirty];
+  [container setNeedsDisplayInRect: FSNPixelAlignedRect(container, dirty)];
   [container displayIfNeeded];
 }
 
@@ -109,6 +121,11 @@ static void FSNRedrawContainerRect(NSView *container, NSRect dirty)
  * so that no gesture begins on one left over from the previous one. */
 static NSTimeInterval foreignCheckTime = 0.0;
 static BOOL foreignCheckAnswer = NO;
+
+/* Drawing faster than the screen refreshes shows nothing more, and a mouse
+ * reports its position up to a thousand times a second: redrawing the icons
+ * for every report is what kept a drag from keeping up with the pointer. */
+static const NSTimeInterval FSNMoveFrameInterval = 1.0 / 60.0;
 
 static void FSNForgetForeignWindowAnswer(void)
 {
@@ -149,6 +166,7 @@ static void FSNForgetForeignWindowAnswer(void)
   RELEASE (tagColor);
   RELEASE (spotlightComment);
   RELEASE (_placementData);
+  RELEASE (draggedLook);
   [super dealloc];
 }
 
@@ -980,70 +998,76 @@ static void FSNForgetForeignWindowAnswer(void)
 		    }
 		}
 	    }
-
-	  /* Once the name editor is up the label belongs to the text field,
-	   * so a drag there selects text instead of moving the icon. */
-	  if (dndSource && (editing == NO))
-	    {
-	      while (1)
-		{
-		  nextEvent = [[self window] nextEventMatchingMask:
-					       NSLeftMouseUpMask | NSLeftMouseDraggedMask];
-
-		  if ([nextEvent type] == NSLeftMouseUp)
-		    {
-		      [[self window] postEvent: nextEvent atStart: NO];
-
-		      if ([container respondsToSelector: @selector(repSelected:)])
-			{
-			  [container repSelected: self];
-			}
-
-		      break;
-
-		    }
-		  /* Anywhere the press selects the icon also starts a drag:
-		   * requiring the image swallowed every drag begun on the
-		   * name, and with it the events until the mouse came up. */
-		  else if ([nextEvent type] == NSLeftMouseDragged)
-		    {
-		      NSPoint p = [nextEvent locationInWindow];
-		      offset = NSMakeSize(p.x - location.x, p.y - location.y);
-		      startdnd = YES;
-		      break;
-		    }
-		}
-	    }
-
-	  if (startdnd)
-	    {
-	      /* Local reposition only in position-honoring containers; a
-	       * pure-reflow container (browser icon view) has no meaningful
-	       * icon positions, so a drag is an external file drag. */
-	      BOOL canReposition =
-	        [container respondsToSelector: @selector(repositionIcon:toCenterPoint:)];
-	      if (canReposition
-	          && [container respondsToSelector: @selector(honorsSavedPositions)])
-	        canReposition = [(FSNIconsView *)container honorsSavedPositions];
-
-	      if ([container respondsToSelector: @selector(stopRepNameEditing)])
-		[container stopRepNameEditing];
-
-	      if (canReposition)
-		{
-		  [self repositionLocal: theEvent offset: offset];
-		}
-	      else
-		{
-		  if ([container respondsToSelector: @selector(setFocusedRep:)])
-		    [container setFocusedRep: nil];
-
-		  [self startExternalDragOnEvent: theEvent withMouseOffset: offset];
-		}
-	    }
-
-	  editstamp = [theEvent timestamp];
 	}
+
+      /* A press that follows a click closely comes as the second click of a
+       * double click, and it drags the icon just the same: the item opens
+       * when the button comes up where it went down, not before.  Only the
+       * single click used to start a drag, so an icon clicked and then
+       * quickly pulled away stayed put.  Once the name editor is up the
+       * label belongs to the text field, so a drag there selects text
+       * instead of moving the icon. */
+      if (dndSource && (editing == NO))
+	{
+	  while (1)
+	    {
+	      nextEvent = [[self window] nextEventMatchingMask:
+					   NSLeftMouseUpMask | NSLeftMouseDraggedMask];
+
+	      if ([nextEvent type] == NSLeftMouseUp)
+		{
+		  [[self window] postEvent: nextEvent atStart: NO];
+
+		  if ([container respondsToSelector: @selector(repSelected:)])
+		    {
+		      [container repSelected: self];
+		    }
+
+		  break;
+
+		}
+	      /* Anywhere the press selects the icon also starts a drag:
+	       * requiring the image swallowed every drag begun on the
+	       * name, and with it the events until the mouse came up. */
+	      else if ([nextEvent type] == NSLeftMouseDragged)
+		{
+		  NSPoint p = [nextEvent locationInWindow];
+		  offset = NSMakeSize(p.x - location.x, p.y - location.y);
+		  startdnd = YES;
+		  break;
+		}
+	    }
+	}
+
+      if (startdnd)
+	{
+	  /* Local reposition only in position-honoring containers; a
+	   * pure-reflow container (browser icon view) has no meaningful
+	   * icon positions, so a drag is an external file drag. */
+	  BOOL canReposition =
+	    [container respondsToSelector: @selector(repositionIcon:toCenterPoint:)];
+	  if (canReposition
+	      && [container respondsToSelector: @selector(honorsSavedPositions)])
+	    canReposition = [(FSNIconsView *)container honorsSavedPositions];
+
+	  if ([container respondsToSelector: @selector(stopRepNameEditing)])
+	    [container stopRepNameEditing];
+
+	  if (canReposition)
+	    {
+	      [self repositionLocal: theEvent offset: offset];
+	    }
+	  else
+	    {
+	      if ([container respondsToSelector: @selector(setFocusedRep:)])
+		[container setFocusedRep: nil];
+
+	      [self startExternalDragOnEvent: theEvent withMouseOffset: offset];
+	    }
+	}
+
+      if ([theEvent clickCount] == 1)
+	editstamp = [theEvent timestamp];
     }
   else
     {
@@ -1074,6 +1098,15 @@ static void FSNForgetForeignWindowAnswer(void)
 
 - (void)setFrame:(NSRect)frameRect
 {
+  /* Following the pointer changes nothing inside the icon, and laying it
+   * out again marks all of it for a second redraw after every step.  The
+   * layout catches up when the icon is let go. */
+  if (beingDragged && NSEqualSizes(frameRect.size, [self frame].size))
+    {
+      [super setFrame: frameRect];
+      return;
+    }
+
   [super setFrame: frameRect];
   [self tile];
 }
@@ -1085,6 +1118,17 @@ static void FSNForgetForeignWindowAnswer(void)
 
 - (void)drawRect:(NSRect)rect
 {
+  if (beingDragged && draggedLook != nil)
+    {
+      [draggedLook drawInRect: [self bounds]
+                     fromRect: NSZeroRect
+                    operation: NSCompositeSourceOver
+                     fraction: 1.0
+               respectFlipped: YES
+                        hints: nil];
+      return;
+    }
+
   /* A dragged icon is a ghost floating over whatever the pointer is on.  Its
    * selection plate is opaque, so painting that too would hide the folder the
    * icon is about to be dropped on, drop highlight and all. */
@@ -1817,12 +1861,91 @@ static void FSNForgetForeignWindowAnswer(void)
   [container setNeedsDisplayInRect: [self frame]];
 }
 
+/* The icon as it draws itself now, on a transparent picture of its bounds. */
+- (NSImage *)imageOfCurrentLook
+{
+  NSRect b = [self bounds];
+  NSImage *image = AUTORELEASE ([[NSImage alloc] initWithSize: b.size]);
+
+  [image setBackgroundColor: [NSColor clearColor]];
+  [image lockFocus];
+  if ([self isFlipped])
+    {
+      NSAffineTransform *flip = [NSAffineTransform transform];
+
+      [flip translateXBy: 0 yBy: b.size.height];
+      [flip scaleXBy: 1 yBy: -1];
+      [flip concat];
+    }
+  [self drawRect: b];
+  [image unlockFocus];
+
+  return image;
+}
+
+- (NSImage *)restingLookImage
+{
+  BOOL wasDragged = beingDragged;
+  BOOL wasSuppressed = suppressSelectionDrawing;
+  NSImage *image;
+
+  /* The flags are changed only around this one drawing, without asking for
+   * a redisplay: the icon on screen must not flicker. */
+  beingDragged = NO;
+  suppressSelectionDrawing = YES;
+  image = [self imageOfCurrentLook];
+  beingDragged = wasDragged;
+  suppressSelectionDrawing = wasSuppressed;
+
+  return image;
+}
+
 - (void)setBeingDragged:(BOOL)flag
 {
   if (beingDragged == flag)
     return;
 
   beingDragged = flag;
+
+  /* The ghost is redrawn for every step of the move, and laying out its name
+   * each time is most of what it costs; nothing about its look changes
+   * until it is let go. */
+  if (beingDragged)
+    {
+      ASSIGN (draggedLook, [self imageOfCurrentLook]);
+    }
+  else
+    {
+      DESTROY (draggedLook);
+      [self tile];
+    }
+
+  FSNRedrawContainerRect(container, [self frame]);
+}
+
+/* The flash before a folder springs open inverts the look it rests in - lit
+ * for a folder that takes the drop, plain for one that does not - and then
+ * restores it. */
+- (void)setSpringHighlightVisible:(BOOL)visible
+{
+  if (selectedicon == nil)
+    ASSIGN (selectedicon, [fsnodeRep openFolderIconOfSize: iconSize forNode: node]);
+  if (selectedicon == nil)
+    return;
+
+  if (visible)
+    {
+      if (springRestingIcon != nil)
+	drawicon = springRestingIcon;
+      springRestingIcon = nil;
+    }
+  else
+    {
+      if (springRestingIcon == nil)
+	springRestingIcon = drawicon;
+      drawicon = (springRestingIcon == selectedicon) ? icon : selectedicon;
+    }
+
   FSNRedrawContainerRect(container, [self frame]);
 }
 
@@ -1849,24 +1972,55 @@ static void FSNForgetForeignWindowAnswer(void)
   FSNRedrawContainerRect(container, [self frame]);
 }
 
+/* Redraws the areas right away, each on its own.  A view keeps one dirty
+ * rectangle, so marking icons spread over it would redraw everything in
+ * between; areas that overlap are joined so nothing is drawn twice. */
+static void FSNRedrawContainerRects(NSView *container, NSMutableArray *rects)
+{
+  NSUInteger i, j;
+
+  for (i = 0; i < [rects count]; i++)
+    {
+      for (j = i + 1; j < [rects count]; j++)
+        {
+          NSRect a = [[rects objectAtIndex: i] rectValue];
+          NSRect b = [[rects objectAtIndex: j] rectValue];
+
+          if (NSIntersectsRect(a, b))
+            {
+              [rects replaceObjectAtIndex: i
+                               withObject: [NSValue valueWithRect: NSUnionRect(a, b)]];
+              [rects removeObjectAtIndex: j];
+              /* The joined area may now reach ones already passed over. */
+              j = i;
+            }
+        }
+    }
+
+  for (i = 0; i < [rects count]; i++)
+  for (i = 0; i < [rects count]; i++)
+    [container displayRect: FSNPixelAlignedRect(container,
+                                                [[rects objectAtIndex: i] rectValue])];
+}
+
 /* Moves the dragged icons to their original frames offset by (dx, dy), as
  * far as FSNClampedGroupDelta lets the group leave the container.
  *
- * Only the area the icons are leaving and the one they now cover is
- * redrawn; redisplaying the window would redraw every icon in it for every
- * mouse-moved event.  The vacated area is the icon's CURRENT frame, not its
- * original one - after the first step those differ, and redrawing the
- * original left the intermediate positions smeared on screen.
+ * Only the area each icon is leaving and the one it now covers is redrawn;
+ * redisplaying the window would redraw every icon in it for every step.  The
+ * vacated area is the icon's CURRENT frame, not its original one - after the
+ * first step those differ, and redrawing the original left the intermediate
+ * positions smeared on screen.
  */
 static void FSNMoveDraggedIcons(NSView *container, NSArray *dragged,
                                 NSArray *frames, CGFloat dx, CGFloat dy)
 {
-  NSRect dirty = NSZeroRect;
+  NSMutableArray *dirty;
   NSRect group = NSZeroRect;
   NSSize delta;
   NSUInteger i, count = [dragged count];
 
-  if (count == 0)
+  if (count == 0 || container == nil)
     return;
 
   for (i = 0; i < count; i++)
@@ -1876,17 +2030,54 @@ static void FSNMoveDraggedIcons(NSView *container, NSArray *dragged,
     }
   delta = FSNClampedGroupDelta(group, [container bounds], NSMakeSize(dx, dy));
 
+  dirty = [NSMutableArray arrayWithCapacity: count];
   for (i = 0; i < count; i++)
     {
       FSNIcon *ic = [dragged objectAtIndex: i];
       NSRect orig = [[frames objectAtIndex: i] rectValue];
+      NSRect was = [ic frame];
 
-      dirty = NSUnionRect(dirty, [ic frame]);
       [ic setFrame: NSOffsetRect(orig, delta.width, delta.height)];
-      dirty = NSUnionRect(dirty, [ic frame]);
+      [dirty addObject: [NSValue valueWithRect: NSUnionRect(was, [ic frame])]];
     }
 
-  FSNRedrawContainerRect(container, dirty);
+  FSNRedrawContainerRects(container, dirty);
+}
+
+typedef struct
+{
+  NSArray *order;
+  NSArray *dragged;
+} FSNStackingContext;
+
+static NSComparisonResult FSNDraggedIconsOnTop(id a, id b, void *context)
+{
+  FSNStackingContext *ctx = (FSNStackingContext *)context;
+  BOOL aDragged = [ctx->dragged indexOfObjectIdenticalTo: a] != NSNotFound;
+  BOOL bDragged = [ctx->dragged indexOfObjectIdenticalTo: b] != NSNotFound;
+  NSUInteger ia, ib;
+
+  if (aDragged != bDragged)
+    return aDragged ? NSOrderedDescending : NSOrderedAscending;
+
+  ia = [ctx->order indexOfObjectIdenticalTo: a];
+  ib = [ctx->order indexOfObjectIdenticalTo: b];
+  if (ia == ib)
+    return NSOrderedSame;
+  return (ia < ib) ? NSOrderedAscending : NSOrderedDescending;
+}
+
+/* Views draw in the order of their superview's subviews, so an icon
+ * dragged over one that comes later went underneath it: a folder hid the
+ * ghost that was about to be dropped on it.  The dragged icons move to the
+ * end; every other icon keeps its place, so overlapping ones do not swap. */
+static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
+{
+  FSNStackingContext ctx;
+
+  ctx.order = [NSArray arrayWithArray: [container subviews]];
+  ctx.dragged = dragged;
+  [container sortSubviewsUsingFunction: FSNDraggedIconsOnTop context: &ctx];
 }
 
 static void FSNSetIconsBeingDragged(NSArray *dragged, BOOL flag)
@@ -1918,101 +2109,31 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
   FSNRedrawContainerRect(container, dirty);
 }
 
-/* Whether the pointer has left this icon view for another drop target, which
- * is what turns a free-position move into an external file drag.  Everything
- * else has to keep the move alive: ending it mid-gesture snaps the icons back
- * to where they started and the user loses the move, so this test only says
- * YES for a target that can really take the drop.
- *
- * A window qualifies only when it is on screen and in front of ours.
- * [NSApp windows] also hands out closed, hidden and miniaturized windows,
- * whose stale frames used to abort moves over untouched desktop area, and
- * windows on our own level sit behind us - ours took the click that started
- * the drag.  This is the path by which a Desktop icon reaches a viewer window
- * or the Dock: the Desktop view covers the whole screen at
- * NSDesktopWindowLevel, so the pointer never leaves it.
- * +windowNumberAtPoint: is no help - GNUstep implements it as a stub that
- * always returns 0.
- *
- * Within our own window only a view that can itself take a file drop ends
- * the move.  The info strip, the scrollers, the window border and the title
- * bar take none, so a move that grazes them keeps going - that it did not
- * was the most visible half of this: the icons snapped back although the
- * pointer had never left the window. */
-- (BOOL)localDragReachedOtherTargetAt:(NSPoint)winLoc inWindow:(NSWindow *)win
+/* Whether another application's window is under the pointer.  Such a window
+ * can only be reached through GNUstep's drag machinery, which talks to other
+ * applications; the application's own windows are handled by the move
+ * itself (see FSNIconDragSession). */
+- (BOOL)otherApplicationIsUnderPointer
 {
-  NSPoint mouseScreen = [NSEvent mouseLocation];
-  NSEnumerator *enumerator = [[NSApp windows] objectEnumerator];
-  NSWindow *w;
-  NSView *home;
-  NSView *hit;
-  NSView *v;
+  NSTimeInterval now;
 
-  while ((w = [enumerator nextObject]) != nil)
+  if ([container respondsToSelector: @selector(foreignWindowIsUnderPointer)] == NO)
+    return NO;
+
+  now = [NSDate timeIntervalSinceReferenceDate];
+  if ((now - foreignCheckTime) >= 0.1)
     {
-      NSString *cname = [w className];
-
-      if (w == win)
-        continue;
-      if ([w isVisible] == NO || [w isMiniaturized])
-        continue;
-      if ([w level] <= [win level])
-        continue;
-      /* Off-screen caches and tool tips are not places to drop a file. */
-      if ([cname hasPrefix: @"GSCache"] || [cname hasPrefix: @"GSTT"])
-        continue;
-      if (NSPointInRect(mouseScreen, [w frame]))
-        return YES;
+      foreignCheckTime = now;
+      foreignCheckAnswer = [container foreignWindowIsUnderPointer];
     }
 
-  if (NSPointInRect(mouseScreen, [win frame]) == NO)
-    return YES;
-
-  /* Windows of other applications are invisible to AppKit, so the container
-     asks the window server - it may well be one of those that covers our own
-     window here, and the Desktop lies behind every one of them. */
-  if ([container respondsToSelector: @selector(foreignWindowIsUnderPointer)])
-    {
-      NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
-
-      if ((now - foreignCheckTime) >= 0.1)
-	{
-	  foreignCheckTime = now;
-	  foreignCheckAnswer = [container foreignWindowIsUnderPointer];
-	}
-
-      if (foreignCheckAnswer)
-	return YES;
-    }
-
-  home = [container enclosingScrollView];
-  if (home == nil)
-    home = container;
-
-  hit = [[[win contentView] superview] hitTest: winLoc];
-
-  /* Still over our own icon view (or the scroll view around it): the icons,
-   * which are drop targets themselves, are inside it. */
-  for (v = hit; v != nil; v = [v superview])
-    if (v == home)
-      return NO;
-
-  for (v = hit; v != nil; v = [v superview])
-    if ([[v registeredDraggedTypes] count] != 0)
-      return YES;
-
-  return NO;
+  return foreignCheckAnswer;
 }
 
-/* The icon under the pointer that the dragged files could be filed into,
- * nil when there is none.  Candidates are all siblings of what is being
- * dragged, which is what makes the test this short: the long validation in
- * -draggingEntered: guards drops that cross folders, and none of what it
- * rules out - a folder into itself or into its own subtree, a name already
- * taken by a directory over there, an unwritable source - can arise between
- * siblings of one folder. */
-- (FSNIcon *)localDropTargetAtPoint:(NSPoint)containerPoint
-                          excluding:(NSArray *)dragged
+/* The icon whose image or name is under the pointer, leaving out the ones
+ * being dragged; nil when there is none. */
+- (FSNIcon *)localIconAtPoint:(NSPoint)containerPoint
+                    excluding:(NSArray *)dragged
 {
   NSArray *reps;
   NSUInteger i;
@@ -2024,25 +2145,36 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
   for (i = 0; i < [reps count]; i++)
     {
       FSNIcon *ic = [reps objectAtIndex: i];
-      FSNode *nd;
 
       if ([ic isKindOfClass: [FSNIcon class]] == NO)
 	continue;
       if ([dragged containsObject: ic])
 	continue;
-      if ([ic pointIsOnNode: [ic convertPoint: containerPoint fromView: container]] == NO)
-	continue;
-
-      nd = [ic node];
-      if (([nd isDirectory] == NO) || [nd isLocked] || ([nd isWritable] == NO))
-	continue;
-      if ([nd isPackage] && ([nd isApplication] == NO))
-	continue;
-
-      return ic;
+      if ([ic pointIsOnNode: [ic convertPoint: containerPoint fromView: container]])
+	return ic;
     }
 
   return nil;
+}
+
+/* Whether the dragged files could be filed into this icon.  Candidates are
+ * all siblings of what is being dragged, which is what makes the test this
+ * short: the long validation in -draggingEntered: guards drops that cross
+ * folders, and none of what it rules out - a folder into itself or into its
+ * own subtree, a name already taken by a directory over there, an
+ * unwritable source - can arise between siblings of one folder. */
+- (BOOL)iconTakesLocalDrop:(FSNIcon *)ic
+{
+  FSNode *nd = [ic node];
+
+  if (ic == nil)
+    return NO;
+  if (([nd isDirectory] == NO) || [nd isLocked] || ([nd isWritable] == NO))
+    return NO;
+  if ([nd isPackage] && ([nd isApplication] == NO))
+    return NO;
+
+  return YES;
 }
 
 /* File the dragged icons into the icon they were dropped on: hand them to it
@@ -2064,18 +2196,71 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
 		   operation: FSNOperationForDragMask(dragOperationForCurrentModifierFlags())];
 }
 
+/* Icons dropped into another window stay hidden while their files move
+ * away: showing them back at the old place first would look like the drop
+ * had failed.  A copy or link leaves the originals, so they come back at
+ * once; a move that did not happen - cancelled in its confirmation, or
+ * refused - brings them back once there has been time for it. */
+- (void)revealIconsAfterDrop:(NSArray *)dragged accepted:(BOOL)accepted
+{
+  NSDragOperation op = dragOperationForCurrentModifierFlags();
+
+  if (accepted == NO || (op & (NSDragOperationCopy | NSDragOperationLink)))
+    {
+      [self revealIconsStillPresent: dragged];
+      return;
+    }
+
+  [self performSelector: @selector(revealIconsStillPresent:)
+             withObject: dragged
+             afterDelay: 1.5];
+}
+
+- (void)revealIconsStillPresent:(NSArray *)dragged
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSUInteger i;
+
+  for (i = 0; i < [dragged count]; i++)
+    {
+      FSNIcon *ic = [dragged objectAtIndex: i];
+
+      if ([fm fileExistsAtPath: [[ic node] path]] && [ic isHidden])
+	{
+	  [ic setHidden: NO];
+	  [[ic superview] setNeedsDisplayInRect: [ic frame]];
+	}
+    }
+}
+
 /*
  * Local icon repositioning (free positioning mode).
  * Moves ALL selected icons together, keeping labels visible.
  * On drop persists every moved icon's position via the container.
+ *
+ * Over the view the icons live in, they follow the pointer as views.  Over
+ * any other of the application's windows, or another drop view of this one,
+ * they travel on as an image and that window's drop views get the drag (see
+ * FSNIconDragSession).  Only another application's window needs GNUstep's
+ * drag machinery, and the move hands over to it there.
  */
 - (void)repositionLocal:(NSEvent *)firstEvent offset:(NSSize)initialOffset
 {
   NSWindow *win = [self window];
   NSPoint startLoc = [firstEvent locationInWindow];
+  NSPoint curLoc = NSMakePoint(startLoc.x + initialOffset.width,
+                               startLoc.y + initialOffset.height);
+  NSPoint lastLoc = NSMakePoint(-1, -1);
+  NSUInteger mask = NSLeftMouseDraggedMask | NSLeftMouseUpMask | NSPeriodicMask;
+  FSNSpringLoader *loader = [FSNSpringLoader sharedLoader];
+  FSNIconDragSession *session;
+  NSView *home;
   NSEvent *event;
   FSNIcon *dropTarget = nil;
+  FSNIcon *springIcon = nil;
   BOOL didMove = NO;
+  NSTimeInterval lastFrame = 0.0;
+  BOOL framePending = NO;
 
   /* Collect all selected icons and record their original frames */
   NSMutableArray *allIcons = [NSMutableArray arrayWithObject: self];
@@ -2105,16 +2290,23 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
    * delta, so this is a no-op there. */
   NSPoint startLocal = [container convertPoint: startLoc fromView: nil];
 
+  home = [container enclosingScrollView];
+  if (home == nil)
+    home = container;
+
+  session = AUTORELEASE ([[FSNIconDragSession alloc] initWithIcons: allIcons
+                                                            source: self
+                                                          inWindow: win]);
+
   FSNForgetForeignWindowAnswer();
+  FSNRaiseDraggedIcons(container, allIcons);
   FSNSetIconsBeingDragged(allIcons, YES);
 
   /* Apply the initial offset from the drag-start event immediately.
    * The first drag event is consumed by mouseDown's while-loop before
    * we're called, so we seed the movement here. */
   {
-    NSPoint seedEndLocal = [container convertPoint:
-      NSMakePoint(startLoc.x + initialOffset.width,
-                  startLoc.y + initialOffset.height) fromView: nil];
+    NSPoint seedEndLocal = [container convertPoint: curLoc fromView: nil];
     CGFloat dx = seedEndLocal.x - startLocal.x;
     CGFloat dy = seedEndLocal.y - startLocal.y;
 
@@ -2125,11 +2317,26 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
       }
   }
 
+  /* Periodic events keep the loop turning while the pointer rests: that is
+   * what times a folder springing open under it. */
+  [NSEvent startPeriodicEventsAfterDelay: 0.05 withPeriod: 0.05];
+
   while (1)
     {
       NSEvent *pendingUp = nil;
+      NSPoint screen;
+      NSWindow *under;
+      NSView *hit;
+      BOOL overHome = NO;
 
-      event = [win nextEventMatchingMask: NSLeftMouseDraggedMask | NSLeftMouseUpMask];
+      /* A position held back until the next frame is acted on when that
+       * frame is due, whether or not the pointer moves on by then. */
+      event = [NSApp nextEventMatchingMask: mask
+                                 untilDate: framePending
+          ? [NSDate dateWithTimeIntervalSinceReferenceDate: lastFrame + FSNMoveFrameInterval]
+          : [NSDate distantFuture]
+                                    inMode: NSEventTrackingRunLoopMode
+                                   dequeue: YES];
 
       /* X11 delivers motion faster than the icons can be redrawn, so only the
        * newest position is acted on - but it is always acted on, even when the
@@ -2138,11 +2345,15 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
        * dropping it would lose the drop. */
       while ([event type] != NSLeftMouseUp)
         {
-          NSEvent *queued = [NSApp nextEventMatchingMask:
-                                     NSLeftMouseDraggedMask | NSLeftMouseUpMask
-                                               untilDate: [NSDate distantPast]
-                                                  inMode: NSEventTrackingRunLoopMode
-                                                 dequeue: YES];
+          NSEvent *queued;
+
+          if ([event type] == NSLeftMouseDragged)
+            curLoc = [event locationInWindow];
+
+          queued = [NSApp nextEventMatchingMask: mask
+                                      untilDate: [NSDate distantPast]
+                                         inMode: NSEventTrackingRunLoopMode
+                                        dequeue: YES];
           if (queued == nil)
             break;
           if ([queued type] == NSLeftMouseUp)
@@ -2156,57 +2367,154 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
       if ([event type] == NSLeftMouseUp)
         break;
 
-      if ([event type] == NSLeftMouseDragged)
+      /* A tick with the pointer at rest only times a spring: nothing moved,
+       * so nothing needs to be looked up or drawn again.  Redrawing the icons
+       * on every tick is what made a drag across the Desktop stutter. */
+      if (NSEqualPoints(curLoc, lastLoc))
         {
-          NSPoint curLoc = [event locationInWindow];
-          NSPoint localInContainer;
-
-          /* Hand the gesture over to the file-drag machinery once the
-           * pointer has reached a drop target outside this icon view, and
-           * put the icons back where they started first. */
-          if ([self localDragReachedOtherTargetAt: curLoc inWindow: win])
+          if ([session isAway])
             {
-              [dropTarget setDropHighlighted: NO];
-              FSNSetIconsBeingDragged(allIcons, NO);
-              FSNRestoreDraggedIcons(container, allIcons, origFrames);
-              [self startExternalDragOnEvent: firstEvent withMouseOffset: initialOffset];
-              return;
+              [session dragAwayRests];
             }
+          else
+            {
+              if (springIcon != nil)
+                [loader pointerRestsOnNode: [springIcon node]
+                                    inView: springIcon
+                                   flasher: springIcon
+                              draggedPaths: [session paths]];
+              [loader dragIsOverWindow: win];
+            }
+
+          if (pendingUp != nil)
+            break;
+          continue;
+        }
+      if (pendingUp == nil
+          && [NSDate timeIntervalSinceReferenceDate] - lastFrame < FSNMoveFrameInterval)
+        {
+          framePending = YES;
+          continue;
+        }
+      framePending = NO;
+      lastFrame = [NSDate timeIntervalSinceReferenceDate];
+      lastLoc = curLoc;
+
+      screen = [win convertBaseToScreen: curLoc];
+
+      /* Another application's window: only GNUstep's drag machinery reaches
+       * it.  The icons go back to where the gesture started first. */
+      if ([self otherApplicationIsUnderPointer])
+        {
+          [NSEvent stopPeriodicEvents];
+          [session returnToSource];
+          [dropTarget setDropHighlighted: NO];
+          [loader pointerLeftView: springIcon];
+          FSNSetIconsBeingDragged(allIcons, NO);
+          FSNRestoreDraggedIcons(container, allIcons, origFrames);
+          [self startExternalDragOnEvent: firstEvent withMouseOffset: initialOffset];
+          return;
+        }
+
+      under = [session windowAtScreenPoint: screen];
+      if (under == win)
+        {
+          for (hit = [[[win contentView] superview] hitTest: curLoc];
+               hit != nil; hit = [hit superview])
+            {
+              if (hit == home)
+                {
+                  overHome = YES;
+                  break;
+                }
+            }
+        }
+
+      if (overHome)
+        {
+          NSPoint localInContainer;
+          FSNIcon *hover;
+
+          [session returnToSource];
 
           /* Reach the parts of a canvas larger than its viewport.  The
            * deltas below are in container coordinates, which scrolling does
            * not change, so this composes with the move. */
-          [container autoscroll: event];
+          if ([event type] == NSLeftMouseDragged)
+            [container autoscroll: event];
 
           /* Delta in container space (see startLocal above): correct for
            * both the flipped spatial container and non-flipped ones. */
           localInContainer = [container convertPoint: curLoc fromView: nil];
 
+          hover = [self localIconAtPoint: localInContainer excluding: allIcons];
+
           /* A folder under the pointer opens up to say that letting go here
            * files the icons into it instead of leaving them on the spot. */
           {
-            FSNIcon *hover = [self localDropTargetAtPoint: localInContainer
-                                                excluding: allIcons];
+            FSNIcon *target = [self iconTakesLocalDrop: hover] ? hover : nil;
 
-            if (hover != dropTarget)
+            if (target != dropTarget)
               {
                 [dropTarget setDropHighlighted: NO];
-                dropTarget = hover;
+                dropTarget = target;
                 [dropTarget setDropHighlighted: YES];
               }
           }
+
+          /* A folder the icons rest on springs open - also one that cannot
+           * take them itself, since the move may be heading further down. */
+          if (hover != springIcon)
+            {
+              [loader pointerLeftView: springIcon];
+              springIcon = hover;
+            }
+          if (springIcon != nil)
+            [loader pointerRestsOnNode: [springIcon node]
+                                inView: springIcon
+                               flasher: springIcon
+                          draggedPaths: [session paths]];
 
           FSNMoveDraggedIcons(container, allIcons, origFrames,
                               localInContainer.x - startLocal.x,
                               localInContainer.y - startLocal.y);
           didMove = YES;
+
+          [loader dragIsOverWindow: win];
+        }
+      else
+        {
+          [dropTarget setDropHighlighted: NO];
+          dropTarget = nil;
+          [loader pointerLeftView: springIcon];
+          springIcon = nil;
+
+          [session dragAwayOverWindow: under atScreenPoint: screen];
         }
 
       if (pendingUp != nil)
         break;
     }
 
+  [NSEvent stopPeriodicEvents];
+  [loader pointerLeftView: springIcon];
+
+  if ([session isAway])
+    {
+      BOOL accepted = [session dropAtScreenPoint: [win convertBaseToScreen: curLoc]];
+
+      FSNSetIconsBeingDragged(allIcons, NO);
+      /* Back to where they were while still hidden, so nothing jumps. */
+      FSNRestoreDraggedIcons(container, allIcons, origFrames);
+      [self revealIconsAfterDrop: allIcons accepted: accepted];
+      return;
+    }
+
   FSNSetIconsBeingDragged(allIcons, NO);
+
+  /* The drop lands in this window, where the gesture started: nothing a
+   * folder sprang open in stays open. */
+  [loader dragDroppedInWindow: win];
 
   /* Let go over a folder: the icons go back where they were and the files
    * move into it.  A free-position drag never reaches the drag machinery, so
@@ -2654,6 +2962,8 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
 
   if ([self draggingPointIsOnNode: sender] == NO)
     {
+      [[FSNSpringLoader sharedLoader] pointerLeftView: self];
+
       if (drawicon == selectedicon)
 	{
 	  drawicon = icon;
@@ -2686,6 +2996,18 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
 	{
 	  drawicon = selectedicon;
 	  [self setNeedsDisplay: YES];
+	}
+
+      /* A folder the drag rests on springs open after a while - also one
+	 that cannot take the drop itself, since the drag may be heading for
+	 a folder further down. */
+      if (onSelf == NO)
+	{
+	  [[FSNSpringLoader sharedLoader]
+	    pointerRestsOnNode: node
+			inView: self
+		       flasher: self
+		  draggedPaths: [FSNSpringLoader draggedPathsOfDraggingInfo: sender]];
 	}
     }
 
@@ -2733,6 +3055,7 @@ static void FSNRestoreDraggedIcons(NSView *container, NSArray *dragged,
 
 - (void)draggingExited:(id <NSDraggingInfo>)sender
 {
+  [[FSNSpringLoader sharedLoader] pointerLeftView: self];
   isDragTarget = NO;
 
   if (dragProxied)

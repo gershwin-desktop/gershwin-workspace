@@ -29,6 +29,7 @@
 #include <Foundation/Foundation.h>
 #include <AppKit/NSMatrix.h>
 #include "FSNodeRep.h"
+#import "FSNSpringLoader.h"
 
 @class FSNBrowserColumn;
 @class FSNBrowserCell;
@@ -41,6 +42,11 @@
   NSInteger editIndex;
   BOOL acceptDnd;
   FSNBrowserCell *dndTarget;
+  /* The cell a drag rests on, for the flash before it springs open; not
+     retained, it is one of the matrix's own cells. */
+  FSNBrowserCell *springCell;
+  BOOL springFlashing;
+  BOOL springRestingLit;
   unsigned int dragOperation;
 }
 
@@ -83,7 +89,12 @@
 @end
 
 
-@interface FSNBrowserMatrix (DraggingDestination)
+@interface FSNBrowserMatrix (DraggingDestination) <FSNSpringFlashing>
+
+- (void)dragRestsOnCell:(FSNBrowserCell *)cell
+           draggingInfo:(id <NSDraggingInfo>)sender;
+
+- (void)dragLeftCells;
 
 - (NSDragOperation)checkReturnValueForCell:(FSNBrowserCell *)acell
                           withDraggingInfo:(id <NSDraggingInfo>)sender;

@@ -29,6 +29,7 @@
 #import "GWViewersManager.h"
 #import "Workspace.h"
 #import "GWDesktopManager.h"
+#import "FSNSpringLoader.h"
 
 // Forward declare methods to avoid warnings
 @interface NSObject (ViewerDelegateMethods)
@@ -39,6 +40,16 @@
 
 
 @implementation GWViewerWindow
+
+/* Spring-loaded folders follow a drag across windows, and a window's drag
+ * events only pass through here.  The loader hears of an event before it is
+ * handled: handling a drop can run a confirmation panel, and the loader must
+ * know where the drop landed before that. */
+- (void)sendEvent:(NSEvent *)theEvent
+{
+  [[FSNSpringLoader sharedLoader] noteEvent: theEvent inWindow: self];
+  [super sendEvent: theEvent];
+}
 
 - (void)dealloc
 {  

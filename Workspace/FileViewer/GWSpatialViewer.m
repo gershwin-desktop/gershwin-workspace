@@ -347,6 +347,7 @@ static BOOL hasLastExtents_ = NO;
 		                            visibleColumns: visibleCols
                                       scroller: [scroll horizontalScroller]
                                     cellsIcons: YES
+                                    acceptsDnd: YES
                                  editableCells: YES       
                                selectionColumn: NO];
     }
@@ -1595,6 +1596,7 @@ static BOOL hasLastExtents_ = NO;
 		                            visibleColumns: visibleCols
                                       scroller: [scroll horizontalScroller]
                                     cellsIcons: YES
+                                    acceptsDnd: YES
                                  editableCells: YES   
                                selectionColumn: NO]; 
       

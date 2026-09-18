@@ -26,6 +26,8 @@ FSNode_OBJC_FILES = \
          FSNPlacementEnumerator.m \
           FSNIconPlacement.m \
           FSNAlias.m \
+          FSNSpringLoader.m \
+          FSNIconDragSession.m \
 
 
 FSNode_HEADER_FILES = \
@@ -49,6 +51,8 @@ FSNode_HEADER_FILES = \
          FSNMetadataProvider.h \
           FSNIconPositionStore.h \
           FSNAlias.h \
+          FSNSpringLoader.h \
+          FSNIconDragSession.h \
 
 
 FSNode_HAS_RESOURCE_BUNDLE = yes                                          

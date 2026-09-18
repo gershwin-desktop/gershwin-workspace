@@ -449,6 +449,30 @@ static NSString *defaultColumns = @"{ \
   [listView deselectRow: [nodeReps indexOfObjectIdenticalTo: aRep]];
 }
 
+/* The flash before a folder springs open inverts the look its row rests
+ * in - lit when it takes the drop, plain when not - and then restores it. */
+- (void)setSpringHighlightVisible:(BOOL)visible
+{
+  BOOL lit;
+
+  if (springRep == nil || [nodeReps containsObject: springRep] == NO)
+    return;
+
+  if (springFlashing == NO)
+    {
+      springRestingLit = (dndTarget == springRep);
+      springFlashing = YES;
+    }
+
+  lit = visible ? springRestingLit : (springRestingLit == NO);
+  if (visible)
+    springFlashing = NO;
+
+  if ([springRep selectIcon: lit])
+    [self redisplayRep: springRep];
+  [listView displayIfNeeded];
+}
+
 - (void)selectIconOfRep:(id)aRep
 {
   if ([aRep selectIcon: YES])
@@ -2011,11 +2035,24 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     {
       if ([self checkDraggingLocation: location])
 	{
-	  [self checkReturnValueForRep: [nodeReps objectAtIndex: row]
-		      withDraggingInfo: sender];
+	  FSNListViewNodeRep *rep = [nodeReps objectAtIndex: row];
+
+	  [self checkReturnValueForRep: rep withDraggingInfo: sender];
+
+	  /* A folder the drag rests on springs open. */
+	  if (rep != springRep)
+	    springFlashing = NO;
+	  springRep = rep;
+	  [[FSNSpringLoader sharedLoader]
+	    pointerRestsOnNode: [rep node]
+			inView: listView
+		       flasher: self
+		  draggedPaths: [FSNSpringLoader draggedPathsOfDraggingInfo: sender]];
 	}
       else
 	{
+	  [[FSNSpringLoader sharedLoader] pointerLeftView: listView];
+	  springRep = nil;
 	  [self unSelectIconsOfRepsDifferentFrom: nil];
 	  dndTarget = nil;
 	  dragOperation = NSDragOperationNone;
@@ -2023,6 +2060,8 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     }
   else
     {
+      [[FSNSpringLoader sharedLoader] pointerLeftView: listView];
+      springRep = nil;
       dndTarget = nil;
       dragOperation = NSDragOperationNone;
     }
@@ -2060,6 +2099,8 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
 - (void)listViewDraggingExited:(id <NSDraggingInfo>)sender
 {
+  [[FSNSpringLoader sharedLoader] pointerLeftView: listView];
+  springRep = nil;
   isDragTarget = NO;
   dndTarget = nil;
   dndValidRect = NSZeroRect;

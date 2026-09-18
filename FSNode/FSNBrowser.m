@@ -99,6 +99,7 @@
 		    visibleColumns:(int)vcols 
               scroller:(NSScroller *)scrl
             cellsIcons:(BOOL)cicns
+            acceptsDnd:(BOOL)dnd
          editableCells:(BOOL)edcells
        selectionColumn:(BOOL)selcol
 {
@@ -152,6 +153,7 @@
     [scroller setAction: @selector(scrollViaScroller:)];    
     
     cellsIcon = cicns;
+    acceptsDnd = dnd;
     selColumn = selcol;
 
     updateViewsLock = 0;
@@ -519,6 +521,7 @@
                                        atIndex: count
                                  cellPrototype: cellPrototype
                                      cellsIcon: cellsIcon
+                                    acceptsDnd: acceptsDnd
                                   nodeInfoType: infoType
                                   extendedType: extInfoType
                                backgroundColor: backColor];

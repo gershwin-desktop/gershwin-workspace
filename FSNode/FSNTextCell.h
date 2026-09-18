@@ -39,6 +39,11 @@
   NSSize titlesize;
   BOOL dateCell;
   NSString *uncutTitle;
+  /* The title and width a label was last shortened for, with the result:
+   * nil when the title fitted. */
+  NSString *fittedTitle;
+  CGFloat fittedWidth;
+  NSString *fittedResult;
   NSImage *icon;
   NSImage *displayIcon;   /* icon with tagColor badge composited on */
   NSColor *tagColor;

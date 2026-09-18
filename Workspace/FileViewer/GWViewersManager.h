@@ -25,6 +25,7 @@
 
 #import <Foundation/Foundation.h>
 #import "FSNodeRep.h"
+#import "FSNSpringLoader.h"
 #import "GWViewer.h"
 
 #define BROWSING 0
@@ -210,4 +211,8 @@
           inHistory:(NSMutableArray *)history
            ofViewer:(id)viewer;
 
+@end
+
+/* Folders spring open under a drag in the kind of window they live in. */
+@interface GWViewersManager (SpringLoading) <FSNSpringLoaderDelegate>
 @end

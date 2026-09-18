@@ -35,44 +35,37 @@
 
 static GSFilenameExtensionDisplayMode _displayModeCache = -1;
 
-static NSString *defaultsPlistPath(void)
+/* The mode as the defaults have it.  The first reading and every later poll
+ * must come from the same place: a poll that read only the user's own
+ * NSGlobalDomain file missed a system-wide setting the first reading had
+ * seen, so every label changed a moment after launch. */
+static GSFilenameExtensionDisplayMode modeFromDefaults(void)
 {
-  NSString *dir;
-  NSString *env = [[[NSProcessInfo processInfo] environment]
-                    objectForKey: @"GNUSTEP_USER_DEFAULTS_DIR"];
-  if (env)
-    dir = env;
-  else
-    dir = [NSHomeDirectory() stringByAppendingPathComponent: @"Library/Preferences"];
-  return [dir stringByAppendingPathComponent: @"NSGlobalDomain.plist"];
+  NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+  id val;
+  NSInteger mode;
+
+  /* Picks up a change the Workspace preferences wrote from another
+   * process. */
+  [defs synchronize];
+  val = [defs objectForKey: @"GSFilenameExtensionDisplayMode"];
+  mode = (val != nil) ? [val integerValue] : GSFilenameExtensionHidePackageExtensions;
+
+  if (mode < GSFilenameExtensionDisplayAll || mode > GSFilenameExtensionHideAll)
+    mode = GSFilenameExtensionHidePackageExtensions;
+
+  return (GSFilenameExtensionDisplayMode)mode;
 }
 
 static void pollDefaults(void)
 {
-  NSString *path = defaultsPlistPath();
-  NSDictionary *plist = [NSDictionary dictionaryWithContentsOfFile: path];
-  NSInteger mode;
-  
-  if (plist) {
-    id val = [plist objectForKey: @"GSFilenameExtensionDisplayMode"];
-    if (val) {
-      mode = [val integerValue];
-    } else {
-      mode = GSFilenameExtensionHidePackageExtensions;
-    }
-  } else {
-    mode = GSFilenameExtensionHidePackageExtensions;
-  }
-  
-  if (mode < GSFilenameExtensionDisplayAll || mode > GSFilenameExtensionHideAll) {
-    mode = GSFilenameExtensionHidePackageExtensions;
-  }
+  GSFilenameExtensionDisplayMode mode = modeFromDefaults();
 
   if (_displayModeCache == -1) {
-    _displayModeCache = (GSFilenameExtensionDisplayMode)mode;
-  } else if (_displayModeCache != (GSFilenameExtensionDisplayMode)mode) {
+    _displayModeCache = mode;
+  } else if (_displayModeCache != mode) {
     NSLog(@"GSExt: mode changed from %ld to %ld", (long)_displayModeCache, (long)mode);
-    _displayModeCache = (GSFilenameExtensionDisplayMode)mode;
+    _displayModeCache = mode;
     [[NSNotificationCenter defaultCenter]
       postNotificationName: NSUserDefaultsDidChangeNotification
                     object: [NSUserDefaults standardUserDefaults]];
@@ -126,13 +119,7 @@ GSCurrentExtensionDisplayMode(void)
 {
   ensureDisplayModeObserver();
   if (_displayModeCache == -1) {
-    NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
-    [defs synchronize];
-    NSInteger mode = [defs integerForKey: @"GSFilenameExtensionDisplayMode"];
-    if (mode < GSFilenameExtensionDisplayAll || mode > GSFilenameExtensionHideAll) {
-      mode = GSFilenameExtensionHidePackageExtensions;
-    }
-    _displayModeCache = (GSFilenameExtensionDisplayMode)mode;
+    _displayModeCache = modeFromDefaults();
   }
   return _displayModeCache;
 }

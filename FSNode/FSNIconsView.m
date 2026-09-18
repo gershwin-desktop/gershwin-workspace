@@ -266,6 +266,12 @@ static void GWHighlightFrameRect(NSRect aRect)
         [icon setNeedsDisplay: YES];
       }
   }
+
+  /* A name that grew or shrank needs a frame of its own width; without
+   * laying the view out again the labels stayed cut to the old names until
+   * some other change did it. */
+  [self tile];
+  [self setNeedsDisplay: YES];
 }
 
 - (void)sortIcons
@@ -335,8 +341,11 @@ static void GWHighlightFrameRect(NSRect aRect)
   CREATE_AUTORELEASE_POOL (pool);
   NSUInteger count = [icons count];
   NSUInteger i;
-  /* Superview frame — used to fill the parent on the desktop (no scroll view). */
-  NSRect svr = [[self superview] frame];
+  /* The area of the superview, in the coordinates this view's frame is
+   * given in - used to fill the parent on the desktop (no scroll view).  Not
+   * its frame: at a scale factor other than 1 that is in the window's
+   * pixels, and the desktop came out taller than the screen. */
+  NSRect svr = [[self superview] bounds];
 
   [self calculateGridSize];
 
@@ -374,8 +383,12 @@ static void GWHighlightFrameRect(NSRect aRect)
      * view must fill the parent. */
     if ([[self superview] isKindOfClass: [NSClipView class]] == NO)
       {
-        if (fh < svr.size.height)
-          fh = svr.size.height;
+        /* A view that cannot scroll is exactly as big as what holds it.
+         * Growing it to reach an icon placed beyond the edge showed nothing
+         * more, but saved positions are measured from its height: every
+         * icon shifted, and the next layout placed them all anew. */
+        maxX = svr.size.width;
+        fh = svr.size.height;
       }
     else
       {
@@ -441,6 +454,8 @@ static void GWHighlightFrameRect(NSRect aRect)
    * and respects _placementDirection so new icons appear at the correct
    * end of the grid (e.g., top-right for desktop's TopToBottomRightToLeft). */
   FSNPlacementEnumerator *autoEnumerator = nil;
+  FSNPlacementEnumerator *overflowEnumerator = nil;
+  NSUInteger autoCols = 0, autoRows = 0;
   NSMutableSet *occupiedCells = nil;
   NSPoint autoGOrigin = NSZeroPoint;
   CGFloat autoCellW = 0, autoCellH = 0, autoGapX = 0;
@@ -471,14 +486,19 @@ static void GWHighlightFrameRect(NSRect aRect)
       FSNIconItemData *data = [icon placementData];
       NSValue *posValue = honor ? [customIconPositions objectForKey: filename] : nil;
       NSPoint cellOrigin = NSZeroPoint;
+      NSPoint placedCenter = NSZeroPoint;
       BOOL placed = NO;
 
       /* A wide label must not be clipped to the grid cell: give the icon a
        * frame wide enough to draw its full title, up to 2x the cell width.
-       * Only honored (placed) icons get the room - the AUTO grid packs cells
-       * tightly and has no spare columns, and resets frameW below. */
+       * Only icons put somewhere by the user or kept from disk get the room.
+       * The AUTO grid packs cells tightly and has no spare columns - and the
+       * position it hands out is recorded like any other, so asking whether
+       * a position is recorded would widen the icon from the next layout
+       * on, over its neighbours. */
       float frameW = _cachedCellSize.width;
-      if ([icon respondsToSelector: @selector(labelTextWidth)])
+      if (data.placementMode == FSNIconPlacementModeManual
+          && [icon respondsToSelector: @selector(labelTextWidth)])
         {
           float labelW = [icon labelTextWidth];
           float maxW = _cachedCellSize.width * 2;
@@ -496,6 +516,7 @@ static void GWHighlightFrameRect(NSRect aRect)
           NSPoint center = [self viewCenterForIlocCenter: [posValue pointValue]];
           cellOrigin.x = center.x - (frameW / 2);
           cellOrigin.y = center.y - (_cachedCellSize.height / 2);
+          placedCenter = center;
           placed = YES;
         }
       else if (honor && data.placementMode == FSNIconPlacementModeManual
@@ -508,6 +529,7 @@ static void GWHighlightFrameRect(NSRect aRect)
           NSPoint center = [self viewCenterForIlocCenter: data.ilocPosition];
           cellOrigin.x = center.x - (frameW / 2);
           cellOrigin.y = center.y - (_cachedCellSize.height / 2);
+          placedCenter = center;
           placed = YES;
         }
 
@@ -518,11 +540,12 @@ static void GWHighlightFrameRect(NSRect aRect)
        * discard it and fall through to AUTO so the icon can never be hidden.
        * Reset the placement state so nothing downstream re-honors the bad
        * value. */
+      /* The icon's own centre: measured from a frame widened for a long
+       * name, a cell-wide box would sit left of it, and an icon in the
+       * leftmost column counted as off-screen. */
       if (placed && !scrollHosted)
         {
-          NSPoint c = NSMakePoint(cellOrigin.x + _cachedCellSize.width / 2,
-                                  cellOrigin.y + _cachedCellSize.height / 2);
-          if (!NSPointInRect(c, usableRect))
+          if (!NSPointInRect(placedCenter, usableRect))
             {
               placed = NO;
               data.placementMode = FSNIconPlacementModeAuto;
@@ -557,11 +580,26 @@ static void GWHighlightFrameRect(NSRect aRect)
               if (nCols < 1) nCols = 1;
               NSUInteger nRows = [self isFlipped]
                 ? 1 : (NSUInteger)(autoGOrigin.y / autoCellH);
+              if (!scrollHosted)
+                {
+                  /* A view that cannot scroll only has the cells that lie
+                   * wholly in its usable area.  Cells under the Dock or past
+                   * the screen edge were handed out here and then rejected
+                   * as off-screen by the next layout, so the icons in them
+                   * moved every time the view was laid out again. */
+                  CGFloat span = [self isFlipped]
+                    ? NSMaxY(usableRect) - autoGOrigin.y
+                    : autoGOrigin.y - NSMinY(usableRect);
+                  nRows = (span > 0) ? (NSUInteger)(span / autoCellH) : 0;
+                }
               if (nRows < 1) nRows = 1;
-              {
-                NSUInteger neededRows = ([icons count] + nCols - 1) / nCols;
-                if (nRows < neededRows) nRows = neededRows;
-              }
+              if (scrollHosted)
+                {
+                  NSUInteger neededRows = ([icons count] + nCols - 1) / nCols;
+                  if (nRows < neededRows) nRows = neededRows;
+                }
+              autoCols = nCols;
+              autoRows = nRows;
 
               /* Pure reflow (no honored positions) owns its document height:
                * anchor the grid to the height the rows actually need, so in
@@ -675,6 +713,39 @@ static void GWHighlightFrameRect(NSRect aRect)
                 break;
               }
 
+            /* More icons than a view that cannot scroll has cells for: the
+             * rest go round the grid again, on top of the icons already
+             * there.  They stay in view, and in the same place each time. */
+            if (!found && !scrollHosted)
+              {
+                if (overflowEnumerator == nil
+                    || [overflowEnumerator nextCell: &cell] == NO)
+                  {
+                    [overflowEnumerator release];
+                    if (_placementDirection == FSNPlacementDirectionTopToBottomRightToLeft)
+                      overflowEnumerator = [[FSNTopToBottomRightToLeftEnumerator alloc]
+                                             initWithColumns: autoCols rows: autoRows];
+                    else
+                      overflowEnumerator = [[FSNLeftToRightTopToBottomEnumerator alloc]
+                                             initWithColumns: autoCols rows: autoRows];
+                    [overflowEnumerator nextCell: &cell];
+                  }
+
+                NSPoint center = [self centerForGridCell: cell
+                                                cellSize: NSMakeSize(autoCellW, autoCellH)
+                                                    gapX: autoGapX
+                                                  origin: autoGOrigin];
+                cellOrigin.x = center.x - (_cachedCellSize.width / 2);
+                cellOrigin.y = center.y - (_cachedCellSize.height / 2);
+                if (honor)
+                  {
+                    [customIconPositions setObject:
+                      [NSValue valueWithPoint: [self ilocCenterForViewCenter: center]]
+                      forKey: filename];
+                  }
+                found = YES;
+              }
+
             if (!found)
               {
                 /* Grid is full or no cells available — fallback to the
@@ -717,6 +788,7 @@ static void GWHighlightFrameRect(NSRect aRect)
     }
 
   [autoEnumerator release];
+  [overflowEnumerator release];
   [occupiedCells release];
 
   if (irects)

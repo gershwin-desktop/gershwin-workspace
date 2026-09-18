@@ -2038,3 +2038,160 @@ if (*pos >= i) *pos -= n; \
 }
 
 @end
+
+
+/* What springing a folder open did for a drag, so it can be undone. */
+typedef enum
+{
+  GWSpringOpenedWindow,   /* a new window, closed again */
+  GWSpringMovedWindow,    /* a browsing window moved in place, moved back */
+  GWSpringRaisedWindow    /* an open window brought to the front, left alone */
+} GWSpringKind;
+
+@interface GWSpringToken : NSObject
+{
+@public
+  GWSpringKind kind;
+  id viewer;
+  FSNode *previousNode;
+}
+@end
+
+@implementation GWSpringToken
+
+- (void)dealloc
+{
+  RELEASE (viewer);
+  RELEASE (previousNode);
+  [super dealloc];
+}
+
+@end
+
+
+@implementation GWViewersManager (SpringLoading)
+
+- (id)viewerForWindow:(NSWindow *)window
+{
+  NSUInteger i;
+
+  for (i = 0; i < [viewers count]; i++)
+    {
+      id vwr = [viewers objectAtIndex: i];
+
+      if ([vwr win] == window)
+        return vwr;
+    }
+
+  return nil;
+}
+
+- (BOOL)springLoader:(FSNSpringLoader *)loader mayOpenNode:(FSNode *)node
+{
+  NSString *trash = [gworkspace trashPath];
+  NSString *path = [node path];
+
+  /* The Trash only ever takes drops; neither it nor anything in it opens
+   * under a drag. */
+  if (trash != nil
+      && ([path isEqual: trash]
+          || [path hasPrefix: [trash stringByAppendingString: @"/"]]))
+    return NO;
+
+  /* A network entry is a service to mount, not a folder to look into. */
+  if ([node respondsToSelector: @selector(isNetworkService)]
+      && [node performSelector: @selector(isNetworkService)])
+    return NO;
+
+  return YES;
+}
+
+- (id)springLoader:(FSNSpringLoader *)loader
+          openNode:(FSNode *)node
+          fromView:(NSView *)view
+{
+  GWSpringToken *token = AUTORELEASE ([GWSpringToken new]);
+  id source = [self viewerForWindow: [view window]];
+  id viewer;
+
+  /* A browsing window follows the drag in place, as it does when the
+   * folder is opened in it. */
+  if (source != nil && [source isSpatial] == NO)
+    {
+      token->kind = GWSpringMovedWindow;
+      ASSIGN (token->viewer, source);
+      ASSIGN (token->previousNode, [source shownNode]);
+      [source showNodeWithoutHistory: node];
+      return token;
+    }
+
+  viewer = [self viewerWithBaseNode: node];
+  if (viewer != nil)
+    {
+      token->kind = GWSpringRaisedWindow;
+      ASSIGN (token->viewer, viewer);
+      [[viewer win] orderFront: nil];
+      return token;
+    }
+
+  /* From a spatial window the folder gets its own spatial window; from the
+   * Desktop, the kind of window the user opens folders in. */
+  if (source != nil || [gworkspace defaultViewerType] == SPATIAL)
+    {
+      viewer = [self viewerOfType: SPATIAL
+                         showType: nil
+                          forNode: node
+                    showSelection: NO
+                   closeOldViewer: nil
+                         forceNew: NO];
+    }
+  else
+    {
+      viewer = [self viewerForNode: node
+                          showType: 0
+                     showSelection: NO
+                          forceNew: NO
+                           withKey: nil];
+    }
+
+  if (viewer == nil)
+    return nil;
+
+  /* The drag loop only runs the event tracking mode, so the new window
+   * would stay blank until the drag ends unless it draws now. */
+  [[viewer win] display];
+
+  token->kind = GWSpringOpenedWindow;
+  ASSIGN (token->viewer, viewer);
+  return token;
+}
+
+- (void)springLoader:(FSNSpringLoader *)loader undo:(id)token
+{
+  GWSpringToken *spring = token;
+
+  /* The user may have closed the window meanwhile. */
+  if ([viewers containsObject: spring->viewer] == NO)
+    return;
+
+  switch (spring->kind)
+    {
+      case GWSpringMovedWindow:
+        [spring->viewer showNodeWithoutHistory: spring->previousNode];
+        break;
+
+      case GWSpringOpenedWindow:
+        [[spring->viewer win] close];
+        break;
+
+      case GWSpringRaisedWindow:
+        break;
+    }
+}
+
+- (NSWindow *)springLoader:(FSNSpringLoader *)loader windowForToken:(id)token
+{
+  return [((GWSpringToken *)token)->viewer win];
+}
+
+@end

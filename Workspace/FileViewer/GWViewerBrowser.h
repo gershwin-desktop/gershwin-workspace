@@ -34,6 +34,7 @@
 		    visibleColumns:(int)vcols 
               scroller:(NSScroller *)scrl
             cellsIcons:(BOOL)cicns
+            acceptsDnd:(BOOL)dnd
          editableCells:(BOOL)edcells
        selectionColumn:(BOOL)selcol;
 

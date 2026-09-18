@@ -45,6 +45,7 @@
 
 #import "GWFunctions.h"
 #import "FSNodeRep.h"
+#import "FSNSpringLoader.h"
 #import "FSNFunctions.h"
 #import "FSNAlias.h"
 #import "Workspace.h"
@@ -933,6 +934,9 @@ static Workspace *gworkspace = nil;
   finder = [Finder finder];
   
   vwrsManager = [GWViewersManager viewersManager];
+  /* Folders spring open under a drag through the viewers manager, which
+     knows what kind of window each folder lives in. */
+  [[FSNSpringLoader sharedLoader] setDelegate: vwrsManager];
   // Don't open viewer windows on startup - just show desktop
   // [vwrsManager showViewers];
   

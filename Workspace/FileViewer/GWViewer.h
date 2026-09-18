@@ -81,6 +81,8 @@
 - (void)createSubviews;
 - (void)unloadFromNode:(FSNode *)anode;
 - (void)updateShownSelection;
+- (FSNode *)shownNode;
+- (void)showNodeWithoutHistory:(FSNode *)node;
 - (void)navigateToNode:(FSNode *)node;
 
 /* Re-base the viewer window to a new node (sidebar navigation).

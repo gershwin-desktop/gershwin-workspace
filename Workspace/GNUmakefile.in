@@ -142,6 +142,7 @@ Preferences/DefEditorPref.m \
 Preferences/XTermPref.m \
 Preferences/DefSortOrderPref.m \
 Preferences/IconsPref.m \
+Preferences/SpringLoadingPref.m \
 Preferences/HiddenFilesPref.m \
 Preferences/HistoryPref.m \
 Preferences/BrowserViewerPref.m \

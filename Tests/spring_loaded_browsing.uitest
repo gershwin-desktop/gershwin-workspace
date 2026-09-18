@@ -1,0 +1,56 @@
+#!/usr/bin/env run_uitest
+# Spring-loaded folders in a browsing window: a file dragged onto a folder and
+# held there opens the folder in place, and letting go files the item into
+# it.  The window then stays in that folder, where the item went, and none of
+# this goes into the window's history.
+#
+# `drag ... onto ... hold` rests on the folder long enough for it to spring
+# open (half a second by default, plus the flash); the window can only end up
+# titled after the folder if it sprang open.
+#
+# Leaves the computer as it was found: the default viewer type is set back to
+# Spatial, the scratch folder is removed and the window is closed.
+#
+# Run with: run_uitest Tests/spring_loaded_browsing.uitest
+activate application "Workspace"
+
+# Self-healing start: a run that stopped half way leaves its window open.
+if window "Inner"
+  close window "Inner"
+  wait until not exists window "Inner"
+end
+if window "Outer"
+  close window "Outer"
+  wait until not exists window "Outer"
+end
+
+select menu "View/View Behavior/Set Browsing as Default"
+
+shell "rm -rf /tmp/uitest-spring-${home} && mkdir -p /tmp/uitest-spring-${home}/Outer/Inner && touch /tmp/uitest-spring-${home}/Outer/dragme.txt"
+
+select menu "Go/Go to Folder..."
+wait until modal
+type "/tmp/uitest-spring-${home}/Outer"
+press Return
+wait until window "Outer" timeout 15s
+select menu "View/as Icons"
+wait until "dragme.txt" in window "Outer" timeout 5s
+wait until "Inner" in window "Outer"
+
+# Rest on the folder: the window moves into it, and the drop lands there.
+drag "dragme.txt" onto "Inner" in window "Outer" hold 1500ms
+wait until modal
+click button "OK"
+wait until not exists modal
+shell "test -e /tmp/uitest-spring-${home}/Outer/Inner/dragme.txt && test ! -e /tmp/uitest-spring-${home}/Outer/dragme.txt"
+
+# The window the item went into stays where it is.
+wait until window "Inner"
+assert not exists window "Outer"
+
+close window "Inner"
+wait until not exists window "Inner"
+select menu "View/View Behavior/Set Spatial as Default"
+shell "rm -rf /tmp/uitest-spring-${home}"
+
+log "a held drag springs a folder open in place and the window stays there"

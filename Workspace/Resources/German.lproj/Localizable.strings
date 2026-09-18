@@ -1190,3 +1190,9 @@
 
 "xterm" = "Programm";
 
+/* Spring-loaded folders */
+"Spring-loading" = "Aufspringen";
+"Spring-loaded folders and windows" = "Ordner und Fenster springen auf";
+"Delay:" = "Verzögerung:";
+"Short" = "Kurz";
+"Long" = "Lang";

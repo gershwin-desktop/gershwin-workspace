@@ -396,6 +396,7 @@ static BOOL hasLastExtents_ = NO;
 		                            visibleColumns: visibleCols
                                       scroller: [nviewScroll horizontalScroller]
                                     cellsIcons: NO
+                                    acceptsDnd: YES
                                  editableCells: NO
                                selectionColumn: YES];
     }
@@ -1359,8 +1360,17 @@ static BOOL hasLastExtents_ = NO;
 }
 
 
-- (void)navigateToNode:(FSNode *)node
+- (FSNode *)shownNode
 {
+  return [nodeView shownNode];
+}
+
+/* Spring-loaded folders move a browsing window along with a drag and back
+ * again afterwards; none of that belongs in its history. */
+- (void)showNodeWithoutHistory:(FSNode *)node
+{
+  NSString *path;
+
   if (node == nil || [node isValid] == NO)
     return;
 
@@ -1368,14 +1378,20 @@ static BOOL hasLastExtents_ = NO;
   [self scrollToBeginning];
   [self selectionChanged: [NSArray arrayWithObject: node]];
 
-  /* Update the window title to reflect the navigated location */
-  NSString *path = [node path];
+  path = [node path];
   if ([path isEqual: path_separator()]) {
     [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
   } else {
     [vwrwin setTitle: [node name]];
   }
+}
 
+- (void)navigateToNode:(FSNode *)node
+{
+  if (node == nil || [node isValid] == NO)
+    return;
+
+  [self showNodeWithoutHistory: node];
   [manager addNode: node toHistoryOfViewer: self];
 }
 
@@ -1425,6 +1441,7 @@ static BOOL hasLastExtents_ = NO;
                                           visibleColumns: visibleCols
                                                 scroller: [pathsScroll horizontalScroller]
                                               cellsIcons: NO
+                                              acceptsDnd: NO
                                            editableCells: NO
                                          selectionColumn: YES];
   }
@@ -1700,6 +1717,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
                                                 visibleColumns: visibleCols
                                                       scroller: [nviewScroll horizontalScroller]
                                                     cellsIcons: NO
+                                                    acceptsDnd: YES
                                                  editableCells: NO
                                                selectionColumn: YES];
       

@@ -31,8 +31,19 @@
 
 #import "GWDesktopWindow.h"
 #import "GWDesktopManager.h"
+#import "FSNSpringLoader.h"
 
 @implementation GWDesktopWindow
+
+/* Spring-loaded folders follow a drag across windows, and a window's drag
+ * events only pass through here.  The loader hears of an event before it is
+ * handled: handling a drop can run a confirmation panel, and the loader must
+ * know where the drop landed before that. */
+- (void)sendEvent:(NSEvent *)theEvent
+{
+  [[FSNSpringLoader sharedLoader] noteEvent: theEvent inWindow: self];
+  [super sendEvent: theEvent];
+}
 
 + (NSRect)desktopFullFrame
 {

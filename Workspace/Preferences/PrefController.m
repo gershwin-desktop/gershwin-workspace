@@ -31,6 +31,7 @@
 #import "XTermPref.h"
 #import "DefSortOrderPref.h"
 #import "IconsPref.h"
+#import "SpringLoadingPref.h"
 #import "HiddenFilesPref.h"
 #import "HistoryPref.h"
 #import "BrowserViewerPref.h"
@@ -86,6 +87,7 @@ RELEASE (currentPref)
   ADD_PREF_VIEW ([BrowserViewerPref class]);
   ADD_PREF_VIEW ([DefSortOrderPref class]);		
   ADD_PREF_VIEW ([IconsPref class]);
+  ADD_PREF_VIEW ([SpringLoadingPref class]);
   ADD_PREF_VIEW ([HiddenFilesPref class]);
   ADD_PREF_VIEW ([DesktopPref class]);
   ADD_PREF_VIEW ([OperationPrefs class]);

@@ -94,6 +94,7 @@ static id <DesktopApplication> desktopApp = nil;
             atIndex:(NSInteger)ind
       cellPrototype:(FSNBrowserCell *)acell
           cellsIcon:(BOOL)cicon
+         acceptsDnd:(BOOL)dnd
        nodeInfoType:(FSNInfoType)type
        extendedType:(NSString *)exttype
     backgroundColor:(NSColor *)acolor
@@ -109,6 +110,7 @@ static id <DesktopApplication> desktopApp = nil;
       index = ind;
       ASSIGN (cellPrototype, acell);
       cellsIcon = cicon;
+      acceptsDnd = dnd;
       ASSIGN (backColor, acolor);
 
       infoType = type;
@@ -129,7 +131,7 @@ static id <DesktopApplication> desktopApp = nil;
       lineh = floor([fsnodeRep heightOfFont: [acell font]]);
 
       scroll = [[FSNBrowserScroll alloc] initWithFrame: rect
-					      inColumn: self acceptDnd: cellsIcon];
+					      inColumn: self acceptDnd: acceptsDnd];
       [self addSubview: scroll];
       RELEASE (scroll);
 
@@ -149,7 +151,7 @@ static id <DesktopApplication> desktopApp = nil;
 					    prototype: cellPrototype
 					 numberOfRows: 0
 				      numberOfColumns: 0
-					    acceptDnd: cellsIcon];
+					    acceptDnd: acceptsDnd];
 
       [matrix setIntercellSpacing: NSMakeSize(0, 0)];
       [matrix setCellSize: NSMakeSize([scroll contentSize].width, cellsHeight)];  
@@ -1551,6 +1553,20 @@ static id <DesktopApplication> desktopApp = nil;
 {
   NSDragOperation sourceDragMask = dragOperationForCurrentModifierFlags();
 
+  /* When the rows take no drops of their own, the column gets the drag, so
+   * it is the one that notices the folder row the drag rests on. */
+  if (matrix != nil)
+    {
+      NSPoint p = [matrix convertPoint: [sender draggingLocation] fromView: nil];
+      NSInteger row, col;
+
+      if ([matrix getRow: &row column: &col forPoint: p])
+	[matrix dragRestsOnCell: [[matrix cells] objectAtIndex: row]
+		   draggingInfo: sender];
+      else
+	[matrix dragLeftCells];
+    }
+
   if (isDragTarget == NO)
     {
       return NSDragOperationNone;
@@ -1577,6 +1593,7 @@ static id <DesktopApplication> desktopApp = nil;
 
 - (void)draggingExited:(id <NSDraggingInfo>)sender
 {
+  [matrix dragLeftCells];
   isDragTarget = NO;
 }
 
@@ -1747,21 +1764,14 @@ static id <DesktopApplication> desktopApp = nil;
 
   prePath = [NSString stringWithString: nodePath];
 
+  /* No autorelease pool per step: draining it freed the parent path just
+   * derived, and the next step then read freed memory. */
   while (1) {
-    CREATE_AUTORELEASE_POOL(arp);
-
     if ([sourcePaths containsObject: prePath])
-      {
-	RELEASE (arp);
-	return NSDragOperationNone;
-      }
+      return NSDragOperationNone;
     if ([prePath isEqual: path_separator()])
-      {
-	RELEASE (arp);
-	break;
-      }
+      break;
     prePath = [prePath stringByDeletingLastPathComponent];
-    RELEASE (arp);
   }
 
   if ([node isApplication])

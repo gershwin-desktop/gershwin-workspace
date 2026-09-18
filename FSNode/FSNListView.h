@@ -38,8 +38,9 @@
 @class FSNListViewNameEditor;
 
 #import "FSNIconLoader.h"
+#import "FSNSpringLoader.h"
 
-@interface FSNListViewDataSource : NSObject <NSTextFieldDelegate, FSNDecorationClient>
+@interface FSNListViewDataSource : NSObject <NSTextFieldDelegate, FSNDecorationClient, FSNSpringFlashing>
 {
   FSNListView *listView;
 
@@ -59,6 +60,11 @@
   BOOL forceCopy;
   NSDragOperation negotiatedDragOp;
   FSNListViewNodeRep *dndTarget;
+  /* The row a drag rests on, for the flash before it springs open; not
+     retained, it is one of nodeReps. */
+  FSNListViewNodeRep *springRep;
+  BOOL springFlashing;
+  BOOL springRestingLit;
   unsigned int dragOperation;
   NSRect dndValidRect;
 

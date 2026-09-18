@@ -36,6 +36,8 @@
 - (void)dealloc
 {
   RELEASE (uncutTitle);
+  RELEASE (fittedTitle);
+  RELEASE (fittedResult);
   RELEASE (fontAttr);
   RELEASE (dots);
   RELEASE (icon);
@@ -113,6 +115,10 @@
     c->uncutTitle = nil;
   }
 
+  /* The copy shares the pointers without owning them. */
+  c->fittedTitle = nil;
+  c->fittedResult = nil;
+
   c->icon = [icon retain];
   c->displayIcon = [displayIcon retain];
   c->tagColor = [tagColor retain];
@@ -133,6 +139,7 @@
   ASSIGN (fontAttr, [NSDictionary dictionaryWithObject: [self font]
                                                 forKey: NSFontAttributeName]);
   titlesize = [[self stringValue] sizeWithAttributes: fontAttr];
+  DESTROY (fittedTitle);
 }
 
 - (void)setIcon:(NSImage *)icn
@@ -275,19 +282,34 @@
     textlength -= ([icon size].width + ICON_TEXT_SPACING);
 
   ASSIGN (uncutTitle, [self stringValue]);
-  cutTitle = nil;
-  if ([uncutTitle sizeWithAttributes: fontAttr].width > textlength)
+
+  /* Measuring and shortening a title lays out its text several times over,
+   * and an icon view redraws its labels many times a second while icons are
+   * dragged across it.  The outcome only changes with the title, the width
+   * or the font. */
+  if (fittedTitle == nil || fittedWidth != textlength
+      || [fittedTitle isEqualToString: uncutTitle] == NO)
     {
-      if (dateCell)
-        cutTitle = [self cutDateTitle:uncutTitle toFitWidth:textlength];
-      else
-        cutTitle = [self cutTitle:uncutTitle toFitWidth:textlength];
-      [self setStringValue: cutTitle];
+      NSString *fitted = nil;
+
+      if ([uncutTitle sizeWithAttributes: fontAttr].width > textlength)
+        {
+          if (dateCell)
+            fitted = [self cutDateTitle: uncutTitle toFitWidth: textlength];
+          else
+            fitted = [self cutTitle: uncutTitle toFitWidth: textlength];
+        }
+      ASSIGN (fittedTitle, uncutTitle);
+      ASSIGN (fittedResult, fitted);
+      fittedWidth = textlength;
     }
-  else
-    {
-      [self setStringValue: uncutTitle];
-    }
+
+  /* Straight to NSCell: the title size kept here is that of the whole
+   * title, and measuring the shortened one only to throw it away is what
+   * this avoids. */
+  cutTitle = fittedResult;
+  if (cutTitle)
+    [super setStringValue: cutTitle];
 
   title_rect.size.height = titlesize.height;
   title_rect.origin.y += ((cellFrame.size.height - titlesize.height) / 2.0);
@@ -328,7 +350,7 @@
 
   /* we reset the title to the orginal string */
   if (cutTitle)
-    [self setStringValue: uncutTitle];
+    [super setStringValue: uncutTitle];
 }
 
 - (BOOL)startTrackingAt:(NSPoint)startPoint inView:(NSView *)controlView

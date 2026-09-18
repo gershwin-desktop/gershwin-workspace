@@ -52,6 +52,9 @@
   FSNCellNameEditor *nameEditor;
 
   BOOL cellsIcon;
+  /* Whether rows and columns take drops and start drags - separate from
+     cellsIcon, which only picks tall icon rows over single-line ones. */
+  BOOL acceptsDnd;
   BOOL selColumn;
 
   BOOL isLoaded;
@@ -89,6 +92,7 @@
 		    visibleColumns:(int)vcols 
               scroller:(NSScroller *)scrl
             cellsIcons:(BOOL)cicns
+            acceptsDnd:(BOOL)dnd
          editableCells:(BOOL)edcells
        selectionColumn:(BOOL)selcol;
 
