@@ -4,13 +4,13 @@
  * SPDX-License-Identifier: BSD-2-Clause OR GPL-2.0-or-later
  */
 
-/* A free-position move of icons that leaves the view it started in.
+/* A free-position move of icons of a spatial window or the Desktop.
  *
- * The icons of a spatial window or the Desktop follow the pointer inside
- * their own view.  When the pointer goes on into another of the
- * application's windows - one a folder sprang open in, or any other - the
- * icons cannot follow as views, so they travel on in a window of their own,
- * shaped like them.  The window underneath hears about the drag the way
+ * A picture of the icons travels with the pointer in a window of its own,
+ * shaped like them, over their own view and over any other of the
+ * application's windows alike; the icons stay where they are until they are
+ * let go.  When the pointer goes on into another window - one a folder
+ * sprang open in, or any other - that window hears about the drag the way
  * GNUstep's drag machinery would tell it: its drop views get the dragging
  * messages, with this session standing in for the dragging info.  What those
  * views do with a drag - highlighting, springing folders open, deciding and
@@ -59,10 +59,13 @@
  * order the window manager reports; nil over none of them. */
 - (NSWindow *)windowAtScreenPoint:(NSPoint)p;
 
-/* The pointer is somewhere the icons cannot follow as views - over another
- * window, a different drop view of their own window, or no window at all
- * (window nil).  The icons travel on as an image and the window underneath
- * is told about the drag. */
+/* The picture of the icons follows the pointer to this point. */
+- (void)followPointerAtScreenPoint:(NSPoint)p;
+
+/* The pointer is away from the icons' own view - over another window, a
+ * different drop view of their own window, or no window at all (window
+ * nil).  The picture follows it and the window underneath is told about the
+ * drag. */
 - (void)dragAwayOverWindow:(NSWindow *)window atScreenPoint:(NSPoint)p;
 
 /* The pointer rests where it was: the window underneath hears of the drag
@@ -70,8 +73,17 @@
  * looked up or moved. */
 - (void)dragAwayRests;
 
-/* Back over the view the icons belong to: they follow as views again. */
+/* Back over the view the icons belong to: the window the pointer left
+ * hears that the drag has gone. */
 - (void)returnToSource;
+
+/* The move ends in the icons' own view, or hands over to GNUstep's drag
+ * machinery: the picture goes. */
+- (void)finish;
+
+/* Takes the icons out of sight, while their files are moved away by a drop
+ * elsewhere. */
+- (void)hideIcons;
 
 - (BOOL)isAway;
 

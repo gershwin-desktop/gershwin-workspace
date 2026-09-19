@@ -81,10 +81,6 @@
   BOOL suppressSelectionDrawing;
   
   BOOL isOpened;
-  /* YES while the icon follows the pointer in a free-position move. */
-  BOOL beingDragged;
-  /* The ghost drawn while beingDragged, rendered once for the whole move. */
-  NSImage *draggedLook;
   /* YES while a rubber band being dragged out would select the icon. */
   BOOL selectionPreview;
   
@@ -169,13 +165,9 @@
    mouse is released. */
 - (void)setDropHighlighted:(BOOL)flag;
 
-/* Ghost this icon while it is being moved, so whatever it passes over - a
-   folder opening up to take it - stays readable underneath. */
-- (void)setBeingDragged:(BOOL)flag;
-
-/* A picture of the icon as it looks at rest - full image, name, no
- * selection plate - to drag around. */
-- (NSImage *)restingLookImage;
+/* The picture of the icon that travels with the pointer while it is
+ * dragged - full image, name on a solid plate, no selection plate. */
+- (NSImage *)dragLookImage;
 
 /* Draw the icon as selected without selecting it, while a rubber band that
    would select it is still being dragged out.  Only marks the icon for
