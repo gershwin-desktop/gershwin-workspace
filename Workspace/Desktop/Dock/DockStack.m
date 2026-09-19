@@ -965,6 +965,9 @@ static NSString *DockStackOpenFolderTitle(void)
   BOOL bottom = ([[icon dock] position] == DockPositionBottom);
   NSArray *nodes = DockStackItems(folder, sort);
 
+  /* A list closes the stack before this returns. */
+  AUTORELEASE (RETAIN (self));
+
   if (style == DockStackViewAutomatic)
     style = (bottom && [nodes count] <= DockStackAutomaticFanLimit)
       ? DockStackViewFan : DockStackViewGrid;
@@ -997,6 +1000,11 @@ static NSString *DockStackOpenFolderTitle(void)
         ASSIGN (menu, [self listMenuForFolder: folder]);
         /* Runs until the menu is done with; the stack is then over. */
         [NSMenu popUpContextMenu: menu withEvent: event forView: icon];
+        /* The menu is gone again by now.  Left registered as shown, the
+         * stack took the next click on the folder for one that puts it
+         * away, and nothing opened. */
+        if (shownStack == self)
+          [DockStack close];
         break;
 
       case DockStackViewGrid:
@@ -1118,9 +1126,26 @@ static NSString *DockStackOpenFolderTitle(void)
 
 - (void)closeStack
 {
+  NSEnumerator *e = [menuFolders keyEnumerator];
+  NSValue *key;
+
   [[NSNotificationCenter defaultCenter] removeObserver: self];
   [window orderOut: nil];
   [window close];
+
+  /* GNUstep puts a context menu away when it is done with, but not the
+   * submenus opened from it: ended by a click, the list left a submenu on
+   * the screen, and after more rounds several.  Every menu of the list is
+   * still held by the item it hangs from while the list lives. */
+  while ((key = [e nextObject]) != nil)
+    {
+      NSMenu *m = [key nonretainedObjectValue];
+
+      if ([m isTransient])
+        [m closeTransient];
+      if ([[m window] isVisible])
+        [m close];
+    }
 }
 
 - (void)openItem:(id)sender
