@@ -1577,13 +1577,35 @@ static GWX11AppManager *sharedX11AppManager = nil;
 
 #pragma mark - Window under the pointer
 
+/* The X windows of ours that the pointer passes through, such as the icons
+   an icon move carries along under it.  libs-back does not give
+   -setIgnoresMouseEvents: any effect on X11, so it is honoured here. */
+static NSHashTable *pointerTransparentWindows(Display *dpy)
+{
+    NSHashTable *result = [NSHashTable hashTableWithOptions:
+        NSPointerFunctionsOpaqueMemory | NSPointerFunctionsOpaquePersonality];
+
+    for (NSWindow *w in [NSApp windows]) {
+        if ([w isVisible] && [w ignoresMouseEvents]) {
+            GSDisplayServer *server = GSServerForWindow(w);
+            if ((Display *)[server serverDevice] == dpy) {
+                [result addObject:(void *)[server windowDevice:[w windowNumber]]];
+            }
+        }
+    }
+    return result;
+}
+
 BOOL GWForeignWindowIsUnderPointer(void)
 {
     Display *dpy = (Display *)[GSCurrentServer() serverDevice];
-    Window root, rootRet = None, child = None, under;
+    Window root, rootRet = None, child = None, under = None;
+    Window unusedRoot = None, unusedParent = None, *topLevel = NULL;
+    unsigned int nTopLevel = 0;
     int rx = 0, ry = 0, wx = 0, wy = 0;
     unsigned int mask = 0;
     pid_t pid = 0;
+    NSHashTable *transparent;
 
     if (dpy == NULL)
         return NO;
@@ -1600,12 +1622,36 @@ BOOL GWForeignWindowIsUnderPointer(void)
     if (child == None)
         return NO;   /* bare root: nothing there to drop on */
 
-    /* XQueryPointer reports the child of the root, which for a managed window
-       is the frame the window manager reparented it into.  Descend to the
-       window really under the pointer, then climb back up to whoever claims
-       ownership: _NET_WM_PID sits on the client window, which is somewhere
-       between the two. */
-    under = child;
+    /* XQueryPointer names only the topmost child of the root, which may be
+       one of ours the pointer passes through; then the window below it is
+       the one that counts.  The root's children come bottom to top. */
+    transparent = pointerTransparentWindows(dpy);
+    if (!XQueryTree(dpy, root, &unusedRoot, &unusedParent, &topLevel, &nTopLevel))
+        return NO;
+    while (nTopLevel-- > 0 && under == None) {
+        Window candidate = topLevel[nTopLevel];
+        XWindowAttributes attr;
+        int tx = 0, ty = 0;
+        Window unusedChild = None;
+
+        if ([transparent containsObject:(void *)candidate])
+            continue;
+        if (XGetWindowAttributes(dpy, candidate, &attr)
+            && attr.map_state == IsViewable
+            && XTranslateCoordinates(dpy, root, candidate, rx, ry, &tx, &ty, &unusedChild)
+            && tx >= 0 && tx < attr.width && ty >= 0 && ty < attr.height) {
+            under = candidate;
+        }
+    }
+    if (topLevel != NULL)
+        XFree(topLevel);
+    if (under == None)
+        return NO;
+
+    /* A top-level window of a managed application is the frame the window
+       manager reparented it into.  Descend to the window really under the
+       pointer, then climb back up to whoever claims ownership: _NET_WM_PID
+       sits on the client window, which is somewhere between the two. */
     for (;;) {
         Window next = None;
         int tx = 0, ty = 0;

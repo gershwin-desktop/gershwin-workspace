@@ -371,6 +371,9 @@ static NSInteger FSNIconDragSequence = 0;
       /* The level GNUstep's own drag image uses, above every window. */
       [overlay setLevel: NSPopUpMenuWindowLevel];
       [overlay setBackgroundColor: [NSColor clearColor]];
+      /* Carried along under the pointer: whatever lies beneath is what the
+       * pointer is over, also when another application's window is. */
+      [overlay setIgnoresMouseEvents: YES];
 
       view = AUTORELEASE ([[NSImageView alloc] initWithFrame:
         NSMakeRect(0, 0, frame.size.width, frame.size.height)]);
