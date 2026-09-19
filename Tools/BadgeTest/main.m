@@ -7,6 +7,11 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 
+/* libs-gui implements -dockTile but its NSApplication.h does not declare it. */
+@interface NSApplication (BadgeTestDockTile)
+- (NSDockTile *)dockTile;
+@end
+
 @interface BadgeTestDelegate : NSObject
 {
   NSWindow *window;

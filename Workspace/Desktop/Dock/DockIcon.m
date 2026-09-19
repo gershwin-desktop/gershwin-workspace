@@ -37,9 +37,16 @@
 #import "X11AppSupport.h"
 #import "GWProcessMonitor.h"
 
+#import <AppKit/NSDockTile.h>
+
 /* Forward declaration for loadLabelColorFromMetadata inherited from FSNIcon */
 @interface FSNIcon (DockIconForwardDecl)
 - (void)loadLabelColorFromMetadata;
+@end
+
+/* libs-gui implements -dockTile but its NSApplication.h does not declare it. */
+@interface NSApplication (DockIconDockTile)
+- (NSDockTile *)dockTile;
 @end
 
 @implementation DockIcon
