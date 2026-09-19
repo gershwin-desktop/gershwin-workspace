@@ -461,6 +461,17 @@
 	         selector: @selector(appDidUnhide:)
 		           name: NSApplicationDidUnhideNotification
 		         object: nil];    
+
+  /* libs-gui posts it under this name without exporting a constant. */
+  [wsnc addObserver: self
+	         selector: @selector(hideOtherApplicationsRequested:)
+		           name: @"GSHideOtherApplicationsNotification"
+		         object: nil];
+
+  [wsnc addObserver: self
+	         selector: @selector(unhideAllApplicationsRequested:)
+		           name: @"GSUnhideAllApplicationsNotification"
+		         object: nil];
     
   [self checkLastRunningApps];
 
@@ -1188,6 +1199,43 @@
     [[dtopManager dock] appDidHide: path appName: name];
   } else {
   }
+}
+
+/* Hide Others only reaches GNUstep applications, which hide themselves on
+ * this notification; X11 applications know nothing of it, so their windows
+ * are iconified here.  Those the Dock shows are hidden through their
+ * application so that the Dock knows them as hidden. */
+- (void)hideOtherApplicationsRequested:(NSNotification *)notif
+{
+  pid_t sender;
+  NSUInteger i;
+
+  if ([self _isSessionNotification: notif] == NO) {
+    return;
+  }
+  sender = (pid_t)[[[notif userInfo] objectForKey: @"NSApplicationProcessIdentifier"] intValue];
+
+  for (i = 0; i < [launchedApps count]; i++) {
+    GWLaunchedApp *app = [launchedApps objectAtIndex: i];
+
+    if ([app isX11App] && [[app identifier] intValue] != sender) {
+      [app hideApplication];
+    }
+  }
+  [[GWX11WindowManager sharedManager] iconifyNonGNUstepWindowsExceptPID: sender];
+}
+
+/* Show All, the counterpart of Hide Others.  A GNUstep application whose
+ * icon is suppressed - as it is here - hides by miniaturizing its windows
+ * and never marks itself hidden, so its own unhide does nothing; X11
+ * applications have no notion of the request at all.  Bringing every
+ * iconified window back covers both. */
+- (void)unhideAllApplicationsRequested:(NSNotification *)notif
+{
+  if ([self _isSessionNotification: notif] == NO) {
+    return;
+  }
+  [[GWX11WindowManager sharedManager] restoreIconifiedWindows];
 }
 
 - (void)appDidUnhide:(NSNotification *)notif

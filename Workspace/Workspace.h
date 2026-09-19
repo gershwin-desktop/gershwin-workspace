@@ -537,6 +537,10 @@
 
 - (void)appDidUnhide:(NSNotification *)notif;
 
+- (void)hideOtherApplicationsRequested:(NSNotification *)notif;
+
+- (void)unhideAllApplicationsRequested:(NSNotification *)notif;
+
 - (void)unhideAppWithPath:(NSString *)path
                   andName:(NSString *)name;
 

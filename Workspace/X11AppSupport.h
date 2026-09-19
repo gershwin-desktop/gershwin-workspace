@@ -145,6 +145,20 @@
 - (BOOL)iconifyWindowsMatchingName:(NSString *)name;
 
 /**
+ * Iconifies every window that no GNUstep application owns, apart from those
+ * of one process.
+ * @param pid The process whose windows stay, or 0
+ * @return YES if at least one window was iconified
+ */
+- (BOOL)iconifyNonGNUstepWindowsExceptPID:(pid_t)pid;
+
+/**
+ * Restores every iconified window, whichever application owns it.
+ * @return YES if at least one window was restored
+ */
+- (BOOL)restoreIconifiedWindows;
+
+/**
  * Restores (de-iconifies) a window.
  * @param windowID The X11 window ID
  * @return YES if successful

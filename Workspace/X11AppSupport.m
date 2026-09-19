@@ -691,6 +691,89 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return success;
 }
 
+- (BOOL)isGNUstepWindow:(Display *)dpy window:(Window)win
+{
+    /* libs-back puts this property on every window it creates; WM_CLASS
+     * cannot tell, it carries the application's own name. */
+    Atom attr = XInternAtom(dpy, "_GNUSTEP_WM_ATTR", False);
+    Atom actual_type = None;
+    int actual_format;
+    unsigned long nitems, bytes_after;
+    unsigned char *data = NULL;
+
+    if (XGetWindowProperty(dpy, win, attr, 0, 1, False, AnyPropertyType,
+                           &actual_type, &actual_format, &nitems,
+                           &bytes_after, &data) == Success && data) {
+        XFree(data);
+    }
+    return (actual_type != None);
+}
+
+- (BOOL)iconifyNonGNUstepWindowsExceptPID:(pid_t)pid
+{
+    Display *dpy = [self openDisplay];
+    BOOL success = NO;
+
+    if (!dpy) return NO;
+
+    @try {
+        int screen = DefaultScreen(dpy);
+        unsigned long count = 0;
+        Window *clients = [self getClientList:dpy count:&count];
+
+        for (unsigned long i = 0; i < count; i++) {
+            Window win = clients[i];
+
+            /* GNUstep applications hide themselves on Hide Others;
+             * iconifying their windows here as well would take them out
+             * of the hidden state the application itself keeps. */
+            if ([self isGNUstepWindow:dpy window:win]) continue;
+            if ([self hasNetWmStateSkipTaskbar:dpy window:win]) continue;
+            if ([self checkWindowIconified:dpy window:win]) continue;
+            if (pid > 0 && [self getPIDForWindow:dpy window:win] == pid) continue;
+            if (XIconifyWindow(dpy, win, screen) != 0) {
+                success = YES;
+            }
+        }
+        if (clients) XFree(clients);
+        XFlush(dpy);
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+
+    return success;
+}
+
+- (BOOL)restoreIconifiedWindows
+{
+    Display *dpy = [self openDisplay];
+    BOOL success = NO;
+
+    if (!dpy) return NO;
+
+    @try {
+        unsigned long count = 0;
+        Window *clients = [self getClientList:dpy count:&count];
+
+        for (unsigned long i = 0; i < count; i++) {
+            Window win = clients[i];
+
+            if ([self hasNetWmStateSkipTaskbar:dpy window:win]) continue;
+            if ([self checkWindowIconified:dpy window:win] == NO) continue;
+            XMapRaised(dpy, win);
+            success = YES;
+        }
+        if (clients) XFree(clients);
+        XFlush(dpy);
+    }
+    @finally {
+        XCloseDisplay(dpy);
+    }
+
+    return success;
+}
+
 - (BOOL)restoreWindow:(unsigned long)windowID
 {
     if (windowID == 0) return NO;
