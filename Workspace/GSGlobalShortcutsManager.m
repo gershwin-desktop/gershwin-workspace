@@ -55,6 +55,34 @@ static KeySym keysymFromName(NSString *name)
     return XStringToKeysym([name UTF8String]);
 }
 
+// Convert the modifier names of a parsed key combo (all parts but the last)
+// to an X11 modifier mask. "cmd" is Mod1 because the Command key of the
+// desktop is the Alt key, and the GlobalShortcuts pref pane records it as "cmd".
+static unsigned int modifierMaskFromParts(NSArray *parts)
+{
+    unsigned int modifier = 0;
+    for (NSUInteger i = 0; i + 1 < [parts count]; i++) {
+        NSString *part = [parts objectAtIndex:i];
+        if ([part isEqualToString:@"ctrl"] || [part isEqualToString:@"control"]) {
+            modifier |= ControlMask;
+        } else if ([part isEqualToString:@"shift"]) {
+            modifier |= ShiftMask;
+        } else if ([part isEqualToString:@"alt"] || [part isEqualToString:@"cmd"] ||
+                   [part isEqualToString:@"mod1"]) {
+            modifier |= Mod1Mask;
+        } else if ([part isEqualToString:@"mod2"]) {
+            modifier |= Mod2Mask;
+        } else if ([part isEqualToString:@"mod3"]) {
+            modifier |= Mod3Mask;
+        } else if ([part isEqualToString:@"super"] || [part isEqualToString:@"mod4"]) {
+            modifier |= Mod4Mask;
+        } else if ([part isEqualToString:@"mod5"]) {
+            modifier |= Mod5Mask;
+        }
+    }
+    return modifier;
+}
+
 // Return YES if the given key combo represents Alt (or Mod1) + Space
 static BOOL isAltSpaceCombo(NSString *keyCombo)
 {
@@ -66,14 +94,7 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     // Accept "space" as the key name
     if (![keyStr isEqualToString:@"space"] && ![keyStr isEqualToString:@" "]) return NO;
 
-    // Check for alt or mod1 in the modifier list
-    for (NSUInteger i = 0; i < [parts count] - 1; i++) {
-        NSString *p = [parts objectAtIndex:i];
-        if ([p isEqualToString:@"alt"] || [p isEqualToString:@"mod1"]) {
-            return YES;
-        }
-    }
-    return NO;
+    return (modifierMaskFromParts(parts) & Mod1Mask) != 0;
 }
 
 @implementation GSGlobalShortcutsManager
@@ -366,22 +387,8 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     NSArray *parts = parseKeyCombo(keyCombo);
     if (!parts || [parts count] < 1) return NO;
     
-    unsigned int modifier = 0;
+    unsigned int modifier = modifierMaskFromParts(parts);
     NSString *keyString = nil;
-    
-    // Parse modifiers
-    for (int i = 0; i < [parts count] - 1; i++) {
-        NSString *part = [parts objectAtIndex:i];
-        if ([part isEqualToString:@"ctrl"]) {
-            modifier |= ControlMask;
-        } else if ([part isEqualToString:@"shift"]) {
-            modifier |= ShiftMask;
-        } else if ([part isEqualToString:@"alt"] || [part isEqualToString:@"mod1"]) {
-            modifier |= Mod1Mask;
-        } else if ([part isEqualToString:@"super"] || [part isEqualToString:@"mod4"]) {
-            modifier |= Mod4Mask;
-        }
-    }
     
     keyString = [parts objectAtIndex:[parts count] - 1];
     KeySym keysym = keysymFromName(keyString);
@@ -432,28 +439,8 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         return;
     }
     
-    unsigned int modifier = 0;
+    unsigned int modifier = modifierMaskFromParts(parts);
     NSString *keyString = nil;
-    
-    // Parse modifiers
-    for (int i = 0; i < [parts count] - 1; i++) {
-        NSString *part = [parts objectAtIndex:i];
-        if ([part isEqualToString:@"ctrl"]) {
-            modifier |= ControlMask;
-        } else if ([part isEqualToString:@"shift"]) {
-            modifier |= ShiftMask;
-        } else if ([part isEqualToString:@"alt"] || [part isEqualToString:@"mod1"]) {
-            modifier |= Mod1Mask;
-        } else if ([part isEqualToString:@"mod2"]) {
-            modifier |= Mod2Mask;
-        } else if ([part isEqualToString:@"mod3"]) {
-            modifier |= Mod3Mask;
-        } else if ([part isEqualToString:@"mod4"]) {
-            modifier |= Mod4Mask;
-        } else if ([part isEqualToString:@"mod5"]) {
-            modifier |= Mod5Mask;
-        }
-    }
     
     // Last part is the key
     if ([parts count] > 0) {
@@ -505,21 +492,8 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     NSArray *parts = parseKeyCombo(keyCombo);
     if (!parts || [parts count] < 1) return NO;
     
-    unsigned int modifier = 0;
+    unsigned int modifier = modifierMaskFromParts(parts);
     NSString *keyString = nil;
-    
-    for (int i = 0; i < [parts count] - 1; i++) {
-        NSString *part = [parts objectAtIndex:i];
-        if ([part isEqualToString:@"ctrl"]) {
-            modifier |= ControlMask;
-        } else if ([part isEqualToString:@"shift"]) {
-            modifier |= ShiftMask;
-        } else if ([part isEqualToString:@"alt"] || [part isEqualToString:@"mod1"]) {
-            modifier |= Mod1Mask;
-        } else if ([part isEqualToString:@"super"] || [part isEqualToString:@"mod4"]) {
-            modifier |= Mod4Mask;
-        }
-    }
     
     keyString = [parts objectAtIndex:[parts count] - 1];
     KeySym keysym = keysymFromName(keyString);
