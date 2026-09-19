@@ -82,6 +82,10 @@ NSString *commonPrefixInArray(NSArray *a);
 
 NSRect rectForWindow(NSArray *otherwins, NSRect proposedRect, BOOL checkKey);
 
+/* The frame of a window whose content area covers the given rect in screen
+ * pixels, the unit X reports and viewer geometry is kept in. */
+NSRect frameRectForScreenContentRect(NSWindow *window, NSRect content);
+
 void GWProcessStartupRunLoop(NSTimeInterval delay);
 
 #endif

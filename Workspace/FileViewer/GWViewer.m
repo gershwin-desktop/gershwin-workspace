@@ -310,14 +310,16 @@ static BOOL hasLastExtents_ = NO;
          * never drifts on repeated open/close cycles. */
         pendingRestoreFrame = dsGeometry;
         hasPendingRestoreFrame = YES;
-        [vwrwin setFrame: [vwrwin frameRectForContentRect: dsGeometry]
+        [vwrwin setFrame: frameRectForScreenContentRect(vwrwin, dsGeometry)
                  display: NO];
         geometryApplied = YES;
       }
     }
     
     if (!geometryApplied) {
-      r = NSMakeRect(200, 200, resizeIncrement * 5, 600);
+      /* The default size is in points; the viewer's geometry is in pixels. */
+      r = NSMakeRect(200, 200, resizeIncrement * 5 * [vwrwin userSpaceScaleFactor],
+                     600 * [vwrwin userSpaceScaleFactor]);
       NSRect content = rectForWindow([manager viewerWindows], r, YES);
       /* Route the default through the same exact restore path: activate:
        * reads the WM's live _NET_FRAME_EXTENTS and adds them to the content
@@ -328,7 +330,7 @@ static BOOL hasLastExtents_ = NO;
        * title while every reopen had it (a 22px frame-constant failure). */
       pendingRestoreFrame = content;
       hasPendingRestoreFrame = YES;
-      [vwrwin setFrame: [vwrwin frameRectForContentRect: content]
+      [vwrwin setFrame: frameRectForScreenContentRect(vwrwin, content)
                display: NO];
     }
     

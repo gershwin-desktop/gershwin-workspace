@@ -292,14 +292,16 @@ static BOOL hasLastExtents_ = NO;
          * race), so the open animation would never play. */
         pendingRestoreFrame = dsGeometry;
         hasPendingRestoreFrame = YES;
-        [vwrwin setFrame: [vwrwin frameRectForContentRect: dsGeometry]
+        [vwrwin setFrame: frameRectForScreenContentRect(vwrwin, dsGeometry)
                  display: NO];
         geometryApplied = YES;
       }
     }
     
     if (!geometryApplied) {
-      NSRect r = NSMakeRect(200, 200, resizeIncrement * 3, 300);
+      /* The default size is in points; the viewer's geometry is in pixels. */
+      NSRect r = NSMakeRect(200, 200, resizeIncrement * 3 * [vwrwin userSpaceScaleFactor],
+                            300 * [vwrwin userSpaceScaleFactor]);
       NSRect content = rectForWindow([manager viewerWindows], r, YES);
       /* Route the default through the same exact restore path: activate:
        * reads the WM's live _NET_FRAME_EXTENTS and adds them to the content
@@ -310,7 +312,7 @@ static BOOL hasLastExtents_ = NO;
        * title while every reopen had it (a 22px frame-constant failure). */
       pendingRestoreFrame = content;
       hasPendingRestoreFrame = YES;
-      [vwrwin setFrame: [vwrwin frameRectForContentRect: content]
+      [vwrwin setFrame: frameRectForScreenContentRect(vwrwin, content)
                display: NO];
     }
 

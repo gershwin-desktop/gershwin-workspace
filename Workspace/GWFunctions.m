@@ -274,6 +274,17 @@ NSRect rectForWindow(NSArray *otherwins, NSRect proposedRect, BOOL checkKey)
   return NSIntegralRect(wr);
 }
 
+NSRect frameRectForScreenContentRect(NSWindow *window, NSRect content)
+{
+  /* -frameRectForContentRect: takes the size in points and multiplies it by
+   * GSScaleFactor; a size already in pixels would grow a second time. */
+  CGFloat scale = [window userSpaceScaleFactor];
+
+  content.size.width /= scale;
+  content.size.height /= scale;
+  return [window frameRectForContentRect: content];
+}
+
 void GWProcessStartupRunLoop(NSTimeInterval delay)
 {
   [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
