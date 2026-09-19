@@ -45,6 +45,7 @@
 #import "GWViewer.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
+#import "GWAlignLogically.h"
 #include <GNUstepGUI/GSDisplayServer.h>
 #import "X11AppSupport.h"
 #import "FSNodeRep.h"
@@ -315,6 +316,10 @@ static BOOL hasLastExtents_ = NO;
       [vwrwin setFrame: frameRectForScreenContentRect(vwrwin, content)
                display: NO];
     }
+
+    /* Nothing stored about this window yet, so it is opened for the first
+     * time; activate arranges it before it appears. */
+    arrangeLogicallyPending = (geometryApplied == NO);
 
     if (rootviewer) {
       NSString *path = [baseNode path];
@@ -685,6 +690,15 @@ static BOOL hasLastExtents_ = NO;
   if ([vwrwin isMiniaturized]) {
     [vwrwin deminiaturize: nil];
   }
+
+  /* Arranged before the window is on screen, so it looks as though it had
+   * been arranged all along. */
+  if (arrangeLogicallyPending) {
+    arrangeLogicallyPending = NO;
+    [[GWAlignLogically sharedAligner] arrangeUnarrangedIconView: (FSNIconsView *)nodeView
+                                                      forFolder: [baseNode path]];
+  }
+
   [vwrwin makeKeyAndOrderFront: nil];
 
   /* Re-apply the saved content rect through GNUstep's own setFrame: now that

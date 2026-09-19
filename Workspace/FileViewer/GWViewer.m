@@ -42,6 +42,7 @@
 #import "GWViewerIconsPath.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
+#import "GWAlignLogically.h"
 #include <GNUstepGUI/GSDisplayServer.h>
 #import "X11AppSupport.h"
 #import "FSNBrowser.h"
@@ -333,6 +334,10 @@ static BOOL hasLastExtents_ = NO;
       [vwrwin setFrame: frameRectForScreenContentRect(vwrwin, content)
                display: NO];
     }
+
+    /* Nothing stored about this window yet, so it is opened for the first
+     * time; activate arranges it before it appears. */
+    arrangeLogicallyPending = (geometryApplied == NO);
     
     r = [vwrwin frame];
     
@@ -722,6 +727,15 @@ static BOOL hasLastExtents_ = NO;
   if ([vwrwin isMiniaturized]) {
     [vwrwin deminiaturize: nil];
   }
+
+  /* Arranged before the window is on screen, so it looks as though it had
+   * been arranged all along. */
+  if (arrangeLogicallyPending) {
+    arrangeLogicallyPending = NO;
+    [[GWAlignLogically sharedAligner] arrangeUnarrangedIconView: (FSNIconsView *)nodeView
+                                                      forFolder: [baseNode path]];
+  }
+
   [vwrwin makeKeyAndOrderFront: nil];
 
   /* Draw the content into the mapped window NOW, synchronously.  The

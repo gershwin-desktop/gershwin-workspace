@@ -68,6 +68,10 @@
    * GNUstep's frame bookkeeping in sync with the real X client. */
   NSRect pendingRestoreFrame;
   BOOL hasPendingRestoreFrame;
+
+  /* Set when the folder opened without stored geometry: it is then arranged
+   * once, before it is first shown. */
+  BOOL arrangeLogicallyPending;
 }
 
 - (id)initForNode:(FSNode *)node

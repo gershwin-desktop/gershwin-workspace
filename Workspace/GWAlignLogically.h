@@ -31,4 +31,17 @@
  * and receives a blue label.  Returns YES when positions were applied. */
 - (BOOL)alignLogicallyInIconView:(FSNIconsView *)iconView;
 
+/* The same, with the move of the icons animated or not.  An arrangement the
+ * user asked for animates, so the icons can be followed from where they were;
+ * one done before a window is first shown must not. */
+- (BOOL)alignLogicallyInIconView:(FSNIconsView *)iconView animated:(BOOL)animate;
+
+/* Arrange a folder that is opened for the first time: one whose window has no
+ * stored geometry and whose icons have no stored positions, so that a source
+ * checkout is laid out from the start as though the user had arranged it.
+ * Only folders holding a .git directory qualify - the layout's grammar is
+ * about source trees.  Returns YES when the icons were arranged. */
+- (BOOL)arrangeUnarrangedIconView:(FSNIconsView *)iconView
+                        forFolder:(NSString *)folderPath;
+
 @end

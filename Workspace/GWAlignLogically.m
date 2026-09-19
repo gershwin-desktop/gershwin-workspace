@@ -882,7 +882,45 @@ static NSUInteger GWColumnSpanForWidth(CGFloat w, CGFloat pitch)
 /* Public entry point                                                  */
 /* ------------------------------------------------------------------ */
 
+- (BOOL)arrangeUnarrangedIconView:(FSNIconsView *)iconView
+                        forFolder:(NSString *)folderPath
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  BOOL isdir = NO;
+  NSArray *icons;
+  NSUInteger i;
+
+  if (iconView == nil || [iconView isKindOfClass: [FSNIconsView class]] == NO)
+    return NO;
+  if (folderPath == nil
+      || [fm fileExistsAtPath: [folderPath stringByAppendingPathComponent: @".git"]
+                  isDirectory: &isdir] == NO
+      || isdir == NO)
+    return NO;
+
+  /* An icon the user has placed, or one with a position on disk, is in manual
+   * placement mode; a single one means this folder was arranged before and
+   * must be left as it is. */
+  icons = [iconView icons];
+  for (i = 0; i < [icons count]; i++)
+    {
+      FSNIcon *icon = [icons objectAtIndex: i];
+
+      if ([[icon placementData] placementMode] == FSNIconPlacementModeManual)
+        return NO;
+    }
+
+  /* No animation: the window is not on the screen yet, and the icons have
+   * never been anywhere else. */
+  return [self alignLogicallyInIconView: iconView animated: NO];
+}
+
 - (BOOL)alignLogicallyInIconView:(FSNIconsView *)iconView
+{
+  return [self alignLogicallyInIconView: iconView animated: YES];
+}
+
+- (BOOL)alignLogicallyInIconView:(FSNIconsView *)iconView animated:(BOOL)animate
 {
   if (!iconView) return NO;
   NSArray *icons = [iconView icons];
@@ -978,7 +1016,8 @@ static NSUInteger GWColumnSpanForWidth(CGFloat w, CGFloat pitch)
 
       /* Smoothly animate the icons from their pre-layout frames to the new
        * grid positions, exactly like Clean Up does. */
-      if ([iconView respondsToSelector: @selector(animateIconsFromOldFrames:)])
+      if (animate
+          && [iconView respondsToSelector: @selector(animateIconsFromOldFrames:)])
         [iconView animateIconsFromOldFrames: oldFrames];
       return YES;
     }
