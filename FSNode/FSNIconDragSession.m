@@ -4,14 +4,13 @@
  * SPDX-License-Identifier: BSD-2-Clause OR GPL-2.0-or-later
  */
 
-#include <math.h>
-
 #import <GNUstepGUI/GSDisplayServer.h>
 
 #import "FSNIconDragSession.h"
 #import "FSNSpringLoader.h"
 #import "FSNIcon.h"
 #import "FSNode.h"
+#import "FSNFunctions.h"
 
 /* The stacking order costs a round trip to the X server, and motion arrives
  * far faster than windows are raised or opened. */
@@ -19,9 +18,6 @@ static const NSTimeInterval FSNWindowOrderLifetime = 0.25;
 
 static NSInteger FSNIconDragSequence = 0;
 
-/* The alpha, in 256ths, up to which the X backend leaves a pixel out of a
- * window's shape (ALPHA_THRESHOLD in libs-back's XGServerWindow.m). */
-static const CGFloat FSNShapeAlphaThreshold = 158;
 
 
 @interface FSNIconDragSession (Private)
@@ -317,7 +313,7 @@ static const CGFloat FSNShapeAlphaThreshold = 158;
 {
   NSView *container = [[icons objectAtIndex: 0] superview];
   NSRect group = NSZeroRect;
-  NSBitmapImageRep *bitmap;
+  NSImage *picture;
   NSUInteger i;
 
   /* In the icons' own view, whose units are points: window coordinates are
@@ -330,91 +326,27 @@ static const CGFloat FSNShapeAlphaThreshold = 158;
       group = (i == 0) ? r : NSUnionRect(group, r);
     }
 
-  {
-    NSImage *picture = AUTORELEASE ([[NSImage alloc] initWithSize: group.size]);
-    NSBitmapImageRep *drawn;
-    CGFloat scale = [[container window] userSpaceScaleFactor];
-    NSInteger w, h, x, y;
+  picture = AUTORELEASE ([[NSImage alloc] initWithSize: group.size]);
+  [picture setBackgroundColor: [NSColor clearColor]];
 
-    [picture setBackgroundColor: [NSColor clearColor]];
+  /* Each icon's own picture is transparent around it: caching the view
+   * would bring the window background along. */
+  [picture lockFocus];
+  for (i = 0; i < [icons count]; i++)
+    {
+      FSNIcon *icon = [icons objectAtIndex: i];
+      NSRect r = [icon frame];
+      CGFloat top = [container isFlipped]
+        ? NSMaxY(group) - NSMaxY(r) : r.origin.y - group.origin.y;
 
-    /* Each icon's own picture is transparent around it: caching the view
-     * would bring the window background along. */
-    [picture lockFocus];
-    for (i = 0; i < [icons count]; i++)
-      {
-        FSNIcon *icon = [icons objectAtIndex: i];
-        NSRect r = [icon frame];
-        CGFloat top = [container isFlipped]
-          ? NSMaxY(group) - NSMaxY(r) : r.origin.y - group.origin.y;
+      [[icon dragLookImage] drawAtPoint: NSMakePoint(r.origin.x - group.origin.x, top)
+                               fromRect: NSZeroRect
+                              operation: NSCompositeSourceOver
+                               fraction: 1.0];
+    }
+  [picture unlockFocus];
 
-        [[icon dragLookImage] drawAtPoint: NSMakePoint(r.origin.x - group.origin.x, top)
-                                 fromRect: NSZeroRect
-                                operation: NSCompositeSourceOver
-                                 fraction: 1.0];
-      }
-    /* The window is shaped after the picture's transparency, and the window
-     * server can only read that from a bitmap: from the cached picture it
-     * got none, the window stayed a rectangle and showed whatever had been
-     * on the screen beneath it. */
-    drawn = AUTORELEASE ([[NSBitmapImageRep alloc] initWithFocusedViewRect:
-      NSMakeRect(0, 0, group.size.width, group.size.height)]);
-    [picture unlockFocus];
-
-    /* The window it travels in is as many pixels big as the picture is in
-     * points times the scale factor, and it is shaped after the bitmap
-     * pixel for pixel.  A bitmap of the size in points, drawn scaled up,
-     * was cut by a shape that no longer fitted it: pieces of the name went
-     * missing or showed in the wrong place.  So the bitmap is brought to
-     * the window's size here, and its transparency settled on the way.
-     *
-     * Without a compositor a pixel of the window is either shown or not,
-     * and a shown pixel that is only partly covered - the soft edge of an
-     * icon or of a letter - has nothing beneath it to blend with: it showed
-     * leftovers of the screen.  Every pixel is made one or the other, cut
-     * where the window server cuts the shape. */
-    w = MAX (1, (NSInteger)lrint(group.size.width * scale));
-    h = MAX (1, (NSInteger)lrint(group.size.height * scale));
-    bitmap = AUTORELEASE ([[NSBitmapImageRep alloc]
-      initWithBitmapDataPlanes: NULL
-                    pixelsWide: w
-                    pixelsHigh: h
-                 bitsPerSample: 8
-               samplesPerPixel: 4
-                      hasAlpha: YES
-                      isPlanar: NO
-                colorSpaceName: NSDeviceRGBColorSpace
-                   bytesPerRow: 0
-                  bitsPerPixel: 0]);
-
-    for (y = 0; y < h; y++)
-      {
-        for (x = 0; x < w; x++)
-          {
-            NSInteger sx = MIN ((NSInteger)(x * [drawn pixelsWide] / w),
-                                [drawn pixelsWide] - 1);
-            NSInteger sy = MIN ((NSInteger)(y * [drawn pixelsHigh] / h),
-                                [drawn pixelsHigh] - 1);
-            NSColor *c = [[drawn colorAtX: sx y: sy]
-                           colorUsingColorSpaceName: NSDeviceRGBColorSpace];
-            CGFloat a = [c alphaComponent];
-
-            if (a * 256 <= FSNShapeAlphaThreshold)
-              c = [NSColor colorWithDeviceRed: 0 green: 0 blue: 0 alpha: 0];
-            else if (a < 1.0)
-              c = [[NSColor whiteColor] blendedColorWithFraction: a
-                                                         ofColor: [c colorWithAlphaComponent: 1.0]];
-
-            [bitmap setColor: c atX: x y: y];
-          }
-      }
-  }
-
-  /* Its size in points, so that it covers its window exactly. */
-  [bitmap setSize: group.size];
-  ASSIGN (image, AUTORELEASE ([[NSImage alloc] initWithSize: group.size]));
-  [image setBackgroundColor: [NSColor clearColor]];
-  [image addRepresentation: bitmap];
+  ASSIGN (image, FSNShapeableImage(picture, [[container window] userSpaceScaleFactor]));
 }
 
 - (void)showOverlayAtScreenPoint:(NSPoint)p

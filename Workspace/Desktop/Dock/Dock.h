@@ -94,6 +94,8 @@ typedef enum DockStyle
 
 - (void)removeIcon:(DockIcon *)icon;
 
+- (void)saveDockConfiguration;
+
 - (DockIcon *)iconForApplicationPath:(NSString *)path;
 
 - (DockIcon *)iconForApplicationName:(NSString *)name;

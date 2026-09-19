@@ -26,9 +26,11 @@
 
 #import <AppKit/NSView.h>
 #import "FSNIcon.h"
+#import "DockStack.h"
 
 @class NSColor;
 @class NSImage;
+@class Dock;
 
 /* A running application springs open by bringing its windows forward, so a
  * file drag can go on into one of them. */
@@ -62,6 +64,10 @@
    * while the drag rests on it. */
   BOOL springFlashing;
   BOOL springRestingLit;
+
+  /* How a folder kept in the Dock shows its stack. */
+  DockStackViewStyle stackViewStyle;
+  DockStackSort stackSort;
 
   /* PID tracking for robust non-GNUstep app support */
   pid_t appPID;
@@ -116,6 +122,13 @@
 - (BOOL)isFolderIcon;
 
 - (BOOL)isApplicationIcon;
+
+- (Dock *)dock;
+
+- (DockStackViewStyle)stackViewStyle;
+- (void)setStackViewStyle:(DockStackViewStyle)style;
+- (DockStackSort)stackSort;
+- (void)setStackSort:(DockStackSort)sort;
 
 /* The highlight that says a drop here would be taken. */
 - (void)showDropHighlight:(BOOL)lit;

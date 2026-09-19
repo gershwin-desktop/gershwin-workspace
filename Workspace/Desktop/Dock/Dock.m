@@ -36,6 +36,7 @@
 #import "GWFunctions.h"
 #import "X11AppSupport.h"
 #import "GWDockWindow.h"
+#import "DockStack.h"
 
 #if HAVE_DBUS
 #import "DockServiceDBus.h"
@@ -419,16 +420,28 @@ static inline CGFloat _dockScaleFactor(void)
 
 - (void)loadDockedFolders
 {
-  NSArray *paths = [[NSUserDefaults standardUserDefaults] arrayForKey: @"folders"];
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  NSArray *paths = [defaults arrayForKey: @"folders"];
+  NSDictionary *stacks = [defaults dictionaryForKey: @"folderstacks"];
   NSUInteger i;
 
   for (i = 0; i < [paths count]; i++)
     {
       NSString *path = [paths objectAtIndex: i];
+      NSDictionary *stack;
+      DockIcon *icon;
 
-      if ([path isKindOfClass: [NSString class]]
-          && [self folderIconForPath: path] == nil)
-        [self addFolderIconAtPath: path atIndex: [icons count]];
+      if ([path isKindOfClass: [NSString class]] == NO
+          || [self folderIconForPath: path] != nil)
+        continue;
+
+      icon = [self addFolderIconAtPath: path atIndex: [icons count]];
+      stack = [stacks objectForKey: path];
+      if (icon != nil && [stack isKindOfClass: [NSDictionary class]])
+        {
+          [icon setStackViewStyle: [[stack objectForKey: @"view"] intValue]];
+          [icon setStackSort: [[stack objectForKey: @"sort"] intValue]];
+        }
     }
 }
 
@@ -462,6 +475,7 @@ static inline CGFloat _dockScaleFactor(void)
     return;
   }
   [manager removeWatcherForPath: [[icon node] path]];
+  [DockStack closeForIcon: icon];
   
   if ([icon superview]) {
     [icon removeFromSuperview];
@@ -1109,12 +1123,36 @@ static inline CGFloat _dockScaleFactor(void)
   return paths;
 }
 
+/* How each kept folder shows its stack, by path; beside "folders", which
+ * keeps the plain list of paths it always had. */
+- (NSDictionary *)dockedFolderStacks
+{
+  NSMutableDictionary *stacks = [NSMutableDictionary dictionary];
+  NSUInteger i;
+
+  for (i = 0; i < [icons count]; i++)
+    {
+      DockIcon *icon = [icons objectAtIndex: i];
+
+      if ([icon isFolderIcon] && [icon isDocked])
+        {
+          [stacks setObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                               [NSNumber numberWithInt: [icon stackViewStyle]], @"view",
+                               [NSNumber numberWithInt: [icon stackSort]], @"sort", nil]
+                     forKey: [icon path]];
+        }
+    }
+
+  return stacks;
+}
+
 - (void)saveDockConfiguration
 {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
 
   [defaults setObject: [self dockedApplicationEntries] forKey: @"applications"];
   [defaults setObject: [self dockedFolderPaths] forKey: @"folders"];
+  [defaults setObject: [self dockedFolderStacks] forKey: @"folderstacks"];
   [defaults synchronize];
 }
 
@@ -1128,6 +1166,7 @@ static inline CGFloat _dockScaleFactor(void)
   [defaults setBool: singleClickLaunch forKey: @"singleclicklaunch"];
   [defaults setObject: [self dockedApplicationEntries] forKey: @"applications"];
   [defaults setObject: [self dockedFolderPaths] forKey: @"folders"];
+  [defaults setObject: [self dockedFolderStacks] forKey: @"folderstacks"];
 
   for (i = 0; i < [icons count]; i++)
     {

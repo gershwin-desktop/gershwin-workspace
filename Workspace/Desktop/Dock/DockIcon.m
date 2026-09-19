@@ -238,6 +238,71 @@
   return ([self isSpecialIcon] == NO) && [node isApplication];
 }
 
+- (Dock *)dock
+{
+  return (Dock *)container;
+}
+
+- (DockStackViewStyle)stackViewStyle
+{
+  return stackViewStyle;
+}
+
+- (void)setStackViewStyle:(DockStackViewStyle)style
+{
+  stackViewStyle = style;
+}
+
+- (DockStackSort)stackSort
+{
+  return stackSort;
+}
+
+- (void)setStackSort:(DockStackSort)sort
+{
+  stackSort = sort;
+}
+
+- (void)stackViewStyleChosen:(id)sender
+{
+  stackViewStyle = (DockStackViewStyle)[sender tag];
+  [(Dock *)container saveDockConfiguration];
+}
+
+- (void)stackSortChosen:(id)sender
+{
+  stackSort = (DockStackSort)[sender tag];
+  [(Dock *)container saveDockConfiguration];
+}
+
+/* A submenu of choices, the current one checked. */
+- (NSMenuItem *)choiceItemWithTitle:(NSString *)title
+                             titles:(NSArray *)titles
+                               tags:(NSArray *)tags
+                            current:(NSInteger)current
+                             action:(SEL)action
+{
+  NSMenuItem *item = AUTORELEASE ([[NSMenuItem alloc] initWithTitle: title
+                                                             action: NULL
+                                                      keyEquivalent: @""]);
+  NSMenu *sub = AUTORELEASE ([[NSMenu alloc] initWithTitle: title]);
+  NSUInteger i;
+
+  for (i = 0; i < [titles count]; i++)
+    {
+      NSInteger tag = [[tags objectAtIndex: i] integerValue];
+      NSMenuItem *choice = AUTORELEASE ([[NSMenuItem alloc]
+        initWithTitle: [titles objectAtIndex: i] action: action keyEquivalent: @""]);
+
+      [choice setTarget: self];
+      [choice setTag: tag];
+      [choice setState: (tag == current) ? NSOnState : NSOffState];
+      [sub addItem: choice];
+    }
+  [item setSubmenu: sub];
+  return item;
+}
+
 - (void)bringApplicationForward
 {
   if (apphidden) {
@@ -843,10 +908,14 @@
 {
   if (theEvent == nil) return;
   
-  if ([theEvent clickCount] >= minimumLaunchClicks) {
-    if ([self isFolderIcon]) {
-      [[Workspace gworkspace] newViewerAtPath: [node path]];
-    } else if ([self isSpecialIcon] == NO) {
+  /* A folder shows its stack at the first click; a second click of a double
+   * click would only put it away again. */
+  if ([self isFolderIcon]) {
+    if ([theEvent clickCount] == 1) {
+      [DockStack toggleForIcon: self event: theEvent];
+    }
+  } else if ([theEvent clickCount] >= minimumLaunchClicks) {
+    if ([self isSpecialIcon] == NO) {
       NSString *nodePath = [node path];
       
       /* Safety check: ensure we have a valid path and name */
@@ -977,6 +1046,27 @@
     NSMenu *menu = AUTORELEASE ([[NSMenu alloc] initWithTitle: [node name]]);
     NSString *path = [node path];
     NSMenuItem *item;
+
+    [menu addItem: [self choiceItemWithTitle: NSLocalizedString(@"View Content as", @"")
+      titles: [NSArray arrayWithObjects: NSLocalizedString(@"Fan", @""),
+                       NSLocalizedString(@"Grid", @""), NSLocalizedString(@"List", @""),
+                       NSLocalizedString(@"Automatic", @""), nil]
+        tags: [NSArray arrayWithObjects: @(DockStackViewFan), @(DockStackViewGrid),
+                       @(DockStackViewList), @(DockStackViewAutomatic), nil]
+     current: stackViewStyle
+      action: @selector(stackViewStyleChosen:)]];
+
+    [menu addItem: [self choiceItemWithTitle: NSLocalizedString(@"Sort Content by", @"")
+      titles: [NSArray arrayWithObjects: NSLocalizedString(@"Name", @""),
+                       NSLocalizedString(@"Date Added", @""),
+                       NSLocalizedString(@"Date Modified", @""),
+                       NSLocalizedString(@"Kind", @""), nil]
+        tags: [NSArray arrayWithObjects: @(DockStackSortName), @(DockStackSortDateAdded),
+                       @(DockStackSortDateModified), @(DockStackSortKind), nil]
+     current: stackSort
+      action: @selector(stackSortChosen:)]];
+
+    [menu addItem: [NSMenuItem separatorItem]];
 
     item = AUTORELEASE ([NSMenuItem new]);
     [item setTitle: NSLocalizedString(@"Open", @"")];

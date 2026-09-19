@@ -32,16 +32,19 @@
 #import "GWDesktopWindow.h"
 #import "GWDesktopManager.h"
 #import "FSNSpringLoader.h"
+#import "Dock/DockStack.h"
 
 @implementation GWDesktopWindow
 
 /* Spring-loaded folders follow a drag across windows, and a window's drag
  * events only pass through here.  The loader hears of an event before it is
  * handled: handling a drop can run a confirmation panel, and the loader must
- * know where the drop landed before that. */
+ * know where the drop landed before that.  A press on the Desktop also puts
+ * away a Dock stack that is open. */
 - (void)sendEvent:(NSEvent *)theEvent
 {
   [[FSNSpringLoader sharedLoader] noteEvent: theEvent inWindow: self];
+  [DockStack noteEvent: theEvent inWindow: self];
   [super sendEvent: theEvent];
 }
 

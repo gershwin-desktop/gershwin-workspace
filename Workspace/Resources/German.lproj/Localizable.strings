@@ -1196,3 +1196,14 @@
 "Delay:" = "Verzögerung:";
 "Short" = "Kurz";
 "Long" = "Lang";
+
+/* Stacks of folders kept in the Dock */
+"View Content as" = "Inhalt anzeigen als";
+"Fan" = "Fächer";
+"Grid" = "Raster";
+"Automatic" = "Automatisch";
+"Sort Content by" = "Inhalt sortieren nach";
+"Date Added" = "Hinzugefügt am";
+"Open in Workspace" = "In Workspace öffnen";
+"%lu More in Workspace" = "%lu weitere in Workspace";
+"No Items" = "Keine Objekte";

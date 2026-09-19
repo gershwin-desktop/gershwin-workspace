@@ -29,6 +29,7 @@
 
 #import "Dock.h"
 #import "FSNSpringLoader.h"
+#import "DockStack.h"
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 
@@ -44,6 +45,7 @@
 - (void)sendEvent:(NSEvent *)theEvent
 {
   [[FSNSpringLoader sharedLoader] noteEvent: theEvent inWindow: self];
+  [DockStack noteEvent: theEvent inWindow: self];
   [super sendEvent: theEvent];
 }
 

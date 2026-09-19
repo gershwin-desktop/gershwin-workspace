@@ -831,3 +831,73 @@ static BOOL GSDirectoryGlobMatch(NSString *pattern, NSString *string)
 
   return (p == plen);
 }
+
+/* The alpha, in 256ths, up to which the X backend leaves a pixel out of a
+ * window's shape (ALPHA_THRESHOLD in libs-back's XGServerWindow.m). */
+static const CGFloat FSNShapeAlphaThreshold = 158;
+
+NSImage *FSNShapeableImage(NSImage *picture, CGFloat scale)
+{
+  NSSize size = [picture size];
+  NSBitmapImageRep *drawn;
+  NSBitmapImageRep *bitmap;
+  NSImage *image;
+  NSInteger w, h, x, y;
+
+  /* The window server can only read transparency from a bitmap: from a
+   * cached picture it got none, and the window stayed a rectangle showing
+   * whatever had been on the screen beneath it. */
+  [picture lockFocus];
+  drawn = AUTORELEASE ([[NSBitmapImageRep alloc] initWithFocusedViewRect:
+    NSMakeRect(0, 0, size.width, size.height)]);
+  [picture unlockFocus];
+
+  /* At the window's size in pixels: a bitmap of the size in points, drawn
+   * scaled up, was cut by a shape that no longer fitted it.  Pixels only
+   * partly covered - the soft edge of an icon or a letter - have nothing
+   * beneath them to blend with and showed leftovers of the screen, so each
+   * is made shown or not, cut where the window server cuts the shape. */
+  w = MAX (1, (NSInteger)lrint(size.width * scale));
+  h = MAX (1, (NSInteger)lrint(size.height * scale));
+  bitmap = AUTORELEASE ([[NSBitmapImageRep alloc]
+    initWithBitmapDataPlanes: NULL
+                  pixelsWide: w
+                  pixelsHigh: h
+               bitsPerSample: 8
+             samplesPerPixel: 4
+                    hasAlpha: YES
+                    isPlanar: NO
+              colorSpaceName: NSDeviceRGBColorSpace
+                 bytesPerRow: 0
+                bitsPerPixel: 0]);
+
+  for (y = 0; y < h; y++)
+    {
+      for (x = 0; x < w; x++)
+        {
+          NSInteger sx = MIN ((NSInteger)(x * [drawn pixelsWide] / w),
+                              [drawn pixelsWide] - 1);
+          NSInteger sy = MIN ((NSInteger)(y * [drawn pixelsHigh] / h),
+                              [drawn pixelsHigh] - 1);
+          NSColor *c = [[drawn colorAtX: sx y: sy]
+                         colorUsingColorSpaceName: NSDeviceRGBColorSpace];
+          CGFloat a = [c alphaComponent];
+
+          if (a * 256 <= FSNShapeAlphaThreshold)
+            c = [NSColor colorWithDeviceRed: 0 green: 0 blue: 0 alpha: 0];
+          else if (a < 1.0)
+            c = [[NSColor whiteColor] blendedColorWithFraction: a
+                                                       ofColor: [c colorWithAlphaComponent: 1.0]];
+
+          [bitmap setColor: c atX: x y: y];
+        }
+    }
+
+  /* Its size in points, so that it covers its window exactly. */
+  [bitmap setSize: size];
+  image = AUTORELEASE ([[NSImage alloc] initWithSize: size]);
+  [image setBackgroundColor: [NSColor clearColor]];
+  [image addRepresentation: bitmap];
+
+  return image;
+}

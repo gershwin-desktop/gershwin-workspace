@@ -74,6 +74,14 @@ NSImage *FSNLinkBadgedImage(NSImage *image);
  * Used to mark git-repository folders.  `logo` may be any size. */
 NSImage *FSNGitBadgedImage(NSImage *image, NSImage *logo);
 
+/* A picture fit to shape a window after (-[GSDisplayServer
+ * restrictWindow:toImage:]): a bitmap as many pixels big as the picture is
+ * in points times scale, every pixel either shown or not.  The window server
+ * shapes a window pixel for pixel from the bitmap, and a window without a
+ * compositor cannot show anything half transparent.  picture is drawn in
+ * points; the result has the same size in points. */
+NSImage *FSNShapeableImage(NSImage *picture, CGFloat scale);
+
 /* Posted (object = the node's path, an NSString) by a decoration delegate when
  * an asynchronously-computed badge count becomes available.  Icon views
  * observe this to refresh the red count badge without blocking on the work. */
