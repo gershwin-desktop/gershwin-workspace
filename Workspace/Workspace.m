@@ -1607,7 +1607,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       || sel_isEqual(action, @selector(openLegal:))
       || sel_isEqual(action, @selector(makeThumbnails:))
       || sel_isEqual(action, @selector(removeThumbnails:))
-      || sel_isEqual(action, @selector(notImplemented:)))
+      || sel_isEqual(action, @selector(notImplemented:))
+      || sel_isEqual(action, @selector(cleanUp:))
+      || sel_isEqual(action, @selector(cleanUpBy:)))
     {
       return YES;
     }
@@ -4480,13 +4482,16 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     RELEASE (cleanUpByItem);
   }
 
-  // Arrange Logically
-  menuItem = [NSMenuItem new];
-  [menuItem setTitle: NSLocalizedString(@"Arrange Logically", @"")];
-  [menuItem setTarget: self];
-  [menuItem setAction: @selector(alignLogically:)];
-  [menu addItem: menuItem];
-  RELEASE (menuItem);
+  // Arrange Logically - only for folder windows, not the Desktop
+  if ([dtopManager hasWindow: viewer] == NO)
+    {
+      menuItem = [NSMenuItem new];
+      [menuItem setTitle: NSLocalizedString(@"Arrange Logically", @"")];
+      [menuItem setTarget: self];
+      [menuItem setAction: @selector(alignLogically:)];
+      [menu addItem: menuItem];
+      RELEASE (menuItem);
+    }
 
   return [menu autorelease];
 }
@@ -4999,13 +5004,12 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 - (id)activeIconView
 {
   NSWindow *kwin = [NSApp keyWindow];
-  if (!kwin) return nil;
 
-  if ([vwrsManager hasViewerWithWindow: kwin])
+  if (kwin != nil && [vwrsManager hasViewerWithWindow: kwin])
     return [[vwrsManager viewerWithWindow: kwin] nodeView];
-  else if ([dtopManager hasWindow: kwin])
-    return [dtopManager desktopView];
-  return nil;
+  /* Clean Up is always enabled; with no folder window in front it tidies
+   * the Desktop, which is what is on the screen then. */
+  return [dtopManager desktopView];
 }
 
 - (void)cleanUp:(id)sender
