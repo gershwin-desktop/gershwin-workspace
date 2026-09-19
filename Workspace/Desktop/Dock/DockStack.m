@@ -1165,7 +1165,7 @@ static NSString *DockStackOpenFolderTitle(void)
 }
 
 /* The list: a menu of the folder's items, folders in it as submenus filled
- * when they open, and the folder itself at the end. */
+ * when they open. */
 - (NSMenu *)listMenuForFolder:(NSString *)folder
 {
   NSMenu *list = [self menuForFolder: folder];
@@ -1214,27 +1214,42 @@ static NSString *DockStackOpenFolderTitle(void)
       [item setTarget: self];
       [item setRepresentedObject: [node path]];
       [item setImage: DockStackIconOfNode(node, 16)];
+      [list addItem: item];
 
       if ([node isDirectory] && [node isPackage] == NO)
         {
+          /* Attached only once the item is in the list, since adding an item
+           * that has a submenu retargets it at the list; -setSubmenu: itself
+           * swaps the action for a no-op.  Restoring both makes a click on
+           * the folder open it while hovering still shows its contents, as
+           * in Menu.app. */
           [item setSubmenu: [self menuForFolder: [node path]]];
+          [item setAction: @selector(openItem:)];
+          [item setTarget: self];
         }
-      [list addItem: item];
     }
 
-  if ([list numberOfItems] > 0)
-    [list addItem: [NSMenuItem separatorItem]];
+  if ([nodes count] == 0)
+    {
+      item = AUTORELEASE ([[NSMenuItem alloc] initWithTitle: NSLocalizedString(@"No Items", @"")
+                                                     action: NULL
+                                              keyEquivalent: @""]);
+      [item setEnabled: NO];
+      [list addItem: item];
+    }
+  else if ([nodes count] > shown)
+    {
+      NSString *more = [NSString stringWithFormat: NSLocalizedString(@"%lu More in Workspace", @""),
+                                 (unsigned long)([nodes count] - shown)];
 
-  item = AUTORELEASE ([[NSMenuItem alloc] initWithTitle:
-      (([nodes count] > shown)
-        ? [NSString stringWithFormat: NSLocalizedString(@"%lu More in Workspace", @""),
-                    (unsigned long)([nodes count] - shown)]
-        : DockStackOpenFolderTitle())
-                                                 action: @selector(openFolder:)
-                                          keyEquivalent: @""]);
-  [item setTarget: self];
-  [item setRepresentedObject: folder];
-  [list addItem: item];
+      [list addItem: [NSMenuItem separatorItem]];
+      item = AUTORELEASE ([[NSMenuItem alloc] initWithTitle: more
+                                                     action: @selector(openFolder:)
+                                              keyEquivalent: @""]);
+      [item setTarget: self];
+      [item setRepresentedObject: folder];
+      [list addItem: item];
+    }
 }
 
 @end
