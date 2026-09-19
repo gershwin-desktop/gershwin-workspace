@@ -310,6 +310,17 @@ static inline CGFloat _dockScaleFactor(void)
         return nil;
       }
 
+      /* Creating the icon can wait on Distributed Objects, and while it
+       * waits the run loop delivers other launch notifications for the same
+       * application, which add its icon.  Inserting this one as well left a
+       * second icon that bounced forever, since the launch only ever
+       * completed on the other one. */
+      DockIcon *existing = [self iconForApplicationPath: path name: name];
+      if (existing != nil) {
+        RELEASE (icon);
+        return existing;
+      }
+
       /* Applications stay before the divider, whatever index they are
        * given: past it are the folders and the Trash. */
       if (index == -1) {
@@ -503,16 +514,22 @@ static inline CGFloat _dockScaleFactor(void)
   return nil;
 }
 
+- (DockIcon *)iconForApplicationPath:(NSString *)path
+                                name:(NSString *)name
+{
+  DockIcon *icon = (path != nil) ? [self iconForApplicationPath: path] : nil;
+
+  if (icon == nil && name != nil) {
+    icon = [self iconForApplicationName: name];
+  }
+  return icon;
+}
+
 - (void)setAppIsX11Only:(BOOL)value
                 forPath:(NSString *)path
                    name:(NSString *)name
 {
-  DockIcon *icon = nil;
-  if (path)
-    icon = [self iconForApplicationPath: path];
-  if (icon == nil && name)
-    icon = [self iconForApplicationName: name];
-  [icon setIsX11OnlyApp: value];
+  [[self iconForApplicationPath: path name: name] setIsX11OnlyApp: value];
 }
 
 - (DockIcon *)workspaceAppIcon
@@ -589,15 +606,7 @@ static inline CGFloat _dockScaleFactor(void)
       return;
     }
 
-    DockIcon *icon = [self iconForApplicationPath: appPath];
-
-    /* The same logical application may be reached via several paths (e.g.
-     * one bundle in /System/Applications and a second copy in
-     * /Local/Applications, or a symlink).  Reuse an existing icon by name so
-     * a launch never produces a duplicate bouncing icon. */
-    if (icon == nil && appName != nil) {
-      icon = [self iconForApplicationName: appName];
-    }
+    DockIcon *icon = [self iconForApplicationPath: appPath name: appName];
 
     if (icon == nil) {
       icon = [self addIconForApplicationAtPath: appPath
@@ -644,17 +653,7 @@ static inline CGFloat _dockScaleFactor(void)
       return;
     }
 
-    DockIcon *icon = [self iconForApplicationPath: appPath];
-
-    /* The same application may exist in several GNUstep domains (System,
-     * Local, ...) as separate bundles with different paths (e.g.
-     * /System/Applications/SudoAskPass.app and
-     * /Local/Applications/SudoAskPass.app).  iconForApplicationPath: only
-     * matches by exact path, so fall back to the app name to avoid showing
-     * a duplicate Dock icon for the same logical application. */
-    if (icon == nil && appName != nil) {
-      icon = [self iconForApplicationName: appName];
-    }
+    DockIcon *icon = [self iconForApplicationPath: appPath name: appName];
 
     if (icon == nil) {
       icon = [self addIconForApplicationAtPath: appPath
@@ -695,14 +694,7 @@ static inline CGFloat _dockScaleFactor(void)
 {
   if (appName == nil) return;
   if ([appName isEqual: [gw gworkspaceProcessName]] == NO) {
-    DockIcon *icon = [self iconForApplicationPath: appPath];
-
-    /* Fall back to the app name: the launch path may differ from the
-     * icon's path (domain copies / symlinks), otherwise the icon would
-     * remain in the Dock after the application quits. */
-    if (icon == nil && appName != nil) {
-      icon = [self iconForApplicationName: appName];
-    }
+    DockIcon *icon = [self iconForApplicationPath: appPath name: appName];
 
     if (icon) {
       [icon setAppPID: 0]; /* Clear PID on termination */

@@ -98,6 +98,12 @@ typedef enum DockStyle
 
 - (DockIcon *)iconForApplicationName:(NSString *)name;
 
+/* The icon of an application, looked up by path and then by name: the same
+ * application can be reached through several paths (a copy in another
+ * domain, a symlink), and it must never get a second icon. */
+- (DockIcon *)iconForApplicationPath:(NSString *)path
+                                name:(NSString *)name;
+
 - (void)setAppIsX11Only:(BOOL)value
                 forPath:(NSString *)path
                    name:(NSString *)name;
