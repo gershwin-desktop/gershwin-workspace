@@ -460,9 +460,10 @@ FSNGitBadgedImage(NSImage *image, NSImage *logo)
 
   /* Half the icon, aspect-preserving.  Anchored toward the bottom via the
    * golden ratio (badge centre at (1 - 1/phi) of the height from the bottom),
-   * then lifted a further 5% of the icon height. */
+   * then lifted a further 2% of the icon height so it sits centred on the
+   * front of the folder instead of poking into the tab. */
   const CGFloat golden = 0.6180339887498949;
-      const CGFloat upShift = 0.10;   /* fraction of icon height to lift */
+  const CGFloat upShift = 0.02;   /* fraction of icon height to lift */
   const CGFloat strength = 0.35;  /* subtle darkening where the logo is dark;
                                    * white/transparent logo areas are left
                                    * untouched (no hue shift). */
@@ -528,6 +529,7 @@ FSNGitBadgedImage(NSImage *image, NSImage *logo)
 
   NSInteger x0 = (NSInteger) floor (dest.origin.x);
   NSInteger x1 = (NSInteger) ceil (dest.origin.x + dw);
+  /* y-up, like dest; compared against yUp below, not the top-down row. */
   NSInteger y0 = (NSInteger) floor (dest.origin.y);
   NSInteger y1 = (NSInteger) ceil (dest.origin.y + dh);
   x0 = MAX (0, x0); x1 = MIN (w, x1);
@@ -548,9 +550,9 @@ FSNGitBadgedImage(NSImage *image, NSImage *logo)
           CGFloat sg = sp[1];
           CGFloat sb = sp[2];
 
-          if (x >= x0 && x < x1 && y >= y0 && y < y1)
+          NSInteger yUp = h - 1 - y;
+          if (x >= x0 && x < x1 && yUp >= y0 && yUp < y1)
             {
-              NSInteger yUp = h - 1 - y;
               CGFloat fx = (CGFloat) (x - dest.origin.x) / dw;
               CGFloat fyUp = (CGFloat) (yUp - dest.origin.y) / dh;
               NSInteger lx = (NSInteger) (fx * (lw - 1));
