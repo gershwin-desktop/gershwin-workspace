@@ -1614,6 +1614,15 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       return YES;
     }
 
+  /* Arranging needs a folder window - it is not offered for the Desktop.
+   * Resolved from the key window, else the main window, else any viewer,
+   * because with the menu bar in Menu.app no window of ours is key while the
+   * menu is being validated. */
+  if (sel_isEqual(action, @selector(alignLogically:)))
+    {
+      return ([self _viewerForKeyWindow] != nil);
+    }
+
   // === Window-level standard operations — forward to key window ===
   if (sel_isEqual(action, @selector(performClose:))
       || sel_isEqual(action, @selector(performMiniaturize:))
@@ -5052,7 +5061,9 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
 - (void)alignLogically:(id)sender
 {
-  id iconView = [self activeIconView];
+  id viewer = [self _viewerForKeyWindow];
+  id iconView = viewer ? [viewer nodeView] : nil;
+
   if (!iconView) return;
   [[GWAlignLogically sharedAligner] alignLogicallyInIconView: iconView];
 }
