@@ -709,20 +709,21 @@ static CGFloat desktopScaleFactor(void)
   NSRect gridrect = [self desktopGridRect];
   CGFloat gridTopOffset = 12.0;
 
-  /* Right-align the grid so the rightmost column is flush with the right edge
-   * of the usable area.  With TopToBottomRightToLeft placement the first icon
-   * goes to the rightmost column; any leftover space from the floor()
-   * truncation in nCols stays on the left side. */
+  /* Right-align the grid: with TopToBottomRightToLeft placement the first
+   * icon goes to the rightmost column, and leftover space from the floor()
+   * truncation in nCols stays on the left side.  Each column owns half the
+   * gap on either side, so the rightmost cell keeps half a gap from the
+   * screen edge, as between columns; flush with the edge, long names ran
+   * into it and the column looked out of step with the rest of the grid. */
   if (_gridCached)
     {
       CGFloat cellW = _cachedCellSize.width;
       CGFloat gapX = _cachedGapX;
-      NSUInteger nCols = (NSUInteger)((gridrect.size.width + gapX)
-                                       / (cellW + gapX));
+      NSUInteger nCols = (NSUInteger)(gridrect.size.width / (cellW + gapX));
       if (nCols < 1)
         nCols = 1;
       CGFloat totalWidth = nCols * (cellW + gapX) - gapX;
-      CGFloat originX = gridrect.origin.x + gridrect.size.width - totalWidth;
+      CGFloat originX = NSMaxX(gridrect) - gapX / 2.0 - totalWidth;
       return NSMakePoint(originX,
                          gridrect.origin.y + gridrect.size.height - gridTopOffset);
     }
