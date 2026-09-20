@@ -1506,6 +1506,28 @@ static GWX11AppManager *sharedX11AppManager = nil;
         [self stopMonitorTimer];
         return;
     }
+
+    /* A tick only needs a thread when an X window scan is due: the scans are
+     * synchronous round-trips that must not run on the main thread.  Once
+     * every registered app has shown its window there is nothing left but a
+     * kill() probe per app, which costs nothing and is done right here -
+     * otherwise this timer would detach a thread with an eight megabyte
+     * stack and its own X connection twice a second for the whole session. */
+    BOOL scanDue = NO;
+    for (NSDictionary *snap in snapshot) {
+        if (![[snap objectForKey: @"appeared"] boolValue]
+            && [[snap objectForKey: @"scanwindows"] boolValue]) {
+            scanDue = YES;
+            break;
+        }
+    }
+
+    if (!scanDue) {
+        [self applyMonitorResults: [self monitorResultsFor: snapshot
+                                             scanningWindows: NO]];
+        return;
+    }
+
     [NSThread detachNewThreadSelector: @selector(monitorScanWorker:)
                              toTarget: self
                            withObject: snapshot];
@@ -1518,6 +1540,22 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (void)monitorScanWorker:(NSArray *)appSnapshots
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    NSDictionary *results = [self monitorResultsFor: appSnapshots
+                                     scanningWindows: YES];
+
+    [self performSelectorOnMainThread: @selector(applyMonitorResults:)
+                           withObject: results waitUntilDone: NO];
+    [[GWX11WindowManager sharedManager] closeThreadDisplay];
+    [pool drain];
+}
+
+/* Which of the registered apps have gone, and which have shown a window.
+ * With scanningWindows NO this only probes the processes, touches no X
+ * connection and is safe to call on the main thread; with YES it runs the
+ * window scans as well and therefore belongs on a worker thread. */
+- (NSDictionary *)monitorResultsFor:(NSArray *)appSnapshots
+                    scanningWindows:(BOOL)mayScan
+{
     GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
     NSMutableArray *appeared = [NSMutableArray array];
     NSMutableArray *terminated = [NSMutableArray array];
@@ -1536,7 +1574,8 @@ static GWX11AppManager *sharedX11AppManager = nil;
         }
 
         /* Check if windows have appeared for this app. */
-        if (!alreadyAppeared && [[snap objectForKey: @"scanwindows"] boolValue]) {
+        if (mayScan && !alreadyAppeared
+            && [[snap objectForKey: @"scanwindows"] boolValue]) {
             NSArray *windows = [wm windowsForPID:pid];
             if ([windows count] == 0) {
                 NSString *search = [snap objectForKey: @"search"];
@@ -1551,12 +1590,8 @@ static GWX11AppManager *sharedX11AppManager = nil;
         }
     }
 
-    NSDictionary *results = [NSDictionary dictionaryWithObjectsAndKeys:
+    return [NSDictionary dictionaryWithObjectsAndKeys:
         appeared, @"appeared", terminated, @"terminated", nil];
-    [self performSelectorOnMainThread: @selector(applyMonitorResults:)
-                           withObject: results waitUntilDone: NO];
-    [wm closeThreadDisplay];
-    [pool drain];
 }
 
 /* Main thread: apply the worker's results. */
