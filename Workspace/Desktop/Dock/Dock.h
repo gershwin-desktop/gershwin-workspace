@@ -26,6 +26,7 @@
 #import <AppKit/NSView.h>
 #import "GWDesktopManager.h"
 #import "FSNodeRep.h"
+#import "DockMagnification.h"
 
 @class NSWindow;
 @class NSColor;
@@ -67,6 +68,34 @@ typedef enum DockStyle
   DockIcon *springIcon;
   
   NSTimer *launchRefreshTimer;
+
+  /* The magnification of the expired patent US7434177: while the pointer is
+   * on the Dock, the icons around it are drawn larger and the rest slide
+   * away to make room.  The view then covers the whole area the enlarged
+   * icons reach into, and barRect is the bar itself within it. */
+  BOOL magnifyEnabled;
+  CGFloat magnifyIconSize;
+  /* The effect at its full strength, as the room beside the bar allows. */
+  DockMagnification magnification;
+  /* How far along the way in the effect is, how much of it that puts on
+   * the screen, and where the pointer is along the Dock, from the left or
+   * from the top. */
+  CGFloat magnifyPhase;
+  CGFloat magnifyFraction;
+  CGFloat magnifyPos;
+  /* Whether the window has been given the room the icons grow into.  It is
+   * taken while the effect is still nothing to be seen, so that the growing
+   * itself never has to move the window. */
+  BOOL magnifyArmed;
+  /* The pointer has to be followed before it reaches the Dock, which no
+   * event tells us about, so it is looked at on a timer: rarely while it is
+   * elsewhere, every frame while it is near. */
+  NSTimer *magnifyTimer;
+  NSTimeInterval magnifyInterval;
+  NSTimeInterval magnifyTime;
+  /* The unmagnified size of one cell, and the bar in view coordinates. */
+  CGFloat baseCell;
+  NSRect barRect;
 
   GWDesktopManager *manager; 
   Workspace *gw;
@@ -158,6 +187,26 @@ typedef enum DockStyle
 - (void)setBackColor:(NSColor *)color;
 
 - (void)tile;
+
+/* The bar itself, without the room the magnified icons reach into, in
+ * screen coordinates: what the Dock takes up when it is left alone. */
+- (NSRect)barFrame;
+
+- (void)setMagnificationEnabled:(BOOL)value;
+
+- (BOOL)isMagnificationEnabled;
+
+/* The size an icon is drawn at while the pointer is on it. */
+- (void)setMagnifiedIconSize:(CGFloat)size;
+
+- (CGFloat)magnifiedIconSize;
+
+/* Puts the Dock back together at once, with the pointer wherever it is. */
+- (void)endMagnification;
+
+/* Whether the Dock watches for the pointer coming near at all; there is
+ * nothing to watch for while it is not on the screen. */
+- (void)setMagnificationTracking:(BOOL)value;
 
 - (void)updateDefaults;
 

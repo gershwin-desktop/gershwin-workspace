@@ -48,6 +48,24 @@
 #define MIN_ICN_SIZE 16
 #define ICN_INCR 4
 
+/* The magnification of the expired patent US7434177: how large the icon
+ * under the pointer is drawn, and how far to either side of the pointer the
+ * effect reaches, counted in tiles. */
+#define MAGNIFY_ICN_SIZE 96.0
+#define MAGNIFY_CELLS 3.0
+
+/* How long the effect takes to come up once the pointer is on the Dock,
+ * and to go back down once it has left. */
+#define MAGNIFY_DURATION 0.2
+
+/* The pointer is looked at every frame while it is anywhere near the Dock.
+ * Further away it is looked at just often enough to catch it coming: the
+ * time it would need to cross what is left of the distance, at a speed no
+ * pointer is pushed past, and never less often than the idle interval. */
+#define MAGNIFY_FRAME_INTERVAL (1.0 / 60.0)
+#define MAGNIFY_IDLE_INTERVAL 0.25
+#define MAGNIFY_POINTER_SPEED 4000.0
+
 /* Returns GSScaleFactor for scaling dock cell frames. Factors below 1.0 are
  * honored (UI is scaled down); an unset or non-positive value means 1.0. */
 static inline CGFloat _dockScaleFactor(void)
@@ -74,6 +92,17 @@ static inline CGFloat _dockScaleFactor(void)
 }
 @end
 
+@interface Dock (Magnification)
+
+- (void)layoutIcons;
+- (void)magnifyTick:(NSTimer *)timer;
+- (void)setMagnifyInterval:(NSTimeInterval)interval;
+- (NSTimeInterval)magnifyIntervalForDistance:(CGFloat)distance
+                                        near:(CGFloat)near;
+
+@end
+
+
 @implementation Dock
 
 - (void)dealloc
@@ -81,6 +110,8 @@ static inline CGFloat _dockScaleFactor(void)
   [[NSNotificationCenter defaultCenter] removeObserver: self];
   [launchRefreshTimer invalidate];
   launchRefreshTimer = nil;
+  [magnifyTimer invalidate];
+  magnifyTimer = nil;
   DockServiceStop();
 #if HAVE_DBUS
   DockServiceDBusStop();
@@ -119,6 +150,23 @@ static inline CGFloat _dockScaleFactor(void)
 
       icons = [NSMutableArray new];
       iconSize = MAX_ICN_SIZE;
+      baseCell = ceil(iconSize / 3 * 4);
+
+      defEntry = [defaults objectForKey: @"dockmagnification"];
+      magnifyEnabled = (defEntry == nil) ? YES : [defEntry boolValue];
+      defEntry = [defaults objectForKey: @"dockmagnifiedsize"];
+      magnifyIconSize = (defEntry == nil)
+        ? MAGNIFY_ICN_SIZE : [defEntry floatValue];
+      magnification = DockMagnificationMake(baseCell, baseCell,
+                                            MAGNIFY_CELLS * baseCell);
+      magnifyPhase = 0.0;
+      magnifyFraction = 0.0;
+      magnifyPos = 0.0;
+      magnifyArmed = NO;
+      magnifyTimer = nil;
+      magnifyInterval = 0.0;
+      magnifyTime = 0.0;
+      barRect = NSZeroRect;
                                 
       dndSourceIcon = nil;
       isDragTarget = NO;
@@ -862,13 +910,105 @@ static inline CGFloat _dockScaleFactor(void)
   }
 }
 
+/* The Dock lays out along one axis: from the left when it is at the bottom
+ * of the screen, from the top when it is at a side.  This turns a span
+ * along that axis into a tile of the given thickness, kept against the edge
+ * of the screen the Dock sits on so that magnified icons grow away from it. */
+- (NSRect)rectForSpanStart:(CGFloat)start
+                    length:(CGFloat)length
+                 thickness:(CGFloat)thickness
+{
+  NSRect bounds = [self bounds];
+
+  if (position == DockPositionBottom)
+    return NSMakeRect(start, 0, length, thickness);
+
+  if (position == DockPositionLeft)
+    return NSMakeRect(0, bounds.size.height - start - length,
+                      thickness, length);
+
+  return NSMakeRect(bounds.size.width - thickness,
+                    bounds.size.height - start - length,
+                    thickness, length);
+}
+
+/* Places the icons, the line between the sections and the gaps a drag opens
+ * one after another along the Dock, and works out how far the bar itself
+ * reaches once the icons around the pointer have pushed it apart. */
+- (void)layoutIcons
+{
+  /* As much of the effect as is showing; at rest this spreads nothing and
+   * every tile is laid out where it lies. */
+  DockMagnification shown = DockMagnificationScale(magnification,
+                                                   magnifyFraction);
+  NSUInteger docs = [self firstDocumentIndex];
+  BOOL divided = (docs > 0) && (docs < [icons count]);
+  CGFloat dividerLength = divided ? DIVIDER_SIZE : 0;
+  /* Armed, the bar lies in the middle of the room kept for the whole
+   * effect, so that no tile ever needs more of it than there is. */
+  CGFloat lead = magnifyArmed ? magnification.spread : 0.0;
+  CGFloat pos = lead;
+  CGFloat barStart, barEnd, start, size;
+  NSUInteger i;
+
+  dividerRect = NSZeroRect;
+  folderGapRect = NSZeroRect;
+
+  DockMagnificationSpan(shown, magnifyPos, pos, 0, &barStart, &size);
+
+  for (i = 0; i < [icons count]; i++)
+    {
+      DockIcon *icon = [icons objectAtIndex: i];
+
+      if (divided && (i == docs))
+        {
+          DockMagnificationSpan(shown, magnifyPos, pos, dividerLength,
+                                &start, &size);
+          dividerRect = [self rectForSpanStart: start
+                                        length: size
+                                     thickness: baseCell];
+          pos += dividerLength;
+        }
+
+      if ((NSInteger)i == folderTargetIndex)
+        {
+          DockMagnificationSpan(shown, magnifyPos, pos, baseCell,
+                                &start, &size);
+          folderGapRect = [self rectForSpanStart: start
+                                          length: size
+                                       thickness: size];
+          pos += baseCell;
+        }
+
+      DockMagnificationSpan(shown, magnifyPos, pos, baseCell, &start, &size);
+      [icon setMagnifiedIconSize:
+              ((magnifyFraction > 0.0) ? (iconSize * size / baseCell) : 0.0)
+                           frame: [self rectForSpanStart: start
+                                                  length: size
+                                               thickness: size]];
+      pos += baseCell;
+
+      if ((targetIndex != -1) && ((NSInteger)i == targetIndex))
+        pos += baseCell;
+    }
+
+  /* The bar runs from where the first tile begins to where the last one
+   * ends, so it grows with the icons instead of leaving them hanging over
+   * its ends. */
+  DockMagnificationSpan(shown, magnifyPos, pos, 0, &barEnd, &size);
+  barRect = [self rectForSpanStart: barStart
+                            length: barEnd - barStart
+                         thickness: baseCell];
+
+  [self setNeedsDisplay: YES];
+}
+
 - (void)tile
 {
   NSView *view = [self superview];
   NSRect scrrect = [[[NSScreen screens] objectAtIndex:0] frame];
   int oldIcnSize = iconSize;
   CGFloat maxheight = scrrect.size.height;
-  NSRect icnrect = NSZeroRect;
   NSRect rect = NSZeroRect;
   NSUInteger i;
   NSUInteger docs = [self firstDocumentIndex];
@@ -878,47 +1018,66 @@ static inline CGFloat _dockScaleFactor(void)
   /* The icons, and the gaps opened where a dragged item would go. */
   CGFloat slots = [icons count] + ((targetIndex != -1) ? 1 : 0)
                                 + ((folderTargetIndex != -1) ? 1 : 0);
-  iconSize = MAX_ICN_SIZE;
   CGFloat sf = _dockScaleFactor();
+  CGFloat cell, scaledCell, barLength, viewLength, viewThickness, screenLength;
+  BOOL inOwnDockWindow;
 
-  dividerRect = NSZeroRect;
-  folderGapRect = NSZeroRect;
+  iconSize = MAX_ICN_SIZE;
 
   /* Compute unscaled cell size (used for icon subview layout inside the view,
    * where the backend's HiDPI transform is already active). */
-  icnrect.origin.x = 0;
-  icnrect.origin.y = 0;
-  icnrect.size.width = ceil(iconSize / 3 * 4);
-  icnrect.size.height = icnrect.size.width;
+  cell = ceil(iconSize / 3 * 4);
 
   /* Use SCALED cell for the dock window frame (screen pixel coordinates). */
-  CGFloat scaledCell = icnrect.size.width * sf;
-
-  rect.size.height = slots * scaledCell + dividerLength * sf;
+  scaledCell = cell * sf;
 
   maxheight -= (scaledCell * 2);
 
-  while (rect.size.height > maxheight) {
+  while ((slots * scaledCell + dividerLength * sf) > maxheight) {
     iconSize -= ICN_INCR;
-    icnrect.size.height = ceil(iconSize / 3 * 4);
-    icnrect.size.width = icnrect.size.height;
-    scaledCell = icnrect.size.width * sf;
-    rect.size.height = slots * scaledCell + dividerLength * sf;
+    cell = ceil(iconSize / 3 * 4);
+    scaledCell = cell * sf;
 
     if (iconSize <= MIN_ICN_SIZE) {
       break;
     }
   }
 
+  baseCell = cell;
+  barLength = slots * cell + dividerLength;
+
+  /* The tiles grow along the curve of the expired patent US7434177, over an
+   * effect region a few tiles wide to either side of the pointer, and only
+   * as far apart as the screen beside the bar allows. */
+  screenLength = ((position == DockPositionBottom)
+                  ? scrrect.size.width : scrrect.size.height) / sf;
+  magnification = DockMagnificationMake(cell,
+                                        magnifyEnabled
+                                          ? (cell * magnifyIconSize / iconSize)
+                                          : cell,
+                                        MAGNIFY_CELLS * cell);
+  /* The bar keeps the same distance from the ends of the screen that it is
+   * laid out with, magnified or not. */
+  magnification = DockMagnificationFit(magnification,
+                                       screenLength - 2 * cell - barLength);
+
+  /* Armed, the Dock takes the room the icons can grow into all at once: as
+   * tall as the largest tile, and long enough for the spread to either
+   * side.  The window is then left alone for as long as the pointer plays
+   * with the Dock, so that growing an icon never moves it.  At rest the
+   * Dock is just the bar again. */
+  viewLength = magnifyArmed ? (barLength + 2 * magnification.spread) : barLength;
+  viewThickness = magnifyArmed ? magnification.magnifiedSize : cell;
+
   if (position == DockPositionBottom)
   {
-    rect.size.width = slots * scaledCell + dividerLength * sf;
-    rect.size.height = scaledCell;
+    rect.size.width = viewLength * sf;
+    rect.size.height = viewThickness * sf;
   }
   else
   {
-    rect.size.width = scaledCell;
-    rect.size.height = slots * scaledCell + dividerLength * sf;
+    rect.size.width = viewThickness * sf;
+    rect.size.height = viewLength * sf;
   }
 
   // Offset by the primary screen's origin so the dock lands on the correct
@@ -949,7 +1108,7 @@ static inline CGFloat _dockScaleFactor(void)
    * (the window's content view is expected to stay at {0,0} within the
    * window content area).
    */
-  BOOL inOwnDockWindow = [[self window] isKindOfClass: [GWDockWindow class]];
+  inOwnDockWindow = [[self window] isKindOfClass: [GWDockWindow class]];
 
   if (inOwnDockWindow)
     {
@@ -965,77 +1124,40 @@ static inline CGFloat _dockScaleFactor(void)
       [self setFrame: rect];
     }
 
-  /* Icon subview frames use UNSCALED cell size (the view's internal
-   * coordinate system is already HiDPI-scaled by the backend).
-   * Icon image size also stays unscaled (48pt). */
-  if (position == DockPositionBottom)
-  {
-    icnrect.origin.x = 0;
-    icnrect.origin.y = 0;
-
-    for (i = 0; i < [icons count]; i++)
+  /* Icon image size stays unscaled (48pt at most); only the pointer
+   * magnifies it. */
+  if (oldIcnSize != iconSize)
     {
-      DockIcon *icon = [icons objectAtIndex: i];
-
-      if (oldIcnSize != iconSize)
-       [icon setIconSize: iconSize];
-
-      if (divided && (i == docs))
-        {
-          dividerRect = NSMakeRect(icnrect.origin.x, 0,
-                                   dividerLength, icnrect.size.height);
-          icnrect.origin.x += dividerLength;
-        }
-      if ((NSInteger)i == folderTargetIndex)
-        {
-          folderGapRect = icnrect;
-          icnrect.origin.x += icnrect.size.width;
-        }
-
-      [icon setFrame: icnrect];
-      icnrect.origin.x += icnrect.size.width;
-
-      if ((targetIndex != -1) && (targetIndex == i))
-        icnrect.origin.x += icnrect.size.width;
+      for (i = 0; i < [icons count]; i++)
+        [[icons objectAtIndex: i] setIconSize: iconSize];
     }
-  }
-  else
-   {
-    icnrect.origin.y = rect.size.height / sf;  // use unscaled height for layout
 
-    for (i = 0; i < [icons count]; i++)
-    {
-      DockIcon *icon = [icons objectAtIndex: i];
+  [self layoutIcons];
 
-      if (oldIcnSize != iconSize)
-        [icon setIconSize: iconSize];
-
-      if (divided && (i == docs))
-        {
-          icnrect.origin.y -= dividerLength;
-          dividerRect = NSMakeRect(0, icnrect.origin.y,
-                                   icnrect.size.width, dividerLength);
-        }
-      if ((NSInteger)i == folderTargetIndex)
-        {
-          icnrect.origin.y -= icnrect.size.height;
-          folderGapRect = icnrect;
-        }
-
-      icnrect.origin.y -= icnrect.size.height;
-      [icon setFrame: icnrect];
-
-      if ((targetIndex != -1) && (targetIndex == i))
-        icnrect.origin.y -= icnrect.size.height;
-    }
-  }
-
-  [self setNeedsDisplay: YES];
   if (view && (inOwnDockWindow == NO)) {
     [view setNeedsDisplayInRect: [self frame]];
   }
 
   [self updateIconGeometries];
+}
+
+- (NSRect)barFrame
+{
+  NSRect wframe;
+  CGFloat sf;
+
+  if (([self window] == nil) || NSIsEmptyRect(barRect))
+    return NSZeroRect;
+
+  /* The Dock places its icons in unscaled points and sizes its window in
+   * screen pixels, so the bar is converted the same way. */
+  wframe = [[self window] frame];
+  sf = _dockScaleFactor();
+
+  return NSMakeRect(wframe.origin.x + barRect.origin.x * sf,
+                    wframe.origin.y + barRect.origin.y * sf,
+                    barRect.size.width * sf,
+                    barRect.size.height * sf);
 }
 
 - (NSRect)x11IconRectForDockIcon:(DockIcon *)icon
@@ -1164,6 +1286,9 @@ static inline CGFloat _dockScaleFactor(void)
   [defaults setObject: [NSNumber numberWithInt: style]
                forKey: @"dockstyle"];
   [defaults setBool: singleClickLaunch forKey: @"singleclicklaunch"];
+  [defaults setBool: magnifyEnabled forKey: @"dockmagnification"];
+  [defaults setObject: [NSNumber numberWithFloat: magnifyIconSize]
+               forKey: @"dockmagnifiedsize"];
   [defaults setObject: [self dockedApplicationEntries] forKey: @"applications"];
   [defaults setObject: [self dockedFolderPaths] forKey: @"folders"];
   [defaults setObject: [self dockedFolderStacks] forKey: @"folderstacks"];
@@ -1192,10 +1317,245 @@ static inline CGFloat _dockScaleFactor(void)
   }
 }
 
+#pragma mark - magnification
+
+- (void)setMagnificationEnabled:(BOOL)value
+{
+  if (value == magnifyEnabled)
+    return;
+
+  magnifyEnabled = value;
+  magnifyPhase = 0.0;
+  magnifyFraction = 0.0;
+  magnifyArmed = NO;
+  [self tile];
+  [self setMagnificationTracking: ([self window] != nil)];
+}
+
+- (BOOL)isMagnificationEnabled
+{
+  return magnifyEnabled;
+}
+
+- (void)setMagnifiedIconSize:(CGFloat)size
+{
+  if (size == magnifyIconSize)
+    return;
+
+  magnifyIconSize = size;
+  magnifyPhase = 0.0;
+  magnifyFraction = 0.0;
+  magnifyArmed = NO;
+  /* Laying the Dock out again works out how far the new size can go. */
+  [self tile];
+}
+
+- (CGFloat)magnifiedIconSize
+{
+  return magnifyIconSize;
+}
+
+/* How long the Dock can wait before looking at the pointer again. */
+- (NSTimeInterval)magnifyIntervalForDistance:(CGFloat)distance
+                                        near:(CGFloat)near
+{
+  NSTimeInterval wait;
+
+  if (magnifyArmed || (distance < near))
+    return MAGNIFY_FRAME_INTERVAL;
+
+  wait = (distance - near) / MAGNIFY_POINTER_SPEED;
+
+  if (wait < MAGNIFY_FRAME_INTERVAL)
+    return MAGNIFY_FRAME_INTERVAL;
+  if (wait > MAGNIFY_IDLE_INTERVAL)
+    return MAGNIFY_IDLE_INTERVAL;
+
+  return wait;
+}
+
+- (void)setMagnifyInterval:(NSTimeInterval)interval
+{
+  NSRunLoop *loop = [NSRunLoop currentRunLoop];
+
+  /* Putting up a new timer for every small change would cost more than
+   * looking a little too often. */
+  if (magnifyTimer
+      && (fabs(interval - magnifyInterval) < magnifyInterval / 4.0))
+    return;
+
+  [magnifyTimer invalidate];
+  magnifyInterval = interval;
+  magnifyTimer = [NSTimer timerWithTimeInterval: interval
+                                         target: self
+                                       selector: @selector(magnifyTick:)
+                                       userInfo: nil
+                                        repeats: YES];
+  /* Also while a menu or a drag is being tracked: the pointer goes on
+   * moving there, and a Dock left half grown would stay that way. */
+  [loop addTimer: magnifyTimer forMode: NSDefaultRunLoopMode];
+  [loop addTimer: magnifyTimer forMode: NSEventTrackingRunLoopMode];
+}
+
+- (void)setMagnificationTracking:(BOOL)value
+{
+  if (value == NO)
+    {
+      [magnifyTimer invalidate];
+      magnifyTimer = nil;
+      magnifyInterval = 0.0;
+      [self endMagnification];
+      return;
+    }
+
+  if (magnifyEnabled == NO)
+    return;
+
+  magnifyTime = 0.0;
+  [self setMagnifyInterval: MAGNIFY_IDLE_INTERVAL];
+}
+
+- (void)viewDidMoveToWindow
+{
+  [super viewDidMoveToWindow];
+  [self setMagnificationTracking: ([self window] != nil)];
+}
+
+/* Where the pointer is along the Dock: from the left when it is at the
+ * bottom of the screen, from the top when it is at a side.
+ *
+ * Taken from the pointer itself and the window as the Dock has just placed
+ * it: the Dock follows the pointer on a timer, and there is no event whose
+ * coordinates it could use instead. */
+- (CGFloat)axisPositionForPointer:(NSPoint)p
+{
+  NSRect wframe = [[self window] frame];
+  NSRect bounds = [self bounds];
+  CGFloat sf = _dockScaleFactor();
+  CGFloat lead = magnifyArmed ? magnification.spread : 0.0;
+  CGFloat length = (position == DockPositionBottom)
+    ? bounds.size.width : bounds.size.height;
+  CGFloat pos = (position == DockPositionBottom)
+    ? ((p.x - NSMinX(wframe)) / sf)
+    : ((NSMaxY(wframe) - p.y) / sf);
+
+  /* A pointer past the end of the bar would push every tile away from
+   * itself, so that the icons walk off as it comes nearer.  It is taken as
+   * being at the end it is coming for, which keeps that end where it is and
+   * lets the Dock spread the other way. */
+  if (pos < lead)
+    return lead;
+  if (pos > length - lead)
+    return length - lead;
+
+  return pos;
+}
+
+/* How far the pointer is from the bar, which is nothing while it is on it. */
+- (CGFloat)distanceFromBarToPointer:(NSPoint)p
+{
+  NSRect bar = [self barFrame];
+  CGFloat dx = 0.0;
+  CGFloat dy = 0.0;
+
+  if (NSIsEmptyRect(bar))
+    return CGFLOAT_MAX;
+
+  if (p.x < NSMinX(bar))
+    dx = NSMinX(bar) - p.x;
+  else if (p.x > NSMaxX(bar))
+    dx = p.x - NSMaxX(bar);
+
+  if (p.y < NSMinY(bar))
+    dy = NSMinY(bar) - p.y;
+  else if (p.y > NSMaxY(bar))
+    dy = p.y - NSMaxY(bar);
+
+  return sqrt(dx * dx + dy * dy) / _dockScaleFactor();
+}
+
+/* Follows the pointer: the nearer it comes, the more of the effect is
+ * shown, and the effect eases towards that rather than jumping to it.  The
+ * room for it is taken while there is still nothing to see, and given back
+ * once there is nothing left. */
+- (void)magnifyTick:(NSTimer *)timer
+{
+  NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+  CGFloat elapsed = (magnifyTime > 0.0) ? (now - magnifyTime)
+                                        : MAGNIFY_FRAME_INTERVAL;
+  CGFloat distance, rise, target, phase, fraction, pos;
+  BOOL dragging = (isDragTarget || (dndSourceIcon != nil));
+  /* Asked for once a frame: every one of these is a question to the X
+   * server, and the Dock is the only one that has to keep asking. */
+  NSPoint pointer;
+
+  magnifyTime = now;
+
+  if ((magnifyEnabled == NO) || ([self window] == nil)
+      || ([[self window] isVisible] == NO) || (magnification.spread <= 0.0))
+    return;
+
+  pointer = [NSEvent mouseLocation];
+  distance = [self distanceFromBarToPointer: pointer];
+  /* How far the tiles stand out beyond the bar at the moment: the pointer
+   * is on the Dock while it is on one of them. */
+  rise = magnifyFraction * (magnification.magnifiedSize - baseCell);
+  target = dragging ? 0.0 : DockMagnificationTarget(distance, rise);
+  phase = DockMagnificationPhase(magnifyPhase, target, elapsed,
+                                 MAGNIFY_DURATION);
+  fraction = DockMagnificationSmooth(phase);
+
+  /* The room for the effect is taken while there is still nothing to see,
+   * and given back a little after the pointer has gone, so that a pointer
+   * resting on the edge of the Dock does not do both every frame. */
+  if ((phase > 0.0) && (magnifyArmed == NO))
+    {
+      magnifyArmed = YES;
+      [self tile];
+    }
+  else if ((phase == 0.0) && magnifyArmed && (distance > baseCell / 2))
+    {
+      magnifyPhase = 0.0;
+      magnifyFraction = 0.0;
+      magnifyArmed = NO;
+      [self tile];
+    }
+
+  magnifyPhase = phase;
+
+  if (magnifyArmed)
+    {
+      pos = [self axisPositionForPointer: pointer];
+
+      if ((fraction != magnifyFraction) || (pos != magnifyPos))
+        {
+          magnifyFraction = fraction;
+          magnifyPos = pos;
+          [self layoutIcons];
+        }
+    }
+
+  [self setMagnifyInterval: [self magnifyIntervalForDistance: distance
+                                                        near: rise + baseCell]];
+}
+
+- (void)endMagnification
+{
+  if ((magnifyArmed == NO) && (magnifyFraction == 0.0))
+    return;
+
+  magnifyPhase = 0.0;
+  magnifyFraction = 0.0;
+  magnifyArmed = NO;
+  [self tile];
+}
+
 - (BOOL)isOpaque
 {
-  /* Modern style draws a semi-transparent gray, so the view is not opaque. */
-  return (style != DockStyleModern);
+  /* Modern style draws a semi-transparent gray, so the view is not opaque;
+   * neither is a Dock holding room for the magnification, which only fills
+   * its bar. */
+  return (style != DockStyleModern) && (magnifyArmed == NO);
 }
 
 - (void)drawRect:(NSRect)rect
@@ -1203,8 +1563,10 @@ static inline CGFloat _dockScaleFactor(void)
   // NSLog(@"DEBUG: Dock drawRect called, rect: %@, superview: %@", NSStringFromRect(rect), [self superview]);
   [super drawRect: rect];
 
+  /* Only the bar itself is filled: while the pointer magnifies the Dock,
+   * the view also covers the room the enlarged icons grow into. */
   [backColor set];
-  NSRectFill(rect);
+  NSRectFill(NSIntersectionRect(rect, barRect));
 
   if (NSIsEmptyRect(dividerRect) == NO)
     {
@@ -1728,6 +2090,10 @@ static inline CGFloat _dockScaleFactor(void)
 
 - (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
 {
+  /* A drag needs the Dock as it lies: the gap for the dragged item is
+   * opened in the plain layout, not around the pointer. */
+  [self endMagnification];
+
   NSPoint location = [sender draggingLocation];
   DockIcon *icon;
   NSUInteger i;

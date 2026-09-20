@@ -125,6 +125,7 @@
     windowCheckResult = NO;
     isDragMountpointOnly = NO;
     ejectIcon = nil;
+    magnifiedSize = 0.0;
 
     /* Initialize bounce animation variables */
     isBouncing = NO;
@@ -1236,6 +1237,72 @@
   [(Dock *)container setDndSourceIcon: nil];
 }
 
+- (void)setMagnifiedIconSize:(CGFloat)size frame:(NSRect)frame
+{
+  /* -setFrame: lays the icon out, so the size is in place before it. */
+  magnifiedSize = size;
+  [self setFrame: frame];
+}
+
+- (CGFloat)magnifiedIconSize
+{
+  return magnifiedSize;
+}
+
+/* The Dock gives a magnified icon a tile as large as the icon grew, so the
+ * icon fills it instead of sitting at its own size in the middle of it. */
+- (void)tile
+{
+  NSRect bounds = [self bounds];
+
+  if (magnifiedSize <= 0.0)
+    {
+      [super tile];
+      return;
+    }
+
+  hlightRect = bounds;
+  icnBounds = NSMakeRect((bounds.size.width - magnifiedSize) / 2,
+                         (bounds.size.height - magnifiedSize) / 2,
+                         magnifiedSize, magnifiedSize);
+  icnPoint = icnBounds.origin;
+
+  /* No tracking rectangle while the pointer magnifies the Dock: it would be
+   * taken down and put up again for every frame, and the Dock follows the
+   * pointer itself anyway. */
+  if (trectTag != -1)
+    {
+      [self removeTrackingRect: trectTag];
+      trectTag = -1;
+    }
+
+  [self setNeedsDisplay: YES];
+}
+
+/* An image of the icon draws at its own size at rest, and fills the tile
+ * while the pointer magnifies the Dock. */
+- (void)drawImage:(NSImage *)image
+           inRect:(NSRect)rect
+         fraction:(CGFloat)fraction
+{
+  if (image == nil)
+    return;
+
+  if (magnifiedSize > 0.0)
+    {
+      [image drawInRect: rect
+               fromRect: NSZeroRect
+              operation: NSCompositeSourceOver
+               fraction: fraction];
+      return;
+    }
+
+  if (fraction < 1.0)
+    [image dissolveToPoint: rect.origin fraction: fraction];
+  else
+    [image compositeToPoint: rect.origin operation: NSCompositeSourceOver];
+}
+
 - (void)drawRect:(NSRect)rect
 {   
 #define DRAWDOT(c1, c2, p) \
@@ -1265,12 +1332,15 @@ x += 6; \
     NSRectFill(rect);
 
     if (highlightImage && useHligtImage) {
-      [highlightImage dissolveToPoint: NSZeroPoint fraction: 0.2];
+      [self drawImage: highlightImage
+               inRect: NSMakeRect(0, 0, hlightRect.size.width,
+                                  hlightRect.size.height)
+             fraction: 0.2];
     }
   }
   
   if (launching) {		
-	  [icon dissolveToPoint: icnPoint fraction: dissFract];
+	  [self drawImage: icon inRect: icnBounds fraction: dissFract];
 	  return;
   }
   
@@ -1303,31 +1373,28 @@ x += 6; \
         [[NSBezierPath bezierPathWithOvalInRect:glowRect] fill];
       }
 
+    NSRect iconRect = NSMakeRect(drawPoint.x, drawPoint.y,
+                                 icnBounds.size.width, icnBounds.size.height);
+
     if (isTrashIcon == NO) {
-      [icon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
+      [self drawImage: icon inRect: iconRect fraction: 1.0];
     } else {
       /* When dragging mountpoints only, show Eject icon; otherwise show Trash icon */
       if (isDragMountpointOnly && ejectIcon) {
-        [ejectIcon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
+        [self drawImage: ejectIcon inRect: iconRect fraction: 1.0];
       } else if (trashFull) {
-        [trashFullIcon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
+        [self drawImage: trashFullIcon inRect: iconRect fraction: 1.0];
       } else {
-        [icon compositeToPoint: drawPoint operation: NSCompositeSourceOver];
+        [self drawImage: icon inRect: iconRect fraction: 1.0];
       }
     }
 
-  if (isWsIcon == YES) 
-  {
-      NSPoint p;
-      p.x = (rect.size.width / 2) - 1;
-      p.y = 2;
-      DRAWDOT([NSColor blackColor], [NSColor whiteColor], p);
-  }
-
-    if (launched && [self hasVisibleWindows])
+  /* The dot goes under the middle of the icon: not of the part of the view
+   * that is being redrawn, and not of a tile the pointer has magnified. */
+  if (isWsIcon || (launched && [self hasVisibleWindows]))
     {
       NSPoint p;
-      p.x = (rect.size.width / 2) - 1;
+      p.x = NSMidX(icnBounds) - 1;
       p.y = 2;
       DRAWDOT([NSColor blackColor], [NSColor whiteColor], p);
     }
@@ -1339,9 +1406,8 @@ x += 6; \
       {
         CGFloat dotSize = 10.0;
         CGFloat dotMargin = 2.0;
-        NSSize iconSz = [icon size];
         NSRect dotRect = NSMakeRect(
-          drawPoint.x + iconSz.width - dotSize - dotMargin,
+          drawPoint.x + icnBounds.size.width - dotSize - dotMargin,
           drawPoint.y + dotMargin,
           dotSize, dotSize);
         FSNDrawLabelDot(dotRect, tagColor);

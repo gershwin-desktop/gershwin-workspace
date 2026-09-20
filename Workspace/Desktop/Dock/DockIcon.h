@@ -73,6 +73,10 @@
   pid_t appPID;
   BOOL isX11OnlyApp;
 
+  /* While the pointer magnifies the Dock, the size the icon is drawn at;
+   * 0 while the Dock is at rest and the icon draws at its own size. */
+  CGFloat magnifiedSize;
+
   /* Cached window visibility check */
   NSTimeInterval lastWindowCheck;
   BOOL windowCheckResult;
@@ -132,6 +136,14 @@
 
 /* The highlight that says a drop here would be taken. */
 - (void)showDropHighlight:(BOOL)lit;
+
+/* How large the icon draws, which the Dock works out from how near the
+ * pointer is, and the tile it has been given for it; a size of 0 puts the
+ * icon back to its own size.  Both at once, because the Dock changes them
+ * together for every frame of the magnification. */
+- (void)setMagnifiedIconSize:(CGFloat)size frame:(NSRect)frame;
+
+- (CGFloat)magnifiedIconSize;
 
 - (void)setDocked:(BOOL)value;
 

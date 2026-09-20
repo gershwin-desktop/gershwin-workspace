@@ -123,10 +123,12 @@
    */
   [self updateX11DockProperties];
   [self updateX11Strut];
+  [dockView setMagnificationTracking: YES];
 }
 
 - (void)hideDock
 {
+  [dockView setMagnificationTracking: NO];
   [self orderOut: self];
 }
 
@@ -208,7 +210,13 @@
   if (dockXWindow == (Window)0)
     return;
 
-  NSRect windowFrame = [self frame];
+  /* The bar is what the Dock takes up; the room its magnified icons reach
+   * into is not reserved, or the windows below would move out of the way of
+   * an effect that is gone as soon as the pointer is. */
+  NSRect windowFrame = [dockView barFrame];
+
+  if (NSIsEmptyRect(windowFrame))
+    windowFrame = [self frame];
 
   /* EWMH struts are in root-window coordinates with Y measured from the top,
    * but NSWindow frames are bottom-left origin.  Convert the vertical span
