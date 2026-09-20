@@ -512,8 +512,8 @@
 
 /* Worker thread: run the X window scans and return the desired new state.
  * Only immutable inputs are read (appName plus the captured snapshot), and the
- * GWX11WindowManager opens its own X connection per call, so this is safe off
- * the main thread. */
+ * GWX11WindowManager gives every thread its own X connection, so this is safe
+ * off the main thread. */
 - (void)refreshLaunchedStateWorker:(NSDictionary *)inputs
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -603,6 +603,7 @@
     [NSNumber numberWithBool: hasWindows], @"haswindows", nil];
   [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
                          withObject: result waitUntilDone: NO];
+  [wm closeThreadDisplay];
   [pool drain];
 }
 

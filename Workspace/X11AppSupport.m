@@ -160,15 +160,59 @@ static GWX11WindowManager *sharedWindowManager = nil;
 
 #pragma mark Private Helpers
 
+/* Key under which a thread keeps the connection it works with. */
+static NSString * const GWX11ThreadDisplayKey = @"GWX11WindowManagerDisplay";
+
+/* A connection costs a socket, the authentication handshake and a round trip
+ * to open, and a single window scan asks several questions in a row, so the
+ * connection is kept for as long as the thread that opened it runs. Each
+ * thread gets its own, which is what makes the scans off the main thread safe
+ * without any locking. */
 - (Display *)openDisplay
 {
+    NSMutableDictionary *threadInfo = [[NSThread currentThread] threadDictionary];
+    NSValue *cached = [threadInfo objectForKey:GWX11ThreadDisplayKey];
+
+    if (cached != nil) {
+        return (Display *)[cached pointerValue];
+    }
+
     ensureX11ErrorHandler();
     Display *dpy = XOpenDisplay(NULL);
-    if (dpy) {
-        /* Sync to catch any pending errors before returning */
-        XSync(dpy, False);
+    if (dpy == NULL) {
+        return NULL;
     }
+
+    /* Sync to catch any pending errors before returning */
+    XSync(dpy, False);
+    [threadInfo setObject:[NSValue valueWithPointer:dpy]
+                   forKey:GWX11ThreadDisplayKey];
     return dpy;
+}
+
+/* Counterpart of openDisplay. The connection stays open, but whatever the
+ * caller queued still has to reach the server, which closing the connection
+ * used to take care of. */
+- (void)releaseDisplay:(Display *)dpy
+{
+    if (dpy != NULL) {
+        XFlush(dpy);
+    }
+}
+
+/* A worker thread must drop its connection before it ends, or the server
+ * keeps a client for every scan that ever ran. */
+- (void)closeThreadDisplay
+{
+    NSMutableDictionary *threadInfo = [[NSThread currentThread] threadDictionary];
+    NSValue *cached = [threadInfo objectForKey:GWX11ThreadDisplayKey];
+
+    if (cached == nil) {
+        return;
+    }
+
+    XCloseDisplay((Display *)[cached pointerValue]);
+    [threadInfo removeObjectForKey:GWX11ThreadDisplayKey];
 }
 
 - (Window *)getClientList:(Display *)dpy count:(unsigned long *)count
@@ -394,7 +438,7 @@ static GWX11WindowManager *sharedWindowManager = nil;
         }
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     
     return windows;
@@ -427,7 +471,7 @@ static GWX11WindowManager *sharedWindowManager = nil;
         }
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     
     return windows;
@@ -541,7 +585,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         }
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     
     return windows;
@@ -606,7 +650,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         success = YES;
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     
     return success;
@@ -657,7 +701,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         XFlush(dpy);
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     
     return success;
@@ -739,7 +783,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         XFlush(dpy);
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
 
     return success;
@@ -768,7 +812,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         XFlush(dpy);
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
 
     return success;
@@ -789,7 +833,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         success = YES;
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     
     return success;
@@ -860,7 +904,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         XFlush(dpy);
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
 
     return success;
@@ -912,7 +956,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         XFlush(dpy);
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
 
     return success;
@@ -933,7 +977,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         iconified = [self checkWindowIconified:dpy window:(Window)windowID];
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     
     return iconified;
@@ -955,7 +999,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         }
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     
     return visible;
@@ -992,7 +1036,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         }
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
 
     return hasVisible;
@@ -1068,7 +1112,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         }
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     
     return success;
@@ -1146,7 +1190,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         success = YES;
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
 
     return success;
@@ -1187,7 +1231,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         }
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
 
     return supported;
@@ -1226,7 +1270,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         }
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     return ok;
 }
@@ -1273,7 +1317,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         if (data) XFree(data);
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     return ok;
 }
@@ -1297,7 +1341,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         }
     }
     @finally {
-        XCloseDisplay(dpy);
+        [self releaseDisplay:dpy];
     }
     if (!mapped) return NO;
     /* Positive top extents mean the WM has framed the window; frameExtents
@@ -1319,16 +1363,45 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     NSString *windowSearchString;
     pid_t pid;
     BOOL hasWindowAppeared;
+    NSUInteger windowScanCount;
+    NSTimeInterval nextWindowScan;
 }
 @property (nonatomic, copy) NSString *appName;
 @property (nonatomic, copy) NSString *appPath;
 @property (nonatomic, copy) NSString *windowSearchString;
 @property (nonatomic, assign) pid_t pid;
 @property (nonatomic, assign) BOOL hasWindowAppeared;
+/* How often the windows of this app have been looked for, and when to look
+ * again; see -shouldScanWindowsAt:. */
+@property (nonatomic, assign) NSUInteger windowScanCount;
+@property (nonatomic, assign) NSTimeInterval nextWindowScan;
 @end
 
 @implementation GWX11AppInfo
 @synthesize appName, appPath, windowSearchString, pid, hasWindowAppeared;
+@synthesize windowScanCount, nextWindowScan;
+
+/* Looking for the windows of an app costs a round trip to the X server per
+ * window, and it only serves to notice the first window of an app that has
+ * just been started. An app that shows one does so within seconds, so the
+ * first attempts come quickly and then ever more slowly, down to once every
+ * ten seconds for an app whose windows never turn up at all (a program
+ * without a window, or one whose windows carry nothing to recognise them
+ * by). Nothing is given up: the app is still noticed, just later. */
+- (BOOL)shouldScanWindowsAt:(NSTimeInterval)now
+{
+    if (hasWindowAppeared) {
+        return NO;
+    }
+    if (nextWindowScan > 0 && now < nextWindowScan) {
+        return NO;
+    }
+
+    NSTimeInterval delay = 0.5 * (NSTimeInterval)(1 << MIN(windowScanCount, (NSUInteger)5));
+    nextWindowScan = now + MIN(delay, (NSTimeInterval)10.0);
+    windowScanCount++;
+    return YES;
+}
 
 - (void)dealloc
 {
@@ -1413,15 +1486,21 @@ static GWX11AppManager *sharedX11AppManager = nil;
      * main thread they can wedge the app under window churn (X11
      * self-deadlock, the same class of bug as the DockIcon refresh). */
     NSMutableArray *snapshot = [NSMutableArray array];
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
     for (NSString *appName in [x11Apps allKeys]) {
         GWX11AppInfo *info = [x11Apps objectForKey:appName];
         if (info == nil) continue;
+        /* Decided here, on the main thread, so the worker only reads the
+         * snapshot: the liveness probe runs every time, the window scan as
+         * often as the app's own backoff allows. */
+        BOOL scanWindows = [info shouldScanWindowsAt: now];
         [snapshot addObject: [NSDictionary dictionaryWithObjectsAndKeys:
             info.appName ?: @"", @"name",
             info.appPath ?: @"", @"path",
             info.windowSearchString ?: @"", @"search",
             [NSNumber numberWithInt: (int)info.pid], @"pid",
-            [NSNumber numberWithBool: info.hasWindowAppeared], @"appeared", nil]];
+            [NSNumber numberWithBool: info.hasWindowAppeared], @"appeared",
+            [NSNumber numberWithBool: scanWindows], @"scanwindows", nil]];
     }
     if ([snapshot count] == 0) {
         [self stopMonitorTimer];
@@ -1434,8 +1513,8 @@ static GWX11AppManager *sharedX11AppManager = nil;
 
 /* Worker thread: check process liveness and run the X window scans for a
  * snapshot of the registered apps.  Only immutable snapshot data is read, and
- * GWX11WindowManager opens its own X connection per call, so this is safe off
- * the main thread.  Results are applied back on the main thread. */
+ * GWX11WindowManager gives every thread its own X connection, so this is safe
+ * off the main thread.  Results are applied back on the main thread. */
 - (void)monitorScanWorker:(NSArray *)appSnapshots
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -1457,7 +1536,7 @@ static GWX11AppManager *sharedX11AppManager = nil;
         }
 
         /* Check if windows have appeared for this app. */
-        if (!alreadyAppeared) {
+        if (!alreadyAppeared && [[snap objectForKey: @"scanwindows"] boolValue]) {
             NSArray *windows = [wm windowsForPID:pid];
             if ([windows count] == 0) {
                 NSString *search = [snap objectForKey: @"search"];
@@ -1476,6 +1555,7 @@ static GWX11AppManager *sharedX11AppManager = nil;
         appeared, @"appeared", terminated, @"terminated", nil];
     [self performSelectorOnMainThread: @selector(applyMonitorResults:)
                            withObject: results waitUntilDone: NO];
+    [wm closeThreadDisplay];
     [pool drain];
 }
 
@@ -1509,6 +1589,10 @@ static GWX11AppManager *sharedX11AppManager = nil;
     windowSearchString:(NSString *)searchString
 {
     if (!appName || !appPath || pid <= 0) return;
+    /* Workspace turns up in its own launch notifications. Watching for our
+     * own windows would keep the scan running for the life of the session
+     * and tell us nothing we do not already know. */
+    if (pid == getpid()) return;
     
     GWX11AppInfo *info = [[GWX11AppInfo alloc] init];
     info.appName = appName;

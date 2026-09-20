@@ -61,6 +61,13 @@
  */
 + (instancetype)sharedManager;
 
+/**
+ * Closes the X11 connection this thread has been using, if any.
+ * A thread that runs window queries and then ends must call this, or the
+ * X server keeps one client per thread that ever ran.
+ */
+- (void)closeThreadDisplay;
+
 #pragma mark Window Discovery
 
 /**
