@@ -550,6 +550,7 @@
             [NSNumber numberWithBool: NO], @"haswindows", nil];
           [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
                                  withObject: result waitUntilDone: NO];
+          [wm closeThreadDisplay];
           [pool drain];
           return;
         }
@@ -574,6 +575,7 @@
             [NSNumber numberWithBool: NO], @"haswindows", nil];
           [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
                                  withObject: result waitUntilDone: NO];
+          [wm closeThreadDisplay];
           [pool drain];
           return;
         }
