@@ -74,7 +74,9 @@ typedef enum DockStyle
    * away to make room.  The view then covers the whole area the enlarged
    * icons reach into, and barRect is the bar itself within it. */
   BOOL magnifyEnabled;
-  CGFloat magnifyIconSize;
+  /* How large the icon under the pointer is drawn: the "docklargesize"
+   * default, in the same units as the icons' own size. */
+  CGFloat largeIconSize;
   /* The effect at its full strength, as the room beside the bar allows. */
   DockMagnification magnification;
   /* How far along the way in the effect is, how much of it that puts on
@@ -197,9 +199,9 @@ typedef enum DockStyle
 - (BOOL)isMagnificationEnabled;
 
 /* The size an icon is drawn at while the pointer is on it. */
-- (void)setMagnifiedIconSize:(CGFloat)size;
+- (void)setLargeIconSize:(CGFloat)size;
 
-- (CGFloat)magnifiedIconSize;
+- (CGFloat)largeIconSize;
 
 /* Puts the Dock back together at once, with the pointer wherever it is. */
 - (void)endMagnification;

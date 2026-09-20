@@ -49,9 +49,11 @@
 #define ICN_INCR 4
 
 /* The magnification of the expired patent US7434177: how large the icon
- * under the pointer is drawn, and how far to either side of the pointer the
- * effect reaches, counted in tiles. */
-#define MAGNIFY_ICN_SIZE 96.0
+ * under the pointer is drawn by default, how large it may be asked to be,
+ * and how far to either side of the pointer the effect reaches, counted in
+ * tiles. */
+#define LARGE_ICN_SIZE 96.0
+#define MAX_LARGE_ICN_SIZE 128.0
 #define MAGNIFY_CELLS 3.0
 
 /* How long the effect takes to come up once the pointer is on the Dock,
@@ -95,6 +97,9 @@ static inline CGFloat _dockScaleFactor(void)
 @interface Dock (Magnification)
 
 - (void)layoutIcons;
+- (BOOL)magnificationEnabledDefault;
+- (CGFloat)largeIconSizeDefault;
+- (void)magnificationDefaultsDidChange:(NSNotification *)notif;
 - (void)magnifyTick:(NSTimer *)timer;
 - (void)setMagnifyInterval:(NSTimeInterval)interval;
 - (NSTimeInterval)magnifyIntervalForDistance:(CGFloat)distance
@@ -152,11 +157,15 @@ static inline CGFloat _dockScaleFactor(void)
       iconSize = MAX_ICN_SIZE;
       baseCell = ceil(iconSize / 3 * 4);
 
-      defEntry = [defaults objectForKey: @"dockmagnification"];
-      magnifyEnabled = (defEntry == nil) ? YES : [defEntry boolValue];
-      defEntry = [defaults objectForKey: @"dockmagnifiedsize"];
-      magnifyIconSize = (defEntry == nil)
-        ? MAGNIFY_ICN_SIZE : [defEntry floatValue];
+      magnifyEnabled = [self magnificationEnabledDefault];
+      largeIconSize = [self largeIconSizeDefault];
+      /* Read again whenever the defaults change, so that writing one takes
+       * effect on a Dock that is already running. */
+      [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector(magnificationDefaultsDidChange:)
+               name: NSUserDefaultsDidChangeNotification
+             object: nil];
       magnification = DockMagnificationMake(baseCell, baseCell,
                                             MAGNIFY_CELLS * baseCell);
       magnifyPhase = 0.0;
@@ -1020,6 +1029,7 @@ static inline CGFloat _dockScaleFactor(void)
                                 + ((folderTargetIndex != -1) ? 1 : 0);
   CGFloat sf = _dockScaleFactor();
   CGFloat cell, scaledCell, barLength, viewLength, viewThickness, screenLength;
+  CGFloat large;
   BOOL inOwnDockWindow;
 
   iconSize = MAX_ICN_SIZE;
@@ -1051,10 +1061,13 @@ static inline CGFloat _dockScaleFactor(void)
    * as far apart as the screen beside the bar allows. */
   screenLength = ((position == DockPositionBottom)
                   ? scrrect.size.width : scrrect.size.height) / sf;
+  /* An icon larger than the tile it sits in is what makes the effect; below
+   * that there is nothing to show, and the largest is kept within reach of
+   * the sizes the icons are drawn at. */
+  large = MIN(largeIconSize, MAX_LARGE_ICN_SIZE);
   magnification = DockMagnificationMake(cell,
                                         magnifyEnabled
-                                          ? (cell * magnifyIconSize / iconSize)
-                                          : cell,
+                                          ? (cell * large / iconSize) : cell,
                                         MAGNIFY_CELLS * cell);
   /* The bar keeps the same distance from the ends of the screen that it is
    * laid out with, magnified or not. */
@@ -1286,9 +1299,10 @@ static inline CGFloat _dockScaleFactor(void)
   [defaults setObject: [NSNumber numberWithInt: style]
                forKey: @"dockstyle"];
   [defaults setBool: singleClickLaunch forKey: @"singleclicklaunch"];
-  [defaults setBool: magnifyEnabled forKey: @"dockmagnification"];
-  [defaults setObject: [NSNumber numberWithFloat: magnifyIconSize]
-               forKey: @"dockmagnifiedsize"];
+  /* The magnification settings are not written back: the Dock never changes
+   * them itself, and saving them over what is on disk would undo a
+   * "defaults write" the moment the Dock is next shut down. */
+  [defaults removeObjectForKey: @"dockmagnifiedsize"];
   [defaults setObject: [self dockedApplicationEntries] forKey: @"applications"];
   [defaults setObject: [self dockedFolderPaths] forKey: @"folders"];
   [defaults setObject: [self dockedFolderStacks] forKey: @"folderstacks"];
@@ -1319,6 +1333,28 @@ static inline CGFloat _dockScaleFactor(void)
 
 #pragma mark - magnification
 
+- (BOOL)magnificationEnabledDefault
+{
+  id defEntry = [[NSUserDefaults standardUserDefaults]
+                  objectForKey: @"dockmagnification"];
+
+  return (defEntry == nil) ? YES : [defEntry boolValue];
+}
+
+- (CGFloat)largeIconSizeDefault
+{
+  id defEntry = [[NSUserDefaults standardUserDefaults]
+                  objectForKey: @"docklargesize"];
+
+  return (defEntry == nil) ? LARGE_ICN_SIZE : [defEntry floatValue];
+}
+
+- (void)magnificationDefaultsDidChange:(NSNotification *)notif
+{
+  [self setMagnificationEnabled: [self magnificationEnabledDefault]];
+  [self setLargeIconSize: [self largeIconSizeDefault]];
+}
+
 - (void)setMagnificationEnabled:(BOOL)value
 {
   if (value == magnifyEnabled)
@@ -1337,12 +1373,12 @@ static inline CGFloat _dockScaleFactor(void)
   return magnifyEnabled;
 }
 
-- (void)setMagnifiedIconSize:(CGFloat)size
+- (void)setLargeIconSize:(CGFloat)size
 {
-  if (size == magnifyIconSize)
+  if (size == largeIconSize)
     return;
 
-  magnifyIconSize = size;
+  largeIconSize = size;
   magnifyPhase = 0.0;
   magnifyFraction = 0.0;
   magnifyArmed = NO;
@@ -1350,9 +1386,9 @@ static inline CGFloat _dockScaleFactor(void)
   [self tile];
 }
 
-- (CGFloat)magnifiedIconSize
+- (CGFloat)largeIconSize
 {
-  return magnifyIconSize;
+  return largeIconSize;
 }
 
 /* How long the Dock can wait before looking at the pointer again. */

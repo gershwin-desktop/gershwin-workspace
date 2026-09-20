@@ -135,3 +135,35 @@ Tools/docktest-dbus.sh "App Name" self-test
 - `DockServiceDBus.h` / `DockServiceDBus.m` — D-Bus service implementation (conditional on `HAVE_DBUS`)
 - `DockIcon.h` / `DockIcon.m` — ivars, accessors, `drawRect:` rendering
 - `Dock.m` — both services' startup/shutdown wiring
+
+---
+
+## Magnification
+
+The icons around the pointer grow while it is on the Dock, following the
+magnification of the expired patent US7434177 (`DockMagnification.h` holds the
+geometry). Two settings in `org.gnustep.Workspace` control it:
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `dockmagnification` | bool | `YES` | Whether the icons grow at all. With it off, the Dock does not even watch the pointer. |
+| `docklargesize` | float | `96` | The size the icon under the pointer is drawn at, in the same units as the icons' own size (48 at rest). Values up to 128 are used; anything at or below the resting size means no magnification. |
+
+Both are read again whenever the defaults change, so a running Dock picks a
+new value up within a few seconds; there is no need to restart Workspace.
+Neither is ever written back, so what is on disk stays what was asked for.
+
+```sh
+defaults write org.gnustep.Workspace docklargesize 128
+defaults write org.gnustep.Workspace dockmagnification NO
+```
+
+Plain values: this `defaults` takes a property list, not the type flags
+(`-float`, `-bool`) of other implementations, which it would store as the
+string value `-float`.
+
+How large the icons really grow can be less than asked for: the Dock works out
+how much room is left beside the bar and narrows the effect, and then the
+magnified size itself, rather than letting the bar run past the edge of the
+screen. A Dock filling most of a small screen therefore magnifies less than
+the same Dock on a large one.
