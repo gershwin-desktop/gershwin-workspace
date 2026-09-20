@@ -172,6 +172,11 @@
  * thread and wedge the app), and the resulting state changes are applied back
  * on the main thread. */
 - (void)refreshLaunchedStateAsync;
+/* For the Dock, which refreshes every icon on one worker thread: it reads
+   these on the main thread and gives them to the worker, which hands the
+   connection back itself when the whole round is done. */
+- (NSDictionary *)launchedStateInputs;
+- (void)refreshLaunchedStateWorker:(NSDictionary *)inputs;
 
 - (void)setAppHidden:(BOOL)value;
 

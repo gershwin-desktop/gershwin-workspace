@@ -498,23 +498,47 @@
    * connection while the main thread waits for a reply on a scan connection). */
 }
 
+/* What the worker needs to know, read on the main thread where it is safe
+   to read it. The Dock collects these for every icon before handing the
+   whole lot to one worker thread. */
+- (NSDictionary *)launchedStateInputs
+{
+  return [NSDictionary dictionaryWithObjectsAndKeys:
+    [NSNumber numberWithBool: isX11OnlyApp], @"x11",
+    [NSNumber numberWithInt: (int)appPID], @"pid",
+    [NSNumber numberWithBool: launched], @"launched", nil];
+}
+
 - (void)refreshLaunchedStateAsync
 {
   /* Capture the current state on the main thread, then hand it to a worker
    * thread that does the X scans.  The worker's result is applied back here. */
-  NSDictionary *inputs = [NSDictionary dictionaryWithObjectsAndKeys:
-    [NSNumber numberWithBool: isX11OnlyApp], @"x11",
-    [NSNumber numberWithInt: (int)appPID], @"pid",
-    [NSNumber numberWithBool: launched], @"launched", nil];
-  [NSThread detachNewThreadSelector: @selector(refreshLaunchedStateWorker:)
+  [NSThread detachNewThreadSelector: @selector(refreshLaunchedStateThread:)
                            toTarget: self
-                         withObject: inputs];
+                         withObject: [self launchedStateInputs]];
+}
+
+/* A thread of its own for one icon: scan, then give the connection back.
+   The Dock's timer does not come this way - it refreshes every icon on one
+   thread - but a single icon asked to refresh itself does. */
+- (void)refreshLaunchedStateThread:(NSDictionary *)inputs
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+  [self refreshLaunchedStateWorker: inputs];
+  [[GWX11WindowManager sharedManager] closeThreadDisplay];
+  [pool drain];
 }
 
 /* Worker thread: run the X window scans and return the desired new state.
  * Only immutable inputs are read (appName plus the captured snapshot), and the
  * GWX11WindowManager gives every thread its own X connection, so this is safe
- * off the main thread. */
+ * off the main thread.
+ *
+ * The connection belongs to the thread, not to this method: the caller gives
+ * it back with -closeThreadDisplay when it has finished with every icon it
+ * means to refresh. That is what lets the Dock refresh eighteen icons over
+ * one connection instead of opening and closing eighteen. */
 - (void)refreshLaunchedStateWorker:(NSDictionary *)inputs
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -550,7 +574,6 @@
             [NSNumber numberWithBool: NO], @"haswindows", nil];
           [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
                                  withObject: result waitUntilDone: NO];
-          [wm closeThreadDisplay];
           [pool drain];
           return;
         }
@@ -575,7 +598,6 @@
             [NSNumber numberWithBool: NO], @"haswindows", nil];
           [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
                                  withObject: result waitUntilDone: NO];
-          [wm closeThreadDisplay];
           [pool drain];
           return;
         }
@@ -606,7 +628,6 @@
     [NSNumber numberWithBool: hasWindows], @"haswindows", nil];
   [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
                          withObject: result waitUntilDone: NO];
-  [wm closeThreadDisplay];
   [pool drain];
 }
 

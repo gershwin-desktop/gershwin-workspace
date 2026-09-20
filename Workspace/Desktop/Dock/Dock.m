@@ -2568,19 +2568,51 @@ static inline CGFloat _dockScaleFactor(void)
 
 - (void)_launchRefreshTimerFired:(NSTimer *)timer
 {
+  NSMutableArray *round = [NSMutableArray arrayWithCapacity: [icons count]];
+
+  /* The X window scans (windowsMatchingName:/hasWindowsForPID:) open X
+   * connections and issue synchronous round-trips.  Done on the main
+   * thread they can wedge the app: while the main thread blocks in a
+   * synchronous X request it stops draining the GNUstep event queue, the X
+   * server gets stuck writing the accumulated events, and the reply never
+   * comes (X11 self-deadlock).  So the scans happen on a worker thread and
+   * the state changes are applied back on the main thread.
+   *
+   * One worker for the whole round, not one per icon: a Dock with eighteen
+   * icons was creating eighteen threads and eighteen X connections every
+   * two seconds, about ten threads a second for as long as the session
+   * lasted, each with an eight megabyte stack. */
   for (DockIcon *icon in icons)
     {
       if ([icon isFolderIcon])
         continue;
-      /* The X window scans (windowsMatchingName:/hasWindowsForPID:) open X
-       * connections and issue synchronous round-trips.  Done on the main
-       * thread they can wedge the app: while the main thread blocks in a
-       * synchronous X request it stops draining the GNUstep event queue, the X
-       * server gets stuck writing the accumulated events, and the reply never
-       * comes (X11 self-deadlock).  Run each icon's refresh on a worker
-       * thread; the state changes are applied back on the main thread. */
-      [icon refreshLaunchedStateAsync];
+      [round addObject: [NSArray arrayWithObjects: icon,
+                         [icon launchedStateInputs], nil]];
     }
+
+  if ([round count] == 0)
+    return;
+
+  [NSThread detachNewThreadSelector: @selector(_refreshLaunchedStatesWorker:)
+                           toTarget: self
+                         withObject: round];
+}
+
+/* Worker thread: refresh every icon of the round over one X connection, and
+   give that connection back when the round is done. Each icon applies its
+   own result on the main thread, one at a time, as it always did. */
+- (void)_refreshLaunchedStatesWorker:(NSArray *)round
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+  for (NSArray *pair in round)
+    {
+      [[pair objectAtIndex: 0] refreshLaunchedStateWorker:
+        [pair objectAtIndex: 1]];
+    }
+
+  [[GWX11WindowManager sharedManager] closeThreadDisplay];
+  [pool drain];
 }
 
 @end
