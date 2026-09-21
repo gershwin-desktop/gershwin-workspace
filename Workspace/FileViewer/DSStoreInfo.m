@@ -1467,8 +1467,13 @@
     }
 
     /* --- Per-file entries --- */
-    for (NSString *filename in [info allIconInfo]) {
-        [self writeIconInfo: [[info allIconInfo] objectForKey: filename]
+    /* -allIconInfo hands out a copy, so asking for it per file copied the
+       whole dictionary once per file: a folder of a few thousand icons cost
+       hundreds of megabytes and seconds of work while it was saved. */
+    NSDictionary *iconInfo = [info allIconInfo];
+
+    for (NSString *filename in iconInfo) {
+        [self writeIconInfo: [iconInfo objectForKey: filename]
                     forFile: filename
                     toStore: store];
     }

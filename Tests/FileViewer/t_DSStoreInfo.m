@@ -381,6 +381,47 @@ main(void)
     [fm removeFileAtPath: dir handler: nil];
   }
 
+  /* --- a folder with thousands of icon positions must not cost more than
+     linear time to write: the per-file loop used to ask for a copy of the
+     whole position dictionary once per file --- */
+  {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSTemporaryDirectory()
+                      stringByAppendingPathComponent: @"t_DSStoreInfo_big"];
+    DSStoreInfo *big;
+    NSDate *start;
+    NSTimeInterval spent;
+    NSUInteger i;
+
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+
+    big = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
+    for (i = 0; i < 3000; i++)
+      {
+        NSString *name = [NSString stringWithFormat: @"file%lu.txt",
+                                   (unsigned long)i];
+        DSStoreIconInfo *icon =
+          [[[DSStoreIconInfo alloc] initWithFilename: name] autorelease];
+
+        icon.position = NSMakePoint((i % 100) * 10, (i / 100) * 10);
+        icon.hasPosition = YES;
+        [big setIconInfo: icon forFilename: name];
+      }
+
+    start = [NSDate date];
+    PASS([big saveToPath: [dir stringByAppendingPathComponent: @".DS_Store"]],
+         "a folder of three thousand icon positions writes its .DS_Store");
+    spent = -[start timeIntervalSinceNow];
+    printf("writing 3000 icon positions took %.0f ms\n", spent * 1000.0);
+    /* 227 ms when the dictionary is fetched once, 1.6 s when it was fetched
+       per file - and the memory it took grew with the square of the count. */
+    PASS(spent < 0.8,
+         "writing three thousand icon positions stays linear");
+
+    [fm removeFileAtPath: dir handler: nil];
+  }
+
   [arp release];
   return 0;
 }
