@@ -38,3 +38,33 @@ t_FSNLazyAttributes_TOOL_LIBS += -lgnustep-gui
 # (run loop modes, timer) and needs -lgnustep-gui.
 t_FSNIconLoader_OBJC_FILES += ../../FSNode/FSNIconLoader.m
 t_FSNIconLoader_TOOL_LIBS += -lgnustep-gui
+
+# t_FSNDisplayName links FSNFunctions.m directly; it references NSWorkspace,
+# so gnustep-gui is needed.
+t_FSNDisplayName_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
+                               ../../FSNode/FSNFunctions.m \
+                               ../../FSNode/FSNAlias.m \
+                               ../../FSNode/FSNodeRep.m \
+                               ../../FSNode/FSNodeRepIcons.m \
+                               ../../FSNode/FSNode.m
+t_FSNDisplayName_TOOL_LIBS += -lgnustep-gui
+
+# t_FSNIconsViewTile drives the icons view itself, so it links the built
+# framework rather than single sources.
+t_FSNIconsViewTile_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                -lFSNode -lgnustep-gui
+# Without this the tool runs against the installed framework and would report
+# on /System rather than on what was just built.  It has to be the old DT_RPATH
+# tag: GNUstep.sh puts the installed libraries in LD_LIBRARY_PATH, which the
+# loader searches before a DT_RUNPATH but after a DT_RPATH.
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
+                      -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+
+# t_FSNDirectoryDescription needs the description table from the framework's
+# resources, so it links the built framework like t_FSNIconsViewTile does.
+t_FSNDirectoryDescription_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                       -lFSNode -lgnustep-gui
+
+# t_FSNLayoutWidth puts a real icons view in a real scroll view.
+t_FSNLayoutWidth_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                              -lFSNode -lgnustep-gui

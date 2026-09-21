@@ -338,6 +338,25 @@ static void GWHighlightFrameRect(NSRect aRect)
 
 - (void)tile
 {
+  /* A pass sets this view's frame, so a surrounding scroll view resizes the
+   * clip view and tiles this view again from inside the pass.  That settles
+   * after a few rounds for a normal folder - and the layout depends on those
+   * rounds running - but with autohiding scrollers the two sizes need not
+   * settle at all: a folder of a few thousand entries recursed until the
+   * stack was gone and the process died inside the drawing library.  So let
+   * the nesting happen and only stop it where no real layout goes. */
+  static const NSUInteger maximumDepth = 32;
+
+  if (_tileDepth >= maximumDepth)
+    return;
+
+  _tileDepth++;
+  [self tilePass];
+  _tileDepth--;
+}
+
+- (void)tilePass
+{
   CREATE_AUTORELEASE_POOL (pool);
   NSUInteger count = [icons count];
   NSUInteger i;
@@ -375,7 +394,16 @@ static void GWHighlightFrameRect(NSRect aRect)
      * horizontal scrollbar; keep the natural width for content genuinely
      * outside the visible area (off-screen manual positions). */
     if (maxX - X_MARGIN <= visibleWidth)
-      maxX = visibleWidth;
+      {
+        /* The frame is made integral below, so handing over the visible
+           width unrounded would round UP and leave the view a fraction
+           wider than what holds it.  At a fractional scale factor that
+           fraction is always there: the scroll view then shows scrollers,
+           which makes the visible area smaller, which lays the icons out
+           again - a fight between the two that never settles and locks up
+           the process while it opens a folder. */
+        maxX = floor(visibleWidth);
+      }
 
     CGFloat fh = _contentExtent.height + Y_MARGIN;
     /* Inside a scroll view the document owns its height (>= visible so icons
@@ -394,7 +422,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       {
         CGFloat visibleHeight = [self visibleContentHeightForLayout];
         if (fh < visibleHeight)
-          fh = visibleHeight;
+          fh = floor(visibleHeight);
       }
     SETRECT (self, 0, 0, maxX, fh);
   }
@@ -1525,6 +1553,16 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   if (sv)
     {
       CGFloat cw = [sv contentSize].width;
+
+      /* Lay out as if the vertical scroller were always there.  Its width
+         is part of the content size only while it is shown, and with
+         autohiding scrollers that makes the layout chase itself: a wider
+         content area needs fewer rows, fewer rows fit without scrolling,
+         the scroller goes, the area grows - the scroll view and this view
+         then swap sizes forever and the process stops answering.  A folder
+         of a few thousand entries reached that state every time. */
+      if ([sv autohidesScrollers] && [sv hasVerticalScroller] == NO)
+        cw -= [NSScroller scrollerWidth];
       if (cw > 0) return cw;
     }
 

@@ -90,6 +90,9 @@
   CGFloat _cachedGapX;
   BOOL _gridCached;
 
+  // How deep the current layout pass has re-entered itself
+  NSUInteger _tileDepth;
+
   NSImage *backgroundImage;  // Background image for spatial views
 
   FSNodeRep *fsnodeRep;

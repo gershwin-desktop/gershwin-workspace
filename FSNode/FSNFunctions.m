@@ -107,10 +107,16 @@ static NSSet *packageExtensions(void)
 BOOL
 GSFilenameExtensionIsNumeric(NSString *ext)
 {
+  /* -invertedSet copies the whole Unicode bitmap, some 139 KB, so building it
+     per call costs that much per directory entry while a folder loads. */
+  static NSCharacterSet *nonDigits = nil;
+
   if ([ext length] == 0) {
     return NO;
   }
-  NSCharacterSet *nonDigits = [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+  if (nonDigits == nil) {
+    nonDigits = [[[NSCharacterSet decimalDigitCharacterSet] invertedSet] retain];
+  }
   return ([ext rangeOfCharacterFromSet: nonDigits].location == NSNotFound);
 }
 
@@ -162,9 +168,17 @@ GSDisplayNameForFilename(NSString *filename, GSFilenameExtensionDisplayMode mode
         @"user.js", nil];
     }
     for (NSString *cext in compoundExts) {
-      if ([filename hasSuffix: @"."] == NO && [filename length] > [cext length]
-          && [[filename substringFromIndex: [filename length] - [cext length]] isEqualToString: cext]) {
-        return [filename substringToIndex: [filename length] - [cext length]];
+      /* The dot in front of the extension belongs to it, so cut one more
+         character; otherwise the name is shown with a trailing dot. */
+      NSUInteger keep;
+
+      if ([filename length] <= [cext length] + 1) {
+        continue;
+      }
+      keep = [filename length] - [cext length] - 1;
+      if ([filename characterAtIndex: keep] == '.'
+          && [[filename substringFromIndex: keep + 1] isEqualToString: cext]) {
+        return [filename substringToIndex: keep];
       }
     }
     NSString *ext = [filename pathExtension];
@@ -686,6 +700,12 @@ FSNDrawLabelDot(NSRect dotRect, NSColor *color)
 NSString *GSDirectoryDescriptionForPath(NSString *path);
 static NSString *GSDirectoryDescriptionExactMatch(NSDictionary *cached,
                                                   NSString *path);
+/* The wildcard keys of the table, longest first, so the first one that
+ * matches is also the most specific.  Kept apart from the table because a
+ * folder asks for a description once per entry, and picking the wildcard
+ * keys out of all 467 keys every time was the largest single cost of
+ * opening a folder. */
+static NSArray *directoryDescriptionGlobKeys = nil;
 static BOOL GSDirectoryGlobMatch(NSString *pattern, NSString *string);
 
 NSString *
@@ -738,6 +758,18 @@ GSDirectoryDescriptionForPath(NSString *path)
             }
 
           cached = [expanded copy];
+          directoryDescriptionGlobKeys = [[[expanded allKeys]
+            filteredArrayUsingPredicate:
+              [NSPredicate predicateWithFormat: @"SELF CONTAINS '*'"]]
+            sortedArrayUsingComparator: ^NSComparisonResult(id a, id b) {
+              NSUInteger la = [(NSString *)a length];
+              NSUInteger lb = [(NSString *)b length];
+
+              if (la > lb) return NSOrderedAscending;
+              if (la < lb) return NSOrderedDescending;
+              return NSOrderedSame;
+            }];
+          RETAIN (directoryDescriptionGlobKeys);
         }
     }
 
@@ -772,24 +804,15 @@ static NSString *GSDirectoryDescriptionExactMatch(NSDictionary *cached,
   if (exact)
     return exact;
 
-  NSString *bestKey = nil;
-  NSArray *keys = [cached allKeys];
   NSUInteger i;
-  for (i = 0; i < [keys count]; i++)
+
+  for (i = 0; i < [directoryDescriptionGlobKeys count]; i++)
     {
-      NSString *key = [keys objectAtIndex: i];
-      if ([key rangeOfString: @"*"].location == NSNotFound)
-        continue;
+      NSString *key = [directoryDescriptionGlobKeys objectAtIndex: i];
 
       if (GSDirectoryGlobMatch(key, path))
-        {
-          if (bestKey == nil || [key length] > [bestKey length])
-            bestKey = key;
-        }
+        return [cached objectForKey: key];
     }
-
-  if (bestKey)
-    return [cached objectForKey: bestKey];
 
   return nil;
 }
