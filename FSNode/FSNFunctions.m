@@ -25,6 +25,9 @@
 
 #include <math.h>
 #include <sys/stat.h>
+#ifdef __GLIBC__
+#include <malloc.h>
+#endif
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -925,4 +928,16 @@ NSImage *FSNShapeableImage(NSImage *picture, CGFloat scale)
   [image addRepresentation: bitmap];
 
   return image;
+}
+
+void FSNReleaseFreedHeapMemory(void)
+{
+#ifdef __GLIBC__
+  /* glibc gives memory back only from the top of the heap.  After a burst
+     of short-lived allocations the freed pages below a surviving object
+     stay resident for the life of the process (about 25 MB in Workspace
+     after launch).  The allocators of the BSDs return such pages on their
+     own, so there is nothing to do there. */
+  malloc_trim(0);
+#endif
 }

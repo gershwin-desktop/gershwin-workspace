@@ -82,18 +82,9 @@ static NSString *nibName = @"DesktopPref";
 	    ASSIGN (imagePath, impath);
 	  }
 
-	  if (imagePath)
-	    {
-	      CREATE_AUTORELEASE_POOL (pool);
-	      NSImage *image = [[NSImage alloc] initWithContentsOfFile: imagePath];
-
-	      if (image)
-		{
-		  [imageView setImage: image];
-		  RELEASE (image);
-		}
-	      RELEASE (pool);
-	    }
+	  /* The preview is decoded in -prefView, when the pane is first shown:
+	     the preferences are built at launch and the wallpaper decoded here
+	     would be a second full-size copy held by every session. */
 
 	  [imagePosMatrix selectCellAtRow: [[manager desktopView] backImageStyle] column: 0];
 
@@ -153,6 +144,18 @@ static NSString *nibName = @"DesktopPref";
 
 - (NSView *)prefView
 {
+  if (imagePath != nil && [imageView image] == nil)
+    {
+      CREATE_AUTORELEASE_POOL (pool);
+      NSImage *image = [[NSImage alloc] initWithContentsOfFile: imagePath];
+
+      if (image)
+	{
+	  [imageView setImage: image];
+	  RELEASE (image);
+	}
+      RELEASE (pool);
+    }
   return prefbox;
 }
 

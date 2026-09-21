@@ -2402,23 +2402,37 @@
    * directory watch, not by any subdirectory watch. */
   [self addRepoWatch: root repoRoot: root];
 
+  /* A pool per entry: a working tree can hold hundreds of thousands of
+     entries, and the strings and attribute dictionaries of every one of
+     them would otherwise stay alive until the walk ends (40 MB for a Dock
+     folder inside a big repository), leaving the heap that large for good. */
   NSDirectoryEnumerator *en = [fm enumeratorAtPath: root];
-  NSString *rel;
-  while ((rel = [en nextObject]) != nil)
+  BOOL more = YES;
+  while (more)
     {
-      NSArray *comps = [rel pathComponents];
-      if ([comps containsObject: @".git"])
+      @autoreleasepool
         {
-          [en skipDescendants];
-          continue;
-        }
-      NSString *abs = [root stringByAppendingPathComponent: rel];
-      NSDictionary *attrs = [en fileAttributes];
-      if ([[attrs fileType] isEqual: NSFileTypeDirectory])
-        {
-          [self addRepoWatch: abs repoRoot: root];
+          NSString *rel = [en nextObject];
+
+          if (rel == nil)
+            {
+              more = NO;
+            }
+          else if ([[rel pathComponents] containsObject: @".git"])
+            {
+              [en skipDescendants];
+            }
+          else if ([[[en fileAttributes] fileType]
+                     isEqual: NSFileTypeDirectory])
+            {
+              [self addRepoWatch: [root stringByAppendingPathComponent: rel]
+                        repoRoot: root];
+            }
         }
     }
+  /* Even freed per entry, the walk leaves a heap as big as its busiest
+     moment behind; give those pages back. */
+  FSNReleaseFreedHeapMemory();
 }
 
 - (void)removeWatchersForRepoRoot:(NSString *)root

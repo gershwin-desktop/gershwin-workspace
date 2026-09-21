@@ -1124,6 +1124,18 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   }
 #endif
 
+  /* Launch builds and throws away a lot (desktop, Dock, preferences, the
+     git walks of Dock folders).  Its autoreleased remains are freed only
+     once this method has returned, so the heap is trimmed on the next pass
+     of the run loop. */
+  [self performSelector: @selector(releaseFreedHeapMemory)
+             withObject: nil
+             afterDelay: 0];
+}
+
+- (void)releaseFreedHeapMemory
+{
+  FSNReleaseFreedHeapMemory();
 }
 
 - (void)applicationDidBecomeActive:(NSNotification *)aNotification

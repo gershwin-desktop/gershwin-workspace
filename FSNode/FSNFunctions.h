@@ -120,4 +120,9 @@ void showAlertNameInUse(Class c, NSString *newname);
  * unchanged.  No-op when color is nil. */
 void FSNDrawLabelDot(NSRect dotRect, NSColor *color);
 
+/* Hand the pages of freed heap memory back to the system.  Call it after
+ * work that allocates a lot and frees it again (launch, walking a big
+ * directory tree); it costs a few milliseconds, so not per event. */
+void FSNReleaseFreedHeapMemory(void);
+
 #endif // FSN_FUNCTIONS_H

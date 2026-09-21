@@ -88,7 +88,6 @@ static GWViewersManager *vwrsmanager = nil;
       gworkspace = [Workspace gworkspace];
       helpManager = [NSHelpManager sharedHelpManager];
       wsnc = [[NSWorkspace sharedWorkspace] notificationCenter];
-      ASSIGN (bviewerHelp, [gworkspace contextHelpFromName: @"BViewer.rtfd"]);
       
       viewers = [NSMutableArray new];
       orderingViewers = NO;
@@ -336,8 +335,17 @@ static GWViewersManager *vwrsmanager = nil;
 
   /* bviewerHelp is browser-window help; spatial windows have none (yet). */
   if (vtype != SPATIAL)
-    [helpManager setContextHelp: bviewerHelp
-                      forObject: [[viewer win] contentView]];
+    {
+      /* Read when the first browser viewer opens, not at launch: the
+         parsed RTFD keeps about 2 MB, and a session that only uses
+         spatial windows never needs it. */
+      if (bviewerHelp == nil)
+        {
+          ASSIGN (bviewerHelp, [gworkspace contextHelpFromName: @"BViewer.rtfd"]);
+        }
+      [helpManager setContextHelp: bviewerHelp
+                        forObject: [[viewer win] contentView]];
+    }
 
   [viewer activate];
 
