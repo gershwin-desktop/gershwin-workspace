@@ -168,6 +168,7 @@ VolumeManager.m \
 LowDiskWarn.m \
 GWUnmountHelper.m \
 GWArchiveOperation.m \
+GWFontWatcher.m \
 ISOWrite/ISOWriteHandler.m \
 ISOWrite/ISOWriteOperation.m \
 ISOWrite/BlockDeviceInfo.m \
