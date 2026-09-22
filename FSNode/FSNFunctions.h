@@ -112,6 +112,8 @@ void showAlertNameInUse(Class c, NSString *newname);
  * (Foundation-only, co-located with the other placement geometry). */
 
 @class NSColor;
+@class NSEvent;
+@class NSWindow;
 
 /* Draw a Finder label-colour dot (drop shadow + filled oval + hairline
  * border) into the current graphics context at dotRect.  Single source for
@@ -124,5 +126,15 @@ void FSNDrawLabelDot(NSRect dotRect, NSColor *color);
  * work that allocates a lot and frees it again (launch, walking a big
  * directory tree); it costs a few milliseconds, so not per event. */
 void FSNReleaseFreedHeapMemory(void);
+
+/* For a mouseDown: that has to find out whether the press becomes a drag:
+ * takes the press's next mouse-up or mouse-dragged event off the window's
+ * queue and returns it.  A mouse-up is put back first, where it was, so the
+ * view's mouseUp: still gets it and in order. */
+NSEvent *FSNNextMouseUpOrDraggedEvent(NSWindow *window);
+
+/* Puts an event that a tracking loop took off the queue back at the head of
+ * it, ahead of anything that arrived behind it. */
+void FSNPutBackDequeuedEvent(NSWindow *window, NSEvent *event);
 
 #endif // FSN_FUNCTIONS_H

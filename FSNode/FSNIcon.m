@@ -1010,13 +1010,10 @@ static void FSNForgetForeignWindowAnswer(void)
 	{
 	  while (1)
 	    {
-	      nextEvent = [[self window] nextEventMatchingMask:
-					   NSLeftMouseUpMask | NSLeftMouseDraggedMask];
+	      nextEvent = FSNNextMouseUpOrDraggedEvent([self window]);
 
 	      if ([nextEvent type] == NSLeftMouseUp)
 		{
-		  [[self window] postEvent: nextEvent atStart: NO];
-
 		  if ([container respondsToSelector: @selector(repSelected:)])
 		    {
 		      [container repSelected: self];
@@ -2302,8 +2299,19 @@ static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
           event = queued;
         }
 
+      /* The release can arrive before the position it belongs to has been
+       * acted on: a busy app finds the whole gesture already waiting, so
+       * mouseDown's loop hands the last dragged event over and the release
+       * is the next event here, and a position can also be held back for
+       * the next frame.  Breaking straight out would lose that position,
+       * and with it the folder the icons were let go over: the drop did
+       * not happen and nothing was asked. */
       if ([event type] == NSLeftMouseUp)
-        break;
+        {
+          if (NSEqualPoints(curLoc, lastLoc))
+            break;
+          pendingUp = event;
+        }
 
       /* A tick with the pointer at rest only times a spring: nothing moved,
        * so nothing needs to be looked up or moved again. */

@@ -68,3 +68,9 @@ t_FSNDirectoryDescription_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/
 # t_FSNLayoutWidth puts a real icons view in a real scroll view.
 t_FSNLayoutWidth_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                               -lFSNode -lgnustep-gui
+
+# t_FSNMouseUpOrder tests a function the installed framework may not have
+# yet; GNUstep's own -L/System/Library/Libraries comes first on the link line,
+# so the built library is named by path.
+t_FSNMouseUpOrder_TOOL_LIBS += ../../FSNode/FSNode.framework/Versions/Current/libFSNode.so \
+                               -lgnustep-gui

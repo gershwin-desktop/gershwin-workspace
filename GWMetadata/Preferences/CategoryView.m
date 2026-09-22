@@ -164,7 +164,11 @@
     							            NSLeftMouseUpMask | NSLeftMouseDraggedMask];
 
     if ([nextEvent type] == NSLeftMouseUp) {
-      [[self window] postEvent: nextEvent atStart: NO];
+      /* Back at the head of the queue, where it was taken from: posted at
+       * the end it came after a click already waiting behind it, and the
+       * window then gave that click's release to nobody.  (The same as
+       * FSNPutBackDequeuedEvent in FSNode, which this bundle does not link.) */
+      [[self window] postEvent: nextEvent atStart: YES];
       break;
 
     } else {

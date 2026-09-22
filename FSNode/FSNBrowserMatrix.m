@@ -320,12 +320,10 @@
 
 	      while (1)
 		{
-		  nextEvent = [[self window] nextEventMatchingMask:
-					       NSLeftMouseUpMask | NSLeftMouseDraggedMask];
+		  nextEvent = FSNNextMouseUpOrDraggedEvent([self window]);
 
 		  if ([nextEvent type] == NSLeftMouseUp)
 		    {
-		      [[self window] postEvent: nextEvent atStart: NO];
 		      break;
 
 		    }

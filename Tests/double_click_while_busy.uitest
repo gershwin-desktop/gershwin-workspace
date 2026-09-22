@@ -1,0 +1,49 @@
+#!/usr/bin/env run_uitest
+# A double click must open a folder even when Workspace is too busy to handle
+# the first click before the second one arrives.  Its icon took the first
+# click's release off the queue to see whether a drag was starting and put it
+# back behind the second click; the window then gave that release to the icon
+# in place of the second one, and the double click's own release, the one
+# that opens the item, reached no view.  On the 2-CPU CI machines this lost
+# the double click in dnd_drop_onto_folder now and then; here Workspace is
+# stopped while the double click is made, so it happens every time.
+#
+# Leaves the computer as it was found: the scratch folder is removed and every
+# window the script opens is closed again.
+#
+# Run with: run_uitest Tests/double_click_while_busy.uitest
+activate application "Workspace"
+
+# Self-healing start: a run that stopped half way leaves its windows open.
+if window "Target"
+  close window "Target"
+  wait until not exists window "Target"
+end
+if window "uitest-busy-${home}"
+  close window "uitest-busy-${home}"
+  wait until not exists window "uitest-busy-${home}"
+end
+
+# A spatial viewer opens a double-clicked folder in a window of its own,
+# which the script can wait for.
+select menu "View/View Behavior/Set Spatial as Default"
+
+shell "rm -rf /tmp/uitest-busy-${home} && mkdir -p /tmp/uitest-busy-${home}/Target"
+
+select menu "Go/Go to Folder..."
+wait until modal
+type "/tmp/uitest-busy-${home}"
+press Return
+wait until window "uitest-busy-${home}" timeout 15s
+wait until "Target" in window "uitest-busy-${home}"
+
+shell "sh ${testdir}/Fixtures/double_click_while_busy.sh Target uitest-busy-${home}"
+wait until window "Target" timeout 10s
+
+close window "Target"
+wait until not exists window "Target"
+close window "uitest-busy-${home}"
+wait until not exists window "uitest-busy-${home}"
+shell "rm -rf /tmp/uitest-busy-${home}"
+
+log "a double click queued behind a busy Workspace still opens the folder"

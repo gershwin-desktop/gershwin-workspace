@@ -1222,7 +1222,7 @@ static CGFloat desktopScaleFactor(void)
       DESTROY (arp);
     }
 
-  [[self window] postEvent: theEvent atStart: NO];
+  FSNPutBackDequeuedEvent([self window], theEvent);
 
   // Erase the final selection rect via normal display
   [self setNeedsDisplayInRect: oldRect];

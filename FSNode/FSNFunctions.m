@@ -941,3 +941,26 @@ void FSNReleaseFreedHeapMemory(void)
   malloc_trim(0);
 #endif
 }
+
+void FSNPutBackDequeuedEvent(NSWindow *window, NSEvent *event)
+{
+  /* At the end of the queue the event would come after everything a busy
+   * app already has waiting behind it.  For a mouse-up that is fatal to a
+   * double click: the second press is handled first, the window gives the
+   * first release to the view in its place (NSWindow keeps only the view of
+   * the last press), and the second release, the one that opens the item,
+   * reaches no view. */
+  [window postEvent: event atStart: YES];
+}
+
+NSEvent *FSNNextMouseUpOrDraggedEvent(NSWindow *window)
+{
+  NSEvent *event = [window nextEventMatchingMask:
+			     NSLeftMouseUpMask | NSLeftMouseDraggedMask];
+
+  if ([event type] == NSLeftMouseUp)
+    {
+      FSNPutBackDequeuedEvent(window, event);
+    }
+  return event;
+}

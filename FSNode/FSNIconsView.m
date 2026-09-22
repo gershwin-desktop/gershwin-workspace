@@ -1968,7 +1968,7 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
     }
 
   [NSEvent stopPeriodicEvents];
-  [[self window] postEvent: theEvent atStart: NO];
+  FSNPutBackDequeuedEvent([self window], theEvent);
 
   // Erase the previous rect
 

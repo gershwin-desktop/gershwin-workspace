@@ -34,6 +34,7 @@
 #import "FinderModulesProtocol.h"
 #import "FSNode.h"
 #import "FSNodeRep.h"
+#import "FSNFunctions.h"
 #import "FSNPathComponentsViewer.h"
 #import "GWFunctions.h"
 #import "Dialogs/Dialogs.h"
@@ -970,12 +971,10 @@ static NSString *lsfname = @"LiveSearch.lsf";
     {   
       while (1)
 	{
-	  nextEvent = [[self window] nextEventMatchingMask:
-				       NSLeftMouseUpMask | NSLeftMouseDraggedMask];
+	  nextEvent = FSNNextMouseUpOrDraggedEvent([self window]);
 	  
 	  if ([nextEvent type] == NSLeftMouseUp)
 	    {
-	      [[self window] postEvent: nextEvent atStart: NO];
 	      break;
 	      
 	    }
