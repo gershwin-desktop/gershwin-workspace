@@ -54,6 +54,7 @@
 @class GWLaunchedApp;
 @class GSGlobalShortcutsManager;
 @class LowDiskWarn;
+@class GWFontWatcher;
 
 @protocol	FSWClientProtocol
 
@@ -146,6 +147,8 @@
   
   GSGlobalShortcutsManager *globalShortcutsManager;
   
+  GWFontWatcher *fontWatcher;
+
 #if HAVE_DBUS
   id fileManagerDBusInterface;
   NSFileHandle *dbusFileHandle;

@@ -85,6 +85,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "DSStore.h"
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
+#import "GWFontWatcher.h"
 #import "GWMetaArchive.h"
 #import "FSNIconsView.h"
 #import "GWMetadataProvider.h"
@@ -1089,6 +1090,18 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   lowDiskWarn = [[LowDiskWarn alloc] init];
   [lowDiskWarn startMonitoring];
 
+  // Initialize font directory watcher so new fonts are picked up live
+  fontWatcher = [[GWFontWatcher alloc] initWithWorkspace: self];
+
+  // Register font directories with fswatcher so we get notified of changes
+  if (fontWatcher != nil) {
+    NSEnumerator *fontDirEnum = [[fontWatcher fontDirectoryPaths] objectEnumerator];
+    NSString *fontDir;
+    while ((fontDir = [fontDirEnum nextObject]) != nil) {
+      [self addWatcherForPath: fontDir];
+    }
+  }
+
   // Initialize global shortcuts manager only if this instance is rendering the desktop
   if ([dtopManager isActive]) {
     globalShortcutsManager = [[GSGlobalShortcutsManager sharedManager] retain];
@@ -1162,6 +1175,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if (globalShortcutsManager) {
     [globalShortcutsManager stop];
     DESTROY(globalShortcutsManager);
+  }
+
+  // Stop font directory watcher
+  if (fontWatcher) {
+    [fontWatcher release];
+    fontWatcher = nil;
   }
   
   [wsnc removeObserver: self];
@@ -3080,6 +3099,11 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       Thumbnailer *t = [Thumbnailer sharedThumbnailer];
       [t makeThumbnails: path];
       [t release];
+    }
+
+    // Check if a font was added or removed in a font directory
+    if (fontWatcher != nil) {
+      [fontWatcher fontDirectoryDidChange: path];
     }
   }
   
