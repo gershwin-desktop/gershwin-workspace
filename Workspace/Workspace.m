@@ -332,7 +332,7 @@ static Workspace *gworkspace = nil;
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(makeAliasFiles:) keyEquivalent:@"l"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Quick Look \"item\"") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Quick Look") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
   // Share submenu
@@ -380,12 +380,9 @@ static Workspace *gworkspace = nil;
   menuItem = [menu addItemWithTitle:_(@"Select All") action:@selector(selectAllInViewer:) keyEquivalent:@"a"];
   [menuItem setTarget:self];
   
-  [menu addItem:[NSMenuItem separatorItem]];
-  
   //menuItem = [menu addItemWithTitle:_(@"Show Clipboard") action:@selector(notImplemented:) keyEquivalent:@""];
   //[menuItem setTarget:self];
 
-  [menu addItem:[NSMenuItem separatorItem]];
 
   // menuItem = [menu addItemWithTitle:_(@"Start Dictation") action:@selector(notImplemented:) keyEquivalent:@""];
   // [menuItem setTarget:self];
@@ -676,10 +673,10 @@ static Workspace *gworkspace = nil;
   menuItem = [menu addItemWithTitle:_(@"Run...") action:@selector(runCommand:) keyEquivalent:@"R"];
   [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask: NSCommandKeyMask | NSShiftKeyMask];
-  
-  [menu addItem:[NSMenuItem separatorItem]];
 
   /*
+  [menu addItem:[NSMenuItem separatorItem]];
+
   menuItem = [menu addItemWithTitle:_(@"History") action:NULL keyEquivalent:@""];
   subMenu = AUTORELEASE ([NSMenu new]);
   [menu setSubmenu: subMenu forItem: menuItem];
