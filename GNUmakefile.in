@@ -46,8 +46,7 @@ SUBPROJECTS = DSStore \
 	      Inspector \
 	      Operation \
 	      Workspace \
-	      GitContextMenu \
-	      CloudContextMenu
+	      GitContextMenu
 
 ifeq ($(BUILD_GWMETADATA),1)
 SUBPROJECTS += GWMetadata
