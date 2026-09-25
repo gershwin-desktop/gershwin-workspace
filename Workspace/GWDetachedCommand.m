@@ -20,12 +20,18 @@
    * are allowed, so everything the child needs is prepared here. */
   const char *shell = getenv("SHELL");
   const char *cmd = [command UTF8String];
+  long maxfd = sysconf(_SC_OPEN_MAX);
   pid_t pid;
   int status;
 
   if (shell == NULL || *shell == '\0')
     {
       shell = "/bin/sh";
+    }
+
+  if (maxfd < 0)
+    {
+      return NO;
     }
 
   pid = fork();
@@ -49,9 +55,11 @@
       dup2(devnull, STDIN_FILENO);
       dup2(devnull, STDOUT_FILENO);
       dup2(devnull, STDERR_FILENO);
-      if (devnull > STDERR_FILENO)
+      /* A plain loop because closefrom() is not available everywhere; this
+       * also closes devnull. */
+      for (long fd = STDERR_FILENO + 1; fd < maxfd; fd++)
         {
-          close(devnull);
+          close((int)fd);
         }
 
       /* The intermediate child exits at once so the command is reparented
