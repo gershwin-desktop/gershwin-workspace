@@ -5,6 +5,7 @@
  */
 
 #import "GSGlobalShortcutsManager.h"
+#import "GWDetachedCommand.h"
 #import <AppKit/NSApplication.h>
 #import <AppKit/NSEvent.h>
 #import <AppKit/NSAlert.h>
@@ -611,64 +612,8 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     
     if (verbose) {
     }
-    
-    
-    pid_t pid = fork();
-    if (pid == 0) {
-        // Child process
-        setsid();
-        
-        // Close file descriptors
-        close(STDIN_FILENO);
-        close(STDOUT_FILENO);
-        close(STDERR_FILENO);
-        
-        int devnull = open("/dev/null", O_RDWR);
-        if (devnull >= 0) {
-            dup2(devnull, STDIN_FILENO);
-            dup2(devnull, STDOUT_FILENO);
-            dup2(devnull, STDERR_FILENO);
-            if (devnull > STDERR_FILENO) {
-                close(devnull);
-            }
-        }
-        
-        pid_t grandchild = fork();
-        if (grandchild == 0) {
-            // Grandchild process - execute command
-            const char *shell = getenv("SHELL");
-            if (!shell) shell = "/bin/sh";
-            
-            
-            execl(shell, shell, "-c", [command UTF8String], (char *)NULL);
-            _exit(127);
-        } else if (grandchild > 0) {
-            _exit(0);
-        } else {
-            _exit(1);
-        }
-    } else if (pid > 0) {
-        // Parent process - wait for child to exit
-        int status;
-        while (waitpid(pid, &status, 0) < 0) {
-            if (errno == EINTR) {
-                continue;
-            } else if (errno == ECHILD) {
-                // Process already exited
-                return YES;
-            } else {
-                return NO;
-            }
-        }
-        
-        if (WIFEXITED(status) && WEXITSTATUS(status) != 0) {
-            return NO;
-        }
-        
-        return YES;
-    } else {
-        return NO;
-    }
+
+    return [GWDetachedCommand launchShellCommand:command];
 }
 
 - (NSString *)findExecutableInPath:(NSString *)command
