@@ -218,6 +218,18 @@ jobs:
             if (-not ($f.StartsWith($root, 'OrdinalIgnoreCase') -or $f.StartsWith('C:\Windows', 'OrdinalIgnoreCase'))) { $foreign += $f }
           }
           (Get-Process -Id $p.Id).Modules | Select-Object -ExpandProperty FileName | Set-Content "$out\modules.txt"
+          # Get the runner's own windows (the terminal running this job, in
+          # particular) out of the picture: minimize every top-level window
+          # that is not the Workspace's or one of its daemons'.
+          Add-Type -Namespace Win32 -Name User32 -MemberDefinition @'
+            [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
+'@
+          $ours = @("Workspace", "gdnc", "gpbs", "gdomap", "fswatcher")
+          foreach ($w in (Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $ours -notcontains $_.ProcessName })) {
+            Write-Host "Minimizing window of $($w.ProcessName): $($w.MainWindowTitle)"
+            [Win32.User32]::ShowWindowAsync($w.MainWindowHandle, 6) | Out-Null   # SW_MINIMIZE
+          }
+          Start-Sleep -Seconds 3
           # Screenshot of the whole desktop.
           Add-Type -AssemblyName System.Windows.Forms, System.Drawing
           $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
