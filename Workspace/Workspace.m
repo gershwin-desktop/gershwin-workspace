@@ -107,6 +107,16 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "FileManagerDBusInterface.h"
 #endif
 
+#ifdef _WIN32
+/* MinGW's sys/stat.h has no group/other execute bits. */
+# ifndef S_IXGRP
+#  define S_IXGRP 0
+# endif
+# ifndef S_IXOTH
+#  define S_IXOTH 0
+# endif
+#endif
+
 
 static NSString *defaulteditor = @"nedit.app";
 static NSString *defaultxterm = @"xterm";

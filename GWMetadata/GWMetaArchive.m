@@ -26,6 +26,9 @@
 #ifdef _WIN32
 /* MinGW has no lstat(); there are no POSIX symlinks to preserve anyway. */
 # define lstat stat
+# ifndef ACCESSPERMS
+#  define ACCESSPERMS 0777
+# endif
 #endif
 
 /* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
