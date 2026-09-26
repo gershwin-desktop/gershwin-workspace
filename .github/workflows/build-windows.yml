@@ -223,7 +223,7 @@ jobs:
           # that is not the Workspace's or one of its daemons'.
           Add-Type -Namespace Win32 -Name User32 -MemberDefinition @'
             [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);
-'@
+          '@
           $ours = @("Workspace", "gdnc", "gpbs", "gdomap", "fswatcher")
           foreach ($w in (Get-Process | Where-Object { $_.MainWindowHandle -ne 0 -and $ours -notcontains $_.ProcessName })) {
             Write-Host "Minimizing window of $($w.ProcessName): $($w.MainWindowTitle)"
