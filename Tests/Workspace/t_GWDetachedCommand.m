@@ -73,6 +73,28 @@ int main(void)
       " (read %d bytes: '%s')", (int)n, buf);
   END_SET("launched command inherits no descriptor above stderr")
 
+  START_SET("launchArguments: passes every argument through untouched")
+    /* What a URL handler receives: no shell may split or expand it. */
+    NSString *url = @"test://cb?code=a1&state=b=c $HOME;x";
+    NSArray *argv = [NSArray arrayWithObjects: @"/bin/sh", @"-c",
+      @"printf %s \"$1\" > \"$2\"", @"sh", url, ranFile, nil];
+    NSString *got;
+
+    [fm removeFileAtPath: ranFile handler: nil];
+    PASS([GWDetachedCommand launchArguments: argv],
+      "launchArguments: starts the program");
+    for (i = 0; i < 100 && [[NSString stringWithContentsOfFile: ranFile]
+      length] < [url length]; i++)
+      {
+        usleep(50000);
+      }
+    got = [NSString stringWithContentsOfFile: ranFile];
+    PASS_EQUAL(got, url, "the program got the exact argument");
+    PASS([GWDetachedCommand launchArguments:
+      [NSArray arrayWithObject: @"sh"]] == NO,
+      "a relative program path is refused");
+  END_SET("launchArguments: passes every argument through untouched")
+
   [fm removeFileAtPath: ranFile handler: nil];
   [arp release];
   return 0;

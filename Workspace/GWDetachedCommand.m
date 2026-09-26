@@ -16,27 +16,49 @@
 
 + (BOOL)launchShellCommand:(NSString *)command
 {
-  /* Workspace is multithreaded: after fork() only async-signal-safe calls
-   * are allowed, so everything the child needs is prepared here. */
   const char *shell = getenv("SHELL");
-  const char *cmd = [command UTF8String];
-  long maxfd = sysconf(_SC_OPEN_MAX);
-  pid_t pid;
-  int status;
 
   if (shell == NULL || *shell == '\0')
     {
       shell = "/bin/sh";
     }
+  return [self launchArguments: [NSArray arrayWithObjects:
+    [NSString stringWithUTF8String: shell], @"-c", command, nil]];
+}
 
-  if (maxfd < 0)
++ (BOOL)launchArguments:(NSArray *)arguments
+{
+  /* Workspace is multithreaded: after fork() only async-signal-safe calls
+   * are allowed, so everything the child needs is prepared here. */
+  NSUInteger count = [arguments count];
+  long maxfd = sysconf(_SC_OPEN_MAX);
+  const char **argv;
+  NSUInteger i;
+  pid_t pid;
+  int status;
+
+  if (count == 0 || [[arguments objectAtIndex: 0] isAbsolutePath] == NO
+      || maxfd < 0)
     {
       return NO;
+    }
+
+  /* The strings stay valid while the autorelease pool that owns them
+   * lives, which outlasts the fork below. */
+  argv = (const char **)calloc(count + 1, sizeof(char *));
+  if (argv == NULL)
+    {
+      return NO;
+    }
+  for (i = 0; i < count; i++)
+    {
+      argv[i] = [[arguments objectAtIndex: i] UTF8String];
     }
 
   pid = fork();
   if (pid < 0)
     {
+      free(argv);
       return NO;
     }
 
@@ -67,12 +89,13 @@
       grandchild = fork();
       if (grandchild == 0)
         {
-          execl(shell, shell, "-c", cmd, (char *)NULL);
+          execv(argv[0], (char * const *)argv);
           _exit(127);
         }
       _exit(grandchild > 0 ? 0 : 1);
     }
 
+  free(argv);
   while (waitpid(pid, &status, 0) < 0)
     {
       if (errno == EINTR)

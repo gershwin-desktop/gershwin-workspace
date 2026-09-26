@@ -25,6 +25,11 @@
  * process could not be started. */
 + (BOOL)launchShellCommand:(NSString *)command;
 
+/** Starts arguments[0], which must be an absolute path, with the whole
+ * array as its argument vector; no shell sees the arguments.  Returns NO
+ * when the process could not be started. */
++ (BOOL)launchArguments:(NSArray *)arguments;
+
 @end
 
 #endif
