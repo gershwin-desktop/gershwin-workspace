@@ -41,7 +41,9 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepGUI/GSInfoPanel.h>
 #import <GNUstepBase/GNUstep.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
+#endif
 
 #import "GWFunctions.h"
 #import "FSNodeRep.h"
@@ -1006,7 +1008,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
    * disposition to SIG_DFL after main(), whose default action terminates the
    * Workspace mid-operation.  Re-assert the ignore here, after everything is
    * loaded. */
+#ifndef _WIN32
   signal(SIGPIPE, SIG_IGN);
+#endif
 
   [self _swizzleGetInfoForFileForNoExtensionFiles];
 

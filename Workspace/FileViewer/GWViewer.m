@@ -24,7 +24,9 @@
  */
 
 #include <math.h>
+#ifndef _WIN32
 #include <sys/statvfs.h>
+#endif
 #include <string.h>
 
 #import <AppKit/AppKit.h>
@@ -71,6 +73,32 @@
 #define PREVIEW_PATHSCRH 46
 
 /* Helper function to get volume information using statvfs */
+#ifdef _WIN32
+static BOOL getVolumeInfo(const char *path, unsigned long long *total,
+                          unsigned long long *free_space,
+                          unsigned long long *available_space)
+{
+  NSString *nspath = (path != NULL) ? [NSString stringWithUTF8String: path] : nil;
+  NSDictionary *attrs = (nspath != nil)
+    ? [[NSFileManager defaultManager] fileSystemAttributesAtPath: nspath] : nil;
+  NSNumber *sizeNum = [attrs objectForKey: NSFileSystemSize];
+  NSNumber *freeNum = [attrs objectForKey: NSFileSystemFreeSize];
+
+  if (sizeNum == nil || freeNum == nil) {
+    return NO;
+  }
+  if (total) {
+    *total = [sizeNum unsignedLongLongValue];
+  }
+  if (free_space) {
+    *free_space = [freeNum unsignedLongLongValue];
+  }
+  if (available_space) {
+    *available_space = [freeNum unsignedLongLongValue];
+  }
+  return YES;
+}
+#else
 static BOOL getVolumeInfo(const char *path, unsigned long long *total, 
                           unsigned long long *free_space, 
                           unsigned long long *available_space)
@@ -91,6 +119,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   }
   return NO;
 }
+#endif
 
 
 @implementation GWViewer
@@ -765,6 +794,7 @@ static BOOL hasLastExtents_ = NO;
    * asynchronously after mapping, so retry briefly until they appear; if they
    * never do we hard-fail (report loudly) instead of placing at a guess. */
   if (hasPendingRestoreFrame) {
+#ifndef _WIN32
     Window xwin = 0;
     GSDisplayServer *gsrv = GSServerForWindow(vwrwin);
     if (!gsrv) gsrv = GSCurrentServer();
@@ -772,6 +802,9 @@ static BOOL hasLastExtents_ = NO;
       void *winptr = [gsrv windowDevice:[vwrwin windowNumber]];
       xwin = (Window)(uintptr_t)winptr;
     }
+#else
+    GWNativeWindowID xwin = 0;
+#endif
     unsigned long l = 0, r = 0, t = 0, b = 0;
     int attempts = 0;
     /* The WM sets _NET_FRAME_EXTENTS asynchronously after framing the window.
@@ -1313,6 +1346,7 @@ static BOOL hasLastExtents_ = NO;
      * happens in dsStoreWindowFrameForScreen:. */
     NSRect contentRect = NSZeroRect;
     {
+#ifndef _WIN32
       Window xwin = 0;
       GSDisplayServer *gsrv = GSServerForWindow(vwrwin);
       if (!gsrv) gsrv = GSCurrentServer();
@@ -1320,6 +1354,9 @@ static BOOL hasLastExtents_ = NO;
         void *winptr = [gsrv windowDevice:[vwrwin windowNumber]];
         xwin = (Window)(uintptr_t)winptr;
       }
+#else
+      GWNativeWindowID xwin = 0;
+#endif
       if (xwin != 0
           && [[GWX11WindowManager sharedManager] windowIsMappedAndFramed:xwin]
           && [[GWX11WindowManager sharedManager] contentRectFromXGeometry:xwin

@@ -13,6 +13,10 @@
 #import <AppKit/AppKit.h>
 #import <sys/stat.h>
 #import <sys/types.h>
+#ifdef _WIN32
+/* MinGW has no lstat(); plain stat() is what we want there anyway. */
+# define lstat stat
+#endif
 #import "GWViewerSidebar.h"
 #import "GWViewer.h"
 #import "GWViewersManager.h"

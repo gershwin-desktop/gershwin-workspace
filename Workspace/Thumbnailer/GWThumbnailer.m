@@ -28,7 +28,9 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
+#endif
 #import "GWThumbnailer.h"
 
 static Thumbnailer *sharedThumbnailerInstance = nil;

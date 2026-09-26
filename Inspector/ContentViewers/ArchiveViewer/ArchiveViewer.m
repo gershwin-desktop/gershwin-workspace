@@ -22,6 +22,23 @@
 #import <archive.h>
 #import <archive_entry.h>
 
+#ifdef _WIN32
+#include <sys/stat.h>
+/* MinGW's <sys/stat.h> lacks these; the mode comes from libarchive anyway. */
+#ifndef S_ISLNK
+#define S_ISLNK(m) (((m) & AE_IFMT) == AE_IFLNK)
+#endif
+#ifndef S_ISSOCK
+#define S_ISSOCK(m) (((m) & AE_IFMT) == AE_IFSOCK)
+#endif
+#ifndef S_ISBLK
+#define S_ISBLK(m) (((m) & AE_IFMT) == AE_IFBLK)
+#endif
+#ifndef S_ISFIFO
+#define S_ISFIFO(m) (((m) & AE_IFMT) == AE_IFIFO)
+#endif
+#endif
+
 #define ONE_KB 1024LLU
 #define ONE_MB (ONE_KB * ONE_KB)
 #define ONE_GB (ONE_KB * ONE_MB)

@@ -11,6 +11,8 @@
 #import "FSNode.h"
 #import "GWViewerWindow.h"
 
+#ifndef _WIN32
+
 #include <X11/Xlib.h>
 
 /* Forward declarations to avoid pulling in headers with type issues */
@@ -295,3 +297,47 @@ static void ensureErrorHandler(void)
 }
 
 @end
+
+#else /* _WIN32 */
+
+/* Windows: no X11 atoms, so the spatial path object only keeps the path. */
+
+@implementation GWX11SpatialPath
+
+- (instancetype)initWithWindow:(NSWindow *)window path:(NSString *)path
+{
+  self = [super init];
+  if (!self) return nil;
+
+  _window = window;
+  _currentPath = [path copy];
+  _pollTimer = nil;
+  _dpy = NULL;
+
+  return self;
+}
+
+- (void)dealloc
+{
+  [self invalidate];
+  RELEASE(_currentPath);
+  [super dealloc];
+}
+
+- (void)setPath:(NSString *)path
+{
+  if (path == nil || [_currentPath isEqual:path])
+    return;
+
+  RELEASE(_currentPath);
+  _currentPath = [path copy];
+}
+
+- (void)invalidate
+{
+  _window = nil;
+}
+
+@end
+
+#endif /* _WIN32 */

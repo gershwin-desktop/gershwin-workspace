@@ -141,7 +141,11 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
     return NO;
 
   /* O_NONBLOCK so a slow file cannot stall the caller either. */
+#ifdef O_NONBLOCK
   fd = open([path fileSystemRepresentation], O_RDONLY | O_NONBLOCK);
+#else
+  fd = open([path fileSystemRepresentation], O_RDONLY);
+#endif
   if (fd < 0)
     {
       return NO;

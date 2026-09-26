@@ -12,11 +12,15 @@
 
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
+#endif
 
 #import <sys/stat.h>
+#ifndef _WIN32
 #import <sys/ioctl.h>
 #import <sys/select.h>
+#endif
 #import <sys/time.h>
 #ifdef __linux__
 #import <linux/fs.h>
@@ -28,6 +32,10 @@
 #import <unistd.h>
 #import <errno.h>
 #import <signal.h>
+#if defined(_WIN32) && !defined(S_ISBLK)
+/* No block devices on Windows */
+# define S_ISBLK(m) (0)
+#endif
 
 /* Buffer size for copying: 1MB for optimal throughput */
 #define ISO_WRITE_BUFFER_SIZE (1024 * 1024)
@@ -527,6 +535,7 @@
         pool = [[NSAutoreleasePool alloc] init];
       }
       
+#ifndef _WIN32
       /* Use select() to check if data is available with timeout */
       fd_set readfds;
       struct timeval timeout;
@@ -546,6 +555,10 @@
         /* Timeout - just continue waiting */
         continue;
       }
+#else
+      /* No select() on pipes on Windows: availableData blocks instead. */
+      (void)fd;
+#endif
       
       /* Data is available - read it safely */
       @try {

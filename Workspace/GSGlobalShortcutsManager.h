@@ -9,13 +9,20 @@
 #define GS_GLOBAL_SHORTCUTS_MANAGER_H
 
 #import <Foundation/Foundation.h>
+#ifndef _WIN32
 #include <X11/Xlib.h>
+#endif
 
 @interface GSGlobalShortcutsManager : NSObject
 {
     NSMutableDictionary *shortcuts;
+#ifndef _WIN32
     Display *display;
     Window rootWindow;
+#else
+    void *display;
+    unsigned long rootWindow;
+#endif
     unsigned int numlock_mask;
     unsigned int capslock_mask;
     unsigned int scrolllock_mask;

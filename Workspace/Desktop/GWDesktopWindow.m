@@ -26,8 +26,10 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <GNUstepGUI/GSDisplayServer.h>
+#ifndef _WIN32
 #import <X11/Xlib.h>
 #import <X11/Xatom.h>
+#endif
 
 #import "GWDesktopWindow.h"
 #import "GWDesktopManager.h"
@@ -114,6 +116,7 @@
 
 - (void)setX11DesktopAtoms
 {
+#ifndef _WIN32
   GSDisplayServer *server = GSCurrentServer();
   if (!server) return;
   NSInteger winNum = [self windowNumber];
@@ -142,6 +145,7 @@
                   PropModeReplace, (unsigned char *)&allDesktops, 1);
 
   XFlush(dpy);
+#endif
 }
 
 - (void)deactivate

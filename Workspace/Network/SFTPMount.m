@@ -11,7 +11,7 @@
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__)
 # include <sys/param.h>
 # include <sys/mount.h>
-#else
+#elif !defined(_WIN32)
 # include <sys/statfs.h>
 #endif
 
@@ -177,11 +177,13 @@
   @try {
     [dnsTask launch];
 
+#ifndef _WIN32
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 3 * NSEC_PER_SEC), dispatch_get_main_queue(), ^{
       if ([dnsTask isRunning]) {
         [dnsTask terminate];
       }
     });
+#endif
 
     [dnsTask waitUntilExit];
 
@@ -701,8 +703,12 @@
     {
       
       /* If mount point already has something mounted, unmount it first */
+#ifdef _WIN32
+      if (0) { /* no statfs()/FUSE on Windows: nothing to unmount */
+#else
       struct statfs statbuf;
       if (statfs([mountPoint UTF8String], &statbuf) == 0) {
+#endif
         /* Mount point exists and is accessible - check if something is mounted there */
         NSFileManager *fm = [NSFileManager defaultManager];
         NSError *testError = nil;

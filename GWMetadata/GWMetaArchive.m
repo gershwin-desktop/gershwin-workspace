@@ -23,6 +23,11 @@
 #include <errno.h>
 #include <sys/stat.h>
 
+#ifdef _WIN32
+/* MinGW has no lstat(); there are no POSIX symlinks to preserve anyway. */
+# define lstat stat
+#endif
+
 #define READ_BLOCK_SIZE  10240
 #define WRITE_BLOCK_SIZE  16384
 

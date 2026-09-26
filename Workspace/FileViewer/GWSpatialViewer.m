@@ -714,6 +714,7 @@ static BOOL hasLastExtents_ = NO;
    * asynchronously after mapping, so retry briefly until they appear - never
    * fall back to a guessed size. */
   if (hasPendingRestoreFrame) {
+#ifndef _WIN32
     Window xwin = 0;
     GSDisplayServer *gsrv = GSServerForWindow(vwrwin);
     if (!gsrv) gsrv = GSCurrentServer();
@@ -721,6 +722,9 @@ static BOOL hasLastExtents_ = NO;
       void *winptr = [gsrv windowDevice:[vwrwin windowNumber]];
       xwin = (Window)(uintptr_t)winptr;
     }
+#else
+    GWNativeWindowID xwin = 0;
+#endif
     unsigned long l = 0, r = 0, t = 0, b = 0;
     int attempts = 0;
     while (xwin != 0 && attempts < 20
@@ -1082,6 +1086,7 @@ static BOOL hasLastExtents_ = NO;
      * coords (bottom-left origin); the DS_Store coordinate conversion
      * happens in dsStoreWindowFrameForScreen:. */
     NSRect contentRect = NSZeroRect;
+#ifndef _WIN32
     Window xwin = 0;
     GSDisplayServer *gsrv = GSServerForWindow(vwrwin);
     if (!gsrv) gsrv = GSCurrentServer();
@@ -1089,6 +1094,9 @@ static BOOL hasLastExtents_ = NO;
         void *winptr = [gsrv windowDevice:[vwrwin windowNumber]];
         xwin = (Window)(uintptr_t)winptr;
     }
+#else
+    GWNativeWindowID xwin = 0;
+#endif
     if (xwin != 0
         && [[GWX11WindowManager sharedManager] windowIsMappedAndFramed:xwin]
         && [[GWX11WindowManager sharedManager] contentRectFromXGeometry:xwin

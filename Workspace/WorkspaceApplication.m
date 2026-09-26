@@ -46,6 +46,9 @@
 #import "X11AppSupport.h"
 #import "GWApplicationLauncher.h"
 #import "GWProcessOwnership.h"
+#ifdef _WIN32
+#import "GWWin32Process.h"
+#endif
 // For checking whether a process identifier still exists
 #include <signal.h>
 #include <errno.h>
@@ -877,11 +880,15 @@
 - (BOOL)_pidExists:(pid_t)pid
 {
   if (pid <= 0) return NO;
+#ifdef _WIN32
+  return GWWin32ProcessIsAlive(pid);
+#else
   // kill(pid, 0) returns 0 if process exists and we have permission,
   // or -1 with EPERM if it exists but we lack permission.
   int r = kill(pid, 0);
   if (r == 0) return YES;
   return (errno == EPERM);
+#endif
 }
 
 - (void)_scheduleLaunchDotFallbackForPath:(NSString *)path name:(NSString *)name
@@ -1875,8 +1882,12 @@
     if (identifier) {
       pid_t pid = (pid_t)[identifier intValue];
       if (pid > 0) {
+#ifdef _WIN32
+        return GWWin32ProcessIsAlive(pid);
+#else
         int result = kill(pid, 0);
         return (result == 0 || errno == EPERM);
+#endif
       }
     }
     return NO;
@@ -1900,8 +1911,12 @@
   if (identifier) {
     pid_t pid = (pid_t)[identifier intValue];
     if (pid > 0) {
+#ifdef _WIN32
+      return GWWin32ProcessIsAlive(pid);
+#else
       int result = kill(pid, 0);
       return (result == 0 || errno == EPERM);
+#endif
     }
   }
   
@@ -1937,7 +1952,11 @@
     /* For X11 apps, send SIGTERM to the process */
     pid_t pid = (pid_t)[identifier intValue];
     if (pid > 0) {
+#ifdef _WIN32
+      GWWin32TerminateProcess(pid);
+#else
       kill(pid, SIGTERM);
+#endif
     }
     return;
   }

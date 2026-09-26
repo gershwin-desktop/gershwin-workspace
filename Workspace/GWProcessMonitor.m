@@ -4,6 +4,8 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
+#ifndef _WIN32
+
 #define _GNU_SOURCE
 #import "GWProcessMonitor.h"
 #import "GWProcessOwnership.h"
@@ -793,3 +795,175 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
 }
 
 @end
+
+#else /* _WIN32 */
+
+/* Windows: no pidfd, kqueue or kill(2).  Process exit is detected by polling
+ * the process handles from a timer on the main thread; child-process and
+ * process-name queries reduce to what OpenProcess can answer. */
+
+#import "GWProcessMonitor.h"
+#import "GWWin32Process.h"
+
+#define GW_PMON_POLL_INTERVAL 0.5
+
+@interface _GWPMonEntry : NSObject
+{
+@public
+  pid_t _pid;
+  id _token;
+  void (^_block)(pid_t, id);
+}
+@end
+
+@implementation _GWPMonEntry
+- (void)dealloc
+{
+  [_token release];
+  [_block release];
+  [super dealloc];
+}
+@end
+
+@interface GWProcessMonitor ()
+{
+  NSMutableArray *_entries;
+  NSTimer *_pollTimer;
+}
+@end
+
+@implementation GWProcessMonitor
+
++ (instancetype)sharedMonitor
+{
+  static GWProcessMonitor *shared = nil;
+  if (shared == nil)
+    {
+      shared = [[self alloc] init];
+    }
+  return shared;
+}
+
+- (instancetype)init
+{
+  self = [super init];
+  if (self)
+    {
+      _entries = [[NSMutableArray alloc] init];
+      _pollTimer = nil;
+    }
+  return self;
+}
+
+- (void)dealloc
+{
+  [_pollTimer invalidate];
+  [_entries release];
+  [super dealloc];
+}
+
+- (void)addPID:(pid_t)pid
+         token:(id)token
+      callback:(void (^)(pid_t pid, id token))block
+{
+  _GWPMonEntry *entry = nil;
+
+  if (pid <= 0 || block == nil)
+    return;
+
+  for (_GWPMonEntry *e in _entries)
+    {
+      if (e->_pid == pid)
+        {
+          entry = e;
+          break;
+        }
+    }
+  if (entry == nil)
+    {
+      entry = [[_GWPMonEntry alloc] init];
+      entry->_pid = pid;
+      [_entries addObject: entry];
+      [entry release];
+    }
+  if (entry->_token != token)
+    {
+      [entry->_token release];
+      entry->_token = [token retain];
+    }
+  if (entry->_block != block)
+    {
+      [entry->_block release];
+      entry->_block = [block copy];
+    }
+
+  if (_pollTimer == nil)
+    {
+      _pollTimer = [NSTimer scheduledTimerWithTimeInterval: GW_PMON_POLL_INTERVAL
+                                                    target: self
+                                                  selector: @selector(_pollTimerFired:)
+                                                  userInfo: nil
+                                                   repeats: YES];
+    }
+}
+
+- (void)removePID:(pid_t)pid
+{
+  NSUInteger i;
+
+  if (pid <= 0)
+    return;
+
+  for (i = 0; i < [_entries count]; i++)
+    {
+      _GWPMonEntry *e = [_entries objectAtIndex: i];
+      if (e->_pid == pid)
+        {
+          [_entries removeObjectAtIndex: i];
+          break;
+        }
+    }
+  if ([_entries count] == 0 && _pollTimer != nil)
+    {
+      [_pollTimer invalidate];
+      _pollTimer = nil;
+    }
+}
+
+- (void)_pollTimerFired:(NSTimer *)timer
+{
+  NSArray *snapshot = [[_entries copy] autorelease];
+
+  for (_GWPMonEntry *e in snapshot)
+    {
+      if (GWWin32ProcessIsAlive(e->_pid) == NO)
+        {
+          pid_t pid = e->_pid;
+          id token = [[e->_token retain] autorelease];
+          void (^cb)(pid_t, id) = [[e->_block retain] autorelease];
+
+          [self removePID: pid];
+          if (cb)
+            {
+              cb(pid, token);
+            }
+        }
+    }
+}
+
+- (BOOL)processOrChildrenAlive:(pid_t)pid
+{
+  /* Child processes are not tracked on Windows. */
+  return GWWin32ProcessIsAlive(pid);
+}
+
+- (BOOL)processNamedAlive:(NSString *)name
+{
+  /* No process-name scan on Windows. */
+  (void)name;
+  return NO;
+}
+
+@end
+
+#endif /* _WIN32 */

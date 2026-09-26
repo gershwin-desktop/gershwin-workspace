@@ -31,8 +31,10 @@
  * animation on FreeBSD/NextBSD/OpenBSD while the X11-based close animation
  * (which lives in X11AppSupport.m) kept working.
  */
+#ifndef _WIN32
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
+#endif
 #include <stdint.h>
 #import "GWViewersManager.h"
 #import "GWViewer.h"
@@ -1688,6 +1690,7 @@ static GWViewersManager *vwrsmanager = nil;
     animationType = 1; // NoAnimation
   }
 
+#ifndef _WIN32
   GSDisplayServer *server = GSServerForWindow(window);
   if (!server) {
     server = GSCurrentServer();
@@ -1771,6 +1774,7 @@ static GWViewersManager *vwrsmanager = nil;
   // change is visible, and the WindowManager will not see the birth data.
   XSync(display, False);
   XSetErrorHandler(oldHandler);
+#endif
 
 }
 

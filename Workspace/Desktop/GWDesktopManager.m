@@ -26,7 +26,9 @@
 
 #import <AppKit/AppKit.h>
 #include <GNUstepGUI/GSDisplayServer.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
+#endif
 #import "GWDesktopManager.h"
 #import "GWDesktopWindow.h"
 #import "GWDesktopView.h"
@@ -36,8 +38,10 @@
 #import "Workspace.h"
 #import "GWViewersManager.h"
 #import "Thumbnailer/GWThumbnailer.h"
+#ifndef _WIN32
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
+#endif
 #include <math.h>
 #include <unistd.h>
 
@@ -184,6 +188,7 @@ static GWDesktopManager *desktopManager = nil;
   
   // Set the desktop window as the X11 active window so Menu.app shows its menus
   // This is needed because the desktop is the first window and should show menus on startup
+#ifndef _WIN32
   Display *display = XOpenDisplay(NULL);
   if (display)
     {
@@ -205,6 +210,7 @@ static GWDesktopManager *desktopManager = nil;
         }
       XCloseDisplay(display);
     }
+#endif
   
   [desktopView showMountedVolumes];
   [desktopView showContentsOfNode: dskNode];

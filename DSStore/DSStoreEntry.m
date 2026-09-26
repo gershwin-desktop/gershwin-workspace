@@ -5,23 +5,23 @@
  */
 
 #import "DSStoreEntry.h"
-#include <arpa/inet.h>  // For htonl, ntohl, htons, ntohs
+#import <Foundation/NSByteOrder.h>  // For NSSwapHostIntToBig etc. (portable htonl/ntohl)
 
 // Byte swapping functions for portability
 static inline uint32_t swapInt32HostToBig(uint32_t x) {
-    return htonl(x);
+    return NSSwapHostIntToBig(x);
 }
 
 static inline uint32_t swapInt32BigToHost(uint32_t x) {
-    return ntohl(x);
+    return NSSwapBigIntToHost(x);
 }
 
 static inline uint16_t swapInt16HostToBig(uint16_t x) {
-    return htons(x);
+    return NSSwapHostShortToBig(x);
 }
 
 static inline uint16_t swapInt16BigToHost(uint16_t x) {
-    return ntohs(x);
+    return NSSwapBigShortToHost(x);
 }
 
 @implementation DSStoreEntry

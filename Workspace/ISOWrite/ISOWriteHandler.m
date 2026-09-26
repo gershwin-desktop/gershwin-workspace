@@ -30,6 +30,10 @@
 #import <GNUstepBase/GNUstep.h>
 
 #import <sys/stat.h>
+#if defined(_WIN32) && !defined(S_ISBLK)
+/* No block devices on Windows */
+# define S_ISBLK(m) (0)
+#endif
 
 /* Singleton list of active operations */
 static NSMutableArray *activeOperations = nil;

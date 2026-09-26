@@ -27,13 +27,17 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#ifndef _WIN32
 #include <sys/statvfs.h>
+#endif
 #include <string.h>
 #include <errno.h>
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
+#endif
 #import "FSNFunctions.h"
 #import "Attributes.h"
 #import "Inspector.h"
@@ -57,6 +61,35 @@ static NSString *nibName = @"Attributes";
 
 static BOOL sizeStop = NO;
 
+#ifdef _WIN32
+/* Helper function to get volume information via NSFileManager (no statvfs on MinGW) */
+static BOOL getVolumeInfo(const char *path, unsigned long long *total,
+                          unsigned long long *free_space,
+                          unsigned long long *available_space)
+{
+  NSString *nspath = (path != NULL) ? [NSString stringWithUTF8String: path] : nil;
+  NSDictionary *fsattrs = nil;
+
+  if (nspath == nil) {
+    return NO;
+  }
+  fsattrs = [[NSFileManager defaultManager] attributesOfFileSystemForPath: nspath
+                                                                    error: NULL];
+  if (fsattrs == nil) {
+    return NO;
+  }
+  if (total) {
+    *total = [[fsattrs objectForKey: NSFileSystemSize] unsignedLongLongValue];
+  }
+  if (free_space) {
+    *free_space = [[fsattrs objectForKey: NSFileSystemFreeSize] unsignedLongLongValue];
+  }
+  if (available_space) {
+    *available_space = [[fsattrs objectForKey: NSFileSystemFreeSize] unsignedLongLongValue];
+  }
+  return YES;
+}
+#else
 /* Helper function to get volume information using statvfs */
 static BOOL getVolumeInfo(const char *path, unsigned long long *total, 
                           unsigned long long *free_space, 
@@ -83,6 +116,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
   // NSLog(@"Attributes: statvfs FAILED - errno=%d", errno);
   return NO;
 }
+#endif /* _WIN32 */
 
 @implementation Attributes
 
@@ -836,9 +870,15 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
   NS_DURING
   {
+#ifdef _WIN32
+    [NSThread detachNewThreadSelector: @selector(createSizerWithPorts:)
+                             toTarget: [Sizer class]
+                           withObject: portArray];
+#else
     dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
       [Sizer createSizerWithPorts:portArray];
     });
+#endif
   }
   NS_HANDLER
   {

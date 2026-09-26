@@ -37,7 +37,9 @@ Workspace_HAS_RESOURCE_BUNDLE = yes
 ADDITIONAL_GUI_LIBS += -lFSNode
 ADDITIONAL_GUI_LIBS += -lInspector
 ADDITIONAL_GUI_LIBS += -lOperation
-ADDITIONAL_GUI_LIBS += -ldispatch
+ifneq ($(findstring mingw,$(GNUSTEP_TARGET_OS)),mingw)
+  ADDITIONAL_GUI_LIBS += -ldispatch
+endif
 ADDITIONAL_GUI_LIBS += -lDSStore
 ADDITIONAL_GUI_LIBS += -lGSMetadata
 ADDITIONAL_GUI_LIBS += -larchive
@@ -93,6 +95,7 @@ Workspace+UITesting.m \
 X11AppSupport.m \
 GWProcessMonitor.m \
 GWProcessOwnership.m \
+GWWin32Process.m \
 GWDetachedCommand.m \
 GWURLSchemeRegistry.m \
 GWURLOpener.m \

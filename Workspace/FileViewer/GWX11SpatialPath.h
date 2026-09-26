@@ -10,7 +10,9 @@
  */
 
 #import <Foundation/Foundation.h>
+#ifndef _WIN32
 #import <X11/Xlib.h>
+#endif
 
 @class FSNode;
 @class NSWindow;
@@ -20,7 +22,11 @@
   NSWindow *_window;
   NSString *_currentPath;
   NSTimer *_pollTimer;
+#ifndef _WIN32
   Display *_dpy;   /* persistent X connection, reused across atom ops */
+#else
+  void *_dpy;      /* unused on Windows */
+#endif
 }
 
 - (instancetype)initWithWindow:(NSWindow *)window path:(NSString *)path;

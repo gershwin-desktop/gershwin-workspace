@@ -9,6 +9,8 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepGUI/GSDisplayServer.h>
 
+#ifndef _WIN32
+
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/Xutil.h>
@@ -103,6 +105,8 @@ void GWInstallX11IOErrorLogger(void)
     gwPreviousIOErrorHandler = XSetIOErrorHandler(gwX11IOErrorLogger);
 }
 
+#endif /* !_WIN32 */
+
 #pragma mark - GWX11WindowInfo Implementation
 
 @implementation GWX11WindowInfo
@@ -135,6 +139,8 @@ void GWInstallX11IOErrorLogger(void)
 }
 
 @end
+
+#ifndef _WIN32
 
 #pragma mark - GWX11WindowManager Implementation
 
@@ -1891,3 +1897,306 @@ BOOL GWForeignWindowIsUnderPointer(void)
        neither must our own windows should this GNUstep stop setting it. */
     return (pid != 0);
 }
+
+#else /* _WIN32 */
+
+#import "GWWin32Process.h"
+
+/* Windows: there is no X11 server to query, so window management for
+ * non-GNUstep applications is unavailable.  Every query answers "no windows"
+ * and every operation reports failure; process liveness uses Win32. */
+
+#pragma mark - GWX11WindowManager Implementation (Windows stub)
+
+@implementation GWX11WindowManager
+
+static GWX11WindowManager *sharedWindowManager = nil;
+
++ (instancetype)sharedManager
+{
+    if (sharedWindowManager == nil) {
+        sharedWindowManager = [[GWX11WindowManager alloc] init];
+    }
+    return sharedWindowManager;
+}
+
+- (void)closeThreadDisplay
+{
+}
+
+- (NSArray *)allClientWindows
+{
+    return [NSArray array];
+}
+
+- (NSArray *)windowsForPID:(pid_t)pid
+{
+    return [NSArray array];
+}
+
+- (NSArray *)windowsMatchingName:(NSString *)name
+{
+    return [NSArray array];
+}
+
+- (unsigned long)findWindowByName:(NSString *)name
+{
+    return 0;
+}
+
+- (unsigned long)findWindowByPID:(pid_t)pid
+{
+    return 0;
+}
+
+- (BOOL)activateWindow:(unsigned long)windowID
+{
+    return NO;
+}
+
+- (BOOL)activateWindowsForPID:(pid_t)pid
+{
+    return NO;
+}
+
+- (BOOL)activateWindowsMatchingName:(NSString *)name
+{
+    return NO;
+}
+
+- (BOOL)iconifyWindow:(unsigned long)windowID
+{
+    return NO;
+}
+
+- (BOOL)iconifyWindowsForPID:(pid_t)pid
+{
+    return NO;
+}
+
+- (BOOL)iconifyWindowsMatchingName:(NSString *)name
+{
+    return NO;
+}
+
+- (BOOL)iconifyNonGNUstepWindowsExceptPID:(pid_t)pid
+{
+    return NO;
+}
+
+- (BOOL)restoreIconifiedWindows
+{
+    return NO;
+}
+
+- (BOOL)restoreWindow:(unsigned long)windowID
+{
+    return NO;
+}
+
+- (BOOL)restoreWindowsForPID:(pid_t)pid
+{
+    return NO;
+}
+
+- (BOOL)restoreWindowsMatchingName:(NSString *)name
+{
+    return NO;
+}
+
+- (BOOL)setIconGeometry:(NSRect)rect forPID:(pid_t)pid
+{
+    return NO;
+}
+
+- (BOOL)setIconGeometry:(NSRect)rect forName:(NSString *)name
+{
+    return NO;
+}
+
+- (BOOL)isWindowIconified:(unsigned long)windowID
+{
+    return NO;
+}
+
+- (BOOL)isWindowVisible:(unsigned long)windowID
+{
+    return NO;
+}
+
+- (BOOL)hasWindowsForPID:(pid_t)pid
+{
+    return NO;
+}
+
+- (BOOL)hasWindowsMatchingName:(NSString *)name
+{
+    return NO;
+}
+
+- (BOOL)closeWindow:(unsigned long)windowID
+{
+    return NO;
+}
+
+- (BOOL)closeWindowsForPID:(pid_t)pid
+{
+    return NO;
+}
+
+- (BOOL)animateWindowClose:(unsigned long)windowID
+               targetRect:(NSRect)targetRect
+{
+    return NO;
+}
+
+- (BOOL)windowManagerSupportsWindowAnimation
+{
+    return NO;
+}
+
+- (BOOL)contentRectFromXGeometry:(GWNativeWindowID)xwindow
+                    screenHeight:(CGFloat)screenHeight
+                        outRect:(NSRect *)outRect
+{
+    return NO;
+}
+
+- (BOOL)frameExtentsForWindow:(GWNativeWindowID)xwindow
+                      outLeft:(unsigned long *)l
+                     outRight:(unsigned long *)r
+                      outTop:(unsigned long *)t
+                   outBottom:(unsigned long *)b
+{
+    return NO;
+}
+
+- (BOOL)windowIsMappedAndFramed:(GWNativeWindowID)xwindow
+{
+    return NO;
+}
+
+@end
+
+#pragma mark - GWX11AppManager Implementation (Windows stub)
+
+@implementation GWX11AppManager
+
+@synthesize delegate;
+
+static GWX11AppManager *sharedX11AppManager = nil;
+
++ (instancetype)sharedManager
+{
+    if (sharedX11AppManager == nil) {
+        sharedX11AppManager = [[GWX11AppManager alloc] init];
+    }
+    return sharedX11AppManager;
+}
+
+- (id)init
+{
+    self = [super init];
+    if (self) {
+        x11Apps = [[NSMutableDictionary alloc] init];
+        monitorTimer = nil;
+        delegate = nil;
+    }
+    return self;
+}
+
+- (void)dealloc
+{
+    [monitorTimer invalidate];
+    RELEASE(x11Apps);
+    [super dealloc];
+}
+
+- (BOOL)processExists:(pid_t)pid
+{
+    return GWWin32ProcessIsAlive(pid);
+}
+
+- (void)registerX11App:(NSString *)appName
+                  path:(NSString *)appPath
+                   pid:(pid_t)pid
+    windowSearchString:(NSString *)windowSearchString
+{
+    static BOOL warned = NO;
+
+    if (!warned) {
+        warned = YES;
+        NSLog(@"GWX11AppManager: non-GNUstep application windows are not managed on Windows");
+    }
+    if (appName != nil) {
+        [x11Apps setObject: [NSNumber numberWithInt: (int)pid] forKey: appName];
+    }
+}
+
+- (void)unregisterX11App:(NSString *)appName
+{
+    if (appName != nil) {
+        [x11Apps removeObjectForKey: appName];
+    }
+}
+
+- (BOOL)isX11App:(NSString *)appName
+{
+    return (appName != nil && [x11Apps objectForKey: appName] != nil);
+}
+
+- (BOOL)activateX11App:(NSString *)appName
+{
+    return NO;
+}
+
+- (BOOL)hideX11App:(NSString *)appName
+{
+    return NO;
+}
+
+- (BOOL)unhideX11App:(NSString *)appName
+{
+    return NO;
+}
+
+- (BOOL)x11AppHasVisibleWindows:(NSString *)appName
+{
+    return NO;
+}
+
+- (pid_t)pidForX11App:(NSString *)appName
+{
+    NSNumber *pid = (appName != nil) ? [x11Apps objectForKey: appName] : nil;
+
+    return (pid != nil) ? (pid_t)[pid intValue] : 0;
+}
+
+- (BOOL)quitX11App:(NSString *)appName timeout:(NSTimeInterval)timeout
+{
+    pid_t pid = [self pidForX11App: appName];
+
+    if (pid <= 0) {
+        return NO;
+    }
+    if (GWWin32TerminateProcess(pid)) {
+        [self unregisterX11App: appName];
+        return YES;
+    }
+    return NO;
+}
+
+@end
+
+#pragma mark - Windows stubs for the C entry points
+
+void GWInstallX11IOErrorLogger(void)
+{
+}
+
+BOOL GWForeignWindowIsUnderPointer(void)
+{
+    return NO;
+}
+
+#endif /* _WIN32 */

@@ -11,7 +11,7 @@
 #if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__)
 # include <sys/param.h>
 # include <sys/mount.h>
-#else
+#elif !defined(_WIN32)
 # include <sys/statfs.h>
 #endif
 #import "VolumeManager.h"
@@ -22,6 +22,22 @@
 #import "Desktop/GWDesktopManager.h"
 #import "Desktop/GWDesktopView.h"
 #import "GWUnmountHelper.h"
+
+#ifdef _WIN32
+/* No POSIX signals (and no FUSE) on Windows: disk image mounting is inert
+ * here, so kill() only needs to report "no such process". */
+#ifndef SIGKILL
+# define SIGKILL 9
+#endif
+static int gw_stub_kill(int pid, int sig)
+{
+  (void)pid;
+  (void)sig;
+  errno = ESRCH;
+  return -1;
+}
+#define kill(p, s) gw_stub_kill((p), (s))
+#endif
 
 static VolumeManager *sharedInstance = nil;
 
@@ -215,11 +231,19 @@ static VolumeManager *sharedInstance = nil;
 
 - (BOOL)isMountPointActive:(NSString *)mountPoint
 {
+#ifdef _WIN32
+  BOOL isDir = NO;
+  if ([fm fileExistsAtPath:mountPoint isDirectory:&isDir] && isDir) {
+    return YES;
+  }
+  return NO;
+#else
   struct statfs statbuf;
   if (statfs([mountPoint UTF8String], &statbuf) == 0) {
     return YES;
   }
   return NO;
+#endif
 }
 
 /* Verify that the mount point has at least one entry and that the FUSE PID is running */

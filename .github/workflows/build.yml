@@ -9,7 +9,7 @@ name: Build Gershwin Workspace
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, windows]
   pull_request:
   workflow_dispatch:
 

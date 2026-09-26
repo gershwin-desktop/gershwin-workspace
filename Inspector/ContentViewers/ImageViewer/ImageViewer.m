@@ -24,7 +24,9 @@
  */
 
 #import <AppKit/AppKit.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
+#endif
 #import "ImageViewer.h"
 #include <math.h>
 
@@ -158,9 +160,15 @@
                                               sendPort: p2];
       [conn setRootObject:self];
 
+#ifdef _WIN32
+      [NSThread detachNewThreadSelector: @selector(connectWithPorts:)
+                               toTarget: [ImageResizer class]
+                             withObject: [NSArray arrayWithObjects: p2, p1, nil]];
+#else
       dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         [ImageResizer connectWithPorts:[NSArray arrayWithObjects: p2, p1, nil]];
       });   
+#endif
     }
   
   if (!(resizer == nil))

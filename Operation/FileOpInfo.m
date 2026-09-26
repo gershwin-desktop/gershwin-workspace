@@ -26,7 +26,9 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
+#endif
 
 #import "FSNAlias.h"
 
@@ -352,9 +354,15 @@ static NSString *nibName = @"FileOperationWin";
 
   NS_DURING
     {
+#ifdef _WIN32
+      [NSThread detachNewThreadSelector: @selector(setPorts:)
+                               toTarget: [FileOpExecutor class]
+                             withObject: ports];
+#else
       dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
         [FileOpExecutor setPorts:ports];
       });
+#endif
     }
   NS_HANDLER
     {

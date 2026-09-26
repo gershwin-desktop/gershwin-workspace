@@ -209,9 +209,10 @@ _gs_remove(const char *path, const char *name)
 #define STRIP_USER_PREFIX(n) \
   ((strncmp((n), "user.", 5) == 0) ? (n) + 5 : (n))
 
-#elif defined(__OpenBSD__)
+#elif defined(__OpenBSD__) || defined(_WIN32)
 /*
- * OpenBSD does not support extended attributes.
+ * OpenBSD does not support extended attributes, and on Windows (MinGW)
+ * no POSIX xattr API is available.
  * All operations return ENOTSUP (operation not supported).
  * Metadata is handled via .DS_Store and AppleDouble sidecar files instead.
  */
@@ -246,7 +247,7 @@ _gs_remove(const char *path, const char *name)
 }
 
 #else
-# error "Unsupported platform: only Linux, FreeBSD, and OpenBSD are supported."
+# error "Unsupported platform: only Linux, FreeBSD, OpenBSD and Windows (MinGW) are supported."
 #endif /* platform */
 
 /* ===================================================================

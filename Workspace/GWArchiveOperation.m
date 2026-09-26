@@ -8,7 +8,9 @@
 #import "GWArchiveOperation.h"
 #import "GWMetaArchive.h"
 
+#ifndef _WIN32
 #include <dispatch/dispatch.h>
+#endif
 
 /* =================================================================
  * Private helpers

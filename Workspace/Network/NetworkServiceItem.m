@@ -6,9 +6,11 @@
  */
 
 #import "NetworkServiceItem.h"
+#ifndef _WIN32
 #import <sys/socket.h>
 #import <netinet/in.h>
 #import <arpa/inet.h>
+#endif
 
 @implementation NetworkServiceItem
 
@@ -107,6 +109,7 @@
   }
 
   /* Check every address for 127.x.x.x (IPv4 loopback) or ::1 (IPv6 loopback) */
+#ifndef _WIN32
   for (NSData *addrData in addresses) {
     const struct sockaddr *addr = (const struct sockaddr *)[addrData bytes];
     if (addr->sa_family == AF_INET) {
@@ -121,6 +124,7 @@
       }
     }
   }
+#endif /* !_WIN32 */
 
   return NO;
 }

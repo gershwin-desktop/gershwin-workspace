@@ -6,7 +6,9 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
+#endif
 #import "GWApplicationLauncher.h"
 #import <unistd.h>
 #include <fcntl.h>

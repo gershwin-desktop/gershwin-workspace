@@ -9,6 +9,7 @@
 #import <AppKit/NSApplication.h>
 #import <AppKit/NSEvent.h>
 #import <AppKit/NSAlert.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
@@ -16,6 +17,7 @@
 #include <signal.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#endif
 #include <sys/stat.h>
 #include <stdarg.h>
 #include <fcntl.h>
@@ -25,6 +27,8 @@
 
 #import "Workspace.h"
 #import <GNUstepGUI/GSDisplayServer.h>
+
+#ifndef _WIN32
 
 static GSGlobalShortcutsManager *sharedManager = nil;
 
@@ -1003,3 +1007,102 @@ static int GWX11GrabErrorHandler(Display *dpy, XErrorEvent *ev)
 }
 
 @end
+
+#else /* _WIN32 */
+
+/* Windows: there is no X11 key grabbing, so the global shortcuts manager is
+ * inert.  Every public method is a no-op that reports "not running". */
+
+static GSGlobalShortcutsManager *sharedManager = nil;
+
+@implementation GSGlobalShortcutsManager
+
++ (GSGlobalShortcutsManager *)sharedManager
+{
+    if (!sharedManager) {
+        sharedManager = [[GSGlobalShortcutsManager alloc] init];
+    }
+    return sharedManager;
+}
+
+- (id)init
+{
+    if ((self = [super init])) {
+        shortcuts = nil;
+        display = NULL;
+        rootWindow = 0;
+        running = NO;
+        verbose = NO;
+        defaultsDomain = @"GlobalShortcuts";
+        eventProcessingTimer = nil;
+        closeWindowKeyCode = 0;
+        closeWindowModifier = 0;
+    }
+    return self;
+}
+
+- (BOOL)startWithVerbose:(BOOL)verboseLogging
+{
+    verbose = verboseLogging;
+    NSLog(@"GSGlobalShortcutsManager: global shortcuts are not available on Windows");
+    return NO;
+}
+
+- (void)stop
+{
+    running = NO;
+}
+
+- (BOOL)loadShortcuts
+{
+    return NO;
+}
+
+- (void)showCommandFailureAlert:(NSString *)command shortcut:(NSString *)shortcut
+{
+}
+
+- (void)processShortcutsData:(NSArray *)shortcutsArray
+{
+}
+
+- (void)reloadShortcutsIfChanged
+{
+}
+
+- (void)globalShortcutsConfigurationChanged:(NSNotification *)notification
+{
+}
+
+- (void)grabCloseWindowShortcut
+{
+}
+
+- (void)ungrabCloseWindowShortcut
+{
+}
+
+- (void)ungrabKeyCombo:(NSString *)keyCombo
+{
+}
+
+- (void)ungrabAllKeys
+{
+}
+
+- (void)temporarilyDisableAllShortcuts:(NSNotification *)notification
+{
+}
+
+- (void)reEnableAllShortcuts:(NSNotification *)notification
+{
+}
+
+- (BOOL)isShortcutAlreadyTaken:(NSString *)keyCombo
+{
+    return NO;
+}
+
+@end
+
+#endif /* _WIN32 */

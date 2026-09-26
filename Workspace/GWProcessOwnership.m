@@ -5,6 +5,9 @@
  */
 
 #import "GWProcessOwnership.h"
+#ifdef _WIN32
+#import "GWWin32Process.h"
+#endif
 
 #include <ctype.h>
 #include <errno.h>
@@ -13,7 +16,7 @@
 #include <string.h>
 #include <unistd.h>
 
-#if !defined(__linux__)
+#if !defined(__linux__) && !defined(_WIN32)
 #include <sys/param.h>
 #include <sys/sysctl.h>
 #if defined(__FreeBSD__)
@@ -200,6 +203,17 @@ static NSString *GWProcessDisplay(pid_t pid)
   return display;
 }
 
+#elif defined(_WIN32)
+
+/* Windows: there is no per-process uid or DISPLAY to compare against.  A
+ * single desktop session is assumed, so the checks below reduce to "does the
+ * process exist" and the environment lookup answers "unknown". */
+static NSString *GWProcessDisplay(pid_t pid)
+{
+  (void)pid;
+  return nil;
+}
+
 #else
 #error "GWProcessOwnership: no process owner/environment lookup for this OS"
 #endif
@@ -226,11 +240,15 @@ static NSString *GWProcessDisplay(pid_t pid)
 
 + (BOOL)isProcessOwnedByCurrentUser:(pid_t)pid
 {
+#ifdef _WIN32
+  return GWWin32ProcessIsAlive(pid);
+#else
   uid_t uid;
 
   if (pid <= 0)
     return NO;
   return GWProcessEffectiveUID(pid, &uid) && uid == getuid();
+#endif
 }
 
 + (NSString *)displayOfProcess:(pid_t)pid
@@ -244,7 +262,11 @@ static NSString *GWProcessDisplay(pid_t pid)
 {
   if ([self isProcessOwnedByCurrentUser: pid] == NO)
     return NO;
+#ifdef _WIN32
+  return YES;
+#else
   return [self display: [self displayOfProcess: pid] isSameAsDisplay: [self currentDisplay]];
+#endif
 }
 
 + (BOOL)isNotificationInfoInCurrentSession:(NSDictionary *)info
@@ -255,11 +277,16 @@ static NSString *GWProcessDisplay(pid_t pid)
   if (ident != nil)
     return [self isProcessInCurrentSession: (pid_t)[ident intValue]];
 
+#ifdef _WIN32
+  (void)display;
+  return YES;
+#else
   display = [info objectForKey: GWLaunchDisplayKey];
   if (display != nil)
     return [self display: display isSameAsDisplay: [self currentDisplay]];
 
   return NO;
+#endif
 }
 
 @end

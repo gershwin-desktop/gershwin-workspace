@@ -9,8 +9,13 @@
 
 #import <Foundation/Foundation.h>
 
-/* Window is the X11 window id type used by the frame extent helpers below. */
+/* GWNativeWindowID is the native window id type used by the frame extent
+ * helpers below (the X11 Window id on X11; unused on Windows). */
+typedef unsigned long GWNativeWindowID;
+
+#ifndef _WIN32
 #include <X11/Xlib.h>
+#endif
 
 /**
  * X11AppSupport provides native X11 window management for non-GNUstep
@@ -279,13 +284,13 @@
  * origin) from its actual X11 client geometry (the client window is the
  * content area; the WM wraps it in a frame).  This is exact where GNUstep's
  * own frame tracking can be a couple of px off.  See X11AppSupport.m. */
-- (BOOL)contentRectFromXGeometry:(Window)xwindow
+- (BOOL)contentRectFromXGeometry:(GWNativeWindowID)xwindow
                     screenHeight:(CGFloat)screenHeight
                         outRect:(NSRect *)outRect;
 /* Read the WM's real _NET_FRAME_EXTENTS for a client window.  The extents are
  * absent until the WM has framed the window, so callers must retry until this
  * returns YES.  See X11AppSupport.m. */
-- (BOOL)frameExtentsForWindow:(Window)xwindow
+- (BOOL)frameExtentsForWindow:(GWNativeWindowID)xwindow
                       outLeft:(unsigned long *)l
                      outRight:(unsigned long *)r
                       outTop:(unsigned long *)t
@@ -296,7 +301,7 @@
  * positive top).  An unmapped ghost window or one caught mid-framing (extents
  * not yet set) sits at a transient/bogus position; callers should not persist
  * geometry from such a window.  See X11AppSupport.m. */
-- (BOOL)windowIsMappedAndFramed:(Window)xwindow;
+- (BOOL)windowIsMappedAndFramed:(GWNativeWindowID)xwindow;
 
 @end
 

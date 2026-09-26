@@ -20,6 +20,22 @@
 #import "../Desktop/GWDesktopManager.h"
 #import "../Desktop/GWDesktopView.h"
 
+#ifdef _WIN32
+/* No POSIX signals (and no sshfs/FUSE) on Windows: kill() only needs to
+ * report "no such process" so the unmount paths stay inert. */
+#ifndef SIGKILL
+# define SIGKILL 9
+#endif
+static int gw_stub_kill(int pid, int sig)
+{
+  (void)pid;
+  (void)sig;
+  errno = ESRCH;
+  return -1;
+}
+#define kill(p, s) gw_stub_kill((p), (s))
+#endif
+
 // Forward declare setAccessoryView for NSAlert (available in newer GNUstep)
 @interface NSAlert (AccessoryView)
 - (void)setAccessoryView:(NSView *)view;

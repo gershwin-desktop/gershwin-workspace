@@ -9,12 +9,19 @@ SUBPROJECTS = \
         fswatcher \
         searchtool \
         lsfupdater \
+        wopen
+
+# Unix-only tools: ddbd needs libdispatch, uitest needs X11, and the three
+# helpers drive Unix mount/format/block-device machinery.
+ifeq ($(findstring mingw,$(GNUSTEP_TARGET_OS)),mingw)
+else
+SUBPROJECTS += \
         ddbd \
-        wopen \
         uitest \
         isowrite-helper \
         formatdisk-helper \
         gw-unmount
+endif
 
 ifeq ($(with_squashfs),yes)
 SUBPROJECTS += appimage-icon-test

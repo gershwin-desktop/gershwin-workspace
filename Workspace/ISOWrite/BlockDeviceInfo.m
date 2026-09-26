@@ -21,7 +21,9 @@
 # import <sys/types.h>
 # import <sys/param.h>
 #endif
+#ifndef _WIN32
 #import <sys/ioctl.h>
+#endif
 #ifdef __linux__
 #import <linux/fs.h>
 #endif
@@ -32,6 +34,33 @@
 #import <fcntl.h>
 #import <unistd.h>
 #import <errno.h>
+
+#ifdef _WIN32
+/* Windows (MinGW): no block devices, ioctl(), mount table or dev_t major
+ * numbers.  Inert stand-ins so the non-Linux code paths below compile;
+ * every probe simply finds nothing. */
+struct statfs {
+  char f_mntonname[1];
+  char f_mntfromname[1];
+  char f_fstypename[1];
+};
+#define MNT_NOWAIT 0
+static int getmntinfo(struct statfs **mntbufp, int flags)
+{
+  (void)flags;
+  *mntbufp = NULL;
+  return 0;
+}
+#ifndef major
+# define major(dev) ((unsigned int)(dev))
+#endif
+#ifndef S_ISBLK
+# define S_ISBLK(m) (0)
+#endif
+#ifndef S_ISCHR
+# define S_ISCHR(m) (0)
+#endif
+#endif /* _WIN32 */
 
 @implementation PartitionInfo
 

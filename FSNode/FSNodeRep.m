@@ -26,6 +26,9 @@
 #include <math.h>
 #include <dirent.h>
 #include <string.h>
+#ifdef _WIN32
+#include <sys/stat.h>
+#endif
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -363,6 +366,27 @@ static FSNodeRep *shared = nil;
                 inDirectoryAtPath: path
                  withHiddenNames: hiddenNames])
         {
+#ifdef _WIN32
+          /* MinGW's struct dirent has no d_type; stat() the entry instead. */
+          {
+            struct stat est;
+            NSString *epath = [path stringByAppendingPathComponent: fname];
+
+            if (stat([epath fileSystemRepresentation], &est) == 0)
+              {
+                if (S_ISDIR(est.st_mode))
+                  kind = FSNDirEntryKindDirectory;
+                else if (S_ISREG(est.st_mode))
+                  kind = FSNDirEntryKindPlain;
+                else
+                  kind = FSNDirEntryKindUnknown;
+              }
+            else
+              {
+                kind = FSNDirEntryKindUnknown;
+              }
+          }
+#else
           switch (dent->d_type)
             {
               case DT_DIR:
@@ -378,6 +402,7 @@ static FSNodeRep *shared = nil;
                 kind = FSNDirEntryKindUnknown;
                 break;
             }
+#endif
 
           [entries addObject: [[FSNDirEntry alloc] initWithName: fname
                                                             kind: kind]];
