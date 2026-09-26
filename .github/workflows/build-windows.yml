@@ -7,9 +7,13 @@ name: Build Gershwin Workspace (Windows)
 # root) and "make workspace" builds this checkout, which is placed where
 # checkout.sh would have cloned it (SKIP_REPOS keeps it from doing so).
 #
-# The core libraries change rarely and take most of the time, so the built
-# /System is cached, keyed on everything in gershwin-developer that goes into
-# it (repository pins, patches, scripts, package list).
+# The core libraries change rarely and take most of the time, so they are
+# not built here: gershwin-developer's Windows CI publishes the built,
+# self-contained /System as Gershwin-System-Windows-x86_64-<id>.zip on its
+# "windows-system" release, <id> being a hash of everything that produced it
+# (Library/Scripts/windows-system-id.sh). This workflow downloads the zip
+# with the id of the gershwin-developer checkout it builds with, and only
+# builds the stack itself when no such zip has been published yet.
 
 on:
   push:
@@ -84,28 +88,27 @@ jobs:
         working-directory: gershwin-developer
         run: ./Library/Scripts/checkout.sh
 
-      - name: Locate the MSYS2 root
-        id: msys2
-        run: echo "system=$(cygpath -w /System)" >> "$GITHUB_OUTPUT"
-
-      - name: Restore core libraries
-        id: corelibs-cache
-        uses: actions/cache/restore@v4
-        with:
-          path: ${{ steps.msys2.outputs.system }}
-          key: corelibs-windows-x86_64-${{ hashFiles('gershwin-developer/Library/Repositories.csv', 'gershwin-developer/Library/Patches/**', 'gershwin-developer/Library/Scripts/**', 'gershwin-developer/Library/OSSupport/windows.txt') }}
+      - name: Fetch the published core system
+        id: system
+        working-directory: gershwin-developer
+        run: |
+          ID=$(sh ./Library/Scripts/windows-system-id.sh)
+          URL="https://github.com/gershwin-desktop/gershwin-developer/releases/download/windows-system/Gershwin-System-Windows-x86_64-${ID}.zip"
+          echo "Core system id: $ID"
+          if curl -fsSL -o "$RUNNER_TEMP/system.zip" "$URL"; then
+            mkdir -p /System
+            ( cd /System && unzip -qo "$RUNNER_TEMP/system.zip" )
+            echo "Unpacked $URL into /System"
+            echo "fetched=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::No published core system for id $ID at $URL; building it here."
+            echo "fetched=false" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build core libraries
-        if: steps.corelibs-cache.outputs.cache-hit != 'true'
+        if: steps.system.outputs.fetched != 'true'
         working-directory: gershwin-developer
         run: make corelibs
-
-      - name: Save core libraries
-        if: steps.corelibs-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ steps.msys2.outputs.system }}
-          key: ${{ steps.corelibs-cache.outputs.cache-primary-key }}
 
       - name: Build workspace
         working-directory: gershwin-developer
