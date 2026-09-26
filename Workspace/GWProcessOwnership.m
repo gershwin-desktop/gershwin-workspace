@@ -60,6 +60,7 @@ static BOOL GWParseDisplay(NSString *name, NSString **host, long *display, long 
 
 /* Environments are NUL-separated "KEY=value" strings on Linux, FreeBSD and
  * NetBSD. */
+#ifndef _WIN32
 static NSString *GWDisplayInEnvironmentBlock(const char *buf, size_t len)
 {
   size_t i = 0;
@@ -77,6 +78,7 @@ static NSString *GWDisplayInEnvironmentBlock(const char *buf, size_t len)
     }
   return nil;
 }
+#endif /* !_WIN32 */
 
 #if defined(__linux__)
 

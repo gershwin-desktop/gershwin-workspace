@@ -164,6 +164,7 @@ static NSDictionary *mountInfoForPath(NSString *path)
             nil];
 }
 
+#ifndef _WIN32
 static NSString *stringForFSMagic(long magic)
 {
   switch (magic) {
@@ -197,6 +198,7 @@ static NSString *stringForFSMagic(long magic)
       return [NSString stringWithFormat:@"0x%08lX", magic];
   }
 }
+#endif /* !_WIN32 */
 
 /* ------------------------------------------------------------------ */
 #pragma mark - GWVolumeID implementation

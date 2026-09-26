@@ -19,6 +19,7 @@
 #endif
 
 /* Overlay/union filesystem type names recognised across platforms. */
+#ifndef _WIN32
 static BOOL
 FSIsOverlayFSType(NSString *fstype)
 {
@@ -76,6 +77,7 @@ FSIsOverlayRoot(void)
 #endif
   return NO;
 }
+#endif /* !_WIN32 */
 
 @implementation LowDiskWarn
 

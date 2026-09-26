@@ -135,7 +135,7 @@ void GWInstallX11IOErrorLogger(void)
 - (NSString *)description
 {
     return [NSString stringWithFormat:@"<GWX11WindowInfo: 0x%lx name='%@' class='%@' pid=%d>",
-            windowID, windowName, windowClass, ownerPID];
+            windowID, windowName, windowClass, (int)ownerPID];
 }
 
 @end

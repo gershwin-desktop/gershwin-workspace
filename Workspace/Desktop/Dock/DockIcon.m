@@ -425,7 +425,7 @@
 
   if (pid > 0)
     {
-      [self setToolTip: [NSString stringWithFormat: @"%@ [%d]", appName, pid]];
+      [self setToolTip: [NSString stringWithFormat: @"%@ [%d]", appName, (int)pid]];
 
       /* Register with kernel process monitor so we get notified the
        * instant the process exits, rather than relying on poll-based

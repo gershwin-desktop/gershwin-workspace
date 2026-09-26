@@ -106,7 +106,9 @@ static NSString *exePathForPID(pid_t pid)
   if (pid <= 0)
     return nil;
 
+#ifndef _WIN32
   char resolved[4096];
+#endif
 
 #if defined(__linux__)
   {
