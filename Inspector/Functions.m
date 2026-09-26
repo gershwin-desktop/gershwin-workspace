@@ -49,7 +49,13 @@ static NSString *fix_path(NSString *s, const char *c)
   
   len = strlen(ptr);
 
+#ifdef _WIN32
+  /* -stringWithFileSystemRepresentation:length: takes UTF-16 on Windows;
+     ptr is a narrow string here. */
+  return [NSString stringWithUTF8String: ptr];
+#else
   return [mgr stringWithFileSystemRepresentation: ptr length: len]; 
+#endif
 }
 
 NSString *fixpath(NSString *s, const char *c)
