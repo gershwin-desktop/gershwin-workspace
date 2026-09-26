@@ -22,6 +22,15 @@ struct statfs {
   char f_mntfromname[1];
   char f_mntonname[1];
 };
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
 #define MNT_NOWAIT 0
 static int statfs(const char *path, struct statfs *buf)
 {
@@ -100,7 +109,7 @@ static NSDictionary *mountInfoForPath(NSString *path)
 {
   if (!path || [path length] == 0) return nil;
 
-  const char *cpath = [path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(path);
   if (cpath == NULL) return nil;
   size_t plen = strlen(cpath);
 

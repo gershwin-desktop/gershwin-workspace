@@ -28,6 +28,15 @@
 # define lstat stat
 #endif
 
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
 #define READ_BLOCK_SIZE  10240
 #define WRITE_BLOCK_SIZE  16384
 
@@ -92,7 +101,7 @@ write_macosx_entry(struct archive *a, NSString *arcname, NSData *appleDouble)
     macosxPath = [NSString stringWithFormat: @"__MACOSX/%@/._%@", dir, file];
 
   struct archive_entry *e = archive_entry_new();
-  archive_entry_set_pathname(e, [macosxPath fileSystemRepresentation]);
+  archive_entry_set_pathname(e, GW_FSREP(macosxPath));
   archive_entry_set_filetype(e, AE_IFREG);
   archive_entry_set_size(e, [appleDouble length]);
   archive_entry_set_perm(e, 0644);
@@ -112,14 +121,14 @@ static int
 add_file_to_archive(struct archive *a, NSString *path, NSString *arcname)
 {
   struct stat st;
-  const char *cpath = [path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(path);
 
   if (lstat(cpath, &st) != 0)
     return ARCHIVE_WARN;
 
   /* Write the real file entry */
   struct archive_entry *entry = archive_entry_new();
-  archive_entry_set_pathname(entry, [arcname fileSystemRepresentation]);
+  archive_entry_set_pathname(entry, GW_FSREP(arcname));
   archive_entry_copy_stat(entry, &st);
 
   int r = archive_write_header(a, entry);
@@ -159,13 +168,13 @@ static int
 add_dir_to_archive(struct archive *a, NSString *path, NSString *arcname)
 {
   struct stat st;
-  const char *cpath = [path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(path);
 
   if (lstat(cpath, &st) != 0)
     return ARCHIVE_WARN;
 
   struct archive_entry *entry = archive_entry_new();
-  archive_entry_set_pathname(entry, [arcname fileSystemRepresentation]);
+  archive_entry_set_pathname(entry, GW_FSREP(arcname));
   archive_entry_copy_stat(entry, &st);
 
   int r = archive_write_header(a, entry);
@@ -327,7 +336,7 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
   archive_write_set_format_zip(a);
   archive_write_add_filter_none(a);
 
-  const char *outpath = [outputPath fileSystemRepresentation];
+  const char *outpath = GW_FSREP(outputPath);
   if (archive_write_open_filename(a, outpath) != ARCHIVE_OK)
     {
       if (error)
@@ -410,7 +419,7 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
   archive_read_support_format_all(a);
   archive_read_support_filter_all(a);
 
-  const char *cpath = [archivePath fileSystemRepresentation];
+  const char *cpath = GW_FSREP(archivePath);
   if (archive_read_open_filename(a, cpath, READ_BLOCK_SIZE) != ARCHIVE_OK)
     {
       if (error)
@@ -586,7 +595,7 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
             [fm createDirectoryAtPath: parent attributes: nil];
 
           mode_t openmode = (mode & ACCESSPERMS) ? (mode & ACCESSPERMS) : 0644;
-          int fd = open([destPath fileSystemRepresentation],
+          int fd = open(GW_FSREP(destPath),
                         O_WRONLY | O_CREAT | O_TRUNC, openmode);
           if (fd >= 0)
             {

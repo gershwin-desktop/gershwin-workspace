@@ -36,6 +36,15 @@
 #import "FSNAlias.h"
 #import "FSNodeRep.h"
 
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
 static GSFilenameExtensionDisplayMode _displayModeCache = -1;
 
 /* The mode as the defaults have it.  The first reading and every later poll
@@ -269,10 +278,10 @@ BOOL pathsAreOnSameVolume(NSString *path1, NSString *path2)
 {
   struct stat s1, s2;
 
-  if (stat([path1 fileSystemRepresentation], &s1) != 0) {
+  if (stat(GW_FSREP(path1), &s1) != 0) {
     return NO;
   }
-  if (stat([path2 fileSystemRepresentation], &s2) != 0) {
+  if (stat(GW_FSREP(path2), &s2) != 0) {
     return NO;
   }
 

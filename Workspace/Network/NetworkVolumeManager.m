@@ -26,6 +26,15 @@
 #ifndef SIGKILL
 # define SIGKILL 9
 #endif
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
 static int gw_stub_kill(int pid, int sig)
 {
   (void)pid;
@@ -768,7 +777,7 @@ static NetworkVolumeManager *sharedInstance = nil;
       NSArray *contents = [fm contentsOfDirectoryAtPath:path error:&contentsErr];
       if (contents && ([contents count] == 0)) {
         // Use rmdir (non-recursive) instead of removeItemAtPath
-        if (rmdir([path fileSystemRepresentation]) == 0) {
+        if (rmdir(GW_FSREP(path)) == 0) {
           directoryRemoved = YES;
         } else {
         }

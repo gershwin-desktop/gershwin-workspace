@@ -9,6 +9,15 @@
 #include <string.h>
 
 /* Seconds between 1904-01-01 (classic Mac epoch) and 1970-01-01. */
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
 #define MAC_EPOCH_OFFSET 2082844800u
 
 /* How deep below the last known ancestor the inode search may descend. */
@@ -648,7 +657,7 @@ NSString * const FSNWorkspaceCreateAliasOperation =
 + (FSNAlias *)aliasWithPath:(NSString *)path
 {  struct stat st;
   FSNAlias *a;
-  const char *rep = [path fileSystemRepresentation];
+  const char *rep = GW_FSREP(path);
 
   if (rep == NULL || stat(rep, &st) != 0)
     {
@@ -675,7 +684,7 @@ NSString * const FSNWorkspaceCreateAliasOperation =
       {
 	struct stat dst;
 
-	if (stat([dir fileSystemRepresentation], &dst) != 0)
+	if (stat(GW_FSREP(dir), &dst) != 0)
 	  {
 	    break;
 	  }
@@ -1308,7 +1317,7 @@ searchByInode(NSString *dir, uint32_t inode, int depth)
       NSString *full = [dir stringByAppendingPathComponent: name];
       struct stat st;
 
-      if (stat([full fileSystemRepresentation], &st) != 0)
+      if (stat(GW_FSREP(full), &st) != 0)
 	{
 	  continue;
 	}
@@ -1341,7 +1350,7 @@ searchByInode(NSString *dir, uint32_t inode, int depth)
 	{
 	  return _posixPath;
 	}
-      if (stat([_posixPath fileSystemRepresentation], &st) == 0
+      if (stat(GW_FSREP(_posixPath), &st) == 0
 	  && (uint32_t)st.st_ino == _targetCNID)
 	{
 	  return _posixPath;

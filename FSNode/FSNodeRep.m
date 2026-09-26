@@ -69,6 +69,15 @@
   #endif
 #endif
 
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
 #define LABEL_W_FACT (8.0)
 #define FONT_H_FACT (1.5)
 
@@ -325,7 +334,7 @@ static FSNodeRep *shared = nil;
   NSMutableArray *entries = [NSMutableArray array];
   NSString *hdnFilePath = [path stringByAppendingPathComponent: @".hidden"];
   NSArray *hiddenNames = nil;
-  const char *cpath = [path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(path);
   DIR *dir;
   struct dirent *dent;
 
@@ -372,7 +381,7 @@ static FSNodeRep *shared = nil;
             struct stat est;
             NSString *epath = [path stringByAppendingPathComponent: fname];
 
-            if (stat([epath fileSystemRepresentation], &est) == 0)
+            if (stat(GW_FSREP(epath), &est) == 0)
               {
                 if (S_ISDIR(est.st_mode))
                   kind = FSNDirEntryKindDirectory;

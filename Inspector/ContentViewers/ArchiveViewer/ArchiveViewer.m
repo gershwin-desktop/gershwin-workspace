@@ -26,6 +26,15 @@
 #include <sys/stat.h>
 /* MinGW's <sys/stat.h> lacks these; the mode comes from libarchive anyway. */
 #ifndef S_ISLNK
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
 #define S_ISLNK(m) (((m) & AE_IFMT) == AE_IFLNK)
 #endif
 #ifndef S_ISSOCK
@@ -356,7 +365,7 @@
   archive_read_support_filter_all (a);
   archive_read_support_format_all (a);
 
-  r = archive_read_open_filename (a, [path fileSystemRepresentation], 10240);
+  r = archive_read_open_filename (a, GW_FSREP(path), 10240);
   if (r != ARCHIVE_OK)
     {
       const char *err = archive_error_string (a);
@@ -455,7 +464,7 @@
   archive_read_support_filter_all (a);
   archive_read_support_format_all (a);
 
-  if (archive_read_open_filename (a, [path fileSystemRepresentation], 10240)
+  if (archive_read_open_filename (a, GW_FSREP(path), 10240)
       == ARCHIVE_OK)
     {
       /* A real archive yields at least its first header.  This reads only

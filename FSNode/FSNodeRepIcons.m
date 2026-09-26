@@ -59,6 +59,15 @@
   }  
 */
 
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
 static unsigned char lighterLUT[256] = { 
   6, 10, 13, 15, 18, 20, 23, 25, 27, 29, 31, 33, 34, 36, 38, 40, 
   41, 43, 45, 46, 48, 49, 51, 52, 54, 55, 56, 58, 59, 61, 62, 63, 
@@ -135,16 +144,16 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
   /* Only regular files can be AppImages.  Opening a device node or FIFO can
    * block indefinitely (e.g. /dev/ptmx, a pipe with no writer), which would
    * hang the Workspace when a directory such as /dev is displayed. */
-  if (stat([path fileSystemRepresentation], &st) != 0)
+  if (stat(GW_FSREP(path), &st) != 0)
     return NO;
   if (!S_ISREG(st.st_mode))
     return NO;
 
   /* O_NONBLOCK so a slow file cannot stall the caller either. */
 #ifdef O_NONBLOCK
-  fd = open([path fileSystemRepresentation], O_RDONLY | O_NONBLOCK);
+  fd = open(GW_FSREP(path), O_RDONLY | O_NONBLOCK);
 #else
-  fd = open([path fileSystemRepresentation], O_RDONLY);
+  fd = open(GW_FSREP(path), O_RDONLY);
 #endif
   if (fd < 0)
     {

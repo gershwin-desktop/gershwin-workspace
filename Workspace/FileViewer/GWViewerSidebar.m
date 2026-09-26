@@ -30,6 +30,15 @@
 #import "NetworkVolumeManager.h"
 #import "Workspace.h"
 
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
 #define ROW_HEIGHT 20.0
 #define HEADER_HEIGHT 20.0
 #define ICON_SIZE 16
@@ -1021,7 +1030,7 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
 
     for (NSString *root in roots) {
       struct stat parentSt;
-      const char *rootC = [root fileSystemRepresentation];
+      const char *rootC = GW_FSREP(root);
       if (lstat(rootC, &parentSt) != 0) continue;
       if (!S_ISDIR(parentSt.st_mode)) continue;
 
@@ -1036,7 +1045,7 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
         if ([networkMountPaths containsObject: full]) continue;
 
         struct stat childSt;
-        if (lstat([full fileSystemRepresentation], &childSt) != 0) continue;
+        if (lstat(GW_FSREP(full), &childSt) != 0) continue;
         if (!S_ISDIR(childSt.st_mode)) continue;
         /* Same device as parent = directory exists but nothing is
            mounted there; skip so we don't list stale stub dirs. */
