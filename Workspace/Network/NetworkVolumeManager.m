@@ -20,12 +20,6 @@
 #import "../Desktop/GWDesktopManager.h"
 #import "../Desktop/GWDesktopView.h"
 
-#ifdef _WIN32
-/* No POSIX signals (and no sshfs/FUSE) on Windows: kill() only needs to
- * report "no such process" so the unmount paths stay inert. */
-#ifndef SIGKILL
-# define SIGKILL 9
-#endif
 /* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
    library calls here take narrow strings, so use the UTF-8 form there. On
    the other platforms this is the plain -fileSystemRepresentation call. */
@@ -35,6 +29,12 @@
 #define GW_FSREP(path) [(path) fileSystemRepresentation]
 #endif
 
+#ifdef _WIN32
+/* No POSIX signals (and no sshfs/FUSE) on Windows: kill() only needs to
+ * report "no such process" so the unmount paths stay inert. */
+#ifndef SIGKILL
+# define SIGKILL 9
+#endif
 static int gw_stub_kill(int pid, int sig)
 {
   (void)pid;

@@ -22,10 +22,6 @@
 #import <archive.h>
 #import <archive_entry.h>
 
-#ifdef _WIN32
-#include <sys/stat.h>
-/* MinGW's <sys/stat.h> lacks these; the mode comes from libarchive anyway. */
-#ifndef S_ISLNK
 /* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
    library calls here take narrow strings, so use the UTF-8 form there. On
    the other platforms this is the plain -fileSystemRepresentation call. */
@@ -35,6 +31,10 @@
 #define GW_FSREP(path) [(path) fileSystemRepresentation]
 #endif
 
+#ifdef _WIN32
+#include <sys/stat.h>
+/* MinGW's <sys/stat.h> lacks these; the mode comes from libarchive anyway. */
+#ifndef S_ISLNK
 #define S_ISLNK(m) (((m) & AE_IFMT) == AE_IFLNK)
 #endif
 #ifndef S_ISSOCK
