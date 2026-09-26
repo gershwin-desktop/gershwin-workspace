@@ -767,7 +767,12 @@
   /* Allocate aligned buffer for direct I/O */
   size_t verifyChunkSize = 10 * 1024 * 1024;  /* 10 MB chunks */
   void *devBuffer = NULL;
+#ifdef _WIN32
+  /* No direct I/O and no posix_memalign() on Windows; plain malloc will do. */
+  devBuffer = malloc(verifyChunkSize);
+#else
   posix_memalign(&devBuffer, 4096, verifyChunkSize);
+#endif
   if (!devBuffer) {
     close(devFd);
     [isoHandle closeFile];
