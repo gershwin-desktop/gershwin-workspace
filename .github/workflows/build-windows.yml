@@ -1,0 +1,135 @@
+name: Build Gershwin Workspace (Windows)
+
+# Build gershwin-workspace for Windows against the real, patched Gershwin
+# GNUstep stack by reusing gershwin-developer's Windows support: its
+# bootstrap.sh installs the MSYS2 packages, checkout.sh clones the pinned
+# sources, "make corelibs" builds the stack into /System (inside the MSYS2
+# root) and "make workspace" builds this checkout, which is placed where
+# checkout.sh would have cloned it (SKIP_REPOS keeps it from doing so).
+#
+# The core libraries change rarely and take most of the time, so the built
+# /System is cached, keyed on everything in gershwin-developer that goes into
+# it (repository pins, patches, scripts, package list).
+
+on:
+  push:
+    branches: [main, dev, windows]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  # gershwin-developer branch to build with. The Windows support lives on its
+  # "windows" branch until it lands in dev.
+  DEVELOPER_BRANCH: windows
+
+  # Repositories checkout.sh should NOT clone: this checkout provides
+  # gershwin-workspace, and nothing else beyond the core libraries is built on
+  # Windows (see gershwin-developer's build-windows.yml for the same list).
+  SKIP_REPOS: >-
+    gershwin-workspace
+    swift-corelibs-libdispatch
+    libs-av
+    libs-steptalk
+    gershwin-system
+    gershwin-systempreferences
+    gershwin-eau-theme
+    gershwin-terminal
+    gershwin-textedit
+    gershwin-windowmanager
+    gershwin-components
+    docs
+    gershwin-desktop.wiki
+
+jobs:
+  build-windows-x86_64:
+    name: Windows x86_64
+    runs-on: windows-latest
+    timeout-minutes: 240
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      # Git for Windows converts LF to CRLF on checkout by default, which
+      # breaks every shell script and patch in the tree.
+      - name: Keep LF line endings
+        shell: pwsh
+        run: git config --global core.autocrlf false
+
+      - name: Clone gershwin-developer
+        uses: actions/checkout@v5
+        with:
+          repository: gershwin-desktop/gershwin-developer
+          ref: ${{ env.DEVELOPER_BRANCH }}
+          path: gershwin-developer
+
+      # The workspace under test goes straight where checkout.sh would have
+      # cloned it (no symlinks on Windows).
+      - name: Checkout workspace source under test
+        uses: actions/checkout@v5
+        with:
+          path: gershwin-developer/Library/Sources/gershwin-workspace
+
+      - name: Set up MSYS2
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: false
+          install: git make
+
+      - name: Bootstrap
+        working-directory: gershwin-developer
+        run: ./Library/Scripts/bootstrap.sh
+
+      - name: Checkout sources
+        working-directory: gershwin-developer
+        run: ./Library/Scripts/checkout.sh
+
+      - name: Locate the MSYS2 root
+        id: msys2
+        run: echo "system=$(cygpath -w /System)" >> "$GITHUB_OUTPUT"
+
+      - name: Restore core libraries
+        id: corelibs-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ steps.msys2.outputs.system }}
+          key: corelibs-windows-x86_64-${{ hashFiles('gershwin-developer/Library/Repositories.csv', 'gershwin-developer/Library/Patches/**', 'gershwin-developer/Library/Scripts/**', 'gershwin-developer/Library/OSSupport/windows.txt') }}
+
+      - name: Build core libraries
+        if: steps.corelibs-cache.outputs.cache-hit != 'true'
+        working-directory: gershwin-developer
+        run: make corelibs
+
+      - name: Save core libraries
+        if: steps.corelibs-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ steps.msys2.outputs.system }}
+          key: ${{ steps.corelibs-cache.outputs.cache-primary-key }}
+
+      - name: Build workspace
+        working-directory: gershwin-developer
+        run: make workspace
+
+      - name: Package
+        run: |
+          mkdir -p artifacts/Windows/x86_64
+          TIMESTAMP=$(date +%y%m%d%H%M%S)
+          ( cd /System && zip -qr "$GITHUB_WORKSPACE/artifacts/Windows/x86_64/Gershwin-Workspace-Windows-${TIMESTAMP}.zip" . )
+          ls -l artifacts/Windows/x86_64
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: gershwin-workspace-windows-x86_64
+          path: artifacts/Windows/x86_64
+          if-no-files-found: error
+
+      - name: Upload configure logs
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: config-logs-windows-x86_64
+          path: |
+            gershwin-developer/Library/Sources/gershwin-workspace/config.log
+            gershwin-developer/Library/Sources/gershwin-workspace/*/config.log
+          if-no-files-found: ignore
