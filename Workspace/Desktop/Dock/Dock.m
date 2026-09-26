@@ -103,7 +103,7 @@ static inline CGFloat _dockScaleFactor(void)
 - (void)magnifyTick:(NSTimer *)timer;
 - (void)setMagnifyInterval:(NSTimeInterval)interval;
 - (NSTimeInterval)magnifyIntervalForDistance:(CGFloat)distance
-                                        near:(CGFloat)near;
+                                        near:(CGFloat)nearDistance;
 
 @end
 
@@ -1393,14 +1393,14 @@ static inline CGFloat _dockScaleFactor(void)
 
 /* How long the Dock can wait before looking at the pointer again. */
 - (NSTimeInterval)magnifyIntervalForDistance:(CGFloat)distance
-                                        near:(CGFloat)near
+                                        near:(CGFloat)nearDistance
 {
   NSTimeInterval wait;
 
-  if (magnifyArmed || (distance < near))
+  if (magnifyArmed || (distance < nearDistance))
     return MAGNIFY_FRAME_INTERVAL;
 
-  wait = (distance - near) / MAGNIFY_POINTER_SPEED;
+  wait = (distance - nearDistance) / MAGNIFY_POINTER_SPEED;
 
   if (wait < MAGNIFY_FRAME_INTERVAL)
     return MAGNIFY_FRAME_INTERVAL;
