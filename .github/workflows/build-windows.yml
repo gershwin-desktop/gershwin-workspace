@@ -111,6 +111,13 @@ jobs:
         working-directory: gershwin-developer
         run: make workspace
 
+      # Copy the MinGW runtime DLLs and a fontconfig setup into /System and
+      # add the Workspace.cmd launcher, so the zip runs on a stock Windows
+      # (the run job below checks exactly that).
+      - name: Bundle the runtime
+        working-directory: gershwin-developer
+        run: sh ./Library/Scripts/windows-bundle-runtime.sh
+
       - name: Package
         run: |
           mkdir -p artifacts/Windows/x86_64
@@ -133,3 +140,80 @@ jobs:
             gershwin-developer/Library/Sources/gershwin-workspace/config.log
             gershwin-developer/Library/Sources/gershwin-workspace/*/config.log
           if-no-files-found: ignore
+
+  # Start the built Workspace on a fresh runner, the way a user would on a
+  # machine that has nothing of the build environment: only the unpacked zip,
+  # with PATH cut down to Windows itself plus the tree's Library\Tools. The
+  # app has to stay alive, every DLL it loaded has to come from the tree or
+  # from Windows, and a screenshot of the desktop is uploaded along with the
+  # app's output.
+  run-windows-x86_64:
+    name: Run on stock Windows
+    needs: build-windows-x86_64
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: gershwin-workspace-windows-x86_64
+          path: dist
+
+      - name: Unpack
+        shell: pwsh
+        run: |
+          $zip = Get-ChildItem dist -Filter *.zip | Select-Object -First 1
+          New-Item -ItemType Directory -Force "$env:RUNNER_TEMP\System" | Out-Null
+          Expand-Archive -Path $zip.FullName -DestinationPath "$env:RUNNER_TEMP\System"
+          Get-ChildItem "$env:RUNNER_TEMP\System"
+
+      - name: Run the Workspace
+        shell: pwsh
+        run: |
+          $root = "$env:RUNNER_TEMP\System"
+          $out = New-Item -ItemType Directory -Force "$env:GITHUB_WORKSPACE\run-log"
+          # Stock Windows: nothing the runner has preinstalled may be found.
+          $env:PATH = "C:\Windows\System32;C:\Windows;C:\Windows\System32\Wbem;$root\Library\Tools"
+          $env:FONTCONFIG_FILE = "$root\Library\Preferences\fontconfig\fonts.conf"
+          $exe = "$root\Applications\Workspace.app\Workspace.exe"
+          $p = Start-Process -FilePath $exe -PassThru -NoNewWindow `
+                 -RedirectStandardOutput "$out\stdout.log" -RedirectStandardError "$out\stderr.log"
+          Start-Sleep -Seconds 45
+          $p.Refresh()
+          if ($p.HasExited) {
+            Write-Host "Workspace exited with code $($p.ExitCode)"
+            Get-Content "$out\stdout.log","$out\stderr.log" -ErrorAction SilentlyContinue
+            exit 1
+          }
+          Write-Host "Workspace is running (pid $($p.Id))"
+          Get-Process | Where-Object { $_.MainWindowTitle } |
+            Select-Object ProcessName, MainWindowTitle | Format-Table -AutoSize
+          # Every loaded module has to come from the tree or from Windows.
+          $foreign = @()
+          foreach ($m in (Get-Process -Id $p.Id).Modules) {
+            $f = $m.FileName
+            if (-not ($f.StartsWith($root, 'OrdinalIgnoreCase') -or $f.StartsWith('C:\Windows', 'OrdinalIgnoreCase'))) { $foreign += $f }
+          }
+          (Get-Process -Id $p.Id).Modules | Select-Object -ExpandProperty FileName | Set-Content "$out\modules.txt"
+          # Screenshot of the whole desktop.
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          $b = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+          $bmp = New-Object System.Drawing.Bitmap $b.Width, $b.Height
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.CopyFromScreen($b.Location, [System.Drawing.Point]::Empty, $b.Size)
+          $bmp.Save("$out\workspace-windows.png", [System.Drawing.Imaging.ImageFormat]::Png)
+          Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue
+          Get-Process Workspace -ErrorAction SilentlyContinue | Stop-Process -Force
+          Get-Content "$out\stdout.log","$out\stderr.log" -ErrorAction SilentlyContinue | Select-Object -First 200
+          if ($foreign.Count -gt 0) {
+            Write-Host "DLLs loaded from outside the tree and Windows:"
+            $foreign | ForEach-Object { Write-Host "  $_" }
+            exit 1
+          }
+
+      - name: Upload run log and screenshot
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: workspace-windows-run
+          path: run-log
+          if-no-files-found: warn
