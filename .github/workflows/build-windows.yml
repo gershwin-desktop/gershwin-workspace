@@ -166,6 +166,42 @@ jobs:
           Expand-Archive -Path $zip.FullName -DestinationPath "$env:RUNNER_TEMP\System"
           Get-ChildItem "$env:RUNNER_TEMP\System"
 
+      # How does gnustep-base resolve its domain on this machine? gspath
+      # prints the resolved paths, --GNU-Debug=NSPathUtilities how it got
+      # there. Then a GNUstep.conf with absolute paths is written next to the
+      # base DLL (the location gnustep-base was configured to read it from)
+      # and the resolution is printed again.
+      - name: Diagnose the path resolution
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          $root = "$env:RUNNER_TEMP\System"
+          $env:PATH = "C:\Windows\System32;C:\Windows;C:\Windows\System32\Wbem;$root\Library\Tools"
+          $gspath = "$root\Library\Tools\gspath.exe"
+          foreach ($what in "path","libs","defaults","user") { Write-Host "gspath $what => $(& $gspath $what 2>&1)" }
+          & $gspath --GNU-Debug=NSPathUtilities libs 2>&1 | Select-Object -First 60
+          $lib = ($root + "\Library").Replace("\", "/")
+          $apps = ($root + "\Applications").Replace("\", "/")
+          @(
+            "GNUSTEP_SYSTEM_APPS=$apps",
+            "GNUSTEP_SYSTEM_ADMIN_APPS=$apps/Admin",
+            "GNUSTEP_SYSTEM_WEB_APPS=$lib/WebApplications",
+            "GNUSTEP_SYSTEM_TOOLS=$lib/Tools",
+            "GNUSTEP_SYSTEM_ADMIN_TOOLS=$lib/Tools/Admin",
+            "GNUSTEP_SYSTEM_LIBRARY=$lib",
+            "GNUSTEP_SYSTEM_HEADERS=$lib/Headers",
+            "GNUSTEP_SYSTEM_LIBRARIES=$lib/Libraries",
+            "GNUSTEP_SYSTEM_DOC=$lib/Documentation",
+            "GNUSTEP_SYSTEM_DOC_MAN=$lib/Documentation/man",
+            "GNUSTEP_SYSTEM_DOC_INFO=$lib/Documentation/info",
+            "GNUSTEP_MAKEFILES=$lib/Makefiles",
+            "GNUSTEP_USER_DEFAULTS_DIR=Library/Preferences",
+            "GNUSTEP_USER_CONFIG_FILE=Library/Preferences/GNUstep.conf"
+          ) | Set-Content -Encoding ascii "$root\Library\Tools\GNUstep.conf"
+          Write-Host "--- with Library\Tools\GNUstep.conf:"
+          foreach ($what in "path","libs") { Write-Host "gspath $what => $(& $gspath $what 2>&1)" }
+          & $gspath --GNU-Debug=NSPathUtilities libs 2>&1 | Select-Object -First 40
+
       - name: Run the Workspace
         shell: pwsh
         run: |
