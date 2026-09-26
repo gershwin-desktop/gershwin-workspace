@@ -107,7 +107,7 @@
     r.origin.y = 16;
     r.size.width = 16;
     r.size.height = 16;
-    progView = [[ProgressView alloc] initWithFrame: r refreshInterval: 0.05];
+    progView = [[IVProgressView alloc] initWithFrame: r refreshInterval: 0.05];
 
     r.origin.x = 141;
     r.origin.y = 10;
@@ -385,7 +385,7 @@
 
 @end
 
-@implementation ProgressView
+@implementation IVProgressView
 
 #define IMAGES 8
 
