@@ -3042,6 +3042,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       NSMutableArray *arguments;
       
       cmd = [NSTask launchPathForTool: @"fswatcher"];
+      if (cmd == nil) {
+        NSLog(@"fswatcher tool not found; file system watching is unavailable");
+        return;
+      }
       arguments = [NSMutableArray arrayWithCapacity:2];
       [arguments addObject:@"--daemon"];
       [arguments addObject:@"--auto"];  
@@ -3177,6 +3181,11 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     NSString *cmd;
     NSMutableArray *arguments;
     cmd = [NSTask launchPathForTool: @"ddbd"];    
+    if (cmd == nil)
+      {
+        NSLog(@"ddbd tool not found; the desktop database is unavailable");
+        return;
+      }
 
     arguments = [NSMutableArray arrayWithCapacity:2];
     [arguments addObject:@"--daemon"];
@@ -3273,6 +3282,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     if (mdextractor == nil) {
 	    NSString *cmd;
       cmd = [NSTask launchPathForTool: @"mdextractor"];    
+      if (cmd == nil) {
+        NSLog(@"mdextractor tool not found; metadata extraction is unavailable");
+        return;
+      }
       [NSTask launchedTaskWithLaunchPath: cmd arguments: nil];
 
       NSDictionary *info = [NSDictionary dictionaryWithObject:[NSDate dateWithTimeIntervalSinceNow: 8.0]
