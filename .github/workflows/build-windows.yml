@@ -118,6 +118,27 @@ jobs:
         working-directory: gershwin-developer
         run: sh ./Library/Scripts/windows-bundle-runtime.sh
 
+      # Run the Workspace once under gdb here, where the toolchain's gdb and
+      # the debug info are at hand: a crash prints a symbolized backtrace
+      # into gdb.log (uploaded below). The pass/fail verdict is the run job
+      # on a stock machine further down; this is the diagnostic for it.
+      - name: Smoke test under gdb
+        run: |
+          export PATH="/System/Library/Tools:$PATH"
+          export FONTCONFIG_FILE=/System/Library/Preferences/fontconfig/fonts.conf
+          cd /System
+          timeout 90 gdb -q -batch -ex run -ex "bt 40" -ex "thread apply all bt 15" \
+            --args Applications/Workspace.app/Workspace.exe > "$GITHUB_WORKSPACE/gdb.log" 2>&1 || true
+          tail -100 "$GITHUB_WORKSPACE/gdb.log"
+
+      - name: Upload gdb log
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: workspace-windows-gdb
+          path: gdb.log
+          if-no-files-found: ignore
+
       - name: Package
         run: |
           mkdir -p artifacts/Windows/x86_64
