@@ -31,12 +31,14 @@
 #import "CompletionField.h"
 #import "Workspace.h"
 #import "FSNode.h"
+#import "GWDetachedCommand.h"
 
 
 @implementation OpenWithController
 
 - (void)dealloc
 {
+  RELEASE (targetURL);
   [super dealloc];
 }
 
@@ -87,6 +89,42 @@
 }
 
 
+- (BOOL)activateForURL:(NSURL *)url
+{
+  /* A URL is no file: the file type check of -activate does not apply. */
+  ASSIGN (targetURL, url);
+  result = NSAlertAlternateReturn;
+  [NSApp runModalForWindow: win];
+  DESTROY (targetURL);
+  return (result == NSAlertDefaultReturn);
+}
+
+/* Starts the chosen application or command with the URL.  A GNUstep
+ * application gets it the way NSWorkspace passes URLs, a command as its
+ * last argument without a shell in between. */
+- (void)openTargetURLWithCommand:(NSString *)command
+                       arguments:(NSMutableArray *)args
+{
+  NSString *urlString = [targetURL absoluteString];
+
+  if ([command hasSuffix: @".app"])
+    {
+      [gw launchApplication: command
+                  arguments: [NSArray arrayWithObjects: @"-GSOpenURL",
+                                      urlString, nil]];
+    }
+  else
+    {
+      [args insertObject: command atIndex: 0];
+      [args addObject: urlString];
+      if ([GWDetachedCommand launchArguments: args] == NO)
+        {
+          NSRunAlertPanel(NULL, NSLocalizedString(@"No executable found!", @""),
+                          NSLocalizedString(@"OK", @""), NULL, NULL);
+        }
+    }
+}
+
 - (IBAction)cancelButtAction:(id)sender
 {
   result = NSAlertAlternateReturn;
@@ -116,7 +154,11 @@
 
       command = [self checkCommand: command];
 
-      if (command)
+      if (command && targetURL != nil)
+        {
+          [self openTargetURLWithCommand: command arguments: args];
+        }
+      else if (command)
         {
           if ([command hasSuffix:@".app"])
             {

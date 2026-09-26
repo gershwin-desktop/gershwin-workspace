@@ -94,6 +94,8 @@ X11AppSupport.m \
 GWProcessMonitor.m \
 GWProcessOwnership.m \
 GWDetachedCommand.m \
+GWURLSchemeRegistry.m \
+GWURLOpener.m \
 WorkspaceApplication.m \
 GWApplicationLauncher.m \
 GSGlobalShortcutsManager.m \

@@ -32,6 +32,11 @@
 @interface OpenWithController : ExecuteController
 {
   Workspace *gw;  
+  NSURL *targetURL;
 }
+
+/** Asks which application opens url, for a scheme nothing is registered
+ * for.  Returns YES when the user chose one. */
+- (BOOL)activateForURL:(NSURL *)url;
 
 @end

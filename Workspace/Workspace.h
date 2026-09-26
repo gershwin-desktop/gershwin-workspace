@@ -250,6 +250,10 @@
 
 - (BOOL)openFile:(NSString *)fullPath;
 
+/** Opens a URL with the application registered for its scheme; asks the
+ * user only when nothing is registered. */
+- (BOOL)openURL:(NSURL *)url;
+
 - (BOOL)application:(NSApplication *)theApplication 
            openFile:(NSString *)filename;
 

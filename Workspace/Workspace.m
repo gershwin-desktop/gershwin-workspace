@@ -63,6 +63,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "StartAppWin.h"
 #import "Preferences/PrefController.h"
 #import "GWApplicationLauncher.h"
+#import "GWURLOpener.h"
 #import "GWUnmountHelper.h"
 #import "GWDesktopManager.h"
 #import "VolumeManager.h"
@@ -1874,6 +1875,17 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       }
     }
 
+    /* "Open in Workspace" on a selected link hands over a URL string, not
+     * a path. */
+    if ([apath isAbsolutePath] == NO) {
+      NSURL *url = [NSURL URLWithString: apath];
+
+      if ([[url scheme] length] > 0) {
+        [self openURL: url];
+      }
+      continue;
+    }
+
     if ([fm fileExistsAtPath: apath]) {
       FSNode *node = [FSNode nodeWithPath: apath];
       if (node == nil || [node hasValidPath] == NO) {
@@ -2310,7 +2322,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       if (aURL == nil)
 	success = [ws openFile: fullPath withApplication: appName];
       else
-	success = [ws openURL: aURL];
+	success = [self openURL: aURL];
     }
   NS_HANDLER
     {
@@ -2325,6 +2337,31 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NS_ENDHANDLER  
   
     return success;  
+}
+
+- (BOOL)openURL:(NSURL *)url
+{
+  GWURLOpener *opener;
+  NSError *error = nil;
+
+  if ([url isFileURL]) {
+    return [ws openURL: url];
+  }
+
+  opener = AUTORELEASE ([GWURLOpener new]);
+  if ([opener openURL: url error: &error]) {
+    return YES;
+  }
+  if (error != nil) {
+    NSRunAlertPanel(NSLocalizedString(@"error", @""),
+                    @"%@",
+                    NSLocalizedString(@"OK", @""), nil, nil,
+                    [error localizedDescription]);
+    return NO;
+  }
+  /* Asking is the last resort: a site handing a login result back to an
+   * installed application must reach it without the user's help. */
+  return [openWithController activateForURL: url];
 }
 
 - (BOOL)application:(NSApplication *)theApplication 
