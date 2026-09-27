@@ -113,15 +113,6 @@ static NSString *defaultxterm = @"xterm";
 
 static Workspace *gworkspace = nil;
 
-/* The flight sources (see GWTrashFlight.h) waiting to learn whether their
- * recycle was actually confirmed or cancelled, once
- * -performFileOperation:... returns - nil once resolved.  A plain static
- * rather than an ivar: nothing here may add ivars to Workspace.h, and at
- * most one Trash flight is ever mid-confirmation at a time (moveToTrash
- * runs on the main thread and -performFileOperation:... itself blocks in a
- * nested run loop for as long as the confirmation panel is up). */
-static NSArray *pendingTrashFlightSources = nil;
-
 /* Forward declarations for methods resolved at runtime on container/view objects.
  * Avoids method-not-found warnings when calling on `id` typed objects. */
 @interface NSObject (WorkspaceForwardDecls)
@@ -137,17 +128,91 @@ static NSArray *pendingTrashFlightSources = nil;
 - (void)_updateTrashContents;
 
 /* "Move to Trash", played out as a flight of the selected icons into the
- * Dock's Trash icon (see GWTrashFlight.h); falls back to recycling at once
+ * Dock's Trash icon (see GWTrashFlight.h) once - and only once - the
+ * recycle is actually confirmed; falls back to a plain, unanimated recycle
  * when there is nothing to animate from. */
-- (void)flyFilesToTrash:(NSArray *)files
-            fromBasePath:(NSString *)basePath
-               filePaths:(NSArray *)filePaths;
+- (void)recycleFiles:(NSArray *)files
+         fromBasePath:(NSString *)basePath
+            filePaths:(NSArray *)filePaths;
 - (NSArray *)trashFlightSourcesForPaths:(NSArray *)paths;
 - (void)setTrashFlightSources:(NSArray *)sources hidden:(BOOL)hidden;
-- (void)performRecycleOfFiles:(NSArray *)files
-                  fromBasePath:(NSString *)basePath
-                       sources:(NSArray *)sources;
-- (void)restorePendingTrashFlightSourcesStillOnDisk;
+- (void)startTrashFlightForFilePaths:(NSArray *)filePaths;
+@end
+
+/* Watches for the ONE GWFileSystemWillChangeNotification that means "this
+ * particular recycle was actually confirmed" (matched on operation type and
+ * source path).
+ *
+ * -performFileOperation:... does NOT block on Eau's confirmation panel: the
+ * panel is shown non-modally (see the "EauAlertPanel shown non-modally" log
+ * line) and the call returns at once, well before the user answers - proved
+ * directly by triggering a recycle, never touching the panel, and finding
+ * the file still sitting unmoved seconds later.  The real confirm/cancel
+ * decision, and this notification, can therefore arrive at any later time,
+ * on a later run loop turn, long after
+ * -recycleFiles:fromBasePath:filePaths: below has already returned - so this
+ * watcher outlives that call.  It owns itself (created with a bare +alloc,
+ * never released by its creator) for exactly that reason, and releases
+ * itself the moment it actually fires; if the user cancels, it simply never
+ * fires and is never released, one small leaked object per cancelled Trash
+ * attempt - the trade-off for never guessing at an outcome with a timer. */
+@interface _GWTrashRecycleWatcher : NSObject
+{
+  NSString *basePath;
+  NSArray *filePaths;
+  Workspace *workspace;
+  BOOL fired;
+}
+- (id)initWithBasePath:(NSString *)aBasePath
+              filePaths:(NSArray *)aFilePaths
+              workspace:(Workspace *)aWorkspace;
+- (void)willChange:(NSNotification *)notif;
+@end
+
+@implementation _GWTrashRecycleWatcher
+
+- (id)initWithBasePath:(NSString *)aBasePath
+              filePaths:(NSArray *)aFilePaths
+              workspace:(Workspace *)aWorkspace
+{
+  self = [super init];
+
+  if (self)
+    {
+      ASSIGN (basePath, aBasePath);
+      ASSIGN (filePaths, aFilePaths);
+      workspace = aWorkspace;  /* not retained: the app singleton outlives this */
+    }
+
+  return self;
+}
+
+- (void)dealloc
+{
+  RELEASE (basePath);
+  RELEASE (filePaths);
+  [super dealloc];
+}
+
+- (void)willChange:(NSNotification *)notif
+{
+  NSDictionary *info = (NSDictionary *)[notif object];
+
+  /* Guards against a stray notification from some other, unrelated
+   * operation that happens to fire while this one is still waiting -
+   * matched on operation type and source, the same fields
+   * -fileSystemDidChange: already keys off. */
+  if (fired
+      || ![[info objectForKey: @"operation"] isEqual: NSWorkspaceRecycleOperation]
+      || ![[info objectForKey: @"source"] isEqual: basePath])
+    return;
+
+  fired = YES;
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
+  [workspace startTrashFlightForFilePaths: filePaths];
+  RELEASE (self);   /* balances the +1 -recycleFiles:... created us with */
+}
+
 @end
 
 @implementation Workspace
@@ -1779,12 +1844,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       [self _updateTrashContents];
     }
 
-    /* Safety net for a confirmed Trash flight (see
-     * -performRecycleOfFiles:fromBasePath:sources:): once any operation
-     * ends, show again whichever of its reps the operation did not
-     * actually remove. */
-    [self restorePendingTrashFlightSourcesStillOnDisk];
-
     if (ddbd != nil) {
       [ddbd fileSystemDidChange: [NSArchiver archivedDataWithRootObject: info]];
     }
@@ -2811,7 +2870,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           return;
         }
 
-      [self flyFilesToTrash: files fromBasePath: basePath filePaths: filePaths];
+      [self recycleFiles: files fromBasePath: basePath filePaths: filePaths];
     }
 }
 
@@ -5936,130 +5995,68 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
     }
 }
 
-/* The choke point every recycle - animated or not - funnels through, so
- * "if refused, show the icons again" has exactly one place to live.
- *
- * -performFileOperation:... always returns YES for a plain file recycle
- * (WorkspaceApplication.m hands the dictionary to the Operation framework
- * and returns unconditionally), regardless of whether the user actually
- * confirms or cancels Eau's own recycle-confirmation panel - so the return
- * value alone cannot tell a refusal from an acceptance, and nothing here
- * may add the plumbing that would make it. What the call DOES do reliably
- * is block, synchronously, in a nested run loop for exactly as long as
- * that panel is on screen (see startOperation in Operation/FileOpInfo.m):
- * only once the user confirms does it go on to post
- * GWFileSystemWillChangeNotification, synchronously, before unwinding back
- * up to this call - so watching for that one notification during the call
- * (not after, not on a timer) is the real signal, fired at the moment the
- * decision is actually made rather than guessed at afterwards. */
-- (void)performRecycleOfFiles:(NSArray *)files
-                  fromBasePath:(NSString *)basePath
-                       sources:(NSArray *)sources
+/* -moveToTrash's own entry point: calls the existing recycle operation
+ * right away, exactly as before this feature existed - Eau's own
+ * confirmation panel appears untouched, and nothing is hidden while it is
+ * up.  -performFileOperation:... does not wait for that panel: it shows it
+ * non-modally and returns at once (confirmed by triggering a recycle,
+ * leaving the panel untouched, and finding the file still unmoved seconds
+ * later), so the real confirm/cancel decision - and the
+ * GWFileSystemWillChangeNotification that means "confirmed" - can arrive at
+ * any later time, long after this call has returned.  The watcher below is
+ * therefore registered and left to outlive this method, firing the flight
+ * whenever the notification for THIS recycle (matched on operation and
+ * source) actually shows up; nothing is hidden, and there is nothing to
+ * "undo", until that happens. */
+- (void)recycleFiles:(NSArray *)files
+         fromBasePath:(NSString *)basePath
+            filePaths:(NSArray *)filePaths
 {
   NSInteger tag;
-  BOOL accepted;
-  __block BOOL confirmed = NO;
-  id observer = [[NSNotificationCenter defaultCenter]
-    addObserverForName: @"GWFileSystemWillChangeNotification"
-                object: nil
-                 queue: nil
-            usingBlock: ^(NSNotification *notif) { confirmed = YES; }];
+  _GWTrashRecycleWatcher *watcher = [[_GWTrashRecycleWatcher alloc]
+    initWithBasePath: basePath
+            filePaths: filePaths
+            workspace: self];
 
-  if (sources != nil)
-    ASSIGN (pendingTrashFlightSources, sources);
+  [[NSNotificationCenter defaultCenter] addObserver: watcher
+                                            selector: @selector(willChange:)
+                                                name: @"GWFileSystemWillChangeNotification"
+                                              object: nil];
 
-  accepted = [self performFileOperation: NSWorkspaceRecycleOperation
-                                  source: basePath
-                             destination: trashPath
-                                   files: files
-                                     tag: &tag];
-
-  [[NSNotificationCenter defaultCenter] removeObserver: observer];
-
-  if (!accepted || !confirmed)
-    {
-      /* Refused (or never even asked): the flight's reps never actually
-       * left, so put them back exactly as they were. */
-      DESTROY (pendingTrashFlightSources);
-      [self setTrashFlightSources: sources hidden: NO];
-    }
-  /* else: left hidden here.  If the confirmed operation goes on to remove
-   * every file, the reps are gone from the view's own model by the next
-   * reload and the hidden flag never matters again; -fileSystemDidChange:
-   * below is the safety net for the rarer case - confirmed, but a file
-   * the operation was supposed to remove is still actually there (a
-   * permission error partway through, say). */
+  [self performFileOperation: NSWorkspaceRecycleOperation
+                       source: basePath
+                  destination: trashPath
+                        files: files
+                          tag: &tag];
 }
 
-/* Safety net for -performRecycleOfFiles:fromBasePath:sources: above: once
- * a confirmed recycle ends (any GWFileSystemDidChangeNotification - a
- * second flight is rare enough that matching source/destination exactly
- * is not worth the complexity), show again whichever of its reps turned
- * out NOT to have been removed, so a partial failure never leaves an icon
- * invisible forever. No timer, no polling: this runs off the same
- * notification -fileSystemDidChange: already observes for its own
- * bookkeeping. */
-- (void)restorePendingTrashFlightSourcesStillOnDisk
-{
-  /* Kept alive locally (independent of the static below) for the rest of
-   * this method: DESTROY-ing the static releases whatever it points to,
-   * and without this the local variable would dangle. */
-  NSArray *sources = AUTORELEASE (RETAIN (pendingTrashFlightSources));
-  NSMutableArray *stillHere;
-  NSUInteger i;
-
-  if (sources == nil)
-    return;
-
-  DESTROY (pendingTrashFlightSources);
-  stillHere = [NSMutableArray arrayWithCapacity: [sources count]];
-
-  for (i = 0; i < [sources count]; i++)
-    {
-      NSDictionary *src = [sources objectAtIndex: i];
-      NSString *path = [src objectForKey: @"path"];
-
-      if (path != nil && [fm fileExistsAtPath: path])
-        [stillHere addObject: src];
-    }
-
-  if ([stillHere count])
-    [self setTrashFlightSources: stillHere hidden: NO];
-}
-
-/* Runs the actual recycle after animating the selected icons flying into
- * the Dock's Trash icon - the way a drag there would look - whenever a
- * live selection view and a visible Trash icon can both be found;
- * otherwise recycles at once, exactly as -moveToTrash always has. */
-- (void)flyFilesToTrash:(NSArray *)files
-            fromBasePath:(NSString *)basePath
-               filePaths:(NSArray *)filePaths
+/* Starts the "fly to Trash" animation for the icons representing
+ * filePaths, once the recycle that is going to remove them has actually
+ * been confirmed (see -recycleFiles:fromBasePath:filePaths: above); a
+ * no-op when there is nothing to animate from (no live selection view
+ * showing them, or the Trash icon is not currently on screen), leaving the
+ * operation to run exactly as it always has. */
+- (void)startTrashFlightForFilePaths:(NSArray *)filePaths
 {
   Dock *dock = [dtopManager dock];
   NSRect trashRect = (dock != nil) ? [dock trashIconScreenRect] : NSZeroRect;
-  NSArray *sources = NSEqualRects (trashRect, NSZeroRect)
-    ? nil : [self trashFlightSourcesForPaths: filePaths];
+  NSArray *sources;
+  GWTrashFlight *flight;
 
+  if (NSEqualRects (trashRect, NSZeroRect))
+    return;
+
+  sources = [self trashFlightSourcesForPaths: filePaths];
   if (sources == nil || [sources count] == 0)
-    {
-      [self performRecycleOfFiles: files fromBasePath: basePath sources: nil];
-      return;
-    }
+    return;
 
-  /* The icons have "left" the folder the moment the flight starts; a
-   * refused recycle (above) shows them again. */
   [self setTrashFlightSources: sources hidden: YES];
 
-  {
-    GWTrashFlight *flight = [[GWTrashFlight alloc]
-      initWithItems: sources
-          trashRect: trashRect
-         completion: ^{
-           [self performRecycleOfFiles: files fromBasePath: basePath sources: sources];
-         }];
-    [flight start];
-    RELEASE (flight);
-  }
+  flight = [[GWTrashFlight alloc] initWithItems: sources
+                                       trashRect: trashRect
+                                      completion: ^{}];
+  [flight start];
+  RELEASE (flight);
 }
 
 @end
