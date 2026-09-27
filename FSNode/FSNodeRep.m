@@ -95,7 +95,7 @@ static FSNodeRep *shared = nil;
   multipleSelIcon = [[NSImage imageNamed:NSImageNameMultipleDocuments] retain];
   [trashIcon release];
   trashIcon = [[NSImage imageNamed:NSImageNameTrashEmpty] retain];
-  [trashFullIcon retain];
+  [trashFullIcon release];
   trashFullIcon = [[NSImage imageNamed:NSImageNameTrashFull] retain];
 }
 
