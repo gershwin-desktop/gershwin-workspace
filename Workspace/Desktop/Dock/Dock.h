@@ -73,6 +73,18 @@ DockMagnifyPollInterval(CGFloat distance, CGFloat near, BOOL armed)
   return wait;
 }
 
+/* Whether -refreshLaunchedStateWorker: would actually touch X for an icon in
+ * this state, so a round can leave out the ones it would only relay back
+ * unchanged: an X11-tracked icon always re-checks its windows, and a
+ * launched icon whose pid is not yet known tries once to discover it (see
+ * DockIcon.m); anything else takes the early-return path that makes no X
+ * call at all. Foundation-only so it can be tested headless. */
+static inline BOOL
+DockIconNeedsLaunchedStateScan(BOOL isX11OnlyApp, BOOL isLaunched, pid_t appPID)
+{
+  return isX11OnlyApp || (isLaunched && (appPID <= 0));
+}
+
 typedef enum DockStyle
 {   
   DockStyleClassic = 0,

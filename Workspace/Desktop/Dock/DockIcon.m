@@ -553,17 +553,35 @@
   BOOL wantLaunched = wasLaunched;
   BOOL hasWindows = NO;
 
+  /* The Dock's own launch-refresh round already leaves out any icon this
+   * same condition rejects (Dock.m, _launchRefreshTimerFired:), but an icon
+   * can also reach here through refreshLaunchedStateAsync (its own, one-icon
+   * thread), so the guaranteed-no-op case is still checked - from the one
+   * shared definition (Dock.h) rather than a second copy of it. */
+  if (DockIconNeedsLaunchedStateScan(x11, wasLaunched, pid) == NO)
+    {
+      NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
+        [NSNumber numberWithBool: NO], @"x11",
+        [NSNumber numberWithInt: 0], @"pid",
+        [NSNumber numberWithBool: wasLaunched], @"launched",
+        [NSNumber numberWithBool: NO], @"changed",
+        [NSNumber numberWithBool: NO], @"haswindows", nil];
+      [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
+                             withObject: result waitUntilDone: NO];
+      [pool drain];
+      return;
+    }
+
   if (wantX11 == NO)
     {
-      /* Auto-discover X11 apps that were running before dock restart. */
-      if (wasLaunched && wantPID <= 0)
+      /* Auto-discover X11 apps that were running before dock restart. The
+       * gate above already established wasLaunched && wantPID <= 0 as the
+       * only way to reach here with wantX11 still NO. */
+      NSArray *windows = [snapshot windowsMatchingName: appName];
+      if ([windows count] > 0)
         {
-          NSArray *windows = [snapshot windowsMatchingName: appName];
-          if ([windows count] > 0)
-            {
-              wantX11 = YES;
-              wantPID = [[windows objectAtIndex: 0] ownerPID];
-            }
+          wantX11 = YES;
+          wantPID = [[windows objectAtIndex: 0] ownerPID];
         }
       if (wantX11 == NO)
         {

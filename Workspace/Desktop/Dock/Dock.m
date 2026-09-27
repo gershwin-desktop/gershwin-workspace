@@ -2573,6 +2573,17 @@ static inline CGFloat _dockScaleFactor(void)
     {
       if ([icon isFolderIcon])
         continue;
+
+      /* refreshLaunchedStateWorker: takes the early-return path and makes
+       * no X call at all unless the icon is X11-tracked or is launched with
+       * a pid still to discover (DockIconNeedsLaunchedStateScan, Dock.h) -
+       * which most docked icons at rest are neither. Detaching a thread for
+       * a round that would only relay every icon's own input back unread
+       * costs a thread and a stack for nothing. */
+      if (DockIconNeedsLaunchedStateScan([icon isX11OnlyApp], [icon isLaunched],
+                                         [icon appPID]) == NO)
+        continue;
+
       [round addObject: [NSArray arrayWithObjects: icon,
                          [icon launchedStateInputs], nil]];
     }
