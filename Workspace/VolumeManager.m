@@ -8,12 +8,6 @@
 #import <signal.h>
 #import <errno.h>
 #import <unistd.h>
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__)
-# include <sys/param.h>
-# include <sys/mount.h>
-#else
-# include <sys/statfs.h>
-#endif
 #import "VolumeManager.h"
 #import "AVFSMount.h"
 #import "Workspace.h"
@@ -215,11 +209,7 @@ static VolumeManager *sharedInstance = nil;
 
 - (BOOL)isMountPointActive:(NSString *)mountPoint
 {
-  struct statfs statbuf;
-  if (statfs([mountPoint UTF8String], &statbuf) == 0) {
-    return YES;
-  }
-  return NO;
+  return VMPathIsActiveMountPoint(mountPoint);
 }
 
 /* Verify that the mount point has at least one entry and that the FUSE PID is running */

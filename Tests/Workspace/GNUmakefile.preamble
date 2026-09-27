@@ -34,3 +34,10 @@ t_AppImageProbeCache_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Curre
                                   -lFSNode -lgnustep-gui -lsquashfs
 t_AppImageDirIconCycle_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                                     -lFSNode -lgnustep-gui -lsquashfs
+
+# VMPathIsActiveMountPoint is a `static inline` predicate declared directly
+# in VolumeManager.h (not VolumeManager.m), specifically so this test can
+# exercise VolumeManager's real mount-detection logic without dragging in
+# VolumeManager.m's AppKit/Workspace/FSNode/AVFS dependencies. It calls
+# +[GWVolumeID mountedFilesystems], linked here as a separate object.
+t_VolumeManagerMountDetection_OBJC_FILES += ../../Workspace/FileViewer/GWVolumeID.m

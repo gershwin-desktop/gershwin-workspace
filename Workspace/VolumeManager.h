@@ -12,8 +12,36 @@
  */
 
 #import <Foundation/Foundation.h>
+#import "FileViewer/GWVolumeID.h"
 
 @class AVFSMount;
+
+/**
+ * Returns YES only if @p mountPoint is really attached in the kernel's own
+ * mount table right now. stat()/statfs() on the path itself cannot answer
+ * this safely: it is true for any directory that merely exists (including
+ * one a FUSE helper mounted and then died under, leaving a stale, already
+ * -unmounted directory behind), and it can BLOCK forever if the process
+ * that mounted the path is still there but wedged, because that syscall
+ * has to cross into whatever filesystem is mounted there to answer.
+ * Reading the mount table instead never touches the path's own inode, so
+ * it is both correct for a stale directory and unable to hang on a live
+ * but unresponsive one. Header-only (not VolumeManager.m) so a test can
+ * exercise it without pulling in VolumeManager's own AppKit/Workspace
+ * dependencies.
+ */
+static inline BOOL VMPathIsActiveMountPoint(NSString *mountPoint)
+{
+  NSArray *table = [GWVolumeID mountedFilesystems];
+  NSDictionary *entry;
+
+  for (entry in table) {
+    if ([[entry objectForKey:@"mountPoint"] isEqualToString:mountPoint]) {
+      return YES;
+    }
+  }
+  return NO;
+}
 
 /**
  * Result object for mount operations
