@@ -753,7 +753,9 @@ static NSString *dots = @"...";
 		return;
 	}
 	isLocked = value;
-	[self setEnabled: isLocked];
+	/* A locked node (involved in a running file operation) is drawn dimmed
+	   and takes no drags or drops, like the icon and list views do. */
+	[self setEnabled: !isLocked];
 }
 
 - (void)checkLocked
