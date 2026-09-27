@@ -317,14 +317,16 @@
 - (NSArray *)selectedPaths;
 
 /* One NSDictionary per selected icon, each with @"path" (NSString),
-   @"rect" (NSValue-wrapped NSRect, the icon's own frame converted to
-   screen coordinates), @"image" (NSImage, its drag-look picture) and
-   @"rep" (the FSNIcon itself, an NSView) - the same picture and screen
-   placement a real drag of that icon would use.  Used to fly the icons to
-   the Trash the way a drag there would look (Workspace -moveToTrash),
-   which also hides the rep's view for the duration of the flight; an icon
-   whose window cannot be resolved (no window, unusual during any normal
-   selection) is left out rather than reported with a zero rect. */
+   @"rect" (NSValue-wrapped NSRect, the icon graphic's own on-screen rect -
+   -iconBounds, not the label), @"image" (NSImage, the icon's own image at
+   device-pixel resolution for this window's scale factor - not a
+   lockFocus snapshot of the view, which stayed pixelated once flown at any
+   scale factor above 1) and @"rep" (the FSNIcon itself, an NSView).  Used
+   to fly the icons to the Trash the way a drag there would look (Workspace
+   -moveToTrash), which also hides the rep's view for the duration of the
+   flight; an icon whose window cannot be resolved (no window, unusual
+   during any normal selection) is left out rather than reported with a
+   zero rect. */
 - (NSArray *)flightSourcesForSelectedReps;
 
 /* Hides (or shows again) one rep's icon for the duration of a

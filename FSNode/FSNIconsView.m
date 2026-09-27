@@ -3348,9 +3348,23 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   return [selectedReps makeImmutableCopyOnFail: NO];
 }
 
-/* dragLookImage is sized to match -bounds exactly (imageOfCurrentLook draws
-   the icon at its own bounds size), so converting that same rect is what
-   places the picture over the real icon rather than beside it. */
+/* The image travels shrinking towards the Trash icon's size, so it has to
+   be a genuinely high-resolution source to begin with - drawing it smaller
+   every later frame only ever downsamples, which stays sharp, but nothing
+   recovers detail a low-resolution source never had.  -dragLookImage is
+   the wrong source for that: it is a lockFocus snapshot of the icon's own
+   view (-imageOfCurrentLook), rasterized at whatever pixel density that
+   lockFocus happened to use, not necessarily this window's real backing
+   scale - flying it looked pixelated at GSScaleFactor 1.5 even on the very
+   first frame.  A real drag does not make this mistake (FSNIconDragSession.m,
+   the shaped-drag-window skill): it draws from the icon's own high-resolution
+   image and only shapes the composited result at device size.  Asking
+   FSNodeRep for the icon's image at iconSize*scale (rather than the plain
+   point size) is the same idea - the returned image then has enough actual
+   pixels for this screen, at this icon's current size, before anything
+   scales it at all.  Only the icon graphic flies, not the name label:
+   -iconBounds (not -bounds, which also spans the label) is the matching
+   rect on screen. */
 - (NSArray *)flightSourcesForSelectedReps
 {
   NSArray *reps = [self selectedReps];
@@ -3364,16 +3378,24 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
       NSRect rectInWindow, rectOnScreen;
       NSImage *image;
       NSString *path;
+      CGFloat scale;
+      int hiResSize;
 
       if (win == nil)
         continue;
 
-      rectInWindow = [icon convertRect: [icon bounds] toView: nil];
+      rectInWindow = [icon convertRect: [icon iconBounds] toView: nil];
       rectOnScreen = [win convertRectToScreen: rectInWindow];
-      image = [icon dragLookImage];
       path = [[icon node] path];
 
-      if (image == nil || path == nil)
+      if (path == nil)
+        continue;
+
+      scale = [win userSpaceScaleFactor];
+      hiResSize = (int)lrint ([icon iconSize] * scale);
+      image = [fsnodeRep iconOfSize: hiResSize forNode: [icon node]];
+
+      if (image == nil)
         continue;
 
       [sources addObject: [NSDictionary dictionaryWithObjectsAndKeys:
