@@ -279,6 +279,9 @@ static NSString * const GWX11ThreadDisplayKey = @"GWX11WindowManagerDisplay";
                            &bytes_after, &data) == Success && data && nitems > 0) {
         name = [NSString stringWithUTF8String:(const char *)data];
         XFree(data);
+        /* A title that is not valid UTF-8 gives no string; the fallback
+         * below must not free the property data a second time. */
+        data = NULL;
         if (name) return name;
     }
     if (data) { XFree(data); data = NULL; }
