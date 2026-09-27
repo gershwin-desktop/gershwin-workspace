@@ -327,6 +327,15 @@
    selection) is left out rather than reported with a zero rect. */
 - (NSArray *)flightSourcesForSelectedReps;
 
+/* Hides (or shows again) one rep's icon for the duration of a
+   GWTrashFlight.  The selected item's name is drawn by a single shared
+   label kept over whichever icon is selected (-updateNameEditor, editIcon),
+   not by the icon's own view, so hiding the icon alone left that label
+   sitting at the icon's old position for the whole flight; this hides (or
+   restores) the label too, exactly when it is currently showing arep's
+   name. */
+- (void)setRep:(id)arep hiddenForFlight:(BOOL)hidden;
+
 - (void)selectionDidChange;
 - (void)checkLockedReps;
 - (void)setSelectionMask:(FSNSelectionMask)mask;

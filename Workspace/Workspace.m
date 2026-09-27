@@ -5883,7 +5883,11 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
  * cell is a plain object that redraws through its owning view instead, and
  * simply keeps showing the item until the recycle operation's own
  * file-watcher notification removes it, same as before this feature
- * existed. */
+ * existed.  Prefers the owning view's own -setRep:hiddenForFlight: (which
+ * also hides the shared selected-item name label FSNIconsView keeps beside
+ * the icon, not inside it) over toggling the icon view directly, so that
+ * label does not linger at the icon's old spot for the length of the
+ * flight. */
 - (void)setTrashFlightSources:(NSArray *)sources hidden:(BOOL)hidden
 {
   NSUInteger i;
@@ -5895,9 +5899,17 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
       if ([rep isKindOfClass: [NSView class]])
         {
           NSView *view = (NSView *)rep;
+          id container = [view superview];
 
-          [view setHidden: hidden];
-          [[view superview] setNeedsDisplayInRect: [view frame]];
+          if ([container respondsToSelector: @selector(setRep:hiddenForFlight:)])
+            {
+              [container setRep: rep hiddenForFlight: hidden];
+            }
+          else
+            {
+              [view setHidden: hidden];
+              [[view superview] setNeedsDisplayInRect: [view frame]];
+            }
         }
     }
 }

@@ -3387,6 +3387,25 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   return sources;
 }
 
+/* editIcon (and the shared nameEditor label showing its name) is only ever
+   set when exactly one item is selected (-updateNameEditor), which is
+   exactly the case a single-item flight leaves showing a leftover label:
+   with several items flying, each keeps drawing its own label itself, so
+   there is nothing extra here to hide. */
+- (void)setRep:(id)arep hiddenForFlight:(BOOL)hidden
+{
+  FSNIcon *icon = (FSNIcon *)arep;
+
+  [icon setHidden: hidden];
+  [self setNeedsDisplayInRect: [icon frame]];
+
+  if (editIcon == icon && [[self subviews] containsObject: nameEditor])
+    {
+      [nameEditor setHidden: hidden];
+      [self setNeedsDisplayInRect: [nameEditor frame]];
+    }
+}
+
 - (NSArray *)selectedNodes
 {
   NSMutableArray *selectedNodes = [NSMutableArray array];
