@@ -1069,9 +1069,15 @@ static GWViewersManager *vwrsmanager = nil;
         
     if ([viewer invalidated] == NO) {
       if (hide) {
-        if ([[[viewer baseNode] path] rangeOfString: @"."].location != NSNotFound) {
-          [viewer invalidate];
-          [viewersToClose addObject: viewer];
+        /* Only a folder that itself becomes hidden closes: one hidden
+         * component anywhere in its path, not a dot anywhere in the name
+         * ("/home/john.doe" stays open). */
+        for (NSString *component in [[[viewer baseNode] path] pathComponents]) {
+          if ([component hasPrefix: @"."]) {
+            [viewer invalidate];
+            [viewersToClose addObject: viewer];
+            break;
+          }
         }
       }
       

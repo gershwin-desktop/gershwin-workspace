@@ -205,7 +205,8 @@ static FSNIconLoader *_sharedLoader = nil;
       return;
     }
 
-  for (FSNIconLoaderItem *item in [_urgentQueue copy])
+  /* Iterate a copy: the queue is edited underneath. */
+  for (FSNIconLoaderItem *item in AUTORELEASE([_urgentQueue copy]))
     {
       if ([item client] == client)
         {
@@ -214,7 +215,7 @@ static FSNIconLoader *_sharedLoader = nil;
         }
     }
 
-  for (FSNIconLoaderItem *item in [_bulkQueue copy])
+  for (FSNIconLoaderItem *item in AUTORELEASE([_bulkQueue copy]))
     {
       if ([item client] == client)
         {

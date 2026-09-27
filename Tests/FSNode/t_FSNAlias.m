@@ -338,6 +338,38 @@ main(void)
     }
   END_SET("10.6 bookmark (Finder interoperability)")
 
+  START_SET("truncated bookmark data is rejected, not read out of bounds")
+    {
+      /* _initWithBookmarkData: picks its header-size field from offset 16
+       * when the "mark" marker is present at offset 8, else from offset 12.
+       * Both reads must be bounds-checked against the buffer's own length,
+       * not against a fixed minimum unrelated to the offset being read.
+       * Each buffer here is allocated at exactly the tested length, so a
+       * regression that reads past it is a memory fault (or, under a
+       * bounds-checked allocator/ASan, an immediate abort) rather than a
+       * silent pass. */
+
+      /* 16 bytes: "book" at 0, "mark" at 8 - selects the offset-16 header
+       * field, which needs len >= 20.  16 is 4 bytes short. */
+      NSMutableData *markShort = [NSMutableData dataWithLength: 16];
+      uint8_t *mb = [markShort mutableBytes];
+      memcpy(mb, "book", 4);
+      memcpy(mb + 8, "mark", 4);
+      FSNAlias *fromMarkShort = [[FSNAlias alloc] initWithData: markShort];
+      PASS(fromMarkShort == nil,
+	   "16-byte book+mark buffer (needs 20) yields nil, not an OOB read");
+
+      /* 12 bytes: "book" at 0, no "mark" - selects the offset-12 header
+       * field, which needs len >= 16.  12 is 4 bytes short. */
+      NSMutableData *plainShort = [NSMutableData dataWithLength: 12];
+      uint8_t *pb = [plainShort mutableBytes];
+      memcpy(pb, "book", 4);
+      FSNAlias *fromPlainShort = [[FSNAlias alloc] initWithData: plainShort];
+      PASS(fromPlainShort == nil,
+	   "12-byte book buffer (needs 16) yields nil, not an OOB read");
+    }
+  END_SET("truncated bookmark data is rejected, not read out of bounds")
+
   [arp release];
   return 0;
 }

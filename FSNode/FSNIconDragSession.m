@@ -86,6 +86,7 @@ static NSInteger FSNIconDragSequence = 0;
   RELEASE (icons);
   RELEASE (source);
   RELEASE (sourceWindow);
+  RELEASE (pboard);
   [super dealloc];
 }
 

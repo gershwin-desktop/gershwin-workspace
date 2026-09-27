@@ -1,0 +1,18 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+
+ADDITIONAL_INCLUDE_DIRS += -I../../DSStore
+ADDITIONAL_OBJCFLAGS += -Wno-deprecated
+
+# Both tools link the DSStore back-end as separate objects (mirrors
+# Tests/FileViewer's t_DSStore* tools) rather than #include-ing it, since
+# each test builds its own crafted/guarded buffer and calls the class
+# through its normal API.
+t_DSBuddyAllocatorOffsetTableBounds_OBJC_FILES += ../../DSStore/DSBuddyAllocator.m
+t_DSBuddyAllocatorOffsetTableBounds_TOOL_LIBS += -lgnustep-gui
+
+t_DSStoreCyclicBTree_OBJC_FILES += ../../DSStore/DSStore.m \
+                                   ../../DSStore/DSStoreCodecs.m \
+                                   ../../DSStore/DSStoreEntry.m \
+                                   ../../DSStore/DSBuddyAllocator.m \
+                                   ../../DSStore/SimpleColor.m
+t_DSStoreCyclicBTree_TOOL_LIBS += -lgnustep-gui

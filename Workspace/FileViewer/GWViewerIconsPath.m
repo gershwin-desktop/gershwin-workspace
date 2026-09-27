@@ -55,6 +55,7 @@
   RELEASE (backColor);
   RELEASE (textColor);
   RELEASE (disabledTextColor);
+  RELEASE (nameEditor);
   
   [super dealloc];
 }

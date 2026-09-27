@@ -1,0 +1,6 @@
+sysfs /sys sysfs rw,nosuid,nodev,noexec,relatime 0 0
+proc /proc proc rw,nosuid,nodev,noexec,relatime 0 0
+/dev/sda1 / ext4 rw,relatime 0 0
+tmpfs /run tmpfs rw,nosuid,nodev,size=1635536k,mode=755 0 0
+sshfs#user@host:/remote /nonexistent/mnt/remote fuse.sshfs rw,nosuid,nodev,relatime,user_id=1000,group_id=1000 0 0
+server:/export /nonexistent/mnt/nfsshare nfs4 rw,relatime,vers=4.2,rsize=131072,wsize=131072,proto=tcp 0 0

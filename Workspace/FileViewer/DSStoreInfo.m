@@ -369,7 +369,6 @@
         if ([matches count] > 0) {
             NSTextCheckingResult *match = [matches objectAtIndex:0];
             NSString *path = [dataString substringWithRange:[match range]];
-            [dataString release];
             
             // Check if file exists
             if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {

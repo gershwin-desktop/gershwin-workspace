@@ -9,6 +9,7 @@
  */
 
 #import <Foundation/Foundation.h>
+#import <Foundation/NSDebug.h>
 #import <AppKit/AppKit.h>
 #import "Testing.h"
 #import "FSNodeRep.h"
@@ -106,6 +107,34 @@ main(void)
            "symlink has the link kind");
     }
   END_SET("snapshot kinds from d_type")
+
+  START_SET("snapshot does not leak its FSNDirEntry objects")
+    {
+      /* Each snapshot call allocates one FSNDirEntry per visible entry;
+       * once the returned array itself goes away, none of those entries
+       * should still be alive.  GSDebugAllocationCount gives the live
+       * instance count of the class directly, so a leaked -addObject:
+       * (retained by the array, never released by the caller) shows up
+       * as a nonzero delta regardless of autorelease pool timing. */
+      int before;
+      int after;
+
+      GSDebugAllocationActive(YES);
+      before = GSDebugAllocationCount([FSNDirEntry class]);
+
+      {
+        NSAutoreleasePool *inner = [NSAutoreleasePool new];
+        NSArray *snapshot = [rep directorySnapshotAtPath: root];
+
+        PASS([snapshot count] == 3, "snapshot has the 3 visible entries");
+        [inner release];
+      }
+
+      after = GSDebugAllocationCount([FSNDirEntry class]);
+      PASS(after == before,
+           "no FSNDirEntry instances survive after the snapshot is released");
+    }
+  END_SET("snapshot does not leak its FSNDirEntry objects")
 
   START_SET("snapshot of missing directory")
     {

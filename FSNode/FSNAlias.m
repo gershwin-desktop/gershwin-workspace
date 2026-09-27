@@ -656,8 +656,10 @@ NSString * const FSNWorkspaceCreateAliasOperation =
     }
 
   a = [[self alloc] init];
-  a->_targetName = [path lastPathComponent];
-  a->_posixPath = path;
+  /* The strings are kept past the caller's autorelease pool, so they are
+   * owned here and released in -dealloc. */
+  a->_targetName = [[path lastPathComponent] copy];
+  a->_posixPath = [path copy];
   a->_isDirectory = S_ISDIR(st.st_mode);
   a->_version = 2;
   /* Spec section 9: do not fabricate an HFS CNID from a foreign filesystem's
@@ -686,18 +688,18 @@ NSString * const FSNWorkspaceCreateAliasOperation =
 	mount = dir;
 	dir = [dir stringByDeletingLastPathComponent];
       }
-    a->_volumeMountPoint = mount;
+    a->_volumeMountPoint = [mount copy];
     if ([mount isEqualTo: @"/"])
       {
-	a->_volumeName = @"";
+	a->_volumeName = [@"" copy];
       }
     else
       {
-	a->_volumeName = [mount lastPathComponent];
+	a->_volumeName = [[mount lastPathComponent] copy];
       }
     /* Spec section 9: do not populate the parent CNID from a foreign inode. */
     a->_parentCNID = 0;
-    a->_parentName = [mount lastPathComponent];
+    a->_parentName = [[mount lastPathComponent] copy];
   }
 
   return a;
@@ -713,30 +715,30 @@ NSString * const FSNWorkspaceCreateAliasOperation =
       return nil;
     }
   a->_version = 2;
-  a->_targetName = [targetPath lastPathComponent];
-  a->_posixPath = targetPath;
+  a->_targetName = [[targetPath lastPathComponent] copy];
+  a->_posixPath = [targetPath copy];
   a->_isDirectory = NO;
   a->_targetCNID = 0;
   a->_parentCNID = 0;
 
   if (volumeName == nil || [volumeName length] == 0)
     {
-      a->_volumeName = @"Macintosh HD";
+      a->_volumeName = [@"Macintosh HD" copy];
     }
   else
     {
-      a->_volumeName = volumeName;
+      a->_volumeName = [volumeName copy];
     }
 
   NSString *parentDir = [targetPath stringByDeletingLastPathComponent];
-  a->_parentName = [parentDir lastPathComponent];
+  a->_parentName = [[parentDir lastPathComponent] copy];
   if ([targetPath hasPrefix: @"/"])
     {
-      a->_volumeMountPoint = @"/";
+      a->_volumeMountPoint = [@"/" copy];
     }
   else
     {
-      a->_volumeMountPoint = a->_volumeName;
+      a->_volumeMountPoint = [a->_volumeName copy];
     }
 
   return a;
@@ -758,6 +760,7 @@ NSString * const FSNWorkspaceCreateAliasOperation =
   [_targetName release];
   [_posixPath release];
   [_volumeMountPoint release];
+  [_parentName release];
   [super dealloc];
 }
 
@@ -785,14 +788,23 @@ NSString * const FSNWorkspaceCreateAliasOperation =
   
   /* Header size: 10.6 places the 8-byte "book" "mark" marker at offsets 0
    * and 8, with the data-area base (header size) at offset 16.  Later
-   * bookmarks store the total size at offset 4 and the header size at 12. */
-    if (len >= 12 && memcmp(b + 8, "mark", 4) == 0)
+   * bookmarks store the total size at offset 4 and the header size at 12.
+   * Each branch must not read its 4-byte field past the buffer: offset 16
+   * needs len >= 20, offset 12 needs len >= 16.  A shorter buffer (8-19
+   * bytes) is a truncated bookmark, not a shorter valid header, so it is
+   * rejected rather than read out of bounds. */
+  if (len >= 20 && memcmp(b + 8, "mark", 4) == 0)
     {
-            hdrsize = readU32LE(b, 16);
+      hdrsize = readU32LE(b, 16);
+    }
+  else if (len >= 16)
+    {
+      hdrsize = readU32LE(b, 12);
     }
   else
     {
-            hdrsize = readU32LE(b, 12);
+      [self release];
+      return nil;
     }
   if (hdrsize == 0 || hdrsize + 8 > len)
     {
@@ -932,15 +944,14 @@ NSString * const FSNWorkspaceCreateAliasOperation =
   b = [data bytes];
   len = [data length];
 
-  /* Bookmarks (10.6 "book"+"mark" magic) are handled separately. */
+  /* Bookmarks (10.6 "book"+"mark" magic) are handled separately.
+   * -_initWithBookmarkData: follows the same failure convention as this
+   * method: on rejection it releases self and returns nil.  Releasing
+   * self again here on top of that would message an already-deallocated
+   * instance, so its result is simply propagated. */
   if (memcmp(b, "book", 4) == 0)
     {
-      if ([self _initWithBookmarkData: data] == nil)
-	{
-	  [self release];
-	  return nil;
-	}
-      return self;
+      return [self _initWithBookmarkData: data];
     }
 
   if ([[self class] isAliasData: data] == NO)

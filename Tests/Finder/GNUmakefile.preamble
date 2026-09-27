@@ -1,0 +1,29 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+# Finder cannot be instantiated headless (its -init loads a Gorm nib and
+# builds a full window/toolbar UI), and linking Finder.m as an object pulls
+# in its entire sibling class graph - Workspace.m (the whole app delegate),
+# FindModuleView, SearchPlacesBox/Cell, SearchResults, LSFolder, and
+# everything those in turn need (~40 sources per Workspace/GNUmakefile.in).
+# t_FinderChangePaths links the real, small Foundation-only helper Finder.m
+# calls (Workspace/Finder/GWChangePaths.m) instead of driving the whole
+# class, so it exercises the shipped function rather than a copy of it.
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Finder
+t_FinderChangePaths_OBJC_FILES += ../../Workspace/Finder/GWChangePaths.m
+
+# FModuleContents.m's own #import "FinderModulesProtocol.h" is one
+# directory up from where it lives.
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Finder/Modules
+
+# t_FModuleContentsSearch proves the fix for the strstr() over-read on
+# NSData's non-NUL-terminated bytes (FModuleContents.m checkPath:with
+# Attributes:): a plain pass/fail on the returned BOOL cannot tell the
+# unsafe scan apart from the bounded one, since both usually agree on the
+# answer whenever whatever happens to sit past the buffer does not itself
+# contain the needle or run out before a stray NUL byte.  Building this
+# one tool with AddressSanitizer makes the over-read fail deterministically
+# (a heap-buffer-overflow abort) instead of depending on heap layout.
+# Only this one tool, and not on OpenBSD, whose toolchain ships no ASan runtime.
+ifeq ($(findstring openbsd,$(GNUSTEP_TARGET_OS)),)
+t_FModuleContentsSearch_OBJCFLAGS += -fsanitize=address -fno-omit-frame-pointer
+t_FModuleContentsSearch_LDFLAGS += -fsanitize=address
+endif

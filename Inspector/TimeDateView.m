@@ -44,6 +44,7 @@ static const int posy[4]  = { 1, 13, 29, 38 };
   RELEASE (daymont1Image);
   RELEASE (daymont2Image);
   RELEASE (monthImage);
+  RELEASE (yearlabel);
   [super dealloc];
 }
 

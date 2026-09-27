@@ -194,7 +194,7 @@
       /* Load the Eject icon for use during mountpoint drags */
       NSString *ejectPath = [[NSBundle mainBundle] pathForResource: @"Eject" ofType: @"icns"];
       if (ejectPath) {
-        ASSIGN (ejectIcon, [[NSImage alloc] initWithContentsOfFile: ejectPath]);
+        ASSIGN (ejectIcon, AUTORELEASE([[NSImage alloc] initWithContentsOfFile: ejectPath]));
       }
       
       subNodes = [node subNodes];
@@ -512,21 +512,55 @@
 - (void)refreshLaunchedStateAsync
 {
   /* Capture the current state on the main thread, then hand it to a worker
-   * thread that does the X scans.  The worker's result is applied back here. */
-  [NSThread detachNewThreadSelector: @selector(refreshLaunchedStateThread:)
-                           toTarget: self
-                         withObject: [self launchedStateInputs]];
+   * thread that does the X scans.  The worker's result is applied back here.
+   * Shared with the Dock's own launch-refresh round rather than a thread of
+   * this icon's own: each icon that asked for this used to open (and then
+   * close) a fresh X connection on top of whatever the Dock's round was
+   * already paying for every 2s - see the launchRefreshThread ivar comment
+   * in Dock.h. */
+  Dock *dock = [self dock];
+  NSDictionary *inputs = [self launchedStateInputs];
+
+  if (dock != nil)
+    {
+      [dock performLaunchRefreshSelector: @selector(refreshLaunchedStateOnSharedThread:)
+                                   target: self
+                               withObject: inputs];
+    }
+  else
+    {
+      /* No Dock to share a thread with - an icon queried before it was
+       * docked, say. Falls back to a thread of its own rather than silently
+       * doing nothing. */
+      [NSThread detachNewThreadSelector: @selector(refreshLaunchedStateThread:)
+                               toTarget: self
+                             withObject: inputs];
+    }
 }
 
 /* A thread of its own for one icon: scan, then give the connection back.
-   The Dock's timer does not come this way - it refreshes every icon on one
-   thread - but a single icon asked to refresh itself does. */
+   Only the no-Dock fallback in -refreshLaunchedStateAsync comes this way;
+   the ordinary path below shares the Dock's persistent thread instead. */
 - (void)refreshLaunchedStateThread:(NSDictionary *)inputs
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
-  [self refreshLaunchedStateWorker: inputs];
-  [[GWX11WindowManager sharedManager] closeThreadDisplay];
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  [self refreshLaunchedStateWorker: inputs windows: [wm clientSnapshot]];
+  [wm closeThreadDisplay];
+  [pool drain];
+}
+
+/* Entry point for the Dock's persistent worker thread (see
+ * -performLaunchRefreshSelector:target:withObject: in Dock.m). That thread
+ * outlives this one call, so unlike -refreshLaunchedStateThread: above the X
+ * connection is not given back here. */
+- (void)refreshLaunchedStateOnSharedThread:(NSDictionary *)inputs
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  [self refreshLaunchedStateWorker: inputs windows: [wm clientSnapshot]];
   [pool drain];
 }
 
@@ -540,29 +574,47 @@
  * means to refresh. That is what lets the Dock refresh eighteen icons over
  * one connection instead of opening and closing eighteen. */
 - (void)refreshLaunchedStateWorker:(NSDictionary *)inputs
+                           windows:(GWX11ClientSnapshot *)snapshot
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   BOOL x11 = [[inputs objectForKey: @"x11"] boolValue];
   pid_t pid = (pid_t)[[inputs objectForKey: @"pid"] intValue];
   BOOL wasLaunched = [[inputs objectForKey: @"launched"] boolValue];
 
-  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
   BOOL wantX11 = x11;
   pid_t wantPID = pid;
   BOOL wantLaunched = wasLaunched;
   BOOL hasWindows = NO;
 
+  /* The Dock's own launch-refresh round already leaves out any icon this
+   * same condition rejects (Dock.m, _launchRefreshTimerFired:), but an icon
+   * can also reach here through refreshLaunchedStateAsync (its own, one-icon
+   * thread), so the guaranteed-no-op case is still checked - from the one
+   * shared definition (Dock.h) rather than a second copy of it. */
+  if (DockIconNeedsLaunchedStateScan(x11, wasLaunched, pid) == NO)
+    {
+      NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
+        [NSNumber numberWithBool: NO], @"x11",
+        [NSNumber numberWithInt: 0], @"pid",
+        [NSNumber numberWithBool: wasLaunched], @"launched",
+        [NSNumber numberWithBool: NO], @"changed",
+        [NSNumber numberWithBool: NO], @"haswindows", nil];
+      [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
+                             withObject: result waitUntilDone: NO];
+      [pool drain];
+      return;
+    }
+
   if (wantX11 == NO)
     {
-      /* Auto-discover X11 apps that were running before dock restart. */
-      if (wasLaunched && wantPID <= 0)
+      /* Auto-discover X11 apps that were running before dock restart. The
+       * gate above already established wasLaunched && wantPID <= 0 as the
+       * only way to reach here with wantX11 still NO. */
+      NSArray *windows = [snapshot windowsMatchingName: appName];
+      if ([windows count] > 0)
         {
-          NSArray *windows = [wm windowsMatchingName: appName];
-          if ([windows count] > 0)
-            {
-              wantX11 = YES;
-              wantPID = [[windows objectAtIndex: 0] ownerPID];
-            }
+          wantX11 = YES;
+          wantPID = [[windows objectAtIndex: 0] ownerPID];
         }
       if (wantX11 == NO)
         {
@@ -581,7 +633,7 @@
 
   if (wantPID <= 0)
     {
-      NSArray *windows = [wm windowsMatchingName: appName];
+      NSArray *windows = [snapshot windowsMatchingName: appName];
       if ([windows count] > 0)
         {
           wantX11 = YES;
@@ -603,14 +655,14 @@
         }
     }
 
-  hasWindows = [wm hasWindowsForPID: wantPID];
+  hasWindows = [snapshot hasVisibleWindowsForPID: wantPID];
   if (wasLaunched && !hasWindows)
     {
-      NSArray *windows = [wm windowsMatchingName: appName];
+      NSArray *windows = [snapshot windowsMatchingName: appName];
       if ([windows count] > 0)
         {
           wantPID = [[windows objectAtIndex: 0] ownerPID];
-          hasWindows = [wm hasWindowsForPID: wantPID];
+          hasWindows = [snapshot hasVisibleWindowsForPID: wantPID];
         }
       if (!hasWindows)
         wantLaunched = NO;

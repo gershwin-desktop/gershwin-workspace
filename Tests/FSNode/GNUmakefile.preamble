@@ -74,3 +74,12 @@ t_FSNLayoutWidth_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
 # so the built library is named by path.
 t_FSNMouseUpOrder_TOOL_LIBS += ../../FSNode/FSNode.framework/Versions/Current/libFSNode.so \
                                -lgnustep-gui
+
+# t_FSNSubpath links FSNFunctions.m directly, like t_FSNDisplayName.
+t_FSNSubpath_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
+                           ../../FSNode/FSNFunctions.m \
+                           ../../FSNode/FSNAlias.m \
+                           ../../FSNode/FSNodeRep.m \
+                           ../../FSNode/FSNodeRepIcons.m \
+                           ../../FSNode/FSNode.m
+t_FSNSubpath_TOOL_LIBS += -lgnustep-gui

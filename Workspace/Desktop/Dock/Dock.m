@@ -60,13 +60,9 @@
  * and to go back down once it has left. */
 #define MAGNIFY_DURATION 0.2
 
-/* The pointer is looked at every frame while it is anywhere near the Dock.
- * Further away it is looked at just often enough to catch it coming: the
- * time it would need to cross what is left of the distance, at a speed no
- * pointer is pushed past, and never less often than the idle interval. */
-#define MAGNIFY_FRAME_INTERVAL (1.0 / 60.0)
-#define MAGNIFY_IDLE_INTERVAL 0.25
-#define MAGNIFY_POINTER_SPEED 4000.0
+/* MAGNIFY_FRAME_INTERVAL, MAGNIFY_IDLE_INTERVAL, MAGNIFY_POINTER_SPEED and
+ * DockMagnifyPollInterval() live in Dock.h: Foundation-only, so the polling
+ * rule can be proven headless in Tests/Dock without building a Dock. */
 
 /* Returns GSScaleFactor for scaling dock cell frames. Factors below 1.0 are
  * honored (UI is scaled down); an unset or non-positive value means 1.0. */
@@ -115,6 +111,7 @@ static inline CGFloat _dockScaleFactor(void)
   [[NSNotificationCenter defaultCenter] removeObserver: self];
   [launchRefreshTimer invalidate];
   launchRefreshTimer = nil;
+  [self stopLaunchRefreshThread];
   [magnifyTimer invalidate];
   magnifyTimer = nil;
   DockServiceStop();
@@ -1391,23 +1388,14 @@ static inline CGFloat _dockScaleFactor(void)
   return largeIconSize;
 }
 
-/* How long the Dock can wait before looking at the pointer again. */
+/* How long the Dock can wait before looking at the pointer again: the pure
+ * rule lives in Dock.h as DockMagnifyPollInterval() so it can be tested
+ * without a Dock; this just supplies the one piece of state the rule needs
+ * that is not already a parameter. */
 - (NSTimeInterval)magnifyIntervalForDistance:(CGFloat)distance
                                         near:(CGFloat)near
 {
-  NSTimeInterval wait;
-
-  if (magnifyArmed || (distance < near))
-    return MAGNIFY_FRAME_INTERVAL;
-
-  wait = (distance - near) / MAGNIFY_POINTER_SPEED;
-
-  if (wait < MAGNIFY_FRAME_INTERVAL)
-    return MAGNIFY_FRAME_INTERVAL;
-  if (wait > MAGNIFY_IDLE_INTERVAL)
-    return MAGNIFY_IDLE_INTERVAL;
-
-  return wait;
+  return DockMagnifyPollInterval(distance, near, magnifyArmed);
 }
 
 - (void)setMagnifyInterval:(NSTimeInterval)interval
@@ -1619,6 +1607,74 @@ static inline CGFloat _dockScaleFactor(void)
       [[backColor shadowWithLevel: 0.4] set];
       NSRectFill(line);
     }
+}
+
+/* Starts the persistent worker thread if it is not already running. Called
+ * only from -performLaunchRefreshSelector:target:withObject:. */
+- (void)ensureLaunchRefreshThreadRunning
+{
+  if (launchRefreshThread != nil)
+    return;
+
+  launchRefreshThreadShouldStop = NO;
+  launchRefreshThread = [[NSThread alloc] initWithTarget: self
+                                                 selector: @selector(_launchRefreshThreadMain)
+                                                   object: nil];
+  [launchRefreshThread start];
+}
+
+/* Runs for as long as the Dock exists (stopped in -dealloc), taking scans
+ * handed to it by -performLaunchRefreshSelector:target:withObject: via
+ * performSelector:onThread:. Staying alive between rounds is the point:
+ * -[GWX11WindowManager openDisplay] caches one X connection per thread, so
+ * the same thread every round means the same connection every round,
+ * instead of a fresh XOpenDisplay (Xauthority read, cookie handshake,
+ * extension queries) every 2s. Mirrors -[GWX11AppManager scanThreadMain] in
+ * X11AppSupport.m. */
+- (void)_launchRefreshThreadMain
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+  /* A run loop with nothing at all scheduled on it does not actually wait
+   * inside -runMode:beforeDate: (there is nothing to wait FOR), and
+   * -performSelector:onThread:...'s delivery mechanism needs the target run
+   * loop to be genuinely parked to notice a hand-off arriving from another
+   * thread. An arbitrary port, never used for anything itself, is enough to
+   * give the loop something to hold open. */
+  [[NSRunLoop currentRunLoop] addPort: [NSPort port] forMode: NSDefaultRunLoopMode];
+
+  while (!launchRefreshThreadShouldStop)
+    {
+      NSAutoreleasePool *inner = [[NSAutoreleasePool alloc] init];
+      [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+                               beforeDate: [NSDate dateWithTimeIntervalSinceNow: 1.0]];
+      RELEASE(inner);
+    }
+  [[GWX11WindowManager sharedManager] closeThreadDisplay];
+  RELEASE(pool);
+}
+
+/* Not joined: the thread notices launchRefreshThreadShouldStop within a
+ * second (the runMode timeout above) and drops its own X connection when it
+ * does; blocking -dealloc on that would trade one idle cost for a worse
+ * one. See -[GWX11AppManager stopScanThread] in X11AppSupport.m, which the
+ * same reasoning applies to. */
+- (void)stopLaunchRefreshThread
+{
+  launchRefreshThreadShouldStop = YES;
+  RELEASE(launchRefreshThread);
+  launchRefreshThread = nil;
+}
+
+- (void)performLaunchRefreshSelector:(SEL)selector
+                               target:(id)target
+                           withObject:(id)argument
+{
+  [self ensureLaunchRefreshThreadRunning];
+  [target performSelector: selector
+                  onThread: launchRefreshThread
+                withObject: argument
+             waitUntilDone: NO];
 }
 
 @end
@@ -2586,6 +2642,17 @@ static inline CGFloat _dockScaleFactor(void)
     {
       if ([icon isFolderIcon])
         continue;
+
+      /* refreshLaunchedStateWorker: takes the early-return path and makes
+       * no X call at all unless the icon is X11-tracked or is launched with
+       * a pid still to discover (DockIconNeedsLaunchedStateScan, Dock.h) -
+       * which most docked icons at rest are neither. Detaching a thread for
+       * a round that would only relay every icon's own input back unread
+       * costs a thread and a stack for nothing. */
+      if (DockIconNeedsLaunchedStateScan([icon isX11OnlyApp], [icon isLaunched],
+                                         [icon appPID]) == NO)
+        continue;
+
       [round addObject: [NSArray arrayWithObjects: icon,
                          [icon launchedStateInputs], nil]];
     }
@@ -2593,25 +2660,30 @@ static inline CGFloat _dockScaleFactor(void)
   if ([round count] == 0)
     return;
 
-  [NSThread detachNewThreadSelector: @selector(_refreshLaunchedStatesWorker:)
-                           toTarget: self
-                         withObject: round];
+  [self performLaunchRefreshSelector: @selector(_refreshLaunchedStatesWorker:)
+                               target: self
+                           withObject: round];
 }
 
-/* Worker thread: refresh every icon of the round over one X connection, and
-   give that connection back when the round is done. Each icon applies its
-   own result on the main thread, one at a time, as it always did. */
+/* Worker thread: refresh every icon of the round over one X connection.
+   Each icon applies its own result on the main thread, one at a time, as it
+   always did. Unlike a one-shot worker, this runs on the Dock's persistent
+   launchRefreshThread (see -performLaunchRefreshSelector:target:withObject:
+   below), so the connection is not given back here - it stays open for the
+   next round, and is only closed when that thread itself stops. */
 - (void)_refreshLaunchedStatesWorker:(NSArray *)round
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  /* One reading of the client list for the whole round: every icon asking
+     for its own walked the list again, a round trip per window per icon. */
+  GWX11ClientSnapshot *windows = [[GWX11WindowManager sharedManager] clientSnapshot];
 
   for (NSArray *pair in round)
     {
-      [[pair objectAtIndex: 0] refreshLaunchedStateWorker:
-        [pair objectAtIndex: 1]];
+      [[pair objectAtIndex: 0] refreshLaunchedStateWorker: [pair objectAtIndex: 1]
+                                                   windows: windows];
     }
 
-  [[GWX11WindowManager sharedManager] closeThreadDisplay];
   [pool drain];
 }
 

@@ -35,6 +35,7 @@
 #import "FSNodeRep.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
+#import "GWChangePaths.h"
 
 #define WINH (262.0)
 #define FMVIEWH (34.0)
@@ -813,14 +814,19 @@ static Finder *finder = nil;
 
 - (void)stopAllSearchs
 {
+  /* Closing a result window synchronously triggers windowWillClose: ->
+   * resultsWindowWillClose:, which removes the entry from searchResults -
+   * indexing the live array while iterating it skipped every other result
+   * window as the array shifted down.  Iterate a snapshot instead. */
+  NSArray *results = [[searchResults copy] autorelease];
   NSUInteger i;
 
-  for (i = 0; i < [searchResults count]; i++) {
-    SearchResults *results = [searchResults objectAtIndex: i];
-  
-    [results stopSearch: nil];
-    if ([[results win] isVisible]) {
-      [[results win] close];
+  for (i = 0; i < [results count]; i++) {
+    SearchResults *r = [results objectAtIndex: i];
+
+    [r stopSearch: nil];
+    if ([[r win] isVisible]) {
+      [[r win] close];
     }
   }
 }
@@ -986,9 +992,14 @@ static Finder *finder = nil;
         
     for (j = 0; j < [srcpaths count]; j++) {
       NSString *srcpath = [srcpaths objectAtIndex: j];
-      NSString *dstpath = [dstpaths objectAtIndex: j];
-      
+
       if (move || copy) {
+        NSString *dstpath = GWChangePathsDestinationAtIndex(dstpaths, j);
+
+        if (dstpath == nil) {
+          continue;
+        }
+
         if ([[node path] isEqual: srcpath]) {
           if ([fm fileExistsAtPath: dstpath]) {
             newnode = [FSNode nodeWithPath: dstpath];

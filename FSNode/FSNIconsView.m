@@ -1743,6 +1743,32 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   if (nCols < 1) nCols = 1;
   NSUInteger nRows = [self isFlipped] ? 1 : (NSUInteger)(gOrigin.y / cellH);
   if (nRows < 1) nRows = 1;
+  if (![self isFlipped]) {
+    /* Only rows whose centre lies inside the usable rect: layoutIcons
+     * rescues a placed icon whose centre falls outside it back to AUTO,
+     * and the auto placer has no wide-label spacing - in a full grid the
+     * rescued icons land beside long labels and the labels overlap.
+     * floor(gOrigin.y / cellH) counts rows down to y = 0, under the Dock;
+     * at a fractional GSScaleFactor the last row's centre lands a fraction
+     * of a point below the Dock line and the whole row was rescued (Clean
+     * Up overlapped labels at GSScaleFactor 1.1 but not at 1.0).  A folder
+     * too big for the usable rows still bumps nRows below and keeps the
+     * rescue-and-stack overflow behaviour it had before. */
+    CGFloat usableBottom = NSMinY([self usableContentRect]);
+    NSUInteger usableRows;
+    if (cellH <= 0) {
+      usableRows = 1;
+    }
+    else {
+      usableRows = (NSUInteger)floor((gOrigin.y + (cellH / 2.0) - usableBottom) / cellH);
+    }
+    if (usableRows < 1) {
+      usableRows = 1;
+    }
+    if (nRows > usableRows) {
+      nRows = usableRows;
+    }
+  }
   {
     NSUInteger neededRows = ([icons count] + nCols - 1) / nCols;
     if (nRows < neededRows) nRows = neededRows;

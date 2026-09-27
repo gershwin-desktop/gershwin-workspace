@@ -523,21 +523,14 @@
   DDBPath *apath;
   DDBPath *bpath;
   NSComparisonResult result;
-  /* Only the dummy-key branch below takes its own +1 on apath; the
-   * unarchived branch is already owned by arp, so releasing it here too
-   * would drop it before arp does and dealloc it out from under arp's own
-   * pending release (this is what the sibling DDBDirsManager.m avoids by
-   * giving both of its branches a +1 of their own instead). */
-  BOOL apathOwned = NO;
-
+  
   if ([akey isEqual: dummyOffsets[0]]) {
-    apath = RETAIN (dummyPaths[0]);
-    apathOwned = YES;
+    apath = dummyPaths[0];
   } else {
     NSData *data = [vlfile dataAtOffset: (NSNumber *)akey];
     apath = [NSUnarchiver unarchiveObjectWithData: data];
   }
-
+  
   if ([bkey isEqual: dummyOffsets[0]]) {
     bpath = dummyPaths[0];
   } else if ([bkey isEqual: dummyOffsets[1]]) {
@@ -548,14 +541,10 @@
   }
 
   result = [apath compare: bpath];
-
-  if (apathOwned) {
-    RELEASE (apath);
-  }
-
+  
   RELEASE (arp);
-
-  return result;
+  
+  return result;  
 }
 
 @end

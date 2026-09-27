@@ -251,18 +251,17 @@ NSString *path_separator(void)
  */
 BOOL isSubpathOfPath(NSString *p1, NSString *p2)
 {
-  int l1 = [p1 length];
-  int l2 = [p2 length];  
+  /* The parent must end at a path separator inside p2: a sibling whose
+   * name merely starts with the parent's name ("/Users/foobar" next to
+   * "/Users/foo") is not inside it, and neither is a same-named folder
+   * further down under such a sibling. */
+  NSString *prefix = [p1 hasSuffix: path_separator()]
+                       ? p1 : [p1 stringByAppendingString: path_separator()];
 
-  if ((l1 > l2) || ([p1 isEqualToString: p2])) {
+  if ([p2 length] <= [prefix length]) {
     return NO;
-  } else if ([[p2 substringToIndex: l1] isEqualToString: p1]) {
-    if ([[p2 pathComponents] containsObject: [p1 lastPathComponent]]) {
-      return YES;
-    }
   }
-
-  return NO;
+  return [p2 hasPrefix: prefix];
 }
 
 BOOL pathsAreOnSameVolume(NSString *path1, NSString *path2)
@@ -279,12 +278,16 @@ BOOL pathsAreOnSameVolume(NSString *path1, NSString *path2)
   return (s1.st_dev == s2.st_dev);
 }
 
+/* The part of path below the folder firstpart, which must contain it. */
 NSString *subtractFirstPartFromPath(NSString *path, NSString *firstpart)
 {
-	if ([path isEqual: firstpart] == NO) {
-    return [path substringFromIndex: [path rangeOfString: firstpart].length +1];
+  if ([path isEqual: firstpart]) {
+    return path_separator();
   }
-	return path_separator();
+  NSString *prefix = [firstpart hasSuffix: path_separator()]
+                       ? firstpart : [firstpart stringByAppendingString: path_separator()];
+
+  return [path substringFromIndex: [prefix length]];
 }
 
 NSComparisonResult compareWithExtType(id r1, id r2, void *context)

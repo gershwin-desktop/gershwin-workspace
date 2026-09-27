@@ -3,3 +3,20 @@ GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace
 # GWApplicationLauncher.m builds its error alert from AppKit classes.
 t_GWApplicationLauncher_TOOL_LIBS += -lgnustep-gui
+# X11AppSupport.m talks to GNUstepGUI/GSDisplayServer and to Xlib directly.
+t_GWX11AppSupport_TOOL_LIBS += -lgnustep-gui -lX11
+
+# GWArchiveOperation.m builds a progress panel from AppKit classes (never
+# actually shown - the test drives runCompress directly, not -run) and
+# imports GWMetaArchive.h, whose implementation is linked as a separate
+# object per the GSMetadata subproject's own library/deps.
+ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata
+t_GWArchiveOperationCancel_OBJC_FILES += ../../GWMetadata/GWMetaArchive.m
+t_GWArchiveOperationCancel_TOOL_LIBS += -lgnustep-gui -lGSMetadata -larchive
+
+# GWThumbnailer.m imports AppKit/AppKit.h (NSBundle/NSImage-adjacent code
+# paths) and dispatch/dispatch.h (header only - no dispatch_* call remains).
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Thumbnailer
+t_GWThumbnailerConcurrency_TOOL_LIBS += -lgnustep-gui
+# X11AppSupport.m needs AppKit and Xlib even when only its thread is exercised.
+t_GWX11ScanThread_TOOL_LIBS += -lgnustep-gui -lX11

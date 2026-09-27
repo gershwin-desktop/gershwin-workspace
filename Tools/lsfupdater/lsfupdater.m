@@ -984,7 +984,7 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
         reset = YES;
         
         if ([startSearch laterDate: lastUpdate] == startSearch) {
-          lastUpdate = [startSearch copy];
+          ASSIGN (lastUpdate, startSearch);
         }
         if ([self saveResults] == NO) {
           [lsfolder updaterError: NSLocalizedString(@"cannot save the folder!", @"")];
@@ -1025,7 +1025,7 @@ BOOL subPathOfPath(NSString *p1, NSString *p2);
       reset = YES;
     
       if ([startSearch laterDate: lastUpdate] == startSearch) {
-        lastUpdate = [startSearch copy];
+        ASSIGN (lastUpdate, startSearch);
       }
       if ([self saveResults] == NO) {
         [lsfolder updaterError: NSLocalizedString(@"cannot save the folder!", @"")];

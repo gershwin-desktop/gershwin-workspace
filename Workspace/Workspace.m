@@ -3384,8 +3384,8 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 						  name: NSConnectionDidDieNotification
 						object: connection];
 
-  NSAssert(connection == [mdextractor connectionForProxy],
-	   NSInternalInconsistencyException);
+  // Don't access [mdextractor connectionForProxy] here - the connection is already dead
+  // and accessing the proxy can cause a segfault
   RELEASE (mdextractor);
   mdextractor = nil;
 

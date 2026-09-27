@@ -357,9 +357,9 @@
     case NSDeleteCharacter:
     case NSBackspaceCharacter:
     case NSDeleteFunctionKey:
-      if (flags & (NSShiftKeyMask | NSCommandKeyMask))
+      if ((flags & NSShiftKeyMask) && (flags & NSCommandKeyMask))
 	{
-	  // Command + Delete or Shift + Delete = Empty Trash
+	  // Command + Shift + Delete = Empty Trash
 	  [[self delegate] emptyTrash];
 	}
       else if (flags & NSCommandKeyMask)
@@ -375,10 +375,11 @@
       return;
       
     case '.':
-      if (flags & (NSShiftKeyMask | NSCommandKeyMask))
+      if ((flags & NSShiftKeyMask) && (flags & NSCommandKeyMask))
 	{
-	  // Command + Shift + . = Show hidden files
-	  [[self delegate] toggleHiddenFiles];
+	  // Command + Shift + . = Show hidden files; the setting belongs to
+	  // the application, the viewer only follows it
+	  [[Workspace gworkspace] toggleHiddenFiles];
 	}
       return;
 

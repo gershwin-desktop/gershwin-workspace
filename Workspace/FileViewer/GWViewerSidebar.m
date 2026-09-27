@@ -24,6 +24,7 @@
 #import "NetworkServiceManager.h"
 #import "NetworkServiceItem.h"
 #import "NetworkVolumeManager.h"
+#import "GWVolumeID.h"
 #import "Workspace.h"
 
 #define ROW_HEIGHT 20.0
@@ -586,6 +587,13 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   GWSidebarItemKind kind;
   NSMutableArray *children;
   id userInfo;
+  /* isMountedNetworkService's result cache: buildModel allocates a fresh
+   * GWSidebarItem on every rebuild, so a per-instance cache is naturally
+   * invalidated by the same notifications (volume/network changes) that
+   * already trigger rebuildModelPreservingExpansion - no separate
+   * invalidation path is needed. */
+  BOOL mountedStateValid;
+  BOOL mountedState;
 }
 - (id)initHeaderWithTitle:(NSString *)aTitle;
 - (id)initPathItemWithTitle:(NSString *)aTitle path:(NSString *)aPath;
@@ -681,37 +689,37 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   if (kind != GWSidebarItemNetwork) return NO;
   if (userInfo == nil || ![userInfo isKindOfClass: [NetworkServiceItem class]]) return NO;
 
-  /* First check what NetworkVolumeManager says (its internal dictionary). */
-  NetworkVolumeManager *nvm = [NetworkVolumeManager sharedManager];
-  NSString *mountPoint = nil;
-
-  if ([nvm isServiceMounted: userInfo]) {
-    mountPoint = [nvm mountPointForService: userInfo];
+  /* itemAtRowIsVolume: calls this once per visible network row on every
+   * sidebar draw; without a cache each of those redid a full mount-table
+   * lookup.  A fresh GWSidebarItem is allocated on every rebuild, so
+   * caching on the instance is automatically invalidated whenever the
+   * model actually changes - see the ivar comment above. */
+  if (mountedStateValid) {
+    return mountedState;
   }
 
-  /* If NetworkVolumeManager doesn't know about this mount, check /proc/mounts
-     directly — the volume may have been mounted externally (e.g. via sshfs
-     command or the umount(1) CLI tool's mount remount).  We look for a line
-     containing the service's hostname in the mount table. */
+  mountedStateValid = YES;
+  mountedState = NO;
+
+  /* First check what NetworkVolumeManager says (its internal dictionary). */
+  NetworkVolumeManager *nvm = [NetworkVolumeManager sharedManager];
+  NSString *mountPoint = [nvm mountPointForService: userInfo];
+
+  /* If NetworkVolumeManager doesn't know about this mount, the volume may
+   * have been mounted externally (e.g. via the sshfs/mount CLI tools
+   * directly).  -allMountedPaths already folds those in through the
+   * platform's own mount table rather than us re-parsing it a second
+   * time here (which was also Linux-only); match by hostname against
+   * each candidate's recorded mount source via GWVolumeID, which reads
+   * the mount table portably (mntent on Linux, getmntinfo on the BSDs). */
   if (mountPoint == nil) {
     NSString *hostname = [userInfo hostName];
-    if (hostname) {
-      NSString *procContent = [NSString stringWithContentsOfFile: @"/proc/mounts"
-                                                        encoding: NSUTF8StringEncoding
-                                                           error: NULL];
-      if (procContent) {
-        if ([procContent rangeOfString: hostname].location != NSNotFound) {
-          /* The service's hostname appears in a mount — try to extract path */
-          NSArray *lines = [procContent componentsSeparatedByString: @"\n"];
-          for (NSString *line in lines) {
-            if ([line rangeOfString: hostname].location != NSNotFound) {
-              NSArray *parts = [line componentsSeparatedByString: @" "];
-              if ([parts count] >= 2) {
-                mountPoint = [parts objectAtIndex: 1];
-                break;
-              }
-            }
-          }
+    if (hostname && [hostname length] > 0) {
+      for (NSString *candidate in [nvm allMountedPaths]) {
+        NSString *source = [GWVolumeID mountSourceForPath: candidate];
+        if (source && [source rangeOfString: hostname].location != NSNotFound) {
+          mountPoint = candidate;
+          break;
         }
       }
     }
@@ -724,6 +732,7 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
   if (![fm fileExistsAtPath: mountPoint isDirectory: &isDir]) return NO;
   if (!isDir) return NO;
 
+  mountedState = YES;
   return YES;
 }
 

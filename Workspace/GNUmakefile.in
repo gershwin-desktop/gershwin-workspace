@@ -100,6 +100,7 @@ WorkspaceApplication.m \
 GWApplicationLauncher.m \
 GSGlobalShortcutsManager.m \
 Desktop/GWDesktopManager.m \
+Desktop/GWMountWatchState.m \
 Desktop/GWDesktopWindow.m \
 Desktop/GWDesktopView.m \
 Desktop/GWDesktopIcon.m \
@@ -134,6 +135,7 @@ FileViewer/GWViewerPrefs.m \
 FileViewer/GWSpatialIconsView.m \
 ../GWMetadata/GWMetaArchive.m \
 Finder/Finder.m \
+Finder/GWChangePaths.m \
 Finder/FindModuleView.m \
 Finder/SearchPlacesBox.m \
 Finder/SearchPlacesCell.m \
