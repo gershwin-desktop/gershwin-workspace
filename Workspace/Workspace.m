@@ -2125,29 +2125,28 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   /* Check if this is a disk image file */
   NSString *ext = [[fullPath pathExtension] lowercaseString];
   if ([ext isEqualToString:@"dmg"]) {
+    /* Mounting a DMG can block for several seconds (the helper tool
+     * launching, then -verifyMountPoint:pid:error: retrying up to ~10s
+     * waiting for its contents to appear) - run it on a background thread
+     * so this double-click does not freeze the whole desktop while it
+     * waits. -diskImageMountCompleted: opens the viewer once it is really
+     * there, on the main thread, same as the synchronous call used to. */
     VolumeManager *volMgr = [VolumeManager sharedManager];
-    NSString *mountPoint = [volMgr mountDMGFile:fullPath];
-    if (mountPoint) {
-      /* Wait for filesystem to populate before opening viewer */
-      usleep(500000);  /* 0.5 second delay */
-      [self newViewerAtPath:mountPoint];
-      return YES;
-    }
-    return NO;
+    [volMgr mountDMGFile:fullPath
+             onMainThread:self
+                 selector:@selector(diskImageMountCompleted:)];
+    return YES;
   } else if ([ext isEqualToString:@"iso"] || [ext isEqualToString:@"bin"] ||
              [ext isEqualToString:@"nrg"] || [ext isEqualToString:@"img"] ||
              [ext isEqualToString:@"mdf"] ||
              [ext isEqualToString:@"squashfs"] || [ext isEqualToString:@"sqsh"] ||
              [ext isEqualToString:@"sfs"]) {
+    /* Same reasoning as the DMG case above. */
     VolumeManager *volMgr = [VolumeManager sharedManager];
-    NSString *mountPoint = [volMgr mountFuseisoImage:fullPath];
-    if (mountPoint) {
-      /* Wait for filesystem to populate before opening viewer */
-      usleep(500000);  /* 0.5 second delay */
-      [self newViewerAtPath:mountPoint];
-      return YES;
-    }
-    return NO;
+    [volMgr mountFuseisoImage:fullPath
+                  onMainThread:self
+                      selector:@selector(diskImageMountCompleted:)];
+    return YES;
   }
   
   /* Check if this is an archive file that AVFS can handle.
@@ -2336,7 +2335,20 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
   NS_ENDHANDLER  
   
-    return success;  
+    return success;
+}
+
+/* Main-thread completion for the async disk-image/ISO mounts -openFile:
+ * kicks off above: opens the viewer once the mount is really there, or
+ * does nothing on failure (mountDMGFile:/mountFuseisoImage: already showed
+ * an alert before delivering nil here) - the same two outcomes the old
+ * synchronous call produced, just arriving later instead of blocking for
+ * them. */
+- (void)diskImageMountCompleted:(NSString *)mountPoint
+{
+  if (mountPoint) {
+    [self newViewerAtPath:mountPoint];
+  }
 }
 
 - (BOOL)openURL:(NSURL *)url

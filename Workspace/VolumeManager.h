@@ -102,6 +102,19 @@ static inline BOOL VMPathIsActiveMountPoint(NSString *mountPoint)
 - (NSString *)mountFuseisoImage:(NSString *)imagePath;
 
 /**
+ * Asynchronous variants of the two mount methods above: the mount itself -
+ * launching the helper tool and waiting for it to attach, which alone can
+ * take up to roughly ten seconds - runs on a background thread instead of
+ * the caller's, so a caller on the main thread (typically reacting to a
+ * double-click) stays responsive. selector is sent to target on the main
+ * thread once mounting finishes, with the resulting mount point as its
+ * single argument, or nil if mounting failed (a failure alert has already
+ * been shown by then, exactly as the synchronous calls above do).
+ */
+- (void)mountDMGFile:(NSString *)dmgPath onMainThread:(id)target selector:(SEL)selector;
+- (void)mountFuseisoImage:(NSString *)imagePath onMainThread:(id)target selector:(SEL)selector;
+
+/**
  * Unmount an image file by its path
  */
 - (BOOL)unmountImageFile:(NSString *)imagePath;
