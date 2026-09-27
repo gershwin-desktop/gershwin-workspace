@@ -33,6 +33,7 @@
 #import "FSNMetadataProvider.h"
 #import "FSNIconPositionStore.h"
 #import "GWDesktopView.h"
+#import "GWDesktopBackImageGeometry.h"
 #import "GWDesktopIcon.h"
 #import "GWDesktopManager.h"
 #import "DSStoreInfo.h"
@@ -87,6 +88,7 @@ static CGFloat desktopScaleFactor(void)
   RELEASE (backImage);
   RELEASE (imagePath);
   RELEASE (dragIcon);
+  RELEASE (_scaledBackImageCache);
 
   [super dealloc];
 }
@@ -148,6 +150,7 @@ static CGFloat desktopScaleFactor(void)
       ASSIGN (backColor, DEF_COLOR);
 
       backImageStyle = BackImageCenterStyle;
+      _scaledBackImageCache = [NSMutableDictionary new];
       mountedVolumes = [NSMutableArray new];
       expectedUnmountPaths = [NSMutableDictionary new];
 
@@ -662,6 +665,9 @@ static CGFloat desktopScaleFactor(void)
   }
   [self setFrame: NSMakeRect(0, 0, screenFrame.size.width, screenFrame.size.height)];
   _gridCached = NO;
+  /* Monitor sizes may have changed; a size-keyed cache entry from before
+   * would otherwise be reused for an unrelated monitor of the same size. */
+  [self invalidateScaledBackImageCache];
   [self tile];
   [self setNeedsDisplay: YES];
 }
@@ -1405,76 +1411,66 @@ static CGFloat desktopScaleFactor(void)
                 style = BackImageCenterStyle;
             }
 
-          [NSGraphicsContext saveGraphicsState];
-          NSBezierPath *clipPath = [NSBezierPath bezierPathWithRect:localRect];
-          [clipPath addClip];
+          /* Only the part of this monitor that is actually dirty needs to be
+           * painted; a rubber-band drag redraws with a thin strip many times
+           * a second, and painting (or, for Fit/Scale, rescaling) the whole
+           * monitor rect on every one of those calls is wasted work. */
+          NSRect dirtyRect = NSIntersectionRect(localRect, rect);
 
-          if (style == BackImageFitStyle)
+          if (style == BackImageFitStyle || style == BackImageScaleStyle)
             {
-              [backImage drawInRect: localRect
-                           fromRect: NSZeroRect
-                          operation: NSCompositeSourceOver
-                           fraction: 1.0
-                     respectFlipped: YES
-                              hints: nil];
-            }
-          else if (style == BackImageTileStyle)
-            {
-              CGFloat x = localRect.origin.x;
-              CGFloat y = NSMaxY(localRect) - imsize.height;
+              /* The scaled bitmap depends only on the image, the style and
+               * the monitor's pixel size, not on which rect is dirty, so it
+               * is computed once and reused - the per-call cost becomes a
+               * plain 1:1 blit of just the dirty sub-rect instead of a fresh
+               * resample of the whole wallpaper. */
+              NSImage *scaled = [self scaledBackImageForSize: localRect.size
+                                                        style: style];
+              NSRect srcRect = GWDesktopBackImageSourceRect(localRect, dirtyRect);
 
-              while (y > (localRect.origin.y - imsize.height))
-                {
-                  [backImage compositeToPoint: NSMakePoint(x, y)
-                                    operation: NSCompositeSourceOver];
-                  x += imsize.width;
-                  if (x >= NSMaxX(localRect))
-                    {
-                      y -= imsize.height;
-                      x = localRect.origin.x;
-                    }
-                }
-            }
-          else if (style == BackImageScaleStyle)
-            {
-              float imRatio = imsize.width / imsize.height;
-              float monRatio = localRect.size.width / localRect.size.height;
-              float scale;
-              NSPoint imagePoint;
-
-              if (imRatio > monRatio)
-                {
-                  scale = imsize.width / localRect.size.width;
-                  imagePoint = NSMakePoint(localRect.origin.x,
-                    localRect.origin.y + (localRect.size.height - imsize.height/scale) / 2);
-                }
-              else
-                {
-                  scale = imsize.height / localRect.size.height;
-                  imagePoint = NSMakePoint(
-                    localRect.origin.x + (localRect.size.width - imsize.width/scale) / 2,
-                    localRect.origin.y);
-                }
-              [backImage drawInRect: NSMakeRect(imagePoint.x, imagePoint.y,
-                                                imsize.width / scale, imsize.height / scale)
-                           fromRect: NSZeroRect
-                          operation: NSCompositeSourceOver
-                           fraction: 1.0
-                     respectFlipped: YES
-                              hints: nil];
+              [scaled drawInRect: dirtyRect
+                        fromRect: srcRect
+                       operation: NSCompositeSourceOver
+                        fraction: 1.0
+                  respectFlipped: YES
+                           hints: nil];
             }
           else
             {
-              /* Center style */
-              NSPoint imagePoint;
-              imagePoint = NSMakePoint(
-                localRect.origin.x + (localRect.size.width - imsize.width) / 2,
-                localRect.origin.y + (localRect.size.height - imsize.height) / 2);
-              [backImage compositeToPoint: imagePoint
-                                operation: NSCompositeSourceOver];
-            }
+              [NSGraphicsContext saveGraphicsState];
+              NSBezierPath *clipPath = [NSBezierPath bezierPathWithRect: dirtyRect];
+              [clipPath addClip];
 
-          [NSGraphicsContext restoreGraphicsState];
+              if (style == BackImageTileStyle)
+                {
+                  CGFloat x = localRect.origin.x;
+                  CGFloat y = NSMaxY(localRect) - imsize.height;
+
+                  while (y > (localRect.origin.y - imsize.height))
+                    {
+                      [backImage compositeToPoint: NSMakePoint(x, y)
+                                        operation: NSCompositeSourceOver];
+                      x += imsize.width;
+                      if (x >= NSMaxX(localRect))
+                        {
+                          y -= imsize.height;
+                          x = localRect.origin.x;
+                        }
+                    }
+                }
+              else
+                {
+                  /* Center style */
+                  NSPoint imagePoint;
+                  imagePoint = NSMakePoint(
+                    localRect.origin.x + (localRect.size.width - imsize.width) / 2,
+                    localRect.origin.y + (localRect.size.height - imsize.height) / 2);
+                  [backImage compositeToPoint: imagePoint
+                                    operation: NSCompositeSourceOver];
+                }
+
+              [NSGraphicsContext restoreGraphicsState];
+            }
         }
     }
 
@@ -2127,6 +2123,7 @@ static CGFloat desktopScaleFactor(void)
 - (void)createBackImage:(NSImage *)image
 {
   ASSIGN(backImage, image);
+  [self invalidateScaledBackImageCache];
 }
 
 - (NSImage *)backImage
@@ -2177,6 +2174,7 @@ static CGFloat desktopScaleFactor(void)
   if (style != backImageStyle)
     {
       backImageStyle = style;
+      [self invalidateScaledBackImageCache];
       if (backImage)
 	{
 	  [self setBackImageAtPath: imagePath];
@@ -2188,6 +2186,71 @@ static CGFloat desktopScaleFactor(void)
           [self updateDefaults];
         }
     }
+}
+
+- (NSImage *)scaledBackImageForSize:(NSSize)size style:(BackImageStyle)style
+{
+  NSString *key = NSStringFromSize(size);
+  NSImage *cached = [_scaledBackImageCache objectForKey: key];
+  NSImage *scaled;
+  NSSize imsize;
+
+  if (cached != nil)
+    {
+      return cached;
+    }
+
+  imsize = [backImage size];
+  scaled = [[NSImage alloc] initWithSize: size];
+  [scaled lockFocus];
+
+  if (style == BackImageFitStyle)
+    {
+      [backImage drawInRect: NSMakeRect(0, 0, size.width, size.height)
+                   fromRect: NSZeroRect
+                  operation: NSCompositeSourceOver
+                   fraction: 1.0
+             respectFlipped: YES
+                      hints: nil];
+    }
+  else
+    {
+      /* Scale style: fit the image inside 'size' preserving aspect ratio,
+       * matching the aspect-fit math the direct (uncached) path used. */
+      float imRatio = imsize.width / imsize.height;
+      float monRatio = size.width / size.height;
+      float scale;
+      NSPoint imagePoint;
+
+      if (imRatio > monRatio)
+        {
+          scale = imsize.width / size.width;
+          imagePoint = NSMakePoint(0, (size.height - imsize.height / scale) / 2);
+        }
+      else
+        {
+          scale = imsize.height / size.height;
+          imagePoint = NSMakePoint((size.width - imsize.width / scale) / 2, 0);
+        }
+      [backImage drawInRect: NSMakeRect(imagePoint.x, imagePoint.y,
+                                        imsize.width / scale, imsize.height / scale)
+                   fromRect: NSZeroRect
+                  operation: NSCompositeSourceOver
+                   fraction: 1.0
+             respectFlipped: YES
+                      hints: nil];
+    }
+
+  [scaled unlockFocus];
+
+  [_scaledBackImageCache setObject: scaled forKey: key];
+  RELEASE(scaled);
+  return scaled;
+}
+
+- (void)invalidateScaledBackImageCache
+{
+  [_scaledBackImageCache removeAllObjects];
 }
 
 /* Override addRepForSubnode: to create GWDesktopIcon instances
