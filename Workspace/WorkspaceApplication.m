@@ -64,16 +64,21 @@
       NSMutableDictionary *opdict = [NSMutableDictionary dictionary];
 
       if (operation != nil)
-	[opdict setObject: operation forKey: @"operation"];
-
-      if (operation != nil)
-	[opdict setObject: source forKey: @"source"];
-      else
-
-      if (destination == nil && [operation isEqualToString:NSWorkspaceRecycleOperation])
-	destination = [self trashPath];
+        {
+          [opdict setObject: operation forKey: @"operation"];
+        }
+      if (source != nil)
+        {
+          [opdict setObject: source forKey: @"source"];
+        }
+      if (destination == nil && [operation isEqualToString: NSWorkspaceRecycleOperation])
+        {
+          destination = [self trashPath];
+        }
       if (destination != nil)
-	[opdict setObject: destination forKey: @"destination"];
+        {
+          [opdict setObject: destination forKey: @"destination"];
+        }
 
       if (files != nil)
 	[opdict setObject: files forKey: @"files"];
