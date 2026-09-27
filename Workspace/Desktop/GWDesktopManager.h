@@ -191,10 +191,24 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath;
 {
   NSArray *mountedRemovableVolumes;
   NSMutableSet *watchedMountRoots;  /* Tracks paths being watched for mount changes */
-  NSTimer *timer;
   BOOL active;
   GWDesktopManager *manager;
   NSFileManager *fm;
+
+#if defined(__OpenBSD__)
+  /* OpenBSD has neither a pollable mount-table fd (no /proc) nor
+   * EVFILT_FS, so it is the one platform that still ticks on a plain
+   * timer - at a much slower, clearly-marked rate than before this fix. */
+  NSTimer *timer;
+#else
+  /* Linux and the kqueue BSDs react to a real mount-table change instead
+   * of ticking: a background NSThread blocks in poll()/kevent() until the
+   * kernel reports one, or until -stopWatching writes to watcherStopPipe. */
+  int watcherStopPipe[2];
+  BOOL watcherThreadRunning;
+  NSCondition *watcherDoneCondition;
+  BOOL watcherThreadDone;
+#endif
 }
 
 - (id)initForManager:(GWDesktopManager *)mngr;

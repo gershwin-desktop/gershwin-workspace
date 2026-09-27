@@ -36,10 +36,20 @@
 #import "Workspace.h"
 #import "GWViewersManager.h"
 #import "Thumbnailer/GWThumbnailer.h"
+#import "GWMountWatchState.h"
+#import "../FileViewer/GWVolumeID.h"
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <math.h>
 #include <unistd.h>
+#include <fcntl.h>
+#include <poll.h>
+#include <errno.h>
+#include <string.h>
+#if !defined(__linux__) && !defined(__OpenBSD__)
+#include <sys/types.h>
+#include <sys/event.h>
+#endif
 
 #define RESV_MARGIN 10
 
@@ -1114,14 +1124,31 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 @end
 
 
+#if !defined(__OpenBSD__)
+@interface MPointWatcher (GWMountWatcherThread)
+- (void)startWatcherThreadIfNeeded;
+- (void)stopWatcherThread;
+- (void)watcherThreadMain;
+@end
+#endif
+
+@interface MPointWatcher (GWMountWatcherApply)
+- (void)applyWatcherVolumes:(NSArray *)newVolumes;
+@end
+
 @implementation MPointWatcher
 
 - (void)dealloc
 {
+#if defined(__OpenBSD__)
   if (timer && [timer isValid])
     {
       [timer invalidate];
     }
+#else
+  [self stopWatcherThread];
+  RELEASE (watcherDoneCondition);
+#endif
 
   RELEASE (mountedRemovableVolumes);
   RELEASE (watchedMountRoots);
@@ -1131,7 +1158,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 - (id)initForManager:(GWDesktopManager *)mngr
 {
   self = [super init];
-  
+
   if (self)
     {
       manager = mngr;
@@ -1139,13 +1166,24 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       fm = [NSFileManager defaultManager];
       watchedMountRoots = [[NSMutableSet alloc] init];
 
-      timer = [NSTimer scheduledTimerWithTimeInterval: 1.5
+#if defined(__OpenBSD__)
+      /* No mount-change event exists here (no /proc, no EVFILT_FS): fall
+       * back to a timer, but at 5s instead of the 1.5s this fix removes
+       * everywhere else - reacting within 5s to a plugged-in drive is
+       * good enough for a human, at a third as many wakeups as before. */
+      timer = [NSTimer scheduledTimerWithTimeInterval: 5.0
 					       target: self
 					     selector: @selector(watchMountPoints:)
 					     userInfo: nil
 					      repeats: YES];
+#else
+      watcherStopPipe[0] = -1;
+      watcherStopPipe[1] = -1;
+      watcherThreadRunning = NO;
+      watcherDoneCondition = [[NSCondition alloc] init];
+#endif
     }
-  
+
   return self;
 }
 
@@ -1154,7 +1192,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   NSArray *configuredPaths = [[defaults persistentDomainForName: NSGlobalDomain] objectForKey: @"GSRemovableMediaPaths"];
   NSMutableSet *pathsToWatch = [NSMutableSet set];
-  
+
   /* Add configured removable media paths from preferences */
   if (configuredPaths && [configuredPaths count] > 0) {
     for (NSString *path in configuredPaths) {
@@ -1166,10 +1204,10 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       }
     }
   }
-  
+
   /* Add the shared volume mount roots (/media, /Volumes, per-user dirs). */
   [pathsToWatch addObjectsFromArray: [Workspace volumeMountRoots]];
-  
+
   /* Register watchers for paths that aren't already watched */
   for (NSString *path in pathsToWatch) {
     BOOL isDir = NO;
@@ -1180,10 +1218,14 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       }
     }
   }
-  
+
   [mountedRemovableVolumes release];
   mountedRemovableVolumes = [[self effectiveDesktopVolumes] retain];
   active = YES;
+
+#if !defined(__OpenBSD__)
+  [self startWatcherThreadIfNeeded];
+#endif
 }
 
 - (void)stopWatching
@@ -1193,47 +1235,203 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
     [manager removeWatcherForPath: path];
   }
   [watchedMountRoots removeAllObjects];
-  
+
   active = NO;
   [mountedRemovableVolumes release];
   mountedRemovableVolumes = nil;
+
+#if !defined(__OpenBSD__)
+  [self stopWatcherThread];
+#endif
 }
 
 - (void)watchMountPoints:(id)sender
 {
   if (active)
     {
-      BOOL removed = NO;
-      BOOL added = NO;
-      NSUInteger i;
-      NSArray *newVolumes = [self effectiveDesktopVolumes];
-
-      for (i = 0; i < [mountedRemovableVolumes count]; i++)
-	{
-	  NSString *vol;
-
-	  vol = [mountedRemovableVolumes objectAtIndex:i];
-	  if (![newVolumes containsObject:vol])
-	    removed |= YES;
-	}
-
-      for (i = 0; i < [newVolumes count]; i++)
-	{
-	  NSString *vol;
-
-	  vol = [newVolumes objectAtIndex:i];
-	  if (![mountedRemovableVolumes containsObject:vol])
-	    added |= YES;
-	}
-
-      if (added || removed)
-	[manager mountedVolumesDidChange];
-
-      [mountedRemovableVolumes release];
-      mountedRemovableVolumes = newVolumes;
-      [mountedRemovableVolumes retain];
+      [self applyWatcherVolumes: [self effectiveDesktopVolumes]];
     }
 }
+
+- (void)applyWatcherVolumes:(NSArray *)newVolumes
+{
+  /* Always runs on the main thread: the watcher thread hands its result
+   * here through -performSelectorOnMainThread: (Linux/kqueue paths below),
+   * and the OpenBSD timer calls it directly since it already fires on the
+   * main run loop via -watchMountPoints:. */
+  NSArray *added = nil, *removed = nil;
+
+  if (!active) return;
+
+  GWMountWatchStateDiff(mountedRemovableVolumes, newVolumes, &added, &removed);
+
+  if ([added count] > 0 || [removed count] > 0)
+    [manager mountedVolumesDidChange];
+
+  [mountedRemovableVolumes release];
+  mountedRemovableVolumes = [newVolumes retain];
+}
+
+#if !defined(__OpenBSD__)
+
+- (void)startWatcherThreadIfNeeded
+{
+  if (watcherThreadRunning) return;   /* e.g. -removableMediaPathsDidChange
+                                        * calling -startWatching again while
+                                        * the desktop is still active */
+
+  if (pipe(watcherStopPipe) != 0)
+    {
+      NSLog(@"MPointWatcher: pipe() failed (%s); mount changes will only "
+            @"be noticed the next time something else triggers a rescan",
+            strerror(errno));
+      watcherStopPipe[0] = -1;
+      watcherStopPipe[1] = -1;
+      return;
+    }
+
+  watcherThreadDone = NO;
+  watcherThreadRunning = YES;
+  [NSThread detachNewThreadSelector: @selector(watcherThreadMain)
+                           toTarget: self
+                         withObject: nil];
+}
+
+- (void)stopWatcherThread
+{
+  if (!watcherThreadRunning) return;
+
+  if (watcherStopPipe[1] >= 0)
+    {
+      char b = 1;
+      /* Wakes poll()/kevent() in -watcherThreadMain out of its indefinite
+       * wait; this is one byte written to a pipe, never a filesystem call. */
+      write(watcherStopPipe[1], &b, 1);
+    }
+
+  [watcherDoneCondition lock];
+  while (!watcherThreadDone)
+    {
+      /* Bounded wait: -deactivateDesktop runs on the main thread and must
+       * not hang if the watcher thread is ever slow to notice the pipe. */
+      if (![watcherDoneCondition waitUntilDate:
+              [NSDate dateWithTimeIntervalSinceNow: 1.0]])
+        break;
+    }
+  [watcherDoneCondition unlock];
+
+  if (watcherStopPipe[0] >= 0) close(watcherStopPipe[0]);
+  if (watcherStopPipe[1] >= 0) close(watcherStopPipe[1]);
+  watcherStopPipe[0] = -1;
+  watcherStopPipe[1] = -1;
+  watcherThreadRunning = NO;
+}
+
+- (void)watcherThreadMain
+{
+  /* Everything here runs off the main thread. Its only job is to block
+   * until the kernel says the mount table changed, so the main thread
+   * never again pays for statfs()'ing every mount on a fixed timer - the
+   * bug this replaces (see the commit message for before/after syscall
+   * counts, including a hung FUSE helper that put every Workspace into
+   * uninterruptible sleep from its very first tick). */
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+
+#if defined(__linux__)
+  int fd = open("/proc/self/mounts", O_RDONLY);
+  if (fd < 0)
+    {
+      NSLog(@"MPointWatcher: cannot open /proc/self/mounts (%s); mount "
+            @"changes will not be detected", strerror(errno));
+    }
+  else
+    {
+      struct pollfd fds[2];
+      fds[1].fd = watcherStopPipe[0];
+      fds[1].events = POLLIN;
+
+      for (;;)
+	{
+	  fds[0].fd = fd;
+	  fds[0].events = POLLERR | POLLPRI;
+	  fds[0].revents = 0;
+	  fds[1].revents = 0;
+
+	  /* The kernel raises POLLPRI/POLLERR on this fd on every change to
+	   * the mount table as a whole - never on a per-mount-point basis,
+	   * and with no statfs involved at all. */
+	  int rc = poll(fds, 2, -1);
+	  if (rc < 0)
+	    {
+	      if (errno == EINTR) continue;
+	      break;
+	    }
+	  if (fds[1].revents & POLLIN) break;   /* -stopWatching asked us to exit */
+	  if (fds[0].revents & (POLLPRI | POLLERR))
+	    {
+	      NSArray *newVolumes = [self effectiveDesktopVolumes];
+	      [self performSelectorOnMainThread: @selector(applyWatcherVolumes:)
+				     withObject: newVolumes
+				  waitUntilDone: NO];
+	    }
+	}
+
+      close(fd);
+    }
+#else
+  /* FreeBSD, NetBSD, DragonFly: EVFILT_FS wakes on any mount-table change,
+   * the same event class libc's own getmntinfo() callers rely on. */
+  int kq = kqueue();
+  if (kq < 0)
+    {
+      NSLog(@"MPointWatcher: kqueue() failed (%s); mount changes will not "
+            @"be detected", strerror(errno));
+    }
+  else
+    {
+      struct kevent changes[2];
+      EV_SET(&changes[0], 0, EVFILT_FS, EV_ADD | EV_CLEAR, 0, 0, NULL);
+      EV_SET(&changes[1], watcherStopPipe[0], EVFILT_READ, EV_ADD, 0, 0, NULL);
+
+      if (kevent(kq, changes, 2, NULL, 0, NULL) < 0)
+	{
+	  NSLog(@"MPointWatcher: kevent(EVFILT_FS) registration failed (%s)",
+		strerror(errno));
+	}
+      else
+	{
+	  for (;;)
+	    {
+	      struct kevent ev;
+	      int rc = kevent(kq, NULL, 0, &ev, 1, NULL);
+	      if (rc < 0)
+		{
+		  if (errno == EINTR) continue;
+		  break;
+		}
+	      if (rc == 0) continue;
+	      if ((int)ev.ident == watcherStopPipe[0]) break;   /* stop requested */
+
+	      NSArray *newVolumes = [self effectiveDesktopVolumes];
+	      [self performSelectorOnMainThread: @selector(applyWatcherVolumes:)
+				     withObject: newVolumes
+				  waitUntilDone: NO];
+	    }
+	}
+
+      close(kq);
+    }
+#endif
+
+  [watcherDoneCondition lock];
+  watcherThreadDone = YES;
+  [watcherDoneCondition signal];
+  [watcherDoneCondition unlock];
+
+  [pool release];
+}
+
+#endif /* !__OpenBSD__ */
 
 - (BOOL)isWatchingPath:(NSString *)path
 {
@@ -1241,28 +1439,86 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 }
 
 /**
- * Returns the effective list of desktop volumes by combining mountedRemovableMedia
- * (which works on Linux via sysfs) with any volumes from mountedLocalVolumePaths
- * that are under well-known mount root directories.  This makes volume detection
- * work on FreeBSD where the sysfs removability check is unavailable.
+ * Returns the effective list of desktop volumes: mount points that are
+ * either configured/removable media, or fall under one of Workspace's
+ * mount root directories (/media, /Volumes, per-user dirs).  Built from
+ * +[GWVolumeID mountedFilesystems] - the mount TABLE, read with
+ * getmntent()/getmntinfo() - rather than NSWorkspace's
+ * mountedRemovableMedia/mountedLocalVolumePaths, which statfs()/statvfs()
+ * every single mount point to answer "removable"/"writable": exactly the
+ * per-mount syscall this watcher must never make (a wedged network share
+ * or FUSE helper hangs statfs() forever, and there was one such call per
+ * mount point on every 1.5s tick).
  */
 - (NSArray *)effectiveDesktopVolumes
 {
-  NSWorkspace *ws = [NSWorkspace sharedWorkspace];
-  NSMutableSet *volumeSet = [NSMutableSet setWithArray:[ws mountedRemovableMedia]];
-
+  NSArray *entries = [GWVolumeID mountedFilesystems];
   NSArray *mountRoots = [Workspace volumeMountRoots];
+  NSArray *removableMediaPaths = [[[NSUserDefaults standardUserDefaults]
+    persistentDomainForName: NSGlobalDomain] objectForKey: @"GSRemovableMediaPaths"];
+  NSArray *reservedTypes = [[NSUserDefaults standardUserDefaults]
+    objectForKey: @"GSReservedMountNames"];
 
-  NSArray *allLocal = [ws mountedLocalVolumePaths];
-  for (NSString *vol in allLocal) {
-    for (NSString *root in mountRoots) {
-      if ([vol hasPrefix: [root stringByAppendingString: @"/"]]
-          && ![vol isEqualToString: @"/"]) {
-        [volumeSet addObject: vol];
-        break;
-      }
+  if (reservedTypes == nil)
+    {
+      /* Same pseudo-filesystem list NSWorkspace's mountedLocalVolumePaths
+       * uses, kept in sync so a mount that used to be excluded there is
+       * still excluded here. */
+      reservedTypes = [NSArray arrayWithObjects:
+        @"proc", @"devpts", @"shm", @"usbdevfs", @"devtmpfs", @"sysfs",
+        @"tmpfs", @"procbususb", @"udev", @"pstore", @"cgroup", nil];
     }
-  }
+
+  NSMutableSet *volumeSet = [NSMutableSet set];
+
+  for (NSDictionary *entry in entries)
+    {
+      NSString *mp = [entry objectForKey: @"mountPoint"];
+      NSString *src = [entry objectForKey: @"source"];
+      NSString *fsType = [entry objectForKey: @"fsType"];
+
+      if (mp == nil) continue;
+
+      BOOL removable = (removableMediaPaths != nil
+                         && [removableMediaPaths containsObject: mp]);
+
+      if (!removable && [src length] > 0 && [src hasPrefix: @"/dev/"])
+	{
+	  /* Same crude "strip the partition number" heuristic NSWorkspace
+	   * used (e.g. /dev/sdb1 -> /sys/block/sdb): reading this file is a
+	   * device query, never a stat/statfs of the mount point itself. */
+	  NSString *devName = [src lastPathComponent];
+	  if ([devName length] > 3)
+	    devName = [devName substringToIndex: 3];
+
+	  NSString *sysPath = [[@"/sys/block" stringByAppendingPathComponent: devName]
+				 stringByAppendingPathComponent: @"removable"];
+	  NSString *flag = [NSString stringWithContentsOfFile: sysPath
+						      encoding: NSUTF8StringEncoding
+							 error: NULL];
+	  if ([flag hasPrefix: @"1"])
+	    removable = YES;
+	}
+
+      if (removable)
+	{
+	  [volumeSet addObject: mp];
+	  continue;
+	}
+
+      if (fsType != nil && [reservedTypes containsObject: fsType])
+	continue;   /* a pseudo filesystem is never a desktop volume */
+
+      for (NSString *root in mountRoots)
+	{
+	  if ([mp hasPrefix: [root stringByAppendingString: @"/"]]
+	      && ![mp isEqualToString: @"/"])
+	    {
+	      [volumeSet addObject: mp];
+	      break;
+	    }
+	}
+    }
 
   return [volumeSet allObjects];
 }
