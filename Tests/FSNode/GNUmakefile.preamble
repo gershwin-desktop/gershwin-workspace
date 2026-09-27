@@ -94,3 +94,8 @@ t_FSNTextCellLabelLookup_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                        ../../FSNode/FSNodeRepIcons.m \
                                        ../../FSNode/FSNode.m
 t_FSNTextCellLabelLookup_TOOL_LIBS += -lgnustep-gui
+
+# t_FSNBrowserMatrixDrawRectRowScan drives the real browser matrix/cell
+# classes, so it links the built framework like t_FSNIconsViewTile does.
+t_FSNBrowserMatrixDrawRectRowScan_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                               -lFSNode -lgnustep-gui
