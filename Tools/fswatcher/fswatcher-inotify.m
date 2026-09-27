@@ -873,26 +873,42 @@ static inline BOOL isDotFile(NSString *path)
     }
 
     uint32_t type = eventType(eventp->mask);
-    
-    if (type != IN_IGNORED && eventp->len) {
+
+    /* IN_DELETE_SELF/IN_MOVE_SELF describe the watched object itself, so the
+     * kernel never appends a trailing name (len stays 0); requiring
+     * eventp->len unconditionally silently dropped both events below,
+     * which is why the watch was never retired from our own bookkeeping
+     * when the kernel retired (or relocated) it. */
+    if (type != IN_IGNORED
+          && (eventp->len || type == IN_DELETE_SELF || type == IN_MOVE_SELF)) {
       Watcher *watcher = [self watcherWithWatchDescriptor: eventp->wd];
-      
+
       if (watcher) {
         CREATE_AUTORELEASE_POOL(arp);
         NSMutableDictionary *notifdict = [NSMutableDictionary dictionary];
         NSString *basepath = [watcher watchedPath];
         NSString *fullpath = basepath;
-        NSString *fname = [NSString stringWithUTF8String: eventp->name];         
+        /* No trailing name field exists when len == 0; reading eventp->name
+         * then would walk off the end of this event into unrelated bytes. */
+        NSString *fname = (eventp->len
+                              ? [NSString stringWithUTF8String: eventp->name]
+                              : @"");
         NSString *ext = [[fname pathExtension] lowercaseString];
         BOOL dirwatch = [watcher isDirWatcher];
         BOOL notify = YES;
-        
+        /* Set when this event means the watched path itself no longer
+         * denotes what we are watching, so the watch must be dropped
+         * the same way fswatcher-kqueue.m's handleKevent: drops it on
+         * NOTE_DELETE/NOTE_RENAME/NOTE_REVOKE. */
+        BOOL watchedObjectGone = NO;
+
         [notifdict setObject: basepath forKey: @"path"];
-            
-        if (dirwatch) {    
-          if (type == IN_DELETE_SELF) {     
+
+        if (dirwatch) {
+          if (type == IN_DELETE_SELF) {
             [notifdict setObject: GWWatchedPathDeleted forKey: @"event"];
-            
+            watchedObjectGone = YES;
+
           } else if (type == IN_DELETE || type == IN_MOVED_FROM) {
             [notifdict setObject: [NSArray arrayWithObject: fname] 
                           forKey: @"files"];            
@@ -926,16 +942,26 @@ static inline BOOL isDotFile(NSString *path)
           if (type == IN_MODIFY || type == IN_CLOSE_WRITE) {
             [notifdict setObject: GWWatchedFileModified forKey: @"event"];
           } else if (type == IN_DELETE_SELF) {
-            [notifdict setObject: GWWatchedPathDeleted forKey: @"event"];          
+            [notifdict setObject: GWWatchedPathDeleted forKey: @"event"];
+            watchedObjectGone = YES;
           } else if (type == IN_MOVE_SELF) {
-            [notifdict setObject: GWWatchedPathRenamed forKey: @"event"];          
+            [notifdict setObject: GWWatchedPathRenamed forKey: @"event"];
+            watchedObjectGone = YES;
           } else {
             notify = NO;
           }
-        }   
-        
+        }
+
         if (notify) {
           [self notifyClients: notifdict];
+        }
+
+        if (watchedObjectGone) {
+          /* watcher is the sole strong reference held by the `watchers`
+           * map; nothing below this point uses the Watcher object itself
+           * (only the primitives already captured above), so it is safe
+           * to retire it here. */
+          [self removeWatcher: watcher];
         }         
                 
         notify = (notify && ([excludedSuffixes containsObject: ext] == NO)
