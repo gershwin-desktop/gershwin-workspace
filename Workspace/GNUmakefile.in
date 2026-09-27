@@ -134,6 +134,7 @@ FileViewer/GWViewerPrefs.m \
 FileViewer/GWSpatialIconsView.m \
 ../GWMetadata/GWMetaArchive.m \
 Finder/Finder.m \
+Finder/GWChangePaths.m \
 Finder/FindModuleView.m \
 Finder/SearchPlacesBox.m \
 Finder/SearchPlacesCell.m \

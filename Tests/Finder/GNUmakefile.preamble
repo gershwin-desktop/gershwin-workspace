@@ -1,0 +1,11 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+# Finder cannot be instantiated headless (its -init loads a Gorm nib and
+# builds a full window/toolbar UI), and linking Finder.m as an object pulls
+# in its entire sibling class graph - Workspace.m (the whole app delegate),
+# FindModuleView, SearchPlacesBox/Cell, SearchResults, LSFolder, and
+# everything those in turn need (~40 sources per Workspace/GNUmakefile.in).
+# t_FinderChangePaths links the real, small Foundation-only helper Finder.m
+# calls (Workspace/Finder/GWChangePaths.m) instead of driving the whole
+# class, so it exercises the shipped function rather than a copy of it.
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Finder
+t_FinderChangePaths_OBJC_FILES += ../../Workspace/Finder/GWChangePaths.m

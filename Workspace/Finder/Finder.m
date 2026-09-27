@@ -35,6 +35,7 @@
 #import "FSNodeRep.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
+#import "GWChangePaths.h"
 
 #define WINH (262.0)
 #define FMVIEWH (34.0)
@@ -986,9 +987,14 @@ static Finder *finder = nil;
         
     for (j = 0; j < [srcpaths count]; j++) {
       NSString *srcpath = [srcpaths objectAtIndex: j];
-      NSString *dstpath = [dstpaths objectAtIndex: j];
-      
+
       if (move || copy) {
+        NSString *dstpath = GWChangePathsDestinationAtIndex(dstpaths, j);
+
+        if (dstpath == nil) {
+          continue;
+        }
+
         if ([[node path] isEqual: srcpath]) {
           if ([fm fileExistsAtPath: dstpath]) {
             newnode = [FSNode nodeWithPath: dstpath];
