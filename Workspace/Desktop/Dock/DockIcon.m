@@ -194,7 +194,7 @@
       /* Load the Eject icon for use during mountpoint drags */
       NSString *ejectPath = [[NSBundle mainBundle] pathForResource: @"Eject" ofType: @"icns"];
       if (ejectPath) {
-        ASSIGN (ejectIcon, [[NSImage alloc] initWithContentsOfFile: ejectPath]);
+        ASSIGN (ejectIcon, AUTORELEASE([[NSImage alloc] initWithContentsOfFile: ejectPath]));
       }
       
       subNodes = [node subNodes];
