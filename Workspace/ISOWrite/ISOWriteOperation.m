@@ -458,14 +458,14 @@
     ldPath = @"/System/Library/Libraries";
   }
   
-  /* Build command with proper shell quoting: LD_LIBRARY_PATH=<path> <helper> '<iso>' '<device>' */
-  NSString *helperCommand = [NSString stringWithFormat:@"LD_LIBRARY_PATH=%@ '%@' '%@' '%@'",
-                             ldPath, helperPath, _isoPath, _devicePath];
-  
-  
+  /* env(1) sets the library path after sudo has cleaned the environment;
+   * the image and device paths reach the helper as plain arguments, so a
+   * quote in a file name cannot turn into a shell command running as root. */
   NSTask *task = [[NSTask alloc] init];
   [task setLaunchPath:sudoPath];
-  [task setArguments:@[@"-A", @"-E", @"sh", @"-c", helperCommand]];
+  [task setArguments:@[@"-A", @"-E", @"/usr/bin/env",
+                       [NSString stringWithFormat:@"LD_LIBRARY_PATH=%@", ldPath],
+                       helperPath, _isoPath, _devicePath]];
   
   /* Set up pipes for monitoring output - explicitly retain to prevent premature deallocation */
   NSPipe *outputPipe = [[NSPipe pipe] retain];
