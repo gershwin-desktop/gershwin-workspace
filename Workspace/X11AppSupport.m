@@ -25,6 +25,46 @@
 #include <stdlib.h>
 #include <math.h>
 
+/* Per-window property readers shared with GWX11ClientSnapshot. */
+@interface GWX11WindowManager (ClientSnapshotSupport)
+- (Display *)openDisplay;
+- (void)releaseDisplay:(Display *)dpy;
+- (Window *)getClientList:(Display *)dpy count:(unsigned long *)count;
+- (pid_t)getPIDForWindow:(Display *)dpy window:(Window)win;
+- (NSString *)getWindowName:(Display *)dpy window:(Window)win;
+- (BOOL)isWindowHidden:(Display *)dpy window:(Window)win;
+- (BOOL)hasNetWmStateSkipTaskbar:(Display *)dpy window:(Window)win;
+- (BOOL)checkWindowIconified:(Display *)dpy window:(Window)win;
+@end
+
+/* What the snapshot knows about one client window.  The owner is read for
+ * every window when the snapshot loads; the rest only for the windows a
+ * question actually looks at, and then once. */
+@interface GWX11ClientRecord : NSObject
+{
+@public
+    Window window;
+    pid_t pid;
+    BOOL stateKnown;
+    BOOL skipTaskbar;
+    BOOL viewableKnown;
+    BOOL viewable;
+    BOOL namesKnown;
+    NSString *name;
+    NSString *className;
+    BOOL workspaceWindow;
+}
+@end
+
+@implementation GWX11ClientRecord
+- (void)dealloc
+{
+    RELEASE(name);
+    RELEASE(className);
+    [super dealloc];
+}
+@end
+
 #pragma mark - X11 Error Handler
 
 /* Custom X error handler to prevent crashes from BadWindow/BadMatch errors.
@@ -447,37 +487,14 @@ static NSString * const GWX11ThreadDisplayKey = @"GWX11WindowManagerDisplay";
     return windows;
 }
 
+- (GWX11ClientSnapshot *)clientSnapshot
+{
+    return AUTORELEASE([[GWX11ClientSnapshot alloc] initWithManager: self]);
+}
+
 - (NSArray *)windowsForPID:(pid_t)pid
 {
-    NSMutableArray *windows = [NSMutableArray array];
-    if (pid <= 0) return windows;
-    
-    Display *dpy = [self openDisplay];
-    if (!dpy) return windows;
-    
-    @try {
-        unsigned long count = 0;
-        Window *clients = [self getClientList:dpy count:&count];
-        
-        if (clients) {
-            for (unsigned long i = 0; i < count; i++) {
-                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
-                if (winPID == pid) {
-                    /* Skip windows with _NET_WM_STATE_SKIP_TASKBAR */
-                    if (![self hasNetWmStateSkipTaskbar:dpy window:clients[i]]) {
-                        GWX11WindowInfo *info = [self infoForWindow:dpy window:clients[i]];
-                        [windows addObject:info];
-                    }
-                }
-            }
-            XFree(clients);
-        }
-    }
-    @finally {
-        [self releaseDisplay:dpy];
-    }
-    
-    return windows;
+    return [[self clientSnapshot] windowsForPID:pid];
 }
 
 /*
@@ -503,95 +520,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 
 - (NSArray *)windowsMatchingName:(NSString *)name
 {
-    NSMutableArray *windows = [NSMutableArray array];
-    if (!name || [name length] == 0) return windows;
-    
-    Display *dpy = [self openDisplay];
-    if (!dpy) return windows;
-    
-    @try {
-        unsigned long count = 0;
-        Window *clients = [self getClientList:dpy count:&count];
-        
-        if (clients) {
-            pid_t myPID = getpid();
-
-            for (unsigned long i = 0; i < count; i++) {
-                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
-
-                /* Skip windows with no PID (WM root/decoration windows) */
-                if (winPID <= 0) {
-                    continue;
-                }
-
-                /* Skip our own windows — the Workspace file viewer titles
-                 * can match app names (e.g., a viewer browsing "xpdf" volume
-                 * would falsely match an app named "xpdf").
-                 * Check both _NET_WM_PID and WM_CLASS since GNUstep apps
-                 * may not set _NET_WM_PID. */
-                if (winPID == myPID) {
-                    continue;
-                }
-
-                NSString *winName = [self getWindowName:dpy window:clients[i]];
-                NSString *winClass = [self getWindowClass:dpy window:clients[i]];
-
-                /* Skip windows belonging to Workspace (by WM_CLASS).
-                 * GNUstep apps have res_class="GNUstep". Workspace's own
-                 * windows use specific res_name values like "Workspace",
-                 * "FileViewer", "Window", etc. Check both parts to avoid
-                 * filtering out other GNUstep applications' windows. */
-                if (winClass && [winClass isEqualToString:@"GNUstep"]) {
-                    XClassHint classHint;
-                    if (XGetClassHint(dpy, clients[i], &classHint)) {
-                        BOOL isWorkspace = NO;
-                        if (classHint.res_name) {
-                            NSString *resName = [NSString stringWithCString:classHint.res_name encoding:NSUTF8StringEncoding];
-                            if ([resName isEqualToString:@"Workspace"] ||
-                                [resName isEqualToString:@"FileViewer"] ||
-                                [resName isEqualToString:@"Window"] ||
-                                [resName isEqualToString:@"Finder"]) {
-                                isWorkspace = YES;
-                            }
-                            XFree(classHint.res_name);
-                        }
-                        if (classHint.res_class) {
-                            XFree(classHint.res_class);
-                        }
-                        if (isWorkspace) {
-                            continue;
-                        }
-                    }
-                }
-
-                /* Skip windows with _NET_WM_STATE_SKIP_TASKBAR (e.g. app icon
-                 * windows, desktop windows, dock panels). */
-                if ([self hasNetWmStateSkipTaskbar:dpy window:clients[i]]) {
-                    continue;
-                }
-
-                BOOL matches = NO;
-                if (winName && stringStartsOrEndsWith(winName, name)) {
-                    matches = YES;
-                } else if (winClass && stringStartsOrEndsWith(winClass, name)) {
-                    matches = YES;
-                }
-
-                /* Other users' windows on this display are not this
-                 * session's applications. */
-                if (matches && [GWProcessOwnership isProcessOwnedByCurrentUser: winPID]) {
-                    GWX11WindowInfo *info = [self infoForWindow:dpy window:clients[i]];
-                    [windows addObject:info];
-                }
-            }
-            XFree(clients);
-        }
-    }
-    @finally {
-        [self releaseDisplay:dpy];
-    }
-    
-    return windows;
+    return [[self clientSnapshot] windowsMatchingName:name];
 }
 
 - (unsigned long)findWindowByName:(NSString *)name
@@ -1010,39 +939,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 
 - (BOOL)hasWindowsForPID:(pid_t)pid
 {
-    if (pid <= 0) return NO;
-
-    Display *dpy = [self openDisplay];
-    if (!dpy) return NO;
-
-    BOOL hasVisible = NO;
-
-    @try {
-        unsigned long count = 0;
-        Window *clients = [self getClientList:dpy count:&count];
-
-        if (clients) {
-            for (unsigned long i = 0; i < count && !hasVisible; i++) {
-                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
-                if (winPID == pid) {
-                    if ([self hasNetWmStateSkipTaskbar:dpy window:clients[i]])
-                        continue;
-                    XWindowAttributes attrs;
-                    if (XGetWindowAttributes(dpy, clients[i], &attrs)) {
-                        if (attrs.map_state == IsViewable) {
-                            hasVisible = YES;
-                        }
-                    }
-                }
-            }
-            XFree(clients);
-        }
-    }
-    @finally {
-        [self releaseDisplay:dpy];
-    }
-
-    return hasVisible;
+    return [[self clientSnapshot] hasVisibleWindowsForPID:pid];
 }
 
 - (BOOL)hasWindowsMatchingName:(NSString *)name
@@ -1357,6 +1254,184 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 
 @end
 
+#pragma mark - GWX11ClientSnapshot Implementation
+
+@implementation GWX11ClientSnapshot
+
+- (id)initWithManager:(GWX11WindowManager *)aManager
+{
+    self = [super init];
+    if (self) {
+        manager = aManager;
+        clients = [[NSMutableArray alloc] init];
+    }
+    return self;
+}
+
+- (void)dealloc
+{
+    RELEASE(clients);
+    [super dealloc];
+}
+
+/* Read the client list and every window's owner.  Happens once, on the
+ * first question, on the asking thread's connection. */
+- (void)load
+{
+    if (loaded) {
+        return;
+    }
+    loaded = YES;
+
+    display = [manager openDisplay];
+    if (display == NULL) {
+        return;
+    }
+
+    unsigned long count = 0;
+    Window *list = [manager getClientList:display count:&count];
+    if (list != NULL) {
+        for (unsigned long i = 0; i < count; i++) {
+            GWX11ClientRecord *rec = [[GWX11ClientRecord alloc] init];
+            rec->window = list[i];
+            rec->pid = [manager getPIDForWindow:display window:list[i]];
+            [clients addObject:rec];
+            RELEASE(rec);
+        }
+        XFree(list);
+    }
+    [manager releaseDisplay:display];
+}
+
+- (BOOL)skipsTaskbar:(GWX11ClientRecord *)rec
+{
+    if (!rec->stateKnown) {
+        rec->stateKnown = YES;
+        rec->skipTaskbar = [manager hasNetWmStateSkipTaskbar:display window:rec->window];
+    }
+    return rec->skipTaskbar;
+}
+
+- (BOOL)isViewable:(GWX11ClientRecord *)rec
+{
+    if (!rec->viewableKnown) {
+        XWindowAttributes attrs;
+        rec->viewableKnown = YES;
+        rec->viewable = XGetWindowAttributes(display, rec->window, &attrs)
+                        && attrs.map_state == IsViewable;
+    }
+    return rec->viewable;
+}
+
+- (void)readNames:(GWX11ClientRecord *)rec
+{
+    if (rec->namesKnown) {
+        return;
+    }
+    rec->namesKnown = YES;
+    rec->name = [[manager getWindowName:display window:rec->window] copy];
+
+    XClassHint hint;
+    if (XGetClassHint(display, rec->window, &hint)) {
+        if (hint.res_class != NULL) {
+            rec->className = [[NSString alloc] initWithCString:hint.res_class
+                                                      encoding:NSUTF8StringEncoding];
+        }
+        /* GNUstep apps may not set _NET_WM_PID, so our own windows are
+         * also told apart by their class hint.  A file viewer browsing a
+         * volume called "xpdf" must not count as the xpdf application. */
+        if (hint.res_name != NULL && [rec->className isEqualToString:@"GNUstep"]) {
+            NSString *resName = [NSString stringWithCString:hint.res_name
+                                                   encoding:NSUTF8StringEncoding];
+            rec->workspaceWindow = [resName isEqualToString:@"Workspace"]
+                                   || [resName isEqualToString:@"FileViewer"]
+                                   || [resName isEqualToString:@"Window"]
+                                   || [resName isEqualToString:@"Finder"];
+        }
+        if (hint.res_name != NULL) {
+            XFree(hint.res_name);
+        }
+        if (hint.res_class != NULL) {
+            XFree(hint.res_class);
+        }
+    }
+}
+
+- (GWX11WindowInfo *)infoForRecord:(GWX11ClientRecord *)rec
+{
+    GWX11WindowInfo *info = [GWX11WindowInfo infoWithWindowID:rec->window];
+    [self readNames:rec];
+    info.windowName = rec->name;
+    info.windowClass = rec->className;
+    info.ownerPID = rec->pid;
+    info.isHidden = [manager isWindowHidden:display window:rec->window];
+    info.isIconified = [manager checkWindowIconified:display window:rec->window];
+    return info;
+}
+
+- (BOOL)hasVisibleWindowsForPID:(pid_t)pid
+{
+    if (pid <= 0) {
+        return NO;
+    }
+    [self load];
+    for (GWX11ClientRecord *rec in clients) {
+        if (rec->pid == pid && ![self skipsTaskbar:rec] && [self isViewable:rec]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (NSArray *)windowsForPID:(pid_t)pid
+{
+    NSMutableArray *windows = [NSMutableArray array];
+    if (pid <= 0) {
+        return windows;
+    }
+    [self load];
+    for (GWX11ClientRecord *rec in clients) {
+        if (rec->pid == pid && ![self skipsTaskbar:rec]) {
+            [windows addObject:[self infoForRecord:rec]];
+        }
+    }
+    return windows;
+}
+
+- (NSArray *)windowsMatchingName:(NSString *)name
+{
+    NSMutableArray *windows = [NSMutableArray array];
+    if ([name length] == 0) {
+        return windows;
+    }
+    [self load];
+    pid_t myPID = getpid();
+    for (GWX11ClientRecord *rec in clients) {
+        /* No owner: the window manager's own frames and decorations. */
+        if (rec->pid <= 0 || rec->pid == myPID) {
+            continue;
+        }
+        if ([self skipsTaskbar:rec]) {
+            continue;
+        }
+        [self readNames:rec];
+        if (rec->workspaceWindow) {
+            continue;
+        }
+        BOOL matches = (rec->name != nil && stringStartsOrEndsWith(rec->name, name))
+                       || (rec->className != nil && stringStartsOrEndsWith(rec->className, name));
+        /* Other users' windows on this display are not this session's
+         * applications. */
+        if (matches && [GWProcessOwnership isProcessOwnedByCurrentUser:rec->pid]) {
+            [windows addObject:[self infoForRecord:rec]];
+        }
+    }
+    return windows;
+}
+
+@end
+
+
 #pragma mark - X11 Application Info
 
 @interface GWX11AppInfo : NSObject
@@ -1559,7 +1634,8 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (NSDictionary *)monitorResultsFor:(NSArray *)appSnapshots
                     scanningWindows:(BOOL)mayScan
 {
-    GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+    /* One reading of the client list serves every app of this run. */
+    GWX11ClientSnapshot *windows = mayScan ? [[GWX11WindowManager sharedManager] clientSnapshot] : nil;
     NSMutableArray *appeared = [NSMutableArray array];
     NSMutableArray *terminated = [NSMutableArray array];
 
@@ -1579,14 +1655,14 @@ static GWX11AppManager *sharedX11AppManager = nil;
         /* Check if windows have appeared for this app. */
         if (mayScan && !alreadyAppeared
             && [[snap objectForKey: @"scanwindows"] boolValue]) {
-            NSArray *windows = [wm windowsForPID:pid];
-            if ([windows count] == 0) {
+            NSArray *found = [windows windowsForPID:pid];
+            if ([found count] == 0) {
                 NSString *search = [snap objectForKey: @"search"];
                 if ([search length] > 0) {
-                    windows = [wm windowsMatchingName:search];
+                    found = [windows windowsMatchingName:search];
                 }
             }
-            if ([windows count] > 0) {
+            if ([found count] > 0) {
                 [appeared addObject: [NSDictionary dictionaryWithObjectsAndKeys:
                     appName ?: @"", @"name", appPath ?: @"", @"path", nil]];
             }

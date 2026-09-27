@@ -29,6 +29,7 @@
 #import "DockStack.h"
 
 @class NSColor;
+@class GWX11ClientSnapshot;
 @class NSImage;
 @class Dock;
 
@@ -176,7 +177,8 @@
    these on the main thread and gives them to the worker, which hands the
    connection back itself when the whole round is done. */
 - (NSDictionary *)launchedStateInputs;
-- (void)refreshLaunchedStateWorker:(NSDictionary *)inputs;
+- (void)refreshLaunchedStateWorker:(NSDictionary *)inputs
+                           windows:(GWX11ClientSnapshot *)windows;
 
 - (void)setAppHidden:(BOOL)value;
 

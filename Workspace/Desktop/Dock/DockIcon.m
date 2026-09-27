@@ -525,8 +525,9 @@
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
 
-  [self refreshLaunchedStateWorker: inputs];
-  [[GWX11WindowManager sharedManager] closeThreadDisplay];
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  [self refreshLaunchedStateWorker: inputs windows: [wm clientSnapshot]];
+  [wm closeThreadDisplay];
   [pool drain];
 }
 
@@ -540,13 +541,13 @@
  * means to refresh. That is what lets the Dock refresh eighteen icons over
  * one connection instead of opening and closing eighteen. */
 - (void)refreshLaunchedStateWorker:(NSDictionary *)inputs
+                           windows:(GWX11ClientSnapshot *)snapshot
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   BOOL x11 = [[inputs objectForKey: @"x11"] boolValue];
   pid_t pid = (pid_t)[[inputs objectForKey: @"pid"] intValue];
   BOOL wasLaunched = [[inputs objectForKey: @"launched"] boolValue];
 
-  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
   BOOL wantX11 = x11;
   pid_t wantPID = pid;
   BOOL wantLaunched = wasLaunched;
@@ -557,7 +558,7 @@
       /* Auto-discover X11 apps that were running before dock restart. */
       if (wasLaunched && wantPID <= 0)
         {
-          NSArray *windows = [wm windowsMatchingName: appName];
+          NSArray *windows = [snapshot windowsMatchingName: appName];
           if ([windows count] > 0)
             {
               wantX11 = YES;
@@ -581,7 +582,7 @@
 
   if (wantPID <= 0)
     {
-      NSArray *windows = [wm windowsMatchingName: appName];
+      NSArray *windows = [snapshot windowsMatchingName: appName];
       if ([windows count] > 0)
         {
           wantX11 = YES;
@@ -603,14 +604,14 @@
         }
     }
 
-  hasWindows = [wm hasWindowsForPID: wantPID];
+  hasWindows = [snapshot hasVisibleWindowsForPID: wantPID];
   if (wasLaunched && !hasWindows)
     {
-      NSArray *windows = [wm windowsMatchingName: appName];
+      NSArray *windows = [snapshot windowsMatchingName: appName];
       if ([windows count] > 0)
         {
           wantPID = [[windows objectAtIndex: 0] ownerPID];
-          hasWindows = [wm hasWindowsForPID: wantPID];
+          hasWindows = [snapshot hasVisibleWindowsForPID: wantPID];
         }
       if (!hasWindows)
         wantLaunched = NO;

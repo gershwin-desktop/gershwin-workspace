@@ -2604,11 +2604,14 @@ static inline CGFloat _dockScaleFactor(void)
 - (void)_refreshLaunchedStatesWorker:(NSArray *)round
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+  /* One reading of the client list for the whole round: every icon asking
+     for its own walked the list again, a round trip per window per icon. */
+  GWX11ClientSnapshot *windows = [[GWX11WindowManager sharedManager] clientSnapshot];
 
   for (NSArray *pair in round)
     {
-      [[pair objectAtIndex: 0] refreshLaunchedStateWorker:
-        [pair objectAtIndex: 1]];
+      [[pair objectAtIndex: 0] refreshLaunchedStateWorker: [pair objectAtIndex: 1]
+                                                   windows: windows];
     }
 
   [[GWX11WindowManager sharedManager] closeThreadDisplay];
