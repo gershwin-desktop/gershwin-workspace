@@ -656,8 +656,10 @@ NSString * const FSNWorkspaceCreateAliasOperation =
     }
 
   a = [[self alloc] init];
-  a->_targetName = [path lastPathComponent];
-  a->_posixPath = path;
+  /* The strings are kept past the caller's autorelease pool, so they are
+   * owned here and released in -dealloc. */
+  a->_targetName = [[path lastPathComponent] copy];
+  a->_posixPath = [path copy];
   a->_isDirectory = S_ISDIR(st.st_mode);
   a->_version = 2;
   /* Spec section 9: do not fabricate an HFS CNID from a foreign filesystem's
@@ -686,18 +688,18 @@ NSString * const FSNWorkspaceCreateAliasOperation =
 	mount = dir;
 	dir = [dir stringByDeletingLastPathComponent];
       }
-    a->_volumeMountPoint = mount;
+    a->_volumeMountPoint = [mount copy];
     if ([mount isEqualTo: @"/"])
       {
-	a->_volumeName = @"";
+	a->_volumeName = [@"" copy];
       }
     else
       {
-	a->_volumeName = [mount lastPathComponent];
+	a->_volumeName = [[mount lastPathComponent] copy];
       }
     /* Spec section 9: do not populate the parent CNID from a foreign inode. */
     a->_parentCNID = 0;
-    a->_parentName = [mount lastPathComponent];
+    a->_parentName = [[mount lastPathComponent] copy];
   }
 
   return a;
@@ -713,30 +715,30 @@ NSString * const FSNWorkspaceCreateAliasOperation =
       return nil;
     }
   a->_version = 2;
-  a->_targetName = [targetPath lastPathComponent];
-  a->_posixPath = targetPath;
+  a->_targetName = [[targetPath lastPathComponent] copy];
+  a->_posixPath = [targetPath copy];
   a->_isDirectory = NO;
   a->_targetCNID = 0;
   a->_parentCNID = 0;
 
   if (volumeName == nil || [volumeName length] == 0)
     {
-      a->_volumeName = @"Macintosh HD";
+      a->_volumeName = [@"Macintosh HD" copy];
     }
   else
     {
-      a->_volumeName = volumeName;
+      a->_volumeName = [volumeName copy];
     }
 
   NSString *parentDir = [targetPath stringByDeletingLastPathComponent];
-  a->_parentName = [parentDir lastPathComponent];
+  a->_parentName = [[parentDir lastPathComponent] copy];
   if ([targetPath hasPrefix: @"/"])
     {
-      a->_volumeMountPoint = @"/";
+      a->_volumeMountPoint = [@"/" copy];
     }
   else
     {
-      a->_volumeMountPoint = a->_volumeName;
+      a->_volumeMountPoint = [a->_volumeName copy];
     }
 
   return a;
@@ -758,6 +760,7 @@ NSString * const FSNWorkspaceCreateAliasOperation =
   [_targetName release];
   [_posixPath release];
   [_volumeMountPoint release];
+  [_parentName release];
   [super dealloc];
 }
 
