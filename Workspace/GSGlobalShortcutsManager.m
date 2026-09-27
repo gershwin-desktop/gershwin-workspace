@@ -756,10 +756,12 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         NSEnumerator *keyEnum = [shortcuts keyEnumerator];
         NSString *keyCombo;
         while ((keyCombo = [keyEnum nextObject])) {
-            NSString *oldCommand = [shortcuts objectForKey:keyCombo];
+            /* Loaded shortcuts are dictionaries; the defaults domain maps
+             * the key combination straight to the command string. */
+            NSString *oldCommand = [[shortcuts objectForKey:keyCombo] objectForKey:@"command"];
             NSString *newCommand = [newConfig objectForKey:keyCombo];
             
-            if (!newCommand || ![oldCommand isEqualToString:newCommand]) {
+            if (![newCommand isKindOfClass:[NSString class]] || ![oldCommand isEqualToString:newCommand]) {
                 needsReload = YES;
                 break;
             }
