@@ -120,6 +120,19 @@ typedef enum DockStyle
   
   NSTimer *launchRefreshTimer;
 
+  /* The one worker thread every launch-refresh round hands its X scans to
+   * (see -_launchRefreshTimerFired: in Dock.m), instead of each round
+   * detaching a thread of its own: a Dock with eighteen icons used to open
+   * ten fresh threads and X connections a second even at rest.  Started on
+   * first use, stopped in -dealloc.  -[DockIcon refreshLaunchedStateAsync]
+   * shares it too, through -performLaunchRefreshSelector:target:withObject:,
+   * rather than pay for a second persistent thread beside this one.  Mirrors
+   * -[GWX11AppManager scanThread] in X11AppSupport.m; kept as Dock's own
+   * rather than moved into GWX11WindowManager because this worktree does not
+   * touch X11AppSupport.h/.m. */
+  NSThread *launchRefreshThread;
+  volatile BOOL launchRefreshThreadShouldStop;
+
   /* The magnification of the expired patent US7434177: while the pointer is
    * on the Dock, the icons around it are drawn larger and the rest slide
    * away to make room.  The view then covers the whole area the enlarged
@@ -264,6 +277,24 @@ typedef enum DockStyle
 - (void)updateDefaults;
 
 - (void)checkRemovedApp:(id)sender;
+
+/* Hands a launch-refresh scan off to the Dock's one persistent worker
+ * thread (starting it on first use) instead of detaching a thread of its
+ * own for the call: see the launchRefreshThread ivar comment above and
+ * -_launchRefreshTimerFired: in Dock.m. -[DockIcon refreshLaunchedStateAsync]
+ * calls this through -dock so a single icon's own refresh shares the same
+ * thread and X connection as the Dock's own round. Runs @p selector on
+ * @p target with @p argument; always asynchronous (waitUntilDone: NO), the
+ * same as the X scans it replaces - the caller must not depend on the
+ * result being ready when this returns. */
+- (void)performLaunchRefreshSelector:(SEL)selector
+                               target:(id)target
+                           withObject:(id)argument;
+
+/* Stops the persistent worker thread and drops its X connection. Called
+ * from -dealloc; exposed so Tests/Dock can prove the thread does not
+ * outlive the object without building a whole Dock. */
+- (void)stopLaunchRefreshThread;
 
 @end
 

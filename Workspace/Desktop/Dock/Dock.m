@@ -111,6 +111,7 @@ static inline CGFloat _dockScaleFactor(void)
   [[NSNotificationCenter defaultCenter] removeObserver: self];
   [launchRefreshTimer invalidate];
   launchRefreshTimer = nil;
+  [self stopLaunchRefreshThread];
   [magnifyTimer invalidate];
   magnifyTimer = nil;
   DockServiceStop();
@@ -1608,6 +1609,74 @@ static inline CGFloat _dockScaleFactor(void)
     }
 }
 
+/* Starts the persistent worker thread if it is not already running. Called
+ * only from -performLaunchRefreshSelector:target:withObject:. */
+- (void)ensureLaunchRefreshThreadRunning
+{
+  if (launchRefreshThread != nil)
+    return;
+
+  launchRefreshThreadShouldStop = NO;
+  launchRefreshThread = [[NSThread alloc] initWithTarget: self
+                                                 selector: @selector(_launchRefreshThreadMain)
+                                                   object: nil];
+  [launchRefreshThread start];
+}
+
+/* Runs for as long as the Dock exists (stopped in -dealloc), taking scans
+ * handed to it by -performLaunchRefreshSelector:target:withObject: via
+ * performSelector:onThread:. Staying alive between rounds is the point:
+ * -[GWX11WindowManager openDisplay] caches one X connection per thread, so
+ * the same thread every round means the same connection every round,
+ * instead of a fresh XOpenDisplay (Xauthority read, cookie handshake,
+ * extension queries) every 2s. Mirrors -[GWX11AppManager scanThreadMain] in
+ * X11AppSupport.m. */
+- (void)_launchRefreshThreadMain
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+  /* A run loop with nothing at all scheduled on it does not actually wait
+   * inside -runMode:beforeDate: (there is nothing to wait FOR), and
+   * -performSelector:onThread:...'s delivery mechanism needs the target run
+   * loop to be genuinely parked to notice a hand-off arriving from another
+   * thread. An arbitrary port, never used for anything itself, is enough to
+   * give the loop something to hold open. */
+  [[NSRunLoop currentRunLoop] addPort: [NSPort port] forMode: NSDefaultRunLoopMode];
+
+  while (!launchRefreshThreadShouldStop)
+    {
+      NSAutoreleasePool *inner = [[NSAutoreleasePool alloc] init];
+      [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+                               beforeDate: [NSDate dateWithTimeIntervalSinceNow: 1.0]];
+      RELEASE(inner);
+    }
+  [[GWX11WindowManager sharedManager] closeThreadDisplay];
+  RELEASE(pool);
+}
+
+/* Not joined: the thread notices launchRefreshThreadShouldStop within a
+ * second (the runMode timeout above) and drops its own X connection when it
+ * does; blocking -dealloc on that would trade one idle cost for a worse
+ * one. See -[GWX11AppManager stopScanThread] in X11AppSupport.m, which the
+ * same reasoning applies to. */
+- (void)stopLaunchRefreshThread
+{
+  launchRefreshThreadShouldStop = YES;
+  RELEASE(launchRefreshThread);
+  launchRefreshThread = nil;
+}
+
+- (void)performLaunchRefreshSelector:(SEL)selector
+                               target:(id)target
+                           withObject:(id)argument
+{
+  [self ensureLaunchRefreshThreadRunning];
+  [target performSelector: selector
+                  onThread: launchRefreshThread
+                withObject: argument
+             waitUntilDone: NO];
+}
+
 @end
 
 
@@ -2591,14 +2660,17 @@ static inline CGFloat _dockScaleFactor(void)
   if ([round count] == 0)
     return;
 
-  [NSThread detachNewThreadSelector: @selector(_refreshLaunchedStatesWorker:)
-                           toTarget: self
-                         withObject: round];
+  [self performLaunchRefreshSelector: @selector(_refreshLaunchedStatesWorker:)
+                               target: self
+                           withObject: round];
 }
 
-/* Worker thread: refresh every icon of the round over one X connection, and
-   give that connection back when the round is done. Each icon applies its
-   own result on the main thread, one at a time, as it always did. */
+/* Worker thread: refresh every icon of the round over one X connection.
+   Each icon applies its own result on the main thread, one at a time, as it
+   always did. Unlike a one-shot worker, this runs on the Dock's persistent
+   launchRefreshThread (see -performLaunchRefreshSelector:target:withObject:
+   below), so the connection is not given back here - it stays open for the
+   next round, and is only closed when that thread itself stops. */
 - (void)_refreshLaunchedStatesWorker:(NSArray *)round
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -2612,7 +2684,6 @@ static inline CGFloat _dockScaleFactor(void)
                                                    windows: windows];
     }
 
-  [[GWX11WindowManager sharedManager] closeThreadDisplay];
   [pool drain];
 }
 

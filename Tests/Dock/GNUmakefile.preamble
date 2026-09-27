@@ -1,6 +1,13 @@
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # DockMagnification.h is Foundation-only inline code kept with the Dock.
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Desktop/Dock
+# Ahead of -I../../FSNode below: Dock.m's own #include "config.h" is a quoted
+# include with no local config.h next to it, so it resolves through this
+# search path - it must find Workspace/config.h (HAVE_DBUS etc.) rather than
+# FSNode/config.h (an unrelated, differently-configured file that happens to
+# have the same name), or Dock.m's "#if HAVE_DBUS" reads as false and its
+# DockServiceDBus calls go undeclared.
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace
 # t_DockPoll imports Dock.h itself (for DockMagnifyPollInterval and
 # DockIconNeedsLaunchedStateScan, both Foundation-only); Dock.h drags in
 # GWDesktopManager.h and, through it, FSNodeRep.h purely for declarations -
@@ -14,3 +21,40 @@ ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Desktop -I../../FSNode
 # Defining them as 0 keeps the (empty) scan in the runtime a no-op.
 ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
                       -Wl,--defsym=__stop___objc_constant_string=0
+
+# t_DockLaunchRefreshThread compiles Dock.m in-process (option 1 of the
+# red/green skill) to reach the real -performLaunchRefreshSelector:... and
+# -stopLaunchRefreshThread, not a copy of their logic.  Dock.m's OTHER
+# methods (createWorkspaceIcon, initForManager:, DockService/DBus/X11 app
+# launching, ...) name Workspace/DockIcon/DockStack/GWDockWindow/
+# GWX11AppManager: the objc2 runtime resolves every class reference in the
+# binary at load time whether or not the referencing method ever runs, so
+# all five have to exist in the link even though this test only ever calls
+# two ivar-only methods on a bare `[Dock alloc]` (see the file comment).
+# X11AppSupport.m/GWProcessOwnership.m are linked for real (GWX11AppManager,
+# and GWX11WindowManager for -closeThreadDisplay); Workspace, DockIcon,
+# DockStack and GWDockWindow get link-only empty stand-ins instead
+# (Collab/DockLaunchRefreshThreadStubs.m - kept out of this directory's top
+# level so gnustep-tests does not also register it as its own test tool)
+# rather than pulling in Workspace.m (a 5800-line application delegate on
+# its own) plus DockIcon's own chain, none of which this test's code path
+# ever touches.  DockIcon's superclass FSNIcon still has to be real for the
+# stub's class hierarchy to link, hence -lFSNode.
+ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata -I../../DSStore
+t_DockLaunchRefreshThread_OBJC_FILES += ../../Workspace/GWProcessOwnership.m \
+                                        ../../Workspace/X11AppSupport.m \
+                                        Collab/DockLaunchRefreshThreadStubs.m
+t_DockLaunchRefreshThread_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                       -lFSNode -lgnustep-gui -lX11
+# DockServiceStart/Stop and DockServiceDBusStart/Stop (Dock.m's -dealloc and
+# -initForManager:) are plain C functions this test never calls (the test
+# never -init's or -dealloc's its bare `[Dock alloc]`, only the two
+# ivar-only methods under test), so leaving DockService.m/DockServiceDBus.m
+# - and libdbus/GCD with them - out of the link is safe: ignore-all lets
+# these two lazily-bound function symbols stay unresolved instead. Class
+# references (Workspace, DockIcon, ...) are NOT covered by this flag - the
+# objc2 runtime resolves those eagerly at load time regardless - which is
+# why they still need the real or stand-in implementations linked above.
+t_DockLaunchRefreshThread_LDFLAGS += -Wl,--unresolved-symbols=ignore-all
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
+                      -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current

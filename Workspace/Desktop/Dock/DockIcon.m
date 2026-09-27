@@ -512,15 +512,35 @@
 - (void)refreshLaunchedStateAsync
 {
   /* Capture the current state on the main thread, then hand it to a worker
-   * thread that does the X scans.  The worker's result is applied back here. */
-  [NSThread detachNewThreadSelector: @selector(refreshLaunchedStateThread:)
-                           toTarget: self
-                         withObject: [self launchedStateInputs]];
+   * thread that does the X scans.  The worker's result is applied back here.
+   * Shared with the Dock's own launch-refresh round rather than a thread of
+   * this icon's own: each icon that asked for this used to open (and then
+   * close) a fresh X connection on top of whatever the Dock's round was
+   * already paying for every 2s - see the launchRefreshThread ivar comment
+   * in Dock.h. */
+  Dock *dock = [self dock];
+  NSDictionary *inputs = [self launchedStateInputs];
+
+  if (dock != nil)
+    {
+      [dock performLaunchRefreshSelector: @selector(refreshLaunchedStateOnSharedThread:)
+                                   target: self
+                               withObject: inputs];
+    }
+  else
+    {
+      /* No Dock to share a thread with - an icon queried before it was
+       * docked, say. Falls back to a thread of its own rather than silently
+       * doing nothing. */
+      [NSThread detachNewThreadSelector: @selector(refreshLaunchedStateThread:)
+                               toTarget: self
+                             withObject: inputs];
+    }
 }
 
 /* A thread of its own for one icon: scan, then give the connection back.
-   The Dock's timer does not come this way - it refreshes every icon on one
-   thread - but a single icon asked to refresh itself does. */
+   Only the no-Dock fallback in -refreshLaunchedStateAsync comes this way;
+   the ordinary path below shares the Dock's persistent thread instead. */
 - (void)refreshLaunchedStateThread:(NSDictionary *)inputs
 {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -528,6 +548,19 @@
   GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
   [self refreshLaunchedStateWorker: inputs windows: [wm clientSnapshot]];
   [wm closeThreadDisplay];
+  [pool drain];
+}
+
+/* Entry point for the Dock's persistent worker thread (see
+ * -performLaunchRefreshSelector:target:withObject: in Dock.m). That thread
+ * outlives this one call, so unlike -refreshLaunchedStateThread: above the X
+ * connection is not given back here. */
+- (void)refreshLaunchedStateOnSharedThread:(NSDictionary *)inputs
+{
+  NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  [self refreshLaunchedStateWorker: inputs windows: [wm clientSnapshot]];
   [pool drain];
 }
 
