@@ -370,6 +370,13 @@
     NSMutableDictionary *x11Apps;
     NSTimer *monitorTimer;
     id<GWX11AppManagerDelegate> delegate;
+    /* One worker thread lives for as long as any app still needs its
+     * windows looked for, so the X connection it opens (see
+     * -[GWX11WindowManager openDisplay]'s per-thread cache) is paid for once
+     * per monitoring session rather than once per 0.5s tick.  See
+     * -ensureScanThreadRunning / -stopScanThread in X11AppSupport.m. */
+    NSThread *scanThread;
+    volatile BOOL scanThreadShouldStop;
 }
 
 @property (nonatomic, assign) id<GWX11AppManagerDelegate> delegate;

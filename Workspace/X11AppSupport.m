@@ -1459,13 +1459,23 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 @synthesize appName, appPath, windowSearchString, pid, hasWindowAppeared;
 @synthesize windowScanCount, nextWindowScan;
 
+/* An app whose window has not turned up after this many attempts is not
+ * going to show one during this session: five doublings reach the 10s cap
+ * at attempt 6 (about 15.5s in), so 20 attempts is roughly two and a half
+ * minutes of trying - generous for a slow-starting GUI, past which
+ * continuing to scan only pays an X round trip for a program that has
+ * none (a headless helper, a tray-only client, or one whose window carries
+ * nothing -windowsMatchingName: can recognise). */
+static const NSUInteger GWX11MaxWindowScanAttempts = 20;
+
 /* Looking for the windows of an app costs a round trip to the X server per
  * window, and it only serves to notice the first window of an app that has
  * just been started. An app that shows one does so within seconds, so the
  * first attempts come quickly and then ever more slowly, down to once every
  * ten seconds for an app whose windows never turn up at all (a program
  * without a window, or one whose windows carry nothing to recognise them
- * by). Nothing is given up: the app is still noticed, just later. */
+ * by). Nothing is given up here: see GWX11MaxWindowScanAttempts for where
+ * the caller stops trying. */
 - (BOOL)shouldScanWindowsAt:(NSTimeInterval)now
 {
     if (hasWindowAppeared) {
@@ -1515,6 +1525,8 @@ static GWX11AppManager *sharedX11AppManager = nil;
         x11Apps = [[NSMutableDictionary alloc] init];
         monitorTimer = nil;
         delegate = nil;
+        scanThread = nil;
+        scanThreadShouldStop = NO;
     }
     return self;
 }
@@ -1522,6 +1534,7 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (void)dealloc
 {
     [monitorTimer invalidate];
+    [self stopScanThread];
     RELEASE(x11Apps);
     [super dealloc];
 }
@@ -1553,7 +1566,56 @@ static GWX11AppManager *sharedX11AppManager = nil;
     if (monitorTimer && [x11Apps count] == 0) {
         [monitorTimer invalidate];
         monitorTimer = nil;
+        [self stopScanThread];
     }
+}
+
+/* Starts, if it is not already running, the one worker thread that all
+ * window scans for this monitoring session share; see the ivar comment in
+ * X11AppSupport.h. Called only from the main thread (monitorTimerFired). */
+- (void)ensureScanThreadRunning
+{
+    if (scanThread != nil) {
+        return;
+    }
+    scanThreadShouldStop = NO;
+    scanThread = [[NSThread alloc] initWithTarget: self
+                                          selector: @selector(scanThreadMain)
+                                            object: nil];
+    [scanThread start];
+}
+
+/* Runs for as long as apps still need their windows looked for, taking
+ * scans handed to it by -monitorTimerFired via performSelector:onThread:.
+ * The point of staying alive between ticks is openDisplay's per-thread
+ * cache: the same thread every tick means the same X connection every
+ * tick, instead of a fresh XOpenDisplay (Xauthority read, cookie
+ * handshake, extension queries) every 0.5s. */
+- (void)scanThreadMain
+{
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    while (!scanThreadShouldStop) {
+        NSAutoreleasePool *inner = [[NSAutoreleasePool alloc] init];
+        [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+                                 beforeDate: [NSDate dateWithTimeIntervalSinceNow: 1.0]];
+        RELEASE(inner);
+    }
+    [[GWX11WindowManager sharedManager] closeThreadDisplay];
+    RELEASE(pool);
+}
+
+/* Not joined: the thread notices scanThreadShouldStop within a second (the
+ * runMode timeout above) and drops its own connection when it does;
+ * blocking the main thread on that would trade one idle cost for a worse
+ * one. A monitoring session that restarts inside that second just starts a
+ * second worker, which is harmless (each thread's connection is its own,
+ * per openDisplay's per-thread cache) and self-corrects once the old one
+ * exits. */
+- (void)stopScanThread
+{
+    scanThreadShouldStop = YES;
+    RELEASE(scanThread);
+    scanThread = nil;
 }
 
 - (void)monitorTimerFired:(NSTimer *)timer
@@ -1564,10 +1626,24 @@ static GWX11AppManager *sharedX11AppManager = nil;
      * main thread they can wedge the app under window churn (X11
      * self-deadlock, the same class of bug as the DockIcon refresh). */
     NSMutableArray *snapshot = [NSMutableArray array];
+    NSMutableArray *expiredNames = [NSMutableArray array];
     NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
     for (NSString *appName in [x11Apps allKeys]) {
         GWX11AppInfo *info = [x11Apps objectForKey:appName];
         if (info == nil) continue;
+
+        if (!info.hasWindowAppeared
+            && info.windowScanCount >= GWX11MaxWindowScanAttempts) {
+            /* Its window was never going to turn up (see
+             * GWX11MaxWindowScanAttempts); drop it so an idle desktop
+             * reaches zero scans instead of probing it every 10s for the
+             * rest of the session. Not reported as terminated: the process
+             * is still running, we have just stopped watching for its
+             * window. */
+            [expiredNames addObject: appName];
+            continue;
+        }
+
         /* Decided here, on the main thread, so the worker only reads the
          * snapshot: the liveness probe runs every time, the window scan as
          * often as the app's own backoff allows. */
@@ -1579,6 +1655,9 @@ static GWX11AppManager *sharedX11AppManager = nil;
             [NSNumber numberWithInt: (int)info.pid], @"pid",
             [NSNumber numberWithBool: info.hasWindowAppeared], @"appeared",
             [NSNumber numberWithBool: scanWindows], @"scanwindows", nil]];
+    }
+    for (NSString *appName in expiredNames) {
+        [x11Apps removeObjectForKey: appName];
     }
     if ([snapshot count] == 0) {
         [self stopMonitorTimer];
@@ -1606,15 +1685,21 @@ static GWX11AppManager *sharedX11AppManager = nil;
         return;
     }
 
-    [NSThread detachNewThreadSelector: @selector(monitorScanWorker:)
-                             toTarget: self
-                           withObject: snapshot];
+    /* Hand the scan to the one persistent worker thread rather than
+     * detaching a new one: see -ensureScanThreadRunning / -scanThreadMain. */
+    [self ensureScanThreadRunning];
+    [self performSelector: @selector(monitorScanWorker:)
+                  onThread: scanThread
+                withObject: snapshot
+             waitUntilDone: NO];
 }
 
 /* Worker thread: check process liveness and run the X window scans for a
  * snapshot of the registered apps.  Only immutable snapshot data is read, and
  * GWX11WindowManager gives every thread its own X connection, so this is safe
- * off the main thread.  Results are applied back on the main thread. */
+ * off the main thread.  Results are applied back on the main thread.  The
+ * connection itself outlives this one call - see -scanThreadMain - so unlike
+ * a one-shot worker this must not close it after every scan. */
 - (void)monitorScanWorker:(NSArray *)appSnapshots
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -1623,7 +1708,6 @@ static GWX11AppManager *sharedX11AppManager = nil;
 
     [self performSelectorOnMainThread: @selector(applyMonitorResults:)
                            withObject: results waitUntilDone: NO];
-    [[GWX11WindowManager sharedManager] closeThreadDisplay];
     [pool drain];
 }
 
