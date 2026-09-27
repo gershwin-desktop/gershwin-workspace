@@ -26,10 +26,13 @@
 #include <signal.h>
 #include <stdlib.h>
 
-/* :95-:99 are reserved for the isolated uitest slots; a number well below
- * that keeps this test from ever colliding with one. */
-static NSString * const displayName = @":70";
-static NSString * const socketPath = @"/tmp/.X11-unix/X70";
+/* :95-:99 are reserved for the isolated uitest slots; the range well below
+ * that keeps this test from ever colliding with one. A display whose server
+ * answers belongs to someone else and is skipped; a leftover socket or lock
+ * of a dead server is no obstacle, Xvfb cleans those up itself. */
+static const int firstDisplay = 70;
+static const int lastDisplay = 89;
+static NSString *displayName = nil;
 
 static Display *waitForXvfb(void)
 {
@@ -47,6 +50,41 @@ static Display *waitForXvfb(void)
   return NULL;
 }
 
+/* Starts a private Xvfb on the first display of the range nobody serves;
+ * returns the connection and leaves the task in *task, or NULL. */
+static Display *startPrivateXvfb(NSTask **task)
+{
+  int n;
+
+  for (n = firstDisplay; n <= lastDisplay; n++)
+    {
+      Display *dpy;
+
+      displayName = [NSString stringWithFormat: @":%d", n];
+      dpy = XOpenDisplay([displayName UTF8String]);
+      if (dpy != NULL)
+        {
+          XCloseDisplay(dpy);
+          continue;
+        }
+      *task = [NSTask new];
+      [*task setLaunchPath: @"/usr/bin/Xvfb"];
+      [*task setArguments: [NSArray arrayWithObjects:
+          displayName, @"-screen", @"0", @"320x240x24", nil]];
+      [*task launch];
+      dpy = waitForXvfb();
+      if (dpy != NULL)
+        {
+          return dpy;
+        }
+      [*task terminate];
+      [*task waitUntilExit];
+      [*task release];
+      *task = nil;
+    }
+  return NULL;
+}
+
 int main(void)
 {
   NSAutoreleasePool *arp = [NSAutoreleasePool new];
@@ -60,25 +98,11 @@ int main(void)
   GWX11WindowManager *wm;
   NSString *name;
 
-  if ([[NSFileManager defaultManager] fileExistsAtPath: socketPath])
-    {
-      NSLog(@"%@ already has a socket - not touching someone else's Xvfb", socketPath);
-      [arp release];
-      return 1;
-    }
-
-  xvfb = [NSTask new];
-  [xvfb setLaunchPath: @"/usr/bin/Xvfb"];
-  [xvfb setArguments: [NSArray arrayWithObjects:
-      displayName, @"-screen", @"0", @"320x240x24", nil]];
-  [xvfb launch];
-
-  dpy = waitForXvfb();
+  xvfb = nil;
+  dpy = startPrivateXvfb(&xvfb);
   if (dpy == NULL)
     {
-      NSLog(@"private Xvfb on %@ never came up", displayName);
-      [xvfb terminate];
-      [xvfb waitUntilExit];
+      NSLog(@"no private Xvfb could be started on :%d-:%d", firstDisplay, lastDisplay);
       [arp release];
       return 1;
     }
