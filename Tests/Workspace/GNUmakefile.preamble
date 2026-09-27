@@ -18,3 +18,5 @@ t_GWArchiveOperationCancel_TOOL_LIBS += -lgnustep-gui -lGSMetadata -larchive
 # paths) and dispatch/dispatch.h (header only - no dispatch_* call remains).
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Thumbnailer
 t_GWThumbnailerConcurrency_TOOL_LIBS += -lgnustep-gui
+# X11AppSupport.m needs AppKit and Xlib even when only its thread is exercised.
+t_GWX11ScanThread_TOOL_LIBS += -lgnustep-gui -lX11

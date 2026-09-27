@@ -1594,6 +1594,11 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (void)scanThreadMain
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    /* A run loop with no input source does not park in runMode:beforeDate:
+     * (it returns at once, so this loop would spin a whole core) and never
+     * gets to deliver a performSelector:onThread: hand-off. A port that is
+     * never used gives the loop something to wait on. */
+    [[NSRunLoop currentRunLoop] addPort: [NSPort port] forMode: NSDefaultRunLoopMode];
     while (!scanThreadShouldStop) {
         NSAutoreleasePool *inner = [[NSAutoreleasePool alloc] init];
         [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
