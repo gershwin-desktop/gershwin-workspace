@@ -357,9 +357,9 @@
     case NSDeleteCharacter:
     case NSBackspaceCharacter:
     case NSDeleteFunctionKey:
-      if (flags & (NSShiftKeyMask | NSCommandKeyMask))
+      if ((flags & NSShiftKeyMask) && (flags & NSCommandKeyMask))
 	{
-	  // Command + Delete or Shift + Delete = Empty Trash
+	  // Command + Shift + Delete = Empty Trash
 	  [[self delegate] emptyTrash];
 	}
       else if (flags & NSCommandKeyMask)
