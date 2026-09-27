@@ -295,9 +295,11 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         // Restore protected Alt-Space if it existed
         if (protectedKey && protectedShortcut) {
             [shortcuts setObject:protectedShortcut forKey:protectedKey];
-            if (verbose) [protectedKey release];
-            [protectedShortcut release];
         }
+        /* The dictionary retained them; the retains above are balanced
+         * whether or not the shortcut had to be put back. */
+        [protectedKey release];
+        [protectedShortcut release];
 
         lastDefaultsModTime = time(NULL);
         [defaults release];
@@ -334,9 +336,11 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     // Re-add protected Alt-Space if it existed and isn't in the newly loaded config
     if (protectedKey && protectedShortcut && ![shortcuts objectForKey:protectedKey]) {
         [shortcuts setObject:protectedShortcut forKey:protectedKey];
-        if (verbose) [protectedKey release];
-        [protectedShortcut release];
     }
+    /* The dictionary retained them; the retains above are balanced
+     * whether or not the shortcut had to be put back. */
+    [protectedKey release];
+    [protectedShortcut release];
 
     lastDefaultsModTime = time(NULL);
     
@@ -704,9 +708,11 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     // Re-add the preserved Alt-Space shortcut if we found one
     if (protectedKey && protectedShortcut) {
         [shortcuts setObject:protectedShortcut forKey:protectedKey];
-        if (verbose) [protectedKey release];
-        [protectedShortcut release];
     }
+    /* The dictionary retained them; the retains above are balanced
+     * whether or not the shortcut had to be put back. */
+    [protectedKey release];
+    [protectedShortcut release];
     
     // Process the new shortcuts data
     for (NSDictionary *shortcutDict in shortcutsArray) {
