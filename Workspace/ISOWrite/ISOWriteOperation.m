@@ -770,8 +770,10 @@
   /* Verify first 10MB */
   [self updateVerificationProgress:10.0 status:@"Verifying beginning of image..."];
   NSData *isoFirst = [isoHandle readDataOfLength:verifyChunkSize];
+  /* A failed read must count as a mismatch: a negative length would make
+   * NSData read far past the buffer. */
   ssize_t readBytes = read(devFd, devBuffer, verifyChunkSize);
-  NSData *devFirst = [NSData dataWithBytes:devBuffer length:readBytes];
+  NSData *devFirst = (readBytes < 0) ? nil : [NSData dataWithBytes:devBuffer length:(NSUInteger)readBytes];
   
   if (![isoFirst isEqualToData:devFirst]) {
     allMatch = NO;
@@ -789,7 +791,7 @@
     
     lseek(devFd, middleOffset, SEEK_SET);
     readBytes = read(devFd, devBuffer, verifyChunkSize);
-    NSData *devMiddle = [NSData dataWithBytes:devBuffer length:readBytes];
+    NSData *devMiddle = (readBytes < 0) ? nil : [NSData dataWithBytes:devBuffer length:(NSUInteger)readBytes];
     
     if (![isoMiddle isEqualToData:devMiddle]) {
       allMatch = NO;
@@ -808,7 +810,7 @@
     
     lseek(devFd, lastOffset, SEEK_SET);
     readBytes = read(devFd, devBuffer, [isoLast length]);
-    NSData *devLast = [NSData dataWithBytes:devBuffer length:readBytes];
+    NSData *devLast = (readBytes < 0) ? nil : [NSData dataWithBytes:devBuffer length:(NSUInteger)readBytes];
     
     if (![isoLast isEqualToData:devLast]) {
       allMatch = NO;
