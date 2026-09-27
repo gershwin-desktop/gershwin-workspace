@@ -143,8 +143,8 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
   [dnc removeObserver: self];
   
   RELEASE (clientsInfo);
-  NSZoneFree (NSDefaultMallocZone(), (void *)watchers);
-  NSZoneFree (NSDefaultMallocZone(), (void *)watchDescrMap);
+  NSFreeMapTable (watchers);
+  NSFreeMapTable (watchDescrMap);
   freeTree(includePathsTree);
   freeTree(excludePathsTree);
   RELEASE (excludedSuffixes);
