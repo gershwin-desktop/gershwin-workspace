@@ -137,7 +137,9 @@ BOOL gDSStoreVerbose = NO;
     
     // Parse ALL directory entries robustly (not just DSDB)
     NSMutableDictionary *directoryEntries = [NSMutableDictionary dictionaryWithCapacity:tocCount];
-    for (uint32_t i = 0; i < tocCount; i++) {
+    /* The count comes from the file; a corrupt one must not spin past the
+     * block. Every entry needs its length byte and a block number. */
+    for (uint32_t i = 0; i < tocCount && [rootBlock tell] + 5 <= [rootBlock size]; i++) {
         uint8_t nameLen = [rootBlock readUInt8];
         NSData *nameData = [rootBlock readBytes:nameLen];
         uint32_t blockNum = [rootBlock readUInt32];
