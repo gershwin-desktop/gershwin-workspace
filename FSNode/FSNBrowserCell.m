@@ -114,6 +114,11 @@ static NSString *dots = @"...";
   }
 }
 
+- (NSImage *)icon
+{
+  return icon;
+}
+
 - (void)setTagColor:(NSColor *)color
 {
   ASSIGN (tagColor, color);

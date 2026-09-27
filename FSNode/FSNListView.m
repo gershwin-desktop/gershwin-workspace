@@ -1574,6 +1574,60 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   return [NSArray arrayWithArray: selpaths];
 }
 
+/* The row's whole span covers every column (name, size, date, ...); only
+   the name column - where the icon and the filename actually sit - is
+   what the user would recognize this row's icon as, so that is what
+   flies rather than the full-width row. */
+- (NSArray *)flightSourcesForSelectedReps
+{
+  NSArray *reps = [self selectedReps];
+  NSMutableArray *sources = [NSMutableArray arrayWithCapacity: [reps count]];
+  NSWindow *win = [listView window];
+  NSTableColumn *nameColumn = [listView tableColumnWithIdentifier:
+    [NSNumber numberWithInt: FSNInfoNameType]];
+  NSInteger nameColIndex = nameColumn
+    ? [listView columnWithIdentifier: [nameColumn identifier]] : -1;
+  NSUInteger i;
+
+  if (win == nil)
+    return sources;
+
+  for (i = 0; i < [reps count]; i++)
+    {
+      FSNListViewNodeRep *rep = [reps objectAtIndex: i];
+      NSInteger row = [nodeReps indexOfObjectIdenticalTo: rep];
+      NSRect rowRect, rect, rectInWindow, rectOnScreen;
+      NSImage *image;
+      NSString *path;
+
+      if (row == NSNotFound)
+        continue;
+
+      rowRect = [listView rectOfRow: row];
+      if (nameColIndex >= 0)
+        rect = NSIntersectionRect(rowRect, [listView rectOfColumn: nameColIndex]);
+      else
+        rect = rowRect;
+
+      rectInWindow = [listView convertRect: rect toView: nil];
+      rectOnScreen = [win convertRectToScreen: rectInWindow];
+
+      image = [rep icon];
+      path = [[rep node] path];
+
+      if (image == nil || path == nil)
+        continue;
+
+      [sources addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+        path, @"path",
+        [NSValue valueWithRect: rectOnScreen], @"rect",
+        image, @"image",
+        nil]];
+    }
+
+  return sources;
+}
+
 - (void)selectionDidChange
 {
   NSArray *selection = [self selectedNodes];
@@ -3329,6 +3383,11 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
 - (NSArray *)selectedPaths
 {
   return [dsource selectedPaths];
+}
+
+- (NSArray *)flightSourcesForSelectedReps
+{
+  return [dsource flightSourcesForSelectedReps];
 }
 
 - (void)selectionDidChange

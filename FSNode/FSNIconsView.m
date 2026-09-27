@@ -3348,6 +3348,45 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   return [selectedReps makeImmutableCopyOnFail: NO];
 }
 
+/* dragLookImage is sized to match -bounds exactly (imageOfCurrentLook draws
+   the icon at its own bounds size), so converting that same rect is what
+   places the picture over the real icon rather than beside it. */
+- (NSArray *)flightSourcesForSelectedReps
+{
+  NSArray *reps = [self selectedReps];
+  NSMutableArray *sources = [NSMutableArray arrayWithCapacity: [reps count]];
+  NSUInteger i;
+
+  for (i = 0; i < [reps count]; i++)
+    {
+      FSNIcon *icon = [reps objectAtIndex: i];
+      NSWindow *win = [icon window];
+      NSRect rectInWindow, rectOnScreen;
+      NSImage *image;
+      NSString *path;
+
+      if (win == nil)
+        continue;
+
+      rectInWindow = [icon convertRect: [icon bounds] toView: nil];
+      rectOnScreen = [win convertRectToScreen: rectInWindow];
+      image = [icon dragLookImage];
+      path = [[icon node] path];
+
+      if (image == nil || path == nil)
+        continue;
+
+      [sources addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+        path, @"path",
+        [NSValue valueWithRect: rectOnScreen], @"rect",
+        image, @"image",
+        icon, @"rep",
+        nil]];
+    }
+
+  return sources;
+}
+
 - (NSArray *)selectedNodes
 {
   NSMutableArray *selectedNodes = [NSMutableArray array];

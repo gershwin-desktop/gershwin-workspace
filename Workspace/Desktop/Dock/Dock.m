@@ -630,6 +630,21 @@ static inline CGFloat _dockScaleFactor(void)
   return nil;
 }
 
+/* AppKit screen coordinates (origin bottom-left) - the same convention the
+ * icon/list/browser views' -flightSourcesForSelectedReps use for their own
+ * rects, so a flight's start and end rects are directly comparable. */
+- (NSRect)trashIconScreenRect
+{
+  DockIcon *icon = [self trashIcon];
+  NSRect rectInWindow;
+
+  if (icon == nil || [icon window] == nil)
+    return NSZeroRect;
+
+  rectInWindow = [icon convertRect: [icon bounds] toView: nil];
+  return [[icon window] convertRectToScreen: rectInWindow];
+}
+
 - (DockIcon *)iconContainingPoint:(NSPoint)p
 {
   NSUInteger i;

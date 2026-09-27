@@ -315,6 +315,18 @@
 - (NSArray *)selectedReps;
 - (NSArray *)selectedNodes;
 - (NSArray *)selectedPaths;
+
+/* One NSDictionary per selected icon, each with @"path" (NSString),
+   @"rect" (NSValue-wrapped NSRect, the icon's own frame converted to
+   screen coordinates), @"image" (NSImage, its drag-look picture) and
+   @"rep" (the FSNIcon itself, an NSView) - the same picture and screen
+   placement a real drag of that icon would use.  Used to fly the icons to
+   the Trash the way a drag there would look (Workspace -moveToTrash),
+   which also hides the rep's view for the duration of the flight; an icon
+   whose window cannot be resolved (no window, unusual during any normal
+   selection) is left out rather than reported with a zero rect. */
+- (NSArray *)flightSourcesForSelectedReps;
+
 - (void)selectionDidChange;
 - (void)checkLockedReps;
 - (void)setSelectionMask:(FSNSelectionMask)mask;

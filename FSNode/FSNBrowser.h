@@ -210,6 +210,15 @@
 - (NSArray *)selectedReps;
 - (NSArray *)selectedNodes;
 - (NSArray *)selectedPaths;
+
+/* One NSDictionary per selected cell, each with @"path" (NSString),
+   @"rect" (NSValue-wrapped NSRect, from -screenRectForCell:) and @"image"
+   (NSImage, the cell's own icon) - used to fly the selection to the Trash
+   the way a drag there would look (Workspace -moveToTrash).  A cell that
+   cannot be resolved to a screen rect (unusual during any normal
+   selection) is left out rather than reported with a zero rect. */
+- (NSArray *)flightSourcesForSelectedReps;
+
 - (void)selectionDidChange;
 - (void)checkLockedReps;
 - (void)setSelectionMask:(FSNSelectionMask)mask;

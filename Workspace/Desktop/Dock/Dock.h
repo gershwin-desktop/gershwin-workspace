@@ -209,6 +209,12 @@ typedef enum DockStyle
 
 - (DockIcon *)trashIcon;
 
+/* The Trash icon's current on-screen rect, in AppKit screen coordinates
+ * (origin bottom-left) - the destination for the "fly to Trash" animation
+ * (Workspace -moveToTrash / GWTrashFlight).  NSZeroRect when the Trash icon
+ * or its window cannot be resolved (Dock not yet shown). */
+- (NSRect)trashIconScreenRect;
+
 - (DockIcon *)iconContainingPoint:(NSPoint)p;
 
 - (void)setDndSourceIcon:(DockIcon *)icon;

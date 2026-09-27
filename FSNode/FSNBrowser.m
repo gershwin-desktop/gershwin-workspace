@@ -2193,6 +2193,36 @@
   return selection;
 }
 
+/* -selectedReps here always means the actual selected cells (never the
+   shown-node fallback -selectedPaths/-selectedNodes use for an empty
+   column), which is exactly what a flight needs: nothing to fly when
+   nothing is selected. */
+- (NSArray *)flightSourcesForSelectedReps
+{
+  NSArray *reps = [self selectedReps];
+  NSMutableArray *sources = [NSMutableArray arrayWithCapacity: [reps count]];
+  NSUInteger i;
+
+  for (i = 0; i < [reps count]; i++)
+    {
+      FSNBrowserCell *cell = [reps objectAtIndex: i];
+      NSRect rectOnScreen = [self screenRectForCell: cell];
+      NSImage *image = [cell icon];
+      NSString *path = [[cell node] path];
+
+      if (NSEqualRects(rectOnScreen, NSZeroRect) || image == nil || path == nil)
+        continue;
+
+      [sources addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+        path, @"path",
+        [NSValue valueWithRect: rectOnScreen], @"rect",
+        image, @"image",
+        nil]];
+    }
+
+  return sources;
+}
+
 - (void)selectionDidChange
 {
 }

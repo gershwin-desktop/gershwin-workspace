@@ -87,6 +87,8 @@ GWMetadataProvider.m \
 GWIconPositionStore.m \
 GWExtensionsManager.m \
 GWAlignLogically.m \
+GWTrashFlightPath.m \
+GWTrashFlight.m \
 Workspace.m \
 AppDataTrash.m \
 Workspace+UITesting.m \

@@ -67,6 +67,12 @@
 
 - (void)setIcon;
 
+/* The cell's own icon image, as last set by -setIcon/-decorate - the same
+ * picture the cell draws.  Used to fly a selected cell's icon to the Trash
+ * the way a drag there would look (Workspace -moveToTrash via
+ * FSNBrowser's -flightSourcesForSelectedReps). */
+- (NSImage *)icon;
+
 - (NSString *)path;
 
 - (BOOL)selectIcon;

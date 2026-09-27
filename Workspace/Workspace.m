@@ -73,6 +73,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWDesktopWindow.h"
 #import "GWDockWindow.h"
 #import "Dock.h"
+#import "GWTrashFlight.h"
 #import "GWViewersManager.h"
 #import "GWViewer.h"
 #import "Finder.h"
@@ -124,6 +125,18 @@ static Workspace *gworkspace = nil;
 
 @interface Workspace (PrivateMethods)
 - (void)_updateTrashContents;
+
+/* "Move to Trash", played out as a flight of the selected icons into the
+ * Dock's Trash icon (see GWTrashFlight.h); falls back to recycling at once
+ * when there is nothing to animate from. */
+- (void)flyFilesToTrash:(NSArray *)files
+            fromBasePath:(NSString *)basePath
+               filePaths:(NSArray *)filePaths;
+- (NSArray *)trashFlightSourcesForPaths:(NSArray *)paths;
+- (void)setTrashFlightSources:(NSArray *)sources hidden:(BOOL)hidden;
+- (void)performRecycleOfFiles:(NSArray *)files
+                  fromBasePath:(NSString *)basePath
+                       sources:(NSArray *)sources;
 @end
 
 @implementation Workspace
@@ -2728,8 +2741,8 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSArray *vpaths = [ws mountedLocalVolumePaths];
   NSMutableArray *umountPaths = [NSMutableArray array];
   NSMutableArray *files = [NSMutableArray array];
+  NSMutableArray *filePaths = [NSMutableArray array];
   NSUInteger i;
-  NSInteger tag;
 
   for (i = 0; i < [selectedPaths count]; i++) {
     NSString *path = [selectedPaths objectAtIndex: i];
@@ -2738,12 +2751,13 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       [umountPaths addObject: path];
     } else {
       [files addObject: [path lastPathComponent]];
+      [filePaths addObject: path];
     }
   }
 
   for (i = 0; i < [umountPaths count]; i++) {
     NSString *umpath = [umountPaths objectAtIndex: i];
-    
+
     // Don't allow ejecting root filesystem
     if ([self isRootFilesystem: umpath]) {
       NSString *err = NSLocalizedString(@"Error", @"");
@@ -2752,7 +2766,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       NSRunAlertPanel(err, msg, buttstr, nil, nil);
       continue;
     }
-    
+
     /* Mark as expected unmount so the desktop does not show a spurious
        "Volume Removed Unexpectedly" warning. */
     [self noteUserInitiatedUnmountAtPath: umpath];
@@ -2775,13 +2789,11 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           NSString *err = NSLocalizedString(@"Error", @"");
           NSString *msg = NSLocalizedString(@"You do not have write permission\nfor", @"");
           NSString *buttstr = NSLocalizedString(@"Continue", @"");
-          NSRunAlertPanel(err, [NSString stringWithFormat: @"%@ \"%@\"!\n", msg, basePath], buttstr, nil, nil);   
+          NSRunAlertPanel(err, [NSString stringWithFormat: @"%@ \"%@\"!\n", msg, basePath], buttstr, nil, nil);
           return;
         }
 
-      [self performFileOperation: NSWorkspaceRecycleOperation
-                          source: basePath destination: trashPath 
-                           files: files tag: &tag];
+      [self flyFilesToTrash: files fromBasePath: basePath filePaths: filePaths];
     }
 }
 
@@ -5823,6 +5835,124 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 	[trashContents addObject: subnode];
       }
     }
+  }
+}
+
+/* Resolves the live selection view the same way -cut:/-copy: do, and asks
+ * it for screen rects + pictures of the icons that represent `paths`, so
+ * the flight has something real to animate from.  nil when there is no key
+ * window showing a selection at all (a script-driven recycle, or the
+ * rare moment nothing is key) - the caller falls back to recycling at
+ * once in that case, exactly as before this feature existed. */
+- (NSArray *)trashFlightSourcesForPaths:(NSArray *)paths
+{
+  NSWindow *kwin = [NSApp keyWindow];
+  id nodeView = nil;
+  NSArray *allSources;
+  NSMutableArray *matched;
+  NSUInteger i;
+
+  if (kwin != nil)
+    {
+      if ([vwrsManager hasViewerWithWindow: kwin])
+        nodeView = [[vwrsManager viewerWithWindow: kwin] nodeView];
+      else if ([dtopManager hasWindow: kwin])
+        nodeView = [dtopManager desktopView];
+    }
+
+  if (nodeView == nil
+      || ![nodeView respondsToSelector: @selector(flightSourcesForSelectedReps)])
+    return nil;
+
+  allSources = [nodeView flightSourcesForSelectedReps];
+  matched = [NSMutableArray arrayWithCapacity: [paths count]];
+
+  for (i = 0; i < [allSources count]; i++)
+    {
+      NSDictionary *src = [allSources objectAtIndex: i];
+
+      if ([paths containsObject: [src objectForKey: @"path"]])
+        [matched addObject: src];
+    }
+
+  return matched;
+}
+
+/* Hides (or shows again) the NSView-backed reps a flight animates - only
+ * the icon/desktop views' reps are actual views; a list row or a browser
+ * cell is a plain object that redraws through its owning view instead, and
+ * simply keeps showing the item until the recycle operation's own
+ * file-watcher notification removes it, same as before this feature
+ * existed. */
+- (void)setTrashFlightSources:(NSArray *)sources hidden:(BOOL)hidden
+{
+  NSUInteger i;
+
+  for (i = 0; i < [sources count]; i++)
+    {
+      id rep = [[sources objectAtIndex: i] objectForKey: @"rep"];
+
+      if ([rep isKindOfClass: [NSView class]])
+        {
+          NSView *view = (NSView *)rep;
+
+          [view setHidden: hidden];
+          [[view superview] setNeedsDisplayInRect: [view frame]];
+        }
+    }
+}
+
+/* The choke point every recycle - animated or not - funnels through, so
+ * "if refused, show the icons again" has exactly one place to live: with
+ * no flight (`sources` nil), this is a plain no-op past the operation
+ * call. */
+- (void)performRecycleOfFiles:(NSArray *)files
+                  fromBasePath:(NSString *)basePath
+                       sources:(NSArray *)sources
+{
+  NSInteger tag;
+  BOOL accepted = [self performFileOperation: NSWorkspaceRecycleOperation
+                                        source: basePath
+                                   destination: trashPath
+                                         files: files
+                                           tag: &tag];
+
+  if (!accepted)
+    [self setTrashFlightSources: sources hidden: NO];
+}
+
+/* Runs the actual recycle after animating the selected icons flying into
+ * the Dock's Trash icon - the way a drag there would look - whenever a
+ * live selection view and a visible Trash icon can both be found;
+ * otherwise recycles at once, exactly as -moveToTrash always has. */
+- (void)flyFilesToTrash:(NSArray *)files
+            fromBasePath:(NSString *)basePath
+               filePaths:(NSArray *)filePaths
+{
+  Dock *dock = [dtopManager dock];
+  NSRect trashRect = (dock != nil) ? [dock trashIconScreenRect] : NSZeroRect;
+  NSArray *sources = NSEqualRects (trashRect, NSZeroRect)
+    ? nil : [self trashFlightSourcesForPaths: filePaths];
+
+  if (sources == nil || [sources count] == 0)
+    {
+      [self performRecycleOfFiles: files fromBasePath: basePath sources: nil];
+      return;
+    }
+
+  /* The icons have "left" the folder the moment the flight starts; a
+   * refused recycle (above) shows them again. */
+  [self setTrashFlightSources: sources hidden: YES];
+
+  {
+    GWTrashFlight *flight = [[GWTrashFlight alloc]
+      initWithItems: sources
+          trashRect: trashRect
+         completion: ^{
+           [self performRecycleOfFiles: files fromBasePath: basePath sources: sources];
+         }];
+    [flight start];
+    RELEASE (flight);
   }
 }
 
