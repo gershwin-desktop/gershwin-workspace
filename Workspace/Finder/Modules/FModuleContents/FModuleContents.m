@@ -24,6 +24,7 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <string.h>
 #import "FinderModulesProtocol.h"
 
 #define MAXFSIZE 600000
@@ -169,7 +170,11 @@ static NSString *nibName = @"FModuleContents";
         } 
       }
     
-      contains = (strstr(bytesStr, searchPtr) != NULL);
+      /* NSData's bytes are not NUL-terminated, so strstr() could walk
+       * past the end of the buffer looking for one; memmem() is bounded
+       * by explicit lengths on both sides and is available on Linux,
+       * FreeBSD and OpenBSD alike. */
+      contains = (memmem(bytesStr, length, searchPtr, strlen(searchPtr)) != NULL);
     }
     
     RELEASE (pool);
