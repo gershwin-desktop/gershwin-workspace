@@ -939,7 +939,7 @@ BOOL gDSStoreVerbose = NO;
                                                                       format:NULL
                                                                        error:NULL];
         if ([d isKindOfClass:[NSDictionary class]]) {
-            return [d mutableCopy];
+            return [[d mutableCopy] autorelease];
         }
     }
     return [NSMutableDictionary dictionary];
