@@ -1359,11 +1359,10 @@
 	    if ([storedAppinfoLock tryLock] == YES) {
 	      break;
 	    }
-	    
-      sleeps++;
+
 	    usleep(100000); // 0.1 seconds
 	  }
-    
+
     if (sleeps >= 10) {
       return nil;
 	  }
@@ -1417,11 +1416,10 @@
 	    if ([storedAppinfoLock tryLock] == YES) {
 	      break;
 	    }
-	    
-      sleeps++;
+
 	    usleep(100000); // 0.1 seconds
 	  }
-    
+
     if (sleeps >= 10) {
       return;
 	  }
