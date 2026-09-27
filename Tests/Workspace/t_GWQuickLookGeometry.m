@@ -59,6 +59,51 @@ int main(void)
       "the 80%% rect stays fully inside the visible frame (1.25 convention)");
   }
 
+  /* The window is CONSTRUCTED with a content rect in points (screen-pixel
+   * origin, point-sized - see GWQuickLookPanel.m -initWithPaths:
+   * sourceWindow: on why only the size divides by the scale factor, not
+   * the origin): at GSScaleFactor 1.25 a 1920x1080 visible frame's 80%
+   * pixel rect (1536x864, centered at 192,108) must become a 1228.8x691.2
+   * pt content rect, so the backend's own re-multiplication by 1.25 lands
+   * back on exactly 1536x864 device pixels - not something smaller (the
+   * bug: passing the pixel rect directly as points, which the backend
+   * then multiplies AGAIN, growing the window past 80%). */
+  {
+    NSRect visible = NSMakeRect(0, 0, 1920, 1080);
+    NSRect content = GWQuickLookContentRectForVisibleFrame(visible, 1.25);
+
+    PASS(EQ(content.origin.x, 192) && EQ(content.origin.y, 108),
+      "content rect origin stays in screen pixels (1.25 scale)");
+    PASS(EQ(content.size.width, 1228.8),
+      "content width is 1536px / 1.25 = 1228.8pt (1.25 scale)");
+    PASS(EQ(content.size.height, 691.2),
+      "content height is 864px / 1.25 = 691.2pt (1.25 scale)");
+    PASS(EQ(content.size.width * 1.25, 1536) && EQ(content.size.height * 1.25, 864),
+      "multiplying back by the scale reproduces whole device pixels (1.25 scale)");
+  }
+
+  /* At scale 1.0 the content rect must be unchanged (dividing by 1 is a
+   * no-op), matching the live desktop's unaffected behavior. */
+  {
+    NSRect visible = NSMakeRect(0, 0, 1920, 1058);
+    NSRect pixelRect = GWQuickLookFrameForVisibleFrame(visible);
+    NSRect content = GWQuickLookContentRectForVisibleFrame(visible, 1.0);
+
+    PASS(NSEqualRects(content, pixelRect),
+      "content rect equals the pixel rect at scale 1.0");
+  }
+
+  /* Scale 1.5, a second non-trivial factor. */
+  {
+    NSRect visible = NSMakeRect(0, 0, 1920, 1080);
+    NSRect content = GWQuickLookContentRectForVisibleFrame(visible, 1.5);
+
+    PASS(EQ(content.size.width, 1024) && EQ(content.size.height, 576),
+      "content size is the 1536x864px rect halved-plus-a-third at 1.5 scale");
+    PASS(EQ(content.size.width * 1.5, 1536) && EQ(content.size.height * 1.5, 864),
+      "multiplying back by 1.5 reproduces whole device pixels");
+  }
+
   [arp release];
   return 0;
 }

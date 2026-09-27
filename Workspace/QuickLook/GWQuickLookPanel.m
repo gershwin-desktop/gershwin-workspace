@@ -19,6 +19,7 @@
 #import "ContentViewersProtocol.h"
 #import "GWViewersManager.h"         /* birth-rect + icon-rect resolution */
 #import "X11AppSupport.h"            /* GWX11WindowManager close animation */
+#import "GWFunctions.h"              /* frameRectForScreenContentRect() */
 
 /* Stands in for the real Inspector object the bundled ContentViewers (and
  * TextViewer) expect as their "inspector": checked against every class
@@ -310,7 +311,6 @@ QuickLookFixupContentView(NSView *view)
 - (id)initWithPaths:(NSArray *)paths sourceWindow:(id)sourceWindow
 {
   NSScreen *screen = nil;
-  NSRect frame;
   unsigned int style = NSTitledWindowMask | NSClosableWindowMask;
 
   if ([sourceWindow respondsToSelector: @selector(screen)])
@@ -322,15 +322,27 @@ QuickLookFixupContentView(NSView *view)
       screen = [NSScreen mainScreen];
     }
 
-  frame = GWQuickLookFrameForVisibleFrame([screen visibleFrame]);
-
-  self = [super initWithContentRect: frame
+  /* Constructed at NSZeroRect and resized right after, exactly like
+   * GWViewerWindow's own -init: NSScreen's -visibleFrame is already in
+   * device pixels here (gnustep-scale-factor-pitfalls), while
+   * -initWithContentRect:.../-frameRectForContentRect: take their SIZE in
+   * points and multiply it by GSScaleFactor - handing the pixel rect
+   * straight to the initializer would double it at any scale other than
+   * 1.0.  frameRectForScreenContentRect() (Workspace/GWFunctions.m) is the
+   * same helper GWViewer.m uses to place a window from a pixel rect: it
+   * divides just the size before asking AppKit for the real frame
+   * (title bar included), leaving the origin in pixels. */
+  self = [super initWithContentRect: NSZeroRect
                            styleMask: style
                              backing: NSBackingStoreBuffered
                                defer: NO
                               screen: screen];
   if (self != nil)
     {
+      NSRect pixelRect = GWQuickLookFrameForVisibleFrame([screen visibleFrame]);
+
+      [self setFrame: frameRectForScreenContentRect(self, pixelRect) display: NO];
+
       _sourceWindow = sourceWindow;
       [self setReleasedWhenClosed: NO];
       [self showPaths: paths];

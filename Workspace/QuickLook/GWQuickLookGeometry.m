@@ -23,3 +23,23 @@ GWQuickLookFrameForVisibleFrame(NSRect visibleFrame)
 
   return NSMakeRect(x, y, w, h);
 }
+
+/* Only the SIZE divides by the scale factor; the ORIGIN is left in screen
+ * pixels.  This mirrors Workspace/GWFunctions.m's frameRectForScreenContentRect()
+ * exactly (its own comment: "-frameRectForContentRect: takes the size in
+ * points and multiplies it by GSScaleFactor" - a size already in pixels
+ * would grow a second time; the origin is never touched by either
+ * function).  frameRectForScreenContentRect() itself needs a live NSWindow
+ * (to read -userSpaceScaleFactor and call -frameRectForContentRect:), so
+ * is not headless-testable; this is the plain-arithmetic half of that
+ * same contract, pulled out so it is. */
+NSRect
+GWQuickLookContentRectForVisibleFrame(NSRect visibleFrame, CGFloat scale)
+{
+  NSRect contentRect = GWQuickLookFrameForVisibleFrame(visibleFrame);
+
+  contentRect.size.width /= scale;
+  contentRect.size.height /= scale;
+
+  return contentRect;
+}
