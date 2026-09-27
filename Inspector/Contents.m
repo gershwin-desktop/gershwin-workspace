@@ -673,7 +673,6 @@ static NSString *nibName = @"Contents";
   if (shComm && fileComm)
     {
       CREATE_AUTORELEASE_POOL (pool);
-      NSString *str;
       NSFileHandle *handle;
 
       [nc removeObserver: self];
@@ -684,9 +683,10 @@ static NSString *nibName = @"Contents";
           DESTROY (task);		
     
           task = [NSTask new]; 
-          [task setLaunchPath: shComm];
-          str = [NSString stringWithFormat: @"%@ -b \"%@\"", fileComm, path];
-          [task setArguments: [NSArray arrayWithObjects: @"-c", str, nil]];
+          /* The path goes to file(1) as an argument of its own: through a
+           * shell, a quote in a file name became a command. */
+          [task setLaunchPath: fileComm];
+          [task setArguments: [NSArray arrayWithObjects: @"-b", path, nil]];
           ASSIGN (pipe, [NSPipe pipe]);
           [task setStandardOutput: pipe];
 
