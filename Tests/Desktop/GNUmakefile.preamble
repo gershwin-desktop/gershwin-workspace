@@ -7,3 +7,11 @@ GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # Defining them as 0 keeps the (empty) scan in the runtime a no-op.
 ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
                       -Wl,--defsym=__stop___objc_constant_string=0
+
+# GWMountWatchState.m is Foundation-only (no GUI), so it links straight in
+# as a plain collaborator object rather than needing the whole Workspace app.
+t_GWMountWatchStateDiff_OBJC_FILES += ../../Workspace/Desktop/GWMountWatchState.m
+
+# GWVolumeID.m is Foundation-only too; link it directly so the test proves
+# the SHIPPED mount-table reader, not a copy of its logic.
+t_GWVolumeIDMountTable_OBJC_FILES += ../../Workspace/FileViewer/GWVolumeID.m
