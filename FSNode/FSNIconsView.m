@@ -3406,6 +3406,20 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
     }
 }
 
+/* Unconditionally shows the shared name-label editor again, regardless of
+   which rep (if any) it is currently positioned for.  The flight that
+   called -setRep:hiddenForFlight: above may, by the time it ends, have
+   already had its rep's node removed by the recycle it was animating - so
+   that method's own editIcon == icon check can no longer find anything to
+   restore through.  A GWTrashFlight completion calls this instead, on
+   every view it hid a rep in, so the label is never left stuck hidden
+   regardless of what became of the icon it was showing. */
+- (void)showNameEditor
+{
+  [nameEditor setHidden: NO];
+  [self setNeedsDisplayInRect: [nameEditor frame]];
+}
+
 - (NSArray *)selectedNodes
 {
   NSMutableArray *selectedNodes = [NSMutableArray array];
@@ -4055,6 +4069,11 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 
       [nameEditor setEditable: NO];
       [nameEditor setSelectable: NO];
+      /* A previous selection's flight (-setRep:hiddenForFlight:) can have
+       * left this shared editor hidden with no rep left to un-hide it
+       * through - always show it again here, whatever it was doing
+       * before, since it is about to represent a brand new selection. */
+      [nameEditor setHidden: NO];
       [self addSubview: nameEditor];
     }
 }

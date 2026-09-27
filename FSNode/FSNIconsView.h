@@ -336,6 +336,13 @@
    name. */
 - (void)setRep:(id)arep hiddenForFlight:(BOOL)hidden;
 
+/* Unconditionally shows the shared name-label editor again, regardless of
+   which rep (if any) it is currently positioned for - the safety net a
+   GWTrashFlight's completion calls on every view it hid a rep in, since by
+   the time it ends the rep's node - and so -setRep:hiddenForFlight:'s own
+   way of finding the label - may already be gone. */
+- (void)showNameEditor;
+
 - (void)selectionDidChange;
 - (void)checkLockedReps;
 - (void)setSelectionMask:(FSNSelectionMask)mask;

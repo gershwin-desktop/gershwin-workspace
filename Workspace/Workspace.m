@@ -6041,7 +6041,9 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   Dock *dock = [dtopManager dock];
   NSRect trashRect = (dock != nil) ? [dock trashIconScreenRect] : NSZeroRect;
   NSArray *sources;
+  NSMutableArray *containers;
   GWTrashFlight *flight;
+  NSUInteger i;
 
   if (NSEqualRects (trashRect, NSZeroRect))
     return;
@@ -6052,9 +6054,44 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
   [self setTrashFlightSources: sources hidden: YES];
 
+  /* Captured now, while each rep still has a superview: the recycle this
+   * flight is about to run removes the rep's node, which drops the rep
+   * from the view entirely (clearing -superview) well before the flight
+   * ends, so there would be nothing left to ask by the time the
+   * completion below runs.  Kept as a set of distinct views - several
+   * flying icons can come from the same one. */
+  containers = [NSMutableArray array];
+  for (i = 0; i < [sources count]; i++)
+    {
+      id rep = [[sources objectAtIndex: i] objectForKey: @"rep"];
+      id container = [rep respondsToSelector: @selector(superview)] ? [rep superview] : nil;
+
+      if (container != nil && ![containers containsObject: container])
+        [containers addObject: container];
+    }
+
   flight = [[GWTrashFlight alloc] initWithItems: sources
                                        trashRect: trashRect
-                                      completion: ^{}];
+                                      completion: ^{
+                                        NSUInteger j;
+
+                                        /* However the recycle turned out,
+                                         * the shared name-label editor
+                                         * these views may have hidden for
+                                         * the flight must not stay hidden
+                                         * once it is over - the rep it was
+                                         * showing is likely gone by now,
+                                         * so -setRep:hiddenForFlight:'s own
+                                         * restore path has nothing left to
+                                         * find. */
+                                        for (j = 0; j < [containers count]; j++)
+                                          {
+                                            id container = [containers objectAtIndex: j];
+
+                                            if ([container respondsToSelector: @selector(showNameEditor)])
+                                              [container showNameEditor];
+                                          }
+                                      }];
   [flight start];
   RELEASE (flight);
 }

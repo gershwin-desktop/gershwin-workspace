@@ -53,6 +53,11 @@ t_FSNDisplayName_TOOL_LIBS += -lgnustep-gui
 # framework rather than single sources.
 t_FSNIconsViewTile_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                                 -lFSNode -lgnustep-gui
+# t_FSNIconsViewFlightLabel drives a real FSNIconsView (showContentsOfNode:,
+# selection, -setRep:hiddenForFlight:) the same way, so it links the built
+# framework too.
+t_FSNIconsViewFlightLabel_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                       -lFSNode -lgnustep-gui
 # Without this the tool runs against the installed framework and would report
 # on /System rather than on what was just built.  It has to be the old DT_RPATH
 # tag: GNUstep.sh puts the installed libraries in LD_LIBRARY_PATH, which the
