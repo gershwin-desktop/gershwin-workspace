@@ -13,3 +13,8 @@ t_GWX11AppSupport_TOOL_LIBS += -lgnustep-gui -lX11
 ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata
 t_GWArchiveOperationCancel_OBJC_FILES += ../../GWMetadata/GWMetaArchive.m
 t_GWArchiveOperationCancel_TOOL_LIBS += -lgnustep-gui -lGSMetadata -larchive
+
+# GWThumbnailer.m imports AppKit/AppKit.h (NSBundle/NSImage-adjacent code
+# paths) and dispatch/dispatch.h (header only - no dispatch_* call remains).
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Thumbnailer
+t_GWThumbnailerConcurrency_TOOL_LIBS += -lgnustep-gui

@@ -277,14 +277,25 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 
 - (void)checkThumbnails:(id)sender
 {
-  if (thumbsDict && [thumbsDict count]) {
-    NSArray *paths = RETAIN ([thumbsDict allKeys]);
+  /* thumbsDict is also written from the detached make/remove worker
+   * threads (see makeThumbnails:/removeThumbnails:), so every read or
+   * mutation here has to go through dictLock too, not just the plist
+   * write at the end. */
+  [dictLock lock];
+  BOOL hasEntries = (thumbsDict != nil) && ([thumbsDict count] > 0);
+  NSArray *paths = hasEntries ? RETAIN ([thumbsDict allKeys]) : nil;
+  [dictLock unlock];
+
+  if (hasEntries) {
     NSMutableArray *deleted = [NSMutableArray array];
     NSUInteger i;
 
     for (i = 0; i < [paths count]; i++) {
       NSString *path = [paths objectAtIndex: i];
+
+      [dictLock lock];
       NSString *tname = [thumbsDict objectForKey: path];
+      [dictLock unlock];
 
       if ([fm fileExistsAtPath: path] == NO) {
         NSString *tpath = [thumbnailDir stringByAppendingPathComponent: tname];
@@ -292,14 +303,16 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
         if ([fm fileExistsAtPath: tpath]) {
           [fm removeFileAtPath: tpath handler: nil];
         }
-        
+
         [deleted addObject: path];
+        [dictLock lock];
         [thumbsDict removeObjectForKey: path];
+        [dictLock unlock];
       }
     }
 
-    RELEASE (paths); 
-    
+    RELEASE (paths);
+
     if ([deleted count])
       {
         NSMutableDictionary *info = [NSMutableDictionary dictionary];
@@ -345,8 +358,13 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
         {
           NSString *fname = [contents objectAtIndex: i];
           NSString *fullPath = [path stringByAppendingPathComponent: fname];
+          BOOL alreadyHave;
 
-          if ([thumbsDict objectForKey: fullPath])
+          [dictLock lock];
+          alreadyHave = ([thumbsDict objectForKey: fullPath] != nil);
+          [dictLock unlock];
+
+          if (alreadyHave)
             continue;
 
           id<TMBProtocol> tmb = [self thumbnailerForPath: fullPath];
@@ -379,18 +397,29 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 
       [[NSDistributedNotificationCenter defaultCenter] 
 	postNotificationName: GWThumbnailsDidChangeNotification
-	object: nil 
+	object: nil
 	userInfo: info];
     }
+  [dictLock lock];
   [pathsInProcessing removeObject:path];
+  [dictLock unlock];
   [arp drain];
 }
 
 - (void)makeThumbnails:(NSString *)path
 {
+  /* Check-and-insert must be one atomic step under dictLock: two threads
+   * racing makeThumbnails: for the same path (several folders opened at
+   * once) must not both pass the containsObject: test and both detach a
+   * worker for it. */
+  [dictLock lock];
   if ([pathsInProcessing containsObject:path])
-    return;
+    {
+      [dictLock unlock];
+      return;
+    }
   [pathsInProcessing addObject:path];
+  [dictLock unlock];
   /* GNUstep thread, not libdispatch: a GCD worker thread running ObjC races
    * the main thread's +load dispatch and crashes the app (GPF in libobjc's
    * load_messages_insert) - the window_placement flake. */
@@ -403,18 +432,19 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 {
   NSMutableArray *deleted;
   BOOL isdir;
+  BOOL hasEntries;
   NSUInteger i;
   NSAutoreleasePool *arp;
 
   arp = [NSAutoreleasePool new];
 
-  
-    if ((thumbsDict == nil) || ([thumbsDict count] == 0)) {
-      return;
-    }
-    
+  [dictLock lock];
+  hasEntries = (thumbsDict != nil) && ([thumbsDict count] > 0);
+  [dictLock unlock];
+
+  if (hasEntries) {
     deleted = [NSMutableArray array];
-    
+
 
     if ([fm fileExistsAtPath: path isDirectory: &isdir])
       {
@@ -449,24 +479,37 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
                           object: nil 
                         userInfo: info];
       }
+  }
 
+  /* Always release the in-processing marker, even when there was nothing
+   * to remove - the old early return above left the path in
+   * pathsInProcessing forever, so a later removeThumbnails: for the same
+   * path silently became a permanent no-op. */
+  [dictLock lock];
   [pathsInProcessing removeObject:path];
+  [dictLock unlock];
   [arp drain];
 }
 
 
 - (void)removeThumbnails:(NSString *)path
 {
+  /* Same atomic check-and-insert as makeThumbnails:; see there. */
+  [dictLock lock];
   if ([pathsInProcessing containsObject:path])
-    return;
+    {
+      [dictLock unlock];
+      return;
+    }
   [pathsInProcessing addObject:path];
+  [dictLock unlock];
   /* GNUstep thread, not libdispatch; see makeThumbnails:. */
   [NSThread detachNewThreadSelector: @selector(_removeThumbnails:)
                            toTarget: self
                          withObject: path];
 }
 
-- (BOOL)registerThumbnailData:(NSData *)data 
+- (BOOL)registerThumbnailData:(NSData *)data
                       forPath:(NSString *)path
                 nameExtension:(NSString *)ext
 {
@@ -474,33 +517,46 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
     NSString *tname;
     NSString *tpath;
 
-    tname = [self nextThumbName];    
+    /* nextThumbName reads and increments thumbref, and the dict entry it
+     * feeds must land as one step - lock across the whole naming/write/
+     * bookkeeping sequence so two threads registering thumbnails at the
+     * same time can never hand out the same tname or race on thumbsDict. */
+    [dictLock lock];
+
+    tname = [self nextThumbName];
     tname = [tname stringByAppendingPathExtension: ext];
     tpath = [thumbnailDir stringByAppendingPathComponent: tname];
-    
+
     if ([data writeToFile: tpath atomically: YES]) {
       NSString *oldtname = [thumbsDict objectForKey: path];
+
       if (oldtname) {
         NSString *oldtpath = [thumbnailDir stringByAppendingPathComponent: oldtname];
-        
+
         if ([fm fileExistsAtPath: oldtpath]) {
           [fm removeFileAtPath: oldtpath handler: nil];
         }
       }
-    
+
       [thumbsDict setObject: tname forKey: path];
+      [dictLock unlock];
       return YES;
     } else {
+      [dictLock unlock];
       return NO;
     }
   }
-  
+
   return NO;
 }
 
 - (BOOL)removeThumbnailForPath:(NSString *)path
 {
-  NSString *tname = [thumbsDict objectForKey: path];
+  NSString *tname;
+  BOOL removed = NO;
+
+  [dictLock lock];
+  tname = [thumbsDict objectForKey: path];
 
   if (tname) {
     NSString *tpath = [thumbnailDir stringByAppendingPathComponent: tname];
@@ -509,11 +565,12 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
       [fm removeFileAtPath: tpath handler: nil];
     }
     [thumbsDict removeObjectForKey: path];
-    return YES;
+    removed = YES;
   }
 
-  return NO;
-}          
+  [dictLock unlock];
+  return removed;
+}
 
 - (NSArray *)bundlesWithExtension:(NSString *)extension 
 		      inDirectory:(NSString *)dirpath
