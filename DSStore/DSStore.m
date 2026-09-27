@@ -57,6 +57,7 @@ BOOL gDSStoreVerbose = NO;
     [_filePath release];
     [_allocator release];
     [_entries release];
+    [_visitedBTreeBlocks release];
     [super dealloc];
 }
 
@@ -195,7 +196,14 @@ BOOL gDSStoreVerbose = NO;
     }
     
     [dsdbBlock close];
-    
+
+    // Fresh cycle guard for this load: a hostile/corrupt file can make a
+    // node's child or sibling point back at a block already on the path
+    // from the root, which would otherwise recurse forever (stack
+    // overflow) instead of just producing a wrong tree.
+    [_visitedBTreeBlocks release];
+    _visitedBTreeBlocks = [[NSMutableIndexSet alloc] init];
+
     // The B-tree root address points to another block in the offset table
     // If rootAddress >= offsetCount, it's likely an offset relative to DSDB block
     if (rootAddress < [offsets count]) {
@@ -203,8 +211,11 @@ BOOL gDSStoreVerbose = NO;
         uint32_t btreeAddr = [[offsets objectAtIndex:rootAddress] unsignedIntValue];
         uint32_t btreeOffset = btreeAddr & ~0x1F;
         uint32_t btreeSize = 1 << (btreeAddr & 0x1F);
-        
-        
+
+        // The root itself is on the path, so a child that loops back to it
+        // must be caught too.
+        [_visitedBTreeBlocks addIndex:rootAddress];
+
         // Read B-tree data (+4 for file offset correction)
         DSBuddyBlock *btreeBlock = [_allocator blockAtOffset:btreeOffset + 4 size:btreeSize - 4];
         if (!btreeBlock) {
@@ -319,6 +330,16 @@ BOOL gDSStoreVerbose = NO;
         for (uint32_t i = 0; i < recordsCount; i++) {
             uint32_t childNum = [block readUInt32];
             if (childNum != 0) {
+                /* A child that revisits a block already on the path from
+                 * the root is a cycle - reading it again would recurse
+                 * forever (stack overflow) rather than just describe a
+                 * malformed tree, so fail the load instead. */
+                if ([_visitedBTreeBlocks containsIndex:childNum]) {
+                    [NSException raise:NSInternalInconsistencyException
+                                format:@"DSStore: cyclic B-tree (block %u visited twice)",
+                                       childNum];
+                }
+                [_visitedBTreeBlocks addIndex:childNum];
                 uint32_t childAddr = [_allocator addressForBlock:childNum];
                 uint32_t childOffset = (childAddr & ~0x1FU) + 4;
                 uint32_t childSize = (1U << (childAddr & 0x1FU)) - 4;
@@ -335,6 +356,12 @@ BOOL gDSStoreVerbose = NO;
             }
         }
         if (nextNode != 0) {
+            if ([_visitedBTreeBlocks containsIndex:nextNode]) {
+                [NSException raise:NSInternalInconsistencyException
+                            format:@"DSStore: cyclic B-tree (block %u visited twice)",
+                                   nextNode];
+            }
+            [_visitedBTreeBlocks addIndex:nextNode];
             uint32_t sibAddr = [_allocator addressForBlock:nextNode];
             uint32_t sibOffset = (sibAddr & ~0x1FU) + 4;
             uint32_t sibSize = (1U << (sibAddr & 0x1FU)) - 4;
