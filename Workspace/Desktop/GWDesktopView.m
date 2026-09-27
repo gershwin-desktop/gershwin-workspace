@@ -1045,73 +1045,67 @@ static CGFloat desktopScaleFactor(void)
 }
 
 
-- (void)selectPrevIcon
+/* Desktop icons sit where the user put them, so the arrow keys walk the
+ * row the selected icon is in by position, not the array order the
+ * folder view uses. */
+- (FSNIcon *)selectedIcon
 {
   NSUInteger i;
 
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
-      NSUInteger index = 0;
 
       if ([icon isSelected])
 	{
-	  NSArray *rowicons = [self iconsWithGridOriginY: [icon frame].origin.y];
-
-	  if (rowicons)
-	    {
-	      FSNIcon *prev;
-
-	      while (index < 0)
-		{
-		  index++;
-		  prev = nil;
-
-		  if (prev && [rowicons containsObject: prev])
-		    {
-		      [prev select];
-		      break;
-		    }
-		}
-	    }
-
-	  break;
+	  return icon;
 	}
+    }
+  return nil;
+}
+
+- (FSNIcon *)neighbourOf:(FSNIcon *)icon toTheRight:(BOOL)right
+{
+  NSArray *rowicons = [self iconsWithGridOriginY: [icon frame].origin.y];
+  CGFloat x = [icon frame].origin.x;
+  FSNIcon *best = nil;
+
+  for (FSNIcon *other in rowicons)
+    {
+      CGFloat ox = [other frame].origin.x;
+
+      if (right ? (ox <= x) : (ox >= x))
+	{
+	  continue;
+	}
+      if (best == nil
+	  || (right ? (ox < [best frame].origin.x) : (ox > [best frame].origin.x)))
+	{
+	  best = other;
+	}
+    }
+  return best;
+}
+
+- (void)selectPrevIcon
+{
+  FSNIcon *icon = [self selectedIcon];
+  FSNIcon *prev = icon ? [self neighbourOf: icon toTheRight: NO] : nil;
+
+  if (prev)
+    {
+      [prev select];
     }
 }
 
 - (void)selectNextIcon
 {
-  NSUInteger i;
+  FSNIcon *icon = [self selectedIcon];
+  FSNIcon *next = icon ? [self neighbourOf: icon toTheRight: YES] : nil;
 
-  for (i = 0; i < [icons count]; i++)
+  if (next)
     {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      NSUInteger index = 0;
-
-      if ([icon isSelected])
-	{
-	  NSArray *rowicons = [self iconsWithGridOriginY: [icon frame].origin.y];
-
-	  if (rowicons)
-	    {
-	      FSNIcon *next;
-
-	      while (index > 0)
-		{
-		  next = nil;
-
-		  if (next && [rowicons containsObject: next])
-		    {
-		      [next select];
-		      break;
-		    }
-		  index--;
-		}
-	    }
-
-	  break;
-	}
+      [next select];
     }
 }
 
