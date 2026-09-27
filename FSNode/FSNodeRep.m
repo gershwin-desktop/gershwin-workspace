@@ -379,8 +379,10 @@ static FSNodeRep *shared = nil;
                 break;
             }
 
-          [entries addObject: [[FSNDirEntry alloc] initWithName: fname
-                                                            kind: kind]];
+          FSNDirEntry *dirEntry = [[FSNDirEntry alloc] initWithName: fname
+                                                                kind: kind];
+          [entries addObject: dirEntry];
+          [dirEntry release];
         }
 
       [fname release];
