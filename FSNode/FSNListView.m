@@ -2909,6 +2909,15 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
                                                   name: NSUserDefaultsDidChangeNotification
                                                 object: nil];
 
+  /* A pending single-click timer targets self with 0.5s repeats:NO; left
+   * running past -dealloc it fires -singleClick: into a freed view. */
+  if (clickTimer != nil)
+    {
+      [clickTimer invalidate];
+      RELEASE (clickTimer);
+      clickTimer = nil;
+    }
+
   RELEASE (charBuffer);
   RELEASE (dsource);
   [super dealloc];

@@ -72,6 +72,9 @@
   NSSize columnSize;
   NSInteger fontSize;
   BOOL simulatingDoubleClick;
+  /* Times out the simulated double-click above; invalidated in -dealloc so
+   * a closed browser cannot have it fire into a freed instance. */
+  NSTimer *doubleClickTimer;
   float mousePointX;
   float mousePointY;
   

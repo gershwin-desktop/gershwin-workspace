@@ -71,6 +71,15 @@
       [[FSNIconLoader sharedLoader] cancelClient: [columns objectAtIndex: i]];
     }
 
+  /* A pending double-click timeout targets self; left running past
+   * -dealloc it fires -doubleClikTimeOut: into a freed instance. */
+  if (doubleClickTimer != nil)
+    {
+      [doubleClickTimer invalidate];
+      RELEASE (doubleClickTimer);
+      doubleClickTimer = nil;
+    }
+
   RELEASE (baseNode);
   RELEASE (extInfoType);
   RELEASE (lastSelection);
@@ -1290,12 +1299,19 @@
           mousePointX = p.x;
           mousePointY = p.y;
           simulatingDoubleClick = YES;
-          
-          [NSTimer scheduledTimerWithTimeInterval: 0.3
-                                           target: self 
-                                         selector: @selector(doubleClikTimeOut:)
-                                         userInfo: nil 
-                                          repeats: NO];
+
+          if (doubleClickTimer != nil)
+            {
+              [doubleClickTimer invalidate];
+              RELEASE (doubleClickTimer);
+            }
+
+          ASSIGN (doubleClickTimer,
+                  [NSTimer scheduledTimerWithTimeInterval: 0.3
+                                                   target: self
+                                                 selector: @selector(doubleClikTimeOut:)
+                                                 userInfo: nil
+                                                  repeats: NO]);
         }
     }
   
@@ -1362,6 +1378,7 @@
 - (void)doubleClikTimeOut:(id)sender
 {
   simulatingDoubleClick = NO;
+  DESTROY (doubleClickTimer);
 }
 
 - (void)mouseDown:(NSEvent*)theEvent
