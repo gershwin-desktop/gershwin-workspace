@@ -21,13 +21,16 @@ t_GWThumbnailerConcurrency_TOOL_LIBS += -lgnustep-gui
 # X11AppSupport.m needs AppKit and Xlib even when only its thread is exercised.
 t_GWX11ScanThread_TOOL_LIBS += -lgnustep-gui -lX11
 
-# t_AppImageProbeCache #includes AppImageIconProvider.m in-process (the unit
-# under test). Its own FSNodeRep/FSNIcon categories reference those two
-# classes by name, so linking the built FSNode framework (not a fresh
-# in-tree copy) resolves them exactly like Workspace itself does;
-# libsquashfs is the library the unit was built against.
+# t_AppImageProbeCache and t_AppImageDirIconCycle #include
+# AppImageIconProvider.m in-process (the unit under test). Its own
+# FSNodeRep/FSNIcon categories reference those two classes by name, so
+# linking the built FSNode framework (not a fresh in-tree copy) resolves
+# them exactly like Workspace itself does; libsquashfs is the library the
+# unit was built against.
 ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
 ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
                       -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
 t_AppImageProbeCache_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                                   -lFSNode -lgnustep-gui -lsquashfs
+t_AppImageDirIconCycle_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                    -lFSNode -lgnustep-gui -lsquashfs

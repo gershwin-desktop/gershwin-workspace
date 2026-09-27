@@ -42,6 +42,12 @@
 #define APPIMAGE_EI_CLASS 4
 #define APPIMAGE_EI_DATA 5
 
+/* .DirIcon may itself be a symlink; a crafted or corrupt AppImage can make
+ * that chain point back on itself, and unbounded recursion here would
+ * overflow the stack just from listing the file. Bound the chase instead of
+ * trusting file-supplied paths to terminate. */
+#define APPIMAGE_MAX_SYMLINK_DEPTH 8
+
 /* Bounds how many per-path AppImage-probe verdicts stay cached across
  * redraws; once full, the whole cache is dropped rather than tracked for
  * recency, which no caller here needs. */
@@ -672,7 +678,8 @@ static NSString *AppImageSanitizeInnerPath(NSString *path)
 static NSData *AppImageReadFileDataFromInode(sqfs_data_reader_t *data_reader,
                                              sqfs_dir_reader_t *dir_reader,
                                              const sqfs_inode_generic_t *inode,
-                                             BOOL fragmentTableReady)
+                                             BOOL fragmentTableReady,
+                                             int depth)
 {
   sqfs_u64 size = 0;
 
@@ -692,6 +699,15 @@ static NSData *AppImageReadFileDataFromInode(sqfs_data_reader_t *data_reader,
     size = inode->data.file_ext.file_size;
   } else if (inode->base.type == SQFS_INODE_SLINK ||
              inode->base.type == SQFS_INODE_EXT_SLINK) {
+    /* A symlink chain that loops back on itself (directly, like .DirIcon
+     * pointing at .DirIcon, or through several hops) would otherwise recurse
+     * until the stack overflows; a corrupt or hostile AppImage can trigger
+     * this just by being listed, so fail cleanly instead of trusting the
+     * file to terminate. */
+    if (depth >= APPIMAGE_MAX_SYMLINK_DEPTH) {
+      return nil;
+    }
+
     sqfs_u32 target_size = (inode->base.type == SQFS_INODE_SLINK)
                            ? inode->data.slink.target_size
                            : inode->data.slink_ext.target_size;
@@ -709,7 +725,8 @@ static NSData *AppImageReadFileDataFromInode(sqfs_data_reader_t *data_reader,
           NSData *resolvedData = AppImageReadFileDataFromInode(data_reader,
                                                                dir_reader,
                                                                resolved,
-                                                               fragmentTableReady);
+                                                               fragmentTableReady,
+                                                               depth + 1);
           sqfs_free(resolved);
           free(target);
           return resolvedData;
@@ -948,7 +965,7 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
         fragmentTableReady = YES;
       }
     }
-    iconData = AppImageReadFileDataFromInode(data_reader, dir_reader, inode, fragmentTableReady);
+    iconData = AppImageReadFileDataFromInode(data_reader, dir_reader, inode, fragmentTableReady, 0);
     sqfs_free(inode);
     inode = NULL;
     if (iconData != nil) {
