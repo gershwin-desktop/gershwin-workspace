@@ -135,6 +135,9 @@ FileViewer/GWVolumeCache.m \
 FileViewer/GWViewSettingsManager.m \
 FileViewer/GWViewerPrefs.m \
 FileViewer/GWSpatialIconsView.m \
+QuickLook/GWQuickLookGeometry.m \
+QuickLook/GWQuickLookController.m \
+QuickLook/GWQuickLookPanel.m \
 ../GWMetadata/GWMetaArchive.m \
 Finder/Finder.m \
 Finder/GWChangePaths.m \

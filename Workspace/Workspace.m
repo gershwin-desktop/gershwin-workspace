@@ -78,6 +78,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWViewer.h"
 #import "Finder.h"
 #import "Inspector.h"
+#import "QuickLook/GWQuickLookController.h"
 #import "Operation.h"
 #import "History/History.h"
 #import "X11AppSupport.h"
@@ -356,7 +357,7 @@ static NSArray *pendingTrashFlightSources = nil;
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(makeAliasFiles:) keyEquivalent:@"l"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Quick Look") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Quick Look") action:@selector(quickLook:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
   // Share submenu
@@ -1660,6 +1661,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       || sel_isEqual(action, @selector(makeThumbnails:))
       || sel_isEqual(action, @selector(removeThumbnails:))
       || sel_isEqual(action, @selector(notImplemented:))
+      || sel_isEqual(action, @selector(quickLook:))
       || sel_isEqual(action, @selector(cleanUp:))
       || sel_isEqual(action, @selector(cleanUpBy:)))
     {
@@ -5614,9 +5616,13 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
 - (void)quickLook:(id)sender
 {
-  NSRunAlertPanel(@"Not Implemented Yet",
-                  @"Quick Look is not yet implemented.",
-                  @"OK", nil, nil);
+  /* Menu entry point: uses the app-wide current selection, same as Get
+   * Info's menu item does; the Space bar path in GWViewerWindow instead
+   * uses the key folder window's own live selection (see
+   * -performKeyEquivalent: there for why). */
+  [[GWQuickLookController sharedController]
+      toggleQuickLookForPaths: selectedPaths
+                 sourceWindow: [NSApp keyWindow]];
 }
 
 + (NSArray *)volumeMountRoots
