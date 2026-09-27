@@ -227,7 +227,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 
   sizeStop = YES;
 
-  if (paths == nil) {
+  if ([paths count] == 0) {
     DESTROY (insppaths);
     return;
   }
