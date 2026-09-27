@@ -479,8 +479,8 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
     tpath = [thumbnailDir stringByAppendingPathComponent: tname];
     
     if ([data writeToFile: tpath atomically: YES]) {
-      if ([[thumbsDict allKeys] containsObject: path]) {
-        NSString *oldtname = [thumbsDict objectForKey: path];
+      NSString *oldtname = [thumbsDict objectForKey: path];
+      if (oldtname) {
         NSString *oldtpath = [thumbnailDir stringByAppendingPathComponent: oldtname];
         
         if ([fm fileExistsAtPath: oldtpath]) {
@@ -500,21 +500,18 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 
 - (BOOL)removeThumbnailForPath:(NSString *)path
 {
-  NSArray *keys = RETAIN ([thumbsDict allKeys]);
+  NSString *tname = [thumbsDict objectForKey: path];
 
-  if ([keys containsObject: path]) {
-    NSString *tname = [thumbsDict objectForKey: path];
+  if (tname) {
     NSString *tpath = [thumbnailDir stringByAppendingPathComponent: tname];
 
     if ([fm fileExistsAtPath: tpath]) {
       [fm removeFileAtPath: tpath handler: nil];
     }
     [thumbsDict removeObjectForKey: path];
-    RELEASE (keys);
     return YES;
   }
 
-  RELEASE (keys);
   return NO;
 }          
 
