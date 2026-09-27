@@ -10,3 +10,13 @@ ADDITIONAL_INCLUDE_DIRS += -I../../DBKit -I../../Workspace
 ADDITIONAL_LIB_DIRS += -L../../DBKit/$(GNUSTEP_OBJ_DIR)
 
 t_FSWatcherInotifyWatchLifecycle_TOOL_LIBS += -lDBKit
+
+# DDBPathsManager.m (Tools/ddbd) is a DBKBTree delegate; its .h imports
+# DBKBTree.h, so this needs the same include/lib path as above. It also
+# imports MDModulesProtocol.h (Tools/ddbd/MDModules) and DDBMDStorage.h/.m
+# (Tools/ddbd), which are linked as a separate object, single class per
+# object per the in-process #include convention.
+ADDITIONAL_INCLUDE_DIRS += -I../../Tools/ddbd -I../../Tools/ddbd/MDModules
+
+t_DDBPathsManagerCompareLeak_OBJC_FILES += ../../Tools/ddbd/DDBMDStorage.m
+t_DDBPathsManagerCompareLeak_TOOL_LIBS += -lDBKit
