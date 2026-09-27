@@ -1,6 +1,11 @@
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # DockMagnification.h is Foundation-only inline code kept with the Dock.
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Desktop/Dock
+# t_DockPoll imports Dock.h itself (for DockMagnifyPollInterval and
+# DockIconNeedsLaunchedStateScan, both Foundation-only); Dock.h drags in
+# GWDesktopManager.h and, through it, FSNodeRep.h purely for declarations -
+# nothing in this suite links FSNode or the desktop manager.
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Desktop -I../../FSNode
 
 # clang 19 / binutils 2.44 regression: the ABI 2.2 .objc_init section always
 # references the __objc_constant_string section bounds, but the linker only

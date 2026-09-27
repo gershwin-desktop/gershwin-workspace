@@ -34,6 +34,45 @@
 @class DockIcon;
 @class Workspace;
 
+/* The pointer is looked at every frame while it is anywhere near the Dock.
+ * Further away it is looked at just often enough to catch it coming: the
+ * time it would need to cross what is left of the distance, at a speed no
+ * pointer is pushed past, and never less often than the idle interval. */
+#define MAGNIFY_FRAME_INTERVAL (1.0 / 60.0)
+#define MAGNIFY_IDLE_INTERVAL 0.25
+/* A pointer that is not headed for the Dock spends most of its time further
+ * from the bar than this speed and the idle interval add up to, so it is a
+ * comfortable, deliberate approach rather than the fastest a hand can move a
+ * mouse: measured live, the old 4000 px/s left the Dock polling at ~12 Hz
+ * indefinitely at a resting position a few hundred points away, because the
+ * distance needed to reach MAGNIFY_IDLE_INTERVAL scaled with it (1000 px).
+ * Lower and the idle rate is actually reached at realistic "parked" spots;
+ * a flick that covers this speed's reach within one idle interval can still
+ * arrive a frame late, exactly as a flick beyond the old 1000 px bound
+ * already could. */
+#define MAGNIFY_POINTER_SPEED 1000.0
+
+/* Foundation-only so it can be tested headless (Tests/Dock). Takes the
+ * in-progress flag as a parameter rather than reading it off a Dock, so the
+ * timing rule can be proven without building one. */
+static inline NSTimeInterval
+DockMagnifyPollInterval(CGFloat distance, CGFloat near, BOOL armed)
+{
+  NSTimeInterval wait;
+
+  if (armed || (distance < near))
+    return MAGNIFY_FRAME_INTERVAL;
+
+  wait = (distance - near) / MAGNIFY_POINTER_SPEED;
+
+  if (wait < MAGNIFY_FRAME_INTERVAL)
+    return MAGNIFY_FRAME_INTERVAL;
+  if (wait > MAGNIFY_IDLE_INTERVAL)
+    return MAGNIFY_IDLE_INTERVAL;
+
+  return wait;
+}
+
 typedef enum DockStyle
 {   
   DockStyleClassic = 0,

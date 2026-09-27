@@ -60,13 +60,9 @@
  * and to go back down once it has left. */
 #define MAGNIFY_DURATION 0.2
 
-/* The pointer is looked at every frame while it is anywhere near the Dock.
- * Further away it is looked at just often enough to catch it coming: the
- * time it would need to cross what is left of the distance, at a speed no
- * pointer is pushed past, and never less often than the idle interval. */
-#define MAGNIFY_FRAME_INTERVAL (1.0 / 60.0)
-#define MAGNIFY_IDLE_INTERVAL 0.25
-#define MAGNIFY_POINTER_SPEED 4000.0
+/* MAGNIFY_FRAME_INTERVAL, MAGNIFY_IDLE_INTERVAL, MAGNIFY_POINTER_SPEED and
+ * DockMagnifyPollInterval() live in Dock.h: Foundation-only, so the polling
+ * rule can be proven headless in Tests/Dock without building a Dock. */
 
 /* Returns GSScaleFactor for scaling dock cell frames. Factors below 1.0 are
  * honored (UI is scaled down); an unset or non-positive value means 1.0. */
@@ -1391,23 +1387,14 @@ static inline CGFloat _dockScaleFactor(void)
   return largeIconSize;
 }
 
-/* How long the Dock can wait before looking at the pointer again. */
+/* How long the Dock can wait before looking at the pointer again: the pure
+ * rule lives in Dock.h as DockMagnifyPollInterval() so it can be tested
+ * without a Dock; this just supplies the one piece of state the rule needs
+ * that is not already a parameter. */
 - (NSTimeInterval)magnifyIntervalForDistance:(CGFloat)distance
                                         near:(CGFloat)near
 {
-  NSTimeInterval wait;
-
-  if (magnifyArmed || (distance < near))
-    return MAGNIFY_FRAME_INTERVAL;
-
-  wait = (distance - near) / MAGNIFY_POINTER_SPEED;
-
-  if (wait < MAGNIFY_FRAME_INTERVAL)
-    return MAGNIFY_FRAME_INTERVAL;
-  if (wait > MAGNIFY_IDLE_INTERVAL)
-    return MAGNIFY_IDLE_INTERVAL;
-
-  return wait;
+  return DockMagnifyPollInterval(distance, near, magnifyArmed);
 }
 
 - (void)setMagnifyInterval:(NSTimeInterval)interval
