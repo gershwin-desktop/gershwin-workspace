@@ -79,10 +79,11 @@
       NSZoneFree (NSDefaultMallocZone(), grid);
     }
   RELEASE (dragIcon);
-  RELEASE (focusedIconLabel);  
+  RELEASE (focusedIconLabel);
   RELEASE (backColor);
   RELEASE (textColor);
   RELEASE (disabledTextColor);
+  RELEASE (labelFont);
 
   [super dealloc];
 }
