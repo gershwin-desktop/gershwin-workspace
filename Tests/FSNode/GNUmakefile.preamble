@@ -83,3 +83,14 @@ t_FSNSubpath_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                            ../../FSNode/FSNodeRepIcons.m \
                            ../../FSNode/FSNode.m
 t_FSNSubpath_TOOL_LIBS += -lgnustep-gui
+
+# t_FSNTextCellLabelLookup includes FSNTextCell.m directly (private ivars);
+# it drives FSNodeRep sharedInstance too, so the same collaborators as
+# t_FSNDirectorySnapshot are linked in as separate objects.
+t_FSNTextCellLabelLookup_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
+                                       ../../FSNode/FSNFunctions.m \
+                                       ../../FSNode/FSNAlias.m \
+                                       ../../FSNode/FSNodeRep.m \
+                                       ../../FSNode/FSNodeRepIcons.m \
+                                       ../../FSNode/FSNode.m
+t_FSNTextCellLabelLookup_TOOL_LIBS += -lgnustep-gui
