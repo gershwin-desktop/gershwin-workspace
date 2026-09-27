@@ -1,0 +1,12 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+
+# fswatcher-inotify.m imports DBKPathsTree.h and calls its plain C
+# functions (newTreeWithIdentifier, freeTree, ...); link the built library
+# rather than the sources, matching Tools/fswatcher/GNUmakefile.preamble.
+# It also does #include "config.h": the only config.h the build generates
+# is Workspace/config.h (configure.ac's sole AC_CONFIG_HEADER), which is
+# why Tools/fswatcher/GNUmakefile.preamble itself adds -I../../Workspace.
+ADDITIONAL_INCLUDE_DIRS += -I../../DBKit -I../../Workspace
+ADDITIONAL_LIB_DIRS += -L../../DBKit/$(GNUSTEP_OBJ_DIR)
+
+t_FSWatcherInotifyWatchLifecycle_TOOL_LIBS += -lDBKit
