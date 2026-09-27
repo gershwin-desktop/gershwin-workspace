@@ -44,6 +44,7 @@
 #import "../Network/NetworkVolumeManager.h"
 #import "Thumbnailer/GWThumbnailer.h"
 #import "X11AppSupport.h"
+#import "../QuickLook/GWQuickLookController.h"
 
 #define DEF_ICN_SIZE 48
 #define DEF_TEXT_SIZE 12
@@ -1331,9 +1332,14 @@ static CGFloat desktopScaleFactor(void)
 	{
 	  if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
 	    {
-	      [NSApp sendAction: @selector(showAttributesInspector:)
-			     to: nil
-			   from: self];
+	      /* Same Quick Look toggle a folder window's Space bar uses (see
+	       * GWViewerWindow -performKeyEquivalent:); -selectedNodes is
+	       * empty with nothing selected (no base-node fallback the way a
+	       * folder viewer's lastSelection has), so "no selection does
+	       * nothing" already falls out of the controller's own rule. */
+	      [[GWQuickLookController sharedController]
+		  toggleQuickLookForSelection: [self selectedNodes]
+				 sourceWindow: [self window]];
 	    }
 	  return;
 	}
