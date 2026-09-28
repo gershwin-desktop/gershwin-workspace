@@ -219,6 +219,16 @@
    selection) is left out rather than reported with a zero rect. */
 - (NSArray *)flightSourcesForSelectedReps;
 
+/* The same sources for an arbitrary set of paths instead of the selection -
+   what an external caller that was handed paths (Workspace
+   -trashExternalPaths:) needs.  Every loaded column is searched, since one
+   browser shows many folders at once; cells that are not on screen are left
+   out. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths;
+
+/* The implementation both of the above share: one NSDictionary per cell. */
+- (NSArray *)flightSourcesForCells:(NSArray *)reps;
+
 - (void)selectionDidChange;
 - (void)checkLockedReps;
 - (void)setSelectionMask:(FSNSelectionMask)mask;

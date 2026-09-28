@@ -2199,7 +2199,42 @@
    nothing is selected. */
 - (NSArray *)flightSourcesForSelectedReps
 {
-  NSArray *reps = [self selectedReps];
+  return [self flightSourcesForCells: [self selectedReps]];
+}
+
+/* An external caller asking for a flight is given paths, not a selection in
+   the key window (Workspace -trashExternalPaths:), so the same sources have
+   to be resolvable for an arbitrary set of cells.  Unlike an icon or list
+   view, one browser shows many folders at once, so every loaded column is
+   searched - a cell that is scrolled out of view or below the clip has no
+   screen rect and is left out below, exactly as one whose cell cannot be
+   resolved is. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths
+{
+  NSMutableArray *matched = [NSMutableArray arrayWithCapacity: [paths count]];
+  NSUInteger i, j;
+
+  if (paths == nil)
+    return matched;
+
+  for (i = 0; i < [columns count]; i++)
+    {
+      NSArray *cells = [[[columns objectAtIndex: i] cmatrix] cells];
+
+      for (j = 0; j < [cells count]; j++)
+        {
+          NSString *path = [[[cells objectAtIndex: j] node] path];
+
+          if (path != nil && [paths containsObject: path])
+            [matched addObject: [cells objectAtIndex: j]];
+        }
+    }
+
+  return [self flightSourcesForCells: matched];
+}
+
+- (NSArray *)flightSourcesForCells:(NSArray *)reps
+{
   NSMutableArray *sources = [NSMutableArray arrayWithCapacity: [reps count]];
   NSUInteger i;
 

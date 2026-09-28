@@ -329,6 +329,15 @@
    zero rect. */
 - (NSArray *)flightSourcesForSelectedReps;
 
+/* The same sources for an arbitrary set of paths instead of the selection -
+   what an external caller that was handed paths (Workspace
+   -trashExternalPaths:) needs.  Only items this view is currently showing
+   are returned; the rest have nothing on screen to fly from. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths;
+
+/* The implementation both of the above share: one NSDictionary per rep. */
+- (NSArray *)flightSourcesForReps:(NSArray *)reps;
+
 /* Hides (or shows again) one rep's icon for the duration of a
    GWTrashFlight.  The selected item's name is drawn by a single shared
    label kept over whichever icon is selected (-updateNameEditor, editIcon),

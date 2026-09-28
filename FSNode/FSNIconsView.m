@@ -3367,7 +3367,38 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
    rect on screen. */
 - (NSArray *)flightSourcesForSelectedReps
 {
-  NSArray *reps = [self selectedReps];
+  return [self flightSourcesForReps: [self selectedReps]];
+}
+
+/* An external caller asking for a flight is given paths, not a selection in
+   the key window (Workspace -trashExternalPaths:), so the same sources have
+   to be resolvable for an arbitrary set of items.  Only the icons this view
+   is actually showing can fly: an item whose folder is not on screen here
+   has no rect to fly from, and is simply left out, exactly as an icon whose
+   window cannot be resolved is left out above. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths
+{
+  NSArray *reps = [self reps];
+  NSMutableArray *matched = [NSMutableArray arrayWithCapacity: [paths count]];
+  NSUInteger i;
+
+  if (paths == nil)
+    return matched;
+
+  for (i = 0; i < [reps count]; i++)
+    {
+      FSNIcon *icon = [reps objectAtIndex: i];
+      NSString *path = [[icon node] path];
+
+      if (path != nil && [paths containsObject: path])
+        [matched addObject: icon];
+    }
+
+  return [self flightSourcesForReps: matched];
+}
+
+- (NSArray *)flightSourcesForReps:(NSArray *)reps
+{
   NSMutableArray *sources = [NSMutableArray arrayWithCapacity: [reps count]];
   NSUInteger i;
 

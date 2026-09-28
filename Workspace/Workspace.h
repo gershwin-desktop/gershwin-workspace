@@ -476,7 +476,26 @@
 
 @interface Workspace (SharedInspector)
 
+/* The two entry points other Gershwin processes use over Distributed
+ * Objects, declared in GWMetadata/MDFinder/MDFinder.h as
+ * @protocol WorkspaceAppProtocol (which stays the protocol a client sets on
+ * its proxy).  Both are oneway: a caller must never wait on Workspace. */
 - (oneway void)showExternalSelection:(NSArray *)selection;
+
+/* Moves the given absolute paths to the Trash, the same way the "Move to
+ * Trash" menu action does (same Trash, same fly-to-Trash animation), without
+ * needing the paths to share a parent directory.  Each folder is first put on
+ * screen with its items selected - opening a viewer when none is open,
+ * deminiaturizing and raising the existing one when it is - so the animation
+ * is played from where the user can see it; items already showing on the
+ * desktop are trashed from there instead.  Pass alreadyConfirmed:YES when the
+ * caller has already asked the user, so the operation does not put a second
+ * panel on top of that dialog; alreadyConfirmed:NO (the default for anything
+ * remote) lets it ask.  org.freedesktop.FileManager1 specifies no trash
+ * method, so this is Workspace's own extension, not part of any standard
+ * interface. */
+- (oneway void)trashExternalPaths:(NSArray *)paths
+                 alreadyConfirmed:(BOOL)alreadyConfirmed;
 
 @end
 
@@ -488,6 +507,16 @@
                  destination:(NSString *)destination 
                        files:(NSArray *)files 
                          tag:(NSInteger *)tag;
+
+/* The same operation with the confirmation suppressed, for a caller that has
+ * already asked the user itself (AppDataTrash, and the Distributed Objects
+ * trash call) so the operation does not put a second panel on top. */
+- (BOOL)performFileOperation:(NSString *)operation 
+                      source:(NSString *)source 
+                 destination:(NSString *)destination 
+                       files:(NSArray *)files 
+                         tag:(NSInteger *)tag
+                  confirmed:(BOOL)alreadyConfirmed;
 
 - (BOOL)selectFile:(NSString *)fullPath
 							inFileViewerRootedAtPath:(NSString *)rootFullpath;

@@ -61,6 +61,26 @@
                        files:(NSArray *)files 
                          tag:(NSInteger *)tag
 {
+  return [self performFileOperation: operation
+                             source: source
+                        destination: destination
+                              files: files
+                                tag: tag
+                         confirmed: NO];
+}
+
+/* `confirmed` is YES when the user was already asked about this exact
+ * operation by whoever asked for it (AppGarden's "Remove %@?" over the
+ * Distributed Objects trash call), so the operation must not put its own
+ * panel on top of that one - the same override AppDataTrash uses a few
+ * lines below for the dialog it shows itself. */
+- (BOOL)performFileOperation:(NSString *)operation 
+                      source:(NSString *)source 
+                 destination:(NSString *)destination 
+                       files:(NSArray *)files 
+                         tag:(NSInteger *)tag
+                  confirmed:(BOOL)confirmed
+{
       NSMutableDictionary *opdict = [NSMutableDictionary dictionary];
 
       if (operation != nil)
@@ -82,6 +102,11 @@
 
       if (files != nil)
 	[opdict setObject: files forKey: @"files"];
+
+      if (confirmed)
+        {
+          [opdict setObject: [NSNumber numberWithBool: NO] forKey: @"confirm"];
+        }
 
       /* When trashing application bundles, offer (once) to also move their
        * related user data to the Trash.  This runs in the single choke point

@@ -34,6 +34,18 @@
 
 - (oneway void)showExternalSelection:(NSArray *)selection;
 
+/* Moves the given absolute paths to the Trash, exactly as Workspace's
+   "Move to Trash" menu action does - same Trash, and the same fly-to-Trash
+   animation, which each folder is first put on screen for (opened, or
+   deminiaturized and raised, with its items selected) unless the items are
+   already showing on the desktop.  Paths need not share a parent directory.
+   Pass alreadyConfirmed:YES when the caller has already asked the user, so
+   that no second panel appears on top of that dialog.  There is no
+   freedesktop equivalent: org.freedesktop.FileManager1 has no trash method,
+   so this is Workspace's own extension. */
+- (oneway void)trashExternalPaths:(NSArray *)paths
+                 alreadyConfirmed:(BOOL)alreadyConfirmed;
+
 @end
 
 

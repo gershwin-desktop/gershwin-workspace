@@ -228,6 +228,15 @@
    zero rect. */
 - (NSArray *)flightSourcesForSelectedReps;
 
+/* The same sources for an arbitrary set of paths instead of the selection -
+   what an external caller that was handed paths (Workspace
+   -trashExternalPaths:) needs.  Only rows this list is currently showing
+   are returned. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths;
+
+/* The implementation both of the above share: one NSDictionary per rep. */
+- (NSArray *)flightSourcesForReps:(NSArray *)reps;
+
 @end
 
 
@@ -417,6 +426,10 @@
 /* Forwards to the data source's own -flightSourcesForSelectedReps (see
    FSNListViewDataSource (NodeRepContainer) above). */
 - (NSArray *)flightSourcesForSelectedReps;
+
+/* Forwards to the data source's own -flightSourcesForPaths: (see
+   FSNListViewDataSource (NodeRepContainer) above). */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths;
 
 @end
 

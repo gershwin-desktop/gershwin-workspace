@@ -1580,7 +1580,35 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
    flies rather than the full-width row. */
 - (NSArray *)flightSourcesForSelectedReps
 {
-  NSArray *reps = [self selectedReps];
+  return [self flightSourcesForReps: [self selectedReps]];
+}
+
+/* An external caller asking for a flight is given paths, not a selection in
+   the key window (Workspace -trashExternalPaths:), so the same sources have
+   to be resolvable for an arbitrary set of rows.  Only rows this list is
+   actually showing can fly: an item in another folder has no rect here. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths
+{
+  NSMutableArray *matched = [NSMutableArray arrayWithCapacity: [paths count]];
+  NSUInteger i;
+
+  if (paths == nil)
+    return matched;
+
+  for (i = 0; i < [nodeReps count]; i++)
+    {
+      FSNListViewNodeRep *rep = [nodeReps objectAtIndex: i];
+      NSString *path = [[rep node] path];
+
+      if (path != nil && [paths containsObject: path])
+        [matched addObject: rep];
+    }
+
+  return [self flightSourcesForReps: matched];
+}
+
+- (NSArray *)flightSourcesForReps:(NSArray *)reps
+{
   NSMutableArray *sources = [NSMutableArray arrayWithCapacity: [reps count]];
   NSWindow *win = [listView window];
   NSTableColumn *nameColumn = [listView tableColumnWithIdentifier:
@@ -3388,6 +3416,11 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
 - (NSArray *)flightSourcesForSelectedReps
 {
   return [dsource flightSourcesForSelectedReps];
+}
+
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths
+{
+  return [dsource flightSourcesForPaths: paths];
 }
 
 - (void)selectionDidChange

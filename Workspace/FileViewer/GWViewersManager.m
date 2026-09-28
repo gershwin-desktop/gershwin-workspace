@@ -1163,6 +1163,11 @@ static GWViewersManager *vwrsmanager = nil;
   return wins;
 }
 
+- (NSArray *)allViewers
+{
+  return [NSArray arrayWithArray: viewers];
+}
+
 - (BOOL)orderingViewers
 {
   return orderingViewers;
