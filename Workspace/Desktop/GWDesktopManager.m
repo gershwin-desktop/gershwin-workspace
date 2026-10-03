@@ -47,10 +47,12 @@
 #include <math.h>
 #include <unistd.h>
 #include <fcntl.h>
+#ifndef _WIN32
 #include <poll.h>
+#endif
 #include <errno.h>
 #include <string.h>
-#if !defined(__linux__) && !defined(__OpenBSD__)
+#if !defined(__linux__) && !defined(__OpenBSD__) && !defined(_WIN32)
 #include <sys/types.h>
 #include <sys/event.h>
 #endif
@@ -1130,7 +1132,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 @end
 
 
-#if !defined(__OpenBSD__)
+#if !defined(__OpenBSD__) && !defined(_WIN32)
 @interface MPointWatcher (GWMountWatcherThread)
 - (void)startWatcherThreadIfNeeded;
 - (void)stopWatcherThread;
@@ -1146,7 +1148,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
 - (void)dealloc
 {
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(_WIN32)
   if (timer && [timer isValid])
     {
       [timer invalidate];
@@ -1172,7 +1174,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       fm = [NSFileManager defaultManager];
       watchedMountRoots = [[NSMutableSet alloc] init];
 
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(_WIN32)
       /* No mount-change event exists here (no /proc, no EVFILT_FS): fall
        * back to a timer, but at 5s instead of the 1.5s this fix removes
        * everywhere else - reacting within 5s to a plugged-in drive is
@@ -1229,7 +1231,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   mountedRemovableVolumes = [[self effectiveDesktopVolumes] retain];
   active = YES;
 
-#if !defined(__OpenBSD__)
+#if !defined(__OpenBSD__) && !defined(_WIN32)
   [self startWatcherThreadIfNeeded];
 #endif
 }
@@ -1246,7 +1248,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   [mountedRemovableVolumes release];
   mountedRemovableVolumes = nil;
 
-#if !defined(__OpenBSD__)
+#if !defined(__OpenBSD__) && !defined(_WIN32)
   [self stopWatcherThread];
 #endif
 }
@@ -1278,7 +1280,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   mountedRemovableVolumes = [newVolumes retain];
 }
 
-#if !defined(__OpenBSD__)
+#if !defined(__OpenBSD__) && !defined(_WIN32)
 
 - (void)startWatcherThreadIfNeeded
 {
@@ -1437,7 +1439,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   [pool release];
 }
 
-#endif /* !__OpenBSD__ */
+#endif /* !__OpenBSD__ && !_WIN32 */
 
 - (BOOL)isWatchingPath:(NSString *)path
 {
