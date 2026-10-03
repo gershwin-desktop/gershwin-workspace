@@ -89,6 +89,8 @@ GWMetadataProvider.m \
 GWIconPositionStore.m \
 GWExtensionsManager.m \
 GWAlignLogically.m \
+GWTrashFlightPath.m \
+GWTrashFlight.m \
 Workspace.m \
 AppDataTrash.m \
 Workspace+UITesting.m \
@@ -103,6 +105,7 @@ WorkspaceApplication.m \
 GWApplicationLauncher.m \
 GSGlobalShortcutsManager.m \
 Desktop/GWDesktopManager.m \
+Desktop/GWMountWatchState.m \
 Desktop/GWDesktopWindow.m \
 Desktop/GWDesktopView.m \
 Desktop/GWDesktopIcon.m \
@@ -135,8 +138,12 @@ FileViewer/GWVolumeCache.m \
 FileViewer/GWViewSettingsManager.m \
 FileViewer/GWViewerPrefs.m \
 FileViewer/GWSpatialIconsView.m \
+QuickLook/GWQuickLookGeometry.m \
+QuickLook/GWQuickLookController.m \
+QuickLook/GWQuickLookPanel.m \
 ../GWMetadata/GWMetaArchive.m \
 Finder/Finder.m \
+Finder/GWChangePaths.m \
 Finder/FindModuleView.m \
 Finder/SearchPlacesBox.m \
 Finder/SearchPlacesCell.m \

@@ -195,13 +195,25 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
    * background thread; each iteration we advance the modal session, then run
    * the default run-loop mode briefly so the completion posts to the main
    * thread can fire, and poll the flag for completion. */
+  /* Cancel must end this loop right away rather than waiting for the
+   * archive worker to notice - the worker has no per-item hook into
+   * GWMetaArchive, so it keeps running in the background, but the user
+   * gets their UI back immediately instead of staring at a frozen panel. */
   NSModalSession session = [NSApp beginModalSessionForWindow: progressWindow];
-  while (!done)
+  while (!done && !cancelled)
     {
+      /* Each iteration was autoreleasing the NSDate below into the pool
+       * that surrounds the whole operation, thirty times a second for
+       * however long the archive takes - drain it every iteration instead. */
+      NSAutoreleasePool *iterPool = [[NSAutoreleasePool alloc] init];
       if ([NSApp runModalSession: session] != NSRunContinuesResponse)
-        break;
+        {
+          [iterPool release];
+          break;
+        }
       [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
                                beforeDate: [NSDate dateWithTimeIntervalSinceNow: 0.03]];
+      [iterPool release];
     }
   [NSApp endModalSession: session];
 
@@ -246,10 +258,17 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
 {
   NSFileManager *fm = [NSFileManager defaultManager];
 
-  /* Count total items */
+  /* Count total items. GWMetaArchive itself has no per-item cancellation
+   * hook, so this loop over the top-level paths is the only checkpoint
+   * available before the (uninterruptible) archive call below - stop
+   * after the current item rather than counting the whole tree. */
   NSUInteger totalItems = 0;
   for (NSString *p in paths)
-    count_items(p, &totalItems, fm);
+    {
+      if (cancelled)
+        return NO;
+      count_items(p, &totalItems, fm);
+    }
 
   if (totalItems == 0)
     {
@@ -258,6 +277,9 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
                                     userInfo: @{NSLocalizedDescriptionKey: @"No files to compress"}]);
       return NO;
     }
+
+  if (cancelled)
+    return NO;
 
   [self performSelectorOnMainThread: @selector(beginCompressProgress:)
                          withObject: [NSNumber numberWithLongLong: totalItems]
@@ -300,6 +322,11 @@ count_items(NSString *path, NSUInteger *total, NSFileManager *fm)
 - (BOOL)runExtract
 {
   NSString *archivePath = [paths objectAtIndex: 0];
+
+  /* Extraction is a single archive of one path, so the only checkpoint
+   * before the (uninterruptible) archive call is right before it starts. */
+  if (cancelled)
+    return NO;
 
   [self performSelectorOnMainThread: @selector(beginExtractProgress)
                          withObject: nil

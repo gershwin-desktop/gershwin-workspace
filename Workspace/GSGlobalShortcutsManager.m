@@ -135,7 +135,8 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         verbose = NO;
         lastDefaultsModTime = 0;
         defaultsDomain = @"GlobalShortcuts";
-        eventProcessingTimer = nil;
+        xEventQueueFd = -1;
+        runLoopSourceAdded = NO;
 
         // Close window shortcut (Alt+W) - initialized when display is ready
         closeWindowKeyCode = 0;
@@ -210,10 +211,15 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
 {
     if (running) {
         running = NO;
-        
-        if (eventProcessingTimer) {
-            [eventProcessingTimer invalidate];
-            DESTROY(eventProcessingTimer);
+
+        if (runLoopSourceAdded) {
+            // Must happen before XCloseDisplay: the fd it watches is about
+            // to become invalid.
+            [[NSRunLoop currentRunLoop] removeEvent: (void*)(intptr_t)xEventQueueFd
+                                                type: ET_RDESC
+                                             forMode: NSDefaultRunLoopMode
+                                                 all: YES];
+            runLoopSourceAdded = NO;
         }
 
         [self ungrabKeys];
@@ -309,9 +315,11 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         // Restore protected Alt-Space if it existed
         if (protectedKey && protectedShortcut) {
             [shortcuts setObject:protectedShortcut forKey:protectedKey];
-            if (verbose) [protectedKey release];
-            [protectedShortcut release];
         }
+        /* The dictionary retained them; the retains above are balanced
+         * whether or not the shortcut had to be put back. */
+        [protectedKey release];
+        [protectedShortcut release];
 
         lastDefaultsModTime = time(NULL);
         [defaults release];
@@ -348,9 +356,11 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     // Re-add protected Alt-Space if it existed and isn't in the newly loaded config
     if (protectedKey && protectedShortcut && ![shortcuts objectForKey:protectedKey]) {
         [shortcuts setObject:protectedShortcut forKey:protectedKey];
-        if (verbose) [protectedKey release];
-        [protectedShortcut release];
     }
+    /* The dictionary retained them; the retains above are balanced
+     * whether or not the shortcut had to be put back. */
+    [protectedKey release];
+    [protectedShortcut release];
 
     lastDefaultsModTime = time(NULL);
     
@@ -375,6 +385,13 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     // at the X11 level before the window manager can intercept it.
     [self grabCloseWindowShortcut];
 
+    // XGrabKey only queues the request in Xlib's output buffer. The old
+    // 20 Hz timer flushed it as a side effect of calling XPending() on
+    // every tick; now that this connection is only woken by incoming
+    // data, nothing else would ever send these bytes to the server, so
+    // the grab would silently never take effect.
+    XFlush(display);
+
     return (successCount > 0);
 }
 
@@ -395,6 +412,11 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         }
         [self ungrabKeyCombo:keyCombo];
     }
+
+    // See the matching comment in -grabKeys: nothing polls this
+    // connection anymore, so an ungrab queued here needs an explicit
+    // flush to actually reach the server.
+    XFlush(display);
 }
 
 - (BOOL)grabKeyCombo:(NSString *)keyCombo
@@ -529,15 +551,33 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
 
 - (BOOL)setupEventProcessing
 {
-    // Create a timer that periodically processes X11 events
-    // This integrates with the NSApplication event loop
-    eventProcessingTimer = [[NSTimer scheduledTimerWithTimeInterval:0.05
-                                                             target:self
-                                                           selector:@selector(processX11Events)
-                                                           userInfo:nil
-                                                            repeats:YES] retain];
-    
+    // A fixed-interval timer polled XPending() ~20 times/sec forever, even
+    // with no shortcuts registered. Watching the connection's own fd lets
+    // the run loop block until the X server actually has something for us
+    // (same pattern libs-back's XGServerEvent uses for the main connection).
+    xEventQueueFd = XConnectionNumber(display);
+    [[NSRunLoop currentRunLoop] addEvent: (void*)(intptr_t)xEventQueueFd
+                                    type: ET_RDESC
+                                 watcher: (id<RunLoopEvents>)self
+                                 forMode: NSDefaultRunLoopMode];
+    runLoopSourceAdded = YES;
+
     return YES;
+}
+
+// Deliberately no -runLoopShouldBlock: override (unlike XGServerEvent's main
+// connection): that hook is polled every run loop pass regardless of this
+// fd's own state, so implementing it here would call XPending() at whatever
+// rate the app's OTHER timers drive the loop, reintroducing the very
+// polling floor this fix removes. -receivedEvent: below drains fully
+// (while XPending() > 0), so nothing is lost by waiting for the kernel to
+// report the fd readable instead of asking Xlib ourselves every pass.
+- (void)receivedEvent:(void*)data
+                  type:(RunLoopEventType)type
+                 extra:(void*)extra
+               forMode:(NSString*)mode
+{
+    [self processX11Events];
 }
 
 - (void)processX11Events
@@ -718,9 +758,11 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
     // Re-add the preserved Alt-Space shortcut if we found one
     if (protectedKey && protectedShortcut) {
         [shortcuts setObject:protectedShortcut forKey:protectedKey];
-        if (verbose) [protectedKey release];
-        [protectedShortcut release];
     }
+    /* The dictionary retained them; the retains above are balanced
+     * whether or not the shortcut had to be put back. */
+    [protectedKey release];
+    [protectedShortcut release];
     
     // Process the new shortcuts data
     for (NSDictionary *shortcutDict in shortcutsArray) {
@@ -770,10 +812,12 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         NSEnumerator *keyEnum = [shortcuts keyEnumerator];
         NSString *keyCombo;
         while ((keyCombo = [keyEnum nextObject])) {
-            NSString *oldCommand = [shortcuts objectForKey:keyCombo];
+            /* Loaded shortcuts are dictionaries; the defaults domain maps
+             * the key combination straight to the command string. */
+            NSString *oldCommand = [[shortcuts objectForKey:keyCombo] objectForKey:@"command"];
             NSString *newCommand = [newConfig objectForKey:keyCombo];
             
-            if (!newCommand || ![oldCommand isEqualToString:newCommand]) {
+            if (![newCommand isKindOfClass:[NSString class]] || ![oldCommand isEqualToString:newCommand]) {
                 needsReload = YES;
                 break;
             }
@@ -827,6 +871,10 @@ static BOOL isAltSpaceCombo(NSString *keyCombo)
         }
         [self ungrabKeyCombo:keyCombo];
     }
+
+    // See the matching comment in -grabKeys: this connection is no longer
+    // polled, so a queued ungrab needs an explicit flush to reach the server.
+    XFlush(display);
 
     if (verbose) {
     }

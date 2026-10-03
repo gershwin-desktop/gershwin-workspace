@@ -72,6 +72,9 @@
   NSSize columnSize;
   NSInteger fontSize;
   BOOL simulatingDoubleClick;
+  /* Times out the simulated double-click above; invalidated in -dealloc so
+   * a closed browser cannot have it fire into a freed instance. */
+  NSTimer *doubleClickTimer;
   float mousePointX;
   float mousePointY;
   
@@ -207,6 +210,25 @@
 - (NSArray *)selectedReps;
 - (NSArray *)selectedNodes;
 - (NSArray *)selectedPaths;
+
+/* One NSDictionary per selected cell, each with @"path" (NSString),
+   @"rect" (NSValue-wrapped NSRect, from -screenRectForCell:) and @"image"
+   (NSImage, the cell's own icon) - used to fly the selection to the Trash
+   the way a drag there would look (Workspace -moveToTrash).  A cell that
+   cannot be resolved to a screen rect (unusual during any normal
+   selection) is left out rather than reported with a zero rect. */
+- (NSArray *)flightSourcesForSelectedReps;
+
+/* The same sources for an arbitrary set of paths instead of the selection -
+   what an external caller that was handed paths (Workspace
+   -trashExternalPaths:) needs.  Every loaded column is searched, since one
+   browser shows many folders at once; cells that are not on screen are left
+   out. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths;
+
+/* The implementation both of the above share: one NSDictionary per cell. */
+- (NSArray *)flightSourcesForCells:(NSArray *)reps;
+
 - (void)selectionDidChange;
 - (void)checkLockedReps;
 - (void)setSelectionMask:(FSNSelectionMask)mask;

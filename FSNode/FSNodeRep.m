@@ -107,7 +107,7 @@ static FSNodeRep *shared = nil;
   multipleSelIcon = [[NSImage imageNamed:NSImageNameMultipleDocuments] retain];
   [trashIcon release];
   trashIcon = [[NSImage imageNamed:NSImageNameTrashEmpty] retain];
-  [trashFullIcon retain];
+  [trashFullIcon release];
   trashFullIcon = [[NSImage imageNamed:NSImageNameTrashFull] retain];
 }
 
@@ -413,8 +413,10 @@ static FSNodeRep *shared = nil;
             }
 #endif
 
-          [entries addObject: [[FSNDirEntry alloc] initWithName: fname
-                                                            kind: kind]];
+          FSNDirEntry *dirEntry = [[FSNDirEntry alloc] initWithName: fname
+                                                                kind: kind];
+          [entries addObject: dirEntry];
+          [dirEntry release];
         }
 
       [fname release];

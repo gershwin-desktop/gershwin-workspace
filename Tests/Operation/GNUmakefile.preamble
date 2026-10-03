@@ -1,0 +1,17 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+
+ADDITIONAL_OBJCFLAGS += -Wno-deprecated
+ADDITIONAL_INCLUDE_DIRS += -I../../Operation -I../../FSNode
+
+# FileOpInfo.m pulls in most of AppKit (nib loading, IBOutlets, NSWorkspace
+# operation constants) plus FSNAlias (from the FSNode framework, used by
+# FileOpExecutor's alias path) and Functions.m (relativePathFittingInField,
+# referenced - even though not called on this test's path - by symbol, so it
+# must link).  Link the built FSNode framework by path so the tool exercises
+# what was just built, not the installed copy.
+t_FileOpInfoRemoveProcessedFiles_OBJC_FILES += ../../Operation/FileOpInfo.m \
+                                               ../../Operation/Functions.m
+t_FileOpInfoRemoveProcessedFiles_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                              -lFSNode -lgnustep-gui -ldispatch
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
+                      -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current

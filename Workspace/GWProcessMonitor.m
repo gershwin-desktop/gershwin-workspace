@@ -497,6 +497,10 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
     return;
 
 #if HAVE_PIDFD || HAVE_KQUEUE
+  /* An entry whose kernel handle could not be opened (an old kernel, a
+   * process gone before we looked) is only ever noticed by the kill()
+   * probe below, so the wait must not block forever while one exists. */
+  BOOL needProbe = NO;
   {
     struct pollfd pfds[GW_PMON_MAX_PIDS + 1];
     nfds_t npfd = 0;
@@ -509,6 +513,10 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
             pfds[npfd].events = POLLIN;
             pfds[npfd].revents = 0;
             npfd++;
+          }
+        else
+          {
+            needProbe = YES;
           }
       }
 
@@ -523,7 +531,7 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
 
     if (npfd > 0)
       {
-        int ret = poll(pfds, npfd, -1);
+        int ret = poll(pfds, npfd, needProbe ? 500 : -1);
 
         if (_running == NO) return;
 
@@ -594,7 +602,8 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
               }
           }
 
-        return;
+        if (!needProbe)
+          return;
       }
   }
 #endif /* HAVE_PIDFD || HAVE_KQUEUE */
@@ -602,6 +611,10 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
   /* ---- Fallback: periodic kill() polling ---- */
   for (NSUInteger i = 0; i < count; i++)
     {
+#if HAVE_PIDFD || HAVE_KQUEUE
+      if (fds[i] >= 0)
+        continue;
+#endif
       int result = kill(pids[i], 0);
       if ((result != 0) && (errno != EPERM))
         {

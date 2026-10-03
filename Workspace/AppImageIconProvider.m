@@ -42,6 +42,17 @@
 #define APPIMAGE_EI_CLASS 4
 #define APPIMAGE_EI_DATA 5
 
+/* .DirIcon may itself be a symlink; a crafted or corrupt AppImage can make
+ * that chain point back on itself, and unbounded recursion here would
+ * overflow the stack just from listing the file. Bound the chase instead of
+ * trusting file-supplied paths to terminate. */
+#define APPIMAGE_MAX_SYMLINK_DEPTH 8
+
+/* Bounds how many per-path AppImage-probe verdicts stay cached across
+ * redraws; once full, the whole cache is dropped rather than tracked for
+ * recency, which no caller here needs. */
+#define APPIMAGE_VERIFY_CACHE_LIMIT 512
+
 typedef struct {
   sqfs_file_t base;
   int fd;
@@ -667,7 +678,8 @@ static NSString *AppImageSanitizeInnerPath(NSString *path)
 static NSData *AppImageReadFileDataFromInode(sqfs_data_reader_t *data_reader,
                                              sqfs_dir_reader_t *dir_reader,
                                              const sqfs_inode_generic_t *inode,
-                                             BOOL fragmentTableReady)
+                                             BOOL fragmentTableReady,
+                                             int depth)
 {
   sqfs_u64 size = 0;
 
@@ -687,6 +699,15 @@ static NSData *AppImageReadFileDataFromInode(sqfs_data_reader_t *data_reader,
     size = inode->data.file_ext.file_size;
   } else if (inode->base.type == SQFS_INODE_SLINK ||
              inode->base.type == SQFS_INODE_EXT_SLINK) {
+    /* A symlink chain that loops back on itself (directly, like .DirIcon
+     * pointing at .DirIcon, or through several hops) would otherwise recurse
+     * until the stack overflows; a corrupt or hostile AppImage can trigger
+     * this just by being listed, so fail cleanly instead of trusting the
+     * file to terminate. */
+    if (depth >= APPIMAGE_MAX_SYMLINK_DEPTH) {
+      return nil;
+    }
+
     sqfs_u32 target_size = (inode->base.type == SQFS_INODE_SLINK)
                            ? inode->data.slink.target_size
                            : inode->data.slink_ext.target_size;
@@ -704,7 +725,8 @@ static NSData *AppImageReadFileDataFromInode(sqfs_data_reader_t *data_reader,
           NSData *resolvedData = AppImageReadFileDataFromInode(data_reader,
                                                                dir_reader,
                                                                resolved,
-                                                               fragmentTableReady);
+                                                               fragmentTableReady,
+                                                               depth + 1);
           sqfs_free(resolved);
           free(target);
           return resolvedData;
@@ -943,7 +965,7 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
         fragmentTableReady = YES;
       }
     }
-    iconData = AppImageReadFileDataFromInode(data_reader, dir_reader, inode, fragmentTableReady);
+    iconData = AppImageReadFileDataFromInode(data_reader, dir_reader, inode, fragmentTableReady, 0);
     sqfs_free(inode);
     inode = NULL;
     if (iconData != nil) {
@@ -1022,6 +1044,108 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
   return NO;
 }
 
+/* Per-path AppImage-probe verdicts (mtime+size keyed so a replaced file is
+ * re-checked), so a file already ruled in or out is not re-probed on every
+ * redraw. Icon views ask the gate below on every drawRect - which fires on
+ * scroll, expose and refresh - and, before this cache, that meant an
+ * open+read+close magic-byte probe of every AppImage-named file in a folder
+ * on every single one of those redraws. */
+static NSMutableDictionary *appImageVerifyCache = nil;
+
+/* Counts real magic-byte probes performed by AppImageNodeIsAppImage (cache
+ * misses only) - a test-visible way to prove a file is probed once, not
+ * once per call. Not used by production logic. */
+static long appImageProbeCallCount = 0;
+
+static BOOL AppImageVerifyCacheLookup(NSString *realPath, BOOL *isAppImageOut)
+{
+  struct stat st;
+
+  if (appImageVerifyCache == nil
+      || stat([realPath fileSystemRepresentation], &st) != 0) {
+    return NO;
+  }
+
+  NSDictionary *record = [appImageVerifyCache objectForKey: realPath];
+  if (record == nil) {
+    return NO;
+  }
+
+  long long cachedMtime = [[record objectForKey: @"mtime"] longLongValue];
+  long long cachedSize = [[record objectForKey: @"size"] longLongValue];
+  if (cachedMtime != (long long)st.st_mtime || cachedSize != (long long)st.st_size) {
+    return NO;
+  }
+
+  *isAppImageOut = [[record objectForKey: @"isAppImage"] boolValue];
+  return YES;
+}
+
+static void AppImageVerifyCacheStore(NSString *realPath, BOOL isAppImage)
+{
+  struct stat st;
+
+  if (stat([realPath fileSystemRepresentation], &st) != 0) {
+    return;
+  }
+
+  if (appImageVerifyCache == nil) {
+    appImageVerifyCache = [[NSMutableDictionary alloc] init];
+  }
+
+  /* A long-lived file-manager session would otherwise grow this without
+   * bound; no caller here needs least-recently-used precision, so once full
+   * just start over. */
+  if ([appImageVerifyCache count] >= APPIMAGE_VERIFY_CACHE_LIMIT
+      && [appImageVerifyCache objectForKey: realPath] == nil) {
+    [appImageVerifyCache removeAllObjects];
+  }
+
+  NSDictionary *record = [NSDictionary dictionaryWithObjectsAndKeys:
+    [NSNumber numberWithLongLong: (long long)st.st_mtime], @"mtime",
+    [NSNumber numberWithLongLong: (long long)st.st_size], @"size",
+    [NSNumber numberWithBool: isAppImage], @"isAppImage", nil];
+  [appImageVerifyCache setObject: record forKey: realPath];
+}
+
+/* Decides whether node denotes an AppImage. A plain file whose own name does
+ * not end in .AppImage, and which is not a symlink (so there is no other
+ * name to consider), cannot be one - that is the overwhelming majority of
+ * files in any real folder, and this returns NO for them without resolving
+ * symlinks (an lstat per path component) or touching the filesystem again.
+ * Anything else is resolved and checked against the bounded cache above
+ * before ever falling through to the real magic-byte probe. On YES,
+ * *outRealPath (if non-NULL) receives the path to use for icon lookup -
+ * the resolved path for a symlink, the node's own path otherwise. */
+static BOOL AppImageNodeIsAppImage(FSNode *node, NSString **outRealPath)
+{
+  NSString *nodepath = [node path];
+  BOOL nodeIsLink = [node isLink];
+  BOOL nameLooksLikeAppImage = GWAppImagePathLooksLikeAppImage(nodepath);
+
+  if (!nameLooksLikeAppImage && !nodeIsLink) {
+    return NO;
+  }
+
+  NSString *realPath = nodeIsLink ? [nodepath stringByResolvingSymlinksInPath] : nodepath;
+
+  if (!nameLooksLikeAppImage && !GWAppImagePathLooksLikeAppImage(realPath)) {
+    return NO;
+  }
+
+  BOOL isAppImage = NO;
+  if (!AppImageVerifyCacheLookup(realPath, &isAppImage)) {
+    appImageProbeCallCount++;
+    isAppImage = AppImageHasType2Magic([realPath fileSystemRepresentation]);
+    AppImageVerifyCacheStore(realPath, isAppImage);
+  }
+
+  if (isAppImage && outRealPath != NULL) {
+    *outRealPath = realPath;
+  }
+  return isAppImage;
+}
+
 @interface NSWorkspace (GWAppImageIconProvider)
 + (void)gw_installAppImageIconProvider;
 - (NSImage *)gw_appImage_iconForFile: (NSString *)fullPath;
@@ -1088,27 +1212,19 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 - (void)gw_appImage_drawRect:(NSRect)rect
 {
   // Check if this is an AppImage and if we need to update the icon
-  if (node != nil && [node isDirectory] == NO) {
-    NSString *nodepath = [node path];
-    NSString *realPath = [nodepath stringByResolvingSymlinksInPath];
+  if (node != nil && [node isDirectory] == NO && AppImageNodeIsAppImage(node, NULL)) {
+    // Check if the proper icon is now available
+    FSNodeRep *fsnodeRepShared = [FSNodeRep sharedInstance];
+    NSImage *currentIcon = [fsnodeRepShared iconOfSize: iconSize forNode: node];
 
-    /* Cheap extension gate before the magic probe (see iconOfSize:forNode:). */
-    if ((GWAppImagePathLooksLikeAppImage(nodepath)
-         || GWAppImagePathLooksLikeAppImage(realPath))
-        && AppImageHasType2Magic([realPath fileSystemRepresentation])) {
-      // Check if the proper icon is now available
-      FSNodeRep *fsnodeRepShared = [FSNodeRep sharedInstance];
-      NSImage *currentIcon = [fsnodeRepShared iconOfSize: iconSize forNode: node];
-      
-      if (currentIcon != icon && [[currentIcon name] isEqualToString: @"AppImageGeneric"] == NO) {
-        // Icon has been updated, refresh our cached icon
-        ASSIGN (icon, currentIcon);
-        drawicon = icon;
-        DESTROY (selectedicon);  // Invalidate selected icon cache too
-        
-        // Recalculate icon positioning (icnPoint, icnBounds) for the new icon size
-        [self tile];
-      }
+    if (currentIcon != icon && [[currentIcon name] isEqualToString: @"AppImageGeneric"] == NO) {
+      // Icon has been updated, refresh our cached icon
+      ASSIGN (icon, currentIcon);
+      drawicon = icon;
+      DESTROY (selectedicon);  // Invalidate selected icon cache too
+
+      // Recalculate icon positioning (icnPoint, icnBounds) for the new icon size
+      [self tile];
     }
   }
 
@@ -1170,51 +1286,24 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
 
 - (NSImage *)gw_appImage_iconOfSize:(int)size forNode:(FSNode *)node
 {
-  if (node != nil && [node isDirectory] == NO) {
-    NSString *nodepath = [node path];
-    NSString *realPath = [nodepath stringByResolvingSymlinksInPath];
+  NSString *realPath = nil;
 
-    /* Cheap extension gate first: only files that look like AppImages get the
-     * magic-byte probe, which would otherwise stat/open every file in a
-     * listing.  Check the original name too, so a symlink whose target has
-     * another name is still recognized by the link's own name. */
-    if ((GWAppImagePathLooksLikeAppImage(nodepath)
-         || GWAppImagePathLooksLikeAppImage(realPath))
-        && AppImageHasType2Magic([realPath fileSystemRepresentation])) {
-      // Check if we have the proper icon cached
-      NSString *key = realPath;
-      NSMutableDictionary *iconDict = [iconsCache objectForKey: key];
-      
-      if (iconDict != nil) {
-        NSNumber *sizeKey = [NSNumber numberWithInt: 48];
-        NSImage *cachedIcon = [iconDict objectForKey: sizeKey];
-        if (cachedIcon != nil && ![[cachedIcon name] isEqualToString: @"AppImageGeneric"]) {
-          // Proper icon is cached
-          NSImage *icon = cachedIcon;
-          if ([node isLink]) {
-            NSImage *linkIcon = [NSImage imageNamed:@"common_linkCursor"];
-            icon = [icon copy];
-            [icon lockFocus];
-            [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
-            [icon unlockFocus];
-            [icon autorelease];
-          }
-          NSSize icnsize = [icon size];
-          if ((icnsize.width > size) || (icnsize.height > size)) {
-            return [self resizedIcon: icon ofSize: size];
-          }
-          return icon;
-        }
-      }
-      
-      // Check if we're already loading this AppImage
-      NSNumber *loading = [appImageLoadingState objectForKey: key];
-      if (loading != nil && [loading boolValue]) {
-        // Still loading, return generic icon
-        NSImage *icon = [NSImage imageNamed: @"UnknownTool"];
-        if (icon == nil) {
-          icon = [NSImage imageNamed: @"Unknown"];
-        }
+  /* AppImageNodeIsAppImage skips the lstat-heavy symlink resolution and the
+   * magic-byte probe for files that cannot possibly be AppImages, and
+   * consults the bounded probe cache before ever doing real I/O for the
+   * rest - see its definition above (iconOfSize:forNode: and drawRect: are
+   * called on every redraw of every icon). */
+  if (node != nil && [node isDirectory] == NO && AppImageNodeIsAppImage(node, &realPath)) {
+    // Check if we have the proper icon cached
+    NSString *key = realPath;
+    NSMutableDictionary *iconDict = [iconsCache objectForKey: key];
+
+    if (iconDict != nil) {
+      NSNumber *sizeKey = [NSNumber numberWithInt: 48];
+      NSImage *cachedIcon = [iconDict objectForKey: sizeKey];
+      if (cachedIcon != nil && ![[cachedIcon name] isEqualToString: @"AppImageGeneric"]) {
+        // Proper icon is cached
+        NSImage *icon = cachedIcon;
         if ([node isLink]) {
           NSImage *linkIcon = [NSImage imageNamed:@"common_linkCursor"];
           icon = [icon copy];
@@ -1229,22 +1318,12 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
         }
         return icon;
       }
-      
-      // Start loading
-      [appImageLoadingState setObject: [NSNumber numberWithBool: YES] forKey: key];
+    }
 
-      /* Async icon loading WITHOUT libdispatch: a GCD worker thread running
-       * ObjC (iconForFile: can load classes/bundles) races the main thread's
-       * +load dispatch and crashes the app (GPF in libobjc's
-       * load_messages_insert) - exactly what window_placement hit.  Use a
-       * GNUstep thread instead. */
-      NSDictionary *job = [NSDictionary dictionaryWithObjectsAndKeys:
-        realPath, @"path", key, @"key", nil];
-      [NSThread detachNewThreadSelector: @selector(gw_loadAppImageInBackgroundForPath:)
-                               toTarget: self
-                             withObject: job];
-
-      // Return generic icon while loading
+    // Check if we're already loading this AppImage
+    NSNumber *loading = [appImageLoadingState objectForKey: key];
+    if (loading != nil && [loading boolValue]) {
+      // Still loading, return generic icon
       NSImage *icon = [NSImage imageNamed: @"UnknownTool"];
       if (icon == nil) {
         icon = [NSImage imageNamed: @"Unknown"];
@@ -1263,6 +1342,39 @@ static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
       }
       return icon;
     }
+
+    // Start loading
+    [appImageLoadingState setObject: [NSNumber numberWithBool: YES] forKey: key];
+
+    /* Async icon loading WITHOUT libdispatch: a GCD worker thread running
+     * ObjC (iconForFile: can load classes/bundles) races the main thread's
+     * +load dispatch and crashes the app (GPF in libobjc's
+     * load_messages_insert) - exactly what window_placement hit.  Use a
+     * GNUstep thread instead. */
+    NSDictionary *job = [NSDictionary dictionaryWithObjectsAndKeys:
+      realPath, @"path", key, @"key", nil];
+    [NSThread detachNewThreadSelector: @selector(gw_loadAppImageInBackgroundForPath:)
+                             toTarget: self
+                           withObject: job];
+
+    // Return generic icon while loading
+    NSImage *icon = [NSImage imageNamed: @"UnknownTool"];
+    if (icon == nil) {
+      icon = [NSImage imageNamed: @"Unknown"];
+    }
+    if ([node isLink]) {
+      NSImage *linkIcon = [NSImage imageNamed:@"common_linkCursor"];
+      icon = [icon copy];
+      [icon lockFocus];
+      [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
+      [icon unlockFocus];
+      [icon autorelease];
+    }
+    NSSize icnsize = [icon size];
+    if ((icnsize.width > size) || (icnsize.height > size)) {
+      return [self resizedIcon: icon ofSize: size];
+    }
+    return icon;
   }
 
   return [self gw_appImage_iconOfSize: size forNode: node];

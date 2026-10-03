@@ -95,15 +95,72 @@ static int getmntinfo(struct statfs **mntbufp, int flags)
 
 static NSMutableDictionary *sVolumeIDCache = nil;
 
+#if defined(__linux__)
+/* The only mount-table file that also supports poll(2) POLLPRI: the fd
+ * GWDesktopManager's mount-change watcher blocks on has to be this one,
+ * not /etc/mtab, which is an ordinary (or symlinked) file with no such
+ * notification. */
+#define GW_LIVE_MOUNT_TABLE "/proc/self/mounts"
+#endif
+
 /* ------------------------------------------------------------------ */
 #pragma mark - Internal helpers
 /* ------------------------------------------------------------------ */
 
 /**
+ * Read every entry of the mount table at @p tablePath (Linux: getmntent;
+ * nil means the live table, GW_LIVE_MOUNT_TABLE) or of the live kernel
+ * table (BSDs: getmntinfo, @p tablePath ignored - there is no on-disk file
+ * to point it at there). Returns one { mountPoint, source, fsType }
+ * dictionary per entry, or nil if the table could not be opened. Never
+ * calls statfs/statvfs/stat/access on any of the mount points it lists -
+ * it only reads the table itself.
+ */
+static NSArray *allMountEntries(const char *tablePath)
+{
+#if defined(__linux__)
+  const char *path = tablePath ? tablePath : GW_LIVE_MOUNT_TABLE;
+  FILE *mt = setmntent(path, "r");
+  if (mt == NULL) return nil;
+
+  NSMutableArray *entries = [NSMutableArray array];
+  struct mntent *me;
+  while ((me = getmntent(mt)) != NULL)
+    {
+      [entries addObject:
+        [NSDictionary dictionaryWithObjectsAndKeys:
+          [NSString stringWithUTF8String: me->mnt_dir],    @"mountPoint",
+          [NSString stringWithUTF8String: me->mnt_fsname], @"source",
+          [NSString stringWithUTF8String: me->mnt_type],   @"fsType",
+          nil]];
+    }
+  endmntent(mt);
+  return entries;
+#else
+  struct statfs *mnts = NULL;
+  int n = getmntinfo(&mnts, MNT_NOWAIT);
+  if (n < 0) return nil;
+
+  NSMutableArray *entries = [NSMutableArray arrayWithCapacity: n];
+  int i;
+  for (i = 0; i < n; i++)
+    {
+      [entries addObject:
+        [NSDictionary dictionaryWithObjectsAndKeys:
+          [NSString stringWithUTF8String: mnts[i].f_mntonname],   @"mountPoint",
+          [NSString stringWithUTF8String: mnts[i].f_mntfromname], @"source",
+          [NSString stringWithUTF8String: mnts[i].f_fstypename],  @"fsType",
+          nil]];
+    }
+  return entries;
+#endif
+}
+
+/**
  * Find the mount entry that owns @p path — the deepest mount point that is a
  * directory-boundary prefix of it — and return { mountPoint, source, fsType }.
- * Uses the portable mount-table APIs (getmntent on Linux, getmntinfo on the
- * BSDs) instead of parsing /proc directly.
+ * Reuses allMountEntries() (getmntent on Linux, getmntinfo on the BSDs)
+ * rather than walking the table a second time.
  */
 static NSDictionary *mountInfoForPath(NSString *path)
 {
@@ -113,16 +170,25 @@ static NSDictionary *mountInfoForPath(NSString *path)
   if (cpath == NULL) return nil;
   size_t plen = strlen(cpath);
 
+  /* Existing per-path lookups have always read /etc/mtab (_PATH_MOUNTED) on
+   * Linux; kept exactly as before so this refactor changes no behavior
+   * here, only removes the duplicated getmntent loop. */
+  NSArray *entries = allMountEntries(
+#if defined(__linux__)
+    _PATH_MOUNTED
+#else
+    NULL
+#endif
+  );
+  if (entries == nil) return nil;
+
   NSString *bestMount = nil, *bestSource = nil, *bestType = nil;
   size_t bestLen = 0;
 
-#if defined(__linux__)
-  FILE *mt = setmntent(_PATH_MOUNTED, "r");
-  if (mt == NULL) return nil;
-  struct mntent *me;
-  while ((me = getmntent(mt)) != NULL)
+  for (NSDictionary *e in entries)
     {
-      const char *mp = me->mnt_dir;
+      NSString *mpStr = [e objectForKey: @"mountPoint"];
+      const char *mp = [mpStr fileSystemRepresentation];
       size_t mlen = strlen(mp);
       if (mlen > plen || strncmp(cpath, mp, mlen) != 0) continue;
       /* Directory boundary: whole-string match, root "/", or next char '/'. */
@@ -130,31 +196,11 @@ static NSDictionary *mountInfoForPath(NSString *path)
       if (mlen >= bestLen)
         {
           bestLen    = mlen;
-          bestMount  = [NSString stringWithUTF8String: mp];
-          bestSource = [NSString stringWithUTF8String: me->mnt_fsname];
-          bestType   = [NSString stringWithUTF8String: me->mnt_type];
+          bestMount  = mpStr;
+          bestSource = [e objectForKey: @"source"];
+          bestType   = [e objectForKey: @"fsType"];
         }
     }
-  endmntent(mt);
-#else
-  struct statfs *mnts = NULL;
-  int n = getmntinfo(&mnts, MNT_NOWAIT);
-  int i;
-  for (i = 0; i < n; i++)
-    {
-      const char *mp = mnts[i].f_mntonname;
-      size_t mlen = strlen(mp);
-      if (mlen > plen || strncmp(cpath, mp, mlen) != 0) continue;
-      if (mlen < plen && mlen > 1 && cpath[mlen] != '/') continue;
-      if (mlen >= bestLen)
-        {
-          bestLen    = mlen;
-          bestMount  = [NSString stringWithUTF8String: mp];
-          bestSource = [NSString stringWithUTF8String: mnts[i].f_mntfromname];
-          bestType   = [NSString stringWithUTF8String: mnts[i].f_fstypename];
-        }
-    }
-#endif
 
   if (bestMount == nil) return nil;
   return [NSDictionary dictionaryWithObjectsAndKeys:
@@ -413,6 +459,18 @@ static NSString *stringForFSMagic(long magic)
 + (void)flushCache
 {
   [sVolumeIDCache removeAllObjects];
+}
+
++ (NSArray *)mountedFilesystemsFromTable:(NSString *)tablePath
+{
+  const char *cpath = tablePath ? [tablePath fileSystemRepresentation] : NULL;
+  NSArray *entries = allMountEntries(cpath);
+  return entries ? entries : [NSArray array];
+}
+
++ (NSArray *)mountedFilesystems
+{
+  return [self mountedFilesystemsFromTable: nil];
 }
 
 @end

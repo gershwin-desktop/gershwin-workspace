@@ -1743,6 +1743,32 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   if (nCols < 1) nCols = 1;
   NSUInteger nRows = [self isFlipped] ? 1 : (NSUInteger)(gOrigin.y / cellH);
   if (nRows < 1) nRows = 1;
+  if (![self isFlipped]) {
+    /* Only rows whose centre lies inside the usable rect: layoutIcons
+     * rescues a placed icon whose centre falls outside it back to AUTO,
+     * and the auto placer has no wide-label spacing - in a full grid the
+     * rescued icons land beside long labels and the labels overlap.
+     * floor(gOrigin.y / cellH) counts rows down to y = 0, under the Dock;
+     * at a fractional GSScaleFactor the last row's centre lands a fraction
+     * of a point below the Dock line and the whole row was rescued (Clean
+     * Up overlapped labels at GSScaleFactor 1.1 but not at 1.0).  A folder
+     * too big for the usable rows still bumps nRows below and keeps the
+     * rescue-and-stack overflow behaviour it had before. */
+    CGFloat usableBottom = NSMinY([self usableContentRect]);
+    NSUInteger usableRows;
+    if (cellH <= 0) {
+      usableRows = 1;
+    }
+    else {
+      usableRows = (NSUInteger)floor((gOrigin.y + (cellH / 2.0) - usableBottom) / cellH);
+    }
+    if (usableRows < 1) {
+      usableRows = 1;
+    }
+    if (nRows > usableRows) {
+      nRows = usableRows;
+    }
+  }
   {
     NSUInteger neededRows = ([icons count] + nCols - 1) / nCols;
     if (nRows < neededRows) nRows = neededRows;
@@ -3322,6 +3348,131 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   return [selectedReps makeImmutableCopyOnFail: NO];
 }
 
+/* The image travels shrinking towards the Trash icon's size, so it has to
+   be a genuinely high-resolution source to begin with - drawing it smaller
+   every later frame only ever downsamples, which stays sharp, but nothing
+   recovers detail a low-resolution source never had.  -dragLookImage is
+   the wrong source for that: it is a lockFocus snapshot of the icon's own
+   view (-imageOfCurrentLook), rasterized at whatever pixel density that
+   lockFocus happened to use, not necessarily this window's real backing
+   scale - flying it looked pixelated at GSScaleFactor 1.5 even on the very
+   first frame.  A real drag does not make this mistake (FSNIconDragSession.m,
+   the shaped-drag-window skill): it draws from the icon's own high-resolution
+   image and only shapes the composited result at device size.  Asking
+   FSNodeRep for the icon's image at iconSize*scale (rather than the plain
+   point size) is the same idea - the returned image then has enough actual
+   pixels for this screen, at this icon's current size, before anything
+   scales it at all.  Only the icon graphic flies, not the name label:
+   -iconBounds (not -bounds, which also spans the label) is the matching
+   rect on screen. */
+- (NSArray *)flightSourcesForSelectedReps
+{
+  return [self flightSourcesForReps: [self selectedReps]];
+}
+
+/* An external caller asking for a flight is given paths, not a selection in
+   the key window (Workspace -trashExternalPaths:), so the same sources have
+   to be resolvable for an arbitrary set of items.  Only the icons this view
+   is actually showing can fly: an item whose folder is not on screen here
+   has no rect to fly from, and is simply left out, exactly as an icon whose
+   window cannot be resolved is left out above. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths
+{
+  NSArray *reps = [self reps];
+  NSMutableArray *matched = [NSMutableArray arrayWithCapacity: [paths count]];
+  NSUInteger i;
+
+  if (paths == nil)
+    return matched;
+
+  for (i = 0; i < [reps count]; i++)
+    {
+      FSNIcon *icon = [reps objectAtIndex: i];
+      NSString *path = [[icon node] path];
+
+      if (path != nil && [paths containsObject: path])
+        [matched addObject: icon];
+    }
+
+  return [self flightSourcesForReps: matched];
+}
+
+- (NSArray *)flightSourcesForReps:(NSArray *)reps
+{
+  NSMutableArray *sources = [NSMutableArray arrayWithCapacity: [reps count]];
+  NSUInteger i;
+
+  for (i = 0; i < [reps count]; i++)
+    {
+      FSNIcon *icon = [reps objectAtIndex: i];
+      NSWindow *win = [icon window];
+      NSRect rectInWindow, rectOnScreen;
+      NSImage *image;
+      NSString *path;
+      CGFloat scale;
+      int hiResSize;
+
+      if (win == nil)
+        continue;
+
+      rectInWindow = [icon convertRect: [icon iconBounds] toView: nil];
+      rectOnScreen = [win convertRectToScreen: rectInWindow];
+      path = [[icon node] path];
+
+      if (path == nil)
+        continue;
+
+      scale = [win userSpaceScaleFactor];
+      hiResSize = (int)lrint ([icon iconSize] * scale);
+      image = [fsnodeRep iconOfSize: hiResSize forNode: [icon node]];
+
+      if (image == nil)
+        continue;
+
+      [sources addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+        path, @"path",
+        [NSValue valueWithRect: rectOnScreen], @"rect",
+        image, @"image",
+        icon, @"rep",
+        nil]];
+    }
+
+  return sources;
+}
+
+/* editIcon (and the shared nameEditor label showing its name) is only ever
+   set when exactly one item is selected (-updateNameEditor), which is
+   exactly the case a single-item flight leaves showing a leftover label:
+   with several items flying, each keeps drawing its own label itself, so
+   there is nothing extra here to hide. */
+- (void)setRep:(id)arep hiddenForFlight:(BOOL)hidden
+{
+  FSNIcon *icon = (FSNIcon *)arep;
+
+  [icon setHidden: hidden];
+  [self setNeedsDisplayInRect: [icon frame]];
+
+  if (editIcon == icon && [[self subviews] containsObject: nameEditor])
+    {
+      [nameEditor setHidden: hidden];
+      [self setNeedsDisplayInRect: [nameEditor frame]];
+    }
+}
+
+/* Unconditionally shows the shared name-label editor again, regardless of
+   which rep (if any) it is currently positioned for.  The flight that
+   called -setRep:hiddenForFlight: above may, by the time it ends, have
+   already had its rep's node removed by the recycle it was animating - so
+   that method's own editIcon == icon check can no longer find anything to
+   restore through.  A GWTrashFlight completion calls this instead, on
+   every view it hid a rep in, so the label is never left stuck hidden
+   regardless of what became of the icon it was showing. */
+- (void)showNameEditor
+{
+  [nameEditor setHidden: NO];
+  [self setNeedsDisplayInRect: [nameEditor frame]];
+}
+
 - (NSArray *)selectedNodes
 {
   NSMutableArray *selectedNodes = [NSMutableArray array];
@@ -3971,6 +4122,11 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 
       [nameEditor setEditable: NO];
       [nameEditor setSelectable: NO];
+      /* A previous selection's flight (-setRep:hiddenForFlight:) can have
+       * left this shared editor hidden with no rep left to un-hide it
+       * through - always show it again here, whatever it was doing
+       * before, since it is about to represent a brand new selection. */
+      [nameEditor setHidden: NO];
       [self addSubview: nameEditor];
     }
 }

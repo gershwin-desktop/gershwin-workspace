@@ -466,14 +466,14 @@
     ldPath = @"/System/Library/Libraries";
   }
   
-  /* Build command with proper shell quoting: LD_LIBRARY_PATH=<path> <helper> '<iso>' '<device>' */
-  NSString *helperCommand = [NSString stringWithFormat:@"LD_LIBRARY_PATH=%@ '%@' '%@' '%@'",
-                             ldPath, helperPath, _isoPath, _devicePath];
-  
-  
+  /* env(1) sets the library path after sudo has cleaned the environment;
+   * the image and device paths reach the helper as plain arguments, so a
+   * quote in a file name cannot turn into a shell command running as root. */
   NSTask *task = [[NSTask alloc] init];
   [task setLaunchPath:sudoPath];
-  [task setArguments:@[@"-A", @"-E", @"sh", @"-c", helperCommand]];
+  [task setArguments:@[@"-A", @"-E", @"/usr/bin/env",
+                       [NSString stringWithFormat:@"LD_LIBRARY_PATH=%@", ldPath],
+                       helperPath, _isoPath, _devicePath]];
   
   /* Set up pipes for monitoring output - explicitly retain to prevent premature deallocation */
   NSPipe *outputPipe = [[NSPipe pipe] retain];
@@ -788,8 +788,10 @@
   /* Verify first 10MB */
   [self updateVerificationProgress:10.0 status:@"Verifying beginning of image..."];
   NSData *isoFirst = [isoHandle readDataOfLength:verifyChunkSize];
+  /* A failed read must count as a mismatch: a negative length would make
+   * NSData read far past the buffer. */
   ssize_t readBytes = read(devFd, devBuffer, verifyChunkSize);
-  NSData *devFirst = [NSData dataWithBytes:devBuffer length:readBytes];
+  NSData *devFirst = (readBytes < 0) ? nil : [NSData dataWithBytes:devBuffer length:(NSUInteger)readBytes];
   
   if (![isoFirst isEqualToData:devFirst]) {
     allMatch = NO;
@@ -807,7 +809,7 @@
     
     lseek(devFd, middleOffset, SEEK_SET);
     readBytes = read(devFd, devBuffer, verifyChunkSize);
-    NSData *devMiddle = [NSData dataWithBytes:devBuffer length:readBytes];
+    NSData *devMiddle = (readBytes < 0) ? nil : [NSData dataWithBytes:devBuffer length:(NSUInteger)readBytes];
     
     if (![isoMiddle isEqualToData:devMiddle]) {
       allMatch = NO;
@@ -826,7 +828,7 @@
     
     lseek(devFd, lastOffset, SEEK_SET);
     readBytes = read(devFd, devBuffer, [isoLast length]);
-    NSData *devLast = [NSData dataWithBytes:devBuffer length:readBytes];
+    NSData *devLast = (readBytes < 0) ? nil : [NSData dataWithBytes:devBuffer length:(NSUInteger)readBytes];
     
     if (![isoLast isEqualToData:devLast]) {
       allMatch = NO;

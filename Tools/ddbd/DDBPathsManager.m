@@ -525,7 +525,7 @@
   NSComparisonResult result;
   
   if ([akey isEqual: dummyOffsets[0]]) {
-    apath = RETAIN (dummyPaths[0]);
+    apath = dummyPaths[0];
   } else {
     NSData *data = [vlfile dataAtOffset: (NSNumber *)akey];
     apath = [NSUnarchiver unarchiveObjectWithData: data];

@@ -281,11 +281,13 @@
     ldPath = @"/System/Library/Libraries";
   }
 
-  /* Build a safe shell command: LD_LIBRARY_PATH=<path> '<helper>' '<device>' '<label>' */
-  NSString *helperCommand = [NSString stringWithFormat:@"LD_LIBRARY_PATH=%@ '%@' '%@' '%@'",
-                             ldPath, helperPath, devicePath, label];
-
-  NSArray *arguments = [NSArray arrayWithObjects:@"-A", @"-E", @"sh", @"-c", helperCommand, nil];
+  /* env(1) sets the library path after sudo has cleaned the environment;
+   * the device path and the label (a volume name from the media itself)
+   * reach the helper as plain arguments, so a quote in either cannot turn
+   * into a shell command running as root. */
+  NSArray *arguments = [NSArray arrayWithObjects:@"-A", @"-E", @"/usr/bin/env",
+                        [NSString stringWithFormat:@"LD_LIBRARY_PATH=%@", ldPath],
+                        helperPath, devicePath, label, nil];
   NSString *taskOutput = nil;
   BOOL formatted = [self runTaskWithLaunchPath:sudoPath arguments:arguments output:&taskOutput];
 

@@ -75,10 +75,12 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWDesktopWindow.h"
 #import "GWDockWindow.h"
 #import "Dock.h"
+#import "GWTrashFlight.h"
 #import "GWViewersManager.h"
 #import "GWViewer.h"
 #import "Finder.h"
 #import "Inspector.h"
+#import "QuickLook/GWQuickLookController.h"
 #import "Operation.h"
 #import "History/History.h"
 #import "X11AppSupport.h"
@@ -136,6 +138,101 @@ static Workspace *gworkspace = nil;
 
 @interface Workspace (PrivateMethods)
 - (void)_updateTrashContents;
+
+/* "Move to Trash", played out as a flight of the selected icons into the
+ * Dock's Trash icon (see GWTrashFlight.h) once - and only once - the
+ * recycle is actually confirmed; falls back to a plain, unanimated recycle
+ * when there is nothing to animate from. */
+- (void)recycleFiles:(NSArray *)files
+         fromBasePath:(NSString *)basePath
+            filePaths:(NSArray *)filePaths;
+- (NSArray *)trashFlightSourcesForPaths:(NSArray *)paths;
+- (NSArray *)trashFlightSourcesInKeyWindowForPaths:(NSArray *)paths;
+- (NSArray *)trashFlightSourcesInOpenWindowsForPaths:(NSArray *)paths;
+- (void)trashExternalPathsOnMainThread:(NSDictionary *)request;
+- (BOOL)pathsAreAllShownByTheDesktop:(NSArray *)paths;
+- (void)recycleFiles:(NSArray *)files
+         fromBasePath:(NSString *)basePath
+            filePaths:(NSArray *)filePaths
+           confirmed:(BOOL)confirmed;
+- (void)setTrashFlightSources:(NSArray *)sources hidden:(BOOL)hidden;
+- (void)startTrashFlightForFilePaths:(NSArray *)filePaths;
+@end
+
+/* Watches for the ONE GWFileSystemWillChangeNotification that means "this
+ * particular recycle was actually confirmed" (matched on operation type and
+ * source path).
+ *
+ * -performFileOperation:... does NOT block on Eau's confirmation panel: the
+ * panel is shown non-modally (see the "EauAlertPanel shown non-modally" log
+ * line) and the call returns at once, well before the user answers - proved
+ * directly by triggering a recycle, never touching the panel, and finding
+ * the file still sitting unmoved seconds later.  The real confirm/cancel
+ * decision, and this notification, can therefore arrive at any later time,
+ * on a later run loop turn, long after
+ * -recycleFiles:fromBasePath:filePaths: below has already returned - so this
+ * watcher outlives that call.  It owns itself (created with a bare +alloc,
+ * never released by its creator) for exactly that reason, and releases
+ * itself the moment it actually fires; if the user cancels, it simply never
+ * fires and is never released, one small leaked object per cancelled Trash
+ * attempt - the trade-off for never guessing at an outcome with a timer. */
+@interface _GWTrashRecycleWatcher : NSObject
+{
+  NSString *basePath;
+  NSArray *filePaths;
+  Workspace *workspace;
+  BOOL fired;
+}
+- (id)initWithBasePath:(NSString *)aBasePath
+              filePaths:(NSArray *)aFilePaths
+              workspace:(Workspace *)aWorkspace;
+- (void)willChange:(NSNotification *)notif;
+@end
+
+@implementation _GWTrashRecycleWatcher
+
+- (id)initWithBasePath:(NSString *)aBasePath
+              filePaths:(NSArray *)aFilePaths
+              workspace:(Workspace *)aWorkspace
+{
+  self = [super init];
+
+  if (self)
+    {
+      ASSIGN (basePath, aBasePath);
+      ASSIGN (filePaths, aFilePaths);
+      workspace = aWorkspace;  /* not retained: the app singleton outlives this */
+    }
+
+  return self;
+}
+
+- (void)dealloc
+{
+  RELEASE (basePath);
+  RELEASE (filePaths);
+  [super dealloc];
+}
+
+- (void)willChange:(NSNotification *)notif
+{
+  NSDictionary *info = (NSDictionary *)[notif object];
+
+  /* Guards against a stray notification from some other, unrelated
+   * operation that happens to fire while this one is still waiting -
+   * matched on operation type and source, the same fields
+   * -fileSystemDidChange: already keys off. */
+  if (fired
+      || ![[info objectForKey: @"operation"] isEqual: NSWorkspaceRecycleOperation]
+      || ![[info objectForKey: @"source"] isEqual: basePath])
+    return;
+
+  fired = YES;
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
+  [workspace startTrashFlightForFilePaths: filePaths];
+  RELEASE (self);   /* balances the +1 -recycleFiles:... created us with */
+}
+
 @end
 
 @implementation Workspace
@@ -345,7 +442,7 @@ static Workspace *gworkspace = nil;
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(makeAliasFiles:) keyEquivalent:@"l"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Quick Look") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Quick Look") action:@selector(quickLook:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
   // Share submenu
@@ -1651,6 +1748,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       || sel_isEqual(action, @selector(makeThumbnails:))
       || sel_isEqual(action, @selector(removeThumbnails:))
       || sel_isEqual(action, @selector(notImplemented:))
+      || sel_isEqual(action, @selector(quickLook:))
       || sel_isEqual(action, @selector(cleanUp:))
       || sel_isEqual(action, @selector(cleanUpBy:)))
     {
@@ -1764,10 +1862,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     NSString *source = [info objectForKey: @"source"];
     NSString *destination = [info objectForKey: @"destination"];
   
-    if ([source isEqual: trashPath] || [destination isEqual: trashPath]) {    
+    if ([source isEqual: trashPath] || [destination isEqual: trashPath]) {
       [self _updateTrashContents];
     }
-    
+
     if (ddbd != nil) {
       [ddbd fileSystemDidChange: [NSArchiver archivedDataWithRootObject: info]];
     }
@@ -2139,29 +2237,28 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   /* Check if this is a disk image file */
   NSString *ext = [[fullPath pathExtension] lowercaseString];
   if ([ext isEqualToString:@"dmg"]) {
+    /* Mounting a DMG can block for several seconds (the helper tool
+     * launching, then -verifyMountPoint:pid:error: retrying up to ~10s
+     * waiting for its contents to appear) - run it on a background thread
+     * so this double-click does not freeze the whole desktop while it
+     * waits. -diskImageMountCompleted: opens the viewer once it is really
+     * there, on the main thread, same as the synchronous call used to. */
     VolumeManager *volMgr = [VolumeManager sharedManager];
-    NSString *mountPoint = [volMgr mountDMGFile:fullPath];
-    if (mountPoint) {
-      /* Wait for filesystem to populate before opening viewer */
-      usleep(500000);  /* 0.5 second delay */
-      [self newViewerAtPath:mountPoint];
-      return YES;
-    }
-    return NO;
+    [volMgr mountDMGFile:fullPath
+             onMainThread:self
+                 selector:@selector(diskImageMountCompleted:)];
+    return YES;
   } else if ([ext isEqualToString:@"iso"] || [ext isEqualToString:@"bin"] ||
              [ext isEqualToString:@"nrg"] || [ext isEqualToString:@"img"] ||
              [ext isEqualToString:@"mdf"] ||
              [ext isEqualToString:@"squashfs"] || [ext isEqualToString:@"sqsh"] ||
              [ext isEqualToString:@"sfs"]) {
+    /* Same reasoning as the DMG case above. */
     VolumeManager *volMgr = [VolumeManager sharedManager];
-    NSString *mountPoint = [volMgr mountFuseisoImage:fullPath];
-    if (mountPoint) {
-      /* Wait for filesystem to populate before opening viewer */
-      usleep(500000);  /* 0.5 second delay */
-      [self newViewerAtPath:mountPoint];
-      return YES;
-    }
-    return NO;
+    [volMgr mountFuseisoImage:fullPath
+                  onMainThread:self
+                      selector:@selector(diskImageMountCompleted:)];
+    return YES;
   }
   
   /* Check if this is an archive file that AVFS can handle.
@@ -2350,7 +2447,20 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
   NS_ENDHANDLER  
   
-    return success;  
+    return success;
+}
+
+/* Main-thread completion for the async disk-image/ISO mounts -openFile:
+ * kicks off above: opens the viewer once the mount is really there, or
+ * does nothing on failure (mountDMGFile:/mountFuseisoImage: already showed
+ * an alert before delivering nil here) - the same two outcomes the old
+ * synchronous call produced, just arriving later instead of blocking for
+ * them. */
+- (void)diskImageMountCompleted:(NSString *)mountPoint
+{
+  if (mountPoint) {
+    [self newViewerAtPath:mountPoint];
+  }
 }
 
 - (BOOL)openURL:(NSURL *)url
@@ -2730,8 +2840,8 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSArray *vpaths = [ws mountedLocalVolumePaths];
   NSMutableArray *umountPaths = [NSMutableArray array];
   NSMutableArray *files = [NSMutableArray array];
+  NSMutableArray *filePaths = [NSMutableArray array];
   NSUInteger i;
-  NSInteger tag;
 
   for (i = 0; i < [selectedPaths count]; i++) {
     NSString *path = [selectedPaths objectAtIndex: i];
@@ -2740,12 +2850,13 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       [umountPaths addObject: path];
     } else {
       [files addObject: [path lastPathComponent]];
+      [filePaths addObject: path];
     }
   }
 
   for (i = 0; i < [umountPaths count]; i++) {
     NSString *umpath = [umountPaths objectAtIndex: i];
-    
+
     // Don't allow ejecting root filesystem
     if ([self isRootFilesystem: umpath]) {
       NSString *err = NSLocalizedString(@"Error", @"");
@@ -2754,7 +2865,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       NSRunAlertPanel(err, msg, buttstr, nil, nil);
       continue;
     }
-    
+
     /* Mark as expected unmount so the desktop does not show a spurious
        "Volume Removed Unexpectedly" warning. */
     [self noteUserInitiatedUnmountAtPath: umpath];
@@ -2777,13 +2888,11 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           NSString *err = NSLocalizedString(@"Error", @"");
           NSString *msg = NSLocalizedString(@"You do not have write permission\nfor", @"");
           NSString *buttstr = NSLocalizedString(@"Continue", @"");
-          NSRunAlertPanel(err, [NSString stringWithFormat: @"%@ \"%@\"!\n", msg, basePath], buttstr, nil, nil);   
+          NSRunAlertPanel(err, [NSString stringWithFormat: @"%@ \"%@\"!\n", msg, basePath], buttstr, nil, nil);
           return;
         }
 
-      [self performFileOperation: NSWorkspaceRecycleOperation
-                          source: basePath destination: trashPath 
-                           files: files tag: &tag];
+      [self recycleFiles: files fromBasePath: basePath filePaths: filePaths];
     }
 }
 
@@ -3411,8 +3520,8 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 						  name: NSConnectionDidDieNotification
 						object: connection];
 
-  NSAssert(connection == [mdextractor connectionForProxy],
-	   NSInternalInconsistencyException);
+  // Don't access [mdextractor connectionForProxy] here - the connection is already dead
+  // and accessing the proxy can cause a segfault
   RELEASE (mdextractor);
   mdextractor = nil;
 
@@ -5601,9 +5710,13 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
 - (void)quickLook:(id)sender
 {
-  NSRunAlertPanel(@"Not Implemented Yet",
-                  @"Quick Look is not yet implemented.",
-                  @"OK", nil, nil);
+  /* Menu entry point: uses the app-wide current selection, same as Get
+   * Info's menu item does; the Space bar path in GWViewerWindow instead
+   * uses the key folder window's own live selection (see
+   * -performKeyEquivalent: there for why). */
+  [[GWQuickLookController sharedController]
+      toggleQuickLookForPaths: selectedPaths
+                 sourceWindow: [NSApp keyWindow]];
 }
 
 + (NSArray *)volumeMountRoots
@@ -5816,10 +5929,152 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   }
 }
 
+/* Move the given absolute paths to the Trash, at the request of another
+ * application over DO.  org.freedesktop.FileManager1 has no trash method (it
+ * only shows and selects, and D-Bus is not where we put this), so this is
+ * Workspace's own extension to the same DO surface -showExternalSelection:
+ * lives on.  It is declared on @protocol WorkspaceAppProtocol next to that
+ * one (GWMetadata/MDFinder/MDFinder.h), which is the protocol a client sets
+ * on its proxy; AppGarden is the first caller.
+ *
+ * It deliberately does NOT go through -moveToTrash, which works on
+ * selectedPaths and on a single base path: an external caller hands us an
+ * arbitrary list, whose items need not share a parent directory, and must
+ * not change what the user has selected to get it done.  So the paths are
+ * validated, grouped by parent directory, and each group is shown on screen
+ * with its items selected before being handed to the same
+ * -recycleFiles:fromBasePath:filePaths: the menu action ends up in - which
+ * means the same Trash and the same fly-to-Trash flight, played from where
+ * the user can see it start.  alreadyConfirmed passes the caller's own "are
+ * you sure?" through to the operation, so the user is asked once and not
+ * twice. */
+- (oneway void)trashExternalPaths:(NSArray *)paths
+                 alreadyConfirmed:(BOOL)alreadyConfirmed
+{
+  if ([paths count] == 0)
+    {
+      return;
+    }
+
+  /* oneway still arrives on the connection's own thread, and the recycle,
+   * its confirmation panel and the flight all need the main thread.
+   * -performSelectorOnMainThread: takes a single object, so the flag rides
+   * along with the paths rather than in a global the next call would
+   * overwrite. */
+  [self performSelectorOnMainThread: @selector(trashExternalPathsOnMainThread:)
+                         withObject:
+                           [NSDictionary dictionaryWithObjectsAndKeys:
+                              paths, @"paths",
+                              [NSNumber numberWithBool: alreadyConfirmed],
+                              @"confirmed",
+                              nil]
+                      waitUntilDone: NO];
+}
+
 @end
 
 
 @implementation	Workspace (PrivateMethods)
+
+- (void)trashExternalPathsOnMainThread:(NSDictionary *)request
+{
+  NSArray *paths = [request objectForKey: @"paths"];
+  BOOL confirmed = [[request objectForKey: @"confirmed"] boolValue];
+  NSMutableArray *directories = [NSMutableArray array];
+  NSMutableDictionary *namesByDirectory
+    = [NSMutableDictionary dictionaryWithCapacity: [paths count]];
+  NSMutableDictionary *pathsByDirectory
+    = [NSMutableDictionary dictionaryWithCapacity: [paths count]];
+  NSArray *vpaths = [ws mountedLocalVolumePaths];
+  NSUInteger i;
+
+  for (i = 0; i < [paths count]; i++)
+    {
+      id candidate = [paths objectAtIndex: i];
+      NSString *path = nil;
+      NSString *directory;
+      BOOL isDirectory = NO;
+
+      /* A remote caller cannot be assumed to send NSStrings. */
+      if ([candidate isKindOfClass: [NSString class]])
+        {
+          path = [(NSString *)candidate stringByStandardizingPath];
+        }
+
+      if ([path length] == 0)
+        continue;
+
+      /* A mounted volume is ejected by -moveToTrash rather than trashed;
+         from a remote request that is too surprising to guess at, and the
+         caller can eject it itself. */
+      if ([vpaths containsObject: path])
+        continue;
+
+      if ([fm fileExistsAtPath: path isDirectory: &isDirectory] == NO)
+        continue;
+
+      /* One operation per directory, in the order the caller listed them:
+         the operation takes names relative to a single source. */
+      directory = [path stringByDeletingLastPathComponent];
+
+      if ([namesByDirectory objectForKey: directory] == nil)
+        {
+          [directories addObject: directory];
+          [namesByDirectory setObject: [NSMutableArray array]
+                              forKey: directory];
+          [pathsByDirectory setObject: [NSMutableArray array]
+                              forKey: directory];
+        }
+
+      [[namesByDirectory objectForKey: directory]
+        addObject: [path lastPathComponent]];
+      [[pathsByDirectory objectForKey: directory] addObject: path];
+    }
+
+  for (i = 0; i < [directories count]; i++)
+    {
+      NSString *directory = [directories objectAtIndex: i];
+      NSArray *groupPaths = [pathsByDirectory objectForKey: directory];
+
+      /* A flight needs a live rep to fly from, so a folder no window is
+       * showing has to be shown first.  -selectFiles:... is exactly that
+       * and no more: it opens a viewer for the folder when none is open,
+       * and activates the existing one otherwise (which deminiaturizes it
+       * and makeKeyAndOrderFront:s it), then selects the items and scrolls
+       * them into view.  So one call covers both "no window" and "window
+       * open but behind something else", and the flight starts from a place
+       * the user can actually watch it leave from.
+       *
+       * The desktop is the one exception: it is always on screen and has
+       * nothing to raise, so items already on it are trashed from the
+       * desktop icon as they are, rather than growing a viewer window that
+       * would only get in the way of the animation. */
+      if (![self pathsAreAllShownByTheDesktop: groupPaths])
+        {
+          [self selectFiles: groupPaths
+            inFileViewerRootedAtPath: directory];
+        }
+
+      [self recycleFiles: [namesByDirectory objectForKey: directory]
+             fromBasePath: directory
+                filePaths: groupPaths
+               confirmed: confirmed];
+    }
+}
+
+/* YES when the desktop is showing every one of these paths right now. */
+- (BOOL)pathsAreAllShownByTheDesktop:(NSArray *)paths
+{
+  id desktopView = [dtopManager desktopView];
+
+  if (desktopView == nil
+      || ![desktopView respondsToSelector: @selector(flightSourcesForPaths:)])
+    {
+      return NO;
+    }
+
+  return [[desktopView flightSourcesForPaths: paths] count] == [paths count];
+}
 
 - (void)_updateTrashContents
 {
@@ -5839,6 +6094,324 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
       }
     }
   }
+}
+
+/* Resolves the live selection view the same way -cut:/-copy: do, and asks
+ * it for screen rects + pictures of the icons that represent `paths`, so
+ * the flight has something real to animate from.  nil when there is no key
+ * window showing a selection at all (a script-driven recycle, or the
+ * rare moment nothing is key) - the caller falls back to recycling at
+ * once in that case, exactly as before this feature existed.
+ *
+ * The key window's selection is the first place to look, because that is
+ * what a user-initiated -moveToTrash is recycling, and it is the only view
+ * that knows which item is which when one path is on screen more than once.
+ * Anything it cannot account for is then looked up in the other open
+ * windows, so an item still flies when the window showing it is not the key
+ * one - which is the normal case for a trash asked for over DO by another
+ * application, where there is no key-window selection at all. */
+- (NSArray *)trashFlightSourcesForPaths:(NSArray *)paths
+{
+  NSArray *sources = [self trashFlightSourcesInKeyWindowForPaths: paths];
+  NSMutableArray *unmatched;
+  NSArray *others;
+  NSUInteger i, j;
+
+  if (sources == nil || [paths count] == 0)
+    return sources;
+
+  /* Only what the key window did not already provide is left to look for,
+     so one item is never flown from two windows at once. */
+  unmatched = [NSMutableArray arrayWithCapacity: [paths count]];
+
+  for (i = 0; i < [paths count]; i++)
+    {
+      NSString *path = [paths objectAtIndex: i];
+      BOOL found = NO;
+
+      for (j = 0; j < [sources count]; j++)
+        {
+          if ([[[sources objectAtIndex: j] objectForKey: @"path"]
+                isEqual: path])
+            {
+              found = YES;
+              break;
+            }
+        }
+
+      if (found == NO)
+        [unmatched addObject: path];
+    }
+
+  if ([unmatched count] == 0)
+    return sources;
+
+  others = [self trashFlightSourcesInOpenWindowsForPaths: unmatched];
+  if ([others count] == 0)
+    return sources;
+
+  return [sources arrayByAddingObjectsFromArray: others];
+}
+
+/* The key window's own selected reps, filtered down to `paths` (the
+   pre-existing behaviour, unchanged). */
+- (NSArray *)trashFlightSourcesInKeyWindowForPaths:(NSArray *)paths
+{
+  NSWindow *kwin = [NSApp keyWindow];
+  id nodeView = nil;
+  NSArray *allSources;
+  NSMutableArray *matched;
+  NSUInteger i;
+
+  if (kwin != nil)
+    {
+      if ([vwrsManager hasViewerWithWindow: kwin])
+        nodeView = [[vwrsManager viewerWithWindow: kwin] nodeView];
+      else if ([dtopManager hasWindow: kwin])
+        nodeView = [dtopManager desktopView];
+    }
+
+  if (nodeView == nil
+      || ![nodeView respondsToSelector: @selector(flightSourcesForSelectedReps)])
+    return nil;
+
+  allSources = [nodeView flightSourcesForSelectedReps];
+  matched = [NSMutableArray arrayWithCapacity: [paths count]];
+
+  for (i = 0; i < [allSources count]; i++)
+    {
+      NSDictionary *src = [allSources objectAtIndex: i];
+
+      if ([paths containsObject: [src objectForKey: @"path"]])
+        [matched addObject: src];
+    }
+
+  return matched;
+}
+
+/* Every other on-screen window that can be showing any of `paths` - the
+   other open viewers, then the desktop - asked directly for those paths.
+ * Windows that are not on screen are skipped: their rects are stale, and
+ * animating towards the Trash from a place the user cannot see is worse
+ * than not animating at all.  A view that does not implement
+ * -flightSourcesForPaths: simply cannot contribute (an old cached window, a
+ * custom view), which leaves the recycle itself unaffected.  A path shown
+ * by more than one window flies from the first one found, so an item is
+ * never flown twice. */
+- (NSArray *)trashFlightSourcesInOpenWindowsForPaths:(NSArray *)paths
+{
+  NSMutableArray *sources = [NSMutableArray array];
+  NSMutableArray *found = [NSMutableArray arrayWithCapacity: [paths count]];
+  NSMutableArray *stillMissing
+    = [NSMutableArray arrayWithArray: paths];
+  NSMutableArray *nodeViews = [NSMutableArray array];
+  NSArray *viewers = [vwrsManager allViewers];
+  NSArray *fromView;
+  id desktopView;
+  NSUInteger i;
+
+  for (i = 0; i < [viewers count]; i++)
+    {
+      NSWindow *win = [[viewers objectAtIndex: i] win];
+      id nodeView = [[viewers objectAtIndex: i] nodeView];
+
+      if (win != nil && [win isVisible] && nodeView != nil
+          && [nodeView respondsToSelector: @selector(flightSourcesForPaths:)])
+        [nodeViews addObject: nodeView];
+    }
+
+  desktopView = [dtopManager desktopView];
+
+  if (desktopView != nil
+      && [desktopView respondsToSelector: @selector(flightSourcesForPaths:)])
+    [nodeViews addObject: desktopView];
+
+  /* One pass per view, not per path: a view answers for the whole set at
+     once, and a path an earlier window accounted for is dropped from the
+     next view's question, so it cannot fly twice. */
+  for (i = 0; i < [nodeViews count] && [stillMissing count] > 0; i++)
+    {
+      id nodeView = [nodeViews objectAtIndex: i];
+      NSMutableArray *nextMissing = [NSMutableArray array];
+      NSUInteger j, k;
+
+      fromView = [nodeView flightSourcesForPaths: stillMissing];
+
+      for (j = 0; j < [fromView count]; j++)
+        {
+          NSString *path = [[fromView objectAtIndex: j] objectForKey: @"path"];
+
+          if ([found containsObject: path])
+            continue;
+
+          [found addObject: path];
+          [sources addObject: [fromView objectAtIndex: j]];
+        }
+
+      for (k = 0; k < [stillMissing count]; k++)
+        {
+          if ([found containsObject: [stillMissing objectAtIndex: k]])
+            continue;
+
+          [nextMissing addObject: [stillMissing objectAtIndex: k]];
+        }
+
+      stillMissing = nextMissing;
+    }
+
+  return sources;
+}
+
+/* Hides (or shows again) the NSView-backed reps a flight animates - only
+ * the icon/desktop views' reps are actual views; a list row or a browser
+ * cell is a plain object that redraws through its owning view instead, and
+ * simply keeps showing the item until the recycle operation's own
+ * file-watcher notification removes it, same as before this feature
+ * existed.  Prefers the owning view's own -setRep:hiddenForFlight: (which
+ * also hides the shared selected-item name label FSNIconsView keeps beside
+ * the icon, not inside it) over toggling the icon view directly, so that
+ * label does not linger at the icon's old spot for the length of the
+ * flight. */
+- (void)setTrashFlightSources:(NSArray *)sources hidden:(BOOL)hidden
+{
+  NSUInteger i;
+
+  for (i = 0; i < [sources count]; i++)
+    {
+      id rep = [[sources objectAtIndex: i] objectForKey: @"rep"];
+
+      if ([rep isKindOfClass: [NSView class]])
+        {
+          NSView *view = (NSView *)rep;
+          id container = [view superview];
+
+          if ([container respondsToSelector: @selector(setRep:hiddenForFlight:)])
+            {
+              [container setRep: rep hiddenForFlight: hidden];
+            }
+          else
+            {
+              [view setHidden: hidden];
+              [[view superview] setNeedsDisplayInRect: [view frame]];
+            }
+        }
+    }
+}
+
+/* -moveToTrash's own entry point: calls the existing recycle operation
+ * right away, exactly as before this feature existed - Eau's own
+ * confirmation panel appears untouched, and nothing is hidden while it is
+ * up.  -performFileOperation:... does not wait for that panel: it shows it
+ * non-modally and returns at once (confirmed by triggering a recycle,
+ * leaving the panel untouched, and finding the file still unmoved seconds
+ * later), so the real confirm/cancel decision - and the
+ * GWFileSystemWillChangeNotification that means "confirmed" - can arrive at
+ * any later time, long after this call has returned.  The watcher below is
+ * therefore registered and left to outlive this method, firing the flight
+ * whenever the notification for THIS recycle (matched on operation and
+ * source) actually shows up; nothing is hidden, and there is nothing to
+ * "undo", until that happens. */
+- (void)recycleFiles:(NSArray *)files
+         fromBasePath:(NSString *)basePath
+            filePaths:(NSArray *)filePaths
+{
+  [self recycleFiles: files
+         fromBasePath: basePath
+            filePaths: filePaths
+           confirmed: NO];
+}
+
+/* `confirmed` is YES when the user was already asked - by an external
+ * caller that has its own dialog for this (AppGarden's "Remove %@?"), or by
+ * AppDataTrash - so the operation must not ask a second time on top of it. */
+- (void)recycleFiles:(NSArray *)files
+         fromBasePath:(NSString *)basePath
+            filePaths:(NSArray *)filePaths
+           confirmed:(BOOL)confirmed
+{
+  NSInteger tag;
+  _GWTrashRecycleWatcher *watcher = [[_GWTrashRecycleWatcher alloc]
+    initWithBasePath: basePath
+            filePaths: filePaths
+            workspace: self];
+
+  [[NSNotificationCenter defaultCenter] addObserver: watcher
+                                            selector: @selector(willChange:)
+                                                name: @"GWFileSystemWillChangeNotification"
+                                              object: nil];
+
+  [self performFileOperation: NSWorkspaceRecycleOperation
+                       source: basePath
+                  destination: trashPath
+                        files: files
+                          tag: &tag
+                     confirmed: confirmed];
+}
+
+/* Starts the "fly to Trash" animation for the icons representing
+ * filePaths, once the recycle that is going to remove them has actually
+ * been confirmed (see -recycleFiles:fromBasePath:filePaths: above); a
+ * no-op when there is nothing to animate from (no live selection view
+ * showing them, or the Trash icon is not currently on screen), leaving the
+ * operation to run exactly as it always has. */
+- (void)startTrashFlightForFilePaths:(NSArray *)filePaths
+{
+  Dock *dock = [dtopManager dock];
+  NSRect trashRect = (dock != nil) ? [dock trashIconScreenRect] : NSZeroRect;
+  NSArray *sources;
+  NSMutableArray *containers;
+  GWTrashFlight *flight;
+  NSUInteger i;
+
+  if (NSEqualRects (trashRect, NSZeroRect))
+    return;
+
+  sources = [self trashFlightSourcesForPaths: filePaths];
+  if (sources == nil || [sources count] == 0)
+    return;
+
+  [self setTrashFlightSources: sources hidden: YES];
+
+  /* Captured now, while each rep still has a superview: the recycle this
+   * flight is about to run removes the rep's node, which drops the rep
+   * from the view entirely (clearing -superview) well before the flight
+   * ends, so there would be nothing left to ask by the time the
+   * completion below runs.  Kept as a set of distinct views - several
+   * flying icons can come from the same one. */
+  containers = [NSMutableArray array];
+  for (i = 0; i < [sources count]; i++)
+    {
+      id rep = [[sources objectAtIndex: i] objectForKey: @"rep"];
+      id container = [rep respondsToSelector: @selector(superview)] ? [rep superview] : nil;
+
+      if (container != nil && ![containers containsObject: container])
+        [containers addObject: container];
+    }
+
+  flight = [[GWTrashFlight alloc] initWithItems: sources
+                                       trashRect: trashRect
+                                      completion: ^{
+                                        NSUInteger j;
+
+                                        /* However the recycle turned out,
+                                         * the shared name-label editor
+                                         * these views may have hidden for
+                                         * the flight must not stay hidden
+                                         * once it is over - the rep it was
+                                         * showing is likely gone by now,
+                                         * so -setRep:hiddenForFlight:'s own
+                                         * restore path has nothing left to
+                                         * find. */
+                                        for (j = 0; j < [containers count]; j++)
+                                          {
+                                            id container = [containers objectAtIndex: j];
+
+                                            if ([container respondsToSelector: @selector(showNameEditor)])
+                                              [container showNameEditor];
+                                          }
+                                      }];
+  [flight start];
+  RELEASE (flight);
 }
 
 @end

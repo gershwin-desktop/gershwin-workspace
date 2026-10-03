@@ -9,11 +9,14 @@
 #define GS_GLOBAL_SHORTCUTS_MANAGER_H
 
 #import <Foundation/Foundation.h>
+#import <Foundation/NSRunLoop.h>
 #ifndef _WIN32
 #include <X11/Xlib.h>
 #endif
 
-@interface GSGlobalShortcutsManager : NSObject
+// Conforms to RunLoopEvents so the shortcuts X connection can wake the
+// run loop only when it actually has data, instead of being polled.
+@interface GSGlobalShortcutsManager : NSObject <RunLoopEvents>
 {
     NSMutableDictionary *shortcuts;
 #ifndef _WIN32
@@ -30,7 +33,11 @@
     BOOL verbose;
     time_t lastDefaultsModTime;
     NSString *defaultsDomain;
-    NSTimer *eventProcessingTimer;
+
+    // fd of the shortcuts' own X connection, registered with the run loop
+    // (ET_RDESC) so events are drained only when the socket is readable
+    int xEventQueueFd;
+    BOOL runLoopSourceAdded;
 
     // Close window shortcut (Alt+W / Cmd+W in Gershwin)
     // Keycode for 'w' (0 if not available/initialized)

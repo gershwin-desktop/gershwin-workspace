@@ -71,6 +71,15 @@
       [[FSNIconLoader sharedLoader] cancelClient: [columns objectAtIndex: i]];
     }
 
+  /* A pending double-click timeout targets self; left running past
+   * -dealloc it fires -doubleClikTimeOut: into a freed instance. */
+  if (doubleClickTimer != nil)
+    {
+      [doubleClickTimer invalidate];
+      RELEASE (doubleClickTimer);
+      doubleClickTimer = nil;
+    }
+
   RELEASE (baseNode);
   RELEASE (extInfoType);
   RELEASE (lastSelection);
@@ -1290,12 +1299,19 @@
           mousePointX = p.x;
           mousePointY = p.y;
           simulatingDoubleClick = YES;
-          
-          [NSTimer scheduledTimerWithTimeInterval: 0.3
-                                           target: self 
-                                         selector: @selector(doubleClikTimeOut:)
-                                         userInfo: nil 
-                                          repeats: NO];
+
+          if (doubleClickTimer != nil)
+            {
+              [doubleClickTimer invalidate];
+              RELEASE (doubleClickTimer);
+            }
+
+          ASSIGN (doubleClickTimer,
+                  [NSTimer scheduledTimerWithTimeInterval: 0.3
+                                                   target: self
+                                                 selector: @selector(doubleClikTimeOut:)
+                                                 userInfo: nil
+                                                  repeats: NO]);
         }
     }
   
@@ -1362,6 +1378,7 @@
 - (void)doubleClikTimeOut:(id)sender
 {
   simulatingDoubleClick = NO;
+  DESTROY (doubleClickTimer);
 }
 
 - (void)mouseDown:(NSEvent*)theEvent
@@ -2174,6 +2191,71 @@
   }
 
   return selection;
+}
+
+/* -selectedReps here always means the actual selected cells (never the
+   shown-node fallback -selectedPaths/-selectedNodes use for an empty
+   column), which is exactly what a flight needs: nothing to fly when
+   nothing is selected. */
+- (NSArray *)flightSourcesForSelectedReps
+{
+  return [self flightSourcesForCells: [self selectedReps]];
+}
+
+/* An external caller asking for a flight is given paths, not a selection in
+   the key window (Workspace -trashExternalPaths:), so the same sources have
+   to be resolvable for an arbitrary set of cells.  Unlike an icon or list
+   view, one browser shows many folders at once, so every loaded column is
+   searched - a cell that is scrolled out of view or below the clip has no
+   screen rect and is left out below, exactly as one whose cell cannot be
+   resolved is. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths
+{
+  NSMutableArray *matched = [NSMutableArray arrayWithCapacity: [paths count]];
+  NSUInteger i, j;
+
+  if (paths == nil)
+    return matched;
+
+  for (i = 0; i < [columns count]; i++)
+    {
+      NSArray *cells = [[[columns objectAtIndex: i] cmatrix] cells];
+
+      for (j = 0; j < [cells count]; j++)
+        {
+          NSString *path = [[[cells objectAtIndex: j] node] path];
+
+          if (path != nil && [paths containsObject: path])
+            [matched addObject: [cells objectAtIndex: j]];
+        }
+    }
+
+  return [self flightSourcesForCells: matched];
+}
+
+- (NSArray *)flightSourcesForCells:(NSArray *)reps
+{
+  NSMutableArray *sources = [NSMutableArray arrayWithCapacity: [reps count]];
+  NSUInteger i;
+
+  for (i = 0; i < [reps count]; i++)
+    {
+      FSNBrowserCell *cell = [reps objectAtIndex: i];
+      NSRect rectOnScreen = [self screenRectForCell: cell];
+      NSImage *image = [cell icon];
+      NSString *path = [[cell node] path];
+
+      if (NSEqualRects(rectOnScreen, NSZeroRect) || image == nil || path == nil)
+        continue;
+
+      [sources addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+        path, @"path",
+        [NSValue valueWithRect: rectOnScreen], @"rect",
+        image, @"image",
+        nil]];
+    }
+
+  return sources;
 }
 
 - (void)selectionDidChange

@@ -70,4 +70,21 @@
  */
 + (void)flushCache;
 
+/**
+ * Enumerate the whole mount table without statting any mount point: one
+ * dictionary per entry, with the same "mountPoint"/"source"/"fsType" keys
+ * +mountPointForPath: etc. build from. On Linux this reads @p tablePath
+ * with getmntent - pass nil for the live table (/proc/self/mounts, the
+ * only one that also supports poll(2) POLLPRI, which is what
+ * GWDesktopManager's mount-change watcher blocks on), or a fixture file
+ * path from a test. On the BSDs getmntinfo(3) always reads the live
+ * kernel table and @p tablePath is ignored - there is no on-disk file to
+ * redirect it to. Returns an empty array (never nil) if the table could
+ * not be read.
+ */
++ (NSArray *)mountedFilesystemsFromTable:(NSString *)tablePath;
+
+/** Convenience for +mountedFilesystemsFromTable: against the live table. */
++ (NSArray *)mountedFilesystems;
+
 @end

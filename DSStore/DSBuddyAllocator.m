@@ -115,6 +115,9 @@ static const uint8_t kHeaderTrailer[16] = {
     [_offsets removeAllObjects];
     const uint32_t *otab =
         (const uint32_t *)([_data bytes] + base + 8);
+    /* A truncated file may claim more offsets than it holds. */
+    uint32_t offsetsPresent = (uint32_t)(([_data length] - (base + 8)) / 4);
+    if (offsetCount > offsetsPresent) offsetCount = offsetsPresent;
     for (uint32_t i = 0; i < offsetCount && i < 256; i++) {
         [_offsets addObject:[NSNumber numberWithUnsignedInt:fromBE32(otab[i])]];
     }

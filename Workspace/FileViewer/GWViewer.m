@@ -1265,9 +1265,17 @@ static BOOL hasLastExtents_ = NO;
   [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_WIN_H)];    
   [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
 
-  [pathsScroll setDocumentView: pathsView];	
-  RELEASE (pathsView); 
-  range = NSMakeRange([pathsView firstVisibleIcon], [pathsView lastVisibleIcon]);
+  [pathsScroll setDocumentView: pathsView];
+  RELEASE (pathsView);
+  {
+    /* setSelectableIconsRange: wants a COUNT of visible icons in
+     * range.length, not the index of the last one - passing the index
+     * inflated the count by firstVisibleIcon and corrupted the icon
+     * path's tiling (see GWViewerIconsPath.m setSelectableIconsRange:). */
+    int first = [pathsView firstVisibleIcon];
+    int last = [pathsView lastVisibleIcon];
+    range = NSMakeRange(first, last - first + 1);
+  }
   [pathsView setSelectableIconsRange: range];
 
   [nviewScroll setDocumentView: nodeView];

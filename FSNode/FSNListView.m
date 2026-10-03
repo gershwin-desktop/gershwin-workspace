@@ -1574,6 +1574,88 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   return [NSArray arrayWithArray: selpaths];
 }
 
+/* The row's whole span covers every column (name, size, date, ...); only
+   the name column - where the icon and the filename actually sit - is
+   what the user would recognize this row's icon as, so that is what
+   flies rather than the full-width row. */
+- (NSArray *)flightSourcesForSelectedReps
+{
+  return [self flightSourcesForReps: [self selectedReps]];
+}
+
+/* An external caller asking for a flight is given paths, not a selection in
+   the key window (Workspace -trashExternalPaths:), so the same sources have
+   to be resolvable for an arbitrary set of rows.  Only rows this list is
+   actually showing can fly: an item in another folder has no rect here. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths
+{
+  NSMutableArray *matched = [NSMutableArray arrayWithCapacity: [paths count]];
+  NSUInteger i;
+
+  if (paths == nil)
+    return matched;
+
+  for (i = 0; i < [nodeReps count]; i++)
+    {
+      FSNListViewNodeRep *rep = [nodeReps objectAtIndex: i];
+      NSString *path = [[rep node] path];
+
+      if (path != nil && [paths containsObject: path])
+        [matched addObject: rep];
+    }
+
+  return [self flightSourcesForReps: matched];
+}
+
+- (NSArray *)flightSourcesForReps:(NSArray *)reps
+{
+  NSMutableArray *sources = [NSMutableArray arrayWithCapacity: [reps count]];
+  NSWindow *win = [listView window];
+  NSTableColumn *nameColumn = [listView tableColumnWithIdentifier:
+    [NSNumber numberWithInt: FSNInfoNameType]];
+  NSInteger nameColIndex = nameColumn
+    ? [listView columnWithIdentifier: [nameColumn identifier]] : -1;
+  NSUInteger i;
+
+  if (win == nil)
+    return sources;
+
+  for (i = 0; i < [reps count]; i++)
+    {
+      FSNListViewNodeRep *rep = [reps objectAtIndex: i];
+      NSInteger row = [nodeReps indexOfObjectIdenticalTo: rep];
+      NSRect rowRect, rect, rectInWindow, rectOnScreen;
+      NSImage *image;
+      NSString *path;
+
+      if (row == NSNotFound)
+        continue;
+
+      rowRect = [listView rectOfRow: row];
+      if (nameColIndex >= 0)
+        rect = NSIntersectionRect(rowRect, [listView rectOfColumn: nameColIndex]);
+      else
+        rect = rowRect;
+
+      rectInWindow = [listView convertRect: rect toView: nil];
+      rectOnScreen = [win convertRectToScreen: rectInWindow];
+
+      image = [rep icon];
+      path = [[rep node] path];
+
+      if (image == nil || path == nil)
+        continue;
+
+      [sources addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+        path, @"path",
+        [NSValue valueWithRect: rectOnScreen], @"rect",
+        image, @"image",
+        nil]];
+    }
+
+  return sources;
+}
+
 - (void)selectionDidChange
 {
   NSArray *selection = [self selectedNodes];
@@ -2909,6 +2991,15 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
                                                   name: NSUserDefaultsDidChangeNotification
                                                 object: nil];
 
+  /* A pending single-click timer targets self with 0.5s repeats:NO; left
+   * running past -dealloc it fires -singleClick: into a freed view. */
+  if (clickTimer != nil)
+    {
+      [clickTimer invalidate];
+      RELEASE (clickTimer);
+      clickTimer = nil;
+    }
+
   RELEASE (charBuffer);
   RELEASE (dsource);
   [super dealloc];
@@ -3320,6 +3411,16 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
 - (NSArray *)selectedPaths
 {
   return [dsource selectedPaths];
+}
+
+- (NSArray *)flightSourcesForSelectedReps
+{
+  return [dsource flightSourcesForSelectedReps];
+}
+
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths
+{
+  return [dsource flightSourcesForPaths: paths];
 }
 
 - (void)selectionDidChange

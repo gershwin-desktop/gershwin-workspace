@@ -53,6 +53,11 @@ t_FSNDisplayName_TOOL_LIBS += -lgnustep-gui
 # framework rather than single sources.
 t_FSNIconsViewTile_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                                 -lFSNode -lgnustep-gui
+# t_FSNIconsViewFlightLabel drives a real FSNIconsView (showContentsOfNode:,
+# selection, -setRep:hiddenForFlight:) the same way, so it links the built
+# framework too.
+t_FSNIconsViewFlightLabel_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                       -lFSNode -lgnustep-gui
 # Without this the tool runs against the installed framework and would report
 # on /System rather than on what was just built.  It has to be the old DT_RPATH
 # tag: GNUstep.sh puts the installed libraries in LD_LIBRARY_PATH, which the
@@ -74,3 +79,28 @@ t_FSNLayoutWidth_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
 # so the built library is named by path.
 t_FSNMouseUpOrder_TOOL_LIBS += ../../FSNode/FSNode.framework/Versions/Current/libFSNode.so \
                                -lgnustep-gui
+
+# t_FSNSubpath links FSNFunctions.m directly, like t_FSNDisplayName.
+t_FSNSubpath_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
+                           ../../FSNode/FSNFunctions.m \
+                           ../../FSNode/FSNAlias.m \
+                           ../../FSNode/FSNodeRep.m \
+                           ../../FSNode/FSNodeRepIcons.m \
+                           ../../FSNode/FSNode.m
+t_FSNSubpath_TOOL_LIBS += -lgnustep-gui
+
+# t_FSNTextCellLabelLookup includes FSNTextCell.m directly (private ivars);
+# it drives FSNodeRep sharedInstance too, so the same collaborators as
+# t_FSNDirectorySnapshot are linked in as separate objects.
+t_FSNTextCellLabelLookup_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
+                                       ../../FSNode/FSNFunctions.m \
+                                       ../../FSNode/FSNAlias.m \
+                                       ../../FSNode/FSNodeRep.m \
+                                       ../../FSNode/FSNodeRepIcons.m \
+                                       ../../FSNode/FSNode.m
+t_FSNTextCellLabelLookup_TOOL_LIBS += -lgnustep-gui
+
+# t_FSNBrowserMatrixDrawRectRowScan drives the real browser matrix/cell
+# classes, so it links the built framework like t_FSNIconsViewTile does.
+t_FSNBrowserMatrixDrawRectRowScan_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                               -lFSNode -lgnustep-gui

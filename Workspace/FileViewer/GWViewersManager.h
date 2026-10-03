@@ -182,6 +182,12 @@
 
 - (NSArray *)viewerWindows;
 
+/* A snapshot of the open viewers, invalidated ones included - for callers
+   that have to look through every window themselves (a trash flight asked
+   for by an external caller, which has no key window to start from) rather
+   than resolving a particular window or node. */
+- (NSArray *)allViewers;
+
 - (BOOL)orderingViewers;
 
 - (void)updateDesktop;

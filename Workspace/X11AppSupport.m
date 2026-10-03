@@ -27,6 +27,46 @@
 #include <stdlib.h>
 #include <math.h>
 
+/* Per-window property readers shared with GWX11ClientSnapshot. */
+@interface GWX11WindowManager (ClientSnapshotSupport)
+- (Display *)openDisplay;
+- (void)releaseDisplay:(Display *)dpy;
+- (Window *)getClientList:(Display *)dpy count:(unsigned long *)count;
+- (pid_t)getPIDForWindow:(Display *)dpy window:(Window)win;
+- (NSString *)getWindowName:(Display *)dpy window:(Window)win;
+- (BOOL)isWindowHidden:(Display *)dpy window:(Window)win;
+- (BOOL)hasNetWmStateSkipTaskbar:(Display *)dpy window:(Window)win;
+- (BOOL)checkWindowIconified:(Display *)dpy window:(Window)win;
+@end
+
+/* What the snapshot knows about one client window.  The owner is read for
+ * every window when the snapshot loads; the rest only for the windows a
+ * question actually looks at, and then once. */
+@interface GWX11ClientRecord : NSObject
+{
+@public
+    Window window;
+    pid_t pid;
+    BOOL stateKnown;
+    BOOL skipTaskbar;
+    BOOL viewableKnown;
+    BOOL viewable;
+    BOOL namesKnown;
+    NSString *name;
+    NSString *className;
+    BOOL workspaceWindow;
+}
+@end
+
+@implementation GWX11ClientRecord
+- (void)dealloc
+{
+    RELEASE(name);
+    RELEASE(className);
+    [super dealloc];
+}
+@end
+
 #pragma mark - X11 Error Handler
 
 /* Custom X error handler to prevent crashes from BadWindow/BadMatch errors.
@@ -285,6 +325,9 @@ static NSString * const GWX11ThreadDisplayKey = @"GWX11WindowManagerDisplay";
                            &bytes_after, &data) == Success && data && nitems > 0) {
         name = [NSString stringWithUTF8String:(const char *)data];
         XFree(data);
+        /* A title that is not valid UTF-8 gives no string; the fallback
+         * below must not free the property data a second time. */
+        data = NULL;
         if (name) return name;
     }
     if (data) { XFree(data); data = NULL; }
@@ -450,37 +493,14 @@ static NSString * const GWX11ThreadDisplayKey = @"GWX11WindowManagerDisplay";
     return windows;
 }
 
+- (GWX11ClientSnapshot *)clientSnapshot
+{
+    return AUTORELEASE([[GWX11ClientSnapshot alloc] initWithManager: self]);
+}
+
 - (NSArray *)windowsForPID:(pid_t)pid
 {
-    NSMutableArray *windows = [NSMutableArray array];
-    if (pid <= 0) return windows;
-    
-    Display *dpy = [self openDisplay];
-    if (!dpy) return windows;
-    
-    @try {
-        unsigned long count = 0;
-        Window *clients = [self getClientList:dpy count:&count];
-        
-        if (clients) {
-            for (unsigned long i = 0; i < count; i++) {
-                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
-                if (winPID == pid) {
-                    /* Skip windows with _NET_WM_STATE_SKIP_TASKBAR */
-                    if (![self hasNetWmStateSkipTaskbar:dpy window:clients[i]]) {
-                        GWX11WindowInfo *info = [self infoForWindow:dpy window:clients[i]];
-                        [windows addObject:info];
-                    }
-                }
-            }
-            XFree(clients);
-        }
-    }
-    @finally {
-        [self releaseDisplay:dpy];
-    }
-    
-    return windows;
+    return [[self clientSnapshot] windowsForPID:pid];
 }
 
 /*
@@ -506,95 +526,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 
 - (NSArray *)windowsMatchingName:(NSString *)name
 {
-    NSMutableArray *windows = [NSMutableArray array];
-    if (!name || [name length] == 0) return windows;
-    
-    Display *dpy = [self openDisplay];
-    if (!dpy) return windows;
-    
-    @try {
-        unsigned long count = 0;
-        Window *clients = [self getClientList:dpy count:&count];
-        
-        if (clients) {
-            pid_t myPID = getpid();
-
-            for (unsigned long i = 0; i < count; i++) {
-                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
-
-                /* Skip windows with no PID (WM root/decoration windows) */
-                if (winPID <= 0) {
-                    continue;
-                }
-
-                /* Skip our own windows — the Workspace file viewer titles
-                 * can match app names (e.g., a viewer browsing "xpdf" volume
-                 * would falsely match an app named "xpdf").
-                 * Check both _NET_WM_PID and WM_CLASS since GNUstep apps
-                 * may not set _NET_WM_PID. */
-                if (winPID == myPID) {
-                    continue;
-                }
-
-                NSString *winName = [self getWindowName:dpy window:clients[i]];
-                NSString *winClass = [self getWindowClass:dpy window:clients[i]];
-
-                /* Skip windows belonging to Workspace (by WM_CLASS).
-                 * GNUstep apps have res_class="GNUstep". Workspace's own
-                 * windows use specific res_name values like "Workspace",
-                 * "FileViewer", "Window", etc. Check both parts to avoid
-                 * filtering out other GNUstep applications' windows. */
-                if (winClass && [winClass isEqualToString:@"GNUstep"]) {
-                    XClassHint classHint;
-                    if (XGetClassHint(dpy, clients[i], &classHint)) {
-                        BOOL isWorkspace = NO;
-                        if (classHint.res_name) {
-                            NSString *resName = [NSString stringWithCString:classHint.res_name encoding:NSUTF8StringEncoding];
-                            if ([resName isEqualToString:@"Workspace"] ||
-                                [resName isEqualToString:@"FileViewer"] ||
-                                [resName isEqualToString:@"Window"] ||
-                                [resName isEqualToString:@"Finder"]) {
-                                isWorkspace = YES;
-                            }
-                            XFree(classHint.res_name);
-                        }
-                        if (classHint.res_class) {
-                            XFree(classHint.res_class);
-                        }
-                        if (isWorkspace) {
-                            continue;
-                        }
-                    }
-                }
-
-                /* Skip windows with _NET_WM_STATE_SKIP_TASKBAR (e.g. app icon
-                 * windows, desktop windows, dock panels). */
-                if ([self hasNetWmStateSkipTaskbar:dpy window:clients[i]]) {
-                    continue;
-                }
-
-                BOOL matches = NO;
-                if (winName && stringStartsOrEndsWith(winName, name)) {
-                    matches = YES;
-                } else if (winClass && stringStartsOrEndsWith(winClass, name)) {
-                    matches = YES;
-                }
-
-                /* Other users' windows on this display are not this
-                 * session's applications. */
-                if (matches && [GWProcessOwnership isProcessOwnedByCurrentUser: winPID]) {
-                    GWX11WindowInfo *info = [self infoForWindow:dpy window:clients[i]];
-                    [windows addObject:info];
-                }
-            }
-            XFree(clients);
-        }
-    }
-    @finally {
-        [self releaseDisplay:dpy];
-    }
-    
-    return windows;
+    return [[self clientSnapshot] windowsMatchingName:name];
 }
 
 - (unsigned long)findWindowByName:(NSString *)name
@@ -1013,39 +945,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 
 - (BOOL)hasWindowsForPID:(pid_t)pid
 {
-    if (pid <= 0) return NO;
-
-    Display *dpy = [self openDisplay];
-    if (!dpy) return NO;
-
-    BOOL hasVisible = NO;
-
-    @try {
-        unsigned long count = 0;
-        Window *clients = [self getClientList:dpy count:&count];
-
-        if (clients) {
-            for (unsigned long i = 0; i < count && !hasVisible; i++) {
-                pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
-                if (winPID == pid) {
-                    if ([self hasNetWmStateSkipTaskbar:dpy window:clients[i]])
-                        continue;
-                    XWindowAttributes attrs;
-                    if (XGetWindowAttributes(dpy, clients[i], &attrs)) {
-                        if (attrs.map_state == IsViewable) {
-                            hasVisible = YES;
-                        }
-                    }
-                }
-            }
-            XFree(clients);
-        }
-    }
-    @finally {
-        [self releaseDisplay:dpy];
-    }
-
-    return hasVisible;
+    return [[self clientSnapshot] hasVisibleWindowsForPID:pid];
 }
 
 - (BOOL)hasWindowsMatchingName:(NSString *)name
@@ -1360,6 +1260,184 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 
 @end
 
+#pragma mark - GWX11ClientSnapshot Implementation
+
+@implementation GWX11ClientSnapshot
+
+- (id)initWithManager:(GWX11WindowManager *)aManager
+{
+    self = [super init];
+    if (self) {
+        manager = aManager;
+        clients = [[NSMutableArray alloc] init];
+    }
+    return self;
+}
+
+- (void)dealloc
+{
+    RELEASE(clients);
+    [super dealloc];
+}
+
+/* Read the client list and every window's owner.  Happens once, on the
+ * first question, on the asking thread's connection. */
+- (void)load
+{
+    if (loaded) {
+        return;
+    }
+    loaded = YES;
+
+    display = [manager openDisplay];
+    if (display == NULL) {
+        return;
+    }
+
+    unsigned long count = 0;
+    Window *list = [manager getClientList:display count:&count];
+    if (list != NULL) {
+        for (unsigned long i = 0; i < count; i++) {
+            GWX11ClientRecord *rec = [[GWX11ClientRecord alloc] init];
+            rec->window = list[i];
+            rec->pid = [manager getPIDForWindow:display window:list[i]];
+            [clients addObject:rec];
+            RELEASE(rec);
+        }
+        XFree(list);
+    }
+    [manager releaseDisplay:display];
+}
+
+- (BOOL)skipsTaskbar:(GWX11ClientRecord *)rec
+{
+    if (!rec->stateKnown) {
+        rec->stateKnown = YES;
+        rec->skipTaskbar = [manager hasNetWmStateSkipTaskbar:display window:rec->window];
+    }
+    return rec->skipTaskbar;
+}
+
+- (BOOL)isViewable:(GWX11ClientRecord *)rec
+{
+    if (!rec->viewableKnown) {
+        XWindowAttributes attrs;
+        rec->viewableKnown = YES;
+        rec->viewable = XGetWindowAttributes(display, rec->window, &attrs)
+                        && attrs.map_state == IsViewable;
+    }
+    return rec->viewable;
+}
+
+- (void)readNames:(GWX11ClientRecord *)rec
+{
+    if (rec->namesKnown) {
+        return;
+    }
+    rec->namesKnown = YES;
+    rec->name = [[manager getWindowName:display window:rec->window] copy];
+
+    XClassHint hint;
+    if (XGetClassHint(display, rec->window, &hint)) {
+        if (hint.res_class != NULL) {
+            rec->className = [[NSString alloc] initWithCString:hint.res_class
+                                                      encoding:NSUTF8StringEncoding];
+        }
+        /* GNUstep apps may not set _NET_WM_PID, so our own windows are
+         * also told apart by their class hint.  A file viewer browsing a
+         * volume called "xpdf" must not count as the xpdf application. */
+        if (hint.res_name != NULL && [rec->className isEqualToString:@"GNUstep"]) {
+            NSString *resName = [NSString stringWithCString:hint.res_name
+                                                   encoding:NSUTF8StringEncoding];
+            rec->workspaceWindow = [resName isEqualToString:@"Workspace"]
+                                   || [resName isEqualToString:@"FileViewer"]
+                                   || [resName isEqualToString:@"Window"]
+                                   || [resName isEqualToString:@"Finder"];
+        }
+        if (hint.res_name != NULL) {
+            XFree(hint.res_name);
+        }
+        if (hint.res_class != NULL) {
+            XFree(hint.res_class);
+        }
+    }
+}
+
+- (GWX11WindowInfo *)infoForRecord:(GWX11ClientRecord *)rec
+{
+    GWX11WindowInfo *info = [GWX11WindowInfo infoWithWindowID:rec->window];
+    [self readNames:rec];
+    info.windowName = rec->name;
+    info.windowClass = rec->className;
+    info.ownerPID = rec->pid;
+    info.isHidden = [manager isWindowHidden:display window:rec->window];
+    info.isIconified = [manager checkWindowIconified:display window:rec->window];
+    return info;
+}
+
+- (BOOL)hasVisibleWindowsForPID:(pid_t)pid
+{
+    if (pid <= 0) {
+        return NO;
+    }
+    [self load];
+    for (GWX11ClientRecord *rec in clients) {
+        if (rec->pid == pid && ![self skipsTaskbar:rec] && [self isViewable:rec]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
+- (NSArray *)windowsForPID:(pid_t)pid
+{
+    NSMutableArray *windows = [NSMutableArray array];
+    if (pid <= 0) {
+        return windows;
+    }
+    [self load];
+    for (GWX11ClientRecord *rec in clients) {
+        if (rec->pid == pid && ![self skipsTaskbar:rec]) {
+            [windows addObject:[self infoForRecord:rec]];
+        }
+    }
+    return windows;
+}
+
+- (NSArray *)windowsMatchingName:(NSString *)name
+{
+    NSMutableArray *windows = [NSMutableArray array];
+    if ([name length] == 0) {
+        return windows;
+    }
+    [self load];
+    pid_t myPID = getpid();
+    for (GWX11ClientRecord *rec in clients) {
+        /* No owner: the window manager's own frames and decorations. */
+        if (rec->pid <= 0 || rec->pid == myPID) {
+            continue;
+        }
+        if ([self skipsTaskbar:rec]) {
+            continue;
+        }
+        [self readNames:rec];
+        if (rec->workspaceWindow) {
+            continue;
+        }
+        BOOL matches = (rec->name != nil && stringStartsOrEndsWith(rec->name, name))
+                       || (rec->className != nil && stringStartsOrEndsWith(rec->className, name));
+        /* Other users' windows on this display are not this session's
+         * applications. */
+        if (matches && [GWProcessOwnership isProcessOwnedByCurrentUser:rec->pid]) {
+            [windows addObject:[self infoForRecord:rec]];
+        }
+    }
+    return windows;
+}
+
+@end
+
+
 #pragma mark - X11 Application Info
 
 @interface GWX11AppInfo : NSObject
@@ -1387,13 +1465,23 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 @synthesize appName, appPath, windowSearchString, pid, hasWindowAppeared;
 @synthesize windowScanCount, nextWindowScan;
 
+/* An app whose window has not turned up after this many attempts is not
+ * going to show one during this session: five doublings reach the 10s cap
+ * at attempt 6 (about 15.5s in), so 20 attempts is roughly two and a half
+ * minutes of trying - generous for a slow-starting GUI, past which
+ * continuing to scan only pays an X round trip for a program that has
+ * none (a headless helper, a tray-only client, or one whose window carries
+ * nothing -windowsMatchingName: can recognise). */
+static const NSUInteger GWX11MaxWindowScanAttempts = 20;
+
 /* Looking for the windows of an app costs a round trip to the X server per
  * window, and it only serves to notice the first window of an app that has
  * just been started. An app that shows one does so within seconds, so the
  * first attempts come quickly and then ever more slowly, down to once every
  * ten seconds for an app whose windows never turn up at all (a program
  * without a window, or one whose windows carry nothing to recognise them
- * by). Nothing is given up: the app is still noticed, just later. */
+ * by). Nothing is given up here: see GWX11MaxWindowScanAttempts for where
+ * the caller stops trying. */
 - (BOOL)shouldScanWindowsAt:(NSTimeInterval)now
 {
     if (hasWindowAppeared) {
@@ -1443,6 +1531,8 @@ static GWX11AppManager *sharedX11AppManager = nil;
         x11Apps = [[NSMutableDictionary alloc] init];
         monitorTimer = nil;
         delegate = nil;
+        scanThread = nil;
+        scanThreadShouldStop = NO;
     }
     return self;
 }
@@ -1450,6 +1540,7 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (void)dealloc
 {
     [monitorTimer invalidate];
+    [self stopScanThread];
     RELEASE(x11Apps);
     [super dealloc];
 }
@@ -1481,7 +1572,61 @@ static GWX11AppManager *sharedX11AppManager = nil;
     if (monitorTimer && [x11Apps count] == 0) {
         [monitorTimer invalidate];
         monitorTimer = nil;
+        [self stopScanThread];
     }
+}
+
+/* Starts, if it is not already running, the one worker thread that all
+ * window scans for this monitoring session share; see the ivar comment in
+ * X11AppSupport.h. Called only from the main thread (monitorTimerFired). */
+- (void)ensureScanThreadRunning
+{
+    if (scanThread != nil) {
+        return;
+    }
+    scanThreadShouldStop = NO;
+    scanThread = [[NSThread alloc] initWithTarget: self
+                                          selector: @selector(scanThreadMain)
+                                            object: nil];
+    [scanThread start];
+}
+
+/* Runs for as long as apps still need their windows looked for, taking
+ * scans handed to it by -monitorTimerFired via performSelector:onThread:.
+ * The point of staying alive between ticks is openDisplay's per-thread
+ * cache: the same thread every tick means the same X connection every
+ * tick, instead of a fresh XOpenDisplay (Xauthority read, cookie
+ * handshake, extension queries) every 0.5s. */
+- (void)scanThreadMain
+{
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+    /* A run loop with no input source does not park in runMode:beforeDate:
+     * (it returns at once, so this loop would spin a whole core) and never
+     * gets to deliver a performSelector:onThread: hand-off. A port that is
+     * never used gives the loop something to wait on. */
+    [[NSRunLoop currentRunLoop] addPort: [NSPort port] forMode: NSDefaultRunLoopMode];
+    while (!scanThreadShouldStop) {
+        NSAutoreleasePool *inner = [[NSAutoreleasePool alloc] init];
+        [[NSRunLoop currentRunLoop] runMode: NSDefaultRunLoopMode
+                                 beforeDate: [NSDate dateWithTimeIntervalSinceNow: 1.0]];
+        RELEASE(inner);
+    }
+    [[GWX11WindowManager sharedManager] closeThreadDisplay];
+    RELEASE(pool);
+}
+
+/* Not joined: the thread notices scanThreadShouldStop within a second (the
+ * runMode timeout above) and drops its own connection when it does;
+ * blocking the main thread on that would trade one idle cost for a worse
+ * one. A monitoring session that restarts inside that second just starts a
+ * second worker, which is harmless (each thread's connection is its own,
+ * per openDisplay's per-thread cache) and self-corrects once the old one
+ * exits. */
+- (void)stopScanThread
+{
+    scanThreadShouldStop = YES;
+    RELEASE(scanThread);
+    scanThread = nil;
 }
 
 - (void)monitorTimerFired:(NSTimer *)timer
@@ -1492,10 +1637,24 @@ static GWX11AppManager *sharedX11AppManager = nil;
      * main thread they can wedge the app under window churn (X11
      * self-deadlock, the same class of bug as the DockIcon refresh). */
     NSMutableArray *snapshot = [NSMutableArray array];
+    NSMutableArray *expiredNames = [NSMutableArray array];
     NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
     for (NSString *appName in [x11Apps allKeys]) {
         GWX11AppInfo *info = [x11Apps objectForKey:appName];
         if (info == nil) continue;
+
+        if (!info.hasWindowAppeared
+            && info.windowScanCount >= GWX11MaxWindowScanAttempts) {
+            /* Its window was never going to turn up (see
+             * GWX11MaxWindowScanAttempts); drop it so an idle desktop
+             * reaches zero scans instead of probing it every 10s for the
+             * rest of the session. Not reported as terminated: the process
+             * is still running, we have just stopped watching for its
+             * window. */
+            [expiredNames addObject: appName];
+            continue;
+        }
+
         /* Decided here, on the main thread, so the worker only reads the
          * snapshot: the liveness probe runs every time, the window scan as
          * often as the app's own backoff allows. */
@@ -1507,6 +1666,9 @@ static GWX11AppManager *sharedX11AppManager = nil;
             [NSNumber numberWithInt: (int)info.pid], @"pid",
             [NSNumber numberWithBool: info.hasWindowAppeared], @"appeared",
             [NSNumber numberWithBool: scanWindows], @"scanwindows", nil]];
+    }
+    for (NSString *appName in expiredNames) {
+        [x11Apps removeObjectForKey: appName];
     }
     if ([snapshot count] == 0) {
         [self stopMonitorTimer];
@@ -1534,15 +1696,21 @@ static GWX11AppManager *sharedX11AppManager = nil;
         return;
     }
 
-    [NSThread detachNewThreadSelector: @selector(monitorScanWorker:)
-                             toTarget: self
-                           withObject: snapshot];
+    /* Hand the scan to the one persistent worker thread rather than
+     * detaching a new one: see -ensureScanThreadRunning / -scanThreadMain. */
+    [self ensureScanThreadRunning];
+    [self performSelector: @selector(monitorScanWorker:)
+                  onThread: scanThread
+                withObject: snapshot
+             waitUntilDone: NO];
 }
 
 /* Worker thread: check process liveness and run the X window scans for a
  * snapshot of the registered apps.  Only immutable snapshot data is read, and
  * GWX11WindowManager gives every thread its own X connection, so this is safe
- * off the main thread.  Results are applied back on the main thread. */
+ * off the main thread.  Results are applied back on the main thread.  The
+ * connection itself outlives this one call - see -scanThreadMain - so unlike
+ * a one-shot worker this must not close it after every scan. */
 - (void)monitorScanWorker:(NSArray *)appSnapshots
 {
     NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
@@ -1551,7 +1719,6 @@ static GWX11AppManager *sharedX11AppManager = nil;
 
     [self performSelectorOnMainThread: @selector(applyMonitorResults:)
                            withObject: results waitUntilDone: NO];
-    [[GWX11WindowManager sharedManager] closeThreadDisplay];
     [pool drain];
 }
 
@@ -1562,7 +1729,8 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (NSDictionary *)monitorResultsFor:(NSArray *)appSnapshots
                     scanningWindows:(BOOL)mayScan
 {
-    GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+    /* One reading of the client list serves every app of this run. */
+    GWX11ClientSnapshot *windows = mayScan ? [[GWX11WindowManager sharedManager] clientSnapshot] : nil;
     NSMutableArray *appeared = [NSMutableArray array];
     NSMutableArray *terminated = [NSMutableArray array];
 
@@ -1582,14 +1750,14 @@ static GWX11AppManager *sharedX11AppManager = nil;
         /* Check if windows have appeared for this app. */
         if (mayScan && !alreadyAppeared
             && [[snap objectForKey: @"scanwindows"] boolValue]) {
-            NSArray *windows = [wm windowsForPID:pid];
-            if ([windows count] == 0) {
+            NSArray *found = [windows windowsForPID:pid];
+            if ([found count] == 0) {
                 NSString *search = [snap objectForKey: @"search"];
                 if ([search length] > 0) {
-                    windows = [wm windowsMatchingName:search];
+                    found = [windows windowsMatchingName:search];
                 }
             }
-            if ([windows count] > 0) {
+            if ([found count] > 0) {
                 [appeared addObject: [NSDictionary dictionaryWithObjectsAndKeys:
                     appName ?: @"", @"name", appPath ?: @"", @"path", nil]];
             }

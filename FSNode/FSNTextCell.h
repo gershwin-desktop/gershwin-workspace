@@ -48,6 +48,9 @@
   NSImage *displayIcon;   /* icon with tagColor badge composited on */
   NSColor *tagColor;
   NSString *nodePath;
+  /* Whether the label colour for nodePath has already been fetched from
+   * the metadata provider, so "no label" is not retried on every draw. */
+  BOOL tagColorLookedUp;
 }
 
 - (void)setIcon:(NSImage *)icn;

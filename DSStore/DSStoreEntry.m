@@ -515,7 +515,7 @@ static DSStoreEntry *patchedPlistEntry(NSString *filename, NSString *code,
     [patch appendBytes: &yBig length: 4];
 
     /* Keep every byte after offset 8 (the trailing 0xFF../flags tail). */
-    NSMutableData *data = [src mutableCopy];
+    NSMutableData *data = [[src mutableCopy] autorelease];
     if ([data length] < 16) [data setLength: 16];
     [data replaceBytesInRange: NSMakeRange(0, 8) withBytes: [patch bytes]];
 
@@ -537,7 +537,7 @@ static DSStoreEntry *patchedPlistEntry(NSString *filename, NSString *code,
 
     /* Patch only the RGB triplet (bytes 4-10); the "ClrB" tag, the reserved
      * byte and any trailing bytes are carried forward untouched. */
-    NSMutableData *data = [src mutableCopy];
+    NSMutableData *data = [[src mutableCopy] autorelease];
     [data replaceBytesInRange: NSMakeRange(4, 2) withBytes: &redBig length: 2];
     [data replaceBytesInRange: NSMakeRange(6, 2) withBytes: &greenBig length: 2];
     [data replaceBytesInRange: NSMakeRange(8, 2) withBytes: &blueBig length: 2];
@@ -558,7 +558,7 @@ static DSStoreEntry *patchedPlistEntry(NSString *filename, NSString *code,
      * Only the icon size is Workspace-owned; everything else (including the
      * arrangement 4CC and any future trailing fields) is carried forward. */
     uint16_t sizeBig = swapInt16HostToBig((uint16_t)size);
-    NSMutableData *data = [src mutableCopy];
+    NSMutableData *data = [[src mutableCopy] autorelease];
     [data replaceBytesInRange: NSMakeRange(12, 2) withBytes: &sizeBig length: 2];
 
     return [[[DSStoreEntry alloc] initWithFilename: filename
@@ -588,7 +588,7 @@ static DSStoreEntry *patchedPlistEntry(NSString *filename, NSString *code,
             [styleData getBytes: style length: 4];
     }
 
-    NSMutableData *data = [src mutableCopy];
+    NSMutableData *data = [[src mutableCopy] autorelease];
     if ([data length] < 16) [data setLength: 16];
     [data replaceBytesInRange: NSMakeRange(0, 2) withBytes: &top length: 2];
     [data replaceBytesInRange: NSMakeRange(2, 2) withBytes: &left length: 2];

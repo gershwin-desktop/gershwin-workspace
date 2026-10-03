@@ -133,13 +133,18 @@
 - (NSRange)visibleRowRange
 {
   NSRange range = NSMakeRange(0, 0);
-  NSArray *cells = [self cells];
+  /* -cells copies every cell into a fresh NSArray, which is disproportionate
+   * just to learn the row count; -numberOfRows reads the same ivar -cells
+   * would have counted, without the O(rows) allocation. This method is now
+   * on the drawRect: hot path (see -[FSNBrowserMatrix drawRect:]), so that
+   * allocation would otherwise run on every single-row redraw. */
+  NSInteger rows = [self numberOfRows];
 
-  if (cells && [cells count])
+  if (rows > 0)
     {
       NSRect vr = [self visibleRect];
       float rowh = [self cellSize].height;
-      NSUInteger count = [cells count];
+      NSUInteger count = (NSUInteger)rows;
       NSUInteger first, last, i;
 
       if (rowh <= 0)
@@ -374,16 +379,41 @@
   if (rows > 0)
     {
       NSColor *evenColor = [NSColor colorWithCalibratedWhite: 0.92 alpha: 1.0];
-      NSInteger i;
+      NSRange visRows = [self visibleRowRange];
+      NSInteger first = (NSInteger)visRows.location;
+      NSInteger count = (NSInteger)visRows.length;
 
-      for (i = 0; i < rows; i += 2)
+      /* A big directory decorates one row at a time as its icons load, each
+       * invalidating only that row's rect; walking every row of the whole
+       * matrix to find which ones fall in it turned that into an O(rows)
+       * scan per redraw, O(rows^2) overall. Only the rows the clip view can
+       * actually show need to be walked at all. */
+      if (count > 0)
         {
-          NSRect cellFrame = [self cellFrameAtRow: i column: 0];
+          NSInteger last = first + count;
+          NSInteger i;
 
-          if (NSIntersectsRect(cellFrame, rect))
+          if (first % 2 != 0)
             {
-              [evenColor set];
-              NSRectFill(cellFrame);
+              first--;
+            }
+
+          for (i = first; i < last; i += 2)
+            {
+              NSRect cellFrame;
+
+              if (i < 0 || i >= rows)
+                {
+                  continue;
+                }
+
+              cellFrame = [self cellFrameAtRow: i column: 0];
+
+              if (NSIntersectsRect(cellFrame, rect))
+                {
+                  [evenColor set];
+                  NSRectFill(cellFrame);
+                }
             }
         }
     }

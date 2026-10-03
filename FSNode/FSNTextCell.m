@@ -123,6 +123,7 @@
   c->displayIcon = [displayIcon retain];
   c->tagColor = [tagColor retain];
   c->nodePath = [nodePath retain];
+  c->tagColorLookedUp = tagColorLookedUp;
 
   return c;
 }
@@ -166,6 +167,12 @@
 
 - (void)setNodePath:(NSString *)path
 {
+  /* A row's cell is reused across many draws with the same path; only a
+   * real path change invalidates the "already looked up" state below. */
+  if ([nodePath isEqualToString: path] == NO)
+    {
+      tagColorLookedUp = NO;
+    }
   ASSIGN (nodePath, path);
 }
 
@@ -337,11 +344,14 @@
 
     [super drawInteriorWithFrame: title_rect inView: controlView];
 
-    /* Lazily load tag colour from the metadata provider if not already set */
-    if (tagColor == nil && nodePath != nil)
+    /* Lazily load tag colour from the metadata provider, but only once per
+     * nodePath: "no label" (the common case) must not be re-queried on
+     * every redraw of the same row. */
+    if (tagColor == nil && nodePath != nil && tagColorLookedUp == NO)
       {
         NSColor *color = [[[FSNodeRep sharedInstance] metadataProvider]
                            labelColorForPath: nodePath];
+        tagColorLookedUp = YES;
         if (color)
           [self setTagColor: color];
       }

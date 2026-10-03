@@ -104,6 +104,11 @@ extern "C" {
     uint32_t _records;
     uint32_t _nodes;
     uint32_t _pageSize;
+
+    // Block numbers already visited while walking the current load's
+    // B-tree, so a file whose child/sibling links form a cycle aborts
+    // instead of recursing forever.
+    NSMutableIndexSet *_visitedBTreeBlocks;
 }
 
 // Factory methods

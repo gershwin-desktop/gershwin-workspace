@@ -13,6 +13,20 @@
 #import "DSStore.h"
 #import "DSStoreEntry.h"
 
+/* Older caches carry "<directory>/<name>" entries next to the bare names.
+ * Under the root every entry starts with "/", so a scoped child of "/" is
+ * only a name with no further separator; a plain prefix test would claim
+ * every folder on the volume (and delete them all when "/" was saved). */
+static BOOL
+GWVolumeCacheIsScopedChild(NSString *filename, NSString *directory)
+{
+  if ([directory isEqualToString:@"/"]) {
+    return [filename hasPrefix:@"/"]
+           && [filename rangeOfString:@"/" options:0 range:NSMakeRange(1, [filename length] - 1)].location == NSNotFound;
+  }
+  return [filename hasPrefix:[directory stringByAppendingString:@"/"]];
+}
+
 @implementation GWVolumeCache
 
 @synthesize cacheFilePath = _cacheFilePath;
@@ -263,16 +277,13 @@
    * may additionally carry scoped "<key>/<filename>" entries.  Prefer the
    * bare-name form (the Mac convention and our new writes); only fall back to
    * a scoped entry when no bare entry exists for that file. */
-  NSString *keyPrefix = ([key isEqualToString:@"/"])
-                          ? @"/"
-                          : [key stringByAppendingString:@"/"];
   NSArray *allFiles = [store allFilenames];
 
   NSMutableArray *scopedFiles = [NSMutableArray array];
   NSMutableArray *bareFiles = [NSMutableArray array];
   for (NSString *filename in allFiles) {
     if ([filename isEqualToString:key]) continue;  /* dir-level entries */
-    if ([filename hasPrefix:keyPrefix]) {
+    if (GWVolumeCacheIsScopedChild(filename, key)) {
       [scopedFiles addObject:filename];
     } else {
       [bareFiles addObject:filename];
@@ -293,8 +304,9 @@
   }
 
   /* Pass 2: legacy scoped entries - only fill files that got no bare entry. */
+  NSUInteger prefixLength = [key isEqualToString:@"/"] ? 1 : [key length] + 1;
   for (NSString *filename in scopedFiles) {
-    NSString *bareName = [filename substringFromIndex:[keyPrefix length]];
+    NSString *bareName = [filename substringFromIndex:prefixLength];
     if ([info iconInfoForFilename: bareName] == nil) {
       [self readPerFileEntry:filename bareName:bareName fromStore:store into:info];
     }
@@ -420,11 +432,8 @@
    * directory.  The root "/" itself is already a "/" - do not build a "//"
    * prefix. */
   NSArray *allFiles = [store allFilenames];
-  NSString *keyPrefix = ([key isEqualToString:@"/"])
-                          ? @"/"
-                          : [key stringByAppendingString:@"/"];
   for (NSString *fname in allFiles) {
-    if ([fname hasPrefix:keyPrefix] && [fname isEqualToString:key] == NO) {
+    if (GWVolumeCacheIsScopedChild(fname, key) && [fname isEqualToString:key] == NO) {
       [store removeAllEntriesForFilename:fname];
     }
   }

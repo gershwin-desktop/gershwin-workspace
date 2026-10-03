@@ -31,22 +31,38 @@
 /* Polling interval for navigation requests (seconds) */
 #define GW_NAVIGATE_POLL_INTERVAL 1.0
 
-/* Custom X error handler to prevent crashes from BadWindow */
+/* XSetErrorHandler is process-global: installing a handler here for the
+ * whole run would also swallow errors on AppKit's own X connection and
+ * defeat libs-back's XGErrorHandler (its BadMatch/SetInputFocus retry and
+ * its exceptions for real protocol errors - see XGServerEvent.m).  Our own
+ * window can legitimately vanish between us reading its id and the X
+ * server acting on it (the WM tears it down on close), which is the one
+ * error we need to swallow, and only around our own calls: save whatever
+ * handler is currently installed, swap ours in, make the calls, then put
+ * the previous handler straight back (the pattern libs-back itself uses
+ * in xutil.c around XShmAttach). */
+static XErrorHandler previousX11ErrorHandler = NULL;
+
 static int gwX11ErrorHandler(Display *dpy, XErrorEvent *event)
 {
-  char errorText[256];
-  XGetErrorText(dpy, event->error_code, errorText, sizeof(errorText));
+  if (event->error_code == BadWindow) {
+    return 0;
+  }
+  if (previousX11ErrorHandler != NULL) {
+    return previousX11ErrorHandler(dpy, event);
+  }
   return 0;
 }
 
-static BOOL x11HandlerInstalled = NO;
-
-static void ensureErrorHandler(void)
+static void beginIgnoringBadWindow(void)
 {
-  if (!x11HandlerInstalled) {
-    XSetErrorHandler(gwX11ErrorHandler);
-    x11HandlerInstalled = YES;
-  }
+  previousX11ErrorHandler = XSetErrorHandler(gwX11ErrorHandler);
+}
+
+static void endIgnoringBadWindow(void)
+{
+  XSetErrorHandler(previousX11ErrorHandler);
+  previousX11ErrorHandler = NULL;
 }
 
 @interface GWX11SpatialPath (Private)
@@ -76,8 +92,6 @@ static void ensureErrorHandler(void)
 {
   if (!_window || !_currentPath)
     return;
-
-  ensureErrorHandler();
 
   [self updateAtomWithPath:_currentPath];
   [self clearNavigateAtom];
@@ -139,7 +153,6 @@ static void ensureErrorHandler(void)
 - (Display *)display
 {
   if (_dpy == NULL) {
-    ensureErrorHandler();
     _dpy = XOpenDisplay(NULL);
   }
   return _dpy;
@@ -163,9 +176,11 @@ static void ensureErrorHandler(void)
   Atom utf8Atom = XInternAtom(dpy, "UTF8_STRING", False);
   const char *cpath = [path UTF8String];
 
+  beginIgnoringBadWindow();
   XChangeProperty(dpy, xid, atom, utf8Atom, 8, PropModeReplace,
                   (unsigned char *)cpath, (int)strlen(cpath));
   XSync(dpy, False);
+  endIgnoringBadWindow();
 }
 
 /* Delete _GW_SPATIAL_NAVIGATE to clear a stale request */
@@ -180,8 +195,10 @@ static void ensureErrorHandler(void)
   }
 
   Atom atom = XInternAtom(dpy, GW_ATOM_SPATIAL_NAVIGATE, False);
+  beginIgnoringBadWindow();
   XDeleteProperty(dpy, xid, atom);
   XSync(dpy, False);
+  endIgnoringBadWindow();
 }
 
 /* Poll for _GW_SPATIAL_NAVIGATE requests from the WM */
@@ -212,6 +229,7 @@ static void ensureErrorHandler(void)
   unsigned char *data = NULL;
   NSString *targetPath = nil;
 
+  beginIgnoringBadWindow();
   if (XGetWindowProperty(dpy, xid, navAtom, 0, 4096, True,
                          utf8Atom, &actual_type, &actual_format,
                          &nitems, &bytes_after, &data) == Success && data && nitems > 0) {
@@ -220,6 +238,7 @@ static void ensureErrorHandler(void)
   }
 
   XSync(dpy, False);
+  endIgnoringBadWindow();
 
   if (targetPath) {
     if ([targetPath length] > 0) {

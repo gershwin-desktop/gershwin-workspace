@@ -3,3 +3,41 @@ GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace
 # GWApplicationLauncher.m builds its error alert from AppKit classes.
 t_GWApplicationLauncher_TOOL_LIBS += -lgnustep-gui
+# X11AppSupport.m talks to GNUstepGUI/GSDisplayServer and to Xlib directly.
+t_GWX11AppSupport_TOOL_LIBS += -lgnustep-gui -lX11
+
+# GWArchiveOperation.m builds a progress panel from AppKit classes (never
+# actually shown - the test drives runCompress directly, not -run) and
+# imports GWMetaArchive.h, whose implementation is linked as a separate
+# object per the GSMetadata subproject's own library/deps.
+ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata
+t_GWArchiveOperationCancel_OBJC_FILES += ../../GWMetadata/GWMetaArchive.m
+t_GWArchiveOperationCancel_TOOL_LIBS += -lgnustep-gui -lGSMetadata -larchive
+
+# GWThumbnailer.m imports AppKit/AppKit.h (NSBundle/NSImage-adjacent code
+# paths) and dispatch/dispatch.h (header only - no dispatch_* call remains).
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Thumbnailer
+t_GWThumbnailerConcurrency_TOOL_LIBS += -lgnustep-gui
+# X11AppSupport.m needs AppKit and Xlib even when only its thread is exercised.
+t_GWX11ScanThread_TOOL_LIBS += -lgnustep-gui -lX11
+
+# t_AppImageProbeCache and t_AppImageDirIconCycle #include
+# AppImageIconProvider.m in-process (the unit under test). Its own
+# FSNodeRep/FSNIcon categories reference those two classes by name, so
+# linking the built FSNode framework (not a fresh in-tree copy) resolves
+# them exactly like Workspace itself does; libsquashfs is the library the
+# unit was built against.
+ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
+                      -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+t_AppImageProbeCache_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                  -lFSNode -lgnustep-gui -lsquashfs
+t_AppImageDirIconCycle_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                    -lFSNode -lgnustep-gui -lsquashfs
+
+# VMPathIsActiveMountPoint is a `static inline` predicate declared directly
+# in VolumeManager.h (not VolumeManager.m), specifically so this test can
+# exercise VolumeManager's real mount-detection logic without dragging in
+# VolumeManager.m's AppKit/Workspace/FSNode/AVFS dependencies. It calls
+# +[GWVolumeID mountedFilesystems], linked here as a separate object.
+t_VolumeManagerMountDetection_OBJC_FILES += ../../Workspace/FileViewer/GWVolumeID.m

@@ -8,12 +8,6 @@
 #import <signal.h>
 #import <errno.h>
 #import <unistd.h>
-#if defined(__FreeBSD__) || defined(__NetBSD__) || defined(__OpenBSD__) || defined(__DragonFly__) || defined(__APPLE__)
-# include <sys/param.h>
-# include <sys/mount.h>
-#elif !defined(_WIN32)
-# include <sys/statfs.h>
-#endif
 #import "VolumeManager.h"
 #import "AVFSMount.h"
 #import "Workspace.h"
@@ -192,6 +186,16 @@ static VolumeManager *sharedInstance = nil;
  * the file at all, so report both together rather than a tool-specific alert. */
 - (void)showNoDmgToolInstalledAlert
 {
+  if (![NSThread isMainThread]) {
+    /* A mount can now run from the async wrappers' background thread
+     * (below); NSAlert's modal loop still has to be pumped from the main
+     * thread, so hop back instead of assuming a caller already is there. */
+    [self performSelectorOnMainThread:@selector(showNoDmgToolInstalledAlert)
+                            withObject:nil
+                         waitUntilDone:NO];
+    return;
+  }
+
   NSAlert *alert = [[NSAlert alloc] init];
   [alert setMessageText:@"DMG Mount Tool Not Installed"];
   [alert setInformativeText:
@@ -208,6 +212,13 @@ static VolumeManager *sharedInstance = nil;
 
 - (void)showFuseisoNotInstalledAlert
 {
+  if (![NSThread isMainThread]) {
+    [self performSelectorOnMainThread:@selector(showFuseisoNotInstalledAlert)
+                            withObject:nil
+                         waitUntilDone:NO];
+    return;
+  }
+
   NSAlert *alert = [[NSAlert alloc] init];
   [alert setMessageText:@"fuseiso Not Installed"];
   [alert setInformativeText:
@@ -224,6 +235,13 @@ static VolumeManager *sharedInstance = nil;
 
 - (void)showErrorAlert:(NSString *)errorMsg
 {
+  if (![NSThread isMainThread]) {
+    [self performSelectorOnMainThread:@selector(showErrorAlert:)
+                            withObject:errorMsg
+                         waitUntilDone:NO];
+    return;
+  }
+
   NSAlert *alert = [[NSAlert alloc] init];
   [alert setMessageText:@"Mount Error"];
   [alert setInformativeText:errorMsg];
@@ -235,24 +253,53 @@ static VolumeManager *sharedInstance = nil;
 
 - (NSString *)mountPointForImageFile:(NSString *)imagePath
 {
-  return [mountedVolumes objectForKey:imagePath];
+  /* mountedVolumes can now be written from the async wrappers' background
+   * thread while this is read from the main thread (or vice versa). */
+  @synchronized(self) {
+    return [mountedVolumes objectForKey:imagePath];
+  }
+}
+
+/* Returns the mount point already tracked for imagePath if it is still
+ * genuinely mounted, evicting the entry and returning nil if it exists but
+ * is stale - the exact case -isMountPointActive: was fixed to detect.
+ * Shared by all three mount methods below instead of each repeating its
+ * own check-and-evict. */
+- (NSString *)activeExistingMountForImage:(NSString *)imagePath
+{
+  NSString *existingMount;
+  @synchronized(self) {
+    existingMount = [[mountedVolumes objectForKey:imagePath] copy];
+  }
+  if (existingMount && [self isMountPointActive:existingMount]) {
+    return [existingMount autorelease];
+  }
+  if (existingMount) {
+    @synchronized(self) {
+      [mountedVolumes removeObjectForKey:imagePath];
+      [mountedVolumesPIDs removeObjectForKey:imagePath];
+    }
+    [existingMount release];
+  }
+  return nil;
+}
+
+/* Records a completed mount so every mount type shares one synchronized
+ * point of truth instead of repeating unguarded dictionary/set mutations -
+ * load-bearing now that a mount can finish on a background thread while
+ * another one is still in flight (see the async wrappers below). */
+- (void)recordMount:(NSString *)mountPoint pid:(int)taskPid forImage:(NSString *)imagePath
+{
+  @synchronized(self) {
+    [mountedVolumes setObject:mountPoint forKey:imagePath];
+    [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:imagePath];
+    [diskImageMountPoints addObject:mountPoint];
+  }
 }
 
 - (BOOL)isMountPointActive:(NSString *)mountPoint
 {
-#ifdef _WIN32
-  BOOL isDir = NO;
-  if ([fm fileExistsAtPath:mountPoint isDirectory:&isDir] && isDir) {
-    return YES;
-  }
-  return NO;
-#else
-  struct statfs statbuf;
-  if (statfs([mountPoint UTF8String], &statbuf) == 0) {
-    return YES;
-  }
-  return NO;
-#endif
+  return VMPathIsActiveMountPoint(mountPoint);
 }
 
 /* Verify that the mount point has at least one entry and that the FUSE PID is running */
@@ -427,6 +474,20 @@ static VolumeManager *sharedInstance = nil;
 
 - (void)registerVolumeWithDesktop:(NSString *)mountPoint isDiskImage:(BOOL)isDiskImage
 {
+  if (![NSThread isMainThread]) {
+    /* FSNode/FSNodeRep and the desktop view are AppKit-adjacent state that
+     * must only be touched from the main thread; a mount can now finish on
+     * a background thread (see the async wrappers below), so hop back
+     * instead of assuming this call already started out there. */
+    NSDictionary *args = [NSDictionary dictionaryWithObjectsAndKeys:
+      mountPoint, @"mountPoint",
+      [NSNumber numberWithBool:isDiskImage], @"isDiskImage", nil];
+    [self performSelectorOnMainThread:@selector(_registerVolumeWithDesktopArgs:)
+                            withObject:args
+                         waitUntilDone:NO];
+    return;
+  }
+
   /* Mark as mount point and register with desktop */
   @try {
     FSNode *vnode = [FSNode nodeWithPath:mountPoint];
@@ -453,6 +514,15 @@ static VolumeManager *sharedInstance = nil;
     }
   } @catch (NSException *e) {
   }
+}
+
+/* performSelectorOnMainThread: target for the hop above - performSelector
+ * only carries a single object argument, so the two real arguments travel
+ * boxed in a dictionary. */
+- (void)_registerVolumeWithDesktopArgs:(NSDictionary *)args
+{
+  [self registerVolumeWithDesktop:[args objectForKey:@"mountPoint"]
+                       isDiskImage:[[args objectForKey:@"isDiskImage"] boolValue]];
 }
 
 /* Try to mount a DMG with one specific tool. Returns the mount point on
@@ -570,9 +640,7 @@ static VolumeManager *sharedInstance = nil;
 /* Register a just-mounted DMG volume and notify observers. */
 - (void)registerDmgMount:(NSString *)dmgPath mountPoint:(NSString *)mountPoint pid:(int)taskPid
 {
-  [mountedVolumes setObject:mountPoint forKey:dmgPath];
-  [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:dmgPath];
-  [diskImageMountPoints addObject:mountPoint];
+  [self recordMount:mountPoint pid:taskPid forImage:dmgPath];
 
   /* Register with desktop to show on desktop and in viewers */
   [self registerVolumeWithDesktop:mountPoint isDiskImage:YES];
@@ -590,14 +658,9 @@ static VolumeManager *sharedInstance = nil;
 
 - (NSString *)mountDMGFile:(NSString *)dmgPath
 {
-  NSString *existingMount = [self mountPointForImageFile:dmgPath];
+  NSString *existingMount = [self activeExistingMountForImage:dmgPath];
   if (existingMount) {
-    if ([self isMountPointActive:existingMount]) {
-      return existingMount;
-    } else {
-      [mountedVolumes removeObjectForKey:dmgPath];
-      [mountedVolumesPIDs removeObjectForKey:dmgPath];
-    }
+    return existingMount;
   }
 
   if (![fm fileExistsAtPath:dmgPath]) {
@@ -651,16 +714,11 @@ static VolumeManager *sharedInstance = nil;
 
 - (NSString *)mountISOFile:(NSString *)isoPath
 {
-  NSString *existingMount = [self mountPointForImageFile:isoPath];
+  NSString *existingMount = [self activeExistingMountForImage:isoPath];
   if (existingMount) {
-    if ([self isMountPointActive:existingMount]) {
-      return existingMount;
-    } else {
-      [mountedVolumes removeObjectForKey:isoPath];
-      [mountedVolumesPIDs removeObjectForKey:isoPath];
-    }
+    return existingMount;
   }
-  
+
   if (![fm fileExistsAtPath:isoPath]) {
     [self showErrorAlert:[NSString stringWithFormat:@"ISO file not found: %@", isoPath]];
     return nil;
@@ -720,13 +778,11 @@ static VolumeManager *sharedInstance = nil;
         return nil;
       }
 
-      
-      [mountedVolumes setObject:mountPoint forKey:isoPath];
-      [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:isoPath];
-      [diskImageMountPoints addObject:mountPoint];
-      
+
+      [self recordMount:mountPoint pid:taskPid forImage:isoPath];
+
       [self registerVolumeWithDesktop:mountPoint isDiskImage:YES];
-      
+
       NSString *parent = [mountPoint stringByDeletingLastPathComponent];
       NSString *name = [mountPoint lastPathComponent];
       [[NSNotificationCenter defaultCenter]
@@ -735,7 +791,7 @@ static VolumeManager *sharedInstance = nil;
                               @"source": parent,
                               @"destination": parent,
                               @"files": @[name]}];
-      
+
       return mountPoint;
     } else {
       NSData *errData = [[errPipe fileHandleForReading] availableData];
@@ -760,13 +816,11 @@ static VolumeManager *sharedInstance = nil;
           return nil;
         }
 
-        
-        [mountedVolumes setObject:mountPoint forKey:isoPath];
-        [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:isoPath];
-        [diskImageMountPoints addObject:mountPoint];
-        
+
+        [self recordMount:mountPoint pid:taskPid forImage:isoPath];
+
         [self registerVolumeWithDesktop:mountPoint isDiskImage:YES];
-        
+
         NSString *parent = [mountPoint stringByDeletingLastPathComponent];
         NSString *name = [mountPoint lastPathComponent];
         [[NSNotificationCenter defaultCenter]
@@ -775,7 +829,7 @@ static VolumeManager *sharedInstance = nil;
                                 @"source": parent,
                                 @"destination": parent,
                                 @"files": @[name]}];
-        
+
         [isoTask release];
         return mountPoint;
       }
@@ -815,8 +869,8 @@ static VolumeManager *sharedInstance = nil;
                      [extension isEqualToString:@"sqsh"] ||
                      [extension isEqualToString:@"sfs"]);
 
-  NSString *existingMount = [self mountPointForImageFile:imagePath];
-  if (existingMount && [self isMountPointActive:existingMount]) {
+  NSString *existingMount = [self activeExistingMountForImage:imagePath];
+  if (existingMount) {
     return existingMount;
   }
 
@@ -883,13 +937,11 @@ static VolumeManager *sharedInstance = nil;
         return nil;
       }
 
-      
-      [mountedVolumes setObject:mountPoint forKey:imagePath];
-      [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:imagePath];
-      [diskImageMountPoints addObject:mountPoint];
-      
+
+      [self recordMount:mountPoint pid:taskPid forImage:imagePath];
+
       [self registerVolumeWithDesktop:mountPoint isDiskImage:YES];
-      
+
       NSString *parent = [mountPoint stringByDeletingLastPathComponent];
       NSString *name = [mountPoint lastPathComponent];
       [[NSNotificationCenter defaultCenter]
@@ -898,11 +950,11 @@ static VolumeManager *sharedInstance = nil;
                               @"source": parent,
                               @"destination": parent,
                               @"files": @[name]}];
-      
+
       [fuseTask release];
       return mountPoint;
     }
-    
+
     NSData *errData = [[errPipe fileHandleForReading] availableData];
     NSString *errString = @"";
     if (errData) {
@@ -925,13 +977,11 @@ static VolumeManager *sharedInstance = nil;
         return nil;
       }
 
-      
-      [mountedVolumes setObject:mountPoint forKey:imagePath];
-      [mountedVolumesPIDs setObject:[NSNumber numberWithInt:taskPid] forKey:imagePath];
-      [diskImageMountPoints addObject:mountPoint];
-      
+
+      [self recordMount:mountPoint pid:taskPid forImage:imagePath];
+
       [self registerVolumeWithDesktop:mountPoint isDiskImage:YES];
-      
+
       NSString *parent = [mountPoint stringByDeletingLastPathComponent];
       NSString *name = [mountPoint lastPathComponent];
       [[NSNotificationCenter defaultCenter]
@@ -940,11 +990,11 @@ static VolumeManager *sharedInstance = nil;
                               @"source": parent,
                               @"destination": parent,
                               @"files": @[name]}];
-      
+
       [fuseTask release];
       return mountPoint;
     }
-    
+
     if ([fuseTask isRunning]) {
       [fuseTask terminate];
       sleep(1);
@@ -966,9 +1016,100 @@ static VolumeManager *sharedInstance = nil;
   }
 }
 
+#pragma mark - Asynchronous mounting
+
+/* Background-thread body for the async wrappers below: op picks which of
+ * the synchronous mount methods above to run unchanged (launching the
+ * helper tool and waiting for -verifyMountPoint:pid:error: to confirm it,
+ * which alone can take up to ~10s) - only the thread it runs on changes,
+ * so a caller on the main thread (typically reacting to a double-click)
+ * is never blocked waiting for a disk image or ISO to attach. delayUsec
+ * reproduces the fixed post-mount settle delay the caller used to sleep
+ * through itself, now spent here instead, where it costs nothing.
+ * result is delivered on the main thread via -_deliverAsyncMountResult:,
+ * since that is the thread every AppKit-facing thing a caller does with
+ * it (opening a viewer) has to run on. */
+- (void)_asyncMountWorker:(NSDictionary *)info
+{
+  NSAutoreleasePool *arp = [NSAutoreleasePool new];
+  NSString *op = [info objectForKey:@"op"];
+  NSString *path = [info objectForKey:@"path"];
+  useconds_t delayUsec = (useconds_t)[[info objectForKey:@"delayUsec"] unsignedIntValue];
+  NSString *result = nil;
+
+  if ([op isEqualToString:@"dmg"]) {
+    result = [self mountDMGFile:path];
+  } else if ([op isEqualToString:@"fuseiso"]) {
+    result = [self mountFuseisoImage:path];
+  }
+
+  if (result && delayUsec > 0) {
+    usleep(delayUsec);
+  }
+
+  NSMutableDictionary *delivery = [NSMutableDictionary dictionaryWithDictionary:info];
+  [delivery setObject:(result ? (id)result : (id)[NSNull null]) forKey:@"result"];
+  [self performSelectorOnMainThread:@selector(_deliverAsyncMountResult:)
+                          withObject:delivery
+                       waitUntilDone:NO];
+  [arp release];
+}
+
+/* performSelector only carries a single object argument, and SEL is not
+ * an object, so the target selector travels as its string name. */
+- (void)_deliverAsyncMountResult:(NSDictionary *)delivery
+{
+  id target = [delivery objectForKey:@"target"];
+  SEL selector = NSSelectorFromString([delivery objectForKey:@"selector"]);
+  id result = [delivery objectForKey:@"result"];
+
+  if ([result isKindOfClass:[NSNull class]]) {
+    result = nil;
+  }
+  if (target && selector && [target respondsToSelector:selector]) {
+    [target performSelector:selector withObject:result];
+  }
+}
+
+/* Asynchronous variant of -mountDMGFile:: the mount itself runs on a
+ * background thread; (target, selector) is invoked on the main thread
+ * with the resulting mount point, or nil if mounting failed (a failure
+ * alert has already been shown by then, exactly as -mountDMGFile: does
+ * when called directly). */
+- (void)mountDMGFile:(NSString *)dmgPath onMainThread:(id)target selector:(SEL)selector
+{
+  NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:
+    @"dmg", @"op",
+    dmgPath, @"path",
+    target, @"target",
+    NSStringFromSelector(selector), @"selector",
+    [NSNumber numberWithUnsignedInt:500000], @"delayUsec",
+    nil];
+  [NSThread detachNewThreadSelector:@selector(_asyncMountWorker:)
+                            toTarget:self
+                          withObject:info];
+}
+
+/* Asynchronous variant of -mountFuseisoImage:, covering ISO/BIN/NRG/IMG/
+ * MDF and squashfs/sqsh/sfs the same way -mountDMGFile:onMainThread:
+ * -selector: does for DMG. */
+- (void)mountFuseisoImage:(NSString *)imagePath onMainThread:(id)target selector:(SEL)selector
+{
+  NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:
+    @"fuseiso", @"op",
+    imagePath, @"path",
+    target, @"target",
+    NSStringFromSelector(selector), @"selector",
+    [NSNumber numberWithUnsignedInt:500000], @"delayUsec",
+    nil];
+  [NSThread detachNewThreadSelector:@selector(_asyncMountWorker:)
+                            toTarget:self
+                          withObject:info];
+}
+
 - (BOOL)unmountImageFile:(NSString *)imagePath
 {
-  NSString *mountPoint = [mountedVolumes objectForKey:imagePath];
+  NSString *mountPoint = [self mountPointForImageFile:imagePath];
   if (!mountPoint) {
     return NO;
   }
@@ -1000,18 +1141,25 @@ static VolumeManager *sharedInstance = nil;
   } else {
   }
   
-  /* Find the tracked volume for cleanup */
+  /* Find the tracked volume for cleanup - the dictionaries can now also be
+   * written by an async mount finishing on a background thread, so take a
+   * consistent snapshot instead of iterating live state. */
   NSString *foundKey = nil;
-  for (NSString *key in [mountedVolumes allKeys]) {
-    if ([[mountedVolumes objectForKey:key] isEqualToString:mountPath]) {
-      foundKey = key;
-      break;
+  NSNumber *pidNumber = nil;
+  @synchronized(self) {
+    for (NSString *key in [mountedVolumes allKeys]) {
+      if ([[mountedVolumes objectForKey:key] isEqualToString:mountPath]) {
+        foundKey = [[key copy] autorelease];
+        break;
+      }
+    }
+    if (foundKey) {
+      pidNumber = [mountedVolumesPIDs objectForKey:foundKey];
     }
   }
-  
+
   /* Kill process as last resort if proper unmount failed */
   if (!unmountSuccess && foundKey) {
-    NSNumber *pidNumber = [mountedVolumesPIDs objectForKey:foundKey];
     if (pidNumber) {
       int pid = [pidNumber intValue];
       
@@ -1043,11 +1191,11 @@ static VolumeManager *sharedInstance = nil;
   
   if (unmountSuccess) {
     /* Clean up tracking data */
-    if (foundKey) {
-      [mountedVolumes removeObjectForKey:foundKey];
-      [mountedVolumesPIDs removeObjectForKey:foundKey];
-    }
     @synchronized(self) {
+      if (foundKey) {
+        [mountedVolumes removeObjectForKey:foundKey];
+        [mountedVolumesPIDs removeObjectForKey:foundKey];
+      }
       [diskImageMountPoints removeObject:mountPath];
     }
     

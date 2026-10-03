@@ -315,6 +315,45 @@
 - (NSArray *)selectedReps;
 - (NSArray *)selectedNodes;
 - (NSArray *)selectedPaths;
+
+/* One NSDictionary per selected icon, each with @"path" (NSString),
+   @"rect" (NSValue-wrapped NSRect, the icon graphic's own on-screen rect -
+   -iconBounds, not the label), @"image" (NSImage, the icon's own image at
+   device-pixel resolution for this window's scale factor - not a
+   lockFocus snapshot of the view, which stayed pixelated once flown at any
+   scale factor above 1) and @"rep" (the FSNIcon itself, an NSView).  Used
+   to fly the icons to the Trash the way a drag there would look (Workspace
+   -moveToTrash), which also hides the rep's view for the duration of the
+   flight; an icon whose window cannot be resolved (no window, unusual
+   during any normal selection) is left out rather than reported with a
+   zero rect. */
+- (NSArray *)flightSourcesForSelectedReps;
+
+/* The same sources for an arbitrary set of paths instead of the selection -
+   what an external caller that was handed paths (Workspace
+   -trashExternalPaths:) needs.  Only items this view is currently showing
+   are returned; the rest have nothing on screen to fly from. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths;
+
+/* The implementation both of the above share: one NSDictionary per rep. */
+- (NSArray *)flightSourcesForReps:(NSArray *)reps;
+
+/* Hides (or shows again) one rep's icon for the duration of a
+   GWTrashFlight.  The selected item's name is drawn by a single shared
+   label kept over whichever icon is selected (-updateNameEditor, editIcon),
+   not by the icon's own view, so hiding the icon alone left that label
+   sitting at the icon's old position for the whole flight; this hides (or
+   restores) the label too, exactly when it is currently showing arep's
+   name. */
+- (void)setRep:(id)arep hiddenForFlight:(BOOL)hidden;
+
+/* Unconditionally shows the shared name-label editor again, regardless of
+   which rep (if any) it is currently positioned for - the safety net a
+   GWTrashFlight's completion calls on every view it hid a rep in, since by
+   the time it ends the rep's node - and so -setRep:hiddenForFlight:'s own
+   way of finding the label - may already be gone. */
+- (void)showNameEditor;
+
 - (void)selectionDidChange;
 - (void)checkLockedReps;
 - (void)setSelectionMask:(FSNSelectionMask)mask;

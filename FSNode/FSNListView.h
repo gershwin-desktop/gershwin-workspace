@@ -219,6 +219,24 @@
                           wasCut:(BOOL)cut;
 - (void)stopRepNameEditing;
 
+/* One NSDictionary per selected row, each with @"path" (NSString),
+   @"rect" (NSValue-wrapped NSRect, the row's name column converted to
+   screen coordinates) and @"image" (NSImage, its icon) - used to fly the
+   selection to the Trash the way a drag there would look (Workspace
+   -moveToTrash).  A row that cannot be resolved to a table row (unusual
+   during any normal selection) is left out rather than reported with a
+   zero rect. */
+- (NSArray *)flightSourcesForSelectedReps;
+
+/* The same sources for an arbitrary set of paths instead of the selection -
+   what an external caller that was handed paths (Workspace
+   -trashExternalPaths:) needs.  Only rows this list is currently showing
+   are returned. */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths;
+
+/* The implementation both of the above share: one NSDictionary per rep. */
+- (NSArray *)flightSourcesForReps:(NSArray *)reps;
+
 @end
 
 
@@ -404,6 +422,14 @@
 - (BOOL)validatePasteOfFilenames:(NSArray *)names
                           wasCut:(BOOL)cut;
 - (void)stopRepNameEditing;
+
+/* Forwards to the data source's own -flightSourcesForSelectedReps (see
+   FSNListViewDataSource (NodeRepContainer) above). */
+- (NSArray *)flightSourcesForSelectedReps;
+
+/* Forwards to the data source's own -flightSourcesForPaths: (see
+   FSNListViewDataSource (NodeRepContainer) above). */
+- (NSArray *)flightSourcesForPaths:(NSArray *)paths;
 
 @end
 

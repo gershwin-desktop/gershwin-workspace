@@ -34,6 +34,57 @@
 @class DockIcon;
 @class Workspace;
 
+/* The pointer is looked at every frame while it is anywhere near the Dock.
+ * Further away it is looked at just often enough to catch it coming: the
+ * time it would need to cross what is left of the distance, at a speed no
+ * pointer is pushed past, and never less often than the idle interval. */
+#define MAGNIFY_FRAME_INTERVAL (1.0 / 60.0)
+#define MAGNIFY_IDLE_INTERVAL 0.25
+/* A pointer that is not headed for the Dock spends most of its time further
+ * from the bar than this speed and the idle interval add up to, so it is a
+ * comfortable, deliberate approach rather than the fastest a hand can move a
+ * mouse: measured live, the old 4000 px/s left the Dock polling at ~12 Hz
+ * indefinitely at a resting position a few hundred points away, because the
+ * distance needed to reach MAGNIFY_IDLE_INTERVAL scaled with it (1000 px).
+ * Lower and the idle rate is actually reached at realistic "parked" spots;
+ * a flick that covers this speed's reach within one idle interval can still
+ * arrive a frame late, exactly as a flick beyond the old 1000 px bound
+ * already could. */
+#define MAGNIFY_POINTER_SPEED 1000.0
+
+/* Foundation-only so it can be tested headless (Tests/Dock). Takes the
+ * in-progress flag as a parameter rather than reading it off a Dock, so the
+ * timing rule can be proven without building one. */
+static inline NSTimeInterval
+DockMagnifyPollInterval(CGFloat distance, CGFloat nearDistance, BOOL armed)
+{
+  NSTimeInterval wait;
+
+  if (armed || (distance < nearDistance))
+    return MAGNIFY_FRAME_INTERVAL;
+
+  wait = (distance - nearDistance) / MAGNIFY_POINTER_SPEED;
+
+  if (wait < MAGNIFY_FRAME_INTERVAL)
+    return MAGNIFY_FRAME_INTERVAL;
+  if (wait > MAGNIFY_IDLE_INTERVAL)
+    return MAGNIFY_IDLE_INTERVAL;
+
+  return wait;
+}
+
+/* Whether -refreshLaunchedStateWorker: would actually touch X for an icon in
+ * this state, so a round can leave out the ones it would only relay back
+ * unchanged: an X11-tracked icon always re-checks its windows, and a
+ * launched icon whose pid is not yet known tries once to discover it (see
+ * DockIcon.m); anything else takes the early-return path that makes no X
+ * call at all. Foundation-only so it can be tested headless. */
+static inline BOOL
+DockIconNeedsLaunchedStateScan(BOOL isX11OnlyApp, BOOL isLaunched, pid_t appPID)
+{
+  return isX11OnlyApp || (isLaunched && (appPID <= 0));
+}
+
 typedef enum DockStyle
 {   
   DockStyleClassic = 0,
@@ -68,6 +119,19 @@ typedef enum DockStyle
   DockIcon *springIcon;
   
   NSTimer *launchRefreshTimer;
+
+  /* The one worker thread every launch-refresh round hands its X scans to
+   * (see -_launchRefreshTimerFired: in Dock.m), instead of each round
+   * detaching a thread of its own: a Dock with eighteen icons used to open
+   * ten fresh threads and X connections a second even at rest.  Started on
+   * first use, stopped in -dealloc.  -[DockIcon refreshLaunchedStateAsync]
+   * shares it too, through -performLaunchRefreshSelector:target:withObject:,
+   * rather than pay for a second persistent thread beside this one.  Mirrors
+   * -[GWX11AppManager scanThread] in X11AppSupport.m; kept as Dock's own
+   * rather than moved into GWX11WindowManager because this worktree does not
+   * touch X11AppSupport.h/.m. */
+  NSThread *launchRefreshThread;
+  volatile BOOL launchRefreshThreadShouldStop;
 
   /* The magnification of the expired patent US7434177: while the pointer is
    * on the Dock, the icons around it are drawn larger and the rest slide
@@ -145,6 +209,12 @@ typedef enum DockStyle
 
 - (DockIcon *)trashIcon;
 
+/* The Trash icon's current on-screen rect, in AppKit screen coordinates
+ * (origin bottom-left) - the destination for the "fly to Trash" animation
+ * (Workspace -moveToTrash / GWTrashFlight).  NSZeroRect when the Trash icon
+ * or its window cannot be resolved (Dock not yet shown). */
+- (NSRect)trashIconScreenRect;
+
 - (DockIcon *)iconContainingPoint:(NSPoint)p;
 
 - (void)setDndSourceIcon:(DockIcon *)icon;
@@ -213,6 +283,24 @@ typedef enum DockStyle
 - (void)updateDefaults;
 
 - (void)checkRemovedApp:(id)sender;
+
+/* Hands a launch-refresh scan off to the Dock's one persistent worker
+ * thread (starting it on first use) instead of detaching a thread of its
+ * own for the call: see the launchRefreshThread ivar comment above and
+ * -_launchRefreshTimerFired: in Dock.m. -[DockIcon refreshLaunchedStateAsync]
+ * calls this through -dock so a single icon's own refresh shares the same
+ * thread and X connection as the Dock's own round. Runs @p selector on
+ * @p target with @p argument; always asynchronous (waitUntilDone: NO), the
+ * same as the X scans it replaces - the caller must not depend on the
+ * result being ready when this returns. */
+- (void)performLaunchRefreshSelector:(SEL)selector
+                               target:(id)target
+                           withObject:(id)argument;
+
+/* Stops the persistent worker thread and drops its X connection. Called
+ * from -dealloc; exposed so Tests/Dock can prove the thread does not
+ * outlive the object without building a whole Dock. */
+- (void)stopLaunchRefreshThread;
 
 @end
 

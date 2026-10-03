@@ -452,7 +452,13 @@ static NSString *nibName = @"FileOperationWin";
           if ([[pFiles objectAtIndex:i] isEqualTo:[fi objectForKey:@"name"]])
             found = YES;
           else
-            i++;
+            /* Advance the SEARCH index (j), not the outer per-processed-name
+             * index (i): incrementing i here left j stuck at 0 whenever the
+             * first pending file was not a match, so the scan never moved
+             * through `files' and i alone ran past the end of pFiles,
+             * raising NSRangeException the next time a user paused a
+             * multi-file operation partway through. */
+            j++;
         }
       if (found)
         {

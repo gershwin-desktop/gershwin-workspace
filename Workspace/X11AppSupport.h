@@ -53,6 +53,45 @@ typedef unsigned long GWNativeWindowID;
 
 @end
 
+#pragma mark - X11 Client Snapshot
+
+@class GWX11WindowManager;
+
+/**
+ * One reading of the X server's client list, taken on the first question
+ * asked of it.  Every question about the same moment (the Dock refreshing
+ * all of its icons, the app monitor checking every registered app) is
+ * answered from that one reading instead of walking the whole client list
+ * again per question, which cost a round trip per window per question.
+ *
+ * The reading is bound to the X connection of the thread that asks first:
+ * keep a snapshot on one thread and drop it before that thread's
+ * -closeThreadDisplay.  Answers describe the moment of the first question.
+ */
+@interface GWX11ClientSnapshot : NSObject
+{
+    GWX11WindowManager *manager;
+    Display *display;
+    NSMutableArray *clients;
+    BOOL loaded;
+}
+
+- (id)initWithManager:(GWX11WindowManager *)aManager;
+
+/** YES if the process owns a mapped window that is not marked to skip the
+ * taskbar. */
+- (BOOL)hasVisibleWindowsForPID:(pid_t)pid;
+
+/** GWX11WindowInfo for every window of the process that is not marked to
+ * skip the taskbar. */
+- (NSArray *)windowsForPID:(pid_t)pid;
+
+/** GWX11WindowInfo for every window of another process of this user whose
+ * title or class starts or ends with the name. */
+- (NSArray *)windowsMatchingName:(NSString *)name;
+
+@end
+
 #pragma mark - X11 Window Operations
 
 /**
@@ -74,6 +113,12 @@ typedef unsigned long GWNativeWindowID;
 - (void)closeThreadDisplay;
 
 #pragma mark Window Discovery
+
+/**
+ * A fresh, unread snapshot of the client list for the calling thread.
+ * Ask it several questions where each would otherwise walk the client list.
+ */
+- (GWX11ClientSnapshot *)clientSnapshot;
 
 /**
  * Returns all client windows from the window manager's client list.
@@ -330,6 +375,13 @@ typedef unsigned long GWNativeWindowID;
     NSMutableDictionary *x11Apps;
     NSTimer *monitorTimer;
     id<GWX11AppManagerDelegate> delegate;
+    /* One worker thread lives for as long as any app still needs its
+     * windows looked for, so the X connection it opens (see
+     * -[GWX11WindowManager openDisplay]'s per-thread cache) is paid for once
+     * per monitoring session rather than once per 0.5s tick.  See
+     * -ensureScanThreadRunning / -stopScanThread in X11AppSupport.m. */
+    NSThread *scanThread;
+    volatile BOOL scanThreadShouldStop;
 }
 
 @property (nonatomic, assign) id<GWX11AppManagerDelegate> delegate;

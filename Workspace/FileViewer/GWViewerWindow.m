@@ -30,6 +30,7 @@
 #import "Workspace.h"
 #import "GWDesktopManager.h"
 #import "FSNSpringLoader.h"
+#import "../QuickLook/GWQuickLookController.h"
 
 // Forward declare methods to avoid warnings
 @interface NSObject (ViewerDelegateMethods)
@@ -209,18 +210,37 @@
       if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
         {
           id del = [self delegate];
+          NSArray *selection = nil;
 
           if ([del respondsToSelector: @selector(lastSelection)])
             {
-              NSArray *sel = [del lastSelection];
-              if (sel && [sel count] > 0)
+              selection = [del lastSelection];
+            }
+
+          /* lastSelection still holds the base folder itself when nothing
+           * inside it is selected (the same convention -validateItem: in
+           * GWViewerBase/GWSpatialViewer checks before enabling Cut/Get
+           * Info/etc.): without this check, Space with nothing selected
+           * would open Quick Look on the folder itself instead of doing
+           * nothing. */
+          if ([selection count] == 1 && [del respondsToSelector: @selector(baseNode)])
+            {
+              FSNode *baseNode = [del baseNode];
+
+              if (baseNode && [[selection objectAtIndex: 0] isEqual: baseNode])
                 {
-                  [NSApp sendAction: @selector(showAttributesInspector:)
-                                 to: nil
-                               from: self];
-                  return YES;
+                  selection = nil;
                 }
             }
+
+          /* Space toggles the Quick Look panel for the current selection:
+           * opens it, or closes it if one is already open (from this
+           * window or another) regardless of what is selected now.  Get
+           * Info's Attributes/Contents inspector - what Space used to
+           * open here - stays reachable only from its own menu item. */
+          return [[GWQuickLookController sharedController]
+                     toggleQuickLookForSelection: selection
+                                    sourceWindow: self];
         }
     }
 
@@ -357,9 +377,9 @@
     case NSDeleteCharacter:
     case NSBackspaceCharacter:
     case NSDeleteFunctionKey:
-      if (flags & (NSShiftKeyMask | NSCommandKeyMask))
+      if ((flags & NSShiftKeyMask) && (flags & NSCommandKeyMask))
 	{
-	  // Command + Delete or Shift + Delete = Empty Trash
+	  // Command + Shift + Delete = Empty Trash
 	  [[self delegate] emptyTrash];
 	}
       else if (flags & NSCommandKeyMask)
@@ -375,10 +395,11 @@
       return;
       
     case '.':
-      if (flags & (NSShiftKeyMask | NSCommandKeyMask))
+      if ((flags & NSShiftKeyMask) && (flags & NSCommandKeyMask))
 	{
-	  // Command + Shift + . = Show hidden files
-	  [[self delegate] toggleHiddenFiles];
+	  // Command + Shift + . = Show hidden files; the setting belongs to
+	  // the application, the viewer only follows it
+	  [[Workspace gworkspace] toggleHiddenFiles];
 	}
       return;
 
