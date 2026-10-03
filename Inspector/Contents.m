@@ -39,9 +39,13 @@
 #define ICNSIZE 48
 #define MAXDATA 1000
 
-#if defined(__MINGW__)
+#if defined(__MINGW32__)
+#ifndef SHPATH
 #define SHPATH "/bin/sh"
+#endif
+#ifndef FILEPATH
 #define FILEPATH "/bin/file"
+#endif
 #endif
 
 static NSString *nibName = @"Contents";

@@ -26,7 +26,9 @@
 
 #import <AppKit/AppKit.h>
 #include <GNUstepGUI/GSDisplayServer.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
+#endif
 #import "GWDesktopManager.h"
 #import "GWDesktopWindow.h"
 #import "GWDesktopView.h"
@@ -38,15 +40,19 @@
 #import "Thumbnailer/GWThumbnailer.h"
 #import "GWMountWatchState.h"
 #import "../FileViewer/GWVolumeID.h"
+#ifndef _WIN32
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
+#endif
 #include <math.h>
 #include <unistd.h>
 #include <fcntl.h>
+#ifndef _WIN32
 #include <poll.h>
+#endif
 #include <errno.h>
 #include <string.h>
-#if !defined(__linux__) && !defined(__OpenBSD__)
+#if !defined(__linux__) && !defined(__OpenBSD__) && !defined(_WIN32)
 #include <sys/types.h>
 #include <sys/event.h>
 #endif
@@ -194,6 +200,7 @@ static GWDesktopManager *desktopManager = nil;
   
   // Set the desktop window as the X11 active window so Menu.app shows its menus
   // This is needed because the desktop is the first window and should show menus on startup
+#ifndef _WIN32
   Display *display = XOpenDisplay(NULL);
   if (display)
     {
@@ -215,6 +222,7 @@ static GWDesktopManager *desktopManager = nil;
         }
       XCloseDisplay(display);
     }
+#endif
   
   [desktopView showMountedVolumes];
   [desktopView showContentsOfNode: dskNode];
@@ -1124,7 +1132,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 @end
 
 
-#if !defined(__OpenBSD__)
+#if !defined(__OpenBSD__) && !defined(_WIN32)
 @interface MPointWatcher (GWMountWatcherThread)
 - (void)startWatcherThreadIfNeeded;
 - (void)stopWatcherThread;
@@ -1140,7 +1148,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
 - (void)dealloc
 {
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(_WIN32)
   if (timer && [timer isValid])
     {
       [timer invalidate];
@@ -1166,7 +1174,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
       fm = [NSFileManager defaultManager];
       watchedMountRoots = [[NSMutableSet alloc] init];
 
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(_WIN32)
       /* No mount-change event exists here (no /proc, no EVFILT_FS): fall
        * back to a timer, but at 5s instead of the 1.5s this fix removes
        * everywhere else - reacting within 5s to a plugged-in drive is
@@ -1223,7 +1231,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   mountedRemovableVolumes = [[self effectiveDesktopVolumes] retain];
   active = YES;
 
-#if !defined(__OpenBSD__)
+#if !defined(__OpenBSD__) && !defined(_WIN32)
   [self startWatcherThreadIfNeeded];
 #endif
 }
@@ -1240,7 +1248,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   [mountedRemovableVolumes release];
   mountedRemovableVolumes = nil;
 
-#if !defined(__OpenBSD__)
+#if !defined(__OpenBSD__) && !defined(_WIN32)
   [self stopWatcherThread];
 #endif
 }
@@ -1272,7 +1280,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   mountedRemovableVolumes = [newVolumes retain];
 }
 
-#if !defined(__OpenBSD__)
+#if !defined(__OpenBSD__) && !defined(_WIN32)
 
 - (void)startWatcherThreadIfNeeded
 {
@@ -1431,7 +1439,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   [pool release];
 }
 
-#endif /* !__OpenBSD__ */
+#endif /* !__OpenBSD__ && !_WIN32 */
 
 - (BOOL)isWatchingPath:(NSString *)path
 {

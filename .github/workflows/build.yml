@@ -9,7 +9,7 @@ name: Build Gershwin Workspace
 
 on:
   push:
-    branches: [main, dev]
+    branches: [main, dev, windows]
   pull_request:
   workflow_dispatch:
 
@@ -28,7 +28,10 @@ env:
   # behaviour of whichever checkout.sh we happen to have cloned.
   # For main, master, or any other branch this is empty, which is identical to
   # not setting it at all -- those builds behave exactly as they did before.
-  BRANCH: ${{ (github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev') && 'dev' || '' }}
+  # The windows branch builds against gershwin-developer's windows branch
+  # (which carries dev plus the Windows support), so the Unix builds there
+  # also cover the developer-side changes.
+  BRANCH: ${{ (github.ref_name == 'dev' || github.head_ref == 'dev' || github.base_ref == 'dev') && 'dev' || (github.ref_name == 'windows' && 'windows' || '') }}
 
   # Repos Checkout.sh should NOT clone:
   #   - gershwin-workspace      -> provided by this repo's checkout (symlinked)

@@ -10,6 +10,23 @@
 #import <signal.h>
 #import <setjmp.h>
 
+#ifdef _WIN32
+/* MinGW has neither sigaction() nor sigsetjmp()/siglongjmp(), and there is
+ * no Avahi to abort() on us.  Reduce the SIGABRT trap below to plain
+ * setjmp()/longjmp() with an inert sigaction(). */
+typedef jmp_buf sigjmp_buf;
+#define sigsetjmp(env, savesigs) setjmp(env)
+#define siglongjmp(env, val) longjmp((env), (val))
+struct sigaction {
+  void (*sa_handler)(int);
+  int sa_mask;
+  int sa_flags;
+};
+#define SA_NODEFER 0
+#define sigemptyset(set) ((void)(set))
+#define sigaction(sig, act, oact) ((void)(sig), (void)(act), (void)(oact), 0)
+#endif
+
 NSString * const NetworkServicesDidChangeNotification = @"NetworkServicesDidChangeNotification";
 NSString * const NetworkServiceDidResolveNotification = @"NetworkServiceDidResolveNotification";
 

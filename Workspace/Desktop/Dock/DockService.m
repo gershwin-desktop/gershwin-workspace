@@ -7,7 +7,9 @@
 #define _GNU_SOURCE
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#ifndef _WIN32
 #import <sys/socket.h>
+#endif
 #import <unistd.h>
 
 #if defined(__linux__)
@@ -104,7 +106,9 @@ static NSString *exePathForPID(pid_t pid)
   if (pid <= 0)
     return nil;
 
+#ifndef _WIN32
   char resolved[4096];
+#endif
 
 #if defined(__linux__)
   {

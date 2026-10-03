@@ -22,7 +22,9 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <unistd.h>
+#ifndef _WIN32
 #import <pthread.h>
+#endif
 #import <errno.h>
 #import "Workspace.h"
 #import "WorkspaceUITesting.h"
@@ -39,10 +41,12 @@ static NSMutableArray *recentLogMessages = nil;
 static NSLock *logBufferLock = nil;
 
 /* Stderr redirection for capturing all output */
+#ifndef _WIN32
 static int originalStderr = -1;
 static int stderrPipe[2] = {-1, -1};
 static pthread_t logReaderThread;
 static BOOL logReaderRunning = NO;
+#endif
 
 /**
  * Add a message to the circular log buffer (raw, no timestamp)
@@ -82,6 +86,7 @@ static void _addToLogBuffer(NSString *message) {
 /**
  * Background thread to read from stderr pipe and add to log buffer
  */
+#ifndef _WIN32
 static void* _logReaderThread(void *arg) {
   NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
   
@@ -143,11 +148,16 @@ static void* _logReaderThread(void *arg) {
   [pool release];
   return NULL;
 }
+#endif /* !_WIN32 */
 
 /**
  * Start capturing stderr to log buffer
  */
 static void _startStderrCapture(void) {
+#ifdef _WIN32
+  /* No POSIX pipe/dup2 on Windows: stderr is not captured. */
+  return;
+#else
   if (originalStderr != -1) {
     return; /* Already capturing */
   }
@@ -189,6 +199,7 @@ static void _startStderrCapture(void) {
     originalStderr = -1;
     return;
   }
+#endif
   
 }
 

@@ -10,13 +10,16 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
+#ifndef _WIN32
 #include <sys/statvfs.h>
-#ifndef __linux__
+#endif
+#if !defined(__linux__) && !defined(_WIN32)
 #include <sys/param.h>
 #include <sys/mount.h>
 #endif
 
 /* Overlay/union filesystem type names recognised across platforms. */
+#ifndef _WIN32
 static BOOL
 FSIsOverlayFSType(NSString *fstype)
 {
@@ -57,6 +60,8 @@ FSIsOverlayRoot(void)
           return FSIsOverlayFSType([parts objectAtIndex: 2]);
         }
     }
+#elif defined(_WIN32)
+  /* Windows: no overlay roots and no mount table to inspect. */
 #else
   /* BSDs / other: getmntinfo() populates struct statfs with f_fstypename. */
   struct statfs *mnts = NULL;
@@ -72,6 +77,7 @@ FSIsOverlayRoot(void)
 #endif
   return NO;
 }
+#endif /* !_WIN32 */
 
 @implementation LowDiskWarn
 
@@ -108,6 +114,11 @@ FSIsOverlayRoot(void)
     return;
   checking = YES;
 
+#ifdef _WIN32
+  /* No statvfs() and no single "/" startup disk on Windows: inert. */
+  checking = NO;
+  return;
+#else
   struct statvfs buf;
   int ret = statvfs("/", &buf);
 
@@ -155,6 +166,7 @@ FSIsOverlayRoot(void)
     }
 
   checking = NO;
+#endif /* _WIN32 */
 }
 
 @end

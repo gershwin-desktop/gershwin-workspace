@@ -96,6 +96,12 @@ AC_ARG_ENABLE(dbus,
   --disable-dbus          Force disable DBus support],
   [with_dbus=$enableval], [])
 
+if test "x$with_dbus" != "xyes"; then
+  with_dbus=no
+  DBUS_LIBS=""
+  DBUS_CFLAGS=""
+fi
+
 AC_SUBST(with_dbus)
 AC_SUBST(DBUS_LIBS)
 AC_SUBST(DBUS_CFLAGS)
@@ -134,6 +140,12 @@ AC_ARG_ENABLE(squashfs,
   [  --enable-squashfs        Force enable AppImage icon support
   --disable-squashfs       Force disable AppImage icon support],
   [with_squashfs=$enableval], [])
+
+if test "x$with_squashfs" != "xyes"; then
+  with_squashfs=no
+  SQUASHFS_LIBS=""
+  SQUASHFS_CFLAGS=""
+fi
 
 AC_SUBST(with_squashfs)
 AC_SUBST(SQUASHFS_LIBS)

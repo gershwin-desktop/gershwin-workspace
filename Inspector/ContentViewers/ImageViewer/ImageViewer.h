@@ -35,7 +35,7 @@
 @class NSTextField;
 @class NSButton;
 @class NSWorkspace;
-@class ProgressView;
+@class IVProgressView;
 @class ImageResizer;
 
 @protocol ContentInspectorProtocol
@@ -63,7 +63,7 @@
   NSTextField *errLabel;
   NSTextField *widthLabel;
   NSTextField *heightLabel;  
-  ProgressView *progView;
+  IVProgressView *progView;
   NSButton *editButt;
   
   NSString *imagePath;
@@ -88,7 +88,7 @@
 @end
 
 
-@interface ProgressView : NSView 
+@interface IVProgressView : NSView 
 {
   NSMutableArray *images;
   NSUInteger index;

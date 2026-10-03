@@ -6,10 +6,21 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
+#endif
 #import "GWApplicationLauncher.h"
 #import <unistd.h>
 #include <fcntl.h>
+
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
 
 @implementation GWApplicationLauncher
 
@@ -43,7 +54,11 @@
                                                     error:NULL];
 
     NSFileHandle *errHandle;
-    int fd = open([logPath fileSystemRepresentation],
+#ifndef O_NONBLOCK
+    /* MinGW has no O_NONBLOCK; a regular file never blocks a write anyway. */
+#define O_NONBLOCK 0
+#endif
+    int fd = open(GW_FSREP(logPath),
                   O_WRONLY | O_CREAT | O_APPEND | O_NONBLOCK, 0644);
     if (fd >= 0) {
       errHandle = [[[NSFileHandle alloc]

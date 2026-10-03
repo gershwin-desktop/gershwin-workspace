@@ -9,13 +9,25 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <stdlib.h>
+#ifndef _WIN32
 #include <sys/wait.h>
 #include <unistd.h>
+#endif
 
 @implementation GWDetachedCommand
 
 + (BOOL)launchShellCommand:(NSString *)command
 {
+#ifdef _WIN32
+  const char *shell = getenv("COMSPEC");
+
+  if (shell == NULL || *shell == '\0')
+    {
+      shell = "cmd.exe";
+    }
+  return [self launchArguments: [NSArray arrayWithObjects:
+    [NSString stringWithUTF8String: shell], @"/c", command, nil]];
+#else
   const char *shell = getenv("SHELL");
 
   if (shell == NULL || *shell == '\0')
@@ -24,10 +36,40 @@
     }
   return [self launchArguments: [NSArray arrayWithObjects:
     [NSString stringWithUTF8String: shell], @"-c", command, nil]];
+#endif
 }
 
 + (BOOL)launchArguments:(NSArray *)arguments
 {
+#ifdef _WIN32
+  /* No fork() on Windows: NSTask starts the command detached from our
+   * standard streams and does not wait for it. */
+  NSUInteger count = [arguments count];
+  NSFileHandle *null = [NSFileHandle fileHandleWithNullDevice];
+  NSTask *task;
+
+  if (count == 0)
+    {
+      return NO;
+    }
+  task = [[[NSTask alloc] init] autorelease];
+  [task setLaunchPath: [arguments objectAtIndex: 0]];
+  [task setArguments: [arguments subarrayWithRange: NSMakeRange(1, count - 1)]];
+  [task setStandardInput: null];
+  [task setStandardOutput: null];
+  [task setStandardError: null];
+  @try
+    {
+      [task launch];
+    }
+  @catch (NSException *e)
+    {
+      NSLog(@"GWDetachedCommand: cannot launch %@: %@",
+            [arguments objectAtIndex: 0], [e reason]);
+      return NO;
+    }
+  return YES;
+#else
   /* Workspace is multithreaded: after fork() only async-signal-safe calls
    * are allowed, so everything the child needs is prepared here. */
   NSUInteger count = [arguments count];
@@ -107,6 +149,7 @@
     }
 
   return (WIFEXITED(status) && WEXITSTATUS(status) == 0);
+#endif
 }
 
 @end

@@ -10,15 +10,22 @@
 
 #import <Foundation/Foundation.h>
 #import <Foundation/NSRunLoop.h>
+#ifndef _WIN32
 #include <X11/Xlib.h>
+#endif
 
 // Conforms to RunLoopEvents so the shortcuts X connection can wake the
 // run loop only when it actually has data, instead of being polled.
 @interface GSGlobalShortcutsManager : NSObject <RunLoopEvents>
 {
     NSMutableDictionary *shortcuts;
+#ifndef _WIN32
     Display *display;
     Window rootWindow;
+#else
+    void *display;
+    unsigned long rootWindow;
+#endif
     unsigned int numlock_mask;
     unsigned int capslock_mask;
     unsigned int scrolllock_mask;

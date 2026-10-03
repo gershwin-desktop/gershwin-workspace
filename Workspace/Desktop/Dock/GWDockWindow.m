@@ -30,8 +30,10 @@
 #import "Dock.h"
 #import "FSNSpringLoader.h"
 #import "DockStack.h"
+#ifndef _WIN32
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
+#endif
 
 @implementation GWDockWindow
 
@@ -132,6 +134,7 @@
   [self orderOut: self];
 }
 
+#ifndef _WIN32
 - (Window)dockX11Window
 {
   GSDisplayServer *srv = GSServerForWindow(self);
@@ -153,11 +156,13 @@
     return NULL;
   return (Display *)[srv serverDevice];
 }
+#endif
 
 #pragma mark - X11 Dock Properties
 
 - (void)updateX11DockProperties
 {
+#ifndef _WIN32
   Display *display = [self dockDisplay];
   if (display == NULL)
     return;
@@ -197,11 +202,13 @@
                   PropModeReplace, (unsigned char *)&allDesktops, 1);
 
   XFlush(display);
+#endif
 
 }
 
 - (void)updateX11Strut
 {
+#ifndef _WIN32
   Display *display = [self dockDisplay];
   if (display == NULL)
     return;
@@ -272,6 +279,7 @@
                   PropModeReplace, (unsigned char *)strutPartial, 12);
 
   XFlush(display);
+#endif
 
 }
 

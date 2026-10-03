@@ -36,6 +36,9 @@
 #import "FSNFunctions.h"
 #import "X11AppSupport.h"
 #import "GWProcessMonitor.h"
+#ifdef _WIN32
+#import "GWWin32Process.h"
+#endif
 
 #import <AppKit/NSDockTile.h>
 
@@ -422,7 +425,7 @@
 
   if (pid > 0)
     {
-      [self setToolTip: [NSString stringWithFormat: @"%@ [%d]", appName, pid]];
+      [self setToolTip: [NSString stringWithFormat: @"%@ [%d]", appName, (int)pid]];
 
       /* Register with kernel process monitor so we get notified the
        * instant the process exits, rather than relying on poll-based
@@ -1028,8 +1031,12 @@
 
         /* Verify the stored PID is still alive */
         if (appPID > 0) {
+#ifndef _WIN32
           int result = kill(appPID, 0);
           if ((result != 0) && (errno != EPERM)) {
+#else
+          if (GWWin32ProcessIsAlive(appPID) == NO) {
+#endif
             /* Process is dead — try to rediscover it by name in X11.
              * Handles sudo re-exec (new PID), crash+restart, etc. */
             GWX11WindowManager *wm = [GWX11WindowManager sharedManager];

@@ -17,6 +17,31 @@
 #import "Desktop/GWDesktopView.h"
 #import "GWUnmountHelper.h"
 
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
+#ifdef _WIN32
+/* No POSIX signals (and no FUSE) on Windows: disk image mounting is inert
+ * here, so kill() only needs to report "no such process". */
+#ifndef SIGKILL
+# define SIGKILL 9
+#endif
+static int gw_stub_kill(int pid, int sig)
+{
+  (void)pid;
+  (void)sig;
+  errno = ESRCH;
+  return -1;
+}
+#define kill(p, s) gw_stub_kill((p), (s))
+#endif
+
 static VolumeManager *sharedInstance = nil;
 
 @implementation VolumeMountResult
@@ -1192,11 +1217,11 @@ static VolumeManager *sharedInstance = nil;
       
       if (contentsErr) {
         /* Try to remove anyway - might be already unmounted */
-        if (rmdir([mountPath fileSystemRepresentation]) == 0) {
+        if (rmdir(GW_FSREP(mountPath)) == 0) {
           directoryRemoved = YES;
         }
       } else if (contents && [contents count] == 0) {
-        if (rmdir([mountPath fileSystemRepresentation]) == 0) {
+        if (rmdir(GW_FSREP(mountPath)) == 0) {
           directoryRemoved = YES;
         } else {
         }

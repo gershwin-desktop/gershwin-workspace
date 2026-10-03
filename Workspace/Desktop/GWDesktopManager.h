@@ -195,7 +195,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath;
   GWDesktopManager *manager;
   NSFileManager *fm;
 
-#if defined(__OpenBSD__)
+#if defined(__OpenBSD__) || defined(_WIN32)
   /* OpenBSD has neither a pollable mount-table fd (no /proc) nor
    * EVFILT_FS, so it is the one platform that still ticks on a plain
    * timer - at a much slower, clearly-marked rate than before this fix. */

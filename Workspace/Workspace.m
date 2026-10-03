@@ -41,7 +41,9 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepGUI/GSInfoPanel.h>
 #import <GNUstepBase/GNUstep.h>
+#ifndef _WIN32
 #import <dispatch/dispatch.h>
+#endif
 
 #import "GWFunctions.h"
 #import "FSNodeRep.h"
@@ -105,6 +107,16 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #if HAVE_DBUS
 #import "DBusConnection.h"
 #import "FileManagerDBusInterface.h"
+#endif
+
+#ifdef _WIN32
+/* MinGW's sys/stat.h has no group/other execute bits. */
+# ifndef S_IXGRP
+#  define S_IXGRP 0
+# endif
+# ifndef S_IXOTH
+#  define S_IXOTH 0
+# endif
 #endif
 
 
@@ -1103,7 +1115,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
    * disposition to SIG_DFL after main(), whose default action terminates the
    * Workspace mid-operation.  Re-assert the ignore here, after everything is
    * loaded. */
+#ifndef _WIN32
   signal(SIGPIPE, SIG_IGN);
+#endif
 
   [self _swizzleGetInfoForFileForNoExtensionFiles];
 
@@ -3137,6 +3151,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       NSMutableArray *arguments;
       
       cmd = [NSTask launchPathForTool: @"fswatcher"];
+      if (cmd == nil) {
+        NSLog(@"fswatcher tool not found; file system watching is unavailable");
+        return;
+      }
       arguments = [NSMutableArray arrayWithCapacity:2];
       [arguments addObject:@"--daemon"];
       [arguments addObject:@"--auto"];  
@@ -3272,6 +3290,11 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     NSString *cmd;
     NSMutableArray *arguments;
     cmd = [NSTask launchPathForTool: @"ddbd"];    
+    if (cmd == nil)
+      {
+        NSLog(@"ddbd tool not found; the desktop database is unavailable");
+        return;
+      }
 
     arguments = [NSMutableArray arrayWithCapacity:2];
     [arguments addObject:@"--daemon"];
@@ -3368,6 +3391,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     if (mdextractor == nil) {
 	    NSString *cmd;
       cmd = [NSTask launchPathForTool: @"mdextractor"];    
+      if (cmd == nil) {
+        NSLog(@"mdextractor tool not found; metadata extraction is unavailable");
+        return;
+      }
       [NSTask launchedTaskWithLaunchPath: cmd arguments: nil];
 
       NSDictionary *info = [NSDictionary dictionaryWithObject:[NSDate dateWithTimeIntervalSinceNow: 8.0]

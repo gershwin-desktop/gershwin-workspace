@@ -6,8 +6,10 @@
 #import "AboutController.h"
 #import "Workspace.h"
 #import <GNUstepBase/GNUstep.h>
+#ifndef _WIN32
 #include <sys/utsname.h>
 #include <X11/Xlib.h>
+#endif
 
 /* Simple NSWindow subclass that closes on Escape key */
 @interface AboutWindow : NSWindow
@@ -211,7 +213,7 @@ static AboutController *sharedController = nil;
                                    bsdSysctl:@"hw.smbios.maker"
                                      bsdKenv:@"smbios.system.maker"];
   }
-#else
+#elif !defined(_WIN32)
   if (![self isX86Architecture]) {
     product = [self runCommand:@"sysctl" withArguments:@[@"-n", @"hw.model"]];
     productVersion = product;
@@ -313,6 +315,13 @@ static AboutController *sharedController = nil;
 
 - (BOOL)isX86Architecture
 {
+#ifdef _WIN32
+#if defined(__x86_64__) || defined(__i386__) || defined(_M_X64) || defined(_M_IX86)
+  return YES;
+#else
+  return NO;
+#endif
+#else
   struct utsname name;
   if (uname(&name) != 0) {
     return NO;
@@ -325,6 +334,7 @@ static AboutController *sharedController = nil;
 
   return [machine hasPrefix:@"x86"] || [machine hasPrefix:@"i386"] || [machine hasPrefix:@"i486"] ||
          [machine hasPrefix:@"i586"] || [machine hasPrefix:@"i686"] || [machine hasPrefix:@"amd64"];
+#endif
 }
 
 - (BOOL)isDeviceTreeSystem
@@ -468,7 +478,7 @@ static AboutController *sharedController = nil;
       if ([val length] > 0) return val;
     }
   }
-#else
+#elif !defined(_WIN32)
   NSString *val = nil;
   // Try kenv first as it's often more descriptive on some BSDs
   if (bsdKenv) {
@@ -486,15 +496,23 @@ static AboutController *sharedController = nil;
 
 - (NSString *)kernelInfo 
 {
+#ifdef _WIN32
+  return [NSString stringWithFormat:@"Windows %@",
+          [[NSProcessInfo processInfo] operatingSystemVersionString]];
+#else
   struct utsname name;
   if (uname(&name) == 0) {
     return [NSString stringWithFormat:@"%s %s", name.sysname, name.release];
   }
   return @"Unknown";
+#endif
 }
 
 - (NSString *)x11VersionInfo 
 {
+#ifdef _WIN32
+  return @"Win32";
+#else
   NSString *sessionType = [[[NSProcessInfo processInfo] environment] objectForKey:@"XDG_SESSION_TYPE"];
   if ([sessionType isEqualToString:@"wayland"])
     {
@@ -523,6 +541,7 @@ static AboutController *sharedController = nil;
       return [NSString stringWithFormat:@"%@ %d", displayName, release];
     }
   return [NSString stringWithFormat:@"%@ %d", vendorStr, release];
+#endif
 }
 
 - (NSString *)getProcessorInfo
@@ -540,6 +559,9 @@ static AboutController *sharedController = nil;
       }
     }
   }
+#elif defined(_WIN32)
+  NSString *val = [[[NSProcessInfo processInfo] environment] objectForKey:@"PROCESSOR_IDENTIFIER"];
+  if (val && [val length] > 0) return val;
 #else
   NSString *val = [self runCommand:@"sysctl" withArguments:@[@"-n", @"hw.model"]];
   if (val) return val;

@@ -15,6 +15,15 @@
  * Marker used for "no position" in FinderInfo fdLocation.
  * When both v and h are -1 (0xFFFF) it means "not positioned".
  */
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
 #define GS_NO_ICON_POSITION  ((int16_t)(-1))
 
 /*
@@ -682,7 +691,7 @@ static NSMutableDictionary *_metadataCache = nil;
 
   /* Read FinderInfo via xattr */
   {
-    const char *cpath = [path fileSystemRepresentation];
+    const char *cpath = GW_FSREP(path);
     ssize_t size = gs_getxattr(cpath,
                                 [GSXATTR_FINDERINFO UTF8String],
                                 NULL, 0);
@@ -698,7 +707,7 @@ static NSMutableDictionary *_metadataCache = nil;
 
   /* Read ResourceFork via xattr */
   {
-    const char *cpath = [path fileSystemRepresentation];
+    const char *cpath = GW_FSREP(path);
     ssize_t size = gs_getxattr(cpath,
                                 [GSXATTR_RESOURCEFORK UTF8String],
                                 NULL, 0);
@@ -714,7 +723,7 @@ static NSMutableDictionary *_metadataCache = nil;
 
   /* Read Finder comment via xattr (binary plist, like macOS/Finder) */
   {
-    const char *cpath = [path fileSystemRepresentation];
+    const char *cpath = GW_FSREP(path);
     ssize_t size = gs_getxattr(cpath,
                                 [GSXATTR_FINDERCOMMENT UTF8String],
                                 NULL, 0);
@@ -734,7 +743,7 @@ static NSMutableDictionary *_metadataCache = nil;
 
   /* Read user tags (_kMDItemUserTags) via xattr */
   {
-    const char *cpath = [path fileSystemRepresentation];
+    const char *cpath = GW_FSREP(path);
     ssize_t size = gs_getxattr(cpath,
                                 [GSXATTR_USERTAGS UTF8String],
                                 NULL, 0);
@@ -750,7 +759,7 @@ static NSMutableDictionary *_metadataCache = nil;
 
   /* Read quarantine record via xattr (plain UTF-8 string) */
   {
-    const char *cpath = [path fileSystemRepresentation];
+    const char *cpath = GW_FSREP(path);
     ssize_t size = gs_getxattr(cpath,
                                 [GSXATTR_QUARANTINE UTF8String],
                                 NULL, 0);
@@ -798,7 +807,7 @@ static NSMutableDictionary *_metadataCache = nil;
   if (_forceSidecar)
     return [self writeSidecarToFileAtPath: path error: error];
 
-  const char *cpath = [path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(path);
   BOOL success = YES;
 
   /* Write FinderInfo */

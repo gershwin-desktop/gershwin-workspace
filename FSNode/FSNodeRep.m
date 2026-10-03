@@ -26,6 +26,9 @@
 #include <math.h>
 #include <dirent.h>
 #include <string.h>
+#ifdef _WIN32
+#include <sys/stat.h>
+#endif
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -64,6 +67,15 @@
       #undef HAVE_GETMNTENT
     #endif
   #endif
+#endif
+
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
 #endif
 
 #define LABEL_W_FACT (8.0)
@@ -322,7 +334,7 @@ static FSNodeRep *shared = nil;
   NSMutableArray *entries = [NSMutableArray array];
   NSString *hdnFilePath = [path stringByAppendingPathComponent: @".hidden"];
   NSArray *hiddenNames = nil;
-  const char *cpath = [path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(path);
   DIR *dir;
   struct dirent *dent;
 
@@ -363,6 +375,27 @@ static FSNodeRep *shared = nil;
                 inDirectoryAtPath: path
                  withHiddenNames: hiddenNames])
         {
+#ifdef _WIN32
+          /* MinGW's struct dirent has no d_type; stat() the entry instead. */
+          {
+            struct stat est;
+            NSString *epath = [path stringByAppendingPathComponent: fname];
+
+            if (stat(GW_FSREP(epath), &est) == 0)
+              {
+                if (S_ISDIR(est.st_mode))
+                  kind = FSNDirEntryKindDirectory;
+                else if (S_ISREG(est.st_mode))
+                  kind = FSNDirEntryKindPlain;
+                else
+                  kind = FSNDirEntryKindUnknown;
+              }
+            else
+              {
+                kind = FSNDirEntryKindUnknown;
+              }
+          }
+#else
           switch (dent->d_type)
             {
               case DT_DIR:
@@ -378,6 +411,7 @@ static FSNodeRep *shared = nil;
                 kind = FSNDirEntryKindUnknown;
                 break;
             }
+#endif
 
           FSNDirEntry *dirEntry = [[FSNDirEntry alloc] initWithName: fname
                                                                 kind: kind];

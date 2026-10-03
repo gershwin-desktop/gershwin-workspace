@@ -8,7 +8,44 @@
  */
 
 #import "GWVolumeID.h"
-#ifdef __linux__
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
+   library calls here take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
+#ifdef _WIN32
+/* Windows (MinGW): no statfs() and no mount table.  Provide an inert
+ * stand-in with the BSD field names so the non-Linux code paths below
+ * compile; statfs() always fails, so callers use their fallbacks
+ * (path hash volume IDs, no network/read-only detection). */
+#import <errno.h>
+struct statfs {
+  long f_type;
+  long f_flags;
+  struct { int val[2]; } f_fsid;
+  char f_fstypename[16];
+  char f_mntfromname[1];
+  char f_mntonname[1];
+};
+#define MNT_NOWAIT 0
+static int statfs(const char *path, struct statfs *buf)
+{
+  (void)path;
+  (void)buf;
+  errno = ENOSYS;
+  return -1;
+}
+static int getmntinfo(struct statfs **mntbufp, int flags)
+{
+  (void)flags;
+  *mntbufp = NULL;
+  return 0;
+}
+#elif defined(__linux__)
 #import <sys/statfs.h>
 #import <mntent.h>       /* getmntent / setmntent — portable mount table */
 #ifndef _PATH_MOUNTED
@@ -129,7 +166,7 @@ static NSDictionary *mountInfoForPath(NSString *path)
 {
   if (!path || [path length] == 0) return nil;
 
-  const char *cpath = [path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(path);
   if (cpath == NULL) return nil;
   size_t plen = strlen(cpath);
 
@@ -151,7 +188,7 @@ static NSDictionary *mountInfoForPath(NSString *path)
   for (NSDictionary *e in entries)
     {
       NSString *mpStr = [e objectForKey: @"mountPoint"];
-      const char *mp = [mpStr fileSystemRepresentation];
+      const char *mp = GW_FSREP(mpStr);
       size_t mlen = strlen(mp);
       if (mlen > plen || strncmp(cpath, mp, mlen) != 0) continue;
       /* Directory boundary: whole-string match, root "/", or next char '/'. */
@@ -173,6 +210,7 @@ static NSDictionary *mountInfoForPath(NSString *path)
             nil];
 }
 
+#ifndef _WIN32
 static NSString *stringForFSMagic(long magic)
 {
   switch (magic) {
@@ -206,6 +244,7 @@ static NSString *stringForFSMagic(long magic)
       return [NSString stringWithFormat:@"0x%08lX", magic];
   }
 }
+#endif /* !_WIN32 */
 
 /* ------------------------------------------------------------------ */
 #pragma mark - GWVolumeID implementation
@@ -424,7 +463,7 @@ static NSString *stringForFSMagic(long magic)
 
 + (NSArray *)mountedFilesystemsFromTable:(NSString *)tablePath
 {
-  const char *cpath = tablePath ? [tablePath fileSystemRepresentation] : NULL;
+  const char *cpath = tablePath ? GW_FSREP(tablePath) : NULL;
   NSArray *entries = allMountEntries(cpath);
   return entries ? entries : [NSArray array];
 }

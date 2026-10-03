@@ -99,7 +99,7 @@ static inline CGFloat _dockScaleFactor(void)
 - (void)magnifyTick:(NSTimer *)timer;
 - (void)setMagnifyInterval:(NSTimeInterval)interval;
 - (NSTimeInterval)magnifyIntervalForDistance:(CGFloat)distance
-                                        near:(CGFloat)near;
+                                        near:(CGFloat)nearDistance;
 
 @end
 
@@ -1408,9 +1408,9 @@ static inline CGFloat _dockScaleFactor(void)
  * without a Dock; this just supplies the one piece of state the rule needs
  * that is not already a parameter. */
 - (NSTimeInterval)magnifyIntervalForDistance:(CGFloat)distance
-                                        near:(CGFloat)near
+                                        near:(CGFloat)nearDistance
 {
-  return DockMagnifyPollInterval(distance, near, magnifyArmed);
+  return DockMagnifyPollInterval(distance, nearDistance, magnifyArmed);
 }
 
 - (void)setMagnifyInterval:(NSTimeInterval)interval

@@ -7,7 +7,10 @@ GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 #
 # subprojects
 #
-SUBPROJECTS = ImageThumbnailer AVThumbnailer
+SUBPROJECTS = ImageThumbnailer
+ifneq ($(findstring mingw,$(GNUSTEP_TARGET_OS)),mingw)
+  SUBPROJECTS += AVThumbnailer
+endif
 
 -include GNUmakefile.preamble
 -include GNUmakefile.local

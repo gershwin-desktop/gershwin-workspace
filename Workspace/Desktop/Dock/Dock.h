@@ -56,14 +56,14 @@
  * in-progress flag as a parameter rather than reading it off a Dock, so the
  * timing rule can be proven without building one. */
 static inline NSTimeInterval
-DockMagnifyPollInterval(CGFloat distance, CGFloat near, BOOL armed)
+DockMagnifyPollInterval(CGFloat distance, CGFloat nearDistance, BOOL armed)
 {
   NSTimeInterval wait;
 
-  if (armed || (distance < near))
+  if (armed || (distance < nearDistance))
     return MAGNIFY_FRAME_INTERVAL;
 
-  wait = (distance - near) / MAGNIFY_POINTER_SPEED;
+  wait = (distance - nearDistance) / MAGNIFY_POINTER_SPEED;
 
   if (wait < MAGNIFY_FRAME_INTERVAL)
     return MAGNIFY_FRAME_INTERVAL;

@@ -44,7 +44,9 @@ ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata -I../../GWMetadata
 # FSNode/Inspector/Operation libraries are found before any stale system-
 # installed copies. Using ADDITIONAL_LIB_DIRS alone is insufficient because
 # the system -L/System/Library/Libraries is added earlier in the command.
-ADDITIONAL_LDFLAGS += -lX11
+ifneq ($(findstring mingw,$(GNUSTEP_TARGET_OS)),mingw)
+  ADDITIONAL_LDFLAGS += -lX11
+endif
 ADDITIONAL_LDFLAGS += -L../FSNode/FSNode.framework/Versions/Current
 ADDITIONAL_LDFLAGS += -L../FSNode/FSNode.framework
 ADDITIONAL_LDFLAGS += -L../Inspector/Inspector.framework/Versions/Current
@@ -55,12 +57,12 @@ ADDITIONAL_LDFLAGS += -L../DSStore/obj
 ADDITIONAL_LDFLAGS += -L../GSMetadata/obj
 
 # Conditional DBus support
-ifneq ($(DBUS_LIBS),)
+ifeq ($(with_dbus),yes)
   ADDITIONAL_GUI_LIBS += $(DBUS_LIBS)
 endif
 
 # Conditional libsquashfs support
-ifneq ($(SQUASHFS_LIBS),)
+ifeq ($(with_squashfs),yes)
   ADDITIONAL_GUI_LIBS += $(SQUASHFS_LIBS)
 endif
 

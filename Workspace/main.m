@@ -41,6 +41,7 @@
 /* Forward declaration of UI testing enable function */
 extern void WorkspaceUITestingSetEnabled(BOOL enabled);
 
+#ifndef _WIN32
 /* Real UID of a process, or -1 if it cannot be determined.  The
  * single-instance check below must not touch another user's instance: a
  * second desktop session on a separate X display (e.g. a UI-test run under
@@ -150,9 +151,11 @@ static void killOtherInstances(const char *myBasename, pid_t myPid)
         fprintf(stderr, "Workspace: No other instances found\n");
     }
 }
+#endif /* !_WIN32 */
 
 int main(int argc, char **argv, char **env)
 {
+#ifndef _WIN32
     /* A DO write to a dead peer (an app the user closed, a crashed connection)
      * raises SIGPIPE; GNUstep ignores it at NSObject init, but a library can
      * reset it to SIG_DFL later, and then the default action terminates the
@@ -182,6 +185,7 @@ int main(int argc, char **argv, char **env)
       {
         killOtherInstances(myBasename, myPid);
       }
+#endif /* !_WIN32 */
     
 	CREATE_AUTORELEASE_POOL (pool);
   
