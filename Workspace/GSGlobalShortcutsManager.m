@@ -1092,7 +1092,8 @@ static GSGlobalShortcutsManager *sharedManager = nil;
         running = NO;
         verbose = NO;
         defaultsDomain = @"GlobalShortcuts";
-        eventProcessingTimer = nil;
+        xEventQueueFd = -1;
+        runLoopSourceAdded = NO;
         closeWindowKeyCode = 0;
         closeWindowModifier = 0;
     }
