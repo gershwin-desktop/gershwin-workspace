@@ -279,13 +279,14 @@ jobs:
           sudo apt-get update -qq
           sudo apt-get install -y -qq wine64 xvfb imagemagick
 
+      # As root: gdomap, GNUstep's name server that the Wine run needs,
+      # binds the privileged port 538 and sets up its sockets in ways the
+      # runner's user is not allowed to.
       - name: Run the Workspace under Wine
         run: |
-          # gdomap (GNUstep's name server, needed under Wine) listens on the
-          # privileged port 538; let the runner's user bind it.
-          sudo sysctl -w net.ipv4.ip_unprivileged_port_start=538
           mkdir -p run-log-wine
-          sh gershwin-developer/Library/Scripts/windows-wine-test.sh dist/Gershwin-Workspace-Windows-*.zip 45 "$PWD/run-log-wine/workspace-wine.png"
+          sudo -E env "PATH=$PATH" HOME=/root sh gershwin-developer/Library/Scripts/windows-wine-test.sh dist/Gershwin-Workspace-Windows-*.zip 45 "$PWD/run-log-wine/workspace-wine.png"
+          sudo chown -R "$(id -u):$(id -g)" run-log-wine
 
       - name: Upload Wine run log and screenshot
         if: always()
