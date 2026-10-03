@@ -15,6 +15,9 @@ typedef unsigned long GWNativeWindowID;
 
 #ifndef _WIN32
 #include <X11/Xlib.h>
+#else
+/* No X server on Windows: the snapshot's display handle is a placeholder. */
+typedef void Display;
 #endif
 
 /**

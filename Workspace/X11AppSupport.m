@@ -2244,6 +2244,11 @@ static GWX11WindowManager *sharedWindowManager = nil;
     return NO;
 }
 
+
+- (GWX11ClientSnapshot *)clientSnapshot
+{
+    return AUTORELEASE([[GWX11ClientSnapshot alloc] initWithManager: self]);
+}
 @end
 
 #pragma mark - GWX11AppManager Implementation (Windows stub)
@@ -2352,6 +2357,39 @@ static GWX11AppManager *sharedX11AppManager = nil;
         return YES;
     }
     return NO;
+}
+
+@end
+
+#pragma mark - GWX11ClientSnapshot Implementation (Windows stub)
+
+@implementation GWX11ClientSnapshot
+
+- (id)initWithManager:(GWX11WindowManager *)aManager
+{
+    self = [super init];
+    if (self) {
+        manager = aManager;
+        display = NULL;
+        clients = nil;
+        loaded = YES;
+    }
+    return self;
+}
+
+- (BOOL)hasVisibleWindowsForPID:(pid_t)pid
+{
+    return NO;
+}
+
+- (NSArray *)windowsForPID:(pid_t)pid
+{
+    return [NSArray array];
+}
+
+- (NSArray *)windowsMatchingName:(NSString *)name
+{
+    return [NSArray array];
 }
 
 @end
