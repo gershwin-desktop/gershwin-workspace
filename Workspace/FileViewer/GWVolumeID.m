@@ -188,7 +188,7 @@ static NSDictionary *mountInfoForPath(NSString *path)
   for (NSDictionary *e in entries)
     {
       NSString *mpStr = [e objectForKey: @"mountPoint"];
-      const char *mp = [mpStr fileSystemRepresentation];
+      const char *mp = GW_FSREP(mpStr);
       size_t mlen = strlen(mp);
       if (mlen > plen || strncmp(cpath, mp, mlen) != 0) continue;
       /* Directory boundary: whole-string match, root "/", or next char '/'. */
@@ -463,7 +463,7 @@ static NSString *stringForFSMagic(long magic)
 
 + (NSArray *)mountedFilesystemsFromTable:(NSString *)tablePath
 {
-  const char *cpath = tablePath ? [tablePath fileSystemRepresentation] : NULL;
+  const char *cpath = tablePath ? GW_FSREP(tablePath) : NULL;
   NSArray *entries = allMountEntries(cpath);
   return entries ? entries : [NSArray array];
 }
