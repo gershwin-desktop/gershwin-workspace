@@ -33,6 +33,10 @@
 @interface GWScrollViewTopSeparator : NSView
 @end
 
+@interface GWViewerScrollView ()
+- (void)layoutTopSeparator;
+@end
+
 @implementation GWViewerScrollView
 
 - (id)initWithFrame:(NSRect)frameRect
@@ -71,6 +75,15 @@
 
 - (void)setDrawsTopSeparator:(BOOL)flag
 {
+  /* Spatial-mode-only feature: the classic browsing viewer never draws the
+   * top separator, whatever a caller asks for. */
+  if (flag && viewer != nil
+      && [viewer respondsToSelector: @selector(isSpatial)]
+      && [viewer isSpatial] == NO)
+    {
+      flag = NO;
+    }
+
   if (drawsTopSeparator != flag)
     {
       drawsTopSeparator = flag;
@@ -79,26 +92,81 @@
         {
           if (topSeparator == nil)
             {
-              /* NSScrollView is flipped (y grows downward), so the visual
-               * top edge is NSMinY(bounds).  Anchor against isFlipped to be
-               * safe rather than assuming an orientation. */
-              NSRect bounds = [self bounds];
-              CGFloat top = [self isFlipped] ? NSMinY(bounds) : NSMaxY(bounds);
               topSeparator = [[GWScrollViewTopSeparator alloc]
-                initWithFrame: NSMakeRect(NSMinX(bounds), top - ([self isFlipped] ? 0 : 1),
-                                          NSWidth(bounds), 1)];
-              [topSeparator setAutoresizingMask:
-                NSViewWidthSizable | NSViewMinYMargin];
+                initWithFrame: NSZeroRect];
+              /* Tracks the scroll view's width automatically; the vertical
+               * position and 1px height are re-pinned in layoutTopSeparator
+               * on every resize, so the line never moves. */
+              [topSeparator setAutoresizingMask: NSViewWidthSizable];
               [self addSubview: topSeparator];
+              /* Retiles: besides pinning the strip this takes the strip's
+               * top row away from the clip view, see -tile below. */
+              [self tile];
             }
         }
       else
         {
           [topSeparator removeFromSuperview];
           DESTROY (topSeparator);
+          /* Retiling gives the freed row back to the clip view. */
+          [self tile];
         }
 
       [self setNeedsDisplay: YES];
+    }
+}
+
+/* Places the separator strip flush against the visual top edge of the scroll
+ * view, whatever the superview's flippedness.  Explicitly re-pinned on every
+ * resize (setFrameSize:) so the line never moves - not when the viewer
+ * resizes and not during scrolling, since it sits outside the clip view. */
+- (void)layoutTopSeparator
+{
+  NSRect bounds;
+  CGFloat top;
+
+  if (topSeparator == nil)
+    {
+      return;
+    }
+
+  bounds = [self bounds];
+  top = [self isFlipped] ? NSMinY(bounds) : NSMaxY(bounds);
+  [topSeparator setFrame: NSMakeRect(NSMinX(bounds),
+                                     top - ([self isFlipped] ? 0 : 1),
+                                     NSWidth(bounds), 1)];
+}
+
+- (void)setFrameSize:(NSSize)newSize
+{
+  [super setFrameSize: newSize];
+  [self layoutTopSeparator];
+}
+
+/* Makes the separator's row untouchable by the document view.  NSScrollView's
+ * tile() lays the clip view over the full top of the scroll view, and a
+ * document-view repaint inside it would paint straight over the strip's
+ * pixels: GNUstep redraws damaged views flat into the X window without
+ * re-rendering the undamaged siblings stacked above, so the line vanished on
+ * every scroll.  Shrinking the clip view along its visual top edge by the
+ * strip's 1px makes that row the strip's own - the clip can no longer paint
+ * there, and the line can neither move nor be covered. */
+- (void)tile
+{
+  [super tile];
+
+  if (drawsTopSeparator && topSeparator != nil)
+    {
+      NSClipView *clip = [self contentView];
+      NSRect clipFrame = [clip frame];
+
+      /* origin.y += 1 / height -= 1 moves the visual top edge down by 1px in
+       * flipped and unflipped coordinate systems alike. */
+      clipFrame.origin.y += 1;
+      clipFrame.size.height -= 1;
+      [clip setFrame: clipFrame];
+
+      [self layoutTopSeparator];
     }
 }
 

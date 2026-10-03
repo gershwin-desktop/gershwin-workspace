@@ -582,7 +582,6 @@ static BOOL hasLastExtents_ = NO;
   if (viewType == GWViewTypeIcon)
     {
       [nviewScroll setBorderType: NSNoBorder];
-      [nviewScroll setDrawsTopSeparator: YES];
     }
   else
     {
@@ -1799,7 +1798,6 @@ constrainMinCoordinate:(CGFloat)proposedMin
           [nviewScroll setHasVerticalScroller: YES];
           [nviewScroll setHasHorizontalScroller: NO];
           [nviewScroll setBorderType: NSNoBorder];
-          [nviewScroll setDrawsTopSeparator: YES];
 
           nodeView = [[GWViewerIconsView alloc] initForViewer: self];
       
