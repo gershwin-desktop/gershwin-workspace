@@ -296,3 +296,46 @@ jobs:
           path: run-log-wine
           if-no-files-found: warn
           overwrite: true
+
+  # Both screenshots in one place: the run's summary page lists them, and the
+  # "workspace-screenshots" artifact holds the two PNGs side by side.
+  screenshots:
+    name: Screenshots
+    needs: [run-windows-x86_64, run-wine-x86_64]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          name: workspace-windows-run
+          path: windows
+        continue-on-error: true
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: workspace-windows-wine-run
+          path: wine
+        continue-on-error: true
+
+      - name: Collect
+        run: |
+          mkdir -p screenshots
+          [ -f windows/workspace-windows.png ] && cp windows/workspace-windows.png screenshots/workspace-on-windows.png
+          [ -f wine/workspace-wine.png ] && cp wine/workspace-wine.png screenshots/workspace-under-wine.png
+          ls -l screenshots
+          {
+            echo "## Workspace screenshots"
+            echo
+            echo "| Stock Windows (windows-latest) | Wine (ubuntu-latest) |"
+            echo "|---|---|"
+            echo "| $([ -f screenshots/workspace-on-windows.png ] && echo 'workspace-on-windows.png' || echo 'not produced') | $([ -f screenshots/workspace-under-wine.png ] && echo 'workspace-under-wine.png' || echo 'not produced') |"
+            echo
+            echo "Download them from the **workspace-screenshots** artifact of this run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: workspace-screenshots
+          path: screenshots
+          if-no-files-found: warn
