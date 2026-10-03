@@ -197,7 +197,6 @@ jobs:
           $out = New-Item -ItemType Directory -Force "$env:GITHUB_WORKSPACE\run-log"
           # Stock Windows: nothing the runner has preinstalled may be found.
           $env:PATH = "C:\Windows\System32;C:\Windows;C:\Windows\System32\Wbem;$root\Library\Tools"
-          $env:FONTCONFIG_FILE = "$root\Library\Preferences\fontconfig\fonts.conf"
           $exe = "$root\Applications\Workspace.app\Workspace.exe"
           $p = Start-Process -FilePath $exe -PassThru -NoNewWindow `
                  -RedirectStandardOutput "$out\stdout.log" -RedirectStandardError "$out\stderr.log"
@@ -252,4 +251,43 @@ jobs:
         with:
           name: workspace-windows-run
           path: run-log
+          if-no-files-found: warn
+
+  # The lightweight counterpart of the job above: the same zip under Wine on
+  # a Linux runner, through gershwin-developer's windows-wine-test.sh, which
+  # is also what a developer runs locally without any Windows at hand.
+  run-wine-x86_64:
+    name: Run under Wine
+    needs: build-windows-x86_64
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Get the Wine test script
+        uses: actions/checkout@v5
+        with:
+          repository: gershwin-desktop/gershwin-developer
+          ref: ${{ env.DEVELOPER_BRANCH }}
+          path: gershwin-developer
+
+      - uses: actions/download-artifact@v7
+        with:
+          name: gershwin-workspace-windows-x86_64
+          path: dist
+
+      - name: Install Wine
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq wine64 xvfb imagemagick
+
+      - name: Run the Workspace under Wine
+        run: |
+          mkdir -p run-log-wine
+          sh gershwin-developer/Library/Scripts/windows-wine-test.sh dist/Gershwin-Workspace-Windows-*.zip 45 "$PWD/run-log-wine/workspace-wine.png"
+
+      - name: Upload Wine run log and screenshot
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: workspace-windows-wine-run
+          path: run-log-wine
           if-no-files-found: warn
