@@ -27,6 +27,24 @@
 #import <string.h>
 #import "FinderModulesProtocol.h"
 
+#ifdef _WIN32
+/* MinGW has no memmem(); a bounded search with the same contract. */
+static void *memmem(const void *haystack, size_t hlen,
+                    const void *needle, size_t nlen)
+{
+  const unsigned char *h = haystack;
+  const unsigned char *n = needle;
+  size_t i;
+
+  if (nlen == 0) return (void *)h;
+  if (hlen < nlen) return NULL;
+  for (i = 0; i + nlen <= hlen; i++) {
+    if (h[i] == n[0] && memcmp(h + i, n, nlen) == 0) return (void *)(h + i);
+  }
+  return NULL;
+}
+#endif
+
 #define MAXFSIZE 600000
 
 static NSString *nibName = @"FModuleContents";
