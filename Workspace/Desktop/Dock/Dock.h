@@ -73,6 +73,29 @@ DockMagnifyPollInterval(CGFloat distance, CGFloat nearDistance, BOOL armed)
   return wait;
 }
 
+/* Whether a drop that went nowhere at this distance out beyond the Dock's
+ * face takes the icon it was dragging out of the Dock.  The icon has to be
+ * carried at least twice the Dock's height away from that face: a drop
+ * let go nearer than that is read as a slip of the hand, and the icon is
+ * put back where it was rather than being taken out.  Distance beyond the
+ * face is measured only outward and is zero everywhere level with the
+ * Dock (see -distanceBeyondDockFaceAt:), so a drag merely moved along the
+ * Dock can never end in a removal.  distance and dockHeight are in screen
+ * points (dockHeight is the bar's height on screen).  No bar to measure
+ * against (dockHeight <= 0) does not remove - failing safe keeps the
+ * item.  Foundation-only so it can be tested headless, the way
+ * DockMagnifyPollInterval is. */
+#define DND_REMOVE_DISTANCE_IN_DOCK_HEIGHTS 2.0
+
+static inline BOOL
+DockDropRemovesIcon(CGFloat distance, CGFloat dockHeight)
+{
+  if (dockHeight <= 0.0)
+    return NO;
+
+  return distance >= DND_REMOVE_DISTANCE_IN_DOCK_HEIGHTS * dockHeight;
+}
+
 /* Whether -refreshLaunchedStateWorker: would actually touch X for an icon in
  * this state, so a round can leave out the ones it would only relay back
  * unchanged: an X11-tracked icon always re-checks its windows, and a
@@ -218,6 +241,17 @@ typedef enum DockStyle
 - (DockIcon *)iconContainingPoint:(NSPoint)p;
 
 - (void)setDndSourceIcon:(DockIcon *)icon;
+
+/* What a drag of one of my icons that ended at @p point (screen
+ * coordinates, as -draggedImage:endedAt:deposited: reports it) and was or
+ * was not deposited (@p flag) does with that icon.  Dropped back inside
+ * the Dock, or let go still within twice the Dock's height of its face
+ * (DND_REMOVE_DISTANCE_IN_DOCK_HEIGHTS), the icon is kept - the drop read
+ * as a slip of the hand, and moving the icon along the Dock is no distance
+ * out at all; dropped into another destination it has left the Dock for
+ * there, and dropped on nothing beyond that reach it is taken out.  YES
+ * keeps the icon. */
+- (BOOL)keepsDraggedIconEndedAt:(NSPoint)point deposited:(BOOL)flag;
 
 - (void)appWillLaunch:(NSString *)appPath
               appName:(NSString *)appName;

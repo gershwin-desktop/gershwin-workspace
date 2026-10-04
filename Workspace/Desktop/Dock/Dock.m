@@ -97,6 +97,7 @@ static inline CGFloat _dockScaleFactor(void)
 - (CGFloat)largeIconSizeDefault;
 - (void)magnificationDefaultsDidChange:(NSNotification *)notif;
 - (void)magnifyTick:(NSTimer *)timer;
+- (CGFloat)distanceFromBarToPointer:(NSPoint)p;
 - (void)setMagnifyInterval:(NSTimeInterval)interval;
 - (NSTimeInterval)magnifyIntervalForDistance:(CGFloat)distance
                                         near:(CGFloat)nearDistance;
@@ -664,6 +665,81 @@ static inline CGFloat _dockScaleFactor(void)
 - (void)setDndSourceIcon:(DockIcon *)icon
 {
   dndSourceIcon = icon;
+}
+
+/* The Dock's own bounds in screen coordinates: where a dropped drag reads
+ * as having gone back into the Dock, whether or not the Dock keeps a
+ * window of its own. */
+- (NSRect)dockRectInScreen
+{
+  NSRect rect = [self convertRect: [self bounds] toView: nil];
+
+  if ([self window] == nil)
+    return NSZeroRect;
+
+  return [[self window] convertRectToScreen: rect];
+}
+
+/* How far the pointer is out beyond the Dock's face - the side that looks
+ * away from the screen edge - and no distance at all while it is level
+ * with the bar or nearer: on the Dock and inside the band the Dock stands
+ * in, it is zero, even past the bar's ends.  Drops are measured outward in
+ * this one direction only, so moving a dragged icon along the Dock cannot
+ * take it out of the Dock however far sideways it goes. */
+- (CGFloat)distanceBeyondDockFaceAt:(NSPoint)point
+{
+  NSRect bar = [self barFrame];
+
+  if (NSIsEmptyRect(bar))
+    return CGFLOAT_MAX;
+
+  switch (position)
+    {
+      case DockPositionBottom:
+        return MAX(0.0, point.y - NSMaxY(bar));
+      case DockPositionLeft:
+        return MAX(0.0, point.x - NSMaxX(bar));
+      case DockPositionRight:
+        return MAX(0.0, NSMinX(bar) - point.x);
+    }
+
+  return CGFLOAT_MAX;
+}
+
+/* What a drag of one of my icons that is being let go does with that icon:
+ * point is the drop in screen coordinates, flag says whether a destination
+ * took the drop.  Dropping it back inside the Dock keeps it - the Dock has
+ * already laid it where it dropped; dropping it into any other
+ * destination (above all another Dock, which adds what it takes) means it
+ * left the Dock there.  Dropped on nothing at all, it comes back unless
+ * the drop went further out beyond the Dock's face than twice the Dock's
+ * height (DockDropRemovesIcon in Dock.h): nearer than that, the trembling
+ * hand over the Dock's edge keeps its item, and so does an icon merely
+ * moved along the Dock, as far out as it likes sideways.
+ *
+ * This is where the removal from the Dock is decided now.  It used to be
+ * decided in -draggingExited:, the instant the drag set out of the Dock,
+ * which took an item away for any drag that crossed the edge at all; it
+ * is kept until the drop is let go instead. */
+- (BOOL)keepsDraggedIconEndedAt:(NSPoint)point deposited:(BOOL)flag
+{
+  NSRect bar;
+  CGFloat distance;
+
+  /* With no bar to measure against (-barFrame answers NSZeroRect) nothing
+   * can be said of the drop's intent, so keep it. */
+  bar = [self barFrame];
+  if (NSIsEmptyRect(bar) == YES)
+    return YES;
+
+  if (flag == YES)
+    return NSPointInRect(point, [self dockRectInScreen]);
+
+  distance = [self distanceBeyondDockFaceAt: point];
+
+  /* The bar's height on screen: the same units the distance beyond the
+   * face is measured in (see -distanceBeyondDockFaceAt:). */
+  return (DockDropRemovesIcon(distance, NSHeight(bar)) == NO);
 }
 
 - (void)appWillLaunch:(NSString *)appPath
@@ -2497,11 +2573,13 @@ static inline CGFloat _dockScaleFactor(void)
   }
   
   [self unselectOtherReps: nil];
-      
-  if (dndSourceIcon && [dndSourceIcon superview]) {
-    [self removeIcon: dndSourceIcon];
-    [self setDndSourceIcon: nil];
-  }
+
+  /* The dragged icon is NOT removed here, whatever the drag's fate: the
+   * drag can still end on the Dock, or on another dock, or out of reach -
+   * kept, moved, taken out - and only -draggedImage:endedAt:deposited:,
+   * on the drop, knows which, through -keepsDraggedIconEndedAt:deposited:.
+   * Removing it here (the old behaviour) took an item out of the Dock for
+   * any drag that crossed the edge of the view at all. */
   if (targetIndex != -1) {
     targetIndex = -1;
     targetRect = NSZeroRect;
