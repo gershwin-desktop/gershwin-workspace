@@ -262,6 +262,27 @@ static GWViewersManager *vwrsmanager = nil;
       if ([nodeView respondsToSelector: @selector(scrollSelectionToVisible)])
         [nodeView scrollSelectionToVisible];
     }
+
+  /* A reveal is asked for by another application (an app store showing what
+   * it just downloaded, a browser's "Show in folder"), so Workspace is not
+   * the active application, and ordering a window that is already on screen
+   * to the front does not lift it above that application's windows: libs-back
+   * only asks the window manager for focus when a window becomes key, and
+   * this one already is.  A window that had to be created got in front by
+   * being mapped; one that was already open stayed where it was.  Asking the
+   * window manager to activate it makes both cases the same, and activating
+   * the viewer first restores a minimized window. */
+  if (viewer != nil)
+    {
+      [NSApp activateIgnoringOtherApps: YES];
+      [viewer activate];
+#ifndef _WIN32
+      GSDisplayServer *server = GSServerForWindow([viewer win]);
+      void *winptr = [server windowDevice: [[viewer win] windowNumber]];
+      if (winptr != NULL)
+        [[GWX11WindowManager sharedManager] activateWindow: (unsigned long)(uintptr_t)winptr];
+#endif
+    }
 }
 
 /* Single creation path for both viewer kinds.  Owns, in one place: window
