@@ -177,6 +177,9 @@ static void mdnsAbortHandler(int sig)
         sigaction(SIGABRT, &oldAct, NULL);
         return;
       }
+      /* A browser that was only allocated crashes in -dealloc, which cleans
+         up state that -init sets up. */
+      probeBrowser = [probeBrowser init];
       [probeBrowser release];
 
       /* Tentatively mark mDNS as available.  If a SIGABRT occurs during

@@ -1122,6 +1122,12 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
   [self _swizzleGetInfoForFileForNoExtensionFiles];
 
+  /* The manager starts its mDNS and SMB discovery when it is created and
+   * keeps it up to date from then on; created here, the Network entries are
+   * already known by the time the first window or the Network folder shows
+   * them, instead of only starting once something asks for them. */
+  [NetworkServiceManager sharedManager];
+
   NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
   NSNotificationCenter *dnc = [NSDistributedNotificationCenter defaultCenter];
   
