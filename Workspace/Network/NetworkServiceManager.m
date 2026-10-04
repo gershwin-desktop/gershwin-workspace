@@ -153,12 +153,20 @@ static void mdnsAbortHandler(int sig)
     if (sigsetjmp(mdnsProbeJmpBuf, 1) == 0) {
       /* ---- Normal execution path ---- */
 
-      if (NSClassFromString(@"NSNetServiceBrowser") == nil) {
+      /* The class exists in every libs-base build, but without an Avahi or
+         mDNSResponder backend (e.g. Windows) +allocWithZone: returns nil,
+         and alloc/init then crashes inside libobjc's objc_alloc_init. */
+      id probeBrowser = nil;
+      if (NSClassFromString(@"NSNetServiceBrowser") != nil) {
+        probeBrowser = [NSNetServiceBrowser allocWithZone: NULL];
+      }
+      if (probeBrowser == nil) {
         mDNSAvailable = NO;
         mdnsProbeActive = 0;
         sigaction(SIGABRT, &oldAct, NULL);
         return;
       }
+      [probeBrowser release];
 
       /* Tentatively mark mDNS as available.  If a SIGABRT occurs during
          the run loop (e.g. during startBrowsing's searchForServicesOfType:
