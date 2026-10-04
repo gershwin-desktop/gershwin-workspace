@@ -10,6 +10,12 @@
 #import <signal.h>
 #import <errno.h>
 #import <unistd.h>
+#ifndef _WIN32
+#import <sys/stat.h>
+#import <sys/socket.h>
+#import <netinet/in.h>
+#import <arpa/inet.h>
+#endif
 #import "NetworkVolumeManager.h"
 #import "NetworkServiceItem.h"
 #import "SFTPMount.h"
@@ -69,6 +75,7 @@ static NetworkVolumeManager *sharedInstance = nil;
     mountedVolumes = [[NSMutableDictionary alloc] init];
     mountedVolumesPIDs = [[NSMutableDictionary alloc] init];
     webdavMounts = [[NSMutableDictionary alloc] init];
+    smbConfigDirs = [[NSMutableDictionary alloc] init];
     recentlyUnmountedPaths = [[NSMutableSet alloc] init];
     fm = [NSFileManager defaultManager];
     lastErrorMessage = nil;
@@ -88,6 +95,7 @@ static NetworkVolumeManager *sharedInstance = nil;
   [mountedVolumes release];
   [mountedVolumesPIDs release];
   [webdavMounts release];
+  [smbConfigDirs release];
   [recentlyUnmountedPaths release];
   RELEASE(lastErrorMessage);
   [super dealloc];
@@ -288,7 +296,7 @@ static NetworkVolumeManager *sharedInstance = nil;
   if ([fm fileExistsAtPath:baseMountPoint isDirectory:&isDir] && isDir) {
     NSError *contentsError = nil;
     NSArray *contents = [fm contentsOfDirectoryAtPath:baseMountPoint error:&contentsError];
-    if (!contentsError && [contents count] == 0) {
+    if (!contentsError && [contents count] == 0 && [fm isWritableFileAtPath:baseMountPoint]) {
       mountPoint = baseMountPoint;
     }
   }
@@ -303,7 +311,7 @@ static NetworkVolumeManager *sharedInstance = nil;
       if ([fm fileExistsAtPath:numberedMountPoint isDirectory:&isDir] && isDir) {
         NSError *contentsError = nil;
         NSArray *contents = [fm contentsOfDirectoryAtPath:numberedMountPoint error:&contentsError];
-        if (!contentsError && [contents count] == 0) {
+        if (!contentsError && [contents count] == 0 && [fm isWritableFileAtPath:numberedMountPoint]) {
           mountPoint = numberedMountPoint;
           foundEmpty = YES;
         }
@@ -758,6 +766,7 @@ static NetworkVolumeManager *sharedInstance = nil;
     if (foundId) {
       [mountedVolumes removeObjectForKey:foundId];
       [mountedVolumesPIDs removeObjectForKey:foundId];
+      [self removeSMBConfigForIdentifier:foundId];
     }
 
     /* Clear FSNode/FSNodeRep state */
@@ -817,6 +826,291 @@ static NetworkVolumeManager *sharedInstance = nil;
   } else {
     return NO;
   }
+}
+
+#pragma mark - SMB Mounting via smbnetfs
+
+/* smbnetfs is a FUSE file system that exposes SMB hosts as HOST/SHARE
+   directories.  It runs in userspace, so no root is needed, and takes its
+   credentials from a config file; that file lives in a private directory
+   that is removed again on unmount. */
+
+- (BOOL)isCommandAvailable:(NSString *)command
+{
+  NSTask *task = [[NSTask alloc] init];
+  [task setLaunchPath:@"/usr/bin/which"];
+  [task setArguments:@[command]];
+  [task setStandardOutput:[NSPipe pipe]];
+  [task setStandardError:[NSPipe pipe]];
+  BOOL found = NO;
+  @try {
+    [task launch];
+    [task waitUntilExit];
+    found = ([task terminationStatus] == 0);
+  } @catch (NSException *exception) {
+  }
+  [task release];
+  return found;
+}
+
+- (void)showSmbnetfsNotInstalledAlert
+{
+  NSAlert *alert = [[NSAlert alloc] init];
+  [alert setMessageText:NSLocalizedString(@"smbnetfs Not Installed", @"")];
+  [alert setInformativeText:NSLocalizedString(
+    @"FUSE smbnetfs is required to mount SMB network volumes but is not installed on your system.\n\n"
+    @"To install it:\n"
+    @"• On Debian/Ubuntu: sudo apt-get install smbnetfs\n"
+    @"• On Fedora/RHEL: sudo dnf install smbnetfs\n"
+    @"• On FreeBSD: sudo pkg install fusefs-smbnetfs", @"")];
+  [alert setAlertStyle:NSWarningAlertStyle];
+  [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
+  [alert runModal];
+  [alert release];
+}
+
+- (void)showMountFailedAlertWithMessage:(NSString *)message
+{
+  RELEASE(lastErrorMessage);
+  lastErrorMessage = [message copy];
+  NSAlert *alert = [[NSAlert alloc] init];
+  [alert setMessageText:NSLocalizedString(@"Mount Failed", @"")];
+  [alert setInformativeText:message];
+  [alert setAlertStyle:NSWarningAlertStyle];
+  [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
+  [alert runModal];
+  [alert release];
+}
+
+/* The name smbnetfs is asked for: the IPv4 address when we have one, because
+   NetBIOS and .local names do not resolve on every network. */
+- (NSString *)smbTargetForService:(NetworkServiceItem *)serviceItem
+{
+#ifndef _WIN32
+  for (NSData *data in [serviceItem addresses]) {
+    const struct sockaddr_in *sin = (const struct sockaddr_in *)[data bytes];
+    if ([data length] >= sizeof(struct sockaddr_in) && sin->sin_family == AF_INET) {
+      char ip[INET_ADDRSTRLEN];
+      if (inet_ntop(AF_INET, &sin->sin_addr, ip, sizeof(ip))) {
+        return [NSString stringWithUTF8String:ip];
+      }
+    }
+  }
+#endif
+  NSString *host = [serviceItem hostName];
+  if ([host hasSuffix:@"."]) {
+    host = [host substringToIndex:[host length] - 1];
+  }
+  return [host length] > 0 ? host : nil;
+}
+
+- (void)removeSMBConfigForIdentifier:(NSString *)identifier
+{
+  NSString *dir = [smbConfigDirs objectForKey:identifier];
+  if (dir) {
+    [fm removeItemAtPath:dir error:NULL];
+    [smbConfigDirs removeObjectForKey:identifier];
+  }
+}
+
+/* YES once something other than the parent directory's file system answers
+   at the mount point. */
+- (BOOL)isFuseMountedAt:(NSString *)mountPoint
+{
+#ifndef _WIN32
+  struct stat mountStat, parentStat;
+  if (stat([mountPoint fileSystemRepresentation], &mountStat) != 0
+      || stat([[mountPoint stringByDeletingLastPathComponent] fileSystemRepresentation], &parentStat) != 0) {
+    return NO;
+  }
+  return mountStat.st_dev != parentStat.st_dev;
+#else
+  return NO;
+#endif
+}
+
+- (NSString *)mountSMBService:(NetworkServiceItem *)serviceItem
+{
+#ifdef _WIN32
+  [self showMountFailedAlertWithMessage:NSLocalizedString(
+    @"SMB mounting is not available on this platform.", @"")];
+  return nil;
+#else
+  NSString *identifier = [serviceItem identifier];
+  NSString *target = [self smbTargetForService:serviceItem];
+
+  NSString *existing = [mountedVolumes objectForKey:identifier];
+  if (existing && target) {
+    return [existing stringByAppendingPathComponent:target];
+  }
+
+  if (![self isCommandAvailable:@"smbnetfs"]) {
+    [self showSmbnetfsNotInstalledAlert];
+    return nil;
+  }
+  if (!target) {
+    [self showMountFailedAlertWithMessage:NSLocalizedString(
+      @"The network service does not have a valid hostname.", @"")];
+    return nil;
+  }
+
+  NSDictionary *creds = [NetworkVolumeManager
+    runCredentialsPanelWithTitle:NSLocalizedString(@"Connect to SMB Server", @"")
+                        hostname:[serviceItem name]];
+  if (!creds) {
+    return nil;
+  }
+  /* An empty user name connects as guest, which is what smbnetfs does
+     without any auth line, too. */
+  NSString *user = [[creds objectForKey:@"username"] length] > 0
+    ? [creds objectForKey:@"username"] : @"guest";
+  NSString *password = [creds objectForKey:@"password"] ?: @"";
+  /* smbnetfs wants DOMAIN/user; Windows users write DOMAIN\user. */
+  user = [user stringByReplacingOccurrencesOfString:@"\\" withString:@"/"];
+
+  /* The config file has no escape syntax we rely on, so refuse what would
+     break out of its quoting instead of guessing. */
+  NSCharacterSet *forbidden = [NSCharacterSet characterSetWithCharactersInString:@"\"\n\r"];
+  if ([user rangeOfCharacterFromSet:forbidden].location != NSNotFound
+      || [password rangeOfCharacterFromSet:forbidden].location != NSNotFound
+      || [target rangeOfCharacterFromSet:forbidden].location != NSNotFound) {
+    [self showMountFailedAlertWithMessage:NSLocalizedString(
+      @"The user name or password contains a character that cannot be passed to smbnetfs.", @"")];
+    return nil;
+  }
+
+  NSString *mountPoint = [self createMountPointForService:serviceItem];
+  if (!mountPoint) {
+    [self showMountFailedAlertWithMessage:NSLocalizedString(
+      @"Could not create a mount point in /Volumes.", @"")];
+    return nil;
+  }
+
+  /* Private directory (mode 0700) for the file that holds the password. */
+  char dirTemplate[] = "/tmp/GWSMBXXXXXX";
+  if (mkdtemp(dirTemplate) == NULL) {
+    [fm removeItemAtPath:mountPoint error:NULL];
+    [self showMountFailedAlertWithMessage:NSLocalizedString(
+      @"Could not create a private configuration directory.", @"")];
+    return nil;
+  }
+  NSString *configDir = [NSString stringWithUTF8String:dirTemplate];
+  NSString *smbDir = [configDir stringByAppendingPathComponent:@".smb"];
+  [fm createDirectoryAtPath:smbDir
+withIntermediateDirectories:YES
+                 attributes:@{NSFilePosixPermissions: @0700}
+                      error:NULL];
+  [fm createFileAtPath:[smbDir stringByAppendingPathComponent:@"smb.conf"]
+              contents:[NSData data]
+            attributes:nil];
+  NSString *configPath = [smbDir stringByAppendingPathComponent:@"smbnetfs.conf"];
+  NSString *config = [NSString stringWithFormat:
+    @"smbnetfs_debug 0\n"
+    @"smb_timeout 8000\n"
+    @"show_$_shares \"false\"\n"
+    @"auth \"%@\" \"%@\" \"%@\"\n"
+    @"host \"%@\"\n",
+    target, user, password, target];
+  [fm createFileAtPath:configPath
+              contents:[config dataUsingEncoding:NSUTF8StringEncoding]
+            attributes:@{NSFilePosixPermissions: @0600}];
+
+  NSTask *task = [[NSTask alloc] init];
+  NSPipe *errorPipe = [NSPipe pipe];
+  [task setLaunchPath:@"/usr/bin/env"];
+  /* -f keeps smbnetfs in the foreground, so the task's pid is the mount's
+     pid and unmounting is a plain kill. */
+  [task setArguments:@[@"smbnetfs", @"-f", mountPoint]];
+  NSMutableDictionary *environment = [[[[NSProcessInfo processInfo] environment] mutableCopy] autorelease];
+  [environment setObject:configDir forKey:@"HOME"];
+  [task setEnvironment:environment];
+  [task setStandardError:errorPipe];
+  [task setStandardOutput:[NSPipe pipe]];
+
+  NSString *failure = nil;
+  @try {
+    [task launch];
+  } @catch (NSException *exception) {
+    failure = [exception reason];
+  }
+
+  if (!failure) {
+    BOOL mounted = NO;
+    for (int i = 0; i < 60 && !mounted && [task isRunning]; i++) {
+      usleep(250000);
+      mounted = [self isFuseMountedAt:mountPoint];
+    }
+    if (!mounted) {
+      NSData *errData = [task isRunning] ? nil : [[errorPipe fileHandleForReading] availableData];
+      NSString *errText = errData ? [[[NSString alloc] initWithData:errData
+                                                          encoding:NSUTF8StringEncoding] autorelease] : nil;
+      failure = [errText length] > 0 ? errText
+        : NSLocalizedString(@"smbnetfs did not start. Is FUSE available to your user?", @"");
+    }
+  }
+
+  NSString *hostPath = [mountPoint stringByAppendingPathComponent:target];
+  if (!failure) {
+    /* The mount comes up before any connection is made; list the host to
+       find out whether the server and the credentials are accepted. */
+    NSError *listError = nil;
+    if (![fm contentsOfDirectoryAtPath:hostPath error:&listError]) {
+      failure = [NSString stringWithFormat:NSLocalizedString(
+        @"Could not connect to %@. Check the user name and password.", @""),
+        [serviceItem name]];
+    }
+  }
+
+  if (failure) {
+    if ([task isRunning]) {
+      kill([task processIdentifier], SIGTERM);
+      [task waitUntilExit];
+    }
+    [task release];
+    [fm removeItemAtPath:configDir error:NULL];
+    [fm removeItemAtPath:mountPoint error:NULL];
+    if ([NSThread isMainThread]) {
+      [self showMountFailedAlertWithMessage:failure];
+    } else {
+      RELEASE(lastErrorMessage);
+      lastErrorMessage = [failure copy];
+    }
+    return nil;
+  }
+
+  [mountedVolumes setObject:mountPoint forKey:identifier];
+  [mountedVolumesPIDs setObject:[NSNumber numberWithInt:[task processIdentifier]] forKey:identifier];
+  [smbConfigDirs setObject:configDir forKey:identifier];
+  [task release];
+
+  @try {
+    FSNode *vnode = [FSNode nodeWithPath:mountPoint];
+    if (vnode) {
+      [vnode setMountPoint:YES];
+    }
+    [[FSNodeRep sharedInstance] addVolumeAt:mountPoint];
+  } @catch (NSException *e) {
+  }
+
+  NSString *parent = [mountPoint stringByDeletingLastPathComponent];
+  NSDictionary *opinfo = @{ @"operation": @"MountOperation",
+                            @"source": parent,
+                            @"destination": parent,
+                            @"files": @[[mountPoint lastPathComponent]] };
+  [[NSNotificationCenter defaultCenter]
+    postNotificationName:@"GWFileSystemDidChangeNotification"
+                  object:opinfo];
+
+  id gworkspace = [Workspace gworkspace];
+  if (gworkspace) {
+    id desktopManager = [gworkspace desktopManager];
+    if (desktopManager && [[desktopManager desktopView] respondsToSelector:@selector(newVolumeMountedAtPath:)]) {
+      [[desktopManager desktopView] newVolumeMountedAtPath:mountPoint];
+    }
+  }
+
+  return hostPath;
+#endif
 }
 
 #pragma mark - WebDAV Mounting via AVFS

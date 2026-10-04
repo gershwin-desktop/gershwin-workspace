@@ -23,6 +23,7 @@
   NSMutableDictionary *mountedVolumes;  /* Maps service identifier to mount point */
   NSMutableDictionary *mountedVolumesPIDs;  /* Maps service identifier to NSNumber(pid) */
   NSMutableDictionary *webdavMounts;    /* Maps service identifier to AVFS virtual path */
+  NSMutableDictionary *smbConfigDirs;   /* Maps service identifier to the private smbnetfs config directory */
   NSFileManager *fm;
   NSString *lastErrorMessage;  /* Last mount error for callers to retrieve */
   NSMutableSet *recentlyUnmountedPaths;  /* Paths recently unmounted, for dialog suppression */
@@ -108,6 +109,14 @@
  * @return The AVFS virtual path, or nil on failure
  */
 - (NSString *)mountWebDAVService:(NetworkServiceItem *)serviceItem;
+
+/**
+ * Mounts an SMB host with smbnetfs (FUSE), asking for credentials first.
+ * Returns the directory that lists the host's shares, or nil on failure
+ * (-lastErrorMessage says why).  The mount itself is unmounted through
+ * -unmountService: like any other network volume.
+ */
+- (NSString *)mountSMBService:(NetworkServiceItem *)serviceItem;
 
 /**
  * Attempts to mount a WebDAV service with provided credentials.

@@ -453,16 +453,7 @@ NSString * const NetworkVirtualPath = @"/Network";
     [alert release];
     return nil;
   } else if ([serviceItem isSMBService]) {
-    /* SMB mounting not yet implemented */
-    NSAlert *alert = [[NSAlert alloc] init];
-    [alert setMessageText:NSLocalizedString(@"Not Implemented", @"")];
-    [alert setInformativeText:NSLocalizedString(
-      @"SMB volume mounting is not yet implemented.", @"")];
-    [alert setAlertStyle:NSInformationalAlertStyle];
-    [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
-    [alert runModal];
-    [alert release];
-    return nil;
+    return [[NetworkVolumeManager sharedManager] mountSMBService:serviceItem];
   }
   
   /* Unknown service type */
