@@ -162,7 +162,7 @@ NSString * const NetworkVirtualPath = @"/Network";
     } else {
       NSUInteger newCount = [count unsignedIntegerValue] + 1;
       [nameCounts setObject:[NSNumber numberWithUnsignedInteger:newCount] forKey:baseName];
-      /* Insert numbering before known suffixes like " (sftp)" and " (afp)" */
+      /* Insert numbering before known suffixes like " (sftp)", " (afp)" and " (smb)" */
       NSString *suffix = nil;
       NSString *namePart = baseName;
       NSRange suffixRange = [baseName rangeOfString:@" (" options:NSBackwardsSearch];
@@ -170,7 +170,8 @@ NSString * const NetworkVirtualPath = @"/Network";
         suffix = [baseName substringFromIndex:suffixRange.location];
         namePart = [baseName substringToIndex:suffixRange.location];
       }
-      if (suffix && ([suffix isEqualToString:@" (sftp)"] || [suffix isEqualToString:@" (afp)"])) {
+      if (suffix && ([suffix isEqualToString:@" (sftp)"] || [suffix isEqualToString:@" (afp)"]
+                     || [suffix isEqualToString:@" (smb)"])) {
         uniqueName = [NSString stringWithFormat:@"%@-%lu%@", namePart, (unsigned long)newCount, suffix];
       } else {
         uniqueName = [NSString stringWithFormat:@"%@-%lu", baseName, (unsigned long)newCount];
@@ -198,6 +199,13 @@ NSString * const NetworkVirtualPath = @"/Network";
   return nodes;
 }
 
+/* The Network folder has no directory to snapshot; its contents are the
+   services the manager has discovered so far. */
+- (NSArray *)lazySubNodes
+{
+  return [self subNodes];
+}
+
 - (NSArray *)subNodeNames
 {
   if (!isNetworkRoot) {
@@ -220,7 +228,7 @@ NSString * const NetworkVirtualPath = @"/Network";
     } else {
       NSUInteger newCount = [count unsignedIntegerValue] + 1;
       [nameCounts setObject:[NSNumber numberWithUnsignedInteger:newCount] forKey:baseName];
-      /* Insert numbering before known suffixes like " (sftp)" and " (afp)" */
+      /* Insert numbering before known suffixes like " (sftp)", " (afp)" and " (smb)" */
       NSString *suffix = nil;
       NSString *namePart = baseName;
       NSRange suffixRange = [baseName rangeOfString:@" (" options:NSBackwardsSearch];
@@ -228,7 +236,8 @@ NSString * const NetworkVirtualPath = @"/Network";
         suffix = [baseName substringFromIndex:suffixRange.location];
         namePart = [baseName substringToIndex:suffixRange.location];
       }
-      if (suffix && ([suffix isEqualToString:@" (sftp)"] || [suffix isEqualToString:@" (afp)"])) {
+      if (suffix && ([suffix isEqualToString:@" (sftp)"] || [suffix isEqualToString:@" (afp)"]
+                     || [suffix isEqualToString:@" (smb)"])) {
         uniqueName = [NSString stringWithFormat:@"%@-%lu%@", namePart, (unsigned long)newCount, suffix];
       } else {
         uniqueName = [NSString stringWithFormat:@"%@-%lu", baseName, (unsigned long)newCount];
@@ -332,6 +341,8 @@ NSString * const NetworkVirtualPath = @"/Network";
       return NSLocalizedString(@"SFTP Server", @"Type for SFTP services");
     } else if ([serviceItem isAFPService]) {
       return NSLocalizedString(@"AFP Server", @"Type for AFP services");
+    } else if ([serviceItem isSMBService]) {
+      return NSLocalizedString(@"SMB Server", @"Type for SMB services");
     } else if ([serviceItem isWebDAVService]) {
       if ([serviceItem isSecureWebDAV]) {
         return NSLocalizedString(@"WebDAV Server (Secure)", @"Type for WebDAVS services");
@@ -436,6 +447,17 @@ NSString * const NetworkVirtualPath = @"/Network";
     [alert setMessageText:NSLocalizedString(@"Not Implemented", @"")];
     [alert setInformativeText:NSLocalizedString(
       @"AFP volume mounting is not yet implemented.", @"")];
+    [alert setAlertStyle:NSInformationalAlertStyle];
+    [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
+    [alert runModal];
+    [alert release];
+    return nil;
+  } else if ([serviceItem isSMBService]) {
+    /* SMB mounting not yet implemented */
+    NSAlert *alert = [[NSAlert alloc] init];
+    [alert setMessageText:NSLocalizedString(@"Not Implemented", @"")];
+    [alert setInformativeText:NSLocalizedString(
+      @"SMB volume mounting is not yet implemented.", @"")];
     [alert setAlertStyle:NSInformationalAlertStyle];
     [alert addButtonWithTitle:NSLocalizedString(@"OK", @"")];
     [alert runModal];

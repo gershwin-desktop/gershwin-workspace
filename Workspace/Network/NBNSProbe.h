@@ -15,6 +15,8 @@
 
 #import <Foundation/Foundation.h>
 
+@interface NBNSProbe : NSObject
+
 /**
  * Returns the answers of a single NBSTAT (node status) query to a host.
  * This is the packet Samba's nmblookup -A sends.  Returns a dictionary

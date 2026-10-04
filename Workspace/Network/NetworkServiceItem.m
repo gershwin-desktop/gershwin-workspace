@@ -82,6 +82,8 @@
     return [base stringByAppendingString:@" (sftp)"];
   } else if ([self isAFPService]) {
     return [base stringByAppendingString:@" (afp)"];
+  } else if ([self isSMBService]) {
+    return [base stringByAppendingString:@" (smb)"];
   } else if ([self isWebDAVService]) {
     if ([self isSecureWebDAV]) {
       return [base stringByAppendingString:@" (webdavs)"];
@@ -137,6 +139,11 @@
 - (BOOL)isAFPService
 {
   return [type hasPrefix:@"_afpovertcp."];
+}
+
+- (BOOL)isSMBService
+{
+  return [type hasPrefix:@"_smb."];
 }
 
 - (BOOL)isWebDAVService

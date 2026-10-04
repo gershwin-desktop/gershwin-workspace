@@ -1,0 +1,21 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Network
+
+# clang 19 / binutils 2.44 regression: the ABI 2.2 .objc_init section always
+# references the __objc_constant_string section bounds, but the linker only
+# synthesizes those __start_/__stop_ symbols when the section exists.  A
+# Foundation-only test tool without constant strings then fails to link.
+ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
+                      -Wl,--defsym=__stop___objc_constant_string=0
+
+# The probes are Foundation-only; each test links just the sources it checks.
+t_WSDiscoveryParse_OBJC_FILES += ../../Workspace/Network/WSDiscoveryProbe.m \
+                                 ../../Workspace/Network/NBNSProbe.m
+t_SMBDiscoveryRecord_OBJC_FILES += ../../Workspace/Network/SMBDiscovery.m \
+                                   ../../Workspace/Network/WSDiscoveryProbe.m \
+                                   ../../Workspace/Network/NBNSProbe.m \
+                                   ../../Workspace/Network/NetworkServiceManager.m \
+                                   ../../Workspace/Network/NetworkServiceItem.m
+t_NetworkServiceItemSMB_OBJC_FILES += ../../Workspace/Network/NetworkServiceItem.m
+# SMBDiscovery uses dispatch_once.
+t_SMBDiscoveryRecord_TOOL_LIBS += -ldispatch

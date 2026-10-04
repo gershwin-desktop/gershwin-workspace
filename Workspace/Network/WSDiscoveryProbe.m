@@ -12,6 +12,7 @@
  */
 
 #import "WSDiscoveryProbe.h"
+#import "NBNSProbe.h"
 
 #ifndef _WIN32
 #import <sys/socket.h>
@@ -19,6 +20,10 @@
 #import <arpa/inet.h>
 #import <netdb.h>
 #import <unistd.h>
+#import <fcntl.h>
+#import <errno.h>
+#import <sys/select.h>
+#import <sys/time.h>
 #import <string.h>
 #import <stdlib.h>
 #endif
@@ -94,74 +99,108 @@
 
 /* The WS-Discovery and metadata XML has a small, controlled vocabulary, so
    instead of a full XML parser a local-name scanner suffices: it finds the
-   first "start" tag with the given local name in front of any namespace
-   prefix and returns the text up to the next "close" tag. */
+   first element with the given local name, whatever its namespace prefix,
+   and returns the text up to its matching close tag. */
 
-/* Finds the first "start" tag with the given local name at or after
-   aStart; returns the range of the element text or NSNotFound. */
+/* Reads the tag that starts at the '<' at index open.  Returns the index of
+   its closing '>' (NSNotFound for a malformed tag) and fills in the local
+   name (prefix removed), whether it is an end tag and whether it is
+   self-closed. */
+static NSUInteger readTag(NSString *xml, NSUInteger open, NSString **localName,
+                          BOOL *isEnd, BOOL *isSelfClosed)
+{
+  NSUInteger length = [xml length];
+  NSUInteger pos = open + 1;
+  *isEnd = NO;
+  *isSelfClosed = NO;
+  *localName = nil;
+
+  if (pos < length && [xml characterAtIndex:pos] == '/') {
+    *isEnd = YES;
+    pos++;
+  }
+  NSUInteger nameStart = pos;
+  NSUInteger localStart = pos;
+  while (pos < length) {
+    unichar c = [xml characterAtIndex:pos];
+    if (c == ':') {
+      localStart = pos + 1;
+    } else if (c == '>' || c == '/' || c == ' ' || c == '\t'
+               || c == '\r' || c == '\n') {
+      break;
+    }
+    pos++;
+  }
+  if (pos >= length || pos == nameStart) {
+    return NSNotFound;
+  }
+  *localName = [xml substringWithRange:NSMakeRange(localStart, pos - localStart)];
+
+  NSRange end = [xml rangeOfString:@">"
+                           options:0
+                             range:NSMakeRange(pos, length - pos)];
+  if (end.location == NSNotFound) {
+    return NSNotFound;
+  }
+  *isSelfClosed = (end.location > 0
+                   && [xml characterAtIndex:end.location - 1] == '/');
+  return end.location;
+}
+
+/* Finds the first element with the given local name at or after start;
+   returns the range of its text, or NSNotFound. */
 static NSRange elementTextRange(NSString *xml, NSString *localName,
                                 NSUInteger start)
 {
   NSUInteger length = [xml length];
-  NSRange search = NSMakeRange(start, length - start);
-  while (search.location != NSNotFound && search.location < length) {
+  NSUInteger pos = start;
+
+  while (pos < length) {
     NSRange open = [xml rangeOfString:@"<"
                               options:0
-                                range:search];
+                                range:NSMakeRange(pos, length - pos)];
     if (open.location == NSNotFound) {
       break;
     }
-
-    /* Read the tag name: optional prefix, local name, then the tag end. */
-    NSUInteger nameStart = open.location + 1;
-    NSRange prefixColon = [xml rangeOfString:@":"
-                                     options:0
-                                       range:NSMakeRange(nameStart,
-                                              MIN(10, length - nameStart))];
-    NSUInteger tagStart = (prefixColon.location != NSNotFound
-                           && prefixColon.location < nameStart + 11)
-                              ? prefixColon.location + 1
-                              : nameStart;
-
-    NSUInteger nameEnd = tagStart;
-    while (nameEnd < length) {
-      unichar c = [xml characterAtIndex:nameEnd];
-      if (c == '>' || c == ' ' || c == '/' || c == '\r' || c == '\n') {
-        break;
-      }
-      nameEnd++;
+    NSString *tag = nil;
+    BOOL isEnd, isSelfClosed;
+    NSUInteger tagEnd = readTag(xml, open.location, &tag, &isEnd, &isSelfClosed);
+    if (tagEnd == NSNotFound) {
+      break;
     }
-    NSString *tag =
-      [xml substringWithRange:NSMakeRange(tagStart, nameEnd - tagStart)];
-    if ([tag isEqualToString:localName]) {
-      /* Element text starts after the open tag end; find the close tag. */
-      NSRange close = [xml rangeOfString:@">"
-                                 options:0
-                                   range:NSMakeRange(nameEnd,
-                                          length - nameEnd)];
-      if (close.location == NSNotFound) {
-        break;
+    pos = tagEnd + 1;
+    if (isEnd || isSelfClosed || ![tag isEqualToString:localName]) {
+      continue;
+    }
+
+    /* Found the open tag; walk on to its matching close tag. */
+    NSUInteger textStart = pos;
+    int depth = 1;
+    NSUInteger inner = pos;
+    while (inner < length) {
+      NSRange next = [xml rangeOfString:@"<"
+                                options:0
+                                  range:NSMakeRange(inner, length - inner)];
+      if (next.location == NSNotFound) {
+        return NSMakeRange(NSNotFound, 0);
       }
-      NSRange value = { close.location + 1, 0 };
-      NSRange closeTag = [xml rangeOfString:@"</"
-                                    options:0
-                                      range:NSMakeRange(value.location,
-                                             length - value.location)];
-      if (closeTag.location == NSNotFound) {
-        break;
+      NSString *innerTag = nil;
+      BOOL innerEnd, innerSelfClosed;
+      NSUInteger innerTagEnd = readTag(xml, next.location, &innerTag,
+                                       &innerEnd, &innerSelfClosed);
+      if (innerTagEnd == NSNotFound) {
+        return NSMakeRange(NSNotFound, 0);
       }
-      value.length = closeTag.location - value.location;
-      if (value.length == 0) {
-        /* Self-closed or empty element: keep scanning for the next match. */
-        search.location = closeTag.location + 2;
-        search.length = length - search.location;
+      inner = innerTagEnd + 1;
+      if (![innerTag isEqualToString:localName] || innerSelfClosed) {
         continue;
       }
-      return value;
+      depth += innerEnd ? -1 : 1;
+      if (depth == 0) {
+        return NSMakeRange(textStart, next.location - textStart);
+      }
     }
-
-    search.location = nameEnd;
-    search.length = length - search.location;
+    return NSMakeRange(NSNotFound, 0);
   }
   return NSMakeRange(NSNotFound, 0);
 }
@@ -292,23 +331,22 @@ static NSString *firstIPv4FromXAddrs(NSString *xaddrs, int *outPort)
 
 #pragma mark - Metadata exchange (HTTP on the XAddr)
 
-/* Plain HTTP POST over a socket - NSURLConnection needs a teasing run loop
-   and we want a short hard timeout anyway.  Returns the response body or
-   nil. */
-static NSString *httpPOST(NSString *hostString,
+/* Plain HTTP POST over a socket: the answering host is on the local network,
+   and a short hard timeout matters more than redirects or TLS.  Returns the
+   response body or nil. */
+static NSString *httpPOST(NSString *ipString,
                           int port,
                           NSString *httpPath,
                           NSString *body)
 {
-#ifndef _WIN32
-  struct hostent *resolved =
-    gethostbyname([hostString UTF8String]);
-  if (!resolved) {
-    return nil;
-  }
-  struct in_addr target;
-  memcpy(&target, resolved->h_addr_list[0], sizeof(target));
-  if (inet_addr(inet_ntoa(target)) == INADDR_NONE) {
+#ifdef _WIN32
+  return nil;
+#else
+  struct sockaddr_in addr;
+  memset(&addr, 0, sizeof(addr));
+  addr.sin_family = AF_INET;
+  addr.sin_port = htons((uint16_t)port);
+  if (inet_pton(AF_INET, [ipString UTF8String], &addr.sin_addr) != 1) {
     return nil;
   }
 
@@ -319,42 +357,228 @@ static NSString *httpPOST(NSString *hostString,
 
   /* Connect non-blocking with a hard select timeout: a target that does
      not answer must not block the discovery thread. */
-  struct sockaddr_in addr;
-  memset(&addr, 0, sizeof(addr));
-  addr.sin_family = AF_INET;
-  addr.sin_port = htons(port);
-  addr.sin_addr = target;
-
   int flags = fcntl(fd, F_GETFL, 0);
   fcntl(fd, F_SETFL, flags | O_NONBLOCK);
-  connect(fd, (struct sockaddr *)&addr, sizeof(addr));
+  if (connect(fd, (struct sockaddr *)&addr, sizeof(addr)) < 0
+      && errno != EINPROGRESS) {
+    close(fd);
+    return nil;
+  }
 
   fd_set writeSet;
   FD_ZERO(&writeSet);
   FD_SET(fd, &writeSet);
-  struct timeval timeout = { 2, 0 };
-  if (select(fd + 1, NULL, &writeSet, NULL, &timeout) <= 0) {
+  struct timeval connectTimeout = { 2, 0 };
+  if (select(fd + 1, NULL, &writeSet, NULL, &connectTimeout) <= 0) {
+    close(fd);
+    return nil;
+  }
+  int connectError = 0;
+  socklen_t errorLength = sizeof(connectError);
+  getsockopt(fd, SOL_SOCKET, SO_ERROR, &connectError, &errorLength);
+  if (connectError != 0) {
     close(fd);
     return nil;
   }
   fcntl(fd, F_SETFL, flags);
 
-  int msec = 5000;
-  struct timeval recvTimeout = { msec / 1000, (msec % 1000) * 1000 };
-  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &recvTimeout, sizeof(recvTimeout));
+  struct timeval ioTimeout = { 3, 0 };
+  setsockopt(fd, SOL_SOCKET, SO_RCVTIMEO, &ioTimeout, sizeof(ioTimeout));
+  setsockopt(fd, SOL_SOCKET, SO_SNDTIMEO, &ioTimeout, sizeof(ioTimeout));
 
-  NSMutableString *request = [NSMutableString
-      stringWithFormat:]
-    ;
+  NSData *bodyData = [body dataUsingEncoding:NSUTF8StringEncoding];
+  NSString *head = [NSString stringWithFormat:
+    @"POST %@ HTTP/1.1\r\n"
+    "Host: %@:%d\r\n"
+    "Content-Type: application/soap+xml; charset=utf-8\r\n"
+    "Content-Length: %lu\r\n"
+    "Connection: close\r\n"
+    "\r\n",
+    httpPath, ipString, port, (unsigned long)[bodyData length]];
+  NSMutableData *request = [NSMutableData
+      dataWithData:[head dataUsingEncoding:NSUTF8StringEncoding]];
+  [request appendData:bodyData];
+
+  const unsigned char *out = [request bytes];
+  size_t sent = 0;
+  while (sent < [request length]) {
+    ssize_t n = send(fd, out + sent, [request length] - sent, 0);
+    if (n <= 0) {
+      close(fd);
+      return nil;
+    }
+    sent += (size_t)n;
+  }
+
+  /* Connection: close, so the end of the response is the end of the stream
+     (or the receive timeout, which is why the cap below also bounds it). */
+  NSMutableData *response = [NSMutableData data];
+  unsigned char buffer[4096];
+  while ([response length] < 256 * 1024) {
+    ssize_t n = recv(fd, buffer, sizeof(buffer), 0);
+    if (n <= 0) {
+      break;
+    }
+    [response appendBytes:buffer length:(NSUInteger)n];
+  }
+  close(fd);
+
+  NSString *text = [[[NSString alloc] initWithData:response
+                                          encoding:NSUTF8StringEncoding]
+                     autorelease];
+  if (!text || ![text hasPrefix:@"HTTP/1."]) {
+    return nil;
+  }
+  NSRange headerEnd = [text rangeOfString:@"\r\n\r\n"];
+  if (headerEnd.location == NSNotFound) {
+    return nil;
+  }
+  NSString *status = [text substringToIndex:
+    [text rangeOfString:@"\r\n"].location];
+  if ([status rangeOfString:@" 200"].location == NSNotFound) {
+    return nil;
+  }
+  return [text substringFromIndex:NSMaxRange(headerEnd)];
 #endif
-  return nil;
 }
 
 #pragma mark - Probe round
 
+#ifndef _WIN32
+static void addComputerMatches(NSArray *matches, NSMutableDictionary *found)
+{
+  for (NSDictionary *match in matches) {
+    NSString *types = [match objectForKey:@"types"];
+    if ([types rangeOfString:@"Computer"].location == NSNotFound) {
+      continue;
+    }
+    int port = 5357;
+    NSString *xaddrs = [match objectForKey:@"xaddrs"];
+    NSString *ip = firstIPv4FromXAddrs(xaddrs, &port);
+    if (!ip || [found objectForKey:ip]) {
+      continue;
+    }
+
+    NSString *xaddrPath = @"/";
+    for (NSString *candidate in [xaddrs componentsSeparatedByString:@" "]) {
+      NSURL *url = [NSURL URLWithString:candidate];
+      if ([[url host] isEqualToString:ip] && [[url path] length] > 0) {
+        xaddrPath = [url path];
+        break;
+      }
+    }
+
+    [found setObject:[NSMutableDictionary dictionaryWithObjectsAndKeys:
+                       ip, @"address",
+                       [match objectForKey:@"endpoint"], @"endpoint",
+                       [NSNumber numberWithInt:port], @"port",
+                       xaddrPath, @"path",
+                       nil]
+              forKey:ip];
+  }
+}
+#endif
+
 + (NSArray *)probeComputerDevicesWithTimeout:(NSTimeInterval)seconds
 {
-  return [self probeDevicesWithTimeout:seconds];
+#ifdef _WIN32
+  return [NSArray array];
+#else
+  int fd = socket(AF_INET, SOCK_DGRAM, 0);
+  if (fd < 0) {
+    return [NSArray array];
+  }
+
+  /* Windows only answers probes that come from UDP port 3702.  Another
+     WS-Discovery client on this machine may own it, hence REUSEADDR and a
+     fallback to an ephemeral port (answers from non-Windows targets still
+     arrive then). */
+  int reuse = 1;
+  setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+  struct sockaddr_in local;
+  memset(&local, 0, sizeof(local));
+  local.sin_family = AF_INET;
+  local.sin_addr.s_addr = htonl(INADDR_ANY);
+  local.sin_port = htons(WSD_UDP_PORT);
+  if (bind(fd, (struct sockaddr *)&local, sizeof(local)) < 0) {
+    local.sin_port = 0;
+    bind(fd, (struct sockaddr *)&local, sizeof(local));
+  }
+  unsigned char ttl = 1;
+  setsockopt(fd, IPPROTO_IP, IP_MULTICAST_TTL, &ttl, sizeof(ttl));
+
+  struct sockaddr_in group;
+  memset(&group, 0, sizeof(group));
+  group.sin_family = AF_INET;
+  group.sin_port = htons(WSD_UDP_PORT);
+  inet_pton(AF_INET, WSD_UDP_MCAST_V4, &group.sin_addr);
+
+  NSMutableDictionary *found = [NSMutableDictionary dictionary];
+  NSDate *deadline = [NSDate dateWithTimeIntervalSinceNow:seconds];
+  NSDate *nextProbe = [NSDate date];
+  int probesSent = 0;
+
+  while ([deadline timeIntervalSinceNow] > 0) {
+    /* UDP is lossy and the targets' replies are staggered by a random delay
+       of up to 500 ms (WS-Discovery APP_MAX_DELAY): several spaced probes,
+       as wsdd sends them. */
+    if (probesSent < 4 && [nextProbe timeIntervalSinceNow] <= 0) {
+      NSData *probe = [[self probeXML] dataUsingEncoding:NSUTF8StringEncoding];
+      /* A multicast datagram leaves through one interface only; a machine
+         with Ethernet and WLAN would otherwise probe just the one the
+         routing table prefers. */
+      for (NSString *local in [NBNSProbe localIPv4Addresses]) {
+        struct in_addr outgoing;
+        if (inet_pton(AF_INET, [local UTF8String], &outgoing) != 1) {
+          continue;
+        }
+        setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &outgoing, sizeof(outgoing));
+        sendto(fd, [probe bytes], [probe length], 0,
+               (struct sockaddr *)&group, sizeof(group));
+      }
+      probesSent++;
+      nextProbe = [NSDate dateWithTimeIntervalSinceNow:0.3];
+    }
+
+    fd_set readSet;
+    FD_ZERO(&readSet);
+    FD_SET(fd, &readSet);
+    struct timeval wait = { 0, 100000 };
+    if (select(fd + 1, &readSet, NULL, NULL, &wait) > 0) {
+      unsigned char packet[65536];
+      ssize_t n = recvfrom(fd, packet, sizeof(packet), 0, NULL, NULL);
+      if (n > 0) {
+        NSString *xml = [[[NSString alloc] initWithBytes:packet
+                                                  length:(NSUInteger)n
+                                                encoding:NSUTF8StringEncoding]
+                          autorelease];
+        addComputerMatches([self parseProbeMatchesXML:xml], found);
+      }
+    }
+  }
+  close(fd);
+
+  NSMutableArray *devices = [NSMutableArray array];
+  for (NSString *ip in found) {
+    NSMutableDictionary *device = [found objectForKey:ip];
+    NSString *endpoint = [device objectForKey:@"endpoint"];
+    NSString *reply = httpPOST(ip,
+                               [[device objectForKey:@"port"] intValue],
+                               [device objectForKey:@"path"],
+                               [self metadataRequestXMLForEndpoint:endpoint]);
+    NSDictionary *host = [self parseMetadataXML:reply];
+    if ([host objectForKey:@"name"]) {
+      [device setObject:[host objectForKey:@"name"] forKey:@"name"];
+    }
+    if ([[host objectForKey:@"workgroup"] length] > 0) {
+      [device setObject:[host objectForKey:@"workgroup"] forKey:@"workgroup"];
+    }
+    [device removeObjectForKey:@"port"];
+    [device removeObjectForKey:@"path"];
+    [devices addObject:device];
+  }
+  return devices;
+#endif
 }
 
 @end

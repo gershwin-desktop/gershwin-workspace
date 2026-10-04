@@ -37,6 +37,7 @@ extern NSString * const NetworkServiceDidResolveNotification;
   NSNetServiceBrowser *afpBrowser;
   NSNetServiceBrowser *webdavBrowser;
   NSNetServiceBrowser *webdavsBrowser;  /* WebDAV over HTTPS */
+  NSNetServiceBrowser *smbBrowser;
   NSMutableArray *services;           // Array of NetworkServiceItem
   NSMutableArray *pendingResolutions; // Array of NSNetService being resolved
   BOOL isSearching;
@@ -96,6 +97,27 @@ extern NSString * const NetworkServiceDidResolveNotification;
  * Returns an array of WebDAV service items only.
  */
 - (NSArray *)webdavServices;
+
+/**
+ * Returns an array of SMB service items only.
+ */
+- (NSArray *)smbServices;
+
+/**
+ * Adds an SMB host found by WS-Discovery or NetBIOS instead of mDNS, unless
+ * the same host is already listed (by name or by address).
+ * Safe to call from any thread.
+ */
+- (void)addManualSMBServiceWithName:(NSString *)name
+                            address:(NSString *)ipAddress
+                               port:(int)port
+                           hostName:(NSString *)hostName;
+
+/**
+ * Removes a host that was added with
+ * -addManualSMBServiceWithName:address:port:hostName:.
+ */
+- (void)removeManualSMBServiceNamed:(NSString *)name;
 
 /**
  * Returns the number of discovered services.

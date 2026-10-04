@@ -2442,9 +2442,7 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 - (void)showContentsOfNode:(FSNode *)anode
 {
   CREATE_AUTORELEASE_POOL(arp);
-  NSArray *snapshot = [fsnodeRep directorySnapshotAtPath: [anode path]];
-  NSArray *subNodes = [FSNode nodesFromDirectorySnapshot: snapshot
-                                                  parent: anode];
+  NSArray *subNodes = [anode lazySubNodes];
   NSUInteger i;
 
   for (i = 0; i < [icons count]; i++)

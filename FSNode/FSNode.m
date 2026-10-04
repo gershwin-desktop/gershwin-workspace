@@ -238,6 +238,13 @@
   return [path isEqualToString: [anode path]];
 }
 
+- (NSArray *)lazySubNodes
+{
+  return [FSNode nodesFromDirectorySnapshot:
+                   [fsnodeRep directorySnapshotAtPath: path]
+                                     parent: self];
+}
+
 - (NSArray *)subNodes 
 {
   CREATE_AUTORELEASE_POOL(arp);

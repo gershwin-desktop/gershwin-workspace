@@ -1105,18 +1105,15 @@ static BOOL GWSidebarPathIsUnderVolumeRoot(NSString *path)
       NSMutableArray *allServices = [NSMutableArray array];
       NSMutableSet *seenIdentifiers = [NSMutableSet set];
 
-      if ([mgr isMDNSAvailable]) {
-        NSArray *discovered = [mgr allServices];
-        for (NetworkServiceItem *svc in discovered) {
-          /* Skip services on the local machine itself */
-          if ([svc isLocalMachine]) {
-            continue;
-          }
-          NSString *ident = [svc identifier];
-          if (![seenIdentifiers containsObject: ident]) {
-            [seenIdentifiers addObject: ident];
-            [allServices addObject: svc];
-          }
+      for (NetworkServiceItem *svc in [mgr allServices]) {
+        /* Skip services on the local machine itself */
+        if ([svc isLocalMachine]) {
+          continue;
+        }
+        NSString *ident = [svc identifier];
+        if (![seenIdentifiers containsObject: ident]) {
+          [seenIdentifiers addObject: ident];
+          [allServices addObject: svc];
         }
       }
 

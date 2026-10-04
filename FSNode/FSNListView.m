@@ -857,11 +857,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
   [listView deselectAll: self];
 
-  {
-    NSArray *snapshot = [fsnodeRep directorySnapshotAtPath: [anode path]];
-
-    nodes = [FSNode nodesFromDirectorySnapshot: snapshot parent: anode];
-  }
+  nodes = [anode lazySubNodes];
   [nodeReps removeAllObjects];
   generation++;   /* pending loader items for the old contents are stale */
 

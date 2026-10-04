@@ -104,6 +104,11 @@
 + (NSArray *)nodesFromDirectorySnapshot:(NSArray *)snapshot
                                  parent:(FSNode *)aparent;
 
+/* The contents of this node as lazy nodes, for the views that list a
+ * directory.  Reads the directory in one pass.  Virtual nodes whose contents
+ * do not live in the file system override this (see -subNodes). */
+- (NSArray *)lazySubNodes;
+
 /* Force-load deferred attributes (no-op when already loaded). */
 - (void)loadAttributesIfNeeded;
 

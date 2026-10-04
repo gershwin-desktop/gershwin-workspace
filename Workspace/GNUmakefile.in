@@ -176,6 +176,9 @@ Network/NetworkServiceManager.m \
 Network/NetworkFSNode.m \
 Network/NetworkVolumeManager.m \
 Network/SFTPMount.m \
+Network/NBNSProbe.m \
+Network/WSDiscoveryProbe.m \
+Network/SMBDiscovery.m \
 AVFSMount.m \
 VolumeManager.m \
 LowDiskWarn.m \

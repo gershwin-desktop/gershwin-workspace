@@ -61,6 +61,11 @@
 - (BOOL)isAFPService;
 
 /**
+ * Returns YES if this is an SMB (Windows file sharing) service.
+ */
+- (BOOL)isSMBService;
+
+/**
  * Returns YES if this is a WebDAV service (HTTP or HTTPS).
  */
 - (BOOL)isWebDAVService;

@@ -12,6 +12,8 @@
 
 #import <Foundation/Foundation.h>
 
+@interface WSDiscoveryProbe : NSObject
+
 /**
  * One probe round: multicast a Probe for wsdp:Device targets, collect the
  * ProbeMatches, and fetch the friendly host name of each matching computer

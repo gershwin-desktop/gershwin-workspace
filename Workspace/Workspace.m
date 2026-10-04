@@ -99,6 +99,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWAlignLogically.h"
 #import "GWArchiveOperation.h"
 #import "Network/NetworkFSNode.h"
+#import "Network/SMBDiscovery.h"
 #import "Network/NetworkServiceManager.h"
 #import "Network/NetworkServiceItem.h"
 #import "Network/NetworkVolumeManager.h"
@@ -3780,16 +3781,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   /* Start network service discovery if not already running */
   NetworkServiceManager *manager = [NetworkServiceManager sharedManager];
 
-  /* If mDNS/DNS-SD support is not available, show a helpful alert and avoid
-     opening the network viewer to prevent crashes on systems without dns-sd. */
-  if (![manager isMDNSAvailable]) {
-    NSAlert *alert = [[[NSAlert alloc] init] autorelease];
-    [alert setMessageText:@"Service Discovery: Not Available"];
-    [alert setInformativeText:@"mDNS/DNS-SD support is not available on this system.\nBuild GNUstep with libdns_sd to enable network service discovery\nand/or start the daemon needed for discovery."];
-    [alert addButtonWithTitle:@"OK"];
-    [alert runModal];
-    return;
-  }
+  /* Windows hosts mostly do not announce via mDNS; ask the WS-Discovery and
+     NetBIOS probes to look again now that someone wants to see the network.
+     The viewer fills in as hosts answer, with or without an mDNS daemon. */
+  [[SMBDiscovery sharedDiscovery] requestFallbackRefresh];
 
   if (![manager isBrowsing]) {
     [manager startBrowsing];

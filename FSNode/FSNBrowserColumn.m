@@ -319,10 +319,9 @@ static id <DesktopApplication> desktopApp = nil;
 - (void)createRowsInMatrix
 {
   NSAutoreleasePool *pool;
-  NSArray *snapshot = [fsnodeRep directorySnapshotAtPath: [shownNode path]];
-  NSUInteger count = [snapshot count];
+  NSArray *subNodes = [shownNode lazySubNodes];
+  NSUInteger count = [subNodes count];
   SEL compSel = [fsnodeRep compareSelectorForDirectory: [shownNode path]];
-  NSArray *subNodes;
   NSInteger i;
 
   if ([matrix numberOfColumns] > 0)
@@ -340,8 +339,6 @@ static id <DesktopApplication> desktopApp = nil;
   /* Lazy nodes from the readdir snapshot: no stat per entry.  Attribute
    * based sort orders (kind/date/size/owner) pull the attributes during
    * the sort itself, once per node, exactly like the eager path did. */
-  subNodes = [FSNode nodesFromDirectorySnapshot: snapshot parent: shownNode];
-
   [matrix addColumn];
 
   for (i = 0; i < count; ++i)

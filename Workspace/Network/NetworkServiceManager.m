@@ -7,7 +7,14 @@
 
 #import "NetworkServiceManager.h"
 #import "NetworkServiceItem.h"
+#import "NBNSProbe.h"
+#import "SMBDiscovery.h"
 #import <signal.h>
+#ifndef _WIN32
+#import <sys/socket.h>
+#import <netinet/in.h>
+#import <arpa/inet.h>
+#endif
 #import <setjmp.h>
 
 #ifdef _WIN32
@@ -107,6 +114,10 @@ static void mdnsAbortHandler(int sig)
     } else {
       mDNSAvailable = NO;
     }
+
+    /* WS-Discovery and NetBIOS need neither the mDNS class nor its daemon,
+       and Windows hosts mostly do not announce via mDNS at all. */
+    [[SMBDiscovery sharedDiscovery] startupWithServiceManager:self];
   }
   return self;
 }
@@ -208,6 +219,7 @@ static void mdnsAbortHandler(int sig)
       [afpBrowser stop];  [afpBrowser release];  afpBrowser = nil;
       [webdavBrowser stop];  [webdavBrowser release];  webdavBrowser = nil;
       [webdavsBrowser stop]; [webdavsBrowser release]; webdavsBrowser = nil;
+      [smbBrowser stop];  [smbBrowser release];  smbBrowser = nil;
       [pendingResolutions removeAllObjects];
 
       sigaction(SIGABRT, &oldAct, NULL);
@@ -268,6 +280,11 @@ static void mdnsAbortHandler(int sig)
     [webdavsBrowser setDelegate:self];
     [webdavsBrowser searchForServicesOfType:@"_webdavs._tcp." inDomain:@"local."];
 
+    /* Start browsing for SMB (Windows file sharing) services */
+    smbBrowser = [[NSNetServiceBrowser alloc] init];
+    [smbBrowser setDelegate:self];
+    [smbBrowser searchForServicesOfType:@"_smb._tcp." inDomain:@"local."];
+
     isSearching = YES;
   } @catch (NSException *exception) {
     NSWarnMLog(@"NetworkServiceManager: mDNS browsing failed with exception: %@ - disabling mDNS support", exception);
@@ -292,6 +309,11 @@ static void mdnsAbortHandler(int sig)
       [webdavsBrowser stop];
       [webdavsBrowser release];
       webdavsBrowser = nil;
+    }
+    if (smbBrowser) {
+      [smbBrowser stop];
+      [smbBrowser release];
+      smbBrowser = nil;
     }
 
     /* Disable mDNS so future calls don't attempt browsing again */
@@ -333,6 +355,12 @@ static void mdnsAbortHandler(int sig)
     [webdavsBrowser stop];
     [webdavsBrowser release];
     webdavsBrowser = nil;
+  }
+
+  if (smbBrowser) {
+    [smbBrowser stop];
+    [smbBrowser release];
+    smbBrowser = nil;
   }
 
   /* Stop any pending resolutions */
@@ -384,6 +412,19 @@ static void mdnsAbortHandler(int sig)
   }
 }
 
+- (NSArray *)smbServices
+{
+  @synchronized(services) {
+    NSMutableArray *result = [NSMutableArray array];
+    for (NetworkServiceItem *item in services) {
+      if ([item isSMBService]) {
+        [result addObject:item];
+      }
+    }
+    return result;
+  }
+}
+
 - (NSArray *)webdavServices
 {
   @synchronized(services) {
@@ -428,13 +469,36 @@ static void mdnsAbortHandler(int sig)
 
 #pragma mark - Private Methods
 
-- (NetworkServiceItem *)existingServiceMatchingNetService:(NSNetService *)netService
+- (NetworkServiceItem *)existingServiceMatchingName:(NSString *)serviceName
+                                              type:(NSString *)serviceType
 {
-  NSString *serviceName = [netService name];
-  NSString *serviceType = [netService type];
-
   for (NetworkServiceItem *item in services) {
     if ([[item name] isEqual:serviceName] && [[item type] isEqual:serviceType]) {
+      return item;
+    }
+  }
+  return nil;
+}
+
+- (NetworkServiceItem *)existingServiceMatchingNetService:(NSNetService *)netService
+{
+  return [self existingServiceMatchingName:[netService name]
+                                      type:[netService type]];
+}
+
+/* NetBIOS names are case-insensitive and mDNS lists the same machine under
+   its own spelling, so a host found by both ways must be matched loosely. */
+- (NetworkServiceItem *)existingSMBServiceNamed:(NSString *)serviceName
+                                        address:(NSData *)address
+{
+  for (NetworkServiceItem *item in services) {
+    if (![item isSMBService]) {
+      continue;
+    }
+    if ([[item name] caseInsensitiveCompare:serviceName] == NSOrderedSame) {
+      return item;
+    }
+    if (address && [[item addresses] containsObject:address]) {
       return item;
     }
   }
@@ -447,7 +511,12 @@ static void mdnsAbortHandler(int sig)
 
   @synchronized(services) {
     /* Check if we already have this service */
-    if ([self existingServiceMatchingNetService:[item netService]] != nil) {
+    if ([self existingServiceMatchingName:[item name] type:[item type]] != nil) {
+      return;
+    }
+    /* The same Windows host may already be listed by WS-Discovery. */
+    if ([item isSMBService]
+        && [self existingSMBServiceNamed:[item name] address:nil] != nil) {
       return;
     }
 
@@ -457,6 +526,70 @@ static void mdnsAbortHandler(int sig)
 
   /* Post notification on main thread */
   NSDictionary *userInfo = @{@"addedServices": added, @"removedServices": @[]};
+  [self performSelectorOnMainThread:@selector(postServicesChangedOnMainThread:)
+                         withObject:userInfo
+                      waitUntilDone:NO];
+}
+
+- (void)addManualSMBServiceWithName:(NSString *)name
+                            address:(NSString *)ipAddress
+                               port:(int)port
+                           hostName:(NSString *)hostName
+{
+  NSData *address = nil;
+#ifndef _WIN32
+  struct sockaddr_in sin;
+  memset(&sin, 0, sizeof(sin));
+  sin.sin_family = AF_INET;
+  sin.sin_port = htons((uint16_t)port);
+  if (inet_pton(AF_INET, [ipAddress UTF8String], &sin.sin_addr) == 1) {
+    address = [NSData dataWithBytes:&sin length:sizeof(sin)];
+  }
+#endif
+
+  NetworkServiceItem *item = [[[NetworkServiceItem alloc] init] autorelease];
+  item.name = name;
+  item.type = @"_smb._tcp.";
+  item.domain = @"local.";
+  item.hostName = hostName;
+  item.port = port;
+  item.addresses = address ? [NSArray arrayWithObject:address] : nil;
+  item.resolved = YES;
+
+  @synchronized(services) {
+    if ([self existingSMBServiceNamed:name address:address] != nil) {
+      return;
+    }
+    [services addObject:item];
+  }
+
+  NSDictionary *userInfo = @{@"addedServices": @[item], @"removedServices": @[]};
+  [self performSelectorOnMainThread:@selector(postServicesChangedOnMainThread:)
+                         withObject:userInfo
+                      waitUntilDone:NO];
+}
+
+- (void)removeManualSMBServiceNamed:(NSString *)name
+{
+  NetworkServiceItem *removed = nil;
+
+  @synchronized(services) {
+    for (NetworkServiceItem *item in services) {
+      /* Only hosts that were added by hand: an mDNS item has a netService
+         and leaves through its own browser callback. */
+      if ([item isSMBService] && [item netService] == nil
+          && [[item name] caseInsensitiveCompare:name] == NSOrderedSame) {
+        removed = [[item retain] autorelease];
+        break;
+      }
+    }
+    if (removed == nil) {
+      return;
+    }
+    [services removeObject:removed];
+  }
+
+  NSDictionary *userInfo = @{@"addedServices": @[], @"removedServices": @[removed]};
   [self performSelectorOnMainThread:@selector(postServicesChangedOnMainThread:)
                          withObject:userInfo
                       waitUntilDone:NO];
@@ -539,6 +672,10 @@ static void mdnsAbortHandler(int sig)
   /* Create a service item and add it */
   NetworkServiceItem *item = [NetworkServiceItem itemWithNetService:netService];
   [self addServiceItem:item];
+
+  /* A network that just announced something is the moment to look for the
+     hosts that never announce. */
+  [[SMBDiscovery sharedDiscovery] requestFallbackRefresh];
 
   /* Start resolving the service to get host/port info */
   [netService setDelegate:self];
