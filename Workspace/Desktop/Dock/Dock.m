@@ -47,6 +47,9 @@
 #define MAX_ICN_SIZE 48
 #define MIN_ICN_SIZE 16
 #define ICN_INCR 4
+/* The share of the screen's length along the Dock that the icons may use,
+ * before they are made smaller to fit. */
+#define MAX_DOCK_SCREEN_SHARE 0.95
 
 /* The magnification of the expired patent US7434177: how large the icon
  * under the pointer is drawn by default, how large it may be asked to be,
@@ -1105,7 +1108,11 @@ static inline CGFloat _dockScaleFactor(void)
   NSView *view = [self superview];
   NSRect scrrect = [[[NSScreen screens] objectAtIndex:0] frame];
   int oldIcnSize = iconSize;
-  CGFloat maxheight = scrrect.size.height;
+  /* The length of the screen along the Dock: its width for a Dock at the
+   * bottom, its height for one at the side. */
+  CGFloat maxLength = ((position == DockPositionBottom)
+                       ? scrrect.size.width : scrrect.size.height)
+                      * MAX_DOCK_SCREEN_SHARE;
   NSRect rect = NSZeroRect;
   NSUInteger i;
   NSUInteger docs = [self firstDocumentIndex];
@@ -1129,9 +1136,7 @@ static inline CGFloat _dockScaleFactor(void)
   /* Use SCALED cell for the dock window frame (screen pixel coordinates). */
   scaledCell = cell * sf;
 
-  maxheight -= (scaledCell * 2);
-
-  while ((slots * scaledCell + dividerLength * sf) > maxheight) {
+  while ((slots * scaledCell + dividerLength * sf) > maxLength) {
     iconSize -= ICN_INCR;
     cell = ceil(iconSize / 3 * 4);
     scaledCell = cell * sf;

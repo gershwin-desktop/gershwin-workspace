@@ -42,6 +42,11 @@
   BOOL isWsIcon;
   BOOL isTrashIcon;
   NSImage *trashFullIcon;
+  /* The icon and the full trash at the resolution the pointer magnifies them
+   * to; drawn instead of the at-rest images, which would only be scaled up. */
+  NSImage *sharpIcon;
+  NSImage *sharpTrashFullIcon;
+  int sharpPixels;
   NSImage *ejectIcon;
   BOOL trashFull;
   BOOL docked;

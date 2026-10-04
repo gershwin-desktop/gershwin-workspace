@@ -73,6 +73,8 @@
   if (appPID > 0)
     [[GWProcessMonitor sharedMonitor] removePID: appPID];
 
+  RELEASE (sharpIcon);
+  RELEASE (sharpTrashFullIcon);
   RELEASE (appName);
   RELEASE (highlightColor);
   RELEASE (darkerColor);
@@ -980,6 +982,9 @@
     ASSIGN (icon, [fsnodeRep iconOfSize: ceil(icnBounds.size.width) 
                                 forNode: node]);
   }
+  DESTROY (sharpIcon);
+  DESTROY (sharpTrashFullIcon);
+  sharpPixels = 0;
   hlightRect.size.width = ceil(isize / 3 * 4);
   hlightRect.size.height = ceil(hlightRect.size.width * [fsnodeRep highlightHeightFactor]);
   if ((hlightRect.size.height - isize) < 4) {
@@ -1384,6 +1389,49 @@
   [self setNeedsDisplay: YES];
 }
 
+/* The icon images are made for the size the Dock lays the icons out at, and
+ * magnifying one only stretches its pixels. While the pointer magnifies the
+ * Dock the icon is therefore asked for again at the size it has grown to, in
+ * device pixels, rounded up to a step so that the icon is not made anew for
+ * every frame of the growth. */
+- (NSImage *)sharpVersionOfImage:(NSImage *)image
+{
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  CGFloat scale = [[defaults objectForKey: @"GSScaleFactor"] floatValue];
+  int pixels;
+
+  if (scale <= 0.0)
+    scale = 1.0;
+  pixels = (int)(ceil(magnifiedSize * scale / 32.0) * 32.0);
+
+  if (pixels != sharpPixels)
+    {
+      DESTROY (sharpIcon);
+      DESTROY (sharpTrashFullIcon);
+      sharpPixels = pixels;
+    }
+
+  if (image == trashFullIcon && trashFullIcon != nil)
+    {
+      if (sharpTrashFullIcon == nil)
+        ASSIGN (sharpTrashFullIcon, [fsnodeRep trashFullIconOfSize: pixels]);
+      return sharpTrashFullIcon;
+    }
+
+  if (image == icon && icon != nil)
+    {
+      if (sharpIcon == nil)
+        {
+          ASSIGN (sharpIcon, isTrashIcon
+                               ? [fsnodeRep trashIconOfSize: pixels]
+                               : [fsnodeRep iconOfSize: pixels forNode: node]);
+        }
+      return sharpIcon;
+    }
+
+  return nil;
+}
+
 /* An image of the icon draws at its own size at rest, and fills the tile
  * while the pointer magnifies the Dock. */
 - (void)drawImage:(NSImage *)image
@@ -1395,10 +1443,12 @@
 
   if (magnifiedSize > 0.0)
     {
-      [image drawInRect: rect
-               fromRect: NSZeroRect
-              operation: NSCompositeSourceOver
-               fraction: fraction];
+      NSImage *sharp = [self sharpVersionOfImage: image];
+
+      [(sharp != nil ? sharp : image) drawInRect: rect
+                                        fromRect: NSZeroRect
+                                       operation: NSCompositeSourceOver
+                                        fraction: fraction];
       return;
     }
 
