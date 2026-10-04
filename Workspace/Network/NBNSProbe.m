@@ -23,6 +23,8 @@
 #import <string.h>
 #import <stdlib.h>
 #endif
+#import <stdlib.h>
+#import <time.h>
 
 /* The UDP ports */
 #define NBNS_UDP_PORT       137
@@ -34,7 +36,7 @@
 + (void)initialize
 {
   if (self == [NBNSProbe class]) {
-    srandom((unsigned int)(time(NULL) ^ getpid()));
+    srand((unsigned int)time(NULL));
   }
 }
 
@@ -83,7 +85,7 @@
                         qtype:(uint16_t)qtype
                         flags:(uint16_t)flags
 {
-  uint16_t txid = (uint16_t)(random() & 0xFFFF);  /* any opaque value */
+  uint16_t txid = (uint16_t)(rand() & 0xFFFF);  /* any opaque value */
   NSMutableData *packet = [NSMutableData dataWithCapacity:64];
 
   unsigned char header[12];
@@ -237,6 +239,8 @@ static NSMutableArray *parseNBAddresses(const unsigned char *r, unsigned int rdl
 #pragma mark - UDP send/receive
 
 /* Opens a UDP socket with a receive timeout.  Returns -1 on error. */
+#ifndef _WIN32
+
 static int openUDPSocket(NSTimeInterval timeout)
 {
   int fd = socket(AF_INET, SOCK_DGRAM, 0);
@@ -518,7 +522,7 @@ static NSArray *broadcastAddresses(void)
 
   /* DNS-style header: query, recursion not desired, one question. */
   unsigned char header[12];
-  unsigned int txid = random() & 0xFFFF;  header[0] = txid >> 8; header[1] = txid & 0xFF;
+  unsigned int txid = rand() & 0xFFFF;  header[0] = txid >> 8; header[1] = txid & 0xFF;
   header[2] = 0; header[3] = 0;
   header[4] = 0; header[5] = 1;     /* QDCOUNT */
   header[6] = 0; header[7] = 0;     /* ANCOUNT */
@@ -596,5 +600,46 @@ static NSArray *broadcastAddresses(void)
   close(fd);
   return addresses;
 }
+
+#else /* _WIN32 */
+
+/* The probes talk BSD sockets; there is no Winsock implementation, so on
+   Windows they find nothing and the Network folder relies on mDNS only. */
+
++ (NSDictionary *)nodeStatusOfHost:(NSString *)ip
+                            timeout:(NSTimeInterval)seconds
+{
+  return nil;
+}
+
++ (NSArray *)broadcastQueriedHostsWithTimeout:(NSTimeInterval)seconds
+{
+  return [NSArray array];
+}
+
++ (NSArray *)broadcastAddressesForName:(NSString *)name
+                                suffix:(uint8_t)suffix
+                                timeout:(NSTimeInterval)seconds
+{
+  return [NSArray array];
+}
+
++ (NSArray *)llmnrAddressesForName:(NSString *)name
+                            timeout:(NSTimeInterval)seconds
+{
+  return [NSArray array];
+}
+
++ (NSArray *)localIPv4Addresses
+{
+  return [NSArray array];
+}
+
++ (BOOL)isLocalIPv4Address:(NSString *)ip
+{
+  return NO;
+}
+
+#endif /* _WIN32 */
 
 @end

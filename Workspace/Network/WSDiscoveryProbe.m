@@ -33,13 +33,6 @@
 
 @implementation WSDiscoveryProbe
 
-+ (void)initialize
-{
-  if (self == [WSDiscoveryProbe class]) {
-    srandom((unsigned int)(time(NULL) ^ getpid()));
-  }
-}
-
 #pragma mark - Message builders
 
 + (NSString *)probeXML

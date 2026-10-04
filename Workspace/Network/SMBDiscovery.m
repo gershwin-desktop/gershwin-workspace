@@ -21,10 +21,11 @@ static const int SMBMaxMisses = 2;
 + (instancetype)sharedDiscovery
 {
   static SMBDiscovery *shared = nil;
-  static dispatch_once_t once;
-  dispatch_once(&once, ^{
-    shared = [[SMBDiscovery alloc] init];
-  });
+  @synchronized(self) {
+    if (shared == nil) {
+      shared = [[SMBDiscovery alloc] init];
+    }
+  }
   return shared;
 }
 
