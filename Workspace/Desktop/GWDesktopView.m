@@ -36,6 +36,7 @@
 #import "GWDesktopBackImageGeometry.h"
 #import "GWDesktopIcon.h"
 #import "GWDesktopManager.h"
+#import "GWDesktopWindow.h"
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
 #import "Dock.h"
@@ -80,11 +81,7 @@
  * at a constant physical size independent of the scale factor. */
 static CGFloat desktopScaleFactor(void)
 {
-  CGFloat factor = 1.0;
-  id val = [[NSUserDefaults standardUserDefaults] objectForKey: @"GSScaleFactor"];
-  if (val)
-    factor = [val floatValue];
-  return (factor != 1.0) ? factor : 1.0;
+  return [GWDesktopWindow desktopScaleFactor];
 }
 
 
@@ -114,21 +111,13 @@ static CGFloat desktopScaleFactor(void)
 
       manager = mngr;
 
-      // Span the full virtual desktop (union of all screens), divided by
-      // GSScaleFactor so the desktop keeps a constant physical size
-      // independent of the scale factor.
-      NSArray *screens = [NSScreen screens];
-      screenFrame = [[screens objectAtIndex:0] frame];
-      for (NSUInteger si = 1; si < [screens count]; si++) {
-        screenFrame = NSUnionRect(screenFrame, [[screens objectAtIndex:si] frame]);
-      }
-      {
-        CGFloat factor = desktopScaleFactor();
-        screenFrame.origin.x /= factor;
-        screenFrame.origin.y /= factor;
-        screenFrame.size.width /= factor;
-        screenFrame.size.height /= factor;
-      }
+      // Span the full desktop.  Frames come from GWDesktopWindow
+      // +desktopFullFrame (X server truth; see there for why [NSScreen
+      // screens] cannot be trusted after live RandR resizes), already
+      // divided by GSScaleFactor for a constant physical size.
+      screenFrame = [GWDesktopWindow desktopFullFrame];
+      screenFrame.origin.x /= desktopScaleFactor();
+      screenFrame.origin.y /= desktopScaleFactor();
       [self setFrame: screenFrame];
 
       size = NSMakeSize(screenFrame.size.width, 2);
@@ -656,23 +645,14 @@ static CGFloat desktopScaleFactor(void)
 
 - (void)screenParametersDidChange
 {
-  NSArray *screens = [NSScreen screens];
-
-  screenFrame = [[screens objectAtIndex:0] frame];
-  for (NSUInteger si = 1; si < [screens count]; si++) {
-    NSRect srect = [[screens objectAtIndex:si] frame];
-    screenFrame = NSUnionRect(screenFrame, srect);
-  }
+  /* X server truth, not [NSScreen screens] — see GWDesktopWindow
+   * +desktopFullFrame.  Already divided by GSScaleFactor. */
+  screenFrame = [GWDesktopWindow desktopFullFrame];
+  screenFrame.origin.x /= desktopScaleFactor();
+  screenFrame.origin.y /= desktopScaleFactor();
 
   /* The content view's origin in window coordinates is always (0,0);
    * only the size changes when the screen configuration changes. */
-  {
-    CGFloat factor = desktopScaleFactor();
-    screenFrame.origin.x /= factor;
-    screenFrame.origin.y /= factor;
-    screenFrame.size.width /= factor;
-    screenFrame.size.height /= factor;
-  }
   [self setFrame: NSMakeRect(0, 0, screenFrame.size.width, screenFrame.size.height)];
   _gridCached = NO;
   /* Monitor sizes may have changed; a size-keyed cache entry from before
@@ -1393,10 +1373,42 @@ static CGFloat desktopScaleFactor(void)
     {
       // Draw the wallpaper independently for each monitor so it repeats
       // properly rather than being stretched across the virtual desktop.
+      // Only while [NSScreen screens] agrees with the actual desktop size:
+      // after a live RandR resize it can stay stale (see GWDesktopWindow
+      // +desktopFullFrame), and painting stale monitor rects over a fresh
+      // view would leave the rest of the desktop unpainted.
       NSArray *screens = [NSScreen screens];
+      NSRect viewBounds = [self bounds];
+      BOOL screensStale = NO;
 
-      for (NSUInteger si = 0; si < [screens count]; si++)
+      if ([screens count] > 0)
         {
+          CGFloat dsf = desktopScaleFactor();
+          NSRect unionFrame = [[screens objectAtIndex:0] frame];
+          for (NSUInteger si = 1; si < [screens count]; si++)
+            unionFrame = NSUnionRect(unionFrame, [[screens objectAtIndex:si] frame]);
+
+          /* Compare against screenFrame (kept in sync with the X server by
+           * initForManager/screenParametersDidChange), not the view bounds:
+           * the bounds can be transiently rewritten by AppKit's own screen
+           * parameters handling while the screen list is stale. */
+          screensStale = (fabs(unionFrame.size.width / dsf - screenFrame.size.width) > 0.5
+                          || fabs(unionFrame.size.height / dsf - screenFrame.size.height) > 0.5);
+        }
+      else
+        screensStale = YES;
+
+      for (NSUInteger si = 0; si < (screensStale ? 1 : [screens count]); si++)
+        {
+          NSRect localRect;
+
+          if (screensStale)
+            {
+              /* Out of sync — paint the whole view as one monitor. */
+              localRect = viewBounds;
+            }
+          else
+            {
           NSRect monFrame = [[screens objectAtIndex:si] frame];
           // Convert from screen coordinates to view-local coordinates
           // (screenFrame.origin is the view's origin in screen coords),
@@ -1408,10 +1420,11 @@ static CGFloat desktopScaleFactor(void)
             monFrame.size.width /= factor;
             monFrame.size.height /= factor;
           }
-          NSRect localRect = NSMakeRect(monFrame.origin.x - screenFrame.origin.x,
+          localRect = NSMakeRect(monFrame.origin.x - screenFrame.origin.x,
                                         monFrame.origin.y - screenFrame.origin.y,
                                         monFrame.size.width,
                                         monFrame.size.height);
+            }
 
           // Only draw if this monitor intersects the dirty rect
           if (!NSIntersectsRect(localRect, rect))

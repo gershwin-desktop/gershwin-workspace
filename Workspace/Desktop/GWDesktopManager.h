@@ -104,6 +104,13 @@ typedef enum {
 
 - (void)setReservedFrames;
 
+/* The frame of the desktop window in device pixels: desktopFullFrame is in
+   points, a window frame is not. */
+- (NSRect)desktopWindowFrame;
+
+/* Applies that frame again once a burst of screen changes has settled. */
+- (void)scheduleDesktopReframe;
+
 - (NSRect)macmenuReservedFrame;
 
 - (NSRect)dockReservedFrame;

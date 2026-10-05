@@ -55,17 +55,48 @@
   /* Union of all screen frames; width and height are divided by
    * GSScaleFactor (like the menu bar does in Menu.app) so the desktop
    * window keeps a constant physical size independent of the scale
-   * factor. */
+   * factor.
+   *
+   * The frames must come from the X server, not from [NSScreen screens]:
+   * after a live RandR resize NSScreen keeps reporting the pre-resize
+   * geometry indefinitely (resetScreens does not refresh the backend's
+   * cached screen list), which sizes the desktop from stale geometry and
+   * exposes the root window.  Streamed desktops (Selkies/VNC) resize the
+   * X screen on every client reconnect, so this is the common path, not
+   * an edge case.  The root window of the default X screen spans the
+   * union of all monitors; NSScreen remains as the fallback when no
+   * display server is reachable yet (first init). */
+#ifndef _WIN32
+  GSDisplayServer *server = GSCurrentServer();
+  Display *dpy = NULL;
+
+  /* Only an X server has a Display to ask; the other backends keep the
+   * screen list. */
+  if ([NSStringFromClass([server class]) hasPrefix: @"XG"]
+      && [server respondsToSelector: @selector(serverDevice)])
+    dpy = (Display *)[server serverDevice];
+
+  if (dpy)
+    {
+      int w = DisplayWidth(dpy, DefaultScreen(dpy));
+      int h = DisplayHeight(dpy, DefaultScreen(dpy));
+
+      if (w > 0 && h > 0)
+        {
+          CGFloat factor = [GWDesktopWindow desktopScaleFactor];
+
+          return NSMakeRect(0, 0, w / factor, h / factor);
+        }
+    }
+#endif
+
   NSArray *screens = [NSScreen screens];
   NSRect fullFrame = [[screens objectAtIndex:0] frame];
   for (NSUInteger i = 1; i < [screens count]; i++) {
     fullFrame = NSUnionRect(fullFrame, [[screens objectAtIndex:i] frame]);
   }
 
-  CGFloat factor = 1.0;
-  id val = [[NSUserDefaults standardUserDefaults] objectForKey: @"GSScaleFactor"];
-  if (val)
-    factor = [val floatValue];
+  CGFloat factor = [GWDesktopWindow desktopScaleFactor];
   if (factor != 1.0)
     {
       fullFrame.size.width /= factor;
@@ -73,6 +104,14 @@
     }
 
   return fullFrame;
+}
+
++ (CGFloat)desktopScaleFactor
+{
+  id val = [[NSUserDefaults standardUserDefaults] objectForKey: @"GSScaleFactor"];
+  CGFloat factor = val ? [val floatValue] : 1.0;
+
+  return (factor > 0.0) ? factor : 1.0;
 }
 
 - (void)dealloc
