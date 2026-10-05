@@ -414,18 +414,29 @@ static GWDesktopManager *desktopManager = nil;
   return !hidedock;
 }
 
+- (NSRect)desktopWindowFrame
+{
+  /* The desktop window's FRAME is in device pixels: the init path runs the
+   * logical content rect through the decoration scaling (at GSScaleFactor 2
+   * a 640x400 content rect yields a 1280x800 frame).  Passing the logical
+   * desktopFullFrame to setFrame: directly therefore shrinks the window to
+   * a quarter of the screen, so scale here, from the same GSScaleFactor
+   * default desktopFullFrame divides by (not the window's transient screen,
+   * which can be nil right after a RandR change). */
+  NSRect full = [GWDesktopWindow desktopFullFrame];
+  CGFloat factor = 1.0;
+  id val = [[NSUserDefaults standardUserDefaults] objectForKey: @"GSScaleFactor"];
+  if (val)
+    factor = [val floatValue];
+  if (factor < 1.0)
+    factor = 1.0;
+  return NSMakeRect(full.origin.x, full.origin.y,
+                    full.size.width * factor, full.size.height * factor);
+}
+
 - (void)screenParametersDidChange:(NSNotification *)notif
 {
-  NSArray *screens = [NSScreen screens];
-  NSRect fullFrame = [[screens objectAtIndex:0] frame];
-
-  for (NSUInteger i = 1; i < [screens count]; i++) {
-    NSRect srect = [[screens objectAtIndex:i] frame];
-    fullFrame = NSUnionRect(fullFrame, srect);
-  }
-
-
-  [win setFrame: [GWDesktopWindow desktopFullFrame] display: YES];
+  [win setFrame: [self desktopWindowFrame] display: YES];
   [desktopView screenParametersDidChange];
   [self setReservedFrames];
 
@@ -439,6 +450,8 @@ static GWDesktopManager *desktopManager = nil;
    * loop is frequently blocked in DO calls, so perform a delayed hop via a
    * background thread instead of a run-loop timer. */
   [self scheduleDockReTile];
+
+  [self scheduleDesktopReframe];
 }
 
 - (void)scheduleDockReTile
@@ -463,6 +476,63 @@ static GWDesktopManager *desktopManager = nil;
   if (dock && hidedock == NO) {
     [dock tile];
   }
+}
+
+/* Deferred desktop reframe.  The X11 backend regenerates NSScreens before
+ * posting NSApplicationDidChangeScreenParametersNotification (XGServerEvent.m),
+ * yet window geometry applied right away still comes out stale after a live
+ * RandR resize: observed on Xvfb, the desktop window shrank to the OLD screen
+ * size divided by GSScaleFactor and landed at a misplaced origin, exposing the
+ * root window (streamed desktops resize the screen on every client reconnect).
+ * So re-apply the frame once the backend has settled, and skip it when the
+ * frame already matches.  Debounced: each notification invalidates the pending
+ * pass, so a burst of resize events ends in a single reframe. */
+static int desktopReframeGeneration = 0;
+
+- (void)scheduleDesktopReframe
+{
+  desktopReframeGeneration++;
+  [NSThread detachNewThreadSelector: @selector(desktopReframeThread:)
+                           toTarget: self
+                           withObject: [NSNumber numberWithInt: desktopReframeGeneration]];
+}
+
+- (void)desktopReframeThread:(NSNumber *)generation
+{
+  CREATE_AUTORELEASE_POOL (pool);
+  [NSThread sleepForTimeInterval: 1.0];
+  [self performSelectorOnMainThread: @selector(desktopReframeOnMainThread:)
+                          withObject: generation
+                       waitUntilDone: NO];
+  RELEASE (pool);
+}
+
+- (void)desktopReframeOnMainThread:(NSNumber *)generation
+{
+  NSRect want, nudge;
+
+  if ([generation intValue] != desktopReframeGeneration)
+    return;   /* superseded by a newer resize */
+
+  want = [self desktopWindowFrame];
+
+  /* setFrame:display: skips a frame identical to the current one, but the
+   * backend can still hold a stale origin/scale after the RandR churn
+   * (AppKit's own notification handler adjusts frames using deltas taken
+   * from the stale screen list).  Nudge by a pixel and settle back to
+   * force the geometry and a full redraw through. */
+  nudge = want;
+  nudge.size.height += 1;
+  [win setFrame: nudge display: NO];
+  [win setFrame: want display: YES];
+
+  [desktopView screenParametersDidChange];
+  [self setReservedFrames];
+
+  if (dock && hidedock == NO) {
+    [dock tile];
+  }
+  [self scheduleDockReTile];
 }
 
 - (void)setReservedFrames

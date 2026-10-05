@@ -35,6 +35,7 @@
 #import "GWDesktopView.h"
 #import "GWDesktopIcon.h"
 #import "GWDesktopManager.h"
+#import "GWDesktopWindow.h"
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
 #import "Dock.h"
@@ -102,21 +103,11 @@ static CGFloat desktopScaleFactor(void)
 
       manager = mngr;
 
-      // Span the full virtual desktop (union of all screens), divided by
-      // GSScaleFactor so the desktop keeps a constant physical size
-      // independent of the scale factor.
-      NSArray *screens = [NSScreen screens];
-      screenFrame = [[screens objectAtIndex:0] frame];
-      for (NSUInteger si = 1; si < [screens count]; si++) {
-        screenFrame = NSUnionRect(screenFrame, [[screens objectAtIndex:si] frame]);
-      }
-      {
-        CGFloat factor = desktopScaleFactor();
-        screenFrame.origin.x /= factor;
-        screenFrame.origin.y /= factor;
-        screenFrame.size.width /= factor;
-        screenFrame.size.height /= factor;
-      }
+      // Span the full desktop.  Frames come from GWDesktopWindow
+      // +desktopFullFrame (X server truth; see there for why [NSScreen
+      // screens] cannot be trusted after live RandR resizes), already
+      // divided by GSScaleFactor for a constant physical size.
+      screenFrame = [GWDesktopWindow desktopFullFrame];
       [self setFrame: screenFrame];
 
       size = NSMakeSize(screenFrame.size.width, 2);
@@ -643,23 +634,12 @@ static CGFloat desktopScaleFactor(void)
 
 - (void)screenParametersDidChange
 {
-  NSArray *screens = [NSScreen screens];
-
-  screenFrame = [[screens objectAtIndex:0] frame];
-  for (NSUInteger si = 1; si < [screens count]; si++) {
-    NSRect srect = [[screens objectAtIndex:si] frame];
-    screenFrame = NSUnionRect(screenFrame, srect);
-  }
+  /* X server truth, not [NSScreen screens] — see GWDesktopWindow
+   * +desktopFullFrame.  Already divided by GSScaleFactor. */
+  screenFrame = [GWDesktopWindow desktopFullFrame];
 
   /* The content view's origin in window coordinates is always (0,0);
    * only the size changes when the screen configuration changes. */
-  {
-    CGFloat factor = desktopScaleFactor();
-    screenFrame.origin.x /= factor;
-    screenFrame.origin.y /= factor;
-    screenFrame.size.width /= factor;
-    screenFrame.size.height /= factor;
-  }
   [self setFrame: NSMakeRect(0, 0, screenFrame.size.width, screenFrame.size.height)];
   _gridCached = NO;
   [self tile];
@@ -1377,10 +1357,42 @@ static CGFloat desktopScaleFactor(void)
     {
       // Draw the wallpaper independently for each monitor so it repeats
       // properly rather than being stretched across the virtual desktop.
+      // Only while [NSScreen screens] agrees with the actual desktop size:
+      // after a live RandR resize it can stay stale (see GWDesktopWindow
+      // +desktopFullFrame), and painting stale monitor rects over a fresh
+      // view would leave the rest of the desktop unpainted.
       NSArray *screens = [NSScreen screens];
+      NSRect viewBounds = [self bounds];
+      BOOL screensStale = NO;
 
-      for (NSUInteger si = 0; si < [screens count]; si++)
+      if ([screens count] > 0)
         {
+          CGFloat dsf = desktopScaleFactor();
+          NSRect unionFrame = [[screens objectAtIndex:0] frame];
+          for (NSUInteger si = 1; si < [screens count]; si++)
+            unionFrame = NSUnionRect(unionFrame, [[screens objectAtIndex:si] frame]);
+
+          /* Compare against screenFrame (kept in sync with the X server by
+           * initForManager/screenParametersDidChange), not the view bounds:
+           * the bounds can be transiently rewritten by AppKit's own screen
+           * parameters handling while the screen list is stale. */
+          screensStale = (fabs(unionFrame.size.width / dsf - screenFrame.size.width) > 0.5
+                          || fabs(unionFrame.size.height / dsf - screenFrame.size.height) > 0.5);
+        }
+      else
+        screensStale = YES;
+
+      for (NSUInteger si = 0; si < (screensStale ? 1 : [screens count]); si++)
+        {
+          NSRect localRect;
+
+          if (screensStale)
+            {
+              /* Out of sync — paint the whole view as one monitor. */
+              localRect = viewBounds;
+            }
+          else
+            {
           NSRect monFrame = [[screens objectAtIndex:si] frame];
           // Convert from screen coordinates to view-local coordinates
           // (screenFrame.origin is the view's origin in screen coords),
@@ -1392,10 +1404,11 @@ static CGFloat desktopScaleFactor(void)
             monFrame.size.width /= factor;
             monFrame.size.height /= factor;
           }
-          NSRect localRect = NSMakeRect(monFrame.origin.x - screenFrame.origin.x,
+          localRect = NSMakeRect(monFrame.origin.x - screenFrame.origin.x,
                                         monFrame.origin.y - screenFrame.origin.y,
                                         monFrame.size.width,
                                         monFrame.size.height);
+            }
 
           // Only draw if this monitor intersects the dirty rect
           if (!NSIntersectsRect(localRect, rect))
@@ -1633,599 +1646,5 @@ static CGFloat desktopScaleFactor(void)
   for (i = 0; i < [subNodes count]; i++)
     {
       FSNode *subnode = [subNodes objectAtIndex: i];
-      GWDesktopIcon *icon = [[GWDesktopIcon alloc] initForNode: subnode
-						  nodeInfoType: infoType
-						  extendedType: extInfoType
-						      iconSize: iconSize
-						  iconPosition: iconPosition
-						     labelFont: labelFont
-						     textColor: textColor
-						     gridIndex: NSNotFound
-						     dndSource: YES
-						     acceptDnd: YES
-						     slideBack: YES];
-      [unsorted addObject: icon];
-      RELEASE (icon);
-    }
 
-  /* Restore positions from fdLocation xattr and DS_Store (Mac-compatible),
-   * through the same injected provider/store interfaces the base view uses.
-   * The raw iloc (top-left CENTER) is the only stored representation;
-   * conversion to view coordinates happens at layout time via the shared
-   * mapping, so positions stay correct across re-tiles. */
-  {
-    NSString *folderPath = [anode path];
-    FSNodeRep *rep = [FSNodeRep sharedInstance];
-
-    /* Source 1: fdLocation xattr (per-file, primary).  FinderInfo defaults
-     * to (0,0) when no position exists, so skip (0,0) and (-1,-1). */
-    NSUInteger i;
-    for (i = 0; i < [unsorted count]; i++)
-      {
-        FSNIcon *icon = [unsorted objectAtIndex: i];
-        FSNode *nd = [icon node];
-        if (!nd) continue;
-        NSPoint floc = [[rep metadataProvider] iconPositionForPath: [nd path]];
-        if ((floc.x > 0 || floc.y > 0) && floc.x != -1 && floc.y != -1)
-          {
-            FSNIconItemData *data = [icon placementData];
-            data.ilocPosition = floc;
-            data.placementMode = FSNIconPlacementModeManual;
-          }
-      }
-
-    /* Source 2: DS_Store Iloc (folder-level, secondary fallback).
-     * Only fills in icons NOT already positioned by fdLocation. */
-    NSDictionary *stored =
-      [[rep iconPositionStore] storedIconPositionsForFolder: folderPath];
-    if ([stored count])
-      {
-        NSUInteger ii;
-        for (ii = 0; ii < [unsorted count]; ii++)
-          {
-            FSNIcon *icon = [unsorted objectAtIndex: ii];
-            FSNIconItemData *data = [icon placementData];
-            if (data.placementMode == FSNIconPlacementModeManual) continue;
-
-            NSValue *v = [stored objectForKey: [[icon node] lastPathComponent]];
-            if (v == nil) continue;
-            NSPoint iloc = [v pointValue];
-            if (iloc.x != 0 || iloc.y != 0)
-              {
-                data.ilocPosition = iloc;
-                data.placementMode = FSNIconPlacementModeManual;
-              }
-          }
-      }
-  }
-
-  /* Add all icons to the view */
-  for (i = 0; i < [unsorted count]; i++)
-    {
-      FSNIcon *icon = [unsorted objectAtIndex: i];
-      [icons addObject: icon];
-      [self addSubview: icon];
-    }
-
-
-  [self tile];
-  [self setNeedsDisplay: YES];
-
-  if ([[NSUserDefaults standardUserDefaults] boolForKey: @"use_thumbnails"])
-    {
-      Thumbnailer *t = [Thumbnailer sharedThumbnailer];
-      if (t) [t makeThumbnails: [node path]];
-    }
-
-  RELEASE (arp);
-}
-
-- (void)nodeContentsDidChange:(NSDictionary *)info
-{
-  NSString *operation = [info objectForKey: @"operation"];
-  NSString *source = [info objectForKey: @"source"];
-  NSString *destination = [info objectForKey: @"destination"];
-  NSArray *files = [info objectForKey: @"files"];
-  NSMutableArray *newlyAdded = nil;
-  NSUInteger i;
-
-  if ([operation isEqual: @"WorkspaceRenameOperation"])
-    {
-      files = [NSArray arrayWithObject: [source lastPathComponent]];
-      source = [source stringByDeletingLastPathComponent];
-    }
-
-  if ([[node path] isEqual: source]
-      && ([operation isEqual: NSWorkspaceMoveOperation]
-	  || [operation isEqual: NSWorkspaceDestroyOperation]
-	  || [operation isEqual: @"WorkspaceRenameOperation"]
-	  || [operation isEqual: NSWorkspaceRecycleOperation]
-	  || [operation isEqual: @"WorkspaceRecycleOutOperation"]))
-    {
-      for (i = 0; i < [files count]; i++)
-	{
-	  NSString *fname = [files objectAtIndex: i];
-	  FSNode *subnode = [FSNode nodeWithRelativePath: fname parent: node];
-
-	  [self removeRepOfSubnode: subnode];
-	}
-    }
-
-  if ([operation isEqual: @"WorkspaceRenameOperation"])
-    {
-      files = [NSArray arrayWithObject: [destination lastPathComponent]];
-      destination = [destination stringByDeletingLastPathComponent];
-    }
-
-  /* Only add reps for files whose destination is this folder — otherwise a
-   * file moved elsewhere would be re-added as a phantom desktop icon. */
-  if ([[node path] isEqual: destination]
-      && ([operation isEqual: NSWorkspaceMoveOperation]
-	  || [operation isEqual: NSWorkspaceCopyOperation]
-	  || [operation isEqual: NSWorkspaceLinkOperation]
-	  || [operation isEqual: NSWorkspaceDuplicateOperation]
-	  || [operation isEqual: @"WorkspaceCreateDirOperation"]
-	  || [operation isEqual: @"WorkspaceCreateFileOperation"]
-	  || [operation isEqual: NSWorkspaceRecycleOperation]
-	  || [operation isEqual: @"WorkspaceRenameOperation"]
-	  || [operation isEqual: @"WorkspaceRecycleOutOperation"]))
-    {
-      for (i = 0; i < [files count]; i++)
-	{
-	  NSString *fname = [files objectAtIndex: i];
-	  FSNode *subnode = [FSNode nodeWithRelativePath: fname parent: node];
-	  FSNIcon *icon = [self repOfSubnode: subnode];
-
-	  if (icon)
-	    [icon setNode: subnode];
-	  else
-	    {
-	      FSNIcon *added = [self addRepForSubnode: subnode];
-	      if (added)
-		{
-		  if (!newlyAdded) newlyAdded = [NSMutableArray array];
-		  [newlyAdded addObject: added];
-		}
-	    }
-	}
-
-      [self sortIcons];
-    }
-
-  [self checkLockedReps];
-  [self tile];
-  /* Persist positions of any items added to the desktop (honor view). */
-  [self persistStoredPositionsForIcons: newlyAdded];
-  [self setNeedsDisplay: YES];
-  [self selectionDidChange];
-}
-
-- (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
-{
-  NSPasteboard *pb;
-  NSDragOperation sourceDragMask;
-  NSArray *sourcePaths;
-  NSString *basePath;
-  NSString *nodePath;
-  NSString *prePath;
-  NSUInteger count;
-  NSUInteger i;
-
-  isDragTarget = NO;
-
-  pb = [sender draggingPasteboard];
-  if (pb && [[pb types] containsObject: NSFilenamesPboardType])
-    {
-      sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
-    }
-  else if ([[pb types] containsObject: @"GWRemoteFilenamesPboardType"])
-    {
-      NSData *pbData = [pb dataForType: @"GWRemoteFilenamesPboardType"];
-      NSDictionary *pbDict = [NSUnarchiver unarchiveObjectWithData: pbData];
-      sourcePaths = [pbDict objectForKey: @"paths"];
-    }
-  else if ([[pb types] containsObject: @"GWLSFolderPboardType"])
-    {
-      NSData *pbData = [pb dataForType: @"GWLSFolderPboardType"];
-      NSDictionary *pbDict = [NSUnarchiver unarchiveObjectWithData: pbData];
-      sourcePaths = [pbDict objectForKey: @"paths"];
-    }
-  else
-    {
-      return NSDragOperationNone;
-    }
-  count = [sourcePaths count];
-  if (count == 0)
-    {
-      return NSDragOperationNone;
-    }
-  dragLocalIcon = YES;
-  for (i = 0; i < [sourcePaths count]; i++)
-    {
-      NSString *srcpath = [sourcePaths objectAtIndex: i];
-      if ([self repOfSubnodePath: srcpath] == nil)
-        {
-          dragLocalIcon = NO;
-        }
-    }
-  if (dragLocalIcon)
-    {
-      isDragTarget = YES;
-      dragPoint = NSZeroPoint;
-      DESTROY (dragIcon);
-      return NSDragOperationEvery;
-    }
-  if ([node isWritable] == NO)
-    {
-      return NSDragOperationNone;
-    }
-  nodePath = [node path];
-  basePath = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
-  if ([basePath isEqual: nodePath])
-    {
-      return NSDragOperationNone;
-    }
-  if ([sourcePaths containsObject: nodePath])
-    {
-      return NSDragOperationNone;
-    }
-  prePath = [NSString stringWithString: nodePath];
-  while (1)
-    {
-      if ([sourcePaths containsObject: prePath])
-        {
-          return NSDragOperationNone;
-        }
-      if ([prePath isEqual: path_separator()])
-        {
-          break;
-        }
-      prePath = [prePath stringByDeletingLastPathComponent];
-    }
-  if ([node isDirectory] && [node isParentOfPath: basePath])
-    {
-      NSArray *subNodes = [node subNodes];
-      for (i = 0; i < [subNodes count]; i++)
-        {
-          FSNode *nd = [subNodes objectAtIndex: i];
-          if ([nd isDirectory])
-            {
-              for (NSUInteger j = 0; j < count; j++)
-                {
-                  NSString *fname = [[sourcePaths objectAtIndex: j] lastPathComponent];
-                  if ([[nd lastPathComponent] isEqual: fname])
-                    {
-                      return NSDragOperationNone;
-                    }
-                }
-            }
-        }
-    }
-  isDragTarget = YES;
-  forceCopy = NO;
-  dragPoint = NSZeroPoint;
-  DESTROY (dragIcon);
-
-  sourceDragMask = [sender draggingSourceOperationMask];
-
-  if (sourceDragMask & NSDragOperationMove)
-    {
-      if ([[NSFileManager defaultManager] isWritableFileAtPath: basePath])
-	{
-	  return NSDragOperationMove;
-	}
-      forceCopy = YES;
-      return NSDragOperationCopy;
-    }
-  if (sourceDragMask & NSDragOperationCopy)
-    {
-      return NSDragOperationCopy;
-    }
-  if (sourceDragMask & NSDragOperationLink)
-    {
-      return NSDragOperationLink;
-    }
-
-  isDragTarget = NO;
-  return NSDragOperationNone;
-}
-
-- (NSDragOperation)draggingUpdated:(id <NSDraggingInfo>)sender
-{
-  NSDragOperation sourceDragMask = [sender draggingSourceOperationMask];
-  NSPoint dpoint = [sender draggingLocation];
-
-  if (isDragTarget == NO)
-    {
-      return NSDragOperationNone;
-    }
-
-  /* Track drop point for drag feedback without grid snapping */
-  dragPoint = dpoint;
-  if (dragIcon == nil)
-    {
-      NSImage *img = [sender draggedImage];
-      if (img)
-        ASSIGN (dragIcon, img);
-    }
-
-  if (sourceDragMask & NSDragOperationMove)
-    {
-      if (forceCopy)
-	{
-	  return NSDragOperationCopy;
-	}
-      return NSDragOperationMove;
-    }
-  if (sourceDragMask & NSDragOperationCopy)
-    {
-      return NSDragOperationCopy;
-    }
-  if (sourceDragMask & NSDragOperationLink)
-    {
-      return NSDragOperationLink;
-    }
-
-  return NSDragOperationNone;
-}
-
-- (void)draggingExited:(id <NSDraggingInfo>)sender
-{
-  DESTROY (dragIcon);
-  isDragTarget = NO;
-  [self setNeedsDisplay: YES];
-}
-
-- (BOOL)prepareForDragOperation:(id <NSDraggingInfo>)sender
-{
-  return isDragTarget;
-}
-
-- (BOOL)performDragOperation:(id <NSDraggingInfo>)sender
-{
-  return YES;
-}
-
-
-
-- (void)concludeDragOperation:(id <NSDraggingInfo>)sender
-{
-  NSPasteboard *pb;
-  NSDragOperation sourceDragMask;
-  NSMutableArray *sourcePaths;
-  NSString *operation, *source;
-  NSMutableArray *files;
-  NSMutableDictionary *opDict;
-  NSString *trashPath;
-  NSInteger i; // FIXME see if it can be made unsigned
-
-  DESTROY (dragIcon);
-  [self setNeedsDisplay: YES];
-
-  isDragTarget = NO;
-
-  sourceDragMask = [sender draggingSourceOperationMask];
-  pb = [sender draggingPasteboard];
-
-  if ([[pb types] containsObject: @"GWRemoteFilenamesPboardType"])
-    {
-      NSData *pbData = [pb dataForType: @"GWRemoteFilenamesPboardType"];
-
-      [desktopApp concludeRemoteFilesDragOperation: pbData
-				       atLocalPath: [node path]];
-      return;
-    }
-  if ([[pb types] containsObject: @"GWLSFolderPboardType"])
-    {
-      NSData *pbData = [pb dataForType: @"GWLSFolderPboardType"];
-
-      [desktopApp lsfolderDragOperation: pbData
-			concludedAtPath: [node path]];
-      return;
-    }
-
-  sourcePaths = [[pb propertyListForType: NSFilenamesPboardType] mutableCopy];
-  AUTORELEASE (sourcePaths);
-
-  /* Icons that live here coming back after the drag left the Desktop: put
-     them down where they were dropped instead of asking the file system to
-     move the files onto themselves. */
-  if (dragLocalIcon)
-    {
-      dragLocalIcon = NO;
-
-      if ([self repositionIconsOfPaths: sourcePaths
-                           atDropPoint: [sender draggingLocation]])
-        return;
-    }
-
-
-
-  i = [sourcePaths count];
-  while (i > 0)
-    {
-      NSString *srcpath = [sourcePaths objectAtIndex: i-1];
-      FSNIcon *icon = [self repOfSubnodePath: srcpath];
-
-      if (icon && [[icon node] isMountPoint])
-	{
-	  [sourcePaths removeObject: srcpath];
-	}
-      i--;
-    }
-
-  if ([sourcePaths count] == 0)
-    {
-      return;
-    }
-
-  source = [[sourcePaths objectAtIndex: 0] stringByDeletingLastPathComponent];
-
-  trashPath = [desktopApp trashPath];
-
-  if ([source isEqual: trashPath])
-    {
-      operation = @"WorkspaceRecycleOutOperation";
-    }
-  else
-    {
-      if (sourceDragMask & NSDragOperationMove)
-	{
-	  operation = NSWorkspaceMoveOperation;
-	}
-      else if (sourceDragMask & NSDragOperationCopy)
-	{
-	  operation = NSWorkspaceCopyOperation;
-	}
-      else if (sourceDragMask & NSDragOperationLink)
-	{
-	  operation = FSNLinkDropOperation();
-	}
-      else
-	{
-	  if ([[NSFileManager defaultManager] isWritableFileAtPath: source])
-	    {
-	      operation = NSWorkspaceMoveOperation;
-	    }
-	  else
-	    {
-	      operation = NSWorkspaceCopyOperation;
-	    }
-	}
-    }
-
-  files = [NSMutableArray array];
-  for(i = 0; i < [sourcePaths count]; i++)
-    {
-      [files addObject: [[sourcePaths objectAtIndex: i] lastPathComponent]];
-    }
-
-  [self recordDropPositionsForFiles: files
-			    atPoint: [sender draggingLocation]];
-
-  opDict = [NSMutableDictionary dictionary];
-  [opDict setObject: operation forKey: @"operation"];
-  [opDict setObject: source forKey: @"source"];
-  [opDict setObject: [node path] forKey: @"destination"];
-  [opDict setObject: files forKey: @"files"];
-
-  [desktopApp performFileOperation: opDict];
-}
-
-@end
-
-
-@implementation GWDesktopView (BackgroundColors)
-
-- (NSColor *)currentColor
-{
-  return backColor;
-}
-
-- (void)setCurrentColor:(NSColor *)color
-{
-  ASSIGN (backColor, color);
-  [[self window] setBackgroundColor: backColor];
-  [self setNeedsDisplay: YES];
-}
-
-- (void)createBackImage:(NSImage *)image
-{
-  ASSIGN(backImage, image);
-}
-
-- (NSImage *)backImage
-{
-  return backImage;
-}
-
-- (NSString *)backImagePath
-{
-  return imagePath;
-}
-
-- (void)setBackImageAtPath:(NSString *)impath
-{
-  CREATE_AUTORELEASE_POOL (pool);
-  NSImage *image = [[NSImage alloc] initWithContentsOfFile: impath];
-
-  if (image)
-    {
-      ASSIGN (imagePath, impath);
-      [self createBackImage: image];
-      RELEASE (image);
-      [self setNeedsDisplay: YES];
-      [self updateDefaults];
-    }
-  RELEASE (pool);
-}
-
-- (BOOL)useBackImage
-{
-  return useBackImage;
-}
-
-- (void)setUseBackImage:(BOOL)value
-{
-  useBackImage = value;
-  [self setNeedsDisplay: YES];
-  [self updateDefaults];
-}
-
-- (BackImageStyle)backImageStyle
-{
-  return backImageStyle;
-}
-
-- (void)setBackImageStyle:(BackImageStyle)style
-{
-  if (style != backImageStyle)
-    {
-      backImageStyle = style;
-      if (backImage)
-	{
-	  [self setBackImageAtPath: imagePath];
-	  [self setNeedsDisplay: YES];
-	}
-      else
-        {
-          // No image set, just save the style preference
-          [self updateDefaults];
-        }
-    }
-}
-
-/* Override addRepForSubnode: to create GWDesktopIcon instances
- * (with proper label rendering and double-click handling) instead of
- * plain FSNIcon.  This is used when volume mount icons are added via
- * newVolumeMountedAtPath:, among others. */
-- (id)addRepForSubnode:(FSNode *)anode
-{
-  /* Never display internal metadata files */
-  NSString *fname = [anode name];
-  if ([fname isEqualToString: @".DS_Store"]
-      || [fname hasPrefix: @"._"]
-      || [fname isEqualToString: @"__MACOSX"])
-    return nil;
-
-  CREATE_AUTORELEASE_POOL(arp);
-  GWDesktopIcon *icon = [[GWDesktopIcon alloc] initForNode: anode
-                                              nodeInfoType: infoType
-                                              extendedType: extInfoType
-                                                  iconSize: iconSize
-                                              iconPosition: iconPosition
-                                                 labelFont: labelFont
-                                                 textColor: textColor
-                                                 gridIndex: NSNotFound
-                                                 dndSource: YES
-                                                 acceptDnd: YES
-                                                 slideBack: YES];
-  [icons addObject: icon];
-  [self addSubview: icon];
-  RELEASE (icon);
-  RELEASE (arp);
-
-  return icon;
-}
-
-@end
+[Showing lines 1-1648 of 2245 (50.0KB limit). Use offset=1649 to continue.]
