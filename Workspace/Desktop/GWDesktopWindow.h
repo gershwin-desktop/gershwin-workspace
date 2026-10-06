@@ -33,6 +33,9 @@
 }
 
 + (NSRect)desktopFullFrame;
+/* The GSScaleFactor the desktop is sized with: 1.0 when it is not set or not
+   positive; factors below 1.0 count, as everywhere else in Workspace. */
++ (CGFloat)desktopScaleFactor;
 - (void)activate;
 - (void)deactivate;
 - (void)setX11DesktopAtoms;
