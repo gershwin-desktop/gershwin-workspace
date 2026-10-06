@@ -2150,6 +2150,10 @@ static CGFloat desktopScaleFactor(void)
 
 - (void)createBackImage:(NSImage *)image
 {
+  /* A cached image is drawn through a hidden backend window the size of the
+   * wallpaper, and the X server keeps two pixmaps of that size for it for the
+   * whole session. The wallpaper is drawn from its bitmap instead. */
+  [image setCacheMode: NSImageCacheNever];
   ASSIGN(backImage, image);
   [self invalidateScaledBackImageCache];
 }
@@ -2229,6 +2233,7 @@ static CGFloat desktopScaleFactor(void)
     }
 
   imsize = [backImage size];
+
   scaled = [[NSImage alloc] initWithSize: size];
   [scaled lockFocus];
 
