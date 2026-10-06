@@ -197,7 +197,11 @@ static NSString *GWProcessDisplay(pid_t pid)
 #endif
           break;
         }
-      if (errno != ENOMEM || size >= 4 * 1024 * 1024)
+      /* A kernel that reports a needed size smaller than our buffer is
+       * failing for another reason (a process in the middle of exec or exit
+       * does this); doubling then only walks up to 4 MB of pointless
+       * allocations for a lookup that cannot succeed. */
+      if (errno != ENOMEM || len < size || size >= 4 * 1024 * 1024)
         break;
       size *= 2;
     }
