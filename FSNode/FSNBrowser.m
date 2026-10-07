@@ -131,24 +131,13 @@
     
     ASSIGN (backColor, [NSColor windowBackgroundColor]);
   
-    defentry = [defaults objectForKey: @"fsn_info_type"];
-    infoType = defentry ? [defentry intValue] : FSNInfoNameType;
-    extInfoType = nil;
-    
-    if (infoType == FSNInfoExtendedType) {
-      defentry = [defaults objectForKey: @"extended_info_type"];
+    {
+      NSString *ext = nil;
 
-      if (defentry) {
-        NSArray *availableTypes = [fsnodeRep availableExtendedInfoNames];
-      
-        if ([availableTypes containsObject: defentry]) {
-          ASSIGN (extInfoType, defentry);
-        }
-      }
-      
-      if (extInfoType == nil) {
-        infoType = FSNInfoNameType;
-      }
+      [fsnodeRep loadInfoType: &infoType
+             extendedInfoType: &ext
+                 fromDefaults: defaults];
+      ASSIGN (extInfoType, ext);
     }
     
     ASSIGN (baseNode, [FSNode nodeWithPath: [bsnode path]]);	    
@@ -1646,13 +1635,7 @@
       DESTROY (extInfoType);
       entry = [nodeDict objectForKey: @"ext_info_type"];
 
-      if (entry) {
-        NSArray *availableTypes = [fsnodeRep availableExtendedInfoNames];
-
-        if ([availableTypes containsObject: entry]) {
-          ASSIGN (extInfoType, entry);
-        }
-      }
+      ASSIGN (extInfoType, [fsnodeRep validExtendedInfoName: entry]);
 
       if (extInfoType == nil) {
         infoType = FSNInfoNameType;

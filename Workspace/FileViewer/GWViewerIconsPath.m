@@ -116,30 +116,19 @@
 
     iconSize = DEF_ICN_SIZE;
 
-    defentry = [defaults objectForKey: @"labeltxtsize"];
+    defentry = [defaults objectForKey: FSNLabelTextSizeDefaultsKey];
     labelTextSize = defentry ? [defentry intValue] : DEF_TEXT_SIZE;
     ASSIGN (labelFont, [NSFont systemFontOfSize: labelTextSize]);
     
     iconPosition = DEF_ICN_POS;
         
-    defentry = [defaults objectForKey: @"fsn_info_type"];
-    infoType = defentry ? [defentry intValue] : FSNInfoNameType;
-    extInfoType = nil;
-    
-    if (infoType == FSNInfoExtendedType) {
-      defentry = [defaults objectForKey: @"extended_info_type"];
+    {
+      NSString *ext = nil;
 
-      if (defentry) {
-        NSArray *availableTypes = [fsnodeRep availableExtendedInfoNames];
-      
-        if ([availableTypes containsObject: defentry]) {
-          ASSIGN (extInfoType, defentry);
-        }
-      }
-      
-      if (extInfoType == nil) {
-        infoType = FSNInfoNameType;
-      }
+      [fsnodeRep loadInfoType: &infoType
+             extendedInfoType: &ext
+                 fromDefaults: defaults];
+      ASSIGN (extInfoType, ext);
     }
 
     icons = [NSMutableArray new];

@@ -862,15 +862,7 @@ static CGFloat desktopScaleFactor(void)
 	  DESTROY (extInfoType);
 	  entry = [dskinfo objectForKey: @"ext_info_type"];
 
-	  if (entry)
-	    {
-	      NSArray *availableTypes = [fsnodeRep availableExtendedInfoNames];
-
-	      if ([availableTypes containsObject: entry])
-		{
-		  ASSIGN (extInfoType, entry);
-		}
-	    }
+	  ASSIGN (extInfoType, [fsnodeRep validExtendedInfoName: entry]);
 
 	  if (extInfoType == nil)
 	    {
@@ -2294,9 +2286,7 @@ static CGFloat desktopScaleFactor(void)
 {
   /* Never display internal metadata files */
   NSString *fname = [anode name];
-  if ([fname isEqualToString: @".DS_Store"]
-      || [fname hasPrefix: @"._"]
-      || [fname isEqualToString: @"__MACOSX"])
+  if ([FSNodeRep isInternalMetadataName: fname])
     return nil;
 
   CREATE_AUTORELEASE_POOL(arp);

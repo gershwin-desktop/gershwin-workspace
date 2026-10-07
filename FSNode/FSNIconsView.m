@@ -166,7 +166,7 @@ static void GWHighlightFrameRect(NSRect aRect)
       defentry = [defaults objectForKey: @"iconsize"];
       iconSize = defentry ? [defentry intValue] : DEF_ICN_SIZE;
 
-      defentry = [defaults objectForKey: @"labeltxtsize"];
+      defentry = [defaults objectForKey: FSNLabelTextSizeDefaultsKey];
       labelTextSize = defentry ? [defentry intValue] : DEF_TEXT_SIZE;
       ASSIGN (labelFont, [NSFont systemFontOfSize: labelTextSize]);
 
@@ -177,29 +177,14 @@ static void GWHighlightFrameRect(NSRect aRect)
        * display mode warrants relabeling every icon. */
       lastDisplayMode = GSCurrentExtensionDisplayMode();
 
-      defentry = [defaults objectForKey: @"fsn_info_type"];
-      infoType = defentry ? [defentry intValue] : FSNInfoNameType;
-      extInfoType = nil;
+      {
+        NSString *ext = nil;
 
-      if (infoType == FSNInfoExtendedType)
-	{
-	  defentry = [defaults objectForKey: @"extended_info_type"];
-
-	  if (defentry)
-	    {
-	      NSArray *availableTypes = [fsnodeRep availableExtendedInfoNames];
-
-	      if ([availableTypes containsObject: defentry])
-		{
-		  ASSIGN (extInfoType, defentry);
-		}
-	    }
-
-	  if (extInfoType == nil)
-	    {
-	      infoType = FSNInfoNameType;
-	    }
-	}
+        [fsnodeRep loadInfoType: &infoType
+               extendedInfoType: &ext
+                   fromDefaults: defaults];
+        ASSIGN (extInfoType, ext);
+      }
 
 
       nameEditor = [FSNIconNameEditor new];
@@ -2586,12 +2571,7 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 	  DESTROY (extInfoType);
 	  entry = [nodeDict objectForKey: @"ext_info_type"];
 
-	  if (entry)
-	    {
-	      NSArray *availableTypes = [fsnodeRep availableExtendedInfoNames];
-	      if ([availableTypes containsObject: entry])
-		ASSIGN (extInfoType, entry);
-	    }
+	  ASSIGN (extInfoType, [fsnodeRep validExtendedInfoName: entry]);
 
 	  if (extInfoType == nil)
 	    infoType = FSNInfoNameType;
@@ -3105,9 +3085,7 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 {
   /* Never display internal metadata files */
   NSString *fname = [anode name];
-  if ([fname isEqualToString: @".DS_Store"]
-      || [fname hasPrefix: @"._"]
-      || [fname isEqualToString: @"__MACOSX"])
+  if ([FSNodeRep isInternalMetadataName: fname])
     return nil;
 
   CREATE_AUTORELEASE_POOL(arp);

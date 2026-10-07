@@ -29,6 +29,11 @@
 #import <Foundation/Foundation.h>
 #import "FSNode.h"
 
+/* User defaults keys for the info shown under icons. */
+extern NSString * const FSNInfoTypeDefaultsKey;
+extern NSString * const FSNExtendedInfoTypeDefaultsKey;
+extern NSString * const FSNLabelTextSizeDefaultsKey;
+
 typedef enum FSNInfoType {   
   FSNInfoNameType = 0,
   FSNInfoKindType = 1,
@@ -420,6 +425,9 @@ typedef enum FSNSelectionMask {
 
 + (FSNodeRep *)sharedInstance;
 
+/* Metadata files of other systems that are never shown to the user. */
++ (BOOL)isInternalMetadataName:(NSString *)name;
+
 /* Finder-metadata provider (label colour, invisibility, custom icon, icon
  * position).  Injected by the application; nil in a plain FSNode client. */
 - (void)setMetadataProvider:(id)provider;
@@ -515,6 +523,16 @@ typedef enum FSNSelectionMask {
 - (void)thumbnailsDidChange:(NSDictionary *)info;
 
 - (NSArray *)availableExtendedInfoNames;
+
+/* Returns name if it is one of the available extended info names, else nil. */
+- (NSString *)validExtendedInfoName:(id)name;
+
+/* Reads the global display defaults for the info shown under icons. An
+ * extended type whose name is not available (any more) falls back to the
+ * name type. */
+- (void)loadInfoType:(FSNInfoType *)type
+    extendedInfoType:(NSString **)extType
+        fromDefaults:(NSUserDefaults *)defaults;
 
 - (NSDictionary *)extendedInfoOfType:(NSString *)type
                              forNode:(FSNode *)anode;

@@ -154,17 +154,8 @@ static NSString *defaultColumns = @"{ \
       defentry = [defaults objectForKey: @"hligh_table_col"];
       hlighColId = defentry ? [defentry intValue] : FSNInfoNameType;
 
-      extInfoType = nil;
-      defentry = [defaults objectForKey: @"extended_info_type"];
-
-      if (defentry)
-	{
-	  NSArray *availableTypes = [fsnodeRep availableExtendedInfoNames];
-
-	  if ([availableTypes containsObject: defentry]) {
-	    ASSIGN (extInfoType, defentry);
-	  }
-	}
+      ASSIGN (extInfoType, [fsnodeRep validExtendedInfoName:
+                              [defaults objectForKey: FSNExtendedInfoTypeDefaultsKey]]);
 
       nodeReps = [NSMutableArray new];
 

@@ -83,6 +83,10 @@
 
 static FSNodeRep *shared = nil;
 
+NSString * const FSNInfoTypeDefaultsKey = @"fsn_info_type";
+NSString * const FSNExtendedInfoTypeDefaultsKey = @"extended_info_type";
+NSString * const FSNLabelTextSizeDefaultsKey = @"labeltxtsize";
+
 @implementation FSNodeRep (PrivateMethods)
 
 + (void)initialize
@@ -290,6 +294,13 @@ static FSNodeRep *shared = nil;
   [super dealloc];
 }
 
++ (BOOL)isInternalMetadataName:(NSString *)name
+{
+  return ([name isEqualToString: @".DS_Store"]
+          || [name hasPrefix: @"._"]
+          || [name isEqualToString: @"__MACOSX"]);
+}
+
 + (FSNodeRep *)sharedInstance
 {
   if (shared == nil)
@@ -443,11 +454,7 @@ static FSNodeRep *shared = nil;
   BOOL hidden = NO;
 
   /* Always hide internal metadata files */
-  if ([fname hasPrefix: @"._"])
-    hidden = YES;
-  if ([fname isEqualToString: @"__MACOSX"])
-    hidden = YES;
-  if ([fname isEqualToString: @".DS_Store"])
+  if ([FSNodeRep isInternalMetadataName: fname])
     hidden = YES;
 
   if (!hidden && [fname hasPrefix: @"."] && hideSysFiles)
@@ -930,6 +937,37 @@ static FSNodeRep *shared = nil;
       }    
     }  
   }
+}
+
+- (NSString *)validExtendedInfoName:(id)name
+{
+  if (name && [[self availableExtendedInfoNames] containsObject: name])
+    {
+      return name;
+    }
+
+  return nil;
+}
+
+- (void)loadInfoType:(FSNInfoType *)type
+    extendedInfoType:(NSString **)extType
+        fromDefaults:(NSUserDefaults *)defaults
+{
+  id entry = [defaults objectForKey: FSNInfoTypeDefaultsKey];
+
+  *type = entry ? [entry intValue] : FSNInfoNameType;
+  *extType = nil;
+
+  if (*type == FSNInfoExtendedType)
+    {
+      *extType = [self validExtendedInfoName:
+                         [defaults objectForKey: FSNExtendedInfoTypeDefaultsKey]];
+
+      if (*extType == nil)
+        {
+          *type = FSNInfoNameType;
+        }
+    }
 }
 
 - (NSArray *)availableExtendedInfoNames
