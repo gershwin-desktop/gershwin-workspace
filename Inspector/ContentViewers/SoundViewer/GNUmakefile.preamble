@@ -10,7 +10,7 @@ ADDITIONAL_OBJCFLAGS += -Wall
 ADDITIONAL_CFLAGS += -Wall
 
 # Additional include directories the compiler should search
-ADDITIONAL_INCLUDE_DIRS += -I../..
+ADDITIONAL_INCLUDE_DIRS += -I../.. -I../../../FSNode
 
 # Additional LDFLAGS to pass to the linker
 ADDITIONAL_LDFLAGS += 
@@ -24,3 +24,6 @@ ADDITIONAL_TOOL_LIBS +=
 # Additional directories to be created during installation
 ADDITIONAL_INSTALL_DIRS +=
 
+
+# The shared "can't open" alert lives in FSNode, which Inspector links already.
+SoundViewer_LIBRARIES_DEPEND_UPON += -lFSNode

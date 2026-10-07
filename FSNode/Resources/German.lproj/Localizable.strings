@@ -6,7 +6,7 @@
 
 "Are you sure you want to add the extension" = "Sind Sie sicher, dass Sie die Erweiterung hinzuf\u00fcgen m\u00f6chten";
 
-"Can't open " = "Kann nicht \u00f6ffnen ";
+"Can't open %@!" = "%@ kann nicht ge\u00f6ffnet werden.";
 
 "Cancel" = "Abbrechen";
 

@@ -89,7 +89,7 @@
 
 
 
-"Can't open " = "Impossible d'ouvrir ";
+"Can't open %@!" = "Impossible d'ouvrir %@.";
 
 "Cancel" = "Annuler";
 

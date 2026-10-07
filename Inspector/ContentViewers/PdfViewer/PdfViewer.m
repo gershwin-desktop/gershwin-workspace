@@ -25,6 +25,7 @@
 #include <math.h>
 
 #import <AppKit/AppKit.h>
+#import "FSNFunctions.h"
 #import <PDFKit/PDFDocument.h>
 #import <PDFKit/PDFImageRep.h>
 #import "PdfViewer.h"
@@ -425,12 +426,7 @@ const double PDFResolution = 72.0;
       }
     NS_HANDLER
       {
-    NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-        [NSString stringWithFormat: @"%@ %@!", 
-          NSLocalizedString(@"Can't open ", @""), [pdfPath lastPathComponent]],
-                                      NSLocalizedString(@"OK", @""), 
-                                      nil, 
-                                      nil);                                     
+    FSNShowCannotOpenAlert([pdfPath lastPathComponent]);                                     
       }
     NS_ENDHANDLER  
 	}

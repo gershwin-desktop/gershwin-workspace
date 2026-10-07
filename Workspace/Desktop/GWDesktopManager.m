@@ -1040,22 +1040,12 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
         }
       NS_HANDLER
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""),
-              [NSString stringWithFormat: @"%@ %@!",
-                        NSLocalizedString(@"Can't open ", @""), [node name]],
-                                            NSLocalizedString(@"OK", @""),
-                                            nil,
-                                            nil);
+          FSNShowCannotOpenAlert([node name]);
         }
       NS_ENDHANDLER
 
     } else {
-      NSRunAlertPanel(NSLocalizedString(@"error", @""),
-          [NSString stringWithFormat: @"%@ %@!",
-                    NSLocalizedString(@"Can't open ", @""), [node name]],
-                                        NSLocalizedString(@"OK", @""),
-                                        nil,
-                                        nil);
+      FSNShowCannotOpenAlert([node name]);
     }
   }
 }
@@ -1077,12 +1067,7 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
         }
       NS_HANDLER
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""),
-              [NSString stringWithFormat: @"%@ %@!",
-                        NSLocalizedString(@"Can't open ", @""), [node name]],
-                                            NSLocalizedString(@"OK", @""),
-                                            nil,
-                                            nil);
+          FSNShowCannotOpenAlert([node name]);
         }
       NS_ENDHANDLER
     }

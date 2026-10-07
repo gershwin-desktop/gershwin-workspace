@@ -3201,12 +3201,7 @@ static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
         }
       NS_HANDLER
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""),
-                  [NSString stringWithFormat: @"%@ %@!",
-                    NSLocalizedString(@"Can't open ", @""), [node name]],
-                  NSLocalizedString(@"OK", @""),
-                  nil,
-                  nil);
+          FSNShowCannotOpenAlert([node name]);
         }
       NS_ENDHANDLER
     }

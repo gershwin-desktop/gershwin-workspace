@@ -25,6 +25,7 @@
 
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import "FSNFunctions.h"
 #include <math.h>
 #import "Tools.h"
 #import "Inspector.h"
@@ -456,12 +457,7 @@ static NSString *nibName = @"Tools";
         }
       NS_HANDLER
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-                          [NSString stringWithFormat: @"%@ %@!", 
-                                    NSLocalizedString(@"Can't open ", @""), [fpath lastPathComponent]],
-                          NSLocalizedString(@"OK", @""), 
-                          nil, 
-                          nil);                                     
+          FSNShowCannotOpenAlert([fpath lastPathComponent]);                                     
         }
       NS_ENDHANDLER  
         }

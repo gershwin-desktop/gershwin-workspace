@@ -8,7 +8,7 @@
 
 "Are you sure you want to add the extension" = "Are you sure you want to add the extension";
 
-"Can't open " = "Can't open ";
+"Can't open %@!" = "Can't open %@!";
 
 "Cancel" = "Cancel";
 

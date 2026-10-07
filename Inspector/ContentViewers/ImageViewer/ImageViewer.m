@@ -24,6 +24,7 @@
  */
 
 #import <AppKit/AppKit.h>
+#import "FSNFunctions.h"
 #ifndef _WIN32
 #import <dispatch/dispatch.h>
 #endif
@@ -347,12 +348,7 @@
       }
     NS_HANDLER
       {
-        NSRunAlertPanel(NSLocalizedString(@"error", @""),
-        [NSString stringWithFormat: @"%@ %@!", 
-          NSLocalizedString(@"Can't open ", @""), [editPath lastPathComponent]],
-                                      NSLocalizedString(@"OK", @""), 
-                                      nil, 
-                                      nil);                                     
+        FSNShowCannotOpenAlert([editPath lastPathComponent]);                                     
       }
     NS_ENDHANDLER  
 	}

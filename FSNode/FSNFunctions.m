@@ -645,6 +645,14 @@ void showAlertNoPermission(Class c, NSString *name)
                   nil, nil);   
 }
 
+void FSNShowCannotOpenAlert(NSString *name)
+{
+  NSRunAlertPanel(NSLocalizedString(@"Error", @""),
+                  [NSString stringWithFormat: NSLocalizedString(@"Can't open %@!", @""), name],
+                  NSLocalizedString(@"OK", @""),
+                  nil, nil);
+}
+
 void showAlertInRecycler(Class c)
 {
   NSRunAlertPanel(NSLocalizedStringFromTableInBundle(@"Error", nil, [NSBundle bundleForClass:c], @""),

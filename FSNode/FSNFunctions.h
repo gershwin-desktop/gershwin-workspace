@@ -97,6 +97,8 @@ NSArray *makePathsSelection(NSArray *selnodes);
 
 double myrintf(double a);
 
+/* The one place that tells the user an item could not be opened. */
+void FSNShowCannotOpenAlert(NSString *name);
 void showAlertNoPermission(Class c, NSString *name);
 void showAlertInRecycler(Class c);
 void showAlertInvalidName(Class c);

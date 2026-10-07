@@ -8,7 +8,7 @@
 
 "Are you sure you want to add the extension" = "Seguro que desea añadir la extensión";
 
-"Can't open " = "No se puede abrir ";
+"Can't open %@!" = "No se puede abrir %@.";
 
 "Cancel" = "Cancelar";
 

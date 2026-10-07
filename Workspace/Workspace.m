@@ -2022,12 +2022,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         }
       NS_HANDLER
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""),
-              [NSString stringWithFormat: @"%@ %@!",
-               NSLocalizedString(@"Can't open ", @""), [apath lastPathComponent]],
-                                            NSLocalizedString(@"OK", @""),
-                                            nil,
-                                            nil);
+          FSNShowCannotOpenAlert([apath lastPathComponent]);
         }
       NS_ENDHANDLER
     }
@@ -2444,12 +2439,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
   NS_HANDLER
     {
-      NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-		      [NSString stringWithFormat: @"%@ %@!", 
-				NSLocalizedString(@"Can't open ", @""), [fullPath lastPathComponent]],
-		      NSLocalizedString(@"OK", @""), 
-		      nil, 
-		      nil);                                     
+      FSNShowCannotOpenAlert([fullPath lastPathComponent]);                                     
       success = NO;
     }
   NS_ENDHANDLER  
@@ -4495,12 +4485,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         }
       NS_HANDLER
         {
-      NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-          [NSString stringWithFormat: @"%@ %@!", 
-              NSLocalizedString(@"Can't open ", @""), [path lastPathComponent]],
-                                        NSLocalizedString(@"OK", @""), 
-                                        nil, 
-                                        nil);                                     
+      FSNShowCannotOpenAlert([path lastPathComponent]);                                     
         }
       NS_ENDHANDLER  
     }

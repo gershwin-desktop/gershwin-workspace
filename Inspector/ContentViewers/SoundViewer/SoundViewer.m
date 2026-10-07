@@ -23,6 +23,7 @@
  */
 
 #import <AppKit/AppKit.h>
+#import "FSNFunctions.h"
 #import "SoundViewer.h"
 
 @implementation SoundViewer
@@ -175,12 +176,7 @@
       }
     NS_HANDLER
       {
-    NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-        [NSString stringWithFormat: @"%@ %@!", 
-          NSLocalizedString(@"Can't open ", @""), [soundPath lastPathComponent]],
-                                      NSLocalizedString(@"OK", @""), 
-                                      nil, 
-                                      nil);                                     
+    FSNShowCannotOpenAlert([soundPath lastPathComponent]);                                     
       }
     NS_ENDHANDLER  
 	}

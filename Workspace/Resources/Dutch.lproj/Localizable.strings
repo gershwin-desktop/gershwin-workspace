@@ -1294,7 +1294,7 @@
 
 "application" = "toepassing";
 
-"Can't open " = "Kan niet openen ";
+"Can't open %@!" = "%@ kan niet worden geopend.";
 
 "Clean Up By" = "Opschonen op";
 

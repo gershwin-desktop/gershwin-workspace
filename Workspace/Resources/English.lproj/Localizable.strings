@@ -132,7 +132,7 @@
 
 "Can't edit a directory!" = "Can't edit a directory!";
 
-"Can't open " = "Can't open ";
+"Can't open %@!" = "Can't open %@!";
 
 "Cancel" = "Cancel";
 

@@ -140,7 +140,7 @@
 
 "Can't edit a directory!" = "Kann Verzeichnis nicht bearbeiten!";
 
-"Can't open " = "Unmöglich zu öffnen ";
+"Can't open %@!" = "%@ kann nicht geöffnet werden.";
 
 "Cancel" = "Abbrechen";
 

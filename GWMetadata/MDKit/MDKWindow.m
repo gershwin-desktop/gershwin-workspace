@@ -23,6 +23,7 @@
  */
  
 #import <AppKit/AppKit.h>
+#import "FSNFunctions.h"
 #import "MDKWindow.h"
 #import "MDKTableView.h"
 #import "MDKAttribute.h"
@@ -1579,12 +1580,7 @@ static NSString *nibName = @"MDKWindow";
         }
       NS_HANDLER
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-              [NSString stringWithFormat: @"%@ %@!", 
-                        NSLocalizedString(@"Can't open ", @""), [nd name]],
-                                            NSLocalizedString(@"OK", @""), 
-                                            nil, 
-                                            nil);                                     
+          FSNShowCannotOpenAlert([nd name]);                                     
         }
       NS_ENDHANDLER      
     }

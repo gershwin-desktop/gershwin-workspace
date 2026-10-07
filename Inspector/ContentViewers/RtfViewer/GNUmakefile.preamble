@@ -9,7 +9,7 @@ ADDITIONAL_OBJCFLAGS += -Wall
 # Additional flags to pass to the C compiler
 ADDITIONAL_CFLAGS += -Wall
 
-ADDITIONAL_INCLUDE_DIRS += -I../..
+ADDITIONAL_INCLUDE_DIRS += -I../.. -I../../../FSNode
 
 # Additional LDFLAGS to pass to the linker
 ADDITIONAL_LDFLAGS += 
@@ -23,3 +23,6 @@ ADDITIONAL_TOOL_LIBS +=
 # Additional directories to be created during installation
 ADDITIONAL_INSTALL_DIRS +=
 
+
+# The shared "can't open" alert lives in FSNode, which Inspector links already.
+RtfViewer_LIBRARIES_DEPEND_UPON += -lFSNode

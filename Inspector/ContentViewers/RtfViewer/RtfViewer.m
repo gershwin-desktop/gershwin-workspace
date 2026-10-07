@@ -23,6 +23,7 @@
  */
 
 #import <AppKit/AppKit.h>
+#import "FSNFunctions.h"
 #import "RtfViewer.h"
 
 #define MAXDATA 1000
@@ -278,12 +279,7 @@
       }
     NS_HANDLER
       {
-    NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-        [NSString stringWithFormat: @"%@ %@!", 
-          NSLocalizedString(@"Can't open ", @""), [editPath lastPathComponent]],
-                                      NSLocalizedString(@"OK", @""), 
-                                      nil, 
-                                      nil);                                     
+    FSNShowCannotOpenAlert([editPath lastPathComponent]);                                     
       }
     NS_ENDHANDLER  
 	}

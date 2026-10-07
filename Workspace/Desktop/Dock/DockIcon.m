@@ -1759,12 +1759,7 @@ x += 6; \
                 }
               NS_HANDLER
                 {
-                  NSRunAlertPanel(NSLocalizedString(@"error", @""), 
-                                  [NSString stringWithFormat: @"%@ %@!", 
-                                            NSLocalizedString(@"Can't open ", @""), [path lastPathComponent]],
-                                  NSLocalizedString(@"OK", @""), 
-                                  nil, 
-                                  nil);                                     
+                  FSNShowCannotOpenAlert([path lastPathComponent]);                                     
                 }
               NS_ENDHANDLER  
              }

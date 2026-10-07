@@ -98,7 +98,7 @@ all applications and shut down now?";
 
 
 
-"Can't open " = "Nie można otworzyć ";
+"Can't open %@!" = "Nie można otworzyć %@.";
 
 "Cancel" = "Anuluj";
 

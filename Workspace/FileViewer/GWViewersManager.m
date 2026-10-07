@@ -762,10 +762,7 @@ static GWViewersManager *vwrsmanager = nil;
 {
   if (node == nil || [node hasValidPath] == NO)
     {
-      NSRunAlertPanel(NSLocalizedString(@"error", @""),
-                      [NSString stringWithFormat: @"%@ %@!",
-                        NSLocalizedString(@"Can't open ", @""), [node name]],
-                      NSLocalizedString(@"OK", @""), nil, nil);
+      FSNShowCannotOpenAlert([node name]);
       return;
     }
 
@@ -844,24 +841,14 @@ static GWViewersManager *vwrsmanager = nil;
             }
           NS_HANDLER
             {
-              NSRunAlertPanel(NSLocalizedString(@"error", @""),
-                              [NSString stringWithFormat: @"%@ %@!",
-                                        NSLocalizedString(@"Can't open ", @""), [node name]],
-                              NSLocalizedString(@"OK", @""),
-                              nil,
-                              nil);
+              FSNShowCannotOpenAlert([node name]);
             }
           NS_ENDHANDLER
 
             }
       else
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""),
-                          [NSString stringWithFormat: @"%@ %@!",
-                                    NSLocalizedString(@"Can't open ", @""), [node name]],
-                          NSLocalizedString(@"OK", @""),
-                          nil,
-                          nil);
+          FSNShowCannotOpenAlert([node name]);
         }
     }
   
@@ -890,12 +877,7 @@ static GWViewersManager *vwrsmanager = nil;
         }
       NS_HANDLER
         {
-          NSRunAlertPanel(NSLocalizedString(@"error", @""),
-                          [NSString stringWithFormat: @"%@ %@!",
-                                    NSLocalizedString(@"Can't open ", @""), [node name]],
-                          NSLocalizedString(@"OK", @""),
-                          nil,
-                          nil);
+          FSNShowCannotOpenAlert([node name]);
         }
       NS_ENDHANDLER
     }

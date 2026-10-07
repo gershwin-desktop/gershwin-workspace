@@ -1295,7 +1295,7 @@ for";
 
 "application" = "aplicação";
 
-"Can't open " = "Não é possível abrir ";
+"Can't open %@!" = "Não é possível abrir %@.";
 
 "Clean Up By" = "Limpar por";
 
