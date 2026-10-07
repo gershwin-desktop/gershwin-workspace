@@ -1196,15 +1196,6 @@ static GWViewersManager *vwrsmanager = nil;
   return orderingViewers;
 }
 
-- (void)updateDesktop
-{
-  id desktopManager = [gworkspace desktopManager];  
-
-  if ([desktopManager isActive]) {
-    [desktopManager deselectAllIcons];
-  }
-}
-
 - (void)updateDefaults
 {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];  

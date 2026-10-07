@@ -95,6 +95,12 @@ static void GWHighlightFrameRect(NSRect aRect)
 - (void)dealloc
 {
   [[FSNIconLoader sharedLoader] cancelClient: self];
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSWindowDidBecomeKeyNotification
+                                                object: nil];
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSWindowDidResignKeyNotification
+                                                object: nil];
 
   [[NSNotificationCenter defaultCenter] removeObserver: self
                                                   name: NSUserDefaultsDidChangeNotification
@@ -3324,6 +3330,66 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
     }
 }
 
+/* A selection is kept while another window has the focus, and then drawn grey
+ * (and its label text dark), as in every window that is not the key window. */
+- (BOOL)drawsSelectionInactive
+{
+  return [self window] != nil && ![[self window] isKeyWindow];
+}
+
+- (void)viewWillMoveToWindow:(NSWindow *)newWindow
+{
+  NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+  if ([self window] != nil)
+    {
+      [nc removeObserver: self name: NSWindowDidBecomeKeyNotification object: [self window]];
+      [nc removeObserver: self name: NSWindowDidResignKeyNotification object: [self window]];
+    }
+  if (newWindow != nil)
+    {
+      [nc addObserver: self
+             selector: @selector(keyStateDidChange:)
+                 name: NSWindowDidBecomeKeyNotification
+               object: newWindow];
+      [nc addObserver: self
+             selector: @selector(keyStateDidChange:)
+                 name: NSWindowDidResignKeyNotification
+               object: newWindow];
+    }
+  [super viewWillMoveToWindow: newWindow];
+}
+
+/* The name editor lies over the label of the selected icon, so its color is
+ * the plate that the icon itself would draw: the same as the highlight around
+ * the icon. */
+- (NSColor *)selectionPlateColor
+{
+  return [self drawsSelectionInactive]
+    ? [NSColor secondarySelectedControlColor] : [NSColor selectedControlColor];
+}
+
+- (void)keyStateDidChange:(NSNotification *)notification
+{
+  NSUInteger i;
+
+  if ([nameEditor superview] == self)
+    {
+      [nameEditor setBackgroundColor: [self selectionPlateColor]];
+      [nameEditor setNeedsDisplay: YES];
+    }
+
+  for (i = 0; i < [icons count]; i++)
+    {
+      id icon = [icons objectAtIndex: i];
+
+      if ([icon respondsToSelector: @selector(isSelected)] && [icon isSelected])
+        {
+          [icon setNeedsDisplay: YES];
+        }
+    }
+}
+
 - (NSArray *)reps
 {
   return icons;
@@ -4107,7 +4173,7 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
       [nameEditor setNode: ednode
 	      stringValue: nodeDescr];
 
-      [nameEditor setBackgroundColor: [NSColor selectedControlColor]];
+      [nameEditor setBackgroundColor: [self selectionPlateColor]];
 
       if ([editIcon isLocked] == NO)
 	{

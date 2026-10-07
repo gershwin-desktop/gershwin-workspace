@@ -79,6 +79,11 @@
   BOOL isSelected;
   BOOL selectable;
   BOOL suppressSelectionDrawing;
+  /* The label colors in force while the selection is drawn inactive (grey),
+   * when the text is drawn dark; saved to put back when it is active again. */
+  BOOL labelColorOverridden;
+  NSColor *savedLabelColor;
+  NSColor *savedInfoLabelColor;
   
   BOOL isOpened;
   /* YES while a rubber band being dragged out would select the icon. */

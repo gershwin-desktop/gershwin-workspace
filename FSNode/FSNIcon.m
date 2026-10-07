@@ -164,6 +164,8 @@ static void FSNForgetForeignWindowAnswer(void)
   RELEASE (infolabel);
   RELEASE (labelFrameColor);
   RELEASE (tagColor);
+  RELEASE (savedLabelColor);
+  RELEASE (savedInfoLabelColor);
   RELEASE (spotlightComment);
   RELEASE (_placementData);
   [super dealloc];
@@ -1105,15 +1107,18 @@ static void FSNForgetForeignWindowAnswer(void)
 
 - (void)drawRect:(NSRect)rect
 {
+  [self updateLabelColorForSelectionState];
   if ((isSelected || selectionPreview) && !suppressSelectionDrawing)
     {
-      [[NSColor selectedControlColor] set];
+      NSColor *selectionColor = [self selectionHighlightColor];
+
+      [selectionColor set];
       [highlightPath fill];
 
-      // Draw the text label background with the standard selected color (blue)
+      // Draw the text label background with the selection color
       if (nameEdited == NO)
         {
-          [[NSColor selectedControlColor] set];
+          [selectionColor set];
           NSRectFill(labelRect);
         }
     }
@@ -1128,8 +1133,17 @@ static void FSNForgetForeignWindowAnswer(void)
     {
       if (nameEdited == NO)
         {
-          [label setBackgroundColor:labelFrameColor];
-          [label setDrawsBackground: drawLabelBackground];
+          if ((isSelected || selectionPreview) && !suppressSelectionDrawing)
+            {
+              /* The plate behind the name was filled above in the highlight's
+               * own color; the cell must not paint another one over it. */
+              [label setDrawsBackground: NO];
+            }
+          else
+            {
+              [label setBackgroundColor:labelFrameColor];
+              [label setDrawsBackground: drawLabelBackground];
+            }
 
           [label drawWithFrame: labelRect inView: self];
         }
@@ -1475,6 +1489,41 @@ static void FSNForgetForeignWindowAnswer(void)
 {
   [label setTextColor: acolor];
   [infolabel setTextColor: acolor];
+  /* The next draw puts the inactive color back on top if it is still needed. */
+  labelColorOverridden = NO;
+}
+
+/* The color of the highlight around the icon, and of the plate behind its name:
+ * grey for a selection that is kept while another window has the focus. */
+- (NSColor *)selectionHighlightColor
+{
+  return ([container respondsToSelector: @selector(drawsSelectionInactive)]
+          && [container drawsSelectionInactive])
+    ? [NSColor secondarySelectedControlColor] : [NSColor selectedControlColor];
+}
+
+/* The text follows the highlight: dark on the grey of a selection that is kept
+ * while another window has the focus, the container's color otherwise. */
+- (void)updateLabelColorForSelectionState
+{
+  BOOL inactive = (isSelected || selectionPreview) && !suppressSelectionDrawing
+    && [container respondsToSelector: @selector(drawsSelectionInactive)]
+    && [container drawsSelectionInactive];
+
+  if (inactive && !labelColorOverridden)
+    {
+      ASSIGN (savedLabelColor, [label textColor]);
+      ASSIGN (savedInfoLabelColor, [infolabel textColor]);
+      [label setTextColor: [NSColor controlTextColor]];
+      [infolabel setTextColor: [NSColor controlTextColor]];
+      labelColorOverridden = YES;
+    }
+  else if (!inactive && labelColorOverridden)
+    {
+      [label setTextColor: savedLabelColor];
+      [infolabel setTextColor: savedInfoLabelColor];
+      labelColorOverridden = NO;
+    }
 }
 
 - (NSColor *)labelTextColor

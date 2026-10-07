@@ -268,6 +268,12 @@ typedef enum FSNSelectionMask {
 
 - (NSColor *)disabledTextColor;
 
+@optional
+
+/* YES while a container keeps its selection but another window has the focus:
+ * the icons then draw it grey. Containers that do not say are never inactive. */
+- (BOOL)drawsSelectionInactive;
+
 @end
 
 

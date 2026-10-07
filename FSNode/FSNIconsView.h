@@ -312,6 +312,11 @@
 - (void)selectAll:(id)sender;
 - (void)scrollSelectionToVisible;
 - (NSArray *)reps;
+
+/* YES while the selection is to be drawn in the inactive style, grey instead of
+ * the selection color: the view keeps its selection while another window has
+ * the focus (the Desktop, once a folder is open). Never, by default. */
+- (BOOL)drawsSelectionInactive;
 - (NSArray *)selectedReps;
 - (NSArray *)selectedNodes;
 - (NSArray *)selectedPaths;

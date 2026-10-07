@@ -1607,7 +1607,6 @@ constrainMinCoordinate:(CGFloat)proposedMin
 {
   NSArray *selection = [nodeView selectedNodes];
 
-  [manager updateDesktop];
   if ([selection count] == 0)
     {
       selection = [NSArray arrayWithObject: [nodeView shownNode]];
