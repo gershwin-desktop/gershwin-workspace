@@ -812,7 +812,6 @@ static GWViewersManager *vwrsmanager = nil;
 {
   NSArray *selreps = [[viewer nodeView] selectedReps];
   NSUInteger count = [selreps count];
-  NSUInteger i;
     
   if (count > MAX_FILES_TO_OPEN_DIALOG)
     {
@@ -829,28 +828,9 @@ static GWViewersManager *vwrsmanager = nil;
         }
     }
     
-  for (i = 0; i < count; i++)
-    {
-      FSNode *node = [[selreps objectAtIndex: i] node];
-
-      if ([node hasValidPath])
-        {
-          NS_DURING
-            {
-              [self openNode: node fromViewer: viewer];
-            }
-          NS_HANDLER
-            {
-              FSNShowCannotOpenAlert([node name]);
-            }
-          NS_ENDHANDLER
-
-            }
-      else
-        {
-          FSNShowCannotOpenAlert([node name]);
-        }
-    }
+  [self openNodes: [selreps valueForKey: @"node"]
+       fromViewer: viewer
+         asFolder: NO];
   
   if (close)
     {
@@ -861,19 +841,41 @@ static GWViewersManager *vwrsmanager = nil;
 - (void)openAsFolderSelectionInViewer:(id)viewer
 {
   NSArray *selnodes = [[viewer nodeView] selectedNodes];
-  NSUInteger i;
 
   if ((selnodes == nil) || ([selnodes count] == 0))
     {
       selnodes = [NSArray arrayWithObject: [[viewer nodeView] shownNode]];
     }
 
-  for (i = 0; i < [selnodes count]; i++)
+  [self openNodes: selnodes fromViewer: viewer asFolder: YES];
+}
+
+- (void)openNodes:(NSArray *)nodes
+       fromViewer:(id)viewer
+         asFolder:(BOOL)asFolder
+{
+  NSUInteger i;
+
+  for (i = 0; i < [nodes count]; i++)
     {
-      FSNode *node = [selnodes objectAtIndex: i];
+      FSNode *node = [nodes objectAtIndex: i];
+
+      if ([node hasValidPath] == NO)
+        {
+          FSNShowCannotOpenAlert([node name]);
+          continue;
+        }
+
       NS_DURING
         {
-          [self openNode: node fromViewer: viewer asFolder: YES];
+          if (asFolder)
+            {
+              [self openNode: node fromViewer: viewer asFolder: YES];
+            }
+          else
+            {
+              [self openNode: node fromViewer: viewer];
+            }
         }
       NS_HANDLER
         {

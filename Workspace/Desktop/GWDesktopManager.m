@@ -1025,53 +1025,19 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
 - (void)openSelectionInNewViewer:(BOOL)newv
 {
-  NSArray *selreps = [desktopView selectedReps];
-  NSUInteger i;
-
-  for (i = 0; i < [selreps count]; i++) {
-    FSNode *node = [[selreps objectAtIndex: i] node];
-
-    if ([node hasValidPath]) {
-      NS_DURING
-        {
-          /* Canonical open: the desktop window is key, so the birth rect is
-           * derived from the desktop icon automatically. */
-          [[gworkspace viewersManager] openNode: node fromViewer: nil];
-        }
-      NS_HANDLER
-        {
-          FSNShowCannotOpenAlert([node name]);
-        }
-      NS_ENDHANDLER
-
-    } else {
-      FSNShowCannotOpenAlert([node name]);
-    }
-  }
+  /* No viewer: the desktop window is key, so the birth rect of the new
+   * window is derived from the desktop icon automatically. */
+  [[gworkspace viewersManager] openNodes: [[desktopView selectedReps] valueForKey: @"node"]
+                              fromViewer: nil
+                                asFolder: NO];
 }
 
 - (void)openSelectionAsFolder
 {
-  NSArray *selnodes = [desktopView selectedNodes];
-  unsigned i;
-
-  for (i = 0; i < [selnodes count]; i++) {
-    FSNode *node = [selnodes objectAtIndex: i];
-
-    if ([node hasValidPath]) {
-      NS_DURING
-        {
-          /* Force-open packages as folders, deriving the birth rect from the
-           * desktop icon. */
-          [[gworkspace viewersManager] openNode: node fromViewer: nil asFolder: YES];
-        }
-      NS_HANDLER
-        {
-          FSNShowCannotOpenAlert([node name]);
-        }
-      NS_ENDHANDLER
-    }
-  }
+  /* Packages are opened as folders. */
+  [[gworkspace viewersManager] openNodes: [desktopView selectedNodes]
+                              fromViewer: nil
+                                asFolder: YES];
 }
 
 - (void)openSelectionWith

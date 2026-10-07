@@ -1694,19 +1694,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
 
       /* Everything else: let each item open itself (folders open a viewer
        * growing from the activated icon, other items launch their app). */
-      NSUInteger i;
-      for (i = 0; i < count; i++) {
-        FSNode *node = [selection objectAtIndex: i];
-        NS_DURING
-          {
-            [manager openNode: node fromViewer: self];
-          }
-        NS_HANDLER
-          {
-            FSNShowCannotOpenAlert([node name]);
-          }
-        NS_ENDHANDLER
-      }
+      [manager openNodes: selection fromViewer: self asFolder: NO];
     } else if (newv) {
       [manager openAsFolderSelectionInViewer: self];
     }

@@ -190,6 +190,13 @@
 
 - (BOOL)orderingViewers;
 
+/* Opens each node, as -openNode:fromViewer: (or -openNode:fromViewer:asFolder:
+ * when asFolder is YES) does, and tells the user about each one that cannot
+ * be opened instead of stopping at it. */
+- (void)openNodes:(NSArray *)nodes
+       fromViewer:(id)viewer
+         asFolder:(BOOL)asFolder;
+
 - (void)updateDefaults;
 
 @end
