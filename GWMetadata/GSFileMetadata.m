@@ -271,8 +271,8 @@ enum {
       int16_t h = (int16_t)be16_to_host(bytes + 12);
       _parsed.iconPosition = NSMakePoint(h, v);
 
-      /* Label is encoded in fdFlags bits 1-3 */
-      _parsed.labelNumber = (_parsed.flags >> 1) & 0x7;
+      _parsed.labelNumber = [GSFileMetadata labelForFinderColor:
+                              (_parsed.flags >> 1) & 0x7];
     }
 
   _parsed.valid = YES;
@@ -427,8 +427,8 @@ enum {
       uint8_t *bytes = (uint8_t *)[(NSMutableData *)_finderInfo mutableBytes];
       host_to_be16(bytes + 8, flags);
       _parsed.flags = flags;
-      /* Recompute label from flags */
-      _parsed.labelNumber = (flags >> 1) & 0x7;
+      _parsed.labelNumber = [GSFileMetadata labelForFinderColor:
+                              (flags >> 1) & 0x7];
       [self _touchFinderFlags: touched];
     }
 }
@@ -592,7 +592,8 @@ enum {
   uint16_t flags = [self finderFlags];
   /* Clear the label bits (1-3), then set new value */
   flags &= ~GSFileFinderColorBits;
-  flags |= (label << 1);
+  flags |= (uint16_t)([GSFileMetadata finderColorForLabel:
+                         (GSFileLabel)label] << 1);
   [self _setFinderFlags: flags touching: GSFileFinderColorBits];
   _parsed.labelNumber = label;
 
@@ -630,8 +631,13 @@ enum {
                   format: NULL error: NULL] : nil;
   NSMutableArray *tags = [disk isKindOfClass: [NSArray class]]
     ? [[disk mutableCopy] autorelease] : [NSMutableArray array];
-  for (NSInteger l = GSFileLabelRed; l <= GSFileLabelGrey; l++)
-    [tags removeObject: [GSFileMetadata tagNameForLabel: (GSFileLabel)l]];
+  for (NSUInteger i = [tags count]; i > 0; i--)
+    {
+      id t = [tags objectAtIndex: i - 1];
+      if ([t isKindOfClass: [NSString class]]
+          && [GSFileMetadata labelForTagName: t] != GSFileLabelNone)
+        [tags removeObjectAtIndex: i - 1];
+    }
   NSString *tag = [GSFileMetadata tagNameForLabel:
                     (GSFileLabel)[self labelNumber]];
   if (tag)
@@ -663,8 +669,38 @@ enum {
     }
 }
 
+/* Finder colour number (index) -> GSFileLabel, from evidence E24. */
+static const GSFileLabel kLabelForFinderColor[8] = {
+  GSFileLabelNone, GSFileLabelGrey, GSFileLabelGreen, GSFileLabelPurple,
+  GSFileLabelBlue, GSFileLabelYellow, GSFileLabelRed, GSFileLabelOrange
+};
+
++ (GSFileLabel)labelForFinderColor:(NSUInteger)color
+{
+  return color < 8 ? kLabelForFinderColor[color] : GSFileLabelNone;
+}
+
++ (NSUInteger)finderColorForLabel:(GSFileLabel)label
+{
+  for (NSUInteger i = 1; i < 8; i++)
+    if (kLabelForFinderColor[i] == label)
+      return i;
+  return 0;
+}
+
 + (GSFileLabel)labelForTagName:(NSString *)tagName
 {
+  /* Later Finders store colour tags as "Name\nN" with the name localized,
+   * so only the number identifies the colour. */
+  NSRange nl = [tagName rangeOfString: @"\n"];
+  if (nl.location != NSNotFound)
+    {
+      NSString *num = [tagName substringFromIndex: NSMaxRange(nl)];
+      NSInteger color = [num integerValue];
+      if ([num length] == 1 && color >= 0 && color < 8)
+        return [self labelForFinderColor: (NSUInteger)color];
+      return GSFileLabelNone;
+    }
   if ([tagName isEqualToString: @"Gray"])   return GSFileLabelGrey;
   if ([tagName isEqualToString: @"Grey"])   return GSFileLabelGrey;
   if ([tagName isEqualToString: @"Green"])  return GSFileLabelGreen;

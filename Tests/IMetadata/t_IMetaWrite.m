@@ -336,7 +336,7 @@ int main(void)
     [fresh writeToFileAtPath: f error: NULL];
     uint8_t want[32];
     memcpy(want, pat, 32);
-    want[9] = 0x10 | (GSFileLabelRed << 1);
+    want[9] = 0x10 | 0x0C /* Red is Finder colour 6 (E24) */;
     PASS_EQUAL(xattrBytes(f, GSXATTR_FINDERINFO),
                [NSData dataWithBytes: want length: 32],
                "MI-META-10 a label change touches only the label bits");
@@ -347,7 +347,7 @@ int main(void)
                           autorelease];
     [l setExtensionHidden: NO];
     [l writeToFileAtPath: f error: NULL];
-    want[9] = (GSFileLabelRed << 1);
+    want[9] = 0x0C /* Red is Finder colour 6 (E24) */;
     PASS_EQUAL(xattrBytes(f, GSXATTR_FINDERINFO),
                [NSData dataWithBytes: want length: 32],
                "MI-META-10 a cleared flag clears just that bit");
@@ -364,7 +364,7 @@ int main(void)
     [s writeSidecarToFileAtPath: g error: NULL];
     GSFileMetadata *back = [GSFileMetadata metadataForFileAtPath: g
                                                     forceSidecar: YES];
-    want[9] = 0x10 | (GSFileLabelRed << 1);
+    want[9] = 0x10 | 0x0C /* Red is Finder colour 6 (E24) */;
     PASS_EQUAL([[back finderInfo] subdataWithRange: NSMakeRange(0, 32)],
                [NSData dataWithBytes: want length: 32],
                "MI-META-10 sidecar entry 9 keeps the bytes nobody changed");
@@ -419,7 +419,7 @@ int main(void)
   {
     uint8_t pat[32];
     for (int i = 0; i < 32; i++) pat[i] = (uint8_t)(0xA0 + i);
-    pat[8] = 0x40; pat[9] = 0x10 | (GSFileLabelRed << 1);   /* invisible, hidden ext, Red */
+    pat[8] = 0x40; pat[9] = 0x10 | 0x0C /* Red is Finder colour 6 (E24) */;   /* invisible, hidden ext, Red */
     NSString *f = [dir stringByAppendingPathComponent: @"clr.txt"];
     [fm createFileAtPath: f contents: [NSData data] attributes: nil];
     putXattr(f, GSXATTR_FINDERINFO, [NSData dataWithBytes: pat length: 32]);

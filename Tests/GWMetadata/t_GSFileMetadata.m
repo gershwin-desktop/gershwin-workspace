@@ -226,38 +226,56 @@ main(void)
          "labelNumber picks the standard colour tag among custom tags");
   }
 
-  /* --- GSFileLabel encoding is the shared order (1=Red..7=Grey): the same
-   * values as DSStoreLabelColor, so the .DS_Store lclr record and the
-   * FinderInfo fdFlags label never disagree --- */
+  /* --- GSFileLabel is the menu order (1=Red..7=Grey), shared with
+   * DSStoreLabelColor; the fdFlags colour field uses Finder's own numbers,
+   * read off a 10.6 Finder in evidence E24 (Orange 0x0E, Red 0x0C,
+   * Yellow 0x0A, Blue 0x08, Purple 0x06, Green 0x04, Grey 0x02) --- */
   {
-    GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
-
-    struct { NSInteger label; NSString *name; } order[] = {
-      { GSFileLabelRed,     @"Red" },
-      { GSFileLabelOrange,  @"Orange" },
-      { GSFileLabelYellow,  @"Yellow" },
-      { GSFileLabelGreen,   @"Green" },
-      { GSFileLabelBlue,    @"Blue" },
-      { GSFileLabelPurple,  @"Purple" },
-      { GSFileLabelGrey,    @"Gray" },
+    struct { NSInteger label; NSString *name; uint16_t bits; } e24[] = {
+      { GSFileLabelRed,     @"Red",    0x0C },
+      { GSFileLabelOrange,  @"Orange", 0x0E },
+      { GSFileLabelYellow,  @"Yellow", 0x0A },
+      { GSFileLabelGreen,   @"Green",  0x04 },
+      { GSFileLabelBlue,    @"Blue",   0x08 },
+      { GSFileLabelPurple,  @"Purple", 0x06 },
+      { GSFileLabelGrey,    @"Gray",   0x02 },
     };
-    NSUInteger n = sizeof(order) / sizeof(order[0]);
+    NSUInteger n = sizeof(e24) / sizeof(e24[0]);
     for (NSUInteger i = 0; i < n; i++)
       {
         GSFileMetadata *m = [[[GSFileMetadata alloc] init] autorelease];
-        [m setLabelNumber: order[i].label];
+        [m setLabelNumber: e24[i].label];
         NSString *tag = [[m userTags] objectAtIndex: 0];
-        BOOL ok = [tag isEqualToString: order[i].name]
-                  && [m labelNumber] == order[i].label;
+        BOOL ok = [tag isEqualToString: e24[i].name]
+                  && [m labelNumber] == e24[i].label;
         PASS(ok, "label %ld maps to its Finder tag name and round-trips",
-             (long)order[i].label);
-      }
+             (long)e24[i].label);
+        PASS(([m finderFlags] & GSFileFinderColorBits) == e24[i].bits,
+             "E24: %s is written as fdFlags colour %#x",
+             [e24[i].name UTF8String], e24[i].bits);
 
-    /* The raw fdFlags label bits must equal the GSFileLabel value (the
-     * shared encoding), so a label set here is readable by Finder. */
-    [md setLabelNumber: GSFileLabelRed];
-    PASS((([md finderFlags] >> 1) & 0x7) == GSFileLabelRed,
-         "fdFlags label bits equal GSFileLabelRed (shared Finder encoding)");
+        /* What 10.6 Finder wrote reads back as the label it showed. */
+        uint8_t fi[32] = {0};
+        fi[9] = (uint8_t)e24[i].bits;
+        GSFileMetadata *r = [[[GSFileMetadata alloc] init] autorelease];
+        [r setFinderInfo: [NSData dataWithBytes: fi length: 32]];
+        PASS([r labelNumber] == e24[i].label,
+             "E24: fdFlags colour %#x reads as %s", e24[i].bits,
+             [e24[i].name UTF8String]);
+      }
+  }
+
+  /* --- Tags written by later Finders carry Finder's colour number after a
+   * newline ("Red\n6"); the number decides, as for fdFlags --- */
+  {
+    PASS([GSFileMetadata labelForTagName: @"Red\n6"] == GSFileLabelRed,
+         "tag 'Red\\n6' is the red label");
+    PASS([GSFileMetadata labelForTagName: @"Gray\n1"] == GSFileLabelGrey,
+         "tag 'Gray\\n1' is the grey label");
+    PASS([GSFileMetadata labelForTagName: @"Rot\n6"] == GSFileLabelRed,
+         "a localized colour tag name is recognised by its number");
+    PASS([GSFileMetadata labelForTagName: @"Projekt\n0"] == GSFileLabelNone,
+         "a tag with colour number 0 is no label");
   }
 
   /* --- custom icon: setting icon data writes it to the resource fork and

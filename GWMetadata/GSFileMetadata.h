@@ -67,14 +67,15 @@ typedef NS_OPTIONS(uint16_t, GSFileFinderFlags) {
 };
 
 /*
- * Standard label colours (0-7), matching the on-disk encodings: the
- * FinderInfo fdFlags kColor field (bits 1-3) and the .DS_Store lclr
- * record both use 1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Blue, 6=Purple,
- * 7=Grey (see TN1150 "Finder Info":
- * https://developer.apple.com/library/archive/technotes/tn/tn1150.html,
- * and the Finder Interface Reference for the value-to-colour mapping).
- * GSFileLabel is deliberately identical to DSStoreLabelColor so the two
- * storage encodings never disagree.
+ * Standard label colours (0-7) in menu order: 1=Red, 2=Orange, 3=Yellow,
+ * 4=Green, 5=Blue, 6=Purple, 7=Grey.  GSFileLabel is deliberately identical
+ * to DSStoreLabelColor, and every label API of this class speaks it.
+ *
+ * The FinderInfo fdFlags kColor field (bits 1-3) does NOT use these values
+ * but Finder's own colour numbers, observed on a 10.6 Finder (evidence E24)
+ * and used by NSURLLabelNumberKey and the "Name\nN" tags of later systems:
+ * 1=Grey, 2=Green, 3=Purple, 4=Blue, 5=Yellow, 6=Red, 7=Orange.
+ * +labelForFinderColor: / +finderColorForLabel: are the only conversion.
  */
 typedef NS_ENUM(NSInteger, GSFileLabel) {
   GSFileLabelNone    = 0,
@@ -263,8 +264,17 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  *  or nil for GSFileLabelNone. */
 + (NSString *)tagNameForLabel:(GSFileLabel)label;
 
-/** The label for a standard tag name, or GSFileLabelNone. */
+/** The label for a standard tag name, or GSFileLabelNone.  A tag with a
+ *  colour number ("Red\n6", as later Finders write) is decided by the
+ *  number, so localized names work too. */
 + (GSFileLabel)labelForTagName:(NSString *)tagName;
+
+/** The label for a FinderInfo fdFlags colour field value (0-7, i.e.
+ *  (fdFlags >> 1) & 7), which uses Finder's colour numbers (see above). */
++ (GSFileLabel)labelForFinderColor:(NSUInteger)color;
+
+/** The fdFlags colour field value (0-7) Finder shows as `label`. */
++ (NSUInteger)finderColorForLabel:(GSFileLabel)label;
 
 /* =================================================================
  * Read / Write

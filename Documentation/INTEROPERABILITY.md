@@ -156,7 +156,7 @@ layout (big-endian):
 | ----- | ------ | ----- |
 | Type code (`fdType`) | 0-3 | FourCharCode |
 | Creator code (`fdCreator`) | 4-7 | FourCharCode |
-| Flags (`fdFlags`) | 8-9 | bit 0 `kIsOnDesk`, bits 1-3 label colour (`kColor` = 0x000E), bit 7 `kHasCustomIcon`, bit 8 `kIsStationery`, bit 9 `kNameLocked`, bit 11 `kIsInvisible`, bit 12 `kIsAlias` |
+| Flags (`fdFlags`) | 8-9 | bit 0 `kIsOnDesk`, bits 1-3 label colour (`kColor` = 0x000E), bit 4 extension hidden (0x0010), bit 10 `kHasCustomIcon` (0x0400), bit 11 `kIsStationery`, bit 12 `kNameLocked` (0x1000), bit 14 `kIsInvisible` (0x4000), bit 15 `kIsAlias` (0x8000) |
 | Icon position (`fdLocation`) | v at 10-11, h at 12-13 | big-endian int16; (-1,-1) = none |
 | Extended info / `fdFldr` | 14-31 | carried forward untouched |
 
@@ -168,12 +168,18 @@ both" behaviour.  `(0,0)` and `(-1,-1)` are treated as "no position".
 
 ### Labels and tags
 
-- The label colour uses the **same numeric encoding** everywhere: the
-  `fdFlags` `kColor` field (bits 1-3), the `.DS_Store` `lclr` record, and
-  `GSFileLabel` / `DSStoreLabelColor` all agree on 1=Red, 2=Orange, 3=Yellow,
-  4=Green, 5=Blue, 6=Purple, 7=Grey (0=none).  `GSFileLabel` is deliberately
-  identical to `DSStoreLabelColor` so the two storage encodings never
-  disagree.
+- `GSFileLabel` (and `DSStoreLabelColor`, deliberately identical) number
+  the labels in menu order: 1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Blue,
+  6=Purple, 7=Grey (0=none).  Every label API of `GSFileMetadata` speaks
+  this order.
+- The `fdFlags` `kColor` field (bits 1-3) holds **Finder's colour number**
+  instead, read off a 10.6 Finder (evidence E24): 1=Grey, 2=Green,
+  3=Purple, 4=Blue, 5=Yellow, 6=Red, 7=Orange - so Red is `fdFlags` 0x000C,
+  Orange 0x000E.  The same numbers follow the newline in the colour tags of
+  later systems (`Red\n6`).  `+[GSFileMetadata labelForFinderColor:]` and
+  `+finderColorForLabel:` are the one conversion; nothing else may shift
+  label bits.  (AppleScript's `label index` is a third order, 1=Orange ..
+  7=Grey, equal to 8 minus the colour number; Workspace never stores it.)
 - Setting a label writes both the `fdFlags` bits **and** the matching
   standard tag in `com.apple.metadata:_kMDItemUserTags` (see section 5
   below).  Reading prefers `fdFlags`; if that is unset it falls back to the

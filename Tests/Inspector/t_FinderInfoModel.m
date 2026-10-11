@@ -140,7 +140,8 @@ int main(void)
   m = [FinderInfoModel modelForPath: p];
   m.labelNumber = 5;
   [m write: NULL];
-  PASS(((flagWord(p) >> 1) & 7) == 5, "MI-INS-6 label 5 in bits 1-3");
+  /* Label 5 is Blue, which Finder stores as colour 4 (evidence E24). */
+  PASS(((flagWord(p) >> 1) & 7) == 4, "MI-INS-6 label 5 (Blue) as Finder colour 4 in bits 1-3");
   PASS([FinderInfoModel modelForPath: p].labelNumber == 5, "MI-INS-6 read back");
   PASS((flagWord(p) & 0x0010) == 0x0010, "MI-INS-6 label edit keeps hidden-extension bit");
 
