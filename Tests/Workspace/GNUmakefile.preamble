@@ -34,6 +34,9 @@ t_AppImageProbeCache_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Curre
                                   -lFSNode -lgnustep-gui
 t_AppImageDirIconCycle_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                                     -lFSNode -lgnustep-gui
+# GWOpenItemAnimation.m asks FSNodeRep for the icon it animates.
+t_GWOpenItemAnimation_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                   -lFSNode -lgnustep-gui
 # Workspace is built without AppImage support when libsquashfs is missing
 # (configure.ac); the two tests then say so instead of failing to compile.
 # They follow configure's own decision (HAVE_SQUASHFS in Workspace/config.h)

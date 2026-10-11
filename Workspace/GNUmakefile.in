@@ -94,6 +94,7 @@ GWExtensionsManager.m \
 GWAlignLogically.m \
 GWTrashFlightPath.m \
 GWTrashFlight.m \
+GWOpenItemAnimation.m \
 Workspace.m \
 AppDataTrash.m \
 Workspace+UITesting.m \

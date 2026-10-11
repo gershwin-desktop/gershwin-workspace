@@ -80,6 +80,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWDockWindow.h"
 #import "Dock.h"
 #import "GWTrashFlight.h"
+#import "GWOpenItemAnimation.h"
 #import "GWViewersManager.h"
 #import "ViewOptions/GWViewOptionsPanel.h"
 #import "GWViewer.h"
@@ -2071,6 +2072,18 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
            * focused viewer's icon), everything else launches its app.  When
            * newv is NO, directories are not opened at all. */
           if (newv || [node isDirectory] == NO) {
+            /* A document or an application grows out of its icon and fades
+             * away; a folder has its own animation, its viewer growing out
+             * of the icon. */
+            if ([node isDirectory] == NO || [node isPackage]) {
+              NSRect iconRect;
+              NSWindow *iconWindow = [vwrsManager windowShowingIconOfNode: node
+                                                               screenRect: &iconRect];
+
+              [GWOpenItemAnimation playForNode: node
+                                      inWindow: iconWindow
+                                  atScreenRect: iconRect];
+            }
             [vwrsManager openNode: node fromViewer: nil];
           }
         }

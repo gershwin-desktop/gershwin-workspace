@@ -149,6 +149,10 @@
 // folder icon is right now.  A nil/NSZeroRect target means "no visible
 // representation - use a plain fade".
 - (NSRect)resolveIconScreenRectForNode:(FSNode *)node;
+/* The window in which `node`'s icon is shown (the desktop first, then the
+ * key viewer, then the others) and the icon's rect in screen coordinates,
+ * or nil and NSZeroRect when no visible window shows it. */
+- (NSWindow *)windowShowingIconOfNode:(FSNode *)node screenRect:(NSRect *)screenRect;
 
 /* Resolve the folder's current icon rect for @p aviewer's window and ask the
  * WindowManager to play the close animation toward it (shrink+fade), or a
