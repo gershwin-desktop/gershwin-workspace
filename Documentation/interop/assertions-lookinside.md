@@ -27,6 +27,7 @@ this round (see OPEN).
 - MI-LI-20 The open panel follows the selection (arrow keys, clicks in any folder window); an emptied selection keeps the last preview [S:Finder 10.6; emptied selection G]
 - MI-LI-24 A click on empty space in a folder window does not make the panel show that folder; the last item stays [G: Finder 10.6 shows the last item or nothing; the same rule as MI-LI-20]
 - MI-LI-25 Folder windows and the Desktop handle the space bar through one code path (`handleSpaceKeyWithCommand:...`), so Option-Space works on the Desktop too [G]
+- (no test id) On a session with Menu running, Option-Space (X Mod1+space, the same as Command-Space here) is grabbed by Menu's Action Search and never reaches Workspace; the Full Screen button and the Look Inside menu item are the reachable ways [observed 2026-10-12 slot uitest84]
 - MI-LI-4 With several items, the arrow keys step through them [S:Finder 10.6]
 - MI-LI-8 Stepping wraps around at both ends [G: no dead end]
 - MI-LI-5 Command-Return shows the overview of several items; Return in it shows the highlighted item; a click on an item shows it [G: own key; Finder has an index sheet]
