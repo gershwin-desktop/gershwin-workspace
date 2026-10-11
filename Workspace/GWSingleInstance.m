@@ -4,6 +4,10 @@
  * SPDX-License-Identifier: BSD-2-Clause OR GPL-2.0-or-later
  */
 
+/* The Windows build has no X server and no POSIX signals, and main()
+   only claims the display on other systems. */
+#ifndef _WIN32
+
 #include "GWSingleInstance.h"
 
 #include <X11/Xlib.h>
@@ -137,3 +141,5 @@ int GWSingleInstanceClaimDisplay(void)
   XFlush(dpy);
   return 1;
 }
+
+#endif /* !_WIN32 */

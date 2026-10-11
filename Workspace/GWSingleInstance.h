@@ -7,6 +7,8 @@
 #ifndef GWSINGLEINSTANCE_H
 #define GWSINGLEINSTANCE_H
 
+#ifndef _WIN32
+
 #include <sys/types.h>
 
 /* Name of the per-screen selection a running Workspace owns.  Not WM_Sn:
@@ -23,5 +25,7 @@ pid_t GWSingleInstanceVictim(pid_t ownerPID, pid_t ownPID);
  * the selection on every screen for the life of the process.  Returns NO
  * (with a message on stderr) when the display cannot be used. */
 int GWSingleInstanceClaimDisplay(void);
+
+#endif /* !_WIN32 */
 
 #endif
