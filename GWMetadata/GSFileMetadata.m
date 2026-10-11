@@ -15,14 +15,6 @@
  * Marker used for "no position" in FinderInfo fdLocation.
  * When both v and h are -1 (0xFFFF) it means "not positioned".
  */
-/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
-   library calls here take narrow strings, so use the UTF-8 form there. On
-   the other platforms this is the plain -fileSystemRepresentation call. */
-#ifdef _WIN32
-#define GW_FSREP(path) [(path) UTF8String]
-#else
-#define GW_FSREP(path) [(path) fileSystemRepresentation]
-#endif
 
 #define GS_NO_ICON_POSITION  ((int16_t)(-1))
 

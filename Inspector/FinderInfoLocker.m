@@ -105,8 +105,10 @@ int FinderInfoLockHelperMain(const char *argsPlistPath)
   } else {
     /* Through sudo the caller is not root: it may only touch its own files.
      * Started as root directly there is no one to protect from. */
+#if !defined(_WIN32)
     if (geteuid() == 0 && sudoUid != NULL)
       owner = strtol(sudoUid, NULL, 10);
+#endif
     if (FinderInfoApplyImmutable(path, [flag boolValue], owner, &failure))
       status = 0;
   }
@@ -173,7 +175,7 @@ int FinderInfoLockHelperMain(const char *argsPlistPath)
   }
   return YES;
 }
-#else
+#elif !defined(_WIN32)
 - (BOOL)setImmutable:(BOOL)immutable atPath:(NSString *)path error:(NSError **)error
 {
   NSString *executable = [[NSBundle mainBundle] executablePath];
@@ -237,6 +239,15 @@ int FinderInfoLockHelperMain(const char *argsPlistPath)
       : @"The administrator authorization was refused or failed.");
   }
   return ok;
+}
+#else
+/* Windows has neither an immutable file flag nor sudo; Locked is refused
+ * there instead of pretending to work. */
+- (BOOL)setImmutable:(BOOL)immutable atPath:(NSString *)path error:(NSError **)error
+{
+  if (error)
+    *error = textError(@"Locking files is not supported on this system.");
+  return NO;
 }
 #endif
 
