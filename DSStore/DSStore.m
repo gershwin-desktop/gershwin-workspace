@@ -37,6 +37,7 @@ BOOL gDSStoreVerbose = NO;
     // Initialize with provided entries
     if (entries) {
         [store->_entries addObjectsFromArray:entries];
+        DESTROY(store->_entryIndex);
     }
     
     store->_isLoaded = YES;
@@ -57,6 +58,7 @@ BOOL gDSStoreVerbose = NO;
     [_filePath release];
     [_allocator release];
     [_entries release];
+    [_entryIndex release];
     [_visitedBTreeBlocks release];
     [super dealloc];
 }
@@ -188,6 +190,7 @@ BOOL gDSStoreVerbose = NO;
     
     
     [_entries removeAllObjects];
+    DESTROY(_entryIndex);
     
     if (recordsNumber == 0) {
         [dsdbBlock close];
@@ -258,6 +261,18 @@ BOOL gDSStoreVerbose = NO;
     }
 }
 
+/* A value length that runs past its b-tree node means the store is corrupt;
+ * reading on would invent bytes and save them back, so loading stops. */
+static NSData *readValueBytes(DSBuddyBlock *block, uint64_t length)
+{
+    if (length > [block bytesLeft]) {
+        [NSException raise:NSInternalInconsistencyException
+                    format:@"DSStore: record value of %llu bytes overruns its node",
+                           (unsigned long long)length];
+    }
+    return [block readBytes:(NSUInteger)length];
+}
+
 /* Reads one record (filename + code + type + value) and advances the
  * block position.  Returns an autoreleased DSStoreEntry, or nil on a bad
  * record length. */
@@ -284,19 +299,19 @@ BOOL gDSStoreVerbose = NO;
     } else if ([type isEqualToString:@"long"]) {
         value = [NSNumber numberWithUnsignedInt:[block readUInt32]];
     } else if ([type isEqualToString:@"shor"]) {
-        value = [NSNumber numberWithUnsignedShort:[block readUInt16]];
+        /* A shor takes four bytes on disk, the value in the low two; reading
+         * two left every later record of the node misaligned and lost. */
+        value = [NSNumber numberWithUnsignedShort:(uint16_t)[block readUInt32]];
     } else if ([type isEqualToString:@"blob"]) {
+        /* The bytes are consumed whatever their length: skipping them would
+         * misalign the rest of the node. */
         uint32_t blobLen = [block readUInt32];
-        if (blobLen > 0 && blobLen < 65536) {
-            value = [block readBytes:blobLen];
-        }
+        value = readValueBytes(block, blobLen);
     } else if ([type isEqualToString:@"ustr"]) {
         uint32_t strLen = [block readUInt32];
-        if (strLen > 0 && strLen < 1024) {
-            NSData *strData = [block readBytes:strLen * 2];
-            value = [[[NSString alloc] initWithData:strData
-                                           encoding:NSUTF16BigEndianStringEncoding] autorelease];
-        }
+        NSData *strData = readValueBytes(block, (uint64_t)strLen * 2);
+        value = [[[NSString alloc] initWithData:strData
+                                       encoding:NSUTF16BigEndianStringEncoding] autorelease];
     } else if ([type isEqualToString:@"type"]) {
         value = [[[NSString alloc] initWithData:[block readBytes:4]
                                        encoding:NSASCIIStringEncoding] autorelease];
@@ -304,9 +319,7 @@ BOOL gDSStoreVerbose = NO;
         value = [NSNumber numberWithUnsignedLongLong:[block readUInt64]];
     } else {
         uint32_t valueLen = [block readUInt32];
-        if (valueLen > 0 && valueLen < 65536) {
-            value = [block readBytes:valueLen];
-        }
+        value = readValueBytes(block, valueLen);
     }
 
     return [[[DSStoreEntry alloc] initWithFilename:filename
@@ -353,6 +366,7 @@ BOOL gDSStoreVerbose = NO;
             DSStoreEntry *pivot = [self _readRecord:block];
             if (pivot) {
                 [_entries addObject:pivot];
+                DESTROY(_entryIndex);
             }
         }
         if (nextNode != 0) {
@@ -377,6 +391,7 @@ BOOL gDSStoreVerbose = NO;
             DSStoreEntry *entry = [self _readRecord:block];
             if (entry) {
                 [_entries addObject:entry];
+                DESTROY(_entryIndex);
             }
         }
     }
@@ -434,7 +449,11 @@ BOOL gDSStoreVerbose = NO;
             NSMutableArray *node = [NSMutableArray array];
             for (DSStoreEntry *e in currentLevel) {
                 uint32_t newTotal = total + ptrSize + (uint32_t)[e byteLength];
-                if (newTotal > pageSize) {
+                /* A record larger than a page gets a node of its own (nodes
+                 * are allocated at their real size); splitting before it
+                 * left it out of the tree, so a save silently dropped it.
+                 * Whether Finder takes such a node is OPEN. */
+                if (newTotal > pageSize && [node count] > 0) {
                     [nodesArr addObject:node];
                     [nextLevel addObject:e];
                     total = 8;
@@ -444,7 +463,24 @@ BOOL gDSStoreVerbose = NO;
                     [node addObject:e];
                 }
             }
-            if ([node count]) [nodesArr addObject:node];
+            if ([node count]) {
+                [nodesArr addObject:node];
+            } else if ([nextLevel count] >= [nodesArr count] && [nodesArr count] > 0) {
+                /* The last record split the level and nothing followed it:
+                 * as a pivot it would have no right child and was lost on
+                 * save.  It becomes a node of its own, and the record before
+                 * it the pivot; a node of a single record takes it in. */
+                DSStoreEntry *orphan = [nextLevel lastObject];
+                NSMutableArray *last = [nodesArr lastObject];
+                [nextLevel removeLastObject];
+                if ([last count] > 1) {
+                    [nextLevel addObject:[last lastObject]];
+                    [last removeLastObject];
+                    [nodesArr addObject:[NSMutableArray arrayWithObject:orphan]];
+                } else {
+                    [last addObject:orphan];
+                }
+            }
             nodeCount += [nodesArr count];
             [levelNodes addObject:nodesArr];
             if ([nodesArr count] == 1) break;
@@ -554,18 +590,33 @@ BOOL gDSStoreVerbose = NO;
     return YES;
 }
 
+/* The index key of a record.  Codes are four characters, so the code in
+ * front keeps keys apart whatever the file name holds; an NSArray key would
+ * not do, its -hash is its count. */
+static NSString *entryKey(NSString *filename, NSString *code)
+{
+    return [code stringByAppendingString:filename];
+}
+
 - (DSStoreEntry *)entryForFilename:(NSString *)filename code:(NSString *)code {
     if (!_isLoaded) {
         [self load];
     }
     
-    for (DSStoreEntry *entry in _entries) {
-        if ([[entry filename] isEqualToString:filename] && 
-            [[entry code] isEqualToString:code]) {
-            return entry;
+    if (filename == nil || code == nil) {
+        return nil;
+    }
+    if (_entryIndex == nil) {
+        _entryIndex = [[NSMutableDictionary alloc] initWithCapacity:[_entries count]];
+        /* The first of duplicate records wins, as with the scan before. */
+        for (DSStoreEntry *entry in [_entries reverseObjectEnumerator]) {
+            if ([entry filename] && [entry code]) {
+                [_entryIndex setObject:entry
+                                forKey:entryKey([entry filename], [entry code])];
+            }
         }
     }
-    return nil;
+    return [_entryIndex objectForKey:entryKey(filename, code)];
 }
 
 - (void)setEntry:(DSStoreEntry *)entry {
@@ -580,6 +631,10 @@ BOOL gDSStoreVerbose = NO;
     }
     
     [_entries addObject:entry];
+    if ([entry filename] && [entry code]) {
+        [_entryIndex setObject:entry
+                        forKey:entryKey([entry filename], [entry code])];
+    }
     _dirty = YES;  // Mark as modified
 }
 
@@ -591,6 +646,7 @@ BOOL gDSStoreVerbose = NO;
     DSStoreEntry *entry = [self entryForFilename:filename code:code];
     if (entry) {
         [_entries removeObject:entry];
+        DESTROY(_entryIndex);
         _dirty = YES;  // Mark as modified
     }
 }
@@ -1215,6 +1271,22 @@ BOOL gDSStoreVerbose = NO;
         [_entries removeObject:entry];
         _dirty = YES;
     }
+    DESTROY(_entryIndex);
+}
+
+- (void)removeAllEntriesForFilenames:(NSSet *)filenames {
+    NSMutableArray *kept = [NSMutableArray arrayWithCapacity:[_entries count]];
+
+    for (DSStoreEntry *entry in _entries) {
+        if (![filenames containsObject:[entry filename]]) {
+            [kept addObject:entry];
+        }
+    }
+    if ([kept count] != [_entries count]) {
+        [_entries setArray:kept];
+        DESTROY(_entryIndex);
+        _dirty = YES;
+    }
 }
 
 - (void)removeEntriesForFilename:(NSString *)filename codes:(NSSet *)codes {
@@ -1231,6 +1303,7 @@ BOOL gDSStoreVerbose = NO;
         [_entries removeObject:entry];
         _dirty = YES;
     }
+    DESTROY(_entryIndex);
 }
 
 - (NSArray *)allFilenames {

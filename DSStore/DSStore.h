@@ -95,6 +95,10 @@ extern "C" {
     NSString *_filePath;
     DSBuddyAllocator *_allocator;
     NSMutableArray *_entries;
+    /* (filename, code) -> entry, built on the first lookup and dropped by
+     * every change but -setEntry:; without it writing a folder of thousands
+     * of icons scanned the whole list once per icon. */
+    NSMutableDictionary *_entryIndex;
     BOOL _isLoaded;
     BOOL _dirty;
     
@@ -131,6 +135,8 @@ extern "C" {
 - (void)setEntry:(DSStoreEntry *)entry;
 - (void)removeEntryForFilename:(NSString *)filename code:(NSString *)code;
 - (void)removeAllEntriesForFilename:(NSString *)filename;
+/* All records of every file in @p filenames, in one pass over the store. */
+- (void)removeAllEntriesForFilenames:(NSSet *)filenames;
 /* Remove every entry for @p filename whose code is in @p codes, keeping all
  * other codes (unknown or not owned by the caller).  Used for a cooperative
  * merge where only the caller's known records are replaced. */

@@ -86,6 +86,8 @@
 - (void)invalidate;
 
 - (NSUInteger)tell;
+/* Bytes between the read position and the end of the block. */
+- (NSUInteger)bytesLeft;
 - (void)seek:(NSUInteger)position;
 
 - (NSData *)readBytes:(NSUInteger)length;

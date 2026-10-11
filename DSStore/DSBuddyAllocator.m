@@ -474,6 +474,7 @@ static const uint8_t kHeaderTrailer[16] = {
 - (void)invalidate { _dirty = NO; }
 
 - (NSUInteger)tell { return _pos; }
+- (NSUInteger)bytesLeft { return _pos < _size ? _size - _pos : 0; }
 - (void)seek:(NSUInteger)position { _pos = position; }
 
 - (NSData *)readBytes:(NSUInteger)length
