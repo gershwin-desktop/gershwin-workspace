@@ -47,9 +47,7 @@
 
   unsigned long long filesize;
   NSDate *crDate;
-  NSString *crDateDescription;
   NSDate *modDate;
-  NSString *modDateDescription;
   unsigned long permissions;
   NSString *owner;
   NSNumber *ownerId;

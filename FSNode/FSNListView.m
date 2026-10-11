@@ -1339,39 +1339,7 @@ compareOptional(id a, id b)
                   relativeNames:(BOOL)relative
                         strings:(NSDictionary *)table
 {
-  NSTimeZone *zone = [NSTimeZone localTimeZone];
-  NSCalendarDate *day = [date dateWithCalendarFormat: nil timeZone: zone];
-  /* The wording, the order and the clock of a date are the language's, so
-   * they come from the strings table and not from code. */
-  NSString *(^word)(NSString *) = ^(NSString *key) {
-    NSString *found = [table objectForKey: key];
-    return found ? found : localized (key);
-  };
-  NSString *time = [day descriptionWithCalendarFormat: word (@"Time format")];
-
-  if (relative)
-    {
-      NSCalendarDate *today = [now dateWithCalendarFormat: nil timeZone: zone];
-      NSInteger difference = [today dayOfCommonEra] - [day dayOfCommonEra];
-      NSString *name = nil;
-
-      if (difference == 0)
-        {
-          name = word (@"Today");
-        }
-      else if (difference == 1)
-        {
-          name = word (@"Yesterday");
-        }
-
-      if (name)
-        {
-          return [NSString stringWithFormat: word (@"%@ at %@"), name, time];
-        }
-    }
-
-  return [NSString stringWithFormat: @"%@ %@",
-                   [day descriptionWithCalendarFormat: word (@"Date format")], time];
+  return FSNFinderDateDescription (date, now, relative, table);
 }
 
 + (CGFloat)rowHeightForTextSize:(CGFloat)points iconSize:(NSInteger)iconSize

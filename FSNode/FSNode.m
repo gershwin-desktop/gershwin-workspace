@@ -45,9 +45,7 @@
   RELEASE (fileType);
   RELEASE (typeDescription);
   RELEASE (crDate);
-  RELEASE (crDateDescription);
   RELEASE (modDate);
-  RELEASE (modDateDescription);
   RELEASE (owner);
   RELEASE (ownerId);
   RELEASE (group);
@@ -846,22 +844,16 @@
   return (crDate ? crDate : (NSDate *)[NSDate date]);
 }
 
+/* Not cached: "Today" turns into "Yesterday" at midnight. */
+static NSString *
+finderDateText(NSDate *date)
+{
+  return FSNFinderDateDescription (date, [NSDate date], YES, nil);
+}
+
 - (NSString *)crDateDescription
 {
-  NSDate *date = [self creationDate];
-  
-  if (date) {
-    if (crDateDescription == nil) {
-      NSString *descr = [date descriptionWithCalendarFormat: @"%b %d %Y" 
-                            timeZone: [NSTimeZone localTimeZone] locale: nil];
-
-      ASSIGN (crDateDescription, descr);   
-    }
-
-    return crDateDescription;
-  }
-
-  return [NSString string];
+  return finderDateText ([self creationDate]);
 }
 
 - (NSDate *)modificationDate
@@ -876,18 +868,7 @@
 
 - (NSString *)modDateDescription
 {
-  NSDate *date = [self modificationDate];
-
-  if (date) {
-    if (modDateDescription == nil) {
-      NSString *descr = [date descriptionWithCalendarFormat: @"%b %d %Y %H:%M" 
-                            timeZone: [NSTimeZone localTimeZone] locale: nil];
-      ASSIGN (modDateDescription, descr);   
-    }
-    return modDateDescription;
-  }
-
-  return [NSString string];
+  return finderDateText ([self modificationDate]);
 }
 
 - (unsigned long long)fileSize

@@ -163,4 +163,12 @@ NSEvent *FSNNextMouseUpOrDraggedEvent(NSWindow *window);
  * it, ahead of anything that arrived behind it. */
 void FSNPutBackDequeuedEvent(NSWindow *window, NSEvent *event);
 
+/* The date as Finder words it: "Today at 2:05 PM" / "Heute, 14:05" when
+ * relative is YES and date is on today's or yesterday's day (local time zone)
+ * relative to now, otherwise the short date and time of the language.  The
+ * words and formats come from table when it has the key, else from the
+ * framework's Localizable.strings.  The single source of date wording. */
+NSString *FSNFinderDateDescription(NSDate *date, NSDate *now, BOOL relative,
+                                   NSDictionary *table);
+
 #endif // FSN_FUNCTIONS_H
