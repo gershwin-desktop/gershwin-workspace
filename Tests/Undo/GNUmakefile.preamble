@@ -1,0 +1,23 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+
+ADDITIONAL_OBJCFLAGS += -Wno-deprecated
+ADDITIONAL_INCLUDE_DIRS += -I../../Operation -I../../FSNode -I../../GWMetadata -I../../DSStore
+
+# The undo model and the operation pipeline it drives, linked as sources so
+# the tools run what was just built.  The metadata and .DS_Store libraries
+# and the FSNode framework (FSNAlias) are linked from the build tree, by
+# path and with an old-style RPATH, so that neither the installed copies
+# nor a second copy of their classes are loaded.
+comma := ,
+UNDO_SOURCES = ../../Operation/GWFileUndoRecord.m \
+               ../../Operation/GWFileUndoStack.m \
+               ../../Operation/Operation.m \
+               ../../Operation/FileOpInfo.m \
+               ../../Operation/Functions.m \
+               ../../Operation/GWMetadataCopier.m
+UNDO_LIB_DIRS = $(CURDIR)/../../FSNode/FSNode.framework/Versions/Current \
+                $(CURDIR)/../../GSMetadata/obj \
+                $(CURDIR)/../../DSStore/obj
+$(foreach t,$(TEST_TOOL_NAME),$(eval $(t)_OBJC_FILES += $(UNDO_SOURCES)))
+$(foreach t,$(TEST_TOOL_NAME),$(eval $(t)_TOOL_LIBS += $(addprefix -L,$(UNDO_LIB_DIRS)) -lFSNode -lGSMetadata -lDSStore -lgnustep-gui -ldispatch))
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags $(addprefix -Wl$(comma)-rpath$(comma),$(UNDO_LIB_DIRS))

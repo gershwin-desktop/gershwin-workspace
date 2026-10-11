@@ -1449,3 +1449,23 @@
 "No" = "Nee";
 
 "OK" = "OK";
+
+/* Edit > Undo and Redo of file operations */
+"Undo %@" = "Herstel %@";
+"Redo %@" = "Opnieuw: %@";
+"Move of \"%@\"" = "verplaatsen van \"%@\"";
+"Move of %lu Items" = "verplaatsen van %lu onderdelen";
+"Copy of \"%@\"" = "kopiëren van \"%@\"";
+"Copy of %lu Items" = "kopiëren van %lu onderdelen";
+"Duplicate of \"%@\"" = "dupliceren van \"%@\"";
+"Duplicate of %lu Items" = "dupliceren van %lu onderdelen";
+"Move of \"%@\" to Trash" = "verplaatsen van \"%@\" naar de prullenmand";
+"Move of %lu Items to Trash" = "verplaatsen van %lu onderdelen naar de prullenmand";
+"Make Alias of \"%@\"" = "aanmaken van alias van \"%@\"";
+"Make Alias of %lu Items" = "aanmaken van aliassen van %lu onderdelen";
+"Rename of \"%@\"" = "wijzigen van naam van \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "Er bestaat al een onderdeel met de naam \"%@\" in \"%@\".";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" in \"%@\" is vervangen door een ander onderdeel.";
+"\"%@\" can no longer be found in \"%@\"." = "\"%@\" is niet meer te vinden in \"%@\".";
+"The operation cannot be undone." = "De bewerking kan niet worden hersteld.";
+"The operation cannot be redone." = "De bewerking kan niet opnieuw worden uitgevoerd.";

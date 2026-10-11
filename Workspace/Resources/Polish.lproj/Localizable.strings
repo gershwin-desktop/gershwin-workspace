@@ -874,3 +874,26 @@ for";
 
 "Show Path Bar" = "Pokaż pasek ścieżki";
 "Show Status Bar" = "Pokaż pasek stanu";
+
+/* Edit > Undo and Redo of file operations */
+"Undo" = "Cofnij";
+"Redo" = "Powtórz";
+"New Folder" = "Nowy katalog";
+"Undo %@" = "Cofnij %@";
+"Redo %@" = "Powtórz %@";
+"Move of \"%@\"" = "przeniesienie \"%@\"";
+"Move of %lu Items" = "przeniesienie %lu rzeczy";
+"Copy of \"%@\"" = "kopiowanie \"%@\"";
+"Copy of %lu Items" = "kopiowanie %lu rzeczy";
+"Duplicate of \"%@\"" = "duplikowanie \"%@\"";
+"Duplicate of %lu Items" = "duplikowanie %lu rzeczy";
+"Move of \"%@\" to Trash" = "przeniesienie \"%@\" do Kosza";
+"Move of %lu Items to Trash" = "przeniesienie %lu rzeczy do Kosza";
+"Make Alias of \"%@\"" = "utworzenie aliasu \"%@\"";
+"Make Alias of %lu Items" = "utworzenie aliasów %lu rzeczy";
+"Rename of \"%@\"" = "zmianę nazwy \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "Rzecz o nazwie \"%@\" już istnieje w \"%@\".";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" w \"%@\" została zastąpiona inną rzeczą.";
+"\"%@\" can no longer be found in \"%@\"." = "Nie można już znaleźć \"%@\" w \"%@\".";
+"The operation cannot be undone." = "Nie można cofnąć operacji.";
+"The operation cannot be redone." = "Nie można powtórzyć operacji.";

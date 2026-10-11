@@ -1466,3 +1466,23 @@ for";
 "No" = "Não";
 
 "OK" = "OK";
+
+/* Edit > Undo and Redo of file operations */
+"Undo %@" = "Desfazer %@";
+"Redo %@" = "Refazer %@";
+"Move of \"%@\"" = "movimentação de \"%@\"";
+"Move of %lu Items" = "movimentação de %lu itens";
+"Copy of \"%@\"" = "cópia de \"%@\"";
+"Copy of %lu Items" = "cópia de %lu itens";
+"Duplicate of \"%@\"" = "duplicação de \"%@\"";
+"Duplicate of %lu Items" = "duplicação de %lu itens";
+"Move of \"%@\" to Trash" = "movimentação de \"%@\" para o Lixo";
+"Move of %lu Items to Trash" = "movimentação de %lu itens para o Lixo";
+"Make Alias of \"%@\"" = "criação de alias de \"%@\"";
+"Make Alias of %lu Items" = "criação de alias de %lu itens";
+"Rename of \"%@\"" = "mudança de nome de \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "Já existe um item chamado \"%@\" em \"%@\".";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" em \"%@\" foi substituído por outro item.";
+"\"%@\" can no longer be found in \"%@\"." = "\"%@\" já não se encontra em \"%@\".";
+"The operation cannot be undone." = "Não é possível desfazer a operação.";
+"The operation cannot be redone." = "Não é possível refazer a operação.";

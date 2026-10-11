@@ -1209,3 +1209,23 @@
 "Open in Workspace" = "In Workspace öffnen";
 "%lu More in Workspace" = "%lu weitere in Workspace";
 "No Items" = "Keine Objekte";
+
+/* Edit > Undo and Redo of file operations */
+"Undo %@" = "Widerrufen: %@";
+"Redo %@" = "Wiederholen: %@";
+"Move of \"%@\"" = "Bewegen von \"%@\"";
+"Move of %lu Items" = "Bewegen von %lu Objekten";
+"Copy of \"%@\"" = "Kopieren von \"%@\"";
+"Copy of %lu Items" = "Kopieren von %lu Objekten";
+"Duplicate of \"%@\"" = "Duplizieren von \"%@\"";
+"Duplicate of %lu Items" = "Duplizieren von %lu Objekten";
+"Move of \"%@\" to Trash" = "Bewegen von \"%@\" in den Papierkorb";
+"Move of %lu Items to Trash" = "Bewegen von %lu Objekten in den Papierkorb";
+"Make Alias of \"%@\"" = "Erstellen eines Alias von \"%@\"";
+"Make Alias of %lu Items" = "Erstellen von Aliassen von %lu Objekten";
+"Rename of \"%@\"" = "Umbenennen von \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "Ein Objekt namens \"%@\" ist in \"%@\" bereits vorhanden.";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" in \"%@\" wurde durch ein anderes Objekt ersetzt.";
+"\"%@\" can no longer be found in \"%@\"." = "\"%@\" ist in \"%@\" nicht mehr vorhanden.";
+"The operation cannot be undone." = "Der Vorgang kann nicht widerrufen werden.";
+"The operation cannot be redone." = "Der Vorgang kann nicht wiederholt werden.";

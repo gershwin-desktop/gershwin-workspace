@@ -1445,3 +1445,23 @@
 
 "OS" = "Système d'exploitation";
 
+
+/* Edit > Undo and Redo of file operations */
+"Undo %@" = "Annuler %@";
+"Redo %@" = "Rétablir %@";
+"Move of \"%@\"" = "le déplacement de « %@ »";
+"Move of %lu Items" = "le déplacement de %lu éléments";
+"Copy of \"%@\"" = "la copie de « %@ »";
+"Copy of %lu Items" = "la copie de %lu éléments";
+"Duplicate of \"%@\"" = "la duplication de « %@ »";
+"Duplicate of %lu Items" = "la duplication de %lu éléments";
+"Move of \"%@\" to Trash" = "le placement de « %@ » dans la corbeille";
+"Move of %lu Items to Trash" = "le placement de %lu éléments dans la corbeille";
+"Make Alias of \"%@\"" = "la création d'un alias de « %@ »";
+"Make Alias of %lu Items" = "la création d'alias de %lu éléments";
+"Rename of \"%@\"" = "le changement de nom de « %@ »";
+"An item named \"%@\" already exists in \"%@\"." = "Un élément nommé « %@ » existe déjà dans « %@ ».";
+"\"%@\" in \"%@\" has been replaced by another item." = "« %@ » dans « %@ » a été remplacé par un autre élément.";
+"\"%@\" can no longer be found in \"%@\"." = "« %@ » est introuvable dans « %@ ».";
+"The operation cannot be undone." = "L'opération ne peut pas être annulée.";
+"The operation cannot be redone." = "L'opération ne peut pas être rétablie.";

@@ -7,11 +7,14 @@ ADDITIONAL_INCLUDE_DIRS += -I../../Operation -I../../FSNode -I../../GWMetadata -
 # operation constants) plus FSNAlias (from the FSNode framework, used by
 # FileOpExecutor's alias path) and Functions.m (relativePathFittingInField,
 # referenced - even though not called on this test's path - by symbol, so it
-# must link).  Link the built FSNode framework by path so the tool exercises
-# what was just built, not the installed copy.
+# must link), and the undo history FileOpInfo reports finished operations
+# to.  Link the built FSNode framework by path so the tool exercises what
+# was just built, not the installed copy.
 t_FileOpInfoRemoveProcessedFiles_OBJC_FILES += ../../Operation/FileOpInfo.m \
                                                ../../Operation/Functions.m \
                                                ../../Operation/GWMetadataCopier.m \
+                                               ../../Operation/GWFileUndoStack.m \
+                                               ../../Operation/GWFileUndoRecord.m \
                                                ../../GWMetadata/GSAppleDouble.m \
                                                ../../GWMetadata/GWMetaXattr.m \
                                                ../../GWMetadata/GSFileMetadata.m \

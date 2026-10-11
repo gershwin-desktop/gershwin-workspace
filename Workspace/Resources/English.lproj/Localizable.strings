@@ -1161,3 +1161,23 @@
 
 "Show Path Bar" = "Show Path Bar";
 "Show Status Bar" = "Show Status Bar";
+
+/* Edit > Undo and Redo of file operations */
+"Undo %@" = "Undo %@";
+"Redo %@" = "Redo %@";
+"Move of \"%@\"" = "Move of \"%@\"";
+"Move of %lu Items" = "Move of %lu Items";
+"Copy of \"%@\"" = "Copy of \"%@\"";
+"Copy of %lu Items" = "Copy of %lu Items";
+"Duplicate of \"%@\"" = "Duplicate of \"%@\"";
+"Duplicate of %lu Items" = "Duplicate of %lu Items";
+"Move of \"%@\" to Trash" = "Move of \"%@\" to Trash";
+"Move of %lu Items to Trash" = "Move of %lu Items to Trash";
+"Make Alias of \"%@\"" = "Make Alias of \"%@\"";
+"Make Alias of %lu Items" = "Make Alias of %lu Items";
+"Rename of \"%@\"" = "Rename of \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "An item named \"%@\" already exists in \"%@\".";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" in \"%@\" has been replaced by another item.";
+"\"%@\" can no longer be found in \"%@\"." = "\"%@\" can no longer be found in \"%@\".";
+"The operation cannot be undone." = "The operation cannot be undone.";
+"The operation cannot be redone." = "The operation cannot be redone.";

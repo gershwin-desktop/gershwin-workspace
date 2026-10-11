@@ -203,6 +203,7 @@
                            usewindow: usewin
                              winrect: [self rectForFileOpWindow]
                           controller: self];
+  [info setUndoRole: [opdict objectForKey: GWFileUndoRoleKey]];
   
   [fileOperations insertObject: info atIndex: [fileOperations count]];
   [info startOperation];

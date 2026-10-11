@@ -685,3 +685,26 @@ for";
 
 "Show Path Bar" = "Afișează bara de cale";
 "Show Status Bar" = "Afișează bara de stare";
+
+/* Edit > Undo and Redo of file operations */
+"Undo" = "Anulează";
+"Redo" = "Refă";
+"New Folder" = "Dosar nou";
+"Undo %@" = "Anulează %@";
+"Redo %@" = "Refă %@";
+"Move of \"%@\"" = "mutarea \"%@\"";
+"Move of %lu Items" = "mutarea a %lu articole";
+"Copy of \"%@\"" = "copierea \"%@\"";
+"Copy of %lu Items" = "copierea a %lu articole";
+"Duplicate of \"%@\"" = "duplicarea \"%@\"";
+"Duplicate of %lu Items" = "duplicarea a %lu articole";
+"Move of \"%@\" to Trash" = "mutarea \"%@\" în Coș";
+"Move of %lu Items to Trash" = "mutarea a %lu articole în Coș";
+"Make Alias of \"%@\"" = "crearea aliasului pentru \"%@\"";
+"Make Alias of %lu Items" = "crearea aliasurilor pentru %lu articole";
+"Rename of \"%@\"" = "redenumirea \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "Un articol numit \"%@\" există deja în \"%@\".";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" din \"%@\" a fost înlocuit de alt articol.";
+"\"%@\" can no longer be found in \"%@\"." = "\"%@\" nu mai poate fi găsit în \"%@\".";
+"The operation cannot be undone." = "Operația nu poate fi anulată.";
+"The operation cannot be redone." = "Operația nu poate fi refăcută.";

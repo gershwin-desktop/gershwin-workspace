@@ -777,3 +777,25 @@
 
 "Show Path Bar" = "Útvonalsáv megjelenítése";
 "Show Status Bar" = "Állapotsor megjelenítése";
+
+/* Edit > Undo and Redo of file operations */
+"Undo" = "Visszavonás";
+"Redo" = "Ismét";
+"Undo %@" = "Visszavonás: %@";
+"Redo %@" = "Ismét: %@";
+"Move of \"%@\"" = "\"%@\" áthelyezése";
+"Move of %lu Items" = "%lu elem áthelyezése";
+"Copy of \"%@\"" = "\"%@\" másolása";
+"Copy of %lu Items" = "%lu elem másolása";
+"Duplicate of \"%@\"" = "\"%@\" duplikálása";
+"Duplicate of %lu Items" = "%lu elem duplikálása";
+"Move of \"%@\" to Trash" = "\"%@\" áthelyezése a Kukába";
+"Move of %lu Items to Trash" = "%lu elem áthelyezése a Kukába";
+"Make Alias of \"%@\"" = "\"%@\" álnevének létrehozása";
+"Make Alias of %lu Items" = "%lu elem álnevének létrehozása";
+"Rename of \"%@\"" = "\"%@\" átnevezése";
+"An item named \"%@\" already exists in \"%@\"." = "Már létezik \"%@\" nevű elem itt: \"%@\".";
+"\"%@\" in \"%@\" has been replaced by another item." = "A(z) \"%@\" elemet itt: \"%@\" egy másik elem váltotta fel.";
+"\"%@\" can no longer be found in \"%@\"." = "A(z) \"%@\" elem már nem található itt: \"%@\".";
+"The operation cannot be undone." = "A művelet nem vonható vissza.";
+"The operation cannot be redone." = "A művelet nem ismételhető meg.";

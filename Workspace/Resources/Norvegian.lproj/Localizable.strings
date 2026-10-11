@@ -775,3 +775,25 @@
 
 "Show Path Bar" = "Vis stilinje";
 "Show Status Bar" = "Vis statuslinje";
+
+/* Edit > Undo and Redo of file operations */
+"Undo" = "Angre";
+"Redo" = "Gjør om";
+"Undo %@" = "Angre %@";
+"Redo %@" = "Gjør om %@";
+"Move of \"%@\"" = "flytting av \"%@\"";
+"Move of %lu Items" = "flytting av %lu objekter";
+"Copy of \"%@\"" = "kopiering av \"%@\"";
+"Copy of %lu Items" = "kopiering av %lu objekter";
+"Duplicate of \"%@\"" = "duplisering av \"%@\"";
+"Duplicate of %lu Items" = "duplisering av %lu objekter";
+"Move of \"%@\" to Trash" = "flytting av \"%@\" til papirkurven";
+"Move of %lu Items to Trash" = "flytting av %lu objekter til papirkurven";
+"Make Alias of \"%@\"" = "oppretting av alias for \"%@\"";
+"Make Alias of %lu Items" = "oppretting av alias for %lu objekter";
+"Rename of \"%@\"" = "endring av navn på \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "Et objekt med navnet \"%@\" finnes allerede i \"%@\".";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" i \"%@\" er erstattet av et annet objekt.";
+"\"%@\" can no longer be found in \"%@\"." = "\"%@\" finnes ikke lenger i \"%@\".";
+"The operation cannot be undone." = "Handlingen kan ikke angres.";
+"The operation cannot be redone." = "Handlingen kan ikke gjøres om.";

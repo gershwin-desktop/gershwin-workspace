@@ -51,6 +51,8 @@
 
 - (void)cacheProcessedFiles:(NSData *)data;
 
+- (void)cacheCompletedItems:(NSData *)data;
+
 - (void)cleanUpExecutor;
 
 - (void)endOperation;
@@ -94,6 +96,9 @@
   NSMutableArray *dupfiles;
   NSMutableArray *procFiles;
   NSData *cachedProcessedFilesData;
+  NSMutableArray *completedItems;
+  NSString *undoRole;
+  BOOL undoReported;
   int ref;
   
   NSMutableDictionary *operationDict;
@@ -164,6 +169,17 @@
 
 - (void)cacheProcessedFiles:(NSData *)data;
 
+/* Adds what one executor run did, as an archived array of
+ * GWFileUndoRecord item dictionaries (a paused operation runs more than
+ * one executor). */
+- (void)cacheCompletedItems:(NSData *)data;
+
+- (NSArray *)completedItems;
+
+/* GWFileUndoRoleKey of the operation dictionary: tells the undo history
+ * whether this operation is a user action, an undo or a redo. */
+- (void)setUndoRole:(NSString *)role;
+
 - (void)cleanUpExecutor;
 
 - (void)endOperation;
@@ -206,6 +222,7 @@
   NSString *destination;
   NSMutableArray *files;
   NSMutableArray *procfiles;
+  NSMutableArray *doneitems;
   NSDictionary *fileinfo;
   NSString *filename;
   int fcount;
@@ -232,6 +249,8 @@
 - (oneway void)performOperation;
 
 - (NSData *)processedFiles;
+
+- (NSData *)completedItemsData;
 
 - (BOOL)moveItem:(NSString *)src to:(NSString *)dst;
 

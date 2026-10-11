@@ -952,3 +952,25 @@
 
 "Show Path Bar" = "Montri vojbreton";
 "Show Status Bar" = "Montri statobreton";
+
+/* Edit > Undo and Redo of file operations */
+"Undo" = "Malfari";
+"Redo" = "Refari";
+"Undo %@" = "Malfari %@";
+"Redo %@" = "Refari %@";
+"Move of \"%@\"" = "movon de \"%@\"";
+"Move of %lu Items" = "movon de %lu eroj";
+"Copy of \"%@\"" = "kopion de \"%@\"";
+"Copy of %lu Items" = "kopion de %lu eroj";
+"Duplicate of \"%@\"" = "duobligon de \"%@\"";
+"Duplicate of %lu Items" = "duobligon de %lu eroj";
+"Move of \"%@\" to Trash" = "movon de \"%@\" al la rubujo";
+"Move of %lu Items to Trash" = "movon de %lu eroj al la rubujo";
+"Make Alias of \"%@\"" = "kreon de kaŝnomo de \"%@\"";
+"Make Alias of %lu Items" = "kreon de kaŝnomoj de %lu eroj";
+"Rename of \"%@\"" = "alinomigon de \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "Ero nomita \"%@\" jam ekzistas en \"%@\".";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" en \"%@\" estis anstataŭigita per alia ero.";
+"\"%@\" can no longer be found in \"%@\"." = "\"%@\" ne plu troviĝas en \"%@\".";
+"The operation cannot be undone." = "La operacio ne povas esti malfarita.";
+"The operation cannot be redone." = "La operacio ne povas esti refarita.";

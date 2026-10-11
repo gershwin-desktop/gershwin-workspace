@@ -735,3 +735,25 @@
 
 "Show Path Bar" = "パスバーを表示";
 "Show Status Bar" = "ステータスバーを表示";
+
+/* Edit > Undo and Redo of file operations */
+"Undo" = "取り消す";
+"Redo" = "やり直す";
+"Undo %@" = "%@を取り消す";
+"Redo %@" = "%@をやり直す";
+"Move of \"%@\"" = "「%@」の移動";
+"Move of %lu Items" = "%lu項目の移動";
+"Copy of \"%@\"" = "「%@」のコピー";
+"Copy of %lu Items" = "%lu項目のコピー";
+"Duplicate of \"%@\"" = "「%@」の複製";
+"Duplicate of %lu Items" = "%lu項目の複製";
+"Move of \"%@\" to Trash" = "「%@」のゴミ箱への移動";
+"Move of %lu Items to Trash" = "%lu項目のゴミ箱への移動";
+"Make Alias of \"%@\"" = "「%@」のエイリアス作成";
+"Make Alias of %lu Items" = "%lu項目のエイリアス作成";
+"Rename of \"%@\"" = "「%@」の名前変更";
+"An item named \"%@\" already exists in \"%@\"." = "「%@」という名前の項目はすでに「%@」にあります。";
+"\"%@\" in \"%@\" has been replaced by another item." = "「%@」（「%@」内）は別の項目に置き換えられました。";
+"\"%@\" can no longer be found in \"%@\"." = "「%@」が「%@」に見つかりません。";
+"The operation cannot be undone." = "操作を取り消せません。";
+"The operation cannot be redone." = "操作をやり直せません。";

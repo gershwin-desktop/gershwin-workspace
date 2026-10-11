@@ -1350,3 +1350,24 @@ for";
 
 "OS" = "Sistema operativo";
 
+
+/* Edit > Undo and Redo of file operations */
+"New Folder" = "Nueva carpeta";
+"Undo %@" = "Deshacer %@";
+"Redo %@" = "Rehacer %@";
+"Move of \"%@\"" = "traslado de \"%@\"";
+"Move of %lu Items" = "traslado de %lu ítems";
+"Copy of \"%@\"" = "copia de \"%@\"";
+"Copy of %lu Items" = "copia de %lu ítems";
+"Duplicate of \"%@\"" = "duplicado de \"%@\"";
+"Duplicate of %lu Items" = "duplicado de %lu ítems";
+"Move of \"%@\" to Trash" = "traslado de \"%@\" a la Papelera";
+"Move of %lu Items to Trash" = "traslado de %lu ítems a la Papelera";
+"Make Alias of \"%@\"" = "creación de alias de \"%@\"";
+"Make Alias of %lu Items" = "creación de alias de %lu ítems";
+"Rename of \"%@\"" = "cambio de nombre de \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "Ya existe un ítem llamado \"%@\" en \"%@\".";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" en \"%@\" ha sido sustituido por otro ítem.";
+"\"%@\" can no longer be found in \"%@\"." = "\"%@\" ya no se encuentra en \"%@\".";
+"The operation cannot be undone." = "No se puede deshacer la operación.";
+"The operation cannot be redone." = "No se puede rehacer la operación.";

@@ -1410,3 +1410,23 @@
 
 "OS" = "Sistema operativo";
 
+
+/* Edit > Undo and Redo of file operations */
+"Undo %@" = "Annulla %@";
+"Redo %@" = "Ripeti %@";
+"Move of \"%@\"" = "spostamento di \"%@\"";
+"Move of %lu Items" = "spostamento di %lu elementi";
+"Copy of \"%@\"" = "copia di \"%@\"";
+"Copy of %lu Items" = "copia di %lu elementi";
+"Duplicate of \"%@\"" = "duplicazione di \"%@\"";
+"Duplicate of %lu Items" = "duplicazione di %lu elementi";
+"Move of \"%@\" to Trash" = "spostamento di \"%@\" nel Cestino";
+"Move of %lu Items to Trash" = "spostamento di %lu elementi nel Cestino";
+"Make Alias of \"%@\"" = "creazione alias di \"%@\"";
+"Make Alias of %lu Items" = "creazione alias di %lu elementi";
+"Rename of \"%@\"" = "rinomina di \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "Un elemento chiamato \"%@\" esiste già in \"%@\".";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" in \"%@\" è stato sostituito da un altro elemento.";
+"\"%@\" can no longer be found in \"%@\"." = "\"%@\" non si trova più in \"%@\".";
+"The operation cannot be undone." = "Impossibile annullare l'operazione.";
+"The operation cannot be redone." = "Impossibile ripetere l'operazione.";

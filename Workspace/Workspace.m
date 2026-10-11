@@ -1070,6 +1070,11 @@ static Workspace *gworkspace = nil;
   }
   
   fileOpsManager = [Operation new];
+  /* Undo and Redo run through the same controller as every file
+   * operation, so they get its progress window, locking and change
+   * notifications. */
+  [[GWFileUndoStack sharedStack] setPerformer: fileOpsManager];
+  [[GWFileUndoStack sharedStack] setTrashPath: trashPath];
   
   ddbd = nil;
   [self connectDDBd];
@@ -1789,12 +1794,27 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       return ([self _viewerForKeyWindow] != nil);
     }
 
+  /* File operations are undone application-wide, as in the Finder: the
+   * title names what would be undone or redone. */
+  if (sel_isEqual(action, @selector(undo:)))
+    {
+      GWFileUndoStack *stack = [GWFileUndoStack sharedStack];
+
+      [anItem setTitle: [stack undoMenuTitle]];
+      return [stack canUndo];
+    }
+  if (sel_isEqual(action, @selector(redo:)))
+    {
+      GWFileUndoStack *stack = [GWFileUndoStack sharedStack];
+
+      [anItem setTitle: [stack redoMenuTitle]];
+      return [stack canRedo];
+    }
+
   // === Window-level standard operations — forward to key window ===
   if (sel_isEqual(action, @selector(performClose:))
       || sel_isEqual(action, @selector(performMiniaturize:))
       || sel_isEqual(action, @selector(performZoom:))
-      || sel_isEqual(action, @selector(undo:))
-      || sel_isEqual(action, @selector(redo:))
       || sel_isEqual(action, @selector(toggleToolbarShown:)))
     {
       NSWindow *keyWindow = [NSApp keyWindow];
@@ -5697,12 +5717,26 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
 - (void)undo:(id)sender
 {
-  [self notImplemented:sender];
+  NSError *error = nil;
+
+  if ([[GWFileUndoStack sharedStack] undo: &error] == NO && error != nil)
+    {
+      NSRunAlertPanel(NSLocalizedString(@"The operation cannot be undone.", @""),
+                      @"%@", NSLocalizedString(@"OK", @""), nil, nil,
+                      [error localizedDescription]);
+    }
 }
 
 - (void)redo:(id)sender
 {
-  [self notImplemented:sender];
+  NSError *error = nil;
+
+  if ([[GWFileUndoStack sharedStack] redo: &error] == NO && error != nil)
+    {
+      NSRunAlertPanel(NSLocalizedString(@"The operation cannot be redone.", @""),
+                      @"%@", NSLocalizedString(@"OK", @""), nil, nil,
+                      [error localizedDescription]);
+    }
 }
 
 - (void)toggleHiddenFiles
