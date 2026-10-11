@@ -40,7 +40,7 @@
 #import "Dialogs/Dialogs.h"
 #ifdef HAVE_MDKIT
 #import "GWFindCriteria.h"
-#import "GWSavedSearch.h"
+#import <MDKit/GWSavedSearch.h>
 #endif
 
 #define CELLS_HEIGHT (28.0)

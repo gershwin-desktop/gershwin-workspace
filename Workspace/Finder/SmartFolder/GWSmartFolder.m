@@ -10,8 +10,8 @@
 #import "FSNodeRep.h"
 #import "FSNTextCell.h"
 #import "Finder.h"
-#import "GWSavedSearch.h"
-#import "GWSavedSearchRunner.h"
+#import <MDKit/GWSavedSearch.h>
+#import <MDKit/GWSavedSearchRunner.h>
 #import "AppearanceMetrics.h"
 
 /* Space between the window edge, the labels and the list. */

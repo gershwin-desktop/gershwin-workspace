@@ -216,8 +216,14 @@ endif
 
 # Smart folders (.savedSearch) are searched through MDKit
 ifeq ($(BUILD_GWMETADATA), 1)
-  ADDITIONAL_GUI_LIBS += -lMDKit
-  ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata/MDKit -IFinder/SmartFolder
+  # MDKit pulls in DBKit's path tree functions; name it so the link does not
+  # depend on the linker following MDKit's own dependencies.
+  ADDITIONAL_GUI_LIBS += -lMDKit -lDBKit
+  ADDITIONAL_LDFLAGS += -L../DBKit/obj
+  # MDKit headers come from derived_src as <MDKit/...>: the MDKit source
+  # directory has its own config.h, which would shadow Workspace's own
+  # config.h for every "config.h" include (HAVE_DBUS in the Dock).
+  ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata/MDKit/derived_src -IFinder/SmartFolder
   ADDITIONAL_CPPFLAGS += -DHAVE_MDKIT=1
   Workspace_OBJC_FILES += Finder/SmartFolder/GWSmartFolder.m
   Workspace_OBJC_FILES += Finder/SmartFolder/GWFindCriteria.m

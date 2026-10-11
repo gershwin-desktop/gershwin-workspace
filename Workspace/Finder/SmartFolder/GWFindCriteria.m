@@ -5,7 +5,7 @@
  */
 
 #import "GWFindCriteria.h"
-#import "GWSavedSearch.h"
+#import <MDKit/GWSavedSearch.h>
 
 /* The pop-up positions the Find modules store in "how" and "what". */
 enum { NameContains, NameIs, NameNotContains, NameStarts, NameEnds };
