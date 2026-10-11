@@ -1195,8 +1195,11 @@ static NSMutableDictionary *_metadataCache = nil;
     fork = [old resourceFork];
   NSData *tagsOut = [self _userTagsDataToWriteOver:
     [oldAttrs objectForKey: @"com.apple.metadata:_kMDItemUserTags"]];
-  NSData *fi = [self _finderInfoPatchedOver:
-    [old hasFinderInfo] ? [old finderInfo] : nil];
+  /* With no sidecar yet the FinderInfo lives in the xattr; an export that
+   * left it out would lose type, creator and flags on the other side. */
+  NSData *fiBase = [old hasFinderInfo] ? [old finderInfo]
+    : [self _xattrData: GSXATTR_FINDERINFO atPath: path];
+  NSData *fi = [self _finderInfoPatchedOver: fiBase];
   NSData *fresh = [self _appleDoubleDataWithFinderInfo: fi
                                           resourceFork: fork
                                                   tags: tagsOut];

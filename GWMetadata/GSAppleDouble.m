@@ -430,12 +430,14 @@ writeBE16(uint8_t *bytes, uint16_t value)
     }
   else
     {
-      fiLen = (finderInfo && [finderInfo length] > 0)
-            ? APPLEDOUBLE_FINFO_SIZE : 0;
+      /* Entry 9 is written even without FinderInfo (as zeros): 10.6
+       * copyfile refuses a sidecar holding only entry 2 and then drops the
+       * fork with it (evidence E17 e/f, E28). */
+      fiLen = APPLEDOUBLE_FINFO_SIZE;
       /* Bytes a foreign writer put behind the FinderInfo travel with it. */
-      if (fiLen && _finderInfoTail)
+      if (_finderInfoTail)
         fiLen += [_finderInfoTail length];
-      entryCount = (fiLen ? 1 : 0) + 1;   /* 9? + always-2 */
+      entryCount = 2;                     /* 9 + 2, exactly like macOS */
     }
   rfLen = resourceFork ? [resourceFork length] : 0;
 
@@ -519,7 +521,7 @@ writeBE16(uint8_t *bytes, uint16_t value)
         }
       dataCursor += fiLen;
     }
-  else if (fiLen)
+  else
     {
       writeBE32(bytes + descCursor, GSAppleDoubleFinderInfo);
       writeBE32(bytes + descCursor + 4, (uint32_t)dataCursor);
