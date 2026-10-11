@@ -271,12 +271,30 @@ int main(void)
       NSUInteger before;
 
       touch(@"A/same");
-      before = [[fm directoryContentsAtPath: P(@"A")] count];
+      before = 0;
+      {
+        NSEnumerator *e = [[fm directoryContentsAtPath: P(@"A")] objectEnumerator];
+        NSString *n;
+
+        while ((n = [e nextObject]) != nil)
+          if (![n hasPrefix: @"._"])
+            before++;
+      }
       NEED(PASS(perform(FSNWorkspaceCreateAliasOperation, P(@"A"), P(@"A"),
                         [NSArray arrayWithObject: @"same"]), "make alias in place finished"));
       PASS(exists(@"A/same"), "the original is still there");
-      PASS([[fm directoryContentsAtPath: P(@"A")] count] == before + 1,
-           "the alias was written next to it");
+      {
+        /* Where the folder has no extended attributes the alias also
+         * brings its ._ sidecar; count only the items themselves. */
+        NSUInteger items = 0;
+        NSEnumerator *e = [[fm directoryContentsAtPath: P(@"A")] objectEnumerator];
+        NSString *n;
+
+        while ((n = [e nextObject]) != nil)
+          if (![n hasPrefix: @"._"])
+            items++;
+        PASS(items == before + 1, "the alias was written next to it");
+      }
     }
   END_SET("make alias in the same folder keeps the original")
 
