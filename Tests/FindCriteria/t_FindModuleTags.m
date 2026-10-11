@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause OR GPL-3.0-or-later
  */
 #import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
 #import "Testing.h"
 #include <unistd.h>
 #import "GSFileMetadata.h"
@@ -46,6 +47,17 @@ int main(void)
   PASS(check(0, @"Red", tagged), "the colour suffix is not part of the name");
   PASS(!check(0, @"Taxes 2025", plain), "untagged file does not match");
   PASS(!check(1, @"", tagged), "an empty text matches nothing");
+
+  /* The controls are AppKit views: they need the shared NSApplication, and
+   * so a display; without one the model checks above still ran. */
+  if (getenv("DISPLAY") == NULL)
+    {
+      printf("no DISPLAY, skipping the control checks\n");
+      [fm removeFileAtPath: dir handler: nil];
+      [arp release];
+      return 0;
+    }
+  [NSApplication sharedApplication];
 
   {
     id m = [[FModuleTags alloc] initInterface];

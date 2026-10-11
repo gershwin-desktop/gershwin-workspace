@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause OR GPL-3.0-or-later
  */
 #import <Foundation/Foundation.h>
+#import <AppKit/AppKit.h>
 #import "Testing.h"
 #include <unistd.h>
 #import "GSFileMetadata.h"
@@ -48,6 +49,17 @@ int main(void)
   PASS(check(1, 6, plain), "is not red: plain file matches");
   PASS(check(0, 0, plain), "no label: plain file matches");
   PASS(!check(0, 1, red), "grey (1) is not red");
+
+  /* The controls are AppKit views: they need the shared NSApplication, and
+   * so a display; without one the model checks above still ran. */
+  if (getenv("DISPLAY") == NULL)
+    {
+      printf("no DISPLAY, skipping the control checks\n");
+      [fm removeFileAtPath: dir handler: nil];
+      [arp release];
+      return 0;
+    }
+  [NSApplication sharedApplication];
 
   /* the controls and their answer */
   {
