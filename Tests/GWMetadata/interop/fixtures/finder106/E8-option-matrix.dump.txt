@@ -1,0 +1,546 @@
+=== m_isz
+(none)
+m_isz icvp blob:
+    arrangeBy = none
+    backgroundColorBlue = 1.0
+    backgroundColorGreen = 1.0
+    backgroundColorRed = 1.0
+    backgroundType = 0
+    gridOffsetX = 0.0
+    gridOffsetY = 0.0
+    gridSpacing = 100.0
+    iconSize = 64.0
+    labelOnBottom = 1
+    showIconPreview = 1
+    showItemInfo = 0
+    textSize = 12.0
+    viewOptionsVersion = 0
+# xattrs
+=== m_ts
+(none)
+m_ts icvp blob:
+    arrangeBy = none
+    backgroundColorBlue = 1.0
+    backgroundColorGreen = 1.0
+    backgroundColorRed = 1.0
+    backgroundType = 0
+    gridOffsetX = 0.0
+    gridOffsetY = 0.0
+    gridSpacing = 100.0
+    iconSize = 48.0
+    labelOnBottom = 1
+    showIconPreview = 1
+    showItemInfo = 0
+    textSize = 11.0
+    viewOptionsVersion = 0
+# xattrs
+=== m_lp
+(none)
+m_lp icvp blob:
+    arrangeBy = none
+    backgroundColorBlue = 1.0
+    backgroundColorGreen = 1.0
+    backgroundColorRed = 1.0
+    backgroundType = 0
+    gridOffsetX = 0.0
+    gridOffsetY = 0.0
+    gridSpacing = 100.0
+    iconSize = 48.0
+    labelOnBottom = 0
+    showIconPreview = 1
+    showItemInfo = 0
+    textSize = 12.0
+    viewOptionsVersion = 0
+# xattrs
+=== m_arr
+(none)
+m_arr icvp blob:
+    arrangeBy = grid
+    backgroundColorBlue = 1.0
+    backgroundColorGreen = 1.0
+    backgroundColorRed = 1.0
+    backgroundType = 0
+    gridOffsetX = 0.0
+    gridOffsetY = 0.0
+    gridSpacing = 100.0
+    iconSize = 48.0
+    labelOnBottom = 1
+    showIconPreview = 1
+    showItemInfo = 0
+    textSize = 12.0
+    viewOptionsVersion = 0
+# xattrs
+=== m_info
+(none)
+m_info icvp blob:
+    arrangeBy = none
+    backgroundColorBlue = 1.0
+    backgroundColorGreen = 1.0
+    backgroundColorRed = 1.0
+    backgroundType = 0
+    gridOffsetX = 0.0
+    gridOffsetY = 0.0
+    gridSpacing = 100.0
+    iconSize = 48.0
+    labelOnBottom = 1
+    showIconPreview = 1
+    showItemInfo = 1
+    textSize = 12.0
+    viewOptionsVersion = 0
+# xattrs
+=== m_prev
+(none)
+m_prev icvp blob:
+    arrangeBy = none
+    backgroundColorBlue = 1.0
+    backgroundColorGreen = 1.0
+    backgroundColorRed = 1.0
+    backgroundType = 0
+    gridOffsetX = 0.0
+    gridOffsetY = 0.0
+    gridSpacing = 100.0
+    iconSize = 48.0
+    labelOnBottom = 1
+    showIconPreview = 0
+    showItemInfo = 0
+    textSize = 12.0
+    viewOptionsVersion = 0
+# xattrs
+=== m_bg
+(none)
+m_bg icvp blob:
+    arrangeBy = none
+    backgroundColorBlue = 0.0287831
+    backgroundColorGreen = 0.0
+    backgroundColorRed = 0.985948
+    backgroundType = 1
+    gridOffsetX = 0.0
+    gridOffsetY = 0.0
+    gridSpacing = 100.0
+    iconSize = 48.0
+    labelOnBottom = 1
+    showIconPreview = 1
+    showItemInfo = 0
+    textSize = 12.0
+    viewOptionsVersion = 0
+# xattrs
+=== m_tb
+(none)
+m_tb bwsp blob:
+    ShowPathbar = 0
+    ShowSidebar = 0
+    ShowStatusBar = 1
+    ShowToolbar = 0
+    SidebarWidth = 193
+    WindowBounds = {{203, 144}, {577, 401}}
+# xattrs
+=== m_sb
+(none)
+# xattrs
+=== m_bounds
+(none)
+m_bounds bwsp blob:
+    ShowPathbar = 0
+    ShowSidebar = 1
+    ShowStatusBar = 1
+    ShowToolbar = 1
+    SidebarWidth = 192
+    WindowBounds = {{200, 168}, {500, 422}}
+# xattrs
+=== m_sw
+(none)
+m_sw bwsp blob:
+    ShowPathbar = 0
+    ShowSidebar = 1
+    ShowStatusBar = 1
+    ShowToolbar = 1
+    SidebarWidth = 150
+    WindowBounds = {{220, 133}, {770, 437}}
+# xattrs
+=== m_list
+(none)
+# xattrs
+=== m_lsort
+(none)
+m_lsort lsvp blob:
+    calculateAllSizes = 0
+    columns =
+      comments =
+        ascending = 1
+        index = 7
+        visible = 0
+        width = 300
+      dateCreated =
+        ascending = 0
+        index = 2
+        visible = 0
+        width = 181
+      dateLastOpened =
+        ascending = 0
+        index = 8
+        visible = 0
+        width = 200
+      dateModified =
+        ascending = 0
+        index = 1
+        visible = 1
+        width = 181
+      kind =
+        ascending = 1
+        index = 4
+        visible = 1
+        width = 115
+      label =
+        ascending = 1
+        index = 5
+        visible = 0
+        width = 100
+      name =
+        ascending = 1
+        index = 0
+        visible = 1
+        width = 300
+      size =
+        ascending = 0
+        index = 3
+        visible = 1
+        width = 97
+      version =
+        ascending = 1
+        index = 6
+        visible = 0
+        width = 75
+    iconSize = 16.0
+    showIconPreview = 1
+    sortColumn = size
+    textSize = 12.0
+    useRelativeDates = 1
+    viewOptionsVersion = 0
+# xattrs
+=== m_lts
+(none)
+m_lts lsvp blob:
+    calculateAllSizes = 0
+    columns =
+      comments =
+        ascending = 1
+        index = 7
+        visible = 0
+        width = 300
+      dateCreated =
+        ascending = 0
+        index = 2
+        visible = 0
+        width = 181
+      dateLastOpened =
+        ascending = 0
+        index = 8
+        visible = 0
+        width = 200
+      dateModified =
+        ascending = 0
+        index = 1
+        visible = 1
+        width = 181
+      kind =
+        ascending = 1
+        index = 4
+        visible = 1
+        width = 115
+      label =
+        ascending = 1
+        index = 5
+        visible = 0
+        width = 100
+      name =
+        ascending = 1
+        index = 0
+        visible = 1
+        width = 300
+      size =
+        ascending = 0
+        index = 3
+        visible = 1
+        width = 97
+      version =
+        ascending = 1
+        index = 6
+        visible = 0
+        width = 75
+    iconSize = 16.0
+    showIconPreview = 1
+    sortColumn = name
+    textSize = 10.0
+    useRelativeDates = 1
+    viewOptionsVersion = 0
+# xattrs
+=== m_lis
+(none)
+m_lis lsvp blob:
+    calculateAllSizes = 0
+    columns =
+      comments =
+        ascending = 1
+        index = 7
+        visible = 0
+        width = 300
+      dateCreated =
+        ascending = 0
+        index = 2
+        visible = 0
+        width = 181
+      dateLastOpened =
+        ascending = 0
+        index = 8
+        visible = 0
+        width = 200
+      dateModified =
+        ascending = 0
+        index = 1
+        visible = 1
+        width = 181
+      kind =
+        ascending = 1
+        index = 4
+        visible = 1
+        width = 115
+      label =
+        ascending = 1
+        index = 5
+        visible = 0
+        width = 100
+      name =
+        ascending = 1
+        index = 0
+        visible = 1
+        width = 300
+      size =
+        ascending = 0
+        index = 3
+        visible = 1
+        width = 97
+      version =
+        ascending = 1
+        index = 6
+        visible = 0
+        width = 75
+    iconSize = 32.0
+    showIconPreview = 1
+    sortColumn = name
+    textSize = 12.0
+    useRelativeDates = 1
+    viewOptionsVersion = 0
+# xattrs
+=== m_lcs
+(none)
+m_lcs lsvp blob:
+    calculateAllSizes = 1
+    columns =
+      comments =
+        ascending = 1
+        index = 7
+        visible = 0
+        width = 300
+      dateCreated =
+        ascending = 0
+        index = 2
+        visible = 0
+        width = 181
+      dateLastOpened =
+        ascending = 0
+        index = 8
+        visible = 0
+        width = 200
+      dateModified =
+        ascending = 0
+        index = 1
+        visible = 1
+        width = 181
+      kind =
+        ascending = 1
+        index = 4
+        visible = 1
+        width = 115
+      label =
+        ascending = 1
+        index = 5
+        visible = 0
+        width = 100
+      name =
+        ascending = 1
+        index = 0
+        visible = 1
+        width = 300
+      size =
+        ascending = 0
+        index = 3
+        visible = 1
+        width = 97
+      version =
+        ascending = 1
+        index = 6
+        visible = 0
+        width = 75
+    iconSize = 16.0
+    showIconPreview = 1
+    sortColumn = name
+    textSize = 12.0
+    useRelativeDates = 1
+    viewOptionsVersion = 0
+# xattrs
+=== m_lrd
+(none)
+m_lrd lsvp blob:
+    calculateAllSizes = 0
+    columns =
+      comments =
+        ascending = 1
+        index = 7
+        visible = 0
+        width = 300
+      dateCreated =
+        ascending = 0
+        index = 2
+        visible = 0
+        width = 181
+      dateLastOpened =
+        ascending = 0
+        index = 8
+        visible = 0
+        width = 200
+      dateModified =
+        ascending = 0
+        index = 1
+        visible = 1
+        width = 181
+      kind =
+        ascending = 1
+        index = 4
+        visible = 1
+        width = 115
+      label =
+        ascending = 1
+        index = 5
+        visible = 0
+        width = 100
+      name =
+        ascending = 1
+        index = 0
+        visible = 1
+        width = 300
+      size =
+        ascending = 0
+        index = 3
+        visible = 1
+        width = 97
+      version =
+        ascending = 1
+        index = 6
+        visible = 0
+        width = 75
+    iconSize = 16.0
+    showIconPreview = 1
+    sortColumn = name
+    textSize = 12.0
+    useRelativeDates = 0
+    viewOptionsVersion = 0
+# xattrs
+=== m_lcw
+(none)
+# xattrs
+=== m_lcv
+(none)
+m_lcv LSVO bool: 1
+m_lcv lsvo blob: data:6c737631090010646e616d08646e616d012c01016d6f646400b502016173636400b5020070687973006102016b696e64007301016c61626c0064010073687672004b0100636d6d74012c0101
+m_lcv lsvt shor: 0
+# xattrs
+=== m_lci
+(none)
+m_lci lsvp blob:
+    calculateAllSizes = 0
+    columns =
+      comments =
+        ascending = 1
+        index = 7
+        visible = 0
+        width = 300
+      dateCreated =
+        ascending = 0
+        index = 2
+        visible = 0
+        width = 181
+      dateLastOpened =
+        ascending = 0
+        index = 8
+        visible = 0
+        width = 200
+      dateModified =
+        ascending = 0
+        index = 1
+        visible = 1
+        width = 181
+      kind =
+        ascending = 1
+        index = 1
+        visible = 1
+        width = 115
+      label =
+        ascending = 1
+        index = 5
+        visible = 0
+        width = 100
+      name =
+        ascending = 1
+        index = 0
+        visible = 1
+        width = 300
+      size =
+        ascending = 0
+        index = 3
+        visible = 1
+        width = 97
+      version =
+        ascending = 1
+        index = 6
+        visible = 0
+        width = 75
+    iconSize = 16.0
+    showIconPreview = 1
+    sortColumn = name
+    textSize = 12.0
+    useRelativeDates = 1
+    viewOptionsVersion = 0
+# xattrs
+=== m_cmt
+a.txt cmmt ustr: hello
+# xattrs
+## ./.DS_Store
+com.apple.FinderInfo:
+00000000  00 00 00 00 00 00 00 00 40 00 00 00 00 00 00 00  |........@.......|
+00000010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000020
+## ./a.txt
+com.apple.metadata:kMDItemFinderComment:
+00000000  62 70 6C 69 73 74 30 30 55 68 65 6C 6C 6F 08 00  |bplist00Uhello..|
+00000010  00 00 00 00 00 01 01 00 00 00 00 00 00 00 01 00  |................|
+00000020  00 00 00 00 00 00 00 00 00 00 00 00 00 00 0E     |...............|
+0000002f
+=== m_lab
+(none)
+# xattrs
+## ./a.txt
+com.apple.FinderInfo:
+00000000  00 00 00 00 00 00 00 00 00 0A 00 00 00 00 00 00  |................|
+00000010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000020
+=== m_lock
+(none)
+# xattrs
+=== m_ext
+(none)
+# xattrs
+## ./a.txt
+com.apple.FinderInfo:
+00000000  00 00 00 00 00 00 00 00 00 10 00 00 00 00 00 00  |................|
+00000010  00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00  |................|
+00000020

@@ -1,0 +1,8 @@
+# Our DSStore code -> Finder: write an icon view record with our own code,
+# push it, and see whether Finder honours it. Params: name, size, dir (a local
+# scratch dir that does not need to exist yet).
+reset
+lcase {dir}
+dsput {dir} icvp iconSize={size} textSize=12 gridSpacing=100 labelOnBottom=true showItemInfo=false showIconPreview=true arrangeBy=none backgroundType=0 backgroundColorRed=1 backgroundColorGreen=1 backgroundColorBlue=1 gridOffsetX=0 gridOffsetY=0 viewOptionsVersion=0
+push {dir} {name}
+expect {name} icon-size {size}

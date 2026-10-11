@@ -1,0 +1,133 @@
+#!/usr/bin/env python3
+# Copyright (c) 2026 Simon Peter
+#
+# SPDX-License-Identifier: BSD-2-Clause OR GPL-3.0-or-later
+#
+# dsread <.DS_Store> [record] - prints a .DS_Store as stable text.
+# Written independently of the repo's DSStore code on purpose: the oracle's
+# reading side must not share a decoder bug with the code under test (the repo
+# decoder read 'shor' as 2 bytes and lost every record after one, see E10).
+import plistlib
+import struct
+import sys
+
+
+def main():
+    data = open(sys.argv[1], 'rb').read()
+    only = sys.argv[2] if len(sys.argv) > 2 else None
+    f = data[4:]  # the buddy allocator's offsets are relative to byte 4
+    _, off, size, _ = struct.unpack('>4sIII', f[0:16])
+    root = f[off:off + size]
+    nblocks = struct.unpack('>I', root[0:4])[0]
+    offs = list(struct.unpack('>%dI' % nblocks, root[8:8 + 4 * nblocks]))
+    p = 8 + ((nblocks + 255) // 256) * 256 * 4
+    dirs = {}
+    ndirs = struct.unpack('>I', root[p:p + 4])[0]
+    p += 4
+    for _ in range(ndirs):
+        n = root[p]
+        name = root[p + 1:p + 1 + n].decode()
+        p += 1 + n
+        dirs[name] = struct.unpack('>I', root[p:p + 4])[0]
+        p += 4
+
+    def block(i):
+        a = offs[i]
+        o = a & ~0x1f
+        return f[o:o + (1 << (a & 0x1f))]
+
+    recs = []
+
+    def record(b, p):
+        n = struct.unpack('>I', b[p:p + 4])[0]
+        p += 4
+        name = b[p:p + 2 * n].decode('utf-16-be')
+        p += 2 * n
+        code = b[p:p + 4].decode('latin1')
+        typ = b[p + 4:p + 8].decode('latin1')
+        p += 8
+        if typ in ('long', 'shor'):  # shor is stored in 4 bytes like long
+            v = struct.unpack('>I', b[p:p + 4])[0]
+            p += 4
+        elif typ == 'bool':
+            v = bool(b[p])
+            p += 1
+        elif typ == 'type':
+            v = b[p:p + 4].decode('latin1')
+            p += 4
+        elif typ in ('comp', 'dutc'):
+            v = struct.unpack('>Q', b[p:p + 8])[0]
+            p += 8
+        elif typ == 'blob':
+            n = struct.unpack('>I', b[p:p + 4])[0]
+            v = b[p + 4:p + 4 + n]
+            p += 4 + n
+        elif typ == 'ustr':
+            n = struct.unpack('>I', b[p:p + 4])[0]
+            v = b[p + 4:p + 4 + 2 * n].decode('utf-16-be')
+            p += 4 + 2 * n
+        else:
+            sys.exit('dsread: unknown type %r' % typ)
+        return (name, code, typ, v), p
+
+    def walk(node):
+        b = block(node)
+        nxt, cnt = struct.unpack('>II', b[:8])
+        p = 8
+        for _ in range(cnt):
+            if nxt:
+                walk(struct.unpack('>I', b[p:p + 4])[0])
+                p += 4
+            r, p = record(b, p)
+            recs.append(r)
+        if nxt:
+            walk(nxt)
+
+    hdr = block(dirs['DSDB'])
+    walk(struct.unpack('>I', hdr[:4])[0])
+    for name, code, typ, v in sorted(recs, key=lambda r: (r[0], r[1])):
+        if only is not None and name != only:
+            continue
+        print('%s %s %s:%s' % (name, code, typ, render_entry(code, v)))
+
+
+def scalar(v):
+    if isinstance(v, bool):
+        return 'true' if v else 'false'
+    if isinstance(v, float):
+        g = '%g' % v
+        return g if ('.' in g or 'e' in g) else g + '.0'
+    if isinstance(v, bytes):
+        return 'data:' + v.hex()
+    return str(v)
+
+
+def render(v, indent):
+    if isinstance(v, dict):
+        out = ''
+        for k in sorted(v):
+            x = v[k]
+            if isinstance(x, (dict, list)):
+                out += '\n%s%s =%s' % (indent, k, render(x, indent + '  '))
+            else:
+                out += '\n%s%s = %s' % (indent, k, scalar(x))
+        return out
+    if isinstance(v, list):
+        return ''.join('\n%s[%d] = %s' % (indent, i, render(e, indent + '  ').lstrip(' ')
+                                            if not isinstance(e, (dict, list))
+                                            else render(e, indent + '  '))
+                       for i, e in enumerate(v))
+    return scalar(v)
+
+
+def render_entry(code, v):
+    if isinstance(v, bytes):
+        if code == 'Iloc' and len(v) >= 8:
+            x, y = struct.unpack('>II', v[:8])
+            return ' x=%d y=%d rest=%s' % (x, y, v[8:].hex())
+        if v[:8] == b'bplist00':
+            return render(plistlib.loads(v), '    ')
+    return ' ' + scalar(v)
+
+
+main()

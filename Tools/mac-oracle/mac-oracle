@@ -1,0 +1,618 @@
+#!/bin/sh
+# Copyright (c) 2026 Simon Peter
+#
+# SPDX-License-Identifier: BSD-2-Clause OR GPL-3.0-or-later
+#
+# mac-oracle - drive the Mac OS X 10.6 Finder over ssh and bring back what it
+# wrote, so interop behaviour is measured on the real thing instead of guessed.
+# Run `mac-oracle help` for the subcommands, see README.md for the findings.
+
+set -u
+
+HERE=$(cd "$(dirname "$0")" && pwd)
+REPO=$(cd "$HERE/../.." && pwd)
+
+MAC_HOST=${MAC_HOST:-Users-Mac-mini.local}
+MAC_USER=${MAC_USER:-user}
+MAC_PASS=${MAC_PASS:-user}
+# Cases live under one folder so reset can wipe them without touching the
+# rest of the user's home.
+MAC_ROOT=${MAC_ROOT:-Desktop/mi}
+BUILD=${MAC_ORACLE_BUILD:-$HERE/.build}
+
+die() { echo "mac-oracle: $*" >&2; exit 1; }
+
+command -v sshpass >/dev/null 2>&1 || die "sshpass not found"
+SSHPASS=$MAC_PASS
+export SSHPASS
+# The 10.6 sshd only offers ssh-rsa; a master connection keeps the many small
+# Finder queries below from paying the handshake every time.
+SSH_OPTS="-o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR \
+-o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa \
+-o ControlMaster=auto -o ControlPersist=120 -o ControlPath=${TMPDIR:-/tmp}/mo-$(id -u)-%C"
+
+# stdin is passed through to the remote command (used to feed scripts and tars).
+msh() { sshpass -e ssh $SSH_OPTS "$MAC_USER@$MAC_HOST" "$@"; }
+mshn() { msh "$@" </dev/null; }
+
+_home=""
+mhome() {
+  [ -n "$_home" ] || _home=$(mshn 'echo $HOME') || die "cannot reach $MAC_HOST"
+  printf '%s' "$_home"
+}
+
+check_name() {
+  case "$1" in
+    ''|.|..|*[!A-Za-z0-9._-]*) die "bad case name '$1' (use A-Za-z0-9._-)";;
+  esac
+}
+
+# --- osascript --------------------------------------------------------------
+
+# The script travels on stdin so no quoting layer can mangle it.
+osa() { printf '%s\n' "$1" | msh osascript -; }
+
+# Finder prelude: $f is the case folder, $w its window (opened on demand).
+finder_script() { # name body [nowindow]
+  _fs_name=$1; _fs_body=$2; _fs_win=${3:-window}
+  _fs_path="$(mhome)/$MAC_ROOT/$_fs_name"
+  printf 'tell application "Finder"\nset f to (POSIX file "%s" as alias)\n' "$_fs_path"
+  if [ "$_fs_win" = window ]; then
+    printf 'open f\nset w to container window of folder f\n'
+  fi
+  printf '%s\nend tell\n' "$_fs_body"
+}
+
+# --- Finder option table ----------------------------------------------------
+
+# Maps an option name to the AppleScript property expression. Item options use
+# <option>@<file>. Kept as one table so finder-set and finder-get cannot drift.
+opt_target() { # option -> prints expression
+  case "$1" in
+    icon-size)            echo 'icon size of icon view options of w';;
+    icon-text-size)       echo 'text size of icon view options of w';;
+    label-position)       echo 'label position of icon view options of w';;
+    arrangement)          echo 'arrangement of icon view options of w';;
+    shows-item-info)      echo 'shows item info of icon view options of w';;
+    shows-icon-preview)   echo 'shows icon preview of icon view options of w';;
+    background-color)     echo 'background color of icon view options of w';;
+    list-sort-column)     echo 'name of sort column of list view options of w';;
+    list-text-size)       echo 'text size of list view options of w';;
+    list-icon-size)       echo 'icon size of list view options of w';;
+    list-calculates-folder-sizes) echo 'calculates folder sizes of list view options of w';;
+    list-uses-relative-dates)     echo 'uses relative dates of list view options of w';;
+    list-column-visible:*) echo "visible of column id ${1#*:} column of list view options of w";;
+    list-column-width:*)   echo "width of column id ${1#*:} column of list view options of w";;
+    list-column-index:*)   echo "index of column id ${1#*:} column of list view options of w";;
+    toolbar-visible)      echo 'toolbar visible of w';;
+    statusbar-visible)    echo 'statusbar visible of w';;
+    bounds)               echo 'bounds of w';;
+    current-view)         echo 'current view of w';;
+    sidebar-width)        echo 'sidebar width of w';;
+    comment@*)            echo "comment of item \"${1#*@}\" of folder f";;
+    label-index@*)        echo "label index of item \"${1#*@}\" of folder f";;
+    locked@*)             echo "locked of item \"${1#*@}\" of folder f";;
+    extension-hidden@*)   echo "extension hidden of item \"${1#*@}\" of folder f";;
+    *) return 1;;
+  esac
+}
+
+# Turn a command-line value into an AppleScript literal.
+opt_value() { # option value
+  case "$1" in
+    current-view)
+      case "$2" in icon|list|column|flow) printf '%s view' "$2";; *) printf '%s' "$2";; esac;;
+    bounds|background-color) printf '{%s}' "$2";;
+    comment@*) printf '"%s"' "$2";;
+    arrangement|label-position) printf '%s' "$2";;
+    *) printf '%s' "$2";;
+  esac
+}
+
+safe_opt() {
+  case "$1" in
+    *[!A-Za-z0-9\ ,._:@-]*) die "option '$1' has characters outside A-Za-z0-9 ,._:@-";;
+  esac
+}
+
+safe_value() {
+  case "$1" in
+    *[!A-Za-z0-9\ ,._-]*) die "value '$1' has characters outside A-Za-z0-9 ,._- (use the 'run' subcommand)";;
+  esac
+}
+
+cmd_finder_set() {
+  [ $# -eq 3 ] || die "usage: finder-set <name> <option> <value>"
+  check_name "$1"; safe_value "$3"; safe_opt "$2"
+  _t=$(opt_target "$2") || die "unknown option '$2' (see README)"
+  _lit=$(opt_value "$2" "$3")
+  _w=window; case "$2" in *@*) _w=nowindow;; esac
+  # list-sort-column needs a column object, not just a name.
+  case "$2" in
+    list-sort-column) _t='sort column of list view options of w'
+      _lit="column id $3 column of list view options of w";;
+  esac
+  osa "$(finder_script "$1" "set $_t to $_lit" "$_w")" >/dev/null || die "Finder refused '$2'"
+}
+
+cmd_finder_get() {
+  [ $# -eq 2 ] || die "usage: finder-get <name> <option>"
+  check_name "$1"; safe_opt "$2"
+  _t=$(opt_target "$2") || die "unknown option '$2' (see README)"
+  _w=window; case "$2" in *@*) _w=nowindow;; esac
+  case "$2" in
+    list-sort-column) _t='name of sort column of list view options of w';;
+  esac
+  _r=$(osa "$(finder_script "$1" "return $_t" "$_w")") || die "Finder refused '$2'"
+  # Finder reports the sort column as e.g. "size column"; finder-set takes "size".
+  case "$2" in list-sort-column) _r=${_r% column};; esac
+  printf '%s\n' "$_r"
+}
+
+# --- flush ------------------------------------------------------------------
+
+# Finder coalesces .DS_Store writes for about 5 s and drops what is pending on
+# SIGTERM; only a polite AppleScript quit writes immediately (see E2..E4).
+finder_pid() { mshn "ps -axco pid,command | awk '\$2==\"Finder\"{print \$1}'"; }
+
+wait_finder() { # old pid: block until a Finder other than that one answers
+  _i=0
+  while :; do
+    _np=$(finder_pid)
+    if [ -n "$_np" ] && [ "$_np" != "$1" ] \
+       && mshn 'osascript -e "tell application \"Finder\" to count windows"' >/dev/null 2>&1; then
+      return 0
+    fi
+    # launchd normally respawns Finder by itself; open -a covers the gap.
+    [ -z "$_np" ] && [ $_i -gt 3 ] && mshn 'open -a Finder' >/dev/null 2>&1
+    _i=$((_i + 1)); [ $_i -gt 40 ] && die "Finder did not come back"
+    sleep 1
+  done
+}
+
+finder_restart() {
+  _op=$(finder_pid)
+  mshn 'osascript -e "tell application \"Finder\" to quit"' >/dev/null 2>&1
+  wait_finder "$_op"
+}
+
+# --- dstool -----------------------------------------------------------------
+
+dstool() {
+  _bin=$BUILD/dstool
+  _newer=0
+  for _s in "$HERE/dstool.m" "$REPO"/DSStore/*.m "$REPO"/DSStore/*.h; do
+    [ "$_s" -nt "$_bin" ] && _newer=1
+  done
+  if [ ! -x "$_bin" ] || [ $_newer = 1 ]; then
+    mkdir -p "$BUILD" || die "cannot create $BUILD"
+    # Compiled from the repo's DSStore sources, not the installed library, so
+    # the dump is guaranteed to show what the code in this tree decodes.
+    ( set +u; . "${GNUSTEP_MAKEFILES:-/System/Library/Makefiles}/GNUstep.sh"
+      cc=${CC:-clang}
+      "$cc" $(gnustep-config --objc-flags) -I"$REPO/DSStore" -Wall \
+        -Wno-deprecated-declarations "$HERE/dstool.m" "$REPO"/DSStore/DS*.m \
+        "$REPO/DSStore/SimpleColor.m" -o "$_bin" $(gnustep-config --base-libs) ) \
+      || die "building dstool failed"
+  fi
+  "$_bin" "$@"
+}
+
+# --- file transfer ----------------------------------------------------------
+
+STATE=.mac-oracle   # local per-case state dir inside a pulled/pushed folder
+
+cmd_push() {
+  _force=0
+  if [ "${1:-}" = --force ]; then _force=1; shift; fi
+  [ $# -eq 2 ] || die "usage: push [--force] <localdir> <name>"
+  [ -d "$1" ] || die "no such directory $1"
+  check_name "$2"
+  _r="$MAC_ROOT/$2"
+  if mshn "test -e '$_r'" && [ $_force = 0 ]; then
+    die "$2 exists on the Mac (use --force)"
+  fi
+  # bsdtar on the Mac turns ._ entries into native xattrs while extracting, the
+  # same merge a copy onto HFS+ does; dot_clean -m catches any left behind.
+  tar -cf - -C "$1" --exclude="./$STATE" . | msh "{ [ ! -e '$_r' ] || chflags -R nouchg '$_r'; } && rm -rf '$_r' && mkdir -p '$_r' && tar -xf - -C '$_r' && dot_clean -m '$_r'" \
+    || die "push failed"
+  # Finder keeps a folder's window and view records in its parent's .DS_Store.
+  if [ -f "$1/$STATE/parent.DS_Store" ]; then
+    finder_restart
+    _t="${TMPDIR:-/tmp}/mo-parent.$$"
+    if mshn "test -s '$MAC_ROOT/.DS_Store'"; then
+      msh "cat '$MAC_ROOT/.DS_Store'" </dev/null >"$_t" || die "cannot fetch parent .DS_Store"
+    else
+      rm -f "$_t"
+    fi
+    # The repo's DSStore loader misreads 'shor' records and drops what follows
+    # them (E10), so merging into such a store would destroy Finder's records.
+    if [ -f "$_t" ] && "$HERE/dsread" "$_t" | grep -q '^[^ ]* [^ ]* shor:'; then
+      rm -f "$_t"; die "parent store holds shor records the merge would corrupt (reset first)"
+    fi
+    dstool copyrec "$1/$STATE/parent.DS_Store" @ "$_t" "$2" || die "record merge failed"
+    msh "cat > '$MAC_ROOT/.DS_Store'" <"$_t" || die "cannot install parent .DS_Store"
+    rm -f "$_t"
+    # Finder respawns by itself within a second or two and would keep its idea of
+    # the old parent store, so it must be restarted once more to read the new one.
+    finder_restart
+  fi
+}
+
+# Writes the plist record Finder will read for the pushed folder; the record is
+# stored under the placeholder name @ and renamed by push.
+cmd_dsput() {
+  [ $# -ge 3 ] || die "usage: dsput <localdir> <code> key=value ..."
+  _d=$1; _c=$2; shift 2
+  mkdir -p "$_d/$STATE" || die "cannot create state dir"
+  dstool put "$_d/$STATE/parent.DS_Store" @ "$_c" "$@" || die "dsput failed"
+}
+
+cmd_pull() {
+  _noflush=0
+  if [ "${1:-}" = --no-flush ]; then _noflush=1; shift; fi
+  [ $# -eq 2 ] || die "usage: pull [--no-flush] <name> <localdir>"
+  check_name "$1"
+  [ $_noflush = 1 ] || finder_restart
+  mshn "test -d '$MAC_ROOT/$1'" || die "no such case $1 on the Mac"
+  rm -rf "$2"; mkdir -p "$2/$STATE" || die "cannot create $2"
+  # Mac tar writes native xattrs out as ._ AppleDouble entries, which is what
+  # our side keeps them as.
+  mshn "tar -cf - -C '$MAC_ROOT/$1' ." | tar -xf - -C "$2" || die "pull failed"
+  if mshn "test -s '$MAC_ROOT/.DS_Store'"; then
+    msh "cat '$MAC_ROOT/.DS_Store'" </dev/null >"$2/$STATE/parent-full.DS_Store" || die "cannot fetch parent .DS_Store"
+    # Only this folder's records, under the placeholder name so push can reuse it.
+    dstool copyrec "$2/$STATE/parent-full.DS_Store" "$1" "$2/$STATE/parent.DS_Store" @ 2>/dev/null
+    rm -f "$2/$STATE/parent-full.DS_Store"
+  fi
+  remote_xattrs "$1" >"$2/$STATE/xattrs.txt"
+}
+
+remote_xattrs() { # name
+  # Hex dump rather than -l alone so binary values (FinderInfo) are diffable.
+  mshn "cd '$MAC_ROOT/$1' && find . | LC_ALL=C sort | while IFS= read -r p; do
+    if [ -n \"\$(xattr \"\$p\")\" ]; then echo \"## \$p\"; xattr -lx \"\$p\"; fi
+  done"
+}
+
+# Stable text: folder .DS_Store, the parent's records for the folder, xattrs.
+cmd_dump() {
+  _noflush=0
+  if [ "${1:-}" = --no-flush ]; then _noflush=1; shift; fi
+  [ $# -eq 1 ] || die "usage: dump [--no-flush] <name>"
+  check_name "$1"
+  [ $_noflush = 1 ] || finder_restart
+  _t="${TMPDIR:-/tmp}/mo-dump.$$"; mkdir -p "$_t"
+  echo "# folder .DS_Store"
+  if mshn "test -s '$MAC_ROOT/$1/.DS_Store'"; then
+    msh "cat '$MAC_ROOT/$1/.DS_Store'" </dev/null >"$_t/own" && "$HERE/dsread" "$_t/own"
+  else
+    echo "(none)"
+  fi
+  echo "# parent .DS_Store records for $1"
+  if mshn "test -s '$MAC_ROOT/.DS_Store'"; then
+    msh "cat '$MAC_ROOT/.DS_Store'" </dev/null >"$_t/par" && "$HERE/dsread" "$_t/par" "$1"
+  else
+    echo "(none)"
+  fi
+  echo "# xattrs"
+  remote_xattrs "$1"
+  rm -rf "$_t"
+}
+
+cmd_shot() {
+  _at=""
+  if [ "${1:-}" = --at ]; then _at=$2; safe_value "$_at"; shift 2; fi
+  [ $# -ge 1 ] || die "usage: shot [--at l,t,r,b] <name> [out.png]"
+  check_name "$1"
+  _out=${2:-$1.png}
+  # A window of another app (a system dialog) may sit on part of the screen;
+  # --at moves the Finder window to a free region first.
+  _mv=""; [ -n "$_at" ] && _mv="set bounds of w to {$_at}"
+  _b=$(osa "$(finder_script "$1" "activate
+$_mv
+set index of w to 1
+delay 1
+return bounds of w")") || die "cannot get window bounds"
+  # screencapture writes nothing when started from ssh (no window server
+  # access), but CGWindowListCreateImage works there, so the region of the
+  # composited screen under the Finder window is grabbed with that.
+  _b=$(printf '%s' "$_b" | tr -d ' ')
+  _l=${_b%%,*}; _r=${_b#*,}; _t=${_r%%,*}; _r=${_r#*,}; _rr=${_r%%,*}; _bb=${_r#*,}
+  # Finder's bounds start below the 32 px title bar and toolbar chrome (bwsp
+  # stores the origin 32 px higher), so extend the grab upwards.
+  msh "python - /tmp/mo-shot.png $_l $((_t - 32)) $((_rr - _l)) $((_bb - _t + 32))" <<'PY' || die "screen grab failed"
+import sys, Quartz
+from Foundation import NSURL
+dst = sys.argv[1]
+x, y, w, h = [int(v) for v in sys.argv[2:6]]
+img = Quartz.CGWindowListCreateImage(Quartz.CGRectMake(x, y, w, h), Quartz.kCGWindowListOptionOnScreenOnly,
+                                     Quartz.kCGNullWindowID, Quartz.kCGWindowImageDefault)
+if img is None:
+    sys.exit(1)
+out = Quartz.CGImageDestinationCreateWithURL(NSURL.fileURLWithPath_(dst), "public.png", 1, None)
+Quartz.CGImageDestinationAddImage(out, img, None)
+Quartz.CGImageDestinationFinalize(out)
+PY
+  msh 'cat /tmp/mo-shot.png' </dev/null >"$_out" || die "cannot fetch picture"
+  mshn 'rm -f /tmp/mo-shot.png'
+  echo "$_out"
+}
+
+cmd_reset() {
+  _keep=0
+  [ "${1:-}" = --keep-cases ] && _keep=1
+  mshn "test -f '$MAC_ROOT/.baseline/com.apple.finder.plist'" \
+    || die "no baseline on the Mac ($MAC_ROOT/.baseline); run 'baseline' on a clean Finder first"
+  _op=$(finder_pid)
+  # Finder is frozen, not quit: a quit would rewrite its preferences and
+  # .DS_Store files from memory over the restored ones, and launchd respawns it
+  # within a second. SIGKILL afterwards discards everything it still held.
+  mshn 'killall -STOP Finder' >/dev/null 2>&1
+  mshn "cp '$MAC_ROOT/.baseline/com.apple.finder.plist' ~/Library/Preferences/com.apple.finder.plist"
+  if [ $_keep = 0 ]; then
+    mshn "cd '$MAC_ROOT' && for p in * .DS_Store; do [ -e \"\$p\" ] && { chflags -R nouchg \"\$p\"; rm -rf \"\$p\"; }; done; true"
+  fi
+  mshn 'killall -KILL Finder' >/dev/null 2>&1
+  wait_finder "$_op"
+  cmd_ui_off
+}
+
+# Records the current Finder preferences once; never overwrites.
+cmd_baseline() {
+  mshn "mkdir -p '$MAC_ROOT/.baseline' && test ! -e '$MAC_ROOT/.baseline/com.apple.finder.plist' && cp ~/Library/Preferences/com.apple.finder.plist '$MAC_ROOT/.baseline/' && echo recorded || echo 'baseline already present'"
+}
+
+# --- UI scripting -----------------------------------------------------------
+
+# Some settings (column visibility in View Options, "Always open in") are only
+# written by Finder when the user clicks them; AppleScript properties take a
+# different path (E5, E10). System Events can click for us only while the
+# root-owned accessibility flag exists, so it is created for the experiment and
+# removed again by ui-off and reset; the Mac must not keep it.
+AXFLAG=/private/var/db/.AccessibilityAPIEnabled
+
+cmd_ui_on() {
+  printf '%s\n' "$MAC_PASS" | msh "sudo -S -p '' sh -c 'echo a > $AXFLAG && chmod 444 $AXFLAG'" \
+    || die "cannot create $AXFLAG"
+  # Both only notice the flag when they start.
+  mshn 'killall "System Events"' >/dev/null 2>&1
+  finder_restart
+}
+
+cmd_ui_off() {
+  mshn "test -e $AXFLAG" || return 0
+  printf '%s\n' "$MAC_PASS" | msh "sudo -S -p '' rm -f $AXFLAG" || die "cannot remove $AXFLAG"
+  mshn 'killall "System Events"' >/dev/null 2>&1
+  return 0
+}
+
+need_ui() { mshn "test -e $AXFLAG" || die "UI scripting is off (run ui-on first)"; }
+
+# Runs <body> against the View Options panel of the case folder's window: L is
+# the flat list of all its controls (System Events' "entire contents" comes
+# back empty for a window, so the tree is walked by hand). Cmd-J toggles the
+# floating panel, which follows the front window and survives closing it, so
+# it is opened only when it is not there and closed again afterwards.
+vo_script() { # name body
+  cat <<EOS
+on walk(e)
+  tell application "System Events"
+    set L to {e}
+    repeat with c in (UI elements of e)
+      set L to L & my walk(contents of c)
+    end repeat
+  end tell
+  return L
+end walk
+$(finder_script "$1" 'activate
+set index of w to 1')
+delay 1
+tell application "System Events" to tell process "Finder"
+  set p to missing value
+  repeat with k from 1 to 2
+    repeat with i from 1 to count of windows
+      if subrole of window i is "AXSystemFloatingWindow" then set p to window i
+    end repeat
+    if p is not missing value then exit repeat
+    keystroke "j" using command down
+    delay 1
+  end repeat
+  if p is missing value then error "no View Options panel"
+  set L to my walk(p)
+$2
+end tell
+EOS
+}
+
+# Clicks the checkbox titled <title> (localized, as Finder shows it).
+cmd_view_option_click() {
+  [ $# -eq 2 ] || die "usage: view-option-click <name> <checkbox title>"
+  check_name "$1"; need_ui
+  case "$2" in *'"'*|*\\*) die "bad title";; esac
+  osa "$(vo_script "$1" "  set hit to false
+  repeat with e in L
+    try
+      if role of e is \"AXCheckBox\" and title of e is \"$2\" then
+        click e
+        set hit to true
+        exit repeat
+      end if
+    end try
+  end repeat
+  delay 0.5
+  click button 1 of p
+  if not hit then error \"no checkbox $2\"")" >/dev/null || die "click on '$2' failed"
+}
+
+# Lists the controls of the View Options panel (role : title : value).
+cmd_view_options() {
+  [ $# -eq 1 ] || die "usage: view-options <name>"
+  check_name "$1"; need_ui
+  osa "$(vo_script "$1" '  set r to ""
+  repeat with e in L
+    set t to ""
+    try
+      set t to t & (role of e as string)
+    end try
+    try
+      set t to t & " : " & (title of e as string)
+    end try
+    try
+      set t to t & " : " & (value of e as string)
+    end try
+    set r to r & t & linefeed
+  end repeat
+  click button 1 of p
+  return r')"
+}
+
+# --- assertions for recipes -------------------------------------------------
+
+cmd_expect() {
+  [ $# -eq 3 ] || die "usage: expect <name> <option> <value>"
+  _got=$(cmd_finder_get "$1" "$2") || exit 1
+  [ "$_got" = "$3" ] || die "FAIL $1 $2: expected '$3', Finder says '$_got'"
+  echo "ok $1 $2 = $_got"
+}
+
+cmd_expect_dump() { # name pattern (extended regexp, searched in dump --no-flush output)
+  [ $# -eq 2 ] || die "usage: expect-dump <name> <egrep pattern>"
+  _o=$(cmd_dump --no-flush "$1") || exit 1
+  printf '%s\n' "$_o" | grep -Eq -- "$2" || { printf '%s\n' "$_o" >&2; die "FAIL dump of $1 lacks /$2/"; }
+  echo "ok dump $1 /$2/"
+}
+
+cmd_expect_no_dump() { # name pattern
+  [ $# -eq 2 ] || die "usage: expect-no-dump <name> <egrep pattern>"
+  _o=$(cmd_dump --no-flush "$1") || exit 1
+  if printf '%s\n' "$_o" | grep -Eq -- "$2"; then
+    printf '%s\n' "$_o" >&2; die "FAIL dump of $1 has /$2/"
+  fi
+  echo "ok dump $1 lacks /$2/"
+}
+
+# --- recipes ----------------------------------------------------------------
+
+cmd_recipe() {
+  [ $# -ge 1 ] || die "usage: recipe <file> [--param k=v ...]"
+  _rf=$1; shift
+  [ -f "$_rf" ] || _rf="$HERE/recipes/$_rf.recipe"
+  [ -f "$_rf" ] || die "no recipe $_rf"
+  _params=""
+  while [ $# -gt 0 ]; do
+    [ "$1" = --param ] && [ $# -ge 2 ] || die "recipe: expected --param k=v"
+    case "$2" in *=*) ;; *) die "recipe: bad param $2";; esac
+    _params="$_params
+$2"
+    shift 2
+  done
+  _n=0
+  # fd 3 so ssh inside a step cannot swallow the rest of the recipe.
+  while IFS= read -r _line <&3 || [ -n "$_line" ]; do
+    _n=$((_n + 1))
+    case "$_line" in ''|'#'*|' '*'#'*) continue;; esac
+    # Substitute {k}; an unknown placeholder is an error, not an empty string.
+    _oldifs=$IFS; IFS='
+'
+    for _kv in $_params; do
+      _k=${_kv%%=*}; _v=${_kv#*=}
+      _pre=""; _rest=$_line
+      _line=""
+      while :; do
+        case "$_rest" in
+          *"{$_k}"*) _line="$_line${_rest%%"{$_k}"*}$_v"; _rest=${_rest#*"{$_k}"};;
+          *) _line="$_line$_rest"; break;;
+        esac
+      done
+    done
+    IFS=$_oldifs
+    case "$_line" in *"{"*"}"*) die "$_rf:$_n: unresolved placeholder in: $_line";; esac
+    echo "+ $_line" >&2
+    # Words follow shell quoting so a step can carry spaces; recipes are trusted
+    # local files.
+    eval "set -- $_line"
+    ( main "$@" </dev/null ) || die "$_rf:$_n: step failed: $_line"
+  done 3<"$_rf"
+}
+
+usage() {
+  cat <<'EOF'
+usage: mac-oracle <subcommand> ...
+  run '<applescript>'            osascript on the Mac
+  sh '<cmd>'                     shell command on the Mac
+  push [--force] <dir> <name>    copy to ~/Desktop/mi/<name>, ._ -> native xattrs
+  pull [--no-flush] <name> <dir> bring back folder, xattrs (._), .mac-oracle/
+  dsput <dir> <code> k=v ...     our DSStore code writes a Finder record for push
+  dsplist <dir> <code> <plist>   same, record from a plist file (nested values)
+  dsraw <dir> <code> <type> <v>  same, raw record (blob as hex or @file, long, bool, ...)
+  dsread <.DS_Store> [record]    decode a store (independent of the repo's DSStore code)
+  dstool <args>                  the local dstool (dump, put, putplist, putraw, rm, copyrec)
+  finder-set <name> <opt> <val>  set a Finder view/window/item option
+  finder-get <name> <opt>        read it back from Finder
+  dump [--no-flush] <name>       decoded .DS_Store records and xattrs as text
+  shot [--at l,t,r,b] <name> [o] screenshot of the Finder window (moved first)
+  flush                          make Finder write pending .DS_Store changes
+  expect <name> <opt> <val>      assert finder-get; expect-dump|expect-no-dump <name> <regex>
+  reset [--keep-cases]           close windows, restore baseline, wipe cases, ui-off
+  ui-on | ui-off                 create/remove the accessibility flag (sudo) for UI scripting
+  ui '<applescript>'             osascript that needs UI scripting (System Events)
+  view-options <name>            controls of the View Options panel (role : title : value)
+  view-option-click <name> <t>   click checkbox titled <t> (localized) in View Options
+  baseline                       record Finder prefs once (never overwrites)
+  mkcase <name>                  fresh folder with a.txt b.txt c.txt
+  lcase <dir>                    same, locally (for dsput/push)
+  recipe <file> [--param k=v]    run Tools/mac-oracle/recipes/<file>.recipe
+EOF
+}
+
+main() {
+  [ $# -ge 1 ] || { usage; exit 2; }
+  _c=$1; shift
+  case "$_c" in
+    run)          [ $# -eq 1 ] || die "usage: run '<applescript>'"; osa "$1";;
+    sh)           [ $# -eq 1 ] || die "usage: sh '<cmd>' (stdin is passed through)"; msh "$1";;
+    push)         cmd_push "$@";;
+    pull)         cmd_pull "$@";;
+    dsput)        cmd_dsput "$@";;
+    dsplist)      # dsplist <dir> <code> <plistfile>: nested plist record for push
+                  [ $# -eq 3 ] || die "usage: dsplist <localdir> <code> <plistfile>"
+                  mkdir -p "$1/$STATE" || exit 1
+                  dstool putplist "$1/$STATE/parent.DS_Store" @ "$2" "$3" || die "dsplist failed";;
+    dsraw)        # dsraw <dir> <code> <type> <hex|@file|value>: legacy raw record for push
+                  [ $# -eq 4 ] || die "usage: dsraw <localdir> <code> <type> <value>"
+                  mkdir -p "$1/$STATE" || exit 1
+                  dstool putraw "$1/$STATE/parent.DS_Store" @ "$2" "$3" "$4" || die "dsraw failed";;
+    dstool)       dstool "$@";;
+    dsread)       "$HERE/dsread" "$@";;
+    finder-set)   cmd_finder_set "$@";;
+    finder-get)   cmd_finder_get "$@";;
+    dump)         cmd_dump "$@";;
+    shot)         cmd_shot "$@";;
+    flush)        finder_restart;;
+    expect)       cmd_expect "$@";;
+    expect-dump)  cmd_expect_dump "$@";;
+    expect-no-dump) cmd_expect_no_dump "$@";;
+    reset)        cmd_reset "$@";;
+    ui-on)        cmd_ui_on;;
+    ui-off)       cmd_ui_off;;
+    ui)           [ $# -eq 1 ] || die "usage: ui '<applescript>'"; need_ui; osa "$1";;
+    view-options) cmd_view_options "$@";;
+    view-option-click) cmd_view_option_click "$@";;
+    baseline)     cmd_baseline;;
+    recipe)       cmd_recipe "$@";;
+    lcase)        # lcase <dir>: local case folder with a.txt b.txt c.txt, for push
+                  [ $# -eq 1 ] || die "usage: lcase <dir>"
+                  mkdir -p "$1" || exit 1
+                  for _f in a.txt b.txt c.txt; do echo "$_f" >"$1/$_f"; done;;
+    echo)         echo "$@";;
+    sleep)        sleep "$@";;
+    mkcase)       # mkcase <name>: fresh case folder with a.txt b.txt c.txt
+                  [ $# -eq 1 ] || die "usage: mkcase <name>"; check_name "$1"; _n=$1
+                  mshn "{ [ ! -e '$MAC_ROOT/$_n' ] || chflags -R nouchg '$MAC_ROOT/$_n'; }; rm -rf '$MAC_ROOT/$_n'; mkdir -p '$MAC_ROOT/$_n'; cd '$MAC_ROOT/$_n' && for f in a.txt b.txt c.txt; do echo \$f > \$f; done";;
+    help|-h|--help) usage;;
+    *) usage; exit 2;;
+  esac
+}
+
+main "$@"

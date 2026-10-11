@@ -1,0 +1,9 @@
+# Finder -> dump: set the icon view size on a fresh folder, let Finder write it
+# out, check the record it stored. Params: name (case folder), size.
+reset
+mkcase {name}
+finder-set {name} current-view icon
+finder-set {name} icon-size {size}
+expect {name} icon-size {size}
+flush
+expect-dump {name} 'iconSize = {size}\.0'

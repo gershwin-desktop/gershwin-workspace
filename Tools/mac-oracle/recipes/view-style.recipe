@@ -1,0 +1,9 @@
+# A view style chosen by script is not stored per folder: no vstl record shows
+# up after Finder has written everything (see evidence E7).
+# Params: name, view (icon|list|column|flow).
+reset
+mkcase {name}
+finder-set {name} current-view {view}
+expect {name} current-view "{view} view"
+flush
+expect-no-dump {name} 'vstl'
