@@ -792,3 +792,4 @@
 
 "There is no application set to open \"%@\"." = "\"%@\" を開くアプリケーションが設定されていません。";
 "Use Open as Folder to look inside it." = "中身を見るには「フォルダとして開く」を使用してください。";
+"Bottom" = "下";
