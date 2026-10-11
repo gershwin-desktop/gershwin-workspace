@@ -27,6 +27,7 @@ static NSMutableDictionary *openFolders = nil;
 - (void)buildWindow;
 - (void)layoutStatus;
 - (NSArray *)selectedNodes;
+- (BOOL)runSearch;
 @end
 
 @implementation GWSmartFolder
@@ -62,6 +63,8 @@ static NSMutableDictionary *openFolders = nil;
     }
     folder = [[[self alloc] initWithPath: path] autorelease];
     [openFolders setObject: folder forKey: path];
+  } else if ([folder runSearch] == NO) {
+    return NO;
   }
   [[folder window] makeKeyAndOrderFront: nil];
   return YES;
@@ -69,20 +72,39 @@ static NSMutableDictionary *openFolders = nil;
 
 - (id)initWithPath:(NSString *)path
 {
-  NSString *err = nil;
-  GWSavedSearch *search = [GWSavedSearch savedSearchWithContentsOfFile: path
-                                                                 error: &err];
-
   self = [super init];
   filePath = [path copy];
   nodes = [NSMutableArray new];
   [self buildWindow];
+  [self runSearch];
+  return self;
+}
+
+/* Opening a smart folder again means asking the question again, and the
+ * file may have been edited since the window was made. */
+- (BOOL)runSearch
+{
+  NSString *err = nil;
+  GWSavedSearch *search = [GWSavedSearch savedSearchWithContentsOfFile: filePath
+                                                                 error: &err];
+
+  if (search == nil) {
+    NSRunAlertPanel([filePath lastPathComponent],
+                    NSLocalizedString(@"This smart folder cannot be read: %@", @""),
+                    NSLocalizedString(@"OK", @""), nil, nil, err);
+    return NO;
+  }
+  [runner stop];
+  [runner release];
+  [nodes removeAllObjects];
+  [table reloadData];
   runner = [[GWSavedSearchRunner alloc] initWithSavedSearch: search
                                                    delegate: self];
   /* An unsearchable file still gets its window, saying why. */
   [runner start];
+  [self updateCount];
   [self layoutStatus];
-  return self;
+  return YES;
 }
 
 - (NSWindow *)window
