@@ -17,9 +17,33 @@
 #import "Testing.h"
 #include "../../Workspace/LookInside/GWLookInsideController.m"
 
+@interface GWTestNode : NSObject
+{
+@public
+  NSString *path;
+}
+- (NSString *)path;
+@end
+
+@implementation GWTestNode
+- (NSString *)path
+{
+  return path;
+}
+@end
+
+static GWTestNode *testNode(NSString *p)
+{
+  GWTestNode *n = [[GWTestNode new] autorelease];
+
+  n->path = p;
+  return n;
+}
+
 @interface GWLookInsideStubController : GWLookInsideController
 {
 @public
+  id keyBase;
   int opens;
   int closes;
   int updates;
@@ -36,6 +60,11 @@
 {
   opens++;
   lastFullScreen = fullScreen;
+}
+
+- (id)keyWindowBaseNode
+{
+  return keyBase;
 }
 
 - (void)showPathsInPanel:(NSArray *)paths
@@ -144,6 +173,57 @@ int main(void)
     [ctrl toggleLookInsideForPaths: first sourceWindow: nil];
     [ctrl selectionDidChange: second];
     PASS(ctrl->updates == 2, "MI-LI-20 a reopened panel follows the selection too");
+    RELEASE(ctrl);
+  }
+
+  /* --- an empty click in a folder window does not select the folder --- */
+  {
+    GWLookInsideStubController *ctrl = [GWLookInsideStubController new];
+    GWTestNode *folder = testNode(@"/tmp/folder");
+    GWTestNode *item = testNode(@"/tmp/folder/item");
+    NSArray *first = [NSArray arrayWithObject: @"/tmp/folder/item"];
+
+    ctrl->keyBase = folder;
+    [ctrl toggleLookInsideForPaths: first sourceWindow: nil];
+    [ctrl selectionDidChange: [NSArray arrayWithObject: @"/tmp/folder"]];
+    PASS(ctrl->updates == 0,
+      "click on empty space keeps the last item, not the folder (Finder)");
+    [ctrl selectionDidChange: [NSArray arrayWithObject: @"/tmp/other"]];
+    PASS(ctrl->updates == 1, "...but another item is still followed");
+    ctrl->keyBase = testNode(@"/tmp");
+    [ctrl selectionDidChange: [NSArray arrayWithObject: @"/tmp/folder"]];
+    PASS(ctrl->updates == 2,
+      "...and the folder itself, selected in its parent window, is shown");
+    [ctrl close];
+
+    PASS([GWLookInsideController selectionPathsOfNodes: [NSArray arrayWithObject: folder]
+                                              baseNode: folder] == nil,
+      "the base folder as selection is no selection");
+    PASS([[GWLookInsideController selectionPathsOfNodes: [NSArray arrayWithObject: item]
+                                               baseNode: folder]
+            isEqual: first],
+      "a real item gives its path");
+    PASS([[GWLookInsideController selectionPathsOfNodes: [NSArray arrayWithObject: folder]
+                                               baseNode: nil]
+            isEqual: [NSArray arrayWithObject: @"/tmp/folder"]],
+      "without a base folder (Desktop) every node counts");
+
+    /* One Space handler for folder windows and the Desktop. */
+    PASS([ctrl handleSpaceKeyWithCommand: NO shift: NO control: NO option: YES
+                               selection: [NSArray arrayWithObject: item]
+                                baseNode: nil sourceWindow: nil]
+           && [ctrl isOpen] && ctrl->lastFullScreen,
+      "Option-Space opens full screen through the shared handler");
+    [ctrl close];
+    PASS(![ctrl handleSpaceKeyWithCommand: YES shift: NO control: NO option: NO
+                                selection: [NSArray arrayWithObject: item]
+                                 baseNode: nil sourceWindow: nil]
+         && ![ctrl isOpen],
+      "Cmd-Space is not ours");
+    PASS(![ctrl handleSpaceKeyWithCommand: NO shift: NO control: NO option: NO
+                                selection: [NSArray arrayWithObject: folder]
+                                 baseNode: folder sourceWindow: nil],
+      "Space on a folder window with nothing selected does nothing");
     RELEASE(ctrl);
   }
 

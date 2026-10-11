@@ -20,6 +20,11 @@
 - (void)closeAnimated;
 @end
 
+@interface NSObject (GWLookInsideKeyWindow)
+- (id)keyWindow;
+- (id)baseNode;
+@end
+
 static GWLookInsideController *sharedInstance = nil;
 
 @implementation GWLookInsideController
@@ -100,11 +105,65 @@ static GWLookInsideController *sharedInstance = nil;
     }
 }
 
++ (NSArray *)selectionPathsOfNodes:(NSArray *)nodes baseNode:(id)baseNode
+{
+  if ([nodes count] == 0)
+    {
+      return nil;
+    }
+  if (baseNode != nil && [nodes count] == 1
+      && [[nodes objectAtIndex: 0] isEqual: baseNode])
+    {
+      return nil;
+    }
+  return [nodes valueForKey: @"path"];
+}
+
+- (BOOL)handleSpaceKeyWithCommand:(BOOL)command
+                            shift:(BOOL)shift
+                          control:(BOOL)control
+                           option:(BOOL)option
+                        selection:(NSArray *)nodes
+                         baseNode:(id)baseNode
+                     sourceWindow:(id)sourceWindow
+{
+  if (command || shift || control)
+    {
+      return NO;
+    }
+  return [self toggleLookInsideForPaths: [[self class] selectionPathsOfNodes: nodes
+                                                                    baseNode: baseNode]
+                           sourceWindow: sourceWindow
+                             fullScreen: option];
+}
+
+/* Looked up by name and by selector so this file needs no AppKit. */
+- (id)keyWindowBaseNode
+{
+  id app = [NSClassFromString(@"NSApplication") performSelector: @selector(sharedApplication)];
+  id window = [app respondsToSelector: @selector(keyWindow)] ? [app keyWindow] : nil;
+  id del = [window respondsToSelector: @selector(delegate)] ? [window delegate] : nil;
+
+  return [del respondsToSelector: @selector(baseNode)] ? [del baseNode] : nil;
+}
+
 - (void)selectionDidChange:(NSArray *)paths
 {
   if (!_open || [paths count] == 0 || [paths isEqual: _paths])
     {
       return;
+    }
+  /* A folder window whose own folder is its "selection" has nothing
+   * selected (a click on empty space); like the Finder, keep showing the
+   * last item instead of the folder. */
+  if ([paths count] == 1)
+    {
+      id base = [self keyWindowBaseNode];
+
+      if (base != nil && [[base path] isEqual: [paths objectAtIndex: 0]])
+        {
+          return;
+        }
     }
   ASSIGN(_paths, paths);
   [self showPathsInPanel: paths];

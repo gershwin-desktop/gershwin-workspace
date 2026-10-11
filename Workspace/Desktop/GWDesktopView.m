@@ -1398,17 +1398,17 @@ static CGFloat desktopScaleFactor(void)
 	}
       if (character == ' ')
 	{
-	  if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
-	    {
-	      /* Same Look Inside toggle a folder window's Space bar uses (see
-	       * GWViewerWindow -performKeyEquivalent:); -selectedNodes is
-	       * empty with nothing selected (no base-node fallback the way a
-	       * folder viewer's lastSelection has), so "no selection does
-	       * nothing" already falls out of the controller's own rule. */
-	      [[GWLookInsideController sharedController]
-		  toggleLookInsideForSelection: [self selectedNodes]
-				  sourceWindow: [self window]];
-	    }
+	  /* The shared Space handler of the folder windows (Option included);
+	   * the Desktop has no base folder, so an empty -selectedNodes
+	   * already means "nothing selected". */
+	  [[GWLookInsideController sharedController]
+	      handleSpaceKeyWithCommand: (flags & NSCommandKeyMask) != 0
+				  shift: (flags & NSShiftKeyMask) != 0
+				control: (flags & NSControlKeyMask) != 0
+				 option: (flags & NSAlternateKeyMask) != 0
+			      selection: [self selectedNodes]
+			       baseNode: nil
+			   sourceWindow: [self window]];
 	  return;
 	}
       if (character == 0x01B) // Escape

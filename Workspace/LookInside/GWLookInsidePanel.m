@@ -517,10 +517,12 @@ ButtonWidth(NSButton *button)
     {
       selection = [del lastSelection];
     }
+  selection = [GWLookInsideController selectionPathsOfNodes: selection
+                                                   baseNode: [del respondsToSelector: @selector(baseNode)]
+                                                             ? [del baseNode] : nil];
   if ([selection count] > 0)
     {
-      [[GWLookInsideController sharedController]
-        selectionDidChange: [selection valueForKey: @"path"]];
+      [[GWLookInsideController sharedController] selectionDidChange: selection];
     }
 }
 

@@ -63,6 +63,29 @@ typedef enum
  * it, and a closed panel stays closed. */
 - (void)selectionDidChange:(NSArray *)paths;
 
+/* The paths of `nodes` (anything responding to -path), or nil when there
+ * is no real selection.  A folder window reports its own folder as its
+ * selection while nothing inside it is selected; that is "nothing
+ * selected", not a request to look inside the folder itself. */
++ (NSArray *)selectionPathsOfNodes:(NSArray *)nodes baseNode:(id)baseNode;
+
+/* The one Space bar handler for every place that has a selection (folder
+ * windows and the Desktop): plain Space toggles the panel, Option-Space
+ * opens it straight into full screen, any other modifier is not ours.
+ * `nodes` is the selection as the caller knows it, `baseNode` the folder
+ * the caller shows (nil for the Desktop).  Returns YES if the key press
+ * was consumed. */
+- (BOOL)handleSpaceKeyWithCommand:(BOOL)command
+                            shift:(BOOL)shift
+                          control:(BOOL)control
+                           option:(BOOL)option
+                        selection:(NSArray *)nodes
+                         baseNode:(id)baseNode
+                     sourceWindow:(id)sourceWindow;
+
+/* Seam: the folder the key window shows, or nil (Desktop, no window). */
+- (id)keyWindowBaseNode;
+
 - (void)close;
 
 /* Overridable seam: the production body (in GWLookInsideController.m)

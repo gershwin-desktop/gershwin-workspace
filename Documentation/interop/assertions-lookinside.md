@@ -25,6 +25,8 @@ this round (see OPEN).
 
 - MI-LI-3 With one item, the arrow keys move the folder window's selection [S:Finder 10.6]
 - MI-LI-20 The open panel follows the selection (arrow keys, clicks in any folder window); an emptied selection keeps the last preview [S:Finder 10.6; emptied selection G]
+- MI-LI-24 A click on empty space in a folder window does not make the panel show that folder; the last item stays [G: Finder 10.6 shows the last item or nothing; the same rule as MI-LI-20]
+- MI-LI-25 Folder windows and the Desktop handle the space bar through one code path (`handleSpaceKeyWithCommand:...`), so Option-Space works on the Desktop too [G]
 - MI-LI-4 With several items, the arrow keys step through them [S:Finder 10.6]
 - MI-LI-8 Stepping wraps around at both ends [G: no dead end]
 - MI-LI-5 Command-Return shows the overview of several items; Return in it shows the highlighted item; a click on an item shows it [G: own key; Finder has an index sheet]
@@ -44,7 +46,7 @@ this round (see OPEN).
 - MI-LI-13 Images NSImage can decode are shown at their own size, scaled down to fit [S:Finder 10.6]
 - MI-LI-14 RTF and RTFD are shown as rich text [S:Finder 10.6]
 - MI-LI-15 The first 20 pages of a PDF are shown, rendered by poppler's pdftoppm; without it a PDF gets icon and facts [G: this AppKit reads no PDF]
-- MI-LI-16 Audio gets icon, facts and a Play button when NSSound can play the format; video gets icon and facts [G: no video playback in Workspace]
+- MI-LI-16 Audio gets icon, facts and a Play button when NSSound can play the format; video gets icon, facts, a poster frame (first representative frame made by ffmpeg when installed, never required) and a Play button that opens the file in its application [G: no video playback in Workspace]
 - MI-LI-17 Plain text is recognised by its bytes (UTF-8, no NUL), whatever its extension; the first 512 KB are shown [G]
 - MI-LI-18 Everything else, empty files included, gets a large icon with name, kind, size and date [S:Finder 10.6]
 - MI-LI-21 The facts: name, kind (Workspace's kind), size as everywhere in Workspace, modification date [S:Finder 10.6]

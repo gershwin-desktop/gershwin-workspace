@@ -207,44 +207,33 @@
 
   if ([characters length] > 0 && [characters characterAtIndex: 0] == ' ')
     {
-      /* Option-Space is the same toggle, opening straight into full
-       * screen. */
-      if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSControlKeyMask)))
+      /* Same handler as the Desktop's Space bar; Option opens straight
+       * into full screen.  Get Info's Attributes/Contents inspector -
+       * what Space used to open here - stays reachable only from its own
+       * menu item. */
+      id del = [self delegate];
+      NSArray *selection = nil;
+      id baseNode = nil;
+
+      if ([del respondsToSelector: @selector(lastSelection)])
         {
-          id del = [self delegate];
-          NSArray *selection = nil;
-
-          if ([del respondsToSelector: @selector(lastSelection)])
-            {
-              selection = [del lastSelection];
-            }
-
-          /* lastSelection still holds the base folder itself when nothing
-           * inside it is selected (the same convention -validateItem: in
-           * GWViewerBase/GWSpatialViewer checks before enabling Cut/Get
-           * Info/etc.): without this check, Space with nothing selected
-           * would open Look Inside on the folder itself instead of doing
-           * nothing. */
-          if ([selection count] == 1 && [del respondsToSelector: @selector(baseNode)])
-            {
-              FSNode *baseNode = [del baseNode];
-
-              if (baseNode && [[selection objectAtIndex: 0] isEqual: baseNode])
-                {
-                  selection = nil;
-                }
-            }
-
-          /* Space toggles the Look Inside panel for the current selection:
-           * opens it, or closes it if one is already open (from this
-           * window or another) regardless of what is selected now.  Get
-           * Info's Attributes/Contents inspector - what Space used to
-           * open here - stays reachable only from its own menu item. */
-          return [[GWLookInsideController sharedController]
-                     toggleLookInsideForPaths: [selection valueForKey: @"path"]
-                                 sourceWindow: self
-                                   fullScreen: (flags & NSAlternateKeyMask) != 0];
+          selection = [del lastSelection];
         }
+      /* lastSelection holds the base folder itself when nothing inside it
+       * is selected. */
+      if ([del respondsToSelector: @selector(baseNode)])
+        {
+          baseNode = [del baseNode];
+        }
+
+      return [[GWLookInsideController sharedController]
+                 handleSpaceKeyWithCommand: (flags & NSCommandKeyMask) != 0
+                                     shift: (flags & NSShiftKeyMask) != 0
+                                   control: (flags & NSControlKeyMask) != 0
+                                    option: (flags & NSAlternateKeyMask) != 0
+                                 selection: selection
+                                  baseNode: baseNode
+                              sourceWindow: self];
     }
 
   return NO;
