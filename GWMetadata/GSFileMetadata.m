@@ -1412,7 +1412,8 @@ static NSMutableDictionary *_metadataCache = nil;
     {
       NSData *qData = [_quarantine dataUsingEncoding: NSUTF8StringEncoding];
       if (qData)
-        [ad setXattr: qData forKey: @"com.apple.quarantine"];
+        [ad setXattr: [[self class] _sidecarQuarantine: qData]
+              forKey: @"com.apple.quarantine"];
     }
 
   NSData *result = [ad appleDoubleData];
@@ -1784,6 +1785,19 @@ static NSData *gsLookupResource(NSData *fork, GSOType type, BOOL useID,
   if ([value length] > 2 && memcmp([value bytes], "q/", 2) == 0)
     return [value subdataWithRange: NSMakeRange(2, [value length] - 2)];
   return value;
+}
+
+/* tar -x and dot_clean on 10.6 drop a sidecar quarantine value that lacks
+ * the "q/" prefix; the prefix is not doubled. */
++ (NSData *)_sidecarQuarantine:(NSData *)value
+{
+  NSMutableData *out;
+
+  if ([value length] >= 2 && memcmp([value bytes], "q/", 2) == 0)
+    return value;
+  out = [NSMutableData dataWithBytes: "q/" length: 2];
+  [out appendData: value];
+  return out;
 }
 
 + (BOOL)writeFolderIconICNS:(NSData *)icns atPath:(NSString *)folder error:(NSError **)error

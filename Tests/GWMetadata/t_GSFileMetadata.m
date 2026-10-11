@@ -424,6 +424,42 @@ main(void)
     [fm removeFileAtPath: dir handler: nil];
   }
 
+  /* 10.6 tar and dot_clean drop a quarantine value that lacks "q/": every
+   * sidecar we write carries it, exactly once. */
+  {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSString stringWithFormat: @"%@/gsfm-m4w-%d", NSTemporaryDirectory(), (int)getpid()];
+    NSString *file = [dir stringByAppendingString: @"/q.txt"];
+    NSString *plain = @"0000;4e8f1c2a;Safari;";
+    NSData *qv = [@"q/0000;4e8f1c2a;Safari;" dataUsingEncoding: NSUTF8StringEncoding];
+    GSFileMetadata *md;
+    GSAppleDouble *ad;
+
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [fm createFileAtPath: file contents: [NSData data] attributes: nil];
+    gs_setxattr([file fileSystemRepresentation], "user.com.apple.quarantine",
+                [plain UTF8String], [plain length], 0);
+    [GSFileMetadata invalidateAllCachedMetadata];
+    md = [GSFileMetadata metadataForFileAtPath: file];
+    PASS_EQUAL([md quarantine], plain, "quarantine xattr reads plain");
+    PASS([md writeSidecarToFileAtPath: file error: NULL], "sidecar written");
+    ad = [[[GSAppleDouble alloc] initWithData:
+      [NSData dataWithContentsOfFile: [GSFileMetadata sidecarPathForFilePath: file]]] autorelease];
+    PASS_EQUAL([[ad extendedAttributes] objectForKey: @"com.apple.quarantine"], qv,
+               "written sidecar carries q/ once");
+    ad = [[[GSAppleDouble alloc] initWithData: [md appleDoubleData]] autorelease];
+    PASS_EQUAL([[ad extendedAttributes] objectForKey: @"com.apple.quarantine"], qv,
+               "appleDoubleData carries q/");
+    md = [GSFileMetadata metadataFromAppleDoubleData: [md appleDoubleData]];
+    PASS_EQUAL([md quarantine], plain, "q/ sidecar reads back plain");
+    md.quarantine = @"q/0000;4e8f1c2a;Safari;";
+    ad = [[[GSAppleDouble alloc] initWithData: [md appleDoubleData]] autorelease];
+    PASS_EQUAL([[ad extendedAttributes] objectForKey: @"com.apple.quarantine"], qv,
+               "an already prefixed value is not doubled");
+    [fm removeFileAtPath: dir handler: nil];
+  }
+
   /* E15 many.txt: one attribute has an empty value; migrating the sidecar
    * must carry it as an empty xattr and all the others with it. */
   {
