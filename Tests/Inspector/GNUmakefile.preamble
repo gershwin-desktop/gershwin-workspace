@@ -16,3 +16,14 @@ ADDITIONAL_INCLUDE_DIRS += -I../../DSStore
 t_FinderInfoModel_OBJC_FILES += ../../DSStore/DSStore.m ../../DSStore/DSStoreCodecs.m \
                                 ../../DSStore/DSStoreEntry.m ../../DSStore/DSBuddyAllocator.m \
                                 ../../DSStore/SimpleColor.m
+
+# SummaryInfoModel reads label and lock state through FinderInfoModel.
+t_SummaryInfoModel_OBJC_FILES += ../../Inspector/FinderInfoModel.m \
+                                 ../../Inspector/FinderInfoLocker.m \
+                                 ../../GWMetadata/GSFileMetadata.m \
+                                 ../../GWMetadata/GSAppleDouble.m \
+                                 ../../GWMetadata/GWMetaXattr.m \
+                                 ../../DSStore/DSStore.m ../../DSStore/DSStoreCodecs.m \
+                                 ../../DSStore/DSStoreEntry.m ../../DSStore/DSBuddyAllocator.m \
+                                 ../../DSStore/SimpleColor.m
+t_SummaryInfoModel_TOOL_LIBS += -lgnustep-gui

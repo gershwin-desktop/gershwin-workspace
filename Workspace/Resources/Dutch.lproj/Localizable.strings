@@ -1504,3 +1504,19 @@
 
 "There is no application set to open \"%@\"." = "Er is geen programma ingesteld om \"%@\" te openen.";
 "Use Open as Folder to look inside it." = "Gebruik \"Open als map\" om erin te kijken.";
+"Recent Folders" = "Recente mappen";
+"Clear Menu" = "Wis menu";
+"Get Summary Info" = "Toon samenvatting van info";
+"Summary Info" = "Samenvatting van info";
+"Mixed" = "Gemengd";
+"Application" = "Programma";
+"Folder" = "Map";
+"%@ file" = "%@-bestand";
+"%lu items" = "%lu onderdelen";
+"Items:" = "Onderdelen:";
+"Kinds:" = "Soorten:";
+"Label:" = "Label:";
+"Locked:" = "Geblokkeerd:";
+"Calculating..." = "Bezig met berekenen...";
+"%@ bytes" = "%@ bytes";
+"%.1f %s (%@ bytes)" = "%.1f %s (%@ bytes)";

@@ -26,6 +26,7 @@
 #include "config.h"
 
 #import <objc/runtime.h>
+#import "GWRecentFolders.h"
 
 /* the following for getrlimit */
 #include <sys/types.h>
@@ -431,8 +432,11 @@ static Workspace *gworkspace = nil;
   subMenu = AUTORELEASE ([NSMenu new]);
   [menu setSubmenu: subMenu forItem: menuItem];
   ASSIGN (openWithMenu, subMenu);
-  menuItem = [menu addItemWithTitle:_(@"Open as Folder") action:@selector(openSelectionAsFolder:) keyEquivalent:@"O"];
-  [[menu itemWithTitle:_(@"Open as Folder")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
+  /* Cmd-Shift-O belongs to Go > Documents, as in Finder. Open as Folder has
+   * no Finder counterpart, so it takes Cmd-Ctrl-O, which nothing else in
+   * the menu bar uses. */
+  menuItem = [menu addItemWithTitle:_(@"Open as Folder") action:@selector(openSelectionAsFolder:) keyEquivalent:@"o"];
+  [[menu itemWithTitle:_(@"Open as Folder")] setKeyEquivalentModifierMask:NSCommandKeyMask | NSControlKeyMask];
 
 
   menuItem = [menu addItemWithTitle:_(@"Print") action:@selector(print:) keyEquivalent:@"p"];
@@ -444,6 +448,9 @@ static Workspace *gworkspace = nil;
   [menu addItem:[NSMenuItem separatorItem]];
   
   menuItem = [menu addItemWithTitle:_(@"Get Info") action:@selector(showAttributesInspector:) keyEquivalent:@"i"];
+  [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Get Summary Info") action:@selector(showSummaryInfo:) keyEquivalent:@"i"];
+  [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSControlKeyMask];
   [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
@@ -786,6 +793,11 @@ static Workspace *gworkspace = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
+  menuItem = [menu addItemWithTitle:_(@"Recent Folders") action:NULL keyEquivalent:@""];
+  recentFoldersMenu = AUTORELEASE ([NSMenu new]);
+  [recentFoldersMenu setDelegate: self];
+  [menu setSubmenu: recentFoldersMenu forItem: menuItem];
+
   menuItem = [menu addItemWithTitle:_(@"Go to Folder...") action:@selector(goToFolder:) keyEquivalent:@"G"];
   [menuItem setTarget:self];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
@@ -1756,9 +1768,15 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       || sel_isEqual(action, @selector(goToFolder:))
       || sel_isEqual(action, @selector(connectToServer:))
       || sel_isEqual(action, @selector(showHistory:))
+      || sel_isEqual(action, @selector(openRecentFolder:))
       || sel_isEqual(action, @selector(openParentFolder:)))
     {
       return YES;
+    }
+
+  if (sel_isEqual(action, @selector(showSummaryInfo:)))
+    {
+      return [selectedPaths count] > 0;
     }
 
   // Always-enabled app-level commands
@@ -3817,6 +3835,60 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   [self openSelectedPaths: [NSArray arrayWithObject: dirPath] newViewer: YES];
 }
 
+/* The submenu is rebuilt when it opens, so folders deleted meanwhile are
+ * not offered and no viewer has to know about the menu. */
+- (void)menuNeedsUpdate:(NSMenu *)menu
+{
+  NSEnumerator *e;
+  NSString *path;
+  id <NSMenuItem> item;
+
+  /* Changing the items makes the menu update itself again, which would
+   * land here once more without end. */
+  static BOOL rebuilding = NO;
+
+  if (menu != recentFoldersMenu || rebuilding)
+    {
+      return;
+    }
+  rebuilding = YES;
+  while ([menu numberOfItems] > 0)
+    {
+      [menu removeItemAtIndex: 0];
+    }
+  e = [[[GWRecentFolders sharedRecentFolders] folderPaths] objectEnumerator];
+  while ((path = [e nextObject]) != nil)
+    {
+      item = [menu addItemWithTitle: [path lastPathComponent]
+                             action: @selector(openRecentFolder:)
+                      keyEquivalent: @""];
+      [item setRepresentedObject: path];
+      [item setToolTip: path];
+      [item setTarget: self];
+    }
+  if ([menu numberOfItems] > 0)
+    {
+      [menu addItem: [NSMenuItem separatorItem]];
+    }
+  item = [menu addItemWithTitle: _(@"Clear Menu")
+                         action: @selector(clearRecentFolders:)
+                  keyEquivalent: @""];
+  [item setTarget: self];
+  [item setEnabled: [[[GWRecentFolders sharedRecentFolders] folderPaths] count] > 0];
+  rebuilding = NO;
+}
+
+- (void)openRecentFolder:(id)sender
+{
+  [self openSelectedPaths: [NSArray arrayWithObject: [sender representedObject]]
+                newViewer: YES];
+}
+
+- (void)clearRecentFolders:(id)sender
+{
+  [[GWRecentFolders sharedRecentFolders] clear];
+}
+
 - (void)goToDocuments:(id)sender
 {
   NSString *documentsPath = [NSHomeDirectory() stringByAppendingPathComponent: @"/Documents"];
@@ -4261,6 +4333,18 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 {
   [self showInspector: nil]; 
   [inspector showAttributes];
+}
+
+- (void)showSummaryInfo:(id)sender
+{
+  if ([selectedPaths count] > 1)
+    {
+      [inspector showSummaryInfoForPaths: selectedPaths];
+    }
+  else
+    {
+      [self showAttributesInspector: nil];
+    }
 }
 
 - (void)showContentsInspector:(id)sender

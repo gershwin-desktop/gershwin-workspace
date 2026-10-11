@@ -45,6 +45,7 @@
   id currentInspector;
 
   NSArray *currentPaths;
+  id summaryWindow;
   NSString *watchedPath;
     
   NSNotificationCenter *nc; 
@@ -53,6 +54,9 @@
 }
 
 - (void)activate;
+
+/* One window with the totals of several items (Finder's Get Summary Info). */
+- (void)showSummaryInfoForPaths:(NSArray *)paths;
 
 - (void)setCurrentSelection:(NSArray *)selection;
 

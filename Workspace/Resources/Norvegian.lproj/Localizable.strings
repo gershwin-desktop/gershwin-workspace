@@ -832,3 +832,21 @@
 
 "There is no application set to open \"%@\"." = "Det er ikke angitt noe program for å åpne \"%@\".";
 "Use Open as Folder to look inside it." = "Bruk «Åpne som mappe» for å se innholdet.";
+"Recent Folders" = "Nylige mapper";
+"Clear Menu" = "Tøm meny";
+"Get Summary Info" = "Vis sammendragsinfo";
+"Summary Info" = "Sammendragsinfo";
+"Mixed" = "Blandet";
+"Application" = "Program";
+"Folder" = "Mappe";
+"%@ file" = "%@-fil";
+"%lu items" = "%lu objekter";
+"Items:" = "Objekter:";
+"Kinds:" = "Typer:";
+"Label:" = "Etikett:";
+"Locked:" = "Låst:";
+"Calculating..." = "Beregner...";
+"Yes" = "Ja";
+"No" = "Nei";
+"%@ bytes" = "%@ byte";
+"%.1f %s (%@ bytes)" = "%.1f %s (%@ byte)";

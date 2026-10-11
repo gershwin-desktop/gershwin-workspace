@@ -38,6 +38,7 @@
 #include <stdint.h>
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
+#import "GWRecentFolders.h"
 #import "GWFolderViewOptions.h"
 #import "GWViewersManager.h"
 #import "GWViewer.h"
@@ -1866,6 +1867,7 @@ static GWViewersManager *vwrsmanager = nil;
 {
   if ([node isValid] && (settingHistoryPath == NO))
     {
+      [[GWRecentFolders sharedRecentFolders] noteFolderAtPath: [node path]];
       NSMutableArray *history = [viewer history];
       int position = [viewer historyPosition];
       id hisviewer = [historyWindow viewer];

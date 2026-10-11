@@ -1500,3 +1500,19 @@
 
 "There is no application set to open \"%@\"." = "Aucune application n'est définie pour ouvrir \"%@\".";
 "Use Open as Folder to look inside it." = "Utilisez « Ouvrir comme dossier » pour voir son contenu.";
+"Recent Folders" = "Dossiers récents";
+"Clear Menu" = "Effacer le menu";
+"Get Summary Info" = "Obtenir un résumé des informations";
+"Summary Info" = "Résumé des informations";
+"Mixed" = "Mixte";
+"Application" = "Application";
+"Folder" = "Dossier";
+"%@ file" = "Fichier %@";
+"%lu items" = "%lu éléments";
+"Items:" = "Éléments :";
+"Kinds:" = "Types :";
+"Label:" = "Étiquette :";
+"Locked:" = "Verrouillé :";
+"Calculating..." = "Calcul en cours...";
+"%@ bytes" = "%@ octets";
+"%.1f %s (%@ bytes)" = "%.1f %s (%@ octets)";

@@ -1465,3 +1465,20 @@
 
 "There is no application set to open \"%@\"." = "Nessuna applicazione è impostata per aprire \"%@\".";
 "Use Open as Folder to look inside it." = "Usa «Apri come cartella» per vederne il contenuto.";
+"Recent Folders" = "Cartelle recenti";
+"Clear Menu" = "Cancella menu";
+"Get Summary Info" = "Mostra riepilogo informazioni";
+"Summary Info" = "Riepilogo informazioni";
+"Mixed" = "Misto";
+"Application" = "Applicazione";
+"Folder" = "Cartella";
+"%@ file" = "File %@";
+"%lu items" = "%lu elementi";
+"Items:" = "Elementi:";
+"Kinds:" = "Tipi:";
+"Label:" = "Etichetta:";
+"Locked:" = "Bloccato:";
+"Calculating..." = "Calcolo in corso...";
+"No" = "No";
+"%@ bytes" = "%@ byte";
+"%.1f %s (%@ bytes)" = "%.1f %s (%@ byte)";

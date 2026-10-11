@@ -32,6 +32,7 @@
 #import "Tools.h"
 #import "Annotations.h"
 #import "FinderInfoPanel.h"
+#import "SummaryInfoWindow.h"
 #import "IconView.h"
 #import "Functions.h"
 
@@ -50,6 +51,7 @@ static NSString *nibName = @"InspectorWin";
   [nc removeObserver: self];
   RELEASE (watchedPath);
   RELEASE (currentPaths);
+  RELEASE (summaryWindow);
   RELEASE (inspectors);
   RELEASE (win);
    
@@ -150,6 +152,15 @@ static NSString *nibName = @"InspectorWin";
     [popUp selectItemAtIndex: index];
     [self activateInspector: popUp];
   }
+}
+
+- (void)showSummaryInfoForPaths:(NSArray *)paths
+{
+  if (summaryWindow == nil)
+    {
+      summaryWindow = [SummaryInfoWindow new];
+    }
+  [summaryWindow showForPaths: paths];
 }
 
 - (void)setCurrentSelection:(NSArray *)selection

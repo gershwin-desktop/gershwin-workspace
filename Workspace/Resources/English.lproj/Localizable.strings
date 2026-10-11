@@ -1216,3 +1216,19 @@
 
 "There is no application set to open \"%@\"." = "There is no application set to open \"%@\".";
 "Use Open as Folder to look inside it." = "Use Open as Folder to look inside it.";
+"Recent Folders" = "Recent Folders";
+"Clear Menu" = "Clear Menu";
+"Get Summary Info" = "Get Summary Info";
+"Summary Info" = "Summary Info";
+"Mixed" = "Mixed";
+"Application" = "Application";
+"Folder" = "Folder";
+"%@ file" = "%@ file";
+"%lu items" = "%lu items";
+"Items:" = "Items:";
+"Kinds:" = "Kinds:";
+"Label:" = "Label:";
+"Locked:" = "Locked:";
+"Calculating..." = "Calculating...";
+"%@ bytes" = "%@ bytes";
+"%.1f %s (%@ bytes)" = "%.1f %s (%@ bytes)";

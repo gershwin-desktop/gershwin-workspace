@@ -834,3 +834,21 @@
 
 "There is no application set to open \"%@\"." = "Nincs beállítva alkalmazás a(z) \"%@\" megnyitásához.";
 "Use Open as Folder to look inside it." = "A tartalom megtekintéséhez használja a „Megnyitás mappaként” parancsot.";
+"Recent Folders" = "Legutóbbi mappák";
+"Clear Menu" = "Menü törlése";
+"Get Summary Info" = "Összegző információ";
+"Summary Info" = "Összegző információ";
+"Mixed" = "Vegyes";
+"Application" = "Alkalmazás";
+"Folder" = "Mappa";
+"%@ file" = "%@ fájl";
+"%lu items" = "%lu elem";
+"Items:" = "Elemek:";
+"Kinds:" = "Típusok:";
+"Label:" = "Címke:";
+"Locked:" = "Zárolva:";
+"Calculating..." = "Számítás...";
+"Yes" = "Igen";
+"No" = "Nem";
+"%@ bytes" = "%@ bájt";
+"%.1f %s (%@ bytes)" = "%.1f %s (%@ bájt)";

@@ -45,6 +45,8 @@ Inspector_OBJC_FILES = \
          FinderInfoModel.m \
          FinderInfoLocker.m \
          FinderInfoPanel.m \
+         SummaryInfoModel.m \
+         SummaryInfoWindow.m \
          IconView.m \
          TimeDateView.m \
          Functions.m

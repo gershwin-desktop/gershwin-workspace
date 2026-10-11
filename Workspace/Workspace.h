@@ -126,6 +126,7 @@
   NSPanel *infoPanel;
   
   History *history;
+  NSMenu *recentFoldersMenu;
   int maxHistoryCache;
     
   GWViewersManager *vwrsManager;
@@ -389,6 +390,9 @@
 - (void)showInspector:(id)sender;
 
 - (void)showAttributesInspector:(id)sender;
+- (void)showSummaryInfo:(id)sender;
+- (void)openRecentFolder:(id)sender;
+- (void)clearRecentFolders:(id)sender;
 
 - (void)showContentsInspector:(id)sender;
 
