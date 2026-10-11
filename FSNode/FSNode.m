@@ -27,6 +27,7 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
 #import "FSNode.h"
+#import "GSFileMetadata.h"
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
@@ -635,7 +636,7 @@
           /* Not a valid bundle at all — don't set package either,
            * so double-click navigates into it as a plain directory. */
         }
-	    } else if (type == NSPlainFileType) {
+	    } else if ([FSNode isPackageDirectoryAtPath: path]) {
         flags.package = 1;
       }
 
@@ -697,7 +698,7 @@
           /* Not a valid bundle at all — don't set package either,
            * so double-click navigates into it as a plain directory. */
         }
-	    } else if (type == NSPlainFileType) {
+	    } else if ([FSNode isPackageDirectoryAtPath: path]) {
         flags.package = 1;
       } else if (type == NSFilesystemFileType) {
         flags.mountpoint = 1;
@@ -1012,6 +1013,38 @@ finderDateText(NSDate *date)
 - (void)setMountPoint:(BOOL)value
 {
   flags.mountpoint = value;
+}
+
+/* The one place that decides whether a directory is shown as a single item
+ * (opened with its application, browsable only via Open as Folder). The
+ * workspace's file-type guess is not consulted: it called any folder with a
+ * registered extension a package. .app is decided by -setTypeFlags, which
+ * also demands a valid bundle structure. */
++ (BOOL)isPackageExtension:(NSString *)ext
+{
+  static NSSet *exts = nil;
+
+  if (exts == nil) {
+    exts = [[NSSet alloc] initWithObjects:
+      @"rtfd", @"pages", @"numbers", @"key", @"bundle", @"plugin",
+      @"kext", @"prefpane", @"playground", @"xcodeproj",
+      @"xcworkspace", @"qlgenerator", @"mdimporter", @"saver", @"wdgt",
+      @"component", @"vst", @"vst3", @"appex", @"xpc", @"dsym", @"workflow",
+      @"action", @"photoslibrary", @"nib", @"gorm", @"theme", @"service", nil];
+  }
+  return [exts containsObject: [ext lowercaseString]];
+}
+
++ (BOOL)isPackageDirectoryAtPath:(NSString *)path
+{
+  GSFileMetadata *md;
+
+  if ([self isPackageExtension: [path pathExtension]]) {
+    return YES;
+  }
+  /* Finder's kHasBundle marks a folder as a package whatever its name. */
+  md = [GSFileMetadata metadataForFileAtPath: path];
+  return (md != nil && [md hasBundle]);
 }
 
 - (BOOL)isApplication 

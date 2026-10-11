@@ -227,6 +227,11 @@
 
 - (BOOL)isPackage;
 
+/* The single decision which directories are packages (extension list or
+ * Finder kHasBundle); the extension is matched case-insensitively. */
++ (BOOL)isPackageExtension:(NSString *)ext;
++ (BOOL)isPackageDirectoryAtPath:(NSString *)path;
+
 - (BOOL)isReadable;
 
 - (BOOL)isWritable;
