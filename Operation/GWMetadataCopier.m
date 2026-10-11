@@ -35,6 +35,14 @@ copyError(NSString *path, NSString *what, int code)
                                       NSLocalizedDescriptionKey: reason }];
 }
 
+/* Windows has no lstat() and no symbolic links worth skipping here, so a
+ * plain stat() answers the same question there. */
+#if defined(_WIN32)
+#define gw_lstat(p, st) stat((p), (st))
+#else
+#define gw_lstat(p, st) lstat((p), (st))
+#endif
+
 @implementation GWMetadataCopier
 
 @synthesize xattrSupportProbe = _xattrSupportProbe;
@@ -46,12 +54,12 @@ copyError(NSString *path, NSString *what, int code)
   if (self)
     {
       _xattrSupportProbe = [^int(NSString *path) {
-        return gs_xattr_supported([path fileSystemRepresentation]);
+        return gs_xattr_supported(GW_FSREP(path));
       } copy];
       _xattrSetter = [^int(NSString *path, NSString *name, NSData *value) {
         /* gs_setxattr refuses a NULL value, an empty one needs a pointer. */
         const void *bytes = [value length] ? [value bytes] : "";
-        return gs_setxattr([path fileSystemRepresentation], [name UTF8String],
+        return gs_setxattr(GW_FSREP(path), [name UTF8String],
                            bytes, [value length], 0) == 0 ? 0 : errno;
       } copy];
     }
@@ -76,7 +84,7 @@ copyError(NSString *path, NSString *what, int code)
  * *error set when one cannot be read. */
 - (NSDictionary *)_attributesAtPath:(NSString *)path error:(NSError **)error
 {
-  const char *cpath = [path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(path);
   gs_xattr_list_t *list = gs_xattr_list_for_path(cpath,
                                                  [GWUserNamespace UTF8String]);
   NSMutableDictionary *attrs = [NSMutableDictionary dictionary];
@@ -122,7 +130,7 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
                        atPath:(NSString *)path
                         error:(NSError **)error
 {
-  const char *cpath = [path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(path);
   NSMutableArray *written = [NSMutableArray array];
 
   for (NSString *name in attrs)
@@ -217,12 +225,12 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
   NSString *dstSidecar = [[self class] sidecarPathForPath: dstPath];
   NSData *sidecarData;
   NSDictionary *attrs;
-  const char *cdst = [dstPath fileSystemRepresentation];
+  const char *cdst = GW_FSREP(dstPath);
   struct stat dst;
   BOOL widened = NO;
   BOOL ok;
 
-  if (lstat([srcPath fileSystemRepresentation], &st) != 0)
+  if (gw_lstat(GW_FSREP(srcPath), &st) != 0)
     {
       if (error)
         *error = copyError(srcPath, @"cannot stat", errno);
@@ -325,9 +333,8 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
 {
   struct stat src, dstDir;
 
-  if (lstat([srcPath fileSystemRepresentation], &src) != 0
-      || stat([[dstPath stringByDeletingLastPathComponent]
-                fileSystemRepresentation], &dstDir) != 0)
+  if (gw_lstat(GW_FSREP(srcPath), &src) != 0
+      || stat(GW_FSREP([dstPath stringByDeletingLastPathComponent]), &dstDir) != 0)
     return NO;
   return src.st_dev == dstDir.st_dev;
 }
