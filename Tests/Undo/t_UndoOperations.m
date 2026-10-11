@@ -266,6 +266,20 @@ int main(void)
     }
   END_SET("make alias")
 
+  START_SET("make alias in the same folder keeps the original")
+    {
+      NSUInteger before;
+
+      touch(@"A/same");
+      before = [[fm directoryContentsAtPath: P(@"A")] count];
+      NEED(PASS(perform(FSNWorkspaceCreateAliasOperation, P(@"A"), P(@"A"),
+                        [NSArray arrayWithObject: @"same"]), "make alias in place finished"));
+      PASS(exists(@"A/same"), "the original is still there");
+      PASS([[fm directoryContentsAtPath: P(@"A")] count] == before + 1,
+           "the alias was written next to it");
+    }
+  END_SET("make alias in the same folder keeps the original")
+
   START_SET("new folder")
     [controller performOperation:
       [NSDictionary dictionaryWithObjectsAndKeys: @"WorkspaceCreateDirOperation", @"operation",

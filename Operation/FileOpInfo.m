@@ -981,12 +981,20 @@ shouldMakeNewConnection:(NSConnection*)newConn
       else if (([operation isEqual: NSWorkspaceDestroyOperation]) 
                || ([operation isEqual: NSWorkspaceDuplicateOperation])
                || ([operation isEqual: NSWorkspaceRecycleOperation])
+               || ([operation isEqual: FSNWorkspaceCreateAliasOperation])
                || ([operation isEqual: @"WorkspaceemptyTrashOperation"]))
         {
+          /* These never replace what is there (an alias or a duplicate gets
+           * a new name), so no conflict may be left behind for the do*
+           * methods: doAlias used to "replace" the source itself, because
+           * the original always sits in the alias' own folder. */
+          samename = NO;
           return NO;
         } 
     }
   
+  /* The answer and the state the do* methods read must agree. */
+  samename = NO;
   return NO;
 }
 
