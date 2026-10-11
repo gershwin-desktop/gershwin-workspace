@@ -477,6 +477,34 @@ int main(void)
                  "MI-AR-28 the xattr holds the plain value, q/ stripped");
   }
 
+  /* --- extracting onto a volume a Mac reads through ._ files ----------- */
+  if (gs_xattr_supported([root fileSystemRepresentation]) == 1)
+    {
+      NSString *tar = [root stringByAppendingPathComponent: @"stick.tar"];
+      writeArchive(tar, NO, @[ @"many.txt", @"._many.txt", @"d/", @"._d" ],
+                   @[ body, manyAD, [NSNull null], dirAD ]);
+      NSString *dest = fresh(@"out-stick");
+      [GSFileMetadata setFilesystemTypeProbe: ^NSString *(NSString *path) {
+        return [path hasPrefix: dest] ? @"exfat" : @"ext4";
+      }];
+      NSError *err = nil;
+      PASS([GWMetaArchive extractArchive: tar toDir: dest error: &err],
+           "MI-AR-29 tar extracts onto exFAT (%s)",
+           err ? [[err description] UTF8String] : "ok");
+      NSString *f = [dest stringByAppendingPathComponent: @"many.txt"];
+      NSString *d = [dest stringByAppendingPathComponent: @"d"];
+      PASS_EQUAL([NSData dataWithContentsOfFile:
+                    [GSFileMetadata sidecarPathForFilePath: f]], manyAD,
+                 "MI-AR-29 the file's companion stays its sidecar, byte for byte");
+      PASS_EQUAL([NSData dataWithContentsOfFile:
+                    [GSFileMetadata sidecarPathForFilePath: d]], dirAD,
+                 "MI-AR-29 so does the folder's");
+      PASS(getx(f, @"user.com.apple.FinderInfo") == nil
+           && getx(d, @"user.com.apple.FinderInfo") == nil,
+           "MI-AR-29 nothing becomes an attribute the Mac would not see");
+      [GSFileMetadata setFilesystemTypeProbe: nil];
+    }
+
   [fm removeFileAtPath: root handler: nil];
   [pool release];
   return 0;

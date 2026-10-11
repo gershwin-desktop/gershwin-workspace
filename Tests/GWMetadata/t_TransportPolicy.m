@@ -15,6 +15,7 @@
 #import "GSFileMetadata.h"
 #import "GWMetaXattr.h"
 #include <unistd.h>
+#include <string.h>
 
 static NSString *gFsType = nil;
 
@@ -77,6 +78,17 @@ int main(void)
          && !wants("ufs") && !wants("ffs") && !wants("tmpfs")
          && !wants("nfs") && !wants("fuse.sshfs") && !wants(""),
          "native Unix filesystems keep attributes");
+    PASS(gs_fs_type_name_for_magic(0x4d44UL, NULL, name, sizeof(name)) == 0
+         && strcmp(name, "msdos") == 0, "Linux FAT magic is msdos");
+    PASS(gs_fs_type_name_for_magic(0x65735546UL, "fuseblk", name,
+                                   sizeof(name)) == 0
+         && strcmp(name, "fuseblk") == 0, "FUSE takes its mountinfo type");
+    PASS(gs_fs_type_name_for_magic(0x65735546UL, NULL, name, sizeof(name)) == 0
+         && strcmp(name, "fuse") == 0 && !wants(name),
+         "FUSE without a mountinfo entry is plain fuse, kept native");
+    PASS(gs_fs_type_name_for_magic(0x12345678UL, NULL, name, sizeof(name)) == 0
+         && !wants(name),
+         "a magic we do not list is named (%s) and kept native", name);
     PASS(gs_fs_type_name(GW_FSREP(dir), name, sizeof(name)) == 0
          && name[0] != '\0',
          "the real probe names the scratch filesystem (%s)", name);
@@ -96,7 +108,7 @@ int main(void)
     PASS([GSFileMetadata storesMetadataInAppleDoubleAtPath: dir] == 0, "ext4: 0");
     gFsType = nil;
     PASS([GSFileMetadata storesMetadataInAppleDoubleAtPath: dir] == -1,
-         "unknown type: -1");
+         "filesystem cannot be examined: -1");
   END_SET("the policy reports per path")
 
   START_SET("saving on a Mac-read volume writes the sidecar, not attributes")
@@ -140,6 +152,22 @@ int main(void)
          "a later save keeps the sidecar and still writes no attribute");
   END_SET("saving on a Mac-read volume writes the sidecar, not attributes")
 
+  START_SET("a share that refuses ._ files")
+    gFsType = @"smb3";
+    NSString *f = freshFile(dir, @"vetoed.txt");
+    NSString *sc = [GSFileMetadata sidecarPathForFilePath: f];
+    [[NSFileManager defaultManager] createDirectoryAtPath: sc attributes: nil];
+    GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
+    NSError *err = nil;
+    md.finderComment = @"x";
+    PASS(![md writeToFileAtPath: f error: &err]
+         && [[err localizedDescription] rangeOfString:
+               @"fruit:veto_appledouble"].location != NSNotFound,
+         "the save fails and names the Samba option to change");
+    PASS(appleXattrCount(f) == 0, "no attribute was written instead");
+    [[NSFileManager defaultManager] removeFileAtPath: sc handler: nil];
+  END_SET("a share that refuses ._ files")
+
   START_SET("saving on a native disk is unchanged")
     gFsType = @"ext4";
     NSString *f = freshFile(dir, @"native.txt");
@@ -155,7 +183,19 @@ int main(void)
       }
   END_SET("saving on a native disk is unchanged")
 
-  START_SET("an unknown filesystem type fails the save")
+  START_SET("an unlisted filesystem keeps attributes")
+    gFsType = @"0x12345678";
+    NSString *f = freshFile(dir, @"exotic.txt");
+    GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
+    md.typeCode = 0x54455854;
+    if (gs_xattr_supported(GW_FSREP(f)) == 1)
+      {
+        PASS([md writeToFileAtPath: f error: NULL] && appleXattrCount(f) > 0,
+             "unlisted type: saved as attributes like before");
+      }
+  END_SET("an unlisted filesystem keeps attributes")
+
+  START_SET("a filesystem that cannot be examined fails the save")
     gFsType = nil;
     NSString *f = freshFile(dir, @"unknown.txt");
     GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
@@ -166,7 +206,7 @@ int main(void)
     PASS(appleXattrCount(f) == 0 && ![[NSFileManager defaultManager]
            fileExistsAtPath: [GSFileMetadata sidecarPathForFilePath: f]],
          "and leaves nothing behind");
-  END_SET("an unknown filesystem type fails the save")
+  END_SET("a filesystem that cannot be examined fails the save")
 
   START_SET("reading on a Mac-read volume merges the sidecar")
     NSString *f = freshFile(dir, @"fat.txt");
@@ -195,7 +235,7 @@ int main(void)
       }
   END_SET("reading on a Mac-read volume merges the sidecar")
 
-  START_SET("reading with an unknown filesystem type gives nothing")
+  START_SET("reading where the filesystem cannot be examined gives nothing")
     NSString *f = freshFile(dir, @"unk.txt");
     GSFileMetadata *mac = [[[GSFileMetadata alloc] init] autorelease];
     mac.finderComment = @"x";
@@ -204,7 +244,7 @@ int main(void)
     gFsType = nil;
     PASS([GSFileMetadata metadataForFileAtPath: f forceSidecar: NO] == nil,
          "no guess when the filesystem cannot be told");
-  END_SET("reading with an unknown filesystem type gives nothing")
+  END_SET("reading where the filesystem cannot be examined gives nothing")
 
   [GSFileMetadata setFilesystemTypeProbe: nil];
   [[NSFileManager defaultManager] removeFileAtPath: dir handler: nil];

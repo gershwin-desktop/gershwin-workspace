@@ -509,11 +509,7 @@ gs_xattr_list_free(gs_xattr_list_t *list)
  * Filesystem type
  * =================================================================== */
 
-#if defined(__linux__)
-# include <sys/vfs.h>
-# include <sys/stat.h>
-# include <sys/sysmacros.h>
-# include <stdio.h>
+#include <stdio.h>
 
 /* Linux only gives a magic number; these are the names mount(8) uses.
  * vfat and msdos share one magic, as do ext2, ext3 and ext4. */
@@ -542,9 +538,36 @@ static const struct { unsigned long magic; const char *name; } gsFsMagic[] = {
 };
 #define GS_FUSE_MAGIC 0x65735546UL
 
-static int
-gs_copy_name(const char *name, char *buf, size_t size)
+int
+gs_fs_type_name_for_magic(unsigned long magic, const char *fuseType,
+                          char *buf, size_t size)
 {
+  const char *name = NULL;
+  size_t i;
+
+  if (!buf || size == 0)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+  if (magic == GS_FUSE_MAGIC)
+    name = fuseType ? fuseType : "fuse";
+  for (i = 0; name == NULL && i < sizeof(gsFsMagic) / sizeof(gsFsMagic[0]); i++)
+    {
+      if (magic == gsFsMagic[i].magic)
+        name = gsFsMagic[i].name;
+    }
+  if (name == NULL)
+    {
+      /* Identified, just not one we tell apart: a name no rule matches,
+       * so the item keeps the native behaviour. */
+      if (snprintf(buf, size, "0x%lx", magic) >= (int)size)
+        {
+          errno = ENAMETOOLONG;
+          return -1;
+        }
+      return 0;
+    }
   if (strlen(name) >= size)
     {
       errno = ENAMETOOLONG;
@@ -554,8 +577,14 @@ gs_copy_name(const char *name, char *buf, size_t size)
   return 0;
 }
 
+#if defined(__linux__)
+# include <sys/vfs.h>
+# include <sys/stat.h>
+# include <sys/sysmacros.h>
+
 /* FUSE shares one magic between ntfs-3g, exfat-fuse, sshfs and the rest;
- * only mountinfo, keyed by the device number, says which one it is. */
+ * only mountinfo, keyed by the device number, says which one it is.
+ * Returns 0 when it does not say: the filesystem is still FUSE. */
 static int
 gs_fuse_type_name(const char *path, char *buf, size_t size)
 {
@@ -565,12 +594,12 @@ gs_fuse_type_name(const char *path, char *buf, size_t size)
   FILE *f;
 
   if (stat(path, &st) != 0)
-    return -1;
+    return 0;
   snprintf(key, sizeof(key), " %u:%u ",
            (unsigned)major(st.st_dev), (unsigned)minor(st.st_dev));
   f = fopen("/proc/self/mountinfo", "r");
   if (f == NULL)
-    return -1;
+    return 0;
   while (fgets(line, sizeof(line), f) != NULL)
     {
       char *sep;
@@ -582,25 +611,22 @@ gs_fuse_type_name(const char *path, char *buf, size_t size)
       type = sep + 3;
       n = strcspn(type, " \n");
       fclose(f);
-      if (n >= size)
-        {
-          errno = ENAMETOOLONG;
-          return -1;
-        }
+      if (n == 0 || n >= size)
+        return 0;
       memcpy(buf, type, n);
       buf[n] = '\0';
-      return 0;
+      return 1;
     }
   fclose(f);
-  errno = ENOENT;
-  return -1;
+  return 0;
 }
 
 int
 gs_fs_type_name(const char *path, char *buf, size_t size)
 {
   struct statfs sf;
-  size_t i;
+  char fuse[64];
+  int haveFuse = 0;
 
   if (!path || !buf || size == 0)
     {
@@ -610,19 +636,9 @@ gs_fs_type_name(const char *path, char *buf, size_t size)
   if (statfs(path, &sf) != 0)
     return -1;
   if ((unsigned long)sf.f_type == GS_FUSE_MAGIC)
-    return gs_fuse_type_name(path, buf, size);
-  for (i = 0; i < sizeof(gsFsMagic) / sizeof(gsFsMagic[0]); i++)
-    {
-      if ((unsigned long)sf.f_type == gsFsMagic[i].magic)
-        return gs_copy_name(gsFsMagic[i].name, buf, size);
-    }
-  /* Not one of ours to tell apart: a name that no rule matches. */
-  if (snprintf(buf, size, "0x%lx", (unsigned long)sf.f_type) >= (int)size)
-    {
-      errno = ENAMETOOLONG;
-      return -1;
-    }
-  return 0;
+    haveFuse = gs_fuse_type_name(path, fuse, sizeof(fuse));
+  return gs_fs_type_name_for_magic((unsigned long)sf.f_type,
+                                   haveFuse ? fuse : NULL, buf, size);
 }
 
 #elif defined(__FreeBSD__) || defined(__OpenBSD__)
@@ -716,6 +732,20 @@ gs_fs_type_wants_appledouble(const char *fstype)
   for (i = 0; i < sizeof(appleDouble) / sizeof(appleDouble[0]); i++)
     {
       if (strcmp(name, appleDouble[i]) == 0)
+        return 1;
+    }
+  return 0;
+}
+
+int
+gs_fs_type_is_smb(const char *fstype)
+{
+  static const char *const smb[] = { "cifs", "smb", "smb2", "smb3", "smbfs" };
+  size_t i;
+
+  for (i = 0; fstype && i < sizeof(smb) / sizeof(smb[0]); i++)
+    {
+      if (strcmp(fstype, smb[i]) == 0)
         return 1;
     }
   return 0;

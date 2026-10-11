@@ -99,6 +99,23 @@ int gs_xattr_supported(const char *path);
 int gs_fs_type_name(const char *path, char *buf, size_t size);
 
 /**
+ * The name gs_fs_type_name() gives a Linux statfs magic number; fuseType is
+ * the mountinfo type for FUSE (NULL when mountinfo does not say, giving
+ * "fuse").  A magic we do not list is named "0x<hex>", which no rule below
+ * matches.  Separate so that tests can feed any magic.
+ *
+ * @return 0, or -1 with errno set (ENAMETOOLONG when buf is too small)
+ */
+int gs_fs_type_name_for_magic(unsigned long magic, const char *fuseType,
+                              char *buf, size_t size);
+
+/**
+ * Whether the type is an SMB mount, where a Samba server may refuse "._"
+ * files (vfs_fruit, fruit:veto_appledouble).
+ */
+int gs_fs_type_is_smb(const char *fstype);
+
+/**
  * Whether a Mac reads Finder metadata on a filesystem of this type only
  * from "._" AppleDouble files: FAT, exFAT, SMB and NTFS.  There, metadata
  * must be written as sidecars even when the local mount would accept

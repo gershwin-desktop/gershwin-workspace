@@ -1308,14 +1308,7 @@ static NSMutableDictionary *_metadataCache = nil;
                                                          contents: appleDoubleData
                                                        attributes: nil];
   if (!written && error)
-    {
-      *error = [NSError errorWithDomain: NSCocoaErrorDomain
-                                   code: NSFileWriteUnknownError
-                               userInfo: @{
-        NSFilePathErrorKey: sidecarPath,
-        NSLocalizedDescriptionKey: @"Could not write AppleDouble sidecar file"
-      }];
-    }
+    *error = [[self class] sidecarWriteErrorAtPath: sidecarPath code: errno];
 
   return written;
 }
@@ -1946,22 +1939,43 @@ static GSFilesystemTypeProbe gsFilesystemTypeProbe = nil;
   ASSIGNCOPY(gsFilesystemTypeProbe, probe);
 }
 
-+ (NSInteger)storesMetadataInAppleDoubleAtPath:(NSString *)path
+static NSString *
+gsFilesystemTypeAtPath(NSString *path)
 {
-  NSString *type = nil;
+  char name[64];
 
   if (gsFilesystemTypeProbe != nil)
-    type = gsFilesystemTypeProbe(path);
-  else
-    {
-      char name[64];
+    return gsFilesystemTypeProbe(path);
+  if (gs_fs_type_name(GW_FSREP(path), name, sizeof(name)) != 0)
+    return nil;
+  return [NSString stringWithUTF8String: name];
+}
 
-      if (gs_fs_type_name(GW_FSREP(path), name, sizeof(name)) == 0)
-        type = [NSString stringWithUTF8String: name];
-    }
++ (NSInteger)storesMetadataInAppleDoubleAtPath:(NSString *)path
+{
+  NSString *type = gsFilesystemTypeAtPath(path);
+
   if (type == nil)
     return -1;
   return gs_fs_type_wants_appledouble([type UTF8String]);
+}
+
++ (NSError *)sidecarWriteErrorAtPath:(NSString *)sidecarPath code:(int)code
+{
+  NSString *type = gsFilesystemTypeAtPath(
+    [sidecarPath stringByDeletingLastPathComponent]);
+  NSString *reason = [NSString stringWithFormat:
+    @"Could not write AppleDouble sidecar file: %s",
+    code ? strerror(code) : "unknown error"];
+
+  if (type != nil && gs_fs_type_is_smb([type UTF8String]))
+    reason = [reason stringByAppendingString:
+      @" (a Samba server with vfs_fruit refuses \"._\" files unless the"
+      @" share sets fruit:veto_appledouble = no)"];
+  return [NSError errorWithDomain: NSPOSIXErrorDomain
+                             code: code
+                         userInfo: @{ NSFilePathErrorKey: sidecarPath,
+                                      NSLocalizedDescriptionKey: reason }];
 }
 
 + (NSString *)sidecarPathForFilePath:(NSString *)filePath

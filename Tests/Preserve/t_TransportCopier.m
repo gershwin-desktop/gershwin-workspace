@@ -220,7 +220,7 @@ main(void)
          "the metadata arrived in the sidecar");
   END_SET("move onto a Mac-read volume")
 
-  START_SET("unknown destination filesystem")
+  START_SET("destination filesystem cannot be examined")
     stickType = nil;
     NSString *src = mk(root, @"unk.txt");
     setx(src, @"user.com.apple.FinderInfo", finfo);
@@ -229,7 +229,34 @@ main(void)
     [copier copyItemAtPath: src toPath: dst handler: nil metadataError: &err];
     PASS(err != nil && userXattrCount(dst) == 0 && sidecarOf(dst) == nil,
          "the copy reports the metadata as not carried and guesses nothing");
-  END_SET("unknown destination filesystem")
+  END_SET("destination filesystem cannot be examined")
+
+  START_SET("unlisted destination filesystem keeps attributes")
+    stickType = @"0x12345678";
+    NSString *src = mk(root, @"exotic.txt");
+    setx(src, @"user.com.apple.FinderInfo", finfo);
+    NSString *dst = [stick stringByAppendingPathComponent: @"exotic.txt"];
+    err = nil;
+    PASS([copier copyItemAtPath: src toPath: dst handler: nil metadataError: &err]
+         && err == nil && userXattrCount(dst) == 1 && sidecarOf(dst) == nil,
+         "a type we do not list is copied as before: attribute, no sidecar");
+  END_SET("unlisted destination filesystem keeps attributes")
+
+  START_SET("a share that refuses ._ files")
+    stickType = @"cifs";
+    NSString *src = mk(root, @"vetoed.txt");
+    setx(src, @"user.com.apple.FinderInfo", finfo);
+    NSString *dst = [stick stringByAppendingPathComponent: @"vetoed.txt"];
+    /* Stands in for Samba's veto: the sidecar cannot be created. */
+    [fm createDirectoryAtPath: [GWMetadataCopier sidecarPathForPath: dst]
+                   attributes: nil];
+    err = nil;
+    [copier copyItemAtPath: src toPath: dst handler: nil metadataError: &err];
+    PASS(err != nil && [[err localizedDescription]
+           rangeOfString: @"fruit:veto_appledouble"].location != NSNotFound,
+         "the copy fails and names the Samba option to change");
+    PASS(userXattrCount(dst) == 0, "no attribute was written instead");
+  END_SET("a share that refuses ._ files")
 
   START_SET("native destination is unchanged")
     NSString *src = mk(root, @"nat.txt");

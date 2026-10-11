@@ -185,7 +185,7 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
       if (![base writeToFile: sidecar atomically: YES])
         {
           if (error)
-            *error = copyError(sidecar, @"cannot write sidecar", errno);
+            *error = [GSFileMetadata sidecarWriteErrorAtPath: sidecar code: errno];
           return NO;
         }
       return YES;
@@ -226,7 +226,7 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
   if (![out writeToFile: sidecar atomically: YES])
     {
       if (error)
-        *error = copyError(sidecar, @"cannot write sidecar", errno);
+        *error = [GSFileMetadata sidecarWriteErrorAtPath: sidecar code: errno];
       return NO;
     }
   return YES;
@@ -317,7 +317,7 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
               && ![sidecarData writeToFile: dstSidecar atomically: YES])
             {
               if (error)
-                *error = copyError(dstSidecar, @"cannot write sidecar", errno);
+                *error = [GSFileMetadata sidecarWriteErrorAtPath: dstSidecar code: errno];
               ok = NO;
             }
         }

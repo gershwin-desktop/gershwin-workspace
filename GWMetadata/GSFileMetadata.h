@@ -455,6 +455,13 @@ typedef NSString *(^GSFilesystemTypeProbe)(NSString *path);
  */
 + (NSInteger)storesMetadataInAppleDoubleAtPath:(NSString *)path;
 
+/**
+ * The error for a "._" sidecar that could not be written.  On an SMB share
+ * it names the Samba setting that refuses such files, since nothing else
+ * can carry the metadata to a Mac there.
+ */
++ (NSError *)sidecarWriteErrorAtPath:(NSString *)sidecarPath code:(int)code;
+
 /** Replaces the filesystem type probe (tests); nil restores the real one. */
 + (void)setFilesystemTypeProbe:(GSFilesystemTypeProbe)probe;
 
