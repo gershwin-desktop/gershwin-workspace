@@ -41,6 +41,7 @@
   NSPopUpButton *backgroundPopUp;
   NSColorWell *colorWell;
   NSButton *pictureButton;
+  NSImageView *pictureWell;
 
   NSPopUpButton *listTextSizePopUp;
   NSPopUpButton *listIconSizePopUp;

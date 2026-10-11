@@ -310,4 +310,17 @@ withoutScrollPosition(NSDictionary *values)
   return [[FSNAlias aliasWithTargetPath: inVolume volumeName: volumeName] aliasData];
 }
 
++ (NSString *)backgroundImagePathForAlias:(NSData *)aliasData
+{
+  FSNAlias *alias = [FSNAlias isAliasData: aliasData]
+    ? [[[FSNAlias alloc] initWithData: aliasData] autorelease] : nil;
+  NSString *path = [alias resolvePath];
+  BOOL isDirectory = NO;
+
+  if (path && [[NSFileManager defaultManager] fileExistsAtPath: path isDirectory: &isDirectory]
+      && isDirectory == NO)
+    return path;
+  return nil;
+}
+
 @end

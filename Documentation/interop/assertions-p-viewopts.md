@@ -18,6 +18,7 @@ GWViewOptionsPanel (code-built panel, strings table ViewOptions.strings).
 | MI-VO-22..28 | panel state onto and back from real icon and list views | [S] |
 | MI-VO-29..30 | a panel writes only the options of the kind of view shown | [G] |
 | MI-VO-31..35 | column view options: global, panel state <-> shared options, vstl clmv only with Always open in, nothing else per folder | [O:E30..E34] |
+| MI-VO-36..41 | background picture: icvp type 2 + alias record (HFS path tag 2, volume name of the mount point, "Macintosh HD" for /), path from a Mac alias, picture onto the icon view at natural size from the top left, an alias for a picture not here is kept | [O:E12] [G: natural size, top left, volume name] |
 
 OPEN
 - Grid spacing and the background are stored (icvp) but the icon view has no

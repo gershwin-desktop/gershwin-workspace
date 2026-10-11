@@ -448,6 +448,8 @@ extern const int FSNMaxLabelTextSize;
 - (NSColor *)backgroundColor;
 - (void)setBackgroundImage:(NSImage *)image;
 - (NSImage *)backgroundImage;
+/* Where the background picture is drawn: its natural size at the top left. */
+- (NSRect)backgroundImageRect;
 - (void)setTextColor:(NSColor *)acolor;
 - (NSColor *)textColor;
 - (NSColor *)disabledTextColor;

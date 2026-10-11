@@ -28,6 +28,7 @@ static const CGFloat LabelWidth = 180.0;
 static const CGFloat RowHeight = 24.0;
 static const CGFloat PanelMinWidth = 520.0;
 static const CGFloat PanelMaxWidth = 800.0;
+static const CGFloat PictureWellSize = 64.0;
 static const CGFloat ControlsLeft = 24.0 + 180.0 + 8.0;
 
 /* Top-down layout is simpler to state than bottom-up. */
@@ -39,6 +40,69 @@ static const CGFloat ControlsLeft = 24.0 + 180.0 + 8.0;
 {
   return YES;
 }
+@end
+
+/* The well Finder shows for a background picture: an image file dropped on
+ * it is the picture.  The plain image view hands over the image only, and
+ * the folder's record needs the file. */
+@interface GWViewOptionsPictureWell : NSImageView
+{
+  NSString *droppedPath;
+}
+- (NSString *)droppedPath;
+@end
+
+@implementation GWViewOptionsPictureWell
+
+- (id)initWithFrame:(NSRect)frame
+{
+  self = [super initWithFrame: frame];
+  if (self)
+    {
+      [self setImageFrameStyle: NSImageFrameGrayBezel];
+      [self setImageScaling: NSImageScaleProportionallyUpOrDown];
+      [self registerForDraggedTypes: [NSArray arrayWithObject: NSFilenamesPboardType]];
+    }
+  return self;
+}
+
+- (void)dealloc
+{
+  RELEASE (droppedPath);
+  [super dealloc];
+}
+
+- (NSString *)droppedPath
+{
+  return droppedPath;
+}
+
+- (NSString *)imageFileInPasteboard:(NSPasteboard *)pboard
+{
+  NSArray *files = [pboard propertyListForType: NSFilenamesPboardType];
+  NSString *file = [files count] == 1 ? [files objectAtIndex: 0] : nil;
+
+  if (file && [[NSImage imageFileTypes] containsObject: [[file pathExtension] lowercaseString]])
+    return file;
+  return nil;
+}
+
+- (NSDragOperation)draggingEntered:(id <NSDraggingInfo>)sender
+{
+  return [self imageFileInPasteboard: [sender draggingPasteboard]]
+    ? NSDragOperationCopy : NSDragOperationNone;
+}
+
+- (BOOL)performDragOperation:(id <NSDraggingInfo>)sender
+{
+  NSString *file = [self imageFileInPasteboard: [sender draggingPasteboard]];
+
+  if (file == nil)
+    return NO;
+  ASSIGN (droppedPath, file);
+  return [self sendAction: [self action] to: [self target]];
+}
+
 @end
 
 static GWViewOptionsPanel *sharedPanel = nil;
@@ -53,6 +117,7 @@ static GWViewOptionsPanel *sharedPanel = nil;
 - (void)controlsFromModel;
 - (void)modelFromControls;
 - (void)controlsChanged:(id)sender;
+- (void)pictureDropped:(id)sender;
 - (void)persist;
 - (void)flushPendingPersist;
 - (void)mainWindowChanged:(NSNotification *)notification;
@@ -257,14 +322,20 @@ columnTitle (NSString *columnId)
   [colorWell setTarget: self];
   [colorWell setAction: @selector(controlsChanged:)];
   [iconPane addSubview: colorWell];
+  pictureWell = [[[GWViewOptionsPictureWell alloc] initWithFrame:
+    NSMakeRect (ControlsLeft, y, PictureWellSize, PictureWellSize)] autorelease];
+  [pictureWell setTarget: self];
+  [pictureWell setAction: @selector(pictureDropped:)];
+  [iconPane addSubview: pictureWell];
   pictureButton = [[[NSButton alloc] initWithFrame:
-    NSMakeRect (ControlsLeft, y, 120, METRICS_BUTTON_HEIGHT + 4)] autorelease];
+    NSMakeRect (ControlsLeft + PictureWellSize + METRICS_SPACE_12,
+                y + (PictureWellSize - METRICS_BUTTON_HEIGHT) / 2, 120, METRICS_BUTTON_HEIGHT + 4)] autorelease];
   [pictureButton setBezelStyle: NSRoundedBezelStyle];
   [pictureButton setTitle: VOStr (@"Select...")];
   [pictureButton setTarget: self];
   [pictureButton setAction: @selector(choosePicture:)];
   [iconPane addSubview: pictureButton];
-  y += RowHeight + 4;
+  y += PictureWellSize + 4;
   paneHeight = y;
 
   /* List pane. */
@@ -533,6 +604,9 @@ columnTitle (NSString *columnId)
     [colorWell setColor: [model backgroundColor]];
   [colorWell setHidden: [model backgroundType] != DSStoreBackgroundColor];
   [pictureButton setHidden: [model backgroundType] != DSStoreBackgroundPicture];
+  [pictureWell setHidden: [model backgroundType] != DSStoreBackgroundPicture];
+  [pictureWell setImage: [model backgroundImagePath]
+    ? [[[NSImage alloc] initWithContentsOfFile: [model backgroundImagePath]] autorelease] : nil];
 
   [listTextSizePopUp selectItemAtIndex: [model listTextSize] - FSNMinLabelTextSize];
   [listIconSizePopUp selectItemAtIndex: [model listLargeIcons] ? 1 : 0];
@@ -589,6 +663,12 @@ columnTitle (NSString *columnId)
   [model setAlwaysOpen: [alwaysOpenButton state] == NSOnState];
 }
 
+- (void)pictureDropped:(id)sender
+{
+  [model setBackgroundImagePath: [(GWViewOptionsPictureWell *)sender droppedPath]];
+  [self controlsChanged: sender];
+}
+
 - (void)choosePicture:(id)sender
 {
   NSOpenPanel *open = [NSOpenPanel openPanel];
@@ -599,6 +679,13 @@ columnTitle (NSString *columnId)
     {
       [model setBackgroundImagePath: [open filename]];
       [self controlsChanged: sender];
+    }
+  else if ([model backgroundImagePath] == nil)
+    {
+      /* Cancelled with nothing to show: a picture background without a
+       * picture would only look like white. */
+      [model setBackgroundType: DSStoreBackgroundDefault];
+      [self controlsFromModel];
     }
 }
 

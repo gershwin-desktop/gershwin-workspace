@@ -69,6 +69,7 @@ clampInt(int value, int low, int high)
   RELEASE (arrangeBy);
   RELEASE (backgroundColor);
   RELEASE (backgroundImagePath);
+  RELEASE (backgroundImageAlias);
   RELEASE (visibleColumns);
   [super dealloc];
 }
@@ -110,7 +111,14 @@ clampInt(int value, int low, int high)
 - (NSColor *)backgroundColor { return backgroundColor; }
 - (void)setBackgroundColor:(NSColor *)color { ASSIGN (backgroundColor, color); }
 - (NSString *)backgroundImagePath { return backgroundImagePath; }
-- (void)setBackgroundImagePath:(NSString *)path { ASSIGN (backgroundImagePath, path); }
+- (void)setBackgroundImagePath:(NSString *)path
+{
+  if ([path isEqual: backgroundImagePath] == NO)
+    DESTROY (backgroundImageAlias);
+  ASSIGN (backgroundImagePath, path);
+}
+- (NSData *)backgroundImageAlias { return backgroundImageAlias; }
+- (void)setBackgroundImageAlias:(NSData *)alias { ASSIGN (backgroundImageAlias, alias); }
 
 - (int)listTextSize { return listTextSize; }
 
@@ -203,7 +211,11 @@ clampInt(int value, int low, int high)
     [self setArrangeBy: [info arrangeBy]];
   [self setBackgroundType: [info backgroundType]];
   [self setBackgroundColor: [info backgroundColor]];
-  [self setBackgroundImagePath: [info backgroundImagePath]];
+  /* A Mac writes the alias record only; its path tags say where the image is. */
+  [self setBackgroundImagePath: [info backgroundImagePath]
+    ? [info backgroundImagePath]
+    : [GWFolderViewOptions backgroundImagePathForAlias: [info backgroundImageAlias]]];
+  [self setBackgroundImageAlias: [info backgroundImageAlias]];
 
   if ([info hasListTextSize])
     [self setListTextSize: [info listTextSize]];
@@ -291,8 +303,9 @@ clampInt(int value, int low, int high)
         NSImage *image = backgroundImagePath
           ? [[[NSImage alloc] initWithContentsOfFile: backgroundImagePath] autorelease] : nil;
 
-        if (image)
-          [view setBackgroundImage: image];
+        /* Around the picture and without one the view is white, as Finder's. */
+        [view setBackgroundColor: [NSColor controlBackgroundColor]];
+        [view setBackgroundImage: image];
       }
       break;
     default:
@@ -352,9 +365,13 @@ clampInt(int value, int low, int high)
   [info setBackgroundImagePath: backgroundType == DSStoreBackgroundPicture
                                   ? backgroundImagePath : nil];
   /* Finder finds a picture through its alias record. */
-  [info setBackgroundImageAlias: (backgroundType == DSStoreBackgroundPicture && backgroundImagePath)
-                                   ? [GWFolderViewOptions backgroundImageAliasForPath: backgroundImagePath]
-                                   : nil];
+  if (backgroundType != DSStoreBackgroundPicture)
+    [info setBackgroundImageAlias: nil];
+  else if (backgroundImageAlias)
+    [info setBackgroundImageAlias: backgroundImageAlias];
+  else
+    [info setBackgroundImageAlias: backgroundImagePath
+       ? [GWFolderViewOptions backgroundImageAliasForPath: backgroundImagePath] : nil];
 }
 
 - (void)putListOptionsIntoInfo:(DSStoreInfo *)info

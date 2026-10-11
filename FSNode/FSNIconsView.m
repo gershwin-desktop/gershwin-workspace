@@ -2674,36 +2674,19 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 {
   [super drawRect: rect];
   
-  // Draw background image if set, otherwise use solid color
+  /* The colour stays under the picture: a picture smaller than the view
+   * leaves the rest as it would be without one. */
+  [backColor set];
+  NSRectFill(rect);
+
   if (backgroundImage)
     {
-      // Get the bounds and image size
-      NSRect bounds = [self bounds];
-      NSSize imageSize = [backgroundImage size];
-      
-      // Spatial view backgrounds are positioned from bottom-left in our coordinate system
-      // (which corresponds to top-left in .DS_Store screen coordinates)
-      // The image is drawn at its natural size, positioned at the bottom-left corner
-      NSRect imageRect;
-      imageRect.origin = bounds.origin;
-      imageRect.size = imageSize;
-      
-      // In GNUstep, y=0 is at the bottom, but we want the image to appear
-      // as if it's positioned from the "top" visually (standard spatial view behavior)
-      // So we position it at the top of the view
-      imageRect.origin.y = bounds.size.height - imageSize.height;
-      
-      // Draw the background image
-      [backgroundImage drawInRect:imageRect
-                         fromRect:NSZeroRect
-                        operation:NSCompositeSourceOver
-                         fraction:1.0];
-    }
-  else
-    {
-      // Fall back to solid color background
-      [backColor set];
-      NSRectFill(rect);
+      [backgroundImage drawInRect: [self backgroundImageRect]
+                         fromRect: NSZeroRect
+                        operation: NSCompositeSourceOver
+                         fraction: 1.0
+                   respectFlipped: YES
+                            hints: nil];
     }
 }
 
@@ -3998,6 +3981,18 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 - (NSImage *)backgroundImage
 {
   return backgroundImage;
+}
+
+- (NSRect)backgroundImageRect
+{
+  NSRect bounds = [self bounds];
+  NSSize imageSize = [backgroundImage size];
+
+  /* Neither scaled nor tiled, anchored at the top left as Finder draws it;
+   * the top is the maximum y unless the view is flipped. */
+  return NSMakeRect (bounds.origin.x,
+                     [self isFlipped] ? NSMinY (bounds) : NSMaxY (bounds) - imageSize.height,
+                     imageSize.width, imageSize.height);
 }
 
 - (void)setTextColor:(NSColor *)acolor

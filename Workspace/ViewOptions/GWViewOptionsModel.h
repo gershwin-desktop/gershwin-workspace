@@ -38,6 +38,7 @@ typedef NS_ENUM (NSInteger, GWViewOptionsKind) {
   DSStoreBackgroundType backgroundType;
   NSColor *backgroundColor;
   NSString *backgroundImagePath;
+  NSData *backgroundImageAlias;
 
   int listTextSize;
   BOOL listLargeIcons;
@@ -78,7 +79,13 @@ typedef NS_ENUM (NSInteger, GWViewOptionsKind) {
 - (NSColor *)backgroundColor;
 - (void)setBackgroundColor:(NSColor *)color;
 - (NSString *)backgroundImagePath;
+/* Choosing another image drops the alias record kept for the old one. */
 - (void)setBackgroundImagePath:(NSString *)path;
+/* The alias record a folder came with.  A picture that is not on this
+ * system has a path of nil but keeps its alias, so saving the folder does
+ * not lose the picture a Mac set. */
+- (NSData *)backgroundImageAlias;
+- (void)setBackgroundImageAlias:(NSData *)alias;
 
 /* List text size, 10 to 16. */
 - (int)listTextSize;

@@ -16,6 +16,8 @@
 #import "FSNListView.h"
 #import "FSNColumnViewOptions.h"
 #import "FSNode.h"
+#import "FSNAlias.h"
+#import "GWFolderViewOptions.h"
 #include <unistd.h>
 
 static NSString *root;
@@ -250,6 +252,64 @@ main(void)
     [m putIntoInfo: info forViewKind: GWViewOptionsColumnView];
     PASS([info hasViewStyle] == NO, "MI-VO-35 no vstl without Always open in");
   END_SET("column view options are global")
+
+  START_SET("a background picture [O:E12]")
+    NSString *pic = [root stringByAppendingPathComponent: @"bg.png"];
+    NSBitmapImageRep *rep = [[[NSBitmapImageRep alloc]
+      initWithBitmapDataPlanes: NULL pixelsWide: 50 pixelsHigh: 40 bitsPerSample: 8
+               samplesPerPixel: 4 hasAlpha: YES isPlanar: NO
+                colorSpaceName: NSCalibratedRGBColorSpace bytesPerRow: 0 bitsPerPixel: 0] autorelease];
+    GWViewOptionsModel *seen = [[[GWViewOptionsModel alloc] init] autorelease];
+    FSNIconsView *v = iconsView();
+    NSData *alias;
+    FSNAlias *parsed;
+    NSRect r;
+
+    memset ([rep bitmapData], 0x80, [rep bytesPerRow] * 40);
+    [[rep representationUsingType: NSPNGFileType properties: nil] writeToFile: pic atomically: NO];
+
+    m = [[[GWViewOptionsModel alloc] init] autorelease];
+    [m setBackgroundType: DSStoreBackgroundPicture];
+    [m setBackgroundImagePath: pic];
+    info = [[[DSStoreInfo alloc] initWithDirectoryPath: root] autorelease];
+    [m putIntoInfo: info forListView: NO];
+    alias = [info backgroundImageAlias];
+    parsed = alias ? [[[FSNAlias alloc] initWithData: alias] autorelease] : nil;
+    PASS([info backgroundType] == DSStoreBackgroundPicture && parsed != nil
+         && [[parsed targetName] isEqual: @"bg.png"] && [[parsed volumeName] length] > 0,
+         "MI-VO-36 a picture is icvp type 2 with the alias record of the image");
+
+    [seen takeFromInfo: info];
+    PASS([[seen backgroundImagePath] isEqual: pic],
+         "MI-VO-37 a folder that has only the alias record gets the image path from it");
+
+    [seen applyToIconsView: v];
+    PASS([v backgroundImage] != nil && [[v backgroundImage] size].width == 50,
+         "MI-VO-38 the picture onto the icon view");
+    r = [v backgroundImageRect];
+    PASS (r.size.width == 50 && r.size.height == 40 && r.origin.x == [v bounds].origin.x
+          && NSMaxY (r) == NSMaxY ([v bounds]),
+          "MI-VO-39 the picture is drawn at its natural size from the top left [G: Finder 10.6]");
+
+    seen = [[[GWViewOptionsModel alloc] init] autorelease];
+    info = [[[DSStoreInfo alloc] initWithDirectoryPath: root] autorelease];
+    [info setBackgroundType: DSStoreBackgroundPicture];
+    [info setBackgroundImageAlias: [GWFolderViewOptions backgroundImageAliasForPath: @"/nowhere/at/all.png"]];
+    [seen takeFromInfo: info];
+    info = [[[DSStoreInfo alloc] initWithDirectoryPath: root] autorelease];
+    [seen putIntoInfo: info forListView: NO];
+    PASS([seen backgroundImagePath] == nil && [info backgroundType] == DSStoreBackgroundPicture
+         && [info backgroundImageAlias] != nil,
+         "MI-VO-40 a picture that is not here is kept as the Mac wrote it, not dropped");
+
+    [seen setBackgroundImagePath: pic];
+    info = [[[DSStoreInfo alloc] initWithDirectoryPath: root] autorelease];
+    [seen putIntoInfo: info forListView: NO];
+    PASS([[[[FSNAlias alloc] initWithData: [info backgroundImageAlias]] autorelease] targetName]
+         && [[[[[FSNAlias alloc] initWithData: [info backgroundImageAlias]] autorelease]
+               targetName] isEqual: @"bg.png"],
+         "MI-VO-41 choosing another picture replaces the kept alias");
+  END_SET("a background picture [O:E12]")
 
   [fm removeFileAtPath: root handler: nil];
   [arp release];

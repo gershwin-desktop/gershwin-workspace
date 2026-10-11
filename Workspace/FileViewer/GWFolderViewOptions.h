@@ -80,4 +80,8 @@
  * that reads it is not known here]. */
 + (NSData *)backgroundImageAliasForPath:(NSString *)imagePath;
 
+/* The image file a background picture alias record (written here or on a
+ * Mac) points to on this system, or nil when it is not here. */
++ (NSString *)backgroundImagePathForAlias:(NSData *)aliasData;
+
 @end
