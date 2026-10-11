@@ -413,6 +413,14 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  * resource fork.  The folder's own kHasCustomIcon flag is not touched.
  * -setCustomIconData: followed by a write does this for a directory.
  */
+/** The value of com.apple.quarantine as the Mac's own attribute holds it
+ *  ("0000;..."): a "q/" prefix from a sidecar or tar is removed. */
++ (NSData *)plainQuarantine:(NSData *)value;
+
+/** The value to store in a "._" sidecar: 10.6 tar and dot_clean drop a
+ *  quarantine value that lacks the "q/" prefix.  Never doubled. */
++ (NSData *)sidecarQuarantine:(NSData *)value;
+
 + (BOOL)writeFolderIconICNS:(NSData *)icns atPath:(NSString *)folder error:(NSError **)error;
 
 /** Removes the "Icon\r" file (and its sidecar) of the folder; YES if none. */

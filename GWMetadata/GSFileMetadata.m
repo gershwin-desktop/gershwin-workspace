@@ -1047,7 +1047,7 @@ static NSMutableDictionary *_metadataCache = nil;
       NSData *value = [attrs objectForKey: name];
 
       if ([name isEqualToString: @"com.apple.quarantine"])
-        value = [[self class] _plainQuarantine: value];
+        value = [[self class] plainQuarantine: value];
       [items setObject: value forKey: [@"user." stringByAppendingString: name]];
     }
 
@@ -1353,7 +1353,7 @@ static NSMutableDictionary *_metadataCache = nil;
               const char *bytes = [qd bytes];
               while (len > 0 && bytes[len - 1] == 0)
                 len--;
-              NSData *trimmed = [[self class] _plainQuarantine:
+              NSData *trimmed = [[self class] plainQuarantine:
                 [qd subdataWithRange: NSMakeRange(0, len)]];
               NSString *q = [[NSString alloc]
                 initWithData: trimmed encoding: NSUTF8StringEncoding];
@@ -1412,7 +1412,7 @@ static NSMutableDictionary *_metadataCache = nil;
     {
       NSData *qData = [_quarantine dataUsingEncoding: NSUTF8StringEncoding];
       if (qData)
-        [ad setXattr: [[self class] _sidecarQuarantine: qData]
+        [ad setXattr: [[self class] sidecarQuarantine: qData]
               forKey: @"com.apple.quarantine"];
     }
 
@@ -1459,7 +1459,7 @@ static NSMutableDictionary *_metadataCache = nil;
       while (len > 0 && bytes[len - 1] == 0)
         len--;
       NSString *q = [[NSString alloc]
-        initWithData: [self _plainQuarantine:
+        initWithData: [self plainQuarantine:
                         [qData subdataWithRange: NSMakeRange(0, len)]]
             encoding: NSUTF8StringEncoding];
       if (q)
@@ -1780,7 +1780,7 @@ static NSData *gsLookupResource(NSData *fork, GSOType type, BOOL useID,
 
 /* 10.6 tar prefixes a quarantine value with "q/"; the Mac's own xattr holds
  * the plain "0000;..." value. */
-+ (NSData *)_plainQuarantine:(NSData *)value
++ (NSData *)plainQuarantine:(NSData *)value
 {
   if ([value length] > 2 && memcmp([value bytes], "q/", 2) == 0)
     return [value subdataWithRange: NSMakeRange(2, [value length] - 2)];
@@ -1789,7 +1789,7 @@ static NSData *gsLookupResource(NSData *fork, GSOType type, BOOL useID,
 
 /* tar -x and dot_clean on 10.6 drop a sidecar quarantine value that lacks
  * the "q/" prefix; the prefix is not doubled. */
-+ (NSData *)_sidecarQuarantine:(NSData *)value
++ (NSData *)sidecarQuarantine:(NSData *)value
 {
   NSMutableData *out;
 

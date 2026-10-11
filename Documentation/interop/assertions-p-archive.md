@@ -28,6 +28,8 @@ the repository (see Mac captures needed below).
 - MI-AR-23 A `.DS_Store` that already exists where the archive would write one is kept. [G: the user's view settings win]
 - MI-AR-24 The real ditto zip (no `._proj`) leaves the folder extracted into without FinderInfo; labeled.txt and subfolder get theirs. [F: E29]
 - MI-AR-26 A folder that existed before the extraction never gets the top folder metadata (Workspace always creates a new folder; the API can be called with an existing one). [G]
+- MI-AR-27 A quarantine value goes into a companion with the "q/" prefix 10.6 needs, never doubled (GSFileMetadata sidecarQuarantine:). [F: Referee]
+- MI-AR-28 Extraction strips "q/" into the plain xattr (GSFileMetadata plainQuarantine:). [F: Referee]
 - MI-AR-25 A companion whose only content is an all-zero FinderInfo sets nothing (and none is written on compression). [F: E29 listing, 82-byte companions]
 
 ## Compression

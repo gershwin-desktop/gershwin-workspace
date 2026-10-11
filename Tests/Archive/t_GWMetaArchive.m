@@ -438,6 +438,45 @@ int main(void)
                  "MI-AR-24 real ditto subfolder");
   }
 
+  /* --- quarantine in a companion: 10.6 keeps it only with "q/" ---------- */
+  {
+    NSData *plainQ = [@"0000;4e8f1c2a;Safari;" dataUsingEncoding: NSUTF8StringEncoding];
+    NSData *sideQ = [@"q/0000;4e8f1c2a;Safari;" dataUsingEncoding: NSUTF8StringEncoding];
+    NSString *src = fresh(@"src-q");
+    NSString *f = [src stringByAppendingPathComponent: @"dl.txt"];
+    [body writeToFile: f atomically: NO];
+    gs_setxattr([f fileSystemRepresentation], "user.com.apple.quarantine",
+                [plainQ bytes], [plainQ length], 0);
+    NSString *zip = [root stringByAppendingPathComponent: @"q.zip"];
+    PASS([GWMetaArchive compressPaths: @[ f ] toArchiveAt: zip error: NULL],
+         "MI-AR-27 file with quarantine compresses");
+    NSData *ad = [readArchive(zip) objectForKey: @"__MACOSX/._dl.txt"];
+    GSAppleDouble *p = ad ? [[[GSAppleDouble alloc] initWithData: ad] autorelease] : nil;
+    PASS_EQUAL([[p extendedAttributes] objectForKey: @"com.apple.quarantine"], sideQ,
+               "MI-AR-27 the companion holds the quarantine with the q/ prefix 10.6 needs [F: Referee]");
+
+    /* a value that has the prefix already is not doubled */
+    gs_setxattr([f fileSystemRepresentation], "user.com.apple.quarantine",
+                [sideQ bytes], [sideQ length], 0);
+    [GWMetaArchive compressPaths: @[ f ] toArchiveAt: zip error: NULL];
+    ad = [readArchive(zip) objectForKey: @"__MACOSX/._dl.txt"];
+    p = [[[GSAppleDouble alloc] initWithData: ad] autorelease];
+    PASS_EQUAL([[p extendedAttributes] objectForKey: @"com.apple.quarantine"], sideQ,
+               "MI-AR-27 the prefix is not doubled");
+
+    /* extraction strips it into the plain xattr */
+    GSAppleDouble *mk = [[[GSAppleDouble alloc] init] autorelease];
+    [mk setXattr: sideQ forKey: @"com.apple.quarantine"];
+    NSString *tar = [root stringByAppendingPathComponent: @"q.tar"];
+    writeArchive(tar, NO, @[ @"dl.txt", @"._dl.txt" ], @[ body, [mk appleDoubleData] ]);
+    NSString *dest = fresh(@"out-q");
+    PASS([GWMetaArchive extractArchive: tar toDir: dest error: NULL], "MI-AR-28 extracts");
+    NSString *g = [dest stringByAppendingPathComponent: @"dl.txt"];
+    if (gs_xattr_supported([dest fileSystemRepresentation]) == 1)
+      PASS_EQUAL(getx(g, @"user.com.apple.quarantine"), plainQ,
+                 "MI-AR-28 the xattr holds the plain value, q/ stripped");
+  }
+
   [fm removeFileAtPath: root handler: nil];
   [pool release];
   return 0;

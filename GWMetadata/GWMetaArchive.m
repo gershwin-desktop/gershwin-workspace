@@ -143,6 +143,8 @@ appledouble_for_path(NSString *path)
         }
       else if ([name isEqualToString: @"com.apple.ResourceFork"])
         [ad setResourceFork: value];
+      else if ([name isEqualToString: @"com.apple.quarantine"])
+        [ad setXattr: [GSFileMetadata sidecarQuarantine: value] forKey: name];
       else
         [ad setXattr: value forKey: name];
     }
@@ -377,8 +379,15 @@ apply_appledouble(NSData *ad, NSString *destPath, NSString **why)
               forKey: @"user.com.apple.ResourceFork"];
   NSDictionary *attrs = [parsed extendedAttributes];
   for (NSString *name in attrs)
-    [items setObject: [attrs objectForKey: name]
-              forKey: [@"user." stringByAppendingString: name]];
+    {
+      NSData *value = [attrs objectForKey: name];
+      /* The Mac's own attribute holds the plain value; "q/" is only the
+       * sidecar's spelling. */
+      if ([name isEqualToString: @"com.apple.quarantine"])
+        value = [GSFileMetadata plainQuarantine: value];
+      [items setObject: value
+                forKey: [@"user." stringByAppendingString: name]];
+    }
 
   NSString *sidecar = [GSFileMetadata sidecarPathForFilePath: destPath];
   const char *cdst = GW_FSREP(destPath);
