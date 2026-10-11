@@ -32,6 +32,7 @@ t_FSNDirectorySnapshot_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                      ../../FSNode/FSNAlias.m \
                                      ../../FSNode/FSNodeRep.m \
                                      ../../FSNode/FSNodeRepIcons.m \
+                                     ../../FSNode/FSNKindNames.m \
                                      ../../FSNode/FSNode.m
 t_FSNDirectorySnapshot_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNDirectorySnapshot_TOOL_LIBS += -lgnustep-gui
@@ -40,6 +41,7 @@ t_FSNLazyAttributes_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                   ../../FSNode/FSNAlias.m \
                                   ../../FSNode/FSNodeRep.m \
                                   ../../FSNode/FSNodeRepIcons.m \
+                                  ../../FSNode/FSNKindNames.m \
                                   ../../FSNode/FSNode.m
 t_FSNLazyAttributes_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNLazyAttributes_TOOL_LIBS += -lgnustep-gui
@@ -56,6 +58,7 @@ t_FSNDisplayName_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                ../../FSNode/FSNAlias.m \
                                ../../FSNode/FSNodeRep.m \
                                ../../FSNode/FSNodeRepIcons.m \
+                               ../../FSNode/FSNKindNames.m \
                                ../../FSNode/FSNode.m
 t_FSNDisplayName_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNDisplayName_TOOL_LIBS += -lgnustep-gui
@@ -97,6 +100,7 @@ t_FSNSubpath_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                            ../../FSNode/FSNAlias.m \
                            ../../FSNode/FSNodeRep.m \
                            ../../FSNode/FSNodeRepIcons.m \
+                           ../../FSNode/FSNKindNames.m \
                            ../../FSNode/FSNode.m
 t_FSNSubpath_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNSubpath_TOOL_LIBS += -lgnustep-gui
@@ -109,6 +113,7 @@ t_FSNTextCellLabelLookup_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                        ../../FSNode/FSNAlias.m \
                                        ../../FSNode/FSNodeRep.m \
                                        ../../FSNode/FSNodeRepIcons.m \
+                                       ../../FSNode/FSNKindNames.m \
                                        ../../FSNode/FSNode.m
 t_FSNTextCellLabelLookup_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNTextCellLabelLookup_TOOL_LIBS += -lgnustep-gui

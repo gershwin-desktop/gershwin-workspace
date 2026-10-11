@@ -55,7 +55,7 @@
 "\nif you make this change, your folder may appear as a single file."
   = "\nif you make this change, your folder may appear as a single file.";
 
-"application" = "application";
+"application" = "Application";
 
 "block special" = "block special";
 
@@ -73,7 +73,7 @@
 
 "mount point" = "mount point";
 
-"package" = "package";
+"package" = "Package";
 
 "plain file" = "Document";
 
@@ -127,3 +127,48 @@
 "Size:" = "Size:";
 "Created:" = "Created:";
 "Modified:" = "Modified:";
+
+/* File kinds, see FSNKindNames.m */
+"Plain Text Document" = "Plain Text Document";
+"Markdown Document" = "Markdown Document";
+"Rich Text Document" = "Rich Text Document";
+"PDF Document" = "PDF Document";
+"PostScript Document" = "PostScript Document";
+"HTML Document" = "HTML Document";
+"XML Document" = "XML Document";
+"JSON Document" = "JSON Document";
+"Property List" = "Property List";
+"CSS Stylesheet" = "CSS Stylesheet";
+"JavaScript Source" = "JavaScript Source";
+"PNG Image" = "PNG Image";
+"JPEG Image" = "JPEG Image";
+"GIF Image" = "GIF Image";
+"TIFF Image" = "TIFF Image";
+"BMP Image" = "BMP Image";
+"SVG Image" = "SVG Image";
+"Icon Image" = "Icon Image";
+"WebP Image" = "WebP Image";
+"MP3 Audio" = "MP3 Audio";
+"WAV Audio" = "WAV Audio";
+"Ogg Audio" = "Ogg Audio";
+"FLAC Audio" = "FLAC Audio";
+"AAC Audio" = "AAC Audio";
+"MPEG-4 Movie" = "MPEG-4 Movie";
+"QuickTime Movie" = "QuickTime Movie";
+"Matroska Movie" = "Matroska Movie";
+"AVI Movie" = "AVI Movie";
+"WebM Movie" = "WebM Movie";
+"ZIP Archive" = "ZIP Archive";
+"Tar Archive" = "Tar Archive";
+"Compressed Archive" = "Compressed Archive";
+"Disk Image" = "Disk Image";
+"C Source" = "C Source";
+"C Header" = "C Header";
+"Objective-C Source" = "Objective-C Source";
+"C++ Source" = "C++ Source";
+"Python Script" = "Python Script";
+"Shell Script" = "Shell Script";
+"Microsoft Word Document" = "Microsoft Word Document";
+"Microsoft Excel Spreadsheet" = "Microsoft Excel Spreadsheet";
+"OpenDocument Text" = "OpenDocument Text";
+"Spreadsheet" = "Spreadsheet";

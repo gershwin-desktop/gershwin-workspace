@@ -167,20 +167,10 @@
                          withObject: nil];
 }
 
-- (NSUInteger)applyLabel:(NSInteger)label
+- (NSUInteger)applyLabel:(NSInteger)label writer:(id<SummaryInfoLabelWriter>)writer
 {
-  NSUInteger i, failures = 0;
+  NSUInteger failures = [writer setLabelNumber: label forPaths: _paths nodeView: nil];
 
-  for (i = 0; i < [_paths count]; i++)
-    {
-      FinderInfoModel *info = [FinderInfoModel modelForPath: [_paths objectAtIndex: i]];
-
-      [info setLabelNumber: label];
-      if (info == nil || ![info write: NULL])
-        {
-          failures++;
-        }
-    }
   if (failures < [_paths count])
     {
       _commonLabel = failures == 0 ? label : -1;

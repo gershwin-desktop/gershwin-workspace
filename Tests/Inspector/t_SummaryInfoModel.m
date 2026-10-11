@@ -7,7 +7,39 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 #import "FSNode.h"
+#import "FSNKindNames.h"
 #include "../../Inspector/SummaryInfoModel.m"
+
+/* Stands for Workspace: records what it was asked and labels like it does. */
+@interface StubWriter : NSObject <SummaryInfoLabelWriter>
+{
+@public
+  NSArray *paths;
+  NSInteger label;
+  id nodeView;
+}
+@end
+@implementation StubWriter
+- (NSUInteger)setLabelNumber:(NSInteger)l forPaths:(NSArray *)p nodeView:(id)v
+{
+  NSUInteger i, failures = 0;
+
+  paths = [p retain];
+  label = l;
+  nodeView = v;
+  for (i = 0; i < [p count]; i++)
+    {
+      FinderInfoModel *info = [FinderInfoModel modelForPath: [p objectAtIndex: i]];
+
+      [info setLabelNumber: l];
+      if (![info write: NULL])
+        {
+          failures++;
+        }
+    }
+  return failures;
+}
+@end
 
 static void writeBytes(NSString *path, NSUInteger n)
 {
@@ -54,13 +86,19 @@ int main(void)
          && [[[m kinds] objectForKey: folder] intValue] == 1, "groups items by the list view kind");
     PASS([[[m kinds] objectForKey: txt] intValue] == 2 && ![txt hasSuffix: @" file"]
          , "a kind is a description, not EXT file");
+    PASS_EQUAL(pdf, [FSNKindNames kindForExtension: @"pdf"], "a PDF is named from the kind table");
+    PASS(![pdf hasPrefix: @"NS"], "a pasteboard type is not shown as the kind");
   }
   PASS([m commonLabel] == 0, "items without a label share the None label");
   PASS([m lockedState] == SummaryStateNone, "unlocked items report not locked");
   PASS([m finished], "finished after compute");
 
   /* One label for all items; Mixed when they differ. */
-  PASS([m applyLabel: 3] == 0, "label applied to every item without failure");
+  StubWriter *writer = [StubWriter new];
+
+  PASS([m applyLabel: 3 writer: writer] == 0, "label applied to every item without failure");
+  PASS(writer->label == 3 && [writer->paths isEqual: sel] && writer->nodeView == nil,
+       "the window hands the label and all paths to the one Workspace writer");
   PASS([m commonLabel] == 3, "model reports the label it applied");
   PASS([[FinderInfoModel modelForPath: a] labelNumber] == 3
        && [[FinderInfoModel modelForPath: dir] labelNumber] == 3, "label reaches each file and folder");

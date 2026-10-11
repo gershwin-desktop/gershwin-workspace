@@ -43,6 +43,11 @@ static NSTextField *makeText(NSFont *font, NSTextAlignment align)
   [super dealloc];
 }
 
+- (void)setLabelWriter:(id)writer
+{
+  _labelWriter = writer;
+}
+
 - (NSWindow *)window
 {
   return _panel;
@@ -86,7 +91,7 @@ static NSArray *labelNames(void)
     {
       return;
     }
-  failures = [_model applyLabel: label];
+  failures = [_model applyLabel: label writer: _labelWriter];
   if (failures > 0)
     {
       NSRunAlertPanel(NSLocalizedString(@"Summary Info", @"Window title"),

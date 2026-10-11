@@ -13,6 +13,11 @@ typedef enum {
   SummaryStateMixed       /* some have it */
 } SummaryState;
 
+/* Implemented by Workspace: the one place that labels files. */
+@protocol SummaryInfoLabelWriter
+- (NSUInteger)setLabelNumber:(NSInteger)label forPaths:(NSArray *)paths nodeView:(id)nodeView;
+@end
+
 /* Totals over a multiple selection, for the Summary Info window.  Free of
  * AppKit so the counting rules can be tested headless. */
 @interface SummaryInfoModel : NSObject
@@ -41,10 +46,12 @@ typedef enum {
 - (void)startInBackgroundNotifying:(id)target selector:(SEL)doneSelector;
 - (void)cancel;
 
-/* Gives every item the label (0 = None, 1-7 as in the Label menu) through
- * FinderInfoModel and returns how many items could not be written.  There is
- * no undo: Workspace has no undo stack for metadata changes. */
-- (NSUInteger)applyLabel:(NSInteger)label;
+/* Gives every item the label (0 = None, 1-7 as in the Label menu) and returns
+ * how many items could not be written.  The writer is the one object that
+ * labels files for all of Workspace, -setLabelNumber:forPaths:nodeView:, so
+ * open viewers refresh too; this class has no way of writing labels itself.
+ * There is no undo: Workspace has no undo stack for metadata changes. */
+- (NSUInteger)applyLabel:(NSInteger)label writer:(id<SummaryInfoLabelWriter>)writer;
 
 @property (nonatomic, readonly) NSUInteger itemCount;
 @property (nonatomic, readonly) NSUInteger folderCount;

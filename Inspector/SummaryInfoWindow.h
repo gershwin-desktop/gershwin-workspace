@@ -8,6 +8,7 @@
 #import <AppKit/AppKit.h>
 
 @class SummaryInfoModel;
+@protocol SummaryInfoLabelWriter;
 
 /* One Info window with the totals of a multiple selection.  Built in code. */
 @interface SummaryInfoWindow : NSObject
@@ -20,11 +21,14 @@
   NSTextField *_itemsValue;
   NSTextField *_kindsValue;
   NSPopUpButton *_labelPopUp;
+  id<SummaryInfoLabelWriter> _labelWriter;
   NSTextField *_lockedValue;
 }
 
 - (void)showForPaths:(NSArray *)paths;
 - (NSWindow *)window;
+/* Not retained; the object that writes labels for all of Workspace. */
+- (void)setLabelWriter:(id)writer;
 /* Gives every item the label chosen in the pop-up. */
 - (void)labelChanged:(id)sender;
 

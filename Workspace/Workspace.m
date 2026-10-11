@@ -5327,8 +5327,18 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
       selection = [NSArray arrayWithObject: [[nodeView baseNode] path]];
     }
 
+  [self setLabelNumber: labelNumber forPaths: selection nodeView: nodeView];
+}
+
+/* The one place that gives files a label: the Label menu and the Summary
+ * Info window both come here, so every viewer and the Desktop show it. */
+- (NSUInteger)setLabelNumber:(NSInteger)labelNumber
+                    forPaths:(NSArray *)selection
+                    nodeView:(id)nodeView
+{
   NSUInteger i;
   NSUInteger count = [selection count];
+  NSUInteger failures = 0;
 
   /* ================================================================
    * 1. Write label via xattr (com.apple.FinderInfo) — existing path
@@ -5348,6 +5358,7 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
       NSError *error = nil;
       if (![md writeToFileAtPath: path error: &error])
         {
+          failures++;
         }
     }
 
@@ -5397,15 +5408,18 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   /* ================================================================
    * 3. Refresh the viewer and apply visual feedback
    * ================================================================ */
-  if ([vwrsManager hasViewerWithWindow: kwin])
-    {
-      GWViewer *viewer = [vwrsManager viewerWithWindow: kwin];
-      [viewer reloadNodeContents];
-    }
-  else if ([dtopManager hasWindow: kwin])
-    {
-      [[dtopManager desktopView] reloadContents];
-    }
+  /* The window that is key may be the Summary Info panel, so every viewer
+   * is reloaded, not only the key one. */
+  {
+    NSEnumerator *ve = [[vwrsManager allViewers] objectEnumerator];
+    GWViewer *viewer;
+
+    while ((viewer = [ve nextObject]) != nil)
+      {
+        [viewer reloadNodeContents];
+      }
+    [[dtopManager desktopView] reloadContents];
+  }
 
   /* Apply tag colors to selected files for immediate visual feedback */
   if (labelNumber != 0 && nodeView
@@ -5424,6 +5438,7 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
           [(id)nodeView setTagColorsFromDictionary: tagColors];
         }
     }
+  return failures;
 }
 
 /*

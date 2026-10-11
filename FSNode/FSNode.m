@@ -26,6 +26,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
+#import "FSNKindNames.h"
 #import "FSNode.h"
 #import "GSFileMetadata.h"
 #import "FSNodeRep.h"
@@ -732,9 +733,16 @@
   NSString *ext = [[path pathExtension] lowercaseString];
   NSDictionary *apps;
 
+  NSString *known;
+
   if (ext == nil || [ext length] == 0)
     {
       return nil;
+    }
+  known = [FSNKindNames kindForExtension: ext];
+  if (known != nil)
+    {
+      return known;
     }
   apps = [ws infoForExtension: ext];
   if (apps == nil || [apps count] == 0)
@@ -761,7 +769,8 @@
             human = [typeInfo objectForKey: @"NSTypeName"];
           }
         typeName = human;
-        if (typeName != nil && [typeName length] > 0)
+        /* Applications often declare a pasteboard type or UTI here. */
+        if ([typeName length] > 0 && ![FSNKindNames isIdentifierName: typeName])
           {
             return typeName;
           }

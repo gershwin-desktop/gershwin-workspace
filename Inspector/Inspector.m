@@ -160,6 +160,7 @@ static NSString *nibName = @"InspectorWin";
     {
       summaryWindow = [SummaryInfoWindow new];
     }
+  [summaryWindow setLabelWriter: desktopApp];
   [summaryWindow showForPaths: paths];
 }
 

@@ -392,6 +392,9 @@
 
 - (void)showAttributesInspector:(id)sender;
 - (void)showSummaryInfo:(id)sender;
+- (NSUInteger)setLabelNumber:(NSInteger)labelNumber
+                    forPaths:(NSArray *)paths
+                    nodeView:(id)nodeView;
 - (void)openRecentFolder:(id)sender;
 - (void)clearRecentFolders:(id)sender;
 
