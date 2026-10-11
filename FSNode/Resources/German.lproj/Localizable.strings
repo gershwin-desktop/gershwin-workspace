@@ -88,7 +88,12 @@
 
 "Yesterday" = "Gestern";
 
-"%@ at %@" = "%@ um %@";
+"%@ at %@" = "%@, %@";
+
+/* strftime-style formats of a list view date and its time, as the Finder of that language shows them */
+"Date format" = "%d.%m.%Y";
+
+"Time format" = "%H:%M";
 
 "Date Created" = "Erstellungsdatum";
 

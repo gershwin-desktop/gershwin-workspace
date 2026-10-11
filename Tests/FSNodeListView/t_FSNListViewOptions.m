@@ -165,12 +165,9 @@ main(void)
                                  relativeTo: now relativeNames: YES];
     NSString *yesterday = [DS descriptionOfDate: localDate (2026, 10, 10, 23, 59)
                                      relativeTo: now relativeNames: YES];
-    NSString *olderExpected = [localDate (2026, 10, 9, 23, 59)
-                                descriptionWithCalendarFormat: @"%b %d %Y %H:%M"];
-    NSString *futureExpected = [localDate (2026, 10, 12, 0, 1)
-                                 descriptionWithCalendarFormat: @"%b %d %Y %H:%M"];
-    NSString *plainExpected = [localDate (2026, 10, 11, 0, 5)
-                                descriptionWithCalendarFormat: @"%b %d %Y %H:%M"];
+    NSString *olderExpected = @"10/9/26 11:59 PM";
+    NSString *futureExpected = @"10/12/26 12:01 AM";
+    NSString *plainExpected = @"10/11/26 12:05 AM";
     NSString *older = [DS descriptionOfDate: localDate (2026, 10, 9, 23, 59)
                                  relativeTo: now relativeNames: YES];
     NSString *future = [DS descriptionOfDate: localDate (2026, 10, 12, 0, 1)
@@ -178,15 +175,35 @@ main(void)
     NSString *plain = [DS descriptionOfDate: localDate (2026, 10, 11, 0, 5)
                                  relativeTo: now relativeNames: NO];
 
-    PASS_EQUAL (today, @"Today at 00:05", "MI-LST-6 a date of today reads \"Today at HH:MM\"");
-    PASS_EQUAL (yesterday, @"Yesterday at 23:59",
-                "MI-LST-7 a date of the day before reads \"Yesterday at HH:MM\"");
+    PASS_EQUAL (today, @"Today 12:05 AM", "MI-LST-6 [O:2026-10-11 E22] a date of today reads the day word and the time");
+    PASS_EQUAL (yesterday, @"Yesterday 11:59 PM",
+                "MI-LST-7 [O:2026-10-11 E22] a date of the day before reads \"Yesterday\" and the time");
     PASS_EQUAL (older, olderExpected,
                 "MI-LST-8 an older date keeps the plain form");
     PASS_EQUAL (future, futureExpected,
                 "MI-LST-9 a date after today is not called Today or Yesterday");
     PASS_EQUAL (plain, plainExpected,
                 "MI-LST-10 with relative dates off today is a plain date");
+
+    /* German as the Mac mini shows it (E22): "Heute, 09:51", "Gestern,
+     * 10:15" and everything else dd.mm.yyyy HH:MM. */
+    {
+      NSDictionary *de = [NSDictionary dictionaryWithContentsOfFile:
+        @"../../FSNode/Resources/German.lproj/Localizable.strings"];
+
+      PASS_EQUAL ([DS descriptionOfDate: localDate (2026, 10, 11, 9, 51)
+                             relativeTo: now relativeNames: YES strings: de],
+                  @"Heute, 09:51", "MI-LST-80 [O:2026-10-11 E22] German today");
+      PASS_EQUAL ([DS descriptionOfDate: localDate (2026, 10, 10, 10, 15)
+                             relativeTo: now relativeNames: YES strings: de],
+                  @"Gestern, 10:15", "MI-LST-81 [O:2026-10-11 E22] German yesterday");
+      PASS_EQUAL ([DS descriptionOfDate: localDate (2026, 10, 8, 9, 30)
+                             relativeTo: now relativeNames: YES strings: de],
+                  @"08.10.2026 09:30", "MI-LST-82 [O:2026-10-11 E22] German older date");
+      PASS_EQUAL ([DS descriptionOfDate: localDate (2026, 10, 11, 9, 51)
+                             relativeTo: now relativeNames: NO strings: de],
+                  @"11.10.2026 09:51", "MI-LST-83 [O:2026-10-11 E22] German today with relative off");
+    }
   }
 
   PASS ([DS rowHeightForTextSize: 0 iconSize: 24] == 28.0,
@@ -411,8 +428,8 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
     PASS (![[ds tableView: view objectValueForTableColumn: dm row: row] hasPrefix: @"Today"],
           "MI-LST-55 dates are plain by default");
     [ds setUsesRelativeDates: YES];
-    PASS ([[ds tableView: view objectValueForTableColumn: dm row: row] hasPrefix: @"Today at "],
-          "MI-LST-56 with relative dates on, today's file reads Today at ...");
+    PASS ([[ds tableView: view objectValueForTableColumn: dm row: row] hasPrefix: @"Today "],
+          "MI-LST-56 with relative dates on, today's file reads Today and the time");
     [ds setUsesRelativeDates: NO];
   }
 

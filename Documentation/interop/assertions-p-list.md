@@ -71,14 +71,15 @@ Status of every line: implemented and covered by the test of the same id.
 
 ## Relative dates
 
-- MI-LST-6 A date of today reads "Today at HH:MM" [S:Finder relative dates]
-- MI-LST-7 A date of the day before reads "Yesterday at HH:MM" [S:Finder relative dates]
-- MI-LST-8 An older date keeps the plain form [G: Finder prints the localized date]
-- MI-LST-9 A date after today is not called Today or Yesterday [G]
-- MI-LST-10 With relative dates off today is a plain date [S:Finder]
+- MI-LST-6 A date of today reads the day word and the time ("Heute, 09:51"; English "Today 9:51 AM" [G]) [O:2026-10-11 E22, German only]
+- MI-LST-7 A date of the day before reads "Gestern, 10:15" [O:2026-10-11 E22]
+- MI-LST-8 An older date, also a future one (there is no "Morgen"), is the short date and time of the language, German "08.10.2026 09:30" [O:2026-10-11 E22]; other languages' formats are [G]
+- MI-LST-9 A date after today is not called Today or Yesterday [O:2026-10-11 E22]
+- MI-LST-10 With relative dates off today is a plain date [O:2026-10-11 E22]
 - MI-LST-55 Dates are plain by default [S:Finder default]
 - MI-LST-56 With relative dates on, today's file reads "Today at ..." in the cell value [S:Finder relative dates]
-- (no test id) The two words and the join are looked up as the strings "Today", "Yesterday", "%@ at %@" in the FSNode strings table [S:localization]
+- MI-LST-80..83 German: "Heute, 09:51", "Gestern, 10:15", "08.10.2026 09:30", relative off "11.10.2026 09:51" [O:2026-10-11 E22]
+- (no test id) The words, the join and the date and time formats are the strings "Today", "Yesterday", "%@ at %@", "Date format", "Time format" of the FSNode strings table of each language [S:localization]; French, Italian, Spanish and English values are [G] (the oracle only has German)
 
 ## Row metrics
 

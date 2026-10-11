@@ -92,7 +92,12 @@
 
 "Yesterday" = "Ieri";
 
-"%@ at %@" = "%@ alle %@";
+"%@ at %@" = "%@, %@";
+
+/* strftime-style formats of a list view date and its time, as the Finder of that language shows them */
+"Date format" = "%d/%m/%y";
+
+"Time format" = "%H:%M";
 
 "Date Created" = "Data di creazione";
 

@@ -210,12 +210,20 @@ extern NSString * const FSNListViewOptionColumnOrder;
  * and sizes. */
 + (BOOL)defaultSortAscendingForColumnId:(NSString *)columnId;
 
-/* "Today at 14:05" / "Yesterday at 14:05" when relative is YES and date is
- * on today's or yesterday's calendar day (local time zone) relative to now,
- * otherwise "Oct 11 2026 14:05". */
+/* "Today 2:05 PM" / "Heute, 14:05" when relative is YES and date is on
+ * today's or yesterday's calendar day (local time zone) relative to now,
+ * otherwise the short date and time of the language ("08.10.2026 09:30"),
+ * as the Finder of that language shows them. */
 + (NSString *)descriptionOfDate:(NSDate *)date
                      relativeTo:(NSDate *)now
                   relativeNames:(BOOL)relative;
+
+/* The same with the words and formats taken from a strings table (a
+ * Localizable.strings of one language) instead of the framework's bundle. */
++ (NSString *)descriptionOfDate:(NSDate *)date
+                     relativeTo:(NSDate *)now
+                  relativeNames:(BOOL)relative
+                        strings:(NSDictionary *)table;
 
 /* Row height for a text size (points; 0 for the default) and icon size. */
 + (CGFloat)rowHeightForTextSize:(CGFloat)textSize iconSize:(NSInteger)iconSize;

@@ -18,7 +18,7 @@ main(void)
   NSString *resources = @"../../FSNode/Resources";
   NSFileManager *fm = [NSFileManager defaultManager];
   NSArray *keys = [NSArray arrayWithObjects:
-                     @"Today", @"Yesterday", @"%@ at %@", @"Date Created",
+                     @"Today", @"Yesterday", @"%@ at %@", @"Date format", @"Time format", @"Date Created",
                      @"Date Last Opened", @"Label", @"Version", @"Comments",
                      @"1 item", @"%lu items", @"Zero bytes", @"1 byte",
                      @"%lu bytes", nil];
