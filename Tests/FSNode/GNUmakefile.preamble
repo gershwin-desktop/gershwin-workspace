@@ -1,7 +1,14 @@
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # Include path so the in-process test can find FSNode's Foundation-only
 # placement header (FSNIconPlacement.h).
-ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
+ADDITIONAL_INCLUDE_DIRS += -I../../FSNode -I../../GWMetadata
+
+# FSNAlias reads and writes its forks through GSFileMetadata, so every test
+# that compiles FSNAlias.m links the Finder-metadata sources with it.  They
+# reference NSImage/NSColor, hence gnustep-gui.
+GSMETA_OBJS = ../../GWMetadata/GSFileMetadata.m \
+              ../../GWMetadata/GSAppleDouble.m \
+              ../../GWMetadata/GWMetaXattr.m
 
 # clang 19 / binutils 2.44 regression: the ABI 2.2 .objc_init section always
 # references the __objc_constant_string section bounds, but the linker only
@@ -25,6 +32,7 @@ t_FSNDirectorySnapshot_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                      ../../FSNode/FSNodeRep.m \
                                      ../../FSNode/FSNodeRepIcons.m \
                                      ../../FSNode/FSNode.m
+t_FSNDirectorySnapshot_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNDirectorySnapshot_TOOL_LIBS += -lgnustep-gui
 t_FSNLazyAttributes_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                   ../../FSNode/FSNFunctions.m \
@@ -32,6 +40,7 @@ t_FSNLazyAttributes_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                   ../../FSNode/FSNodeRep.m \
                                   ../../FSNode/FSNodeRepIcons.m \
                                   ../../FSNode/FSNode.m
+t_FSNLazyAttributes_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNLazyAttributes_TOOL_LIBS += -lgnustep-gui
 
 # t_FSNIconLoader links the loader as a separate object; it imports AppKit
@@ -47,6 +56,7 @@ t_FSNDisplayName_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                ../../FSNode/FSNodeRep.m \
                                ../../FSNode/FSNodeRepIcons.m \
                                ../../FSNode/FSNode.m
+t_FSNDisplayName_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNDisplayName_TOOL_LIBS += -lgnustep-gui
 
 # t_FSNIconsViewTile drives the icons view itself, so it links the built
@@ -87,6 +97,7 @@ t_FSNSubpath_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                            ../../FSNode/FSNodeRep.m \
                            ../../FSNode/FSNodeRepIcons.m \
                            ../../FSNode/FSNode.m
+t_FSNSubpath_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNSubpath_TOOL_LIBS += -lgnustep-gui
 
 # t_FSNTextCellLabelLookup includes FSNTextCell.m directly (private ivars);
@@ -98,9 +109,18 @@ t_FSNTextCellLabelLookup_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                        ../../FSNode/FSNodeRep.m \
                                        ../../FSNode/FSNodeRepIcons.m \
                                        ../../FSNode/FSNode.m
+t_FSNTextCellLabelLookup_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNTextCellLabelLookup_TOOL_LIBS += -lgnustep-gui
 
 # t_FSNBrowserMatrixDrawRectRowScan drives the real browser matrix/cell
 # classes, so it links the built framework like t_FSNIconsViewTile does.
 t_FSNBrowserMatrixDrawRectRowScan_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                                                -lFSNode -lgnustep-gui
+
+# These include FSNAlias.m (and FSNAliasFile.m) in-process.
+t_FSNAlias_OBJC_FILES += $(GSMETA_OBJS)
+t_FSNAlias_TOOL_LIBS += -lgnustep-gui
+t_FSNAliasCreate_OBJC_FILES += $(GSMETA_OBJS)
+t_FSNAliasCreate_TOOL_LIBS += -lgnustep-gui
+t_FSNAliasOwnership_OBJC_FILES += $(GSMETA_OBJS)
+t_FSNAliasOwnership_TOOL_LIBS += -lgnustep-gui

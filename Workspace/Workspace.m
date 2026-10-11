@@ -50,6 +50,8 @@
 #import "FSNSpringLoader.h"
 #import "FSNFunctions.h"
 #import "FSNAlias.h"
+#import "FSNAliasFile.h"
+#import "FSNLocationFile.h"
 #import "Workspace.h"
 
 /* Set of paths the user has recently unmounted via the GUI.
@@ -2057,30 +2059,26 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSURL *aURL;
 
 
-/* Alias records (issue #71): opening a file that is an alias opens the
-   target the record resolves to, not the record itself. */
+/* Alias files (issue #71): opening an alias opens the target the record
+   resolves to, not the file itself.  Only a file the Finder Info marks as an
+   alias counts, so a text file that merely starts with "book" stays a file. */
   {
-    NSFileHandle *afh = [NSFileHandle fileHandleForReadingAtPath: fullPath];
-    if (afh) {
-      NSData *hdr = [afh readDataOfLength:4];
-      [afh closeFile];
-      if ([FSNAlias isAliasData: hdr]) {
-        FSNAlias *alias = [[FSNAlias alloc]
-                            initWithData: [NSData dataWithContentsOfFile: fullPath]];
-        NSString *target = [alias resolvePath];
-        AUTORELEASE(alias);
-        if (target == nil) {
-          NSAlert *alert = [[[NSAlert alloc] init] autorelease];
-          [alert setMessageText: @"Broken Alias"];
-          [alert setInformativeText: [NSString stringWithFormat:
-            @"The original of \"%@\" could not be found.",
-            [fullPath lastPathComponent]]];
-          [alert addButtonWithTitle: @"OK"];
-          [alert runModal];
-          return NO;
-        }
-        return [self openFile: target];
+    FSNAlias *alias = [FSNAlias aliasWithContentsOfFile: fullPath];
+
+    if (alias != nil) {
+      NSString *target = [alias resolvePath];
+
+      if (target == nil) {
+        NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+        [alert setMessageText: @"Broken Alias"];
+        [alert setInformativeText: [NSString stringWithFormat:
+          @"The original of \"%@\" could not be found.",
+          [fullPath lastPathComponent]]];
+        [alert addButtonWithTitle: @"OK"];
+        [alert runModal];
+        return NO;
       }
+      return [self openFile: target];
     }
   }
 
@@ -2419,14 +2417,16 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
   else if (type == NSPlainFileType)
     {
-      if ([[fullPath pathExtension] isEqualToString: @"webloc"])
+      if ([FSNLocationFile isLocationFilePath: fullPath])
 	{
-	  NSDictionary *weblocDict;
-	  NSString *urlString;
-
-	  weblocDict = [NSDictionary dictionaryWithContentsOfFile: fullPath];
-	  urlString = [weblocDict objectForKey:@"URL"];
-	  aURL = [NSURL URLWithString: urlString];
+	  aURL = [FSNLocationFile URLForLocationFileAtPath: fullPath];
+	  if (aURL == nil)
+	    {
+	      /* Never hand a location file we cannot read to another
+	       * application as if it were a document. */
+	      FSNShowCannotOpenAlert([fullPath lastPathComponent]);
+	      return NO;
+	    }
         }
     }
   

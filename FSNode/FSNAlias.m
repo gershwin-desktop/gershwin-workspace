@@ -4,9 +4,13 @@
  */
 
 #import "FSNAlias.h"
+#import "GSFileMetadata.h"
 
 #include <sys/stat.h>
 #include <string.h>
+
+static BOOL fsnaStoreForks(NSString *path, NSData *finderInfo,
+			   NSData *resourceFork);
 
 /* Seconds between 1904-01-01 (classic Mac epoch) and 1970-01-01. */
 /* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
@@ -574,9 +578,8 @@ NSString * const FSNWorkspaceCreateAliasOperation =
 			      volumeUUID: @""];
 }
 
-/* Write a 10.6 bookmark alias file.  The bookmark lives in the data fork;
- * a "._" AppleDouble sidecar carries the Finder Info (type "alis") so the
- * file is recognised as an alias once it reaches a Finder system. */
+/* Write a 10.6 bookmark alias file.  The bookmark lives in the data fork; the
+ * Finder Info (type "alis") makes a Finder system recognise it as an alias. */
 + (NSString *)writeAliasBookmarkForTargetPath:(NSString *)targetPath
 				  inDirectory:(NSString *)directory
 				    volumeName:(NSString *)volumeName
@@ -598,16 +601,7 @@ NSString * const FSNWorkspaceCreateAliasOperation =
     {
       return nil;
     }
-  NSData *fi = [a aliasFinderInfoData];
-  NSData *sidecar = fsnaAppleDouble(fi, [NSData data]);
-  if (sidecar == nil)
-    {
-      return nil;
-    }
-  NSString *sidecarName = [NSString stringWithFormat: @"._%@",
-					[aliasPath lastPathComponent]];
-  NSString *sidecarPath = [directory stringByAppendingPathComponent: sidecarName];
-  if ([sidecar writeToFile: sidecarPath atomically: YES] == NO)
+  if (fsnaStoreForks(aliasPath, [a aliasFinderInfoData], nil) == NO)
     {
       return nil;
     }
@@ -623,8 +617,8 @@ NSString * const FSNWorkspaceCreateAliasOperation =
 }
 
 /* Shared writer: the alias file itself has an empty data fork; the "alis"
- * resource and Finder Info travel in a "._" AppleDouble sidecar so the file
- * resolves natively on Finder systems once copied there by a Mac-aware tool. */
+ * resource and the Finder Info travel as metadata so the file resolves
+ * natively on Finder systems once copied there by a Mac-aware tool. */
 + (NSString *)_writeAlias:(FSNAlias *)a inDirectory:(NSString *)directory
 {
   NSString *aliasPath = fsnaUniqueAliasPath(directory, [a targetName]);
@@ -634,20 +628,8 @@ NSString * const FSNWorkspaceCreateAliasOperation =
       return nil;
     }
 
-  NSData *rsrc = [a aliasResourceForkData];
-  NSData *fi = [a aliasFinderInfoData];
-  NSData *sidecar = fsnaAppleDouble(fi, rsrc);
-
-  if (sidecar == nil)
-    {
-      return nil;
-    }
-
-  NSString *sidecarName = [NSString stringWithFormat: @"._%@",
-					[aliasPath lastPathComponent]];
-  NSString *sidecarPath = [directory stringByAppendingPathComponent: sidecarName];
-
-  if ([sidecar writeToFile: sidecarPath atomically: YES] == NO)
+  if (fsnaStoreForks(aliasPath, [a aliasFinderInfoData],
+		      [a aliasResourceForkData]) == NO)
     {
       return nil;
     }
@@ -1216,100 +1198,46 @@ fail:
   return d;
 }
 
-/* Build the resource fork that carries the "alis" resource - a classic
- * resource fork header, a gap, the alias data, and a minimal type/resource
- * map.  This is what macOS reads to resolve an alias file. */
+/* The fork is built by GSFileMetadata so the one Resource Manager layout
+ * writer serves every producer; the record is resource 0 of type 'alis', the
+ * form Finder's alias resolution reads. */
 - (NSData *)aliasResourceForkData
 {
-  NSData *alis = [self aliasData];
-  NSUInteger alisLen = [alis length];
-  NSUInteger mapLen = 46;
-  NSUInteger dataAreaLen = 4 + alisLen;   /* 4-byte handle-size prefix + alis */
-  NSUInteger mapOff = 256 + dataAreaLen;
+  GSOType type = [GSFileMetadata osTypeFromString: @"alis"];
+  NSDictionary *entry = [GSFileMetadata resourceEntryWithType: type
+						   resourceID: 0
+							 data: [self aliasData]];
 
-  NSMutableData *hdr = [NSMutableData dataWithLength: 16];
-  fsnaWriteU32(hdr, 0, 256);
-  fsnaWriteU32(hdr, 4, (uint32_t)mapOff);
-  fsnaWriteU32(hdr, 8, (uint32_t)dataAreaLen);
-  fsnaWriteU32(hdr, 12, (uint32_t)mapLen);
-
-  /* The first 16 bytes of the map duplicate the fork header (overwritten
-   * above); the trailing 12 bytes are constant.  The resource manager locates
-   * the type list at the fixed map+28 offset, so the resList offset stored in
-   * the type entry is not consulted. */
-  static const uint8_t kMapPrefix[28] = {
-    0x00,0x00,0x01,0x00, 0x00,0x00,0xa7,0x7a,
-    0x00,0x00,0xa6,0x7a, 0x00,0x00,0x00,0x46,
-    0x6b,0x73,0x73,0x21, 0x4c,0x00,0x00,0x00,
-    0x00,0x1c,0x00,0x46
-  };
-  uint8_t map[46];
-  memcpy(map, kMapPrefix, 28);
-  memcpy(map, [hdr bytes], 16);
-  /* type list: count=1, type "alis", resCount=0, resListOff=18 */
-  uint8_t tl[10] = { 0x00,0x01, 'a','l','i','s', 0x00,0x00, 0x00,0x12 };
-  memcpy(map + 28, tl, 10);
-  /* resource entry: resID=0, nameOff=0xFFFF, attrs=0, dataOff=0 */
-  uint8_t rl[8] = { 0x00,0x00, 0xff,0xff, 0x00,0x00,0x00,0x00 };
-  memcpy(map + 38, rl, 8);
-
-  NSMutableData *out = [NSMutableData dataWithCapacity: mapOff + mapLen];
-  [out appendData: hdr];
-  [out increaseLengthBy: 240];              /* pad to the data area at 256 */
-  /* Each resource's data is preceded by a 4-byte big-endian handle size. */
-  uint8_t hsz[4];
-  fsnaPutBE32(hsz, (uint32_t)alisLen);
-  [out appendBytes: hsz length: 4];
-  [out appendData: alis];
-  [out appendBytes: map length: 46];
-  return out;
+  return [GSFileMetadata resourceForkWithResources:
+	    [NSArray arrayWithObject: entry]];
 }
 
-/* The 32-byte Finder Info: OSType "alis", creator "MACS", and the alias flag
- * (0x8000) plus 0x0400.  This is what marks a file as a Mac alias. */
+/* Type "alis", creator "MACS" and kIsAlias.  kHasBeenInited stays clear so
+ * Finder reconsiders the item rather than trusting stale state. */
 - (NSData *)aliasFinderInfoData
 {
-  uint8_t fi[32] = {0};
-  fi[0] = 'a'; fi[1] = 'l'; fi[2] = 'i'; fi[3] = 's';
-  fi[4] = 'M'; fi[5] = 'A'; fi[6] = 'C'; fi[7] = 'S';
-  /* kIsAlias (0x8000) set, kHasBeenInited (0x0400) cleared - spec section 17:
-   * Finder should reconsider the item rather than trust stale state. */
-  fi[8] = 0x80; fi[9] = 0x00;
-  return [NSData dataWithBytes: fi length: 32];
+  GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
+
+  [md setTypeCode: [GSFileMetadata osTypeFromString: @"alis"]];
+  [md setCreatorCode: [GSFileMetadata osTypeFromString: @"MACS"]];
+  [md setAlias: YES];
+  return [md finderInfo];
 }
 
-/* Wrap the resource fork and Finder Info in an AppleDouble V2 sidecar ("._"
- * file) so the alias survives on filesystems that lack native xattrs and is
- * reconstituted by macOS when the file is copied via a Mac-aware tool. */
-static NSData *
-fsnaAppleDouble(NSData *finderInfo, NSData *resourceFork)
+/* Store the Finder Info (and fork) of a freshly written alias file the way
+ * GSFileMetadata stores everything: extended attributes where the file system
+ * has them, a "._" sidecar otherwise. */
+static BOOL
+fsnaStoreForks(NSString *path, NSData *finderInfo, NSData *resourceFork)
 {
-  NSUInteger fiLen = 32;
-  NSUInteger rfLen = [resourceFork length];
-  NSUInteger total = 26 + 2 * 12 + fiLen + rfLen;
-  NSMutableData *d = [NSMutableData dataWithLength: total];
-  uint8_t *b = [d mutableBytes];
+  GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
 
-  fsnaWriteU32(d, 0, 0x00051607);           /* AppleDouble magic */
-  fsnaWriteU32(d, 4, 0x00020000);           /* version 2 */
-  memcpy(b + 8, "Mac OS X", 8);
-  memset(b + 16, ' ', 8);
-  fsnaWriteU16(d, 24, 2);                   /* entry count */
-
-  NSUInteger dc = 50;                       /* body after header + descriptors */
-  fsnaWriteU32(d, 26, 9);                   /* entry 9: Finder Info */
-  fsnaWriteU32(d, 30, (uint32_t)dc);
-  fsnaWriteU32(d, 34, (uint32_t)fiLen);
-  memcpy(b + dc, [finderInfo bytes], fiLen);
-  dc += fiLen;
-  fsnaWriteU32(d, 38, 2);                   /* entry 2: Resource Fork */
-  fsnaWriteU32(d, 42, (uint32_t)dc);
-  fsnaWriteU32(d, 46, (uint32_t)rfLen);
-  if (rfLen)
+  [md setFinderInfo: finderInfo];
+  if (resourceFork != nil)
     {
-      memcpy(b + dc, [resourceFork bytes], rfLen);
+      [md setResourceFork: resourceFork];
     }
-  return d;
+  return [md writeToFileAtPath: path error: NULL];
 }
 
 /* Depth-limited search for an entry with the recorded inode. */

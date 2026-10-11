@@ -1,4 +1,10 @@
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # Extra include path so the in-process test source (compiled via #include of
 # FSNAlias.m) can find FSNAlias.h under ../../FSNode.
-ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
+ADDITIONAL_INCLUDE_DIRS += -I../../FSNode -I../../../GWMetadata
+
+# FSNAlias.m reads and writes its forks through GSFileMetadata.
+t_FSNAliasInterop_OBJC_FILES += ../../../GWMetadata/GSFileMetadata.m \
+                                ../../../GWMetadata/GSAppleDouble.m \
+                                ../../../GWMetadata/GWMetaXattr.m
+t_FSNAliasInterop_TOOL_LIBS += -lgnustep-gui

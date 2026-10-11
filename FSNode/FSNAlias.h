@@ -97,6 +97,12 @@ extern NSString * const FSNWorkspaceCreateAliasOperation;
 /* Serialize back to the wire format (version 2 record). */
 - (NSData *)aliasData;
 
+/* The record wrapped in a resource fork holding it as 'alis' resource 0, and
+ * the 32 byte Finder Info that flags a file as an alias.  An alias file is
+ * these two plus an empty data fork. */
+- (NSData *)aliasResourceForkData;
+- (NSData *)aliasFinderInfoData;
+
 /* Try to locate the target.  Prefers the recorded POSIX path (guarded by
  * the stored inode when present), then searches below the deepest existing
  * ancestor directory for the recorded inode. */

@@ -32,6 +32,7 @@
 #import "FSNTextCell.h"
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
+#import "FSNLocationFile.h"
 #import "FSNIconLoader.h"
 #import "FSNDirEntry.h"
 
@@ -3040,6 +3041,18 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
       pb = [sender draggingPasteboard];
 
+      /* A link dropped into the list becomes an Internet location file. */
+      if ([FSNLocationFile URLForPasteboard: pb] != nil)
+	{
+	  if ([node isWritable] == NO)
+	    {
+	      return NSDragOperationNone;
+	    }
+	  isDragTarget = YES;
+	  negotiatedDragOp = NSDragOperationCopy;
+	  return NSDragOperationCopy;
+	}
+
       if (pb && [[pb types] containsObject: NSFilenamesPboardType])
 	{
 	  sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
@@ -3251,11 +3264,31 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
 - (BOOL)listViewPerformDragOperation:(id <NSDraggingInfo>)sender
 {
+  NSPasteboard *pb = [sender draggingPasteboard];
+
+  if ((dndTarget != nil || isDragTarget)
+      && [FSNLocationFile URLForPasteboard: pb] != nil)
+    {
+      /* Written here, not on conclude, so a failure refuses the drop. */
+      return [FSNLocationFile
+	       writeWeblocFromPasteboard: pb
+			     inDirectory: [(dndTarget ? [dndTarget node] : node) path]]
+	!= nil;
+    }
   return ((dndTarget != nil) || isDragTarget);
 }
 
 - (void)listViewConcludeDragOperation:(id <NSDraggingInfo>)sender
 {
+  if ([FSNLocationFile URLForPasteboard: [sender draggingPasteboard]] != nil)
+    {
+      [self unSelectIconsOfRepsDifferentFrom: nil];
+      isDragTarget = NO;
+      dndTarget = nil;
+      dndValidRect = NSZeroRect;
+      return;
+    }
+
   if (dndTarget)
     {
       [dndTarget repConcludeDragOperation: sender];
@@ -3871,6 +3904,12 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
   pb = [sender draggingPasteboard];
 
+  if ([FSNLocationFile URLForPasteboard: pb] != nil)
+    {
+      isDragTarget = YES;
+      return NSDragOperationCopy;
+    }
+
   if ([[pb types] containsObject: NSFilenamesPboardType])
     {
       sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
@@ -4184,6 +4223,8 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
                                                 NSFilenamesPboardType,
 					      @"GWLSFolderPboardType",
 					      @"GWRemoteFilenamesPboardType",
+					      NSURLPboardType,
+					      NSStringPboardType,
 					      nil]];
     }
 

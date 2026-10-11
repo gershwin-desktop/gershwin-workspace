@@ -35,6 +35,7 @@
 #import "FSNFunctions.h"
 #import "FSNIconDragSession.h"
 #import "FSNMetadataProvider.h"
+#import "FSNLocationFile.h"
 #import "FSNIconPlacement.h"
 #import "FSNIconsView.h"
 
@@ -450,6 +451,8 @@ static void FSNForgetForeignWindowAnswer(void)
 	  NSArray *pbTypes = [NSArray arrayWithObjects: NSFilenamesPboardType,
 				      @"GWLSFolderPboardType",
 				      @"GWRemoteFilenamesPboardType",
+				      NSURLPboardType,
+				      NSStringPboardType,
 				      nil];
 	  [self registerForDraggedTypes: pbTypes];
 	}
@@ -2996,6 +2999,20 @@ static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
   pb = [sender draggingPasteboard];
   sourcePaths = nil;
 
+  /* A link dropped on a folder becomes an Internet location file in it. */
+  if ([FSNLocationFile URLForPasteboard: pb] != nil)
+    {
+      if (selection || isLocked || [node isDirectory] == NO
+	  || [node isPackage] || [node isWritable] == NO
+	  || [node isSubnodeOfPath: [desktopApp trashPath]])
+	{
+	  return NSDragOperationNone;
+	}
+      isDragTarget = YES;
+      negotiatedDragOp = NSDragOperationCopy;
+      return NSDragOperationCopy;
+    }
+
   if ([[pb types] containsObject: NSFilenamesPboardType])
     {
       sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
@@ -3371,6 +3388,15 @@ static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
   if (dragProxied)
     return [container performDragOperation: sender];
 
+  if (isDragTarget && isLocked == NO
+      && [FSNLocationFile URLForPasteboard: [sender draggingPasteboard]] != nil)
+    {
+      /* Written here, not on conclude, so a failure refuses the drop. */
+      return [FSNLocationFile
+	       writeWeblocFromPasteboard: [sender draggingPasteboard]
+			     inDirectory: [node path]] != nil;
+    }
+
   return isLocked ? NO : isDragTarget;
 }
 
@@ -3408,6 +3434,11 @@ static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
   [self setNeedsDisplay: YES];
 
   pb = [sender draggingPasteboard];
+
+  if ([FSNLocationFile URLForPasteboard: pb] != nil)
+    {
+      return;
+    }
 
   if ([node isPackage] == NO)
     {

@@ -1,0 +1,18 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+ADDITIONAL_INCLUDE_DIRS += -I../../FSNode -I../../GWMetadata
+
+# clang 19 / binutils 2.44: a Foundation-only tool whose literals are all
+# short has no constant string section, so the linker invents no bounds.
+ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
+                      -Wl,--defsym=__stop___objc_constant_string=0
+
+# The fork readers and writers are GSFileMetadata's; it references
+# NSImage/NSColor, hence gnustep-gui.
+GSMETA_OBJS = ../../GWMetadata/GSFileMetadata.m \
+              ../../GWMetadata/GSAppleDouble.m \
+              ../../GWMetadata/GWMetaXattr.m
+t_AliasFile_OBJC_FILES += ../../FSNode/FSNAlias.m ../../FSNode/FSNAliasFile.m \
+                          $(GSMETA_OBJS)
+t_AliasFile_TOOL_LIBS += -lgnustep-gui
+t_LocationFile_OBJC_FILES += ../../FSNode/FSNLocationFile.m $(GSMETA_OBJS)
+t_LocationFile_TOOL_LIBS += -lgnustep-gui

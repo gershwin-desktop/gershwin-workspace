@@ -35,6 +35,7 @@
 #import "FSNIcon.h"
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
+#import "FSNLocationFile.h"
 #import "FSNIconPositionStore.h"
 #import "FSNPlacementEnumerator.h"
 
@@ -218,6 +219,8 @@ const int FSNMaxLabelTextSize = 16;
 						NSFilenamesPboardType,
 					      @"GWLSFolderPboardType",
 					      @"GWRemoteFilenamesPboardType",
+					      NSURLPboardType,
+					      NSStringPboardType,
 					      nil]];
 
       /* Enable resize notification so resizeWithOldSuperviewSize:
@@ -4071,6 +4074,18 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 
   pb = [sender draggingPasteboard];
 
+  /* A link dropped into the view becomes an Internet location file. */
+  if ([FSNLocationFile URLForPasteboard: pb] != nil)
+    {
+      if ([node isWritable] == NO)
+	{
+	  return NSDragOperationNone;
+	}
+      isDragTarget = YES;
+      negotiatedDragOp = NSDragOperationCopy;
+      return NSDragOperationCopy;
+    }
+
   if (pb && [[pb types] containsObject: NSFilenamesPboardType])
     {
       sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
@@ -4300,6 +4315,15 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 
 - (BOOL)performDragOperation:(id <NSDraggingInfo>)sender
 {
+  NSPasteboard *pb = [sender draggingPasteboard];
+
+  /* The location file is written here, not in -concludeDragOperation:, so a
+   * failure can still refuse the drop. */
+  if ([FSNLocationFile URLForPasteboard: pb] != nil)
+    {
+      return [FSNLocationFile writeWeblocFromPasteboard: pb
+					    inDirectory: [node path]] != nil;
+    }
   return YES;
 }
 
@@ -4318,6 +4342,11 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   operation = nil;
 
   pb = [sender draggingPasteboard];
+
+  if ([FSNLocationFile URLForPasteboard: pb] != nil)
+    {
+      return;
+    }
 
   if ([[pb types] containsObject: @"GWRemoteFilenamesPboardType"])
     {
