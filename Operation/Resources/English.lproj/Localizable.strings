@@ -344,12 +344,6 @@
 "You have not write permission\nfor "
   = "You do not have write permission\nfor ";
 
-"\nto the Recycler"
-  = "\nto the Recycler";
-
-"\nto: "
-  = "\nto: ";
-
 "_copy" = "_copy";
 
 "blue" = "blue";
@@ -360,15 +354,7 @@
 
 "frequency" = "frequency";
 
-"from" = "from";
-
-"from the Recycler" = "from the Recycler";
-
 "green" = "green";
-
-"items" = "items";
-
-"one item" = "one item";
 
 "red" = "red";
 
@@ -378,3 +364,33 @@
 
 "with file:" = "with file:";
 
+/* Whole confirmation sentences; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Move one item from: %@\nto: %@?";
+
+"Move %lu items from: %@\nto: %@?"
+  = "Move %lu items from: %@\nto: %@?";
+
+"Copy one item from: %@\nto: %@?"
+  = "Copy one item from: %@\nto: %@?";
+
+"Copy %lu items from: %@\nto: %@?"
+  = "Copy %lu items from: %@\nto: %@?";
+
+"Link one item from: %@\nto: %@?"
+  = "Link one item from: %@\nto: %@?";
+
+"Link %lu items from: %@\nto: %@?"
+  = "Link %lu items from: %@\nto: %@?";
+
+"Move one item from: %@\nto the Recycler?"
+  = "Move one item from: %@\nto the Recycler?";
+
+"Move %lu items from: %@\nto the Recycler?"
+  = "Move %lu items from: %@\nto the Recycler?";
+
+"Move one item from the Recycler\nto: %@?"
+  = "Move one item from the Recycler\nto: %@?";
+
+"Move %lu items from the Recycler\nto: %@?"
+  = "Move %lu items from the Recycler\nto: %@?";

@@ -50,25 +50,41 @@
 
 "To:" = "Nach:";
 
-"\nto the Recycler"
-  = "\nin den Papierkorb";
-
-"\nto: "
-  = "\nnach: ";
-
 "_copy" = "_copy";
 
 "executor connection died!" = "Executor-Verbindung abgebrochen!";
-
-"from" = "von";
-
-"from the Recycler" = "aus dem Papierkorb";
-
-"items" = "Elemente";
-
-"one item" = "ein Element";
 
 "the Recycler" = "der Papierkorb";
 
 "with file:" = "mit Datei:";
 
+/* Whole confirmation sentences; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Ein Element verschieben von: %@\nnach: %@?";
+
+"Move %lu items from: %@\nto: %@?"
+  = "%lu Elemente verschieben von: %@\nnach: %@?";
+
+"Copy one item from: %@\nto: %@?"
+  = "Ein Element kopieren von: %@\nnach: %@?";
+
+"Copy %lu items from: %@\nto: %@?"
+  = "%lu Elemente kopieren von: %@\nnach: %@?";
+
+"Link one item from: %@\nto: %@?"
+  = "Ein Element verkn\u00fcpfen von: %@\nnach: %@?";
+
+"Link %lu items from: %@\nto: %@?"
+  = "%lu Elemente verkn\u00fcpfen von: %@\nnach: %@?";
+
+"Move one item from: %@\nto the Recycler?"
+  = "Ein Element von %@\nin den Papierkorb legen?";
+
+"Move %lu items from: %@\nto the Recycler?"
+  = "%lu Elemente von %@\nin den Papierkorb legen?";
+
+"Move one item from the Recycler\nto: %@?"
+  = "Ein Element aus dem Papierkorb\nnach %@ bewegen?";
+
+"Move %lu items from the Recycler\nto: %@?"
+  = "%lu Elemente aus dem Papierkorb\nnach %@ bewegen?";

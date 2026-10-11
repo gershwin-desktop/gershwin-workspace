@@ -210,6 +210,14 @@
 
 - (void)getWinRect: (NSRect*)rptr;
 
++ (NSString *)confirmationTitleForOperation:(NSString *)op;
++ (NSString *)confirmationFormatForOperation:(NSString *)op
+                                   itemCount:(NSUInteger)n;
++ (NSString *)confirmationMessageForOperation:(NSString *)op
+                                    itemCount:(NSUInteger)n
+                                       source:(NSString *)src
+                                  destination:(NSString *)dst;
+
 @end 
 
 

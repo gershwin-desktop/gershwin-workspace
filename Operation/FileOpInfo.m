@@ -214,96 +214,97 @@ static NSString *nibName = @"FileOperationWin";
   return self;
 }
 
+/* Each sentence is one localizable string: the order of the words, and the
+ * place of the paths in them, differs between languages, so nothing is
+ * glued together from pieces. */
++ (NSString *)confirmationTitleForOperation:(NSString *)op
+{
+  if ([op isEqual: NSWorkspaceMoveOperation])
+    return NSLocalizedString(@"Move", @"");
+  if ([op isEqual: NSWorkspaceCopyOperation])
+    return NSLocalizedString(@"Copy", @"");
+  if ([op isEqual: NSWorkspaceLinkOperation])
+    return NSLocalizedString(@"Link", @"");
+  if ([op isEqual: NSWorkspaceRecycleOperation]
+      || [op isEqual: @"WorkspaceRecycleOutOperation"]
+      || [op isEqual: @"WorkspaceemptyTrashOperation"])
+    return NSLocalizedString(@"Recycler", @"");
+  if ([op isEqual: NSWorkspaceDestroyOperation])
+    return NSLocalizedString(@"Delete", @"");
+  if ([op isEqual: NSWorkspaceDuplicateOperation])
+    return NSLocalizedString(@"Duplicate", @"");
+  if ([op isEqual: FSNWorkspaceCreateAliasOperation])
+    return NSLocalizedString(@"Make Alias", @"");
+  return nil;
+}
+
+/* The localized sentence with its placeholders: the item count (%lu, only
+ * when more than one item) and then the source and the destination, as the
+ * operation uses them. Nil for an operation that does not ask. */
++ (NSString *)confirmationFormatForOperation:(NSString *)op
+                                   itemCount:(NSUInteger)n
+{
+  BOOL one = (n == 1);
+
+  if ([op isEqual: NSWorkspaceMoveOperation])
+    return one ? NSLocalizedString(@"Move one item from: %@\nto: %@?", @"")
+               : NSLocalizedString(@"Move %lu items from: %@\nto: %@?", @"");
+  if ([op isEqual: NSWorkspaceCopyOperation])
+    return one ? NSLocalizedString(@"Copy one item from: %@\nto: %@?", @"")
+               : NSLocalizedString(@"Copy %lu items from: %@\nto: %@?", @"");
+  if ([op isEqual: NSWorkspaceLinkOperation])
+    return one ? NSLocalizedString(@"Link one item from: %@\nto: %@?", @"")
+               : NSLocalizedString(@"Link %lu items from: %@\nto: %@?", @"");
+  if ([op isEqual: NSWorkspaceRecycleOperation])
+    return one ? NSLocalizedString(@"Move one item from: %@\nto the Recycler?", @"")
+               : NSLocalizedString(@"Move %lu items from: %@\nto the Recycler?", @"");
+  if ([op isEqual: @"WorkspaceRecycleOutOperation"])
+    return one ? NSLocalizedString(@"Move one item from the Recycler\nto: %@?", @"")
+               : NSLocalizedString(@"Move %lu items from the Recycler\nto: %@?", @"");
+  if ([op isEqual: @"WorkspaceemptyTrashOperation"])
+    return NSLocalizedString(@"Empty the Recycler?", @"");
+  if ([op isEqual: NSWorkspaceDestroyOperation])
+    return NSLocalizedString(@"Delete the selected objects?", @"");
+  if ([op isEqual: NSWorkspaceDuplicateOperation])
+    return NSLocalizedString(@"Duplicate the selected objects?", @"");
+  if ([op isEqual: FSNWorkspaceCreateAliasOperation])
+    return NSLocalizedString(@"Create aliases of the selected objects?", @"");
+  return nil;
+}
+
++ (NSString *)confirmationMessageForOperation:(NSString *)op
+                                    itemCount:(NSUInteger)n
+                                       source:(NSString *)src
+                                  destination:(NSString *)dst
+{
+  NSString *fmt = [self confirmationFormatForOperation: op itemCount: n];
+  BOOL one = (n == 1);
+  unsigned long count = (unsigned long)n;
+
+  if ([op isEqual: NSWorkspaceMoveOperation]
+      || [op isEqual: NSWorkspaceCopyOperation]
+      || [op isEqual: NSWorkspaceLinkOperation])
+    return one ? [NSString stringWithFormat: fmt, src, dst]
+               : [NSString stringWithFormat: fmt, count, src, dst];
+  if ([op isEqual: NSWorkspaceRecycleOperation])
+    return one ? [NSString stringWithFormat: fmt, src]
+               : [NSString stringWithFormat: fmt, count, src];
+  if ([op isEqual: @"WorkspaceRecycleOutOperation"])
+    return one ? [NSString stringWithFormat: fmt, dst]
+               : [NSString stringWithFormat: fmt, count, dst];
+  return fmt;
+}
+
 - (void)startOperation
 {
   if (confirm)
     {    
-      NSString *title = nil;
-      NSString *msg = nil;
-      NSString *msg1 = nil;
-      NSString *msg2 = nil;
-      NSString *items;
+      NSString *title = [FileOpInfo confirmationTitleForOperation: type];
+      NSString *msg = [FileOpInfo confirmationMessageForOperation: type
+                                                        itemCount: [files count]
+                                                           source: source
+                                                      destination: destination];
 
-      if ([files count] > 1)
-        {
-          items = [NSString stringWithFormat: @"%lu %@", (unsigned long)[files count], NSLocalizedString(@"items", @"")];
-        }
-      else
-        {
-          items = NSLocalizedString(@"one item", @"");
-        }
-    
-      if ([type isEqual: NSWorkspaceMoveOperation])
-        {
-          title = NSLocalizedString(@"Move", @"");
-          msg1 = [NSString stringWithFormat: @"%@ %@ %@: ", 
-                           NSLocalizedString(@"Move", @""), 
-                           items, 
-                           NSLocalizedString(@"from", @"")];
-          msg2 = NSLocalizedString(@"\nto: ", @"");
-          msg = [NSString stringWithFormat: @"%@%@%@%@?", msg1, source, msg2, destination];
-        }
-      else if ([type isEqual: NSWorkspaceCopyOperation])
-        {
-          title = NSLocalizedString(@"Copy", @"");
-          msg1 = [NSString stringWithFormat: @"%@ %@ %@: ", 
-                           NSLocalizedString(@"Copy", @""), 
-                           items, 
-                           NSLocalizedString(@"from", @"")];
-          msg2 = NSLocalizedString(@"\nto: ", @"");
-          msg = [NSString stringWithFormat: @"%@%@%@%@?", msg1, source, msg2, destination];
-        }
-      else if ([type isEqual: NSWorkspaceLinkOperation])
-        {
-          title = NSLocalizedString(@"Link", @"");
-          msg1 = [NSString stringWithFormat: @"%@ %@ %@: ", 
-                           NSLocalizedString(@"Link", @""), 
-                           items, 
-                           NSLocalizedString(@"from", @"")];
-          msg2 = NSLocalizedString(@"\nto: ", @"");
-          msg = [NSString stringWithFormat: @"%@%@%@%@?", msg1, source, msg2, destination];
-        }
-      else if ([type isEqual: NSWorkspaceRecycleOperation])
-        {
-          title = NSLocalizedString(@"Recycler", @"");
-          msg1 = [NSString stringWithFormat: @"%@ %@ %@: ", 
-                           NSLocalizedString(@"Move", @""), 
-                           items, 
-                           NSLocalizedString(@"from", @"")];
-          msg2 = NSLocalizedString(@"\nto the Recycler", @"");
-          msg = [NSString stringWithFormat: @"%@%@%@?", msg1, source, msg2];
-        }
-      else if ([type isEqual: @"WorkspaceRecycleOutOperation"])
-        {
-          title = NSLocalizedString(@"Recycler", @"");
-          msg1 = [NSString stringWithFormat: @"%@ %@ %@ ", 
-                           NSLocalizedString(@"Move", @""), 
-                           items, 
-                           NSLocalizedString(@"from the Recycler", @"")];
-          msg2 = NSLocalizedString(@"\nto: ", @"");
-          msg = [NSString stringWithFormat: @"%@%@%@?", msg1, msg2, destination];
-        }
-      else if ([type isEqual: @"WorkspaceemptyTrashOperation"])
-        {
-          title = NSLocalizedString(@"Recycler", @"");
-          msg = NSLocalizedString(@"Empty the Recycler?", @"");
-        }
-      else if ([type isEqual: NSWorkspaceDestroyOperation])
-        {
-          title = NSLocalizedString(@"Delete", @"");
-          msg = NSLocalizedString(@"Delete the selected objects?", @"");
-        }
-      else if ([type isEqual: NSWorkspaceDuplicateOperation])
-        {
-          title = NSLocalizedString(@"Duplicate", @"");
-          msg = NSLocalizedString(@"Duplicate the selected objects?", @"");
-        }
-      else if ([type isEqual: FSNWorkspaceCreateAliasOperation])
-        {
-          title = NSLocalizedString(@"Make Alias", @"");
-          msg = NSLocalizedString(@"Create aliases of the selected objects?", @"");
-        }
-      
       if (NSRunAlertPanel(title, msg, 
                           NSLocalizedString(@"OK", @""), 
                           NSLocalizedString(@"Cancel", @""), 

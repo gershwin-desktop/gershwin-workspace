@@ -10,7 +10,7 @@ ADDITIONAL_INCLUDE_DIRS += -I../../Operation -I../../FSNode -I../../GWMetadata -
 # must link), and the undo history FileOpInfo reports finished operations
 # to.  Link the built FSNode framework by path so the tool exercises what
 # was just built, not the installed copy.
-t_FileOpInfoRemoveProcessedFiles_OBJC_FILES += ../../Operation/FileOpInfo.m \
+FILEOP_OBJC_FILES = ../../Operation/FileOpInfo.m \
                                                ../../Operation/Functions.m \
                                                ../../Operation/GWMetadataCopier.m \
                                                ../../Operation/GWFileUndoStack.m \
@@ -21,7 +21,11 @@ t_FileOpInfoRemoveProcessedFiles_OBJC_FILES += ../../Operation/FileOpInfo.m \
                                                ../../DSStore/DSStore.m ../../DSStore/DSStoreCodecs.m \
                                                ../../DSStore/DSStoreEntry.m ../../DSStore/DSBuddyAllocator.m \
                                                ../../DSStore/SimpleColor.m
-t_FileOpInfoRemoveProcessedFiles_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+FILEOP_TOOL_LIBS = -L../../FSNode/FSNode.framework/Versions/Current \
                                               -lFSNode -lgnustep-gui -ldispatch
+t_FileOpInfoRemoveProcessedFiles_OBJC_FILES += $(FILEOP_OBJC_FILES)
+t_FileOpInfoRemoveProcessedFiles_TOOL_LIBS += $(FILEOP_TOOL_LIBS)
+t_FileOpInfoConfirmText_OBJC_FILES += $(FILEOP_OBJC_FILES)
+t_FileOpInfoConfirmText_TOOL_LIBS += $(FILEOP_TOOL_LIBS)
 ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
                       -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
