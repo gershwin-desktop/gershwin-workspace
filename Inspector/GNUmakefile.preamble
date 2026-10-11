@@ -13,7 +13,7 @@ ADDITIONAL_CFLAGS += -Wall
 ADDITIONAL_INCLUDE_DIRS += -I../FSNode -I../GWMetadata -I../Workspace -I../DSStore
 
 # Additional LDFLAGS to pass to the linker
-ADDITIONAL_OBJC_LIBS += -lFSNode -lGSMetadata -lPackageManager 
+ADDITIONAL_OBJC_LIBS += -lFSNode -lGSMetadata 
 
 # Additional library directories the linker should search   
 ADDITIONAL_LIB_DIRS += -L../FSNode/FSNode.framework -L../GSMetadata/obj -L../DSStore/obj

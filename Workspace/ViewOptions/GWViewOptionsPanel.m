@@ -13,6 +13,8 @@
 #import "DSStore.h"
 #import "FSNIconsView.h"
 #import "FSNListView.h"
+#import "FSNBrowser.h"
+#import "FSNColumnViewOptions.h"
 #import "FSNode.h"
 #import "../AppearanceMetrics.h"
 
@@ -298,10 +300,41 @@ columnTitle (NSString *columnId)
   if (y > paneHeight)
     paneHeight = y;
 
+  /* Column pane: the options are the same for all folders [O:E30]. */
+  columnPane = [[GWViewOptionsFlippedView alloc] initWithFrame: NSMakeRect (0, 0, width, 10)];
+  y = METRICS_CONTENT_TOP_MARGIN;
+
+  [self labelWithTitle: VOStr (@"Text size:") inView: columnPane y: y];
+  columnTextSizePopUp = [self popUpWithTitles: [self textSizeTitles] inView: columnPane y: y];
+  y += RowHeight + 4;
+
+  columnIconsButton = [self checkBoxWithTitle: VOStr (@"Show icons") inView: columnPane y: y];
+  y += RowHeight;
+  columnPreviewButton = [self checkBoxWithTitle: VOStr (@"Show icon preview") inView: columnPane y: y];
+  y += RowHeight;
+  columnPreviewColumnButton = [self checkBoxWithTitle: VOStr (@"Show preview column")
+                                               inView: columnPane y: y];
+  y += RowHeight + 4;
+
+  [self labelWithTitle: VOStr (@"Arrange by:") inView: columnPane y: y];
+  /* In the order of FSNIconsArrangement. */
+  columnArrangePopUp = [self popUpWithTitles:
+    [NSArray arrayWithObjects: VOStr (@"None"), VOStr (@"Name"), VOStr (@"Kind"),
+             VOStr (@"Date Modified"), VOStr (@"Date Created"), VOStr (@"Size"),
+             VOStr (@"Label"), nil]
+                                      inView: columnPane y: y];
+  y += RowHeight + 4;
+  if (y > paneHeight)
+    paneHeight = y;
+
   content = [[[GWViewOptionsFlippedView alloc] initWithFrame:
     NSMakeRect (0, 0, width, paneHeight + bottomHeight)] autorelease];
   [iconPane setFrame: NSMakeRect (0, 0, width, paneHeight)];
   [listPane setFrame: NSMakeRect (0, 0, width, paneHeight)];
+  [columnPane setFrame: NSMakeRect (0, 0, width, paneHeight)];
+  [columnPane setAutoresizingMask: NSViewWidthSizable];
+  [content addSubview: columnPane];
+  RELEASE (columnPane);
   [iconPane setAutoresizingMask: NSViewWidthSizable];
   [listPane setAutoresizingMask: NSViewWidthSizable];
   [content addSubview: iconPane];
@@ -424,8 +457,9 @@ columnTitle (NSString *columnId)
   id view = viewer ? [self nodeView] : nil;
   BOOL icons = [view isKindOfClass: [FSNIconsView class]];
   BOOL list = [view isKindOfClass: [FSNListView class]];
+  BOOL column = [view isKindOfClass: [FSNBrowser class]];
   NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
-  NSWindow *window = (icons || list) ? [view window] : nil;
+  NSWindow *window = (icons || list || column) ? [view window] : nil;
 
   if (viewerWindow)
     {
@@ -440,7 +474,7 @@ columnTitle (NSString *columnId)
 
   RELEASE (model);
   model = [[GWViewOptionsModel alloc] init];
-  if (icons || list)
+  if (icons || list || column)
     {
       /* What the folder keeps first (background, grid spacing and the
        * options of the other kind of view), then what the window shows. */
@@ -450,9 +484,12 @@ columnTitle (NSString *columnId)
       [model takeFromInfo: info];
       if (icons)
         [model takeFromIconsView: view];
-      else
+      else if (list)
         [model takeFromListDataSource: [(FSNListView *)view dataSource]];
-      [model setAlwaysOpenStyle: icons ? DSStoreViewStyleIcon : DSStoreViewStyleList];
+      else
+        [model takeFromColumnViewOptions: [FSNColumnViewOptions sharedOptions]];
+      [model setAlwaysOpenStyle: icons ? DSStoreViewStyleIcon
+                                       : (list ? DSStoreViewStyleList : DSStoreViewStyleColumn)];
       [panel setTitle: [NSString stringWithFormat: @"%@ %@",
                                  [path lastPathComponent], VOStr (@"View Options")]];
     }
@@ -463,10 +500,12 @@ columnTitle (NSString *columnId)
 
   [iconPane setHidden: icons == NO];
   [listPane setHidden: list == NO];
-  [emptyLabel setHidden: icons || list];
-  [alwaysOpenButton setHidden: (icons || list) == NO];
+  [columnPane setHidden: column == NO];
+  [emptyLabel setHidden: icons || list || column];
+  [alwaysOpenButton setHidden: (icons || list || column) == NO];
   [alwaysOpenButton setTitle: list ? VOStr (@"Always open in list view")
-                                   : VOStr (@"Always open in icon view")];
+                                   : (column ? VOStr (@"Always open in column view")
+                                             : VOStr (@"Always open in icon view"))];
   [self controlsFromModel];
 }
 
@@ -502,6 +541,13 @@ columnTitle (NSString *columnId)
       [[columnButtons objectForKey: columnId]
         setState: [[model visibleColumns] containsObject: columnId] ? NSOnState : NSOffState];
     }
+  [columnTextSizePopUp selectItemAtIndex: [model columnTextSize] - FSNMinLabelTextSize];
+  [columnIconsButton setState: [model columnShowsIcons] ? NSOnState : NSOffState];
+  [columnPreviewButton setState: [model columnShowsIconPreview] ? NSOnState : NSOffState];
+  /* Without icons there is nothing to preview, as in Finder. */
+  [columnPreviewButton setEnabled: [model columnShowsIcons]];
+  [columnPreviewColumnButton setState: [model columnShowsPreviewColumn] ? NSOnState : NSOffState];
+  [columnArrangePopUp selectItemAtIndex: [model columnArrangement]];
   [relativeDatesButton setState: [model usesRelativeDates] ? NSOnState : NSOffState];
   [allSizesButton setState: [model calculatesAllSizes] ? NSOnState : NSOffState];
   [alwaysOpenButton setState: [model alwaysOpen] ? NSOnState : NSOffState];
@@ -533,6 +579,11 @@ columnTitle (NSString *columnId)
         [shown addObject: columnId];
     }
   [model setVisibleColumns: shown];
+  [model setColumnTextSize: FSNMinLabelTextSize + (int)[columnTextSizePopUp indexOfSelectedItem]];
+  [model setColumnShowsIcons: [columnIconsButton state] == NSOnState];
+  [model setColumnShowsIconPreview: [columnPreviewButton state] == NSOnState];
+  [model setColumnShowsPreviewColumn: [columnPreviewColumnButton state] == NSOnState];
+  [model setColumnArrangement: (FSNIconsArrangement)[columnArrangePopUp indexOfSelectedItem]];
   [model setUsesRelativeDates: [relativeDatesButton state] == NSOnState];
   [model setCalculatesAllSizes: [allSizesButton state] == NSOnState];
   [model setAlwaysOpen: [alwaysOpenButton state] == NSOnState];
@@ -574,6 +625,8 @@ columnTitle (NSString *columnId)
     [model applyToIconsView: view];
   else if ([view isKindOfClass: [FSNListView class]])
     [model applyToListDataSource: [(FSNListView *)view dataSource]];
+  else if ([view isKindOfClass: [FSNBrowser class]])
+    [model applyToColumnViewOptions: [FSNColumnViewOptions sharedOptions]];
   [self controlsFromModel];
 
   dragging = [[NSApp currentEvent] type] == NSLeftMouseDragged;
@@ -604,7 +657,10 @@ columnTitle (NSString *columnId)
       return;
     }
 
-  [model putIntoInfo: info forListView: [view isKindOfClass: [FSNListView class]]];
+  [model putIntoInfo: info
+         forViewKind: [view isKindOfClass: [FSNBrowser class]] ? GWViewOptionsColumnView
+                      : ([view isKindOfClass: [FSNListView class]] ? GWViewOptionsListView
+                                                                   : GWViewOptionsIconView)];
   /* The window's own state wins for what it has: the scroll position, the
    * complete column description. */
   if ([view isKindOfClass: [FSNIconsView class]])

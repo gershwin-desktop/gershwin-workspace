@@ -269,6 +269,15 @@ withoutScrollPosition(NSDictionary *values)
   return withoutScrollPosition([scratch listViewRecordValues]);
 }
 
++ (NSDictionary *)folderPrefsFromViewerPrefs:(NSDictionary *)prefs
+{
+  NSMutableDictionary *folder = [NSMutableDictionary dictionaryWithDictionary: prefs];
+
+  [folder removeObjectsForKeys: [NSArray arrayWithObjects: @"iconsize", @"iconspos",
+                                         @"iconsarr", nil]];
+  return folder;
+}
+
 + (BOOL)opensSpatially:(DSStoreInfo *)info byDefault:(BOOL)spatialDefault
 {
   return [info hasShowToolbar] ? ([info showToolbar] == NO) : spatialDefault;

@@ -36,6 +36,8 @@
 #import "FSNIconDragSession.h"
 #import "FSNMetadataProvider.h"
 #import "FSNLocationFile.h"
+#import "FSNIconPreview.h"
+#import "FSNArrangement.h"
 #import "FSNIconPlacement.h"
 #import "FSNIconsView.h"
 
@@ -853,13 +855,7 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
 
 - (BOOL)isPlainImageFile
 {
-  NSString *ext;
-
-  if (node == nil || selection != nil || [node isDirectory] || [node isLink])
-    return NO;
-  ext = [[[node path] pathExtension] lowercaseString];
-  return ([ext length] > 0
-          && [[NSImage imageFileTypes] containsObject: ext]);
+  return (selection == nil && [FSNIconPreview isPlainImageNode: node]);
 }
 
 - (NSString *)computeItemInfo
@@ -941,74 +937,11 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
   return icon;
 }
 
-/* Thumbnails of one file are kept for as long as memory allows, keyed so a
- * file changed on disk or shown at another size is decoded again. */
-- (NSImage *)previewImage
-{
-  static NSCache *cache = nil;
-  NSString *path = [node path];
-  NSString *key = [NSString stringWithFormat: @"%@|%d|%.0f", path, iconSize,
-                            [[node modificationDate] timeIntervalSince1970]];
-  NSImage *image;
-  NSSize sz;
-
-  if (cache == nil)
-    {
-      cache = [NSCache new];
-      [cache setCountLimit: 512];
-    }
-
-  image = [cache objectForKey: key];
-  if (image != nil)
-    return image;
-
-  image = [fsnodeRep thumbnailForPath: path];
-  if (image == nil && [node fileSize] <= FSNPreviewMaxFileSize)
-    image = [[[NSImage alloc] initWithContentsOfFile: path] autorelease];
-  if (image == nil || [image isValid] == NO)
-    return nil;
-
-  /* Images smaller than the icon stay as small as they are: blowing a
-   * 16 pixel picture up to the icon size would only make it blurry. */
-  sz = [image size];
-  if (sz.width > iconSize || sz.height > iconSize)
-    image = [fsnodeRep resizedIcon: image ofSize: iconSize];
-
-  [cache setObject: image forKey: key];
-  return image;
-}
-
-/* The generic image of the file's type, bypassing the thumbnail cache that
- * -[FSNodeRep iconOfSize:forNode:] consults for every file. */
-- (NSImage *)genericTypeIcon
-{
-  NSString *path = [node path];
-  NSString *key = [[path pathExtension] lowercaseString];
-  NSImage *generic = [fsnodeRep cachedIconOfSize: iconSize forKey: key];
-
-  if (generic == nil)
-    {
-      NSImage *base = [[NSWorkspace sharedWorkspace] iconForFile: path];
-
-      generic = [fsnodeRep cachedIconOfSize: iconSize
-                                     forKey: key
-                                addBaseIcon: base];
-    }
-  return generic;
-}
-
 - (NSImage *)loadedIconImage
 {
-  if ([self isPlainImageFile]
-      && [[fsnodeRep metadataProvider] customIconForPath: [node path]] == nil)
-    {
-      NSImage *image = showsPreview ? [self previewImage] : [self genericTypeIcon];
-
-      if (image != nil)
-        return image;
-    }
-
-  return [fsnodeRep iconOfSize: iconSize forNode: node];
+  if (selection != nil)
+    return [fsnodeRep iconOfSize: iconSize forNode: node];
+  return [FSNIconPreview iconForNode: node size: iconSize showsPreview: showsPreview];
 }
 
 - (NSInteger)labelIndex
@@ -2144,23 +2077,8 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
  * which is not the order of the label numbers. */
 - (int)compareAccordingToLabel:(id)aIcon
 {
-  NSInteger mine = [self labelIndex];
-  NSInteger theirs = [aIcon labelIndex];
-  NSString *myName, *theirName;
-
-  if (mine == 0 || theirs == 0)
-    {
-      return (mine == theirs) ? NSOrderedSame
-        : (mine == 0 ? NSOrderedAscending : NSOrderedDescending);
-    }
-  myName = [self labelName];
-  theirName = [aIcon labelName];
-  if (myName && theirName)
-    {
-      return [myName caseInsensitiveCompare: theirName];
-    }
-  return (mine < theirs) ? NSOrderedAscending
-    : (mine > theirs ? NSOrderedDescending : NSOrderedSame);
+  return FSNCompareLabels ([self labelIndex], [self labelName],
+                           [aIcon labelIndex], [aIcon labelName]);
 }
 
 - (int)compareAccordingToOwner:(id)aIcon

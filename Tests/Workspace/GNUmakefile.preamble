@@ -31,9 +31,27 @@ ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
 ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
                       -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
 t_AppImageProbeCache_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
-                                  -lFSNode -lgnustep-gui -lsquashfs
+                                  -lFSNode -lgnustep-gui
 t_AppImageDirIconCycle_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
-                                    -lFSNode -lgnustep-gui -lsquashfs
+                                    -lFSNode -lgnustep-gui
+# Workspace is built without AppImage support when libsquashfs is missing
+# (configure.ac); the two tests then say so instead of failing to compile.
+# They follow configure's own decision (HAVE_SQUASHFS in Workspace/config.h)
+# rather than probing again: on FreeBSD a second probe found the library
+# that configure had rejected and linked a tool Workspace itself never uses.
+ifneq ($(shell grep -s '^\#define HAVE_SQUASHFS 1' ../../Workspace/config.h),)
+GW_SQUASHFS_PC := $(firstword $(foreach p,libsquashfs squashfs,\
+                    $(shell pkg-config --exists $(p) 2>/dev/null && echo $(p))))
+GW_SQUASHFS_FLAGS := $(if $(GW_SQUASHFS_PC),$(shell pkg-config --cflags $(GW_SQUASHFS_PC)))
+GW_SQUASHFS_LIBS := $(if $(GW_SQUASHFS_PC),$(shell pkg-config --libs $(GW_SQUASHFS_PC)),-lsquashfs)
+else
+GW_SQUASHFS_FLAGS := -DGW_NO_SQUASHFS
+GW_SQUASHFS_LIBS :=
+endif
+t_AppImageProbeCache_OBJCFLAGS += $(GW_SQUASHFS_FLAGS)
+t_AppImageDirIconCycle_OBJCFLAGS += $(GW_SQUASHFS_FLAGS)
+t_AppImageProbeCache_TOOL_LIBS += $(GW_SQUASHFS_LIBS)
+t_AppImageDirIconCycle_TOOL_LIBS += $(GW_SQUASHFS_LIBS)
 
 # VMPathIsActiveMountPoint is a `static inline` predicate declared directly
 # in VolumeManager.h (not VolumeManager.m), specifically so this test can
@@ -45,3 +63,27 @@ t_VolumeManagerMountDetection_OBJC_FILES += ../../Workspace/FileViewer/GWVolumeI
 # GWSingleInstance.m talks to Xlib; the decision functions tested here do not
 # need a display.
 t_GWSingleInstance_TOOL_LIBS += -lX11
+
+# t_GWLookInsideInfo #includes GWLookInsidePreviewView.m (the unit under
+# test, an NSView subclass used without drawing) and links the preview kind
+# decision, the geometry and the column provider as separate objects; FSNode
+# gives the item's facts and the icons, linked from the build tree like the
+# AppImage tests above.
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/LookInside
+t_GWLookInsideInfo_OBJC_FILES += ../../Workspace/LookInside/GWLookInsidePreviewKind.m \
+                                 ../../Workspace/LookInside/GWLookInsideGeometry.m \
+                                 ../../Workspace/LookInside/GWLookInsideColumnPreviewProvider.m
+t_GWLookInsideInfo_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                -lFSNode -lgnustep-gui
+
+# t_GWStationery includes GWStationery.m; the copier and the Finder metadata
+# library it uses are linked as separate objects, as in Tests/Preserve.
+ADDITIONAL_INCLUDE_DIRS += -I../../Operation -I../../DSStore
+t_GWStationery_OBJC_FILES += ../../Operation/GWMetadataCopier.m \
+                             ../../GWMetadata/GSAppleDouble.m \
+                             ../../GWMetadata/GWMetaXattr.m \
+                             ../../GWMetadata/GSFileMetadata.m \
+                             ../../DSStore/DSStore.m ../../DSStore/DSStoreCodecs.m \
+                             ../../DSStore/DSStoreEntry.m ../../DSStore/DSBuddyAllocator.m \
+                             ../../DSStore/SimpleColor.m
+t_GWStationery_TOOL_LIBS += -lgnustep-gui

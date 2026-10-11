@@ -266,7 +266,7 @@ DSStore 'shor' decode bug reported (E10).
 | Referee | mi/referee | Documentation/interop/referee-*.md, the Mac |
 
 Waiting for F-meta: HFS+ volumes (osx.* xattrs on Linux hfsplus),
-`__MACOSX` in zip archives (GWMetaArchive), Quick Look-like preview.
+`__MACOSX` in zip archives (GWMetaArchive), Look Inside preview.
 
 ## Parked (user decision 2026-10-11)
 

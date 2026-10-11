@@ -126,4 +126,13 @@ void gs_xattr_list_free(gs_xattr_list_t *list);
 }
 #endif
 
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the gs_*xattr
+   functions take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
 #endif /* GWMETAXATTR_H */

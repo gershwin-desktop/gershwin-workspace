@@ -10,6 +10,7 @@
 
 #import <AppKit/AppKit.h>
 #import "Testing.h"
+#include <sys/stat.h>
 #import "DSStore.h"
 #import "DSStoreEntry.h"
 #import "DSStoreInfo.h"
@@ -502,8 +503,28 @@ main(void)
     PASS([DSStoreInfo parentStorePathForDirectory: @"/"] == nil
          && [DSStoreInfo parentStorePathForDirectory: NSHomeDirectory()] == nil,
          "MI-IV-79 the root and the home folder keep \".\" in their own store");
-    PASS([DSStoreInfo parentStorePathForDirectory: @"/proc"] == nil,
-         "MI-IV-80 so does the root of any other volume");
+    {
+      /* A mount point on every system: /proc is not mounted on the BSDs,
+       * /dev is part of / on OpenBSD. */
+      NSArray *candidates = [NSArray arrayWithObjects: @"/proc", @"/dev", @"/sys",
+                                     @"/tmp", @"/run", @"/dev/shm", nil];
+      NSString *mount = nil;
+      NSString *c;
+      NSEnumerator *e = [candidates objectEnumerator];
+      struct stat own, up;
+
+      while (mount == nil && (c = [e nextObject]) != nil)
+        if (stat([c fileSystemRepresentation], &own) == 0
+            && stat([[c stringByDeletingLastPathComponent] fileSystemRepresentation], &up) == 0
+            && own.st_dev != up.st_dev)
+          mount = c;
+      if (mount == nil)
+        NSLog(@"none of %@ is a mount point here; MI-IV-80 has no volume root to check",
+              candidates);
+      else
+        PASS([DSStoreInfo parentStorePathForDirectory: mount] == nil,
+             "MI-IV-80 so does the root of any other volume (%s)", [mount UTF8String]);
+    }
     PASS([[DSStoreInfo parentStorePathForDirectory: [root stringByAppendingPathComponent: @"x"]]
            isEqual: [root stringByAppendingPathComponent: @".DS_Store"]],
          "MI-IV-81 any other folder in its parent's");

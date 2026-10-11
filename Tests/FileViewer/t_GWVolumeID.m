@@ -49,10 +49,14 @@ main(void)
    * system's own identity, not the device number --- */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *source = [GWVolumeID mountSourceForPath: @"/"];
+    /* Any device node will do; the mount source of / is none in a container
+     * (overlay), and the BSDs' /dev/ufsid and /dev/gptid are searched after
+     * /dev/disk/by-uuid, which the second directory stands in for. */
+    NSString *source = @"/dev/null";
     NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
                       [NSString stringWithFormat: @"t_GWVolumeID_%d", (int)getpid()]];
     NSString *plain = [dir stringByAppendingPathComponent: @"plain"];
+    NSString *first = [dir stringByAppendingPathComponent: @"by-uuid"];
 
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
@@ -67,9 +71,18 @@ main(void)
     PASS([GWVolumeID filesystemIdentityForDevice: plain
                                    inDirectories: [NSArray arrayWithObject: dir]] == nil,
          "MI-IV-88 something that is not a device has none");
+    [fm createDirectoryAtPath: first attributes: nil];
+    PASS_EQUAL([GWVolumeID filesystemIdentityForDevice: source
+                                         inDirectories: ([NSArray arrayWithObjects: first, dir, nil])],
+               @"1234-ABCD",
+               "a later directory (ufsid, gptid) is searched when an earlier one has no entry");
+    PASS([GWVolumeID filesystemIdentityForDevice: source
+                                   inDirectories: [NSArray arrayWithObject: first]] == nil,
+         "a device with no entry in any directory has no identity");
     if ([fm fileExistsAtPath: @"/dev/disk/by-uuid"])
       {
-        NSString *uuid = [GWVolumeID filesystemIdentityForDevice: source
+        NSString *uuid = [GWVolumeID filesystemIdentityForDevice:
+                                       [GWVolumeID mountSourceForPath: @"/"]
                                                    inDirectories:
                                     [NSArray arrayWithObject: @"/dev/disk/by-uuid"]];
 

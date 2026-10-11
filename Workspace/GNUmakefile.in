@@ -98,6 +98,7 @@ X11AppSupport.m \
 GWProcessMonitor.m \
 GWProcessOwnership.m \
 GWSingleInstance.m \
+GWStationery.m \
 GWWin32Process.m \
 GWDetachedCommand.m \
 GWURLSchemeRegistry.m \
@@ -121,6 +122,7 @@ Desktop/Dock/GWDockWindow.m \
 ViewOptions/GWViewOptionsModel.m \
 ViewOptions/GWViewOptionsPanel.m \
  FileViewer/GWViewerChrome.m \
+ FileViewer/GWViewerGeometry.m \
  FileViewer/GWViewer.m \
 FileViewer/GWViewTypeHelpers.m \
 FileViewer/GWSpatialViewer.m \
@@ -143,9 +145,14 @@ FileViewer/GWVolumeCache.m \
 FileViewer/GWViewSettingsManager.m \
 FileViewer/GWViewerPrefs.m \
 FileViewer/GWSpatialIconsView.m \
-QuickLook/GWQuickLookGeometry.m \
-QuickLook/GWQuickLookController.m \
-QuickLook/GWQuickLookPanel.m \
+LookInside/GWLookInsideGeometry.m \
+LookInside/GWLookInsideController.m \
+LookInside/GWLookInsideKeys.m \
+LookInside/GWLookInsidePreviewKind.m \
+LookInside/GWLookInsidePreviewView.m \
+LookInside/GWLookInsideOverviewView.m \
+LookInside/GWLookInsideColumnPreviewProvider.m \
+LookInside/GWLookInsidePanel.m \
 ../GWMetadata/GWMetaArchive.m \
 Finder/Finder.m \
 Finder/GWChangePaths.m \

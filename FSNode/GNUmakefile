@@ -19,6 +19,12 @@ FSNode_OBJC_FILES = \
          FSNBrowserMatrix.m \
          FSNBrowserColumn.m \
          FSNBrowser.m \
+         FSNBrowserLayout.m \
+         FSNColumnViewOptions.m \
+         FSNBrowserPreviewView.m \
+         FSNBrowserResizeHandle.m \
+         FSNArrangement.m \
+         FSNIconPreview.m \
          FSNIcon.m \
          FSNIconsView.m \
          FSNListView.m \
@@ -45,6 +51,13 @@ FSNode_HEADER_FILES = \
          FSNBrowserMatrix.h \
          FSNBrowserColumn.h \
          FSNBrowser.h \
+         FSNBrowserLayout.h \
+         FSNColumnViewOptions.h \
+         FSNBrowserPreviewView.h \
+         FSNBrowserResizeHandle.h \
+         FSNArrangement.h \
+         FSNIconPreview.h \
+         FSNPreviewProvider.h \
          FSNIcon.h \
          FSNIconsView.h \
          FSNListView.h \

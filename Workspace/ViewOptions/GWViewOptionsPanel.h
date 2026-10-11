@@ -26,6 +26,7 @@
 
   NSView *iconPane;
   NSView *listPane;
+  NSView *columnPane;
   NSTextField *emptyLabel;
   NSButton *alwaysOpenButton;
 
@@ -46,6 +47,12 @@
   NSMutableDictionary *columnButtons;
   NSButton *relativeDatesButton;
   NSButton *allSizesButton;
+
+  NSPopUpButton *columnTextSizePopUp;
+  NSButton *columnIconsButton;
+  NSButton *columnPreviewButton;
+  NSButton *columnPreviewColumnButton;
+  NSPopUpButton *columnArrangePopUp;
 }
 
 + (GWViewOptionsPanel *)sharedPanel;
