@@ -134,32 +134,32 @@ appended to `INTEROP_DSSTORE.md` / FEATURES.md. Reports, never fixes.
 
 ## Scout queue (filled from Porter reports)
 
-- S1 (P-preserve OPEN-1): real 10.6 `._` fixtures: FinderInfo only, one
+- S1 [ANSWERED E15] (P-preserve OPEN-1): real 10.6 `._` fixtures: FinderInfo only, one
   xattr, many xattrs, resource fork + xattrs (via `ditto -c --sequesterRsrc`
   / copy to a FAT/SMB volume). Padding to 4096? debug_tag? Commit them under
   `Tests/GWMetadata/interop/fixtures/finder106/` (the old fixtures are
   generated, not in git).
-- S2 (OPEN-2): 10.6 `cp -p`, `ditto`, Finder copy: is
+- S2 [ANSWERED E16] (OPEN-2): 10.6 `cp -p`, `ditto`, Finder copy: is
   `com.apple.quarantine` copied verbatim, changed or dropped?
-- S3 (OPEN-4): are ATTR header/record flags ever non-zero on 10.6?
-- S4 (OPEN-5): FinderInfo xattr of length != 32 in a sidecar: entry 9 or ATTR?
-- S5 (P-list): first-click sort direction per column; lsvp `ascending`
+- S3 [ANSWERED E15] (OPEN-4): are ATTR header/record flags ever non-zero on 10.6?
+- S4 [ANSWERED E17] (OPEN-5): FinderInfo xattr of length != 32 in a sidecar: entry 9 or ATTR?
+- S5 [ANSWERED E20] (P-list): first-click sort direction per column; lsvp `ascending`
   semantics for dates/size; sort column when it gets hidden.
-- S6 (P-list): can Name be dragged off the left edge?
-- S7 (P-list): relative date wording/format and older dates; Date Last
+- S6 [ANSWERED E21] (P-list): can Name be dragged off the left edge?
+- S7 [ANSWERED E22] (P-list): relative date wording/format and older dates; Date Last
   Opened source and empty display; empty Version/Comments display.
-- S8 (P-list): folder/package size display without calculate-all-sizes;
+- S8 [ANSWERED E23 (partly)] (P-list): folder/package size display without calculate-all-sizes;
   logical vs physical, hard links, mounts; display while calculating; live
   re-sort while sizes arrive.
-- S9 (P-list): Label column sort order and content; row heights for list
+- S9 [ANSWERED E24] (P-list): Label column sort order and content; row heights for list
   icon sizes 16/32 and text sizes 10-16.
-- S10 (P-icons): item info wording (bytes/KB/MB, base 10?), for apps,
+- S10 [ANSWERED E23 (partly)] (P-icons): item info wording (bytes/KB/MB, base 10?), for apps,
   packages, volumes; folder count includes hidden files?
-- S11 (P-icons): arrange by label/kind/size/date order (folders first?
+- S11 [ANSWERED E25] (P-icons): arrange by label/kind/size/date order (folders first?
   newest/largest first?); snap-to-grid collision on drop.
-- S12 (P-icons): icvp scrollPositionX/Y origin + units; show icon preview
+- S12 [ANSWERED E11, E26] (P-icons): icvp scrollPositionX/Y origin + units; show icon preview
   off = generic icon? default showIconPreview without icvp.
-- S13 (P-inspector): hide extension = fdFlags 0x0010 on 10.6? (dump after
+- S13 [ANSWERED E18] (P-inspector): hide extension = fdFlags 0x0010 on 10.6? (dump after
   Finder hides one). PNG-in-icns resource fork custom icon shown by 10.6?
   Locked also sets kNameLocked; kNameLocked honoured on rename? Folder
   custom icon layout (Icon\r + fork + 0x0400 on folder).
@@ -173,10 +173,18 @@ exception for fixtures/finder106/ at integration.
 - D3: sudo round trip of the Locked helper untested (classifier blocked
   the agent): user runs it, or authorizes a narrow test.
 
-- S14 (P-links): does 10.6 Finder resolve our alias (file + `._` or
+- S14 [ANSWERED E19, E28] (P-links): does 10.6 Finder resolve our alias (file + `._` or
   xattrs)? Fixtures: Finder alias to file on another volume, to a folder;
   'alis' id/payload, data fork empty?; classic .webloc with only 'url '
   resource (id 256?); does Finder open our XML .webloc?
+
+Scout done 2026-10-11 (gw-wt/toolsmith, evidence E10-E28): A1 lsvp honoured
+and wins over LSVO/lsvo/lsvt (E10, E21); A2 scrollPositionX/Y top-left,
+points, in icvp and lsvp (E11); A3 icvp backgroundType 2 +
+backgroundImageAlias, CNID-less alias needs tag 2 (E12); A4 bwsp ShowToolbar,
+SidebarWidth per folder, bar flags global (E13); A5 volume root and home use
+"." in their own store, read-only places persist nothing (E14). S15 (E27, E28).
+DSStore 'shor' decode bug reported (E10).
 
 
 - D1 DECIDED 2026-10-11: sidecar fallback for E2BIG/ENOSPC only (P-preserve implements). Was: ext4 caps one xattr at about a block, so a large
