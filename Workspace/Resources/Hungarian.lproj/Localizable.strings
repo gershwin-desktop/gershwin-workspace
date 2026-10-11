@@ -848,6 +848,7 @@
 "Label:" = "Címke:";
 "Locked:" = "Zárolva:";
 "Calculating..." = "Számítás...";
+"The label could not be set on %lu items." = "A cimkét nem sikerült beállítani %lu elemen.";
 "Yes" = "Igen";
 "No" = "Nem";
 "%@ bytes" = "%@ bájt";

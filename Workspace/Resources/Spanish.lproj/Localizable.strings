@@ -1421,6 +1421,7 @@ for";
 "Label:" = "Etiqueta:";
 "Locked:" = "Bloqueado:";
 "Calculating..." = "Calculando...";
+"The label could not be set on %lu items." = "No se pudo asignar la etiqueta a %lu elementos.";
 "No" = "No";
 "%@ bytes" = "%@ bytes";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bytes)";

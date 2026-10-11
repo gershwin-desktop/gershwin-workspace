@@ -758,6 +758,7 @@ for";
 "Label:" = "Etichetă:";
 "Locked:" = "Blocat:";
 "Calculating..." = "Se calculează...";
+"The label could not be set on %lu items." = "Eticheta nu a putut fi setată pentru %lu elemente.";
 "Yes" = "Da";
 "No" = "Nu";
 "%@ bytes" = "%@ octeți";

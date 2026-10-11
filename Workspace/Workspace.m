@@ -5072,6 +5072,20 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   [menu addItem: menuItem];
   RELEASE (menuItem);
 
+  /* Every view builds its context menu here, so this is the one place that
+   * offers the totals of a selection.  Finder 10.6 shows the item only while
+   * Option is held; an alternate item is not reliable in a GNUstep pop-up, so
+   * a plain item is always shown for several items. */
+  if ([nodes count] > 1) {
+    menuItem = [NSMenuItem new];
+    [menuItem setTitle: NSLocalizedString(@"Get Summary Info", @"")];
+    [menuItem setTarget: [Workspace gworkspace]];
+    [menuItem setAction: @selector(showSummaryInfo:)];
+    [menuItem setEnabled: YES];
+    [menu addItem: menuItem];
+    RELEASE (menuItem);
+  }
+
   // Label submenu + Compress or Extract — only for non-mount-points
   if (!isMountPoint) {
     [menu addItem: [NSMenuItem separatorItem]];

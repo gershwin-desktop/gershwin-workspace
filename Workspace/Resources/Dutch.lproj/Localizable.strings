@@ -1518,6 +1518,7 @@
 "Label:" = "Label:";
 "Locked:" = "Geblokkeerd:";
 "Calculating..." = "Bezig met berekenen...";
+"The label could not be set on %lu items." = "Het label kon niet worden ingesteld voor %lu onderdelen.";
 "%@ bytes" = "%@ bytes";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bytes)";
 

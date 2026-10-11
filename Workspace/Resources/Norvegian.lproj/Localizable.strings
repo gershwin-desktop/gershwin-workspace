@@ -846,6 +846,7 @@
 "Label:" = "Etikett:";
 "Locked:" = "Låst:";
 "Calculating..." = "Beregner...";
+"The label could not be set on %lu items." = "Etiketten kunne ikke settes på %lu elementer.";
 "Yes" = "Ja";
 "No" = "Nei";
 "%@ bytes" = "%@ byte";

@@ -948,6 +948,7 @@ for";
 "Label:" = "Etykieta:";
 "Locked:" = "Zablokowany:";
 "Calculating..." = "Obliczanie...";
+"The label could not be set on %lu items." = "Nie udało się ustawić etykiety dla %lu elementów.";
 "%@ bytes" = "%@ bajtów";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bajtów)";
 

@@ -41,6 +41,11 @@ typedef enum {
 - (void)startInBackgroundNotifying:(id)target selector:(SEL)doneSelector;
 - (void)cancel;
 
+/* Gives every item the label (0 = None, 1-7 as in the Label menu) through
+ * FinderInfoModel and returns how many items could not be written.  There is
+ * no undo: Workspace has no undo stack for metadata changes. */
+- (NSUInteger)applyLabel:(NSInteger)label;
+
 @property (nonatomic, readonly) NSUInteger itemCount;
 @property (nonatomic, readonly) NSUInteger folderCount;
 @property (nonatomic, readonly) unsigned long long totalBytes;

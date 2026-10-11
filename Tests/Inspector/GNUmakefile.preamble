@@ -27,3 +27,11 @@ t_SummaryInfoModel_OBJC_FILES += ../../Inspector/FinderInfoModel.m \
                                  ../../DSStore/DSStoreEntry.m ../../DSStore/DSBuddyAllocator.m \
                                  ../../DSStore/SimpleColor.m
 t_SummaryInfoModel_TOOL_LIBS += -lgnustep-gui
+
+# SummaryInfoModel names the kinds as the list view does, through FSNode.
+# DT_RPATH on the build's own framework: see Tests/FSNodeModel.
+ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
+                      -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current \
+                      -L$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+t_SummaryInfoModel_TOOL_LIBS += -lFSNode

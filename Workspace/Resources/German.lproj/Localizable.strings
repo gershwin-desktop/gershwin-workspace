@@ -1278,6 +1278,7 @@
 "Label:" = "Etikett:";
 "Locked:" = "Gesperrt:";
 "Calculating..." = "Wird berechnet ...";
+"The label could not be set on %lu items." = "Die Farbmarkierung konnte bei %lu Objekten nicht gesetzt werden.";
 "%@ bytes" = "%@ Byte";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ Byte)";
 

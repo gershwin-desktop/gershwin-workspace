@@ -6,6 +6,7 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
+#import "FSNode.h"
 #include "../../Inspector/SummaryInfoModel.m"
 
 static void writeBytes(NSString *path, NSUInteger n)
@@ -42,13 +43,49 @@ int main(void)
   [m compute];
   PASS([m itemCount] == 4 && [m folderCount] == 1, "counts items and folders");
   PASS([m totalBytes] == 6300, "total size includes the content of folders, not links");
-  PASS([[[m kinds] objectForKey: @"TXT file"] intValue] == 2
-       && [[[m kinds] objectForKey: @"PDF file"] intValue] == 1
-       && [[[m kinds] objectForKey: @"Folder"] intValue] == 1, "groups items by kind");
+  /* The kinds are the ones the list view's Kind column shows. */
+  {
+    NSString *txt = [[FSNode nodeWithPath: a] typeDescription];
+    NSString *pdf = [[FSNode nodeWithPath: c] typeDescription];
+    NSString *folder = [[FSNode nodeWithPath: dir] typeDescription];
+
+    PASS([[[m kinds] objectForKey: txt] intValue] == 2
+         && [[[m kinds] objectForKey: pdf] intValue] == 1
+         && [[[m kinds] objectForKey: folder] intValue] == 1, "groups items by the list view kind");
+    PASS([[[m kinds] objectForKey: txt] intValue] == 2 && ![txt hasSuffix: @" file"]
+         , "a kind is a description, not EXT file");
+  }
   PASS([m commonLabel] == 0, "items without a label share the None label");
   PASS([m lockedState] == SummaryStateNone, "unlocked items report not locked");
   PASS([m finished], "finished after compute");
+
+  /* One label for all items; Mixed when they differ. */
+  PASS([m applyLabel: 3] == 0, "label applied to every item without failure");
+  PASS([m commonLabel] == 3, "model reports the label it applied");
+  PASS([[FinderInfoModel modelForPath: a] labelNumber] == 3
+       && [[FinderInfoModel modelForPath: dir] labelNumber] == 3, "label reaches each file and folder");
   [m release];
+  {
+    FinderInfoModel *one = [FinderInfoModel modelForPath: b];
+
+    [one setLabelNumber: 1];
+    [one write: NULL];
+  }
+  m = [[SummaryInfoModel alloc] initWithPaths: sel];
+  [m compute];
+  PASS([m commonLabel] == -1, "differing labels are Mixed");
+  [m release];
+
+  /* A file nobody ever labeled has no metadata at all; it is None, not absent. */
+  {
+    NSString *e = [root stringByAppendingPathComponent: @"e.txt"];
+
+    writeBytes(e, 10);
+    m = [[SummaryInfoModel alloc] initWithPaths: [NSArray arrayWithObjects: a, e, nil]];
+    [m compute];
+    PASS([m commonLabel] == -1, "a labeled and an unlabeled file are Mixed");
+    [m release];
+  }
 
   m = [[SummaryInfoModel alloc] initWithPaths: sel];
   [m cancel];

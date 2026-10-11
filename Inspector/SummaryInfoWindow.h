@@ -19,11 +19,13 @@
   NSTextField *_sizeValue;
   NSTextField *_itemsValue;
   NSTextField *_kindsValue;
-  NSTextField *_labelValue;
+  NSPopUpButton *_labelPopUp;
   NSTextField *_lockedValue;
 }
 
 - (void)showForPaths:(NSArray *)paths;
 - (NSWindow *)window;
+/* Gives every item the label chosen in the pop-up. */
+- (void)labelChanged:(id)sender;
 
 @end

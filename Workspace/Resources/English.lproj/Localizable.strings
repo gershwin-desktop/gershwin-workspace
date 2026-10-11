@@ -1230,6 +1230,7 @@
 "Label:" = "Label:";
 "Locked:" = "Locked:";
 "Calculating..." = "Calculating...";
+"The label could not be set on %lu items." = "The label could not be set on %lu items.";
 "%@ bytes" = "%@ bytes";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bytes)";
 

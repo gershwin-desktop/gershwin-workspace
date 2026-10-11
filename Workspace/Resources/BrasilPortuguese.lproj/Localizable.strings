@@ -801,6 +801,7 @@
 "Label:" = "Etiqueta:";
 "Locked:" = "Bloqueado:";
 "Calculating..." = "Calculando...";
+"The label could not be set on %lu items." = "Não foi possível definir a etiqueta em %lu itens.";
 "Yes" = "Sim";
 "No" = "Não";
 "%@ bytes" = "%@ bytes";

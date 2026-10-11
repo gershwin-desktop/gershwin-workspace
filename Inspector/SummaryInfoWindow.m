@@ -48,22 +48,53 @@ static NSTextField *makeText(NSFont *font, NSTextAlignment align)
   return _panel;
 }
 
-- (NSString *)labelDescription
+/* Label names as the Label menu and the Find window have them; the tag of a
+ * pop-up item is the label number, -1 stands for Mixed. */
+static NSArray *labelNames(void)
 {
-  NSArray *names = [NSArray arrayWithObjects: @"None", @"Red", @"Orange",
-                            @"Yellow", @"Green", @"Blue", @"Purple", @"Grey", nil];
-  NSInteger n = [_model commonLabel];
+  return [NSArray arrayWithObjects: @"None", @"Red", @"Orange", @"Yellow",
+                  @"Green", @"Blue", @"Purple", @"Grey", nil];
+}
 
+- (void)fillLabelPopUp
+{
+  NSInteger n = [_model commonLabel];
+  NSArray *names = labelNames();
+  NSUInteger i;
+
+  [_labelPopUp removeAllItems];
   if (n < 0)
     {
-      return NSLocalizedString(@"Mixed", @"Value differs between the items");
+      /* Mixed is shown, not offered: it is not a label to give. */
+      [_labelPopUp addItemWithTitle: NSLocalizedString(@"Mixed", @"Value differs between the items")];
+      [[_labelPopUp lastItem] setTag: -1];
     }
-  if ((NSUInteger)n >= [names count])
+  for (i = 0; i < [names count]; i++)
     {
-      return @"-";
+      [_labelPopUp addItemWithTitle: NSLocalizedString([names objectAtIndex: i], @"")];
+      [[_labelPopUp lastItem] setTag: i];
     }
-  /* Same table as the Label menu and the Find window use. */
-  return NSLocalizedString([names objectAtIndex: n], @"");
+  [_labelPopUp selectItemAtIndex: n < 0 ? 0 : MIN(n, 7)];
+}
+
+- (void)labelChanged:(id)sender
+{
+  NSInteger label = [[_labelPopUp selectedItem] tag];
+  NSUInteger failures;
+
+  if (label < 0)
+    {
+      return;
+    }
+  failures = [_model applyLabel: label];
+  if (failures > 0)
+    {
+      NSRunAlertPanel(NSLocalizedString(@"Summary Info", @"Window title"),
+                      NSLocalizedString(@"The label could not be set on %lu items.",
+                                        @"Alert text after a failed label change"),
+                      nil, nil, nil, (unsigned long)failures);
+    }
+  [self fillLabelPopUp];
 }
 
 - (NSString *)kindsDescription
@@ -92,7 +123,8 @@ static NSTextField *makeText(NSFont *font, NSTextAlignment align)
   [_sizeValue setStringValue:
      [SummaryInfoModel descriptionForByteCount: [model totalBytes]]];
   [_kindsValue setStringValue: [self kindsDescription]];
-  [_labelValue setStringValue: [self labelDescription]];
+  [self fillLabelPopUp];
+  [_labelPopUp setEnabled: YES];
   if ([model supportsLocking])
     {
       NSString *s = NSLocalizedString(@"No", @"Locked: no");
@@ -136,6 +168,26 @@ static NSTextField *makeText(NSFont *font, NSTextAlignment align)
   return val;
 }
 
+- (void)addControl:(NSControl *)control withCaption:(NSString *)caption y:(CGFloat *)y
+{
+  NSTextField *cap = makeText(METRICS_FONT_SYSTEM_BOLD_11, NSRightTextAlignment);
+  NSView *content = [_panel contentView];
+  CGFloat valueX = METRICS_CONTENT_SIDE_MARGIN + CAPTION_WIDTH + METRICS_SPACE_8;
+  CGFloat h = METRICS_TEXT_INPUT_FIELD_HEIGHT;
+
+  *y -= h;
+  [cap setStringValue: caption];
+  [cap setFrame: NSMakeRect(METRICS_CONTENT_SIDE_MARGIN, *y + (h - LINE_HEIGHT) / 2 - 1,
+                            CAPTION_WIDTH, LINE_HEIGHT)];
+  [control setFrame: NSMakeRect(valueX, *y, 140.0, h)];
+  [cap setAutoresizingMask: NSViewMinYMargin];
+  [control setAutoresizingMask: NSViewMinYMargin];
+  [content addSubview: cap];
+  [content addSubview: control];
+  [cap release];
+  *y -= METRICS_SPACE_8;
+}
+
 /* The kinds are only known after the walk; the extensions give the number of
  * lines up front so the window does not have to grow afterwards. */
 - (NSUInteger)estimatedKindLinesForPaths:(NSArray *)paths
@@ -162,7 +214,7 @@ static NSTextField *makeText(NSFont *font, NSTextAlignment align)
   CGFloat height = METRICS_CONTENT_TOP_MARGIN + ICON_SIDE + METRICS_SPACE_16
     + 2 * (LINE_HEIGHT + METRICS_SPACE_8)            /* items, size */
     + kindsHeight + METRICS_SPACE_8                  /* kinds */
-    + (LINE_HEIGHT + METRICS_SPACE_8)                /* label */
+    + (METRICS_TEXT_INPUT_FIELD_HEIGHT + METRICS_SPACE_8) /* label */
     + (locking ? LINE_HEIGHT + METRICS_SPACE_8 : 0)
     + METRICS_CONTENT_BOTTOM_MARGIN - METRICS_SPACE_8;
   CGFloat y = height - METRICS_CONTENT_TOP_MARGIN;
@@ -215,8 +267,15 @@ static NSTextField *makeText(NSFont *font, NSTextAlignment align)
                                      y: &y height: LINE_HEIGHT];
   _kindsValue = [self addRowWithCaption: NSLocalizedString(@"Kinds:", @"Summary Info caption")
                                   value: @"" y: &y height: kindsHeight];
-  _labelValue = [self addRowWithCaption: NSLocalizedString(@"Label:", @"Summary Info caption")
-                                  value: @"" y: &y height: LINE_HEIGHT];
+  _labelPopUp = [[NSPopUpButton alloc] initWithFrame: NSZeroRect pullsDown: NO];
+  [_labelPopUp addItemWithTitle: NSLocalizedString(@"Calculating...", @"Size not known yet")];
+  [_labelPopUp setTarget: self];
+  [_labelPopUp setAction: @selector(labelChanged:)];
+  /* Items are counted first; a label cannot be given before the walk is done. */
+  [_labelPopUp setEnabled: NO];
+  [self addControl: _labelPopUp withCaption: NSLocalizedString(@"Label:", @"Summary Info caption")
+                 y: &y];
+  [_labelPopUp release];
   if (locking)
     {
       _lockedValue = [self addRowWithCaption: NSLocalizedString(@"Locked:", @"Summary Info caption")

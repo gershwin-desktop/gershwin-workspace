@@ -6,6 +6,7 @@
 
 #import "SummaryInfoModel.h"
 #import "FinderInfoModel.h"
+#import "FSNode.h"
 
 @implementation SummaryInfoModel
 
@@ -39,26 +40,10 @@
   [super dealloc];
 }
 
+/* The list view's Kind column asks the node, so the same words appear here. */
 - (NSString *)kindOfPath:(NSString *)path
-          isDirectory:(BOOL)isDir
 {
-  NSString *ext = [[path pathExtension] lowercaseString];
-
-  if (isDir)
-    {
-      if ([ext isEqual: @"app"])
-        {
-          return NSLocalizedString(@"Application", @"Kind of an item");
-        }
-      return NSLocalizedString(@"Folder", @"Kind of an item");
-    }
-  if ([ext length] == 0)
-    {
-      return NSLocalizedString(@"File", @"Kind of an item");
-    }
-  return [NSString stringWithFormat:
-            NSLocalizedString(@"%@ file", @"Kind of an item, %@ is the extension"),
-            [ext uppercaseString]];
+  return [[FSNode nodeWithPath: path] typeDescription];
 }
 
 /* Sizes of regular files only, links are not followed: a link into another
@@ -101,7 +86,7 @@
       NSDictionary *a = [fm fileAttributesAtPath: path traverseLink: NO];
       NSString *type = [a fileType];
       BOOL isDir = [type isEqual: NSFileTypeDirectory];
-      NSString *kind = [self kindOfPath: path isDirectory: isDir];
+      NSString *kind = [self kindOfPath: path];
       FinderInfoModel *info = [FinderInfoModel modelForPath: path];
       NSNumber *n;
 
@@ -164,6 +149,10 @@
                                 withObject: self
                              waitUntilDone: NO];
     }
+  /* The window owns the model; keeping the window alive from here on would
+   * make a retain cycle that nothing breaks. */
+  [_target release];
+  _target = nil;
   [pool release];
 }
 
@@ -176,6 +165,27 @@
   [NSThread detachNewThreadSelector: @selector(runInBackground:)
                            toTarget: self
                          withObject: nil];
+}
+
+- (NSUInteger)applyLabel:(NSInteger)label
+{
+  NSUInteger i, failures = 0;
+
+  for (i = 0; i < [_paths count]; i++)
+    {
+      FinderInfoModel *info = [FinderInfoModel modelForPath: [_paths objectAtIndex: i]];
+
+      [info setLabelNumber: label];
+      if (info == nil || ![info write: NULL])
+        {
+          failures++;
+        }
+    }
+  if (failures < [_paths count])
+    {
+      _commonLabel = failures == 0 ? label : -1;
+    }
+  return failures;
 }
 
 - (void)cancel

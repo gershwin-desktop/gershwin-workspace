@@ -1024,6 +1024,7 @@
 "Label:" = "Etikedo:";
 "Locked:" = "Ŝlosita:";
 "Calculating..." = "Kalkulante...";
+"The label could not be set on %lu items." = "La etikedo ne povis esti agordita por %lu eroj.";
 "%@ bytes" = "%@ bajtoj";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bajtoj)";
 

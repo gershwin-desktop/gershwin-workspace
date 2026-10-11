@@ -1536,6 +1536,7 @@ for";
 "Label:" = "Etiqueta:";
 "Locked:" = "Bloqueado:";
 "Calculating..." = "A calcular...";
+"The label could not be set on %lu items." = "Não foi possível definir a etiqueta em %lu itens.";
 "%@ bytes" = "%@ bytes";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bytes)";
 

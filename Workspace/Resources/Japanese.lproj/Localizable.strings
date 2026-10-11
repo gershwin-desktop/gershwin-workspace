@@ -809,6 +809,7 @@
 "Label:" = "ラベル:";
 "Locked:" = "ロック:";
 "Calculating..." = "計算中...";
+"The label could not be set on %lu items." = "%lu 個の項目にラベルを設定できませんでした。";
 "%@ bytes" = "%@ バイト";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ バイト)";
 

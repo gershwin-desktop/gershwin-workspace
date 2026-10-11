@@ -1479,6 +1479,7 @@
 "Label:" = "Etichetta:";
 "Locked:" = "Bloccato:";
 "Calculating..." = "Calcolo in corso...";
+"The label could not be set on %lu items." = "Non è stato possibile impostare l'etichetta su %lu elementi.";
 "No" = "No";
 "%@ bytes" = "%@ byte";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ byte)";
