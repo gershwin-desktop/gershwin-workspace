@@ -130,10 +130,13 @@ checkApplied(NSData *adData, NSString *path, const char *what)
   BOOL xattrs = gs_xattr_supported([[path stringByDeletingLastPathComponent]
     fileSystemRepresentation]) == 1;
 
-  if (!xattrs)
+  /* A value too big for the volume's attributes (the 70 KB icon fork of
+   * the real zips) puts everything into the sidecar, byte for byte. */
+  NSData *side = [NSData dataWithContentsOfFile:
+    [GSFileMetadata sidecarPathForFilePath: path]];
+  if (!xattrs || side != nil)
     {
-      PASS([fm fileExistsAtPath: [GSFileMetadata sidecarPathForFilePath: path]],
-           "%s: no attributes on this volume, metadata kept in the sidecar", what);
+      PASS_EQUAL(side, adData, "%s: kept in the sidecar (no attributes or too big)", what);
       return;
     }
   if ([ad hasFinderInfo])
@@ -152,7 +155,7 @@ checkApplied(NSData *adData, NSString *path, const char *what)
 }
 
 static void
-checkClean(NSString *dir, const char *what)
+checkClean(NSString *dir, const char *what, BOOL sidecarsOK)
 {
   PASS(![fm fileExistsAtPath: [dir stringByAppendingPathComponent: @"__MACOSX"]],
        "%s: no __MACOSX folder", what);
@@ -162,8 +165,8 @@ checkClean(NSString *dir, const char *what)
   while ((rel = [en nextObject]) != nil)
     if ([[rel lastPathComponent] hasPrefix: @"._"])
       leftover = YES;
-  PASS(!leftover || gs_xattr_supported([dir fileSystemRepresentation]) != 1,
-       "%s: no ._ file left where attributes work", what);
+  PASS(!leftover || gs_xattr_supported([dir fileSystemRepresentation]) != 1
+       || sidecarsOK, "%s: no ._ file left where attributes work", what);
 }
 
 int main(void)
@@ -206,7 +209,7 @@ int main(void)
     checkApplied(rsrcAD, [dest stringByAppendingPathComponent: @"rsrc.txt"], "MI-AR-3 rsrc.txt");
     checkApplied(dirAD, [dest stringByAppendingPathComponent: @"sub"], "MI-AR-4 folder");
     checkApplied(fiAD, [dest stringByAppendingPathComponent: @"sub/fi.txt"], "MI-AR-5 nested file");
-    checkClean(dest, "MI-AR-6 zip");
+    checkClean(dest, "MI-AR-6 zip", NO);
     PASS(getx([dest stringByAppendingPathComponent: @"plain.txt"],
                  @"user.com.apple.FinderInfo") == nil,
          "MI-AR-7 an item without companion gets no metadata");
@@ -225,7 +228,7 @@ int main(void)
     checkApplied(manyAD, [dest stringByAppendingPathComponent: @"a.txt"], "MI-AR-8 file");
     checkApplied(dirAD, [dest stringByAppendingPathComponent: @"folder"],
                  "MI-AR-8 folder entry that ends in a slash");
-    checkClean(dest, "MI-AR-8");
+    checkClean(dest, "MI-AR-8", NO);
   }
 
   /* --- tar / ditto: ._name beside the item ------------------------------ */
@@ -355,7 +358,84 @@ int main(void)
                getx(labelled, @"user.org.example.other"), "MI-AR-19 round trip other attribute");
     PASS_EQUAL(getx([dest stringByAppendingPathComponent: @"x/sub"], @"user.com.apple.FinderInfo"),
                getx(sub, @"user.com.apple.FinderInfo"), "MI-AR-19 round trip folder label");
-    checkClean(dest, "MI-AR-19");
+    checkClean(dest, "MI-AR-19", NO);
+  }
+
+  /* --- an all-zero companion carries nothing ----------------------------- */
+  {
+    NSMutableData *zero = [NSMutableData dataWithData: fiAD];
+    GSAppleDouble *zp = [[[GSAppleDouble alloc] init] autorelease];
+    [zp setFinderInfo: [NSMutableData dataWithLength: 32]];
+    zero = [NSMutableData dataWithData: [zp appleDoubleData]];
+    NSString *tar = [root stringByAppendingPathComponent: @"zero.tar"];
+    writeArchive(tar, NO, @[ @"z.txt", @"._z.txt" ], @[ body, zero ]);
+    NSString *dest = fresh(@"out-zero");
+    PASS([GWMetaArchive extractArchive: tar toDir: dest error: NULL], "MI-AR-25 zero companion extracts");
+    PASS(getx([dest stringByAppendingPathComponent: @"z.txt"], @"user.com.apple.FinderInfo") == nil,
+         "MI-AR-25 an all-zero FinderInfo sets nothing");
+  }
+
+  /* --- real zips of 10.6 (E29) ------------------------------------------ */
+  {
+    NSString *z = [fixDir stringByAppendingPathComponent: @"E29-zips"];
+    NSDictionary *finder = readArchive([z stringByAppendingPathComponent:
+      @"proj-labelled-folder-finder.zip"]);
+    NSData *projAD = [finder objectForKey: @"__MACOSX/._proj"];
+    NSData *labeledAD = [finder objectForKey: @"__MACOSX/proj/._labeled.txt"];
+    PASS(projAD && labeledAD, "E29 Finder zip fixture present");
+
+    /* Workspace extracts into a folder it creates for the archive. */
+    NSString *dest = fresh(@"out-e29");
+    [fm removeFileAtPath: dest handler: nil];
+    NSError *err = nil;
+    PASS([GWMetaArchive extractArchive: [z stringByAppendingPathComponent:
+            @"proj-labelled-folder-finder.zip"] toDir: dest error: &err],
+         "MI-AR-20 real Finder zip extracts (%s)", err ? [[err description] UTF8String] : "ok");
+    checkApplied(labeledAD, [dest stringByAppendingPathComponent: @"labeled.txt"],
+                 "MI-AR-20 real labeled.txt");
+    checkApplied(projAD, dest, "MI-AR-21 the labelled top folder: its label lands on the folder extracted into");
+    PASS_EQUAL([NSData dataWithContentsOfFile:
+                  [dest stringByAppendingPathComponent: @".DS_Store"]],
+               [finder objectForKey: @"proj/.DS_Store"],
+               "MI-AR-22 the zipped .DS_Store is the folder's own store and is extracted");
+    checkApplied([finder objectForKey: @"__MACOSX/proj/._.DS_Store"],
+                 [dest stringByAppendingPathComponent: @".DS_Store"],
+                 "MI-AR-22 .DS_Store keeps the invisible flag Finder gave it");
+    checkClean(dest, "MI-AR-20 real zip", YES);
+
+    /* a folder that existed before is never relabelled */
+    NSString *pre = fresh(@"out-e29-pre");
+    PASS([GWMetaArchive extractArchive: [z stringByAppendingPathComponent:
+            @"proj-labelled-folder-finder.zip"] toDir: pre error: NULL],
+         "MI-AR-26 extracting into an existing folder works");
+    PASS(getx(pre, @"user.com.apple.FinderInfo") == nil
+         && ![fm fileExistsAtPath: [GSFileMetadata sidecarPathForFilePath: pre]],
+         "MI-AR-26 an existing folder keeps its metadata untouched");
+
+    /* extracting into a folder that already has a store keeps that store */
+    NSString *dest2 = fresh(@"out-e29-existing");
+    NSData *mine = [@"mine" dataUsingEncoding: NSUTF8StringEncoding];
+    [mine writeToFile: [dest2 stringByAppendingPathComponent: @".DS_Store"] atomically: NO];
+    PASS([GWMetaArchive extractArchive: [z stringByAppendingPathComponent:
+            @"proj-labelled-folder-finder.zip"] toDir: dest2 error: NULL],
+         "MI-AR-23 extracting into a folder with a store works");
+    PASS_EQUAL([NSData dataWithContentsOfFile:
+                  [dest2 stringByAppendingPathComponent: @".DS_Store"]], mine,
+               "MI-AR-23 the folder's existing .DS_Store is kept");
+
+    /* ditto --keepParent writes no ._proj: the folder gets nothing */
+    NSString *dest3 = fresh(@"out-e29-ditto");
+    PASS([GWMetaArchive extractArchive: [z stringByAppendingPathComponent:
+            @"proj-ditto.zip"] toDir: dest3 error: NULL], "MI-AR-24 real ditto zip extracts");
+    PASS(getx(dest3, @"user.com.apple.FinderInfo") == nil,
+         "MI-AR-24 no top folder companion, no metadata on the folder");
+    NSDictionary *dd = readArchive([z stringByAppendingPathComponent: @"proj-ditto.zip"]);
+    checkApplied([dd objectForKey: @"__MACOSX/proj/._labeled.txt"],
+                 [dest3 stringByAppendingPathComponent: @"labeled.txt"],
+                 "MI-AR-24 real ditto labeled.txt");
+    checkApplied([dd objectForKey: @"__MACOSX/proj/._subfolder"],
+                 [dest3 stringByAppendingPathComponent: @"subfolder"],
+                 "MI-AR-24 real ditto subfolder");
   }
 
   [fm removeFileAtPath: root handler: nil];

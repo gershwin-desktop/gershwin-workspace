@@ -88,6 +88,23 @@ copy_fd_to_archive(struct archive *a, int fd)
   return (n == 0) ? ARCHIVE_OK : ARCHIVE_FATAL;
 }
 
+/* An all-zero FinderInfo alone is what a Mac writes for an item it has
+ * nothing to say about (Finder's Compress does it for .DS_Store); it
+ * carries no information and must not be applied or written. */
+static BOOL
+appledouble_is_empty(GSAppleDouble *ad)
+{
+  if ([[ad extendedAttributes] count] > 0 || [[ad resourceFork] length] > 0)
+    return NO;
+  if (![ad hasFinderInfo])
+    return YES;
+  const uint8_t *b = [[ad finderInfo] bytes];
+  NSUInteger n = [[ad finderInfo] length];
+  while (n > 0 && b[n - 1] == 0)
+    n--;
+  return n == 0;
+}
+
 /*
  * The AppleDouble a Mac's ditto/Finder would write for the item, built from
  * everything the item carries: FinderInfo, resource fork and every user.*
@@ -132,18 +149,7 @@ appledouble_for_path(NSString *path)
   if (list != NULL)
     gs_xattr_list_free(list);
 
-  /* An all-zero FinderInfo alone is what a Mac writes for a file it has
-   * nothing to say about; ditto then writes no "._" at all. */
-  BOOL nothing = [[ad extendedAttributes] count] == 0
-                 && ![ad hasResourceFork];
-  if (nothing && [ad hasFinderInfo])
-    {
-      const uint8_t *b = [[ad finderInfo] bytes];
-      NSUInteger n = [[ad finderInfo] length];
-      while (n > 0 && b[n - 1] == 0)
-        n--;
-      nothing = (n == 0);
-    }
+  BOOL nothing = appledouble_is_empty(ad);
 
   NSData *out = nothing ? nil : [ad appleDoubleData];
   [ad release];
@@ -360,6 +366,9 @@ apply_appledouble(NSData *ad, NSString *destPath, NSString **why)
       return NO;
     }
 
+  if (appledouble_is_empty(parsed))
+    return YES;
+
   NSMutableDictionary *items = [NSMutableDictionary dictionary];
   if ([parsed hasFinderInfo])
     [items setObject: [parsed finderInfo] forKey: @"user.com.apple.FinderInfo"];
@@ -560,7 +569,10 @@ apply_appledouble(NSData *ad, NSString *destPath, NSString **why)
 {
   NSFileManager *fm = [NSFileManager defaultManager];
 
-  if (![fm fileExistsAtPath: destDir])
+  /* Only a folder this call creates may take the metadata of the archive's
+   * stripped top folder; a folder that was there is the user's. */
+  BOOL createdDest = ![fm fileExistsAtPath: destDir];
+  if (createdDest)
     {
       if (![fm createDirectoryAtPath: destDir attributes: nil])
         {
@@ -753,6 +765,15 @@ apply_appledouble(NSData *ad, NSString *destPath, NSString **why)
           continue;
         }
 
+      /* A .DS_Store is the view settings of the folder it sits in. Where
+       * the folder already has one, those are the user's, not the archive's. */
+      if ([[destPath lastPathComponent] isEqualToString: @".DS_Store"]
+          && [fm fileExistsAtPath: destPath])
+        {
+          archive_read_data_skip(a);
+          continue;
+        }
+
       mode_t mode = archive_entry_mode(entry);
       mode_t filetype = mode & S_IFMT;
 
@@ -802,12 +823,14 @@ apply_appledouble(NSData *ad, NSString *destPath, NSString **why)
         }
 
       /* Apply metadata from pass 1.  A directory entry may end in "/",
-       * its companion's key does not.  The destination itself stands for
-       * the stripped top folder and is not ours to relabel. */
+       * its companion's key does not.  With a stripped top folder the
+       * destination stands for it and gets its label (relpath is empty),
+       * but only when we created it. */
       NSString *key = epath;
       while ([key length] > 1 && [key hasSuffix: @"/"])
         key = [key substringToIndex: [key length] - 1];
-      NSData *ad = [relpath length] > 0 ? [metadataDict objectForKey: key] : nil;
+      NSData *ad = ([relpath length] > 0 || createdDest)
+        ? [metadataDict objectForKey: key] : nil;
       if (ad)
         {
           NSString *why = nil;

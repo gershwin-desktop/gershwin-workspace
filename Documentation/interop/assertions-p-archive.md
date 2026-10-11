@@ -22,7 +22,13 @@ the repository (see Mac captures needed below).
 - MI-AR-10 A file named `._x` that is not AppleDouble (no magic) is extracted as a file. [G: not ours to drop]
 - MI-AR-11 A read-only item in the archive gets its attributes and stays read-only. [G]
 - Volume without attributes (or a value that does not fit, E2BIG/ENOSPC): all metadata stays in the `._` sidecar next to the item, the way a Mac keeps it there. Any other failure aborts the extraction with an error (code 17). [G]
-- The destination folder itself never gets metadata, even when the archive's single top folder was stripped and had a label. See OPEN-1.
+- MI-AR-20 The real 10.6 Finder zip (E29 proj-labelled-folder-finder.zip) extracts; labeled.txt gets FinderInfo, 70 KB icon fork and comment (too big for ext4 attributes, so all of it stays in the sidecar byte for byte). [F: E29]
+- MI-AR-21 When the archive's single top folder is stripped, its `__MACOSX/._proj` (Finder writes it only when the folder has a label; ditto --keepParent writes none) is applied to the folder extracted into. [F: E29]
+- MI-AR-22 The zipped `.DS_Store` is the folder's own store and is extracted; its companion (FinderInfo 0x4000, invisible) is applied. [F: E29]
+- MI-AR-23 A `.DS_Store` that already exists where the archive would write one is kept. [G: the user's view settings win]
+- MI-AR-24 The real ditto zip (no `._proj`) leaves the folder extracted into without FinderInfo; labeled.txt and subfolder get theirs. [F: E29]
+- MI-AR-26 A folder that existed before the extraction never gets the top folder metadata (Workspace always creates a new folder; the API can be called with an existing one). [G]
+- MI-AR-25 A companion whose only content is an all-zero FinderInfo sets nothing (and none is written on compression). [F: E29 listing, 82-byte companions]
 
 ## Compression
 
@@ -37,7 +43,7 @@ the repository (see Mac captures needed below).
 
 ## OPEN
 
-- OPEN-1 Does Finder's Compress of a single folder put `__MACOSX/._folder` in the zip, and should extracting give the (stripped) top folder its label? We strip the common top folder and then never touch the destination. Needs a real zip.
+- OPEN-1 (closed by E29) Finder writes `__MACOSX/._<folder>` only for a labelled folder; the label goes on the destination folder.
 - OPEN-2 Names: Mac zips may store file names in NFD and 10.6 ditto zips use a different Unicode form than ours. Not handled; names are used as stored.
 - OPEN-3 `ditto -c -k` skipped `._one.txt` for a file with xattr but no FinderInfo (E15, unexplained); we write one. Harmless on extraction.
 

@@ -1,0 +1,1263 @@
+## ditto -c -k --sequesterRsrc --keepParent proj proj-ditto.zip
+Archive:  proj-ditto.zip
+  Length     Date   Time    Name
+ --------    ----   ----    ----
+        0  10-11-26 10:46   proj/
+       13  10-11-26 10:46   proj/bigxattr.txt
+        0  10-11-26 10:46   __MACOSX/
+        0  10-11-26 10:46   __MACOSX/proj/
+      448  10-11-26 10:46   __MACOSX/proj/._bigxattr.txt
+       16  10-11-26 10:46   proj/commentonly.txt
+      228  10-11-26 10:46   __MACOSX/proj/._commentonly.txt
+       12  10-11-26 10:46   proj/labeled.txt
+    70017  10-11-26 10:46   __MACOSX/proj/._labeled.txt
+       10  10-11-26 10:46   proj/plain.txt
+        0  10-11-26 10:46   proj/subfolder/
+        0  10-11-26 10:46   proj/subfolder/Icon^M
+        0  10-11-26 10:46   __MACOSX/proj/subfolder/
+    69950  10-11-26 10:46   __MACOSX/proj/subfolder/._Icon^M
+        2  10-11-26 10:46   proj/subfolder/inner.txt
+       82  10-11-26 10:46   __MACOSX/proj/._subfolder
+ --------                   -------
+   140778                   16 files
+Archive:  proj-ditto.zip   103074 bytes   16 files
+
+End-of-central-directory record:
+-------------------------------
+
+  Actual offset of end-of-central-dir record:      103052 (0001928Ch)
+  Expected offset of end-of-central-dir record:    103052 (0001928Ch)
+  (based on the length of the central directory and its expected offset)
+
+  This zipfile constitutes the sole disk of a single-part archive; its
+  central directory contains 16 entries.  The central directory is 1248
+  (000004E0h) bytes long, and its (expected) offset in bytes from the
+  beginning of the zipfile is 101804 (00018DACh).
+
+  There is no zipfile comment.
+
+Central directory entry #1:
+---------------------------
+
+  proj/
+
+  offset of local header from start of archive:     0 (00000000h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               5 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (040755 octal):              drwxr-xr-x
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #2:
+---------------------------
+
+  proj/bigxattr.txt
+
+  offset of local header from start of archive:     51 (00000033h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           1e56a10c
+  compressed size:                                  15 bytes
+  uncompressed size:                                13 bytes
+  length of filename:                               17 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #3:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  __MACOSX/
+
+  offset of local header from start of archive:     145 (00000091h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:28 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:28 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               9 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (040775 octal):              drwxrwxr-x
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e4 4c cb 6a e4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #4:
+---------------------------
+
+  __MACOSX/proj/
+
+  offset of local header from start of archive:     200 (000000C8h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:28 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:28 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               14 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (040775 octal):              drwxrwxr-x
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e4 4c cb 6a e4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #5:
+---------------------------
+
+  __MACOSX/proj/._bigxattr.txt
+
+  offset of local header from start of archive:     260 (00000104h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           d410950a
+  compressed size:                                  80 bytes
+  uncompressed size:                                448 bytes
+  length of filename:                               28 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #6:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  proj/commentonly.txt
+
+  offset of local header from start of archive:     430 (000001AEh) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           98c57e06
+  compressed size:                                  18 bytes
+  uncompressed size:                                16 bytes
+  length of filename:                               20 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #7:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  __MACOSX/proj/._commentonly.txt
+
+  offset of local header from start of archive:     530 (00000212h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           8ffb52a9
+  compressed size:                                  125 bytes
+  uncompressed size:                                228 bytes
+  length of filename:                               31 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #8:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  proj/labeled.txt
+
+  offset of local header from start of archive:     748 (000002ECh) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           a256efe8
+  compressed size:                                  14 bytes
+  uncompressed size:                                12 bytes
+  length of filename:                               16 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #9:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  __MACOSX/proj/._labeled.txt
+
+  offset of local header from start of archive:     840 (00000348h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           31e33031
+  compressed size:                                  50160 bytes
+  uncompressed size:                                70017 bytes
+  length of filename:                               27 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #10:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  proj/plain.txt
+
+  offset of local header from start of archive:     51089 (0000C791h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           f4cd92cd
+  compressed size:                                  12 bytes
+  uncompressed size:                                10 bytes
+  length of filename:                               14 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #11:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  proj/subfolder/
+
+  offset of local header from start of archive:     51177 (0000C7E9h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               15 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (040755 octal):              drwxr-xr-x
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #12:
+---------------------------
+
+  proj/subfolder/Icon^M
+
+  offset of local header from start of archive:     51238 (0000C826h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:28 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:28 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               20 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #13:
+---------------------------
+
+  __MACOSX/proj/subfolder/
+
+  offset of local header from start of archive:     51304 (0000C868h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:28 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:28 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               24 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (040775 octal):              drwxrwxr-x
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e4 4c cb 6a e4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #14:
+---------------------------
+
+  __MACOSX/proj/subfolder/._Icon^M
+
+  offset of local header from start of archive:     51374 (0000C8AEh) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:28 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:28 UTC
+  32-bit CRC value (hex):                           80b31454
+  compressed size:                                  50119 bytes
+  uncompressed size:                                69950 bytes
+  length of filename:                               31 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #15:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  proj/subfolder/inner.txt
+
+  offset of local header from start of archive:     101586 (00018CD2h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           5ff1395e
+  compressed size:                                  4 bytes
+  uncompressed size:                                2 bytes
+  length of filename:                               24 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #16:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  __MACOSX/proj/._subfolder
+
+  offset of local header from start of archive:     101676 (00018D2Ch) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           f7ecb610
+  compressed size:                                  41 bytes
+  uncompressed size:                                82 bytes
+  length of filename:                               25 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e3 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+
+## Finder Compress (proj 2.zip)
+Archive:  proj 2.zip
+  Length     Date   Time    Name
+ --------    ----   ----    ----
+        0  10-11-26 10:46   proj/
+     6148  10-11-26 10:46   proj/.DS_Store
+        0  10-11-26 10:46   __MACOSX/
+        0  10-11-26 10:46   __MACOSX/proj/
+       82  10-11-26 10:46   __MACOSX/proj/._.DS_Store
+       13  10-11-26 10:46   proj/bigxattr.txt
+      448  10-11-26 10:46   __MACOSX/proj/._bigxattr.txt
+       16  10-11-26 10:46   proj/commentonly.txt
+      228  10-11-26 10:46   __MACOSX/proj/._commentonly.txt
+       12  10-11-26 10:46   proj/labeled.txt
+    70017  10-11-26 10:46   __MACOSX/proj/._labeled.txt
+       10  10-11-26 10:46   proj/plain.txt
+        0  10-11-26 10:46   proj/subfolder/
+        0  10-11-26 10:46   proj/subfolder/Icon^M
+        0  10-11-26 10:46   __MACOSX/proj/subfolder/
+    69950  10-11-26 10:46   __MACOSX/proj/subfolder/._Icon^M
+        2  10-11-26 10:46   proj/subfolder/inner.txt
+       82  10-11-26 10:46   __MACOSX/proj/._subfolder
+ --------                   -------
+   147008                   18 files
+Archive:  proj 2.zip   103703 bytes   18 files
+
+End-of-central-directory record:
+-------------------------------
+
+  Actual offset of end-of-central-dir record:      103681 (00019501h)
+  Expected offset of end-of-central-dir record:    103681 (00019501h)
+  (based on the length of the central directory and its expected offset)
+
+  This zipfile constitutes the sole disk of a single-part archive; its
+  central directory contains 18 entries.  The central directory is 1403
+  (0000057Bh) bytes long, and its (expected) offset in bytes from the
+  beginning of the zipfile is 102278 (00018F86h).
+
+  There is no zipfile comment.
+
+Central directory entry #1:
+---------------------------
+
+  proj/
+
+  offset of local header from start of archive:     0 (00000000h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:28 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:28 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               5 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (040755 octal):              drwxr-xr-x
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e4 4c cb 6a e4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #2:
+---------------------------
+
+  proj/.DS_Store
+
+  offset of local header from start of archive:     51 (00000033h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:28 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:28 UTC
+  32-bit CRC value (hex):                           29ac4d3d
+  compressed size:                                  271 bytes
+  uncompressed size:                                6148 bytes
+  length of filename:                               14 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a e4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #3:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  __MACOSX/
+
+  offset of local header from start of archive:     398 (0000018Eh) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:44
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:44 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:44 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               9 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (040775 octal):              drwxrwxr-x
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a f4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #4:
+---------------------------
+
+  __MACOSX/proj/
+
+  offset of local header from start of archive:     453 (000001C5h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:44
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:44 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:44 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               14 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (040775 octal):              drwxrwxr-x
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a f4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #5:
+---------------------------
+
+  __MACOSX/proj/._.DS_Store
+
+  offset of local header from start of archive:     513 (00000201h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:28 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:28 UTC
+  32-bit CRC value (hex):                           b88f91dc
+  compressed size:                                  40 bytes
+  uncompressed size:                                82 bytes
+  length of filename:                               25 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a e4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #6:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  proj/bigxattr.txt
+
+  offset of local header from start of archive:     640 (00000280h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           1e56a10c
+  compressed size:                                  15 bytes
+  uncompressed size:                                13 bytes
+  length of filename:                               17 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #7:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  __MACOSX/proj/._bigxattr.txt
+
+  offset of local header from start of archive:     734 (000002DEh) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           d410950a
+  compressed size:                                  80 bytes
+  uncompressed size:                                448 bytes
+  length of filename:                               28 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #8:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  proj/commentonly.txt
+
+  offset of local header from start of archive:     904 (00000388h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           98c57e06
+  compressed size:                                  18 bytes
+  uncompressed size:                                16 bytes
+  length of filename:                               20 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #9:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  __MACOSX/proj/._commentonly.txt
+
+  offset of local header from start of archive:     1004 (000003ECh) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           8ffb52a9
+  compressed size:                                  125 bytes
+  uncompressed size:                                228 bytes
+  length of filename:                               31 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #10:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  proj/labeled.txt
+
+  offset of local header from start of archive:     1222 (000004C6h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           a256efe8
+  compressed size:                                  14 bytes
+  uncompressed size:                                12 bytes
+  length of filename:                               16 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #11:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  __MACOSX/proj/._labeled.txt
+
+  offset of local header from start of archive:     1314 (00000522h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           31e33031
+  compressed size:                                  50160 bytes
+  uncompressed size:                                70017 bytes
+  length of filename:                               27 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #12:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  proj/plain.txt
+
+  offset of local header from start of archive:     51563 (0000C96Bh) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           f4cd92cd
+  compressed size:                                  12 bytes
+  uncompressed size:                                10 bytes
+  length of filename:                               14 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #13:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  proj/subfolder/
+
+  offset of local header from start of archive:     51651 (0000C9C3h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               15 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (040755 octal):              drwxr-xr-x
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e4 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #14:
+---------------------------
+
+  proj/subfolder/Icon^M
+
+  offset of local header from start of archive:     51712 (0000CA00h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:28 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:28 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               20 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e4 4c cb 6a e4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #15:
+---------------------------
+
+  __MACOSX/proj/subfolder/
+
+  offset of local header from start of archive:     51778 (0000CA42h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     1.0
+  compression method:                               none (stored)
+  file security status:                             not encrypted
+  extended local header:                            no
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:44
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:44 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:44 UTC
+  32-bit CRC value (hex):                           00000000
+  compressed size:                                  0 bytes
+  uncompressed size:                                0 bytes
+  length of filename:                               24 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (040775 octal):              drwxrwxr-x
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a f4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #16:
+---------------------------
+
+  __MACOSX/proj/subfolder/._Icon^M
+
+  offset of local header from start of archive:     51848 (0000CA88h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:28 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:28 UTC
+  32-bit CRC value (hex):                           80b31454
+  compressed size:                                  50119 bytes
+  uncompressed size:                                69950 bytes
+  length of filename:                               31 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e4 4c cb 6a e4 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #17:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  proj/subfolder/inner.txt
+
+  offset of local header from start of archive:     102060 (00018EACh) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           5ff1395e
+  compressed size:                                  4 bytes
+  uncompressed size:                                2 bytes
+  length of filename:                               24 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    f4 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
+Central directory entry #18:
+---------------------------
+
+  There are an extra 16 bytes preceding this file.
+
+  __MACOSX/proj/._subfolder
+
+  offset of local header from start of archive:     102150 (00018F06h) bytes
+  file system or operating system of origin:        Unix
+  version of encoding software:                     2.1
+  minimum file system compatibility required:       MS-DOS, OS/2 or NT FAT
+  minimum software version required to extract:     2.0
+  compression method:                               deflated
+  compression sub-type (deflation):                 normal
+  file security status:                             not encrypted
+  extended local header:                            yes
+  file last modified on (DOS date/time):            2026 Oct 11 10:46:28
+  file last modified on (UT extra field modtime):   2026 Oct 11 10:46:27 local
+  file last modified on (UT extra field modtime):   2026 Oct 11 08:46:27 UTC
+  32-bit CRC value (hex):                           f7ecb610
+  compressed size:                                  41 bytes
+  uncompressed size:                                82 bytes
+  length of filename:                               25 characters
+  length of extra field:                            12 bytes
+  length of file comment:                           0 characters
+  disk number on which file begins:                 disk 1
+  apparent file type:                               binary
+  Unix file attributes (100644 octal):              -rw-r--r--
+  MS-DOS file attributes (00 hex):                  none
+
+  The central-directory extra field contains:
+  - A subfield with ID 0x5855 (old Info-ZIP Unix/OS2/NT) and 8 data bytes:
+    e4 4c cb 6a e3 4c cb 6a.
+
+  There is no file comment.
+
