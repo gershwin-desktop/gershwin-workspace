@@ -35,12 +35,370 @@
 #import "FSNIconLoader.h"
 #import "FSNDirEntry.h"
 
+#include <sys/stat.h>
+#include <dirent.h>
+#include <limits.h>
+
 #define ICNSIZE (24)
 #define CELLS_HEIGHT (28.0)
 #define HLIGHT_H_FACT (0.8125)
 
+#define DEFAULT_LIST_ICON_SIZE (ICNSIZE)
+#define MIN_LIST_ICON_SIZE (16)
+#define MAX_LIST_ICON_SIZE (128)
+/* Space above and below the icon, and above and below the text line, that
+ * the 28 point rows of the default 24 point icon have always had. */
+#define ROW_ICON_MARGIN (4.0)
+#define ROW_TEXT_MARGIN (6.0)
+#define EMPTY_VALUE_STRING @"--"
+/* Key of a rep's lazy label name (FSNListColumnTypeLabel holds its colour). */
+#define LAZY_LABEL_NAME (FSNListColumnTypeLabel + 1000)
+
 #define DOUBLE_CLICK_LIMIT 300
 #define EDIT_CLICK_LIMIT 1000
+
+
+NSString * const FSNListColumnIdName = @"name";
+NSString * const FSNListColumnIdDateModified = @"dateModified";
+NSString * const FSNListColumnIdDateCreated = @"dateCreated";
+NSString * const FSNListColumnIdSize = @"size";
+NSString * const FSNListColumnIdKind = @"kind";
+NSString * const FSNListColumnIdLabel = @"label";
+NSString * const FSNListColumnIdVersion = @"version";
+NSString * const FSNListColumnIdComments = @"comments";
+NSString * const FSNListColumnIdDateLastOpened = @"dateLastOpened";
+NSString * const FSNListColumnIdOwner = @"owner";
+
+NSString * const FSNListViewOptionsDidChangeNotification = @"FSNListViewOptionsDidChange";
+NSString * const FSNListViewChangedOptionKey = @"option";
+NSString * const FSNListViewOptionSort = @"sort";
+NSString * const FSNListViewOptionColumnOrder = @"columnOrder";
+
+/* The extra column types below FSNInfoType, as table identifiers. */
+#define COLUMN_TYPE_IS_DATE(t) ((t) == FSNInfoDateType \
+                                || (t) == FSNListColumnTypeDateCreated \
+                                || (t) == FSNListColumnTypeDateLastOpened)
+
+static NSBundle *
+stringsBundle(void)
+{
+  return [NSBundle bundleForClass: [FSNode class]];
+}
+
+static NSString *
+localized(NSString *key)
+{
+  return NSLocalizedStringFromTableInBundle(key, nil, stringsBundle(), @"");
+}
+
+/* Finder id <-> table identifier, in the order Finder lists the columns. */
+static NSArray *
+finderColumnIdList(void)
+{
+  static NSArray *ids = nil;
+
+  if (ids == nil)
+    {
+      ids = [[NSArray alloc] initWithObjects:
+                               FSNListColumnIdName,
+                             FSNListColumnIdDateModified,
+                             FSNListColumnIdDateCreated,
+                             FSNListColumnIdSize,
+                             FSNListColumnIdKind,
+                             FSNListColumnIdLabel,
+                             FSNListColumnIdVersion,
+                             FSNListColumnIdComments,
+                             FSNListColumnIdDateLastOpened,
+                             nil];
+    }
+  return ids;
+}
+
+static NSDictionary *
+columnTypeByColumnId(void)
+{
+  static NSDictionary *map = nil;
+
+  if (map == nil)
+    {
+      map = [[NSDictionary alloc] initWithObjectsAndKeys:
+        [NSNumber numberWithInt: FSNInfoNameType], FSNListColumnIdName,
+        [NSNumber numberWithInt: FSNInfoDateType], FSNListColumnIdDateModified,
+        [NSNumber numberWithInt: FSNListColumnTypeDateCreated], FSNListColumnIdDateCreated,
+        [NSNumber numberWithInt: FSNInfoSizeType], FSNListColumnIdSize,
+        [NSNumber numberWithInt: FSNInfoKindType], FSNListColumnIdKind,
+        [NSNumber numberWithInt: FSNListColumnTypeLabel], FSNListColumnIdLabel,
+        [NSNumber numberWithInt: FSNListColumnTypeVersion], FSNListColumnIdVersion,
+        [NSNumber numberWithInt: FSNListColumnTypeComments], FSNListColumnIdComments,
+        [NSNumber numberWithInt: FSNListColumnTypeDateLastOpened], FSNListColumnIdDateLastOpened,
+        [NSNumber numberWithInt: FSNInfoOwnerType], FSNListColumnIdOwner,
+        nil];
+    }
+  return map;
+}
+
+@interface FSNListViewDataSource (FinderListOptionsPrivate) <FSNFolderSizeCalculatorDelegate>
+- (BOOL)defaultAscendingForColumnType:(NSInteger)type;
+- (NSDictionary *)defaultColumnInfoForType:(NSInteger)type;
+- (FSNTextCell *)freshDataCell;
+- (NSFont *)effectiveFont;
+- (void)updateSortIndicators;
+- (void)resortPreservingSelection;
+- (void)postOptionChange:(NSString *)option;
+- (NSComparisonResult)compareRep:(FSNListViewNodeRep *)r1
+                         withRep:(FSNListViewNodeRep *)r2
+                      columnType:(NSInteger)type;
+- (NSString *)descriptionOfDate:(NSDate *)date;
+- (NSString *)sizeDescriptionOfRep:(FSNListViewNodeRep *)rep;
+- (void)cancelSizeCalculation;
+- (void)startSizeCalculation;
+- (void)columnDidMove:(NSNotification *)notification;
+@end
+
+/* The sort direction arrow a column header shows, drawn here because the
+ * table view of this GNUstep version has no indicator image support. */
+@interface FSNListHeaderCell : NSTableHeaderCell
+{
+  int sortDirection;   /* 1 ascending, -1 descending, 0 not sorted by */
+}
+- (void)setSortDirection:(int)direction;
+- (int)sortDirection;
+@end
+
+#define SORT_ARROW_WIDTH (8.0)
+#define SORT_ARROW_HEIGHT (5.0)
+#define SORT_ARROW_MARGIN (6.0)
+
+@implementation FSNListHeaderCell
+
+- (void)setSortDirection:(int)direction
+{
+  sortDirection = direction;
+}
+
+- (int)sortDirection
+{
+  return sortDirection;
+}
+
+- (void)drawInteriorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView
+{
+  CGFloat reserved = SORT_ARROW_WIDTH + 2 * SORT_ARROW_MARGIN;
+
+  if (sortDirection == 0 || cellFrame.size.width <= reserved)
+    {
+      [super drawInteriorWithFrame: cellFrame inView: controlView];
+      return;
+    }
+
+  /* The title gives way to the arrow instead of running under it. */
+  {
+    NSRect titleFrame = cellFrame;
+    NSBezierPath *arrow = [NSBezierPath bezierPath];
+    CGFloat x = NSMaxX (cellFrame) - SORT_ARROW_MARGIN - SORT_ARROW_WIDTH;
+    CGFloat top = NSMidY (cellFrame) - SORT_ARROW_HEIGHT / 2.0;
+    CGFloat bottom = top + SORT_ARROW_HEIGHT;
+    /* Header views are flipped in GNUstep; in an unflipped one the arrow
+     * would point the wrong way. */
+    BOOL up = ((sortDirection > 0) == [controlView isFlipped]);
+
+    titleFrame.size.width -= reserved;
+    [super drawInteriorWithFrame: titleFrame inView: controlView];
+
+    if (up)
+      {
+        [arrow moveToPoint: NSMakePoint (x, bottom)];
+        [arrow lineToPoint: NSMakePoint (x + SORT_ARROW_WIDTH, bottom)];
+        [arrow lineToPoint: NSMakePoint (x + SORT_ARROW_WIDTH / 2.0, top)];
+      }
+    else
+      {
+        [arrow moveToPoint: NSMakePoint (x, top)];
+        [arrow lineToPoint: NSMakePoint (x + SORT_ARROW_WIDTH, top)];
+        [arrow lineToPoint: NSMakePoint (x + SORT_ARROW_WIDTH / 2.0, bottom)];
+      }
+    [arrow closePath];
+    [[NSColor controlShadowColor] set];
+    [arrow fill];
+  }
+}
+
+@end
+
+
+@implementation FSNFolderSizeCalculator
+
+- (id)initWithPaths:(NSArray *)folderPaths
+           delegate:(id <FSNFolderSizeCalculatorDelegate>)aDelegate
+{
+  self = [super init];
+  if (self)
+    {
+      paths = [folderPaths copy];
+      delegate = aDelegate;
+    }
+  return self;
+}
+
+- (void)dealloc
+{
+  RELEASE (paths);
+  [super dealloc];
+}
+
+- (void)start
+{
+  /* The thread retains self until it ends, so a cancelled calculator that
+   * nobody owns any more stays valid for as long as it needs. */
+  [NSThread detachNewThreadSelector: @selector(work:)
+                           toTarget: self
+                         withObject: nil];
+}
+
+- (void)cancel
+{
+  /* Main thread only, like the delivery below: after this a result still
+   * queued for the main thread finds no delegate. */
+  __atomic_store_n (&cancelled, 1, __ATOMIC_SEQ_CST);
+  delegate = nil;
+}
+
+- (BOOL)isFinished
+{
+  return finished;
+}
+
+- (void)work:(id)unused
+{
+  CREATE_AUTORELEASE_POOL (pool);
+  NSUInteger i;
+
+  for (i = 0; i < [paths count]; i++)
+    {
+      CREATE_AUTORELEASE_POOL (inner);
+      NSString *path = [paths objectAtIndex: i];
+      unsigned long long size;
+
+      if (__atomic_load_n (&cancelled, __ATOMIC_SEQ_CST))
+        {
+          RELEASE (inner);
+          break;
+        }
+
+      size = [FSNFolderSizeCalculator sizeOfTreeAtPath: path stop: &cancelled];
+
+      if (__atomic_load_n (&cancelled, __ATOMIC_SEQ_CST) == 0)
+        {
+          [self performSelectorOnMainThread: @selector(deliver:)
+                                 withObject: [NSArray arrayWithObjects:
+                                                        path,
+                                                      [NSNumber numberWithUnsignedLongLong: size],
+                                                      nil]
+                              waitUntilDone: NO];
+        }
+      RELEASE (inner);
+    }
+
+  [self performSelectorOnMainThread: @selector(deliverFinish)
+                         withObject: nil
+                      waitUntilDone: NO];
+  RELEASE (pool);
+}
+
+- (void)deliver:(NSArray *)result
+{
+  [delegate sizeCalculator: self
+            didComputeSize: [[result objectAtIndex: 1] unsignedLongLongValue]
+                   forPath: [result objectAtIndex: 0]];
+}
+
+- (void)deliverFinish
+{
+  finished = YES;
+  [delegate sizeCalculatorDidFinish: self];
+}
+
+/* Plain C on purpose: this runs off the main thread, and a walk through a
+ * big tree must not build an object per entry. */
+static unsigned long long
+treeSize(char *path, size_t length, dev_t device, const int *stop, int depth)
+{
+  unsigned long long total = 0;
+  DIR *dir = opendir (path);
+  struct dirent *entry;
+
+  if (dir == NULL)
+    {
+      return 0;
+    }
+
+  while ((entry = readdir (dir)) != NULL)
+    {
+      size_t nameLength;
+      struct stat st;
+
+      if (__atomic_load_n (stop, __ATOMIC_SEQ_CST))
+        {
+          break;
+        }
+      if (strcmp (entry->d_name, ".") == 0 || strcmp (entry->d_name, "..") == 0)
+        {
+          continue;
+        }
+
+      nameLength = strlen (entry->d_name);
+      if (length + 1 + nameLength >= PATH_MAX)
+        {
+          continue;
+        }
+      path[length] = '/';
+      memcpy (path + length + 1, entry->d_name, nameLength + 1);
+
+      if (lstat (path, &st) == 0)
+        {
+          if (!S_ISDIR (st.st_mode))
+            {
+              total += (unsigned long long)st.st_size;
+            }
+          /* A mount below the folder is another file system's business
+           * (and /proc and friends are not files at all). */
+          else if (st.st_dev == device && depth < 256)
+            {
+              total += treeSize (path, length + 1 + nameLength, device, stop, depth + 1);
+            }
+        }
+      path[length] = '\0';
+    }
+
+  closedir (dir);
+  return total;
+}
+
++ (unsigned long long)sizeOfTreeAtPath:(NSString *)path stop:(const int *)stop
+{
+  char buffer[PATH_MAX];
+  struct stat st;
+  static const int never = 0;
+
+  if (stop == NULL)
+    {
+      stop = &never;
+    }
+  if (![path getFileSystemRepresentation: buffer maxLength: sizeof (buffer)]
+      || lstat (buffer, &st) != 0)
+    {
+      return 0;
+    }
+  if (!S_ISDIR (st.st_mode))
+    {
+      return (unsigned long long)st.st_size;
+    }
+
+  return treeSize (buffer, strlen (buffer), st.st_dev, stop, 0);
+}
+
+@end
+
 
 static NSString *defaultColumns = @"{ \
   <*I0> = { \
@@ -79,11 +437,16 @@ static NSString *defaultColumns = @"{ \
   [[NSNotificationCenter defaultCenter] removeObserver: self
                                                   name: NSUserDefaultsDidChangeNotification
                                                 object: nil];
+  [self detachFromListView];
   RELEASE (node);
   RELEASE (extInfoType);
   RELEASE (nodeReps);
   RELEASE (nameEditor);
   RELEASE (lastSelection);
+  RELEASE (listFont);
+  RELEASE (folderSizes);
+  RELEASE (sizeCalculator);
+  RELEASE (hiddenColumnWidths);
 
   [super dealloc];
 }
@@ -153,6 +516,10 @@ static NSString *defaultColumns = @"{ \
 
       defentry = [defaults objectForKey: @"hligh_table_col"];
       hlighColId = defentry ? [defentry intValue] : FSNInfoNameType;
+      sortAscending = [self defaultAscendingForColumnType: hlighColId];
+      listIconSize = DEFAULT_LIST_ICON_SIZE;
+      folderSizes = [NSMutableDictionary new];
+      hiddenColumnWidths = [NSMutableDictionary new];
 
       ASSIGN (extInfoType, [fsnodeRep validExtendedInfoName:
                               [defaults objectForKey: FSNExtendedInfoTypeDefaultsKey]]);
@@ -174,6 +541,12 @@ static NSString *defaultColumns = @"{ \
            selector: @selector(defaultsChanged:)
                name: NSUserDefaultsDidChangeNotification
              object: nil];
+
+      [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector(columnDidMove:)
+               name: NSTableViewColumnDidMoveNotification
+             object: aview];
     }
 
   return self;
@@ -198,30 +571,12 @@ static NSString *defaultColumns = @"{ \
 
 - (void)setSortColumn:(FSNInfoType)sortType
 {
-  if (sortType != hlighColId) {
-    NSArray *selected = [self selectedReps];
-    
-    [listView deselectAll: self];
-    hlighColId = sortType;
-    [self sortNodeReps];
-    [listView reloadData];
-    
-    if ([selected count]) {
-      id rep = [selected objectAtIndex: 0];
-      NSUInteger index = [nodeReps indexOfObjectIdenticalTo: rep];
-      
-      [self selectReps: selected];
-      
-      if (index != NSNotFound) {
-        [listView scrollRowToVisible: index];
-      }
+  if (sortType != hlighColId)
+    {
+      hlighColId = sortType;
+      sortAscending = [self defaultAscendingForColumnType: sortType];
+      [self resortPreservingSelection];
     }
-    
-    NSTableColumn *column = [listView tableColumnWithIdentifier: [NSNumber numberWithInt: hlighColId]];
-    if (column) {
-      [listView setHighlightedTableColumn: column];
-    }
-  }
 }
 
 - (FSNInfoType)sortColumn
@@ -267,12 +622,13 @@ static NSString *defaultColumns = @"{ \
 - (void)addColumn:(NSDictionary *)info
 {
   NSNumber *identifier = [info objectForKey: @"identifier"];
-  FSNInfoType type = [identifier intValue];
+  NSInteger type = [identifier intValue];
   float width = [[info objectForKey: @"width"] floatValue];
   float minwidth = [[info objectForKey: @"minwidth"] floatValue];
   NSTableColumn *column = [(NSTableColumn *)[NSTableColumn alloc] initWithIdentifier: identifier];
 
-  [column setDataCell: AUTORELEASE ([[FSNTextCell alloc] init])];
+  [column setHeaderCell: AUTORELEASE ([[FSNListHeaderCell alloc] init])];
+  [column setDataCell: [self freshDataCell]];
   [column setEditable: NO];
   [column setResizable: YES];
   [[column headerCell] setAlignment: NSLeftTextAlignment];
@@ -305,6 +661,21 @@ static NSString *defaultColumns = @"{ \
     case FSNInfoDescriptionType:
       [[column headerCell] setStringValue: NSLocalizedStringFromTableInBundle(@"Description", nil, [NSBundle bundleForClass:[FSNode class]], @"")];
       break;
+    case FSNListColumnTypeDateCreated:
+      [[column headerCell] setStringValue: localized (@"Date Created")];
+      break;
+    case FSNListColumnTypeDateLastOpened:
+      [[column headerCell] setStringValue: localized (@"Date Last Opened")];
+      break;
+    case FSNListColumnTypeLabel:
+      [[column headerCell] setStringValue: localized (@"Label")];
+      break;
+    case FSNListColumnTypeVersion:
+      [[column headerCell] setStringValue: localized (@"Version")];
+      break;
+    case FSNListColumnTypeComments:
+      [[column headerCell] setStringValue: localized (@"Comments")];
+      break;
     default:
       [[column headerCell] setStringValue: NSLocalizedStringFromTableInBundle(@"Name", nil, [NSBundle bundleForClass:[FSNode class]], @"")];
       break;
@@ -312,6 +683,7 @@ static NSString *defaultColumns = @"{ \
 
   [listView addTableColumn: column];
   RELEASE (column);
+  [self updateSortIndicators];
 }
 
 - (void)addDescriptionColumn
@@ -336,7 +708,12 @@ static NSString *defaultColumns = @"{ \
       if (column)
 	{
 	  [listView removeTableColumn: column];
-	  hlighColId = FSNInfoNameType;
+	  /* Only the sorted-by column's removal changes the order. */
+	  if ([identifier intValue] == hlighColId)
+	    {
+	      hlighColId = FSNInfoNameType;
+	      sortAscending = [self defaultAscendingForColumnType: hlighColId];
+	    }
 	  [self sortNodeReps];
 	  [listView reloadData];
 	}
@@ -376,48 +753,26 @@ static NSString *defaultColumns = @"{ \
 
 - (void)sortNodeReps
 {
-  NSTableColumn *column;
+  NSInteger type = hlighColId;
+  BOOL ascending = sortAscending;
 
-  if (hlighColId != FSNInfoExtendedType)
-    {
-      SEL sortingSel;
+  [nodeReps sortUsingComparator: ^NSComparisonResult (id r1, id r2) {
+      NSComparisonResult result = [self compareRep: r1 withRep: r2 columnType: type];
 
-      switch(hlighColId)
-	{
-	case FSNInfoNameType:
-	  sortingSel = @selector(compareAccordingToName:);
-	  break;
-	case FSNInfoKindType:
-	  sortingSel = @selector(compareAccordingToKind:);
-	  break;
-	case FSNInfoDateType:
-	  sortingSel = @selector(compareAccordingToDate:);
-	  break;
-	case FSNInfoSizeType:
-	  sortingSel = @selector(compareAccordingToSize:);
-	  break;
-	case FSNInfoOwnerType:
-	  sortingSel = @selector(compareAccordingToOwner:);
-	  break;
-	default:
-	  sortingSel = @selector(compareAccordingToName:);
-	  break;
-	}
+      if (result == NSOrderedSame)
+        {
+          /* Equal values keep a stable, readable order whatever the
+           * direction. */
+          return [[r1 node] compareAccordingToName: [r2 node]];
+        }
+      if (ascending == NO)
+        {
+          return (result == NSOrderedAscending) ? NSOrderedDescending : NSOrderedAscending;
+        }
+      return result;
+    }];
 
-      [nodeReps sortUsingSelector: sortingSel];
-
-    }
-  else
-    {
-      [nodeReps sortUsingFunction: compareWithExtType
-			  context: (void *)NULL];
-    }
-
-  column = [listView tableColumnWithIdentifier: [NSNumber numberWithInt: hlighColId]];
-  if (column)
-    {
-      [listView setHighlightedTableColumn: column];
-    }
+  [self updateSortIndicators];
 }
 
 - (void)setMouseFlags:(NSUInteger)flags
@@ -573,6 +928,729 @@ static NSString *defaultColumns = @"{ \
 @end
 
 
+
+@implementation FSNListViewDataSource (FinderListOptionsPrivate)
+
+- (BOOL)defaultAscendingForColumnType:(NSInteger)type
+{
+  /* Newest and biggest first is what one looks for in these. */
+  return !(COLUMN_TYPE_IS_DATE (type) || type == FSNInfoSizeType);
+}
+
+- (NSDictionary *)defaultColumnInfoForType:(NSInteger)type
+{
+  float width = 80.0, minwidth = 80.0;
+
+  switch (type)
+    {
+    case FSNInfoNameType:
+      width = 260.0;
+      minwidth = 100.0;
+      break;
+    case FSNInfoDateType:
+    case FSNListColumnTypeDateCreated:
+    case FSNListColumnTypeDateLastOpened:
+      width = 120.0;
+      minwidth = 120.0;
+      break;
+    case FSNInfoKindType:
+    case FSNInfoParentType:
+    case FSNInfoExtendedType:
+      width = 90.0;
+      minwidth = 80.0;
+      break;
+    case FSNListColumnTypeLabel:
+    case FSNListColumnTypeVersion:
+      width = 90.0;
+      minwidth = 60.0;
+      break;
+    case FSNListColumnTypeComments:
+      width = 160.0;
+      minwidth = 60.0;
+      break;
+    case FSNInfoDescriptionType:
+      width = 200.0;
+      minwidth = 50.0;
+      break;
+    default:
+      break;
+    }
+
+  return [NSDictionary dictionaryWithObjectsAndKeys:
+                         [NSNumber numberWithInteger: type], @"identifier",
+                       [NSNumber numberWithFloat: width], @"width",
+                       [NSNumber numberWithFloat: minwidth], @"minwidth",
+                       nil];
+}
+
+/* The cells' own default font when no size was asked for. */
+- (NSFont *)effectiveFont
+{
+  return listFont ? listFont : [[self freshDataCell] font];
+}
+
+- (FSNTextCell *)freshDataCell
+{
+  FSNTextCell *cell = AUTORELEASE ([[FSNTextCell alloc] init]);
+
+  if (listFont)
+    {
+      [cell setFont: listFont];
+    }
+  return cell;
+}
+
+- (void)updateSortIndicators
+{
+  NSArray *columns = [listView tableColumns];
+  NSTableColumn *sorted = nil;
+  NSUInteger i;
+
+  for (i = 0; i < [columns count]; i++)
+    {
+      NSTableColumn *column = [columns objectAtIndex: i];
+      BOOL isSorted = ([[column identifier] intValue] == hlighColId);
+
+      [(FSNListHeaderCell *)[column headerCell]
+        setSortDirection: (isSorted ? (sortAscending ? 1 : -1) : 0)];
+      if (isSorted)
+        {
+          sorted = column;
+        }
+    }
+
+  if (sorted)
+    {
+      [listView setHighlightedTableColumn: sorted];
+    }
+  [[listView headerView] setNeedsDisplay: YES];
+}
+
+- (void)resortPreservingSelection
+{
+  NSArray *selected = [self selectedReps];
+
+  [listView deselectAll: self];
+  [self sortNodeReps];
+  [listView reloadData];
+
+  if ([selected count])
+    {
+      NSUInteger index = [nodeReps indexOfObjectIdenticalTo: [selected objectAtIndex: 0]];
+
+      [self selectReps: selected];
+      if (index != NSNotFound)
+        {
+          [listView scrollRowToVisible: index];
+        }
+    }
+}
+
+- (void)postOptionChange:(NSString *)option
+{
+  [[NSNotificationCenter defaultCenter]
+    postNotificationName: FSNListViewOptionsDidChangeNotification
+                  object: listView
+                userInfo: [NSDictionary dictionaryWithObject: option
+                                                      forKey: FSNListViewChangedOptionKey]];
+}
+
+/* nil sorts before everything, so a missing value does not raise. */
+static NSComparisonResult
+compareOptional(id a, id b)
+{
+  if (a == nil || b == nil)
+    {
+      return (a == b) ? NSOrderedSame : (a == nil ? NSOrderedAscending : NSOrderedDescending);
+    }
+  return [a compare: b];
+}
+
+/* Where a label colour comes in Finder's order: no label, then the colours
+ * round the colour wheel from red, grey last. */
+static double
+labelRank(NSColor *color)
+{
+  CGFloat hue, saturation, brightness, alpha;
+
+  if (color == nil)
+    {
+      return -1.0;
+    }
+  [[color colorUsingColorSpaceName: NSCalibratedRGBColorSpace]
+    getHue: &hue saturation: &saturation brightness: &brightness alpha: &alpha];
+  return (saturation < 0.1) ? 2.0 : hue;
+}
+
+- (unsigned long long)sortSizeOfRep:(FSNListViewNodeRep *)rep
+{
+  FSNode *nd = [rep node];
+
+  if ([nd isDirectory])
+    {
+      return [[folderSizes objectForKey: [nd path]] unsignedLongLongValue];
+    }
+  return [nd fileSize];
+}
+
+- (NSComparisonResult)compareRep:(FSNListViewNodeRep *)r1
+                         withRep:(FSNListViewNodeRep *)r2
+                      columnType:(NSInteger)type
+{
+  FSNode *n1 = [r1 node];
+  FSNode *n2 = [r2 node];
+
+  switch (type)
+    {
+    case FSNInfoKindType:
+      return [n1 compareAccordingToKind: n2];
+    case FSNInfoDateType:
+      return compareOptional ([n1 modificationDate], [n2 modificationDate]);
+    case FSNListColumnTypeDateCreated:
+      return compareOptional ([n1 creationDate], [n2 creationDate]);
+    case FSNListColumnTypeDateLastOpened:
+      return compareOptional ([r1 lazyValueForColumnType: type],
+                              [r2 lazyValueForColumnType: type]);
+    case FSNInfoSizeType:
+      {
+        unsigned long long s1 = [self sortSizeOfRep: r1];
+        unsigned long long s2 = [self sortSizeOfRep: r2];
+
+        return (s1 == s2) ? NSOrderedSame : (s1 < s2 ? NSOrderedAscending : NSOrderedDescending);
+      }
+    case FSNInfoOwnerType:
+      return [[n1 owner] caseInsensitiveCompare: [n2 owner]];
+    case FSNInfoExtendedType:
+      return [[r1 shownInfo] caseInsensitiveCompare: [r2 shownInfo]];
+    case FSNListColumnTypeLabel:
+      {
+        double k1 = labelRank ([r1 lazyValueForColumnType: type]);
+        double k2 = labelRank ([r2 lazyValueForColumnType: type]);
+
+        if (k1 == k2)
+          {
+            return compareOptional ([r1 lazyValueForColumnType: LAZY_LABEL_NAME],
+                                    [r2 lazyValueForColumnType: LAZY_LABEL_NAME]);
+          }
+        return (k1 < k2) ? NSOrderedAscending : NSOrderedDescending;
+      }
+    case FSNListColumnTypeVersion:
+      {
+        NSString *v1 = [r1 lazyValueForColumnType: type];
+        NSString *v2 = [r2 lazyValueForColumnType: type];
+
+        if (v1 == nil || v2 == nil)
+          {
+            return compareOptional (v1, v2);
+          }
+        return [v1 compare: v2 options: NSNumericSearch | NSCaseInsensitiveSearch];
+      }
+    case FSNListColumnTypeComments:
+      {
+        NSString *c1 = [r1 lazyValueForColumnType: type];
+        NSString *c2 = [r2 lazyValueForColumnType: type];
+
+        if (c1 == nil || c2 == nil)
+          {
+            return compareOptional (c1, c2);
+          }
+        return [c1 caseInsensitiveCompare: c2];
+      }
+    default:
+      return [n1 compareAccordingToName: n2];
+    }
+}
+
+- (NSString *)descriptionOfDate:(NSDate *)date
+{
+  if (date == nil)
+    {
+      return EMPTY_VALUE_STRING;
+    }
+  return [[self class] descriptionOfDate: date
+                              relativeTo: [NSDate date]
+                           relativeNames: usesRelativeDates];
+}
+
+- (NSString *)sizeDescriptionOfRep:(FSNListViewNodeRep *)rep
+{
+  FSNode *nd = [rep node];
+
+  if ([nd isDirectory] == NO)
+    {
+      return [nd sizeDescription];
+    }
+  if (calculatesAllSizes)
+    {
+      NSNumber *size = [folderSizes objectForKey: [nd path]];
+
+      if (size)
+        {
+          return sizeDescription ([size unsignedLongLongValue]);
+        }
+    }
+  return EMPTY_VALUE_STRING;
+}
+
+- (void)cancelSizeCalculation
+{
+  [sizeCalculator cancel];
+  DESTROY (sizeCalculator);
+}
+
+- (void)startSizeCalculation
+{
+  NSMutableArray *paths;
+  NSUInteger i;
+
+  [self cancelSizeCalculation];
+  if (calculatesAllSizes == NO)
+    {
+      return;
+    }
+
+  paths = [NSMutableArray array];
+  for (i = 0; i < [nodeReps count]; i++)
+    {
+      FSNode *nd = [[nodeReps objectAtIndex: i] node];
+
+      if ([nd isDirectory])
+        {
+          [paths addObject: [nd path]];
+        }
+    }
+
+  if ([paths count])
+    {
+      sizeCalculator = [[FSNFolderSizeCalculator alloc] initWithPaths: paths delegate: self];
+      [sizeCalculator start];
+    }
+}
+
+- (void)sizeCalculator:(FSNFolderSizeCalculator *)calculator
+        didComputeSize:(unsigned long long)size
+               forPath:(NSString *)path
+{
+  FSNListViewNodeRep *rep = [self repOfSubnodePath: path];
+
+  [folderSizes setObject: [NSNumber numberWithUnsignedLongLong: size] forKey: path];
+
+  if (rep)
+    {
+      NSUInteger row = [nodeReps indexOfObjectIdenticalTo: rep];
+
+      if (row != NSNotFound)
+        {
+          [listView setNeedsDisplayInRect: [listView rectOfRow: row]];
+        }
+    }
+}
+
+- (void)sizeCalculatorDidFinish:(FSNFolderSizeCalculator *)calculator
+{
+  /* Rows are moved only now: a list that reshuffles under the pointer while
+   * the numbers come in cannot be read. */
+  if (hlighColId == FSNInfoSizeType)
+    {
+      [self resortPreservingSelection];
+    }
+}
+
+- (void)columnDidMove:(NSNotification *)notification
+{
+  if (programmaticChanges)
+    {
+      return;
+    }
+
+  /* Many of these arrive during one drag; the order is only worth reporting
+   * (and the name column worth putting back) once it settles. */
+  [NSObject cancelPreviousPerformRequestsWithTarget: self
+                                           selector: @selector(settleColumnOrder)
+                                             object: nil];
+  [self performSelector: @selector(settleColumnOrder)
+             withObject: nil
+             afterDelay: 0.0
+                inModes: [NSArray arrayWithObjects: NSDefaultRunLoopMode,
+                                  NSEventTrackingRunLoopMode, nil]];
+}
+
+- (void)settleColumnOrder
+{
+  NSInteger nameIndex = [listView columnWithIdentifier:
+                                    [NSNumber numberWithInt: FSNInfoNameType]];
+
+  /* Finder keeps the name column at the left edge. */
+  if (nameIndex > 0)
+    {
+      programmaticChanges++;
+      [listView moveColumn: nameIndex toColumn: 0];
+      programmaticChanges--;
+    }
+  [self postOptionChange: FSNListViewOptionColumnOrder];
+}
+
+@end
+
+
+@implementation FSNListViewDataSource (FinderListOptions)
+
++ (NSArray *)finderColumnIds
+{
+  return finderColumnIdList ();
+}
+
++ (NSNumber *)tableIdentifierForColumnId:(NSString *)columnId
+{
+  return [columnTypeByColumnId () objectForKey: columnId];
+}
+
++ (NSString *)columnIdForTableIdentifier:(NSNumber *)identifier
+{
+  return [[columnTypeByColumnId () allKeysForObject: identifier] lastObject];
+}
+
++ (BOOL)defaultSortAscendingForColumnId:(NSString *)columnId
+{
+  NSNumber *ident = [self tableIdentifierForColumnId: columnId];
+
+  return !(ident && (COLUMN_TYPE_IS_DATE ([ident intValue])
+                     || [ident intValue] == FSNInfoSizeType));
+}
+
++ (NSString *)descriptionOfDate:(NSDate *)date
+                     relativeTo:(NSDate *)now
+                  relativeNames:(BOOL)relative
+{
+  NSTimeZone *zone = [NSTimeZone localTimeZone];
+  NSCalendarDate *day = [date dateWithCalendarFormat: nil timeZone: zone];
+
+  if (relative)
+    {
+      NSCalendarDate *today = [now dateWithCalendarFormat: nil timeZone: zone];
+      NSInteger difference = [today dayOfCommonEra] - [day dayOfCommonEra];
+      NSString *name = nil;
+
+      if (difference == 0)
+        {
+          name = localized (@"Today");
+        }
+      else if (difference == 1)
+        {
+          name = localized (@"Yesterday");
+        }
+
+      if (name)
+        {
+          return [NSString stringWithFormat: localized (@"%@ at %@"), name,
+                           [day descriptionWithCalendarFormat: @"%H:%M"]];
+        }
+    }
+
+  return [day descriptionWithCalendarFormat: @"%b %d %Y %H:%M"];
+}
+
++ (CGFloat)rowHeightForTextSize:(CGFloat)points iconSize:(NSInteger)iconSize
+{
+  NSFont *font = (points > 0)
+    ? [NSFont systemFontOfSize: points]
+    : [[[[FSNTextCell alloc] init] autorelease] font];
+  CGFloat line = ceil ([font ascender] - [font descender]);
+
+  return MAX (iconSize + ROW_ICON_MARGIN, line + ROW_TEXT_MARGIN);
+}
+
+- (BOOL)setSortColumnId:(NSString *)columnId ascending:(BOOL)ascending
+{
+  NSNumber *ident = [[self class] tableIdentifierForColumnId: columnId];
+
+  if (ident == nil || [listView tableColumnWithIdentifier: ident] == nil)
+    {
+      return NO;
+    }
+
+  hlighColId = [ident intValue];
+  sortAscending = ascending;
+  [self resortPreservingSelection];
+  return YES;
+}
+
+- (NSString *)sortColumnId
+{
+  return [[self class] columnIdForTableIdentifier: [NSNumber numberWithInt: hlighColId]];
+}
+
+- (void)setSortAscending:(BOOL)ascending
+{
+  if (ascending != sortAscending)
+    {
+      sortAscending = ascending;
+      [self resortPreservingSelection];
+    }
+}
+
+- (BOOL)sortAscending
+{
+  return sortAscending;
+}
+
+- (BOOL)setColumn:(NSString *)columnId visible:(BOOL)visible
+{
+  NSNumber *ident = [[self class] tableIdentifierForColumnId: columnId];
+  NSTableColumn *column;
+
+  if (ident == nil)
+    {
+      return NO;
+    }
+  if ([ident intValue] == FSNInfoNameType)
+    {
+      return visible;
+    }
+
+  column = [listView tableColumnWithIdentifier: ident];
+  if (visible == (column != nil))
+    {
+      return YES;
+    }
+
+  programmaticChanges++;
+  if (visible)
+    {
+      NSMutableDictionary *info
+        = [[[self defaultColumnInfoForType: [ident intValue]] mutableCopy] autorelease];
+      NSNumber *remembered = [hiddenColumnWidths objectForKey: ident];
+
+      if (remembered)
+        {
+          [info setObject: remembered forKey: @"width"];
+        }
+      [self addColumn: info];
+      [listView reloadData];
+    }
+  else
+    {
+      [hiddenColumnWidths setObject: [NSNumber numberWithFloat: [column width]]
+                             forKey: ident];
+      [self removeColumnWithIdentifier: ident];
+    }
+  programmaticChanges--;
+
+  return YES;
+}
+
+- (BOOL)isColumnVisible:(NSString *)columnId
+{
+  NSNumber *ident = [[self class] tableIdentifierForColumnId: columnId];
+
+  return ident && ([listView tableColumnWithIdentifier: ident] != nil);
+}
+
+- (NSArray *)columnOrder
+{
+  NSArray *columns = [listView tableColumns];
+  NSMutableArray *ids = [NSMutableArray arrayWithCapacity: [columns count]];
+  NSUInteger i;
+
+  for (i = 0; i < [columns count]; i++)
+    {
+      NSString *columnId
+        = [[self class] columnIdForTableIdentifier: [[columns objectAtIndex: i] identifier]];
+
+      if (columnId)
+        {
+          [ids addObject: columnId];
+        }
+    }
+  return ids;
+}
+
+- (void)setColumnOrder:(NSArray *)columnIds
+{
+  NSMutableArray *target = [NSMutableArray arrayWithObject:
+                                             [NSNumber numberWithInt: FSNInfoNameType]];
+  NSUInteger i;
+
+  for (i = 0; i < [columnIds count]; i++)
+    {
+      NSNumber *ident = [[self class] tableIdentifierForColumnId: [columnIds objectAtIndex: i]];
+
+      if (ident && [target containsObject: ident] == NO
+          && [listView tableColumnWithIdentifier: ident])
+        {
+          [target addObject: ident];
+        }
+    }
+
+  programmaticChanges++;
+  for (i = 0; i < [target count]; i++)
+    {
+      NSInteger index = [listView columnWithIdentifier: [target objectAtIndex: i]];
+
+      if (index != (NSInteger)i)
+        {
+          [listView moveColumn: index toColumn: i];
+        }
+    }
+  programmaticChanges--;
+}
+
+- (BOOL)setColumnWidth:(CGFloat)width forColumnId:(NSString *)columnId
+{
+  NSNumber *ident = [[self class] tableIdentifierForColumnId: columnId];
+
+  if (ident == nil || width <= 0)
+    {
+      return NO;
+    }
+
+  if ([listView tableColumnWithIdentifier: ident])
+    {
+      programmaticChanges++;
+      [self setColumnWidth: width forIdentifier: (FSNInfoType)[ident intValue]];
+      programmaticChanges--;
+    }
+  else
+    {
+      /* Shown at this width when the column comes back. */
+      [hiddenColumnWidths setObject: [NSNumber numberWithFloat: width] forKey: ident];
+    }
+  return YES;
+}
+
+- (CGFloat)columnWidthForColumnId:(NSString *)columnId
+{
+  NSNumber *ident = [[self class] tableIdentifierForColumnId: columnId];
+
+  if (ident == nil)
+    {
+      return 0;
+    }
+  return [self columnWidthForIdentifier: (FSNInfoType)[ident intValue]];
+}
+
+- (void)setUsesRelativeDates:(BOOL)flag
+{
+  if (flag != usesRelativeDates)
+    {
+      usesRelativeDates = flag;
+      [listView setNeedsDisplay: YES];
+    }
+}
+
+- (BOOL)usesRelativeDates
+{
+  return usesRelativeDates;
+}
+
+- (void)setCalculatesAllSizes:(BOOL)flag
+{
+  if (flag == calculatesAllSizes)
+    {
+      return;
+    }
+  calculatesAllSizes = flag;
+
+  if (flag)
+    {
+      [self startSizeCalculation];
+    }
+  else
+    {
+      [self cancelSizeCalculation];
+      [folderSizes removeAllObjects];
+    }
+
+  if (hlighColId == FSNInfoSizeType)
+    {
+      [self resortPreservingSelection];
+    }
+  else
+    {
+      [listView setNeedsDisplay: YES];
+    }
+}
+
+- (BOOL)calculatesAllSizes
+{
+  return calculatesAllSizes;
+}
+
+- (BOOL)isCalculatingSizes
+{
+  return sizeCalculator && ([sizeCalculator isFinished] == NO);
+}
+
+- (NSNumber *)calculatedSizeForPath:(NSString *)path
+{
+  return [folderSizes objectForKey: path];
+}
+
+- (void)applyRowMetrics
+{
+  NSArray *columns = [listView tableColumns];
+  NSUInteger i;
+
+  [listView setRowHeight: [[self class] rowHeightForTextSize: [self textSize]
+                                                    iconSize: listIconSize]];
+
+  for (i = 0; i < [columns count]; i++)
+    {
+      [[[columns objectAtIndex: i] dataCell] setFont: [self effectiveFont]];
+    }
+  for (i = 0; i < [nodeReps count]; i++)
+    {
+      [[nodeReps objectAtIndex: i] invalidateIcons];
+    }
+
+  [listView reloadData];
+  [self enqueueUndecoratedReps];
+}
+
+- (void)setTextSize:(CGFloat)points
+{
+  NSFont *font = (points > 0) ? [NSFont systemFontOfSize: points] : nil;
+
+  if (font == listFont || [font isEqual: listFont])
+    {
+      return;
+    }
+  ASSIGN (listFont, font);
+  [self applyRowMetrics];
+}
+
+- (CGFloat)textSize
+{
+  return [[self effectiveFont] pointSize];
+}
+
+- (void)setListIconSize:(NSInteger)points
+{
+  points = MIN (MAX_LIST_ICON_SIZE, MAX (MIN_LIST_ICON_SIZE, points));
+  if (points != listIconSize)
+    {
+      listIconSize = points;
+      [self applyRowMetrics];
+    }
+}
+
+- (NSInteger)listIconSize
+{
+  return listIconSize;
+}
+
+- (void)detachFromListView
+{
+  [self cancelSizeCalculation];
+  [NSObject cancelPreviousPerformRequestsWithTarget: self];
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSTableViewColumnDidMoveNotification
+                                                object: nil];
+}
+
+@end
+
+
 @implementation FSNListViewDataSource (NSTableViewDataSource)
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)aTableView
@@ -584,7 +1662,7 @@ static NSString *defaultColumns = @"{ \
 objectValueForTableColumn:(NSTableColumn *)aTableColumn
 	    row:(NSInteger)rowIndex
 {
-  FSNInfoType ident = [[aTableColumn identifier] intValue];
+  NSInteger ident = [[aTableColumn identifier] intValue];
   FSNListViewNodeRep *rep = [nodeReps objectAtIndex: rowIndex];
   FSNode *nd = [rep node];
 
@@ -597,10 +1675,21 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
       return [nd typeDescription];
       break;
     case FSNInfoDateType:
-      return [nd modDateDescription];
+      /* The node caches the plain form; only the relative one is built here. */
+      if (usesRelativeDates == NO)
+        {
+          return [nd modDateDescription];
+        }
+      return [self descriptionOfDate: [nd modificationDate]];
+      break;
+    case FSNListColumnTypeDateCreated:
+      return [self descriptionOfDate: [nd creationDate]];
+      break;
+    case FSNListColumnTypeDateLastOpened:
+      return [self descriptionOfDate: [rep lazyValueForColumnType: ident]];
       break;
     case FSNInfoSizeType:
-      return [nd sizeDescription];
+      return [self sizeDescriptionOfRep: rep];
       break;
     case FSNInfoOwnerType:
       return [nd owner];
@@ -613,6 +1702,21 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
       break;
     case FSNInfoDescriptionType:
       return GSDirectoryDescriptionForPath([nd path]);
+      break;
+    case FSNListColumnTypeVersion:
+    case FSNListColumnTypeComments:
+      {
+        NSString *value = [rep lazyValueForColumnType: ident];
+
+        return ([value length] > 0) ? value : EMPTY_VALUE_STRING;
+      }
+      break;
+    case FSNListColumnTypeLabel:
+      {
+        NSString *value = [rep lazyValueForColumnType: LAZY_LABEL_NAME];
+
+        return ([value length] > 0) ? value : EMPTY_VALUE_STRING;
+      }
       break;
     default:
       return [nd name];
@@ -687,7 +1791,7 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
    forTableColumn:(NSTableColumn *)aTableColumn
               row:(NSInteger)rowIndex
 {
-  FSNInfoType ident = [[aTableColumn identifier] intValue];
+  NSInteger ident = [[aTableColumn identifier] intValue];
   FSNListViewNodeRep *rep = [nodeReps objectAtIndex: rowIndex];
 
   /* The row is on screen now: complete its lazy decoration (icon, tag
@@ -729,41 +1833,32 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
 	  [cell setTextColor: [NSColor controlTextColor]];
 	}
     }
-  else if (ident == FSNInfoDateType)
+  else if (COLUMN_TYPE_IS_DATE (ident))
     {
       FSNTextCell *cell = (FSNTextCell *)aCell;
       [cell setDateCell: YES];
     }
 }
 
+/* A click, not the mouse going down: a header that is dragged to reorder
+ * the columns must not also sort. */
 - (void)tableView:(NSTableView *)tableView
-mouseDownInHeaderOfTableColumn:(NSTableColumn *)tableColumn
+didClickTableColumn:(NSTableColumn *)tableColumn
 {
-  FSNInfoType newOrder = [[tableColumn identifier] intValue];
+  NSInteger clicked = [[tableColumn identifier] intValue];
 
-  if (newOrder != hlighColId)
+  if (clicked == hlighColId)
     {
-      NSArray *selected = [self selectedReps];
-
-      [listView deselectAll: self];
-      hlighColId = newOrder;
-      [self sortNodeReps];
-      [listView reloadData];
-
-      if ([selected count])
-	{
-	  id rep = [selected objectAtIndex: 0];
-	  NSUInteger index = [nodeReps indexOfObjectIdenticalTo: rep];
-
-	  [self selectReps: selected];
-
-	  if (index != NSNotFound) {
-	    [listView scrollRowToVisible: index];
-	  }
-	}
+      sortAscending = !sortAscending;
+    }
+  else
+    {
+      hlighColId = clicked;
+      sortAscending = [self defaultAscendingForColumnType: clicked];
     }
 
-  [listView setHighlightedTableColumn: tableColumn];
+  [self resortPreservingSelection];
+  [self postOptionChange: FSNListViewOptionSort];
 }
 
 - (NSImage *)tableView:(NSTableView *)tableView
@@ -809,7 +1904,17 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   BOOL keepinfo;
   NSUInteger i;
 
-  keepinfo = (node && ([self keepsColumnsInfo] || [node isEqual: anode]));
+  BOOL sameNode = (node && [node isEqual: anode]);
+
+  keepinfo = (node && ([self keepsColumnsInfo] || sameNode));
+
+  /* Sizes belong to the folder that was shown; a reload of the same one
+   * keeps showing them until the new ones are in. */
+  [self cancelSizeCalculation];
+  if (sameNode == NO)
+    {
+      [folderSizes removeAllObjects];
+    }
 
   ASSIGN (node, anode);
 
@@ -860,6 +1965,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   [self sortNodeReps];
   [listView reloadData];
   [self enqueueUndecoratedReps];
+  [self startSizeCalculation];
 
   DESTROY (lastSelection);
   [self selectionDidChange];
@@ -876,6 +1982,10 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     {
       id entry = [nodeDict objectForKey: @"hligh_table_col"];
       hlighColId = entry ? [entry intValue] : hlighColId;
+
+      entry = [nodeDict objectForKey: @"hligh_table_asc"];
+      sortAscending = entry ? [entry boolValue]
+                            : [self defaultAscendingForColumnType: hlighColId];
 
       entry = [nodeDict objectForKey: @"ext_info_type"];
 
@@ -914,6 +2024,9 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
       [updatedInfo setObject: [NSNumber numberWithInt: hlighColId]
 		      forKey: @"hligh_table_col"];
+
+      [updatedInfo setObject: [NSNumber numberWithBool: sortAscending]
+		      forKey: @"hligh_table_asc"];
 
       if (extInfoType)
 	{
@@ -1240,40 +2353,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
   if (column == nil)
     {
-      NSMutableDictionary *dict = [NSMutableDictionary dictionary];
-      float width, minwidth;
-
-      switch(type)
-	{
-	case FSNInfoKindType:
-	case FSNInfoOwnerType:
-	  width = 80.0;
-	  minwidth = 80.0;
-	  break;
-	case FSNInfoDateType:
-	case FSNInfoParentType:
-	case FSNInfoExtendedType:
-	  width = 90.0;
-	  minwidth = 80.0;
-	  break;
-	case FSNInfoSizeType:
-	  width = 50.0;
-	  minwidth = 50.0;
-	  break;
-	default:
-	  width = 80.0;
-	  minwidth = 80.0;
-	  break;
-	}
-
-      [dict setObject: num forKey: @"identifier"];
-      [dict setObject: [NSNumber numberWithFloat: width]
-	       forKey: @"width"];
-      [dict setObject: [NSNumber numberWithFloat: minwidth]
-	       forKey: @"minwidth"];
-
-      [self addColumn: dict];
-
+      [self addColumn: [self defaultColumnInfoForType: type]];
     }
   else
     {
@@ -2301,6 +3381,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   RELEASE (spopenicon);
   RELEASE (extInfoStr);
   RELEASE (tagColor);
+  RELEASE (lazyValues);
   [super dealloc];
 }
 
@@ -2321,6 +3402,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
        * per row at fill time. */
       icon = nil;
       decorated = NO;
+      lazyValues = [NSMutableDictionary new];
 
       openicon = nil;
       lockedicon = nil;
@@ -2345,7 +3427,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
       return;
     }
 
-  ASSIGN (icon, [fsnodeRep iconOfSize: ICNSIZE forNode: node]);
+  ASSIGN (icon, [fsnodeRep iconOfSize: [dataSource listIconSize] forNode: node]);
 
   /* Load Finder label color from the metadata provider */
   ASSIGN (tagColor,
@@ -2362,6 +3444,95 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 - (BOOL)isDecorated
 {
   return decorated;
+}
+
+- (void)invalidateIcons
+{
+  BOOL wasSelected = iconSelected;
+
+  DESTROY (icon);
+  DESTROY (openicon);
+  DESTROY (lockedicon);
+  DESTROY (spopenicon);
+  decorated = NO;
+
+  /* A selected row draws its open icon, which is only made when the row is
+   * selected. */
+  iconSelected = NO;
+  if (wasSelected)
+    {
+      [self selectIcon: YES];
+    }
+}
+
+- (id)loadLazyValueForColumnType:(NSInteger)type
+{
+  NSString *path = [node path];
+  id provider = [fsnodeRep metadataProvider];
+
+  switch (type)
+    {
+    case FSNListColumnTypeDateLastOpened:
+      {
+        struct stat st;
+
+        /* The access time is what a POSIX system has that comes closest. */
+        if (stat ([path fileSystemRepresentation], &st) == 0)
+          {
+            return [NSDate dateWithTimeIntervalSince1970: (NSTimeInterval)st.st_atime];
+          }
+      }
+      break;
+    case FSNListColumnTypeVersion:
+      if ([node isPackage])
+        {
+          NSDictionary *plist = [[NSBundle bundleWithPath: path] infoDictionary];
+          NSString *version = [plist objectForKey: @"CFBundleShortVersionString"];
+
+          if (version == nil)
+            {
+              version = [plist objectForKey: @"CFBundleVersion"];
+            }
+          if (version == nil)
+            {
+              version = [plist objectForKey: @"ApplicationRelease"];
+            }
+          return version;
+        }
+      break;
+    case FSNListColumnTypeComments:
+      if ([provider respondsToSelector: @selector(commentForPath:)])
+        {
+          return [provider commentForPath: path];
+        }
+      break;
+    case FSNListColumnTypeLabel:
+      return [provider labelColorForPath: path];
+    case LAZY_LABEL_NAME:
+      if ([provider respondsToSelector: @selector(labelNameForPath:)])
+        {
+          return [provider labelNameForPath: path];
+        }
+      break;
+    }
+
+  return nil;
+}
+
+- (id)lazyValueForColumnType:(NSInteger)type
+{
+  NSNumber *key = [NSNumber numberWithInteger: type];
+  id value = [lazyValues objectForKey: key];
+
+  if (value == nil)
+    {
+      value = [self loadLazyValueForColumnType: type];
+      /* "Nothing" is remembered too, or every redraw of a row without a
+       * comment would ask again. */
+      [lazyValues setObject: (value ? value : (id)[NSNull null]) forKey: key];
+    }
+
+  return (value == [NSNull null]) ? nil : value;
 }
 
 - (NSImage *)icon
@@ -2408,7 +3579,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
       if (iconSelected && ((openicon == nil) || (isOpened != wasOpened)))
 	{
-	  NSImage *opicn = [fsnodeRep openFolderIconOfSize: ICNSIZE forNode: node];
+	  NSImage *opicn = [fsnodeRep openFolderIconOfSize: [dataSource listIconSize] forNode: node];
 
 	  if (isOpened)
 	    {
@@ -2442,9 +3613,10 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   ASSIGN (node, anode);
   if (decorated)
     {
-      ASSIGN (icon, [fsnodeRep iconOfSize: ICNSIZE forNode: node]);
+      ASSIGN (icon, [fsnodeRep iconOfSize: [dataSource listIconSize] forNode: node]);
     }
   DESTROY (tagColor);
+  [lazyValues removeAllObjects];
   [self setLocked: [node isLocked]];
 }
 
@@ -2503,7 +3675,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
 - (int)iconSize
 {
-  return ICNSIZE;
+  return [dataSource listIconSize];
 }
 
 - (void)setIconPosition:(NSCellImagePosition)ipos
@@ -2973,6 +4145,7 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
    * unretained listView back-pointer die here.  Drop the items and the
    * defaults observer now so a late notification cannot reach the dead
    * table view through the surviving data source. */
+  [dsource detachFromListView];
   [[FSNIconLoader sharedLoader] cancelClient: dsource];
   [[NSNotificationCenter defaultCenter] removeObserver: dsource
                                                   name: NSUserDefaultsDidChangeNotification

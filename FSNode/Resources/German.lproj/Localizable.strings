@@ -83,3 +83,29 @@
 
 "unknown" = "unbekannt";
 
+/* List and icon views: dates, columns, item info */
+"Today" = "Heute";
+
+"Yesterday" = "Gestern";
+
+"%@ at %@" = "%@ um %@";
+
+"Date Created" = "Erstellungsdatum";
+
+"Date Last Opened" = "Zuletzt ge\u00f6ffnet";
+
+"Label" = "Etikett";
+
+"Version" = "Version";
+
+"Comments" = "Kommentare";
+
+"1 item" = "1 Objekt";
+
+"%lu items" = "%lu Objekte";
+
+"Zero bytes" = "0 Byte";
+
+"1 byte" = "1 Byte";
+
+"%lu bytes" = "%lu Byte";

@@ -85,3 +85,29 @@
 
 "unknown" = "unknown";
 
+/* List and icon views: dates, columns, item info */
+"Today" = "Today";
+
+"Yesterday" = "Yesterday";
+
+"%@ at %@" = "%@ at %@";
+
+"Date Created" = "Date Created";
+
+"Date Last Opened" = "Date Last Opened";
+
+"Label" = "Label";
+
+"Version" = "Version";
+
+"Comments" = "Comments";
+
+"1 item" = "1 item";
+
+"%lu items" = "%lu items";
+
+"Zero bytes" = "Zero bytes";
+
+"1 byte" = "1 byte";
+
+"%lu bytes" = "%lu bytes";
