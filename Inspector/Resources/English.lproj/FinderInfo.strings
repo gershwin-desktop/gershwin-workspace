@@ -1,0 +1,32 @@
+/* Strings of the Inspector's Finder Info pane. */
+
+"Finder Info" = "Finder Info";
+"Finder Info Inspector" = "Finder Info Inspector";
+"Select a single item" = "Select a single item";
+"Hide extension" = "Hide extension";
+"Locked" = "Locked";
+"Name locked" = "Name locked";
+"Stationery pad" = "Stationery pad";
+"Invisible" = "Invisible";
+"Label:" = "Label:";
+"None" = "None";
+"Red" = "Red";
+"Orange" = "Orange";
+"Yellow" = "Yellow";
+"Green" = "Green";
+"Blue" = "Blue";
+"Purple" = "Purple";
+"Grey" = "Grey";
+"Type code:" = "Type code:";
+"Creator code:" = "Creator code:";
+"Custom icon:" = "Custom icon:";
+"Paste Icon" = "Paste Icon";
+"Clear Icon" = "Clear Icon";
+"Comment:" = "Comment:";
+"Revert" = "Revert";
+"Apply" = "Apply";
+"OK" = "OK";
+"Unknown error" = "Unknown error";
+"Could not change Finder Info" = "Could not change Finder Info";
+"The image could not be used as an icon." = "The image could not be used as an icon.";
+"Type and creator codes must be empty or exactly four printable ASCII characters." = "Type and creator codes must be empty or exactly four printable ASCII characters.";

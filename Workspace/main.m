@@ -37,6 +37,7 @@
 #include <errno.h>
 
 #include "Workspace.h"
+#include "FinderInfoLocker.h"
 
 /* Forward declaration of UI testing enable function */
 extern void WorkspaceUITestingSetEnabled(BOOL enabled);
@@ -155,6 +156,12 @@ static void killOtherInstances(const char *myBasename, pid_t myPid)
 
 int main(int argc, char **argv, char **env)
 {
+    /* Privileged re-exec from the Inspector (sudo -A <Workspace> --set-immutable
+     * <plist>): do the one action and leave before anything below runs, since
+     * the single-instance check would kill the user's own Workspace. */
+    if (argc >= 3 && strcmp(argv[1], FinderInfoLockHelperFlag) == 0)
+        return FinderInfoLockHelperMain(argv[2]);
+
 #ifndef _WIN32
     /* A DO write to a dead peer (an app the user closed, a crashed connection)
      * raises SIGPIPE; GNUstep ignores it at NSObject init, but a library can
