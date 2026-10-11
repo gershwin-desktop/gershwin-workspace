@@ -121,6 +121,8 @@ Desktop/Dock/DockIcon.m \
 Desktop/Dock/DockStack.m \
 Desktop/Dock/DockService.m \
 Desktop/Dock/GWDockWindow.m \
+Desktop/Dock/DockMiniatureTile.m \
+Desktop/Dock/DockMiniatureWatcher.m \
  FileViewer/GWViewersManager.m \
  FileViewer/GWViewerBase.m \
  FileViewer/GWFolderViewOptions.m \

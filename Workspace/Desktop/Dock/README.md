@@ -167,3 +167,25 @@ how much room is left beside the bar and narrows the effect, and then the
 magnified size itself, rather than letting the bar run past the edge of the
 screen. A Dock filling most of a small screen therefore magnifies less than
 the same Dock on a large one.
+
+---
+
+## Live miniatures
+
+A minimized window gets a tile of its own in front of the Trash, and the
+window manager's compositor paints the window into it, scaled down and live:
+a playing video keeps playing, a terminal keeps scrolling. Clicking the tile
+restores the window out of it; its menu offers Restore and Close.
+
+The window manager lists the windows it minimizes in the root window's
+`_WINDOW_LIVE_MINIATURES`; the Dock writes each tile's rect to the window's
+`_NET_WM_ICON_GEOMETRY` and then answers with its own window in the window's
+`_WINDOW_LIVE_MINIATURE` (`DockMiniatureWatcher.m`; the protocol is described
+in the window manager's `URSLiveMiniatureController.h`). A window the Dock does
+not answer for is minimized into its application's icon, as before. Without a
+compositor, nothing is listed and nothing changes.
+
+| Key | Type | Default | Meaning |
+|-----|------|---------|---------|
+| `GWDockLiveMiniatures` | bool | `YES` | Whether minimized windows get tiles. Read when Workspace starts. |
+| `GWDockLiveMiniatureLimit` | integer | `8` | At most this many tiles; windows minimized beyond it go into their application's icon. Each live miniature keeps its full-size picture in the window manager. |
