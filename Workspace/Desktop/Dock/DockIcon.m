@@ -174,9 +174,6 @@
 - (void)setWsIcon:(BOOL)value
 {
   isWsIcon = value;
-  if (isWsIcon) {
-    [self removeAllToolTips];
-  }
 }
 
 - (BOOL)isWsIcon
@@ -218,10 +215,6 @@
                                   forNode: node]);
     }
   }
-  
-  if (isTrashIcon) {
-    [self removeAllToolTips];
-  }  
 }
 
 - (void)setTrashFull:(BOOL)value

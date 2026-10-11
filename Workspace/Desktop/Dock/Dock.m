@@ -330,7 +330,7 @@ static inline CGFloat _dockScaleFactor(void)
   NSString *path = [manager trashPath];
   FSNode *node = [FSNode nodeWithPath: path];
   DockIcon *icon = [[DockIcon alloc] initForNode: node
-                                         appName: nil
+                                         appName: NSLocalizedString(@"Recycler", @"")
                                         iconSize: iconSize];
 
   [icon setHighlightColor: backColor];
