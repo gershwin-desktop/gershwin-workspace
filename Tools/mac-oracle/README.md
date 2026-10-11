@@ -2,7 +2,7 @@
 
 Drives the Mac OS X 10.6.8 Finder over ssh (the oracle) so Workspace's Finder
 interoperability is measured on the real thing. Findings are in
-`Documentation/interop/evidence.md` (E1..E9); read E1, E2, E4, E5 first.
+`Documentation/interop/evidence.md` (E1..E28); read E1, E2, E4, E5, E10 first.
 
     Tools/mac-oracle/mac-oracle help
 
@@ -19,6 +19,13 @@ at a time.
 - `push [--force] <dir> <name>`: tar to the Mac; `._` sidecars become native
   xattrs. If `<dir>/.mac-oracle/parent.DS_Store` exists its record `@` is merged
   into the Mac's parent `.DS_Store` under `<name>` (Finder restarted around it).
+- `dsplist <dir> <code> <plist>`: same as dsput, record from a plist file (nested
+  values such as lsvp `columns`, data such as `backgroundImageAlias`).
+- `dsraw <dir> <code> <type> <value>`: raw record for push (blob as hex or
+  `@file`, `long`, `shor`, `bool`, `ustr`, `type`), for the legacy records.
+- `dsread <.DS_Store> [record]`: decodes a store with an independent Python
+  reader (`dump` uses it); `dstool <args>` runs the C helper (put, putplist,
+  putraw, rm, copyrec, dump).
 - `pull [--no-flush] <name> <dir>`: flushes Finder, brings the folder back; xattrs
   arrive as `._` files, `.mac-oracle/xattrs.txt` has a hex dump of all xattrs and
   `.mac-oracle/parent.DS_Store` the parent records of that folder (record `@`).
@@ -39,7 +46,17 @@ at a time.
     `current-view` (icon|list|column|flow), `sidebar-width`
   - items: `comment@<file>`, `label-index@<file>`, `locked@<file>`,
     `extension-hidden@<file>`
-- `shot <name> [out.png]`: picture of the Finder window.
+- `shot [--at l,t,r,b] <name> [out.png]`: picture of the Finder window, moved to
+  `l,t,r,b` first (a system dialog may cover the middle of the screen; the
+  free strip on the oracle is about {10,470,1014,725}).
+- `ui-on`, `ui-off`: create/remove the root-owned accessibility flag (sudo with
+  the Mac password) and restart System Events/Finder; `reset` runs `ui-off`.
+  `ui '<applescript>'` runs a System Events script, `view-options <name>` lists
+  the View Options panel controls, `view-option-click <name> <title>` clicks a
+  checkbox by its (localized) title.
+- `drag <x1> <y1> <x2> <y2>`: Quartz mouse drag on the Mac screen (points,
+  top-left origin) for what System Events cannot do (column widths/order, icon
+  drops, text drags).
 - `flush`: make Finder write pending `.DS_Store` changes (E4).
 - `expect <name> <opt> <val>`, `expect-dump`, `expect-no-dump <name> <regex>`: assertions.
 - `reset [--keep-cases]`: restores the Finder preferences baseline recorded in
@@ -61,3 +78,10 @@ at a time.
 - `screencapture` does not work over ssh; `shot` uses Quartz on the Mac.
 - A locked item (`locked@`) needs `chflags nouchg` before removal; `reset`, `push
   --force` and `mkcase` do that.
+- The repo DSStore loader reads `shor` as 2 bytes and drops every later record
+  (E10); `push` therefore refuses to merge into a parent store holding `shor`
+  records (`reset` first), and `dump` reads with `dsread`.
+- AppleScript column `visible`/`index` do not do what they say (E10); use
+  `view-option-click` or `drag`.
+- A `._` sidecar without entry 9 is rejected by 10.6 copyfile, so `push` fails
+  on it (E17).

@@ -467,6 +467,28 @@ cmd_view_options() {
   return r')"
 }
 
+# Mouse drag in screen points (top-left origin). System Events in 10.6 cannot
+# drag, which is the only way to resize or reorder list columns as a user does;
+# Quartz events posted from the ssh session reach the console session.
+cmd_drag() {
+  [ $# -eq 4 ] || die "usage: drag <x1> <y1> <x2> <y2>"
+  for _v in "$@"; do case "$_v" in ''|*[!0-9]*) die "drag: integers only";; esac; done
+  msh "python - $*" <<'PY' || die "drag failed"
+import sys, time, Quartz
+x1, y1, x2, y2 = [float(v) for v in sys.argv[1:5]]
+def post(kind, x, y):
+    e = Quartz.CGEventCreateMouseEvent(None, kind, (x, y), Quartz.kCGMouseButtonLeft)
+    Quartz.CGEventPost(Quartz.kCGHIDEventTap, e)
+post(Quartz.kCGEventMouseMoved, x1, y1); time.sleep(0.2)
+post(Quartz.kCGEventLeftMouseDown, x1, y1); time.sleep(0.2)
+for i in range(1, 21):
+    post(Quartz.kCGEventLeftMouseDragged, x1 + (x2 - x1) * i / 20, y1 + (y2 - y1) * i / 20)
+    time.sleep(0.03)
+time.sleep(0.2)
+post(Quartz.kCGEventLeftMouseUp, x2, y2)
+PY
+}
+
 # --- assertions for recipes -------------------------------------------------
 
 cmd_expect() {
@@ -557,6 +579,7 @@ usage: mac-oracle <subcommand> ...
   reset [--keep-cases]           close windows, restore baseline, wipe cases, ui-off
   ui-on | ui-off                 create/remove the accessibility flag (sudo) for UI scripting
   ui '<applescript>'             osascript that needs UI scripting (System Events)
+  drag <x1> <y1> <x2> <y2>       mouse drag on the Mac screen (points, top-left origin)
   view-options <name>            controls of the View Options panel (role : title : value)
   view-option-click <name> <t>   click checkbox titled <t> (localized) in View Options
   baseline                       record Finder prefs once (never overwrites)
@@ -598,6 +621,7 @@ main() {
     ui-off)       cmd_ui_off;;
     ui)           [ $# -eq 1 ] || die "usage: ui '<applescript>'"; need_ui; osa "$1";;
     view-options) cmd_view_options "$@";;
+    drag)         cmd_drag "$@";;
     view-option-click) cmd_view_option_click "$@";;
     baseline)     cmd_baseline;;
     recipe)       cmd_recipe "$@";;
