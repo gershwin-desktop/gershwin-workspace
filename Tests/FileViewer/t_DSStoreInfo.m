@@ -13,9 +13,44 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
+#import "GWTestTemporaryDirectory.h"
+#include <time.h>
 #import "GSFileMetadata.h"
 
 #include "../../Workspace/FileViewer/DSStoreInfo.m"
+
+/* CPU seconds -saveToPath: takes for a folder of @p count icon positions. */
+static double
+cpuSecondsToSave(NSUInteger count)
+{
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *dir = [GWTestTemporaryDirectory()
+                    stringByAppendingPathComponent: @"t_DSStoreInfo_big"];
+  DSStoreInfo *big;
+  clock_t start;
+  double spent;
+  NSUInteger i;
+
+  [fm removeFileAtPath: dir handler: nil];
+  [fm createDirectoryAtPath: dir attributes: nil];
+  big = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
+  for (i = 0; i < count; i++)
+    {
+      NSString *name = [NSString stringWithFormat: @"file%lu.txt", (unsigned long)i];
+      DSStoreIconInfo *icon = [[[DSStoreIconInfo alloc] initWithFilename: name] autorelease];
+
+      icon.position = NSMakePoint((i % 100) * 10, (i / 100) * 10);
+      icon.hasPosition = YES;
+      [big setIconInfo: icon forFilename: name];
+    }
+  start = clock();
+  [big saveToPath: [dir stringByAppendingPathComponent: @".DS_Store"]];
+  spent = (double)(clock() - start) / CLOCKS_PER_SEC;
+  [fm removeFileAtPath: dir handler: nil];
+  [pool release];
+  return spent;
+}
 
 int
 main(void)
@@ -88,7 +123,7 @@ main(void)
    *     now persist to) --- */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                       [NSString stringWithFormat: @"t_dsstore_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
@@ -97,12 +132,13 @@ main(void)
 
     DSStoreInfo *w = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
     [w takeValuesFromViewerPrefs: @{ @"viewtype" : @"List",
-                                     @"geometry" : NSStringFromRect(NSMakeRect(100, 150, 600, 400)),
-                                     @"hligh_table_col" : @2,   /* dateModified */
-                                     @"list_view_columns" : @{
-                                         @"0" : @{ @"identifier" : @0, @"width" : @220 },
-                                         @"2" : @{ @"identifier" : @2, @"width" : @140 }
-                                     } }];
+                                     @"geometry" : NSStringFromRect(NSMakeRect(100, 150, 600, 400)) }];
+    /* List options come from the list view itself (GWFolderViewOptions),
+     * not from the viewer prefs. */
+    w.sortColumn = @"dateModified";
+    w.hasSortColumn = YES;
+    w.listColumns = @{ @"name" : @{ @"width" : @220 },
+                       @"dateModified" : @{ @"width" : @140 } };
     DSStoreIconInfo *icon =
       [[[DSStoreIconInfo alloc] initWithFilename: @"doc.txt"] autorelease];
     icon.position = NSMakePoint(80, 160);
@@ -216,7 +252,7 @@ main(void)
    * ghosts collide with live files on reopen, so loading must drop them. */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                       [NSString stringWithFormat: @"t_dsstore_prune_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
@@ -270,7 +306,7 @@ main(void)
    * live on-screen layout and DROP any foreign colliding/stale position. */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                       [NSString stringWithFormat: @"t_dsstore_live_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
@@ -339,7 +375,7 @@ main(void)
    * load from that fallback and must mirror back into it on save. */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
         [NSString stringWithFormat: @"t_fi_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
@@ -385,41 +421,17 @@ main(void)
      linear time to write: the per-file loop used to ask for a copy of the
      whole position dictionary once per file --- */
   {
-    NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory()
-                      stringByAppendingPathComponent: @"t_DSStoreInfo_big"];
-    DSStoreInfo *big;
-    NSDate *start;
-    NSTimeInterval spent;
-    NSUInteger i;
+    double small = cpuSecondsToSave(1000);
+    double large = cpuSecondsToSave(3000);
 
-    [fm removeFileAtPath: dir handler: nil];
-    [fm createDirectoryAtPath: dir attributes: nil];
-
-    big = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
-    for (i = 0; i < 3000; i++)
-      {
-        NSString *name = [NSString stringWithFormat: @"file%lu.txt",
-                                   (unsigned long)i];
-        DSStoreIconInfo *icon =
-          [[[DSStoreIconInfo alloc] initWithFilename: name] autorelease];
-
-        icon.position = NSMakePoint((i % 100) * 10, (i / 100) * 10);
-        icon.hasPosition = YES;
-        [big setIconInfo: icon forFilename: name];
-      }
-
-    start = [NSDate date];
-    PASS([big saveToPath: [dir stringByAppendingPathComponent: @".DS_Store"]],
-         "a folder of three thousand icon positions writes its .DS_Store");
-    spent = -[start timeIntervalSinceNow];
-    printf("writing 3000 icon positions took %.0f ms\n", spent * 1000.0);
-    /* 227 ms when the dictionary is fetched once, 1.6 s when it was fetched
-       per file - and the memory it took grew with the square of the count. */
-    PASS(spent < 0.8,
+    printf("writing 1000 / 3000 icon positions took %.0f / %.0f ms of CPU\n",
+           small * 1000.0, large * 1000.0);
+    /* Process CPU time and a ratio rather than a wall-clock limit: the suite
+       runs next to builds and other suites, which made a fixed limit fail on
+       a loaded machine.  Three times the icons take about three times as
+       long; fetching the dictionary per file made it nine. */
+    PASS(small > 0 && large < small * 6.0,
          "writing three thousand icon positions stays linear");
-
-    [fm removeFileAtPath: dir handler: nil];
   }
 
   [arp release];

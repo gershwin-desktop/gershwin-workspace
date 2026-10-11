@@ -56,6 +56,7 @@
 #import "NetworkServiceManager.h"
 #import "NetworkFSNode.h"
 #import "DSStoreInfo.h"
+#import "FSNListView.h"
 #import "GWViewSettingsManager.h"
 #import "GSFileMetadata.h"
 #import "GWViewerPrefs.h"
@@ -71,6 +72,17 @@
 #define PREVIEW_XMARGIN 0
 #define PREVIEW_YMARGIN 0
 #define PREVIEW_PATHSCRH 46
+
+/* Finder's own name for its global path bar setting. */
+static NSString *const GWViewerShowPathBarKey = @"ShowPathbar";
+
+static BOOL
+GWViewerShowsPathBar(void)
+{
+  id value = [[NSUserDefaults standardUserDefaults] objectForKey: GWViewerShowPathBarKey];
+
+  return value ? [value boolValue] : YES;
+}
 
 /* Helper function to get volume information using statvfs */
 #ifdef _WIN32
@@ -291,7 +303,8 @@ static BOOL hasLastExtents_ = NO;
       }
     }
 
-    /* The sidebar toggle is remembered per view type, like the inspector. */
+    /* The sidebar toggle is remembered per view type, like the inspector,
+     * unless the folder carries its own (bwsp ShowSidebar). */
     showSidebar = YES;
     {
       NSString *vtKey = [self _viewTypeKey];
@@ -300,6 +313,7 @@ static BOOL hasLastExtents_ = NO;
         showSidebar = [defEntry boolValue];
       }
     }
+    showPathbar = GWViewerShowsPathBar();
 
     if (dsInfo.loaded && dsInfo.hasSidebarWidth)
       {
@@ -441,6 +455,8 @@ static BOOL hasLastExtents_ = NO;
     RELEASE (nodeView);
     [self applyContentBackgroundColor];
     [nodeView showContentsOfNode: baseNode];
+    /* After the node view has loaded its own prefs, so the folder's wins. */
+    [self applyFolderViewOptions: dsInfo includingScrollPosition: YES];
 
     if ([[NSUserDefaults standardUserDefaults] boolForKey: @"use_thumbnails"])
       {
@@ -492,6 +508,11 @@ static BOOL hasLastExtents_ = NO;
     [nc addObserver: self 
            selector: @selector(columnsWidthChanged:) 
                name: @"GWBrowserColumnWidthChangedNotification"
+             object: nil];
+
+    [nc addObserver: self
+           selector: @selector(listViewOptionsDidChange:)
+               name: FSNListViewOptionsDidChangeNotification
              object: nil];
 
     /* If this viewer is showing the Network node, observe service changes */
@@ -619,14 +640,17 @@ static BOOL hasLastExtents_ = NO;
   NSRect low = [lowBox bounds];
   CGFloat w = low.size.width;
   CGFloat h = low.size.height;
+  CGFloat pathH = showPathbar ? PREVIEW_PATHSCRH : 0;
   NSRect nr, pr;
+
+  [pathsScroll setHidden: !showPathbar];
 
   if (showInspector)
     {
       if (previewPane == nil)
         {
-          pr = NSMakeRect(w - GW_PREVIEW_PANE_WIDTH, PREVIEW_PATHSCRH,
-                          GW_PREVIEW_PANE_WIDTH, h - PREVIEW_PATHSCRH);
+          pr = NSMakeRect(w - GW_PREVIEW_PANE_WIDTH, pathH,
+                          GW_PREVIEW_PANE_WIDTH, h - pathH);
           previewPane = [[GWViewerBrowserPreview alloc] initWithFrame: pr];
           [previewPane setViewer: self];
           [previewPane setAutoresizingMask: NSViewHeightSizable | NSViewMinXMargin];
@@ -635,9 +659,9 @@ static BOOL hasLastExtents_ = NO;
       /* Apply the remembered pane for the current view type (the pane may
        * persist across view-type switches). */
       [previewPane selectInspectorAtIndex: inspectorPane];
-      nr = NSMakeRect(PREVIEW_XMARGIN, PREVIEW_PATHSCRH,
+      nr = NSMakeRect(PREVIEW_XMARGIN, pathH,
                       w - (PREVIEW_XMARGIN * 2) - GW_PREVIEW_PANE_WIDTH,
-                      h - PREVIEW_PATHSCRH - PREVIEW_YMARGIN);
+                      h - pathH - PREVIEW_YMARGIN);
       [nviewScroll setAutoresizingMask: NSViewNotSizable | NSViewHeightSizable];
     }
   else
@@ -647,8 +671,8 @@ static BOOL hasLastExtents_ = NO;
           [previewPane removeFromSuperview];
           DESTROY (previewPane);
         }
-      nr = NSMakeRect(PREVIEW_XMARGIN, PREVIEW_PATHSCRH,
-                      w - (PREVIEW_XMARGIN * 2), h - PREVIEW_PATHSCRH - PREVIEW_YMARGIN);
+      nr = NSMakeRect(PREVIEW_XMARGIN, pathH,
+                      w - (PREVIEW_XMARGIN * 2), h - pathH - PREVIEW_YMARGIN);
       [nviewScroll setAutoresizingMask: NSViewNotSizable | NSViewWidthSizable | NSViewHeightSizable];
     }
 
@@ -922,6 +946,51 @@ static BOOL hasLastExtents_ = NO;
   [self tileViews];
   [vwrwin display];
   [self updateDefaults];
+}
+
+- (BOOL)isPathBarShown
+{
+  return showPathbar;
+}
+
+- (void)togglePathBar:(id)sender
+{
+  [self setPathBarShown: !showPathbar];
+}
+
+- (void)setPathBarShown:(BOOL)shown
+{
+  if (showPathbar == shown) return;
+  showPathbar = shown;
+  /* One setting for every browsing window, as Finder's ShowPathbar. */
+  [[NSUserDefaults standardUserDefaults] setBool: shown forKey: GWViewerShowPathBarKey];
+  [self updatePreviewPaneForCurrentType];
+  [nodeView resizeWithOldSuperviewSize: [nodeView bounds].size];
+  [vwrwin display];
+  [self updateDefaults];
+}
+
+/* The browsing window has a sidebar and a path bar, no toolbar or status
+ * bar of the kind Finder's ShowToolbar / ShowStatusBar mean, so those keys
+ * are left as stored. */
+- (void)takeWindowChromeInto:(DSStoreInfo *)info
+{
+  [info setShowSidebar: showSidebar];
+  [info setHasShowSidebar: YES];
+  [info setShowPathbar: showPathbar];
+  [info setHasShowPathbar: YES];
+}
+
+/* A folder shown in place gets its own options, like a window opened on it. */
+- (void)applySettingsOfShownFolder
+{
+  NSString *path = [[nodeView shownNode] path];
+
+  if (path == nil)
+    return;
+  [self applyFolderViewOptions:
+          [[GWViewSettingsManager managerForDirectoryPath: path] readSettings]
+       includingScrollPosition: YES];
 }
 
 - (void)reloadSidebar
@@ -1383,27 +1452,7 @@ static BOOL hasLastExtents_ = NO;
       }
     }
 
-    // Save view settings to .DS_Store for Mac interoperability
-    {
-      GWViewSettingsManager *sm = [GWViewSettingsManager managerForDirectoryPath:[baseNode path]];
-      /* Reload current settings first so the write reflects any icon
-       * positions the position store persisted since the last load. */
-      DSStoreInfo *dsInfo = [sm readSettings];
-      if (dsInfo == nil) {
-        dsInfo = [DSStoreInfo infoForDirectoryPath:[baseNode path] loadImmediately:NO];
-      }
-      [dsInfo takeValuesFromViewerPrefs:updatedprefs];
-      /* Persist the LIVE layout: an icon-position-honoring view knows exactly
-       * where every icon sits right now, so write that instead of whatever a
-       * stale .DS_Store (possibly with foreign colliding positions) had. */
-      if (viewType == GWViewTypeIcon
-          && [nodeView respondsToSelector: @selector(liveIconPositions)]) {
-        NSDictionary *live = [nodeView liveIconPositions];
-        if (live && [live count] > 0)
-          [dsInfo setLiveIconPositions: live];
-      }
-      [sm writeSettings:dsInfo];
-    }
+    [self saveFolderSettingsWithPrefs: updatedprefs];
 
     [baseNode checkWritable];
 
@@ -1436,6 +1485,7 @@ static BOOL hasLastExtents_ = NO;
 
   [nodeView showContentsOfNode: node];
   [self scrollToBeginning];
+  [self applySettingsOfShownFolder];
   [self selectionChanged: [NSArray arrayWithObject: node]];
 
   path = [node path];
@@ -1537,6 +1587,8 @@ static BOOL hasLastExtents_ = NO;
 
   [manager addNode: baseNode toHistoryOfViewer: self];
   [self scrollToBeginning];
+  /* After the scroll to the top, which would drop a restored position. */
+  [self applySettingsOfShownFolder];
   [self activate];
 }
 
@@ -1688,6 +1740,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
             && [nodeView respondsToSelector: @selector(showContentsOfNode:)]) {
           [nodeView showContentsOfNode: node];
           [self scrollToBeginning];
+          [self applySettingsOfShownFolder];
           return;
         }
       }
@@ -1809,6 +1862,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
           viewType = GWViewTypeList;
         }
     
+      viewTypeChosenByUser = YES;
       [nviewScroll setDocumentView: nodeView];
       RELEASE (nodeView);
       [self applyContentBackgroundColor];
@@ -1841,6 +1895,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
       DESTROY (selection);
     
       [self scrollToBeginning];
+      [self applySettingsOfShownFolder];
 
       [vwrwin makeFirstResponder: nodeView]; 
 

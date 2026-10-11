@@ -21,6 +21,7 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
+#import "GWTestTemporaryDirectory.h"
 
 #import "../../DSStore/DSStore.h"
 #import "../../DSStore/DSStoreEntry.h"
@@ -28,7 +29,7 @@
 
 static NSString *tmpStorePath(NSString *tag)
 {
-  return [NSTemporaryDirectory()
+  return [GWTestTemporaryDirectory()
            stringByAppendingPathComponent:
              [NSString stringWithFormat: @"t_preserve_%@_%d.DS_Store", tag, (int)getpid()]];
 }
@@ -405,7 +406,7 @@ main(void)
    * carry unknown records and partial icvo fields forward unchanged. --- */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                       [NSString stringWithFormat: @"t_preserve_integ_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
@@ -471,7 +472,7 @@ main(void)
    * a saveToPath: that changes a different directory field --- */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                       [NSString stringWithFormat: @"t_preserve_dirunk_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];

@@ -53,6 +53,15 @@
                fromStore:(id)store
                     into:(DSStoreInfo *)info;
 
+/* Only the directory-level records under @p dirPath, without the per-file
+ * entries.  For a folder whose own .DS_Store is written. */
+- (DSStoreInfo *)readDirectoryInfoForDirectoryPath:(NSString *)dirPath;
+
+/* Write only the records Finder reads for a folder (vstl, bwsp, icvp, lsvp)
+ * under @p dirPath, merged over what is there: the stand-in for the parent's
+ * .DS_Store when that cannot be written. */
+- (BOOL)writeFinderViewRecordsOfInfo:(DSStoreInfo *)info forDirectoryPath:(NSString *)dirPath;
+
 /**
  * Write (merge) the view settings from @p info into the cache,
  * keyed by @p dirPath.  Other folders' records in the cache are

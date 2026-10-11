@@ -36,10 +36,12 @@
  */
 + (instancetype)managerForDirectoryPath:(NSString *)path;
 
-/**
- * Designated initialiser.
- */
+/* The volume cache of the volume @p path is on. */
 - (instancetype)initWithDirectoryPath:(NSString *)path;
+
+/* Designated initialiser: @p cache instead of the volume's own, so that a
+ * test does not write into the user's caches. */
+- (instancetype)initWithDirectoryPath:(NSString *)path volumeCache:(GWVolumeCache *)cache;
 
 /** The normalised directory path this manager serves. */
 @property (nonatomic, readonly) NSString *directoryPath;

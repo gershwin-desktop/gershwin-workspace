@@ -48,6 +48,7 @@
   GWViewerSidebar *sidebar;
   float sidebarWidth;
   BOOL showSidebar; /* sidebar visible in this browsing viewer */
+  BOOL showPathbar; /* path bar under the contents (bwsp ShowPathbar) */
   NSView *lowBox;
   GWViewerPathsScroll *pathsScroll;
   GWViewerIconsPath *pathsView;
@@ -113,6 +114,9 @@
 - (BOOL)isSidebarShown;
 - (void)toggleSidebar:(id)sender;
 - (void)setSidebarShown:(BOOL)shown;
+- (BOOL)isPathBarShown;
+- (void)togglePathBar:(id)sender;
+- (void)setPathBarShown:(BOOL)shown;
 - (void)reloadSidebar;
 - (void)invalidate;
 - (void)unselectAllReps;

@@ -33,6 +33,7 @@ typedef enum
 @class FSNode;
 @class GWViewersManager;
 @class Workspace;
+@class DSStoreInfo;
 
 @interface GWViewerBase : NSObject
 {
@@ -67,7 +68,32 @@ typedef enum
   Workspace *gworkspace;
 
   NSNotificationCenter *nc;
+
+  /* The user picked the view type in this window; only then is it kept
+   * per folder (vstl), as Finder keeps it only for "Always open in". */
+  BOOL viewTypeChosenByUser;
+
+  /* A folder's stored scroll position, waiting for the scroll to the top
+   * that opening and navigating end with, which would otherwise drop it. */
+  NSValue *pendingScrollPosition;
 }
+
+/* Finder's per-folder options (.DS_Store icvp/lsvp) onto the node view. */
+- (void)applyFolderViewOptions:(DSStoreInfo *)info includingScrollPosition:(BOOL)scroll;
+
+/* The bars a viewer kind has, into bwsp.  Finder 10.6 keeps them per
+ * folder only as a snapshot of its global settings and ignores them on read
+ * [O:E13], so they are written, never applied; the base has none. */
+- (void)takeWindowChromeInto:(DSStoreInfo *)info;
+
+/* Writes the folder's settings: the stored ones, overlaid with the viewer
+ * prefs, the live view options, the chrome and the live icon layout.
+ * Returns what was written. */
+- (DSStoreInfo *)saveFolderSettingsWithPrefs:(NSDictionary *)prefs;
+
+/* FSNListViewOptionsDidChangeNotification: the user sorted or moved a
+ * column, so the list options of the folder shown are written. */
+- (void)listViewOptionsDidChange:(NSNotification *)notification;
 
 /* Mode-specific hooks called from shared base methods; implemented by the
  * concrete viewer classes. */
