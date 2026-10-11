@@ -1227,11 +1227,23 @@ static NSString *columnIdForLegacyCode(NSString *code)
     NSSet *childSet = [self childrenOfDirectory: directoryPath];
     if (childSet == nil) return;
 
+    NSString *scope = [keepPath isAbsolutePath]
+      ? [([keepPath isEqualToString: @"/"] ? @"" : keepPath) stringByAppendingString: @"/"]
+      : nil;
     NSMutableSet *ghosts = [NSMutableSet set];
     for (NSString *fn in [store allFilenames]) {
+        NSString *name = fn;
+
         if ([fn isEqualToString: keepPath]) continue;
-        if ([fn isEqualToString: @"/"]) continue;   /* volume-root record */
-        if ([childSet containsObject: fn]) continue;  /* real child */
+        if ([fn isAbsolutePath]) {
+            /* A volume cache keys every folder's record by its path: only
+             * the older scoped "<folder>/<file>" entries of this folder are
+             * its own, all other paths belong to other folders. */
+            if (scope == nil || ![fn hasPrefix: scope]) continue;
+            name = [fn substringFromIndex: [scope length]];
+            if ([name length] == 0 || [name rangeOfString: @"/"].location != NSNotFound) continue;
+        }
+        if ([childSet containsObject: name]) continue;  /* real child */
         [ghosts addObject: fn];
     }
     [store removeAllEntriesForFilenames: ghosts];

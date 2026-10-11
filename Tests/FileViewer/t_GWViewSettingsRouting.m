@@ -151,6 +151,10 @@ main(void)
     PASS(!isStoreFile(dir) && !isStoreFile(parent),
          "no .DS_Store is written on a blocked network folder");
     PASS(cacheHasListView(cache, dir), "the settings are in the volume cache");
+    /* One cache serves the whole volume: a write for one folder must not
+     * drop the records of the others. */
+    PASS(cacheHasListView(cache, [root stringByAppendingPathComponent: @"locked/ro"]),
+         "the first folder's cached settings survive later writes for others");
   }
 
   /* --- DSDontWriteNetworkStores is read from the defaults --- */
