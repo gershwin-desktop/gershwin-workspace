@@ -14,3 +14,6 @@ t_FSNListViewOptions_TOOL_LIBS += ../../FSNode/FSNode.framework/Versions/Current
 # clang 19 / binutils 2.44: see Tests/FSNode/GNUmakefile.preamble.
 ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
                       -Wl,--defsym=__stop___objc_constant_string=0
+
+# The build's own FSNode before the installed one in /System, for -lFSNode too.
+ADDITIONAL_LDFLAGS += -L$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current

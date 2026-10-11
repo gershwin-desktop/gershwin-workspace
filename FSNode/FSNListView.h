@@ -556,7 +556,21 @@ extern NSString * const FSNListViewOptionColumnOrder;
   NSTimeInterval lastKeyPressedTime;
 
   NSTimer *clickTimer;
+
+  /* Scroll position asked for by the owner, held until the user scrolls */
+  NSPoint _savedScroll;
+  BOOL _hasSavedScroll;
+  BOOL _applyingScroll;
+  NSClipView *_observedClip;   /* not retained */
 }
+
+/* The scrolled position as Finder keeps it per folder (lsvp scrollPositionX/Y,
+ * the same convention as the icon view): points from the left and from the top
+ * edge of the content to the corner of the visible part.  Setting it works
+ * before the rows are there too: it is applied again after every (re)load until
+ * the user scrolls. */
+- (NSPoint)scrollPosition;
+- (void)setScrollPosition:(NSPoint)position;
 
 - (id)initWithFrame:(NSRect)frameRect
     dataSourceClass:(Class)dsclass;

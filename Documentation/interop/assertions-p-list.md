@@ -121,3 +121,9 @@ Status of every line: implemented and covered by the test of the same id.
 - MI-LST-75 Showing another folder cancels the walk; nothing of it is delivered afterwards [G: required by the task]
 - MI-LST-76 A folder without subfolders has nothing to walk [G]
 - (no test id) Another file system mounted below a folder is not entered [G]
+
+## Scroll position
+- MI-LST-106 A freshly shown folder is at the top left [O:2026-10-11 E11]
+- MI-LST-107 The position is points from the left and from the top edge of the content to the visible corner, as lsvp scrollPositionX/Y [O:2026-10-11 E11]
+- MI-LST-108 It survives a reload of the folder, until the user scrolls [G]
+- MI-LST-109 A position beyond the content is held inside it [G]

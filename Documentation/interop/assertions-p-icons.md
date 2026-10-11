@@ -59,9 +59,9 @@ Fixtures with `icvp` bytes were not available in this tree, so no [F:].
 - MI-ICN-43 two icons that want one cell both take it, no collision handling [O:2026-10-11 E25]
 
 ## Scroll position
-- MI-ICN-46 a freshly shown folder is at the top left [G]
-- MI-ICN-47 the position set is the one reported, measured from the top [S: scrollPositionX/Y; G: origin top-left]
-- MI-ICN-48 y counts down from the top edge of the content [G]
+- MI-ICN-46 a freshly shown folder is at the top left [O:2026-10-11 E11]
+- MI-ICN-47 the position set is the one reported, measured from the top [O:2026-10-11 E11]
+- MI-ICN-48 y counts down from the top edge of the content [O:2026-10-11 E11]
 - MI-ICN-49 a position beyond the content is held inside it [G]
 
 ## Grid cell and spacing

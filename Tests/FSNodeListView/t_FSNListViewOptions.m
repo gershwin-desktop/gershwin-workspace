@@ -583,6 +583,43 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
                 "MI-LST-100 [O:2026-10-11 E23] a plain folder shows -- then");
   }
 
+  /* scroll position, the same convention as the icon view (E11) */
+  {
+    NSString *many = [root stringByAppendingPathComponent: @"many"];
+    NSScrollView *sc = [[[NSScrollView alloc] initWithFrame: NSMakeRect (0, 0, 400, 200)] autorelease];
+    FSNListView *lv = [[FSNListView alloc] initWithFrame: NSMakeRect (0, 0, 400, 200)
+                                         dataSourceClass: [FSNListViewDataSource class]];
+    NSPoint got;
+
+    [fm createDirectoryAtPath: many withIntermediateDirectories: YES attributes: nil error: NULL];
+    for (i = 0; i < 80; i++)
+      {
+        [@"x" writeToFile: [many stringByAppendingPathComponent:
+                                   [NSString stringWithFormat: @"f%03u.txt", (unsigned)i]]
+               atomically: NO encoding: NSUTF8StringEncoding error: NULL];
+      }
+    [sc setDocumentView: lv];
+    [lv showContentsOfNode: [FSNode nodeWithPath: many]];
+
+    got = [lv scrollPosition];
+    PASS (fabs (got.x) < 0.5 && fabs (got.y) < 0.5,
+          "MI-LST-106 [O:2026-10-11 E11] a freshly shown folder is scrolled to its top left");
+    [lv setScrollPosition: NSMakePoint (0, 120)];
+    got = [lv scrollPosition];
+    PASS (fabs (got.x) < 0.5 && fabs (got.y - 120) < 0.5
+          && fabs (NSMinY ([lv visibleRect]) - 120) < 0.5,
+          "MI-LST-107 [O:2026-10-11 E11] the position is points from the top left of the content to the visible corner");
+    [lv reloadContents];
+    got = [lv scrollPosition];
+    PASS (fabs (got.y - 120) < 0.5,
+          "MI-LST-108 [G] it survives a reload of the folder");
+    [lv setScrollPosition: NSMakePoint (0, 100000)];
+    got = [lv scrollPosition];
+    PASS (got.y < 100000 && NSMaxY ([lv visibleRect]) <= NSMaxY ([lv bounds]) + 0.5,
+          "MI-LST-109 [G] a position beyond the content is held inside it");
+    [lv release];
+  }
+
   [view release];
   [observer release];
   [fm removeItemAtPath: root error: NULL];

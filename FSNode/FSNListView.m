@@ -4206,6 +4206,8 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
 
 - (void)dealloc
 {
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
+
   /* Pending loader items keep the data source alive past this dealloc (the
    * window is going away, the loader is not), while its observers and its
    * unretained listView back-pointer die here.  Drop the items and the
@@ -4229,6 +4231,70 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
   RELEASE (charBuffer);
   RELEASE (dsource);
   [super dealloc];
+}
+
+- (NSPoint)scrollPosition
+{
+  NSRect visible = [self visibleRect];
+  NSRect all = [self bounds];
+
+  return NSMakePoint(NSMinX(visible) - NSMinX(all),
+                     [self isFlipped] ? NSMinY(visible) - NSMinY(all)
+                                      : NSMaxY(all) - NSMaxY(visible));
+}
+
+- (void)applySavedScroll
+{
+  NSScrollView *scroll = [self enclosingScrollView];
+  NSClipView *clip = [scroll contentView];
+  NSRect all = [self bounds];
+  NSSize visible = [clip bounds].size;
+  CGFloat x, top, y;
+
+  if (clip == nil)
+    {
+      return;
+    }
+
+  x = MIN (MAX (_savedScroll.x, 0), MAX (NSWidth (all) - visible.width, 0));
+  top = MIN (MAX (_savedScroll.y, 0), MAX (NSHeight (all) - visible.height, 0));
+  y = [self isFlipped] ? NSMinY (all) + top : NSMaxY (all) - top - visible.height;
+
+  /* Not the user scrolling, so it must not end the hold on the position. */
+  _applyingScroll = YES;
+  [clip scrollToPoint: [clip constrainScrollPoint: NSMakePoint (NSMinX (all) + x, y)]];
+  [scroll reflectScrolledClipView: clip];
+  _applyingScroll = NO;
+}
+
+- (void)clipViewBoundsDidChange:(NSNotification *)notification
+{
+  if (_applyingScroll == NO)
+    {
+      _hasSavedScroll = NO;
+    }
+}
+
+- (void)setScrollPosition:(NSPoint)position
+{
+  NSClipView *clip = [[self enclosingScrollView] contentView];
+
+  if (clip != _observedClip)
+    {
+      NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+
+      [center removeObserver: self name: NSViewBoundsDidChangeNotification object: _observedClip];
+      _observedClip = clip;
+      [clip setPostsBoundsChangedNotifications: YES];
+      [center addObserver: self
+                 selector: @selector(clipViewBoundsDidChange:)
+                     name: NSViewBoundsDidChangeNotification
+                   object: clip];
+    }
+
+  _savedScroll = position;
+  _hasSavedScroll = YES;
+  [self applySavedScroll];
 }
 
 - (id)initWithFrame:(NSRect)frameRect
@@ -4479,6 +4545,10 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
 - (void)showContentsOfNode:(FSNode *)anode
 {
   [dsource showContentsOfNode: anode];
+  if (_hasSavedScroll)
+    {
+      [self applySavedScroll];
+    }
 }
 
 - (NSDictionary *)readNodeInfo
@@ -4494,11 +4564,19 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
 - (void)reloadContents
 {
   [dsource reloadContents];
+  if (_hasSavedScroll)
+    {
+      [self applySavedScroll];
+    }
 }
 
 - (void)reloadFromNode:(FSNode *)anode
 {
   [dsource reloadFromNode: anode];
+  if (_hasSavedScroll)
+    {
+      [self applySavedScroll];
+    }
 }
 
 - (FSNode *)baseNode
