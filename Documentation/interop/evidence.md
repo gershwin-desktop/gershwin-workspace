@@ -863,3 +863,106 @@ Dumps below come from `mac-oracle dump`, i.e. decoded by this repo's DSStore cod
   view, bounds 100,390,900,668 (E7 formula), sidebar width 150.
 - Fixtures: `E30-column-view/finder-written-BrowserWindowState-column.plist`,
   `setbws.py`.
+
+## E35 - Finder copy to a FAT32 volume: AppleDouble ._ files made by the msdos driver, quarantine dropped
+
+- Date: 2026-10-11
+- Steps: file set a.txt (custom icon via NSWorkspace setIcon, label Red,
+  comment), b.txt (label Orange, comment, com.apple.quarantine, extra xattr),
+  c.txt (3000 byte xattr, no FinderInfo), c-alias (Finder alias of c.txt), a
+  folder lf/sub with label Yellow and a comment. `hdiutil create -size 64m -fs
+  MS-DOS -layout NONE`, attached; Finder `duplicate` of the items onto the
+  volume; later Finder `duplicate` from the volume back to a HFS+ folder. SMB:
+  see below.
+- Observed, destination layout: the kernel msdos driver, not Finder, makes the
+  `._` files. Every item with any FinderInfo/xattr/resource fork gets a
+  sibling `._<name>` (also `._.Trashes`, `._.DS_Store`). Finder wrote no
+  `.DS_Store` after a plain copy; `.DS_Store` (with `._.DS_Store`) appears only
+  in a folder whose window was opened and changed (here: comment record `sub
+  cmmt` of folder lf; no window record was in the volume root store). The
+  volume also gets `.Trashes` (and `.Trashes/501`) with their own `._`. No
+  `.TemporaryItems`.
+- AppleDouble layout (identical for every `._`): magic 00051607, version
+  00020000, filler "Mac OS X" + spaces, 2 entries: entry 9 (FinderInfo) at
+  offset 50 with length 3760, entry 2 (resource fork) at offset 3810. Entry 9
+  holds the 32 byte FinderInfo then an "ATTR" block (magic 'ATTR', debug tag
+  3b9ac9ff, total size, data start, ...) with all other xattrs (here the
+  comment bplist and org.example.extra); the rest is zero padding up to the
+  fixed 3760. Entry 2 has length 286 and offset 3810 when there is no resource
+  fork (zero-filled), otherwise the real fork (a.txt: 83547, c-alias: 42944;
+  file size 87357 / 46754). Without FinderInfo the 32 bytes are zero. The file
+  size is always a multiple of 4096 (minimum 4096). A 5000 byte xattr grows
+  entry 9 to 7856 (file 8192) and entry 2 moves to 7906.
+- The driver presents the `._` content live as xattrs on the base file, so
+  `xattr -l` on the FAT file shows FinderInfo, ResourceFork, the comment
+  attribute and org.example.* as on HFS+.
+- Quarantine: `com.apple.quarantine` is NOT carried by Finder duplicate, not
+  even HFS+ to HFS+ (the copy in the control folder had none). It was only
+  written into a `._` when set directly with `xattr -w` on the FAT file.
+- Copy back FAT -> HFS+ with Finder: everything that is in the `._` returns
+  byte for byte: FinderInfo (custom icon bit + label bits), resource fork (cmp
+  equal for icon and alias), comment, label, the alias still resolves to
+  c.txt, 3000 byte xattr, org.example.extra. Only the quarantine is lost, as
+  above. A `.DS_Store` appears in the HFS+ target folder as for any window.
+- SMB/NFS: not measurable here. The Mac sees no SMB server (this Linux host
+  listens on no 445/139/2049; `smbutil view //guest@<host>` refused; Bonjour
+  browse for _smb._tcp found none; only the Mac's own AFP). No server was set up.
+  So whether 10.6 writes `._` files on an SMB/NFS mount that supports
+  streams is open; the msdos result suggests the `._` synthesis is a per
+  filesystem driver feature (no native xattr support), not a Finder one.
+- Fixtures: `E35-nonhfs-fat32/` `fat-._*` (raw `._` files as on the volume,
+  `fat-._big.txt-5000B-xattr+quarantine`), `fat-lf.DS_Store`,
+  `fat-lf.._.DS_Store.bin`, `fat-lf-._sub`, `fat-listing.txt`,
+  `xattrs-hfs-source-back-hfsdup.txt` (source, copy back, control).
+
+## E36 - Smart folders: .savedSearch is an XML plist; SearchCriteria is mandatory
+
+- Date: 2026-10-11
+- Steps: File > New Smart Folder (System Events), criteria Kind is Image,
+  Last modified within last 7 days, Name contains x, File label (Red); saved
+  to ~/Library/Saved Searches (default, "Gesicherte Suchabfragen") and to the
+  Desktop; plists pulled. Built-in sidebar entries examined. Three hand-written
+  plists opened with Finder.
+- Observed, file: plain XML plist (not binary), extension `.savedSearch`,
+  `com.apple.FinderInfo` flags 0x0010 at bytes 8-9 (no type/creator code), UTI
+  kind "saved search". The default location `~/Library/Saved Searches` is
+  created on demand with an empty `.localized`. The Desktop copy is identical in
+  structure.
+- Keys: `CompatibleVersion` 1; `RawQuery` string (the compiled mdfind query,
+  e.g. `(true) && (((kMDItemFSLabel = 6) && (_kMDItemGroupId = 13)))`;
+  kind image is `_kMDItemGroupId = 13`; name contains is
+  `kMDItemDisplayName = "*x*"cd`; date range is `InRange(kMDItemContent
+  ModificationDate,<abs start>,<abs end>)` with CFAbsoluteTime reals, computed
+  at save time); `RawQueryDict` {RawQuery (same), SearchScopes [paths or
+  `kMDQueryScopeComputer`], FinderFilesOnly true, UserFilesOnly true};
+  `SearchCriteria` {AnyAttributeContains "", CurrentFolderPath [path] (only
+  when scope was a folder or "this Mac" from a folder window), FXScope
+  (four-char code as int: 'SCev' 1396925814 this Mac, 'SCcf' 1396925286 current
+  folder, 'SCsf' 1396929382 shared/canned), FXScopeArrayOfPaths,
+  FXCriteriaSlices [ {criteria: [attribute, op codes...], displayValues:
+  [UI strings, localized: "Letztes Aenderungsdatum"], rowType 0 (1 = compound
+  "None/Any/All of the following", with subrows), subrows []} ]}. Kind row:
+  criteria `kMDItemKind 300 408 500`; label row `kMDItemFSLabel 1400`
+  displayValues [name, label number (Finder label colour index 6 = Red, same as
+  kMDItemFSLabel), 9223372036854775807 = none selected]; modified within N
+  days: `kMDItemContentModificationDate 800 801 900 901` + "7", "days".
+  Note the RawQuery term order differs from the slice order.
+- Sidebar "Search For" entries (Today, Yesterday, Past Week, All Images, ...)
+  are not files in the user's tree: `com.apple.sidebarlists` `savedsearches`
+  holds {Alias, Icon, Name} items pointing at
+  `Finder.app/Contents/Resources/CannedSearches/<Name>.cannedSearch/search.savedSearch`
+  (same XML format; scope kMDQueryScopeComputer, FXScope 'SCsf'). A saved
+  search saved with "Add To Sidebar" is added to that array.
+- Hand-written files: (1) RawQuery + RawQueryDict only (`hand-min`): Finder 10.6.8
+  CRASHES (SIGSEGV, CFDictionaryGetValue on NULL, main thread, during the
+  open Apple event) - SearchCriteria is required; (2) RawQuery + RawQueryDict +
+  SearchCriteria {FXScope 'SCcf', FXScopeArrayOfPaths, CurrentFolderPath}
+  without any FXCriteriaSlices (`hand-crit`): opens, shows the search window
+  titled with the file name (extension shown because no hide-extension flag),
+  results a.txt b.txt c.txt for `kMDItemFSName = "*.txt"cd` limited to the scope
+  folder, criteria bar empty; Finder did not rewrite the file. Not tried: the
+  RawQuery-only file (`hand-rawonly`), expected to crash like (1).
+  FinderInfo of a hand-written file was empty; it worked anyway.
+- Fixtures: `E36-smart-folders/` `finder-written-*.savedSearch`, `canned-*.savedSearch`,
+  `hand-*.savedSearch`, `crash-hand-min.txt`, `shot-hand-crit.png` (the oracle's
+  Bluetooth dialog covers the middle).
