@@ -98,6 +98,8 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWMetaArchive.h"
 #import "FSNIconsView.h"
 #import "GWMetadataProvider.h"
+#import "FSNBrowser.h"
+#import "LookInside/GWLookInsideColumnPreviewProvider.h"
 #import "GWIconPositionStore.h"
 #import "GWExtensionsManager.h"
 #import "GWAlignLogically.h"
@@ -447,7 +449,7 @@ static Workspace *gworkspace = nil;
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(makeAliasFiles:) keyEquivalent:@"l"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Look Inside") action:@selector(lookInside:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Look Inside") action:@selector(lookInside:) keyEquivalent:@"y"];
   [menuItem setTarget:self];
   
   // Share submenu
@@ -932,6 +934,7 @@ static Workspace *gworkspace = nil;
    * label colours, invisibility, custom icons and icon positions without
    * depending on the metadata implementation directly. */
   [fsnodeRep setMetadataProvider: [GWMetadataProvider sharedProvider]];
+  [FSNBrowser setPreviewProvider: [GWLookInsideColumnPreviewProvider sharedProvider]];
   [fsnodeRep setIconPositionStore: [GWIconPositionStore sharedStore]];
   /* Let external .gwext bundles decorate nodes and extend the context menu. */
   [fsnodeRep setDecorationDelegate: [GWExtensionsManager defaultManager]];
@@ -4423,6 +4426,8 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 {
   if (newsel && [newsel count] && ([vwrsManager orderingViewers] == NO)) {
     [self setSelectedPaths: [FSNode pathsOfNodes: newsel]];
+    /* An open Look Inside panel shows whatever is selected now. */
+    [[GWLookInsideController sharedController] selectionDidChange: selectedPaths];
   }
 }
 

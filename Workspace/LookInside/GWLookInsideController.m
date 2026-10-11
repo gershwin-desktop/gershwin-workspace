@@ -11,11 +11,12 @@
  * GWLookInsidePanel; declared here (rather than by importing
  * GWLookInsidePanel.h) so this file needs no AppKit/Inspector include
  * paths and never creates a link-time dependency on the panel - the
- * class is looked up by name in -createAndShowPanelForPaths:sourceWindow:
+ * class is looked up by name in -createAndShowPanelForPaths:sourceWindow:fullScreen:
  * below, and the class object is never referenced literally. */
 @interface NSObject (GWLookInsidePanelMethods)
 - (id)initWithPaths:(NSArray *)paths sourceWindow:(id)sourceWindow;
-- (void)showAnimated;
+- (void)showAnimatedInFullScreen:(BOOL)fullScreen;
+- (void)showPaths:(NSArray *)paths;
 - (void)closeAnimated;
 @end
 
@@ -51,6 +52,7 @@ static GWLookInsideController *sharedInstance = nil;
 - (void)dealloc
 {
   DESTROY(_panel);
+  DESTROY(_paths);
   [super dealloc];
 }
 
@@ -70,13 +72,21 @@ static GWLookInsideController *sharedInstance = nil;
 - (BOOL)toggleLookInsideForPaths:(NSArray *)paths
                      sourceWindow:(id)sourceWindow
 {
+  return [self toggleLookInsideForPaths: paths sourceWindow: sourceWindow fullScreen: NO];
+}
+
+- (BOOL)toggleLookInsideForPaths:(NSArray *)paths
+                     sourceWindow:(id)sourceWindow
+                       fullScreen:(BOOL)fullScreen
+{
   GWLookInsideAction action = [[self class] actionForSpaceKeyWithSelectionCount: [paths count]
                                                                         isOpen: _open];
 
   switch (action)
     {
     case GWLookInsideActionOpen:
-      [self createAndShowPanelForPaths: paths sourceWindow: sourceWindow];
+      ASSIGN(_paths, paths);
+      [self createAndShowPanelForPaths: paths sourceWindow: sourceWindow fullScreen: fullScreen];
       _open = YES;
       return YES;
 
@@ -90,16 +100,29 @@ static GWLookInsideController *sharedInstance = nil;
     }
 }
 
+- (void)selectionDidChange:(NSArray *)paths
+{
+  if (!_open || [paths count] == 0 || [paths isEqual: _paths])
+    {
+      return;
+    }
+  ASSIGN(_paths, paths);
+  [self showPathsInPanel: paths];
+}
+
 - (void)close
 {
   if (_open)
     {
       [self destroyPanel];
+      DESTROY(_paths);
       _open = NO;
     }
 }
 
-- (void)createAndShowPanelForPaths:(NSArray *)paths sourceWindow:(id)sourceWindow
+- (void)createAndShowPanelForPaths:(NSArray *)paths
+                      sourceWindow:(id)sourceWindow
+                        fullScreen:(BOOL)fullScreen
 {
   /* Looked up by name (see the category note above) so this class never
    * links the window/AppKit-heavy GWLookInsidePanel implementation; the
@@ -116,7 +139,12 @@ static GWLookInsideController *sharedInstance = nil;
   panel = [[panelClass alloc] initWithPaths: paths sourceWindow: sourceWindow];
   ASSIGN(_panel, panel);
   RELEASE(panel);
-  [_panel showAnimated];
+  [_panel showAnimatedInFullScreen: fullScreen];
+}
+
+- (void)showPathsInPanel:(NSArray *)paths
+{
+  [_panel showPaths: paths];
 }
 
 - (void)destroyPanel

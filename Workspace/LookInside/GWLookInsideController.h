@@ -25,6 +25,7 @@ typedef enum
 {
   BOOL _open;
   id _panel;
+  NSArray *_paths;   /* what the open panel was opened for or last followed */
 }
 
 + (GWLookInsideController *)sharedController;
@@ -49,6 +50,19 @@ typedef enum
 - (BOOL)toggleLookInsideForPaths:(NSArray *)paths
                      sourceWindow:(id)sourceWindow;
 
+/* Same, opening straight into full screen when `fullScreen` is YES (Option
+ * held with Space); a close ignores it. */
+- (BOOL)toggleLookInsideForPaths:(NSArray *)paths
+                     sourceWindow:(id)sourceWindow
+                       fullScreen:(BOOL)fullScreen;
+
+/* Workspace's current selection changed (any folder window or the
+ * Desktop).  An open panel shows the new selection, so clicking another
+ * item or moving the selection with the arrow keys keeps the preview in
+ * step; an emptied selection keeps the last preview rather than blanking
+ * it, and a closed panel stays closed. */
+- (void)selectionDidChange:(NSArray *)paths;
+
 - (void)close;
 
 /* Overridable seam: the production body (in GWLookInsideController.m)
@@ -57,7 +71,10 @@ typedef enum
  * compiled into a headless test; a test subclass overrides both methods
  * to only count calls, so the toggle state above is covered without a
  * display. */
-- (void)createAndShowPanelForPaths:(NSArray *)paths sourceWindow:(id)sourceWindow;
+- (void)createAndShowPanelForPaths:(NSArray *)paths
+                      sourceWindow:(id)sourceWindow
+                        fullScreen:(BOOL)fullScreen;
+- (void)showPathsInPanel:(NSArray *)paths;
 - (void)destroyPanel;
 
 @end

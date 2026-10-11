@@ -7,48 +7,62 @@
 /* GWLookInsidePanel.h
  *
  * The window Space opens over a folder window's current selection: a
- * normal titled window - not borderless - covering 80% of the screen's
- * visible frame, centered in it, showing ONLY the selected item's
- * contents through the same content viewers the Inspector's Get Info >
- * Contents pane uses (Inspector/ContentViewers, plus the TextViewer /
- * GenericView fallbacks declared in Inspector/Contents.h), with no tab
- * strip and no attribute fields.  Being an ordinary titled, closable
- * window is what makes the WindowManager play its birth/close animation
- * for it, exactly as for a folder window - see
- * gershwin-windowmanager/ANIMATIONS.md; a borderless window gets no such
- * treatment there.
+ * normal titled, closable, resizable window - not borderless - showing a
+ * GWLookInsidePreviewView of the current item above a strip of controls:
+ * previous/next, "n of m" and the overview of all items when several are
+ * shown, full screen, and opening the item with its application.  Being an
+ * ordinary titled window is what makes the WindowManager play its
+ * birth/close animation for it, from and to the item's icon, exactly as for
+ * a folder window - see gershwin-windowmanager/ANIMATIONS.md.
+ *
+ * The panel comes back at the size it had when it was last closed.
  */
 
 #import <AppKit/AppKit.h>
 
+@class GWLookInsidePreviewView;
+@class GWLookInsideOverviewView;
+
 @interface GWLookInsidePanel : NSWindow
 {
   id _sourceWindow;          /* the folder window Look Inside was opened
-                               * from; arrow keys are forwarded to its
-                               * first responder so the folder's own
-                               * selection moves, and the shown item
-                               * follows it. */
-  id _currentViewer;         /* the live ContentViewersProtocol / TextViewer
-                               * / GenericView instance currently shown -
-                               * never owned uniquely by this panel (all
-                               * three kinds are cached and reused across
-                               * Look Inside invocations, like Inspector's
-                               * own Contents does), kept only so
-                               * -stopTasks can be sent before swapping. */
-  NSView *_currentViewerView;
-  NSArray *_currentPaths;
+                              * from; arrow keys go to its first responder
+                              * so the folder's own selection moves, and the
+                              * shown item follows it. */
+  NSArray *_paths;
+  NSUInteger _index;
+  BOOL _overviewShown;
+  BOOL _fullScreen;
+  GWLookInsidePreviewView *_preview;
+  GWLookInsideOverviewView *_overview;
+  NSButton *_previousButton;
+  NSButton *_nextButton;
+  NSTextField *_countField;
+  NSButton *_overviewButton;
+  NSButton *_fullScreenButton;
+  NSButton *_openButton;
 }
 
 - (id)initWithPaths:(NSArray *)paths sourceWindow:(id)sourceWindow;
 
-/* Swaps the displayed content without recreating the window - used for
- * arrow-key navigation while Look Inside is open. */
+/* Shows another set of items without recreating the window - the
+ * selection changed while the panel is open. */
 - (void)showPaths:(NSArray *)paths;
 
-/* Maps the window, asking the WindowManager for the birth animation. */
-- (void)showAnimated;
+/* Maps the window, asking the WindowManager for the birth animation, and
+ * goes full screen right away when asked to. */
+- (void)showAnimatedInFullScreen:(BOOL)fullScreen;
 
-/* Asks the WindowManager for the close animation, then unmaps. */
+/* Remembers the size, asks the WindowManager for the close animation,
+ * then unmaps. */
 - (void)closeAnimated;
+
+/* The item shown now, and the actions of the control strip. */
+- (NSString *)currentPath;
+- (void)showNext:(id)sender;
+- (void)showPrevious:(id)sender;
+- (void)toggleOverview:(id)sender;
+- (void)toggleFullScreen:(id)sender;
+- (void)openCurrentItem:(id)sender;
 
 @end

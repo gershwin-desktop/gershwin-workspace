@@ -207,7 +207,9 @@
 
   if ([characters length] > 0 && [characters characterAtIndex: 0] == ' ')
     {
-      if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
+      /* Option-Space is the same toggle, opening straight into full
+       * screen. */
+      if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSControlKeyMask)))
         {
           id del = [self delegate];
           NSArray *selection = nil;
@@ -239,8 +241,9 @@
            * Info's Attributes/Contents inspector - what Space used to
            * open here - stays reachable only from its own menu item. */
           return [[GWLookInsideController sharedController]
-                     toggleLookInsideForSelection: selection
-                                     sourceWindow: self];
+                     toggleLookInsideForPaths: [selection valueForKey: @"path"]
+                                 sourceWindow: self
+                                   fullScreen: (flags & NSAlternateKeyMask) != 0];
         }
     }
 

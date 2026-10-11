@@ -41,3 +41,15 @@ t_AppImageDirIconCycle_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Cur
 # VolumeManager.m's AppKit/Workspace/FSNode/AVFS dependencies. It calls
 # +[GWVolumeID mountedFilesystems], linked here as a separate object.
 t_VolumeManagerMountDetection_OBJC_FILES += ../../Workspace/FileViewer/GWVolumeID.m
+
+# t_GWLookInsideInfo #includes GWLookInsidePreviewView.m (the unit under
+# test, an NSView subclass used without drawing) and links the preview kind
+# decision, the geometry and the column provider as separate objects; FSNode
+# gives the item's facts and the icons, linked from the build tree like the
+# AppImage tests above.
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/LookInside
+t_GWLookInsideInfo_OBJC_FILES += ../../Workspace/LookInside/GWLookInsidePreviewKind.m \
+                                 ../../Workspace/LookInside/GWLookInsideGeometry.m \
+                                 ../../Workspace/LookInside/GWLookInsideColumnPreviewProvider.m
+t_GWLookInsideInfo_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                -lFSNode -lgnustep-gui

@@ -22,14 +22,26 @@
 @public
   int opens;
   int closes;
+  int updates;
+  BOOL lastFullScreen;
+  NSArray *lastShown;
 }
 @end
 
 @implementation GWLookInsideStubController
 
-- (void)createAndShowPanelForPaths:(NSArray *)paths sourceWindow:(id)sourceWindow
+- (void)createAndShowPanelForPaths:(NSArray *)paths
+                      sourceWindow:(id)sourceWindow
+                        fullScreen:(BOOL)fullScreen
 {
   opens++;
+  lastFullScreen = fullScreen;
+}
+
+- (void)showPathsInPanel:(NSArray *)paths
+{
+  updates++;
+  lastShown = paths;
 }
 
 - (void)destroyPanel
@@ -91,6 +103,47 @@ int main(void)
     PASS(![ctrl isOpen], "-close always leaves it closed");
     PASS(ctrl->closes == 2, "...tearing down the second panel");
 
+    RELEASE(ctrl);
+  }
+
+  /* --- MI-LI-19: Option-Space opens straight into full screen --- */
+  {
+    GWLookInsideStubController *ctrl = [GWLookInsideStubController new];
+    NSArray *paths = [NSArray arrayWithObject: @"/tmp/some-file"];
+
+    [ctrl toggleLookInsideForPaths: paths sourceWindow: nil fullScreen: YES];
+    PASS([ctrl isOpen] && ctrl->lastFullScreen, "MI-LI-19 opens in full screen when asked");
+    [ctrl close];
+    [ctrl toggleLookInsideForPaths: paths sourceWindow: nil];
+    PASS([ctrl isOpen] && !ctrl->lastFullScreen, "MI-LI-19 Space alone opens the panel");
+    RELEASE(ctrl);
+  }
+
+  /* --- MI-LI-20: the open panel follows the selection --- */
+  {
+    GWLookInsideStubController *ctrl = [GWLookInsideStubController new];
+    NSArray *first = [NSArray arrayWithObject: @"/tmp/a"];
+    NSArray *second = [NSArray arrayWithObjects: @"/tmp/b", @"/tmp/c", nil];
+
+    [ctrl selectionDidChange: second];
+    PASS(ctrl->updates == 0 && ![ctrl isOpen],
+      "MI-LI-20 a selection change while closed opens nothing");
+
+    [ctrl toggleLookInsideForPaths: first sourceWindow: nil];
+    [ctrl selectionDidChange: first];
+    PASS(ctrl->updates == 0, "MI-LI-20 the same selection again does not rebuild the preview");
+
+    [ctrl selectionDidChange: second];
+    PASS(ctrl->updates == 1 && [ctrl->lastShown isEqual: second],
+      "MI-LI-20 a new selection is shown in the open panel");
+
+    [ctrl selectionDidChange: [NSArray array]];
+    PASS(ctrl->updates == 1, "MI-LI-20 an emptied selection keeps the last preview");
+
+    [ctrl close];
+    [ctrl toggleLookInsideForPaths: first sourceWindow: nil];
+    [ctrl selectionDidChange: second];
+    PASS(ctrl->updates == 2, "MI-LI-20 a reopened panel follows the selection too");
     RELEASE(ctrl);
   }
 
