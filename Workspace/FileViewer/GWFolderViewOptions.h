@@ -61,6 +61,13 @@
 + (NSDictionary *)iconViewStateOf:(FSNIconsView *)view;
 + (NSDictionary *)listViewStateOf:(FSNListViewDataSource *)dataSource;
 
+/* The part of a viewer's prefs (updateNodeInfo:) that is the folder's
+ * window: geometry, view type, sidebar width.  The node view's own icon
+ * size, label position and arrangement are left out: they are not the
+ * folder's icon view options, which come from the view itself and only
+ * when changed [O:E33]. */
++ (NSDictionary *)folderPrefsFromViewerPrefs:(NSDictionary *)prefs;
+
 /* Whether the folder opens in a spatial window: a stored bwsp ShowToolbar
  * decides (0 spatial, 1 browsing, as Finder's toolbar-less windows are its
  * spatial ones), else @p spatialDefault. */

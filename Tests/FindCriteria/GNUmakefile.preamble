@@ -1,0 +1,14 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata/MDKit -I../../GWMetadata -I../../Workspace/Finder/SmartFolder
+
+# clang 19 / binutils 2.44: a Foundation-only tool whose literals are all
+# short has no constant string section, so the linker invents no bounds.
+ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
+                      -Wl,--defsym=__stop___objc_constant_string=0
+t_FindCriteria_OBJC_FILES += ../../Workspace/Finder/SmartFolder/GWFindCriteria.m \
+                             ../../GWMetadata/MDKit/GWSavedSearch.m
+# GWSavedSearch writes Finder Info through GSFileMetadata (NSImage, hence gui).
+t_FindCriteria_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m \
+                             ../../GWMetadata/GSAppleDouble.m \
+                             ../../GWMetadata/GWMetaXattr.m
+t_FindCriteria_TOOL_LIBS += -lgnustep-gui

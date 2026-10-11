@@ -22,10 +22,14 @@ Operation_OBJC_FILES = \
                  Operation.m \
                  FileOpInfo.m \
                  Functions.m \
-                 GWMetadataCopier.m
+                 GWMetadataCopier.m \
+                 GWFileUndoRecord.m \
+                 GWFileUndoStack.m
 
 Operation_HEADER_FILES = \
-         Operation.h 
+         Operation.h \
+         GWFileUndoRecord.h \
+         GWFileUndoStack.h
 
 LIBRARIES_DEPEND_UPON += $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
 

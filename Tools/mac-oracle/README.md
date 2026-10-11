@@ -54,7 +54,7 @@ at a time.
   `ui '<applescript>'` runs a System Events script, `view-options <name>` lists
   the View Options panel controls, `view-option-click <name> <title>` clicks a
   checkbox by its (localized) title.
-- `drag <x1> <y1> <x2> <y2>`: Quartz mouse drag on the Mac screen (points,
+- `drag [--mods alt|cmd|shift|ctrl] <x1> <y1> <x2> <y2>`: Quartz mouse drag on the Mac screen (points,
   top-left origin) for what System Events cannot do (column widths/order, icon
   drops, text drags).
 - `flush`: make Finder write pending `.DS_Store` changes (E4).

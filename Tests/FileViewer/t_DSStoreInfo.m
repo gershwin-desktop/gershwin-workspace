@@ -45,6 +45,7 @@ cpuSecondsToSave(NSUInteger count)
   clock_t start;
   double spent;
   NSUInteger i;
+  NSUInteger reps = 0;
 
   [fm removeFileAtPath: dir handler: nil];
   [fm createDirectoryAtPath: dir attributes: nil];
@@ -58,9 +59,21 @@ cpuSecondsToSave(NSUInteger count)
       icon.hasPosition = YES;
       [big setIconInfo: icon forFilename: name];
     }
+  /* clock() ticks only 128 times a second on FreeBSD, where one save of a
+   * thousand positions took about one tick; saving again until a quarter of
+   * a second has passed makes the tick a small part of what is measured. */
   start = clock();
-  [big saveToPath: [dir stringByAppendingPathComponent: @".DS_Store"]];
-  spent = (double)(clock() - start) / CLOCKS_PER_SEC;
+  do
+    {
+      NSAutoreleasePool *inner = [NSAutoreleasePool new];
+
+      [fm removeFileAtPath: [dir stringByAppendingPathComponent: @".DS_Store"] handler: nil];
+      [big saveToPath: [dir stringByAppendingPathComponent: @".DS_Store"]];
+      [inner release];
+      reps++;
+    }
+  while (clock() - start < CLOCKS_PER_SEC / 4);
+  spent = (double)(clock() - start) / CLOCKS_PER_SEC / reps;
   [fm removeFileAtPath: dir handler: nil];
   [pool release];
   return spent;

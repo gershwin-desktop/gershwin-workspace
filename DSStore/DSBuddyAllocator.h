@@ -44,7 +44,8 @@
 - (BOOL)openForWriting;
 
 - (void)close;
-- (void)flush;
+/* NO when the file could not be written. */
+- (BOOL)flush;
 
 /* Reader support: a block whose content begins at `offset' (caller already
  * adds the +4 lead). */

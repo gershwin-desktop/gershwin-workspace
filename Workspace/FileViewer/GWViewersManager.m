@@ -456,10 +456,21 @@ static GWViewersManager *vwrsmanager = nil;
  * moved, the view was recreated, or the user navigated away and back. */
 - (NSRect)resolveIconScreenRectForNode:(FSNode *)node
 {
-  if (node == nil) {
-    return NSZeroRect;
-  }
   NSRect result = NSZeroRect;
+
+  [self windowShowingIconOfNode: node screenRect: &result];
+  return result;
+}
+
+- (NSWindow *)windowShowingIconOfNode:(FSNode *)node screenRect:(NSRect *)screenRect
+{
+  NSRect result = NSZeroRect;
+  NSWindow *window = nil;
+
+  *screenRect = NSZeroRect;
+  if (node == nil) {
+    return nil;
+  }
 
   /* The desktop may show the node regardless of which key window (e.g.
    * when closing a folder window whose icon lives on the desktop). */
@@ -472,12 +483,11 @@ static GWViewersManager *vwrsmanager = nil;
         if (icon && [icon respondsToSelector: @selector(window)]) {
           NSRect iconBounds = [icon bounds];
           NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
-          result = [[icon window] convertRectToScreen: rectInWindow];
-          if (!NSEqualRects(result, NSZeroRect)) {
-            NSWindow *win = [icon window];
-            if (win == nil || ![win isVisible] || [win isMiniaturized]) {
-              result = NSZeroRect;
-            }
+          window = [icon window];
+          result = [window convertRectToScreen: rectInWindow];
+          if (window == nil || ![window isVisible] || [window isMiniaturized]) {
+            result = NSZeroRect;
+            window = nil;
           }
         }
       }
@@ -493,7 +503,7 @@ static GWViewersManager *vwrsmanager = nil;
     /* Only fall back to a viewer if the desktop did not already resolve the
      * node's icon (the desktop may show the folder even when a viewer
      * window is key, e.g. while closing that viewer). */
-    result = [self iconScreenRectFromViewer: viewer forNode: node];
+    result = [self iconScreenRectFromViewer: viewer forNode: node window: &window];
   }
   if (NSEqualRects(result, NSZeroRect)) {
     /* The focused (or last) viewer didn't show the node: scan all viewers so
@@ -502,18 +512,19 @@ static GWViewersManager *vwrsmanager = nil;
     for (i = 0; i < [viewers count] && NSEqualRects(result, NSZeroRect); i++) {
       id v = [viewers objectAtIndex: i];
       if (v != viewer) {
-        result = [self iconScreenRectFromViewer: v forNode: node];
+        result = [self iconScreenRectFromViewer: v forNode: node window: &window];
       }
     }
   }
-  return result;
+  *screenRect = result;
+  return NSEqualRects(result, NSZeroRect) ? nil : window;
 }
 
-/* Extract the on-screen rect of a node's icon from a single viewer's node
- * view, or NSZeroRect if not shown there or its window is not a usable
- * animation target (hidden or minimized). */
-- (NSRect)iconScreenRectFromViewer:(id)viewer forNode:(FSNode *)node
+- (NSRect)iconScreenRectFromViewer:(id)viewer
+                           forNode:(FSNode *)node
+                            window:(NSWindow **)window
 {
+  *window = nil;
   id nodeView = [viewer nodeView];
   if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)]) {
     id icon = [nodeView repOfSubnodePath: [node path]];
@@ -532,13 +543,16 @@ static GWViewersManager *vwrsmanager = nil;
       NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
       result = [[icon window] convertRectToScreen: rectInWindow];
     }
-    /* Only a folder icon on a visible, unminimized window is a valid close
-     * target; otherwise the animation would point at a hidden window. */
+    /* Only an icon on a visible, unminimized window is a valid animation
+     * target; otherwise the animation would point at a hidden window.  List
+     * rows and browser cells are not views, so their window is the node
+     * view's. */
     if (!NSEqualRects(result, NSZeroRect)) {
-      NSWindow *win = [icon respondsToSelector: @selector(window)] ? [icon window] : nil;
+      NSWindow *win = [icon respondsToSelector: @selector(window)] ? [icon window] : [nodeView window];
       if (win == nil || ![win isVisible] || [win isMiniaturized]) {
         return NSZeroRect;
       }
+      *window = win;
     }
     return result;
   }

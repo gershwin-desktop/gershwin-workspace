@@ -38,6 +38,10 @@
 #import "FSNPathComponentsViewer.h"
 #import "GWFunctions.h"
 #import "Dialogs/Dialogs.h"
+#ifdef HAVE_MDKIT
+#import "GWFindCriteria.h"
+#import <MDKit/GWSavedSearch.h>
+#endif
 
 #define CELLS_HEIGHT (28.0)
 
@@ -106,6 +110,29 @@ static NSString *lsfname = @"LiveSearch.lsf";
     [stopButt setEnabled: NO];
     [restartButt setImage: [NSImage imageNamed: @"magnify_small"]];
     [restartButt setEnabled: NO];
+#ifdef HAVE_MDKIT
+    /* In the free space of the top bar, left of the stop button, where the
+       bar keeps its controls pinned to the right edge. */
+    {
+      NSView *bar = [stopButt superview];
+      NSRect sr = [stopButt frame];
+
+      smartFolderButt = [[NSButton alloc] initWithFrame:
+                         NSMakeRect(sr.origin.x - 8 - 120, sr.origin.y,
+                                    120, sr.size.height)];
+      [smartFolderButt setButtonType: NSMomentaryPushInButton];
+      [smartFolderButt setBezelStyle: NSRoundedBezelStyle];
+      [smartFolderButt setFont: [NSFont systemFontOfSize: 11]];
+      [smartFolderButt setTitle: NSLocalizedString(@"Save Search...", @"")];
+      [smartFolderButt setToolTip: NSLocalizedString(
+        @"Saves the search as a smart folder that other file managers open too", @"")];
+      [smartFolderButt setTarget: self];
+      [smartFolderButt setAction: @selector(saveSmartFolder:)];
+      [smartFolderButt setAutoresizingMask: NSViewMinXMargin];
+      [bar addSubview: smartFolderButt];
+      RELEASE (smartFolderButt);
+    }
+#endif
         
     [resultsScroll setBorderType: NSBezelBorder];
     [resultsScroll setHasHorizontalScroller: YES];
@@ -693,6 +720,45 @@ static NSString *lsfname = @"LiveSearch.lsf";
     NSRunAlertPanel(NULL, msg, NSLocalizedString(@"OK", @""), NULL, NULL);  
   }
 }
+
+#ifdef HAVE_MDKIT
+- (IBAction)saveSmartFolder:(id)sender
+{
+  NSString *err = nil;
+  GWSavedSearch *smart = [GWFindCriteria savedSearchForCriteria: searchCriteria
+                                                    searchPaths: searchPaths
+                                                      recursive: recursive
+                                                          error: &err];
+  NSSavePanel *panel;
+  NSString *dir;
+  NSString *localized;
+
+  if (smart == nil) {
+    NSRunAlertPanel(NSLocalizedString(@"Save Search", @""), @"%@",
+                    NSLocalizedString(@"OK", @""), nil, nil, err);
+    return;
+  }
+  /* The place the Finder keeps its smart folders, made when first needed. */
+  dir = [NSHomeDirectory() stringByAppendingPathComponent:
+         @"Library/Saved Searches"];
+  localized = [dir stringByAppendingPathComponent: @".localized"];
+  if ([fm fileExistsAtPath: dir] == NO
+      && [fm createDirectoryAtPath: dir attributes: nil]) {
+    [@"" writeToFile: localized atomically: YES encoding: NSUTF8StringEncoding
+               error: NULL];
+  }
+  panel = [NSSavePanel savePanel];
+  [panel setTitle: NSLocalizedString(@"Save Search", @"")];
+  [panel setRequiredFileType: @"savedSearch"];
+  if ([panel runModalForDirectory: dir file: @""] == NSOKButton) {
+    if ([smart writeToFile: [panel filename] atomically: YES] == NO) {
+      NSRunAlertPanel(NSLocalizedString(@"Save Search", @""),
+                      NSLocalizedString(@"The smart folder could not be written.", @""),
+                      NSLocalizedString(@"OK", @""), nil, nil);
+    }
+  }
+}
+#endif
 
 - (BOOL)windowShouldClose:(id)sender
 {

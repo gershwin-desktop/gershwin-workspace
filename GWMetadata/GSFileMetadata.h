@@ -108,6 +108,8 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  *   // ... inspect/modify properties ...
  *   [md writeToFileAtPath: path error: NULL];
  */
+@class GSAppleDouble;
+
 @interface GSFileMetadata : NSObject <NSCopying>
 {
   /* Raw data backing the properties */
@@ -442,6 +444,38 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  * Returns nil for label 0 (none).
  */
 + (NSColor *)colorForLabel:(GSFileLabel)label;
+
+/** Names the filesystem type holding a path, nil when that cannot be told. */
+typedef NSString *(^GSFilesystemTypeProbe)(NSString *path);
+
+/**
+ * Whether metadata of the item at path lives in its "._" sidecar rather
+ * than in extended attributes: 1 on volumes a Mac reads (FAT, exFAT, SMB,
+ * NTFS; see gs_fs_type_wants_appledouble), 0 elsewhere, -1 when the
+ * filesystem cannot be told.  Writes there go only to the sidecar and keep
+ * it; reads take the sidecar first and fill gaps from attributes.
+ */
++ (NSInteger)storesMetadataInAppleDoubleAtPath:(NSString *)path;
+
+/**
+ * The error for a "._" sidecar that could not be written.  On an SMB share
+ * it names the Samba setting that refuses such files, since nothing else
+ * can carry the metadata to a Mac there.
+ */
++ (NSError *)sidecarWriteErrorAtPath:(NSString *)sidecarPath code:(int)code;
+
+/**
+ * The bytes of a "._" file for a volume a Mac reads through such files: the
+ * kernel's own layout (-[GSAppleDouble appleDoubleDataInVolumeLayout]) with
+ * the quarantine as the kernel stores it, plain (E35), or left out when
+ * keepQuarantine is NO, as Finder leaves it out of every copy (E35, E16).
+ * nil when nothing is left to write.
+ */
++ (NSData *)macVolumeSidecarDataFor:(GSAppleDouble *)appleDouble
+                     keepQuarantine:(BOOL)keepQuarantine;
+
+/** Replaces the filesystem type probe (tests); nil restores the real one. */
++ (void)setFilesystemTypeProbe:(GSFilesystemTypeProbe)probe;
 
 /**
  * Whether we should use sidecar mode (xattrs unavailable or forced).

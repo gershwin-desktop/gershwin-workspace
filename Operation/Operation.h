@@ -23,6 +23,7 @@
  */
 
 #import <Foundation/Foundation.h>
+#import "GWFileUndoStack.h"
 
 @class FileOpInfo;
 
@@ -34,7 +35,7 @@ enum {
   CREATE
 };
 
-@interface Operation : NSObject 
+@interface Operation : NSObject <GWFileUndoPerformer>
 {
   NSMutableArray *fileOperations;
   NSUInteger fopRef;

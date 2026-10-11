@@ -61,6 +61,7 @@
   IBOutlet id elementsLabel;
   NSString *elementsStr;
   IBOutlet id stopButt;
+  NSButton *smartFolderButt;
   IBOutlet id restartButt;
   IBOutlet NSBox *dragIconBox;
   DocumentIcon *documentIcon;
@@ -137,6 +138,9 @@
 - (unsigned long)memAddress;
 
 - (void)createLiveSearchFolderAtPath:(NSString *)path;
+
+/* Saves what was searched for as a Spotlight smart folder (.savedSearch). */
+- (IBAction)saveSmartFolder:(id)sender;
 
 // ResultsTableView delegate
 - (NSImage *)tableView:(NSTableView *)tableView 

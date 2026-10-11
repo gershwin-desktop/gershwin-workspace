@@ -29,7 +29,7 @@ Workspace persists four kinds of data:
 
 1.  **Per-folder view settings and icon positions** - `.DS_Store` files
 2.  **Per-file icon metadata (position, label)** - FinderInfo xattr
-3.  **Per-file AppleDouble sidecars** - `._` files (fallback)
+3.  **Per-file AppleDouble sidecars** - `._` files (volumes a Mac reads, and fallback)
 4.  **Window-level viewer state** - GNUstep user defaults
 
 Writes are routed through `GWViewSettingsManager` (folder `.DS_Store` primary,
@@ -61,32 +61,31 @@ update the per-file FinderInfo xattr).
 
 ## 1. Per-folder `.DS_Store` (primary for writable directories)
 
-Location: `$FOLDER/.DS_Store`
+Location: `.DS_Store` of the parent folder (a folder's own store for its items)
 
 Written by `DSStoreInfo saveToPath:` via `GWViewSettingsManager writeSettings:`.
 Used whenever the folder is writable and network-store writes are not blocked
 (`DSDontWriteNetworkStores`).
 
-### Directory-level entries (keyed by `.` in the file)
+### Folder view and window records (parent's store)
 
-Stored as DSStore entries on the special filename `.`:
+Finder 10.6 keeps a folder's view and window records in the **parent's**
+`.DS_Store`, under the folder's name, and ignores `.` records in the folder's
+own store (evidence E1, E2).  Only a volume root and the home folder keep them
+as `.` in their own store (E14).  The records are:
 
-| Setting                         | Code | Notes                              |
-| ------------------------------- | ---- | ---------------------------------- |
-| View style (icon/list/columns)  | `vstl` / `icnv`, `Nlsv`, `clmv`, `glyv`, `Flwv` | |
-| Icon size                       | `icvo` (iconSize slot) | 1-512, 0 = unset |
-| Icon arrangement (free/grid)    | `icvo` (arrangement slot) | |
-| Label position (bottom/right)   | `icvo` (labelPosition slot) | |
-| Grid spacing                    | `icvo` (gridSpacing slot) | |
-| Background color                | `BKGD`   | RGB, 16-bit components |
-| Background image                | `BKGD`   | path |
-| Sidebar width                   | `icvo` (sidebarWidth slot) | |
-| Window geometry                 | `bwsp` + `fwi0` | GNUstep saved-frame parsed and stored as DS-Store content rect |
-| List view settings (sort column, ascending, text/icon size, column widths/visibility) | `lsvp` | |
+| Setting                         | Record | Notes                              |
+| ------------------------------- | ------ | ---------------------------------- |
+| View style (icon/list/columns)  | `vstl` (`icnv`, `Nlsv`, `clmv`, `glyv`, `Flwv`) | only after "Always open in" (E5) |
+| Icon view options (size, text size, label position, grid spacing, arrange by, item info, icon preview, background colour or picture, scroll position) | `icvp` | created only when an option changed (E6) |
+| List view options (sort column, per-column direction, text/icon size, column widths/order/visibility, relative dates, calculate sizes, scroll position) | `lsvp` | wins over legacy `lsvo`/`LSVO`/`lsvt` (E10) |
+| Window geometry, toolbar, sidebar width | `bwsp` | origin bottom left (E7); bars other than the toolbar and the sidebar width are global (E13) |
 
-These are written by the shared helper
-`DSStoreInfo +writeStoreEntriesForInfo:key:toStore:` (key `.` for the folder
-file, or the full directory path for the volume cache - see below).
+The pre-10.6 records (`BKGD`, `fwi0`, `fwsw`, `iarr`, `icsp`, `icvo`, `lblp`,
+`vSrn`) are no longer written; they are read only when nothing newer exists
+and are left untouched in the store.
+
+These are written by `DSStoreInfo` through `GWViewSettingsManager`.
 
 ### Per-file entries (keyed by the on-disk filename)
 
@@ -94,7 +93,7 @@ file, or the full directory path for the volume cache - see below).
 | --------- | ------ | ---------------------------------- |
 | Icon position | `Iloc` | 16-byte blob; icon CENTER, top-left origin, y grows downward |
 | Comment   | `cmmt` | ustr |
-| Label color | `lclr` | long |
+| Label color | (none) | Finder 10.6 keeps a label only in FinderInfo `fdFlags` (section 3) and ignores `lclr`; an `lclr` already in a store is still read |
 
 Keys are the **bare, on-disk filename** (e.g. `Desktop`, not the translated
 display name `Schreibtisch`).  This matches the macOS Finder convention
@@ -115,7 +114,7 @@ directory's own record (`.` / the path) is never pruned.
 
 `GWViewSettingsManager readSettings:` reads in this order:
 
-1.  `$FOLDER/.DS_Store` (if it loads, it wins)
+1.  the parent's `.DS_Store` (for a volume root or the home folder: its own store)
 2.  the volume cache for the folder's volume
 3.  empty defaults (fresh, unloaded `DSStoreInfo`)
 
@@ -191,18 +190,52 @@ Setting a custom icon (`setCustomIconData:`) writes the icns bytes into
 `user.com.apple.ResourceFork` and sets the `kHasCustomIcon` flag - the flag
 alone is not a complete custom icon.  `clearCustomIcon` drops both.
 
-## 4. AppleDouble sidecars (fallback)
+## 4. AppleDouble sidecars
 
-Location: `._NAME` next to each file (AppleDouble encoding).
+Location: `._NAME` next to each file (AppleDouble encoding).  The sidecar path
+is derived from the **on-disk** file path only - a localized display name must
+never be used to build a sidecar path (that would create orphan
+`._Schreibtisch`-style files for folders that do not exist).
 
-Used only when the filesystem has no xattr support (or xattr writes fail).
-`GSFileMetadata` transparently falls back to a `._NAME` sidecar for read and
-write.  Sidecar path is derived from the **on-disk** file path only - a
-localized display name must never be used to build a sidecar path (that would
-create orphan `._Schreibtisch`-style files for folders that do not exist).
+Where metadata goes is decided per path by the filesystem type, in one place:
+`+[GSFileMetadata storesMetadataInAppleDoubleAtPath:]`, which combines
+`gs_fs_type_name()` (Linux statfs magic, FUSE subtype from mountinfo; BSD
+`f_fstypename`; Windows volume file system name) with
+`gs_fs_type_wants_appledouble()`.  Saving (`GSFileMetadata`), copying and
+moving (`GWMetadataCopier`) and archive extraction (`GWMetaArchive`) all ask
+it.
 
-On xattr-capable filesystems, any existing sidecar is removed when metadata is
-written via xattr, so the two never diverge.
+| Filesystem | Metadata lives in | Why |
+|---|---|---|
+| msdos, vfat, msdosfs, fat*, exfat | `._` sidecar only | A Mac has no native attributes there; its kernel writes and reads `._` files (E35) |
+| cifs, smb, smb2, smb3, smbfs | `._` sidecar only | A Mac never sees the SMB extended attributes a Linux mount stores (guess, not measured) |
+| ntfs, ntfs3, ntfs-3g, fuseblk | `._` sidecar only | As SMB (guess, not measured) |
+| everything else (ext4, xfs, btrfs, zfs, tmpfs, ufs, ffs, nfs, plain fuse, unlisted types) | `user.*` xattrs | Native; a sidecar only when the filesystem has no xattrs (OpenBSD) or a value does not fit (E2BIG/ENOSPC) |
+| path cannot be examined (statfs fails) | nothing, error | No guessing |
+
+On sidecar-only volumes:
+
+- Saving writes only the sidecar and keeps it; it is never migrated into
+  xattrs.  Reading takes the sidecar first; xattrs a Linux tool left on the
+  mount only fill fields the sidecar lacks.
+- The sidecar has the layout the Mac kernel itself writes (E35): entry 9 at
+  offset 50 with an ATTR block (debug tag 0x3b9ac9ff, attributes in file
+  order), zero padded so that the file up to a 286-byte entry 2 is a multiple
+  of 4096; entry 2 is the fork or the kernel's empty resource map, which
+  reading treats as no fork.
+- A copy, move or archive extraction does not carry `com.apple.quarantine`,
+  as Finder does not (E35, E16); a quarantine set on the item itself is
+  stored plain, as the kernel stores it.
+- A folder whose `.DS_Store` Workspace writes a comment record into gets the
+  invisible `._.DS_Store` a Mac writes beside every store there (E35).
+- On a Samba share with vfs_fruit, `._` files are refused unless the share
+  sets `fruit:veto_appledouble = no`; the error says so, and nothing falls
+  back to attributes the Mac would not see.
+
+On native volumes, any existing sidecar is migrated into xattrs and removed
+when metadata is saved, so the two never diverge; a sidecar that arrives with
+a copy is carried as it is.  Sidecars written outside volumes a Mac reads
+(OpenBSD, E2BIG fallback, archives) use the compact 10.6 tar layout.
 
 ## 5. User tags
 

@@ -9,6 +9,7 @@
 #import "GWFolderViewOptions.h"
 #import "FSNIconsView.h"
 #import "FSNListView.h"
+#import "FSNColumnViewOptions.h"
 
 static int
 clampInt(int value, int low, int high)
@@ -52,6 +53,11 @@ clampInt(int value, int low, int high)
       showsIconPreview = YES;
       ASSIGN (arrangeBy, @"none");
       listTextSize = 12;
+      columnTextSize = 12;
+      columnShowsIcons = YES;
+      columnShowsIconPreview = YES;
+      columnShowsPreviewColumn = YES;
+      columnArrangement = FSNIconsArrangeName;
       ASSIGN (visibleColumns, [NSSet set]);
       alwaysOpenStyle = DSStoreViewStyleIcon;
     }
@@ -129,6 +135,48 @@ clampInt(int value, int low, int high)
 - (void)setUsesRelativeDates:(BOOL)flag { usesRelativeDates = flag; }
 - (BOOL)calculatesAllSizes { return calculatesAllSizes; }
 - (void)setCalculatesAllSizes:(BOOL)flag { calculatesAllSizes = flag; }
+- (int)columnTextSize { return columnTextSize; }
+
+- (void)setColumnTextSize:(int)size
+{
+  columnTextSize = [FSNIconsView clampedLabelTextSize: size];
+}
+
+- (BOOL)columnShowsIcons { return columnShowsIcons; }
+- (void)setColumnShowsIcons:(BOOL)flag { columnShowsIcons = flag; }
+- (BOOL)columnShowsIconPreview { return columnShowsIconPreview; }
+- (void)setColumnShowsIconPreview:(BOOL)flag { columnShowsIconPreview = flag; }
+- (BOOL)columnShowsPreviewColumn { return columnShowsPreviewColumn; }
+- (void)setColumnShowsPreviewColumn:(BOOL)flag { columnShowsPreviewColumn = flag; }
+- (FSNIconsArrangement)columnArrangement { return columnArrangement; }
+- (void)setColumnArrangement:(FSNIconsArrangement)value { columnArrangement = value; }
+
+- (void)takeFromColumnViewOptions:(FSNColumnViewOptions *)options
+{
+  [self setColumnTextSize: [options textSize]];
+  [self setColumnShowsIcons: [options showsIcons]];
+  [self setColumnShowsIconPreview: [options showsIconPreview]];
+  [self setColumnShowsPreviewColumn: [options showsPreviewColumn]];
+  [self setColumnArrangement: [options arrangement]];
+}
+
+- (void)applyToColumnViewOptions:(FSNColumnViewOptions *)options
+{
+  [options setTextSize: columnTextSize];
+  [options setShowsIcons: columnShowsIcons];
+  [options setShowsIconPreview: columnShowsIconPreview];
+  [options setShowsPreviewColumn: columnShowsPreviewColumn];
+  [options setArrangement: columnArrangement];
+}
+
+- (void)putIntoInfo:(DSStoreInfo *)info forViewKind:(GWViewOptionsKind)kind
+{
+  if (kind == GWViewOptionsColumnView)
+    [self putViewStyleIntoInfo: info];
+  else
+    [self putIntoInfo: info forListView: kind == GWViewOptionsListView];
+}
+
 - (BOOL)alwaysOpen { return alwaysOpen; }
 - (void)setAlwaysOpen:(BOOL)flag { alwaysOpen = flag; }
 - (DSStoreViewStyle)alwaysOpenStyle { return alwaysOpenStyle; }

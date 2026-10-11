@@ -15,14 +15,6 @@
  * Marker used for "no position" in FinderInfo fdLocation.
  * When both v and h are -1 (0xFFFF) it means "not positioned".
  */
-/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
-   library calls here take narrow strings, so use the UTF-8 form there. On
-   the other platforms this is the plain -fileSystemRepresentation call. */
-#ifdef _WIN32
-#define GW_FSREP(path) [(path) UTF8String]
-#else
-#define GW_FSREP(path) [(path) fileSystemRepresentation]
-#endif
 
 #define GS_NO_ICON_POSITION  ((int16_t)(-1))
 
@@ -884,6 +876,10 @@ static NSMutableDictionary *_metadataCache = nil;
       return md;
     }
 
+  NSInteger appleDouble = [self storesMetadataInAppleDoubleAtPath: path];
+  if (appleDouble < 0)
+    return nil;
+
   /* Try xattrs first */
   BOOL found = NO;
 
@@ -977,9 +973,20 @@ static NSMutableDictionary *_metadataCache = nil;
       }
   }
 
-  /* If nothing found via xattrs, try sidecar */
-  if (!found)
+  if (appleDouble == 1)
     {
+      /* A Mac writes only the sidecar here, so it is the current state; an
+       * attribute a Linux tool left on the mount only fills its gaps. */
+      GSFileMetadata *sidecar = [[[self alloc] init] autorelease];
+      if ([sidecar readSidecarForPath: path])
+        {
+          [md _takeFieldsReadFrom: sidecar];
+          found = YES;
+        }
+    }
+  else if (!found)
+    {
+      /* If nothing found via xattrs, try sidecar */
       if ([md readSidecarForPath: path])
         found = YES;
     }
@@ -988,6 +995,20 @@ static NSMutableDictionary *_metadataCache = nil;
     return nil;
   [md _markLoaded];
   return md;
+}
+
+- (void)_takeFieldsReadFrom:(GSFileMetadata *)other
+{
+  if (other->_finderInfo)
+    self.finderInfo = other->_finderInfo;
+  if (other->_resourceFork)
+    self.resourceFork = other->_resourceFork;
+  if (other->_userTagsData)
+    self.userTagsData = other->_userTagsData;
+  if (other->_finderComment)
+    self.finderComment = other->_finderComment;
+  if (other->_quarantine)
+    self.quarantine = other->_quarantine;
 }
 
 /* =================================================================
@@ -1086,9 +1107,25 @@ static NSMutableDictionary *_metadataCache = nil;
       return NO;
     }
 
+  NSInteger appleDouble = _forceSidecar ? 1
+    : [[self class] storesMetadataInAppleDoubleAtPath: path];
+  if (appleDouble < 0)
+    {
+      if (error)
+        *error = [NSError errorWithDomain: NSPOSIXErrorDomain
+                                     code: errno
+                                 userInfo: @{
+          NSFilePathErrorKey: path,
+          NSLocalizedDescriptionKey:
+            @"Cannot tell the filesystem type, so not where metadata belongs"
+        }];
+      return NO;
+    }
   if (![self _divertFolderIconAtPath: path error: error])
     return NO;
-  if (_forceSidecar)
+  /* Attributes would be invisible to the Mac that reads this volume, and
+   * migrating the sidecar into them would take away what it does see. */
+  if (appleDouble == 1)
     return [self writeSidecarToFileAtPath: path error: error];
 
   const char *cpath = GW_FSREP(path);
@@ -1255,6 +1292,14 @@ static NSMutableDictionary *_metadataCache = nil;
     appleDoubleDataByUpdatingSidecar: existing
                          withContent: fresh
                    managedXattrNames: managed];
+  /* There the Mac kernel reads the file, in the one layout it writes
+   * itself (E35); nothing says it takes the compact one. */
+  if (appleDoubleData != nil
+      && [[self class] storesMetadataInAppleDoubleAtPath: path] == 1)
+    appleDoubleData = [[self class] macVolumeSidecarDataFor:
+                         [[[GSAppleDouble alloc] initWithData: appleDoubleData]
+                           autorelease]
+                                             keepQuarantine: YES];
   if (!appleDoubleData)
     {
       /* Nothing left to keep: remove sidecar if it exists */
@@ -1271,14 +1316,7 @@ static NSMutableDictionary *_metadataCache = nil;
                                                          contents: appleDoubleData
                                                        attributes: nil];
   if (!written && error)
-    {
-      *error = [NSError errorWithDomain: NSCocoaErrorDomain
-                                   code: NSFileWriteUnknownError
-                               userInfo: @{
-        NSFilePathErrorKey: sidecarPath,
-        NSLocalizedDescriptionKey: @"Could not write AppleDouble sidecar file"
-      }];
-    }
+    *error = [[self class] sidecarWriteErrorAtPath: sidecarPath code: errno];
 
   return written;
 }
@@ -1901,6 +1939,65 @@ static NSData *gsLookupResource(NSData *fork, GSOType type, BOOL useID,
 /* =================================================================
  * Utilities
  * ================================================================= */
+
+static GSFilesystemTypeProbe gsFilesystemTypeProbe = nil;
+
++ (void)setFilesystemTypeProbe:(GSFilesystemTypeProbe)probe
+{
+  ASSIGNCOPY(gsFilesystemTypeProbe, probe);
+}
+
+static NSString *
+gsFilesystemTypeAtPath(NSString *path)
+{
+  char name[64];
+
+  if (gsFilesystemTypeProbe != nil)
+    return gsFilesystemTypeProbe(path);
+  if (gs_fs_type_name(GW_FSREP(path), name, sizeof(name)) != 0)
+    return nil;
+  return [NSString stringWithUTF8String: name];
+}
+
++ (NSInteger)storesMetadataInAppleDoubleAtPath:(NSString *)path
+{
+  NSString *type = gsFilesystemTypeAtPath(path);
+
+  if (type == nil)
+    return -1;
+  return gs_fs_type_wants_appledouble([type UTF8String]);
+}
+
++ (NSData *)macVolumeSidecarDataFor:(GSAppleDouble *)appleDouble
+                     keepQuarantine:(BOOL)keepQuarantine
+{
+  GSAppleDouble *ad = [[appleDouble copy] autorelease];
+  NSString *qName = @"com.apple.quarantine";
+  NSData *q = [[ad extendedAttributes] objectForKey: qName];
+
+  if (q != nil)
+    [ad setXattr: keepQuarantine ? [self plainQuarantine: q] : nil
+          forKey: qName];
+  return [ad appleDoubleDataInVolumeLayout];
+}
+
++ (NSError *)sidecarWriteErrorAtPath:(NSString *)sidecarPath code:(int)code
+{
+  NSString *type = gsFilesystemTypeAtPath(
+    [sidecarPath stringByDeletingLastPathComponent]);
+  NSString *reason = [NSString stringWithFormat:
+    @"Could not write AppleDouble sidecar file: %s",
+    code ? strerror(code) : "unknown error"];
+
+  if (type != nil && gs_fs_type_is_smb([type UTF8String]))
+    reason = [reason stringByAppendingString:
+      @" (a Samba server with vfs_fruit refuses \"._\" files unless the"
+      @" share sets fruit:veto_appledouble = no)"];
+  return [NSError errorWithDomain: NSPOSIXErrorDomain
+                             code: code
+                         userInfo: @{ NSFilePathErrorKey: sidecarPath,
+                                      NSLocalizedDescriptionKey: reason }];
+}
 
 + (NSString *)sidecarPathForFilePath:(NSString *)filePath
 {

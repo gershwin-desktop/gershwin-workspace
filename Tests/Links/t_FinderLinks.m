@@ -288,8 +288,12 @@ int main(void)
 		   attributes: nil error: NULL];
     for (name in names)
       {
+	/* The fixtures store ":" as "%3A": a ":" in a checked-in path breaks
+	 * every git checkout on Windows. */
+	NSString *stored = [name stringByReplacingOccurrencesOfString: @":"
+							    withString: @"%3A"];
 	NSURL *u = [FSNLocationFile URLForLocationFileAtPath:
-		      [e27 stringByAppendingPathComponent: name]];
+		      [e27 stringByAppendingPathComponent: stored]];
 	NSString *p = [FSNLocationFile writeWeblocForURL: u title: nil
 					     inDirectory: out];
 

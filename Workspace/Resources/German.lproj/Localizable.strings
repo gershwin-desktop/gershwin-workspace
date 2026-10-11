@@ -665,9 +665,7 @@
 
 "Put Away" = "Wiederherstellen";
 
-"Quick Look" = "Kurzblick";
-
-"Quick Look \"item\"" = "Quick Look \"item\"";
+"Look Inside" = "Hineinsehen";
 
 "Quit" = "Beenden";
 
@@ -1211,3 +1209,58 @@
 "Open in Workspace" = "In Workspace öffnen";
 "%lu More in Workspace" = "%lu weitere in Workspace";
 "No Items" = "Keine Objekte";
+
+/* Edit > Undo and Redo of file operations */
+"Undo %@" = "Widerrufen: %@";
+"Redo %@" = "Wiederholen: %@";
+"Move of \"%@\"" = "Bewegen von \"%@\"";
+"Move of %lu Items" = "Bewegen von %lu Objekten";
+"Copy of \"%@\"" = "Kopieren von \"%@\"";
+"Copy of %lu Items" = "Kopieren von %lu Objekten";
+"Duplicate of \"%@\"" = "Duplizieren von \"%@\"";
+"Duplicate of %lu Items" = "Duplizieren von %lu Objekten";
+"Move of \"%@\" to Trash" = "Bewegen von \"%@\" in den Papierkorb";
+"Move of %lu Items to Trash" = "Bewegen von %lu Objekten in den Papierkorb";
+"Make Alias of \"%@\"" = "Erstellen eines Alias von \"%@\"";
+"Make Alias of %lu Items" = "Erstellen von Aliassen von %lu Objekten";
+"Rename of \"%@\"" = "Umbenennen von \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "Ein Objekt namens \"%@\" ist in \"%@\" bereits vorhanden.";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" in \"%@\" wurde durch ein anderes Objekt ersetzt.";
+"\"%@\" can no longer be found in \"%@\"." = "\"%@\" ist in \"%@\" nicht mehr vorhanden.";
+"The operation cannot be undone." = "Der Vorgang kann nicht widerrufen werden.";
+"The operation cannot be redone." = "Der Vorgang kann nicht wiederholt werden.";
+" - searching..." = " - suche läuft...";
+"%@ (attribute not indexed)" = "%@ (Attribut nicht indiziert)";
+"%@ (character not searchable)" = "%@ (Zeichen nicht durchsuchbar)";
+"%@ (date not understood)" = "%@ (Datum nicht verstanden)";
+"%@ (text cannot be ordered)" = "%@ (Text lässt sich nicht ordnen)";
+"A smart folder cannot express: %@" = "Ein intelligenter Ordner kann nicht ausdrücken: %@";
+"Approximated: %@" = "Angenähert: %@";
+"Save Search" = "Suche sichern";
+"Save Search..." = "Suche sichern...";
+"The smart folder could not be written." = "Der intelligente Ordner konnte nicht geschrieben werden.";
+"This smart folder cannot be read: %@" = "Dieser intelligente Ordner kann nicht gelesen werden: %@";
+"This smart folder cannot be searched here. Not supported: %@" = "Dieser intelligente Ordner kann hier nicht durchsucht werden. Nicht unterstützt: %@";
+"_kMDItemGroupId %@ %@ (kind group not known)" = "_kMDItemGroupId %@ %@ (Artengruppe unbekannt)";
+"a search needs at least one term besides size and dates" = "eine Suche braucht mindestens einen Begriff außer Größe und Datum";
+"content types are matched by file name extension" = "Inhaltstypen werden über die Dateinamenendung zugeordnet";
+"date" = "Datum";
+"diacritic and word matching modifiers are not applied" = "Modifikatoren für Akzente und Wortvergleich werden nicht angewendet";
+"kinds other than folder and application" = "andere Arten als Ordner und Programm";
+"names with *, \" or \\" = "Namen mit *, \" oder \\";
+"query not understood (%@)" = "Abfrage nicht verstanden (%@)";
+"relative dates are resolved when the search is opened" = "relative Daten werden beim Öffnen der Suche aufgelöst";
+"search location %@" = "Suchort %@";
+"searching one folder level only" = "Suche nur auf einer Ordnerebene";
+"searching several folders" = "Suche in mehreren Ordnern";
+"size and date terms can only be combined with and" = "Größen- und Datumsbedingungen können nur mit „und“ verknüpft werden";
+"size and dates are checked on the files found" = "Größe und Datum werden an den gefundenen Dateien geprüft";
+"the Finder-files-only option is not applied" = "die Option „Nur Finder-Dateien“ wird nicht angewendet";
+"the content modification date is searched as the file modification date" = "das Änderungsdatum des Inhalts wird als Änderungsdatum der Datei gesucht";
+"the display name is searched as the file name" = "der angezeigte Name wird als Dateiname gesucht";
+"the query matches everything" = "die Abfrage trifft auf alles zu";
+"the query matches nothing" = "die Abfrage trifft auf nichts zu";
+"the user-files-only option is not applied" = "die Option „Nur Benutzerdateien“ wird nicht angewendet";
+
+"There is no application set to open \"%@\"." = "Es ist kein Programm zum Öffnen von \"%@\" festgelegt.";
+"Use Open as Folder to look inside it." = "Mit \"Als Ordner öffnen\" können Sie hineinschauen.";

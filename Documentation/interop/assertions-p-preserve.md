@@ -43,6 +43,30 @@ Mac-written `._` file seen on the build machine (modern macOS, not stored).
 - MI-PRS-20 A source sidecar is carried byte for byte, to destinations with and without attributes. [G]
 - MI-PRS-21 Source attributes are merged into the carried sidecar; entries and attributes only the sidecar had are kept. [G]
 
+## Volumes a Mac reads through `._` files (referee M3/M8, P-transport)
+
+Tests: `Tests/GWMetadata/t_TransportPolicy.m`, `Tests/GWMetadata/t_VolumeLayout.m`,
+`Tests/Preserve/t_TransportCopier.m`, `Tests/Archive/t_GWMetaArchive.m` (MI-AR-29)
+(filesystem type injected with +[GSFileMetadata setFilesystemTypeProbe:]).
+
+- MI-PRS-33 One function decides per path: +[GSFileMetadata storesMetadataInAppleDoubleAtPath:] = gs_fs_type_wants_appledouble(gs_fs_type_name(path)); 1 for msdos/msdosfs/vfat/fat*/exfat, cifs/smb/smb2/smb3/smbfs, ntfs/ntfs3/ntfs-3g/fuseblk (fuse./fusefs. prefixes stripped, case ignored), 0 for everything else. [O: E35 for FAT; G for SMB, NTFS, fuseblk - not measurable, no server]
+- MI-PRS-34 Type names: Linux statfs magic mapped to mount(8) names, FUSE subtype from /proc/self/mountinfo by device number ("fuse" when absent), an unlisted magic named "0x<hex>"; FreeBSD/OpenBSD f_fstypename; Windows GetVolumeInformationW. [S]
+- MI-PRS-38 Only a path that cannot be examined (statfs/GetVolumeInformation fails) is an error: a save or copy fails, a read returns nil. An identified but unlisted type (plain FUSE, unknown magic) keeps the native behaviour. [D: coordinator 2026-10-11]
+- MI-PRS-35 Saving metadata there writes only the `._` sidecar even when the mount accepts attributes; no com.apple attribute is set. [O: E35 the kernel shows the `._` content as the xattrs; G for SMB]
+- MI-PRS-36 A later save there keeps the sidecar; it is never migrated into attributes and deleted as on a native disk. [G]
+- MI-PRS-37 Reading there takes the sidecar first; attributes a Linux tool left on the mount only fill fields the sidecar lacks. [G]
+- MI-PRS-43 Every sidecar written there has the kernel's layout: entry 9 at 50 with ATTR (debug tag 3b9ac9ff, total_size = end of entry 9, attributes in file order, new ones appended), zero padded so that header + entry 9 + 286 is a multiple of 4096 (3760, or 7856 for a 5000-byte attribute); entry 2 the fork or the 286-byte empty map. Parse and rewrite of all eight E35 `._` files is byte identical. [O: E35]
+- MI-PRS-44 The kernel's 286-byte empty map in entry 2 reads as no resource fork. [O: E35 xattr -l shows no ResourceFork for such files]
+- MI-PRS-45 A quarantine set on an item there is stored plain (no q/), as the kernel stores it. [O: E35 big.txt]
+- MI-PRS-39 A copy or move onto such a volume puts every attribute of the source into the sidecar (also with attributes supported), merged over the source sidecar, except com.apple.quarantine, which Finder never carries; a quarantine-only source gets no sidecar. [O: E35, E16]
+- MI-PRS-40 A kernel-made source sidecar copied to such a volume arrives byte for byte (it is rewritten in the same layout). [O: E35]
+- MI-PRS-46 An archive extracted onto such a volume keeps each companion as the item's sidecar, in the kernel's layout, without quarantine; nothing becomes an attribute. [O: E35]
+- MI-PRS-41 A copy with a Finder comment onto such a volume writes the cmmt record into that folder's .DS_Store and gives the store the invisible `._.DS_Store` the kernel writes (byte equal to E35 lf/._.DS_Store); no attribute. [O: M2, E35]
+- MI-PRS-47 A sidecar that cannot be written on an SMB mount fails the save, copy or extraction with an error naming fruit:veto_appledouble; nothing falls back to attributes. [D: coordinator 2026-10-11]
+- MI-PRS-42 Native destinations (ext4, tmpfs, ...) are unchanged: attributes, no sidecar. [S]
+- MI-PRS-19 (changed) The sidecar quarantine on a destination without attributes that a Mac does not read (OpenBSD) carries the q/ prefix, as GSFileMetadata's compact sidecar writer does. [fb800d91]
+- NOT DONE: other .DS_Store writers (view settings in Workspace/FileViewer, DSStore/) do not create `._.DS_Store` on such volumes; the Mac does not need it to read the store.
+
 ## Platform wrapper
 
 - MI-PRS-23 When storing an attribute fails with E2BIG or ENOSPC, all metadata of the item goes into the sidecar and attributes already written are removed; any other errno fails hard. [D: user decision 2026-10-11, OPEN-3 option A; GSFileMetadata does the same]

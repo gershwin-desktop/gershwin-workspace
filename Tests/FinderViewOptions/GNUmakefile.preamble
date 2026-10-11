@@ -35,6 +35,7 @@ t_FinderRecords_TOOL_LIBS += -lgnustep-gui
 ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
                       -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
 t_FolderViewOptions_OBJC_FILES += ../../Workspace/FileViewer/GWFolderViewOptions.m \
+                                  ../../Workspace/FileViewer/GWViewerGeometry.m \
                                   $(SETTINGS_SOURCES)
 # gnustep-make puts -L/System/Library/Libraries into the flags ahead of
 # every lib dir; only ADDITIONAL_LDFLAGS come before it, and without this

@@ -1,0 +1,16 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+# Headers and libraries come from the tree under test, not from installed
+# copies that may be older (DT_RPATH, which outranks LD_LIBRARY_PATH).
+ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata -I../../GWMetadata/MDKit \
+                           -I../../FSNode -I../../DBKit
+MDKLIBS = ../../GWMetadata/MDKit/MDKit.framework/Versions/Current \
+          ../../GSMetadata/obj ../../FSNode/FSNode.framework/Versions/Current ../../DBKit/obj
+ADDITIONAL_LIB_DIRS += $(addprefix -L,$(MDKLIBS))
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags $(addprefix -Wl$(COMMA)-rpath$(COMMA)$(CURDIR)/,$(MDKLIBS))
+COMMA = ,
+# The MDKit just built when it is there (a plain -lMDKit would find an older
+# installed copy first, since /System/Library/Libraries leads the -L list);
+# on CI the install step has cleaned the build tree and installed this very
+# build, so -lMDKit is right there.
+MDKIT_BUILT := $(wildcard $(CURDIR)/../../GWMetadata/MDKit/MDKit.framework/Versions/Current/libMDKit.so)
+t_MDKParse_TOOL_LIBS += $(if $(MDKIT_BUILT),$(MDKIT_BUILT),-lMDKit) -lGSMetadata -lFSNode -lDBKit -lgnustep-gui

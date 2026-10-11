@@ -16,6 +16,8 @@ MDKit_HAS_RESOURCE_BUNDLE = yes
 
 LIBRARIES_DEPEND_UPON += -lFSNode
 LIBRARIES_DEPEND_UPON += -lDBKit
+# Finder Info of the smart folders GWSavedSearch writes
+LIBRARIES_DEPEND_UPON += -lGSMetadata
 LIBRARIES_DEPEND_UPON += $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
 
 MDKit_RESOURCE_FILES = \
@@ -37,7 +39,9 @@ MDKAttributeChooser.m \
 MDKAttribute.m \
 MDKAttributeView.m \
 MDKAttributeEditor.m \
-MDKFSFilter.m
+MDKFSFilter.m \
+GWSavedSearch.m \
+GWSavedSearchRunner.m
 
 MDKit_HEADER_FILES = \
 MDKit.h \
@@ -48,7 +52,9 @@ MDKWindow.h \
 MDKAttributeChooser.h \
 MDKAttribute.h \
 MDKAttributeView.h \
-MDKAttributeEditor.h
+MDKAttributeEditor.h \
+GWSavedSearch.h \
+GWSavedSearchRunner.h
 
 ifeq ($(findstring darwin, $(GNUSTEP_TARGET_OS)), darwin)
   ifeq ($(OBJC_RUNTIME_LIB), gnu)

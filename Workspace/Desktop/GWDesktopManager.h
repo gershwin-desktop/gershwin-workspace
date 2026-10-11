@@ -102,6 +102,8 @@ typedef enum {
 
 - (BOOL)dockActive;
 
+- (void)saveDockDefaults;
+
 - (void)setReservedFrames;
 
 /* The frame of the desktop window in device pixels: desktopFullFrame is in

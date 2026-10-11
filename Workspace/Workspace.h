@@ -266,6 +266,7 @@
 - (void)newObjectAtPath:(NSString *)basePath 
             isDirectory:(BOOL)directory;
 
+- (void)duplicateFiles:(id)sender;
 - (void)duplicateFiles;
 - (void)makeAliasFiles:(id)sender;
 
@@ -342,7 +343,7 @@
 
 - (void)toggleHiddenFiles;
 
-- (void)quickLook:(id)sender;
+- (void)lookInside:(id)sender;
 
 - (BOOL)unmountVolumeAtPath:(NSString *)path;
 

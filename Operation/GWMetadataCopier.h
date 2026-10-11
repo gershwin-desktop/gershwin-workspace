@@ -7,9 +7,10 @@
  * would be lost by a copy, a duplicate or a move across filesystems.
  *
  * Where the destination has extended attributes, every "user." attribute
- * is copied under its own name.  Where it has none (FAT, exFAT, OpenBSD),
- * all of them go into the "._" AppleDouble sidecar, laid out the way Mac OS X
- * lays it out.  A sidecar on the source is carried to the destination as it
+ * is copied under its own name.  Where it has none (OpenBSD), or where a
+ * Mac reads the volume and sees only "._" files (FAT, exFAT, SMB, NTFS; see
+ * +[GSFileMetadata storesMetadataInAppleDoubleAtPath:]), all of them go into
+ * the "._" AppleDouble sidecar, laid out the way Mac OS X lays it out.  A sidecar on the source is carried to the destination as it
  * is.
  *
  * SPDX-License-Identifier: GPL-2.0-or-later OR BSD-2-Clause

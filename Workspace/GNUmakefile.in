@@ -11,6 +11,9 @@ with_dbus = @with_dbus@
 DBUS_CFLAGS = @DBUS_CFLAGS@
 DBUS_LIBS = @DBUS_LIBS@
 
+# GWMetadata (MDKit) is built only when its dependencies are present
+BUILD_GWMETADATA = @BUILD_GWMETADATA@
+
 # libsquashfs support variables from configure
 with_squashfs = @with_squashfs@
 SQUASHFS_CFLAGS = @SQUASHFS_CFLAGS@
@@ -91,12 +94,15 @@ GWExtensionsManager.m \
 GWAlignLogically.m \
 GWTrashFlightPath.m \
 GWTrashFlight.m \
+GWOpenItemAnimation.m \
 Workspace.m \
 AppDataTrash.m \
 Workspace+UITesting.m \
 X11AppSupport.m \
 GWProcessMonitor.m \
 GWProcessOwnership.m \
+GWSingleInstance.m \
+GWStationery.m \
 GWWin32Process.m \
 GWDetachedCommand.m \
 GWURLSchemeRegistry.m \
@@ -120,6 +126,7 @@ Desktop/Dock/GWDockWindow.m \
 ViewOptions/GWViewOptionsModel.m \
 ViewOptions/GWViewOptionsPanel.m \
  FileViewer/GWViewerChrome.m \
+ FileViewer/GWViewerGeometry.m \
  FileViewer/GWViewer.m \
 FileViewer/GWViewTypeHelpers.m \
 FileViewer/GWSpatialViewer.m \
@@ -142,9 +149,14 @@ FileViewer/GWVolumeCache.m \
 FileViewer/GWViewSettingsManager.m \
 FileViewer/GWViewerPrefs.m \
 FileViewer/GWSpatialIconsView.m \
-QuickLook/GWQuickLookGeometry.m \
-QuickLook/GWQuickLookController.m \
-QuickLook/GWQuickLookPanel.m \
+LookInside/GWLookInsideGeometry.m \
+LookInside/GWLookInsideController.m \
+LookInside/GWLookInsideKeys.m \
+LookInside/GWLookInsidePreviewKind.m \
+LookInside/GWLookInsidePreviewView.m \
+LookInside/GWLookInsideOverviewView.m \
+LookInside/GWLookInsideColumnPreviewProvider.m \
+LookInside/GWLookInsidePanel.m \
 ../GWMetadata/GWMetaArchive.m \
 Finder/Finder.m \
 Finder/GWChangePaths.m \
@@ -201,6 +213,21 @@ ifeq ($(with_dbus), yes)
   Workspace_OBJC_FILES += DBusConnection.m
   Workspace_OBJC_FILES += FileManagerDBusInterface.m
   Workspace_OBJC_FILES += Desktop/Dock/DockServiceDBus.m
+endif
+
+# Smart folders (.savedSearch) are searched through MDKit
+ifeq ($(BUILD_GWMETADATA), 1)
+  # MDKit pulls in DBKit's path tree functions; name it so the link does not
+  # depend on the linker following MDKit's own dependencies.
+  ADDITIONAL_GUI_LIBS += -lMDKit -lDBKit
+  ADDITIONAL_LDFLAGS += -L../DBKit/obj
+  # MDKit headers come from derived_src as <MDKit/...>: the MDKit source
+  # directory has its own config.h, which would shadow Workspace's own
+  # config.h for every "config.h" include (HAVE_DBUS in the Dock).
+  ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata/MDKit/derived_src -IFinder/SmartFolder
+  ADDITIONAL_CPPFLAGS += -DHAVE_MDKIT=1
+  Workspace_OBJC_FILES += Finder/SmartFolder/GWSmartFolder.m
+  Workspace_OBJC_FILES += Finder/SmartFolder/GWFindCriteria.m
 endif
 
 # Conditionally add AppImageIconProvider.m if libsquashfs is available

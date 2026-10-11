@@ -15,10 +15,13 @@ ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
 
 ADDITIONAL_LIB_DIRS += -L../MDKit/MDKit.framework
 ADDITIONAL_LIB_DIRS += -L../../FSNode/FSNode.framework
+# libFSNode needs libGSMetadata, which is not installed yet in a from-source
+# build; naming it directly makes every linker resolve it from the tree.
+ADDITIONAL_LIB_DIRS += -L../../GSMetadata/obj
 ADDITIONAL_LIB_DIRS += -L../../DBKit/$(GNUSTEP_OBJ_DIR)
 
 # Additional LDFLAGS to pass to the linker
 # ADDITIONAL_LDFLAGS += 
 
-ADDITIONAL_GUI_LIBS += -lFSNode -lMDKit -lDBKit
+ADDITIONAL_GUI_LIBS += -lFSNode -lGSMetadata -lMDKit -lDBKit
 

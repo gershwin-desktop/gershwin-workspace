@@ -1,0 +1,33 @@
+== e35/a.txt
+com.apple.FinderInfo:
+com.apple.ResourceFork:
+0001465b
+com.apple.metadata:kMDItemFinderComment:
+== e35/b.txt
+com.apple.FinderInfo:
+com.apple.metadata:kMDItemFinderComment:
+com.apple.quarantine: 0001;4f8a1234;Safari;
+org.example.extra: hello-extra
+== e35/c-alias
+com.apple.FinderInfo:
+com.apple.ResourceFork:
+== e35/c.txt
+org.example.big: xxxxxxxxxxxxxxxxxxxx...
+== back/a.txt
+com.apple.FinderInfo:
+com.apple.ResourceFork:
+0001465b
+com.apple.metadata:kMDItemFinderComment:
+== back/b.txt
+com.apple.FinderInfo:
+com.apple.metadata:kMDItemFinderComment:
+org.example.extra: hello-extra
+== back/c-alias
+com.apple.FinderInfo:
+com.apple.ResourceFork:
+== back/c.txt
+org.example.big: xxxxxxxxxxxxxxxxxxxx...
+== hfsdup/b.txt
+com.apple.FinderInfo:
+com.apple.metadata:kMDItemFinderComment:
+org.example.extra: hello-extra

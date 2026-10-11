@@ -22,6 +22,8 @@ static NSString * const GWUserNamespace = @"user.";
 /* AppleDouble keeps these two outside the ATTR blob, in entries 9 and 2. */
 static NSString * const GWFinderInfoName = @"com.apple.FinderInfo";
 static NSString * const GWResourceForkName = @"com.apple.ResourceFork";
+/* 10.6 tar and dot_clean drop a sidecar quarantine without its "q/". */
+static NSString * const GWQuarantineName = @"com.apple.quarantine";
 #define GW_FINDERINFO_SIZE 32
 
 static NSError *
@@ -35,6 +37,14 @@ copyError(NSString *path, NSString *what, int code)
                                       NSLocalizedDescriptionKey: reason }];
 }
 
+/* Windows has no lstat() and no symbolic links worth skipping here, so a
+ * plain stat() answers the same question there. */
+#if defined(_WIN32)
+#define gw_lstat(p, st) stat((p), (st))
+#else
+#define gw_lstat(p, st) lstat((p), (st))
+#endif
+
 @implementation GWMetadataCopier
 
 @synthesize xattrSupportProbe = _xattrSupportProbe;
@@ -46,12 +56,12 @@ copyError(NSString *path, NSString *what, int code)
   if (self)
     {
       _xattrSupportProbe = [^int(NSString *path) {
-        return gs_xattr_supported([path fileSystemRepresentation]);
+        return gs_xattr_supported(GW_FSREP(path));
       } copy];
       _xattrSetter = [^int(NSString *path, NSString *name, NSData *value) {
         /* gs_setxattr refuses a NULL value, an empty one needs a pointer. */
         const void *bytes = [value length] ? [value bytes] : "";
-        return gs_setxattr([path fileSystemRepresentation], [name UTF8String],
+        return gs_setxattr(GW_FSREP(path), [name UTF8String],
                            bytes, [value length], 0) == 0 ? 0 : errno;
       } copy];
     }
@@ -76,7 +86,7 @@ copyError(NSString *path, NSString *what, int code)
  * *error set when one cannot be read. */
 - (NSDictionary *)_attributesAtPath:(NSString *)path error:(NSError **)error
 {
-  const char *cpath = [path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(path);
   gs_xattr_list_t *list = gs_xattr_list_for_path(cpath,
                                                  [GWUserNamespace UTF8String]);
   NSMutableDictionary *attrs = [NSMutableDictionary dictionary];
@@ -122,7 +132,7 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
                        atPath:(NSString *)path
                         error:(NSError **)error
 {
-  const char *cpath = [path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(path);
   NSMutableArray *written = [NSMutableArray array];
 
   for (NSString *name in attrs)
@@ -163,11 +173,24 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
 - (BOOL)_writeSidecarAtPath:(NSString *)sidecar
                  attributes:(NSDictionary *)attrs
                    baseData:(NSData *)base
+                forMacVolume:(BOOL)forMacVolume
                       error:(NSError **)error
 {
   GSAppleDouble *ad = nil;
   NSData *out;
 
+  /* Nothing to add: a rewrite would only lose the layout the writer chose.
+   * A volume a Mac reads always gets the kernel's layout instead (E35). */
+  if (base != nil && [attrs count] == 0 && !forMacVolume)
+    {
+      if (![base writeToFile: sidecar atomically: YES])
+        {
+          if (error)
+            *error = [GSFileMetadata sidecarWriteErrorAtPath: sidecar code: errno];
+          return NO;
+        }
+      return YES;
+    }
   if (base != nil)
     {
       ad = [[GSAppleDouble alloc] initWithData: base];
@@ -182,7 +205,9 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
   else
     ad = [[GSAppleDouble alloc] init];
 
-  for (NSString *name in attrs)
+  /* Sorted, so that attributes new to the sidecar land in a fixed order. */
+  for (NSString *name in [[attrs allKeys]
+         sortedArrayUsingSelector: @selector(compare:)])
     {
       NSData *value = [attrs objectForKey: name];
 
@@ -191,10 +216,16 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
         [ad setFinderInfo: value];
       else if ([name isEqual: GWResourceForkName])
         [ad setResourceFork: value];
+      else if ([name isEqual: GWQuarantineName])
+        [ad setXattr: [GSFileMetadata sidecarQuarantine: value] forKey: name];
       else
         [ad setXattr: value forKey: name];
     }
-  out = [ad appleDoubleData];
+  /* Finder never carries the quarantine to a copy on such a volume, not
+   * even from a "._" file (E35, E16); a copy made here does not either. */
+  out = forMacVolume
+    ? [GSFileMetadata macVolumeSidecarDataFor: ad keepQuarantine: NO]
+    : [ad appleDoubleData];
   DESTROY(ad);
 
   if (out == nil)
@@ -202,7 +233,7 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
   if (![out writeToFile: sidecar atomically: YES])
     {
       if (error)
-        *error = copyError(sidecar, @"cannot write sidecar", errno);
+        *error = [GSFileMetadata sidecarWriteErrorAtPath: sidecar code: errno];
       return NO;
     }
   return YES;
@@ -217,12 +248,12 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
   NSString *dstSidecar = [[self class] sidecarPathForPath: dstPath];
   NSData *sidecarData;
   NSDictionary *attrs;
-  const char *cdst = [dstPath fileSystemRepresentation];
+  const char *cdst = GW_FSREP(dstPath);
   struct stat dst;
   BOOL widened = NO;
   BOOL ok;
 
-  if (lstat([srcPath fileSystemRepresentation], &st) != 0)
+  if (gw_lstat(GW_FSREP(srcPath), &st) != 0)
     {
       if (error)
         *error = copyError(srcPath, @"cannot stat", errno);
@@ -258,9 +289,19 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
       widened = YES;
     }
 
-  int support = _xattrSupportProbe(dstPath);
+  /* Where a Mac reads the volume, it sees only "._" files; attributes the
+   * mount would accept never reach it, so they all go into the sidecar. */
+  NSInteger appleDouble = [GSFileMetadata storesMetadataInAppleDoubleAtPath: dstPath];
+  int support = appleDouble == 1 ? 0
+    : appleDouble == 0 ? _xattrSupportProbe(dstPath) : -1;
 
-  if (support < 0)
+  if (appleDouble < 0)
+    {
+      if (error)
+        *error = copyError(dstPath, @"cannot tell the filesystem type", errno);
+      ok = NO;
+    }
+  else if (support < 0)
     {
       /* Neither "supported" nor "not supported": do not guess. */
       if (error)
@@ -283,7 +324,7 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
               && ![sidecarData writeToFile: dstSidecar atomically: YES])
             {
               if (error)
-                *error = copyError(dstSidecar, @"cannot write sidecar", errno);
+                *error = [GSFileMetadata sidecarWriteErrorAtPath: dstSidecar code: errno];
               ok = NO;
             }
         }
@@ -291,6 +332,7 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
         ok = [self _writeSidecarAtPath: dstSidecar
                             attributes: attrs
                               baseData: sidecarData
+                          forMacVolume: appleDouble == 1
                                  error: error];
     }
 
@@ -325,9 +367,8 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
 {
   struct stat src, dstDir;
 
-  if (lstat([srcPath fileSystemRepresentation], &src) != 0
-      || stat([[dstPath stringByDeletingLastPathComponent]
-                fileSystemRepresentation], &dstDir) != 0)
+  if (gw_lstat(GW_FSREP(srcPath), &src) != 0
+      || stat(GW_FSREP([dstPath stringByDeletingLastPathComponent]), &dstDir) != 0)
     return NO;
   return src.st_dev == dstDir.st_dev;
 }
@@ -340,10 +381,40 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
                                    error:(NSError **)error
 {
   GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
+  NSError *failure = nil;
 
   if ([md.finderComment length] == 0)
     return;
-  [DSStore setComment: md.finderComment forItemAtPath: path error: error];
+  if (![DSStore setComment: md.finderComment forItemAtPath: path
+                     error: &failure])
+    {
+      if (error)
+        *error = failure;
+      return;
+    }
+  [self _markStoreInvisibleBesideItemAtPath: path error: error];
+}
+
+/* On a volume a Mac reads through "._" files, the .DS_Store's invisible
+ * flag lives in "._.DS_Store", and a Mac writes one beside every store it
+ * makes there (E35). */
+- (void)_markStoreInvisibleBesideItemAtPath:(NSString *)path
+                                      error:(NSError **)error
+{
+  NSString *store = [[path stringByDeletingLastPathComponent]
+    stringByAppendingPathComponent: @".DS_Store"];
+  GSFileMetadata *md;
+
+  if ([GSFileMetadata storesMetadataInAppleDoubleAtPath: store] != 1)
+    return;
+  md = [GSFileMetadata metadataForFileAtPath: store forceSidecar: NO];
+  if ([md isInvisible])
+    return;
+  if (md == nil)
+    md = [[[GSFileMetadata alloc] init] autorelease];
+  [md setInvisible: YES];
+  [md writeToFileAtPath: store error: error];
+  [GSFileMetadata invalidateCachedMetadataForPath: store];
 }
 
 /* A copied folder holds more items than the one dropped: each needs its

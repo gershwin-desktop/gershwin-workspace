@@ -9,6 +9,7 @@
 #import "GWMetadataCopier.h"
 #import "GSAppleDouble.h"
 #import "GWMetaXattr.h"
+#import "GSFileMetadata.h"
 
 #include <sys/stat.h>
 #include <unistd.h>
@@ -242,7 +243,8 @@ main(void)
       PASS([[ad finderInfo] isEqual: finfo] && [[ad resourceFork] isEqual: rsrc],
            "MI-PRS-19 Finder info and resource fork go into entries 9 and 2");
       NSDictionary *x = [ad extendedAttributes];
-      PASS([[x objectForKey: @"com.apple.quarantine"] isEqual: quarantine]
+      PASS([[x objectForKey: @"com.apple.quarantine"] isEqual:
+               [GSFileMetadata sidecarQuarantine: quarantine]]
            && [[x objectForKey: @"org.example.blob"] isEqual: blob]
            && [[x objectForKey: @"com.apple.metadata:_kMDItemUserTags"]
                isEqual: D("bplist00", 8)],
@@ -294,7 +296,7 @@ main(void)
                  isEqual: D("keep-me", 7)],
              "MI-PRS-21 entries and attributes only the sidecar had are kept");
         PASS([[[ad extendedAttributes] objectForKey: @"com.apple.quarantine"]
-              isEqual: quarantine],
+              isEqual: [GSFileMetadata sidecarQuarantine: quarantine]],
              "MI-PRS-21 the attributes of the source are merged into it");
       }
   }
@@ -323,7 +325,7 @@ main(void)
       PASS(calls == 3, "MI-PRS-23 the failure came after two attributes were stored");
       PASS([[[ad extendedAttributes] objectForKey: @"org.example.big"] isEqual: blob]
            && [[[ad extendedAttributes] objectForKey: @"com.apple.quarantine"]
-               isEqual: quarantine] && [[ad resourceFork] isEqual: rsrc],
+               isEqual: [GSFileMetadata sidecarQuarantine: quarantine]] && [[ad resourceFork] isEqual: rsrc],
            "MI-PRS-23 then all metadata of the item is in the sidecar");
       PASS(getx(dst, @"user.com.apple.quarantine") == nil
            && getx(dst, @"user.com.apple.ResourceFork") == nil,

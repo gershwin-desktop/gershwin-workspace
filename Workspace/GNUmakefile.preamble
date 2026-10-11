@@ -55,6 +55,7 @@ ADDITIONAL_LDFLAGS += -L../Operation/Operation.framework/Versions/Current
 ADDITIONAL_LDFLAGS += -L../Operation/Operation.framework
 ADDITIONAL_LDFLAGS += -L../DSStore/obj
 ADDITIONAL_LDFLAGS += -L../GSMetadata/obj
+ADDITIONAL_LDFLAGS += -L../GWMetadata/MDKit/MDKit.framework/Versions/Current
 
 # Conditional DBus support
 ifeq ($(with_dbus),yes)

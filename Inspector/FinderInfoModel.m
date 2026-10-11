@@ -382,7 +382,7 @@ static BOOL storeComment(NSString *path, NSString *comment, NSError **error)
 - (BOOL)write:(NSError **)error
 {
   GSFileMetadata *md;
-  const char *cpath = [_path fileSystemRepresentation];
+  const char *cpath = GW_FSREP(_path);
   uint16_t flags;
   BOOL wasLocked = [_locker isImmutableAtPath: _path];
 

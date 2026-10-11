@@ -30,6 +30,9 @@
 #import <AppKit/NSView.h>
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
+#import "FSNArrangement.h"
+#import "FSNPreviewProvider.h"
+#import "FSNColumnViewOptions.h"
 
 @class FSNBrowserColumn;
 @class FSNBrowserCell;
@@ -89,6 +92,13 @@
   id <DesktopApplication> desktopApp;
   FSNodeRep *fsnodeRep;
   id _observedClipView;
+
+  /* Column view options (see the ViewOptions category). */
+  FSNColumnViewOptions *options;
+  BOOL showsPreviewColumn;
+  FSNIconsArrangement arrangement;
+  CGFloat defaultColumnWidth;
+  NSMutableDictionary *columnWidths;
 }
 
 - (id)initWithBaseNode:(FSNode *)bsnode
@@ -164,6 +174,56 @@
 - (void)clickInMatrixOfColumn:(FSNBrowserColumn *)col;
 - (void)doubleClickInMatrixOfColumn:(FSNBrowserColumn *)col;
 - (void)doubleClikTimeOut:(id)sender;
+
+@end
+
+
+/* Finder's column view options.  They are the same for every column view
+ * (E30): a browser starts with FSNColumnViewOptions and follows its
+ * changes.  The setters here change this browser alone - what the global
+ * options do through them, and what a plain drag of a column's resize
+ * handle does for this window's session (E32). */
+@interface FSNBrowser (ViewOptions)
+
+/* The text size of the names, held to Finder's 10 to 16. */
++ (int)clampedLabelTextSize:(int)size;
+- (void)setLabelTextSize:(int)size;
+
+/* "Show icons": without, the rows show the names alone. */
+- (void)setShowsIcons:(BOOL)flag;
+- (BOOL)showsIcons;
+
+/* "Show icon preview": an image file shows its own picture rather than the
+ * icon of its type. */
+- (void)setShowsIconPreview:(BOOL)flag;
+- (BOOL)showsIconPreview;
+
+/* "Show preview column": a single selected file is shown large, with what
+ * it is, in the column after it. */
+- (void)setShowsPreviewColumn:(BOOL)flag;
+- (BOOL)showsPreviewColumn;
+
+/* "Arrange by", in the orders of the icon view; None keeps the folder's own
+ * sort order. */
+- (void)setArrangement:(FSNIconsArrangement)value;
+- (FSNIconsArrangement)arrangement;
+
+/* The width of every column, in whole points, at least
+ * FSNBrowserMinimumColumnWidth.  Setting it drops the widths of single
+ * columns. */
+- (void)setDefaultColumnWidth:(CGFloat)width;
+- (CGFloat)defaultColumnWidth;
+
+/* The width of one column (by its index from the left, 0 for the folder
+ * the browser starts at); kept until the default width changes. */
+- (void)setWidth:(CGFloat)width forColumnAtIndex:(NSInteger)index;
+- (CGFloat)widthOfColumnAtIndex:(NSInteger)index;
+
+/* What the preview column shows of a file comes from this provider (the
+ * application's file rendering); without one it shows the file's icon.
+ * Retained. */
++ (void)setPreviewProvider:(id<FSNPreviewProvider>)provider;
++ (id<FSNPreviewProvider>)previewProvider;
 
 @end
 

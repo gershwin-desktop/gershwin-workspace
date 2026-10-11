@@ -88,6 +88,45 @@ int gs_removexattr(const char *path, const char *name);
 int gs_xattr_supported(const char *path);
 
 /**
+ * Copy the type name of the filesystem holding path into buf: the kernel's
+ * own name where it has one (f_fstypename on the BSDs, the volume's file
+ * system name on Windows), on Linux a name for the statfs magic number
+ * ("fuseblk" for block-backed FUSE, "fuse.<subtype>" from mountinfo for
+ * the rest).
+ *
+ * @return 0, or -1 with errno set (ENAMETOOLONG when buf is too small)
+ */
+int gs_fs_type_name(const char *path, char *buf, size_t size);
+
+/**
+ * The name gs_fs_type_name() gives a Linux statfs magic number; fuseType is
+ * the mountinfo type for FUSE (NULL when mountinfo does not say, giving
+ * "fuse").  A magic we do not list is named "0x<hex>", which no rule below
+ * matches.  Separate so that tests can feed any magic.
+ *
+ * @return 0, or -1 with errno set (ENAMETOOLONG when buf is too small)
+ */
+int gs_fs_type_name_for_magic(unsigned long magic, const char *fuseType,
+                              char *buf, size_t size);
+
+/**
+ * Whether the type is an SMB mount, where a Samba server may refuse "._"
+ * files (vfs_fruit, fruit:veto_appledouble).
+ */
+int gs_fs_type_is_smb(const char *fstype);
+
+/**
+ * Whether a Mac reads Finder metadata on a filesystem of this type only
+ * from "._" AppleDouble files: FAT, exFAT, SMB and NTFS.  There, metadata
+ * must be written as sidecars even when the local mount would accept
+ * extended attributes, because the Mac never sees those.
+ *
+ * @param fstype A name as gs_fs_type_name() returns it (case ignored)
+ * @return 1 or 0
+ */
+int gs_fs_type_wants_appledouble(const char *fstype);
+
+/**
  * Entry returned by gs_xattr_list_for_path().
  */
 typedef struct {
@@ -124,6 +163,15 @@ void gs_xattr_list_free(gs_xattr_list_t *list);
 
 #ifdef __cplusplus
 }
+#endif
+
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the gs_*xattr
+   functions take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
 #endif
 
 #endif /* GWMETAXATTR_H */

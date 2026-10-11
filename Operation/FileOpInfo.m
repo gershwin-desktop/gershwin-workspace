@@ -36,6 +36,8 @@
 #import "Operation.h"
 #import "Functions.h"
 #import "GWMetadataCopier.h"
+#import "GWFileUndoRecord.h"
+#import "GWFileUndoStack.h"
 
 
 #define PROGR_STEPS (100.0)
@@ -62,6 +64,8 @@ static NSString *nibName = @"FileOperationWin";
   RELEASE (files);
   RELEASE (procFiles);
   RELEASE (cachedProcessedFilesData);
+  RELEASE (completedItems);
+  RELEASE (undoRole);
   RELEASE (dupfiles);
   RELEASE (notifNames);
   RELEASE (win);
@@ -139,6 +143,7 @@ static NSString *nibName = @"FileOperationWin";
       ASSIGN (destination, dst);
       files = [[NSMutableArray arrayWithArray:fls] retain];
       procFiles = [[NSMutableArray alloc] init];
+      completedItems = [NSMutableArray new];
     
       dupfiles = [NSMutableArray new];
     
@@ -411,6 +416,21 @@ static NSString *nibName = @"FileOperationWin";
   ASSIGN(cachedProcessedFilesData, data);
 }
 
+- (void)cacheCompletedItems:(NSData *)data
+{
+  [completedItems addObjectsFromArray: [NSUnarchiver unarchiveObjectWithData: data]];
+}
+
+- (NSArray *)completedItems
+{
+  return completedItems;
+}
+
+- (void)setUndoRole:(NSString *)role
+{
+  ASSIGN (undoRole, role);
+}
+
 - (void)removeProcessedFiles
 {
   NSData *pFData;
@@ -568,7 +588,18 @@ static NSString *nibName = @"FileOperationWin";
       [win saveFrameUsingName: @"fopinfo"];
       [win close];
     }
-  
+
+  /* The executor's error handlers end an operation early, before its run
+   * has reported what it did, and the run ends it again afterwards: the
+   * history gets the first end that has something to undo, once. */
+  if (undoReported == NO && [completedItems count] > 0)
+    {
+      undoReported = YES;
+      [[GWFileUndoStack sharedStack] fileOperation: type
+                                didFinishWithItems: completedItems
+                                              role: undoRole];
+    }
+
   [controller endOfFileOperation: self];
   [execconn setRootObject:nil];
 }
@@ -821,6 +852,7 @@ shouldMakeNewConnection:(NSConnection*)newConn
   RELEASE (destination);
   RELEASE (files);
   RELEASE (procfiles);
+  RELEASE (doneitems);
   RELEASE (metaCopier);
   [super dealloc];
 }
@@ -883,6 +915,7 @@ shouldMakeNewConnection:(NSConnection*)newConn
   }		
   
   procfiles = [NSMutableArray new];
+  doneitems = [NSMutableArray new];
   
   return YES;
 }
@@ -1079,6 +1112,53 @@ shouldMakeNewConnection:(NSConnection*)newConn
   return [NSArchiver archivedDataWithRootObject: procfiles];
 }
 
+- (NSData *)completedItemsData
+{
+  return [NSArchiver archivedDataWithRootObject: doneitems];
+}
+
+/* Where each item went is what undo needs; the processed names alone do
+ * not say it once the Trash or Duplicate picked another name. */
+- (void)noteDone:(NSString *)name from:(NSString *)src to:(NSString *)dst
+{
+  NSMutableDictionary *item = [NSMutableDictionary dictionaryWithCapacity: 2];
+
+  if (src != nil)
+    [item setObject: src forKey: GWFileUndoFromKey];
+  [item setObject: dst forKey: GWFileUndoToKey];
+  [procfiles addObject: name];
+  [doneitems addObject: item];
+}
+
+- (void)reportProgress
+{
+  [fileOp cacheProcessedFiles: [self processedFiles]];
+  [fileOp cacheCompletedItems: [self completedItemsData]];
+  [fileOp sendDidChangeNotification];
+}
+
+/* End of a run over many files, which may also end in a pause. */
+- (void)finishBatch
+{
+  [self reportProgress];
+  if (([files count] == 0) || stopped)
+    {
+      [fileOp endOperation];
+    }
+  else if (paused)
+    {
+      [fileOp removeProcessedFiles];
+    }
+  [fileOp cleanUpExecutor];
+}
+
+- (void)finishSingle
+{
+  [self reportProgress];
+  [fileOp endOperation];
+  [fileOp cleanUpExecutor];
+}
+
 #define CHECK_DONE \
 if (([files count] == 0) || stopped || paused) break
 
@@ -1101,7 +1181,7 @@ filename = [fileinfo objectForKey: @"name"];
 	  
 	  if ([self moveItem: src to: dst])
 	    {
-	      [procfiles addObject: filename];
+	      [self noteDone: filename from: src to: dst];
 	    }
 	  else
 	    {
@@ -1112,7 +1192,7 @@ filename = [fileinfo objectForKey: @"name"];
 		{
 		  if ([fm copyPath: src toPath: dst handler: self] && [fm removeFileAtPath: src handler: self])
 		    {
-		      [procfiles addObject: filename];
+		      [self noteDone: filename from: src to: dst];
 		    }
 		}
 	    }
@@ -1122,17 +1202,7 @@ filename = [fileinfo objectForKey: @"name"];
       RELEASE (fileinfo);
     }
 
-  [fileOp cacheProcessedFiles: [self processedFiles]];
-  [fileOp sendDidChangeNotification];
-  if (([files count] == 0) || stopped)
-    {
-      [fileOp endOperation];
-    }
-  else if (paused)
-    {
-      [fileOp removeProcessedFiles];
-    }
-  [fileOp cleanUpExecutor];
+  [self finishBatch];
 }
 
 - (void)doCopy
@@ -1144,27 +1214,19 @@ filename = [fileinfo objectForKey: @"name"];
       
       if ((samename == NO) || (samename && [self removeExisting: fileinfo]))
         {
-          if ([self copyItem: [source stringByAppendingPathComponent: filename]
-                          to: [destination stringByAppendingPathComponent: filename]])
+          NSString *src = [source stringByAppendingPathComponent: filename];
+          NSString *dst = [destination stringByAppendingPathComponent: filename];
+
+          if ([self copyItem: src to: dst])
             {
-              [procfiles addObject: filename];
+              [self noteDone: filename from: src to: dst];
             }
         }
       [files removeObject: fileinfo];
       RELEASE (fileinfo); 
     }
   
-  [fileOp cacheProcessedFiles: [self processedFiles]];
-  [fileOp sendDidChangeNotification];
-  if (([files count] == 0) || stopped)
-    {
-      [fileOp endOperation];
-    }
-  else if (paused)
-    {
-      [fileOp removeProcessedFiles];
-    }
-  [fileOp cleanUpExecutor];
+  [self finishBatch];
 }
 
 - (void)doLink
@@ -1188,17 +1250,7 @@ filename = [fileinfo objectForKey: @"name"];
       RELEASE (fileinfo);
     }
 
-  [fileOp cacheProcessedFiles: [self processedFiles]];
-  [fileOp sendDidChangeNotification];
-  if (([files count] == 0) || stopped)
-    {
-      [fileOp endOperation];
-    }
-  else if (paused)
-    {
-      [fileOp removeProcessedFiles];
-    }
-  [fileOp cleanUpExecutor];
+  [self finishBatch];
 }
 
 /* Create Alias records (not symlinks) for each dropped/menu-selected
@@ -1219,24 +1271,14 @@ filename = [fileinfo objectForKey: @"name"];
 
 	  if (aliasPath != nil)
 	    {
-	      [procfiles addObject: [aliasPath lastPathComponent]];
+	      [self noteDone: [aliasPath lastPathComponent] from: src to: aliasPath];
 	    }
 	}
       [files removeObject: fileinfo];
       RELEASE (fileinfo);
     }
 
-  [fileOp cacheProcessedFiles: [self processedFiles]];
-  [fileOp sendDidChangeNotification];
-  if (([files count] == 0) || stopped)
-    {
-      [fileOp endOperation];
-    }
-  else if (paused)
-    {
-      [fileOp removeProcessedFiles];
-    }
-  [fileOp cleanUpExecutor];
+  [self finishBatch];
 }
 
 - (void)doRemove
@@ -1261,17 +1303,7 @@ filename = [fileinfo objectForKey: @"name"];
       RELEASE (fileinfo);
     }
 
-  [fileOp cacheProcessedFiles: [self processedFiles]];
-  [fileOp sendDidChangeNotification];
-  if (([files count] == 0) || stopped)
-    {
-      [fileOp endOperation];
-    }
-  else if (paused)
-    {
-      [fileOp removeProcessedFiles];
-    }
-  [fileOp cleanUpExecutor];                      
+  [self finishBatch];
 }
 
 - (void)doDuplicate
@@ -1318,33 +1350,26 @@ filename = [fileinfo objectForKey: @"name"];
 
 	  if ([self copyItem: [destination stringByAppendingPathComponent: filename]
 				      to: destpath]) {
-      [procfiles addObject: newname];	
+      [self noteDone: newname
+                from: [destination stringByAppendingPathComponent: filename]
+                  to: destpath];
     }
 	  [files removeObject: fileinfo];
     RELEASE (fileinfo);	       
   }
 
-  [fileOp cacheProcessedFiles: [self processedFiles]];
-  [fileOp sendDidChangeNotification];
-  if (([files count] == 0) || stopped)
-    {
-      [fileOp endOperation];
-    }
-  else if (paused)
-    {
-      [fileOp removeProcessedFiles];
-    }
-  [fileOp cleanUpExecutor];                                  
+  [self finishBatch];
 }
 
 - (void)doRename
 {
   GET_FILENAME;    
   
-  if ([fm movePath: source toPath: destination handler: self])
-    {         
-      [procfiles addObject: filename];
-  
+  /* Through the metadata copier like every other move, so that the "._"
+   * sidecar keeps following the item to its new name. */
+  if ([self moveItem: source to: destination])
+    {
+      [self noteDone: filename from: source to: destination];
     }
   else
     {
@@ -1355,7 +1380,7 @@ filename = [fileinfo objectForKey: @"name"];
 	  && ([fm fileExistsAtPath: source] == NO)) {
 	if ([fm copyPath: source toPath: destination handler: self]
 	    && [fm removeFileAtPath: source handler: self]) {
-	  [procfiles addObject: filename];
+	  [self noteDone: filename from: source to: destination];
 	}
       }
     }
@@ -1363,27 +1388,22 @@ filename = [fileinfo objectForKey: @"name"];
   [files removeObject: fileinfo];
   RELEASE (fileinfo);	
 
-  [fileOp cacheProcessedFiles: [self processedFiles]];
-  [fileOp sendDidChangeNotification];
-  [fileOp endOperation];
-  [fileOp cleanUpExecutor];
+  [self finishSingle];
 }
 
 - (void)doNewFolder
 {
   GET_FILENAME;  
 
-  if ([fm createDirectoryAtPath: [destination stringByAppendingPathComponent: filename]
-		     attributes: nil]) {
-    [procfiles addObject: filename];
+  NSString *dirpath = [destination stringByAppendingPathComponent: filename];
+
+  if ([fm createDirectoryAtPath: dirpath attributes: nil]) {
+    [self noteDone: filename from: nil to: dirpath];
   }
   [files removeObject: fileinfo];	
   RELEASE (fileinfo);
 
-  [fileOp cacheProcessedFiles: [self processedFiles]];
-  [fileOp sendDidChangeNotification];
-  [fileOp endOperation];
-  [fileOp cleanUpExecutor];
+  [self finishSingle];
 }
 
 - (void)doNewFile
@@ -1398,10 +1418,7 @@ filename = [fileinfo objectForKey: @"name"];
   [files removeObject: fileinfo];	
   RELEASE (fileinfo);
   
-  [fileOp cacheProcessedFiles: [self processedFiles]];
-  [fileOp sendDidChangeNotification];
-  [fileOp endOperation];
-  [fileOp cleanUpExecutor];
+  [self finishSingle];
 }
 
 - (void)doTrash
@@ -1451,7 +1468,7 @@ filename = [fileinfo objectForKey: @"name"];
     }
 
 	  if ([self moveItem: srcpath to: destpath]) {
-      [procfiles addObject: newname];
+      [self noteDone: newname from: srcpath to: destpath];
     } else {
       /* check for broken symlink */
       NSDictionary *attributes = [fm fileAttributesAtPath: srcpath traverseLink: NO];
@@ -1460,7 +1477,7 @@ filename = [fileinfo objectForKey: @"name"];
                                   && ([fm fileExistsAtPath: srcpath] == NO)) {
         if ([fm copyPath: srcpath toPath: destpath handler: self]
                           && [fm removeFileAtPath: srcpath handler: self]) {
-          [procfiles addObject: newname];
+          [self noteDone: newname from: srcpath to: destpath];
         }
       }
     }
@@ -1469,17 +1486,7 @@ filename = [fileinfo objectForKey: @"name"];
     RELEASE (fileinfo);  
   }
 
-  [fileOp cacheProcessedFiles: [self processedFiles]];
-  [fileOp sendDidChangeNotification];
-  if (([files count] == 0) || stopped)
-    {
-      [fileOp endOperation];
-    }
-  else if (paused)
-    {
-      [fileOp removeProcessedFiles];
-    }
-  [fileOp cleanUpExecutor];                                         
+  [self finishBatch];
 }
 
 /* Copying and moving go through GWMetadataCopier because NSFileManager

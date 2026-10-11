@@ -41,6 +41,8 @@
    library calls here take narrow strings, so use the UTF-8 form there. On
    the other platforms this is the plain -fileSystemRepresentation call. */
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #define GW_FSREP(path) [(path) UTF8String]
 #else
 #define GW_FSREP(path) [(path) fileSystemRepresentation]
@@ -447,11 +449,22 @@ NSString *FSNGroupedInteger(long long number, NSString *groupingSeparator)
 
 unsigned long long FSNAllocatedSizeOfPath(NSString *path)
 {
+#ifdef _WIN32
+  /* Windows has no st_blocks; the compressed size is what the file takes on
+   * its disk (smaller for compressed and sparse files). */
+  DWORD high = 0;
+  DWORD low = GetCompressedFileSizeW ((const wchar_t *)[path fileSystemRepresentation], &high);
+
+  if (low == INVALID_FILE_SIZE && GetLastError () != NO_ERROR)
+    return 0;
+  return ((unsigned long long)high << 32) | low;
+#else
   struct stat st;
 
   if (lstat ([path fileSystemRepresentation], &st) != 0)
     return 0;
   return (unsigned long long)st.st_blocks * 512ULL;
+#endif
 }
 
 NSArray *makePathsSelection(NSArray *selnodes)

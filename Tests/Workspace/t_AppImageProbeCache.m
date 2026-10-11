@@ -23,6 +23,20 @@
  * FSNodeRep or FSNIcon themselves).
  */
 
+#if defined(GW_NO_SQUASHFS)
+#import <Foundation/Foundation.h>
+
+int
+main(void)
+{
+  NSAutoreleasePool *arp = [NSAutoreleasePool new];
+
+  NSLog(@"libsquashfs is not installed, so Workspace is built without "
+        @"AppImage support and there is nothing to test");
+  [arp release];
+  return 0;
+}
+#else
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 
@@ -116,3 +130,4 @@ main(void)
   [arp release];
   return 0;
 }
+#endif /* GW_NO_SQUASHFS */

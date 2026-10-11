@@ -396,13 +396,23 @@ apply_appledouble(NSData *ad, NSString *destPath, NSString **why)
   BOOL inSidecar = NO;
   NSMutableArray *written = [NSMutableArray array];
 
+  /* Where a Mac reads the volume it sees only "._" files, so the companion
+   * stays exactly that. */
+  NSInteger appleDouble = [GSFileMetadata storesMetadataInAppleDoubleAtPath: destPath];
+  if (appleDouble < 0)
+    {
+      *why = [NSString stringWithFormat: @"cannot examine the filesystem: %s",
+                strerror(errno)];
+      return NO;
+    }
+
   /* Setting a user attribute needs write permission, an archive may well
    * hold a read-only file. */
   if (stat(cdst, &st) == 0 && (st.st_mode & S_IWUSR) == 0
       && chmod(cdst, st.st_mode | S_IWUSR) == 0)
     widened = YES;
 
-  int support = gs_xattr_supported(cdst);
+  int support = appleDouble == 1 ? 0 : gs_xattr_supported(cdst);
   if (support < 0)
     {
       *why = [NSString stringWithFormat: @"cannot tell whether attributes are supported: %s",
@@ -439,9 +449,21 @@ apply_appledouble(NSData *ad, NSString *destPath, NSString **why)
   if (widened)
     chmod(cdst, st.st_mode & 07777);
 
+  /* On a volume a Mac reads, the kernel's layout, and no quarantine:
+   * Finder does not carry it onto such a volume either (E35). */
+  if (appleDouble == 1)
+    {
+      ad = [GSFileMetadata macVolumeSidecarDataFor: parsed keepQuarantine: NO];
+      if (ad == nil)
+        {
+          [GSFileMetadata invalidateCachedMetadataForPath: destPath];
+          return YES;
+        }
+    }
   if (inSidecar && ![ad writeToFile: sidecar atomically: YES])
     {
-      *why = [NSString stringWithFormat: @"cannot write %@", sidecar];
+      *why = [[GSFileMetadata sidecarWriteErrorAtPath: sidecar code: errno]
+               localizedDescription];
       return NO;
     }
   [GSFileMetadata invalidateCachedMetadataForPath: destPath];

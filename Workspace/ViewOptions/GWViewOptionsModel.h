@@ -12,10 +12,19 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import "DSStore.h"
+#import "FSNIconsView.h"
 
 @class DSStoreInfo;
 @class FSNIconsView;
 @class FSNListViewDataSource;
+@class FSNColumnViewOptions;
+
+/* Which kind of view the panel edits. */
+typedef NS_ENUM (NSInteger, GWViewOptionsKind) {
+  GWViewOptionsIconView = 0,
+  GWViewOptionsListView,
+  GWViewOptionsColumnView
+};
 
 @interface GWViewOptionsModel : NSObject
 {
@@ -35,6 +44,12 @@
   NSSet *visibleColumns;
   BOOL usesRelativeDates;
   BOOL calculatesAllSizes;
+
+  int columnTextSize;
+  BOOL columnShowsIcons;
+  BOOL columnShowsIconPreview;
+  BOOL columnShowsPreviewColumn;
+  FSNIconsArrangement columnArrangement;
 
   BOOL alwaysOpen;
   DSStoreViewStyle alwaysOpenStyle;
@@ -80,6 +95,20 @@
 - (BOOL)calculatesAllSizes;
 - (void)setCalculatesAllSizes:(BOOL)flag;
 
+/* Column view options: the same for all folders, as Finder keeps them
+ * [O:E30], so they are not part of a folder's records. */
+- (int)columnTextSize;
+- (void)setColumnTextSize:(int)size;
+- (BOOL)columnShowsIcons;
+- (void)setColumnShowsIcons:(BOOL)flag;
+/* Has no effect while icons are off. */
+- (BOOL)columnShowsIconPreview;
+- (void)setColumnShowsIconPreview:(BOOL)flag;
+- (BOOL)columnShowsPreviewColumn;
+- (void)setColumnShowsPreviewColumn:(BOOL)flag;
+- (FSNIconsArrangement)columnArrangement;
+- (void)setColumnArrangement:(FSNIconsArrangement)value;
+
 /* "Always open in <view>": the folder keeps its view style (vstl), which
  * Finder stores only for this [O:E5]. */
 - (BOOL)alwaysOpen;
@@ -97,15 +126,23 @@
 - (void)takeFromInfo:(DSStoreInfo *)info;
 - (void)takeFromIconsView:(FSNIconsView *)view;
 - (void)takeFromListDataSource:(FSNListViewDataSource *)dataSource;
+- (void)takeFromColumnViewOptions:(FSNColumnViewOptions *)options;
 
 - (void)applyToIconsView:(FSNIconsView *)view;
 - (void)applyToListDataSource:(FSNListViewDataSource *)dataSource;
+/* Changes the shared options, which every column view follows at once and
+ * keeps in the defaults. */
+- (void)applyToColumnViewOptions:(FSNColumnViewOptions *)options;
 
 /* The options of the kind of view shown into the record: the icon view
  * options or the list view options, never the ones of a view the user has
  * not set up.  The view style is stored only with "Always open in", and
  * dropped without. */
 - (void)putIntoInfo:(DSStoreInfo *)info forListView:(BOOL)list;
+
+/* A column view has no options of its own in a folder: only the view
+ * style, with "Always open in". */
+- (void)putIntoInfo:(DSStoreInfo *)info forViewKind:(GWViewOptionsKind)kind;
 
 /* Both kinds. */
 - (void)putIntoInfo:(DSStoreInfo *)info;

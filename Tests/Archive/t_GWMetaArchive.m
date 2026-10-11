@@ -477,6 +477,44 @@ int main(void)
                  "MI-AR-28 the xattr holds the plain value, q/ stripped");
   }
 
+  /* --- extracting onto a volume a Mac reads through ._ files ----------- */
+  if (gs_xattr_supported([root fileSystemRepresentation]) == 1)
+    {
+      NSString *tar = [root stringByAppendingPathComponent: @"stick.tar"];
+      writeArchive(tar, NO, @[ @"many.txt", @"._many.txt", @"d/", @"._d" ],
+                   @[ body, manyAD, [NSNull null], dirAD ]);
+      NSString *dest = fresh(@"out-stick");
+      [GSFileMetadata setFilesystemTypeProbe: ^NSString *(NSString *path) {
+        return [path hasPrefix: dest] ? @"exfat" : @"ext4";
+      }];
+      NSError *err = nil;
+      PASS([GWMetaArchive extractArchive: tar toDir: dest error: &err],
+           "MI-AR-29 tar extracts onto exFAT (%s)",
+           err ? [[err description] UTF8String] : "ok");
+      NSString *f = [dest stringByAppendingPathComponent: @"many.txt"];
+      NSString *d = [dest stringByAppendingPathComponent: @"d"];
+      NSData *fs = [NSData dataWithContentsOfFile:
+                     [GSFileMetadata sidecarPathForFilePath: f]];
+      GSAppleDouble *want = [[[GSAppleDouble alloc] initWithData: manyAD] autorelease];
+      GSAppleDouble *got = fs ? [[[GSAppleDouble alloc] initWithData: fs] autorelease] : nil;
+      NSMutableDictionary *wantX = [[[want extendedAttributes] mutableCopy] autorelease];
+      [wantX removeObjectForKey: @"com.apple.quarantine"];
+      const uint8_t *b = [fs bytes];
+      PASS([fs length] >= 4096 && b[36] == 0x0e && b[37] == 0xb0,
+           "MI-AR-29 the companion becomes a sidecar in the kernel's layout [O: E35]");
+      PASS_EQUAL([got finderInfo], [want finderInfo],
+                 "MI-AR-29 with the companion's FinderInfo");
+      PASS_EQUAL([got extendedAttributes], wantX,
+                 "MI-AR-29 and its attributes, the quarantine left out [O: E35]");
+      PASS([NSData dataWithContentsOfFile:
+              [GSFileMetadata sidecarPathForFilePath: d]] != nil,
+           "MI-AR-29 the folder gets its sidecar too");
+      PASS(getx(f, @"user.com.apple.FinderInfo") == nil
+           && getx(d, @"user.com.apple.FinderInfo") == nil,
+           "MI-AR-29 nothing becomes an attribute the Mac would not see");
+      [GSFileMetadata setFilesystemTypeProbe: nil];
+    }
+
   [fm removeFileAtPath: root handler: nil];
   [pool release];
   return 0;

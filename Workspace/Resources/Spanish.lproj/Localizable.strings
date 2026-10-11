@@ -1160,7 +1160,7 @@ for";
 
 "Make Alias" = "Crear alias";
 
-"Quick Look" = "Vista rápida";
+"Look Inside" = "Mirar dentro";
 
 "AFP Server" = "Servidor AFP";
 
@@ -1350,3 +1350,59 @@ for";
 
 "OS" = "Sistema operativo";
 
+
+/* Edit > Undo and Redo of file operations */
+"New Folder" = "Nueva carpeta";
+"Undo %@" = "Deshacer %@";
+"Redo %@" = "Rehacer %@";
+"Move of \"%@\"" = "traslado de \"%@\"";
+"Move of %lu Items" = "traslado de %lu ítems";
+"Copy of \"%@\"" = "copia de \"%@\"";
+"Copy of %lu Items" = "copia de %lu ítems";
+"Duplicate of \"%@\"" = "duplicado de \"%@\"";
+"Duplicate of %lu Items" = "duplicado de %lu ítems";
+"Move of \"%@\" to Trash" = "traslado de \"%@\" a la Papelera";
+"Move of %lu Items to Trash" = "traslado de %lu ítems a la Papelera";
+"Make Alias of \"%@\"" = "creación de alias de \"%@\"";
+"Make Alias of %lu Items" = "creación de alias de %lu ítems";
+"Rename of \"%@\"" = "cambio de nombre de \"%@\"";
+"An item named \"%@\" already exists in \"%@\"." = "Ya existe un ítem llamado \"%@\" en \"%@\".";
+"\"%@\" in \"%@\" has been replaced by another item." = "\"%@\" en \"%@\" ha sido sustituido por otro ítem.";
+"\"%@\" can no longer be found in \"%@\"." = "\"%@\" ya no se encuentra en \"%@\".";
+"The operation cannot be undone." = "No se puede deshacer la operación.";
+"The operation cannot be redone." = "No se puede rehacer la operación.";
+" - searching..." = " - buscando...";
+"%@ (attribute not indexed)" = "%@ (atributo no indexado)";
+"%@ (character not searchable)" = "%@ (carácter no buscable)";
+"%@ (date not understood)" = "%@ (fecha no comprendida)";
+"%@ (text cannot be ordered)" = "%@ (el texto no se puede ordenar)";
+"A smart folder cannot express: %@" = "Una carpeta inteligente no puede expresar: %@";
+"Approximated: %@" = "Aproximado: %@";
+"Save Search" = "Guardar búsqueda";
+"Save Search..." = "Guardar búsqueda...";
+"The smart folder could not be written." = "No se pudo escribir la carpeta inteligente.";
+"This smart folder cannot be read: %@" = "No se puede leer esta carpeta inteligente: %@";
+"This smart folder cannot be searched here. Not supported: %@" = "Esta carpeta inteligente no se puede buscar aquí. No admitido: %@";
+"_kMDItemGroupId %@ %@ (kind group not known)" = "_kMDItemGroupId %@ %@ (grupo de tipos desconocido)";
+"a search needs at least one term besides size and dates" = "una búsqueda necesita al menos un criterio además del tamaño y las fechas";
+"content types are matched by file name extension" = "los tipos de contenido se reconocen por la extensión del nombre de archivo";
+"date" = "fecha";
+"diacritic and word matching modifiers are not applied" = "los modificadores de acentos y de palabras no se aplican";
+"kinds other than folder and application" = "tipos distintos de carpeta y aplicación";
+"names with *, \" or \\" = "nombres con *, \" o \\";
+"query not understood (%@)" = "consulta no comprendida (%@)";
+"relative dates are resolved when the search is opened" = "las fechas relativas se resuelven al abrir la búsqueda";
+"search location %@" = "ubicación de búsqueda %@";
+"searching one folder level only" = "búsqueda en un solo nivel de carpeta";
+"searching several folders" = "búsqueda en varias carpetas";
+"size and date terms can only be combined with and" = "los criterios de tamaño y fecha solo se pueden combinar con «y»";
+"size and dates are checked on the files found" = "el tamaño y las fechas se comprueban en los archivos encontrados";
+"the Finder-files-only option is not applied" = "la opción «solo archivos del Finder» no se aplica";
+"the content modification date is searched as the file modification date" = "la fecha de modificación del contenido se busca como fecha de modificación del archivo";
+"the display name is searched as the file name" = "el nombre mostrado se busca como nombre de archivo";
+"the query matches everything" = "la consulta coincide con todo";
+"the query matches nothing" = "la consulta no coincide con nada";
+"the user-files-only option is not applied" = "la opción «solo archivos del usuario» no se aplica";
+
+"There is no application set to open \"%@\"." = "No hay ninguna aplicación definida para abrir \"%@\".";
+"Use Open as Folder to look inside it." = "Use «Abrir como carpeta» para ver su contenido.";

@@ -1,0 +1,21 @@
+/* Strings of Look Inside, Workspace's space bar preview
+ * (Workspace/LookInside). */
+
+"1 item" = "1 \u00edtem";
+"%lu items" = "%lu \u00edtems";
+"Kind" = "Clase";
+"Contents" = "Contenido";
+"Size" = "Tama\u00f1o";
+"Calculating..." = "Calculando...";
+"Modified" = "Modificado";
+"Play" = "Reproducir";
+"Stop" = "Detener";
+"Previous" = "Anterior";
+"Next" = "Siguiente";
+"All Items" = "Todos los \u00edtems";
+"Full Screen" = "Pantalla completa";
+"Exit Full Screen" = "Salir de pantalla completa";
+"Open" = "Abrir";
+"Open with %@" = "Abrir con %@";
+"%lu Items" = "%lu \u00edtems";
+"%lu of %lu" = "%lu de %lu";

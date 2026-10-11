@@ -682,7 +682,9 @@ Dumps below come from `mac-oracle dump`, i.e. decoded by this repo's DSStore cod
   extension is chosen by scheme (http -> .webloc, ftp -> .ftploc, mailto ->
   .mailtoloc). Content as in E19: XML plist (tab indented), resources drag 128,
   TEXT 256, url 256, FinderInfo ilht/ilft/ilma + MACS, fdFlags 0x0010.
-- Fixtures: `E27-dragged-locations/` (data + `._` as fetched with tar).
+- Fixtures: `E27-dragged-locations/` (data + `._` as fetched with tar; the
+  ":" of the on-disk names is stored as "%3A" so the repository checks out
+  on Windows).
 
 ## E28 - p-links2 952191a2 aliases and location files on 10.6 (S15 part 2)
 
@@ -720,3 +722,247 @@ Dumps below come from `mac-oracle dump`, i.e. decoded by this repo's DSStore cod
   mount / Mail setup on the oracle).
 - Fixtures: `E28-p-links2/as-written/` (incl. the n = 1 sidecars),
   `E28-p-links2/fixed-sidecars/`, `shot-1.png`, `shot-2.png`, `mklinks2.m`.
+
+## E30 - column view options are global, in com.apple.finder, not in any .DS_Store
+
+- Date: 2026-10-11
+- Steps: folder c1 (a.txt, b.txt, pic.jpg, sub/deep) opened and switched to
+  column view by AppleScript; the View Options panel (Cmd-J) listed and each
+  checkbox clicked by UI scripting (`view-option-click`), the popups set by UI
+  scripting; Finder quit after every change (`flush`), then
+  `com.apple.finder.plist` and the stores of mi, c1, c1/sub, c1/sub/deep
+  diffed against the previous snapshot. The same options set by AppleScript
+  `column view options` and read back in a second folder c2.
+- Observed: the panel has text size, "Symbole einblenden" (show icons),
+  "Symbolvorschau einblenden" (show icon preview, disabled while icons are
+  off), "Vorschau einblenden" (show preview column), "Ausrichten nach"
+  (arrange by) and "Immer in Spaltendarstellung oeffnen"; there is no "Als
+  Standard verwenden" button. No change wrote anything into any .DS_Store (no
+  record in the parent, none in the folder's own store, none in the subfolders).
+  The first change creates `StandardViewOptions` -> `ColumnViewOptions` in
+  com.apple.finder.plist (absent in the baseline), with: ArrangeBy (string,
+  four-char code), ColumnShowFolderArrow (bool), ColumnShowIcons (bool),
+  ColumnWidth (integer, 205), FontSize (integer, 12), PreviewDisclosureState
+  (bool), SharedArrangeBy (string, kipl), ShowIconThumbnails (bool),
+  ShowPreview (bool). A value set in c2 is at once the value in c1: the options
+  are global.
+- Key mapping (two of the names are swapped against their meaning; proven by
+  single AppleScript changes, the panel state, screenshots and E31):
+  show icons = `ShowPreview`; show preview column = `ColumnShowIcons`; show icon
+  preview = `ShowIconThumbnails`; text size = `FontSize` (10..16); preview pane
+  disclosure ("Vorschau:" triangle, AppleScript `discloses preview pane`) =
+  `PreviewDisclosureState`; column width = `ColumnWidth`.
+- ArrangeBy codes: Name `dnam`, Date Modified `modd`, Date Created `ascd`,
+  Size `phys`, Kind `kipl`, Label `labl`. SharedArrangeBy stayed `kipl` (no
+  UI for it on a local folder).
+- Switching a window to column view also sets the global last-used view
+  `FXPreferredViewStyle` = `clmv` (E5).
+- Fixtures: `E30-column-view/finder-written-first-ColumnViewOptions.plist`
+  (the excerpt Finder wrote), `shot-icons-on-preview-off.png`.
+
+## E31 - written ColumnViewOptions are honoured, if typed correctly
+
+- Date: 2026-10-11
+- Steps: Finder stopped (`killall -STOP`), StandardViewOptions.ColumnViewOptions
+  written with typed values (`setcvo.py`, Foundation on the Mac), Finder killed
+  and relaunched by launchd; c1 opened in column view, AppleScript `column view
+  options` read, View Options panel and AX column widths read, item order of the
+  c1 column read (AXFilename), `shot`. Three rounds: (1) ShowPreview false,
+  ColumnShowIcons true, ShowIconThumbnails false, FontSize 14, ColumnWidth 300,
+  ArrangeBy phys; (2) ShowPreview true, ArrangeBy kipl, FontSize 10,
+  PreviewDisclosureState false, ColumnShowFolderArrow false; (3)
+  ShowIconThumbnails true, ColumnShowIcons false, FontSize 16, ColumnWidth 180,
+  ArrangeBy dnam. Before that, the same keys written with `defaults write` in
+  the old-style plist syntax.
+- Observed: (1) icons hidden, preview column shown, text 14, every column 300
+  wide, order b.txt, a.txt, sub, pic.jpg (495932 B), big.bin (500000 B), i.e.
+  size smallest first, as in icon view (E25). (2) icons shown, text 10, order
+  by kind (pic.jpg JPEG-Bild, big.bin, sub Ordner, a.txt, b.txt). (3) text 16,
+  columns 180, name order, pic.jpg drawn as a thumbnail, no preview column.
+  So FontSize, ColumnWidth, ArrangeBy, ShowPreview, ColumnShowIcons and
+  ShowIconThumbnails are honoured on read. ColumnShowFolderArrow false had no
+  visible effect (folder arrows still drawn). PreviewDisclosureState was not
+  honoured from the file: file 0 read as disclosed, file 1 read as collapsed;
+  only changes made inside Finder took effect (not explained).
+- `defaults write` with the old plist syntax stores every value as a string;
+  Finder then logs `-[NSCFString _getValue:forType:]: unrecognized selector`
+  repeatedly and stops answering AppleScript for its windows. The types must be
+  integer and boolean as Finder writes them.
+- Fixtures: `E30-column-view/setcvo.py`,
+  `shot-written-prefs-noicons-preview-w300-size.png`,
+  `shot-written-prefs-thumbs-text16-w180.png`, `shot-preview-collapsed.png`.
+
+## E32 - column widths: only Option-drag persists, and globally
+
+- Date: 2026-10-11
+- Steps: the resize grip at the bottom right of a column (under its vertical
+  scroller, AX geometry read first) dragged by `mac-oracle drag` (+80 px), then
+  window closed and reopened in the same Finder session, another folder opened,
+  Finder relaunched; the same with `drag --mods alt` (Option held, +60 px).
+- Observed: a plain drag widens only that column (205 -> 285); after closing
+  and reopening the window, or opening another folder, all columns are 205
+  again, and nothing was written anywhere. An Option-drag widens every column
+  (205 -> 265), sets `ColumnWidth` = 265 in ColumnViewOptions, applies to
+  other folders and survives a Finder relaunch. There is no per-column or
+  per-folder width.
+- Fixture: none (geometry numbers above).
+
+## E33 - per folder in column view: vstl clmv and bwsp; Workspace's writer is honoured
+
+- Date: 2026-10-11
+- Steps: (a) fresh folders c3, c7: "Immer in Spaltendarstellung oeffnen"
+  clicked by UI scripting, window closed, Finder quit, stores dumped; c7 and c8
+  also switched to column view by AppleScript with bounds set, without the
+  click. (b) Reverse: a tool built from this tree's
+  Workspace/FileViewer/DSStoreInfo.m (+ DSStore, GWMetadata; run on a private
+  Xvfb :613) set viewStyle column, a window frame, sidebar width and toolbar
+  and called `-saveToParentStore` for c4 (frame {{40,300},{800,300}}, sidebar
+  260, toolbar on) and c5 ({{100,200},{700,250}}, sidebar 180, toolbar off);
+  the records were pushed with the global last-used view set to icon; Finder
+  read current view, bounds, toolbar, sidebar width; `shot`.
+- Observed (a): the checkbox writes `vstl` type `clmv` into the PARENT store
+  under the folder's name, nothing else; AppleScript `current view` writes no
+  vstl (as E5). Window geometry, toolbar and sidebar width in column view are
+  the same `bwsp` record in the parent store as in the other views. Once (c1,
+  trigger not reproduced in c7/c8) Finder also wrote a legacy `fwi0` blob
+  023f000a02d803f6636c6d7600010000 (top 575, left 10, bottom 728, right 1014,
+  view clmv, then 0001 0000) next to vstl clmv.
+- Observed (b): both folders open in column view although the global view is
+  icon; c4 bounds 31,306,646,537 = WindowBounds {{31, 231}, {615, 253}} by the
+  E7 formula, toolbar on, sidebar width 260; c5 toolbar off, bounds
+  77,422,615,614 = {{77, 154}, {538, 214}} (sidebar width reads 0 while the
+  toolbar is hidden, E8). All honoured.
+- Notes on the writer: DSStoreInfo divided the frame by GSScaleFactor 1.3 of
+  this host (pixels -> points, intended) and also wrote a default `icvp` for
+  these column view folders although no icon option was changed; Finder 10.6
+  never writes an icvp for a column view folder (harmless, but not what Finder
+  does).
+- Fixtures: `E30-column-view/workspace-written-c4-c5.parent.DS_Store`,
+  `parent-after-all.DS_Store` (Finder-written c1 bwsp/fwi0/vstl, c3 vstl,
+  c6/c7/c8 bwsp), `cvwriter.m`, `shot-workspace-c4-c5.png` (a Bluetooth setup
+  dialog of the oracle covers part of it).
+
+## E34 - selected path and scroll positions in column view are window restore state only
+
+- Date: 2026-10-11
+- Steps: c1 opened in column view, window target set to c1/sub/deep and d.txt
+  selected; window closed and c1 reopened; Finder relaunched with the window
+  open; com.apple.finder `BrowserWindowState` read. Reverse: with no window
+  open and Finder stopped, a BrowserWindowState with one entry (TargetURL
+  c1/sub, ViewStyle Column, WindowBounds {{100, 100}, {800, 300}}, SidebarWidth
+  150, `setbws.py`) written; Finder killed and relaunched.
+- Observed: no per-folder record of the selected path or the column scroll
+  positions exists. Reopening c1 shows c1 again, not the deeper path. Only the
+  windows open when Finder quits are stored, globally, in
+  `BrowserWindowState` (array of dicts: TargetURL, TargetPath = every folder
+  from the Desktop down to the target, ViewStyle `Column`, WindowBounds,
+  ShowToolbar, ShowSidebar, ShowStatusBar, ShowPathbar, SidebarWidth,
+  BrowserViewState with ColumnViewInnerScrollOrigins = one "{x, y}" string per
+  column and ColumnViewOuterScrollOrigin), next to BrowserWindowRestoreAttempted
+  0. The written state was honoured at relaunch: one window on c1/sub, column
+  view, bounds 100,390,900,668 (E7 formula), sidebar width 150.
+- Fixtures: `E30-column-view/finder-written-BrowserWindowState-column.plist`,
+  `setbws.py`.
+
+## E35 - Finder copy to a FAT32 volume: AppleDouble ._ files made by the msdos driver, quarantine dropped
+
+- Date: 2026-10-11
+- Steps: file set a.txt (custom icon via NSWorkspace setIcon, label Red,
+  comment), b.txt (label Orange, comment, com.apple.quarantine, extra xattr),
+  c.txt (3000 byte xattr, no FinderInfo), c-alias (Finder alias of c.txt), a
+  folder lf/sub with label Yellow and a comment. `hdiutil create -size 64m -fs
+  MS-DOS -layout NONE`, attached; Finder `duplicate` of the items onto the
+  volume; later Finder `duplicate` from the volume back to a HFS+ folder. SMB:
+  see below.
+- Observed, destination layout: the kernel msdos driver, not Finder, makes the
+  `._` files. Every item with any FinderInfo/xattr/resource fork gets a
+  sibling `._<name>` (also `._.Trashes`, `._.DS_Store`). Finder wrote no
+  `.DS_Store` after a plain copy; `.DS_Store` (with `._.DS_Store`) appears only
+  in a folder whose window was opened and changed (here: comment record `sub
+  cmmt` of folder lf; no window record was in the volume root store). The
+  volume also gets `.Trashes` (and `.Trashes/501`) with their own `._`. No
+  `.TemporaryItems`.
+- AppleDouble layout (identical for every `._`): magic 00051607, version
+  00020000, filler "Mac OS X" + spaces, 2 entries: entry 9 (FinderInfo) at
+  offset 50 with length 3760, entry 2 (resource fork) at offset 3810. Entry 9
+  holds the 32 byte FinderInfo then an "ATTR" block (magic 'ATTR', debug tag
+  3b9ac9ff, total size, data start, ...) with all other xattrs (here the
+  comment bplist and org.example.extra); the rest is zero padding up to the
+  fixed 3760. Entry 2 has length 286 and offset 3810 when there is no resource
+  fork (zero-filled), otherwise the real fork (a.txt: 83547, c-alias: 42944;
+  file size 87357 / 46754). Without FinderInfo the 32 bytes are zero. The file
+  size is always a multiple of 4096 (minimum 4096). A 5000 byte xattr grows
+  entry 9 to 7856 (file 8192) and entry 2 moves to 7906.
+- The driver presents the `._` content live as xattrs on the base file, so
+  `xattr -l` on the FAT file shows FinderInfo, ResourceFork, the comment
+  attribute and org.example.* as on HFS+.
+- Quarantine: `com.apple.quarantine` is NOT carried by Finder duplicate, not
+  even HFS+ to HFS+ (the copy in the control folder had none). It was only
+  written into a `._` when set directly with `xattr -w` on the FAT file.
+- Copy back FAT -> HFS+ with Finder: everything that is in the `._` returns
+  byte for byte: FinderInfo (custom icon bit + label bits), resource fork (cmp
+  equal for icon and alias), comment, label, the alias still resolves to
+  c.txt, 3000 byte xattr, org.example.extra. Only the quarantine is lost, as
+  above. A `.DS_Store` appears in the HFS+ target folder as for any window.
+- SMB/NFS: not measurable here. The Mac sees no SMB server (this Linux host
+  listens on no 445/139/2049; `smbutil view //guest@<host>` refused; Bonjour
+  browse for _smb._tcp found none; only the Mac's own AFP). No server was set up.
+  So whether 10.6 writes `._` files on an SMB/NFS mount that supports
+  streams is open; the msdos result suggests the `._` synthesis is a per
+  filesystem driver feature (no native xattr support), not a Finder one.
+- Fixtures: `E35-nonhfs-fat32/` `fat-._*` (raw `._` files as on the volume,
+  `fat-._big.txt-5000B-xattr+quarantine`), `fat-lf.DS_Store`,
+  `fat-lf.._.DS_Store.bin`, `fat-lf-._sub`, `fat-listing.txt`,
+  `xattrs-hfs-source-back-hfsdup.txt` (source, copy back, control).
+
+## E36 - Smart folders: .savedSearch is an XML plist; SearchCriteria is mandatory
+
+- Date: 2026-10-11
+- Steps: File > New Smart Folder (System Events), criteria Kind is Image,
+  Last modified within last 7 days, Name contains x, File label (Red); saved
+  to ~/Library/Saved Searches (default, "Gesicherte Suchabfragen") and to the
+  Desktop; plists pulled. Built-in sidebar entries examined. Three hand-written
+  plists opened with Finder.
+- Observed, file: plain XML plist (not binary), extension `.savedSearch`,
+  `com.apple.FinderInfo` flags 0x0010 at bytes 8-9 (no type/creator code), UTI
+  kind "saved search". The default location `~/Library/Saved Searches` is
+  created on demand with an empty `.localized`. The Desktop copy is identical in
+  structure.
+- Keys: `CompatibleVersion` 1; `RawQuery` string (the compiled mdfind query,
+  e.g. `(true) && (((kMDItemFSLabel = 6) && (_kMDItemGroupId = 13)))`;
+  kind image is `_kMDItemGroupId = 13`; name contains is
+  `kMDItemDisplayName = "*x*"cd`; date range is `InRange(kMDItemContent
+  ModificationDate,<abs start>,<abs end>)` with CFAbsoluteTime reals, computed
+  at save time); `RawQueryDict` {RawQuery (same), SearchScopes [paths or
+  `kMDQueryScopeComputer`], FinderFilesOnly true, UserFilesOnly true};
+  `SearchCriteria` {AnyAttributeContains "", CurrentFolderPath [path] (only
+  when scope was a folder or "this Mac" from a folder window), FXScope
+  (four-char code as int: 'SCev' 1396925814 this Mac, 'SCcf' 1396925286 current
+  folder, 'SCsf' 1396929382 shared/canned), FXScopeArrayOfPaths,
+  FXCriteriaSlices [ {criteria: [attribute, op codes...], displayValues:
+  [UI strings, localized: "Letztes Aenderungsdatum"], rowType 0 (1 = compound
+  "None/Any/All of the following", with subrows), subrows []} ]}. Kind row:
+  criteria `kMDItemKind 300 408 500`; label row `kMDItemFSLabel 1400`
+  displayValues [name, label number (Finder label colour index 6 = Red, same as
+  kMDItemFSLabel), 9223372036854775807 = none selected]; modified within N
+  days: `kMDItemContentModificationDate 800 801 900 901` + "7", "days".
+  Note the RawQuery term order differs from the slice order.
+- Sidebar "Search For" entries (Today, Yesterday, Past Week, All Images, ...)
+  are not files in the user's tree: `com.apple.sidebarlists` `savedsearches`
+  holds {Alias, Icon, Name} items pointing at
+  `Finder.app/Contents/Resources/CannedSearches/<Name>.cannedSearch/search.savedSearch`
+  (same XML format; scope kMDQueryScopeComputer, FXScope 'SCsf'). A saved
+  search saved with "Add To Sidebar" is added to that array.
+- Hand-written files: (1) RawQuery + RawQueryDict only (`hand-min`): Finder 10.6.8
+  CRASHES (SIGSEGV, CFDictionaryGetValue on NULL, main thread, during the
+  open Apple event) - SearchCriteria is required; (2) RawQuery + RawQueryDict +
+  SearchCriteria {FXScope 'SCcf', FXScopeArrayOfPaths, CurrentFolderPath}
+  without any FXCriteriaSlices (`hand-crit`): opens, shows the search window
+  titled with the file name (extension shown because no hide-extension flag),
+  results a.txt b.txt c.txt for `kMDItemFSName = "*.txt"cd` limited to the scope
+  folder, criteria bar empty; Finder did not rewrite the file. Not tried: the
+  RawQuery-only file (`hand-rawonly`), expected to crash like (1).
+  FinderInfo of a hand-written file was empty; it worked anyway.
+- Fixtures: `E36-smart-folders/` `finder-written-*.savedSearch`, `canned-*.savedSearch`,
+  `hand-*.savedSearch`, `crash-hand-min.txt`, `shot-hand-crit.png` (the oracle's
+  Bluetooth dialog covers the middle).

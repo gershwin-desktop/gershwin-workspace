@@ -1,0 +1,55 @@
+.:
+total 428
+drwxrwxrwx  1 user  staff  -      16384 Oct 11 16:14 .
+drwxrwxrwt@ 4 root  admin  hidden   136 Oct 11 16:13 ..
+	com.apple.FinderInfo	   32 
+drwxrwxrwx@ 1 user  staff  hidden  2048 Oct 11 16:13 .Trashes
+	com.apple.FinderInfo	   32 
+-rwxrwxrwx  1 user  staff  hidden  4096 Oct 11 16:13 ._.Trashes
+-rwxrwxrwx  1 user  staff  hidden 87357 Oct 11 16:13 ._a.txt
+-rwxrwxrwx  1 user  staff  hidden  4096 Oct 11 16:13 ._b.txt
+-rwxrwxrwx  1 user  staff  hidden 46754 Oct 11 16:13 ._c-alias
+-rwxrwxrwx  1 user  staff  hidden  4096 Oct 11 16:13 ._c.txt
+-rwxrwxrwx@ 1 user  staff  -          6 Oct 11 16:13 a.txt
+	com.apple.FinderInfo	   32 
+	com.apple.ResourceFork	83547 
+	com.apple.metadata:kMDItemFinderComment	   51 
+-rwxrwxrwx@ 1 user  staff  -          6 Oct 11 16:12 b.txt
+	com.apple.FinderInfo	   32 
+	com.apple.metadata:kMDItemFinderComment	   51 
+	org.example.extra	   11 
+-rwxrwxrwx@ 1 user  staff  -      43372 Oct 11 16:13 c-alias
+	com.apple.FinderInfo	   32 
+	com.apple.ResourceFork	42944 
+-rwxrwxrwx@ 1 user  staff  -          6 Oct 11 16:12 c.txt
+	org.example.big	 3000 
+drwxrwxrwx  1 user  staff  -       2048 Oct 11 16:14 lf
+
+.Trashes:
+total 48
+drwxrwxrwx@ 1 user  staff  hidden  2048 Oct 11 16:13 .
+	com.apple.FinderInfo	   32 
+drwxrwxrwx  1 user  staff  -      16384 Oct 11 16:14 ..
+-rwxrwxrwx  1 user  staff  hidden  4096 Oct 11 16:13 ._501
+drwxrwxrwx@ 1 user  staff  -       2048 Oct 11 16:13 501
+	com.apple.FinderInfo	   32 
+
+lf:
+total 72
+drwxrwxrwx  1 user  staff  -       2048 Oct 11 16:14 .
+drwxrwxrwx  1 user  staff  -      16384 Oct 11 16:14 ..
+-rwxrwxrwx@ 1 user  staff  hidden  6148 Oct 11 16:14 .DS_Store
+	com.apple.FinderInfo	   32 
+-rwxrwxrwx  1 user  staff  hidden  4096 Oct 11 16:14 ._.DS_Store
+-rwxrwxrwx  1 user  staff  hidden  4096 Oct 11 16:14 ._sub
+drwxrwxrwx@ 1 user  staff  -       2048 Oct 11 16:14 sub
+	com.apple.FinderInfo	   32 
+	com.apple.metadata:kMDItemFinderComment	   52 
+
+lf/sub:
+total 12
+drwxrwxrwx@ 1 user  staff  - 2048 Oct 11 16:14 .
+	com.apple.FinderInfo	  32 
+	com.apple.metadata:kMDItemFinderComment	  52 
+drwxrwxrwx  1 user  staff  - 2048 Oct 11 16:14 ..
+-rwxrwxrwx  1 user  staff  -    2 Oct 11 16:14 in.txt

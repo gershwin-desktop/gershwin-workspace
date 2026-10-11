@@ -37,7 +37,9 @@
 #import "FSNDirEntry.h"
 
 #include <sys/stat.h>
+#if !defined(_WIN32)
 #include <dirent.h>
+#endif
 #include <limits.h>
 
 #define ICNSIZE (24)
@@ -324,6 +326,7 @@ columnTypeByColumnId(void)
 
 /* Plain C on purpose: this runs off the main thread, and a walk through a
  * big tree must not build an object per entry. */
+#if !defined(_WIN32)
 static unsigned long long
 treeSize(char *path, size_t length, dev_t device, const int *stop, int depth)
 {
@@ -400,6 +403,41 @@ treeSize(char *path, size_t length, dev_t device, const int *stop, int depth)
 
   return treeSize (buffer, strlen (buffer), st.st_dev, stop, 0);
 }
+#else
++ (unsigned long long)sizeOfTreeAtPath:(NSString *)path stop:(const int *)stop
+{
+  /* Windows has no lstat/st_blocks and wide-character paths, so the walk
+   * goes through NSFileManager and the shared on-disk size function. */
+  static const int never = 0;
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSDirectoryEnumerator *e;
+  NSString *sub;
+  BOOL isDir = NO;
+  unsigned long long total = 0;
+
+  if (stop == NULL)
+    {
+      stop = &never;
+    }
+  if (![fm fileExistsAtPath: path isDirectory: &isDir])
+    {
+      return 0;
+    }
+  if (!isDir)
+    {
+      return FSNAllocatedSizeOfPath (path);
+    }
+  e = [fm enumeratorAtPath: path];
+  while ((sub = [e nextObject]) != nil && *stop == 0)
+    {
+      if (![[[e fileAttributes] fileType] isEqual: NSFileTypeDirectory])
+        {
+          total += FSNAllocatedSizeOfPath ([path stringByAppendingPathComponent: sub]);
+        }
+    }
+  return total;
+}
+#endif
 
 @end
 
@@ -3508,6 +3546,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     {
     case FSNListColumnTypeDateLastOpened:
       {
+#if !defined(_WIN32)
         struct stat st;
 
         /* The access time is what a POSIX system has that comes closest. */
@@ -3515,6 +3554,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
           {
             return [NSDate dateWithTimeIntervalSince1970: (NSTimeInterval)st.st_atime];
           }
+#endif
       }
       break;
     case FSNListColumnTypeVersion:

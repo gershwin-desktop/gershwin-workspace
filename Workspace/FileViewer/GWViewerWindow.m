@@ -30,7 +30,7 @@
 #import "Workspace.h"
 #import "GWDesktopManager.h"
 #import "FSNSpringLoader.h"
-#import "../QuickLook/GWQuickLookController.h"
+#import "../LookInside/GWLookInsideController.h"
 
 // Forward declare methods to avoid warnings
 @interface NSObject (ViewerDelegateMethods)
@@ -207,7 +207,9 @@
 
   if ([characters length] > 0 && [characters characterAtIndex: 0] == ' ')
     {
-      if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
+      /* Option-Space is the same toggle, opening straight into full
+       * screen. */
+      if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSControlKeyMask)))
         {
           id del = [self delegate];
           NSArray *selection = nil;
@@ -221,7 +223,7 @@
            * inside it is selected (the same convention -validateItem: in
            * GWViewerBase/GWSpatialViewer checks before enabling Cut/Get
            * Info/etc.): without this check, Space with nothing selected
-           * would open Quick Look on the folder itself instead of doing
+           * would open Look Inside on the folder itself instead of doing
            * nothing. */
           if ([selection count] == 1 && [del respondsToSelector: @selector(baseNode)])
             {
@@ -233,14 +235,15 @@
                 }
             }
 
-          /* Space toggles the Quick Look panel for the current selection:
+          /* Space toggles the Look Inside panel for the current selection:
            * opens it, or closes it if one is already open (from this
            * window or another) regardless of what is selected now.  Get
            * Info's Attributes/Contents inspector - what Space used to
            * open here - stays reachable only from its own menu item. */
-          return [[GWQuickLookController sharedController]
-                     toggleQuickLookForSelection: selection
-                                    sourceWindow: self];
+          return [[GWLookInsideController sharedController]
+                     toggleLookInsideForPaths: [selection valueForKey: @"path"]
+                                 sourceWindow: self
+                                   fullScreen: (flags & NSAlternateKeyMask) != 0];
         }
     }
 

@@ -53,6 +53,7 @@
 #import "FSNAliasFile.h"
 #import "FSNLocationFile.h"
 #import "GWViewerChrome.h"
+#import "GWStationery.h"
 #import "Workspace.h"
 
 /* Set of paths the user has recently unmounted via the GUI.
@@ -79,12 +80,16 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWDockWindow.h"
 #import "Dock.h"
 #import "GWTrashFlight.h"
+#import "GWOpenItemAnimation.h"
 #import "GWViewersManager.h"
 #import "ViewOptions/GWViewOptionsPanel.h"
 #import "GWViewer.h"
 #import "Finder.h"
+#ifdef HAVE_MDKIT
+#import "GWSmartFolder.h"
+#endif
 #import "Inspector.h"
-#import "QuickLook/GWQuickLookController.h"
+#import "LookInside/GWLookInsideController.h"
 #import "Operation.h"
 #import "History/History.h"
 #import "X11AppSupport.h"
@@ -98,6 +103,8 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWMetaArchive.h"
 #import "FSNIconsView.h"
 #import "GWMetadataProvider.h"
+#import "FSNBrowser.h"
+#import "LookInside/GWLookInsideColumnPreviewProvider.h"
 #import "GWIconPositionStore.h"
 #import "GWExtensionsManager.h"
 #import "GWAlignLogically.h"
@@ -447,7 +454,7 @@ static Workspace *gworkspace = nil;
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(makeAliasFiles:) keyEquivalent:@"l"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Quick Look") action:@selector(quickLook:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Look Inside") action:@selector(lookInside:) keyEquivalent:@"y"];
   [menuItem setTarget:self];
   
   // Share submenu
@@ -932,6 +939,7 @@ static Workspace *gworkspace = nil;
    * label colours, invisibility, custom icons and icon positions without
    * depending on the metadata implementation directly. */
   [fsnodeRep setMetadataProvider: [GWMetadataProvider sharedProvider]];
+  [FSNBrowser setPreviewProvider: [GWLookInsideColumnPreviewProvider sharedProvider]];
   [fsnodeRep setIconPositionStore: [GWIconPositionStore sharedStore]];
   /* Let external .gwext bundles decorate nodes and extend the context menu. */
   [fsnodeRep setDecorationDelegate: [GWExtensionsManager defaultManager]];
@@ -1066,6 +1074,11 @@ static Workspace *gworkspace = nil;
   }
   
   fileOpsManager = [Operation new];
+  /* Undo and Redo run through the same controller as every file
+   * operation, so they get its progress window, locking and change
+   * notifications. */
+  [[GWFileUndoStack sharedStack] setPerformer: fileOpsManager];
+  [[GWFileUndoStack sharedStack] setTrashPath: trashPath];
   
   ddbd = nil;
   [self connectDDBd];
@@ -1769,7 +1782,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       || sel_isEqual(action, @selector(makeThumbnails:))
       || sel_isEqual(action, @selector(removeThumbnails:))
       || sel_isEqual(action, @selector(notImplemented:))
-      || sel_isEqual(action, @selector(quickLook:))
+      || sel_isEqual(action, @selector(lookInside:))
       || sel_isEqual(action, @selector(cleanUp:))
       || sel_isEqual(action, @selector(cleanUpBy:)))
     {
@@ -1785,12 +1798,27 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       return ([self _viewerForKeyWindow] != nil);
     }
 
+  /* File operations are undone application-wide, as in the Finder: the
+   * title names what would be undone or redone. */
+  if (sel_isEqual(action, @selector(undo:)))
+    {
+      GWFileUndoStack *stack = [GWFileUndoStack sharedStack];
+
+      [anItem setTitle: [stack undoMenuTitle]];
+      return [stack canUndo];
+    }
+  if (sel_isEqual(action, @selector(redo:)))
+    {
+      GWFileUndoStack *stack = [GWFileUndoStack sharedStack];
+
+      [anItem setTitle: [stack redoMenuTitle]];
+      return [stack canRedo];
+    }
+
   // === Window-level standard operations — forward to key window ===
   if (sel_isEqual(action, @selector(performClose:))
       || sel_isEqual(action, @selector(performMiniaturize:))
       || sel_isEqual(action, @selector(performZoom:))
-      || sel_isEqual(action, @selector(undo:))
-      || sel_isEqual(action, @selector(redo:))
       || sel_isEqual(action, @selector(toggleToolbarShown:)))
     {
       NSWindow *keyWindow = [NSApp keyWindow];
@@ -2044,6 +2072,18 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
            * focused viewer's icon), everything else launches its app.  When
            * newv is NO, directories are not opened at all. */
           if (newv || [node isDirectory] == NO) {
+            /* A document or an application grows out of its icon and fades
+             * away; a folder has its own animation, its viewer growing out
+             * of the icon. */
+            if ([node isDirectory] == NO || [node isPackage]) {
+              NSRect iconRect;
+              NSWindow *iconWindow = [vwrsManager windowShowingIconOfNode: node
+                                                               screenRect: &iconRect];
+
+              [GWOpenItemAnimation playForNode: node
+                                      inWindow: iconWindow
+                                  atScreenRect: iconRect];
+            }
             [vwrsManager openNode: node fromViewer: nil];
           }
         }
@@ -2083,6 +2123,14 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   BOOL success;
   NSURL *aURL;
 
+
+#ifdef HAVE_MDKIT
+  /* A Spotlight smart folder opens a window with what it finds, not the
+     file in an editor. */
+  if ([[fullPath pathExtension] isEqualToString: @"savedSearch"]) {
+    return [GWSmartFolder openSavedSearchAtPath: fullPath];
+  }
+#endif
 
 /* Alias files (issue #71): opening an alias opens the target the record
    resolves to, not the file itself.  Only a file the Finder Info marks as an
@@ -2307,70 +2355,64 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
   aURL = nil;
 
-  /* Mac Creator code lookup + Stationery handling */
+  /* Stationery first: a pad with a creator code still opens as a new copy
+   * in that application, never as the pad itself. */
   {
     GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: fullPath];
-    if (md)
-    {
-      /* Creator code -> application mapping */
-      if ([md creatorCode] != 0)
-        {
-          NSString *appPath = [self applicationForCreatorCode: [md creatorCode]];
-          if (appPath)
-            {
-              return [[NSWorkspace sharedWorkspace] openFile: fullPath withApplication: appPath];
-            }
-        }
 
-      /* Stationery: create a copy and open the copy instead */
-      if ([md isStationery])
-        {
-          NSString *dir  = [fullPath stringByDeletingLastPathComponent];
-          NSString *name = [fullPath lastPathComponent];
-          NSString *ext  = [name pathExtension];
-          NSString *base = [name stringByDeletingPathExtension];
+    if ([md isStationery])
+      {
+        NSError *error = nil;
+        NSString *copyPath = [GWStationery makeCopyOfStationeryAtPath: fullPath
+                                                                 error: &error];
 
-          NSString *copyName;
-          if ([ext length] > 0)
-            copyName = [NSString stringWithFormat: @"%@ copy.%@", base, ext];
-          else
-            copyName = [NSString stringWithFormat: @"%@ copy", name];
+        if (copyPath == nil)
+          {
+            NSRunAlertPanel(nil, @"%@", _(@"OK"), nil, nil,
+                            [error localizedDescription]);
+            return NO;
+          }
+        return [self openFile: copyPath];
+      }
+    if ([md creatorCode] != 0)
+      {
+        NSString *appPath = [self applicationForCreatorCode: [md creatorCode]];
 
-          NSString *copyPath = [dir stringByAppendingPathComponent: copyName];
-          NSFileManager *fileMgr = [NSFileManager defaultManager];
-
-          if ([fileMgr fileExistsAtPath: copyPath])
-            {
-              NSUInteger n = 2;
-              do {
-                NSString *tryName;
-                if ([ext length] > 0)
-                  tryName = [NSString stringWithFormat: @"%@ copy %lu.%@", base, (unsigned long)n, ext];
-                else
-                  tryName = [NSString stringWithFormat: @"%@ copy %lu", name, (unsigned long)n];
-                copyPath = [dir stringByAppendingPathComponent: tryName];
-                n++;
-              } while ([fileMgr fileExistsAtPath: copyPath]);
-            }
-
-          if ([fileMgr copyPath: fullPath toPath: copyPath handler: nil])
-            {
-              GSFileMetadata *copyMd = [GSFileMetadata metadataForFileAtPath: copyPath];
-              if (!copyMd) copyMd = [[[GSFileMetadata alloc] init] autorelease];
-              [copyMd setStationery: NO];
-              [copyMd writeToFileAtPath: copyPath error: nil];
-
-              return [self openFile: copyPath];
-            }
-          else
-            {
-              return NO;
-            }
-        }
-    }
+        if (appPath)
+          return [[NSWorkspace sharedWorkspace] openFile: fullPath withApplication: appPath];
+      }
   }
 
   [ws getInfoForFile: fullPath application: &appName type: &type];
+
+  /* A document package (x.pages, x.rtfd, ...) that no application claims
+   * would go to NSWorkspace with no application, which hands it back to
+   * Workspace itself as the folder handler and lands here again, forever.
+   * Finder says there is no application for it; offer Open as Folder. */
+  {
+    FSNode *node = [FSNode nodeWithPath: fullPath];
+
+    if ([node isDirectory] && [node isPackage] && ([node isApplication] == NO)
+        && (appName == nil
+            || [[[appName lastPathComponent] stringByDeletingPathExtension]
+                 isEqualToString: [[NSProcessInfo processInfo] processName]]))
+      {
+        NSInteger choice = NSRunAlertPanel(
+          [NSString stringWithFormat: _(@"There is no application set to open \"%@\"."),
+                    [fullPath lastPathComponent]],
+          _(@"Use Open as Folder to look inside it."),
+          _(@"Open as Folder"), _(@"Cancel"), nil);
+
+        if (choice == NSAlertDefaultReturn)
+          {
+            /* asFolder: newViewerAtPath: would route the package through
+             * this method again and show the alert once more. */
+            [vwrsManager openNode: node fromViewer: nil asFolder: YES];
+            return YES;
+          }
+        return NO;
+      }
+  }
 
   /* If file is a plain file, check for ELF magic and handle executable prompting.
 
@@ -2736,6 +2778,18 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 		  destination: basePath
 			files: files
 			  tag: &tag];
+}
+
+/* The File menu sends duplicateFiles:; with the menu bar owned by another
+ * process there is often no key window to take it, so the application
+ * delegate must answer it like makeAliasFiles:, or Duplicate stays disabled. */
+- (void)duplicateFiles:(id)sender
+{
+  if ([selectedPaths count] == 0)
+    {
+      return;
+    }
+  [self duplicateFiles];
 }
 
 - (void)duplicateFiles
@@ -3634,6 +3688,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if (infoPanel == nil) {
     infoPanel = [[GSInfoPanel alloc] initWithDictionary: nil];
     [infoPanel setReleasedWhenClosed: NO];
+    /* NSPanel hides on deactivation by default; launching another
+       application deactivates Workspace and would hide the panel. */
+    [infoPanel setHidesOnDeactivate: NO];
     [infoPanel setTitle: [NSString stringWithFormat: _(@"About %@"),
                                    [[NSProcessInfo processInfo] processName]]];
   }
@@ -4423,6 +4480,8 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 {
   if (newsel && [newsel count] && ([vwrsManager orderingViewers] == NO)) {
     [self setSelectedPaths: [FSNode pathsOfNodes: newsel]];
+    /* An open Look Inside panel shows whatever is selected now. */
+    [[GWLookInsideController sharedController] selectionDidChange: selectedPaths];
   }
 }
 
@@ -5723,12 +5782,26 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
 - (void)undo:(id)sender
 {
-  [self notImplemented:sender];
+  NSError *error = nil;
+
+  if ([[GWFileUndoStack sharedStack] undo: &error] == NO && error != nil)
+    {
+      NSRunAlertPanel(NSLocalizedString(@"The operation cannot be undone.", @""),
+                      @"%@", NSLocalizedString(@"OK", @""), nil, nil,
+                      [error localizedDescription]);
+    }
 }
 
 - (void)redo:(id)sender
 {
-  [self notImplemented:sender];
+  NSError *error = nil;
+
+  if ([[GWFileUndoStack sharedStack] redo: &error] == NO && error != nil)
+    {
+      NSRunAlertPanel(NSLocalizedString(@"The operation cannot be redone.", @""),
+                      @"%@", NSLocalizedString(@"OK", @""), nil, nil,
+                      [error localizedDescription]);
+    }
 }
 
 - (void)toggleHiddenFiles
@@ -5739,15 +5812,15 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
                   @"OK", nil, nil);
 }
 
-- (void)quickLook:(id)sender
+- (void)lookInside:(id)sender
 {
   /* Menu entry point: uses the app-wide current selection, same as Get
    * Info's menu item does; the Space bar path in GWViewerWindow instead
    * uses the key folder window's own live selection (see
    * -performKeyEquivalent: there for why). */
-  [[GWQuickLookController sharedController]
-      toggleQuickLookForPaths: selectedPaths
-                 sourceWindow: [NSApp keyWindow]];
+  [[GWLookInsideController sharedController]
+      toggleLookInsideForPaths: selectedPaths
+                  sourceWindow: [NSApp keyWindow]];
 }
 
 + (NSArray *)volumeMountRoots

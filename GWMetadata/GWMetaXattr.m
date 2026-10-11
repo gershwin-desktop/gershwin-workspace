@@ -109,6 +109,11 @@ _gs_set(const char *path, const char *name, const void *value,
 
   ssize_t written = extattr_set_file(path, EXTATTR_NAMESPACE_USER,
                                      name, value, size);
+  /* FreeBSD refuses a value larger than the file system keeps for one
+   * attribute (64 KiB, e.g. a Finder resource fork) with EINVAL, where Linux
+   * says E2BIG; callers fall back to the AppleDouble sidecar on E2BIG. */
+  if (written < 0 && errno == EINVAL && size > 0)
+    errno = E2BIG;
   return (written == (ssize_t)size) ? 0 : -1;
 }
 
@@ -498,4 +503,250 @@ gs_xattr_list_free(gs_xattr_list_t *list)
     }
   free(list->entries);
   free(list);
+}
+
+/* ===================================================================
+ * Filesystem type
+ * =================================================================== */
+
+#include <stdio.h>
+
+/* Linux only gives a magic number; these are the names mount(8) uses.
+ * vfat and msdos share one magic, as do ext2, ext3 and ext4. */
+static const struct { unsigned long magic; const char *name; } gsFsMagic[] = {
+  { 0x4d44UL,     "msdos" },
+  { 0x2011BAB0UL, "exfat" },
+  { 0xFF534D42UL, "cifs" },
+  { 0xFE534D42UL, "smb3" },
+  { 0x517BUL,     "smbfs" },
+  { 0x5346544eUL, "ntfs" },
+  { 0xEF53UL,     "ext4" },
+  { 0x58465342UL, "xfs" },
+  { 0x9123683EUL, "btrfs" },
+  { 0x2fc12fc1UL, "zfs" },
+  { 0xF2F52010UL, "f2fs" },
+  { 0xca451a4eUL, "bcachefs" },
+  { 0x01021994UL, "tmpfs" },
+  { 0x858458f6UL, "ramfs" },
+  { 0x794c7630UL, "overlay" },
+  { 0x6969UL,     "nfs" },
+  { 0x482bUL,     "hfsplus" },
+  { 0x4244UL,     "hfs" },
+  { 0x9660UL,     "iso9660" },
+  { 0x15013346UL, "udf" },
+  { 0x73717368UL, "squashfs" },
+};
+#define GS_FUSE_MAGIC 0x65735546UL
+
+int
+gs_fs_type_name_for_magic(unsigned long magic, const char *fuseType,
+                          char *buf, size_t size)
+{
+  const char *name = NULL;
+  size_t i;
+
+  if (!buf || size == 0)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+  if (magic == GS_FUSE_MAGIC)
+    name = fuseType ? fuseType : "fuse";
+  for (i = 0; name == NULL && i < sizeof(gsFsMagic) / sizeof(gsFsMagic[0]); i++)
+    {
+      if (magic == gsFsMagic[i].magic)
+        name = gsFsMagic[i].name;
+    }
+  if (name == NULL)
+    {
+      /* Identified, just not one we tell apart: a name no rule matches,
+       * so the item keeps the native behaviour. */
+      if (snprintf(buf, size, "0x%lx", magic) >= (int)size)
+        {
+          errno = ENAMETOOLONG;
+          return -1;
+        }
+      return 0;
+    }
+  if (strlen(name) >= size)
+    {
+      errno = ENAMETOOLONG;
+      return -1;
+    }
+  strcpy(buf, name);
+  return 0;
+}
+
+#if defined(__linux__)
+# include <sys/vfs.h>
+# include <sys/stat.h>
+# include <sys/sysmacros.h>
+
+/* FUSE shares one magic between ntfs-3g, exfat-fuse, sshfs and the rest;
+ * only mountinfo, keyed by the device number, says which one it is.
+ * Returns 0 when it does not say: the filesystem is still FUSE. */
+static int
+gs_fuse_type_name(const char *path, char *buf, size_t size)
+{
+  struct stat st;
+  char key[32];
+  char line[4096];
+  FILE *f;
+
+  if (stat(path, &st) != 0)
+    return 0;
+  snprintf(key, sizeof(key), " %u:%u ",
+           (unsigned)major(st.st_dev), (unsigned)minor(st.st_dev));
+  f = fopen("/proc/self/mountinfo", "r");
+  if (f == NULL)
+    return 0;
+  while (fgets(line, sizeof(line), f) != NULL)
+    {
+      char *sep;
+      char *type;
+      size_t n;
+
+      if (strstr(line, key) == NULL || (sep = strstr(line, " - ")) == NULL)
+        continue;
+      type = sep + 3;
+      n = strcspn(type, " \n");
+      fclose(f);
+      if (n == 0 || n >= size)
+        return 0;
+      memcpy(buf, type, n);
+      buf[n] = '\0';
+      return 1;
+    }
+  fclose(f);
+  return 0;
+}
+
+int
+gs_fs_type_name(const char *path, char *buf, size_t size)
+{
+  struct statfs sf;
+  char fuse[64];
+  int haveFuse = 0;
+
+  if (!path || !buf || size == 0)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+  if (statfs(path, &sf) != 0)
+    return -1;
+  if ((unsigned long)sf.f_type == GS_FUSE_MAGIC)
+    haveFuse = gs_fuse_type_name(path, fuse, sizeof(fuse));
+  return gs_fs_type_name_for_magic((unsigned long)sf.f_type,
+                                   haveFuse ? fuse : NULL, buf, size);
+}
+
+#elif defined(__FreeBSD__) || defined(__OpenBSD__)
+# include <sys/param.h>
+# include <sys/mount.h>
+
+int
+gs_fs_type_name(const char *path, char *buf, size_t size)
+{
+  struct statfs sf;
+
+  if (!path || !buf || size == 0)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+  if (statfs(path, &sf) != 0)
+    return -1;
+  if (strlen(sf.f_fstypename) >= size)
+    {
+      errno = ENAMETOOLONG;
+      return -1;
+    }
+  strcpy(buf, sf.f_fstypename);
+  return 0;
+}
+
+#elif defined(_WIN32)
+# include <windows.h>
+
+int
+gs_fs_type_name(const char *path, char *buf, size_t size)
+{
+  wchar_t wpath[MAX_PATH];
+  wchar_t root[MAX_PATH + 1];
+  wchar_t fsname[MAX_PATH + 1];
+
+  if (!path || !buf || size == 0)
+    {
+      errno = EINVAL;
+      return -1;
+    }
+  /* Callers pass UTF-8 (GW_FSREP); the ANSI calls would misread it. */
+  if (MultiByteToWideChar(CP_UTF8, 0, path, -1, wpath, MAX_PATH) == 0
+      || GetFileAttributesW(wpath) == INVALID_FILE_ATTRIBUTES
+      || !GetVolumePathNameW(wpath, root, MAX_PATH + 1)
+      || !GetVolumeInformationW(root, NULL, 0, NULL, NULL, NULL,
+                                fsname, MAX_PATH + 1))
+    {
+      errno = ENOENT;
+      return -1;
+    }
+  if (WideCharToMultiByte(CP_UTF8, 0, fsname, -1, buf, (int)size,
+                          NULL, NULL) == 0)
+    {
+      errno = ENAMETOOLONG;
+      return -1;
+    }
+  return 0;
+}
+#endif
+
+int
+gs_fs_type_wants_appledouble(const char *fstype)
+{
+  /* Mac OS X keeps Finder metadata in "._" files on exactly these: it has
+   * no native attributes on FAT and exFAT, and over SMB and on NTFS it does
+   * not see the attributes a Linux mount stores there. */
+  static const char *const appleDouble[] = {
+    "msdos", "msdosfs", "vfat", "fat", "fat12", "fat16", "fat32", "exfat",
+    "cifs", "smb", "smb2", "smb3", "smbfs",
+    "ntfs", "ntfs3", "ntfs-3g", "fuseblk",
+  };
+  char lower[64];
+  const char *name;
+  size_t i;
+
+  if (!fstype || strlen(fstype) >= sizeof(lower))
+    return 0;
+  for (i = 0; fstype[i]; i++)
+    lower[i] = (fstype[i] >= 'A' && fstype[i] <= 'Z')
+      ? (char)(fstype[i] - 'A' + 'a') : fstype[i];
+  lower[i] = '\0';
+  /* FUSE drivers are named after what they mount: fuse.exfat on Linux,
+   * fusefs.ntfs on FreeBSD. */
+  name = lower;
+  if (strncmp(name, "fuse.", 5) == 0)
+    name += 5;
+  else if (strncmp(name, "fusefs.", 7) == 0)
+    name += 7;
+  for (i = 0; i < sizeof(appleDouble) / sizeof(appleDouble[0]); i++)
+    {
+      if (strcmp(name, appleDouble[i]) == 0)
+        return 1;
+    }
+  return 0;
+}
+
+int
+gs_fs_type_is_smb(const char *fstype)
+{
+  static const char *const smb[] = { "cifs", "smb", "smb2", "smb3", "smbfs" };
+  size_t i;
+
+  for (i = 0; fstype && i < sizeof(smb) / sizeof(smb[0]); i++)
+    {
+      if (strcmp(fstype, smb[i]) == 0)
+        return 1;
+    }
+  return 0;
 }

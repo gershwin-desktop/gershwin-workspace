@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CompatibleVersion</key>
+	<integer>1</integer>
+	<key>RawQuery</key>
+	<string>kMDItemFSName = "*.txt"cd</string>
+	<key>RawQueryDict</key>
+	<dict>
+		<key>RawQuery</key>
+		<string>kMDItemFSName = "*.txt"cd</string>
+		<key>SearchScopes</key>
+		<array>
+			<string>/Users/user/Desktop/mi/e35</string>
+		</array>
+	</dict>
+	<key>SearchCriteria</key>
+	<dict>
+		<key>FXScope</key>
+		<integer>1396925286</integer>
+		<key>FXScopeArrayOfPaths</key>
+		<array>
+			<string>/Users/user/Desktop/mi/e35</string>
+		</array>
+		<key>CurrentFolderPath</key>
+		<array>
+			<string>/Users/user/Desktop/mi/e35</string>
+		</array>
+	</dict>
+</dict>
+</plist>
