@@ -1,0 +1,69 @@
+/* View Options panel of the file viewer */
+
+"View Options" = "Nézetbeállítások";
+
+"Icon size:" = "Ikonméret:";
+
+"Grid spacing:" = "Rács távolsága:";
+
+"Text size:" = "Szövegméret:";
+
+"Label position:" = "Címke helye:";
+
+"Bottom" = "Alul";
+
+"Right" = "Jobbra";
+
+"Show item info" = "Elemadatok megjelenítése";
+
+"Show icon preview" = "Ikonelőnézet megjelenítése";
+
+"Arrange by:" = "Rendezés:";
+
+"None" = "Nincs";
+
+"Snap to Grid" = "Igazítás a rácshoz";
+
+"Name" = "Név";
+
+"Kind" = "Típus";
+
+"Date Modified" = "Módosítás dátuma";
+
+"Date Created" = "Létrehozás dátuma";
+
+"Date Last Opened" = "Utolsó megnyitás dátuma";
+
+"Size" = "Méret";
+
+"Label" = "Címke";
+
+"Version" = "Verzió";
+
+"Comments" = "Megjegyzések";
+
+"Background:" = "Háttér:";
+
+"White" = "Fehér";
+
+"Color" = "Szín";
+
+"Picture" = "Kép";
+
+"Select..." = "Kiválasztás...";
+
+"Small" = "Kicsi";
+
+"Large" = "Nagy";
+
+"Show columns:" = "Oszlopok megjelenítése:";
+
+"Use relative dates" = "Relatív dátumok használata";
+
+"Calculate all sizes" = "Minden méret kiszámítása";
+
+"Always open in icon view" = "Mindig ikonnézetben nyíljon meg";
+
+"Always open in list view" = "Mindig listanézetben nyíljon meg";
+
+"This window has no view options." = "Ennek az ablaknak nincsenek nézetbeállításai.";

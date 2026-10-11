@@ -1,0 +1,69 @@
+/* View Options panel of the file viewer */
+
+"View Options" = "表示オプション";
+
+"Icon size:" = "アイコンサイズ:";
+
+"Grid spacing:" = "グリッド間隔:";
+
+"Text size:" = "テキストサイズ:";
+
+"Label position:" = "ラベルの位置:";
+
+"Bottom" = "下";
+
+"Right" = "右";
+
+"Show item info" = "項目情報を表示";
+
+"Show icon preview" = "アイコンプレビューを表示";
+
+"Arrange by:" = "整列順序:";
+
+"None" = "なし";
+
+"Snap to Grid" = "グリッドに揃える";
+
+"Name" = "名前";
+
+"Kind" = "種類";
+
+"Date Modified" = "変更日";
+
+"Date Created" = "作成日";
+
+"Date Last Opened" = "最後に開いた日";
+
+"Size" = "サイズ";
+
+"Label" = "ラベル";
+
+"Version" = "バージョン";
+
+"Comments" = "コメント";
+
+"Background:" = "背景:";
+
+"White" = "白";
+
+"Color" = "カラー";
+
+"Picture" = "ピクチャ";
+
+"Select..." = "選択...";
+
+"Small" = "小";
+
+"Large" = "大";
+
+"Show columns:" = "表示する列:";
+
+"Use relative dates" = "相対的な日付を使用";
+
+"Calculate all sizes" = "すべてのサイズを計算";
+
+"Always open in icon view" = "常にアイコン表示で開く";
+
+"Always open in list view" = "常にリスト表示で開く";
+
+"This window has no view options." = "このウインドウには表示オプションがありません。";

@@ -1,0 +1,69 @@
+/* View Options panel of the file viewer */
+
+"View Options" = "Opțiuni de vizualizare";
+
+"Icon size:" = "Dimensiune pictograme:";
+
+"Grid spacing:" = "Spațiere grilă:";
+
+"Text size:" = "Dimensiune text:";
+
+"Label position:" = "Poziția etichetei:";
+
+"Bottom" = "Jos";
+
+"Right" = "Dreapta";
+
+"Show item info" = "Afișează informații despre element";
+
+"Show icon preview" = "Afișează previzualizarea pictogramei";
+
+"Arrange by:" = "Aranjează după:";
+
+"None" = "Niciuna";
+
+"Snap to Grid" = "Aliniază la grilă";
+
+"Name" = "Nume";
+
+"Kind" = "Tip";
+
+"Date Modified" = "Data modificării";
+
+"Date Created" = "Data creării";
+
+"Date Last Opened" = "Data ultimei deschideri";
+
+"Size" = "Dimensiune";
+
+"Label" = "Etichetă";
+
+"Version" = "Versiune";
+
+"Comments" = "Comentarii";
+
+"Background:" = "Fundal:";
+
+"White" = "Alb";
+
+"Color" = "Culoare";
+
+"Picture" = "Imagine";
+
+"Select..." = "Selectează...";
+
+"Small" = "Mic";
+
+"Large" = "Mare";
+
+"Show columns:" = "Afișează coloanele:";
+
+"Use relative dates" = "Folosește date relative";
+
+"Calculate all sizes" = "Calculează toate dimensiunile";
+
+"Always open in icon view" = "Deschide întotdeauna în vizualizare pictograme";
+
+"Always open in list view" = "Deschide întotdeauna în vizualizare listă";
+
+"This window has no view options." = "Această fereastră nu are opțiuni de vizualizare.";

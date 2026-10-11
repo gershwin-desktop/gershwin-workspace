@@ -1,0 +1,69 @@
+/* View Options panel of the file viewer */
+
+"View Options" = "Montraj agordoj";
+
+"Icon size:" = "Piktogramgrando:";
+
+"Grid spacing:" = "Kradinterspaco:";
+
+"Text size:" = "Tekstogrando:";
+
+"Label position:" = "Pozicio de etikedo:";
+
+"Bottom" = "Sube";
+
+"Right" = "Dekstre";
+
+"Show item info" = "Montri informojn pri eroj";
+
+"Show icon preview" = "Montri antaŭvidon en piktogramoj";
+
+"Arrange by:" = "Ordigi laŭ:";
+
+"None" = "Neniu";
+
+"Snap to Grid" = "Alĝustigi al krado";
+
+"Name" = "Nomo";
+
+"Kind" = "Speco";
+
+"Date Modified" = "Dato de modifo";
+
+"Date Created" = "Dato de kreo";
+
+"Date Last Opened" = "Dato de lasta malfermo";
+
+"Size" = "Grando";
+
+"Label" = "Etikedo";
+
+"Version" = "Versio";
+
+"Comments" = "Komentoj";
+
+"Background:" = "Fono:";
+
+"White" = "Blanka";
+
+"Color" = "Koloro";
+
+"Picture" = "Bildo";
+
+"Select..." = "Elekti...";
+
+"Small" = "Malgranda";
+
+"Large" = "Granda";
+
+"Show columns:" = "Montri kolumnojn:";
+
+"Use relative dates" = "Uzi relativajn datojn";
+
+"Calculate all sizes" = "Kalkuli ĉiujn grandojn";
+
+"Always open in icon view" = "Ĉiam malfermi en piktograma vido";
+
+"Always open in list view" = "Ĉiam malfermi en lista vido";
+
+"This window has no view options." = "Ĉi tiu fenestro ne havas montrajn agordojn.";

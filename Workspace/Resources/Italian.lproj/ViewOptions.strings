@@ -1,0 +1,69 @@
+/* View Options panel of the file viewer */
+
+"View Options" = "Opzioni vista";
+
+"Icon size:" = "Dimensione icone:";
+
+"Grid spacing:" = "Spaziatura griglia:";
+
+"Text size:" = "Dimensione testo:";
+
+"Label position:" = "Posizione etichetta:";
+
+"Bottom" = "Sotto";
+
+"Right" = "A destra";
+
+"Show item info" = "Mostra informazioni elemento";
+
+"Show icon preview" = "Mostra anteprima icone";
+
+"Arrange by:" = "Disponi per:";
+
+"None" = "Nessuno";
+
+"Snap to Grid" = "Allinea alla griglia";
+
+"Name" = "Nome";
+
+"Kind" = "Tipo";
+
+"Date Modified" = "Data modifica";
+
+"Date Created" = "Data creazione";
+
+"Date Last Opened" = "Data ultima apertura";
+
+"Size" = "Dimensione";
+
+"Label" = "Etichetta";
+
+"Version" = "Versione";
+
+"Comments" = "Commenti";
+
+"Background:" = "Sfondo:";
+
+"White" = "Bianco";
+
+"Color" = "Colore";
+
+"Picture" = "Immagine";
+
+"Select..." = "Seleziona...";
+
+"Small" = "Piccola";
+
+"Large" = "Grande";
+
+"Show columns:" = "Mostra colonne:";
+
+"Use relative dates" = "Usa date relative";
+
+"Calculate all sizes" = "Calcola tutte le dimensioni";
+
+"Always open in icon view" = "Apri sempre in vista icone";
+
+"Always open in list view" = "Apri sempre in vista elenco";
+
+"This window has no view options." = "Questa finestra non ha opzioni di vista.";

@@ -117,6 +117,8 @@ Desktop/Dock/GWDockWindow.m \
  FileViewer/GWViewersManager.m \
  FileViewer/GWViewerBase.m \
  FileViewer/GWFolderViewOptions.m \
+ViewOptions/GWViewOptionsModel.m \
+ViewOptions/GWViewOptionsPanel.m \
  FileViewer/GWViewer.m \
 FileViewer/GWViewTypeHelpers.m \
 FileViewer/GWSpatialViewer.m \

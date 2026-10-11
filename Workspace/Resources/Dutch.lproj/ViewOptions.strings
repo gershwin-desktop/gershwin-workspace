@@ -1,0 +1,69 @@
+/* View Options panel of the file viewer */
+
+"View Options" = "Weergaveopties";
+
+"Icon size:" = "Symboolgrootte:";
+
+"Grid spacing:" = "Rasterafstand:";
+
+"Text size:" = "Tekstgrootte:";
+
+"Label position:" = "Positie van naam:";
+
+"Bottom" = "Onder";
+
+"Right" = "Rechts";
+
+"Show item info" = "Toon iteminformatie";
+
+"Show icon preview" = "Toon voorvertoning in symbool";
+
+"Arrange by:" = "Orden op:";
+
+"None" = "Geen";
+
+"Snap to Grid" = "Uitlijnen op raster";
+
+"Name" = "Naam";
+
+"Kind" = "Soort";
+
+"Date Modified" = "Wijzigingsdatum";
+
+"Date Created" = "Aanmaakdatum";
+
+"Date Last Opened" = "Datum laatst geopend";
+
+"Size" = "Grootte";
+
+"Label" = "Label";
+
+"Version" = "Versie";
+
+"Comments" = "Opmerkingen";
+
+"Background:" = "Achtergrond:";
+
+"White" = "Wit";
+
+"Color" = "Kleur";
+
+"Picture" = "Afbeelding";
+
+"Select..." = "Kies...";
+
+"Small" = "Klein";
+
+"Large" = "Groot";
+
+"Show columns:" = "Toon kolommen:";
+
+"Use relative dates" = "Gebruik relatieve datums";
+
+"Calculate all sizes" = "Bereken alle groottes";
+
+"Always open in icon view" = "Open altijd in symboolweergave";
+
+"Always open in list view" = "Open altijd in lijstweergave";
+
+"This window has no view options." = "Dit venster heeft geen weergaveopties.";
