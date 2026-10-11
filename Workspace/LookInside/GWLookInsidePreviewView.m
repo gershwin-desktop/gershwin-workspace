@@ -217,7 +217,7 @@ PdftoppmPath(void)
     }
 
   {
-    NSString *name = [NSString stringWithFormat: @"GWLookInside-%d-%lu", getpid(), ++counter];
+    NSString *name = [NSString stringWithFormat: @"GWLookInside-%d-%lu", [[NSProcessInfo processInfo] processIdentifier], ++counter];
 
     ASSIGN(_outputDir, [NSTemporaryDirectory() stringByAppendingPathComponent: name]);
   }

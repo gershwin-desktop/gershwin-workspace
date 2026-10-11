@@ -5,7 +5,9 @@
  */
 
 #include <stdint.h>
+#ifndef _WIN32
 #include <X11/Xlib.h>
+#endif
 #include <GNUstepGUI/GSDisplayServer.h>
 
 #import <AppKit/AppKit.h>
@@ -56,6 +58,11 @@ LookInsideX11WindowID(NSWindow *window)
 static BOOL
 LookInsideRequestFullScreen(NSWindow *window, BOOL fullScreen)
 {
+#ifdef _WIN32
+  /* No X window manager to ask on Windows; the caller keeps the panel
+   * windowed. */
+  return NO;
+#else
   GSDisplayServer *server = GSServerForWindow(window);
   Display *dpy = (server != nil) ? (Display *)[server serverDevice] : NULL;
   unsigned long xwindow = LookInsideX11WindowID(window);
@@ -78,6 +85,7 @@ LookInsideRequestFullScreen(NSWindow *window, BOOL fullScreen)
              SubstructureRedirectMask | SubstructureNotifyMask, &event);
   XFlush(dpy);
   return YES;
+#endif
 }
 
 static NSButton *
