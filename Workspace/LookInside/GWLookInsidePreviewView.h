@@ -37,6 +37,7 @@ extern NSString * const GWLookInsideInfoModified;
 
 @class GWLookInsideFolderSizer;
 @class GWLookInsidePDFRenderer;
+@class GWLookInsideVideoPoster;
 
 @interface GWLookInsidePreviewView : NSView
 {
@@ -53,6 +54,8 @@ extern NSString * const GWLookInsideInfoModified;
   NSSound *_sound;
   GWLookInsideFolderSizer *_sizer;
   GWLookInsidePDFRenderer *_pdfRenderer;
+  GWLookInsideVideoPoster *_videoPoster;
+  BOOL _posterShown;                 /* _picture holds a video's frame, not an icon */
 }
 
 - (id)initWithFrame:(NSRect)frame style:(GWLookInsidePreviewStyle)style;

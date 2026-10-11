@@ -168,7 +168,7 @@ RunLoopModes(void)
 @implementation GWLookInsidePDFRenderer
 
 static NSString *
-PdftoppmPath(void)
+ExecutableOnPath(NSString *name)
 {
   NSString *pathVar = [[[NSProcessInfo processInfo] environment] objectForKey: @"PATH"];
   NSEnumerator *e = [[pathVar componentsSeparatedByString: @":"] objectEnumerator];
@@ -177,7 +177,7 @@ PdftoppmPath(void)
 
   while ((dir = [e nextObject]) != nil)
     {
-      NSString *candidate = [dir stringByAppendingPathComponent: @"pdftoppm"];
+      NSString *candidate = [dir stringByAppendingPathComponent: name];
 
       if ([dir length] > 0 && [fm isExecutableFileAtPath: candidate])
         {
@@ -208,7 +208,7 @@ PdftoppmPath(void)
 - (BOOL)startWithPath:(NSString *)path
 {
   static unsigned long counter = 0;
-  NSString *tool = PdftoppmPath();
+  NSString *tool = ExecutableOnPath(@"pdftoppm");
   NSFileManager *fm = [NSFileManager defaultManager];
 
   if (tool == nil)
@@ -300,6 +300,118 @@ PdftoppmPath(void)
 
 @end
 
+
+
+/* ------------------------------------------------------------------ */
+/* A poster frame of a video, made by ffmpeg when it is installed.  This
+ * Workspace has no video playback of its own (NSMovieView is only a stub
+ * in this AppKit and Workspace links no media library), so without ffmpeg
+ * on the PATH a video keeps the icon-and-facts preview; ffmpeg is never
+ * required.  "thumbnail" picks a representative frame of the first
+ * frames instead of the often black first one. */
+
+@interface GWLookInsideVideoPoster : NSObject
+{
+  NSTask *_task;
+  NSString *_outputFile;
+  id _target;                /* not retained: the view cancels before it goes */
+}
+- (id)initWithTarget:(id)target;
+- (BOOL)startWithPath:(NSString *)path;
+- (void)cancel;
+@end
+
+@interface NSObject (GWLookInsideVideoPosterTarget)
+- (void)videoPoster:(GWLookInsideVideoPoster *)poster didRenderImage:(NSImage *)image;
+@end
+
+@implementation GWLookInsideVideoPoster
+
+- (id)initWithTarget:(id)target
+{
+  self = [super init];
+  if (self != nil)
+    {
+      _target = target;
+    }
+  return self;
+}
+
+- (void)dealloc
+{
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
+  RELEASE(_task);
+  RELEASE(_outputFile);
+  [super dealloc];
+}
+
+- (BOOL)startWithPath:(NSString *)path
+{
+  static unsigned long counter = 0;
+  NSString *tool = ExecutableOnPath(@"ffmpeg");
+  NSString *name;
+
+  if (tool == nil)
+    {
+      return NO;
+    }
+  name = [NSString stringWithFormat: @"GWLookInside-%d-poster-%lu.png",
+                   [[NSProcessInfo processInfo] processIdentifier], ++counter];
+  ASSIGN(_outputFile, [NSTemporaryDirectory() stringByAppendingPathComponent: name]);
+
+  _task = [NSTask new];
+  [_task setLaunchPath: tool];
+  [_task setArguments: [NSArray arrayWithObjects:
+    @"-nostdin", @"-v", @"error", @"-y", @"-i", path,
+    @"-vf", @"thumbnail,scale='min(512,iw)':-2", @"-frames:v", @"1",
+    _outputFile, nil]];
+  [[NSNotificationCenter defaultCenter] addObserver: self
+                                           selector: @selector(taskDidTerminate:)
+                                               name: NSTaskDidTerminateNotification
+                                             object: _task];
+  [_task launch];
+  return YES;
+}
+
+- (void)removeOutput
+{
+  if (_outputFile != nil)
+    {
+      [[NSFileManager defaultManager] removeFileAtPath: _outputFile handler: nil];
+      DESTROY(_outputFile);
+    }
+}
+
+- (void)taskDidTerminate:(NSNotification *)note
+{
+  NSImage *image = nil;
+
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
+  if (_target != nil && [_task terminationStatus] == 0)
+    {
+      image = [[[NSImage alloc] initWithData:
+                 [NSData dataWithContentsOfFile: _outputFile]] autorelease];
+    }
+  [self removeOutput];
+  if (image != nil)
+    {
+      [_target videoPoster: self didRenderImage: image];
+    }
+}
+
+- (void)cancel
+{
+  _target = nil;
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
+  if ([_task isRunning])
+    {
+      [_task terminate];
+      [_task waitUntilExit];
+    }
+  [self removeOutput];
+}
+
+@end
 
 /* ------------------------------------------------------------------ */
 
@@ -516,6 +628,8 @@ DecodeText(NSData *data)
   DESTROY(_sizer);
   [_pdfRenderer cancel];
   DESTROY(_pdfRenderer);
+  [_videoPoster cancel];
+  DESTROY(_videoPoster);
   if (_sound != nil)
     {
       [_sound setDelegate: nil];
@@ -535,6 +649,7 @@ DecodeText(NSData *data)
   DESTROY(_picture);
   DESTROY(_nameField);
   DESTROY(_playButton);
+  _posterShown = NO;
   [_labelFields removeAllObjects];
   [_valueFields removeAllObjects];
   _sizeValueField = nil;
@@ -784,6 +899,23 @@ DecodeText(NSData *data)
       [self addSubview: _playButton];
     }
 
+  if (_kind == GWLookInsidePreviewKindVideo)
+    {
+      _playButton = [[NSButton alloc] initWithFrame: NSZeroRect];
+      [_playButton setButtonType: NSMomentaryPushInButton];
+      [_playButton setBezelStyle: NSRoundedBezelStyle];
+      [_playButton setTitle: LIString(@"Play", @"Button that plays a sound file in a preview")];
+      [_playButton setTarget: self];
+      [_playButton setAction: @selector(playVideo:)];
+      [self addSubview: _playButton];
+      /* The icon-and-facts layout stands in until the poster arrives. */
+      _videoPoster = [[GWLookInsideVideoPoster alloc] initWithTarget: self];
+      if (![_videoPoster startWithPath: _path])
+        {
+          DESTROY(_videoPoster);
+        }
+    }
+
   [self layoutInfo];
 }
 
@@ -795,6 +927,25 @@ DecodeText(NSData *data)
       DESTROY(_sizer);
       [self layoutInfo];
     }
+}
+
+/* Workspace plays no video itself: Play hands the file to the
+ * application that opens it. */
+- (void)playVideo:(id)sender
+{
+  [[NSWorkspace sharedWorkspace] openFile: _path];
+}
+
+- (void)videoPoster:(GWLookInsideVideoPoster *)poster didRenderImage:(NSImage *)image
+{
+  if (poster != _videoPoster || _picture == nil)
+    {
+      return;
+    }
+  DESTROY(_videoPoster);
+  _posterShown = YES;
+  [_picture setImage: image];
+  [self layoutInfo];
 }
 
 - (void)togglePlay:(id)sender
@@ -864,7 +1015,7 @@ WidestString(NSArray *fields)
   if (_style == GWLookInsidePreviewStyleCompact)
     {
       side = floor(MAX(MIN(NSWidth(bounds), NSHeight(bounds)), kPictureMinimum));
-      if (_kind != GWLookInsidePreviewKindImage)
+      if (!_posterShown && _kind != GWLookInsidePreviewKindImage)
         {
           side = MIN(side, GWLookInsideIconMaximumSide);
         }
@@ -874,7 +1025,7 @@ WidestString(NSArray *fields)
       return;
     }
 
-  side = floor(MIN(MIN((_kind == GWLookInsidePreviewKindImage) ? kFullPictureMaximum : GWLookInsideIconMaximumSide,
+  side = floor(MIN(MIN((_posterShown || _kind == GWLookInsidePreviewKindImage) ? kFullPictureMaximum : GWLookInsideIconMaximumSide,
                        NSWidth(bounds) - 2 * METRICS_CONTENT_SIDE_MARGIN),
                    NSHeight(bounds) - textH - 2 * METRICS_CONTENT_SIDE_MARGIN - METRICS_SPACE_16));
   side = MAX(side, kPictureMinimum);
