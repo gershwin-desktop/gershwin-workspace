@@ -73,9 +73,14 @@ typedef enum
    * per folder (vstl), as Finder keeps it only for "Always open in". */
   BOOL viewTypeChosenByUser;
 
-  /* A folder's stored scroll position, waiting for the scroll to the top
-   * that opening and navigating end with, which would otherwise drop it. */
+  /* A folder's stored scroll position (icon or list view), waiting for the
+   * scroll to the top that opening and navigating end with, which would
+   * otherwise drop it. */
   NSValue *pendingScrollPosition;
+
+  /* The node view's options right after the folder's were applied; the
+   * folder's icvp / lsvp is written on close only when they changed. */
+  NSDictionary *appliedViewState;
 }
 
 /* Finder's per-folder options (.DS_Store icvp/lsvp) onto the node view. */
@@ -85,6 +90,13 @@ typedef enum
  * folder only as a snapshot of its global settings and ignores them on read
  * [O:E13], so they are written, never applied; the base has none. */
 - (void)takeWindowChromeInto:(DSStoreInfo *)info;
+
+/* Implemented by the concrete viewers. */
+- (BOOL)isSpatial;
+
+/* "Always open in" was unticked: the view type is no longer kept for the
+ * folder, until the user picks one again. */
+- (void)forgetChosenViewType;
 
 /* Writes the folder's settings: the stored ones, overlaid with the viewer
  * prefs, the live view options, the chrome and the live icon layout.

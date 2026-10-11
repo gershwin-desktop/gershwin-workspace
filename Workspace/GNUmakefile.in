@@ -119,6 +119,7 @@ Desktop/Dock/GWDockWindow.m \
  FileViewer/GWFolderViewOptions.m \
 ViewOptions/GWViewOptionsModel.m \
 ViewOptions/GWViewOptionsPanel.m \
+ FileViewer/GWViewerChrome.m \
  FileViewer/GWViewer.m \
 FileViewer/GWViewTypeHelpers.m \
 FileViewer/GWSpatialViewer.m \

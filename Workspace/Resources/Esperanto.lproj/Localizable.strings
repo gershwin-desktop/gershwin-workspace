@@ -949,3 +949,6 @@
 
 
 "xterm" = "xterm-komando";
+
+"Show Path Bar" = "Montri vojbreton";
+"Show Status Bar" = "Montri statobreton";

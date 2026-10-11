@@ -57,6 +57,7 @@
 #import "NetworkFSNode.h"
 #import "DSStoreInfo.h"
 #import "FSNListView.h"
+#import "GWViewerChrome.h"
 #import "GWViewSettingsManager.h"
 #import "GSFileMetadata.h"
 #import "GWViewerPrefs.h"
@@ -73,16 +74,6 @@
 #define PREVIEW_YMARGIN 0
 #define PREVIEW_PATHSCRH 46
 
-/* Finder's own name for its global path bar setting. */
-static NSString *const GWViewerShowPathBarKey = @"ShowPathbar";
-
-static BOOL
-GWViewerShowsPathBar(void)
-{
-  id value = [[NSUserDefaults standardUserDefaults] objectForKey: GWViewerShowPathBarKey];
-
-  return value ? [value boolValue] : YES;
-}
 
 /* Helper function to get volume information using statvfs */
 #ifdef _WIN32
@@ -313,7 +304,7 @@ static BOOL hasLastExtents_ = NO;
         showSidebar = [defEntry boolValue];
       }
     }
-    showPathbar = GWViewerShowsPathBar();
+    showPathbar = [GWViewerChrome showsPathBar];
 
     if (dsInfo.loaded && dsInfo.hasSidebarWidth)
       {
@@ -508,6 +499,11 @@ static BOOL hasLastExtents_ = NO;
     [nc addObserver: self 
            selector: @selector(columnsWidthChanged:) 
                name: @"GWBrowserColumnWidthChangedNotification"
+             object: nil];
+
+    [nc addObserver: self
+           selector: @selector(windowChromeDidChange:)
+               name: GWViewerChromeDidChangeNotification
              object: nil];
 
     [nc addObserver: self
@@ -953,21 +949,18 @@ static BOOL hasLastExtents_ = NO;
   return showPathbar;
 }
 
-- (void)togglePathBar:(id)sender
-{
-  [self setPathBarShown: !showPathbar];
-}
-
 - (void)setPathBarShown:(BOOL)shown
 {
   if (showPathbar == shown) return;
   showPathbar = shown;
-  /* One setting for every browsing window, as Finder's ShowPathbar. */
-  [[NSUserDefaults standardUserDefaults] setBool: shown forKey: GWViewerShowPathBarKey];
   [self updatePreviewPaneForCurrentType];
   [nodeView resizeWithOldSuperviewSize: [nodeView bounds].size];
   [vwrwin display];
-  [self updateDefaults];
+}
+
+- (void)windowChromeDidChange:(NSNotification *)notification
+{
+  [self setPathBarShown: [GWViewerChrome showsPathBar]];
 }
 
 /* The browsing window has a sidebar and a path bar, no toolbar or status

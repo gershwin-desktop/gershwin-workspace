@@ -29,6 +29,7 @@
 #import <AppKit/AppKit.h>
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
+#import "GWViewerChrome.h"
 #import "GSFileMetadata.h"
 #import "GWViewerPrefs.h"
 #import "GWSpatialViewer.h"
@@ -59,9 +60,6 @@
  
 #define DEFAULT_INCR 150
 #define MIN_W_HEIGHT 180
-
-/* Finder's own name for its global status bar setting. */
-static NSString *const GWSpatialShowStatusBarKey = @"ShowStatusBar";
 
 @implementation GWSpatialViewer
 
@@ -337,11 +335,7 @@ static BOOL hasLastExtents_ = NO;
       [vwrwin setTitle: [node name]];   
     }
 
-    {
-      id shown = [defaults objectForKey: GWSpatialShowStatusBarKey];
-
-      showStatusBar = shown ? [shown boolValue] : YES;
-    }
+    showStatusBar = [GWViewerChrome showsStatusBar];
     [self createSubviews];
 
     if ([viewType isEqual: @"Icon"]) {
@@ -424,6 +418,11 @@ static BOOL hasLastExtents_ = NO;
     [nc addObserver: self 
            selector: @selector(columnsWidthChanged:) 
                name: @"GWBrowserColumnWidthChangedNotification"
+             object: nil];
+
+    [nc addObserver: self
+           selector: @selector(windowChromeDidChange:)
+               name: GWViewerChromeDidChangeNotification
              object: nil];
 
     [nc addObserver: self
@@ -594,22 +593,21 @@ static BOOL hasLastExtents_ = NO;
   return showStatusBar;
 }
 
-- (void)toggleStatusBar:(id)sender
-{
-  [self setStatusBarShown: !showStatusBar];
-}
-
 - (void)setStatusBarShown:(BOOL)shown
 {
   if (showStatusBar == shown)
     return;
   showStatusBar = shown;
-  /* One setting for every spatial window, as Finder's ShowStatusBar. */
-  [[NSUserDefaults standardUserDefaults] setBool: shown forKey: GWSpatialShowStatusBarKey];
   [topBox setHidden: !shown];
   [self updatePreviewPaneForCurrentType];
+  /* The icons keep their distance from the top edge, which just moved. */
+  [nodeView resizeWithOldSuperviewSize: [nodeView bounds].size];
   [vwrwin display];
-  [self updateDefaults];
+}
+
+- (void)windowChromeDidChange:(NSNotification *)notification
+{
+  [self setStatusBarShown: [GWViewerChrome showsStatusBar]];
 }
 
 /* The spatial window has the item count / free space line Finder calls the

@@ -1158,3 +1158,6 @@
 
 "xterm" = "xterm";
 
+
+"Show Path Bar" = "Show Path Bar";
+"Show Status Bar" = "Show Status Bar";

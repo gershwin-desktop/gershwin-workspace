@@ -76,6 +76,12 @@
  */
 - (BOOL)writeSettings:(DSStoreInfo *)info;
 
+/* Forget the folder's own view style ("Always open in" unticked): its vstl
+ * under the folder's name in the parent's store, as "." in its own store
+ * and in the volume cache.  Without one the folder opens in the view last
+ * used [O:E5]. */
+- (void)removeViewStyle;
+
 /**
  * Convenience: returns YES if the directory is directly writable
  * (write+execute for the effective user).

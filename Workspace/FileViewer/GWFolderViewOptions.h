@@ -13,6 +13,7 @@
 
 @class DSStoreInfo;
 @class FSNListViewDataSource;
+@class FSNListView;
 
 @interface GWFolderViewOptions : NSObject
 
@@ -49,10 +50,21 @@
 + (void)takeListViewOptionsOf:(FSNListViewDataSource *)dataSource
                          into:(DSStoreInfo *)info;
 
-/* Only the column widths, into a record that already has list options: a
- * width dragged by the user posts no options notification. */
-+ (void)takeListColumnWidthsOf:(FSNListViewDataSource *)dataSource
-                          into:(DSStoreInfo *)info;
+/* The lsvp scroll position onto the list, and back.  Applied only when a
+ * folder is opened, like the icon view's. */
++ (void)applyListScrollPositionOf:(DSStoreInfo *)info toListView:(FSNListView *)list;
++ (void)takeListScrollPositionOf:(FSNListView *)list into:(DSStoreInfo *)info;
+
+/* What the user can change of a view, as the record values it would give,
+ * scroll position left out: compared before and after, they tell whether
+ * the options were changed while the window was open. */
++ (NSDictionary *)iconViewStateOf:(FSNIconsView *)view;
++ (NSDictionary *)listViewStateOf:(FSNListViewDataSource *)dataSource;
+
+/* Whether the folder opens in a spatial window: a stored bwsp ShowToolbar
+ * decides (0 spatial, 1 browsing, as Finder's toolbar-less windows are its
+ * spatial ones), else @p spatialDefault. */
++ (BOOL)opensSpatially:(DSStoreInfo *)info byDefault:(BOOL)spatialDefault;
 
 /* A folder background picture as Finder 10.6 reads it: a classic alias
  * record of the image whose HFS path tag says "<volume>:<path in volume>"

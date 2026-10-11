@@ -19,6 +19,20 @@
 
 #include "../../Workspace/FileViewer/DSStoreInfo.m"
 
+/* The scale factor the conversions see, set for this process only so the
+ * tests neither depend on nor change the user's own GSScaleFactor. */
+static void
+setTestScaleFactor(float scale)
+{
+  NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+
+  [defs removeVolatileDomainForName: NSArgumentDomain];
+  [defs setVolatileDomain: [NSDictionary dictionaryWithObject:
+                                           [NSNumber numberWithFloat: scale]
+                                                       forKey: @"GSScaleFactor"]
+                  forName: NSArgumentDomain];
+}
+
 /* CPU seconds -saveToPath: takes for a folder of @p count icon positions. */
 static double
 cpuSecondsToSave(NSUInteger count)
@@ -56,6 +70,8 @@ int
 main(void)
 {
   NSAutoreleasePool *arp = [NSAutoreleasePool new];
+
+  setTestScaleFactor(1.0);
 
   /* --- viewer-prefs -> DSStoreInfo mapping (the migration path) --- */
   {
@@ -145,8 +161,11 @@ main(void)
     icon.hasPosition = YES;
     [w setIconInfo: icon forFilename: @"doc.txt"];
 
+    /* The folder's records go to its parent's store, the icon positions to
+     * its own [O:E1]. */
     NSString *dsPath = [dir stringByAppendingPathComponent: @".DS_Store"];
     PASS([w saveToPath: dsPath], "saveToPath writes a .DS_Store binary");
+    PASS([w saveToParentStore], "saveToParentStore writes the folder's records");
     PASS([fm fileExistsAtPath: dsPath], "the .DS_Store file exists on disk");
 
     DSStoreInfo *r = [DSStoreInfo infoForDirectoryPath: dir];
@@ -381,7 +400,9 @@ main(void)
     [fm createDirectoryAtPath: dir attributes: nil];
 
     /* Write a folder FinderInfo (DInfo) carrying view=column + a window rect,
-     * with NO .DS_Store present - this is the classic macOS spatial case. */
+     * with NO .DS_Store present - this is the classic macOS spatial case.
+     * Only the window rect is taken from it: a frView of 0, which every
+     * folder FinderInfo has, would read as a chosen icon view. */
     GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
     [md setViewStyleCodeForDirectory: @"clmv"];
     [md setWindowBoundsForDirectory: NSMakeRect(50, 60, 400, 300)];
@@ -393,26 +414,23 @@ main(void)
     /* DSStoreInfo should fall back to it when there is no .DS_Store. */
     DSStoreInfo *info = [DSStoreInfo infoForDirectoryPath: dir];
     PASS(info != nil && info.loaded, "FinderInfo-only folder loads");
-    PASS(info.hasViewStyle && info.viewStyle == DSStoreViewStyleColumn,
-         "view style read from folder FinderInfo fallback");
+    PASS(info.hasViewStyle == NO,
+         "no view style is read from folder FinderInfo");
     PASS(info.hasWindowFrame
          && NSEqualRects(info.windowFrame,
                          [DSStoreInfo gnustepRectFromDSStoreRect:
                             NSMakeRect(50, 60, 400, 300)]),
          "window geometry read from folder FinderInfo fallback (GNUstep coords)");
 
-    /* Saving a different view/window must mirror into FinderInfo. */
+    /* A save leaves the folder's FinderInfo as it was: the stores carry the
+     * view and window, and Finder 10.6 does not read them from there. */
     [info takeValuesFromViewerPrefs: @{ @"viewtype" : @"List",
                                         @"geometry" : NSStringFromRect(NSMakeRect(100, 150, 600, 400)) }];
     PASS([info saveToPath: [dir stringByAppendingPathComponent: @".DS_Store"]],
-         "saveToPath writes .DS_Store and mirrors FinderInfo");
+         "saveToPath writes .DS_Store");
     GSFileMetadata *re = [GSFileMetadata metadataForFileAtPath: dir];
-    PASS(re != nil && [[re viewStyleCodeForDirectory] isEqualToString: @"Nlsv"],
-         "save mirrors view style into folder FinderInfo");
-    NSRect expected = [info dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
-    NSRect got = [re windowBoundsForDirectory];
-    PASS(!NSEqualRects(got, NSZeroRect) && NSEqualRects(got, expected),
-         "save mirrors window geometry into folder FinderInfo");
+    PASS(re != nil && NSEqualRects([re windowBoundsForDirectory], NSMakeRect(50, 60, 400, 300)),
+         "save leaves the folder FinderInfo alone");
 
     [fm removeFileAtPath: dir handler: nil];
   }

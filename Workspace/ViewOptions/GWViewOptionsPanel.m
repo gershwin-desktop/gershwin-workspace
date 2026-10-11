@@ -587,26 +587,6 @@ columnTitle (NSString *columnId)
   [NSObject cancelPreviousPerformRequestsWithTarget: self selector: @selector(persist) object: nil];
 }
 
-/* Finder keeps a folder's view style only for "Always open in"; without it
- * the record of an earlier choice has to go [O:E5]. */
-- (void)removeViewStyleOfFolder:(NSString *)path
-{
-  NSString *storePath = [DSStoreInfo parentStorePathForDirectory: path];
-  DSStore *store;
-
-  if (storePath == nil || [[NSFileManager defaultManager] fileExistsAtPath: storePath] == NO)
-    return;
-  store = [DSStore storeWithPath: storePath];
-  if ([store load] == NO)
-    {
-      NSLog (@"View Options: cannot read %@", storePath);
-      return;
-    }
-  [store removeEntryForFilename: [path lastPathComponent] code: @"vstl"];
-  if ([store save] == NO)
-    NSLog (@"View Options: cannot write %@", storePath);
-}
-
 - (void)persist
 {
   id view = viewer ? [self nodeView] : nil;
@@ -635,8 +615,15 @@ columnTitle (NSString *columnId)
 
   if ([settings writeSettings: info] == NO)
     NSLog (@"View Options: cannot write the settings of %@", path);
+  /* Finder keeps a folder's view style only for "Always open in"; without
+   * it the record of an earlier choice goes, and the window no longer counts
+   * its view type as chosen for the folder [O:E5]. */
   if ([model alwaysOpen] == NO)
-    [self removeViewStyleOfFolder: path];
+    {
+      [settings removeViewStyle];
+      if ([viewer respondsToSelector: @selector(forgetChosenViewType)])
+        [viewer forgetChosenViewType];
+    }
 }
 
 @end

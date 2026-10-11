@@ -15,10 +15,40 @@
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
 #import "GWVolumeCache.h"
+#import "GSFileMetadata.h"
+#import "GWViewerChrome.h"
 #include <unistd.h>
 
 /* The stores Finder 10.6.8 wrote, kept with the Scout's evidence. */
 static NSString *const GWFinderFixtures = @"../GWMetadata/interop/fixtures/finder106";
+
+@interface PostCounter : NSObject
+{
+@public
+  int posts;
+}
+@end
+
+@implementation PostCounter
+- (void)changed:(NSNotification *)n
+{
+  posts++;
+}
+@end
+
+/* The scale factor the conversions see, set for this process only so the
+ * tests neither depend on nor change the user's own GSScaleFactor. */
+static void
+setTestScaleFactor(float scale)
+{
+  NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+
+  [defs removeVolatileDomainForName: NSArgumentDomain];
+  [defs setVolatileDomain: [NSDictionary dictionaryWithObject:
+                                           [NSNumber numberWithFloat: scale]
+                                                       forKey: @"GSScaleFactor"]
+                  forName: NSArgumentDomain];
+}
 
 static NSString *root;
 static NSFileManager *fm;
@@ -86,8 +116,7 @@ main(void)
   root = [[NSTemporaryDirectory() stringByAppendingPathComponent:
              [NSString stringWithFormat: @"t_FinderRecords-%d", (int)getpid()]] retain];
   [fm createDirectoryAtPath: root withIntermediateDirectories: YES attributes: nil error: NULL];
-  /* The store conversions read the screen height; headless, there is none. */
-  [[NSUserDefaults standardUserDefaults] setFloat: 1.0 forKey: @"GSScaleFactor"];
+  setTestScaleFactor(1.0);
 
   START_SET("store parsing")
     DSStore *s = loadedStore([GWFinderFixtures stringByAppendingPathComponent: e8]);
@@ -272,7 +301,7 @@ main(void)
          "MI-IV-42 other folders' records and the legacy lsvo stay as they were");
   END_SET("Finder's keys survive our write")
 
-  START_SET("the settings manager writes both stores")
+  START_SET("the settings manager writes the parent's store")
     NSString *dir = folderUnderFixture(nil, @"w2");
     GWVolumeCache *cache = [[[GWVolumeCache alloc] initWithCacheFilePath:
                                [root stringByAppendingPathComponent: @"cache.DS_Store"]]
@@ -285,17 +314,189 @@ main(void)
 
     info.iconTextSize = 15;
     info.hasIconTextSize = YES;
+    {
+      DSStoreIconInfo *icon = [DSStoreIconInfo infoForFilename: @"a.txt"];
+
+      [[NSData data] writeToFile: [dir stringByAppendingPathComponent: @"a.txt"] atomically: NO];
+      icon.position = NSMakePoint(40, 40);
+      icon.hasPosition = YES;
+      [info setIconInfo: icon forFilename: @"a.txt"];
+    }
     PASS([sm writeSettings: info], "MI-IV-43 settings written");
     own = loadedStore([dir stringByAppendingPathComponent: @".DS_Store"]);
     parent = loadedStore([[dir stringByDeletingLastPathComponent]
                            stringByAppendingPathComponent: @".DS_Store"]);
     PASS([[plistOf(parent, @"w2", @"icvp") objectForKey: @"textSize"] intValue] == 15,
          "MI-IV-44 under the folder's name in the parent [O:E1]");
-    PASS([[plistOf(own, @".", @"icvp") objectForKey: @"textSize"] intValue] == 15,
-         "MI-IV-45 and as \".\" in its own store, for newer Finders");
+    PASS([[own allCodesForFilename: @"."] count] == 0
+         && [own entryForFilename: @"a.txt" code: @"Iloc"] != nil,
+         "MI-IV-45 its own store gets the icon positions but no \".\" records [O:E2, M6]");
     PASS([[[sm readSettings] valueForKey: @"iconTextSize"] intValue] == 15,
          "MI-IV-46 and read back");
-  END_SET("the settings manager writes both stores")
+  END_SET("the settings manager writes the parent's store")
+
+  START_SET("window geometry is kept in points [O:E7]")
+    NSString *dir = folderUnderFixture(nil, @"w4");
+    NSString *parentStore = [[dir stringByDeletingLastPathComponent]
+                              stringByAppendingPathComponent: @".DS_Store"];
+    DSStoreInfo *w = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
+    DSStoreInfo *back;
+    NSRect finder = NSMakeRect(100, 50, 400, 300);
+    NSRect pixels;
+
+    /* The window is measured in device pixels; Finder means points. */
+    setTestScaleFactor(1.25);
+    w.windowFrame = NSMakeRect(250, 210, 625, 500);
+    w.hasWindowFrame = YES;
+    [w saveToParentStore];
+    PASS([[plistOf(loadedStore(parentStore), @"w4", @"bwsp") objectForKey: @"WindowBounds"]
+           isEqual: @"{{200, 168}, {500, 422}}"],
+         "MI-IV-90 at 1.25 WindowBounds is the window in points");
+    back = [DSStoreInfo infoForDirectoryPath: dir];
+    PASS(NSEqualRects(back.windowFrame, NSMakeRect(250, 210, 625, 500)),
+         "MI-IV-91 and comes back in pixels");
+
+    pixels = [DSStoreInfo gnustepRectFromDSStoreRect: finder];
+    PASS(pixels.size.width == 500 && pixels.size.height == 375 && pixels.origin.x == 125,
+         "MI-IV-92 a top-left record (fwi0, FinderInfo) is scaled to pixels as well");
+    back.windowFrame = pixels;
+    PASS(NSEqualRects([back dsStoreWindowFrameForScreen: nil], finder),
+         "MI-IV-93 and written back in points");
+
+    setTestScaleFactor(1.0);
+    pixels = [DSStoreInfo gnustepRectFromDSStoreRect: finder];
+    PASS(pixels.size.width == 400 && pixels.size.height == 300 && pixels.origin.x == 100,
+         "MI-IV-94 at 1.0 points and pixels are the same");
+  END_SET("window geometry is kept in points [O:E7]")
+
+  START_SET("path bar and status bar are global settings [O:E13]")
+    NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+    PostCounter *counter = [[PostCounter new] autorelease];
+
+    [defs removeObjectForKey: @"ShowPathbar"];
+    [defs removeObjectForKey: @"ShowStatusBar"];
+    PASS([GWViewerChrome showsPathBar] && [GWViewerChrome showsStatusBar],
+         "MI-IV-98 both are shown by default");
+    [[NSNotificationCenter defaultCenter] addObserver: counter
+                                             selector: @selector(changed:)
+                                                 name: GWViewerChromeDidChangeNotification
+                                               object: nil];
+    [GWViewerChrome setShowsPathBar: NO];
+    [GWViewerChrome setShowsStatusBar: NO];
+    PASS(![GWViewerChrome showsPathBar] && ![defs boolForKey: @"ShowPathbar"]
+         && [defs objectForKey: @"ShowPathbar"] != nil
+         && ![GWViewerChrome showsStatusBar] && [defs objectForKey: @"ShowStatusBar"] != nil,
+         "MI-IV-99 under Finder's own names ShowPathbar and ShowStatusBar");
+    PASS(counter->posts == 2, "MI-IV-100 every change is announced to the open windows");
+    [[NSNotificationCenter defaultCenter] removeObserver: counter];
+    [defs removeObjectForKey: @"ShowPathbar"];
+    [defs removeObjectForKey: @"ShowStatusBar"];
+  END_SET("path bar and status bar are global settings [O:E13]")
+
+  START_SET("records are created only for what was changed [M6]")
+    NSString *lcv = folderUnderFixture(e8, @"m_lcv");
+    NSString *parentStore = [[lcv stringByDeletingLastPathComponent]
+                              stringByAppendingPathComponent: @".DS_Store"];
+    NSString *red = folderUnderFixture(nil, @"red");
+    NSString *redParent = [[red stringByDeletingLastPathComponent]
+                            stringByAppendingPathComponent: @".DS_Store"];
+    DSStoreInfo *info;
+    DSStore *s;
+
+    info = [DSStoreInfo infoForDirectoryPath: lcv];
+    info.windowFrame = NSMakeRect(10, 10, 400, 300);
+    info.hasWindowFrame = YES;
+    [info saveToParentStore];
+    PASS([loadedStore(parentStore) entryForFilename: @"m_lcv" code: @"lsvp"] == nil,
+         "MI-IV-108 legacy list records alone do not become an lsvp");
+    info.listTextSize = 14;
+    info.hasListTextSize = YES;
+    [info saveToParentStore];
+    PASS([[plistOf(loadedStore(parentStore), @"m_lcv", @"lsvp") objectForKey: @"textSize"] intValue] == 14,
+         "MI-IV-109 one that was changed in Workspace does");
+
+    s = [DSStore createStoreAtPath: redParent withEntries: nil];
+    [s load];
+    [s setEntry: [DSStoreEntry backgroundColorEntryForFile: @"red" red: 65535 green: 0 blue: 0]];
+    [s save];
+    info = [DSStoreInfo infoForDirectoryPath: red];
+    info.windowFrame = NSMakeRect(10, 10, 400, 300);
+    info.hasWindowFrame = YES;
+    [info saveToParentStore];
+    PASS([loadedStore(redParent) entryForFilename: @"red" code: @"icvp"] == nil,
+         "MI-IV-110 a BKGD colour Finder ignores does not become an icvp it honours [O:E12]");
+  END_SET("records are created only for what was changed [M6]")
+
+  START_SET("stored value types are kept [M6]")
+    NSString *dir = folderUnderFixture(nil, @"hand");
+    NSString *parentStore = [[dir stringByDeletingLastPathComponent]
+                              stringByAppendingPathComponent: @".DS_Store"];
+    DSStore *s = [DSStore createStoreAtPath: parentStore withEntries: nil];
+    DSStoreInfo *info;
+    NSDictionary *lsvp, *icvp;
+
+    [s load];
+    [s setEntry: [DSStoreEntry plistEntryForFile: @"hand" code: @"lsvp"
+                                      dictionary: @{ @"textSize" : @12, @"iconSize" : @16,
+                                                     @"sortColumn" : @"name",
+                                                     @"viewOptionsVersion" : @1 }]];
+    [s setEntry: [DSStoreEntry plistEntryForFile: @"hand" code: @"icvp"
+                                      dictionary: @{ @"iconSize" : @64, @"textSize" : @12,
+                                                     @"viewOptionsVersion" : @1 }]];
+    [s save];
+    info = [DSStoreInfo infoForDirectoryPath: dir];
+    info.sortColumn = @"size";
+    info.iconSize = 80;
+    [info saveToParentStore];
+    s = loadedStore(parentStore);
+    lsvp = plistOf(s, @"hand", @"lsvp");
+    icvp = plistOf(s, @"hand", @"icvp");
+    PASS(!isReal([lsvp objectForKey: @"textSize"]) && !isReal([lsvp objectForKey: @"iconSize"])
+         && [[lsvp objectForKey: @"sortColumn"] isEqual: @"size"],
+         "MI-IV-111 integers not changed by Workspace stay integers");
+    PASS([[lsvp objectForKey: @"viewOptionsVersion"] intValue] == 1
+         && [[icvp objectForKey: @"viewOptionsVersion"] intValue] == 1,
+         "MI-IV-112 viewOptionsVersion stays as stored [O:E6]");
+    PASS(isReal([icvp objectForKey: @"iconSize"]) && [[icvp objectForKey: @"iconSize"] intValue] == 80,
+         "MI-IV-113 a value Workspace changed is written as Finder writes it");
+  END_SET("stored value types are kept [M6]")
+
+  START_SET("vstl only for a chosen view [O:E5]")
+    NSString *dir = folderUnderFixture(nil, @"fi");
+    GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
+    GWVolumeCache *cache = [[[GWVolumeCache alloc] initWithCacheFilePath:
+                               [root stringByAppendingPathComponent: @"cache2.DS_Store"]]
+                             autorelease];
+    GWViewSettingsManager *sm = [[[GWViewSettingsManager alloc] initWithDirectoryPath: dir
+                                                                          volumeCache: cache]
+                                  autorelease];
+    NSString *parentStore = [[dir stringByDeletingLastPathComponent]
+                              stringByAppendingPathComponent: @".DS_Store"];
+    DSStore *own;
+    DSStoreInfo *info;
+
+    [md setWindowBoundsForDirectory: NSMakeRect(10, 10, 300, 200)];
+    [md writeToFileAtPath: dir error: NULL];
+    PASS([[DSStoreInfo infoForDirectoryPath: dir] hasViewStyle] == NO,
+         "MI-IV-114 a folder's Finder Info does not make up a view style");
+
+    info = [sm readSettings];
+    info.viewStyle = DSStoreViewStyleList;
+    info.hasViewStyle = YES;
+    [sm writeSettings: info];
+    own = [DSStore createStoreAtPath: [dir stringByAppendingPathComponent: @".DS_Store"]
+                         withEntries: nil];
+    [own load];
+    [own setEntry: [DSStoreEntry viewStyleEntryForFile: @"." style: @"Nlsv"]];
+    [own save];
+    [cache writeInfo: info forDirectoryPath: dir];
+    [sm removeViewStyle];
+    PASS([loadedStore(parentStore) entryForFilename: @"fi" code: @"vstl"] == nil
+         && [loadedStore([dir stringByAppendingPathComponent: @".DS_Store"])
+              entryForFilename: @"." code: @"vstl"] == nil
+         && [[sm readSettings] hasViewStyle] == NO,
+         "MI-IV-115 unticking Always open in removes it from the parent, own store and cache");
+  END_SET("vstl only for a chosen view [O:E5]")
 
   START_SET("where a folder's records live [O:E14]")
     PASS([DSStoreInfo parentStorePathForDirectory: @"/"] == nil

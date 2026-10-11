@@ -148,6 +148,8 @@ const CGFloat DSStoreInfoFinderTitleBarHeight = 22.0;
 @synthesize hasUseRelativeDates = _hasUseRelativeDates;
 @synthesize calculateAllSizes = _calculateAllSizes;
 @synthesize hasCalculateAllSizes = _hasCalculateAllSizes;
+@synthesize listScrollPosition = _listScrollPosition;
+@synthesize hasListScrollPosition = _hasListScrollPosition;
 
 #pragma mark - Factory Methods
 
@@ -353,6 +355,8 @@ const CGFloat DSStoreInfoFinderTitleBarHeight = 22.0;
     [_sortColumn release];
     [_arrangeBy release];
     [_listColumns release];
+    [_loadedIconValues release];
+    [_loadedListValues release];
     [super dealloc];
 }
 
@@ -388,6 +392,7 @@ const CGFloat DSStoreInfoFinderTitleBarHeight = 22.0;
     [self loadFinderInfoFallback];
 
     _loaded = YES;
+    [self rememberLoadedOptions];
     
     /* "Loaded" means we found something in .DS_Store or in FinderInfo. */
     return (_hasViewStyle || _hasWindowFrame || store != nil || parentHadRecords);
@@ -444,6 +449,23 @@ const CGFloat DSStoreInfoFinderTitleBarHeight = 22.0;
 - (void)markAsLoaded
 {
     _loaded = YES;
+    [self rememberLoadedOptions];
+}
+
+- (void)rememberLoadedOptions
+{
+    ASSIGN(_loadedIconValues, [self iconViewRecordValues]);
+    ASSIGN(_loadedListValues, [self listViewRecordValues]);
+}
+
+- (BOOL)iconViewOptionsChanged
+{
+    return ![[self iconViewRecordValues] isEqual:(_loadedIconValues ? _loadedIconValues : @{})];
+}
+
+- (BOOL)listViewOptionsChanged
+{
+    return ![[self listViewRecordValues] isEqual:(_loadedListValues ? _loadedListValues : @{})];
 }
 
 #pragma mark - Alias Resolution
@@ -588,27 +610,17 @@ const CGFloat DSStoreInfoFinderTitleBarHeight = 22.0;
     }
 }
 
+/* A folder's window bounds from its FinderInfo (frRect), the classic
+ * channel, when no store gave any. */
 - (void)loadFinderInfoFallback
 {
     GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: _directoryPath];
     if (md == nil)
         return;
 
-    if (!_hasViewStyle) {
-        NSString *code = [md viewStyleCodeForDirectory];
-        if ([code isEqualToString: @"icnv"]) {
-            _viewStyle = DSStoreViewStyleIcon;     _hasViewStyle = YES;
-        } else if ([code isEqualToString: @"Nlsv"]) {
-            _viewStyle = DSStoreViewStyleList;     _hasViewStyle = YES;
-        } else if ([code isEqualToString: @"clmv"]) {
-            _viewStyle = DSStoreViewStyleColumn;   _hasViewStyle = YES;
-        } else if ([code isEqualToString: @"glyv"]) {
-            _viewStyle = DSStoreViewStyleGallery;  _hasViewStyle = YES;
-        } else if ([code isEqualToString: @"Flwv"]) {
-            _viewStyle = DSStoreViewStyleCoverflow; _hasViewStyle = YES;
-        }
-    }
-
+    /* No view style from here: a frView of 0, which every folder Finder
+     * Info carries, reads as icon view, and folders that never had a view
+     * chosen came out with one (and a vstl on the next save). */
     if (!_hasWindowFrame) {
         NSRect r = [md windowBoundsForDirectory];
         if (!NSEqualRects(r, NSZeroRect)) {
@@ -668,8 +680,10 @@ static BOOL readFloat(NSDictionary *plist, NSString *key, CGFloat *value)
     if ([windowBounds isKindOfClass:[NSString class]]) {
         NSRect rect = NSRectFromString(windowBounds);
         if (rect.size.width > 0 && rect.size.height > DSStoreInfoFinderTitleBarHeight) {
+            CGFloat scale = [DSStoreInfo scaleFactor];
             rect.size.height -= DSStoreInfoFinderTitleBarHeight;
-            _windowFrame = rect;
+            _windowFrame = NSMakeRect(rect.origin.x * scale, rect.origin.y * scale,
+                                      rect.size.width * scale, rect.size.height * scale);
             _hasWindowFrame = YES;
         }
     }
@@ -962,6 +976,11 @@ static NSString *columnIdForLegacyCode(NSString *code)
     }
     _hasUseRelativeDates |= readBool(plist, @"useRelativeDates", &_useRelativeDates);
     _hasCalculateAllSizes |= readBool(plist, @"calculateAllSizes", &_calculateAllSizes);
+    CGFloat x, y;
+    if (readFloat(plist, @"scrollPositionX", &x) && readFloat(plist, @"scrollPositionY", &y)) {
+        _listScrollPosition = NSMakePoint(x, y);
+        _hasListScrollPosition = YES;
+    }
 
     /* Older Workspace versions wrote a top-level "ascending"; 10.6 keeps
      * the direction per column [F:E8]. */
@@ -1220,12 +1239,15 @@ static NSString *columnIdForLegacyCode(NSString *code)
 
 + (NSSet *)ownedDirectoryCodes
 {
-    /* The codes writeStoreEntriesForInfo: emits for a directory key.  Any
-     * other 4CC under the same key (written by Finder) is not owned and must
-     * survive a merge write. */
+    /* The records a volume cache write replaces wholesale under a directory
+     * key: vstl and the picture records, which writeStoreEntriesForInfo:
+     * writes again when they are still set, and the pre-10.6 records older
+     * versions wrote there.  icvp, bwsp and lsvp are merged in place instead,
+     * so that one not changed is not dropped.  Any other 4CC under the key is
+     * not owned and survives. */
     return [NSSet setWithObjects:
-              @"vstl", @"icvo", @"icvp", @"iarr", @"lblp", @"icsp",
-              @"BKGD", @"pict", @"fwsw", @"bwsp", @"fwi0", @"lsvp",
+              @"vstl", @"icvo", @"iarr", @"lblp", @"icsp",
+              @"BKGD", @"pict", @"fwsw", @"fwi0",
               nil];
 }
 
@@ -1243,16 +1265,34 @@ static NSString *viewStyleCode(DSStoreViewStyle style)
 
 /* @p defaults, overlaid with the plist already stored in @p existing (so that
  * keys only Finder knows survive), overlaid with @p owned. */
+/* @p owned laid over @p stored, where a value equal to the stored one keeps
+ * the stored object: an integer Finder (or a hand) wrote stays an integer as
+ * long as Workspace does not change the value. */
+static NSDictionary *overlaidKeepingStored(NSDictionary *stored, NSDictionary *owned)
+{
+    NSMutableDictionary *merged = [NSMutableDictionary dictionaryWithDictionary:stored];
+    for (id k in owned) {
+        id mine = [owned objectForKey:k];
+        id theirs = [stored objectForKey:k];
+        if ([mine isKindOfClass:[NSDictionary class]] && [theirs isKindOfClass:[NSDictionary class]]) {
+            [merged setObject:overlaidKeepingStored(theirs, mine) forKey:k];
+        } else if (theirs == nil || ![theirs isEqual:mine]) {
+            [merged setObject:mine forKey:k];
+        }
+    }
+    return merged;
+}
+
 static DSStoreEntry *mergedPlistEntry(NSString *key, NSString *code, DSStoreEntry *existing,
                                       NSDictionary *defaults, NSDictionary *owned)
 {
-    NSMutableDictionary *merged = [NSMutableDictionary dictionaryWithDictionary:defaults];
+    NSMutableDictionary *base = [NSMutableDictionary dictionaryWithDictionary:defaults];
     NSDictionary *stored = plistOfEntry(existing);
     if (stored) {
-        [merged addEntriesFromDictionary:stored];
+        [base addEntriesFromDictionary:stored];
     }
-    [merged addEntriesFromDictionary:owned];
-    return [DSStoreEntry plistEntryForFile:key code:code dictionary:merged];
+    return [DSStoreEntry plistEntryForFile:key code:code
+                                dictionary:overlaidKeepingStored(base, owned)];
 }
 
 /* An icvp as 10.6 Finder writes it for a fresh folder [F:E8].  Finder drops
@@ -1341,9 +1381,9 @@ static NSDictionary *finderWindowDefaults(void)
     return defaults;
 }
 
-+ (DSStoreEntry *)iconViewEntryForInfo:(DSStoreInfo *)info key:(NSString *)key
-                              existing:(DSStoreEntry *)existing
+- (NSDictionary *)iconViewRecordValues
 {
+    DSStoreInfo *info = self;
     NSMutableDictionary *owned = [NSMutableDictionary dictionary];
     if ([info hasIconSize]) {
         [owned setObject:[NSNumber numberWithDouble:[info iconSize]] forKey:@"iconSize"];
@@ -1387,13 +1427,21 @@ static NSDictionary *finderWindowDefaults(void)
         [owned setObject:[NSNumber numberWithInt:2] forKey:@"backgroundType"];
         [owned setObject:[info backgroundImageAlias] forKey:@"backgroundImageAlias"];
     }
-    [owned setObject:[NSNumber numberWithInt:0] forKey:@"viewOptionsVersion"];
-    return mergedPlistEntry(key, @"icvp", existing, finderIconViewDefaults(), owned);
+    return owned;
 }
 
-+ (DSStoreEntry *)listViewEntryForInfo:(DSStoreInfo *)info key:(NSString *)key
++ (DSStoreEntry *)iconViewEntryForInfo:(DSStoreInfo *)info key:(NSString *)key
                               existing:(DSStoreEntry *)existing
 {
+    /* viewOptionsVersion only comes from the defaults: a stored 1, which
+     * Finder 10.6 ignores [O:E6], must not become an honoured 0 by our save. */
+    return mergedPlistEntry(key, @"icvp", existing, finderIconViewDefaults(),
+                            [info iconViewRecordValues]);
+}
+
+- (NSDictionary *)listViewRecordValues
+{
+    DSStoreInfo *info = self;
     NSMutableDictionary *owned = [NSMutableDictionary dictionary];
     if ([info hasSortColumn] && [info sortColumn]) {
         [owned setObject:[info sortColumn] forKey:@"sortColumn"];
@@ -1410,48 +1458,47 @@ static NSDictionary *finderWindowDefaults(void)
     if ([info hasCalculateAllSizes]) {
         [owned setObject:[NSNumber numberWithBool:[info calculateAllSizes]] forKey:@"calculateAllSizes"];
     }
+    if ([info hasListScrollPosition]) {
+        [owned setObject:[NSNumber numberWithDouble:[info listScrollPosition].x] forKey:@"scrollPositionX"];
+        [owned setObject:[NSNumber numberWithDouble:[info listScrollPosition].y] forKey:@"scrollPositionY"];
+    }
 
-    /* Merge column by column, so a key Finder keeps inside one column's
-     * dictionary survives as well.  A stored "columns" in the array form older
-     * Workspace versions wrote is replaced by Finder's dictionary form. */
-    NSMutableDictionary *columns = [NSMutableDictionary dictionaryWithDictionary:finderListColumnDefaults()];
-    id storedColumns = [plistOfEntry(existing) objectForKey:@"columns"];
-    NSMutableSet *ids = [NSMutableSet setWithArray:[columns allKeys]];
-    if ([storedColumns isKindOfClass:[NSDictionary class]]) {
-        [ids addObjectsFromArray:[storedColumns allKeys]];
+    if ([[info listColumns] count] > 0) {
+        [owned setObject:[info listColumns] forKey:@"columns"];
     }
-    [ids addObjectsFromArray:[[info listColumns] allKeys]];
-    for (NSString *columnId in ids) {
-        NSMutableDictionary *col = [NSMutableDictionary dictionary];
-        [col addEntriesFromDictionary:[columns objectForKey:columnId]];
-        if ([storedColumns isKindOfClass:[NSDictionary class]]
-            && [[storedColumns objectForKey:columnId] isKindOfClass:[NSDictionary class]]) {
-            [col addEntriesFromDictionary:[storedColumns objectForKey:columnId]];
-        }
-        [col addEntriesFromDictionary:[[info listColumns] objectForKey:columnId]];
-        [columns setObject:col forKey:columnId];
-    }
-    [owned setObject:columns forKey:@"columns"];
-    [owned removeObjectForKey:@"ascending"];
+    return owned;
+}
 
-    NSMutableDictionary *defaults = [NSMutableDictionary dictionaryWithDictionary:finderListViewDefaults()];
-    DSStoreEntry *e = mergedPlistEntry(key, @"lsvp", existing, defaults, owned);
-    /* The top-level "ascending" of older Workspace versions would contradict
-     * the per-column direction now written. */
-    NSMutableDictionary *plist = [NSMutableDictionary dictionaryWithDictionary:plistOfEntry(e)];
-    if ([plist objectForKey:@"ascending"] == nil) {
-        return e;
++ (DSStoreEntry *)listViewEntryForInfo:(DSStoreInfo *)info key:(NSString *)key
+                              existing:(DSStoreEntry *)existing
+{
+    /* Finder's defaults, then what is stored, then ours; per column too, so
+     * a key Finder keeps inside one column's dictionary survives.  A stored
+     * "columns" in the array form older Workspace versions wrote, and their
+     * top-level "ascending", give way to Finder's form. */
+    NSMutableDictionary *base = [NSMutableDictionary dictionaryWithDictionary:finderListViewDefaults()];
+    NSDictionary *stored = plistOfEntry(existing);
+    if (stored) {
+        [base addEntriesFromDictionary:stored];
     }
-    [plist removeObjectForKey:@"ascending"];
-    return [DSStoreEntry plistEntryForFile:key code:@"lsvp" dictionary:plist];
+    if (![[base objectForKey:@"columns"] isKindOfClass:[NSDictionary class]]) {
+        [base setObject:finderListColumnDefaults() forKey:@"columns"];
+    }
+    [base removeObjectForKey:@"ascending"];
+    return [DSStoreEntry plistEntryForFile:key code:@"lsvp"
+                                dictionary:overlaidKeepingStored(base, [info listViewRecordValues])];
 }
 
 + (DSStoreEntry *)windowEntryForInfo:(DSStoreInfo *)info key:(NSString *)key
                             existing:(DSStoreEntry *)existing
 {
     NSMutableDictionary *owned = [NSMutableDictionary dictionary];
-    /* GNUstep content rect -> whole window, bottom-left origin [O:E7]. */
+    /* GNUstep content rect in pixels -> whole window in points, bottom-left
+     * origin [O:E7]. */
+    CGFloat scale = [DSStoreInfo scaleFactor];
     NSRect frame = [info windowFrame];
+    frame = NSMakeRect(frame.origin.x / scale, frame.origin.y / scale,
+                       frame.size.width / scale, frame.size.height / scale);
     frame.size.height += DSStoreInfoFinderTitleBarHeight;
     [owned setObject:[NSString stringWithFormat:@"{{%d, %d}, {%d, %d}}",
                         (int)round(frame.origin.x), (int)round(frame.origin.y),
@@ -1493,14 +1540,18 @@ static NSDictionary *finderWindowDefaults(void)
                                           existing:[store entryForFilename:key code:@"bwsp"]];
         if (e) [store setEntry:e];
     }
-    if ([info hasIconViewOptions]) {
-        DSStoreEntry *e = [self iconViewEntryForInfo:info key:key
-                                            existing:[store entryForFilename:key code:@"icvp"]];
+    /* An icvp or lsvp is created only for options changed in Workspace.
+     * Values that came from records Finder does not honour (a legacy lsvo, a
+     * BKGD colour) would otherwise turn into ones it does, and the folder
+     * would change on the Mac without anyone having changed it. */
+    DSStoreEntry *icvp = [store entryForFilename:key code:@"icvp"];
+    if (icvp || [info iconViewOptionsChanged]) {
+        DSStoreEntry *e = [self iconViewEntryForInfo:info key:key existing:icvp];
         if (e) [store setEntry:e];
     }
-    if ([info hasListViewOptions]) {
-        DSStoreEntry *e = [self listViewEntryForInfo:info key:key
-                                            existing:[store entryForFilename:key code:@"lsvp"]];
+    DSStoreEntry *lsvp = [store entryForFilename:key code:@"lsvp"];
+    if (lsvp || [info listViewOptionsChanged]) {
+        DSStoreEntry *e = [self listViewEntryForInfo:info key:key existing:lsvp];
         if (e) [store setEntry:e];
     }
 }
@@ -1511,53 +1562,12 @@ static NSDictionary *finderWindowDefaults(void)
 {
     [self writeFinderViewRecordsForInfo:info key:key toStore:store];
 
-    /* --- Pre-10.6 records, kept for older readers --- */
-
-    /* Icon size - patch the existing icvo if present, preserving unknown
-     * fields (arrangement, flags, future trailing bytes). */
-    if ([info hasIconSize] && [info iconSize] > 0 && [info iconSize] <= 512) {
-        DSStoreEntry *existing = [store entryForFilename: key code: @"icvo"];
-        DSStoreEntry *e = [DSStoreEntry iconSizeEntryForFile: key
-                                                        size: [info iconSize]
-                                                  preserving: existing];
-        if (e) [store setEntry: e];
-    }
-
-    if ([info hasIconArrangement]) {
-        int arr = ([info iconArrangement] == DSStoreIconArrangementGrid) ? 1 : 0;
-        DSStoreEntry *e = [DSStoreEntry iconArrangementEntryForFile: key arrangement: arr];
-        if (e) [store setEntry: e];
-    }
-
-    if ([info hasLabelPosition]) {
-        int pos = ([info labelPosition] == DSStoreLabelPositionBottom) ? 0 : 1;
-        DSStoreEntry *e = [DSStoreEntry labelPositionEntryForFile: key position: pos];
-        if (e) [store setEntry: e];
-    }
-
-    if ([info hasGridSpacing] && [info gridSpacing] > 0) {
-        DSStoreEntry *e = [DSStoreEntry gridSpacingEntryForFile: key
-                                                        spacing: (int)[info gridSpacing]];
-        if (e) [store setEntry: e];
-    }
-
-    /* Background color - patch existing BKGD, preserving tag/reserved bytes */
-    if ([info backgroundType] == DSStoreBackgroundColor && [info backgroundColor]) {
-        CGFloat r, g, b, a;
-        [[[info backgroundColor] colorUsingColorSpaceName: NSCalibratedRGBColorSpace]
-          getRed: &r green: &g blue: &b alpha: &a];
-        DSStoreEntry *existing = [store entryForFilename: key code: @"BKGD"];
-        DSStoreEntry *e = [DSStoreEntry backgroundColorEntryForFile: key
-                                                                red: (int)(r * 65535.0)
-                                                              green: (int)(g * 65535.0)
-                                                               blue: (int)(b * 65535.0)
-                                                          preserving: existing];
-        if (e) [store setEntry: e];
-    }
-
-    /* Background image: BKGD PctB plus the path in a "pict" ustr.  10.6
-     * ignores both [O:E12]; they are kept as the path form older Workspace
-     * versions read. */
+    /* The pre-10.6 records (icvo, fwi0, fwsw, BKGD colour, and the iarr,
+     * lblp, icsp of older Workspace versions) are no longer written: 10.6
+     * reads icvp, bwsp and lsvp [O:E10, E12], and records nobody reads only
+     * make a cooperative save differ from what was there.  A picture keeps
+     * BKGD PctB with its path in a "pict" ustr, the form older Workspace
+     * versions read back; Finder ignores both [O:E12]. */
     if ([info backgroundType] == DSStoreBackgroundPicture && [info backgroundImagePath]) {
         DSStoreEntry *e = [DSStoreEntry backgroundImageEntryForFile: key
                                                           imagePath: [info backgroundImagePath]];
@@ -1570,23 +1580,11 @@ static NSDictionary *finderWindowDefaults(void)
         [store setEntry: pict];
     }
 
-    if ([info hasSidebarWidth]) {
-        DSStoreEntry *e = [DSStoreEntry sidebarWidthEntryForFile: key width: [info sidebarWidth]];
-        if (e) [store setEntry: e];
-    }
+    [self writePerFileEntriesForInfo: info toStore: store];
+}
 
-    /* fwi0 - patch existing so trailing bytes written by Finder are kept. */
-    if ([info hasWindowFrame]) {
-        NSRect dsFrame = [info dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
-        DSStoreEntry *oldFwi0 = [store entryForFilename: key code: @"fwi0"];
-        DSStoreEntry *fwi0 = [DSStoreEntry windowGeometryEntryForFile: key
-                                                                 rect: dsFrame
-                                                            viewStyle: viewStyleCode([info viewStyle])
-                                                          preserving: oldFwi0];
-        if (fwi0) [store setEntry: fwi0];
-    }
-
-    /* --- Per-file entries --- */
++ (void)writePerFileEntriesForInfo:(DSStoreInfo *)info toStore:(DSStore *)store
+{
     /* -allIconInfo hands out a copy, so asking for it per file copied the
        whole dictionary once per file: a folder of a few thousand icons cost
        hundreds of megabytes and seconds of work while it was saved. */
@@ -1623,7 +1621,7 @@ static NSDictionary *finderWindowDefaults(void)
 
 #pragma mark - Coordinate Conversion
 
-/* Every window rect this object holds is in GNUstep screen coordinates
+/* Every window rect this object holds is in GNUstep screen pixels
    (origin bottom-left), whatever it was loaded from: the .DS_Store fwi0/bwsp
    rect, the folder FinderInfo or a viewer's own prefs all pass through
    +gnustepRectFromDSStoreRect: on the way in.  One convention throughout is
@@ -1638,10 +1636,23 @@ static NSDictionary *finderWindowDefaults(void)
 + (NSRect)gnustepRectFromDSStoreRect:(NSRect)dsRect
 {
   CGFloat screenHeight = [[DSStoreInfo safeMainScreen] frame].size.height;
+  CGFloat scale = [DSStoreInfo scaleFactor];
 
-  return NSMakeRect(dsRect.origin.x,
-                    screenHeight - dsRect.origin.y - dsRect.size.height,
-                    dsRect.size.width, dsRect.size.height);
+  return NSMakeRect(dsRect.origin.x * scale,
+                    screenHeight - (dsRect.origin.y + dsRect.size.height) * scale,
+                    dsRect.size.width * scale, dsRect.size.height * scale);
+}
+
++ (CGFloat)scaleFactor
+{
+  NSScreen *screen = [DSStoreInfo safeMainScreen];
+  CGFloat scale;
+
+  /* Without a screen (a headless tool) the setting the screen would take
+   * its factor from is read directly. */
+  scale = screen ? [screen userSpaceScaleFactor]
+                 : [[NSUserDefaults standardUserDefaults] floatForKey: @"GSScaleFactor"];
+  return scale > 0 ? scale : 1.0;
 }
 
 - (NSRect)gnustepWindowFrameForScreen:(NSScreen *)screen
@@ -1670,13 +1681,11 @@ static NSDictionary *finderWindowDefaults(void)
       screen = [DSStoreInfo safeMainScreen];
     }
     CGFloat screenHeight = [screen frame].size.height;
+    CGFloat scale = [DSStoreInfo scaleFactor];
     CGFloat dsStoreTop = screenHeight - _windowFrame.origin.y - _windowFrame.size.height;
 
-    NSRect result = NSMakeRect(_windowFrame.origin.x, dsStoreTop,
-                               _windowFrame.size.width, _windowFrame.size.height);
-
-
-    return result;
+    return NSMakeRect(_windowFrame.origin.x / scale, dsStoreTop / scale,
+                      _windowFrame.size.width / scale, _windowFrame.size.height / scale);
 }
 
 + (NSScreen *)safeMainScreen
@@ -1707,19 +1716,22 @@ static NSDictionary *finderWindowDefaults(void)
 {
   if (!dsStorePath || [dsStorePath length] == 0) return NO;
 
-
-  /* Build the DSStore object with all current settings */
   DSStore *store = [DSStore createStoreAtPath:dsStorePath withEntries:nil];
   if (!store) {
     return NO;
   }
-
   [store load];  /* Load existing entries so we merge, not replace */
 
-  /* --- Directory-level + per-file entries (keyed by ".") --- */
-  [DSStoreInfo writeStoreEntriesForInfo: self
-                                    key: @"."
-                                toStore: store];
+  /* The folder's own view and window records belong in its own store only
+   * for a volume root or the home folder [O:E14]; any other folder has them
+   * in its parent's (-saveToParentStore), and a "." record there would be
+   * one 10.6 ignores [O:E2].  Newer macOS versions keep using the parent's
+   * record too, so there is nothing a second copy here would serve. */
+  if ([DSStoreInfo parentStorePathForDirectory: _directoryPath] == nil) {
+    [DSStoreInfo writeStoreEntriesForInfo: self key: @"." toStore: store];
+  } else {
+    [DSStoreInfo writePerFileEntriesForInfo: self toStore: store];
+  }
 
   /* Prune ghost per-file entries on write: remove Iloc/lclr/cmmt entries for
    * files that are no longer on-disk children of this directory (renamed,
@@ -1730,50 +1742,7 @@ static NSDictionary *finderWindowDefaults(void)
                               forDirectory: _directoryPath
                                   keepPath: @"."];
 
-  /* --- Write atomically --- */
-  BOOL saved = [store save];
-  if (saved) {
-  } else {
-  }
-
-  /* Mirror per-folder view style + window geometry into the folder's own
-   * com.apple.FinderInfo DInfo (the classic / spatial macOS channel) so the
-   * values interoperate with Finder on systems that read it, and so Gershwin's
-   * own spatial viewer persists them.  Best-effort only: failures (e.g. a
-   * filesystem without xattr support) are logged and ignored; .DS_Store
-   * remains the primary on-disk channel.  Only written when we actually have a
-   * value, to avoid stamping a spurious zeroed FinderInfo on folders we know
-   * nothing about. */
-  if (saved && (_hasViewStyle || _hasWindowFrame)) {
-    GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: _directoryPath];
-    if (md == nil)
-      md = [[[GSFileMetadata alloc] init] autorelease];
-    if (md != nil) {
-      if (_hasViewStyle) {
-        NSString *styleStr = @"icnv";
-        switch (_viewStyle) {
-          case DSStoreViewStyleIcon:     styleStr = @"icnv"; break;
-          case DSStoreViewStyleList:     styleStr = @"Nlsv"; break;
-          case DSStoreViewStyleColumn:   styleStr = @"clmv"; break;
-          case DSStoreViewStyleGallery:  styleStr = @"glyv"; break;
-          case DSStoreViewStyleCoverflow:styleStr = @"Flwv"; break;
-        }
-        [md setViewStyleCodeForDirectory: styleStr];
-      }
-      if (_hasWindowFrame) {
-        NSRect dsFrame = [self dsStoreWindowFrameForScreen:
-                            [DSStoreInfo safeMainScreen]];
-        [md setWindowBoundsForDirectory: dsFrame];
-      }
-      NSError *fiErr = nil;
-      if ([md writeToFileAtPath: _directoryPath error: &fiErr] == NO && fiErr) {
-        NSLog(@"DSStoreInfo: FinderInfo write failed for %@: %@",
-              _directoryPath, fiErr);
-      }
-    }
-  }
-
-  return saved;
+  return [store save];
 }
 
 - (BOOL)saveToParentStore
@@ -1908,6 +1877,7 @@ static NSDictionary *finderWindowDefaults(void)
   _hasShowSidebar = NO;
   _hasUseRelativeDates = NO;
   _hasCalculateAllSizes = NO;
+  _hasListScrollPosition = NO;
   _sortAscending = YES;
 
   _backgroundType = DSStoreBackgroundDefault;
@@ -1917,6 +1887,8 @@ static NSDictionary *finderWindowDefaults(void)
   [_sortColumn release];  _sortColumn = nil;
   [_arrangeBy release];  _arrangeBy = nil;
   [_listColumns release];  _listColumns = nil;
+  DESTROY(_loadedIconValues);
+  DESTROY(_loadedListValues);
   [_iconInfoDict removeAllObjects];
 
   _loaded = NO;
@@ -1980,6 +1952,10 @@ static NSDictionary *finderWindowDefaults(void)
   if (!_hasCalculateAllSizes && [other hasCalculateAllSizes]) {
     _calculateAllSizes = [other calculateAllSizes];
     _hasCalculateAllSizes = YES;
+  }
+  if (!_hasListScrollPosition && [other hasListScrollPosition]) {
+    _listScrollPosition = [other listScrollPosition];
+    _hasListScrollPosition = YES;
   }
   if (!_hasLabelPosition && [other hasLabelPosition]) {
     _labelPosition = [other labelPosition];

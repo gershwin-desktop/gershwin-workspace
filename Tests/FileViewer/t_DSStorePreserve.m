@@ -453,11 +453,11 @@ main(void)
     PASS(unkE != nil && [[unkE value] isEqual: unk],
          "integration: unknown record 'qqqq' survives the DSStoreInfo write");
 
+    /* The legacy icvo is no longer written, so it is kept byte for byte. */
     DSStoreEntry *icvoE = [chk entryForFilename: @"." code: @"icvo"];
     NSData *icvoV = (NSData *)[icvoE value];
     PASS([icvoV length] == 24, "integration: icvo keeps its 24-byte shape");
     const uint8_t *b = [icvoV bytes];
-    PASS(b[12] == 0 && b[13] == 128, "integration: icvo size updated to 128");
     PASS(memcmp(b + 14, "auto", 4) == 0,
          "integration: icvo arrangement 'auto' preserved (not normalized)");
     NSData *gotTail = [icvoV subdataWithRange: NSMakeRange(18, 6)];

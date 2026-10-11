@@ -52,6 +52,7 @@
 #import "FSNAlias.h"
 #import "FSNAliasFile.h"
 #import "FSNLocationFile.h"
+#import "GWViewerChrome.h"
 #import "Workspace.h"
 
 /* Set of paths the user has recently unmounted via the GUI.
@@ -79,6 +80,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "Dock.h"
 #import "GWTrashFlight.h"
 #import "GWViewersManager.h"
+#import "ViewOptions/GWViewOptionsPanel.h"
 #import "GWViewer.h"
 #import "Finder.h"
 #import "Inspector.h"
@@ -687,6 +689,12 @@ static Workspace *gworkspace = nil;
   [menuItem setState: NSOnState];
   menuItem = [menu addItemWithTitle:_(@"Show Preview") action:@selector(notImplemented:) keyEquivalent:@""];
   [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Show Path Bar") action:@selector(togglePathBar:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  [menuItem setState: [GWViewerChrome showsPathBar] ? NSOnState : NSOffState];
+  menuItem = [menu addItemWithTitle:_(@"Show Status Bar") action:@selector(toggleStatusBar:) keyEquivalent:@""];
+  [menuItem setTarget:self];
+  [menuItem setState: [GWViewerChrome showsStatusBar] ? NSOnState : NSOffState];
   
   [menu addItem:[NSMenuItem separatorItem]];
   
@@ -697,7 +705,7 @@ static Workspace *gworkspace = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Show View Options") action:@selector(notImplemented:) keyEquivalent:@"j"];
+  menuItem = [menu addItemWithTitle:_(@"Show View Options") action:@selector(showViewOptions:) keyEquivalent:@"j"];
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Show Preview Options") action:@selector(notImplemented:) keyEquivalent:@"J"];
   [menuItem setKeyEquivalentModifierMask:NSCommandKeyMask | NSShiftKeyMask];
@@ -1045,6 +1053,7 @@ static Workspace *gworkspace = nil;
   finder = [Finder finder];
   
   vwrsManager = [GWViewersManager viewersManager];
+  [[GWViewOptionsPanel sharedPanel] setViewersManager: vwrsManager];
   /* Folders spring open under a drag through the viewers manager, which
      knows what kind of window each folder lives in. */
   [[FSNSpringLoader sharedLoader] setDelegate: vwrsManager];
@@ -1689,6 +1698,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if (sel_isEqual(action, @selector(activateContextHelp:))) {
     return ([NSHelpManager isContextHelpModeActive] == NO);
   }
+  if (sel_isEqual(action, @selector(showViewOptions:))) {
+    return [[GWViewOptionsPanel sharedPanel] hasViewerToEdit];
+  }
 
   // Cut/copy/paste for file operations
   if (sel_isEqual(action, @selector(cut:))
@@ -1785,6 +1797,19 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       if ([keyWindow respondsToSelector:@selector(validateMenuItem:)])
         return [keyWindow validateMenuItem:anItem];
       return NO;
+    }
+
+  /* Settings of all windows, as in Finder: always available, checked while
+   * the bar is shown. */
+  if (sel_isEqual(action, @selector(togglePathBar:)))
+    {
+      [anItem setState: [GWViewerChrome showsPathBar] ? NSOnState : NSOffState];
+      return YES;
+    }
+  if (sel_isEqual(action, @selector(toggleStatusBar:)))
+    {
+      [anItem setState: [GWViewerChrome showsStatusBar] ? NSOnState : NSOffState];
+      return YES;
     }
 
   // === View type / behaviour — enabled whenever a viewer window exists ===
@@ -5606,17 +5631,29 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
        * and the UITest's select menu resolve by the item's current title, which
        * no longer changes). */
       if ([viewer respondsToSelector: @selector(isSidebarShown)]) {
-        [self _setSidebarMenuItemState: [viewer isSidebarShown]];
+        [self _setState: [viewer isSidebarShown] ofMenuItemWithAction: @selector(toggleSidebar:)];
       }
     }
 }
 
-/* Updates the checkmark of the "Show Sidebar" menu item to match the given
+/* Every open window follows: the viewers observe the change. */
+- (void)togglePathBar:(id)sender
+{
+  [GWViewerChrome setShowsPathBar: ![GWViewerChrome showsPathBar]];
+  [self _setState: [GWViewerChrome showsPathBar] ofMenuItemWithAction: _cmd];
+}
+
+- (void)toggleStatusBar:(id)sender
+{
+  [GWViewerChrome setShowsStatusBar: ![GWViewerChrome showsStatusBar]];
+  [self _setState: [GWViewerChrome showsStatusBar] ofMenuItemWithAction: _cmd];
+}
+
+/* Updates the checkmark of a toggle in the main menu to match the given
  * state, so an in-process toggle (no menu display, no validation) still
  * leaves the menu state consistent. */
-- (void)_setSidebarMenuItemState:(BOOL)shown
+- (void)_setState:(BOOL)shown ofMenuItemWithAction:(SEL)act
 {
-  SEL act = @selector(toggleSidebar:);
   NSMenu *mainMenu = [NSApp mainMenu];
   for (NSMenuItem *top in [mainMenu itemArray])
     {
@@ -5651,6 +5688,14 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 
   /* Informational confirmation; see setDefaultBrowsingBehaviour:. */
   NSLog(@"Default viewer type set to Spatial for new viewer windows.");
+}
+
+- (void)showViewOptions:(id)sender
+{
+  GWViewOptionsPanel *viewOptions = [GWViewOptionsPanel sharedPanel];
+
+  [viewOptions setViewersManager: vwrsManager];
+  [viewOptions showForMainWindow];
 }
 
 - (void)notImplemented:(id)sender

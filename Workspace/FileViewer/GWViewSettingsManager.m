@@ -119,6 +119,33 @@
   return YES;
 }
 
+/* Removes @p code under @p key from the store at @p path, if both exist. */
+static void
+removeRecord(NSString *path, NSString *key, NSString *code)
+{
+  DSStore *store;
+
+  if (path == nil || ![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+    return;
+  }
+  store = [DSStore storeWithPath:path];
+  if (![store load] || [store entryForFilename:key code:code] == nil) {
+    return;
+  }
+  [store removeEntryForFilename:key code:code];
+  if (![store save]) {
+    NSLog(@"GWViewSettingsManager: cannot write %@", path);
+  }
+}
+
+- (void)removeViewStyle
+{
+  removeRecord([DSStoreInfo parentStorePathForDirectory:_directoryPath],
+               [_directoryPath lastPathComponent], @"vstl");
+  removeRecord([self folderDSStorePath], @".", @"vstl");
+  removeRecord([_volumeCache cacheFilePath], _directoryPath, @"vstl");
+}
+
 /* ------------------------------------------------------------------ */
 #pragma mark - Policy checks
 /* ------------------------------------------------------------------ */

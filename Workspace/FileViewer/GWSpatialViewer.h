@@ -115,7 +115,6 @@
 - (void)reapplyDSStoreSettings;
 - (void)applyDSStoreSettingsIncludingScrollPosition:(BOOL)restoreScroll;
 - (BOOL)isStatusBarShown;
-- (void)toggleStatusBar:(id)sender;
 - (void)setStatusBarShown:(BOOL)shown;
 - (DSStoreInfo *)dsStoreInfo;
 - (GWViewSettingsManager *)settingsManager;

@@ -113,6 +113,12 @@
     BOOL _hasUseRelativeDates;
     BOOL _calculateAllSizes;
     BOOL _hasCalculateAllSizes;
+    NSPoint _listScrollPosition;
+    BOOL _hasListScrollPosition;
+
+    /* The icvp / lsvp values as loaded, to tell what Workspace changed. */
+    NSDictionary *_loadedIconValues;
+    NSDictionary *_loadedListValues;
     
     // Icon positions (Iloc)
     NSMutableDictionary *_iconInfoDict;  // filename -> DSStoreIconInfo
@@ -189,11 +195,27 @@
 @property (nonatomic, assign) BOOL hasUseRelativeDates;
 @property (nonatomic, assign) BOOL calculateAllSizes;
 @property (nonatomic, assign) BOOL hasCalculateAllSizes;
+/* lsvp scrollPositionX/Y, the icon view's convention [O:E11]. */
+@property (nonatomic, assign) NSPoint listScrollPosition;
+@property (nonatomic, assign) BOOL hasListScrollPosition;
 /* Views of listColumns: column id -> width, column id -> visible. */
 @property (nonatomic, readonly) NSDictionary *columnWidths;
 @property (nonatomic, readonly) NSDictionary *columnVisible;
 /* Ids of the visible columns, left to right. */
 - (NSArray *)listColumnOrder;
+/* The icvp / lsvp keys this object would write, with their values. */
+- (NSDictionary *)iconViewRecordValues;
+- (NSDictionary *)listViewRecordValues;
+
+/* Takes the current values as the loaded ones; -load and -markAsLoaded do
+ * this, a caller that merges more stored values in does it again. */
+- (void)rememberLoadedOptions;
+
+/* Whether the icon or list options differ from the loaded ones, i.e. were
+ * changed in Workspace.  Only then is a missing icvp / lsvp created. */
+- (BOOL)iconViewOptionsChanged;
+- (BOOL)listViewOptionsChanged;
+
 /* Whether any list view option (lsvp) is known. */
 - (BOOL)hasListViewOptions;
 /* Whether any icon view option (icvp) is known. */
@@ -333,6 +355,9 @@ extern const CGFloat DSStoreInfoFinderTitleBarHeight;
 /* Whether the receiver holds anything saveToParentStore would write. */
 - (BOOL)hasFinderViewRecords;
 
+/* Write the per-file Iloc/lclr/cmmt entries of @p info. */
++ (void)writePerFileEntriesForInfo:(DSStoreInfo *)info toStore:(DSStore *)store;
+
 /* Write the Finder view records (vstl, bwsp, icvp, lsvp) of @p info under
  * @p key, merged over any record already there. */
 + (void)writeFinderViewRecordsForInfo:(DSStoreInfo *)info
@@ -360,6 +385,11 @@ extern const CGFloat DSStoreInfoFinderTitleBarHeight;
    is always in GNUstep coordinates and the flip back to .DS_Store happens
    once, at save time. */
 + (NSRect)gnustepRectFromDSStoreRect:(NSRect)dsRect;
+
+/* Stored rects are in points, as Finder means them; the window frames this
+ * object holds are screen pixels, as measured from the X window.  This is
+ * the factor between the two (GSScaleFactor). */
++ (CGFloat)scaleFactor;
 
 - (NSRect)gnustepWindowFrameForScreen:(NSScreen *)screen;
 - (NSPoint)gnustepPositionForDSStorePoint:(NSPoint)dsPoint 

@@ -115,7 +115,6 @@
 - (void)toggleSidebar:(id)sender;
 - (void)setSidebarShown:(BOOL)shown;
 - (BOOL)isPathBarShown;
-- (void)togglePathBar:(id)sender;
 - (void)setPathBarShown:(BOOL)shown;
 - (void)reloadSidebar;
 - (void)invalidate;

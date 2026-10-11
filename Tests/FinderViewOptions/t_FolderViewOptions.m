@@ -110,6 +110,18 @@ main(void)
          "MI-IV-50 and back; an arrangement wins over snap");
   END_SET("arrangeBy and Arrange By [F:E8, G: S11]")
 
+  START_SET("toolbar and window kind [decision A]")
+    DSStoreInfo *info = [[[DSStoreInfo alloc] initWithDirectoryPath: @"/nonexistent"] autorelease];
+
+    PASS([O opensSpatially: info byDefault: YES] && ![O opensSpatially: info byDefault: NO],
+         "MI-IV-95 without a stored ShowToolbar the default kind is used");
+    info.showToolbar = NO;
+    info.hasShowToolbar = YES;
+    PASS([O opensSpatially: info byDefault: NO], "MI-IV-96 ShowToolbar 0 opens a spatial window");
+    info.showToolbar = YES;
+    PASS(![O opensSpatially: info byDefault: YES], "MI-IV-97 ShowToolbar 1 a browsing window");
+  END_SET("toolbar and window kind [decision A]")
+
   START_SET("a background picture as Finder resolves it [O:E12]")
     NSData *alias = [O backgroundImageAliasForPath: @"/srv/pics/bg.png"];
     NSString *bytes = [[[NSString alloc] initWithData: alias
@@ -253,7 +265,6 @@ main(void)
   START_SET("a list back into lsvp")
     FSNListViewDataSource *ds = listDataSource();
     DSStoreInfo *info = finderInfo(e8, @"m_lsort");
-    DSStoreInfo *back;
     NSArray *order = @[ @"name", @"kind", @"size" ];
 
     [O applyListViewOptionsOf: info toDataSource: ds];
@@ -269,11 +280,59 @@ main(void)
     PASS([[[info.listColumns objectForKey: @"size"] objectForKey: @"ascending"] boolValue] == NO,
          "MI-IV-77 the other columns keep their own direction");
 
-    back = [[[DSStoreInfo alloc] initWithDirectoryPath: root] autorelease];
-    [O takeListColumnWidthsOf: ds into: back];
-    PASS([back hasListViewOptions] == NO,
-         "MI-IV-78 a width alone does not create list options");
   END_SET("a list back into lsvp")
+
+  START_SET("every column keeps its own direction in lsvp [F:E8]")
+    FSNListViewDataSource *ds = listDataSource();
+    DSStoreInfo *info = finderInfo(e8, @"m_lsort");
+
+    [O applyListViewOptionsOf: info toDataSource: ds];
+    [ds setSortColumnId: @"kind" ascending: NO];
+    [ds setSortColumnId: @"name" ascending: YES];
+    [O takeListViewOptionsOf: ds into: info];
+    PASS([[[info.listColumns objectForKey: @"kind"] objectForKey: @"ascending"] boolValue] == NO,
+         "MI-IV-101 a column sorted before keeps the direction it was sorted in");
+    PASS([[[info.listColumns objectForKey: @"name"] objectForKey: @"ascending"] boolValue],
+         "MI-IV-102 the sort column its own");
+  END_SET("every column keeps its own direction in lsvp [F:E8]")
+
+  START_SET("the list's scroll position [O:E11]")
+    FSNListView *list = [[FSNListView alloc] initWithFrame: NSMakeRect(0, 0, 400, 2000)
+                                           dataSourceClass: [FSNListViewDataSource class]];
+    NSScrollView *scroll = [[NSScrollView alloc] initWithFrame: NSMakeRect(0, 0, 400, 120)];
+    DSStoreInfo *info = finderInfo(e8, @"m_lsort");
+    DSStoreInfo *back = finderInfo(e8, @"m_lsort");
+
+    [scroll setHasVerticalScroller: YES];
+    [scroll setDocumentView: list];
+    [list showContentsOfNode: [FSNode nodeWithPath: root]];
+    info.listScrollPosition = NSMakePoint(0, 60);
+    info.hasListScrollPosition = YES;
+    [O applyListScrollPositionOf: info toListView: list];
+    PASS([list scrollPosition].y == 60, "MI-IV-103 is restored from lsvp");
+    [list setScrollPosition: NSMakePoint(0, 40)];
+    [O takeListScrollPositionOf: list into: back];
+    PASS(back.hasListScrollPosition && back.listScrollPosition.y == 40,
+         "MI-IV-104 and taken back");
+    [scroll release];
+  END_SET("the list's scroll position [O:E11]")
+
+  START_SET("icvp gridSpacing [F:E8]")
+    FSNIconsView *v = iconsView();
+    DSStoreInfo *info = finderInfo(e8, @"m_ts");
+    DSStoreInfo *back = [[[DSStoreInfo alloc] initWithDirectoryPath: root] autorelease];
+
+    info.gridSpacing = 140;
+    [O applyIconViewOptionsOf: info toIconsView: v includingScrollPosition: NO];
+    PASS([v gridSpacing] == 140, "MI-IV-105 reaches the icon view");
+    [v setGridSpacing: 120];
+    [O takeIconViewOptionsOf: v into: back];
+    PASS(back.hasGridSpacing && back.gridSpacing == 120, "MI-IV-106 and comes back");
+    back.gridSpacing = 100;
+    [v setGridSpacing: 0];
+    [O takeIconViewOptionsOf: v into: back];
+    PASS(back.gridSpacing == 100, "MI-IV-107 an automatic spacing leaves the stored one alone");
+  END_SET("icvp gridSpacing [F:E8]")
 
   [fm removeFileAtPath: root handler: nil];
   [arp release];

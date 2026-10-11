@@ -66,6 +66,8 @@ static NSDictionary *arrangementsByName(void)
 
   if ([info hasIconSize] && [info iconSize] > 0)
     [view setIconSize: [info iconSize]];
+  if ([info hasGridSpacing])
+    [view setGridSpacing: [info gridSpacing]];
   if ([info hasLabelPosition])
     [view setIconPosition: ([info labelPosition] == DSStoreLabelPositionBottom)
                             ? NSImageAbove : NSImageLeft];
@@ -111,6 +113,13 @@ static NSDictionary *arrangementsByName(void)
   [info setHasShowIconPreview: YES];
   [info setScrollPosition: [view scrollPosition]];
   [info setHasScrollPosition: YES];
+  /* 0 is the view's own spacing, which Finder has no value for; the stored
+   * one is kept then. */
+  if ([view gridSpacing] > 0)
+    {
+      [info setGridSpacing: [view gridSpacing]];
+      [info setHasGridSpacing: YES];
+    }
 
   /* A value the view cannot show (a newer Finder's "dateAdded") came in as
    * no arrangement; writing "none" back would lose it while the user did
@@ -165,11 +174,10 @@ static NSDictionary *arrangementsByName(void)
     [dataSource setCalculatesAllSizes: [info calculateAllSizes]];
 }
 
-/* Finder's column dictionaries with the view's widths (and, when asked,
- * visibility and order) laid over them. */
+/* Finder's column dictionaries with the view's widths, directions,
+ * visibility and order laid over them. */
 + (NSDictionary *)columnsOf:(FSNListViewDataSource *)dataSource
                  overColumns:(NSDictionary *)stored
-                 widthsOnly:(BOOL)widthsOnly
 {
   NSMutableDictionary *columns = [NSMutableDictionary dictionary];
   NSArray *order = [dataSource columnOrder];
@@ -183,16 +191,15 @@ static NSDictionary *arrangementsByName(void)
 
       if (width > 0)
         [col setObject: [NSNumber numberWithInt: (int)width] forKey: @"width"];
-      if (widthsOnly == NO)
-        {
-          [col setObject: [NSNumber numberWithBool: [dataSource isColumnVisible: columnId]]
-                  forKey: @"visible"];
-          /* A hidden column keeps the place it had, as Finder's do [F:E8]. */
-          if (index != NSNotFound)
-            [col setObject: [NSNumber numberWithInt: (int)index] forKey: @"index"];
-        }
-      if ([col count] > 0)
-        [columns setObject: col forKey: columnId];
+      /* Each column keeps the direction it was last sorted in [F:E8]. */
+      [col setObject: [NSNumber numberWithBool: [dataSource sortAscendingForColumnId: columnId]]
+              forKey: @"ascending"];
+      [col setObject: [NSNumber numberWithBool: [dataSource isColumnVisible: columnId]]
+              forKey: @"visible"];
+      /* A hidden column keeps the place it had, as Finder's do [F:E8]. */
+      if (index != NSNotFound)
+        [col setObject: [NSNumber numberWithInt: (int)index] forKey: @"index"];
+      [columns setObject: col forKey: columnId];
     }
   return columns;
 }
@@ -204,8 +211,7 @@ static NSDictionary *arrangementsByName(void)
     return;
 
   [info setListColumns: [self columnsOf: dataSource
-                            overColumns: [info listColumns]
-                             widthsOnly: NO]];
+                            overColumns: [info listColumns]]];
   if ([dataSource sortColumnId])
     {
       [info setSortColumn: [dataSource sortColumnId]];
@@ -225,15 +231,47 @@ static NSDictionary *arrangementsByName(void)
   [info setHasCalculateAllSizes: YES];
 }
 
-+ (void)takeListColumnWidthsOf:(FSNListViewDataSource *)dataSource
-                          into:(DSStoreInfo *)info
++ (void)applyListScrollPositionOf:(DSStoreInfo *)info toListView:(FSNListView *)list
 {
-  if (info == nil || dataSource == nil || [[info listColumns] count] == 0)
-    return;
+  if ([info hasListScrollPosition])
+    [list setScrollPosition: [info listScrollPosition]];
+}
 
-  [info setListColumns: [self columnsOf: dataSource
-                            overColumns: [info listColumns]
-                             widthsOnly: YES]];
++ (void)takeListScrollPositionOf:(FSNListView *)list into:(DSStoreInfo *)info
+{
+  [info setListScrollPosition: [list scrollPosition]];
+  [info setHasListScrollPosition: YES];
+}
+
+static NSDictionary *
+withoutScrollPosition(NSDictionary *values)
+{
+  NSMutableDictionary *d = [NSMutableDictionary dictionaryWithDictionary: values];
+
+  [d removeObjectsForKeys: [NSArray arrayWithObjects: @"scrollPositionX",
+                                    @"scrollPositionY", nil]];
+  return d;
+}
+
++ (NSDictionary *)iconViewStateOf:(FSNIconsView *)view
+{
+  DSStoreInfo *scratch = [[[DSStoreInfo alloc] initWithDirectoryPath: @"/"] autorelease];
+
+  [self takeIconViewOptionsOf: view into: scratch];
+  return withoutScrollPosition([scratch iconViewRecordValues]);
+}
+
++ (NSDictionary *)listViewStateOf:(FSNListViewDataSource *)dataSource
+{
+  DSStoreInfo *scratch = [[[DSStoreInfo alloc] initWithDirectoryPath: @"/"] autorelease];
+
+  [self takeListViewOptionsOf: dataSource into: scratch];
+  return withoutScrollPosition([scratch listViewRecordValues]);
+}
+
++ (BOOL)opensSpatially:(DSStoreInfo *)info byDefault:(BOOL)spatialDefault
+{
+  return [info hasShowToolbar] ? ([info showToolbar] == NO) : spatialDefault;
 }
 
 + (NSData *)backgroundImageAliasForPath:(NSString *)imagePath

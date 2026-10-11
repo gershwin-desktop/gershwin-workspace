@@ -32,6 +32,7 @@
 - (void)dealloc
 {
   RELEASE (pendingScrollPosition);
+  RELEASE (appliedViewState);
   [super dealloc];
 }
 
@@ -58,11 +59,55 @@
     {
       [GWFolderViewOptions applyListViewOptionsOf: info
                                      toDataSource: [nodeView dataSource]];
+      if (scroll && [info hasListScrollPosition])
+        {
+          [GWFolderViewOptions applyListScrollPositionOf: info toListView: nodeView];
+          ASSIGN (pendingScrollPosition, [NSValue valueWithPoint: [info listScrollPosition]]);
+        }
     }
+  ASSIGN (appliedViewState, [self currentViewState]);
+}
+
+- (NSDictionary *)currentViewState
+{
+  if ([nodeView isKindOfClass: [FSNIconsView class]])
+    return [GWFolderViewOptions iconViewStateOf: nodeView];
+  if ([nodeView isKindOfClass: [FSNListView class]])
+    return [GWFolderViewOptions listViewStateOf: [nodeView dataSource]];
+  return nil;
 }
 
 - (void)takeWindowChromeInto:(DSStoreInfo *)info
 {
+}
+
+- (BOOL)isSpatial
+{
+  [self subclassResponsibility: _cmd];
+  return NO;
+}
+
+- (void)forgetChosenViewType
+{
+  viewTypeChosenByUser = NO;
+}
+
+/* Finder's windows without a toolbar are its spatial ones [decision A].
+ * Only a window of another kind than the folder would open in records it:
+ * a folder merely opened in the usual kind of window keeps no bwsp of its
+ * own for that, as Finder writes none for an untouched window [O:E8]. */
+- (void)takeWindowKindInto:(DSStoreInfo *)info
+{
+  BOOL spatial = [self isSpatial];
+  BOOL wouldOpenSpatially =
+    [GWFolderViewOptions opensSpatially: info
+                              byDefault: ([gworkspace defaultViewerType] == SPATIAL)];
+
+  if ([info hasShowToolbar] || wouldOpenSpatially != spatial)
+    {
+      [info setShowToolbar: !spatial];
+      [info setHasShowToolbar: YES];
+    }
 }
 
 - (DSStoreInfo *)saveFolderSettingsWithPrefs:(NSDictionary *)prefs
@@ -86,13 +131,19 @@
    * its options are not this folder's. */
   if ([[[nodeView shownNode] path] isEqual: [baseNode path]])
     {
-      if ([nodeView isKindOfClass: [FSNIconsView class]])
+      /* Options the user did not touch stay as stored: taking them all
+       * would create an icvp or lsvp for every folder opened, and turn
+       * values from records Finder ignores into ones it reads. */
+      BOOL changed = ![[self currentViewState] isEqual: appliedViewState];
+
+      if (changed && [nodeView isKindOfClass: [FSNIconsView class]])
         {
           [GWFolderViewOptions takeIconViewOptionsOf: nodeView into: info];
         }
-      else if ([nodeView isKindOfClass: [FSNListView class]])
+      else if (changed && [nodeView isKindOfClass: [FSNListView class]])
         {
-          [GWFolderViewOptions takeListColumnWidthsOf: [nodeView dataSource] into: info];
+          [GWFolderViewOptions takeListViewOptionsOf: [nodeView dataSource] into: info];
+          [GWFolderViewOptions takeListScrollPositionOf: nodeView into: info];
         }
 
       /* The live layout, not whatever a stale .DS_Store (possibly with
@@ -106,6 +157,7 @@
         }
     }
   [self takeWindowChromeInto: info];
+  [self takeWindowKindInto: info];
 
   [sm writeSettings: info];
   return info;
@@ -122,6 +174,7 @@
   sm = [GWViewSettingsManager managerForDirectoryPath: [[nodeView shownNode] path]];
   info = [sm readSettings];
   [GWFolderViewOptions takeListViewOptionsOf: [nodeView dataSource] into: info];
+  [GWFolderViewOptions takeListScrollPositionOf: nodeView into: info];
   [sm writeSettings: info];
 }
 
@@ -359,7 +412,7 @@
   if ([nodeView isSingleNode]) {
     [nodeView scrollSelectionToVisible];
   }
-  if (pendingScrollPosition && [nodeView isKindOfClass: [FSNIconsView class]])
+  if (pendingScrollPosition && [nodeView respondsToSelector: @selector(setScrollPosition:)])
     {
       [nodeView setScrollPosition: [pendingScrollPosition pointValue]];
     }

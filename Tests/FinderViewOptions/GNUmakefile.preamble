@@ -17,6 +17,7 @@ DSSTORE_SOURCES = ../../DSStore/DSStore.m \
 # DSStoreInfo writes FinderInfo through GSFileMetadata; the settings manager
 # falls back to the volume cache.
 SETTINGS_SOURCES = ../../Workspace/FileViewer/DSStoreInfo.m \
+                   ../../Workspace/FileViewer/GWViewerChrome.m \
                    ../../Workspace/FileViewer/GWViewSettingsManager.m \
                    ../../Workspace/FileViewer/GWVolumeCache.m \
                    ../../Workspace/FileViewer/GWVolumeID.m \
