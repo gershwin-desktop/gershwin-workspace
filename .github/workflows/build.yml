@@ -71,7 +71,7 @@ jobs:
           mem: 4096
           prepare: |
             pkg update
-            pkg install -y git
+            pkg install -y git xorg-vfbserver
           run: |
             set -e
             BASE="$(pwd)"
@@ -84,6 +84,8 @@ jobs:
             ln -sfn "$BASE/gershwin-workspace" Library/Sources/gershwin-workspace
             make corelibs
             make workspace
+            # The unit suites run against what make workspace installed.
+            sh "$BASE/gershwin-workspace/Tests/run-suites.sh"
 
   build-archlinux-x86_64:
     name: Arch x86_64
@@ -127,6 +129,13 @@ jobs:
         working-directory: gershwin-developer
         run: make workspace
 
+      - name: Run the unit suites
+        # Each Tests/ directory with a TestInfo marker, against the installed
+        # build, on a private Xvfb started by the script.
+        run: |
+          pacman -S --noconfirm xorg-server-xvfb
+          sh gershwin-workspace/Tests/run-suites.sh
+
   build-debian-x86_64:
     name: Debian x86_64
     runs-on: ubuntu-latest
@@ -169,6 +178,13 @@ jobs:
         working-directory: gershwin-developer
         run: make workspace
 
+      - name: Run the unit suites
+        # Each Tests/ directory with a TestInfo marker, against the installed
+        # build, on a private Xvfb started by the script.
+        run: |
+          apt-get -y install xvfb
+          sh gershwin-workspace/Tests/run-suites.sh
+
   build-openbsd-78-amd64:
     name: OpenBSD x86_64
     runs-on: ubuntu-latest
@@ -202,6 +218,8 @@ jobs:
           run: |
             set -e
             BASE="$(pwd)"
+            # Xvfb for the unit suites comes with the xserv set.
+            export PATH="$PATH:/usr/X11R6/bin"
             export PKG_PATH="https://ftp.openbsd.org/pub/OpenBSD/%v/packages/%a/:https://mirrors.gigenet.com/pub/OpenBSD/%v/packages/%a/:https://cdn.openbsd.org/pub/OpenBSD/%v/packages/%a/"
             # Empty unless this is a dev run; see the BRANCH comment at the top.
             BRANCH="${{ env.BRANCH }}"
@@ -222,3 +240,5 @@ jobs:
             ln -sfn "$BASE/gershwin-workspace" Library/Sources/gershwin-workspace
             make corelibs
             make workspace
+            # The unit suites run against what make workspace installed.
+            sh "$BASE/gershwin-workspace/Tests/run-suites.sh"
