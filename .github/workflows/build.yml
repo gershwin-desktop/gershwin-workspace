@@ -71,7 +71,7 @@ jobs:
           mem: 4096
           prepare: |
             pkg update
-            pkg install -y git xorg-vfbserver
+            pkg install -y git xorg-vfbserver dejavu
           run: |
             set -e
             BASE="$(pwd)"
@@ -133,7 +133,7 @@ jobs:
         # Each Tests/ directory with a TestInfo marker, against the installed
         # build, on a private Xvfb started by the script.
         run: |
-          pacman -S --noconfirm xorg-server-xvfb
+          pacman -S --noconfirm xorg-server-xvfb ttf-dejavu
           sh gershwin-workspace/Tests/run-suites.sh
 
   build-debian-x86_64:
@@ -182,7 +182,7 @@ jobs:
         # Each Tests/ directory with a TestInfo marker, against the installed
         # build, on a private Xvfb started by the script.
         run: |
-          apt-get -y install xvfb
+          apt-get -y install xvfb fonts-dejavu-core
           sh gershwin-workspace/Tests/run-suites.sh
 
   build-openbsd-78-amd64:

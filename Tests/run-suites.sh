@@ -38,11 +38,38 @@ if [ -z "$DISPLAY" ]; then
   echo "Running the suites on Xvfb $DISPLAY"
 fi
 
+# Views measure and draw text; without a single font NSFont is nil and the
+# view suites fail with exceptions that say nothing about the cause.
+if [ -z "$(fc-list 2>/dev/null | head -n 1)" ]; then
+  echo "FATAL: fontconfig finds no fonts; install one (e.g. DejaVu) to run the view suites" >&2
+  exit 1
+fi
+
 suites=""
 for marker in */TestInfo; do
   suites="$suites ${marker%/TestInfo}"
 done
 [ -n "$suites" ] || { echo "FATAL: no suites found" >&2; exit 1; }
 
-# gnustep-tests exits 1 on any failed test, file or build.
-gnustep-tests $suites
+# gnustep-tests exits 1 on any failed test, file or build. Its summary only
+# names what failed; the why (exceptions, compiler errors, what the test
+# logged) is in tests.log, which CI does not keep, so print the log of every
+# test file that failed.
+if gnustep-tests $suites; then
+  exit 0
+fi
+awk '
+  /^Testing .*\.\.\.$/ { flush(); n = 0 }
+  { buf[n++] = $0 }
+  /^Failed |aborted without|Error [0-9]|error:/ { bad = 1 }
+  function flush(  i, from) {
+    if (bad) {
+      from = (n > 120) ? n - 120 : 0
+      print "----- " buf[0]
+      for (i = from; i < n; i++) print buf[i]
+    }
+    bad = 0
+  }
+  END { flush() }
+' tests.log
+exit 1
