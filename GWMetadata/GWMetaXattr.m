@@ -360,14 +360,20 @@ gs_xattr_list_for_path(const char *path, const char *prefix)
   if (!list)
     return NULL;
 
-  /* Get list size */
+  /* Get list size.  Zero means the file carries no attributes, which is an
+   * empty list, not a failure; errno is only meaningful for -1. */
+  errno = 0;
   ssize_t bufsize = gs_listxattr(path, NULL, 0);
-  if (bufsize <= 0)
+  if (bufsize == 0)
+    return list;
+  if (bufsize < 0)
     {
-      /* ENOTSUP / no attrs -> return empty list, not an error */
+      /* ENOTSUP -> the filesystem has none: an empty list, not an error */
       if (errno == ENOTSUP || errno == EOPNOTSUPP)
         return list;
+      int saved = errno;
       free(list);
+      errno = saved;
       return NULL;
     }
 
@@ -378,11 +384,15 @@ gs_xattr_list_for_path(const char *path, const char *prefix)
       return NULL;
     }
 
+  /* The list can change between the two calls; ERANGE then means "ask
+   * again", which the caller sees as a failure rather than a truncated list. */
   ssize_t ret = gs_listxattr(path, buf, bufsize);
-  if (ret <= 0)
+  if (ret < 0)
     {
+      int saved = errno;
       free(buf);
       free(list);
+      errno = saved;
       return NULL;
     }
 
@@ -401,12 +411,15 @@ gs_xattr_list_for_path(const char *path, const char *prefix)
       ptr += len + 1;
     }
 
-  list->entries = calloc(count, sizeof(gs_xattr_entry_t));
-  if (!list->entries && count > 0)
+  if (count > 0)
     {
-      free(buf);
-      free(list);
-      return NULL;
+      list->entries = calloc(count, sizeof(gs_xattr_entry_t));
+      if (!list->entries)
+        {
+          free(buf);
+          free(list);
+          return NULL;
+        }
     }
   list->count = 0;
 
@@ -427,18 +440,40 @@ gs_xattr_list_for_path(const char *path, const char *prefix)
                   gs_xattr_list_free(list);
                   return NULL;
                 }
+              list->count++;
 
+              /* A value that cannot be read must fail the whole listing:
+               * a caller copying attributes would otherwise copy a
+               * silently emptied one. */
               ssize_t vsize = gs_getxattr(path, ptr, NULL, 0);
+              if (vsize < 0)
+                {
+                  int saved = errno;
+                  free(buf);
+                  gs_xattr_list_free(list);
+                  errno = saved;
+                  return NULL;
+                }
               if (vsize > 0)
                 {
                   e->value = malloc(vsize);
-                  if (e->value)
+                  if (!e->value)
                     {
-                      gs_getxattr(path, ptr, e->value, vsize);
-                      e->size = vsize;
+                      free(buf);
+                      gs_xattr_list_free(list);
+                      return NULL;
                     }
+                  ssize_t got = gs_getxattr(path, ptr, e->value, vsize);
+                  if (got < 0)
+                    {
+                      int saved = errno;
+                      free(buf);
+                      gs_xattr_list_free(list);
+                      errno = saved;
+                      return NULL;
+                    }
+                  e->size = got;
                 }
-              list->count++;
             }
         }
       ptr += len + 1;

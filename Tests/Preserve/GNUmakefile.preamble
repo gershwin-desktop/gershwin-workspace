@@ -1,0 +1,10 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+ADDITIONAL_OBJCFLAGS += -Wno-deprecated
+ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata -I../../Operation
+
+# Foundation-only units under test, linked as separate objects so the tools
+# stay headless and display-independent.
+t_ADPreserve_OBJC_FILES += ../../GWMetadata/GSAppleDouble.m
+t_MetadataCopier_OBJC_FILES += ../../Operation/GWMetadataCopier.m \
+                               ../../GWMetadata/GSAppleDouble.m \
+                               ../../GWMetadata/GWMetaXattr.m

@@ -96,23 +96,23 @@ writeBE16(uint8_t *bytes, uint16_t value)
  * `bytes`/`length`.  xattr value offsets stored in the blob are absolute
  * from the start of the AppleDouble file, so we resolve them against
  * `bytes` directly.  Malformed pieces are skipped rather than crashing. */
-- (void)_parseAttrBlobFromBytes:(const uint8_t *)bytes
-                         length:(NSUInteger)length
-               atAbsoluteOffset:(uint32_t)base
+- (BOOL)_parseAttrBlobFromBytes:(const uint8_t *)bytes
+                        length:(NSUInteger)length
+              atAbsoluteOffset:(uint32_t)base
 {
   if ((uint64_t)base + APPLEDOUBLE_ATTR_HDR_SIZE > length)
-    return;
+    return NO;
 
   uint32_t magic = readBE32(bytes + base);
   if (magic != APPLEDOUBLE_ATTR_MAGIC)
-    return;
+    return NO;
 
   uint32_t total = readBE32(bytes + base + 8);
   uint16_t numAttrs = (bytes[base + 34] << 8) | bytes[base + 35];
 
   /* The ATTR header references absolute offsets; bound them. */
   if ((uint64_t)base + APPLEDOUBLE_ATTR_HDR_SIZE + (uint64_t)numAttrs * 12 > length)
-    return;
+    return NO;
 
   uint32_t entryOff = base + APPLEDOUBLE_ATTR_HDR_SIZE;
   for (uint16_t i = 0; i < numAttrs; i++)
@@ -146,7 +146,9 @@ writeBE16(uint8_t *bytes, uint16_t value)
           && [name characterAtIndex: [name length] - 1] == 0)
         name = [name substringToIndex: [name length] - 1];
 
-      if (name != nil && valueLen > 0)
+      /* A zero-length value is a real attribute (it can be a marker), so
+       * it is kept; dropping it would silently delete the attribute. */
+      if (name != nil)
         {
           NSData *value = [NSData dataWithBytes: bytes + valueOff
                                          length: valueLen];
@@ -160,6 +162,7 @@ writeBE16(uint8_t *bytes, uint16_t value)
       entryOff += row;
     }
   (void)total;
+  return YES;
 }
 
 - (instancetype)initWithData:(NSData *)data
@@ -241,12 +244,20 @@ writeBE16(uint8_t *bytes, uint16_t value)
        * in an "ATTR" blob after the 32-byte FinderInfo inside entry 9. */
       if (entryID == GSAppleDoubleFinderInfo && dataLen > APPLEDOUBLE_FINFO_SIZE)
         {
-          [self _parseAttrBlobFromBytes: bytes
-                                 length: length
-                       atAbsoluteOffset: dataOff
-                                      + APPLEDOUBLE_FINFO_SIZE
-                                      + APPLEDOUBLE_ATTR_PAD];
-          /* Expose only the 32-byte FinderInfo, not the ATTR blob. */
+          BOOL isAttr = [self _parseAttrBlobFromBytes: bytes
+                                               length: length
+                                     atAbsoluteOffset: dataOff
+                                          + APPLEDOUBLE_FINFO_SIZE
+                                          + APPLEDOUBLE_ATTR_PAD];
+          /* Expose only the 32-byte FinderInfo, not the ATTR blob.  What
+           * follows the FinderInfo is kept verbatim when it is not an ATTR
+           * blob, because another writer put it there and a rewrite must
+           * not delete it. */
+          if (!isAttr)
+            ASSIGN(_finderInfoTail,
+                   [entryData subdataWithRange:
+                     NSMakeRange(APPLEDOUBLE_FINFO_SIZE,
+                                 dataLen - APPLEDOUBLE_FINFO_SIZE)]);
           [_entries setObject:
               [entryData subdataWithRange:
                 NSMakeRange(0, APPLEDOUBLE_FINFO_SIZE)]
@@ -271,6 +282,7 @@ writeBE16(uint8_t *bytes, uint16_t value)
       [[copy mutableXattrs] setObject: [_xattrs objectForKey: key]
                                forKey: key];
     }
+  ASSIGN(copy->_finderInfoTail, _finderInfoTail);
   return copy;
 }
 
@@ -278,6 +290,7 @@ writeBE16(uint8_t *bytes, uint16_t value)
 {
   DESTROY(_entries);
   DESTROY(_xattrs);
+  DESTROY(_finderInfoTail);
   [super dealloc];
 }
 
@@ -337,7 +350,9 @@ writeBE16(uint8_t *bytes, uint16_t value)
 
 - (void)setXattr:(NSData *)value forKey:(NSString *)name
 {
-  if (value && [value length] > 0 && name && [name length] > 0)
+  if (name == nil || [name length] == 0)
+    return;
+  if (value != nil)
     [_xattrs setObject: value forKey: name];
   else
     [_xattrs removeObjectForKey: name];
@@ -369,6 +384,13 @@ writeBE16(uint8_t *bytes, uint16_t value)
     finderInfo = [finderInfo subdataWithRange:
       NSMakeRange(0, APPLEDOUBLE_FINFO_SIZE)];
 
+  BOOL hasContent = NO;
+  for (NSNumber *key in _entries)
+    if ([[_entries objectForKey: key] length] > 0)
+      hasContent = YES;
+  if ([_finderInfoTail length] > 0)
+    hasContent = YES;
+
   NSArray *xattrNames = [[_xattrs allKeys]
     sortedArrayUsingSelector: @selector(compare:)];
   BOOL attrMode = [xattrNames count] > 0;
@@ -376,11 +398,9 @@ writeBE16(uint8_t *bytes, uint16_t value)
   NSUInteger recordsSize = 0;
 
   /* Nothing at all -> nothing to write (callers treat nil as "remove
-   * any sidecar"). */
-  if (!attrMode
-      && (!finderInfo || [finderInfo length] == 0)
-      && (!resourceFork || [resourceFork length] == 0)
-      && [_entries count] <= 2)
+   * any sidecar").  An entry this code does not understand counts as
+   * content: a sidecar holding only that must not be deleted by a rewrite. */
+  if (!attrMode && !hasContent)
     return nil;
 
   uint8_t fi[APPLEDOUBLE_FINFO_SIZE] = {0};
@@ -412,6 +432,9 @@ writeBE16(uint8_t *bytes, uint16_t value)
     {
       fiLen = (finderInfo && [finderInfo length] > 0)
             ? APPLEDOUBLE_FINFO_SIZE : 0;
+      /* Bytes a foreign writer put behind the FinderInfo travel with it. */
+      if (fiLen && _finderInfoTail)
+        fiLen += [_finderInfoTail length];
       entryCount = (fiLen ? 1 : 0) + 1;   /* 9? + always-2 */
     }
   rfLen = resourceFork ? [resourceFork length] : 0;
@@ -503,6 +526,9 @@ writeBE16(uint8_t *bytes, uint16_t value)
       writeBE32(bytes + descCursor + 8, (uint32_t)fiLen);
       descCursor += APPLEDOUBLE_ENTRY_SIZE;
       memcpy(bytes + dataCursor, fi, APPLEDOUBLE_FINFO_SIZE);
+      if (fiLen > APPLEDOUBLE_FINFO_SIZE)
+        memcpy(bytes + dataCursor + APPLEDOUBLE_FINFO_SIZE,
+               [_finderInfoTail bytes], [_finderInfoTail length]);
       dataCursor += fiLen;
     }
 
@@ -529,6 +555,53 @@ writeBE16(uint8_t *bytes, uint16_t value)
       dataCursor += [data length];
     }
 
+  return result;
+}
+
+#pragma mark - Preserving foreign content
+
++ (NSData *)appleDoubleDataByUpdatingSidecar:(NSData *)existing
+                                 withContent:(NSData *)fresh
+                           managedXattrNames:(NSSet *)managedNames
+{
+  GSAppleDouble *old = existing ? [[GSAppleDouble alloc] initWithData: existing]
+                                : nil;
+  GSAppleDouble *merged = fresh ? [[GSAppleDouble alloc] initWithData: fresh]
+                                : nil;
+
+  if (old == nil)
+    {
+      NSData *result = fresh;
+      DESTROY(merged);
+      return result;
+    }
+  if (merged == nil)
+    merged = [[GSAppleDouble alloc] init];
+
+  /* Entries 9 and 2 are the caller's to set or clear; anything else was
+   * written by somebody else and is not ours to delete. */
+  for (NSNumber *key in old->_entries)
+    {
+      uint32_t eid = [key unsignedIntValue];
+      if (eid != GSAppleDoubleFinderInfo && eid != GSAppleDoubleResourceFork
+          && [merged->_entries objectForKey: key] == nil)
+        [merged->_entries setObject: [old->_entries objectForKey: key]
+                             forKey: key];
+    }
+  for (NSString *name in old->_xattrs)
+    {
+      if (![managedNames containsObject: name]
+          && [merged->_xattrs objectForKey: name] == nil)
+        [merged->_xattrs setObject: [old->_xattrs objectForKey: name]
+                            forKey: name];
+    }
+  if (old->_finderInfoTail != nil && merged->_finderInfoTail == nil
+      && [merged->_xattrs count] == 0)
+    ASSIGN(merged->_finderInfoTail, old->_finderInfoTail);
+
+  NSData *result = [merged appleDoubleData];
+  DESTROY(merged);
+  DESTROY(old);
   return result;
 }
 
