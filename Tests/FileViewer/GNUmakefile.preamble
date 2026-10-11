@@ -42,6 +42,13 @@ t_GWViewSettingsManager_OBJC_FILES += ../../Workspace/FileViewer/DSStoreInfo.m \
                             $(DSSTORE_SOURCES) $(METADATA_SOURCES)
 t_GWViewSettingsManager_TOOL_LIBS += -lgnustep-gui
 
+# t_GWViewSettingsRouting includes the facade the same way.
+t_GWViewSettingsRouting_OBJC_FILES += ../../Workspace/FileViewer/DSStoreInfo.m \
+                            ../../Workspace/FileViewer/GWVolumeCache.m \
+                            ../../Workspace/FileViewer/GWVolumeID.m \
+                            $(DSSTORE_SOURCES) $(METADATA_SOURCES)
+t_GWViewSettingsRouting_TOOL_LIBS += -lgnustep-gui
+
 # t_DSStorePreserve links the DSStore back-end as separate objects so it can
 # seed files with unknown/partial records and verify they survive a write
 # cycle.

@@ -221,12 +221,13 @@ static const uint8_t kHeaderTrailer[16] = {
 }
 
 - (void)close { [self flush]; }
-- (void)flush
+- (BOOL)flush
 {
-    if (!_dirty) return;
+    if (!_dirty) return YES;
     [self writeRootBlock];
-    [_data writeToFile:_filePath atomically:YES];
+    if (![_data writeToFile:_filePath atomically:YES]) return NO;
     _dirty = NO;
+    return YES;
 }
 
 - (void)writeRootBlock
