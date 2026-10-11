@@ -1031,13 +1031,14 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
  * "no label". */
 - (void)loadLabelIndex
 {
-  id provider = [fsnodeRep metadataProvider];
+  id<FSNMetadataProvider> provider = [fsnodeRep metadataProvider];
 
   labelIndex = 0;
+  /* The method returns a scalar, so it must be sent directly:
+   * performSelector: would treat the integer as an object pointer. */
   if ([provider respondsToSelector: @selector(labelIndexForPath:)])
     {
-      labelIndex = [[provider performSelector: @selector(labelIndexForPath:)
-                                   withObject: [node path]] integerValue];
+      labelIndex = [provider labelIndexForPath: [node path]];
     }
 }
 
