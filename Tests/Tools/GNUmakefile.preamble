@@ -22,3 +22,5 @@ t_DDBPathsManagerCompareLeak_OBJC_FILES += ../../Tools/ddbd/DDBMDStorage.m
 t_DDBPathsManagerCompareLeak_TOOL_LIBS += -lDBKit
 
 t_FSWatcherInotifyDealloc_TOOL_LIBS += -lDBKit
+
+t_FSWatcherInotifyAttrib_TOOL_LIBS += -lDBKit

@@ -27,6 +27,16 @@
 #include <unistd.h>
 #include <stdint.h>
 
+/* IN_ATTRIB is watched because a Finder label, a tag or a comment lives in an
+   extended attribute: writing one changes neither the content nor the
+   modification date, so without it nobody (viewers, the indexer) would hear
+   of it. It is reported like a modification. */
+#define GW_INOTIFY_DIRMASK (IN_CREATE | IN_DELETE | IN_DELETE_SELF \
+                | IN_MOVED_FROM | IN_MOVED_TO | IN_MOVE_SELF | IN_MODIFY \
+                | IN_ATTRIB)
+#define GW_INOTIFY_FILEMASK (IN_CLOSE_WRITE | IN_MODIFY | IN_ATTRIB \
+                | IN_DELETE_SELF | IN_MOVE_SELF)
+
 
 
 static BOOL	auto_stop = NO;		/* Should we shut down when unused? */
@@ -194,9 +204,8 @@ static NSString *GWWatchedPathRenamed = @"GWWatchedPathRenamed";
       return self;  
     }
 
-    dirmask = (IN_CREATE | IN_DELETE | IN_DELETE_SELF 
-                | IN_MOVED_FROM | IN_MOVED_TO | IN_MOVE_SELF | IN_MODIFY);    
-    filemask = (IN_CLOSE_WRITE | IN_MODIFY | IN_DELETE_SELF | IN_MOVE_SELF);    
+    dirmask = GW_INOTIFY_DIRMASK;
+    filemask = GW_INOTIFY_FILEMASK;
     lastMovedPath = nil;
     moveCookie = 0;
 
@@ -646,6 +655,8 @@ static inline uint32_t eventType(uint32_t mask)
     type = IN_CLOSE_WRITE;
   } else if ((mask & IN_MODIFY) == IN_MODIFY) {
     type = IN_MODIFY;
+  } else if ((mask & IN_ATTRIB) == IN_ATTRIB) {
+    type = IN_ATTRIB;
   }
   
   return type;  
@@ -879,8 +890,13 @@ static inline BOOL isDotFile(NSString *path)
      * eventp->len unconditionally silently dropped both events below,
      * which is why the watch was never retired from our own bookkeeping
      * when the kernel retired (or relocated) it. */
+    /* A watch on a file (not a folder) reports changes of that file with
+     * no name either, so those must pass; for a folder such an event
+     * describes the folder itself and is dropped below. */
     if (type != IN_IGNORED
-          && (eventp->len || type == IN_DELETE_SELF || type == IN_MOVE_SELF)) {
+          && (eventp->len || type == IN_DELETE_SELF || type == IN_MOVE_SELF
+              || type == IN_MODIFY || type == IN_CLOSE_WRITE
+              || type == IN_ATTRIB)) {
       Watcher *watcher = [self watcherWithWatchDescriptor: eventp->wd];
 
       if (watcher) {
@@ -895,7 +911,8 @@ static inline BOOL isDotFile(NSString *path)
                               : @"");
         NSString *ext = [[fname pathExtension] lowercaseString];
         BOOL dirwatch = [watcher isDirWatcher];
-        BOOL notify = YES;
+        BOOL notify = (eventp->len || [watcher isDirWatcher] == NO
+                        || type == IN_DELETE_SELF || type == IN_MOVE_SELF);
         /* Set when this event means the watched path itself no longer
          * denotes what we are watching, so the watch must be dropped
          * the same way fswatcher-kqueue.m's handleKevent: drops it on
@@ -923,7 +940,7 @@ static inline BOOL isDotFile(NSString *path)
                           forKey: @"event"];
             fullpath = [basepath stringByAppendingPathComponent: fname];
               
-          } else if (type == IN_MODIFY) {
+          } else if (type == IN_MODIFY || type == IN_ATTRIB) {
             [notifdict setObject: GWWatchedFileModified forKey: @"event"];
             fullpath = [basepath stringByAppendingPathComponent: fname];
             
@@ -939,7 +956,8 @@ static inline BOOL isDotFile(NSString *path)
           }
           
         } else {
-          if (type == IN_MODIFY || type == IN_CLOSE_WRITE) {
+          if (type == IN_MODIFY || type == IN_CLOSE_WRITE
+                || type == IN_ATTRIB) {
             [notifdict setObject: GWWatchedFileModified forKey: @"event"];
           } else if (type == IN_DELETE_SELF) {
             [notifdict setObject: GWWatchedPathDeleted forKey: @"event"];
@@ -981,7 +999,7 @@ static inline BOOL isDotFile(NSString *path)
             [notifdict setObject: GWFileCreatedInWatchedDirectory 
                           forKey: @"event"];        
                      
-          } else if (type == IN_MODIFY 
+          } else if (type == IN_MODIFY || type == IN_ATTRIB
                         || ((dirwatch == NO) && type == IN_CLOSE_WRITE)) {
             [notifdict setObject: GWWatchedFileModified forKey: @"event"];        
                  
