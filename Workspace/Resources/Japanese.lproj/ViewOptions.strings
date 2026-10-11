@@ -67,3 +67,9 @@
 "Always open in list view" = "常にリスト表示で開く";
 
 "This window has no view options." = "このウインドウには表示オプションがありません。";
+
+"Show icons" = "アイコンを表示";
+
+"Show preview column" = "プレビューカラムを表示";
+
+"Always open in column view" = "常にカラム表示で開く";

@@ -14,6 +14,7 @@
 #import "GWViewOptionsModel.h"
 #import "FSNIconsView.h"
 #import "FSNListView.h"
+#import "FSNColumnViewOptions.h"
 #import "FSNode.h"
 #include <unistd.h>
 
@@ -207,6 +208,48 @@ main(void)
          && [[seen visibleColumns] isEqual: sizeKind],
          "MI-VO-28 a list view back into the panel state");
   END_SET("panel state <-> views")
+
+  START_SET("column view options are global")
+    FSNColumnViewOptions *o = [FSNColumnViewOptions sharedOptions];
+    GWViewOptionsModel *seen = [[[GWViewOptionsModel alloc] init] autorelease];
+
+    m = [[[GWViewOptionsModel alloc] init] autorelease];
+    [m setColumnTextSize: 40];
+    PASS([m columnTextSize] == 16, "MI-VO-31 column text size has a ceiling of 16");
+    [m setColumnTextSize: 14];
+    [m setColumnShowsIcons: NO];
+    [m setColumnShowsIconPreview: NO];
+    [m setColumnShowsPreviewColumn: NO];
+    [m setColumnArrangement: FSNIconsArrangeKind];
+    [m applyToColumnViewOptions: o];
+    PASS([o textSize] == 14 && [o showsIcons] == NO && [o showsIconPreview] == NO
+         && [o showsPreviewColumn] == NO && [o arrangement] == FSNIconsArrangeKind,
+         "MI-VO-32 the panel state onto the shared column options [O:E30]");
+
+    [seen takeFromColumnViewOptions: o];
+    PASS([seen columnTextSize] == 14 && [seen columnShowsIcons] == NO
+         && [seen columnShowsPreviewColumn] == NO
+         && [seen columnArrangement] == FSNIconsArrangeKind,
+         "MI-VO-33 the shared column options back into the panel state");
+
+    [m setColumnShowsIcons: YES];
+    [m setColumnShowsIconPreview: YES];
+    [m setColumnShowsPreviewColumn: YES];
+    [m setColumnArrangement: FSNIconsArrangeName];
+    [m applyToColumnViewOptions: o];
+
+    [m setAlwaysOpen: YES];
+    [m setAlwaysOpenStyle: DSStoreViewStyleColumn];
+    info = [[[DSStoreInfo alloc] initWithDirectoryPath: root] autorelease];
+    [m putIntoInfo: info forViewKind: GWViewOptionsColumnView];
+    PASS([info hasViewStyle] && [info viewStyle] == DSStoreViewStyleColumn
+         && [info hasIconSize] == NO && [info hasListTextSize] == NO,
+         "MI-VO-34 a column view panel stores only vstl clmv, and only with Always open in [O:E30]");
+    [m setAlwaysOpen: NO];
+    info = [[[DSStoreInfo alloc] initWithDirectoryPath: root] autorelease];
+    [m putIntoInfo: info forViewKind: GWViewOptionsColumnView];
+    PASS([info hasViewStyle] == NO, "MI-VO-35 no vstl without Always open in");
+  END_SET("column view options are global")
 
   [fm removeFileAtPath: root handler: nil];
   [arp release];
