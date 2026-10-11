@@ -366,42 +366,17 @@ static NSError *errorWithText(NSString *key)
 }
 
 /* Finder writes the comment twice, as the xattr and as the item's cmmt record
- * in the parent's .DS_Store (E8).  Only that one record is touched, so
- * positions and view settings other tools keep there survive. */
-static BOOL writeStoreComment(NSString *path, NSString *comment, NSError **error)
+ * in the parent's .DS_Store (E8).  DSStore words its failures in English;
+ * they are shown localized through the pane's strings table. */
+static BOOL storeComment(NSString *path, NSString *comment, NSError **error)
 {
-  NSString *item = [path lastPathComponent];
-  NSString *storePath = [[path stringByDeletingLastPathComponent]
-                          stringByAppendingPathComponent: @".DS_Store"];
-  BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath: storePath];
-  BOOL clear = [comment length] == 0;
-  DSStore *store;
+  NSError *inner = nil;
 
-  /* The root has no parent folder to hold a record. */
-  if ([path isEqualToString: @"/"])
+  if ([DSStore setComment: comment forItemAtPath: path error: &inner])
     return YES;
-  if (!exists && clear)
-    return YES;
-  if (exists) {
-    store = [DSStore storeWithPath: storePath];
-    if ([store load] == NO) {
-      if (error)
-        *error = errorWithText(@"The .DS_Store of the folder could not be read; the comment was not stored there.");
-      return NO;
-    }
-  } else {
-    store = [DSStore createStoreAtPath: storePath withEntries: nil];
-  }
-  if (clear)
-    [store removeEntriesForFilename: item codes: [NSSet setWithObject: @"cmmt"]];
-  else
-    [store setCommentsForFilename: item comments: comment];
-  if ([store save] == NO) {
-    if (error)
-      *error = errorWithText(@"The .DS_Store of the folder could not be written.");
-    return NO;
-  }
-  return YES;
+  if (error)
+    *error = errorWithText([inner localizedDescription]);
+  return NO;
 }
 
 - (BOOL)write:(NSError **)error
@@ -475,7 +450,7 @@ static BOOL writeStoreComment(NSString *path, NSString *comment, NSError **error
       return NO;
     }
   }
-  if (_commentChanged && writeStoreComment(_path, _comment, error) == NO) {
+  if (_commentChanged && storeComment(_path, _comment, error) == NO) {
     if (wasLocked)
       [_locker setImmutable: YES atPath: _path error: NULL];
     return NO;
