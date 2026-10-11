@@ -64,6 +64,22 @@ int main(void)
     NSDictionary *c;
 
     PASS([m controls] != nil, "controls exist");
+    /* Every row of the Find window lines up: the controls are 20 high and
+     * flush with the bottom of the row, as in the modules from the nib. */
+    {
+      NSView *row = [m controls];
+      NSEnumerator *en;
+      NSView *v;
+
+      [row setFrameSize: NSMakeSize(260, 34)];
+      en = [[row subviews] objectEnumerator];
+      while ((v = [en nextObject]) != nil)
+        {
+          PASS(NSMinY([v frame]) == 0 && NSHeight([v frame]) == 20,
+               "control %s is 20 high at the bottom of the row",
+               [NSStringFromClass([v class]) UTF8String]);
+        }
+    }
     [m setControlsState: [NSDictionary dictionaryWithObjectsAndKeys:
       [NSNumber numberWithInt: 1], @"how", @"abc", @"what", nil]];
     c = [m searchCriteria];

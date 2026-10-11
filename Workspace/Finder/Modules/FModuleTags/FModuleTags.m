@@ -47,13 +47,14 @@ enum { IS, CONTAINS };
   self = [super init];
 
   if (self) {
-    controlsBox = [[NSView alloc] initWithFrame: NSMakeRect(0, 0, 300, 30)];
-    popUp = [[NSPopUpButton alloc] initWithFrame: NSMakeRect(0, 4, 100, 22)
+    controlsBox = [[NSView alloc] initWithFrame: NSMakeRect(0, 0, 260, 34)];
+    popUp = [[NSPopUpButton alloc] initWithFrame: NSMakeRect(10, 0, 111, 20)
                                        pullsDown: NO];
-    textField = [[NSTextField alloc] initWithFrame: NSMakeRect(108, 4, 160, 22)];
-    [popUp setAutoresizingMask: NSViewMinYMargin | NSViewMaxYMargin];
-    [textField setAutoresizingMask: NSViewMinYMargin | NSViewMaxYMargin
-                                    | NSViewWidthSizable];
+    textField = [[NSTextField alloc] initWithFrame: NSMakeRect(126, 0, 124, 20)];
+    /* Same frames as the modules from the nib (controls 20 high, flush with the
+     * bottom of the row), so every row of the Find window lines up. */
+    [popUp setAutoresizingMask: NSViewMaxYMargin];
+    [textField setAutoresizingMask: NSViewMaxYMargin | NSViewWidthSizable];
 
     [popUp addItemWithTitle: NSLocalizedString(@"is", @"")];
     [popUp addItemWithTitle: NSLocalizedString(@"contains", @"")];

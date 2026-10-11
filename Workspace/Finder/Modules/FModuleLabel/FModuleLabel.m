@@ -53,13 +53,15 @@ enum { IS, IS_NOT };
 
   if (self) {
 
-    controlsBox = [[NSView alloc] initWithFrame: NSMakeRect(0, 0, 300, 30)];
-    isPopUp = [[NSPopUpButton alloc] initWithFrame: NSMakeRect(0, 4, 90, 22)
+    controlsBox = [[NSView alloc] initWithFrame: NSMakeRect(0, 0, 260, 34)];
+    isPopUp = [[NSPopUpButton alloc] initWithFrame: NSMakeRect(10, 0, 111, 20)
                                          pullsDown: NO];
-    colorPopUp = [[NSPopUpButton alloc] initWithFrame: NSMakeRect(98, 4, 150, 22)
+    colorPopUp = [[NSPopUpButton alloc] initWithFrame: NSMakeRect(126, 0, 124, 20)
                                             pullsDown: NO];
-    [isPopUp setAutoresizingMask: NSViewMinYMargin | NSViewMaxYMargin];
-    [colorPopUp setAutoresizingMask: NSViewMinYMargin | NSViewMaxYMargin];
+    /* Same frames as the modules from the nib (popups 20 high, flush with the
+     * bottom of the row), so every row of the Find window lines up. */
+    [isPopUp setAutoresizingMask: NSViewMaxYMargin];
+    [colorPopUp setAutoresizingMask: NSViewMaxYMargin];
 
     [isPopUp addItemWithTitle: NSLocalizedString(@"is", @"")];
     [isPopUp addItemWithTitle: NSLocalizedString(@"is not", @"")];
