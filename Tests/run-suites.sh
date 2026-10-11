@@ -64,7 +64,11 @@ done
 # names what failed; the why (exceptions, compiler errors, what the test
 # logged) is in tests.log, which CI does not keep, so print the log of every
 # test file that failed.
-if gnustep-tests $suites; then
+# --sequential: by default gnustep-tests builds all tools of a directory
+# with make -j 4, and tools that compile the same shared source (e.g.
+# ../../DSStore/DSStore.m) write the same object and dependency file at
+# once, which made random tools fail to build on CI.
+if gnustep-tests --sequential $suites; then
   exit 0
 fi
 awk '
