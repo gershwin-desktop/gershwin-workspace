@@ -421,4 +421,26 @@ clampInt(int value, int low, int high)
     }
 }
 
++ (CGFloat)minimumPanelWidth { return 520.0; }
++ (CGFloat)maximumPanelWidth { return 800.0; }
+
++ (NSString *)placementStringWithOrigin:(NSPoint)origin width:(CGFloat)width
+{
+  return [NSString stringWithFormat: @"%d %d %d", (int)floor (origin.x + 0.5), (int)floor (origin.y + 0.5),
+                    (int)floor (width + 0.5)];
+}
+
++ (BOOL)getPlacement:(NSString *)string origin:(NSPoint *)origin width:(CGFloat *)width
+{
+  NSScanner *scanner = [NSScanner scannerWithString: string];
+  int x, y, w;
+
+  if ([scanner scanInt: &x] == NO || [scanner scanInt: &y] == NO
+      || [scanner scanInt: &w] == NO || [scanner isAtEnd] == NO)
+    return NO;
+  *origin = NSMakePoint (x, y);
+  *width = MIN (MAX ((CGFloat)w, [self minimumPanelWidth]), [self maximumPanelWidth]);
+  return YES;
+}
+
 @end

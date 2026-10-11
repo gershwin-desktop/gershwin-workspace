@@ -154,4 +154,16 @@ typedef NS_ENUM (NSInteger, GWViewOptionsKind) {
 /* Both kinds. */
 - (void)putIntoInfo:(DSStoreInfo *)info;
 
+/* Where the panel comes back: the lower left corner of its frame in screen
+ * pixels and its width in points, as one string for the defaults.
+ * The window system's own frame autosave stores the frame, which loses the
+ * theme's border (8 pixels of width, 4 of position) each time the panel is
+ * reopened, so what is kept here is what stays the same across a restart. */
++ (NSString *)placementStringWithOrigin:(NSPoint)origin width:(CGFloat)width;
+/* NO for a string that is not one; the width is brought into the limits the
+ * panel can have, 520 to 800. */
++ (BOOL)getPlacement:(NSString *)string origin:(NSPoint *)origin width:(CGFloat *)width;
++ (CGFloat)minimumPanelWidth;
++ (CGFloat)maximumPanelWidth;
+
 @end

@@ -26,8 +26,9 @@ static const NSTimeInterval PersistDelay = 0.4;
 
 static const CGFloat LabelWidth = 180.0;
 static const CGFloat RowHeight = 24.0;
-static const CGFloat PanelMinWidth = 520.0;
-static const CGFloat PanelMaxWidth = 800.0;
+#define PanelMinWidth ([GWViewOptionsModel minimumPanelWidth])
+#define PanelMaxWidth ([GWViewOptionsModel maximumPanelWidth])
+static NSString *const PlacementDefaultsKey = @"GWViewOptionsPanelPlacement";
 static const CGFloat PictureWellSize = 64.0;
 static const CGFloat ControlsLeft = 24.0 + 180.0 + 8.0;
 
@@ -130,6 +131,8 @@ static GWViewOptionsPanel *sharedPanel = nil;
 - (void)modelFromControls;
 - (void)controlsChanged:(id)sender;
 - (void)pictureDropped:(id)sender;
+- (void)restorePlacement;
+- (void)savePlacement:(NSNotification *)notification;
 - (void)persist;
 - (void)flushPendingPersist;
 - (void)mainWindowChanged:(NSNotification *)notification;
@@ -457,14 +460,16 @@ columnTitle (NSString *columnId)
   /* The menu bar belongs to another application, so using a menu deactivates this one. */
   [panel setHidesOnDeactivate: NO];
   /* Only the width can change; the limits are for the whole window, with
-   * its title bar. */
-  [panel setMinSize: NSMakeSize (PanelMinWidth, [panel frame].size.height)];
-  [panel setMaxSize: NSMakeSize (PanelMaxWidth, [panel frame].size.height)];
+   * its title bar, in pixels like the frame. */
+  [panel setMinSize: NSMakeSize (PanelMinWidth * [panel userSpaceScaleFactor], [panel frame].size.height)];
+  [panel setMaxSize: NSMakeSize (PanelMaxWidth * [panel userSpaceScaleFactor], [panel frame].size.height)];
   [panel setContentView: content];
   /* A new window starts at the screen's lower left corner. */
-  if ([panel setFrameUsingName: @"GWViewOptionsPanel"] == NO)
-    [panel center];
-  [panel setFrameAutosaveName: @"GWViewOptionsPanel"];
+  [panel center];
+  [[NSNotificationCenter defaultCenter] addObserver: self selector: @selector(savePlacement:)
+                                               name: NSWindowDidMoveNotification object: panel];
+  [[NSNotificationCenter defaultCenter] addObserver: self selector: @selector(savePlacement:)
+                                               name: NSWindowDidResizeNotification object: panel];
   [self controlsFromModel];
 }
 
@@ -478,6 +483,52 @@ columnTitle (NSString *columnId)
   viewer = aviewer;
   [self reloadFromViewer];
   [panel orderFront: nil];
+  if (placementRestored == NO)
+    {
+      placementRestored = YES;
+      /* The window manager has not framed the window yet, so its frame
+       * math would still be a guess; the saved placement goes on once it
+       * has. */
+      [self performSelector: @selector(restorePlacement) withObject: nil afterDelay: 0.5];
+    }
+}
+
+- (void)restorePlacement
+{
+  NSString *saved = [[NSUserDefaults standardUserDefaults] stringForKey: PlacementDefaultsKey];
+  NSPoint origin;
+  CGFloat width;
+
+  if (saved && [GWViewOptionsModel getPlacement: saved origin: &origin width: &width])
+    {
+      NSRect frame = [panel frame];
+
+      /* The height limits were taken from the frame before the window
+       * manager framed the window, 3 pixels more than it really has; left
+       * so, the frame grows by them and the panel creeps with every restart. */
+      [panel setMinSize: NSMakeSize ([panel minSize].width, frame.size.height)];
+      [panel setMaxSize: NSMakeSize ([panel maxSize].width, frame.size.height)];
+      frame.size.width = width * [panel userSpaceScaleFactor];
+      frame.origin = origin;
+      [panel setFrame: frame display: YES];
+    }
+  placementSaving = YES;
+}
+
+- (void)savePlacement:(NSNotification *)notification
+{
+  NSRect frame = [panel frame];
+
+  /* Not before the saved placement is back, or the guessed one overwrites it. */
+  if (placementSaving == NO)
+    return;
+  [[NSUserDefaults standardUserDefaults]
+    setObject: [GWViewOptionsModel placementStringWithOrigin: frame.origin
+                                                  width: frame.size.width / [panel userSpaceScaleFactor]]
+       forKey: PlacementDefaultsKey];
+  /* The panel is moved or resized by hand rarely, and the application may
+   * be quit before the defaults are written on their own. */
+  [[NSUserDefaults standardUserDefaults] synchronize];
 }
 
 - (NSWindow *)frontViewerWindow

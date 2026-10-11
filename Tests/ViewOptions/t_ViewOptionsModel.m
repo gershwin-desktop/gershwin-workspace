@@ -327,6 +327,32 @@ main(void)
          "MI-VO-41 choosing another picture replaces the kept alias");
   END_SET("a background picture [O:E12]")
 
+  START_SET("where the panel comes back")
+    NSPoint origin = NSZeroPoint;
+    CGFloat width = 0;
+    NSString *kept = [GWViewOptionsModel placementStringWithOrigin: NSMakePoint (566, 811)
+                                                       width: 520];
+    int i;
+
+    /* Each reopening used to take 8 pixels of width and move the panel 4
+     * down, because the frame was saved and put back; the same string put
+     * back and saved again stays the same. */
+    for (i = 0; i < 5; i++)
+      {
+        PASS ([GWViewOptionsModel getPlacement: kept origin: &origin width: &width],
+              "MI-VO-43 a saved placement reads back");
+        kept = [GWViewOptionsModel placementStringWithOrigin: origin width: width];
+      }
+    PASS (origin.x == 566 && origin.y == 811 && width == 520,
+          "MI-VO-44 five save and restore rounds change nothing");
+    [GWViewOptionsModel getPlacement: @"10 20 5000" origin: &origin width: &width];
+    PASS (width == 800, "MI-VO-45 a width beyond the panel's limit is brought into them");
+    [GWViewOptionsModel getPlacement: @"10 20 100" origin: &origin width: &width];
+    PASS (width == 520, "MI-VO-46 and one below it too");
+    PASS ([GWViewOptionsModel getPlacement: @"nonsense" origin: &origin width: &width] == NO,
+          "MI-VO-47 a string that is not a placement is refused");
+  END_SET("where the panel comes back")
+
   [fm removeFileAtPath: root handler: nil];
   [arp release];
   return 0;

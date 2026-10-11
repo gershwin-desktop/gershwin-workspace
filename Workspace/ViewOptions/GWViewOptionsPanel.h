@@ -23,6 +23,8 @@
   NSWindow *viewerWindow;
   NSWindow *lastViewerWindow;
   BOOL loading;
+  BOOL placementRestored;
+  BOOL placementSaving;
 
   NSView *iconPane;
   NSView *listPane;
