@@ -97,6 +97,7 @@ Workspace+UITesting.m \
 X11AppSupport.m \
 GWProcessMonitor.m \
 GWProcessOwnership.m \
+GWSingleInstance.m \
 GWWin32Process.m \
 GWDetachedCommand.m \
 GWURLSchemeRegistry.m \

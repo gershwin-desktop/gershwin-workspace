@@ -41,3 +41,7 @@ t_AppImageDirIconCycle_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Cur
 # VolumeManager.m's AppKit/Workspace/FSNode/AVFS dependencies. It calls
 # +[GWVolumeID mountedFilesystems], linked here as a separate object.
 t_VolumeManagerMountDetection_OBJC_FILES += ../../Workspace/FileViewer/GWVolumeID.m
+
+# GWSingleInstance.m talks to Xlib; the decision functions tested here do not
+# need a display.
+t_GWSingleInstance_TOOL_LIBS += -lX11
