@@ -20,6 +20,13 @@
 #import "GWFolderViewOptions.h"
 #include <unistd.h>
 
+/* What GWSpatialIconsView is to the picture: a flipped icon view. */
+@interface FlippedIconsView : FSNIconsView
+@end
+@implementation FlippedIconsView
+- (BOOL)isFlipped { return YES; }
+@end
+
 static NSString *root;
 
 static FSNIconsView *
@@ -290,6 +297,15 @@ main(void)
     PASS (r.size.width == 50 && r.size.height == 40 && r.origin.x == [v bounds].origin.x
           && NSMaxY (r) == NSMaxY ([v bounds]),
           "MI-VO-39 the picture is drawn at its natural size from the top left [G: Finder 10.6]");
+
+    {
+      FlippedIconsView *flipped = [[[FlippedIconsView alloc] initWithFrame: NSMakeRect (0, 0, 300, 200)] autorelease];
+
+      [flipped setBackgroundImage: [v backgroundImage]];
+      r = [flipped backgroundImageRect];
+      PASS (r.size.width == 50 && r.origin.x == 0 && r.origin.y == 0,
+            "MI-VO-42 a flipped (spatial) icon view draws the same picture from its top, by the same code");
+    }
 
     seen = [[[GWViewOptionsModel alloc] init] autorelease];
     info = [[[DSStoreInfo alloc] initWithDirectoryPath: root] autorelease];

@@ -26,8 +26,11 @@ SETTINGS_SOURCES = ../../Workspace/FileViewer/DSStoreInfo.m \
                    ../../GWMetadata/GWMetaXattr.m \
                    $(DSSTORE_SOURCES)
 
-t_FinderRecords_OBJC_FILES += $(SETTINGS_SOURCES)
-t_FinderRecords_TOOL_LIBS += -lgnustep-gui
+# DSStoreInfo resolves a picture's alias through GWFolderViewOptions and the
+# FSNode framework (linked as below).
+t_FinderRecords_OBJC_FILES += $(SETTINGS_SOURCES) \
+                              ../../Workspace/FileViewer/GWFolderViewOptions.m
+t_FinderRecords_TOOL_LIBS += -lFSNode -lgnustep-gui
 
 # t_FolderViewOptions drives real FSNIconsView / FSNListView objects, so it
 # links the built framework; the old DT_RPATH tag makes the loader prefer it

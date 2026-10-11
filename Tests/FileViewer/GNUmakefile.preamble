@@ -24,14 +24,24 @@ ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/FileViewer
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace -I../../FSNode -I../../GWMetadata
 t_GWAlignLogically_TOOL_LIBS += -lFSNode -lgnustep-gui
 
+# DSStoreInfo resolves a background picture's alias record through
+# GWFolderViewOptions and FSNAlias, which live in the built FSNode framework;
+# the old DT_RPATH tag makes the loader prefer it over the installed one.
+ALIAS_SOURCES = ../../Workspace/FileViewer/GWFolderViewOptions.m
+ALIAS_LIBS = -lFSNode
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
+                      -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current \
+                      -L$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+
 # t_DSStoreInfo compiles DSStoreInfo.m in-process; its DSStore back-end lives
 # under DSStore/ and is linked as separate objects (avoids in-TU symbol
 # clashes).  DSStoreInfo now also reads/writes the folder's FinderInfo via
 # GSFileMetadata (view style / window geometry fallback), so link those
 # sources too.  DSStoreInfo references NSColor, so link gnustep-gui too.
 ADDITIONAL_INCLUDE_DIRS += -I../../DSStore -I../../GWMetadata
-t_DSStoreInfo_OBJC_FILES += $(DSSTORE_SOURCES) $(METADATA_SOURCES)
-t_DSStoreInfo_TOOL_LIBS += -lgnustep-gui
+t_DSStoreInfo_OBJC_FILES += $(DSSTORE_SOURCES) $(METADATA_SOURCES) $(ALIAS_SOURCES) \
+                            ../../Workspace/FileViewer/GWVolumeID.m
+t_DSStoreInfo_TOOL_LIBS += -lgnustep-gui $(ALIAS_LIBS)
 
 # t_GWViewSettingsManager compiles the facade in-process; its collaborators
 # (DSStoreInfo, volume cache/id, DSStore back-end) are linked as separate
@@ -39,21 +49,22 @@ t_DSStoreInfo_TOOL_LIBS += -lgnustep-gui
 t_GWViewSettingsManager_OBJC_FILES += ../../Workspace/FileViewer/DSStoreInfo.m \
                             ../../Workspace/FileViewer/GWVolumeCache.m \
                             ../../Workspace/FileViewer/GWVolumeID.m \
-                            $(DSSTORE_SOURCES) $(METADATA_SOURCES)
-t_GWViewSettingsManager_TOOL_LIBS += -lgnustep-gui
+                            $(DSSTORE_SOURCES) $(METADATA_SOURCES) $(ALIAS_SOURCES)
+t_GWViewSettingsManager_TOOL_LIBS += -lgnustep-gui $(ALIAS_LIBS)
 
 # t_GWViewSettingsRouting includes the facade the same way.
 t_GWViewSettingsRouting_OBJC_FILES += ../../Workspace/FileViewer/DSStoreInfo.m \
                             ../../Workspace/FileViewer/GWVolumeCache.m \
                             ../../Workspace/FileViewer/GWVolumeID.m \
-                            $(DSSTORE_SOURCES) $(METADATA_SOURCES)
-t_GWViewSettingsRouting_TOOL_LIBS += -lgnustep-gui
+                            $(DSSTORE_SOURCES) $(METADATA_SOURCES) $(ALIAS_SOURCES)
+t_GWViewSettingsRouting_TOOL_LIBS += -lgnustep-gui $(ALIAS_LIBS)
 
 # t_DSStorePreserve links the DSStore back-end as separate objects so it can
 # seed files with unknown/partial records and verify they survive a write
 # cycle.
-t_DSStorePreserve_OBJC_FILES += $(DSSTORE_SOURCES) $(METADATA_SOURCES)
-t_DSStorePreserve_TOOL_LIBS += -lgnustep-gui
+t_DSStorePreserve_OBJC_FILES += $(DSSTORE_SOURCES) $(METADATA_SOURCES) $(ALIAS_SOURCES) \
+                            ../../Workspace/FileViewer/GWVolumeID.m
+t_DSStorePreserve_TOOL_LIBS += -lgnustep-gui $(ALIAS_LIBS)
 
 # t_DSStoreWriter exercises the writer end-to-end (build a file, read it back
 # with ds_store on the Mac oracle).  Links the DSStore back-end as objects.

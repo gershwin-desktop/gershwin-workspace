@@ -6,6 +6,7 @@
 
 #import "DSStoreInfo.h"
 #import "DSStore.h"
+#import "GWFolderViewOptions.h"
 #import "GSFileMetadata.h"
 #import "GWMetaXattr.h"
 #include <sys/stat.h>
@@ -469,78 +470,6 @@ const CGFloat DSStoreInfoFinderTitleBarHeight = 22.0;
     return ![[self listViewRecordValues] isEqual:(_loadedListValues ? _loadedListValues : @{})];
 }
 
-#pragma mark - Alias Resolution
-
-/**
- * Resolve an alias record to a file path.
- * This is a simplified implementation that looks for common path patterns.
- * Native alias records are complex and contain multiple fallback strategies.
- */
-- (NSString *)resolveAliasData:(NSData *)aliasData relativeTo:(NSString *)baseDir
-{
-    if (!aliasData || [aliasData length] < 150) {
-        return nil;
-    }
-    
-    // Alias records are complex, but typically contain:
-    // - Volume name
-    // - Directory IDs
-    // - Full path as UTF-16 or UTF-8 string
-    // For now, we'll try to find ASCII/UTF-8 path strings in the data
-    
-    // TS: unused variables
-    // const unsigned char *bytes = [aliasData bytes];
-    // NSUInteger len = [aliasData length];
-    
-    // Look for path-like strings in the alias data
-    // Common patterns: starts with '/' or contains '.bg/' etc.
-    NSString *dataString = [[NSString alloc] initWithData:aliasData 
-                                                  encoding:NSUTF8StringEncoding];
-    if (dataString) {
-        // Try to extract paths using regex
-        NSRegularExpression *regex = [NSRegularExpression 
-            regularExpressionWithPattern:@"(/[^\\x00-\\x1F]+\\.(png|jpg|jpeg|tiff|gif|bmp))"
-            options:NSRegularExpressionCaseInsensitive
-            error:nil];
-        
-        NSArray *matches = [regex matchesInString:dataString
-                                          options:0
-                                            range:NSMakeRange(0, [dataString length])];
-        
-        if ([matches count] > 0) {
-            NSTextCheckingResult *match = [matches objectAtIndex:0];
-            NSString *path = [dataString substringWithRange:[match range]];
-            
-            // Check if file exists
-            if ([[NSFileManager defaultManager] fileExistsAtPath:path]) {
-                return path;
-            }
-            
-            // Try relative to base directory
-            NSString *relativePath = [baseDir stringByAppendingPathComponent:path];
-            if ([[NSFileManager defaultManager] fileExistsAtPath:relativePath]) {
-                return relativePath;
-            }
-        }
-        [dataString release];
-    }
-    
-    // Fallback: Look for common .bg folder pattern
-    NSString *bgPath = [baseDir stringByAppendingPathComponent:@".bg"];
-    if ([[NSFileManager defaultManager] fileExistsAtPath:bgPath]) {
-        NSArray *contents = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:bgPath error:nil];
-        for (NSString *file in contents) {
-            if ([[file pathExtension] isEqualToString:@"png"] ||
-                [[file pathExtension] isEqualToString:@"jpg"] ||
-                [[file pathExtension] isEqualToString:@"jpeg"]) {
-                return [bgPath stringByAppendingPathComponent:file];
-            }
-        }
-    }
-    
-    return nil;
-}
-
 #pragma mark - Private Loading Methods
 
 - (void)takeDirectoryRecordsFromStore:(DSStore *)store key:(NSString *)key
@@ -824,7 +753,7 @@ static BOOL readFloat(NSDictionary *plist, NSString *key, CGFloat *value)
         id alias = [plist objectForKey:@"backgroundImageAlias"];
         if ([alias isKindOfClass:[NSData class]]) {
             [self setBackgroundImageAlias:alias];
-            NSString *resolved = [self resolveAliasData:alias relativeTo:_directoryPath];
+            NSString *resolved = [GWFolderViewOptions backgroundImagePathForAlias: alias];
             if (resolved) {
                 [self setBackgroundImagePath:resolved];
             }

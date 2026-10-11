@@ -93,6 +93,18 @@ static const CGFloat ControlsLeft = 24.0 + 180.0 + 8.0;
     ? NSDragOperationCopy : NSDragOperationNone;
 }
 
+/* The image view's own versions refuse what it has no image for; the drop
+ * is decided here by the file alone. */
+- (NSDragOperation)draggingUpdated:(id <NSDraggingInfo>)sender
+{
+  return [self draggingEntered: sender];
+}
+
+- (BOOL)prepareForDragOperation:(id <NSDraggingInfo>)sender
+{
+  return [self imageFileInPasteboard: [sender draggingPasteboard]] != nil;
+}
+
 - (BOOL)performDragOperation:(id <NSDraggingInfo>)sender
 {
   NSString *file = [self imageFileInPasteboard: [sender draggingPasteboard]];
