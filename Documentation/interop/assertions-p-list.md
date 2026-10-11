@@ -65,7 +65,8 @@ Status of every line: implemented and covered by the test of the same id.
 - MI-LST-51 A plain file has no version, shown "--" [O:2026-10-11 E22]
 - MI-LST-52 The label column shows the label name the provider returns [S:Finder column]
 - MI-LST-53 Date last opened is a date, from the file's access time [G: closest POSIX equivalent]
-- MI-LST-54 Sorting by label puts labelled files before those without when descending [G: label index order, none first]
+- MI-LST-54 Sorting by label: no label first, then alphabetical by the localized label name (not by colour); the second click reverses exactly [O:2026-10-11 E24]
+- MI-LST-101..103 as above with two names (Blue before Red) [O:2026-10-11 E24]
 - (no test id) Date created and date last opened rows draw as date cells (shortened to a numeric date when narrow) [G: as date modified]
 - (no test id) Version of a package is CFBundleShortVersionString, else CFBundleVersion, else ApplicationRelease [G: Finder shows short version]
 
@@ -84,10 +85,12 @@ Status of every line: implemented and covered by the test of the same id.
 ## Row metrics
 
 - MI-LST-11 The default row height is 28 points [F:existing CELLS_HEIGHT]
-- MI-LST-12 The row height follows the icon size (icon + 4) [G: AppearanceMetrics has no list row metric]
-- MI-LST-13 A big text makes rows taller than a small icon needs (line + 6) [G]
+- MI-LST-12 The row height follows the icon size: 32 point icons 39, 16 point icons text size + 7, 24 point icons (not a Finder size) keep 28 [O:2026-10-11 E24]
+- MI-LST-104 With 16 point icons a row is the text size plus 7 (10 -> 17 ... 16 -> 23) [O:2026-10-11 E24]
+- MI-LST-105 With 32 point icons a row is 39 for every text size 10 to 16 [O:2026-10-11 E24]
+- MI-LST-13 A big text makes rows taller than a small icon needs (text + 7) [O:2026-10-11 E24]
 - MI-LST-57 Default row 28, icon 24 [F:existing ICNSIZE]
-- MI-LST-58 A 32 point icon makes the rows 36 points [G]
+- MI-LST-58 A 32 point icon makes the rows 39 points [O:2026-10-11 E24]
 - MI-LST-59 Icon sizes are limited to 128 [G]
 - MI-LST-60 and to 16 at the least [S:Finder list icon sizes 16 and 32]
 - MI-LST-61 Back to 24 the rows are 28 again [G]

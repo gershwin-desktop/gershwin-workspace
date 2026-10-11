@@ -43,6 +43,8 @@
 @implementation StubProvider
 - (NSColor *)labelColorForPath:(NSString *)path
 {
+  if ([path hasSuffix: @"/mid.dat"])
+    return [NSColor blueColor];
   return [path hasSuffix: @"/big.bin"] ? [NSColor redColor] : nil;
 }
 - (BOOL)isInvisibleAtPath:(NSString *)path { return NO; }
@@ -55,6 +57,8 @@
 }
 - (NSString *)labelNameForPath:(NSString *)path
 {
+  if ([path hasSuffix: @"/mid.dat"])
+    return @"Blue";
   return [path hasSuffix: @"/big.bin"] ? @"Red" : nil;
 }
 @end
@@ -209,9 +213,21 @@ main(void)
 
   PASS ([DS rowHeightForTextSize: 0 iconSize: 24] == 28.0,
         "MI-LST-11 the default row height is the 28 points the list always had");
-  PASS ([DS rowHeightForTextSize: 0 iconSize: 32] == 36.0
+  PASS ([DS rowHeightForTextSize: 0 iconSize: 32] == 39.0
         && [DS rowHeightForTextSize: 0 iconSize: 16] < 28.0,
         "MI-LST-12 the row height follows the icon size");
+  {
+    BOOL small = YES, large = YES;
+    int size;
+
+    for (size = 10; size <= 16; size++)
+      {
+        small = small && [DS rowHeightForTextSize: size iconSize: 16] == size + 7;
+        large = large && [DS rowHeightForTextSize: size iconSize: 32] == 39.0;
+      }
+    PASS (small, "MI-LST-104 [O:2026-10-11 E24] with 16 point icons a row is the text size plus 7 (10 -> 17 ... 16 -> 23)");
+    PASS (large, "MI-LST-105 [O:2026-10-11 E24] with 32 point icons a row is 39 for every text size 10 to 16");
+  }
   PASS ([DS rowHeightForTextSize: 40 iconSize: 16] > [DS rowHeightForTextSize: 0 iconSize: 16],
         "MI-LST-13 a big text makes rows taller than a small icon needs");
 
@@ -418,7 +434,20 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
   }
   [ds setSortColumnId: @"label" ascending: NO];
   PASS_EQUAL ([shownNames (ds) objectAtIndex: 0], @"big.bin",
-              "MI-LST-54 sorting by label puts labelled files before those without (descending)");
+              "MI-LST-54 [O:2026-10-11 E24] sorting by label puts labelled files before those without (descending)");
+  [ds setSortColumnId: @"label" ascending: YES];
+  {
+    NSArray *names = shownNames (ds);
+
+    PASS ([names indexOfObject: @"small.txt"] < [names indexOfObject: @"mid.dat"]
+          && [names indexOfObject: @"sub"] < [names indexOfObject: @"mid.dat"],
+          "MI-LST-101 [O:2026-10-11 E24] first click on Label: no label first");
+    PASS ([names indexOfObject: @"mid.dat"] < [names indexOfObject: @"big.bin"],
+          "MI-LST-102 [O:2026-10-11 E24] then alphabetical by the label name (Blue before Red), not by colour");
+  }
+  [ds setSortColumnId: @"label" ascending: NO];
+  PASS_EQUAL ([shownNames (ds) objectAtIndex: 0], @"big.bin",
+              "MI-LST-103 [O:2026-10-11 E24] the second click reverses it exactly");
   [ds setSortColumnId: @"name" ascending: YES];
 
   /* relative dates in the cell values */
@@ -444,7 +473,7 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
 
     PASS (before == 28.0 && [ds listIconSize] == 24, "MI-LST-57 default row 28, icon 24");
     [ds setListIconSize: 32];
-    PASS ([view rowHeight] == 36.0, "MI-LST-58 a 32 point icon makes the rows 36 points");
+    PASS ([view rowHeight] == 39.0, "MI-LST-58 [O:2026-10-11 E24] a 32 point icon makes the rows 39 points");
     [ds setListIconSize: 1000];
     PASS ([ds listIconSize] == 128, "MI-LST-59 icon sizes are limited to 128");
     [ds setListIconSize: 1];

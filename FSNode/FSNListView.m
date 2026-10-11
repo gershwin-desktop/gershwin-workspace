@@ -50,7 +50,8 @@
 /* Space above and below the icon, and above and below the text line, that
  * the 28 point rows of the default 24 point icon have always had. */
 #define ROW_ICON_MARGIN (4.0)
-#define ROW_TEXT_MARGIN (6.0)
+#define ROW_ICON_MARGIN_LARGE (7.0)
+#define ROW_TEXT_MARGIN (7.0)
 #define EMPTY_VALUE_STRING @"--"
 /* Key of a rep's lazy label name (FSNListColumnTypeLabel holds its colour). */
 #define LAZY_LABEL_NAME (FSNListColumnTypeLabel + 1000)
@@ -1096,22 +1097,6 @@ compareOptional(id a, id b)
   return [a compare: b];
 }
 
-/* Where a label colour comes in Finder's order: no label, then the colours
- * round the colour wheel from red, grey last. */
-static double
-labelRank(NSColor *color)
-{
-  CGFloat hue, saturation, brightness, alpha;
-
-  if (color == nil)
-    {
-      return -1.0;
-    }
-  [[color colorUsingColorSpaceName: NSCalibratedRGBColorSpace]
-    getHue: &hue saturation: &saturation brightness: &brightness alpha: &alpha];
-  return (saturation < 0.1) ? 2.0 : hue;
-}
-
 - (unsigned long long)sortSizeOfRep:(FSNListViewNodeRep *)rep
 {
   FSNode *nd = [rep node];
@@ -1153,17 +1138,10 @@ labelRank(NSColor *color)
     case FSNInfoExtendedType:
       return [[r1 shownInfo] caseInsensitiveCompare: [r2 shownInfo]];
     case FSNListColumnTypeLabel:
-      {
-        double k1 = labelRank ([r1 lazyValueForColumnType: type]);
-        double k2 = labelRank ([r2 lazyValueForColumnType: type]);
-
-        if (k1 == k2)
-          {
-            return compareOptional ([r1 lazyValueForColumnType: LAZY_LABEL_NAME],
-                                    [r2 lazyValueForColumnType: LAZY_LABEL_NAME]);
-          }
-        return (k1 < k2) ? NSOrderedAscending : NSOrderedDescending;
-      }
+      /* Finder: no label first, then by the (localized) label name; the
+       * colour does not matter. */
+      return compareOptional ([r1 lazyValueForColumnType: LAZY_LABEL_NAME],
+                              [r2 lazyValueForColumnType: LAZY_LABEL_NAME]);
     case FSNListColumnTypeVersion:
       {
         NSString *v1 = [r1 lazyValueForColumnType: type];
@@ -1398,12 +1376,25 @@ labelRank(NSColor *color)
 
 + (CGFloat)rowHeightForTextSize:(CGFloat)points iconSize:(NSInteger)iconSize
 {
-  NSFont *font = (points > 0)
-    ? [NSFont systemFontOfSize: points]
-    : [[[[FSNTextCell alloc] init] autorelease] font];
-  CGFloat line = ceil ([font ascender] - [font descender]);
+  CGFloat text = (points > 0)
+    ? points
+    : [[[[FSNTextCell alloc] init] autorelease] font].pointSize;
+  CGFloat icon = 0;
 
-  return MAX (iconSize + ROW_ICON_MARGIN, line + ROW_TEXT_MARGIN);
+  /* Finder: a row is the text size plus 7, also with 16 point icons, and the
+   * icon plus 7 with 32 point ones (E24).  Sizes in between, which Finder
+   * does not offer, keep the 4 points around the icon the default 24 point
+   * rows always had. */
+  if (iconSize >= 32)
+    {
+      icon = iconSize + ROW_ICON_MARGIN_LARGE;
+    }
+  else if (iconSize > 16)
+    {
+      icon = iconSize + ROW_ICON_MARGIN;
+    }
+
+  return MAX (icon, text + ROW_TEXT_MARGIN);
 }
 
 - (BOOL)setSortColumnId:(NSString *)columnId ascending:(BOOL)ascending
