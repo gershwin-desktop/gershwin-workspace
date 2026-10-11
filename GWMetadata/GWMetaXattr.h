@@ -88,6 +88,28 @@ int gs_removexattr(const char *path, const char *name);
 int gs_xattr_supported(const char *path);
 
 /**
+ * Copy the type name of the filesystem holding path into buf: the kernel's
+ * own name where it has one (f_fstypename on the BSDs, the volume's file
+ * system name on Windows), on Linux a name for the statfs magic number
+ * ("fuseblk" for block-backed FUSE, "fuse.<subtype>" from mountinfo for
+ * the rest).
+ *
+ * @return 0, or -1 with errno set (ENAMETOOLONG when buf is too small)
+ */
+int gs_fs_type_name(const char *path, char *buf, size_t size);
+
+/**
+ * Whether a Mac reads Finder metadata on a filesystem of this type only
+ * from "._" AppleDouble files: FAT, exFAT, SMB and NTFS.  There, metadata
+ * must be written as sidecars even when the local mount would accept
+ * extended attributes, because the Mac never sees those.
+ *
+ * @param fstype A name as gs_fs_type_name() returns it (case ignored)
+ * @return 1 or 0
+ */
+int gs_fs_type_wants_appledouble(const char *fstype);
+
+/**
  * Entry returned by gs_xattr_list_for_path().
  */
 typedef struct {

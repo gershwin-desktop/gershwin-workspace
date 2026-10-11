@@ -876,6 +876,10 @@ static NSMutableDictionary *_metadataCache = nil;
       return md;
     }
 
+  NSInteger appleDouble = [self storesMetadataInAppleDoubleAtPath: path];
+  if (appleDouble < 0)
+    return nil;
+
   /* Try xattrs first */
   BOOL found = NO;
 
@@ -969,9 +973,20 @@ static NSMutableDictionary *_metadataCache = nil;
       }
   }
 
-  /* If nothing found via xattrs, try sidecar */
-  if (!found)
+  if (appleDouble == 1)
     {
+      /* A Mac writes only the sidecar here, so it is the current state; an
+       * attribute a Linux tool left on the mount only fills its gaps. */
+      GSFileMetadata *sidecar = [[[self alloc] init] autorelease];
+      if ([sidecar readSidecarForPath: path])
+        {
+          [md _takeFieldsReadFrom: sidecar];
+          found = YES;
+        }
+    }
+  else if (!found)
+    {
+      /* If nothing found via xattrs, try sidecar */
       if ([md readSidecarForPath: path])
         found = YES;
     }
@@ -980,6 +995,20 @@ static NSMutableDictionary *_metadataCache = nil;
     return nil;
   [md _markLoaded];
   return md;
+}
+
+- (void)_takeFieldsReadFrom:(GSFileMetadata *)other
+{
+  if (other->_finderInfo)
+    self.finderInfo = other->_finderInfo;
+  if (other->_resourceFork)
+    self.resourceFork = other->_resourceFork;
+  if (other->_userTagsData)
+    self.userTagsData = other->_userTagsData;
+  if (other->_finderComment)
+    self.finderComment = other->_finderComment;
+  if (other->_quarantine)
+    self.quarantine = other->_quarantine;
 }
 
 /* =================================================================
@@ -1078,9 +1107,25 @@ static NSMutableDictionary *_metadataCache = nil;
       return NO;
     }
 
+  NSInteger appleDouble = _forceSidecar ? 1
+    : [[self class] storesMetadataInAppleDoubleAtPath: path];
+  if (appleDouble < 0)
+    {
+      if (error)
+        *error = [NSError errorWithDomain: NSPOSIXErrorDomain
+                                     code: errno
+                                 userInfo: @{
+          NSFilePathErrorKey: path,
+          NSLocalizedDescriptionKey:
+            @"Cannot tell the filesystem type, so not where metadata belongs"
+        }];
+      return NO;
+    }
   if (![self _divertFolderIconAtPath: path error: error])
     return NO;
-  if (_forceSidecar)
+  /* Attributes would be invisible to the Mac that reads this volume, and
+   * migrating the sidecar into them would take away what it does see. */
+  if (appleDouble == 1)
     return [self writeSidecarToFileAtPath: path error: error];
 
   const char *cpath = GW_FSREP(path);
@@ -1893,6 +1938,31 @@ static NSData *gsLookupResource(NSData *fork, GSOType type, BOOL useID,
 /* =================================================================
  * Utilities
  * ================================================================= */
+
+static GSFilesystemTypeProbe gsFilesystemTypeProbe = nil;
+
++ (void)setFilesystemTypeProbe:(GSFilesystemTypeProbe)probe
+{
+  ASSIGNCOPY(gsFilesystemTypeProbe, probe);
+}
+
++ (NSInteger)storesMetadataInAppleDoubleAtPath:(NSString *)path
+{
+  NSString *type = nil;
+
+  if (gsFilesystemTypeProbe != nil)
+    type = gsFilesystemTypeProbe(path);
+  else
+    {
+      char name[64];
+
+      if (gs_fs_type_name(GW_FSREP(path), name, sizeof(name)) == 0)
+        type = [NSString stringWithUTF8String: name];
+    }
+  if (type == nil)
+    return -1;
+  return gs_fs_type_wants_appledouble([type UTF8String]);
+}
 
 + (NSString *)sidecarPathForFilePath:(NSString *)filePath
 {

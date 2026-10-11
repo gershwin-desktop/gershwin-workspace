@@ -25,3 +25,11 @@ t_DSStoreComment_OBJC_FILES += $(DSSTORE_SRC)
 t_DSStoreComment_TOOL_LIBS += -lgnustep-gui
 t_MetadataCopier_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m $(DSSTORE_SRC)
 t_MetadataCopier_TOOL_LIBS += -lgnustep-gui
+
+# Copies onto volumes a Mac reads through "._" files; the filesystem type is
+# injected through GSFileMetadata, and the comment record needs the store.
+t_TransportCopier_OBJC_FILES += ../../Operation/GWMetadataCopier.m \
+                                ../../GWMetadata/GSAppleDouble.m \
+                                ../../GWMetadata/GWMetaXattr.m \
+                                ../../GWMetadata/GSFileMetadata.m $(DSSTORE_SRC)
+t_TransportCopier_TOOL_LIBS += -lgnustep-gui

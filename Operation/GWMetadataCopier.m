@@ -22,6 +22,8 @@ static NSString * const GWUserNamespace = @"user.";
 /* AppleDouble keeps these two outside the ATTR blob, in entries 9 and 2. */
 static NSString * const GWFinderInfoName = @"com.apple.FinderInfo";
 static NSString * const GWResourceForkName = @"com.apple.ResourceFork";
+/* 10.6 tar and dot_clean drop a sidecar quarantine without its "q/". */
+static NSString * const GWQuarantineName = @"com.apple.quarantine";
 #define GW_FINDERINFO_SIZE 32
 
 static NSError *
@@ -176,6 +178,18 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
   GSAppleDouble *ad = nil;
   NSData *out;
 
+  /* Nothing to add: a rewrite would only lose the layout the writer chose
+   * (a 10.6 FAT copy pads to 4096 bytes). */
+  if (base != nil && [attrs count] == 0)
+    {
+      if (![base writeToFile: sidecar atomically: YES])
+        {
+          if (error)
+            *error = copyError(sidecar, @"cannot write sidecar", errno);
+          return NO;
+        }
+      return YES;
+    }
   if (base != nil)
     {
       ad = [[GSAppleDouble alloc] initWithData: base];
@@ -199,6 +213,8 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
         [ad setFinderInfo: value];
       else if ([name isEqual: GWResourceForkName])
         [ad setResourceFork: value];
+      else if ([name isEqual: GWQuarantineName])
+        [ad setXattr: [GSFileMetadata sidecarQuarantine: value] forKey: name];
       else
         [ad setXattr: value forKey: name];
     }
@@ -266,9 +282,19 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
       widened = YES;
     }
 
-  int support = _xattrSupportProbe(dstPath);
+  /* Where a Mac reads the volume, it sees only "._" files; attributes the
+   * mount would accept never reach it, so they all go into the sidecar. */
+  NSInteger appleDouble = [GSFileMetadata storesMetadataInAppleDoubleAtPath: dstPath];
+  int support = appleDouble == 1 ? 0
+    : appleDouble == 0 ? _xattrSupportProbe(dstPath) : -1;
 
-  if (support < 0)
+  if (appleDouble < 0)
+    {
+      if (error)
+        *error = copyError(dstPath, @"cannot tell the filesystem type", errno);
+      ok = NO;
+    }
+  else if (support < 0)
     {
       /* Neither "supported" nor "not supported": do not guess. */
       if (error)

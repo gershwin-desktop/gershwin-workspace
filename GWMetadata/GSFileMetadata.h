@@ -443,6 +443,21 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  */
 + (NSColor *)colorForLabel:(GSFileLabel)label;
 
+/** Names the filesystem type holding a path, nil when that cannot be told. */
+typedef NSString *(^GSFilesystemTypeProbe)(NSString *path);
+
+/**
+ * Whether metadata of the item at path lives in its "._" sidecar rather
+ * than in extended attributes: 1 on volumes a Mac reads (FAT, exFAT, SMB,
+ * NTFS; see gs_fs_type_wants_appledouble), 0 elsewhere, -1 when the
+ * filesystem cannot be told.  Writes there go only to the sidecar and keep
+ * it; reads take the sidecar first and fill gaps from attributes.
+ */
++ (NSInteger)storesMetadataInAppleDoubleAtPath:(NSString *)path;
+
+/** Replaces the filesystem type probe (tests); nil restores the real one. */
++ (void)setFilesystemTypeProbe:(GSFilesystemTypeProbe)probe;
+
 /**
  * Whether we should use sidecar mode (xattrs unavailable or forced).
  */

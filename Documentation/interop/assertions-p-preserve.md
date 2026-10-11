@@ -43,6 +43,23 @@ Mac-written `._` file seen on the build machine (modern macOS, not stored).
 - MI-PRS-20 A source sidecar is carried byte for byte, to destinations with and without attributes. [G]
 - MI-PRS-21 Source attributes are merged into the carried sidecar; entries and attributes only the sidecar had are kept. [G]
 
+## Volumes a Mac reads through `._` files (referee M3/M8, P-transport)
+
+Tests: `Tests/GWMetadata/t_TransportPolicy.m`, `Tests/Preserve/t_TransportCopier.m`
+(filesystem type injected with +[GSFileMetadata setFilesystemTypeProbe:]).
+
+- MI-PRS-33 One function decides per path: +[GSFileMetadata storesMetadataInAppleDoubleAtPath:] = gs_fs_type_wants_appledouble(gs_fs_type_name(path)); 1 for msdos/msdosfs/vfat/fat*/exfat, cifs/smb/smb2/smb3/smbfs, ntfs/ntfs3/ntfs-3g/fuseblk (fuse./fusefs. prefixes stripped, case ignored), 0 for everything else, -1 when the type cannot be told. [S: Mac OS X writes `._` on non-HFS volumes; NTFS and fuseblk G]
+- MI-PRS-34 Type names: Linux statfs magic mapped to mount(8) names, FUSE resolved through /proc/self/mountinfo by device number; FreeBSD/OpenBSD f_fstypename; Windows GetVolumeInformationW. An unexaminable path is -1, never a guess. [S]
+- MI-PRS-35 Saving metadata there writes only the `._` sidecar (entry 9 first, entry 2, ATTR with comment, tags and q/ quarantine) even when the mount accepts attributes; no com.apple attribute is set. [G: the Mac never sees Linux attributes on these volumes; pending Scout E35+]
+- MI-PRS-36 A later save there keeps the sidecar; it is never migrated into attributes and deleted as on a native disk. [G]
+- MI-PRS-37 Reading there takes the sidecar first; attributes a Linux tool left on the mount only fill fields the sidecar lacks. [G]
+- MI-PRS-38 Unknown filesystem type: a save fails with an error and writes nothing; a read returns nil. [D: user rule, no guessing]
+- MI-PRS-39 A copy or move onto such a volume puts every attribute of the source into the sidecar (also with attributes supported), merged over the source sidecar; quarantine gets the q/ prefix. [G + E16/fb800d91]
+- MI-PRS-40 A source sidecar with no attributes to add is carried byte for byte (a 10.6 FAT copy's 4096-byte layout stays). [F: E17 layout]
+- MI-PRS-41 A copy with a Finder comment onto such a volume writes the cmmt record into that folder's .DS_Store; the store gets no `._.DS_Store` and no attribute from us. [O: M2; G for `._.DS_Store`, pending Scout]
+- MI-PRS-42 Native destinations (ext4, tmpfs, ...) are unchanged: attributes, no sidecar. [S]
+- MI-PRS-19 (changed) The sidecar quarantine on a destination without attributes carries the q/ prefix, as GSFileMetadata's sidecar writer does. [fb800d91]
+
 ## Platform wrapper
 
 - MI-PRS-23 When storing an attribute fails with E2BIG or ENOSPC, all metadata of the item goes into the sidecar and attributes already written are removed; any other errno fails hard. [D: user decision 2026-10-11, OPEN-3 option A; GSFileMetadata does the same]

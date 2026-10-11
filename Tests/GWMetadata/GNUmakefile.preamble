@@ -15,3 +15,10 @@ t_SidecarExport_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m \
                               ../../GWMetadata/GSAppleDouble.m \
                               ../../GWMetadata/GWMetaXattr.m
 t_SidecarExport_TOOL_LIBS += -lgnustep-gui
+
+# Where metadata goes per filesystem type, through the public API with an
+# injected type probe.
+t_TransportPolicy_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m \
+                                ../../GWMetadata/GSAppleDouble.m \
+                                ../../GWMetadata/GWMetaXattr.m
+t_TransportPolicy_TOOL_LIBS += -lgnustep-gui
