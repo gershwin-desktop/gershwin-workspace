@@ -33,6 +33,7 @@
 
 #import "FSNIconsView.h"
 #import "FSNIcon.h"
+#import "FSNArrangement.h"
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
 #import "FSNLocationFile.h"
@@ -272,52 +273,21 @@ const int FSNMaxLabelTextSize = 16;
   [self setNeedsDisplay: YES];
 }
 
-/* Arrange By orders as the Mac mini lists them (E25); ties fall back to the
- * name so the result does not depend on the order the directory was read in.
- * Dates run newest first, sizes smallest first with the folders ahead, and
- * folders have no precedence in the name and kind orders. */
-static NSComparisonResult
-compareNames(FSNode *a, FSNode *b)
-{
-  return [[a name] caseInsensitiveCompare: [b name]];
-}
-
+/* Arrange By, in the orders shared with the column view (FSNArrangement);
+ * the label order uses the label each icon already loaded. */
 static NSComparisonResult
 compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
 {
   FSNIconsArrangement arrangement = (FSNIconsArrangement)(intptr_t)context;
-  FSNode *na = [a node];
-  FSNode *nb = [b node];
-  NSComparisonResult result = NSOrderedSame;
 
-  switch (arrangement)
+  if (arrangement == FSNIconsArrangeLabel)
     {
-      case FSNIconsArrangeKind:
-        result = [[na typeDescription] caseInsensitiveCompare: [nb typeDescription]];
-        break;
-      case FSNIconsArrangeDateModified:
-        result = [[nb modificationDate] compare: [na modificationDate]];
-        break;
-      case FSNIconsArrangeDateCreated:
-        result = [[nb creationDate] compare: [na creationDate]];
-        break;
-      case FSNIconsArrangeSize:
-        {
-          unsigned long long sa = [na isDirectory] ? 0 : [na fileSize];
-          unsigned long long sb = [nb isDirectory] ? 0 : [nb fileSize];
+      NSComparisonResult result = [a compareAccordingToLabel: b];
 
-          result = (sa == sb) ? NSOrderedSame
-            : ((sa < sb) ? NSOrderedAscending : NSOrderedDescending);
-        }
-        break;
-      case FSNIconsArrangeLabel:
-        result = [a compareAccordingToLabel: b];
-        break;
-      default:
-        break;
+      if (result != NSOrderedSame)
+        return result;
     }
-
-  return (result != NSOrderedSame) ? result : compareNames (na, nb);
+  return FSNCompareNodesForArrangement ([a node], [b node], arrangement);
 }
 
 - (void)sortIcons
