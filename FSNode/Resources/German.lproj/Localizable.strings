@@ -118,3 +118,10 @@
 "%lu bytes" = "%lu Byte";
 
 "%@ x %@" = "%@ \U00D7 %@";
+
+/* Preview column of the column view */
+"Name:" = "Name:";
+"Kind:" = "Art:";
+"Size:" = "Gr\u00f6\u00dfe:";
+"Created:" = "Erstellt:";
+"Modified:" = "Ge\u00e4ndert:";

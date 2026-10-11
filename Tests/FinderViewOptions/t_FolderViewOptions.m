@@ -14,6 +14,7 @@
 #import "DSStore.h"
 #import "DSStoreInfo.h"
 #import "GWFolderViewOptions.h"
+#import "GWViewerGeometry.h"
 #import "FSNIconsView.h"
 #import "FSNListView.h"
 #import "FSNode.h"
@@ -121,6 +122,32 @@ main(void)
     info.showToolbar = YES;
     PASS(![O opensSpatially: info byDefault: YES], "MI-IV-97 ShowToolbar 1 a browsing window");
   END_SET("toolbar and window kind [decision A]")
+
+  START_SET("a closed window adds no default icvp [O:E33]")
+    DSStoreInfo *info = [[[DSStoreInfo alloc] initWithDirectoryPath: @"/nonexistent"] autorelease];
+    NSDictionary *prefs = @{ @"iconsize" : @48, @"iconspos" : @"bottom", @"iconsarr" : @"none",
+                             @"labeltxtsize" : @12, @"viewtype" : @"Browser",
+                             @"geometry" : @"{{10, 10}, {600, 400}}", @"sidebarwidth" : @180 };
+
+    [info markAsLoaded];
+    [info takeValuesFromViewerPrefs: [O folderPrefsFromViewerPrefs: prefs]];
+    PASS([info iconViewOptionsChanged] == NO,
+         "MI-IV-116 a view's own icon prefs do not count as changed icon view options");
+    PASS(info.hasWindowFrame && info.hasViewStyle && info.hasSidebarWidth,
+         "MI-IV-117 the window's geometry, view type and sidebar width still do");
+  END_SET("a closed window adds no default icvp [O:E33]")
+
+  START_SET("a column view window has no resize increments [E33]")
+    NSSize browser = GWViewerResizeIncrements(GWViewTypeBrowser, 150);
+    NSSize icons = GWViewerResizeIncrements(GWViewTypeIcon, 150);
+
+    PASS(browser.width == 1 && browser.height == 1,
+         "MI-IV-118 the column view resizes freely: its columns are 205 points, not 150");
+    PASS(icons.width == 150 && icons.height == 1,
+         "MI-IV-119 the icon and list views keep the configured increment");
+    PASS(GWViewerBrowserInitialColumns > 0,
+         "MI-IV-120 the column view starts with a fixed number of empty columns");
+  END_SET("a column view window has no resize increments [E33]")
 
   START_SET("a background picture as Finder resolves it [O:E12]")
     NSData *alias = [O backgroundImageAliasForPath: @"/srv/pics/bg.png"];

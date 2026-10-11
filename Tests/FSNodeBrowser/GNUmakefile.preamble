@@ -1,0 +1,23 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+ADDITIONAL_INCLUDE_DIRS += -I../../FSNode -I../../FSNode/ExtendedInfo
+
+# clang 19 / binutils 2.44: see Tests/FSNode/GNUmakefile.preamble.
+ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
+                      -Wl,--defsym=__stop___objc_constant_string=0
+
+# The tools drive a real FSNBrowser, so they link the built framework.
+# Without the old DT_RPATH tag the loader would pick the installed framework
+# from LD_LIBRARY_PATH and report on /System instead of on what was just
+# built.
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
+                      -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+
+t_FSNBrowserLayout_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                -lFSNode -lgnustep-gui
+t_FSNBrowserViewOptions_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                     -lFSNode -lgnustep-gui
+
+# The build's own FSNode before the installed one in /System, for -lFSNode too.
+ADDITIONAL_LDFLAGS += -L$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+t_FSNColumnViewOptions_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                    -lFSNode -lgnustep-gui

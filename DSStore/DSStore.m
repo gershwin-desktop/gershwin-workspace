@@ -587,9 +587,11 @@ static NSData *readValueBytes(DSBuddyBlock *block, uint64_t length)
     [s zeroFill];
     [s close];
 
-    [alloc flush];
+    /* A store that could not be written must say so: the caller then keeps
+     * the settings in the volume cache instead of losing them. */
+    BOOL written = [alloc flush];
     [alloc release];
-    return YES;
+    return written;
 }
 
 /* The index key of a record.  Codes are four characters, so the code in

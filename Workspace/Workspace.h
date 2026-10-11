@@ -342,7 +342,7 @@
 
 - (void)toggleHiddenFiles;
 
-- (void)quickLook:(id)sender;
+- (void)lookInside:(id)sender;
 
 - (BOOL)unmountVolumeAtPath:(NSString *)path;
 

@@ -122,3 +122,10 @@
 "%lu bytes" = "%lu byte";
 
 "%@ x %@" = "%@ \U00D7 %@";
+
+/* Preview column of the column view */
+"Name:" = "Nome:";
+"Kind:" = "Tipo:";
+"Size:" = "Dimensioni:";
+"Created:" = "Creato:";
+"Modified:" = "Modificato:";

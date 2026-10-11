@@ -91,7 +91,7 @@
 - (void)selectAllInViewer;
 - (void)showTerminal;
 - (void)toggleHiddenFiles;
-- (void)quickLook:(id)sender;
+- (void)lookInside:(id)sender;
 - (NSArray *)lastSelection;
 
 @end

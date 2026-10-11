@@ -59,9 +59,12 @@ recordFromFirstWriterFork(NSData *fork)
 
 + (BOOL)isAliasFileAtPath:(NSString *)path
 {
-  struct stat st;
+  /* NSFileManager instead of stat(): Windows file system paths are wide
+   * characters, which stat() does not take. */
+  NSDictionary *attrs = [[NSFileManager defaultManager]
+                          fileAttributesAtPath: path traverseLink: NO];
 
-  if (stat([path fileSystemRepresentation], &st) != 0 || !S_ISREG(st.st_mode))
+  if (![[attrs fileType] isEqualToString: NSFileTypeRegular])
     {
       return NO;
     }
@@ -74,7 +77,7 @@ recordFromFirstWriterFork(NSData *fork)
   NSData *fork;
   NSData *record;
   FSNAlias *alias;
-  struct stat st;
+  unsigned long long size;
 
   if ([self isAliasFileAtPath: path] == NO)
     {
@@ -93,8 +96,9 @@ recordFromFirstWriterFork(NSData *fork)
     {
       return alias;
     }
-  if (stat([path fileSystemRepresentation], &st) != 0
-      || st.st_size <= 0 || st.st_size > ALIAS_DATA_MAX)
+  size = [[[NSFileManager defaultManager] fileAttributesAtPath: path
+                                                  traverseLink: NO] fileSize];
+  if (size == 0 || size > ALIAS_DATA_MAX)
     {
       return nil;
     }

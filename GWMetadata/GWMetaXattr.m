@@ -109,6 +109,11 @@ _gs_set(const char *path, const char *name, const void *value,
 
   ssize_t written = extattr_set_file(path, EXTATTR_NAMESPACE_USER,
                                      name, value, size);
+  /* FreeBSD refuses a value larger than the file system keeps for one
+   * attribute (64 KiB, e.g. a Finder resource fork) with EINVAL, where Linux
+   * says E2BIG; callers fall back to the AppleDouble sidecar on E2BIG. */
+  if (written < 0 && errno == EINVAL && size > 0)
+    errno = E2BIG;
   return (written == (ssize_t)size) ? 0 : -1;
 }
 

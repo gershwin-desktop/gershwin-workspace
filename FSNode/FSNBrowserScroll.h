@@ -29,15 +29,20 @@
 #include <AppKit/NSScrollView.h>
 
 @class FSNBrowserColumn;
+@class FSNBrowserResizeHandle;
 
 @interface FSNBrowserScroll : NSScrollView
 {
   FSNBrowserColumn *column;
+  FSNBrowserResizeHandle *resizeHandle;
 }
 
 - (id)initWithFrame:(NSRect)frameRect
            inColumn:(FSNBrowserColumn *)col
           acceptDnd:(BOOL)dnd;
+
+/* The grip that resizes the column, under the vertical scroller. */
+- (FSNBrowserResizeHandle *)resizeHandle;
 
 @end
 

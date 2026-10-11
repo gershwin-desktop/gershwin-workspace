@@ -58,6 +58,7 @@
 #import "DSStoreInfo.h"
 #import "FSNListView.h"
 #import "GWViewerChrome.h"
+#import "GWViewerGeometry.h"
 #import "GWViewSettingsManager.h"
 #import "GSFileMetadata.h"
 #import "GWViewerPrefs.h"
@@ -133,7 +134,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 static unsigned long lastExtents_[4];
 static BOOL hasLastExtents_ = NO;
 
-/* Accessor for lastSelection used by GWViewerWindow quicklook guard */
+/* Accessor for lastSelection used by GWViewerWindow Look Inside guard */
 
 - (void)dealloc
 {
@@ -387,7 +388,7 @@ static BOOL hasLastExtents_ = NO;
     }
 
     [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_WIN_H)];    
-    [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
+    [vwrwin setResizeIncrements: GWViewerResizeIncrements(viewType, resizeIncrement)];
 
     if (firstRootViewer) {
       NSString *path = [baseNode path];
@@ -434,7 +435,7 @@ static BOOL hasLastExtents_ = NO;
       [nviewScroll setHasVerticalScroller: YES];
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
-		                            visibleColumns: visibleCols
+		                            visibleColumns: GWViewerBrowserInitialColumns
                                       scroller: [nviewScroll horizontalScroller]
                                     cellsIcons: NO
                                     acceptsDnd: YES
@@ -580,7 +581,9 @@ static BOOL hasLastExtents_ = NO;
   [lowBox addSubview: pathsScroll];
   RELEASE (pathsScroll);
 
-  visibleCols = myrintf(r.size.width / [vwrwin resizeIncrements].width);
+  /* The path bar's icons still step by the configured width; the column
+   * view's 205 point columns lay themselves out. */
+  visibleCols = myrintf(r.size.width / resizeIncrement);
 
   r = [[pathsScroll contentView] bounds];
   pathsView = [[GWViewerIconsPath alloc] initWithFrame: r
@@ -1318,13 +1321,17 @@ static BOOL hasLastExtents_ = NO;
   [pathsScroll setDocumentView: nil];	  
 
   resizeIncrement = [(NSNumber *)[notification object] intValue];
-  /* When the Inspector toggle is on, it occupies a fixed width of window
+  /* A column view keeps its size: its columns no longer follow this width.
+   * When the Inspector toggle is on, it occupies a fixed width of window
    * space regardless of view type. */
-  r.size.width = ((visibleCols * resizeIncrement)
-                  + (showInspector ? GW_PREVIEW_PANE_WIDTH : 0));
-  [vwrwin setFrame: r display: YES];  
+  if (viewType != GWViewTypeBrowser)
+    {
+      r.size.width = ((visibleCols * resizeIncrement)
+                      + (showInspector ? GW_PREVIEW_PANE_WIDTH : 0));
+      [vwrwin setFrame: r display: YES];
+    }
   [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_WIN_H)];    
-  [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
+  [vwrwin setResizeIncrements: GWViewerResizeIncrements(viewType, resizeIncrement)];
 
   [pathsScroll setDocumentView: pathsView];
   RELEASE (pathsView);
@@ -1541,7 +1548,7 @@ static BOOL hasLastExtents_ = NO;
   } else if (viewType == GWViewTypeBrowser) {
     nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                                 inViewer: self
-                                          visibleColumns: visibleCols
+                                          visibleColumns: GWViewerBrowserInitialColumns
                                                 scroller: [pathsScroll horizontalScroller]
                                               cellsIcons: NO
                                               acceptsDnd: NO
@@ -1678,7 +1685,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
 
     if ([nodeView isSingleNode]) {
       NSRect r = [[vwrwin contentView] bounds];
-      int cols = myrintf(r.size.width / [vwrwin resizeIncrements].width);  
+      int cols = myrintf(r.size.width / resizeIncrement);
 
       if (cols != visibleCols) {
         [self setSelectableNodesRange: NSMakeRange(0, cols)];
@@ -1802,7 +1809,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
 
           nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                                       inViewer: self
-                                                visibleColumns: visibleCols
+                                                visibleColumns: GWViewerBrowserInitialColumns
                                                       scroller: [nviewScroll horizontalScroller]
                                                     cellsIcons: NO
                                                     acceptsDnd: YES
@@ -1856,6 +1863,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
         }
     
       viewTypeChosenByUser = YES;
+      [vwrwin setResizeIncrements: GWViewerResizeIncrements(viewType, resizeIncrement)];
       [nviewScroll setDocumentView: nodeView];
       RELEASE (nodeView);
       [self applyContentBackgroundColor];

@@ -33,6 +33,8 @@
 #import "FSNBrowser.h"
 #import "FSNFunctions.h"
 #import "FSNIconLoader.h"
+#import "FSNBrowserPreviewView.h"
+#import "FSNArrangement.h"
 #import "FSNDirEntry.h"
 
 #define ICON_CELL_HEIGHT 28
@@ -58,6 +60,7 @@ static id <DesktopApplication> desktopApp = nil;
   [[FSNIconLoader sharedLoader] cancelClient: self];
 
   RELEASE (cellPrototype);
+  RELEASE (previewView);
   RELEASE (shownNode);
   RELEASE (oldNode);
   RELEASE (extInfoType);
@@ -253,6 +256,7 @@ static id <DesktopApplication> desktopApp = nil;
       [matrix removeColumn: 0];
     }
 
+  [self showPreviewOfNode: nil];
   DESTROY (shownNode);
   DESTROY (oldNode);
   isLoaded = NO;
@@ -316,6 +320,105 @@ static id <DesktopApplication> desktopApp = nil;
   return shownNode;
 }
 
+- (void)showPreviewOfNode:(FSNode *)anode
+{
+  if (anode == nil)
+    {
+      if (previewView != nil)
+        {
+          [previewView removeFromSuperview];
+          DESTROY (previewView);
+          [scroll setHidden: NO];
+          [self setNeedsDisplay: YES];
+        }
+      return;
+    }
+
+  if (previewView == nil)
+    {
+      previewView = [[FSNBrowserPreviewView alloc] initWithFrame: [scroll frame]];
+      [previewView setBackgroundColor: backColor];
+      [self addSubview: previewView];
+      [scroll setHidden: YES];
+    }
+  [previewView showNode: anode];
+}
+
+- (FSNode *)previewNode
+{
+  return [previewView node];
+}
+
+- (FSNBrowserPreviewView *)previewView
+{
+  return previewView;
+}
+
+static NSComparisonResult
+compareCellsForArrangement(id a, id b, void *context)
+{
+  return FSNCompareNodesForArrangement ([a node], [b node],
+                                        (FSNIconsArrangement)(intptr_t)context);
+}
+
+/* The folder's own sort order unless the browser arranges its items. */
+- (void)sortCellsUsingSelector:(SEL)compSel
+{
+  FSNIconsArrangement arrangement = [browser arrangement];
+
+  if (arrangement != FSNIconsArrangeNone)
+    {
+      [matrix sortUsingFunction: compareCellsForArrangement
+                        context: (void *)(intptr_t)arrangement];
+    }
+  else
+    {
+      [matrix sortUsingSelector: compSel];
+    }
+}
+
+- (void)sortCells
+{
+  NSArray *selected;
+
+  if (shownNode == nil || [[matrix cells] count] == 0)
+    {
+      return;
+    }
+
+  selected = RETAIN ([self selectedNodes]);
+  [matrix deselectAllCells];
+  [self sortCellsUsingSelector:
+          [fsnodeRep compareSelectorForDirectory: [shownNode path]]];
+  if (selected)
+    {
+      [self selectCellsOfNodes: selected sendAction: NO];
+    }
+  RELEASE (selected);
+  [self decorateVisibleCells];
+  [matrix setNeedsDisplay: YES];
+}
+
+- (void)iconOptionsDidChange
+{
+  NSArray *cells = [matrix cells];
+  NSUInteger i;
+
+  for (i = 0; i < [cells count]; i++)
+    {
+      FSNBrowserCell *cell = [cells objectAtIndex: i];
+
+      [cell setShowsIcon: [cellPrototype showsIcon]];
+      [cell setShowsIconPreview: [cellPrototype showsIconPreview]];
+    }
+  [matrix setNeedsDisplay: YES];
+}
+
+- (FSNBrowser *)browser
+{
+  return browser;
+}
+
 - (void)createRowsInMatrix
 {
   NSAutoreleasePool *pool;
@@ -364,7 +467,7 @@ static id <DesktopApplication> desktopApp = nil;
       [cell checkLocked];
     }
 
-  [matrix sortUsingSelector: compSel];
+  [self sortCellsUsingSelector: compSel];
   RELEASE (pool);
 
   [self decorateVisibleCells];
@@ -425,7 +528,7 @@ static id <DesktopApplication> desktopApp = nil;
         }
     }
 
-  [matrix sortUsingSelector: compSel];
+  [self sortCellsUsingSelector: compSel];
   [self adjustMatrix];
 
   if (selectedNodes)
@@ -1195,6 +1298,7 @@ static id <DesktopApplication> desktopApp = nil;
 - (void)setBackgroundColor:(NSColor *)acolor
 {
   ASSIGN (backColor, acolor);
+  [previewView setBackgroundColor: backColor];
   [matrix setBackgroundColor: backColor];
   [matrix setCellBackgroundColor: backColor];
 }
@@ -1232,6 +1336,7 @@ static id <DesktopApplication> desktopApp = nil;
       [scroll setFrame: r];
       [self adjustMatrix];
     }
+  [previewView setFrame: r];
 }
 
 - (void)drawRect:(NSRect)rect

@@ -67,3 +67,9 @@
 "Always open in list view" = "Toujours ouvrir en mode liste";
 
 "This window has no view options." = "Cette fenêtre n'a pas d'options d'affichage.";
+
+"Show icons" = "Afficher les icônes";
+
+"Show preview column" = "Afficher la colonne d'aperçu";
+
+"Always open in column view" = "Toujours ouvrir en vue par colonnes";

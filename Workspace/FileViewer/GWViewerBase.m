@@ -117,7 +117,8 @@
   /* Read first, so the write keeps icon positions persisted since the
    * window opened and every record Finder wrote. */
   DSStoreInfo *info = [sm readSettings];
-  NSMutableDictionary *folderPrefs = [NSMutableDictionary dictionaryWithDictionary: prefs];
+  NSMutableDictionary *folderPrefs =
+    [NSMutableDictionary dictionaryWithDictionary: [GWFolderViewOptions folderPrefsFromViewerPrefs: prefs]];
 
   if (viewTypeChosenByUser == NO && [info hasViewStyle] == NO)
     {

@@ -8,7 +8,7 @@ ADDITIONAL_INCLUDE_DIRS += -I../../FSNode -I../../FSNode/ExtendedInfo
 # loader searches before a DT_RUNPATH).
 ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
                       -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
-t_FSNListViewOptions_TOOL_LIBS += ../../FSNode/FSNode.framework/Versions/Current/libFSNode.so \
+t_FSNListViewOptions_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current -lFSNode \
                                   -lgnustep-gui
 
 # clang 19 / binutils 2.44: see Tests/FSNode/GNUmakefile.preamble.

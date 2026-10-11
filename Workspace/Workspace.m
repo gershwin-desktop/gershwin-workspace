@@ -53,6 +53,7 @@
 #import "FSNAliasFile.h"
 #import "FSNLocationFile.h"
 #import "GWViewerChrome.h"
+#import "GWStationery.h"
 #import "Workspace.h"
 
 /* Set of paths the user has recently unmounted via the GUI.
@@ -84,7 +85,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWViewer.h"
 #import "Finder.h"
 #import "Inspector.h"
-#import "QuickLook/GWQuickLookController.h"
+#import "LookInside/GWLookInsideController.h"
 #import "Operation.h"
 #import "History/History.h"
 #import "X11AppSupport.h"
@@ -98,6 +99,8 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWMetaArchive.h"
 #import "FSNIconsView.h"
 #import "GWMetadataProvider.h"
+#import "FSNBrowser.h"
+#import "LookInside/GWLookInsideColumnPreviewProvider.h"
 #import "GWIconPositionStore.h"
 #import "GWExtensionsManager.h"
 #import "GWAlignLogically.h"
@@ -447,7 +450,7 @@ static Workspace *gworkspace = nil;
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(makeAliasFiles:) keyEquivalent:@"l"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Quick Look") action:@selector(quickLook:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Look Inside") action:@selector(lookInside:) keyEquivalent:@"y"];
   [menuItem setTarget:self];
   
   // Share submenu
@@ -932,6 +935,7 @@ static Workspace *gworkspace = nil;
    * label colours, invisibility, custom icons and icon positions without
    * depending on the metadata implementation directly. */
   [fsnodeRep setMetadataProvider: [GWMetadataProvider sharedProvider]];
+  [FSNBrowser setPreviewProvider: [GWLookInsideColumnPreviewProvider sharedProvider]];
   [fsnodeRep setIconPositionStore: [GWIconPositionStore sharedStore]];
   /* Let external .gwext bundles decorate nodes and extend the context menu. */
   [fsnodeRep setDecorationDelegate: [GWExtensionsManager defaultManager]];
@@ -1769,7 +1773,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       || sel_isEqual(action, @selector(makeThumbnails:))
       || sel_isEqual(action, @selector(removeThumbnails:))
       || sel_isEqual(action, @selector(notImplemented:))
-      || sel_isEqual(action, @selector(quickLook:))
+      || sel_isEqual(action, @selector(lookInside:))
       || sel_isEqual(action, @selector(cleanUp:))
       || sel_isEqual(action, @selector(cleanUpBy:)))
     {
@@ -2307,67 +2311,32 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
   aURL = nil;
 
-  /* Mac Creator code lookup + Stationery handling */
+  /* Stationery first: a pad with a creator code still opens as a new copy
+   * in that application, never as the pad itself. */
   {
     GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: fullPath];
-    if (md)
-    {
-      /* Creator code -> application mapping */
-      if ([md creatorCode] != 0)
-        {
-          NSString *appPath = [self applicationForCreatorCode: [md creatorCode]];
-          if (appPath)
-            {
-              return [[NSWorkspace sharedWorkspace] openFile: fullPath withApplication: appPath];
-            }
-        }
 
-      /* Stationery: create a copy and open the copy instead */
-      if ([md isStationery])
-        {
-          NSString *dir  = [fullPath stringByDeletingLastPathComponent];
-          NSString *name = [fullPath lastPathComponent];
-          NSString *ext  = [name pathExtension];
-          NSString *base = [name stringByDeletingPathExtension];
+    if ([md isStationery])
+      {
+        NSError *error = nil;
+        NSString *copyPath = [GWStationery makeCopyOfStationeryAtPath: fullPath
+                                                                 error: &error];
 
-          NSString *copyName;
-          if ([ext length] > 0)
-            copyName = [NSString stringWithFormat: @"%@ copy.%@", base, ext];
-          else
-            copyName = [NSString stringWithFormat: @"%@ copy", name];
+        if (copyPath == nil)
+          {
+            NSRunAlertPanel(nil, @"%@", _(@"OK"), nil, nil,
+                            [error localizedDescription]);
+            return NO;
+          }
+        return [self openFile: copyPath];
+      }
+    if ([md creatorCode] != 0)
+      {
+        NSString *appPath = [self applicationForCreatorCode: [md creatorCode]];
 
-          NSString *copyPath = [dir stringByAppendingPathComponent: copyName];
-          NSFileManager *fileMgr = [NSFileManager defaultManager];
-
-          if ([fileMgr fileExistsAtPath: copyPath])
-            {
-              NSUInteger n = 2;
-              do {
-                NSString *tryName;
-                if ([ext length] > 0)
-                  tryName = [NSString stringWithFormat: @"%@ copy %lu.%@", base, (unsigned long)n, ext];
-                else
-                  tryName = [NSString stringWithFormat: @"%@ copy %lu", name, (unsigned long)n];
-                copyPath = [dir stringByAppendingPathComponent: tryName];
-                n++;
-              } while ([fileMgr fileExistsAtPath: copyPath]);
-            }
-
-          if ([fileMgr copyPath: fullPath toPath: copyPath handler: nil])
-            {
-              GSFileMetadata *copyMd = [GSFileMetadata metadataForFileAtPath: copyPath];
-              if (!copyMd) copyMd = [[[GSFileMetadata alloc] init] autorelease];
-              [copyMd setStationery: NO];
-              [copyMd writeToFileAtPath: copyPath error: nil];
-
-              return [self openFile: copyPath];
-            }
-          else
-            {
-              return NO;
-            }
-        }
-    }
+        if (appPath)
+          return [[NSWorkspace sharedWorkspace] openFile: fullPath withApplication: appPath];
+      }
   }
 
   [ws getInfoForFile: fullPath application: &appName type: &type];
@@ -4426,6 +4395,8 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 {
   if (newsel && [newsel count] && ([vwrsManager orderingViewers] == NO)) {
     [self setSelectedPaths: [FSNode pathsOfNodes: newsel]];
+    /* An open Look Inside panel shows whatever is selected now. */
+    [[GWLookInsideController sharedController] selectionDidChange: selectedPaths];
   }
 }
 
@@ -5742,15 +5713,15 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
                   @"OK", nil, nil);
 }
 
-- (void)quickLook:(id)sender
+- (void)lookInside:(id)sender
 {
   /* Menu entry point: uses the app-wide current selection, same as Get
    * Info's menu item does; the Space bar path in GWViewerWindow instead
    * uses the key folder window's own live selection (see
    * -performKeyEquivalent: there for why). */
-  [[GWQuickLookController sharedController]
-      toggleQuickLookForPaths: selectedPaths
-                 sourceWindow: [NSApp keyWindow]];
+  [[GWLookInsideController sharedController]
+      toggleLookInsideForPaths: selectedPaths
+                  sourceWindow: [NSApp keyWindow]];
 }
 
 + (NSArray *)volumeMountRoots

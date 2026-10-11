@@ -28,6 +28,7 @@
 #import <AppKit/AppKit.h>
 
 #import "FSNBrowserCell.h"
+#import "FSNIconPreview.h"
 #import "FSNode.h"
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
@@ -96,6 +97,8 @@ static NSString *dots = @"...";
       isOpened = NO;
       nameEdited = NO;
       decorated = NO;
+      showsIcon = YES;
+      showsIconPreview = YES;
       
       [self setAllowsMixedState: NO];
       
@@ -108,10 +111,46 @@ static NSString *dots = @"...";
 - (void)setIcon
 {
   if (node) {
-    ASSIGN (icon, [fsnodeRep iconOfSize: icnsize forNode: node]);
+    if (showsIcon) {
+      ASSIGN (icon, [FSNIconPreview iconForNode: node
+                                           size: icnsize
+                                   showsPreview: showsIconPreview]);
+    } else {
+      DESTROY (icon);
+    }
     icnh = [icon size].height;
     DESTROY (selectedicon);
   }
+}
+
+/* An undecorated cell picks the options up when it is decorated; a
+ * multiple selection keeps the selection icon. */
+- (void)setShowsIcon:(BOOL)flag
+{
+  if (showsIcon == flag)
+    return;
+  showsIcon = flag;
+  if (decorated && selection == nil)
+    [self setIcon];
+}
+
+- (BOOL)showsIcon
+{
+  return showsIcon;
+}
+
+- (void)setShowsIconPreview:(BOOL)flag
+{
+  if (showsIconPreview == flag)
+    return;
+  showsIconPreview = flag;
+  if (decorated && selection == nil)
+    [self setIcon];
+}
+
+- (BOOL)showsIconPreview
+{
+  return showsIconPreview;
 }
 
 - (NSImage *)icon
