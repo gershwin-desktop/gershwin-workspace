@@ -5,7 +5,6 @@
  */
 
 #import <Foundation/Foundation.h>
-#import <PackageManager/GWSudoHelper.h>
 #import "FinderInfoLocker.h"
 
 #include <errno.h>
@@ -182,7 +181,9 @@ int FinderInfoLockHelperMain(const char *argsPlistPath)
     [NSString stringWithFormat: @"FinderInfoLock-%d.plist", (int)getpid()]];
   NSDictionary *args = [NSDictionary dictionaryWithObjectsAndKeys:
     path, @"Path", [NSNumber numberWithBool: immutable], @"Immutable", nil];
-  NSArray *prefix = GWSudoArgPrefix();
+  /* Escalate in-repo rather than through PackageManager's helper: that
+     framework lives in gershwin-components, which is built after Workspace. */
+  BOOL needsSudo = (geteuid() != 0);
   NSMutableDictionary *env = [[[[NSProcessInfo processInfo] environment] mutableCopy] autorelease];
   NSTask *task = [[[NSTask alloc] init] autorelease];
   NSPipe *pipe = [NSPipe pipe];
@@ -201,10 +202,10 @@ int FinderInfoLockHelperMain(const char *argsPlistPath)
     NSArray *helperArgs = [NSArray arrayWithObjects:
       [NSString stringWithUTF8String: FinderInfoLockHelperFlag], argsPath, nil];
 
-    /* Already root: GWSudoArgPrefix is empty and the binary is run directly. */
-    if ([prefix count] > 0) {
-      [task setLaunchPath: GWSudoPath()];
-      [task setArguments: [[prefix arrayByAddingObject: executable]
+    if (needsSudo) {
+      /* A bare name: sudo is in /usr/bin on Linux, elsewhere on other systems. */
+      [task setLaunchPath: @"sudo"];
+      [task setArguments: [[NSArray arrayWithObjects: @"-A", @"-E", executable, nil]
                             arrayByAddingObjectsFromArray: helperArgs]];
     } else {
       [task setLaunchPath: executable];

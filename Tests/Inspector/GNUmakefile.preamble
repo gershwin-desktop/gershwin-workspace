@@ -7,12 +7,9 @@ t_FinderInfoModel_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m \
                                 ../../GWMetadata/GWMetaXattr.m
 t_FinderInfoModel_TOOL_LIBS += -lgnustep-gui
 
-# The model reaches the immutable flag through FinderInfoLocker, which pulls
-# in the sudo helper of PackageManager for the Linux privileged path.
+# The model reaches the immutable flag through FinderInfoLocker.
 t_FinderInfoModel_OBJC_FILES += ../../Inspector/FinderInfoLocker.m
-t_FinderInfoModel_TOOL_LIBS += -lPackageManager
 t_FinderInfoLocker_OBJC_FILES += ../../Inspector/FinderInfoLocker.m
-t_FinderInfoLocker_TOOL_LIBS += -lPackageManager
 
 # MI-INS-15: the comment is also written into the parent's .DS_Store.
 ADDITIONAL_INCLUDE_DIRS += -I../../DSStore
