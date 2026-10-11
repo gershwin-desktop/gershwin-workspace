@@ -11,6 +11,9 @@ with_dbus = @with_dbus@
 DBUS_CFLAGS = @DBUS_CFLAGS@
 DBUS_LIBS = @DBUS_LIBS@
 
+# GWMetadata (MDKit) is built only when its dependencies are present
+BUILD_GWMETADATA = @BUILD_GWMETADATA@
+
 # libsquashfs support variables from configure
 with_squashfs = @with_squashfs@
 SQUASHFS_CFLAGS = @SQUASHFS_CFLAGS@
@@ -209,6 +212,15 @@ ifeq ($(with_dbus), yes)
   Workspace_OBJC_FILES += DBusConnection.m
   Workspace_OBJC_FILES += FileManagerDBusInterface.m
   Workspace_OBJC_FILES += Desktop/Dock/DockServiceDBus.m
+endif
+
+# Smart folders (.savedSearch) are searched through MDKit
+ifeq ($(BUILD_GWMETADATA), 1)
+  ADDITIONAL_GUI_LIBS += -lMDKit
+  ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata/MDKit -IFinder/SmartFolder
+  ADDITIONAL_CPPFLAGS += -DHAVE_MDKIT=1
+  Workspace_OBJC_FILES += Finder/SmartFolder/GWSmartFolder.m
+  Workspace_OBJC_FILES += Finder/SmartFolder/GWFindCriteria.m
 endif
 
 # Conditionally add AppImageIconProvider.m if libsquashfs is available

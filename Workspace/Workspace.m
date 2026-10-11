@@ -84,6 +84,9 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "ViewOptions/GWViewOptionsPanel.h"
 #import "GWViewer.h"
 #import "Finder.h"
+#ifdef HAVE_MDKIT
+#import "GWSmartFolder.h"
+#endif
 #import "Inspector.h"
 #import "LookInside/GWLookInsideController.h"
 #import "Operation.h"
@@ -2107,6 +2110,14 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   BOOL success;
   NSURL *aURL;
 
+
+#ifdef HAVE_MDKIT
+  /* A Spotlight smart folder opens a window with what it finds, not the
+     file in an editor. */
+  if ([[fullPath pathExtension] isEqualToString: @"savedSearch"]) {
+    return [GWSmartFolder openSavedSearchAtPath: fullPath];
+  }
+#endif
 
 /* Alias files (issue #71): opening an alias opens the target the record
    resolves to, not the file itself.  Only a file the Finder Info marks as an

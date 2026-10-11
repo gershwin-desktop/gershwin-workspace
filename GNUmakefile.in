@@ -48,8 +48,9 @@ SUBPROJECTS = DSStore \
 	      Workspace \
 	      GitContextMenu
 
+# Before Workspace, which links MDKit for smart folders.
 ifeq ($(BUILD_GWMETADATA),1)
-SUBPROJECTS += GWMetadata
+SUBPROJECTS := $(filter-out Workspace GitContextMenu,$(SUBPROJECTS)) GWMetadata Workspace GitContextMenu
 endif
 
 
