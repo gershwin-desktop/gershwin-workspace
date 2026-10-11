@@ -8,7 +8,8 @@ SUBPROJECTS = Extractors
 TOOL_NAME = mdextractor
 
 mdextractor_OBJC_FILES = mdextractor.m \
-                  updater.m 
+                  updater.m \
+                  GMDSFinderAttributes.m 
 
 mdextractor_TOOL_LIBS += -lgnustep-gui
 mdextractor_TOOL_LIBS += -L../../../GWMetadata/MDKit/MDKit.framework -lMDKit

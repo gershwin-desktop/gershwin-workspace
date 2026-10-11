@@ -150,6 +150,22 @@ Attributes: use `mdfind -a` for the full list of 70+ `GSMDItem*` attributes
 - `GSMDItemFSSize`, `GSMDItemFSModificationDate`, `GSMDItemFSCreationDate`
 - `GSMDItemAuthors`, `GSMDItemTitle`, `GSMDItemFinderComment`
 - `GSMDItemKeywords`, `GSMDItemDescription`, `GSMDItemCopyrightDescription`
+- `GSMDItemFSLabel` - Finder label as Finder's colour number, as text: `"0"`
+  none (every unlabelled file has the row, so "not red" finds it), `"1"` grey,
+  `"2"` green, `"3"` purple, `"4"` blue, `"5"` yellow, `"6"` red, `"7"` orange
+  (evidence E24; this is not the menu order). Spotlight's `kMDItemFSLabel`.
+- `GSMDItemUserTags` - the Finder tags, one row per tag name (the `"\nN"`
+  colour suffix of later Finders is dropped). A file is found when any of its
+  tags matches, so "is not" is not offered for it. Spotlight's
+  `kMDItemUserTags`.
+
+Label and tags are read by `mdextractor` through `GSFileMetadata`
+(`GMDSFinderAttributes`) whenever a path is indexed or re-indexed, so they
+follow the same update path as every other attribute (new file, changed
+file, `GSMetadataUserAttributeModifiedNotification`, rescan). A label change
+alone does not touch the file's mtime or raise an inotify event on Linux
+(`IN_ATTRIB` is not watched), so it reaches the index with the next
+notification or rescan of that path.
 
 ### a) Command line (`mdfind`)
 

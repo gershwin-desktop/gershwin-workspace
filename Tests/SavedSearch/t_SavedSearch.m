@@ -145,15 +145,37 @@ int main(void)
   PASS(tr(@"kMDItemContentTypeTree = 'com.example.unknown'") == nil,
        "unknown content type is refused");
 
+  /* Finder label (colour number, E24/E36) and tags */
+  PASS_EQUAL(tr(@"kMDItemFSLabel = 6"), @"GSMDItemFSLabel == \"6\"",
+             "label red");
+  PASS_EQUAL(tr(@"kMDItemFSLabel == 0"), @"GSMDItemFSLabel == \"0\"",
+             "no label");
+  PASS_EQUAL(tr(@"kMDItemFSLabel != 6"), @"GSMDItemFSLabel != \"6\"",
+             "not red");
+  PASS_EQUAL(tr(@"!(kMDItemFSLabel = 6)"), @"GSMDItemFSLabel != \"6\"",
+             "negated label");
+  PASS(tr(@"kMDItemFSLabel = 8") == nil, "no colour 8");
+  PASS(tr(@"kMDItemFSLabel = 2.5") == nil, "no fractional colour");
+  PASS(tr(@"kMDItemFSLabel > 3") == nil, "colours are not ordered");
+  PASS(tr(@"kMDItemFSLabel = \"6\"") == nil, "a label is a number");
+  PASS_EQUAL(tr(@"kMDItemUserTags = \"Taxes\"c"),
+             @"GSMDItemUserTags == \"Taxes\"c", "tag");
+  PASS_EQUAL(tr(@"kMDItemUserTags = \"Tax*\""),
+             @"GSMDItemUserTags == \"Tax*\"", "tag with wildcard");
+  PASS(tr(@"kMDItemUserTags != \"Taxes\"") == nil,
+       "not-a-tag is refused: tags are several values, one row each");
+  PASS(tr(@"!(kMDItemUserTags = \"Taxes\")") == nil,
+       "negated tag is refused as well");
+
   /* refusals are named and stop the search */
   s = [GWSavedSearch savedSearchWithRawQuery:
-       @"kMDItemFSName = \"a\"c && kMDItemFSLabel = 6" scopes: nil];
+       @"kMDItemFSName = \"a\"c && kMDItemKind = 6" scopes: nil];
   PASS([s mdkQueryStringAtDate: fixedNow] == nil
        && [[s unsupportedTerms] count] == 1
        && [[[s unsupportedTerms] objectAtIndex: 0]
-           hasPrefix: @"kMDItemFSLabel == 6"],
-       "an unindexed attribute (label) is refused and named");
-  PASS([[s statusText] rangeOfString: @"kMDItemFSLabel"].location
+           hasPrefix: @"kMDItemKind == 6"],
+       "an unindexed attribute is refused and named");
+  PASS([[s statusText] rangeOfString: @"kMDItemKind"].location
        != NSNotFound, "status text names the term");
   PASS(tr(@"kMDItemFSName = \"50%\"c") == nil, "SQL wildcard in text refused");
   PASS(tr(@"kMDItemFSName = \"a_b\"c") == nil, "LIKE underscore refused");
@@ -257,6 +279,21 @@ int main(void)
   PASS_EQUAL([s rawQuery],
              @"(kMDItemFSName == \"*.png\"c || kMDItemContentTypeTree == 'public.folder')",
              "extension and folder");
+  s = [GWSavedSearch savedSearchWithMDKitQuery:
+       @"GSMDItemFSLabel == \"6\" && GSMDItemUserTags == \"Taxes\"c"
+                                   searchPaths: nil error: &err];
+  PASS_EQUAL([s rawQuery],
+             @"(kMDItemFSLabel == 6 && kMDItemUserTags == \"Taxes\"c)",
+             "label and tag are written the Spotlight way");
+  PASS_EQUAL(tr([s rawQuery]),
+             @"(GSMDItemFSLabel == \"6\" && GSMDItemUserTags == \"Taxes\"c)",
+             "label and tag round trip");
+  PASS([GWSavedSearch savedSearchWithMDKitQuery: @"GSMDItemFSLabel == \"9\""
+                                    searchPaths: nil error: &err] == nil,
+       "a label that is no colour is not written");
+  PASS([GWSavedSearch savedSearchWithMDKitQuery: @"GSMDItemUserTags != \"a\""
+                                    searchPaths: nil error: &err] == nil,
+       "a negated tag is not written");
   PASS([GWSavedSearch savedSearchWithMDKitQuery: @"GSMDItemWords == \"a\""
                                     searchPaths: nil error: &err] == nil
        && [err rangeOfString: @"GSMDItemWords"].location != NSNotFound,
@@ -277,7 +314,6 @@ int main(void)
     NSString *dir = @"../GWMetadata/interop/fixtures/finder106/E36-smart-folders";
     NSArray *label = [NSArray arrayWithObjects:
       @"finder-written-Desktop-e35-smart-desk", nil];
-    NSString *name;
     GWSavedSearch *f;
 
     f = fixture(dir, @"finder-written-Saved-Searches-e35-smart");
@@ -290,10 +326,10 @@ int main(void)
     PASS([[f unsupportedTerms] count] == 0 && [[f notes] count] >= 1,
          "E36 Finder file has notes and nothing unsupported");
     f = fixture(dir, [label objectAtIndex: 0]);
-    PASS([f mdkQueryStringAtDate: fixedNow] == nil
-         && [[[f unsupportedTerms] objectAtIndex: 0]
-             hasPrefix: @"kMDItemFSLabel == 6"],
-         "E36 file label is refused");
+    q = [f mdkQueryStringAtDate: fixedNow];
+    PASS(q != nil && [q hasPrefix: @"(GSMDItemFSLabel == \"6\" && "],
+         "E36 file: label red (Finder colour 6) is searched");
+    PASS([[f unsupportedTerms] count] == 0, "E36 label file has no refusal");
     f = fixture(dir, @"canned-All-Images");
     q = [f mdkQueryStringAtDate: fixedNow];
     PASS(q != nil && [q hasPrefix: @"(GSMDItemFSExtension == \"png\""],
@@ -398,6 +434,7 @@ int main(void)
 
       ok = (a != nil)
         && ((attrMap[i].type == AttrString && (t == 0 || t == 1))
+            || (attrMap[i].type == AttrLabel && t == 0)
             || (attrMap[i].type == AttrNumber && t == 2)
             || (attrMap[i].type == AttrDate && t == 3));
       if (!ok) {

@@ -13,7 +13,7 @@
 
 enum { NodeAnd, NodeOr, NodeNot, NodeCompare, NodeRange, NodeTrue };
 enum { ValString, ValNumber, ValTime };
-enum { AttrString, AttrNumber, AttrDate };
+enum { AttrString, AttrNumber, AttrDate, AttrLabel };
 
 /* ---- syntax tree ------------------------------------------------------ */
 
@@ -405,6 +405,9 @@ typedef struct {
   const char *note;
   /* Not in the metadata index: MDKit checks it on the file (see below). */
   int fs;
+  /* One index row per value: "is not" would match a file that has another
+   * value as well, which Spotlight does not. */
+  int multi;
 } AttrMap;
 
 /* Every row names an attribute that exists in MDKit's attributes.plist
@@ -422,6 +425,9 @@ static const AttrMap attrMap[] = {
   { "kMDItemFSCreationDate", "GSMDItemFSCreationDate", AttrDate, NULL, 1 },
   { "kMDItemTextContent", "GSMDItemTextContent", AttrString, NULL },
   { "kMDItemFinderComment", "GSMDItemFinderComment", AttrString, NULL },
+  /* Finder's colour number 0..7 (E24), stored as text. */
+  { "kMDItemFSLabel", "GSMDItemFSLabel", AttrLabel, NULL },
+  { "kMDItemUserTags", "GSMDItemUserTags", AttrString, NULL, 0, 1 },
   { "kMDItemTitle", "GSMDItemTitle", AttrString, NULL },
   { "kMDItemAuthors", "GSMDItemAuthors", AttrString, NULL },
   { "kMDItemKeywords", "GSMDItemKeywords", AttrString, NULL },
@@ -863,6 +869,27 @@ inverseOp(NSString *op)
     [self note: [[NSBundle mainBundle] localizedStringForKey:
                  [NSString stringWithUTF8String: m->note] value: nil table: nil]];
   }
+  if (m->type == AttrLabel) {
+    int color = (int)v->number;
+
+    if (v->type != ValNumber || color < 0 || color > 7
+        || (double)color != v->number) {
+      [self refuse: desc];
+      return nil;
+    }
+    if ([op isEqualToString: @"=="] == NO
+        && [op isEqualToString: @"!="] == NO) {
+      [self refuse: [NSString stringWithFormat:
+                     NSLocalizedString(@"%@ (colours cannot be ordered)", @""), desc]];
+      return nil;
+    }
+    return [NSString stringWithFormat: @"%s %@ \"%d\"", m->mdk, op, color];
+  }
+  if (m->multi && [op isEqualToString: @"!="]) {
+    [self refuse: [NSString stringWithFormat:
+                   NSLocalizedString(@"%@ (not-equal on a list of values)", @""), desc]];
+    return nil;
+  }
   if (m->type == AttrString) {
     BOOL insens;
     NSString *s = v->string;
@@ -952,6 +979,16 @@ inverseOp(NSString *op)
 static NSString *
 spotlightValue(GWSSValue *v, const AttrMap *m, NSString **why)
 {
+  if (m->type == AttrLabel) {
+    NSString *t = v->string;
+
+    if (v->type != ValString || [t length] != 1
+        || [t characterAtIndex: 0] < '0' || [t characterAtIndex: 0] > '7') {
+      *why = @"colour number 0 to 7 expected";
+      return nil;
+    }
+    return t;
+  }
   if (m->type == AttrString) {
     NSString *mods = [v->mods rangeOfString: @"c"].location != NSNotFound
       ? @"c" : @"";
@@ -1022,6 +1059,11 @@ spotlightForNode(GWSSNode *n, NSString **why)
   m = attrForMDK(n->attr);
   if (m == NULL) {
     *why = [NSString stringWithFormat: @"attribute %@", n->attr];
+    return nil;
+  }
+  if (m->multi && [n->op isEqualToString: @"!="]) {
+    *why = [NSString stringWithFormat: @"%@: not-equal on a list of values",
+            n->attr];
     return nil;
   }
   val = spotlightValue(n->value, m, why);

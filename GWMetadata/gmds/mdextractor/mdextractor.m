@@ -32,6 +32,7 @@
 #import <AppKit/AppKit.h>
 
 #import "mdextractor.h"
+#import "GMDSFinderAttributes.h"
 #import "dbschema.h"
 #include "config.h"
 
@@ -1047,6 +1048,11 @@ do { \
   KEY_AND_ATTRIBUTE (@"GSMDItemFSName", qname);  
   KEY_AND_ATTRIBUTE (@"GSMDItemFSExtension", qext);  
   KEY_AND_ATTRIBUTE (@"GSMDItemFSType", type);  
+
+  /* Every (re)index of a path goes through here, so a changed label or tag
+     is picked up by the update path as soon as the path is updated. */
+  [mdattributes addObjectsFromArray:
+      [GMDSFinderAttributes attributesForPath: path]];
   
   if (ddbd) {
     NSArray *usermdata = [ddbd userMetadataForPath: path];

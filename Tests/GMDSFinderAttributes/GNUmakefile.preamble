@@ -1,0 +1,13 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata -I../../GWMetadata/gmds/mdextractor
+
+# clang 19 / binutils 2.44: a Foundation-only tool whose literals are all
+# short has no constant string section, so the linker invents no bounds.
+ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
+                      -Wl,--defsym=__stop___objc_constant_string=0
+
+t_FinderAttributes_OBJC_FILES += ../../GWMetadata/gmds/mdextractor/GMDSFinderAttributes.m \
+                                 ../../GWMetadata/GSFileMetadata.m \
+                                 ../../GWMetadata/GSAppleDouble.m \
+                                 ../../GWMetadata/GWMetaXattr.m
+t_FinderAttributes_TOOL_LIBS += -lgnustep-gui

@@ -49,6 +49,8 @@ static NSArray *basesetAttributes(void)
 	        @"GSMDItemFSOwnerGroup",        // FSAttribute
 
 	        @"GSMDItemFinderComment",
+	        @"GSMDItemFSLabel",
+	        @"GSMDItemUserTags",
 
 	        @"GSMDItemApplicationName",
 	        @"GSMDItemRole",

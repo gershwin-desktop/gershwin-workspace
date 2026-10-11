@@ -33,6 +33,7 @@
 #import <AppKit/AppKit.h>
 
 #import "mdextractor.h"
+#import "GMDSFinderAttributes.h"
 
 #define EXECUTE_QUERY(q, r) \
 do { \
@@ -855,6 +856,7 @@ do { \
     if (dirok) {
       NSArray *contents = [self filteredDirectoryContentsAtPath: dir escapeEntries: YES];
       NSMutableDictionary *dbcontents = [NSMutableDictionary dictionary];
+      NSMutableDictionary *indexedFinder = [NSMutableDictionary dictionary];
       NSArray *dbpaths = nil;
       NSString *qdir = stringForQuery(dir);
       NSString *sep = path_separator();
@@ -887,6 +889,51 @@ do { \
         [dbcontents setObject: [dict objectForKey: @"moddate"]
                        forKey: [dict objectForKey: @"path"]];
       }
+
+      /* Changing a label or a tag neither changes the modification date nor
+         raises a file system event we watch, so the stored values are
+         compared with the current ones here. */
+      query = @"SELECT paths.path AS path, attributes.key AS key, "
+              @"attributes.attribute AS attribute "
+              @"FROM paths, attributes "
+              @"WHERE attributes.path_id = paths.id "
+              @"AND attributes.key IN (:labelkey, :tagskey) "
+              @"AND paths.path > :minpath "
+              @"AND paths.path < :maxpath "
+              @"AND paths.path NOT GLOB :limit";
+
+      statement = [sqlite statementForQuery: query 
+                             withIdentifier: @"check_next_dir_finder"
+                                   bindings: SQLITE_TEXT,
+                                             @":labelkey", GMDSFSLabelKey,
+                                             SQLITE_TEXT,
+                                             @":tagskey", GMDSUserTagsKey,
+                                             SQLITE_TEXT,
+                                             @":minpath",
+                      [NSString stringWithFormat: @"%@%@", qdir, sep],                   
+                                             SQLITE_TEXT,
+                                             @":maxpath",                             
+                      [NSString stringWithFormat: @"%@0", qdir],
+                                             SQLITE_TEXT,
+                                             @":limit",                             
+                [NSString stringWithFormat: @"%@%@*%@*", qdir, sep, sep], 0];
+
+      results = [sqlite resultsOfQueryWithStatement: statement];
+
+      for (i = 0; i < [results count]; i++) {
+        NSDictionary *dict = [results objectAtIndex: i];
+        NSString *rpath = [dict objectForKey: @"path"];
+        NSMutableSet *stored = [indexedFinder objectForKey: rpath];
+        
+        if (stored == nil) {
+          stored = [NSMutableSet set];
+          [indexedFinder setObject: stored forKey: rpath];
+        }
+        [stored addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                              [dict objectForKey: @"key"], @"key",
+                              [dict objectForKey: @"attribute"], @"attribute",
+                              nil]];
+      }
           
       for (i = 0; i < [contents count]; i++) {
         NSString *path = [contents objectAtIndex: i];
@@ -900,6 +947,11 @@ do { \
           NSTimeInterval date = [[attrs fileModificationDate] timeIntervalSinceReferenceDate];
    
           if ((date - [dbdate floatValue]) > 10) {
+            [self updatePath: path];
+
+          } else if ([[NSSet setWithArray:
+                        [GMDSFinderAttributes attributesForPath: path]]
+                        isEqual: [indexedFinder objectForKey: path]] == NO) {
             [self updatePath: path];
           }
         }
