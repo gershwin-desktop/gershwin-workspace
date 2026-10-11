@@ -3859,7 +3859,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   e = [[[GWRecentFolders sharedRecentFolders] folderPaths] objectEnumerator];
   while ((path = [e nextObject]) != nil)
     {
-      item = [menu addItemWithTitle: [path lastPathComponent]
+      /* The name a viewer window shows for the folder (Documents is
+       * Dokumente in a German UI), not the raw name on disk. */
+      item = [menu addItemWithTitle: [[FSNode nodeWithPath: path] name]
                              action: @selector(openRecentFolder:)
                       keyEquivalent: @""];
       [item setRepresentedObject: path];
