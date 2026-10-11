@@ -27,9 +27,10 @@
 + (instancetype)sharedDiscovery;
 
 /**
- * Loads the host cache, shows the cached hosts at once and starts the
- * background worker, which runs the first probe round a few seconds later
- * so that Workspace startup is not slowed down.
+ * Loads the host cache and starts the background worker.  The worker shows
+ * the cached hosts that still answer at their address, then runs the first
+ * probe round a few seconds later so that Workspace startup is not slowed
+ * down, and another one every few minutes.
  */
 - (void)startupWithServiceManager:(NetworkServiceManager *)aManager;
 
@@ -48,5 +49,18 @@
  * tests need no network.
  */
 + (NSDictionary *)hostRecordFromNodeStatusNames:(NSArray *)names;
+
+/**
+ * Brings the host cache (name -> mutable record with "misses") up to date
+ * after a round in which the hosts in seen answered: every cached host that
+ * did not answer gets one more miss, and one missed often enough leaves the
+ * cache.  Every cached host is asked directly in each round, so silence is
+ * its own answer; only a round with no network interface to ask on counts
+ * nothing.  Returns the names that left.  Class-level so tests need no
+ * network.
+ */
++ (NSArray *)namesDroppedFromCache:(NSMutableDictionary *)cache
+                       afterSeeing:(NSDictionary *)seen
+                         networkUp:(BOOL)networkUp;
 
 @end

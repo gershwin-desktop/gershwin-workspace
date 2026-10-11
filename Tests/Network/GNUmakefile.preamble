@@ -17,3 +17,8 @@ t_SMBDiscoveryRecord_OBJC_FILES += ../../Workspace/Network/SMBDiscovery.m \
                                    ../../Workspace/Network/NetworkServiceManager.m \
                                    ../../Workspace/Network/NetworkServiceItem.m
 t_NetworkServiceItemSMB_OBJC_FILES += ../../Workspace/Network/NetworkServiceItem.m
+t_SMBHostCacheExpiry_OBJC_FILES += ../../Workspace/Network/SMBDiscovery.m \
+                                   ../../Workspace/Network/WSDiscoveryProbe.m \
+                                   ../../Workspace/Network/NBNSProbe.m \
+                                   ../../Workspace/Network/NetworkServiceManager.m \
+                                   ../../Workspace/Network/NetworkServiceItem.m

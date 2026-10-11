@@ -15,6 +15,11 @@ static const NSTimeInterval SMBMinRoundGap = 45.0;
 /* A host that was missed in this many rounds in a row leaves the list; one
    missed round is just a lost UDP datagram or a sleeping laptop. */
 static const int SMBMaxMisses = 2;
+/* Rounds otherwise only run when mDNS sees something, which on a network
+   without mDNS services is never: a host that went away would stay. */
+static const NSTimeInterval SMBPeriodicRound = 300.0;
+/* How long a cached host gets to answer before it is shown at startup. */
+static const NSTimeInterval SMBVerifyTimeout = 0.8;
 
 @implementation SMBDiscovery
 
@@ -69,6 +74,37 @@ static const int SMBMaxMisses = 2;
   return record;
 }
 
++ (NSArray *)namesDroppedFromCache:(NSMutableDictionary *)cache
+                       afterSeeing:(NSDictionary *)seen
+                         networkUp:(BOOL)networkUp
+{
+  NSMutableArray *dropped = [NSMutableArray array];
+
+  for (NSString *name in seen) {
+    NSMutableDictionary *record = [NSMutableDictionary
+        dictionaryWithDictionary:[seen objectForKey:name]];
+    [record setObject:[NSNumber numberWithInt:0] forKey:@"misses"];
+    [cache setObject:record forKey:name];
+  }
+  if (!networkUp) {
+    return dropped;
+  }
+  for (NSString *name in [cache allKeys]) {
+    if ([seen objectForKey:name]) {
+      continue;
+    }
+    NSMutableDictionary *record = [cache objectForKey:name];
+    int misses = [[record objectForKey:@"misses"] intValue] + 1;
+    if (misses >= SMBMaxMisses) {
+      [dropped addObject:name];
+      [cache removeObjectForKey:name];
+    } else {
+      [record setObject:[NSNumber numberWithInt:misses] forKey:@"misses"];
+    }
+  }
+  return dropped;
+}
+
 #pragma mark - Cache
 
 - (void)loadCache
@@ -115,11 +151,6 @@ static const int SMBMaxMisses = 2;
   manager = aManager;
 
   [self loadCache];
-  @synchronized(hostCache) {
-    for (NSString *name in hostCache) {
-      [self publishHostNamed:name record:[hostCache objectForKey:name]];
-    }
-  }
 
   refreshRequested = YES;
   [NSThread detachNewThreadSelector:@selector(workerMain)
@@ -135,10 +166,33 @@ static const int SMBMaxMisses = 2;
   [wakeup unlock];
 }
 
+/* The cache remembers hosts from earlier sessions, some of them long gone;
+   each is shown only once it answers at its old address under its old name.
+   The others wait for the round, which asks them again. */
+- (void)showCachedHostsThatAnswer
+{
+  NSDictionary *snapshot;
+
+  @synchronized(hostCache) {
+    snapshot = [[hostCache copy] autorelease];
+  }
+  for (NSString *name in snapshot) {
+    NSDictionary *record = [snapshot objectForKey:name];
+    NSDictionary *status = [NBNSProbe nodeStatusOfHost:[record objectForKey:@"address"]
+                                               timeout:SMBVerifyTimeout];
+    NSDictionary *answer = [SMBDiscovery hostRecordFromNodeStatusNames:
+                             [status objectForKey:@"names"]];
+    if ([[[answer objectForKey:@"name"] uppercaseString] isEqual:name]) {
+      [self publishHostNamed:name record:record];
+    }
+  }
+}
+
 - (void)workerMain
 {
   @autoreleasepool {
     [[NSThread currentThread] setName:@"GWSMBDiscovery"];
+    [self showCachedHostsThatAnswer];
     [NSThread sleepForTimeInterval:SMBStartupDelay];
   }
 
@@ -146,7 +200,10 @@ static const int SMBMaxMisses = 2;
     @autoreleasepool {
       [wakeup lock];
       while (!refreshRequested) {
-        [wakeup wait];
+        if (![wakeup waitUntilDate:
+               [NSDate dateWithTimeIntervalSinceNow:SMBPeriodicRound]]) {
+          refreshRequested = YES;
+        }
       }
       [wakeup unlock];
 
@@ -241,32 +298,16 @@ static const int SMBMaxMisses = 2;
 
 - (void)mergeSeenHosts:(NSDictionary *)seen
 {
-  NSMutableArray *dropped = [NSMutableArray array];
+  NSArray *dropped;
+  /* With no interface up nothing could be asked, and silence means nothing. */
+  BOOL networkUp = [[NBNSProbe localIPv4Addresses] count] > 0;
 
   @synchronized(hostCache) {
+    dropped = [SMBDiscovery namesDroppedFromCache:hostCache
+                                      afterSeeing:seen
+                                        networkUp:networkUp];
     for (NSString *name in seen) {
-      NSMutableDictionary *record = [seen objectForKey:name];
-      [record setObject:[NSNumber numberWithInt:0] forKey:@"misses"];
-      [hostCache setObject:record forKey:name];
-      [self publishHostNamed:name record:record];
-    }
-
-    /* Only count a miss when something answered at all; a round during
-       which the network was down would otherwise empty the list. */
-    if ([seen count] > 0) {
-      for (NSString *name in [hostCache allKeys]) {
-        if ([seen objectForKey:name]) {
-          continue;
-        }
-        NSMutableDictionary *record = [hostCache objectForKey:name];
-        int misses = [[record objectForKey:@"misses"] intValue] + 1;
-        if (misses >= SMBMaxMisses) {
-          [dropped addObject:name];
-          [hostCache removeObjectForKey:name];
-        } else {
-          [record setObject:[NSNumber numberWithInt:misses] forKey:@"misses"];
-        }
-      }
+      [self publishHostNamed:name record:[hostCache objectForKey:name]];
     }
   }
 
