@@ -163,6 +163,7 @@ LookInside/GWLookInsidePanel.m \
 ../GWMetadata/GWMetaArchive.m \
 Finder/Finder.m \
 Finder/GWChangePaths.m \
+Finder/GWFinderGeometry.m \
 Finder/FindModuleView.m \
 Finder/SearchPlacesBox.m \
 Finder/SearchPlacesCell.m \

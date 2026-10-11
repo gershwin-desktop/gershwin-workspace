@@ -27,3 +27,7 @@ ifeq ($(findstring openbsd,$(GNUSTEP_TARGET_OS)),)
 t_FModuleContentsSearch_OBJCFLAGS += -fsanitize=address -fno-omit-frame-pointer
 t_FModuleContentsSearch_LDFLAGS += -fsanitize=address
 endif
+
+# t_FinderGeometry links the Foundation-only helper Finder -tile uses to
+# grow the window by a row (Workspace/Finder/GWFinderGeometry.m).
+t_FinderGeometry_OBJC_FILES += ../../Workspace/Finder/GWFinderGeometry.m

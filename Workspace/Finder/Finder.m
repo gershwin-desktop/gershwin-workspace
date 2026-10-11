@@ -36,8 +36,8 @@
 #import "Workspace.h"
 #import "GWFunctions.h"
 #import "GWChangePaths.h"
+#import "GWFinderGeometry.h"
 
-#define WINH (262.0)
 #define FMVIEWH (34.0)
 #define BORDER (4.0)
 #define HMARGIN (12.0)
@@ -1063,18 +1063,17 @@ static Finder *finder = nil;
 
 - (void)tile
 {
-  NSRect wrect = [win frame];
   NSRect mbrect = [modulesBox bounds];
   NSUInteger count = [fmviews count];
   CGFloat hspace = (count * FMVIEWH) + HMARGIN + BORDER;
   NSUInteger i;
     
-  if (mbrect.size.height != hspace) {  
-    if (wrect.size.height != WINH) {
-      wrect.origin.y -= (hspace - mbrect.size.height);
-    } 
-    wrect.size.height += (hspace - mbrect.size.height);
-    [win setFrame: wrect display: NO];
+  if (mbrect.size.height != hspace) {
+    [win setFrame: GWFinderFrameForModulesHeight([win frame],
+                                                 mbrect.size.height,
+                                                 hspace,
+                                                 [win userSpaceScaleFactor])
+          display: NO];
   }
 
   mbrect = [modulesBox bounds];
