@@ -740,3 +740,6 @@ for";
 "the query matches everything" = "interogarea se potrivește cu tot";
 "the query matches nothing" = "interogarea nu se potrivește cu nimic";
 "the user-files-only option is not applied" = "opțiunea „doar fișiere ale utilizatorului” nu este aplicată";
+
+"There is no application set to open \"%@\"." = "Nu este setată nicio aplicație pentru a deschide \"%@\".";
+"Use Open as Folder to look inside it." = "Folosiți „Deschide ca dosar” pentru a vedea conținutul.";

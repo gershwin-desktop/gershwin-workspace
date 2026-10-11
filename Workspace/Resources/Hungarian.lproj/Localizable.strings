@@ -831,3 +831,6 @@
 "the query matches everything" = "a lekérdezés mindenre illik";
 "the query matches nothing" = "a lekérdezés semmire sem illik";
 "the user-files-only option is not applied" = "a „csak felhasználói fájlok” beállítás nincs alkalmazva";
+
+"There is no application set to open \"%@\"." = "Nincs beállítva alkalmazás a(z) \"%@\" megnyitásához.";
+"Use Open as Folder to look inside it." = "A tartalom megtekintéséhez használja a „Megnyitás mappaként” parancsot.";

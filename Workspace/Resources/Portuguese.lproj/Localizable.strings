@@ -1518,3 +1518,6 @@ for";
 "the query matches everything" = "a consulta corresponde a tudo";
 "the query matches nothing" = "a consulta não corresponde a nada";
 "the user-files-only option is not applied" = "a opção «apenas ficheiros do utilizador» não é aplicada";
+
+"There is no application set to open \"%@\"." = "Não existe nenhuma aplicação definida para abrir \"%@\".";
+"Use Open as Folder to look inside it." = "Use «Abrir como pasta» para ver o conteúdo.";

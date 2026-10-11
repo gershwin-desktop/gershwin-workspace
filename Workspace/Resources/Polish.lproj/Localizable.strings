@@ -929,3 +929,6 @@ for";
 "the query matches everything" = "zapytanie pasuje do wszystkiego";
 "the query matches nothing" = "zapytanie nie pasuje do niczego";
 "the user-files-only option is not applied" = "opcja „tylko pliki użytkownika” nie jest stosowana";
+
+"There is no application set to open \"%@\"." = "Nie ustawiono programu do otwierania \"%@\".";
+"Use Open as Folder to look inside it." = "Użyj „Otwórz jako folder”, aby zajrzeć do środka.";

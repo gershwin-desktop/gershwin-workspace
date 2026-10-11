@@ -2385,6 +2385,35 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
   [ws getInfoForFile: fullPath application: &appName type: &type];
 
+  /* A document package (x.pages, x.rtfd, ...) that no application claims
+   * would go to NSWorkspace with no application, which hands it back to
+   * Workspace itself as the folder handler and lands here again, forever.
+   * Finder says there is no application for it; offer Open as Folder. */
+  {
+    FSNode *node = [FSNode nodeWithPath: fullPath];
+
+    if ([node isDirectory] && [node isPackage] && ([node isApplication] == NO)
+        && (appName == nil
+            || [[[appName lastPathComponent] stringByDeletingPathExtension]
+                 isEqualToString: [[NSProcessInfo processInfo] processName]]))
+      {
+        NSInteger choice = NSRunAlertPanel(
+          [NSString stringWithFormat: _(@"There is no application set to open \"%@\"."),
+                    [fullPath lastPathComponent]],
+          _(@"Use Open as Folder to look inside it."),
+          _(@"Open as Folder"), _(@"Cancel"), nil);
+
+        if (choice == NSAlertDefaultReturn)
+          {
+            /* asFolder: newViewerAtPath: would route the package through
+             * this method again and show the alert once more. */
+            [vwrsManager openNode: node fromViewer: nil asFolder: YES];
+            return YES;
+          }
+        return NO;
+      }
+  }
+
   /* If file is a plain file, check for ELF magic and handle executable prompting.
 
    * This mirrors how archives are intercepted earlier: special-case before

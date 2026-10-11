@@ -1501,3 +1501,6 @@
 "the query matches everything" = "de zoekopdracht komt met alles overeen";
 "the query matches nothing" = "de zoekopdracht komt met niets overeen";
 "the user-files-only option is not applied" = "de optie „alleen gebruikersbestanden” wordt niet toegepast";
+
+"There is no application set to open \"%@\"." = "Er is geen programma ingesteld om \"%@\" te openen.";
+"Use Open as Folder to look inside it." = "Gebruik \"Open als map\" om erin te kijken.";

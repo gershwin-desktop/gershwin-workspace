@@ -1462,3 +1462,6 @@
 "the query matches everything" = "la richiesta corrisponde a tutto";
 "the query matches nothing" = "la richiesta non corrisponde a nulla";
 "the user-files-only option is not applied" = "l'opzione «solo file dell'utente» non viene applicata";
+
+"There is no application set to open \"%@\"." = "Nessuna applicazione è impostata per aprire \"%@\".";
+"Use Open as Folder to look inside it." = "Usa «Apri come cartella» per vederne il contenuto.";

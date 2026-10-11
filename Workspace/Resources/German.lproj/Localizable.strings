@@ -1261,3 +1261,6 @@
 "the query matches everything" = "die Abfrage trifft auf alles zu";
 "the query matches nothing" = "die Abfrage trifft auf nichts zu";
 "the user-files-only option is not applied" = "die Option „Nur Benutzerdateien“ wird nicht angewendet";
+
+"There is no application set to open \"%@\"." = "Es ist kein Programm zum Öffnen von \"%@\" festgelegt.";
+"Use Open as Folder to look inside it." = "Mit \"Als Ordner öffnen\" können Sie hineinschauen.";

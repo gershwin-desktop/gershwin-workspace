@@ -1213,3 +1213,6 @@
 "the query matches everything" = "the query matches everything";
 "the query matches nothing" = "the query matches nothing";
 "the user-files-only option is not applied" = "the user-files-only option is not applied";
+
+"There is no application set to open \"%@\"." = "There is no application set to open \"%@\".";
+"Use Open as Folder to look inside it." = "Use Open as Folder to look inside it.";

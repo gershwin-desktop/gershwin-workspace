@@ -1006,3 +1006,6 @@
 "the query matches everything" = "la demando kongruas kun ĉio";
 "the query matches nothing" = "la demando kongruas kun nenio";
 "the user-files-only option is not applied" = "la opcio „nur uzantaj dosieroj” ne estas aplikata";
+
+"There is no application set to open \"%@\"." = "Neniu aplikaĵo estas difinita por malfermi \"%@\".";
+"Use Open as Folder to look inside it." = "Uzu \"Malfermi kiel dosierujon\" por rigardi enen.";

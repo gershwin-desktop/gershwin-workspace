@@ -829,3 +829,6 @@
 "the query matches everything" = "spørringen passer til alt";
 "the query matches nothing" = "spørringen passer til ingenting";
 "the user-files-only option is not applied" = "valget «bare brukerfiler» brukes ikke";
+
+"There is no application set to open \"%@\"." = "Det er ikke angitt noe program for å åpne \"%@\".";
+"Use Open as Folder to look inside it." = "Bruk «Åpne som mappe» for å se innholdet.";

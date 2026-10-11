@@ -789,3 +789,6 @@
 "the query matches everything" = "クエリはすべてに一致します";
 "the query matches nothing" = "クエリは何にも一致しません";
 "the user-files-only option is not applied" = "「ユーザのファイルのみ」オプションは適用されません";
+
+"There is no application set to open \"%@\"." = "\"%@\" を開くアプリケーションが設定されていません。";
+"Use Open as Folder to look inside it." = "中身を見るには「フォルダとして開く」を使用してください。";
