@@ -100,6 +100,9 @@ enum {
 {
   MDKQuery *rootQuery;
   MDKQuery *currentQuery;
+  /* Per scanner: state left over from an earlier query made the next
+   * query's first comparison look like a missing compound operator. */
+  unsigned int parsed;
 }
 
 + (MDKQueryScanner *)scannerWithString:(NSString *)string
@@ -1963,7 +1966,6 @@ enum {
 - (void)parse
 {
   MDKCompoundOperator op = MDKCompoundOperatorNone;
-  static unsigned int parsed = 0;
 
 #define PARSEXCEPT(x, e) \
   if (x > 0) [NSException raise: NSInvalidArgumentException format: e] 
@@ -2039,18 +2041,19 @@ enum {
   attrinfo = [[MDKQuery attributesInfo] objectForKey: attribute];
   attrtype = [[attrinfo objectForKey: @"type"] intValue];
   optype = 0;
-  if ([self scanString: @"<" intoString: NULL]) {
-    optype = MDKLessThanOperatorType;
-    CHK_ATTR_TYPE (@"<");
-  } else if ([self scanString: @"<=" intoString: NULL]) {
+  /* The two character operators first, or "<" would take the "<" of "<=". */
+  if ([self scanString: @"<=" intoString: NULL]) {
     optype = MDKLessThanOrEqualToOperatorType;
     CHK_ATTR_TYPE (@"<=");
-  } else if ([self scanString: @">" intoString: NULL]) {
-    optype = MDKGreaterThanOperatorType;
-    CHK_ATTR_TYPE (@">");
+  } else if ([self scanString: @"<" intoString: NULL]) {
+    optype = MDKLessThanOperatorType;
+    CHK_ATTR_TYPE (@"<");
   } else if ([self scanString: @">=" intoString: NULL]) {
     optype = MDKGreaterThanOrEqualToOperatorType;
     CHK_ATTR_TYPE (@">=");
+  } else if ([self scanString: @">" intoString: NULL]) {
+    optype = MDKGreaterThanOperatorType;
+    CHK_ATTR_TYPE (@">");
   } else if ([self scanString: @"==" intoString: NULL]) {
     optype = MDKEqualToOperatorType;
   } else if ([self scanString: @"!=" intoString: NULL]) {
