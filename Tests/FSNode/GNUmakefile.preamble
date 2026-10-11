@@ -6,7 +6,8 @@ ADDITIONAL_INCLUDE_DIRS += -I../../FSNode -I../../GWMetadata
 # FSNAlias reads and writes its forks through GSFileMetadata, so every test
 # that compiles FSNAlias.m links the Finder-metadata sources with it.  They
 # reference NSImage/NSColor, hence gnustep-gui.
-GSMETA_OBJS = ../../GWMetadata/GSFileMetadata.m \
+GSMETA_OBJS = ../../FSNode/FSNAliasIcon.m \
+              ../../GWMetadata/GSFileMetadata.m \
               ../../GWMetadata/GSAppleDouble.m \
               ../../GWMetadata/GWMetaXattr.m
 

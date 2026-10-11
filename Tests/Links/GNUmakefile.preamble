@@ -8,7 +8,8 @@ ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
 
 # The fork readers and writers are GSFileMetadata's; it references
 # NSImage/NSColor, hence gnustep-gui.
-GSMETA_OBJS = ../../GWMetadata/GSFileMetadata.m \
+GSMETA_OBJS = ../../FSNode/FSNAliasIcon.m \
+              ../../GWMetadata/GSFileMetadata.m \
               ../../GWMetadata/GSAppleDouble.m \
               ../../GWMetadata/GWMetaXattr.m
 t_AliasFile_OBJC_FILES += ../../FSNode/FSNAlias.m ../../FSNode/FSNAliasFile.m \
@@ -16,3 +17,6 @@ t_AliasFile_OBJC_FILES += ../../FSNode/FSNAlias.m ../../FSNode/FSNAliasFile.m \
 t_AliasFile_TOOL_LIBS += -lgnustep-gui
 t_LocationFile_OBJC_FILES += ../../FSNode/FSNLocationFile.m $(GSMETA_OBJS)
 t_LocationFile_TOOL_LIBS += -lgnustep-gui
+t_FinderLinks_OBJC_FILES += ../../FSNode/FSNAlias.m ../../FSNode/FSNAliasFile.m \
+                            ../../FSNode/FSNLocationFile.m $(GSMETA_OBJS)
+t_FinderLinks_TOOL_LIBS += -lgnustep-gui

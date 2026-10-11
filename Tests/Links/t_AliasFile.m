@@ -156,8 +156,9 @@ main(void)
       NSData *rec = firstResource(@"alis", fork);
 
       PASS_EQUAL(rec, [src aliasData], "alis resource returned byte for byte");
-      PASS(firstResource(@"icns", fork) == nil,
-	   "other type is absent");
+      PASS(firstResource(@"icns", fork) != nil
+	   && firstResource(@"TEXT", fork) == nil,
+	   "the badge icon is there, a type nobody wrote is absent");
       PASS(firstResource(@"alis", [fork subdataWithRange:
 					       NSMakeRange(0, 100)]) == nil,
 	   "truncated fork rejected");

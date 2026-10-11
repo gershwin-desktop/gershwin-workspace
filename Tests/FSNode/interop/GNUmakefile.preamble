@@ -4,7 +4,8 @@ GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 ADDITIONAL_INCLUDE_DIRS += -I../../FSNode -I../../../GWMetadata
 
 # FSNAlias.m reads and writes its forks through GSFileMetadata.
-t_FSNAliasInterop_OBJC_FILES += ../../../GWMetadata/GSFileMetadata.m \
+t_FSNAliasInterop_OBJC_FILES += ../../../FSNode/FSNAliasIcon.m \
+                                ../../../GWMetadata/GSFileMetadata.m \
                                 ../../../GWMetadata/GSAppleDouble.m \
                                 ../../../GWMetadata/GWMetaXattr.m
 t_FSNAliasInterop_TOOL_LIBS += -lgnustep-gui

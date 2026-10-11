@@ -27,6 +27,7 @@ FSNode_OBJC_FILES = \
           FSNIconPlacement.m \
           FSNAlias.m \
           FSNAliasFile.m \
+          FSNAliasIcon.m \
           FSNLocationFile.m \
           FSNSpringLoader.m \
           FSNIconDragSession.m \
@@ -54,6 +55,7 @@ FSNode_HEADER_FILES = \
           FSNIconPositionStore.h \
           FSNAlias.h \
           FSNAliasFile.h \
+          FSNAliasIcon.h \
           FSNLocationFile.h \
           FSNSpringLoader.h \
           FSNIconDragSession.h \

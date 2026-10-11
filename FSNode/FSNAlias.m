@@ -4,6 +4,7 @@
  */
 
 #import "FSNAlias.h"
+#import "FSNAliasIcon.h"
 #import "GSFileMetadata.h"
 
 #include <sys/stat.h>
@@ -26,6 +27,9 @@ static BOOL fsnaStoreForks(NSString *path, NSData *finderInfo,
 
 /* How deep below the last known ancestor the inode search may descend. */
 #define RESOLVE_MAX_DEPTH 8
+
+/* Resource id under which the Finder keeps an alias file's icon. */
+#define kAliasBadgeResourceID (-16496)
 
 #define V2_HEADER_LEN 150
 #define V3_HEADER_LEN 54
@@ -578,8 +582,9 @@ NSString * const FSNWorkspaceCreateAliasOperation =
 			      volumeUUID: @""];
 }
 
-/* Write a 10.6 bookmark alias file.  The bookmark lives in the data fork; the
- * Finder Info (type "alis") makes a Finder system recognise it as an alias. */
+/* Write an alias file with a bookmark in the data fork, as later systems
+ * read it, and the classic record in the resource fork, which is all 10.6
+ * resolves from. */
 + (NSString *)writeAliasBookmarkForTargetPath:(NSString *)targetPath
 				  inDirectory:(NSString *)directory
 				    volumeName:(NSString *)volumeName
@@ -601,7 +606,9 @@ NSString * const FSNWorkspaceCreateAliasOperation =
     {
       return nil;
     }
-  if (fsnaStoreForks(aliasPath, [a aliasFinderInfoData], nil) == NO)
+  /* 10.6 ignores the bookmark and resolves only from the 'alis' resource. */
+  if (fsnaStoreForks(aliasPath, [a aliasFinderInfoData],
+		      [a aliasResourceForkData]) == NO)
     {
       return nil;
     }
@@ -708,7 +715,15 @@ NSString * const FSNWorkspaceCreateAliasOperation =
   a->_version = 2;
   a->_targetName = [[targetPath lastPathComponent] copy];
   a->_posixPath = [targetPath copy];
-  a->_isDirectory = NO;
+  /* A target that does not exist here (a path on a Mac volume) is taken for
+   * a file; only a folder that is present can be told apart. */
+  {
+    struct stat st;
+    const char *rep = GW_FSREP(targetPath);
+
+    a->_isDirectory = (rep != NULL && stat(rep, &st) == 0
+		       && S_ISDIR(st.st_mode));
+  }
   a->_targetCNID = 0;
   a->_parentCNID = 0;
 
@@ -1077,12 +1092,16 @@ NSString * const FSNWorkspaceCreateAliasOperation =
       }
   }
 
-  /* Real Mac aliases store TLV 18 (POSIX path) relative to the volume mount
-   * point (no leading slash), with TLV 19 carrying the mount point.  Reassemble
-   * the absolute path so callers get a usable POSIX path.  Our own writer emits
-   * an absolute TLV 18, in which case this is a no-op. */
-  if (_posixPath != nil && [_posixPath hasPrefix: @"/"] == NO
-      && _volumeMountPoint != nil && [_volumeMountPoint length] > 0)
+  /* The Finder stores TLV 18 (POSIX path) relative to the volume mount point
+   * and TLV 19 carries the mount point: no leading slash on the startup
+   * volume, a leading slash on any other.  Reassemble the absolute path so
+   * callers get a usable POSIX path.  Records of the older writer hold an
+   * absolute path that already starts with the mount point; they are kept. */
+  if (_posixPath != nil && [_volumeMountPoint length] > 0
+      && ([_posixPath hasPrefix: @"/"] == NO
+	  || ([_volumeMountPoint isEqualToString: @"/"] == NO
+	      && [_posixPath hasPrefix: [_volumeMountPoint
+				       stringByAppendingString: @"/"]] == NO)))
     {
       NSString *abs;
       if ([_volumeMountPoint isEqualToString: @"/"])
@@ -1157,15 +1176,6 @@ fail:
   fsnaPutBE32(cnidPath + 4, _targetCNID);
   fsnaAppendTlv(d, TLV_CNID_PATH, [NSData dataWithBytes: cnidPath length: 8]);
 
-  if (_targetName != nil)
-    {
-      fsnaAppendTlv(d, TLV_UNICODE_NAME, fsnaUtf16TlvValue(_targetName));
-    }
-  if (_volumeName != nil && [_volumeName length])
-    {
-      fsnaAppendTlv(d, TLV_UNICODE_VOLUME, fsnaUtf16TlvValue(_volumeName));
-    }
-
   /* Carbon path (colon-separated, volume-qualified) - this is what 10.6's
    * Alias Manager uses for path-based resolution when the CNID fields are
    * zero.  It is the volume name, a colon, then the path components joined
@@ -1182,11 +1192,31 @@ fail:
   fsnaAppendTlv(d, TLV_CARBON_PATH,
 		[carbonPath dataUsingEncoding: NSUTF8StringEncoding]);
 
-  /* POSIX path of the target, absolute (e.g. /Volumes/NTFS-Disk/...).  Spec
-   * section 7.3: the complete POSIX target path; pathname-first resolution on
-   * 10.6 relies on this, not on the CNID fields. */
+  /* The tags follow the order the 10.6 Finder writes them in. */
+  if (_targetName != nil)
+    {
+      fsnaAppendTlv(d, TLV_UNICODE_NAME, fsnaUtf16TlvValue(_targetName));
+    }
+  if (_volumeName != nil && [_volumeName length])
+    {
+      fsnaAppendTlv(d, TLV_UNICODE_VOLUME, fsnaUtf16TlvValue(_volumeName));
+    }
+
+  /* The POSIX path is relative to the mount point, as the Finder writes it:
+   * without a leading slash on the startup volume ("Users/me/a.txt"), with
+   * one on any other ("/remote.txt" for /Volumes/ALVOL/remote.txt). */
+  NSString *posix = _posixPath;
+  if ([_volumeMountPoint length] > 1 && [posix hasPrefix: [_volumeMountPoint
+				       stringByAppendingString: @"/"]])
+    {
+      posix = [posix substringFromIndex: [_volumeMountPoint length]];
+    }
+  else if ([posix hasPrefix: @"/"])
+    {
+      posix = [posix substringFromIndex: 1];
+    }
   fsnaAppendTlv(d, TLV_POSIX_PATH,
-		[_posixPath dataUsingEncoding: NSUTF8StringEncoding]);
+		[posix dataUsingEncoding: NSUTF8StringEncoding]);
   if (_volumeMountPoint != nil)
     {
       fsnaAppendTlv(d, TLV_VOLUME_POSIX_PATH,
@@ -1200,27 +1230,38 @@ fail:
 
 /* The fork is built by GSFileMetadata so the one Resource Manager layout
  * writer serves every producer; the record is resource 0 of type 'alis', the
- * form Finder's alias resolution reads. */
+ * form Finder's alias resolution reads (10.6 reads nothing else), and the
+ * badge icon is 'icns' -16496 where the Finder keeps the one it shows. */
 - (NSData *)aliasResourceForkData
 {
   GSOType type = [GSFileMetadata osTypeFromString: @"alis"];
-  NSDictionary *entry = [GSFileMetadata resourceEntryWithType: type
-						   resourceID: 0
-							 data: [self aliasData]];
+  NSDictionary *record = [GSFileMetadata resourceEntryWithType: type
+						    resourceID: 0
+							  data: [self aliasData]];
+  NSData *icns = [FSNAliasIcon icnsDataForDirectory: _isDirectory];
+  NSDictionary *badge = [GSFileMetadata
+			  resourceEntryWithType: [GSFileMetadata
+						   osTypeFromString: @"icns"]
+				     resourceID: kAliasBadgeResourceID
+					   data: icns];
 
   return [GSFileMetadata resourceForkWithResources:
-	    [NSArray arrayWithObject: entry]];
+	    [NSArray arrayWithObjects: record, badge, nil]];
 }
 
-/* Type "alis", creator "MACS" and kIsAlias.  kHasBeenInited stays clear so
- * Finder reconsiders the item rather than trusting stale state. */
+/* Type "alis" ("fdrp" for a folder), creator "MACS", kIsAlias and
+ * kHasCustomIcon for the badge in the fork: fdFlags 0x8400 like the Finder's.
+ * kHasBeenInited stays clear so Finder reconsiders the item rather than
+ * trusting stale state. */
 - (NSData *)aliasFinderInfoData
 {
   GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
 
-  [md setTypeCode: [GSFileMetadata osTypeFromString: @"alis"]];
+  [md setTypeCode: [GSFileMetadata osTypeFromString:
+		      _isDirectory ? @"fdrp" : @"alis"]];
   [md setCreatorCode: [GSFileMetadata osTypeFromString: @"MACS"]];
   [md setAlias: YES];
+  [md setCustomIcon: YES];
   return [md finderInfo];
 }
 

@@ -15,6 +15,16 @@
  * resource. */
 static NSString * const kClassicURLResource = @"url ";
 
+/* The 'drag' 128 resource of a Finder-made location file: the flavors
+ * (TEXT 256, url  256) a drag of the file offers.  Identical in the webloc,
+ * ftploc and mailtoloc captures whatever the URL, so it is written verbatim;
+ * the meaning of the fields is inferred from those bytes, not documented. */
+static const uint8_t kDragResource[48] = {
+  0, 0, 0, 1,  0, 0, 0, 0,  0, 0, 0, 0,  0, 0, 0, 2,
+  'T', 'E', 'X', 'T',  0, 0, 1, 0,  0, 0, 0, 0,  0, 0, 0, 0,
+  'u', 'r', 'l', ' ',  0, 0, 1, 0,  0, 0, 0, 0,  0, 0, 0, 0
+};
+
 static NSURL *
 absoluteURL(NSString *string)
 {
@@ -100,6 +110,50 @@ safeFileName(NSString *title)
   return s;
 }
 
+/* The classic fork and Finder Info of a Finder-made location file, so an
+ * older Finder opens the file and shows its name without the extension. */
+/* The plist exactly as the Finder writes it (tab indented); the GNUstep XML
+ * writer indents with spaces, which parses the same but is not the same file. */
+static NSData *
+xmlPlistForURL(NSString *urlString)
+{
+  NSString *escaped = [[[urlString
+    stringByReplacingOccurrencesOfString: @"&" withString: @"&amp;"]
+    stringByReplacingOccurrencesOfString: @"<" withString: @"&lt;"]
+    stringByReplacingOccurrencesOfString: @">" withString: @"&gt;"];
+  NSString *xml = [NSString stringWithFormat:
+    @"<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    @"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" "
+    @"\"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n"
+    @"<plist version=\"1.0\">\n<dict>\n\t<key>URL</key>\n"
+    @"\t<string>%@</string>\n</dict>\n</plist>\n", escaped];
+
+  return [xml dataUsingEncoding: NSUTF8StringEncoding];
+}
+
+static BOOL
+storeForks(NSString *path, NSString *type, NSURL *url)
+{
+  GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
+  NSData *text = [[url absoluteString] dataUsingEncoding: NSUTF8StringEncoding];
+  NSArray *resources = [NSArray arrayWithObjects:
+    [GSFileMetadata resourceEntryWithType:
+       [GSFileMetadata osTypeFromString: @"drag"] resourceID: 128
+       data: [NSData dataWithBytes: kDragResource length: sizeof(kDragResource)]],
+    [GSFileMetadata resourceEntryWithType:
+       [GSFileMetadata osTypeFromString: @"TEXT"] resourceID: 256 data: text],
+    [GSFileMetadata resourceEntryWithType:
+       [GSFileMetadata osTypeFromString: kClassicURLResource] resourceID: 256
+       data: text],
+    nil];
+
+  [md setTypeCode: [GSFileMetadata osTypeFromString: type]];
+  [md setCreatorCode: [GSFileMetadata osTypeFromString: @"MACS"]];
+  [md setExtensionHidden: YES];
+  [md setResourceFork: [GSFileMetadata resourceForkWithResources: resources]];
+  return [md writeToFileAtPath: path error: NULL];
+}
+
 @implementation FSNLocationFile
 
 + (BOOL)isLocationFilePath:(NSString *)path
@@ -107,7 +161,8 @@ safeFileName(NSString *title)
   NSString *ext = [[path pathExtension] lowercaseString];
 
   return [ext isEqualToString: @"webloc"] || [ext isEqualToString: @"inetloc"]
-    || [ext isEqualToString: @"fileloc"] || [ext isEqualToString: @"url"];
+    || [ext isEqualToString: @"fileloc"] || [ext isEqualToString: @"url"]
+    || [ext isEqualToString: @"ftploc"] || [ext isEqualToString: @"mailtoloc"];
 }
 
 + (NSURL *)URLForLocationFileAtPath:(NSString *)path
@@ -151,6 +206,8 @@ safeFileName(NSString *title)
   NSString *base;
   NSString *path;
   NSData *plist;
+  NSString *ext = @"webloc";
+  NSString *type = @"ilht";
   int n = 1;
 
   if ([[url scheme] length] == 0)
@@ -163,22 +220,32 @@ safeFileName(NSString *title)
     {
       base = @"Internet Location";
     }
-  plist = [NSPropertyListSerialization
-	    dataWithPropertyList: [NSDictionary dictionaryWithObject:
-				   [url absoluteString] forKey: @"URL"]
-			  format: NSPropertyListXMLFormat_v1_0
-			 options: 0
-			   error: NULL];
+  plist = xmlPlistForURL([url absoluteString]);
+  /* The Finder names and types the file after the protocol. */
+  if ([[url scheme] caseInsensitiveCompare: @"ftp"] == NSOrderedSame)
+    {
+      ext = @"ftploc";
+      type = @"ilft";
+    }
+  else if ([[url scheme] caseInsensitiveCompare: @"mailto"] == NSOrderedSame)
+    {
+      ext = @"mailtoloc";
+      type = @"ilma";
+    }
   path = [directory stringByAppendingPathComponent:
-	    [base stringByAppendingPathExtension: @"webloc"]];
+	    [base stringByAppendingPathExtension: ext]];
   while ([fm fileExistsAtPath: path])
     {
       n++;
       path = [directory stringByAppendingPathComponent:
 		[[NSString stringWithFormat: @"%@ %d", base, n]
-		  stringByAppendingPathExtension: @"webloc"]];
+		  stringByAppendingPathExtension: ext]];
     }
-  return (plist && [plist writeToFile: path atomically: YES]) ? path : nil;
+  if (plist == nil || [plist writeToFile: path atomically: YES] == NO)
+    {
+      return nil;
+    }
+  return storeForks(path, type, url) ? path : nil;
 }
 
 + (NSURL *)URLForPasteboard:(id)pasteboard

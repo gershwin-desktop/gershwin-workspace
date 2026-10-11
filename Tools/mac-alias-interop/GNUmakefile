@@ -11,7 +11,7 @@ GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 TOOL_NAME = gw-alias-writer gen_alias_for_mac
 
 gw-alias-writer_OBJC_FILES = gw-alias-writer.m
-gen_alias_for_mac_OBJC_FILES = gen_alias_for_mac.m
+gen_alias_for_mac_OBJC_FILES = gen_alias_for_mac.m ../../FSNode/FSNAliasIcon.m
 
 ADDITIONAL_INCLUDE_DIRS += -I../../FSNode -I../../GWMetadata
 ADDITIONAL_OBJCFLAGS += -Wall
