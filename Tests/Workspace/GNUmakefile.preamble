@@ -36,15 +36,14 @@ t_AppImageDirIconCycle_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Cur
                                     -lFSNode -lgnustep-gui
 # Workspace is built without AppImage support when libsquashfs is missing
 # (configure.ac); the two tests then say so instead of failing to compile.
-# The same probes as configure: pkg-config under either name, then the header.
+# They follow configure's own decision (HAVE_SQUASHFS in Workspace/config.h)
+# rather than probing again: on FreeBSD a second probe found the library
+# that configure had rejected and linked a tool Workspace itself never uses.
+ifneq ($(shell grep -s '^\#define HAVE_SQUASHFS 1' ../../Workspace/config.h),)
 GW_SQUASHFS_PC := $(firstword $(foreach p,libsquashfs squashfs,\
                     $(shell pkg-config --exists $(p) 2>/dev/null && echo $(p))))
-ifneq ($(GW_SQUASHFS_PC),)
-GW_SQUASHFS_FLAGS := $(shell pkg-config --cflags $(GW_SQUASHFS_PC))
-GW_SQUASHFS_LIBS := $(shell pkg-config --libs $(GW_SQUASHFS_PC))
-else ifneq ($(wildcard /usr/include/sqfs/predef.h /usr/local/include/sqfs/predef.h),)
-GW_SQUASHFS_FLAGS := -I/usr/local/include
-GW_SQUASHFS_LIBS := -L/usr/local/lib -lsquashfs
+GW_SQUASHFS_FLAGS := $(if $(GW_SQUASHFS_PC),$(shell pkg-config --cflags $(GW_SQUASHFS_PC)))
+GW_SQUASHFS_LIBS := $(if $(GW_SQUASHFS_PC),$(shell pkg-config --libs $(GW_SQUASHFS_PC)),-lsquashfs)
 else
 GW_SQUASHFS_FLAGS := -DGW_NO_SQUASHFS
 GW_SQUASHFS_LIBS :=
