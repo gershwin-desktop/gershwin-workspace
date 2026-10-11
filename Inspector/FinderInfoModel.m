@@ -9,6 +9,7 @@
 #import "GSFileMetadata.h"
 #import "GWMetaXattr.h"
 #import "FinderInfoLocker.h"
+#import "DSStore.h"
 
 #include <errno.h>
 #include <string.h>
@@ -174,6 +175,13 @@ static void appendBE32(NSMutableData *d, uint32_t v)
 
 #pragma mark - Model
 
+/* Finder keeps a folder's icon in a file of this name inside it ("Icon" and
+ * a carriage return). */
+static NSString *iconFilePath(NSString *folder)
+{
+  return [folder stringByAppendingPathComponent: @"Icon\r"];
+}
+
 @implementation FinderInfoModel
 
 @synthesize path = _path;
@@ -286,6 +294,14 @@ static id<FinderInfoLocking> defaultLocker;
         _creatorCode = [[FinderInfoModel stringFromCode: [md creatorCode]] copy];
         _hasCustomIcon = [md hasCustomIcon];
         _customIconICNS = [[md customIconData] copy];
+      } else {
+        _hasCustomIcon = [md hasCustomIcon];
+        if (_hasCustomIcon) {
+          GSFileMetadata *imd = [GSFileMetadata metadataForFileAtPath: iconFilePath(path)
+                                                         forceSidecar: NO];
+
+          _customIconICNS = [[GSFileMetadata icnsDataFromResourceFork: [imd resourceFork]] copy];
+        }
       }
     }
     if (_typeCode == nil)
@@ -314,7 +330,12 @@ static id<FinderInfoLocking> defaultLocker;
 - (NSString *)comment { return _comment; }
 - (void)setTypeCode:(NSString *)code { [_typeCode autorelease]; _typeCode = [code copy]; }
 - (void)setCreatorCode:(NSString *)code { [_creatorCode autorelease]; _creatorCode = [code copy]; }
-- (void)setComment:(NSString *)text { [_comment autorelease]; _comment = [text copy]; }
+- (void)setComment:(NSString *)text
+{
+  [_comment autorelease];
+  _comment = [text copy];
+  _commentChanged = YES;
+}
 
 - (BOOL)setCustomIconFromImage:(NSImage *)image
 {
@@ -346,6 +367,85 @@ static NSError *errorWithText(NSString *key)
                          userInfo: [NSDictionary dictionaryWithObject: text
                                                                forKey: NSLocalizedDescriptionKey]];
 }
+
+/* Finder writes the comment twice, as the xattr and as the item's cmmt record
+ * in the parent's .DS_Store (E8).  Only that one record is touched, so
+ * positions and view settings other tools keep there survive. */
+static BOOL writeStoreComment(NSString *path, NSString *comment, NSError **error)
+{
+  NSString *item = [path lastPathComponent];
+  NSString *storePath = [[path stringByDeletingLastPathComponent]
+                          stringByAppendingPathComponent: @".DS_Store"];
+  BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath: storePath];
+  BOOL clear = [comment length] == 0;
+  DSStore *store;
+
+  /* The root has no parent folder to hold a record. */
+  if ([path isEqualToString: @"/"])
+    return YES;
+  if (!exists && clear)
+    return YES;
+  if (exists) {
+    store = [DSStore storeWithPath: storePath];
+    if ([store load] == NO) {
+      if (error)
+        *error = errorWithText(@"The .DS_Store of the folder could not be read; the comment was not stored there.");
+      return NO;
+    }
+  } else {
+    store = [DSStore createStoreAtPath: storePath withEntries: nil];
+  }
+  if (clear)
+    [store removeEntriesForFilename: item codes: [NSSet setWithObject: @"cmmt"]];
+  else
+    [store setCommentsForFilename: item comments: comment];
+  if ([store save] == NO) {
+    if (error)
+      *error = errorWithText(@"The .DS_Store of the folder could not be written.");
+    return NO;
+  }
+  return YES;
+}
+
+/* The Icon file of a folder: empty data fork, invisible, the icon in the
+ * resource fork.  Finder does not set kHasCustomIcon on this file (E18). */
+static BOOL writeFolderIconFile(NSString *folder, NSData *icns, NSError **error)
+{
+  NSString *file = iconFilePath(folder);
+  NSFileManager *fm = [NSFileManager defaultManager];
+  GSFileMetadata *imd;
+
+  if ([fm fileExistsAtPath: file] == NO
+      && [fm createFileAtPath: file contents: [NSData data] attributes: nil] == NO) {
+    if (error)
+      *error = errorWithText(@"The icon file could not be created in the folder.");
+    return NO;
+  }
+  imd = [GSFileMetadata metadataForFileAtPath: file forceSidecar: NO];
+  imd = imd ? [[imd copy] autorelease] : [[[GSFileMetadata alloc] init] autorelease];
+  [imd setCustomIconData: icns];
+  [imd setCustomIcon: NO];
+  [imd setInvisible: YES];
+  return [imd writeToFileAtPath: file error: error];
+}
+
+static BOOL removeFolderIconFile(NSString *folder, NSError **error)
+{
+  NSString *file = iconFilePath(folder);
+  NSFileManager *fm = [NSFileManager defaultManager];
+
+  if ([fm fileExistsAtPath: file] == NO)
+    return YES;
+  if ([fm removeFileAtPath: file handler: nil] == NO) {
+    if (error)
+      *error = errorWithText(@"The icon file could not be removed from the folder.");
+    return NO;
+  }
+  [fm removeFileAtPath: [GSFileMetadata sidecarPathForFilePath: file] handler: nil];
+  [GSFileMetadata invalidateCachedMetadataForPath: file];
+  return YES;
+}
+
 
 - (BOOL)write:(NSError **)error
 {
@@ -379,6 +479,10 @@ static NSError *errorWithText(NSString *key)
   [md setLocked: _nameLocked];
   [md setInvisible: _invisible];
   [md setLabelNumber: _labelNumber];
+  if (_isDirectory && _iconChanged) {
+    /* The folder only says that it has an icon; the icon is in its Icon file. */
+    [md setCustomIcon: _customIconICNS != nil];
+  }
   if (_isDirectory == NO) {
     [md setStationery: _stationery];
     [md setTypeCode: [FinderInfoModel codeFromString: _typeCode]];
@@ -404,6 +508,22 @@ static NSError *errorWithText(NSString *key)
     gs_removexattr(cpath, [GSXATTR_FINDERCOMMENT UTF8String]);
   if (_isDirectory == NO && _iconChanged && _customIconICNS == nil)
     gs_removexattr(cpath, [GSXATTR_RESOURCEFORK UTF8String]);
+  if (_isDirectory && _iconChanged) {
+    BOOL ok = _customIconICNS != nil ? writeFolderIconFile(_path, _customIconICNS, error)
+                                     : removeFolderIconFile(_path, error);
+
+    if (ok == NO) {
+      if (wasLocked)
+        [_locker setImmutable: YES atPath: _path error: NULL];
+      return NO;
+    }
+  }
+  if (_commentChanged && writeStoreComment(_path, _comment, error) == NO) {
+    if (wasLocked)
+      [_locker setImmutable: YES atPath: _path error: NULL];
+    return NO;
+  }
+  _commentChanged = NO;
   _iconChanged = NO;
   [GSFileMetadata invalidateCachedMetadataForPath: _path];
 

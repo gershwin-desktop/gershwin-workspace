@@ -30,3 +30,7 @@
 "Could not change Finder Info" = "Impossible de modifier les infos Finder";
 "The image could not be used as an icon." = "Cette image ne peut pas servir d'ic\u00f4ne.";
 "Type and creator codes must be empty or exactly four printable ASCII characters." = "Les codes de type et de cr\u00e9ateur doivent \u00eatre vides ou comporter exactement quatre caract\u00e8res ASCII imprimables.";
+"The .DS_Store of the folder could not be read; the comment was not stored there." = "Le fichier .DS_Store du dossier n'a pas pu \u00eatre lu ; le commentaire n'y a pas \u00e9t\u00e9 enregistr\u00e9.";
+"The .DS_Store of the folder could not be written." = "Le fichier .DS_Store du dossier n'a pas pu \u00eatre \u00e9crit.";
+"The icon file could not be created in the folder." = "Le fichier d'ic\u00f4ne n'a pas pu \u00eatre cr\u00e9\u00e9 dans le dossier.";
+"The icon file could not be removed from the folder." = "Le fichier d'ic\u00f4ne n'a pas pu \u00eatre supprim\u00e9 du dossier.";

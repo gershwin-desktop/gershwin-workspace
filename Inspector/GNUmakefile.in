@@ -53,7 +53,7 @@ Inspector_HEADER_FILES = \
          Inspector.h \
          ContentViewersProtocol.h
 
-LIBRARIES_DEPEND_UPON += -lFSNode -lGSMetadata -lPackageManager
+LIBRARIES_DEPEND_UPON += -lFSNode -lGSMetadata -lPackageManager -lDSStore
 LIBRARIES_DEPEND_UPON += $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
 
 ifeq ($(findstring darwin, $(GNUSTEP_TARGET_OS)), darwin)

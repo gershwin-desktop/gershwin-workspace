@@ -326,9 +326,9 @@
     [_stationeryButton setEnabled: file];
     [_typeField setEnabled: file];
     [_creatorField setEnabled: file];
-    [_iconWell setEditable: file];
-    [_pasteIconButton setEnabled: file];
-    [_clearIconButton setEnabled: file];
+    [_iconWell setEditable: single];
+    [_pasteIconButton setEnabled: single];
+    [_clearIconButton setEnabled: single];
   }
   [self setDirty: NO];
 }

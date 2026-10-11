@@ -33,6 +33,7 @@ extern NSString * const GWFinderInfoErrorDomain;
   NSData *_customIconICNS;
   BOOL _hasCustomIcon;
   BOOL _iconChanged;
+  BOOL _commentChanged;
 }
 
 + (instancetype)modelForPath:(NSString *)path;

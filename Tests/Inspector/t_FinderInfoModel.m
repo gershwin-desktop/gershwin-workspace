@@ -9,6 +9,7 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 #import "GSFileMetadata.h"
+#import "DSStore.h"
 #include <arpa/inet.h>
 #include "../../Inspector/FinderInfoModel.m"
 
@@ -269,6 +270,98 @@ int main(void)
     memset(before, 0, 8);
     PASS(memcmp(before, after, 8) == 0, "MI-INS-11 folder bytes 0-7 (window rect) stay zero");
     PASS((flagWord(d) & 0x4000) && !(flagWord(d) & 0x0800), "MI-INS-11 invisible set, stationery ignored");
+    [[NSFileManager defaultManager] removeFileAtPath: d handler: nil];
+  }
+
+
+  /* MI-INS-14: a folder's custom icon lives in an invisible "Icon\r" file
+   * inside it (E18), plus kHasCustomIcon on the folder. */
+  {
+    NSString *d = [NSString stringWithFormat: @"%@/fim-icondir-%d", NSTemporaryDirectory(), (int)getpid()];
+    NSString *iconFile = [d stringByAppendingString: @"/Icon\r"];
+    NSBitmapImageRep *rep = [[NSBitmapImageRep alloc]
+      initWithBitmapDataPlanes: NULL pixelsWide: 32 pixelsHigh: 32 bitsPerSample: 8
+               samplesPerPixel: 4 hasAlpha: YES isPlanar: NO
+                colorSpaceName: NSCalibratedRGBColorSpace bytesPerRow: 0 bitsPerPixel: 32];
+    NSImage *img = [[NSImage alloc] initWithSize: NSMakeSize(32, 32)];
+    FinderInfoModel *back;
+    GSFileMetadata *imd;
+
+    [img addRepresentation: rep];
+    [[NSFileManager defaultManager] removeFileAtPath: d handler: nil];
+    [[NSFileManager defaultManager] createDirectoryAtPath: d attributes: nil];
+    m = [FinderInfoModel modelForPath: d];
+    PASS([m setCustomIconFromImage: img], "MI-INS-14 folder icon accepted");
+    PASS([m write: &err], "MI-INS-14 folder write succeeds");
+    PASS((flagWord(d) & 0x0400) == 0x0400, "MI-INS-14 folder carries kHasCustomIcon");
+    PASS([[NSFileManager defaultManager] fileExistsAtPath: iconFile],
+         "MI-INS-14 Icon\\r file exists in the folder");
+    PASS([[[NSFileManager defaultManager] fileAttributesAtPath: iconFile traverseLink: NO]
+           fileSize] == 0, "MI-INS-14 Icon\\r data fork is empty");
+    PASS((flagWord(iconFile) & 0x4000) == 0x4000, "MI-INS-14 Icon\\r is invisible");
+    [GSFileMetadata invalidateAllCachedMetadata];
+    imd = [GSFileMetadata metadataForFileAtPath: iconFile forceSidecar: NO];
+    PASS([GSFileMetadata icnsDataFromResourceFork: [imd resourceFork]] != nil
+         && memcmp([[GSFileMetadata icnsDataFromResourceFork: [imd resourceFork]] bytes], "icns", 4) == 0,
+         "MI-INS-14 Icon\\r resource fork holds icns -16455");
+    back = [FinderInfoModel modelForPath: d];
+    PASS(back.hasCustomIcon && back.customIconICNS != nil, "MI-INS-14 folder icon read back");
+    [back clearCustomIcon];
+    PASS([back write: &err], "MI-INS-14 clearing the folder icon writes");
+    PASS((flagWord(d) & 0x0400) == 0, "MI-INS-14 clear drops kHasCustomIcon on the folder");
+    PASS(![[NSFileManager defaultManager] fileExistsAtPath: iconFile],
+         "MI-INS-14 clear removes Icon\\r");
+    PASS(![FinderInfoModel modelForPath: d].hasCustomIcon, "MI-INS-14 cleared folder reads plain");
+    [[NSFileManager defaultManager] removeFileAtPath: d handler: nil];
+    [img release]; [rep release];
+  }
+
+  /* MI-INS-15: the comment is also the item's cmmt record in the parent's
+   * .DS_Store; every other record stays (E8). */
+  {
+    NSString *d = [NSString stringWithFormat: @"%@/fim-cmmt-%d", NSTemporaryDirectory(), (int)getpid()];
+    NSString *f = [d stringByAppendingString: @"/doc.txt"];
+    NSString *store = [d stringByAppendingString: @"/.DS_Store"];
+    DSStore *s;
+
+    [[NSFileManager defaultManager] removeFileAtPath: d handler: nil];
+    [[NSFileManager defaultManager] createDirectoryAtPath: d attributes: nil];
+    [[NSFileManager defaultManager] createFileAtPath: f contents: [NSData data] attributes: nil];
+    m = [FinderInfoModel modelForPath: f];
+    m.comment = @"first";
+    PASS([m write: &err], "MI-INS-15 comment write without a store");
+    s = [DSStore storeWithPath: store];
+    PASS([s load], "MI-INS-15 a store was created");
+    PASS_EQUAL([s commentsForFilename: @"doc.txt"], @"first", "MI-INS-15 cmmt record holds the comment");
+    [s setIconLocationForFilename: @"doc.txt" x: 40 y: 50];
+    [s setIconLocationForFilename: @"other.txt" x: 90 y: 60];
+    [s setCommentsForFilename: @"other.txt" comments: @"theirs"];
+    PASS([s save], "MI-INS-15 store saved with foreign records");
+
+    m = [FinderInfoModel modelForPath: f];
+    m.comment = @"second";
+    PASS([m write: &err], "MI-INS-15 comment rewrite");
+    s = [DSStore storeWithPath: store];
+    [s load];
+    PASS_EQUAL([s commentsForFilename: @"doc.txt"], @"second", "MI-INS-15 cmmt replaced");
+    PASS_EQUAL([s commentsForFilename: @"other.txt"], @"theirs", "MI-INS-15 other item's cmmt kept");
+    PASS([s iconLocationForFilename: @"doc.txt"].x == 40
+         && [s iconLocationForFilename: @"other.txt"].x == 90, "MI-INS-15 Iloc records kept");
+
+    m = [FinderInfoModel modelForPath: f];
+    m.comment = @"";
+    PASS([m write: &err], "MI-INS-15 comment cleared");
+    s = [DSStore storeWithPath: store];
+    [s load];
+    PASS([s commentsForFilename: @"doc.txt"] == nil, "MI-INS-15 empty comment removes the cmmt record");
+    PASS_EQUAL([s commentsForFilename: @"other.txt"], @"theirs", "MI-INS-15 clearing keeps the others");
+
+    /* A store that cannot be read is an error, not silently replaced. */
+    [@"junk" writeToFile: store atomically: NO];
+    m = [FinderInfoModel modelForPath: f];
+    m.comment = @"third";
+    err = nil;
+    PASS([m write: &err] == NO && err != nil, "MI-INS-15 unreadable store fails hard");
     [[NSFileManager defaultManager] removeFileAtPath: d handler: nil];
   }
 

@@ -13,3 +13,9 @@ t_FinderInfoModel_OBJC_FILES += ../../Inspector/FinderInfoLocker.m
 t_FinderInfoModel_TOOL_LIBS += -lPackageManager
 t_FinderInfoLocker_OBJC_FILES += ../../Inspector/FinderInfoLocker.m
 t_FinderInfoLocker_TOOL_LIBS += -lPackageManager
+
+# MI-INS-15: the comment is also written into the parent's .DS_Store.
+ADDITIONAL_INCLUDE_DIRS += -I../../DSStore
+t_FinderInfoModel_OBJC_FILES += ../../DSStore/DSStore.m ../../DSStore/DSStoreCodecs.m \
+                                ../../DSStore/DSStoreEntry.m ../../DSStore/DSBuddyAllocator.m \
+                                ../../DSStore/SimpleColor.m
