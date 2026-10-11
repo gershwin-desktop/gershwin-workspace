@@ -60,6 +60,10 @@ t_AppImageDirIconCycle_TOOL_LIBS += $(GW_SQUASHFS_LIBS)
 # +[GWVolumeID mountedFilesystems], linked here as a separate object.
 t_VolumeManagerMountDetection_OBJC_FILES += ../../Workspace/FileViewer/GWVolumeID.m
 
+# GWSingleInstance.m talks to Xlib; the decision functions tested here do not
+# need a display.
+t_GWSingleInstance_TOOL_LIBS += -lX11
+
 # t_GWLookInsideInfo #includes GWLookInsidePreviewView.m (the unit under
 # test, an NSView subclass used without drawing) and links the preview kind
 # decision, the geometry and the column provider as separate objects; FSNode
