@@ -250,6 +250,7 @@ static NSString *nibName = @"DesktopPref";
 - (IBAction)setUsesDock:(id)sender
 {
   [manager setDockActive: ([sender state] == NSOnState)];
+  [manager saveDockDefaults];
 }
 
 - (IBAction)setDockPosition:(id)sender
@@ -259,6 +260,7 @@ static NSString *nibName = @"DesktopPref";
   
   [dockPosMatrix getRow: &row column: &col ofCell: cell];
   [manager setDockPosition: (row == 0) ? DockPositionLeft : (row == 1) ? DockPositionRight : DockPositionBottom];
+  [manager saveDockDefaults];
 }
 
 - (IBAction)setDockStyle:(id)sender
@@ -268,6 +270,7 @@ static NSString *nibName = @"DesktopPref";
   
   [dockStyleMatrix getRow: &row column: &col ofCell: cell];
   [[manager dock] setStyle: (row == 0) ? DockStyleClassic : DockStyleModern];
+  [manager saveDockDefaults];
 }
 
 - (IBAction)setSingleClickLaunch:(id)sender
