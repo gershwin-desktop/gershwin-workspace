@@ -282,6 +282,53 @@ main(void)
     [view setShowsIconPreview: YES];
   }
 
+  /* the info line must fit in the cell for every text size (it overlapped the
+   * icon below in the position-honouring windows) */
+  {
+    FSNodeRep *rep = [FSNodeRep sharedInstance];
+    NSFontManager *fm2 = [NSFontManager sharedFontManager];
+    BOOL fits = YES;
+    int size;
+
+    [view setShowsItemInfo: YES];
+    for (size = 10; size <= 16; size++)
+      {
+        NSFont *lf, *inf;
+        CGFloat need;
+
+        [view setLabelTextSize: size];
+        lf = [NSFont systemFontOfSize: size];
+        inf = [fm2 convertFont: [fm2 convertFont: lf toSize: size - 2]
+                   toHaveTrait: NSItalicFontMask];
+        /* what FSNIcon lays out: highlight, name, info line, bottom padding */
+        need = ceil ([view iconSize] + 6.0) + ceil ([rep heightOfFont: lf])
+               + ceil ([rep heightOfFont: inf]) + [rep labelMargin] / 2 + 2;
+        if ([view gridCellSize].height < need)
+          fits = NO;
+      }
+    PASS(fits, "MI-ICN-55 the grid cell is tall enough for name and info line at every text size");
+    [view setShowsItemInfo: NO];
+    [view setLabelTextSize: 12];
+  }
+
+  /* --- grid spacing (icvp gridSpacing) --- */
+  {
+    NSSize cell = [view gridCellSize];
+    CGFloat automaticGap = [view gridColumnGap];
+
+    PASS([view gridSpacing] == 0, "MI-ICN-56 [G: key semantics] the grid spacing is automatic by default");
+    [view setGridSpacing: cell.width + 60];
+    PASS([view gridSpacing] == cell.width + 60
+         && fabs([view gridColumnGap] + [view gridCellSize].width - ([view gridSpacing])) < 0.5,
+         "MI-ICN-57 [G: key semantics] a grid spacing is the distance between the starts of two neighbouring cells");
+    PASS([view gridCellSize].height >= [view gridSpacing],
+         "MI-ICN-58 [G: key semantics] and between two rows");
+    [view setGridSpacing: 0];
+    PASS([view gridSpacing] == 0 && [view gridColumnGap] == automaticGap
+         && NSEqualSizes([view gridCellSize], cell),
+         "MI-ICN-59 0 selects the automatic spacing again");
+  }
+
   /* --- arrange by --- */
   {
     PASS([view arrangement] == FSNIconsArrangeNone,

@@ -354,7 +354,16 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
 
   if (infoType != FSNInfoNameType || showsItemInfo)
     {
-      float lbsh = (labelSize.height * 2) - 2;
+      /* The very fonts and roundings FSNIcon lays the name and the info line
+       * out with; sizing the cell by twice the name's height left the line
+       * overlapping the icon below. */
+      NSFontManager *fmanager = [NSFontManager sharedFontManager];
+      NSFont *infoFont = [fmanager convertFont:
+                            [fmanager convertFont: labelFont
+                                           toSize: [labelFont pointSize] - 2]
+                                   toHaveTrait: NSItalicFontMask];
+      float lbsh = ceil ([fsnodeRep heightOfFont: labelFont])
+                   + ceil ([fsnodeRep heightOfFont: infoFont]);
 
       if (iconPosition == NSImageAbove)
 	{
@@ -384,6 +393,9 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
 
   // Add extra height matching FSNIcon's lblmargin/2 + 2 padding
   gridSize.height += lblmargin / 2 + 2;
+
+  if (gridSpacing > gridSize.height)
+    gridSize.height = gridSpacing;
     
 }
 
@@ -404,7 +416,26 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
 
 - (CGFloat)gridColumnGap
 {
-  return (CGFloat)COLUMN_GAP_X;
+  CGFloat width = [self gridCellSize].width;
+
+  return (gridSpacing > width) ? gridSpacing - width : (CGFloat)COLUMN_GAP_X;
+}
+
+- (void)setGridSpacing:(CGFloat)spacing
+{
+  spacing = (spacing > 0) ? spacing : 0;
+  if (spacing == gridSpacing)
+    return;
+
+  gridSpacing = spacing;
+  _gridCached = NO;
+  [self calculateGridSize];
+  [self tile];
+}
+
+- (CGFloat)gridSpacing
+{
+  return gridSpacing;
 }
 
 /* An icon made after an option was set has to start out with it. */
@@ -567,7 +598,7 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
   if (!_gridCached)
     {
       _cachedCellSize = gridSize;
-      _cachedGapX = (CGFloat)COLUMN_GAP_X;
+      _cachedGapX = [self gridColumnGap];
       _gridCached = YES;
     }
 
@@ -998,7 +1029,7 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
                  * visible, even if cells wrap around. */
                 cellOrigin.x = gridX;
                 cellOrigin.y = gridY;
-                gridX += (gridSize.width + COLUMN_GAP_X);
+                gridX += (gridSize.width + _cachedGapX);
                 if (gridX > (visibleWidth - gridSize.width))
                   {
                     gridX = X_MARGIN;
@@ -1149,7 +1180,7 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
       if ([icon isSelected])
 	{
 	  NSSize sz = [self bounds].size;
-	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + COLUMN_GAP_X) / (gridSize.width + COLUMN_GAP_X)) : 1;
+	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + _cachedGapX) / (gridSize.width + _cachedGapX)) : 1;
 	  if (i >= cols)
 	    pos = i - cols;
 	  break;
@@ -1177,7 +1208,7 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
       if ([icon isSelected])
 	{
 	  NSSize sz = [self bounds].size;
-	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + COLUMN_GAP_X) / (gridSize.width + COLUMN_GAP_X)) : 1;
+	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + _cachedGapX) / (gridSize.width + _cachedGapX)) : 1;
 	  if (i + cols < [icons count])
 	    pos = i + cols;
 	  break;
@@ -1494,7 +1525,7 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
 	 [NSValue valueWithPoint: [self ilocCenterForViewCenter: center]]
 			      forKey: [names objectAtIndex: i]];
 
-      x += cellW + COLUMN_GAP_X;
+      x += cellW + _cachedGapX;
       if ((x + cellW / 2) > NSMaxX(area))
 	{
 	  x = p.x;
@@ -2006,7 +2037,7 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
     {
       [self calculateGridSize];
       _cachedCellSize = gridSize;
-      _cachedGapX = (CGFloat)COLUMN_GAP_X;
+      _cachedGapX = [self gridColumnGap];
       _gridCached = YES;
     }
 

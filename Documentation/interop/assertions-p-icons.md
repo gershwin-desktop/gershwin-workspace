@@ -63,3 +63,10 @@ Fixtures with `icvp` bytes were not available in this tree, so no [F:].
 - MI-ICN-47 the position set is the one reported, measured from the top [S: scrollPositionX/Y; G: origin top-left]
 - MI-ICN-48 y counts down from the top edge of the content [G]
 - MI-ICN-49 a position beyond the content is held inside it [G]
+
+## Grid cell and spacing
+- MI-ICN-55 the grid cell is tall enough for the name and the info line at every text size 10 to 16 (they overlapped the icon below) [G: layout]
+- MI-ICN-56 the grid spacing is automatic (0) by default [G: icvp gridSpacing semantics, not yet observed]
+- MI-ICN-57 a grid spacing is the distance between the starts of two neighbouring cells [G]
+- MI-ICN-58 and between two rows [G]
+- MI-ICN-59 0 selects the automatic spacing again [G]

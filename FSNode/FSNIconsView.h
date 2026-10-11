@@ -135,6 +135,7 @@ extern const int FSNMaxLabelTextSize;
 
   FSNIconsArrangement arrangement;
   BOOL snapsToGrid;
+  CGFloat gridSpacing;
   BOOL showsItemInfo;
   BOOL showsIconPreview;
 
@@ -174,6 +175,13 @@ extern const int FSNMaxLabelTextSize;
  * and the space between two columns. */
 - (NSSize)gridCellSize;
 - (CGFloat)gridColumnGap;
+
+/* The icvp gridSpacing: the distance in points between the starts of two
+ * neighbouring cells, in both directions.  0 (the default) keeps the spacing
+ * the view computes from the icon and text size.  A spacing smaller than the
+ * cell itself cannot overlap icons and leaves the cell as it is. */
+- (void)setGridSpacing:(CGFloat)spacing;
+- (CGFloat)gridSpacing;
 
 /* The scrolled position as Finder keeps it per folder: points from the left
  * and from the top edge of the content to the corner of the visible part.
