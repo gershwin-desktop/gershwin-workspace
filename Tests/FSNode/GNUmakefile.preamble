@@ -125,3 +125,6 @@ t_FSNAliasCreate_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNAliasCreate_TOOL_LIBS += -lgnustep-gui
 t_FSNAliasOwnership_OBJC_FILES += $(GSMETA_OBJS)
 t_FSNAliasOwnership_TOOL_LIBS += -lgnustep-gui
+
+t_FSNInternalMetadataName_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                       -lFSNode -lgnustep-gui
