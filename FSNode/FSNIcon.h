@@ -196,11 +196,12 @@
 /* Item count of a folder, as Finder words the line under its name. */
 + (NSString *)itemInfoForItemCount:(NSUInteger)count;
 
-/* File size in decimal units (1 KB is 1000 bytes), as Finder words it. */
-+ (NSString *)itemInfoForByteSize:(unsigned long long)size;
-
-/* Pixel size of an image, "width x height". */
+/* Pixel size of an image, "2,560 x 1,600" with the thousands separator of the
+ * language (or the given one) and the multiplication sign. */
 + (NSString *)itemInfoForPixelWidth:(NSInteger)width height:(NSInteger)height;
++ (NSString *)itemInfoForPixelWidth:(NSInteger)width
+                             height:(NSInteger)height
+                  groupingSeparator:(NSString *)separator;
 
 /* Show a second line under the name with the item count of a folder, the
  * size of a file or the pixel size of an image.  An explicitly chosen info

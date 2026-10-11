@@ -797,6 +797,8 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
 
 + (NSString *)itemInfoForItemCount:(NSUInteger)count
 {
+  if (count == 0)
+    return itemInfoString(@"Zero items", @"Item info under an empty folder");
   return (count == 1)
     ? itemInfoString(@"1 item", @"Item info under a folder with one entry")
     : [NSString stringWithFormat:
@@ -804,26 +806,18 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
          (unsigned long)count];
 }
 
-+ (NSString *)itemInfoForByteSize:(unsigned long long)size
-{
-  if (size == 0)
-    return itemInfoString(@"Zero bytes", @"Item info under an empty file");
-  if (size == 1)
-    return itemInfoString(@"1 byte", @"Item info under a one byte file");
-  if (size < 1000ULL)
-    return [NSString stringWithFormat:
-              itemInfoString(@"%lu bytes", @"Item info under a small file"),
-              (unsigned long)size];
-  if (size < 1000000ULL)
-    return [NSString stringWithFormat: @"%.0f KB", (double)size / 1000.0];
-  if (size < 1000000000ULL)
-    return [NSString stringWithFormat: @"%.1f MB", (double)size / 1000000.0];
-  return [NSString stringWithFormat: @"%.2f GB", (double)size / 1000000000.0];
-}
-
 + (NSString *)itemInfoForPixelWidth:(NSInteger)width height:(NSInteger)height
 {
-  return [NSString stringWithFormat: @"%ld x %ld", (long)width, (long)height];
+  return [self itemInfoForPixelWidth: width height: height groupingSeparator: nil];
+}
+
++ (NSString *)itemInfoForPixelWidth:(NSInteger)width
+                             height:(NSInteger)height
+                  groupingSeparator:(NSString *)separator
+{
+  return [NSString stringWithFormat: itemInfoString(@"%@ x %@", @"Item info under an image: width and height in pixels"),
+                   FSNGroupedInteger (width, separator),
+                   FSNGroupedInteger (height, separator)];
 }
 
 - (BOOL)hasInfoLine
@@ -892,7 +886,8 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
                                        height: [rep pixelsHigh]];
     }
 
-  return [FSNIcon itemInfoForByteSize: [node fileSize]];
+  /* Finder says nothing about plain files and applications. */
+  return @"";
 }
 
 /* Re-run the info type switch so the line shows the new text and the

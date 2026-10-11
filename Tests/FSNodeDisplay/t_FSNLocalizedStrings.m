@@ -20,7 +20,7 @@ main(void)
   NSArray *keys = [NSArray arrayWithObjects:
                      @"Today", @"Yesterday", @"%@ at %@", @"Date format", @"Time format", @"Date Created",
                      @"Date Last Opened", @"Label", @"Version", @"Comments",
-                     @"1 item", @"%lu items", @"Zero bytes", @"1 byte",
+                     @"Zero items", @"%@ x %@", @"1 item", @"%lu items", @"Zero bytes", @"1 byte",
                      @"%lu bytes", nil];
   /* The same word in that language. */
   NSArray *sameOk = [NSArray arrayWithObjects:

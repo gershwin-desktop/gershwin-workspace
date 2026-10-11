@@ -6,23 +6,19 @@ Tags: [S:] public spec / icvp key semantics, [F:] fixture bytes, [G:] guess
 Fixtures with `icvp` bytes were not available in this tree, so no [F:].
 
 ## Show item info
-- MI-ICN-1 an empty folder reads "0 items" [G: Finder wording]
-- MI-ICN-2 one entry reads "1 item" [G: Finder wording]
-- MI-ICN-3 twelve entries read "12 items" [G: Finder wording]
-- MI-ICN-4 an empty file reads "Zero bytes" [G: 10.6 wording from memory]
-- MI-ICN-5 one byte reads "1 byte" [G]
-- MI-ICN-6 below 1000 bytes counted in bytes, decimal units [G: 10.6 uses base 10]
-- MI-ICN-7 kilobytes decimal, no fraction ("4 KB") [G]
-- MI-ICN-8 megabytes decimal, one fraction digit ("1.2 MB") [G]
-- MI-ICN-9 gigabytes decimal, two fraction digits ("3.50 GB") [G]
-- MI-ICN-10 an image reads "width x height" in pixels [S: showItemInfo shows image dimensions]
+- MI-ICN-1 an empty folder reads "Zero items" (German "Keine Objekte" [O:2026-10-11 E23]; the English wording is [G])
+- MI-ICN-2 one entry reads "1 item" ("1 Objekt") [O:2026-10-11 E23]
+- MI-ICN-3 twelve entries read "12 items" ("N Objekte") [O:2026-10-11 E23]
+- MI-ICN-4..9 removed: plain files and applications show no item info; sizes belong to the list (MI-LST-84..97) [O:2026-10-11 E23]
+- MI-ICN-10 an image reads "2.560 x 1.600" with the multiplication sign: pixel size, thousands separator of the language [O:2026-10-11 E23]
+- MI-ICN-53 the thousands separator is the language's [O:2026-10-11 E23]
 - MI-ICN-17 item info is off by default [G]
 - MI-ICN-18 item info can be turned on [S: icvp showItemInfo]
 - MI-ICN-19 a folder shows its item count [S: showItemInfo]
-- MI-ICN-20 a file shows its size [S: showItemInfo]
+- MI-ICN-20 a plain file shows nothing [O:2026-10-11 E23]
 - MI-ICN-21 an image shows its pixel size [S: showItemInfo]
 - MI-ICN-22 the grid cell grows by the info line [G]
-- MI-ICN-23 every icon has an info line while the option is on [G]
+- MI-ICN-23 every folder has an info line while the option is on [G]
 - MI-ICN-24 turning it off removes the line [S]
 - MI-ICN-25 and restores the cell height [G]
 

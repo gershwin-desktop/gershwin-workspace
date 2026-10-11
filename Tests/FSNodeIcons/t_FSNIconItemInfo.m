@@ -20,28 +20,19 @@ main(void)
   [[NSUserDefaults standardUserDefaults]
     setObject: [NSArray arrayWithObject: @"English"] forKey: @"NSLanguages"];
 
-  PASS_EQUAL([FSNIcon itemInfoForItemCount: 0], @"0 items",
-             "MI-ICN-1 an empty folder reads \"0 items\"");
+  PASS_EQUAL([FSNIcon itemInfoForItemCount: 0], @"Zero items",
+             "MI-ICN-1 [O:2026-10-11 E23, German \"Keine Objekte\"] an empty folder reads \"Zero items\" [G: English]");
   PASS_EQUAL([FSNIcon itemInfoForItemCount: 1], @"1 item",
-             "MI-ICN-2 a folder with one entry reads \"1 item\", singular");
+             "MI-ICN-2 [O:2026-10-11 E23] a folder with one entry reads \"1 item\", singular");
   PASS_EQUAL([FSNIcon itemInfoForItemCount: 12], @"12 items",
-             "MI-ICN-3 a folder with twelve entries reads \"12 items\"");
+             "MI-ICN-3 [O:2026-10-11 E23] a folder with twelve entries reads \"12 items\"");
 
-  PASS_EQUAL([FSNIcon itemInfoForByteSize: 0], @"Zero bytes",
-             "MI-ICN-4 an empty file reads \"Zero bytes\"");
-  PASS_EQUAL([FSNIcon itemInfoForByteSize: 1], @"1 byte",
-             "MI-ICN-5 one byte is singular");
-  PASS_EQUAL([FSNIcon itemInfoForByteSize: 999], @"999 bytes",
-             "MI-ICN-6 sizes below 1000 are counted in bytes (decimal units)");
-  PASS_EQUAL([FSNIcon itemInfoForByteSize: 4096], @"4 KB",
-             "MI-ICN-7 kilobytes are decimal and shown without a fraction");
-  PASS_EQUAL([FSNIcon itemInfoForByteSize: 1234567], @"1.2 MB",
-             "MI-ICN-8 megabytes are decimal with one fraction digit");
-  PASS_EQUAL([FSNIcon itemInfoForByteSize: 3500000000ULL], @"3.50 GB",
-             "MI-ICN-9 gigabytes are decimal with two fraction digits");
-
-  PASS_EQUAL([FSNIcon itemInfoForPixelWidth: 640 height: 480], @"640 x 480",
-             "MI-ICN-10 an image reads \"width x height\" in pixels");
+  PASS_EQUAL([FSNIcon itemInfoForPixelWidth: 640 height: 480 groupingSeparator: @"."],
+             @"640 \u00D7 480",
+             "MI-ICN-10 [O:2026-10-11 E23] an image reads \"width x height\" in pixels with the multiplication sign");
+  PASS_EQUAL([FSNIcon itemInfoForPixelWidth: 2560 height: 1600 groupingSeparator: @"."],
+             @"2.560 \u00D7 1.600",
+             "MI-ICN-53 [O:2026-10-11 E23] the pixel counts have the thousands separator of the language");
 
   [arp release];
   return 0;

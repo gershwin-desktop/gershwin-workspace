@@ -217,16 +217,16 @@ main(void)
     PASS([view showsItemInfo] == YES, "MI-ICN-18 item info can be turned on");
     PASS_EQUAL([iconNamed(view, @"Folder") itemInfo], @"2 items",
                "MI-ICN-19 a folder shows its item count under the name");
-    PASS_EQUAL([iconNamed(view, @"a.txt") itemInfo], @"1 byte",
-               "MI-ICN-20 a file shows its size under the name");
-    PASS_EQUAL([iconNamed(view, @"d.png") itemInfo], @"20 x 10",
+    PASS_EQUAL([iconNamed(view, @"a.txt") itemInfo], @"",
+               "MI-ICN-20 [O:2026-10-11 E23] a plain file shows nothing under the name");
+    PASS_EQUAL([iconNamed(view, @"d.png") itemInfo], @"20 \u00D7 10",
                "MI-ICN-21 an image shows its pixel size under the name");
     PASS(with.height > without.height,
          "MI-ICN-22 the grid cell grows by the info line");
-    PASS([[iconNamed(view, @"b.txt") itemInfo] length] > 0,
-         "MI-ICN-23 every icon has an info line while the option is on");
+    PASS([[iconNamed(view, @"Folder") itemInfo] length] > 0,
+         "MI-ICN-23 every folder has an info line while the option is on");
     [view setShowsItemInfo: NO];
-    PASS([[iconNamed(view, @"a.txt") itemInfo] length] == 0,
+    PASS([[iconNamed(view, @"Folder") itemInfo] length] == 0,
          "MI-ICN-24 turning item info off takes the line away again");
     PASS([view gridCellSize].height == without.height,
          "MI-ICN-25 and gives the grid cell its old height back");

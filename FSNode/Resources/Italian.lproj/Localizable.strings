@@ -109,6 +109,8 @@
 
 "Comments" = "Commenti";
 
+"Zero items" = "Nessun elemento";
+
 "1 item" = "1 elemento";
 
 "%lu items" = "%lu elementi";
@@ -118,3 +120,5 @@
 "1 byte" = "1 byte";
 
 "%lu bytes" = "%lu byte";
+
+"%@ x %@" = "%@ \U00D7 %@";

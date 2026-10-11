@@ -103,6 +103,20 @@ NSComparisonResult compareWithExtType(id r1, id r2, void *context);
 
 NSString *sizeDescription(unsigned long long size);
 
+/* A size as Finder writes it in the size column: units of 1000, no fraction
+ * for bytes and kilobytes, one decimal below 10 (and none when it would be
+ * .0) for the larger ones.  The decimal separator is the given one, or the
+ * current locale's when nil. */
+NSString *FSNFinderSizeDescription(unsigned long long bytes, NSString *decimalSeparator);
+
+/* A whole number with the thousands separator of the language (given, or the
+ * current locale's when nil). */
+NSString *FSNGroupedInteger(long long number, NSString *groupingSeparator);
+
+/* The space a file takes on its disk (blocks used, which is what Finder lists
+ * as its size), 0 when there is no such file.  Symbolic links are not followed. */
+unsigned long long FSNAllocatedSizeOfPath(NSString *path);
+
 NSArray *makePathsSelection(NSArray *selnodes);
 
 double myrintf(double a);

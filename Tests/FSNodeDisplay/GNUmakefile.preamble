@@ -18,3 +18,4 @@ t_FSNLocalizedStrings_TOOL_LIBS += -lgnustep-gui
 ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
                       -Wl,--defsym=__stop___objc_constant_string=0
 t_FSNIconLabelIndex_TOOL_LIBS += ../../FSNode/FSNode.framework/Versions/Current/libFSNode.so -lgnustep-gui
+t_FSNFinderSize_TOOL_LIBS += ../../FSNode/FSNode.framework/Versions/Current/libFSNode.so -lgnustep-gui

@@ -35,6 +35,7 @@
 #import "FSNFunctions.h"
 #import "FSNAlias.h"
 #import "FSNodeRep.h"
+#import "FSNode.h"
 
 /* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
    library calls here take narrow strings, so use the UTF-8 form there. On
@@ -375,6 +376,82 @@ NSString *sizeDescription(unsigned long long size)
     sizeStr = [NSString stringWithFormat:@" %3.2fTB", ((double)size / (double)(ONE_TB))];
 
   return sizeStr;
+}
+
+static NSString *
+FSNFinderString(NSString *key)
+{
+  return NSLocalizedStringFromTableInBundle (key, nil,
+                                             [NSBundle bundleForClass: [FSNode class]], @"");
+}
+
+NSString *FSNFinderSizeDescription(unsigned long long bytes, NSString *decimalSeparator)
+{
+  static NSString *units[] = { @"KB", @"MB", @"GB", @"TB" };
+  double value = (double)bytes / 1000.0;
+  NSUInteger unit = 0;
+  NSString *text;
+
+  if (bytes == 0)
+    return FSNFinderString (@"Zero bytes");
+  if (bytes == 1)
+    return FSNFinderString (@"1 byte");
+  if (bytes < 1000ULL)
+    return [NSString stringWithFormat: FSNFinderString (@"%lu bytes"), (unsigned long)bytes];
+
+  while (value >= 1000.0 && unit < 3)
+    {
+      value /= 1000.0;
+      unit++;
+    }
+
+  if (unit == 0)
+    {
+      text = [NSString stringWithFormat: @"%.0f", value];
+    }
+  else if (value < 9.95)
+    {
+      /* "1.0 MB" is written "1 MB". */
+      text = [NSString stringWithFormat: @"%.1f", value];
+      if ([text hasSuffix: @".0"])
+        text = [text substringToIndex: [text length] - 2];
+    }
+  else
+    {
+      text = [NSString stringWithFormat: @"%.0f", floor (value + 0.5)];
+    }
+
+  if (decimalSeparator == nil)
+    decimalSeparator = [[NSLocale currentLocale] objectForKey: NSLocaleDecimalSeparator];
+  if (decimalSeparator && [decimalSeparator isEqualToString: @"."] == NO)
+    text = [text stringByReplacingOccurrencesOfString: @"." withString: decimalSeparator];
+
+  return [NSString stringWithFormat: @"%@ %@", text, units[unit]];
+}
+
+NSString *FSNGroupedInteger(long long number, NSString *groupingSeparator)
+{
+  NSMutableString *digits = [[[NSString stringWithFormat: @"%lld", number < 0 ? -number : number]
+                               mutableCopy] autorelease];
+  NSInteger i;
+
+  if (groupingSeparator == nil)
+    groupingSeparator = [[NSLocale currentLocale] objectForKey: NSLocaleGroupingSeparator];
+  if (groupingSeparator == nil)
+    groupingSeparator = @"";
+
+  for (i = (NSInteger)[digits length] - 3; i > 0; i -= 3)
+    [digits insertString: groupingSeparator atIndex: i];
+  return number < 0 ? [@"-" stringByAppendingString: digits] : digits;
+}
+
+unsigned long long FSNAllocatedSizeOfPath(NSString *path)
+{
+  struct stat st;
+
+  if (lstat ([path fileSystemRepresentation], &st) != 0)
+    return 0;
+  return (unsigned long long)st.st_blocks * 512ULL;
 }
 
 NSArray *makePathsSelection(NSArray *selnodes)

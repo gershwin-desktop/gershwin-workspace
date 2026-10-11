@@ -61,8 +61,8 @@ Status of every line: implemented and covered by the test of the same id.
 ## New columns
 
 - MI-LST-49 The comments column shows the comment the metadata provider returns [S:Finder column]
-- MI-LST-50 An empty comment shows "--" [G: Finder]
-- MI-LST-51 A plain file has no version, shown "--" [S:Finder column]
+- MI-LST-50 An empty comment shows "--" [O:2026-10-11 E22]
+- MI-LST-51 A plain file has no version, shown "--" [O:2026-10-11 E22]
 - MI-LST-52 The label column shows the label name the provider returns [S:Finder column]
 - MI-LST-53 Date last opened is a date, from the file's access time [G: closest POSIX equivalent]
 - MI-LST-54 Sorting by label puts labelled files before those without when descending [G: label index order, none first]
@@ -97,11 +97,15 @@ Status of every line: implemented and covered by the test of the same id.
 
 ## Calculate all sizes
 
-- MI-LST-14 A folder's size is the sum of the sizes of the files below it, symbolic links not followed [G: logical size, as Finder]
-- MI-LST-15 The size of a plain file is its own [G]
+- MI-LST-14 A folder's size is the sum of the space taken by the files below it (blocks used, not lengths), symbolic links not followed [O:2026-10-11 E23]
+- MI-LST-15 The size of a plain file is the space it takes [O:2026-10-11 E23]
 - MI-LST-16 A walk told to stop does not go on [G: cancellation]
 - MI-LST-17 A folder that is not there is 0 bytes [G]
-- MI-LST-65 A folder's size is "--" as long as sizes are not calculated [S:Finder]
+- MI-LST-84..97 Sizes are written in base 10: bytes below 1000, then KB without fraction, MB and larger with one decimal below 10 and none when it would be .0 ("4 KB", "1 MB", "5,5 MB" with the language's decimal separator) [O:2026-10-11 E23]; GB/TB follow the MB rule [G]
+- MI-LST-98 A file row shows the space the file takes ("4 KB" for a 5 byte file) [O:2026-10-11 E23]
+- MI-LST-99 A package shows its size although calculate all sizes is off [O:2026-10-11 E23]
+- MI-LST-100 A plain folder shows "--" then [O:2026-10-11 E23]
+- MI-LST-65 A folder's size is "--" as long as sizes are not calculated [O:2026-10-11 E23]
 - MI-LST-66 Turning calculate all sizes on starts the walk on a thread of its own [G: must not block the UI]
 - MI-LST-67 The UI does not wait for it [G]
 - MI-LST-68 The walk ends [G]

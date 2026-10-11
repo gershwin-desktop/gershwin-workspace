@@ -361,7 +361,7 @@ treeSize(char *path, size_t length, dev_t device, const int *stop, int depth)
         {
           if (!S_ISDIR (st.st_mode))
             {
-              total += (unsigned long long)st.st_size;
+              total += (unsigned long long)st.st_blocks * 512ULL;
             }
           /* A mount below the folder is another file system's business
            * (and /proc and friends are not files at all). */
@@ -394,7 +394,7 @@ treeSize(char *path, size_t length, dev_t device, const int *stop, int depth)
     }
   if (!S_ISDIR (st.st_mode))
     {
-      return (unsigned long long)st.st_size;
+      return (unsigned long long)st.st_blocks * 512ULL;
     }
 
   return treeSize (buffer, strlen (buffer), st.st_dev, stop, 0);
@@ -1120,7 +1120,7 @@ labelRank(NSColor *color)
     {
       return [[folderSizes objectForKey: [nd path]] unsignedLongLongValue];
     }
-  return [nd fileSize];
+  return FSNAllocatedSizeOfPath ([nd path]);
 }
 
 - (NSComparisonResult)compareRep:(FSNListViewNodeRep *)r1
@@ -1208,15 +1208,17 @@ labelRank(NSColor *color)
 
   if ([nd isDirectory] == NO)
     {
-      return [nd sizeDescription];
+      return FSNFinderSizeDescription (FSNAllocatedSizeOfPath ([nd path]), nil);
     }
-  if (calculatesAllSizes)
+  /* A package is one thing to the user, so Finder sizes it without being
+   * asked to size every folder. */
+  if (calculatesAllSizes || [nd isPackage])
     {
       NSNumber *size = [folderSizes objectForKey: [nd path]];
 
       if (size)
         {
-          return sizeDescription ([size unsignedLongLongValue]);
+          return FSNFinderSizeDescription ([size unsignedLongLongValue], nil);
         }
     }
   return EMPTY_VALUE_STRING;
@@ -1234,17 +1236,13 @@ labelRank(NSColor *color)
   NSUInteger i;
 
   [self cancelSizeCalculation];
-  if (calculatesAllSizes == NO)
-    {
-      return;
-    }
 
   paths = [NSMutableArray array];
   for (i = 0; i < [nodeReps count]; i++)
     {
       FSNode *nd = [[nodeReps objectAtIndex: i] node];
 
-      if ([nd isDirectory])
+      if ([nd isDirectory] && (calculatesAllSizes || [nd isPackage]))
         {
           [paths addObject: [nd path]];
         }
@@ -1614,6 +1612,8 @@ labelRank(NSColor *color)
     {
       [self cancelSizeCalculation];
       [folderSizes removeAllObjects];
+      /* Packages keep their size. */
+      [self startSizeCalculation];
     }
 
   if (hlighColId == FSNInfoSizeType)

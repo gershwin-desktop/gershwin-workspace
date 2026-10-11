@@ -13,6 +13,7 @@
 #import "FSNode.h"
 #import "FSNodeRep.h"
 #import "FSNMetadataProvider.h"
+#import "FSNFunctions.h"
 
 /* Counts the user-change notifications. */
 @interface OptionsObserver : NSObject
@@ -227,14 +228,18 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
   symlink ("/etc/passwd", [[folder stringByAppendingPathComponent: @"link"] fileSystemRepresentation]);
 
   {
-    unsigned long long linkSize = (unsigned long long)strlen ("/etc/passwd");
+    /* Finder adds up the space the files take, not their lengths (E23). */
+    unsigned long long below = FSNAllocatedSizeOfPath ([folder stringByAppendingPathComponent: @"a"])
+      + FSNAllocatedSizeOfPath ([folder stringByAppendingPathComponent: @"deep/b"])
+      + FSNAllocatedSizeOfPath ([folder stringByAppendingPathComponent: @"link"]);
     int stopped = 1;
 
-    PASS ([FSNFolderSizeCalculator sizeOfTreeAtPath: folder stop: NULL] == 1010 + linkSize,
-          "MI-LST-14 a folder's size is the sum of the sizes of what is below it, links not followed");
+    PASS ([FSNFolderSizeCalculator sizeOfTreeAtPath: folder stop: NULL] == below && below > 0,
+          "MI-LST-14 [O:2026-10-11 E23] a folder's size is the sum of the space taken by what is below it, links not followed");
     PASS ([FSNFolderSizeCalculator sizeOfTreeAtPath: [folder stringByAppendingPathComponent: @"a"]
-                                               stop: NULL] == 10,
-          "MI-LST-15 the size of a plain file is its own");
+                                               stop: NULL]
+          == FSNAllocatedSizeOfPath ([folder stringByAppendingPathComponent: @"a"]),
+          "MI-LST-15 [O:2026-10-11 E23] the size of a plain file is the space it takes");
     PASS ([FSNFolderSizeCalculator sizeOfTreeAtPath: folder stop: &stopped] == 0,
           "MI-LST-16 a walk told to stop does not go on");
     PASS ([FSNFolderSizeCalculator sizeOfTreeAtPath: @"/nonexistent-fsn" stop: NULL] == 0,
@@ -247,11 +252,11 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
   [fm createDirectoryAtPath: folder withIntermediateDirectories: YES attributes: nil error: NULL];
   [[NSMutableData dataWithLength: 5] writeToFile: [root stringByAppendingPathComponent: @"small.txt"]
                                       atomically: NO];
-  [[NSMutableData dataWithLength: 5000] writeToFile: [root stringByAppendingPathComponent: @"big.bin"]
+  [[NSMutableData dataWithLength: 20000] writeToFile: [root stringByAppendingPathComponent: @"big.bin"]
                                          atomically: NO];
-  [[NSMutableData dataWithLength: 500] writeToFile: [root stringByAppendingPathComponent: @"mid.dat"]
+  [[NSMutableData dataWithLength: 5000] writeToFile: [root stringByAppendingPathComponent: @"mid.dat"]
                                         atomically: NO];
-  [[NSMutableData dataWithLength: 700] writeToFile: [folder stringByAppendingPathComponent: @"inner"]
+  [[NSMutableData dataWithLength: 9000] writeToFile: [folder stringByAppendingPathComponent: @"inner"]
                                         atomically: NO];
   [fm setAttributes: [NSDictionary dictionaryWithObject: localDate (2026, 1, 2, 3, 4)
                                                  forKey: NSFileModificationDate]
@@ -456,6 +461,16 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
     PASS ([view rowHeight] == 28.0, "MI-LST-64 text size 0 selects the default again");
   }
 
+  /* the size of a file is the space it takes */
+  {
+    NSInteger row = [shownNames (ds) indexOfObject: @"small.txt"];
+    NSTableColumn *sz = [view tableColumnWithIdentifier: [NSNumber numberWithInt: FSNInfoSizeType]];
+
+    PASS_EQUAL ([ds tableView: view objectValueForTableColumn: sz row: row],
+                FSNFinderSizeDescription (FSNAllocatedSizeOfPath ([root stringByAppendingPathComponent: @"small.txt"]), nil),
+                "MI-LST-98 [O:2026-10-11 E23] a 5 byte file shows the space it takes, like \"4 KB\"");
+  }
+
   /* folder sizes */
   {
     NSInteger row = [shownNames (ds) indexOfObject: @"sub"];
@@ -473,10 +488,14 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
       }
     PASS ([ds isCalculatingSizes] == NO, "MI-LST-68 the walk ends");
     PASS ([[ds calculatedSizeForPath: [root stringByAppendingPathComponent: @"sub"]]
-            unsignedLongLongValue] == 700,
+            unsignedLongLongValue]
+          == FSNAllocatedSizeOfPath ([[root stringByAppendingPathComponent: @"sub"]
+                                       stringByAppendingPathComponent: @"inner"]),
           "MI-LST-69 the folder's size is that of its contents");
-    PASS ([[ds tableView: view objectValueForTableColumn: sz row: row] hasPrefix: @" 700 bytes"],
-          "MI-LST-70 and the size column shows it");
+    PASS_EQUAL ([ds tableView: view objectValueForTableColumn: sz row: row],
+                FSNFinderSizeDescription (FSNAllocatedSizeOfPath ([[root stringByAppendingPathComponent: @"sub"]
+                                            stringByAppendingPathComponent: @"inner"]), nil),
+                "MI-LST-70 and the size column shows it");
 
     [ds setSortColumnId: @"size" ascending: NO];
     PASS_EQUAL ([shownNames (ds) objectAtIndex: 0], @"big.bin", "MI-LST-71 sizes sort with folders");
@@ -501,6 +520,38 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
           "MI-LST-75 sizes of a folder no longer shown are not kept or delivered");
     PASS ([ds isCalculatingSizes] == NO, "MI-LST-76 a folder without subfolders has nothing to walk");
     [ds setCalculatesAllSizes: NO];
+  }
+
+  /* a package shows its size without calculate all sizes (E23), a plain folder not */
+  {
+    NSString *pk = [root stringByAppendingPathComponent: @"Thing.app"];
+    NSTableColumn *sz;
+    NSInteger prow, frow;
+    unsigned long long expected;
+
+    [fm createDirectoryAtPath: [pk stringByAppendingPathComponent: @"Contents"]
+  withIntermediateDirectories: YES attributes: nil error: NULL];
+    [fm createDirectoryAtPath: [pk stringByAppendingPathComponent: @"Resources"]
+  withIntermediateDirectories: YES attributes: nil error: NULL];
+    [@"{}" writeToFile: [pk stringByAppendingPathComponent: @"Resources/Info.plist"]
+            atomically: NO encoding: NSUTF8StringEncoding error: NULL];
+    [[NSMutableData dataWithLength: 30000]
+      writeToFile: [pk stringByAppendingPathComponent: @"Contents/blob"] atomically: NO];
+    expected = FSNAllocatedSizeOfPath ([pk stringByAppendingPathComponent: @"Contents/blob"])
+      + FSNAllocatedSizeOfPath ([pk stringByAppendingPathComponent: @"Resources/Info.plist"]);
+    [view showContentsOfNode: [FSNode nodeWithPath: root]];
+    sz = [view tableColumnWithIdentifier: [NSNumber numberWithInt: FSNInfoSizeType]];
+    for (i = 0; i < 40 && [ds isCalculatingSizes]; i++)
+      {
+        spin (0.05);
+      }
+    prow = [shownNames (ds) indexOfObject: @"Thing.app"];
+    frow = [shownNames (ds) indexOfObject: @"sub"];
+    PASS_EQUAL ([ds tableView: view objectValueForTableColumn: sz row: prow],
+                FSNFinderSizeDescription (expected, nil),
+                "MI-LST-99 [O:2026-10-11 E23] a package shows its size although sizes are not calculated");
+    PASS_EQUAL ([ds tableView: view objectValueForTableColumn: sz row: frow], @"--",
+                "MI-LST-100 [O:2026-10-11 E23] a plain folder shows -- then");
   }
 
   [view release];
