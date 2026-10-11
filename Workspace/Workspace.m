@@ -3603,6 +3603,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if (infoPanel == nil) {
     infoPanel = [[GSInfoPanel alloc] initWithDictionary: nil];
     [infoPanel setReleasedWhenClosed: NO];
+    /* NSPanel hides on deactivation by default; launching another
+       application deactivates Workspace and would hide the panel. */
+    [infoPanel setHidesOnDeactivate: NO];
     [infoPanel setTitle: [NSString stringWithFormat: _(@"About %@"),
                                    [[NSProcessInfo processInfo] processName]]];
   }
