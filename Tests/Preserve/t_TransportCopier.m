@@ -58,6 +58,15 @@ userXattrCount(NSString *path)
   return n;
 }
 
+static NSData *
+fixture(NSString *name)
+{
+  return [NSData dataWithContentsOfFile: [[[fm currentDirectoryPath]
+    stringByAppendingPathComponent:
+      @"../GWMetadata/interop/fixtures/finder106/E35-nonhfs-fat32"]
+    stringByAppendingPathComponent: name]];
+}
+
 static GSAppleDouble *
 sidecarOf(NSString *path)
 {
@@ -129,9 +138,14 @@ main(void)
              && [[x objectForKey: @"com.apple.metadata:_kMDItemUserTags"]
                   isEqual: tags],
              "%s: other attributes in ATTR under their Mac names", [t UTF8String]);
-        PASS([[x objectForKey: @"com.apple.quarantine"] isEqual:
-               [GSFileMetadata sidecarQuarantine: quarantine]],
-             "%s: quarantine carries the q/ prefix", [t UTF8String]);
+        PASS([x objectForKey: @"com.apple.quarantine"] == nil,
+             "%s: the quarantine stays behind, as with Finder [O: E35]",
+             [t UTF8String]);
+        NSData *raw = [NSData dataWithContentsOfFile:
+          [GWMetadataCopier sidecarPathForPath: dst]];
+        const uint8_t *b = [raw bytes];
+        PASS([raw length] == 3810 + [rsrc length] && b[36] == 0x0e && b[37] == 0xb0,
+             "%s: the kernel's padded layout [O: E35]", [t UTF8String]);
       }
   END_SET("copy onto a Mac-read volume")
 
@@ -154,15 +168,22 @@ main(void)
          "attribute and sidecar content end up in one sidecar");
   END_SET("a sidecar of the source is merged, not duplicated as attributes")
 
+  START_SET("a quarantine alone makes no sidecar")
+    stickType = @"vfat";
+    NSString *src = mk(root, @"qonly.txt");
+    setx(src, @"user.com.apple.quarantine", quarantine);
+    NSString *dst = [stick stringByAppendingPathComponent: @"qonly.txt"];
+    err = nil;
+    PASS([copier copyItemAtPath: src toPath: dst handler: nil metadataError: &err]
+         && err == nil && sidecarOf(dst) == nil && userXattrCount(dst) == 0,
+         "nothing is written for it [O: E35, E16]");
+  END_SET("a quarantine alone makes no sidecar")
+
   START_SET("a Mac-made sidecar travels byte for byte")
     stickType = @"msdos";
     NSString *src = mk(root, @"macmade.txt");
     NSString *dst = [stick stringByAppendingPathComponent: @"macmade.txt"];
-    GSAppleDouble *seed = [[[GSAppleDouble alloc] init] autorelease];
-    [seed setFinderInfo: finfo];
-    NSMutableData *padded = [[[seed appleDoubleData] mutableCopy] autorelease];
-    /* A 10.6 FAT copy pads the file to 4096 bytes (E17). */
-    [padded setLength: 4096];
+    NSData *padded = fixture(@"fat-._b.txt");
     [padded writeToFile: [GWMetadataCopier sidecarPathForPath: src] atomically: NO];
     PASS([copier copyItemAtPath: src toPath: dst handler: nil metadataError: &err],
          "copy succeeds");
@@ -202,9 +223,12 @@ main(void)
          && err == nil, "copy succeeds");
     PASS([fm fileExistsAtPath: [stick stringByAppendingPathComponent: @".DS_Store"]],
          "the comment record goes into the stick's .DS_Store");
-    PASS(![fm fileExistsAtPath: [stick stringByAppendingPathComponent: @"._.DS_Store"]]
-         && userXattrCount([stick stringByAppendingPathComponent: @".DS_Store"]) <= 0,
-         "the store itself gets no sidecar and no attribute");
+    PASS_EQUAL([NSData dataWithContentsOfFile:
+                  [stick stringByAppendingPathComponent: @"._.DS_Store"]],
+               fixture(@"fat-lf.._.DS_Store.bin"),
+               "the store gets the invisible ._.DS_Store a Mac writes [O: E35]");
+    PASS(userXattrCount([stick stringByAppendingPathComponent: @".DS_Store"]) == 0,
+         "and no attribute");
   END_SET(".DS_Store on a Mac-read volume")
 
   START_SET("move onto a Mac-read volume")

@@ -82,6 +82,9 @@ typedef NS_ENUM(uint32_t, GSAppleDoubleEntryID) {
                                   // that macOS embeds inside entry ID 9
                                   // when a file carries xattrs (e.g.
                                   // com.apple.metadata:_kMDItemUserTags).
+  NSMutableArray *_xattrOrder;    // names in the order the file had them,
+                                  // new ones appended, as the Mac kernel
+                                  // keeps them in a "._" file.
   NSData *_finderInfoTail;        // bytes behind the 32 FinderInfo bytes in
                                   // entry 9 that are not an ATTR blob; kept
                                   // so a rewrite does not delete them.
@@ -135,6 +138,23 @@ typedef NS_ENUM(uint32_t, GSAppleDoubleEntryID) {
  *   - Storing in __MACOSX directory entries
  */
 - (NSData *)appleDoubleData;
+
+/**
+ * The layout the Mac OS X kernel itself writes for "._" files on volumes
+ * without native extended attributes (evidence E35, a 10.6 FAT32 volume):
+ * entry 9 at offset 50 always carries an ATTR block (debug tag 0x3b9ac9ff,
+ * attributes in file order) and is zero padded so that the file up to the
+ * end of a 286-byte entry 2 is a multiple of 4096 bytes; entry 2 holds the
+ * fork, or the kernel's empty resource map when there is none.  A foreign
+ * non-ATTR tail behind the FinderInfo cannot share entry 9 with an ATTR
+ * block; such an object is emitted as -appleDoubleData so the tail is kept.
+ * nil when there is nothing to write.
+ */
+- (NSData *)appleDoubleDataInVolumeLayout;
+
+/** The same object re-emitted with -appleDoubleDataInVolumeLayout; nil when
+ *  data is not AppleDouble or holds nothing. */
++ (NSData *)volumeLayoutFromAppleDoubleData:(NSData *)data;
 
 /**
  * Parse an AppleDouble blob and return the Finder Info bytes,

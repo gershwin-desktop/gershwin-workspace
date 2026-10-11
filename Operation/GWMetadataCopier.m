@@ -173,14 +173,15 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
 - (BOOL)_writeSidecarAtPath:(NSString *)sidecar
                  attributes:(NSDictionary *)attrs
                    baseData:(NSData *)base
+                forMacVolume:(BOOL)forMacVolume
                       error:(NSError **)error
 {
   GSAppleDouble *ad = nil;
   NSData *out;
 
-  /* Nothing to add: a rewrite would only lose the layout the writer chose
-   * (a 10.6 FAT copy pads to 4096 bytes). */
-  if (base != nil && [attrs count] == 0)
+  /* Nothing to add: a rewrite would only lose the layout the writer chose.
+   * A volume a Mac reads always gets the kernel's layout instead (E35). */
+  if (base != nil && [attrs count] == 0 && !forMacVolume)
     {
       if (![base writeToFile: sidecar atomically: YES])
         {
@@ -204,7 +205,9 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
   else
     ad = [[GSAppleDouble alloc] init];
 
-  for (NSString *name in attrs)
+  /* Sorted, so that attributes new to the sidecar land in a fixed order. */
+  for (NSString *name in [[attrs allKeys]
+         sortedArrayUsingSelector: @selector(compare:)])
     {
       NSData *value = [attrs objectForKey: name];
 
@@ -218,7 +221,11 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
       else
         [ad setXattr: value forKey: name];
     }
-  out = [ad appleDoubleData];
+  /* Finder never carries the quarantine to a copy on such a volume, not
+   * even from a "._" file (E35, E16); a copy made here does not either. */
+  out = forMacVolume
+    ? [GSFileMetadata macVolumeSidecarDataFor: ad keepQuarantine: NO]
+    : [ad appleDoubleData];
   DESTROY(ad);
 
   if (out == nil)
@@ -325,6 +332,7 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
         ok = [self _writeSidecarAtPath: dstSidecar
                             attributes: attrs
                               baseData: sidecarData
+                          forMacVolume: appleDouble == 1
                                  error: error];
     }
 
@@ -373,10 +381,40 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
                                    error:(NSError **)error
 {
   GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
+  NSError *failure = nil;
 
   if ([md.finderComment length] == 0)
     return;
-  [DSStore setComment: md.finderComment forItemAtPath: path error: error];
+  if (![DSStore setComment: md.finderComment forItemAtPath: path
+                     error: &failure])
+    {
+      if (error)
+        *error = failure;
+      return;
+    }
+  [self _markStoreInvisibleBesideItemAtPath: path error: error];
+}
+
+/* On a volume a Mac reads through "._" files, the .DS_Store's invisible
+ * flag lives in "._.DS_Store", and a Mac writes one beside every store it
+ * makes there (E35). */
+- (void)_markStoreInvisibleBesideItemAtPath:(NSString *)path
+                                      error:(NSError **)error
+{
+  NSString *store = [[path stringByDeletingLastPathComponent]
+    stringByAppendingPathComponent: @".DS_Store"];
+  GSFileMetadata *md;
+
+  if ([GSFileMetadata storesMetadataInAppleDoubleAtPath: store] != 1)
+    return;
+  md = [GSFileMetadata metadataForFileAtPath: store forceSidecar: NO];
+  if ([md isInvisible])
+    return;
+  if (md == nil)
+    md = [[[GSFileMetadata alloc] init] autorelease];
+  [md setInvisible: YES];
+  [md writeToFileAtPath: store error: error];
+  [GSFileMetadata invalidateCachedMetadataForPath: store];
 }
 
 /* A copied folder holds more items than the one dropped: each needs its

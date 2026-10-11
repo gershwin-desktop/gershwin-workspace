@@ -493,12 +493,22 @@ int main(void)
            err ? [[err description] UTF8String] : "ok");
       NSString *f = [dest stringByAppendingPathComponent: @"many.txt"];
       NSString *d = [dest stringByAppendingPathComponent: @"d"];
-      PASS_EQUAL([NSData dataWithContentsOfFile:
-                    [GSFileMetadata sidecarPathForFilePath: f]], manyAD,
-                 "MI-AR-29 the file's companion stays its sidecar, byte for byte");
-      PASS_EQUAL([NSData dataWithContentsOfFile:
-                    [GSFileMetadata sidecarPathForFilePath: d]], dirAD,
-                 "MI-AR-29 so does the folder's");
+      NSData *fs = [NSData dataWithContentsOfFile:
+                     [GSFileMetadata sidecarPathForFilePath: f]];
+      GSAppleDouble *want = [[[GSAppleDouble alloc] initWithData: manyAD] autorelease];
+      GSAppleDouble *got = fs ? [[[GSAppleDouble alloc] initWithData: fs] autorelease] : nil;
+      NSMutableDictionary *wantX = [[[want extendedAttributes] mutableCopy] autorelease];
+      [wantX removeObjectForKey: @"com.apple.quarantine"];
+      const uint8_t *b = [fs bytes];
+      PASS([fs length] >= 4096 && b[36] == 0x0e && b[37] == 0xb0,
+           "MI-AR-29 the companion becomes a sidecar in the kernel's layout [O: E35]");
+      PASS_EQUAL([got finderInfo], [want finderInfo],
+                 "MI-AR-29 with the companion's FinderInfo");
+      PASS_EQUAL([got extendedAttributes], wantX,
+                 "MI-AR-29 and its attributes, the quarantine left out [O: E35]");
+      PASS([NSData dataWithContentsOfFile:
+              [GSFileMetadata sidecarPathForFilePath: d]] != nil,
+           "MI-AR-29 the folder gets its sidecar too");
       PASS(getx(f, @"user.com.apple.FinderInfo") == nil
            && getx(d, @"user.com.apple.FinderInfo") == nil,
            "MI-AR-29 nothing becomes an attribute the Mac would not see");

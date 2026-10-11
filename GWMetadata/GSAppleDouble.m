@@ -78,6 +78,8 @@ writeBE16(uint8_t *bytes, uint16_t value)
   bytes[1] =  value       & 0xFF;
 }
 
+static NSData *emptyResourceFork(void);
+
 @implementation GSAppleDouble
 
 - (instancetype)init
@@ -87,6 +89,7 @@ writeBE16(uint8_t *bytes, uint16_t value)
     {
       _entries = [[NSMutableDictionary alloc] initWithCapacity: 4];
       _xattrs = [[NSMutableDictionary alloc] initWithCapacity: 4];
+      _xattrOrder = [[NSMutableArray alloc] initWithCapacity: 4];
     }
   return self;
 }
@@ -152,6 +155,8 @@ writeBE16(uint8_t *bytes, uint16_t value)
         {
           NSData *value = [NSData dataWithBytes: bytes + valueOff
                                          length: valueLen];
+          if ([_xattrs objectForKey: name] == nil)
+            [_xattrOrder addObject: name];
           [_xattrs setObject: value forKey: name];
         }
       DESTROY(full);
@@ -173,6 +178,7 @@ writeBE16(uint8_t *bytes, uint16_t value)
 
   _entries = [[NSMutableDictionary alloc] initWithCapacity: 4];
   _xattrs = [[NSMutableDictionary alloc] initWithCapacity: 4];
+  _xattrOrder = [[NSMutableArray alloc] initWithCapacity: 4];
 
   const uint8_t *bytes = [data bytes];
   NSUInteger length = [data length];
@@ -266,6 +272,12 @@ writeBE16(uint8_t *bytes, uint16_t value)
     }
   }
 
+  /* The kernel's placeholder is not a fork: the Mac shows no resource fork
+   * for such a file (E35), and a copy to a native disk must not grow one. */
+  NSNumber *forkKey = [NSNumber numberWithUnsignedInt: GSAppleDoubleResourceFork];
+  if ([[_entries objectForKey: forkKey] isEqual: emptyResourceFork()])
+    [_entries removeObjectForKey: forkKey];
+
   return self;
 }
 
@@ -282,6 +294,7 @@ writeBE16(uint8_t *bytes, uint16_t value)
       [[copy mutableXattrs] setObject: [_xattrs objectForKey: key]
                                forKey: key];
     }
+  [copy->_xattrOrder setArray: _xattrOrder];
   ASSIGN(copy->_finderInfoTail, _finderInfoTail);
   return copy;
 }
@@ -290,6 +303,7 @@ writeBE16(uint8_t *bytes, uint16_t value)
 {
   DESTROY(_entries);
   DESTROY(_xattrs);
+  DESTROY(_xattrOrder);
   DESTROY(_finderInfoTail);
   [super dealloc];
 }
@@ -353,9 +367,16 @@ writeBE16(uint8_t *bytes, uint16_t value)
   if (name == nil || [name length] == 0)
     return;
   if (value != nil)
-    [_xattrs setObject: value forKey: name];
+    {
+      if ([_xattrs objectForKey: name] == nil)
+        [_xattrOrder addObject: name];
+      [_xattrs setObject: value forKey: name];
+    }
   else
-    [_xattrs removeObjectForKey: name];
+    {
+      [_xattrs removeObjectForKey: name];
+      [_xattrOrder removeObject: name];
+    }
 }
 
 - (NSDictionary<NSString *, NSData *> *)extendedAttributes
@@ -594,8 +615,7 @@ writeBE16(uint8_t *bytes, uint16_t value)
     {
       if (![managedNames containsObject: name]
           && [merged->_xattrs objectForKey: name] == nil)
-        [merged->_xattrs setObject: [old->_xattrs objectForKey: name]
-                            forKey: name];
+        [merged setXattr: [old->_xattrs objectForKey: name] forKey: name];
     }
   if (old->_finderInfoTail != nil && merged->_finderInfoTail == nil
       && [merged->_xattrs count] == 0)
@@ -605,6 +625,154 @@ writeBE16(uint8_t *bytes, uint16_t value)
   DESTROY(merged);
   DESTROY(old);
   return result;
+}
+
+/* The Mac kernel's empty resource fork ("This resource fork intentionally
+ * left blank"), which it stores in entry 2 of every "._" file without a
+ * fork (E35). */
+static NSData *
+emptyResourceFork(void)
+{
+  static NSData *fork = nil;
+
+  if (fork == nil)
+    {
+      static const char text[] = "This resource fork intentionally left blank   ";
+      uint8_t b[286] = { 0 };
+
+      b[2] = 1; b[6] = 1; b[15] = 30;
+      memcpy(b + 16, text, sizeof(text) - 1);
+      b[258] = 1; b[262] = 1; b[271] = 30;
+      b[281] = 28; b[283] = 30; b[284] = 0xff; b[285] = 0xff;
+      fork = [[NSData alloc] initWithBytes: b length: sizeof(b)];
+    }
+  return fork;
+}
+
+- (NSData *)appleDoubleDataInVolumeLayout
+{
+  NSData *finderInfo = [_entries objectForKey:
+    [NSNumber numberWithUnsignedInt: GSAppleDoubleFinderInfo]];
+  NSData *fork = [_entries objectForKey:
+    [NSNumber numberWithUnsignedInt: GSAppleDoubleResourceFork]];
+  NSMutableArray *names = [NSMutableArray array];
+  NSMutableArray *extraIDs = [NSMutableArray array];
+  NSUInteger recordsSize = 0, valuesLength = 0, i;
+  BOOL tailIsPadding = YES;
+
+  for (i = 0; i < [_finderInfoTail length]; i++)
+    if (((const uint8_t *)[_finderInfoTail bytes])[i] != 0)
+      tailIsPadding = NO;
+  if (!tailIsPadding)
+    return [self appleDoubleData];
+  if ([self appleDoubleData] == nil)
+    return nil;
+
+  for (NSString *name in _xattrOrder)
+    if ([_xattrs objectForKey: name] != nil)
+      [names addObject: name];
+  for (NSString *name in [[_xattrs allKeys]
+         sortedArrayUsingSelector: @selector(compare:)])
+    if (![names containsObject: name])
+      [names addObject: name];
+  for (NSString *name in names)
+    {
+      recordsSize += (11 + [name lengthOfBytesUsingEncoding:
+                              NSUTF8StringEncoding] + 1 + 3) & ~(NSUInteger)3;
+      valuesLength += [[_xattrs objectForKey: name] length];
+    }
+  for (NSNumber *key in _entries)
+    {
+      uint32_t idv = [key unsignedIntValue];
+      if (idv != GSAppleDoubleFinderInfo && idv != GSAppleDoubleResourceFork)
+        [extraIDs addObject: key];
+    }
+  [extraIDs sortUsingSelector: @selector(compare:)];
+  if ([fork length] == 0)
+    fork = emptyResourceFork();
+
+  NSUInteger count = 2 + [extraIDs count];
+  NSUInteger hdr = APPLEDOUBLE_HEADER_SIZE + count * APPLEDOUBLE_ENTRY_SIZE;
+  NSUInteger recordsStart = APPLEDOUBLE_FINFO_SIZE + APPLEDOUBLE_ATTR_PAD
+                          + APPLEDOUBLE_ATTR_HDR_SIZE;
+  NSUInteger used = recordsStart + recordsSize + valuesLength;
+  /* The kernel sizes entry 9 so that header, entry 9 and an empty entry 2
+   * fill whole 4096-byte blocks. */
+  NSUInteger block = (hdr + used + 286 + 4095) & ~(NSUInteger)4095;
+  NSUInteger fiLen = block - hdr - 286;
+  NSUInteger total = hdr + fiLen + [fork length];
+
+  for (NSNumber *key in extraIDs)
+    total += [[_entries objectForKey: key] length];
+
+  NSMutableData *result = [NSMutableData dataWithLength: total];
+  uint8_t *bytes = [result mutableBytes];
+  uint8_t *e = bytes + hdr;
+  uint8_t *h = e + APPLEDOUBLE_FINFO_SIZE + APPLEDOUBLE_ATTR_PAD;
+  NSUInteger rec = recordsStart;
+  NSUInteger valAbs = hdr + recordsStart + recordsSize;
+  NSUInteger cursor = hdr + fiLen;
+  NSUInteger desc = APPLEDOUBLE_HEADER_SIZE;
+
+  writeBE32(bytes, APPLEDOUBLE_MAGIC);
+  writeBE32(bytes + 4, APPLEDOUBLE_VERSION);
+  memcpy(bytes + 8, "Mac OS X", 8);
+  memset(bytes + 16, ' ', 8);
+  writeBE16(bytes + 24, (uint16_t)count);
+
+  writeBE32(bytes + desc, GSAppleDoubleFinderInfo);
+  writeBE32(bytes + desc + 4, (uint32_t)hdr);
+  writeBE32(bytes + desc + 8, (uint32_t)fiLen);
+  desc += APPLEDOUBLE_ENTRY_SIZE;
+  if ([finderInfo length] >= APPLEDOUBLE_FINFO_SIZE)
+    memcpy(e, [finderInfo bytes], APPLEDOUBLE_FINFO_SIZE);
+
+  writeBE32(h, APPLEDOUBLE_ATTR_MAGIC);
+  writeBE32(h + 4, 0x3b9ac9ff);   /* what every E35 file carries */
+  writeBE32(h + 8, (uint32_t)(hdr + fiLen));
+  writeBE32(h + 12, (uint32_t)(hdr + recordsStart + recordsSize));
+  writeBE32(h + 16, (uint32_t)valuesLength);
+  writeBE16(h + 34, (uint16_t)[names count]);
+  for (NSString *name in names)
+    {
+      NSData *value = [_xattrs objectForKey: name];
+      NSUInteger nameLen = [name lengthOfBytesUsingEncoding:
+                              NSUTF8StringEncoding] + 1;
+
+      writeBE32(e + rec, (uint32_t)valAbs);
+      writeBE32(e + rec + 4, (uint32_t)[value length]);
+      e[rec + 10] = (uint8_t)nameLen;
+      memcpy(e + rec + 11, [name UTF8String], nameLen - 1);
+      memcpy(bytes + valAbs, [value bytes], [value length]);
+      valAbs += [value length];
+      rec += (11 + nameLen + 3) & ~(NSUInteger)3;
+    }
+
+  writeBE32(bytes + desc, GSAppleDoubleResourceFork);
+  writeBE32(bytes + desc + 4, (uint32_t)cursor);
+  writeBE32(bytes + desc + 8, (uint32_t)[fork length]);
+  desc += APPLEDOUBLE_ENTRY_SIZE;
+  memcpy(bytes + cursor, [fork bytes], [fork length]);
+  cursor += [fork length];
+
+  for (NSNumber *key in extraIDs)
+    {
+      NSData *data = [_entries objectForKey: key];
+      writeBE32(bytes + desc, [key unsignedIntValue]);
+      writeBE32(bytes + desc + 4, (uint32_t)cursor);
+      writeBE32(bytes + desc + 8, (uint32_t)[data length]);
+      desc += APPLEDOUBLE_ENTRY_SIZE;
+      memcpy(bytes + cursor, [data bytes], [data length]);
+      cursor += [data length];
+    }
+  return result;
+}
+
++ (NSData *)volumeLayoutFromAppleDoubleData:(NSData *)data
+{
+  GSAppleDouble *ad = [[[GSAppleDouble alloc] initWithData: data] autorelease];
+
+  return [ad appleDoubleDataInVolumeLayout];
 }
 
 #pragma mark - Convenience class methods

@@ -131,10 +131,14 @@ int main(void)
     PASS(ad != nil, "a ._ sidecar was written");
     const uint8_t *b = [raw bytes];
     PASS([raw length] > 38 && b[29] == 9, "entry 9 is the first entry");
+    PASS([raw length] > 50 && b[36] == 0x0e && b[37] == 0xb0
+         && b[44] == 0x0e && b[45] == 0xe2,
+         "the kernel's layout: entry 9 is 3760 bytes, entry 2 at 3810 [O: E35]");
     PASS([[ad resourceFork] isEqual: fork], "fork in entry 2");
     NSData *q = [[ad extendedAttributes] objectForKey: @"com.apple.quarantine"];
-    PASS(q != nil && memcmp([q bytes], "q/", 2) == 0,
-         "quarantine in ATTR with the q/ prefix 10.6 needs");
+    PASS([q isEqual: [@"0001;5a000000;Safari;"
+                        dataUsingEncoding: NSUTF8StringEncoding]],
+         "a quarantine set on the item is stored plain, as the kernel does [O: E35]");
     PASS([[ad extendedAttributes] objectForKey:
            @"com.apple.metadata:kMDItemFinderComment"] != nil,
          "comment in ATTR");

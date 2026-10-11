@@ -1292,6 +1292,14 @@ static NSMutableDictionary *_metadataCache = nil;
     appleDoubleDataByUpdatingSidecar: existing
                          withContent: fresh
                    managedXattrNames: managed];
+  /* There the Mac kernel reads the file, in the one layout it writes
+   * itself (E35); nothing says it takes the compact one. */
+  if (appleDoubleData != nil
+      && [[self class] storesMetadataInAppleDoubleAtPath: path] == 1)
+    appleDoubleData = [[self class] macVolumeSidecarDataFor:
+                         [[[GSAppleDouble alloc] initWithData: appleDoubleData]
+                           autorelease]
+                                             keepQuarantine: YES];
   if (!appleDoubleData)
     {
       /* Nothing left to keep: remove sidecar if it exists */
@@ -1958,6 +1966,19 @@ gsFilesystemTypeAtPath(NSString *path)
   if (type == nil)
     return -1;
   return gs_fs_type_wants_appledouble([type UTF8String]);
+}
+
++ (NSData *)macVolumeSidecarDataFor:(GSAppleDouble *)appleDouble
+                     keepQuarantine:(BOOL)keepQuarantine
+{
+  GSAppleDouble *ad = [[appleDouble copy] autorelease];
+  NSString *qName = @"com.apple.quarantine";
+  NSData *q = [[ad extendedAttributes] objectForKey: qName];
+
+  if (q != nil)
+    [ad setXattr: keepQuarantine ? [self plainQuarantine: q] : nil
+          forKey: qName];
+  return [ad appleDoubleDataInVolumeLayout];
 }
 
 + (NSError *)sidecarWriteErrorAtPath:(NSString *)sidecarPath code:(int)code

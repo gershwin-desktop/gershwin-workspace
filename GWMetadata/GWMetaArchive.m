@@ -449,6 +449,17 @@ apply_appledouble(NSData *ad, NSString *destPath, NSString **why)
   if (widened)
     chmod(cdst, st.st_mode & 07777);
 
+  /* On a volume a Mac reads, the kernel's layout, and no quarantine:
+   * Finder does not carry it onto such a volume either (E35). */
+  if (appleDouble == 1)
+    {
+      ad = [GSFileMetadata macVolumeSidecarDataFor: parsed keepQuarantine: NO];
+      if (ad == nil)
+        {
+          [GSFileMetadata invalidateCachedMetadataForPath: destPath];
+          return YES;
+        }
+    }
   if (inSidecar && ![ad writeToFile: sidecar atomically: YES])
     {
       *why = [[GSFileMetadata sidecarWriteErrorAtPath: sidecar code: errno]

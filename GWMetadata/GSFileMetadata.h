@@ -108,6 +108,8 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  *   // ... inspect/modify properties ...
  *   [md writeToFileAtPath: path error: NULL];
  */
+@class GSAppleDouble;
+
 @interface GSFileMetadata : NSObject <NSCopying>
 {
   /* Raw data backing the properties */
@@ -461,6 +463,16 @@ typedef NSString *(^GSFilesystemTypeProbe)(NSString *path);
  * can carry the metadata to a Mac there.
  */
 + (NSError *)sidecarWriteErrorAtPath:(NSString *)sidecarPath code:(int)code;
+
+/**
+ * The bytes of a "._" file for a volume a Mac reads through such files: the
+ * kernel's own layout (-[GSAppleDouble appleDoubleDataInVolumeLayout]) with
+ * the quarantine as the kernel stores it, plain (E35), or left out when
+ * keepQuarantine is NO, as Finder leaves it out of every copy (E35, E16).
+ * nil when nothing is left to write.
+ */
++ (NSData *)macVolumeSidecarDataFor:(GSAppleDouble *)appleDouble
+                     keepQuarantine:(BOOL)keepQuarantine;
 
 /** Replaces the filesystem type probe (tests); nil restores the real one. */
 + (void)setFilesystemTypeProbe:(GSFilesystemTypeProbe)probe;

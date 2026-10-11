@@ -22,3 +22,6 @@ t_TransportPolicy_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m \
                                 ../../GWMetadata/GSAppleDouble.m \
                                 ../../GWMetadata/GWMetaXattr.m
 t_TransportPolicy_TOOL_LIBS += -lgnustep-gui
+
+# The Mac kernel's "._" layout, compared byte for byte with the E35 files.
+t_VolumeLayout_OBJC_FILES += ../../GWMetadata/GSAppleDouble.m
