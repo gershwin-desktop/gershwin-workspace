@@ -7,6 +7,7 @@
 #import "DSStoreInfo.h"
 #import "DSStore.h"
 #import "GSFileMetadata.h"
+#import "GWMetaXattr.h"
 #include <sys/stat.h>
 
 #pragma mark - DSStoreIconInfo Implementation
@@ -430,8 +431,8 @@ const CGFloat DSStoreInfoFinderTitleBarHeight = 22.0;
     }
     NSString *parent = [standard stringByDeletingLastPathComponent];
     struct stat own, up;
-    if (stat([standard fileSystemRepresentation], &own) == 0
-        && stat([parent fileSystemRepresentation], &up) == 0
+    if (stat(GW_FSREP(standard), &own) == 0
+        && stat(GW_FSREP(parent), &up) == 0
         && own.st_dev != up.st_dev) {
         return nil;
     }
