@@ -36,10 +36,7 @@
 
 - (NSImage *)customIconForPath:(NSString *)path
 {
-  GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
-  if (md && [md hasCustomIcon])
-    return [md customIconAsImage];
-  return nil;
+  return [GSFileMetadata customIconImageForPath: path];
 }
 
 - (NSPoint)iconPositionForPath:(NSString *)path

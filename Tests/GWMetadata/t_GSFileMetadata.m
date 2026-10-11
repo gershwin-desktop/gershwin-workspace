@@ -323,6 +323,41 @@ main(void)
          "clearCustomIcon drops the resource fork");
   }
 
+  /* E18: a folder's icon is in its "Icon\r" file; one reader serves files
+   * and folders. */
+  {
+    NSMutableData *icns = [NSMutableData dataWithBytes: "icns" length: 4];
+    uint32_t lenBE = htonl(8);
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSString stringWithFormat: @"%@/gsfm-folder-icon-%d",
+                              NSTemporaryDirectory(), (int)getpid()];
+    NSString *iconFile = [dir stringByAppendingString: @"/Icon\r"];
+    GSFileMetadata *fmd = [[[GSFileMetadata alloc] init] autorelease];
+    GSFileMetadata *imd = [[[GSFileMetadata alloc] init] autorelease];
+
+    [icns appendBytes: &lenBE length: 4];
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [GSFileMetadata invalidateAllCachedMetadata];
+
+    PASS([GSFileMetadata customIconDataForPath: dir] == nil,
+         "folder without the flag has no custom icon");
+    [fmd setCustomIcon: YES];
+    [fmd writeToFileAtPath: dir error: NULL];
+    [GSFileMetadata invalidateAllCachedMetadata];
+    PASS([GSFileMetadata customIconDataForPath: dir] == nil,
+         "flagged folder without an Icon file has no custom icon");
+    [fm createFileAtPath: iconFile contents: [NSData data] attributes: nil];
+    [imd setCustomIconData: icns];
+    [imd setCustomIcon: NO];
+    [imd writeToFileAtPath: iconFile error: NULL];
+    [GSFileMetadata invalidateAllCachedMetadata];
+    PASS([[GSFileMetadata customIconDataForPath: dir] isEqual: icns],
+         "folder icon is read from the Icon file");
+    [fm removeFileAtPath: dir handler: nil];
+    [GSFileMetadata invalidateAllCachedMetadata];
+  }
+
   /* --- directory DInfo: view style + window bounds (spatial FinderInfo) --- */
   {
     GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];

@@ -397,6 +397,17 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 - (NSImage *)customIconAsImage;
 
 /**
+ * The icns custom icon of the item at `path`, nil when it has none.  For a
+ * folder it is read from the invisible "Icon\r" file inside it, where Finder
+ * keeps it, once the folder carries kHasCustomIcon; for anything else from
+ * the item's own resource fork.
+ */
++ (NSData *)customIconDataForPath:(NSString *)path;
+
+/** The same icon decoded for display, nil when none or undecodable. */
++ (NSImage *)customIconImageForPath:(NSString *)path;
+
+/**
  * Utility: return the sidecar path for a given file path
  * (e.g. /foo/bar.txt -> /foo/._bar.txt).
  */

@@ -1747,6 +1747,30 @@ static NSData *gsLookupResource(NSData *fork, GSOType type, BOOL useID,
   return nil;
 }
 
++ (NSData *)customIconDataForPath:(NSString *)path
+{
+  GSFileMetadata *md = [self metadataForFileAtPath: path];
+  BOOL isDir = NO;
+
+  if (md == nil || ![md hasCustomIcon])
+    return nil;
+  if ([[NSFileManager defaultManager] fileExistsAtPath: path isDirectory: &isDir] && isDir)
+    {
+      GSFileMetadata *imd = [self metadataForFileAtPath:
+        [path stringByAppendingPathComponent: @"Icon\r"]];
+
+      return imd ? [self icnsDataFromResourceFork: [imd resourceFork]] : nil;
+    }
+  return [md customIconData];
+}
+
++ (NSImage *)customIconImageForPath:(NSString *)path
+{
+  NSData *icns = [self customIconDataForPath: path];
+
+  return icns ? [[[NSImage alloc] initWithData: icns] autorelease] : nil;
+}
+
 - (void)setCustomIconData:(NSData *)icnsData
 {
   if (icnsData == nil || [icnsData length] == 0)

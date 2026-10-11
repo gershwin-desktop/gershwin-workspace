@@ -292,16 +292,13 @@ static id<FinderInfoLocking> defaultLocker;
         _stationery = [md isStationery];
         _typeCode = [[FinderInfoModel stringFromCode: [md typeCode]] copy];
         _creatorCode = [[FinderInfoModel stringFromCode: [md creatorCode]] copy];
-        _hasCustomIcon = [md hasCustomIcon];
-        _customIconICNS = [[md customIconData] copy];
-      } else {
-        _hasCustomIcon = [md hasCustomIcon];
-        if (_hasCustomIcon) {
-          GSFileMetadata *imd = [GSFileMetadata metadataForFileAtPath: iconFilePath(path)
-                                                         forceSidecar: NO];
-
-          _customIconICNS = [[GSFileMetadata icnsDataFromResourceFork: [imd resourceFork]] copy];
-        }
+      }
+      _hasCustomIcon = [md hasCustomIcon];
+      if (_hasCustomIcon) {
+        /* The shared reader goes through the cache, which may be stale. */
+        [GSFileMetadata invalidateCachedMetadataForPath: path];
+        [GSFileMetadata invalidateCachedMetadataForPath: iconFilePath(path)];
+        _customIconICNS = [[GSFileMetadata customIconDataForPath: path] copy];
       }
     }
     if (_typeCode == nil)
