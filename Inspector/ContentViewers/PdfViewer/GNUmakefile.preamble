@@ -26,7 +26,9 @@ ADDITIONAL_INSTALL_DIRS +=
 
 
 # The shared "can't open" alert lives in FSNode, which Inspector links already.
-PdfViewer_LIBRARIES_DEPEND_UPON += -lFSNode
+# A bundle on Windows is a DLL that must resolve every symbol at link time,
+# and bundle.make links it against _BUNDLE_LIBS (not LIBRARIES_DEPEND_UPON).
+PdfViewer_BUNDLE_LIBS += -lFSNode
 # The in-tree FSNode first: an installed older FSNode (the prebuilt Windows
 # System has one) lacks the alert function and fails the link.
 ADDITIONAL_LIB_DIRS += -L../../../FSNode/FSNode.framework
