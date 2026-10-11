@@ -864,3 +864,25 @@
 "Purple" = "Lilla";
 "Grey" = "Grå";
 "None" = "Ingen";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Flytte ett element fra: %@\ntil: %@?";
+"Move %lu items from: %@\nto: %@?"
+  = "Flytte %lu elementer fra: %@\ntil: %@?";
+"Copy one item from: %@\nto: %@?"
+  = "Kopiere ett element fra: %@\ntil: %@?";
+"Copy %lu items from: %@\nto: %@?"
+  = "Kopiere %lu elementer fra: %@\ntil: %@?";
+"Link one item from: %@\nto: %@?"
+  = "Lenke ett element fra: %@\ntil: %@?";
+"Link %lu items from: %@\nto: %@?"
+  = "Lenke %lu elementer fra: %@\ntil: %@?";
+"Move one item from: %@\nto the Recycler?"
+  = "Flytte ett element fra %@\ntil papirkurven?";
+"Move %lu items from: %@\nto the Recycler?"
+  = "Flytte %lu elementer fra %@\ntil papirkurven?";
+"Move one item from the Recycler\nto: %@?"
+  = "Flytte ett element fra papirkurven\ntil: %@?";
+"Move %lu items from the Recycler\nto: %@?"
+  = "Flytte %lu elementer fra papirkurven\ntil: %@?";

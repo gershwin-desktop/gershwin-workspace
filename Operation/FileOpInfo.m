@@ -41,6 +41,10 @@
 
 
 #define PROGR_STEPS (100.0)
+
+/* Looked up in the application's own table (see +stringsBundle), where the
+ * titles and every other string of the application live. */
+#define FOString(key) [[FileOpInfo stringsBundle] localizedStringForKey: (key) value: @"" table: nil]
 static BOOL stopped = NO;
 static BOOL paused = NO;
 
@@ -214,27 +218,41 @@ static NSString *nibName = @"FileOperationWin";
   return self;
 }
 
+static NSBundle *stringsBundle = nil;
+
++ (NSBundle *)stringsBundle
+{
+  return stringsBundle ? stringsBundle : [NSBundle mainBundle];
+}
+
++ (void)setStringsBundle:(NSBundle *)bundle
+{
+  [bundle retain];
+  [stringsBundle release];
+  stringsBundle = bundle;
+}
+
 /* Each sentence is one localizable string: the order of the words, and the
  * place of the paths in them, differs between languages, so nothing is
  * glued together from pieces. */
 + (NSString *)confirmationTitleForOperation:(NSString *)op
 {
   if ([op isEqual: NSWorkspaceMoveOperation])
-    return NSLocalizedString(@"Move", @"");
+    return FOString(@"Move");
   if ([op isEqual: NSWorkspaceCopyOperation])
-    return NSLocalizedString(@"Copy", @"");
+    return FOString(@"Copy");
   if ([op isEqual: NSWorkspaceLinkOperation])
-    return NSLocalizedString(@"Link", @"");
+    return FOString(@"Link");
   if ([op isEqual: NSWorkspaceRecycleOperation]
       || [op isEqual: @"WorkspaceRecycleOutOperation"]
       || [op isEqual: @"WorkspaceemptyTrashOperation"])
-    return NSLocalizedString(@"Recycler", @"");
+    return FOString(@"Recycler");
   if ([op isEqual: NSWorkspaceDestroyOperation])
-    return NSLocalizedString(@"Delete", @"");
+    return FOString(@"Delete");
   if ([op isEqual: NSWorkspaceDuplicateOperation])
-    return NSLocalizedString(@"Duplicate", @"");
+    return FOString(@"Duplicate");
   if ([op isEqual: FSNWorkspaceCreateAliasOperation])
-    return NSLocalizedString(@"Make Alias", @"");
+    return FOString(@"Make Alias");
   return nil;
 }
 
@@ -247,28 +265,28 @@ static NSString *nibName = @"FileOperationWin";
   BOOL one = (n == 1);
 
   if ([op isEqual: NSWorkspaceMoveOperation])
-    return one ? NSLocalizedString(@"Move one item from: %@\nto: %@?", @"")
-               : NSLocalizedString(@"Move %lu items from: %@\nto: %@?", @"");
+    return one ? FOString(@"Move one item from: %@\nto: %@?")
+               : FOString(@"Move %lu items from: %@\nto: %@?");
   if ([op isEqual: NSWorkspaceCopyOperation])
-    return one ? NSLocalizedString(@"Copy one item from: %@\nto: %@?", @"")
-               : NSLocalizedString(@"Copy %lu items from: %@\nto: %@?", @"");
+    return one ? FOString(@"Copy one item from: %@\nto: %@?")
+               : FOString(@"Copy %lu items from: %@\nto: %@?");
   if ([op isEqual: NSWorkspaceLinkOperation])
-    return one ? NSLocalizedString(@"Link one item from: %@\nto: %@?", @"")
-               : NSLocalizedString(@"Link %lu items from: %@\nto: %@?", @"");
+    return one ? FOString(@"Link one item from: %@\nto: %@?")
+               : FOString(@"Link %lu items from: %@\nto: %@?");
   if ([op isEqual: NSWorkspaceRecycleOperation])
-    return one ? NSLocalizedString(@"Move one item from: %@\nto the Recycler?", @"")
-               : NSLocalizedString(@"Move %lu items from: %@\nto the Recycler?", @"");
+    return one ? FOString(@"Move one item from: %@\nto the Recycler?")
+               : FOString(@"Move %lu items from: %@\nto the Recycler?");
   if ([op isEqual: @"WorkspaceRecycleOutOperation"])
-    return one ? NSLocalizedString(@"Move one item from the Recycler\nto: %@?", @"")
-               : NSLocalizedString(@"Move %lu items from the Recycler\nto: %@?", @"");
+    return one ? FOString(@"Move one item from the Recycler\nto: %@?")
+               : FOString(@"Move %lu items from the Recycler\nto: %@?");
   if ([op isEqual: @"WorkspaceemptyTrashOperation"])
-    return NSLocalizedString(@"Empty the Recycler?", @"");
+    return FOString(@"Empty the Recycler?");
   if ([op isEqual: NSWorkspaceDestroyOperation])
-    return NSLocalizedString(@"Delete the selected objects?", @"");
+    return FOString(@"Delete the selected objects?");
   if ([op isEqual: NSWorkspaceDuplicateOperation])
-    return NSLocalizedString(@"Duplicate the selected objects?", @"");
+    return FOString(@"Duplicate the selected objects?");
   if ([op isEqual: FSNWorkspaceCreateAliasOperation])
-    return NSLocalizedString(@"Create aliases of the selected objects?", @"");
+    return FOString(@"Create aliases of the selected objects?");
   return nil;
 }
 

@@ -819,3 +819,25 @@
 "Purple" = "Roxo";
 "Grey" = "Cinza";
 "None" = "Nenhum";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Mover um item de: %@\npara: %@?";
+"Move %lu items from: %@\nto: %@?"
+  = "Mover %lu itens de: %@\npara: %@?";
+"Copy one item from: %@\nto: %@?"
+  = "Copiar um item de: %@\npara: %@?";
+"Copy %lu items from: %@\nto: %@?"
+  = "Copiar %lu itens de: %@\npara: %@?";
+"Link one item from: %@\nto: %@?"
+  = "Vincular um item de: %@\npara: %@?";
+"Link %lu items from: %@\nto: %@?"
+  = "Vincular %lu itens de: %@\npara: %@?";
+"Move one item from: %@\nto the Recycler?"
+  = "Mover um item de %@\npara a Lixeira?";
+"Move %lu items from: %@\nto the Recycler?"
+  = "Mover %lu itens de %@\npara a Lixeira?";
+"Move one item from the Recycler\nto: %@?"
+  = "Mover um item da Lixeira\npara: %@?";
+"Move %lu items from the Recycler\nto: %@?"
+  = "Mover %lu itens da Lixeira\npara: %@?";

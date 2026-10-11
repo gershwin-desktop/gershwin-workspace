@@ -1544,3 +1544,25 @@ for";
 "tags that are empty or contain *, \" or \\" = "etiquetas vazias ou com *, \" ou \\";
 "%@ (colours cannot be ordered)" = "%@ (as cores não podem ser ordenadas)";
 "%@ (not-equal on a list of values)" = "%@ («não é» numa lista de valores)";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Mover um item de: %@\npara: %@?";
+"Move %lu items from: %@\nto: %@?"
+  = "Mover %lu itens de: %@\npara: %@?";
+"Copy one item from: %@\nto: %@?"
+  = "Copiar um item de: %@\npara: %@?";
+"Copy %lu items from: %@\nto: %@?"
+  = "Copiar %lu itens de: %@\npara: %@?";
+"Link one item from: %@\nto: %@?"
+  = "Ligar um item de: %@\npara: %@?";
+"Link %lu items from: %@\nto: %@?"
+  = "Ligar %lu itens de: %@\npara: %@?";
+"Move one item from: %@\nto the Recycler?"
+  = "Mover um item de %@\npara o Lixo?";
+"Move %lu items from: %@\nto the Recycler?"
+  = "Mover %lu itens de %@\npara o Lixo?";
+"Move one item from the Recycler\nto: %@?"
+  = "Mover um item do Lixo\npara: %@?";
+"Move %lu items from the Recycler\nto: %@?"
+  = "Mover %lu itens do Lixo\npara: %@?";

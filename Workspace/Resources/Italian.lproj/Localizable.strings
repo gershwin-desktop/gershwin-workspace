@@ -1488,3 +1488,25 @@
 "tags that are empty or contain *, \" or \\" = "tag vuoti o contenenti *, \" o \\";
 "%@ (colours cannot be ordered)" = "%@ (i colori non possono essere ordinati)";
 "%@ (not-equal on a list of values)" = "%@ («diverso da» su un elenco di valori)";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Spostare un elemento da: %@\na: %@?";
+"Move %lu items from: %@\nto: %@?"
+  = "Spostare %lu elementi da: %@\na: %@?";
+"Copy one item from: %@\nto: %@?"
+  = "Copiare un elemento da: %@\na: %@?";
+"Copy %lu items from: %@\nto: %@?"
+  = "Copiare %lu elementi da: %@\na: %@?";
+"Link one item from: %@\nto: %@?"
+  = "Collegare un elemento da: %@\na: %@?";
+"Link %lu items from: %@\nto: %@?"
+  = "Collegare %lu elementi da: %@\na: %@?";
+"Move one item from: %@\nto the Recycler?"
+  = "Spostare un elemento da %@\nnel Cestino?";
+"Move %lu items from: %@\nto the Recycler?"
+  = "Spostare %lu elementi da %@\nnel Cestino?";
+"Move one item from the Recycler\nto: %@?"
+  = "Spostare un elemento dal Cestino\na: %@?";
+"Move %lu items from the Recycler\nto: %@?"
+  = "Spostare %lu elementi dal Cestino\na: %@?";

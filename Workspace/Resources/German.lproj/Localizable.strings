@@ -1286,3 +1286,25 @@
 "tags that are empty or contain *, \" or \\" = "Schlagworte, die leer sind oder *, \" oder \\ enthalten";
 "%@ (colours cannot be ordered)" = "%@ (Farben lassen sich nicht ordnen)";
 "%@ (not-equal on a list of values)" = "%@ („ist nicht“ bei einer Liste von Werten)";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Ein Element verschieben von: %@\nnach: %@?";
+"Move %lu items from: %@\nto: %@?"
+  = "%lu Elemente verschieben von: %@\nnach: %@?";
+"Copy one item from: %@\nto: %@?"
+  = "Ein Element kopieren von: %@\nnach: %@?";
+"Copy %lu items from: %@\nto: %@?"
+  = "%lu Elemente kopieren von: %@\nnach: %@?";
+"Link one item from: %@\nto: %@?"
+  = "Ein Element verknüpfen von: %@\nnach: %@?";
+"Link %lu items from: %@\nto: %@?"
+  = "%lu Elemente verknüpfen von: %@\nnach: %@?";
+"Move one item from: %@\nto the Recycler?"
+  = "Ein Element von %@\nin den Papierkorb legen?";
+"Move %lu items from: %@\nto the Recycler?"
+  = "%lu Elemente von %@\nin den Papierkorb legen?";
+"Move one item from the Recycler\nto: %@?"
+  = "Ein Element aus dem Papierkorb\nnach %@ bewegen?";
+"Move %lu items from the Recycler\nto: %@?"
+  = "%lu Elemente aus dem Papierkorb\nnach %@ bewegen?";

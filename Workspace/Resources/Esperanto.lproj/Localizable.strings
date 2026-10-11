@@ -1040,3 +1040,25 @@
 "Purple" = "Purpura";
 "Grey" = "Griza";
 "None" = "Neniu";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Ĉu movi unu eron de: %@\nal: %@?";
+"Move %lu items from: %@\nto: %@?"
+  = "Ĉu movi %lu erojn de: %@\nal: %@?";
+"Copy one item from: %@\nto: %@?"
+  = "Ĉu kopii unu eron de: %@\nal: %@?";
+"Copy %lu items from: %@\nto: %@?"
+  = "Ĉu kopii %lu erojn de: %@\nal: %@?";
+"Link one item from: %@\nto: %@?"
+  = "Ĉu ligi unu eron de: %@\nal: %@?";
+"Link %lu items from: %@\nto: %@?"
+  = "Ĉu ligi %lu erojn de: %@\nal: %@?";
+"Move one item from: %@\nto the Recycler?"
+  = "Ĉu movi unu eron de %@\nal la rubujo?";
+"Move %lu items from: %@\nto the Recycler?"
+  = "Ĉu movi %lu erojn de %@\nal la rubujo?";
+"Move one item from the Recycler\nto: %@?"
+  = "Ĉu movi unu eron el la rubujo\nal: %@?";
+"Move %lu items from the Recycler\nto: %@?"
+  = "Ĉu movi %lu erojn el la rubujo\nal: %@?";

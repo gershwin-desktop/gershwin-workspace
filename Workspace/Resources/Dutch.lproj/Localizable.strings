@@ -1526,3 +1526,25 @@
 "tags that are empty or contain *, \" or \\" = "labels die leeg zijn of *, \" of \\ bevatten";
 "%@ (colours cannot be ordered)" = "%@ (kleuren kunnen niet worden gesorteerd)";
 "%@ (not-equal on a list of values)" = "%@ („is niet” bij een lijst met waarden)";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Eén onderdeel verplaatsen van: %@\nnaar: %@?";
+"Move %lu items from: %@\nto: %@?"
+  = "%lu onderdelen verplaatsen van: %@\nnaar: %@?";
+"Copy one item from: %@\nto: %@?"
+  = "Eén onderdeel kopiëren van: %@\nnaar: %@?";
+"Copy %lu items from: %@\nto: %@?"
+  = "%lu onderdelen kopiëren van: %@\nnaar: %@?";
+"Link one item from: %@\nto: %@?"
+  = "Eén onderdeel koppelen van: %@\nnaar: %@?";
+"Link %lu items from: %@\nto: %@?"
+  = "%lu onderdelen koppelen van: %@\nnaar: %@?";
+"Move one item from: %@\nto the Recycler?"
+  = "Eén onderdeel van %@\nnaar de Prullenmand verplaatsen?";
+"Move %lu items from: %@\nto the Recycler?"
+  = "%lu onderdelen van %@\nnaar de Prullenmand verplaatsen?";
+"Move one item from the Recycler\nto: %@?"
+  = "Eén onderdeel uit de Prullenmand\nnaar %@ verplaatsen?";
+"Move %lu items from the Recycler\nto: %@?"
+  = "%lu onderdelen uit de Prullenmand\nnaar %@ verplaatsen?";

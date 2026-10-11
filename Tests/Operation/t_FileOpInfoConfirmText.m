@@ -33,6 +33,16 @@ specifiers(NSString *fmt)
   return out;
 }
 
+/* The language the lookup uses, as the user's setting would choose it. */
+static void
+setLang(NSString *lang)
+{
+  [NSUserDefaults setUserLanguages: [NSArray arrayWithObject: lang]];
+  /* The bundle keeps the table of the language it first read; drop it so the
+   * next lookup follows the language chosen here. */
+  [[FileOpInfo stringsBundle] setValue: nil forKey: @"_localizations"];
+}
+
 int
 main(void)
 {
@@ -41,7 +51,11 @@ main(void)
   NSArray *types = @[ NSWorkspaceMoveOperation, NSWorkspaceCopyOperation,
                       NSWorkspaceLinkOperation, NSWorkspaceRecycleOperation,
                       kRecycleOut ];
-  NSArray *langs = @[ @"English", @"German" ];
+  /* All languages Workspace ships. */
+  NSArray *langs = @[ @"English", @"German", @"French", @"Italian",
+                      @"Spanish", @"Portuguese", @"BrasilPortuguese",
+                      @"Dutch", @"Esperanto", @"Hungarian", @"Japanese",
+                      @"Norvegian", @"Polish", @"Romanian" ];
   NSString *type;
   NSString *lang;
 
@@ -75,41 +89,71 @@ main(void)
                                     destination: nil],
              @"Delete the selected objects?", "delete is unchanged");
 
-  for (lang in langs) {
-    NSString *path = [NSString stringWithFormat:
-      @"../../Operation/Resources/%@.lproj/Localizable.strings", lang];
-    NSDictionary *tbl = [NSDictionary dictionaryWithContentsOfFile: path];
-    NSString *key;
+  /* The sentences must be looked up where they live: the table of the
+   * application (Workspace/Resources), through the same call the code uses.
+   * The test points the lookup at that table and asks for each language. */
+  [FileOpInfo setStringsBundle:
+    [NSBundle bundleWithPath: [[[NSFileManager defaultManager] currentDirectoryPath] stringByAppendingPathComponent: @"../../Workspace/Resources"]]];
+  PASS([FileOpInfo stringsBundle] != nil, "application strings found");
+  NSMutableDictionary *reference = [NSMutableDictionary dictionary];
 
-    PASS(tbl != nil, "%s strings readable", [lang UTF8String]);
+  /* What a missing translation shows: the English key itself. */
+  setLang(@"English");
+  for (type in types) {
+    NSUInteger k;
+
+    for (k = 1; k <= 2; k++) {
+      [reference setObject: [c confirmationFormatForOperation: type itemCount: k]
+                    forKey: [NSString stringWithFormat: @"%@/%lu", type,
+                                      (unsigned long)k]];
+    }
+  }
+  for (lang in langs) {
+    BOOL english = [lang isEqual: @"English"];
+
+    setLang(lang);
     for (type in types) {
       NSUInteger n;
+      BOOL needsSrc = ![type isEqual: kRecycleOut];
+      BOOL needsDst = ![type isEqual: NSWorkspaceRecycleOperation];
 
       for (n = 1; n <= 2; n++) {
-        NSString *en = [c confirmationMessageForOperation: type
-                                                itemCount: n
-                                                   source: @"%@"
-                                              destination: @"%@"];
+        NSString *loc = [c confirmationMessageForOperation: type
+                                                 itemCount: n
+                                                    source: @"SRCPATH"
+                                               destination: @"DSTPATH"];
         NSString *fmt = [c confirmationFormatForOperation: type itemCount: n];
-        NSString *loc = [tbl objectForKey: fmt];
 
-        PASS(loc != nil, "%s has the sentence for %s/%lu",
-             [lang UTF8String], [type UTF8String], (unsigned long)n);
-        PASS_EQUAL(specifiers(loc), specifiers(fmt),
-                   "placeholders of the %s sentence match", [lang UTF8String]);
-        if ([lang isEqual: @"German"]) {
-          PASS([loc rangeOfString: @"item"].location == NSNotFound
-               && [loc rangeOfString: @" from"].location == NSNotFound
-               && [loc rangeOfString: @"Recycler"].location == NSNotFound,
-               "German sentence has no English words: %s", [loc UTF8String]);
+        PASS(!needsSrc || [loc rangeOfString: @"SRCPATH"].location != NSNotFound,
+             "%s keeps the source path (%s/%lu)", [lang UTF8String],
+             [type UTF8String], (unsigned long)n);
+        PASS(!needsDst || [loc rangeOfString: @"DSTPATH"].location != NSNotFound,
+             "%s keeps the destination path (%s/%lu)", [lang UTF8String],
+             [type UTF8String], (unsigned long)n);
+        PASS(n == 1 || [loc rangeOfString: @"2"].location != NSNotFound,
+             "%s keeps the item count (%s)", [lang UTF8String],
+             [type UTF8String]);
+        if (!english) {
+          NSString *ref = [reference objectForKey:
+            [NSString stringWithFormat: @"%@/%lu", type, (unsigned long)n]];
+
+          PASS_EQUAL(specifiers(fmt), specifiers(ref),
+                     "%s placeholders match (%s/%lu)", [lang UTF8String],
+                     [type UTF8String], (unsigned long)n);
+          PASS(![fmt isEqual: ref],
+               "%s sentence for %s/%lu is translated: %s", [lang UTF8String],
+               [type UTF8String], (unsigned long)n, [loc UTF8String]);
         }
-        (void)en;
       }
     }
-    key = @"Delete the selected objects?";
-    PASS([tbl objectForKey: key] != nil, "%s keeps %s", [lang UTF8String],
-         [key UTF8String]);
   }
+  setLang(@"German");
+  PASS_EQUAL([c confirmationMessageForOperation: NSWorkspaceMoveOperation
+                                      itemCount: 1
+                                         source: @"/a"
+                                    destination: @"/b"],
+             @"Ein Element verschieben von: /a\nnach: /b?",
+             "the German UI shows the German move sentence");
   [arp release];
   return 0;
 }

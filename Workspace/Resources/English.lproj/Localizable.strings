@@ -1238,3 +1238,25 @@
 "tags that are empty or contain *, \" or \\" = "tags that are empty or contain *, \" or \\";
 "%@ (colours cannot be ordered)" = "%@ (colours cannot be ordered)";
 "%@ (not-equal on a list of values)" = "%@ (not-equal on a list of values)";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Move one item from: %@\nto: %@?";
+"Move %lu items from: %@\nto: %@?"
+  = "Move %lu items from: %@\nto: %@?";
+"Copy one item from: %@\nto: %@?"
+  = "Copy one item from: %@\nto: %@?";
+"Copy %lu items from: %@\nto: %@?"
+  = "Copy %lu items from: %@\nto: %@?";
+"Link one item from: %@\nto: %@?"
+  = "Link one item from: %@\nto: %@?";
+"Link %lu items from: %@\nto: %@?"
+  = "Link %lu items from: %@\nto: %@?";
+"Move one item from: %@\nto the Recycler?"
+  = "Move one item from: %@\nto the Trash?";
+"Move %lu items from: %@\nto the Recycler?"
+  = "Move %lu items from: %@\nto the Trash?";
+"Move one item from the Recycler\nto: %@?"
+  = "Move one item from the Trash\nto: %@?";
+"Move %lu items from the Recycler\nto: %@?"
+  = "Move %lu items from the Trash\nto: %@?";

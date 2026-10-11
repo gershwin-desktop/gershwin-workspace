@@ -964,3 +964,25 @@ for";
 "Purple" = "Fioletowy";
 "Grey" = "Szary";
 "None" = "Brak";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Przenieść jeden element z: %@\ndo: %@?";
+"Move %lu items from: %@\nto: %@?"
+  = "Przenieść elementy (%lu) z: %@\ndo: %@?";
+"Copy one item from: %@\nto: %@?"
+  = "Skopiować jeden element z: %@\ndo: %@?";
+"Copy %lu items from: %@\nto: %@?"
+  = "Skopiować elementy (%lu) z: %@\ndo: %@?";
+"Link one item from: %@\nto: %@?"
+  = "Dowiązać jeden element z: %@\ndo: %@?";
+"Link %lu items from: %@\nto: %@?"
+  = "Dowiązać elementy (%lu) z: %@\ndo: %@?";
+"Move one item from: %@\nto the Recycler?"
+  = "Przenieść jeden element z %@\ndo Kosza?";
+"Move %lu items from: %@\nto the Recycler?"
+  = "Przenieść elementy (%lu) z %@\ndo Kosza?";
+"Move one item from the Recycler\nto: %@?"
+  = "Przenieść jeden element z Kosza\ndo: %@?";
+"Move %lu items from the Recycler\nto: %@?"
+  = "Przenieść elementy (%lu) z Kosza\ndo: %@?";

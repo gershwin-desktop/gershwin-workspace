@@ -776,3 +776,25 @@ for";
 "Purple" = "Mov";
 "Grey" = "Gri";
 "None" = "Fără";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Mutați un element din: %@\nîn: %@?";
+"Move %lu items from: %@\nto: %@?"
+  = "Mutați %lu elemente din: %@\nîn: %@?";
+"Copy one item from: %@\nto: %@?"
+  = "Copiați un element din: %@\nîn: %@?";
+"Copy %lu items from: %@\nto: %@?"
+  = "Copiați %lu elemente din: %@\nîn: %@?";
+"Link one item from: %@\nto: %@?"
+  = "Legați un element din: %@\nîn: %@?";
+"Link %lu items from: %@\nto: %@?"
+  = "Legați %lu elemente din: %@\nîn: %@?";
+"Move one item from: %@\nto the Recycler?"
+  = "Mutați un element din %@\nîn Coș?";
+"Move %lu items from: %@\nto the Recycler?"
+  = "Mutați %lu elemente din %@\nîn Coș?";
+"Move one item from the Recycler\nto: %@?"
+  = "Mutați un element din Coș\nîn: %@?";
+"Move %lu items from the Recycler\nto: %@?"
+  = "Mutați %lu elemente din Coș\nîn: %@?";

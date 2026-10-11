@@ -866,3 +866,25 @@
 "Purple" = "Lila";
 "Grey" = "Szürke";
 "None" = "Nincs";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "Egy elem áthelyezése innen: %@\nide: %@?";
+"Move %lu items from: %@\nto: %@?"
+  = "%lu elem áthelyezése innen: %@\nide: %@?";
+"Copy one item from: %@\nto: %@?"
+  = "Egy elem másolása innen: %@\nide: %@?";
+"Copy %lu items from: %@\nto: %@?"
+  = "%lu elem másolása innen: %@\nide: %@?";
+"Link one item from: %@\nto: %@?"
+  = "Egy elem hivatkozásának létrehozása innen: %@\nide: %@?";
+"Link %lu items from: %@\nto: %@?"
+  = "%lu elem hivatkozásának létrehozása innen: %@\nide: %@?";
+"Move one item from: %@\nto the Recycler?"
+  = "Egy elem áthelyezése innen: %@\na Szemetesbe?";
+"Move %lu items from: %@\nto the Recycler?"
+  = "%lu elem áthelyezése innen: %@\na Szemetesbe?";
+"Move one item from the Recycler\nto: %@?"
+  = "Egy elem áthelyezése a Szemetesből\nide: %@?";
+"Move %lu items from the Recycler\nto: %@?"
+  = "%lu elem áthelyezése a Szemetesből\nide: %@?";

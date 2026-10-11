@@ -825,3 +825,25 @@
 "Purple" = "紫";
 "Grey" = "グレイ";
 "None" = "なし";
+
+/* Whole confirmation sentences of the file operations; %lu is the item count, %@ the paths. */
+"Move one item from: %@\nto: %@?"
+  = "1個の項目を移動しますか?\n元: %@\n先: %@";
+"Move %lu items from: %@\nto: %@?"
+  = "%lu個の項目を移動しますか?\n元: %@\n先: %@";
+"Copy one item from: %@\nto: %@?"
+  = "1個の項目をコピーしますか?\n元: %@\n先: %@";
+"Copy %lu items from: %@\nto: %@?"
+  = "%lu個の項目をコピーしますか?\n元: %@\n先: %@";
+"Link one item from: %@\nto: %@?"
+  = "1個の項目のリンクを作成しますか?\n元: %@\n先: %@";
+"Link %lu items from: %@\nto: %@?"
+  = "%lu個の項目のリンクを作成しますか?\n元: %@\n先: %@";
+"Move one item from: %@\nto the Recycler?"
+  = "1個の項目をゴミ箱に入れますか?\n元: %@";
+"Move %lu items from: %@\nto the Recycler?"
+  = "%lu個の項目をゴミ箱に入れますか?\n元: %@";
+"Move one item from the Recycler\nto: %@?"
+  = "1個の項目をゴミ箱から戻しますか?\n先: %@";
+"Move %lu items from the Recycler\nto: %@?"
+  = "%lu個の項目をゴミ箱から戻しますか?\n先: %@";

@@ -210,6 +210,11 @@
 
 - (void)getWinRect: (NSRect*)rptr;
 
+/* The bundle whose Localizable table holds the operation strings: the
+ * application's own (Workspace.app), where every other string of the
+ * application lives. Tests point it at the table in the source tree. */
++ (NSBundle *)stringsBundle;
++ (void)setStringsBundle:(NSBundle *)bundle;
 + (NSString *)confirmationTitleForOperation:(NSString *)op;
 + (NSString *)confirmationFormatForOperation:(NSString *)op
                                    itemCount:(NSUInteger)n;
