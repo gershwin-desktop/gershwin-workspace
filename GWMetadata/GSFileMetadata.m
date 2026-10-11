@@ -1060,8 +1060,11 @@ static NSMutableDictionary *_metadataCache = nil;
         continue;
       if (_modified & [[cleared objectForKey: name] unsignedIntegerValue])
         continue;
-      if (gs_setxattr(cpath, [name UTF8String], [value bytes], [value length],
-                      0) != 0)
+      /* An empty value has no bytes pointer; hand over a real one so the
+       * attribute is created empty instead of the whole migration failing. */
+      if (gs_setxattr(cpath, [name UTF8String],
+                      [value length] > 0 ? [value bytes] : "",
+                      [value length], 0) != 0)
         return NO;
     }
   return YES;

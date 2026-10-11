@@ -358,6 +358,31 @@ main(void)
     [GSFileMetadata invalidateAllCachedMetadata];
   }
 
+  /* E15 many.txt: one attribute has an empty value; migrating the sidecar
+   * must carry it as an empty xattr and all the others with it. */
+  {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSString stringWithFormat: @"%@/gsfm-migrate-%d",
+                              NSTemporaryDirectory(), (int)getpid()];
+    NSString *file = [dir stringByAppendingString: @"/many.txt"];
+    NSString *fix = @"interop/fixtures/finder106/E15-appledouble-tar/many.txt.ad";
+    const char *c = [file fileSystemRepresentation];
+    char buf[16];
+    BOOL ok;
+
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [fm createFileAtPath: file contents: [NSData data] attributes: nil];
+    [fm copyPath: fix toPath: [GSFileMetadata sidecarPathForFilePath: file] handler: nil];
+    ok = [[[[GSFileMetadata alloc] init] autorelease]
+           _migrateSidecar: [GSFileMetadata sidecarPathForFilePath: file] toFileAtPath: file];
+    PASS(ok, "sidecar with an empty-valued attribute migrates");
+    PASS(gs_getxattr(c, "user.org.example.a", buf, sizeof buf) == 1, "attribute before the empty one migrated");
+    PASS(gs_getxattr(c, "user.org.example.ccc", NULL, 0) == 300, "long attribute migrated");
+    PASS(gs_getxattr(c, "user.org.example.e", buf, sizeof buf) == 0, "empty attribute migrated as empty xattr");
+    [fm removeFileAtPath: dir handler: nil];
+  }
+
   /* --- directory DInfo: view style + window bounds (spatial FinderInfo) --- */
   {
     GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
