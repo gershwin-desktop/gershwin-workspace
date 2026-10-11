@@ -408,6 +408,17 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 + (NSImage *)customIconImageForPath:(NSString *)path;
 
 /**
+ * Stores `icns` as the custom icon of the folder at `folder` the way Finder
+ * does: an invisible, empty "Icon\r" file inside it holding the icon in its
+ * resource fork.  The folder's own kHasCustomIcon flag is not touched.
+ * -setCustomIconData: followed by a write does this for a directory.
+ */
++ (BOOL)writeFolderIconICNS:(NSData *)icns atPath:(NSString *)folder error:(NSError **)error;
+
+/** Removes the "Icon\r" file (and its sidecar) of the folder; YES if none. */
++ (BOOL)removeFolderIconAtPath:(NSString *)folder error:(NSError **)error;
+
+/**
  * Utility: return the sidecar path for a given file path
  * (e.g. /foo/bar.txt -> /foo/._bar.txt).
  */

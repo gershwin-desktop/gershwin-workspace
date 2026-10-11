@@ -1043,8 +1043,13 @@ static NSMutableDictionary *_metadataCache = nil;
   if ([ad hasResourceFork] && [[ad resourceFork] length] > 0)
     [items setObject: [ad resourceFork] forKey: GSXATTR_RESOURCEFORK];
   for (NSString *name in attrs)
-    [items setObject: [attrs objectForKey: name]
-              forKey: [@"user." stringByAppendingString: name]];
+    {
+      NSData *value = [attrs objectForKey: name];
+
+      if ([name isEqualToString: @"com.apple.quarantine"])
+        value = [[self class] _plainQuarantine: value];
+      [items setObject: value forKey: [@"user." stringByAppendingString: name]];
+    }
 
   NSDictionary *cleared = [NSDictionary dictionaryWithObjectsAndKeys:
     [NSNumber numberWithUnsignedInteger: GSFieldResourceFork], GSXATTR_RESOURCEFORK,
@@ -1081,6 +1086,8 @@ static NSMutableDictionary *_metadataCache = nil;
       return NO;
     }
 
+  if (![self _divertFolderIconAtPath: path error: error])
+    return NO;
   if (_forceSidecar)
     return [self writeSidecarToFileAtPath: path error: error];
 
@@ -1204,6 +1211,8 @@ static NSMutableDictionary *_metadataCache = nil;
 
 - (BOOL)writeSidecarToFileAtPath:(NSString *)path error:(NSError **)error
 {
+  if (![self _divertFolderIconAtPath: path error: error])
+    return NO;
   NSString *sidecarPath = [[self class] sidecarPathForFilePath: path];
 
   /* Merge over what is already there: entries and attributes written by
@@ -1344,8 +1353,8 @@ static NSMutableDictionary *_metadataCache = nil;
               const char *bytes = [qd bytes];
               while (len > 0 && bytes[len - 1] == 0)
                 len--;
-              NSData *trimmed = [qd subdataWithRange:
-                NSMakeRange(0, len)];
+              NSData *trimmed = [[self class] _plainQuarantine:
+                [qd subdataWithRange: NSMakeRange(0, len)]];
               NSString *q = [[NSString alloc]
                 initWithData: trimmed encoding: NSUTF8StringEncoding];
               if (q)
@@ -1449,7 +1458,8 @@ static NSMutableDictionary *_metadataCache = nil;
       while (len > 0 && bytes[len - 1] == 0)
         len--;
       NSString *q = [[NSString alloc]
-        initWithData: [qData subdataWithRange: NSMakeRange(0, len)]
+        initWithData: [self _plainQuarantine:
+                        [qData subdataWithRange: NSMakeRange(0, len)]]
             encoding: NSUTF8StringEncoding];
       if (q)
         {
@@ -1765,6 +1775,85 @@ static NSData *gsLookupResource(NSData *fork, GSOType type, BOOL useID,
       return imd ? [self icnsDataFromResourceFork: [imd resourceFork]] : nil;
     }
   return [md customIconData];
+}
+
+/* 10.6 tar prefixes a quarantine value with "q/"; the Mac's own xattr holds
+ * the plain "0000;..." value. */
++ (NSData *)_plainQuarantine:(NSData *)value
+{
+  if ([value length] > 2 && memcmp([value bytes], "q/", 2) == 0)
+    return [value subdataWithRange: NSMakeRange(2, [value length] - 2)];
+  return value;
+}
+
++ (BOOL)writeFolderIconICNS:(NSData *)icns atPath:(NSString *)folder error:(NSError **)error
+{
+  NSString *file = [folder stringByAppendingPathComponent: @"Icon\r"];
+  NSFileManager *fm = [NSFileManager defaultManager];
+  GSFileMetadata *imd;
+
+  if ([fm fileExistsAtPath: file] == NO
+      && [fm createFileAtPath: file contents: [NSData data] attributes: nil] == NO)
+    {
+      if (error)
+        *error = [NSError errorWithDomain: NSCocoaErrorDomain
+                                     code: NSFileWriteUnknownError
+                                 userInfo: nil];
+      return NO;
+    }
+  imd = [self metadataForFileAtPath: file forceSidecar: NO];
+  imd = imd ? [[imd copy] autorelease] : [[[GSFileMetadata alloc] init] autorelease];
+  /* Finder leaves kHasCustomIcon off the Icon file itself (E18). */
+  [imd setCustomIconData: icns];
+  [imd setCustomIcon: NO];
+  [imd setInvisible: YES];
+  if ([imd writeToFileAtPath: file error: error] == NO)
+    return NO;
+  [self invalidateCachedMetadataForPath: file];
+  return YES;
+}
+
++ (BOOL)removeFolderIconAtPath:(NSString *)folder error:(NSError **)error
+{
+  NSString *file = [folder stringByAppendingPathComponent: @"Icon\r"];
+  NSFileManager *fm = [NSFileManager defaultManager];
+
+  if ([fm fileExistsAtPath: file] == NO)
+    return YES;
+  if ([fm removeFileAtPath: file handler: nil] == NO)
+    {
+      if (error)
+        *error = [NSError errorWithDomain: NSCocoaErrorDomain
+                                     code: NSFileWriteUnknownError
+                                 userInfo: nil];
+      return NO;
+    }
+  [fm removeFileAtPath: [self sidecarPathForFilePath: file] handler: nil];
+  [self invalidateCachedMetadataForPath: file];
+  return YES;
+}
+
+/* A folder cannot take a resource fork on a Mac, so a fork set on one goes
+ * to its Icon file (or that file goes, for an emptied fork) and the write
+ * proceeds as if the fork were unchanged. */
+- (BOOL)_divertFolderIconAtPath:(NSString *)path error:(NSError **)error
+{
+  BOOL isDir = NO;
+  NSData *icns;
+
+  if (!(_modified & GSFieldResourceFork)
+      || ![[NSFileManager defaultManager] fileExistsAtPath: path isDirectory: &isDir]
+      || !isDir)
+    return YES;
+  icns = [[self class] icnsDataFromResourceFork: _resourceFork];
+  if (icns != nil
+      ? ![[self class] writeFolderIconICNS: icns atPath: path error: error]
+      : ![[self class] removeFolderIconAtPath: path error: error])
+    return NO;
+  /* The fork now lives in the Icon file, not in this folder's metadata. */
+  _modified &= ~GSFieldResourceFork;
+  DESTROY(_resourceFork);
+  return YES;
 }
 
 + (NSImage *)customIconImageForPath:(NSString *)path

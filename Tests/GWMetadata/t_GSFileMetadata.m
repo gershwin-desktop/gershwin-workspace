@@ -358,6 +358,72 @@ main(void)
     [GSFileMetadata invalidateAllCachedMetadata];
   }
 
+  /* M7: -setCustomIconData: on a folder uses the Icon file layout, never a
+   * fork in ._folder (10.6 cannot unpack that). */
+  {
+    NSMutableData *icns = [NSMutableData dataWithBytes: "icns" length: 4];
+    uint32_t lenBE = htonl(8);
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSString stringWithFormat: @"%@/gsfm-m7-%d", NSTemporaryDirectory(), (int)getpid()];
+    NSString *iconFile = [dir stringByAppendingString: @"/Icon\r"];
+    int rnd;
+
+    [icns appendBytes: &lenBE length: 4];
+    for (rnd = 0; rnd < 2; rnd++) {
+      GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
+      NSData *side;
+
+      [fm removeFileAtPath: dir handler: nil];
+      [fm createDirectoryAtPath: dir attributes: nil];
+      [GSFileMetadata invalidateAllCachedMetadata];
+      [md setCustomIconData: icns];
+      md.forceSidecar = (rnd == 1);
+      PASS([md writeToFileAtPath: dir error: NULL], "folder icon write succeeds");
+      [GSFileMetadata invalidateAllCachedMetadata];
+      PASS([fm fileExistsAtPath: iconFile], "folder icon goes to the Icon file");
+      side = [NSData dataWithContentsOfFile: [GSFileMetadata sidecarPathForFilePath: dir]];
+      PASS(side == nil || [[[[[GSAppleDouble alloc] initWithData: side] autorelease] resourceFork] length] == 0,
+           "no resource fork in ._folder");
+      PASS([[GSFileMetadata customIconDataForPath: dir] isEqual: icns], "folder icon reads back");
+      md = [[[GSFileMetadata alloc] init] autorelease];
+      [md clearCustomIcon];
+      md.forceSidecar = (rnd == 1);
+      [md writeToFileAtPath: dir error: NULL];
+      [GSFileMetadata invalidateAllCachedMetadata];
+      PASS(![fm fileExistsAtPath: iconFile], "clearing removes the Icon file");
+    }
+    [fm removeFileAtPath: dir handler: nil];
+    [GSFileMetadata invalidateAllCachedMetadata];
+  }
+
+  /* M4: 10.6 tar writes a quarantine value with a "q/" prefix; the plain
+   * value is what the Mac keeps in the xattr. */
+  {
+    GSAppleDouble *ad = [[[GSAppleDouble alloc] init] autorelease];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSString stringWithFormat: @"%@/gsfm-m4-%d", NSTemporaryDirectory(), (int)getpid()];
+    NSString *file = [dir stringByAppendingString: @"/q.txt"];
+    NSString *sc = [GSFileMetadata sidecarPathForFilePath: file];
+    GSFileMetadata *md;
+    char buf[64];
+    ssize_t n;
+
+    [ad setEntry: GSAppleDoubleFinderInfo data: [NSMutableData dataWithLength: 32]];
+    [ad setXattr: [@"q/0000;4e8f1c2a;Safari;" dataUsingEncoding: NSUTF8StringEncoding]
+          forKey: @"com.apple.quarantine"];
+    md = [GSFileMetadata metadataFromAppleDoubleData: [ad appleDoubleData]];
+    PASS_EQUAL([md quarantine], @"0000;4e8f1c2a;Safari;", "q/ prefix dropped when reading a sidecar");
+
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [fm createFileAtPath: file contents: [NSData data] attributes: nil];
+    [[ad appleDoubleData] writeToFile: sc atomically: NO];
+    [[[[GSFileMetadata alloc] init] autorelease] _migrateSidecar: sc toFileAtPath: file];
+    n = gs_getxattr([file fileSystemRepresentation], "user.com.apple.quarantine", buf, sizeof buf);
+    PASS(n == 21 && memcmp(buf, "0000;4e8f1c2a;Safari;", 21) == 0, "migrated xattr is the plain value");
+    [fm removeFileAtPath: dir handler: nil];
+  }
+
   /* E15 many.txt: one attribute has an empty value; migrating the sidecar
    * must carry it as an empty xattr and all the others with it. */
   {

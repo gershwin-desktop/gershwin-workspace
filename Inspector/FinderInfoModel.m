@@ -404,46 +404,6 @@ static BOOL writeStoreComment(NSString *path, NSString *comment, NSError **error
   return YES;
 }
 
-/* The Icon file of a folder: empty data fork, invisible, the icon in the
- * resource fork.  Finder does not set kHasCustomIcon on this file (E18). */
-static BOOL writeFolderIconFile(NSString *folder, NSData *icns, NSError **error)
-{
-  NSString *file = iconFilePath(folder);
-  NSFileManager *fm = [NSFileManager defaultManager];
-  GSFileMetadata *imd;
-
-  if ([fm fileExistsAtPath: file] == NO
-      && [fm createFileAtPath: file contents: [NSData data] attributes: nil] == NO) {
-    if (error)
-      *error = errorWithText(@"The icon file could not be created in the folder.");
-    return NO;
-  }
-  imd = [GSFileMetadata metadataForFileAtPath: file forceSidecar: NO];
-  imd = imd ? [[imd copy] autorelease] : [[[GSFileMetadata alloc] init] autorelease];
-  [imd setCustomIconData: icns];
-  [imd setCustomIcon: NO];
-  [imd setInvisible: YES];
-  return [imd writeToFileAtPath: file error: error];
-}
-
-static BOOL removeFolderIconFile(NSString *folder, NSError **error)
-{
-  NSString *file = iconFilePath(folder);
-  NSFileManager *fm = [NSFileManager defaultManager];
-
-  if ([fm fileExistsAtPath: file] == NO)
-    return YES;
-  if ([fm removeFileAtPath: file handler: nil] == NO) {
-    if (error)
-      *error = errorWithText(@"The icon file could not be removed from the folder.");
-    return NO;
-  }
-  [fm removeFileAtPath: [GSFileMetadata sidecarPathForFilePath: file] handler: nil];
-  [GSFileMetadata invalidateCachedMetadataForPath: file];
-  return YES;
-}
-
-
 - (BOOL)write:(NSError **)error
 {
   GSFileMetadata *md;
@@ -506,8 +466,8 @@ static BOOL removeFolderIconFile(NSString *folder, NSError **error)
   if (_isDirectory == NO && _iconChanged && _customIconICNS == nil)
     gs_removexattr(cpath, [GSXATTR_RESOURCEFORK UTF8String]);
   if (_isDirectory && _iconChanged) {
-    BOOL ok = _customIconICNS != nil ? writeFolderIconFile(_path, _customIconICNS, error)
-                                     : removeFolderIconFile(_path, error);
+    BOOL ok = _customIconICNS != nil ? [GSFileMetadata writeFolderIconICNS: _customIconICNS atPath: _path error: error]
+                                     : [GSFileMetadata removeFolderIconAtPath: _path error: error];
 
     if (ok == NO) {
       if (wasLocked)
