@@ -54,6 +54,7 @@ typedef NS_OPTIONS(uint16_t, GSFileFinderFlags) {
   GSFileFinderIsOnDesk       = 1 << 0,
   GSFileFinderColorFlag      = 1 << 1,   /* bit 1 + bits 2-3 = label colour */
   GSFileFinderColorBits      = (1 << 1) | (1 << 2) | (1 << 3),
+  GSFileFinderIsExtensionHidden = 1 << 4, /* 0x0010 kExtensionIsHidden */
   GSFileFinderIsShared       = 1 << 6,   /* 0x0040 */
   GSFileFinderHasNoINITs     = 1 << 7,   /* 0x0080 */
   GSFileFinderHasBeenInited  = 1 << 8,   /* 0x0100 */
@@ -125,6 +126,16 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
     NSInteger labelNumber;
   } _parsed;
 
+  /* Which of resource fork, comment, tags and quarantine a setter changed
+   * (_modified) or that were read from disk (_loaded).  A write touches only
+   * the modified ones, so a field nobody changed stays as it is on disk. */
+  NSUInteger _modified;
+  NSUInteger _loaded;
+
+  /* Per FinderInfo byte, the bits a setter has set (value as set, 0
+   * included).  A write patches exactly those over the bytes on disk. */
+  uint8_t _fiTouched[32];
+
   /* Sidecar mode override */
   BOOL _forceSidecar;
 }
@@ -137,10 +148,10 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 @property (nonatomic, copy) NSData *finderInfo;
 
 /** Raw resource fork data. */
-@property (copy) NSData *resourceFork;
+@property (nonatomic, copy) NSData *resourceFork;
 
 /** Finder/Spotlight comment (kMDItemFinderComment). */
-@property (copy) NSString *finderComment;
+@property (nonatomic, copy) NSString *finderComment;
 
 /* =================================================================
  * Convenient parsed properties from FinderInfo
@@ -157,6 +168,13 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 
 /** File is locked (name locked). */
 @property (getter=isLocked) BOOL locked;
+
+/** Finder.h kNameLocked; same bit as -isLocked, under the name Finder uses. */
+@property (getter=isNameLocked) BOOL nameLocked;
+
+/** Finder.h kExtensionIsHidden (fdFlags 0x0010): views show the name
+ *  without its extension. */
+@property (getter=isExtensionHidden) BOOL extensionHidden;
 
 /** File has a custom icon (check resource fork for icns data). */
 @property (getter=hasCustomIcon) BOOL customIcon;
@@ -229,7 +247,7 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 @property (copy) NSArray *userTags;
 
 /** Raw _kMDItemUserTags xattr value (binary plist), or nil when unset. */
-@property (copy) NSData *userTagsData;
+@property (nonatomic, copy) NSData *userTagsData;
 
 /**
  * Quarantine record (com.apple.quarantine), e.g.
@@ -239,7 +257,7 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  * are rewritten to "0000;00000000;;", so string equality only holds on
  * the pre-ingest bytes.
  */
-@property (copy) NSString *quarantine;
+@property (nonatomic, copy) NSString *quarantine;
 
 /** The standard tag name for a label (e.g. GSFileLabelRed -> "Red"),
  *  or nil for GSFileLabelNone. */
@@ -314,6 +332,40 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  * Returns the raw icns data if found, nil otherwise.
  */
 - (NSData *)customIconData;
+
+/* Classic Resource Manager forks (Inside Macintosh, More Macintosh Toolbox,
+ * Resource Manager chapter).  Readers never trust an offset or size from the
+ * fork: anything that points outside it makes the lookup return nil. */
+
+/** Four-character code ("icns", "url ") as a GSOType; nil or a string that
+ *  is not four MacRoman characters gives 0. */
++ (GSOType)osTypeFromString:(NSString *)string;
+
+/** The data of resource `type`/`rid` in `fork`, or nil when absent or the
+ *  fork is malformed.  An empty resource yields empty data. */
++ (NSData *)dataForResourceType:(GSOType)type
+                     resourceID:(NSInteger)rid
+                         inFork:(NSData *)fork;
+
+/** The data of the resource of `type` with the lowest ID, or nil. */
++ (NSData *)firstDataForResourceType:(GSOType)type inFork:(NSData *)fork;
+
+/** One entry for +resourceForkWithResources:. */
++ (NSDictionary *)resourceEntryWithType:(GSOType)type
+                             resourceID:(NSInteger)rid
+                                   data:(NSData *)data;
+
+/** Builds a fork holding the given entries (from
+ *  +resourceEntryWithType:resourceID:data:).  nil for no entries, an ID
+ *  outside SInt16 or a fork the format cannot address (24 bit offsets). */
++ (NSData *)resourceForkWithResources:(NSArray *)entries;
+
+/** Fork holding `icns` as the 'icns' resource -16455 (the custom icon). */
++ (NSData *)resourceForkWithICNS:(NSData *)icns;
+
+/** The custom icon data of a fork: resource 'icns' -16455, or the data itself
+ *  when it is a bare icns container (the form older versions stored). */
++ (NSData *)icnsDataFromResourceFork:(NSData *)fork;
 
 /**
  * Set a custom icon from raw icns data.  Embeds the icns data in the
