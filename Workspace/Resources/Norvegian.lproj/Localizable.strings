@@ -889,3 +889,9 @@
 
 /* Title of the window listing what a search found. */
 "Search Results" = "Søkeresultater";
+
+/* Show Original (File menu) */
+"Show Original" = "Vis original";
+"The original of \"%@\" cannot be found." = "Originalen til \"%@\" ble ikke funnet.";
+"It may have been moved, renamed or deleted." = "Den kan ha blitt flyttet, omdøpt eller slettet.";
+"Delete Alias" = "Slett alias";

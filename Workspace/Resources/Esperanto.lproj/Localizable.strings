@@ -1065,3 +1065,9 @@
 
 /* Title of the window listing what a search found. */
 "Search Results" = "Serĉrezultoj";
+
+/* Show Original (File menu) */
+"Show Original" = "Montri originalon";
+"The original of \"%@\" cannot be found." = "La originalo de \"%@\" ne troviĝas.";
+"It may have been moved, renamed or deleted." = "Eble ĝi estis movita, alinomita aŭ forigita.";
+"Delete Alias" = "Forigi la aliason";

@@ -1263,3 +1263,9 @@
 
 /* Title of the window listing what a search found. */
 "Search Results" = "Search Results";
+
+/* Show Original (File menu) */
+"Show Original" = "Show Original";
+"The original of \"%@\" cannot be found." = "The original of \"%@\" cannot be found.";
+"It may have been moved, renamed or deleted." = "It may have been moved, renamed or deleted.";
+"Delete Alias" = "Delete Alias";

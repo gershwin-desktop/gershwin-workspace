@@ -844,3 +844,9 @@
 
 /* Title of the window listing what a search found. */
 "Search Results" = "Resultados da busca";
+
+/* Show Original (File menu) */
+"Show Original" = "Mostrar original";
+"The original of \"%@\" cannot be found." = "Não foi possível encontrar o original de \"%@\".";
+"It may have been moved, renamed or deleted." = "Ele pode ter sido movido, renomeado ou excluído.";
+"Delete Alias" = "Excluir alias";

@@ -106,4 +106,56 @@ recordFromFirstWriterFork(NSData *fork)
   return [[[FSNAlias alloc] initWithData: record] autorelease];
 }
 
+/* lstat, not stat: a symlink must be seen as the link, and a dangling one
+ * has nothing to stat at all. */
+static BOOL
+isSymlink(NSString *path)
+{
+  struct stat st;
+
+  return lstat([path fileSystemRepresentation], &st) == 0 && S_ISLNK(st.st_mode);
+}
+
++ (NSString *)originalOfItemAtPath:(NSString *)path
+{
+  NSString *target;
+
+  if (isSymlink(path))
+    {
+      target = [[NSFileManager defaultManager]
+		 pathContentOfSymbolicLinkAtPath: path];
+      if (target == nil)
+	{
+	  return nil;
+	}
+      if ([target isAbsolutePath] == NO)
+	{
+	  target = [[path stringByDeletingLastPathComponent]
+		     stringByAppendingPathComponent: target];
+	}
+    }
+  else
+    {
+      target = [[self aliasWithContentsOfFile: path] resolvePath];
+    }
+  if (target == nil
+      || [[NSFileManager defaultManager] fileExistsAtPath: target] == NO)
+    {
+      return nil;
+    }
+  return [target stringByResolvingSymlinksInPath];
+}
+
++ (BOOL)canShowOriginalForPaths:(NSArray *)paths
+{
+  NSString *path;
+
+  if ([paths count] != 1)
+    {
+      return NO;
+    }
+  path = [paths objectAtIndex: 0];
+  return isSymlink(path) || [self isAliasFileAtPath: path];
+}
+
 @end

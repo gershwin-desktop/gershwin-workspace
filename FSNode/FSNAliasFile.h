@@ -27,6 +27,16 @@
  * by NSURL). */
 + (FSNAlias *)aliasWithContentsOfFile:(NSString *)path;
 
+/* The item the alias file or symbolic link at path points to, fully
+ * resolved, or nil when path is neither or the original is gone.  Both kinds
+ * are handled here so Show Original treats them alike, as the Finder does. */
++ (NSString *)originalOfItemAtPath:(NSString *)path;
+
+/* YES when Show Original applies to this selection: exactly one alias file
+ * or symbolic link.  A link whose original is missing still counts, so the
+ * command can say so instead of silently being unavailable. */
++ (BOOL)canShowOriginalForPaths:(NSArray *)paths;
+
 @end
 
 #endif

@@ -989,3 +989,9 @@ for";
 
 /* Title of the window listing what a search found. */
 "Search Results" = "Wyniki wyszukiwania";
+
+/* Show Original (File menu) */
+"Show Original" = "Pokaż oryginał";
+"The original of \"%@\" cannot be found." = "Nie można znaleźć oryginału „%@”.";
+"It may have been moved, renamed or deleted." = "Mógł zostać przeniesiony, przemianowany lub usunięty.";
+"Delete Alias" = "Usuń alias";

@@ -891,3 +891,9 @@
 
 /* Title of the window listing what a search found. */
 "Search Results" = "Keresési eredmények";
+
+/* Show Original (File menu) */
+"Show Original" = "Eredeti megjelenítése";
+"The original of \"%@\" cannot be found." = "A(z) \"%@\" eredetije nem található.";
+"It may have been moved, renamed or deleted." = "Lehet, hogy áthelyezték, átnevezték vagy törölték.";
+"Delete Alias" = "Alias törlése";

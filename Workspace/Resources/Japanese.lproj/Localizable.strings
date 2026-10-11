@@ -850,3 +850,9 @@
 
 /* Title of the window listing what a search found. */
 "Search Results" = "検索結果";
+
+/* Show Original (File menu) */
+"Show Original" = "元のアイテムを表示";
+"The original of \"%@\" cannot be found." = "「%@」の元のアイテムが見つかりません。";
+"It may have been moved, renamed or deleted." = "移動、名前の変更、または削除された可能性があります。";
+"Delete Alias" = "エイリアスを削除";

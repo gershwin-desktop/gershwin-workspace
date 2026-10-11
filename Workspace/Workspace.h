@@ -270,6 +270,7 @@
 - (void)duplicateFiles:(id)sender;
 - (void)duplicateFiles;
 - (void)makeAliasFiles:(id)sender;
+- (void)showOriginal:(id)sender;
 
 - (void)deleteFiles;
 

@@ -1547,3 +1547,9 @@
 
 /* Title of the window listing what a search found. */
 "Search Results" = "Résultats de la recherche";
+
+/* Show Original (File menu) */
+"Show Original" = "Afficher l’original";
+"The original of \"%@\" cannot be found." = "L’original de \"%@\" est introuvable.";
+"It may have been moved, renamed or deleted." = "Il a peut-être été déplacé, renommé ou supprimé.";
+"Delete Alias" = "Supprimer l’alias";

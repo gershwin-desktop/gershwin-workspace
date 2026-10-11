@@ -801,3 +801,9 @@ for";
 
 /* Title of the window listing what a search found. */
 "Search Results" = "Rezultatele căutării";
+
+/* Show Original (File menu) */
+"Show Original" = "Arată originalul";
+"The original of \"%@\" cannot be found." = "Originalul pentru \"%@\" nu a fost găsit.";
+"It may have been moved, renamed or deleted." = "Este posibil să fi fost mutat, redenumit sau șters.";
+"Delete Alias" = "Șterge aliasul";

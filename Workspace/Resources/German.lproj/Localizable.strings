@@ -1311,3 +1311,9 @@
 
 /* Title of the window listing what a search found. */
 "Search Results" = "Suchergebnisse";
+
+/* Show Original (File menu) */
+"Show Original" = "Original zeigen";
+"The original of \"%@\" cannot be found." = "Das Original von \"%@\" wurde nicht gefunden.";
+"It may have been moved, renamed or deleted." = "Es wurde möglicherweise verschoben, umbenannt oder gelöscht.";
+"Delete Alias" = "Alias löschen";

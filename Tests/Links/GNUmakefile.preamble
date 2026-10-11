@@ -20,3 +20,7 @@ t_LocationFile_TOOL_LIBS += -lgnustep-gui
 t_FinderLinks_OBJC_FILES += ../../FSNode/FSNAlias.m ../../FSNode/FSNAliasFile.m \
                             ../../FSNode/FSNLocationFile.m $(GSMETA_OBJS)
 t_FinderLinks_TOOL_LIBS += -lgnustep-gui
+
+t_ShowOriginal_OBJC_FILES += ../../FSNode/FSNAlias.m ../../FSNode/FSNAliasFile.m \
+                             $(GSMETA_OBJS)
+t_ShowOriginal_TOOL_LIBS += -lgnustep-gui

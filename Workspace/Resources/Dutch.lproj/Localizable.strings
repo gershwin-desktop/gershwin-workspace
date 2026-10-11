@@ -1551,3 +1551,9 @@
 
 /* Title of the window listing what a search found. */
 "Search Results" = "Zoekresultaten";
+
+/* Show Original (File menu) */
+"Show Original" = "Toon origineel";
+"The original of \"%@\" cannot be found." = "Het origineel van \"%@\" kan niet worden gevonden.";
+"It may have been moved, renamed or deleted." = "Het is mogelijk verplaatst, hernoemd of verwijderd.";
+"Delete Alias" = "Verwijder alias";

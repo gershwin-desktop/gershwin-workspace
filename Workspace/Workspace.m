@@ -461,6 +461,8 @@ static Workspace *gworkspace = nil;
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(makeAliasFiles:) keyEquivalent:@"l"];
   [menuItem setTarget:self];
+  menuItem = [menu addItemWithTitle:_(@"Show Original") action:@selector(showOriginal:) keyEquivalent:@"r"];
+  [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Look Inside") action:@selector(lookInside:) keyEquivalent:@"y"];
   [menuItem setTarget:self];
   
@@ -1779,6 +1781,11 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       return [selectedPaths count] > 0;
     }
 
+  if (sel_isEqual(action, @selector(showOriginal:)))
+    {
+      return [FSNAlias canShowOriginalForPaths: selectedPaths];
+    }
+
   // Always-enabled app-level commands
   if (sel_isEqual(action, @selector(showViewer:))
       || sel_isEqual(action, @selector(runCommand:))
@@ -2796,6 +2803,49 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 		  destination: basePath
 			files: files
 			  tag: &tag];
+}
+
+/* Show Original: a viewer on the folder that holds the original, with the
+   original selected.  When it cannot be found the alias is the only thing
+   left to act on, so the alert offers to discard it. */
+- (void)showOriginal:(id)sender
+{
+  NSString *aliasPath;
+  NSString *original;
+
+  if ([FSNAlias canShowOriginalForPaths: selectedPaths] == NO)
+    {
+      return;
+    }
+  aliasPath = [selectedPaths objectAtIndex: 0];
+  original = [FSNAlias originalOfItemAtPath: aliasPath];
+
+  if (original != nil)
+    {
+      [self selectFile: original
+        inFileViewerRootedAtPath: [original stringByDeletingLastPathComponent]];
+      return;
+    }
+
+  {
+    NSAlert *alert = [[[NSAlert alloc] init] autorelease];
+
+    [alert setMessageText: [NSString stringWithFormat:
+      NSLocalizedString(@"The original of \"%@\" cannot be found.", @""),
+      [aliasPath lastPathComponent]]];
+    [alert setInformativeText: NSLocalizedString(
+      @"It may have been moved, renamed or deleted.", @"")];
+    [alert addButtonWithTitle: NSLocalizedString(@"OK", @"")];
+    [alert addButtonWithTitle: NSLocalizedString(@"Delete Alias", @"")];
+    if ([alert runModal] == NSAlertSecondButtonReturn)
+      {
+        /* Already asked above; the trash path records the undo step. */
+        [self recycleFiles: [NSArray arrayWithObject: [aliasPath lastPathComponent]]
+               fromBasePath: [aliasPath stringByDeletingLastPathComponent]
+                  filePaths: [NSArray arrayWithObject: aliasPath]
+                 confirmed: YES];
+      }
+  }
 }
 
 /* The File menu sends duplicateFiles:; with the menu bar owned by another
