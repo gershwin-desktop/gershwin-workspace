@@ -1,0 +1,18 @@
+# Assertions: P-links (Finder aliases, location files)
+
+Status: [S] public format docs, [F] existing fixture/tool, [M] needs a Mac (OPEN for Scout).
+
+## Alias files
+- A1 [S] An alias file is marked by kIsAlias (0x8000 in fdFlags, Finder Info offset 8); a data fork that only looks like a record is not an alias. Test: t_AliasFile "which files count as aliases".
+- A2 [S] The record is read from resource 'alis' of the resource fork (xattr user.com.apple.ResourceFork, FreeBSD user namespace, or "._" AppleDouble entry 2), then from the data fork (10.6 bookmark file). Both classic "alis" and "book" payloads parse.
+- A3 [S] Resource fork layout per Inside Macintosh (More Toolbox ch.1): 16 byte header, data at 256, map with header copy, type list (count-1), 8 byte type entry, 12 byte reference entry, lengths as 4 byte prefix. The reader rejects out-of-range offsets; the writer output round-trips through the reader. The previous writer emitted an 8 byte reference entry and a type count of 2 (not spec-conformant, never verified on a Mac): fixed.
+- A4 Created alias: empty data fork + sidecar (Finder Info kIsAlias, 'alis' fork). Test: t_FSNAliasCreate (was stale: read the data fork).
+- A5 [F] E19 (10.6.8): a Finder resolves our classic alias (empty data fork, 'alis' 0) for a file and a folder; it does not resolve a bookmark-only file, because 10.6 reads only the 'alis' resource. Fixed: every alias we write, the bookmark writer included (which keeps its data-fork bookmark), carries 'alis' 0.
+- A7 [F] E19: Finder alias structure, matched by t_FinderLinks against E19-links/finder: FinderInfo type alis (fdrp for a folder target) creator MACS, fdFlags 0x8400 (kIsAlias + kHasCustomIcon), resource fork exactly 'alis' 0 + 'icns' -16496, record tags 0 1 2 14 15 18 19 in the Finder's order. The icns is OUR artwork (FSNAliasIcon: generic page or folder with the alias arrow, PNG ic07/ic08), never Apple's bytes. Tag 18 is relative to the mount point: no leading slash on the boot volume ("Users/me/a.txt"), leading slash elsewhere ("/remote.txt" with tag 19 "/Volumes/ALVOL"); the reader joins both forms. Not written: tags 16, 17 (high-res dates), 20 (alias to the disk image of another volume), 21 (0x000b, meaning unknown), real dates, CNIDs, volume attributes of the other-volume case (drive type 5, 0x0d02). OPEN [M]: does 10.6 show our badge icon (ic07/ic08 only, no classic is32/il32) and resolve the written alias on a Mac again.
+- A6 [M] OPEN fixtures: alias to a file on another volume made by 10.6 Finder; alias made by 10.6 Finder as seen by xattr (does the data fork carry "book" or stay empty, which resource ids); alias to a folder.
+
+## Location files
+- L1 [S] .webloc/.inetloc/.fileloc: plist with string URL; .url: [InternetShortcut] URL=; classic: 'url ' resource (id 256 on Finder-made files). Absolute URL required, no guessing.
+- L2 Created .webloc: XML plist {URL}, name from title or host, unique, no "/" ":" or leading dot. Test: t_LocationFile.
+- L3 [F] E19: a 10.6 Finder recognises our XML-only .webloc and a classic 'url '-only file as Internet location files with the right location; opening them was not tried (would start a browser on the oracle).
+- L4 [F] E19: a location file we write matches the Finder's: data fork the same tab-indented XML plist, resources 'drag' 128, 'TEXT' 256, 'url ' 256 (the URL bytes, no terminator), FinderInfo type ilht (ftp: ilft, mailto: ilma) creator MACS, fdFlags 0x0010, extension .webloc (.ftploc, .mailtoloc). Test: t_FinderLinks. The 'drag' 128 bytes are identical in all three captures whatever the URL, so they are written verbatim; what their fields mean is inferred, not known.

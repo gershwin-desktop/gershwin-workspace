@@ -35,11 +35,14 @@
 #import "FSNFunctions.h"
 #import "FSNAlias.h"
 #import "FSNodeRep.h"
+#import "FSNode.h"
 
 /* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
    library calls here take narrow strings, so use the UTF-8 form there. On
    the other platforms this is the plain -fileSystemRepresentation call. */
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <windows.h>
 #define GW_FSREP(path) [(path) UTF8String]
 #else
 #define GW_FSREP(path) [(path) fileSystemRepresentation]
@@ -202,6 +205,39 @@ GSDisplayNameForFilename(NSString *filename, GSFilenameExtensionDisplayMode mode
 }
 
 NSString *
+GSDisplayNameForFilenameHidingExtension(NSString *filename, GSFilenameExtensionDisplayMode mode, BOOL extensionHidden)
+{
+  NSString *shown = GSDisplayNameForFilename(filename, mode);
+
+  /* Only when the global mode left the name alone: it may already have cut
+   * the extension, and cutting a second one would eat the base name. */
+  if (extensionHidden && mode != GSFilenameExtensionDisplayAll
+      && [shown isEqualToString: filename]) {
+    NSString *stripped = [filename stringByDeletingPathExtension];
+
+    if ([stripped length] > 0 && [filename hasPrefix: @"."] == NO) {
+      return stripped;
+    }
+  }
+  return shown;
+}
+
+NSString *
+GSRenamedFilename(NSString *editedText, NSString *currentName, GSFilenameExtensionDisplayMode mode)
+{
+  NSString *hiddenExt = GSFilenameHiddenExtension(currentName, mode);
+  NSString *newName = editedText;
+
+  if ([editedText isEqualToString: GSDisplayNameForFilename(currentName, mode)]) {
+    return nil;
+  }
+  if ([hiddenExt length] > 0 && [editedText rangeOfString: @"."].location == NSNotFound) {
+    newName = [editedText stringByAppendingString: hiddenExt];
+  }
+  return [newName isEqualToString: currentName] ? nil : newName;
+}
+
+NSString *
 GSFilenameHiddenExtension(NSString *filename, GSFilenameExtensionDisplayMode mode)
 {
   if ([filename length] == 0 || [filename hasPrefix: @"."]) {
@@ -342,6 +378,93 @@ NSString *sizeDescription(unsigned long long size)
     sizeStr = [NSString stringWithFormat:@" %3.2fTB", ((double)size / (double)(ONE_TB))];
 
   return sizeStr;
+}
+
+static NSString *
+FSNFinderString(NSString *key)
+{
+  return NSLocalizedStringFromTableInBundle (key, nil,
+                                             [NSBundle bundleForClass: [FSNode class]], @"");
+}
+
+NSString *FSNFinderSizeDescription(unsigned long long bytes, NSString *decimalSeparator)
+{
+  static NSString *units[] = { @"KB", @"MB", @"GB", @"TB" };
+  double value = (double)bytes / 1000.0;
+  NSUInteger unit = 0;
+  NSString *text;
+
+  if (bytes == 0)
+    return FSNFinderString (@"Zero bytes");
+  if (bytes == 1)
+    return FSNFinderString (@"1 byte");
+  if (bytes < 1000ULL)
+    return [NSString stringWithFormat: FSNFinderString (@"%lu bytes"), (unsigned long)bytes];
+
+  while (value >= 1000.0 && unit < 3)
+    {
+      value /= 1000.0;
+      unit++;
+    }
+
+  if (unit == 0)
+    {
+      text = [NSString stringWithFormat: @"%.0f", value];
+    }
+  else if (value < 9.95)
+    {
+      /* "1.0 MB" is written "1 MB". */
+      text = [NSString stringWithFormat: @"%.1f", value];
+      if ([text hasSuffix: @".0"])
+        text = [text substringToIndex: [text length] - 2];
+    }
+  else
+    {
+      text = [NSString stringWithFormat: @"%.0f", floor (value + 0.5)];
+    }
+
+  if (decimalSeparator == nil)
+    decimalSeparator = [[NSLocale currentLocale] objectForKey: NSLocaleDecimalSeparator];
+  if (decimalSeparator && [decimalSeparator isEqualToString: @"."] == NO)
+    text = [text stringByReplacingOccurrencesOfString: @"." withString: decimalSeparator];
+
+  return [NSString stringWithFormat: @"%@ %@", text, units[unit]];
+}
+
+NSString *FSNGroupedInteger(long long number, NSString *groupingSeparator)
+{
+  NSMutableString *digits = [[[NSString stringWithFormat: @"%lld", number < 0 ? -number : number]
+                               mutableCopy] autorelease];
+  NSInteger i;
+
+  if (groupingSeparator == nil)
+    groupingSeparator = [[NSLocale currentLocale] objectForKey: NSLocaleGroupingSeparator];
+  if (groupingSeparator == nil)
+    groupingSeparator = @"";
+
+  for (i = (NSInteger)[digits length] - 3; i > 0; i -= 3)
+    [digits insertString: groupingSeparator atIndex: i];
+  return number < 0 ? [@"-" stringByAppendingString: digits] : digits;
+}
+
+unsigned long long FSNAllocatedSizeOfPath(NSString *path)
+{
+#ifdef _WIN32
+  /* Windows has no st_blocks; the compressed size is what the file takes on
+   * its disk (smaller for compressed and sparse files). */
+  DWORD high = 0;
+  DWORD low = GetCompressedFileSizeW ((const wchar_t *)[path fileSystemRepresentation], &high);
+
+  if (low == INVALID_FILE_SIZE && GetLastError () != NO_ERROR)
+    return 0;
+  return ((unsigned long long)high << 32) | low;
+#else
+  struct stat st;
+
+  if (lstat ([path fileSystemRepresentation], &st) != 0)
+    return 0;
+  return (unsigned long long)st.st_blocks * 512ULL;
+#endif
 }
 
 NSArray *makePathsSelection(NSArray *selnodes)
@@ -984,3 +1107,43 @@ NSEvent *FSNNextMouseUpOrDraggedEvent(NSWindow *window)
     }
   return event;
 }
+
+NSString *
+FSNFinderDateDescription(NSDate *date, NSDate *now, BOOL relative, NSDictionary *table)
+{
+  NSTimeZone *zone = [NSTimeZone localTimeZone];
+  NSCalendarDate *day = [date dateWithCalendarFormat: nil timeZone: zone];
+  NSBundle *bundle = [NSBundle bundleForClass: [FSNode class]];
+  /* The wording, the order and the clock of a date are the language's, so
+   * they come from the strings table and not from code. */
+  NSString *(^word)(NSString *) = ^(NSString *key) {
+    NSString *found = [table objectForKey: key];
+    return found ? found : NSLocalizedStringFromTableInBundle (key, nil, bundle, @"");
+  };
+  NSString *time = [day descriptionWithCalendarFormat: word (@"Time format")];
+
+  if (relative)
+    {
+      NSCalendarDate *today = [now dateWithCalendarFormat: nil timeZone: zone];
+      NSInteger difference = [today dayOfCommonEra] - [day dayOfCommonEra];
+      NSString *name = nil;
+
+      if (difference == 0)
+        {
+          name = word (@"Today");
+        }
+      else if (difference == 1)
+        {
+          name = word (@"Yesterday");
+        }
+
+      if (name)
+        {
+          return [NSString stringWithFormat: word (@"%@ at %@"), name, time];
+        }
+    }
+
+  return [NSString stringWithFormat: @"%@ %@",
+                   [day descriptionWithCalendarFormat: word (@"Date format")], time];
+}
+

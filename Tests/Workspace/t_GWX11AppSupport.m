@@ -52,6 +52,25 @@ static Display *waitForXvfb(void)
 
 /* Starts a private Xvfb on the first display of the range nobody serves;
  * returns the connection and leaves the task in *task, or NULL. */
+static NSString *xvfbPath(void)
+{
+  NSString *dir;
+  NSEnumerator *e = [[[[[NSProcessInfo processInfo] environment]
+    objectForKey: @"PATH"] componentsSeparatedByString: @":"] objectEnumerator];
+
+  while ((dir = [e nextObject]) != nil)
+    {
+      NSString *p = [dir stringByAppendingPathComponent: @"Xvfb"];
+      if ([[NSFileManager defaultManager] isExecutableFileAtPath: p])
+        {
+          return p;
+        }
+    }
+  [NSException raise: NSInternalInconsistencyException
+              format: @"Xvfb is not in PATH; the test needs it"];
+  return nil;
+}
+
 static Display *startPrivateXvfb(NSTask **task)
 {
   int n;
@@ -68,7 +87,8 @@ static Display *startPrivateXvfb(NSTask **task)
           continue;
         }
       *task = [NSTask new];
-      [*task setLaunchPath: @"/usr/bin/Xvfb"];
+      /* Xvfb lives in /usr/bin on Linux and /usr/local/bin on the BSDs. */
+      [*task setLaunchPath: xvfbPath()];
       [*task setArguments: [NSArray arrayWithObjects:
           displayName, @"-screen", @"0", @"320x240x24", nil]];
       [*task launch];

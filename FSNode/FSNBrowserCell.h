@@ -61,6 +61,9 @@
 
   /* NO between -setNodeBasic: and -decorate (lazy-filled columns). */
   BOOL decorated;
+  /* The column view's "Show icons" and "Show icon preview". */
+  BOOL showsIcon;
+  BOOL showsIconPreview;
 
   FSNodeRep *fsnodeRep;
 }
@@ -98,6 +101,15 @@
 - (void)decorate;
 
 - (BOOL)isDecorated;
+
+/* Finder's column view options "Show icons" (without, the row shows the
+ * name alone) and "Show icon preview" (an image file shows its own picture
+ * rather than the icon of its type).  Both are on by default and are copied
+ * from the prototype cell into new cells. */
+- (void)setShowsIcon:(BOOL)flag;
+- (BOOL)showsIcon;
+- (void)setShowsIconPreview:(BOOL)flag;
+- (BOOL)showsIconPreview;
 
 @end
 

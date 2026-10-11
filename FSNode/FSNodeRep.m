@@ -296,9 +296,13 @@ NSString * const FSNLabelTextSizeDefaultsKey = @"labeltxtsize";
 
 + (BOOL)isInternalMetadataName:(NSString *)name
 {
+  /* "Icon\r" holds a folder's custom icon in its resource fork; Finder
+   * never lists it, and it must not depend on the hide-system-files
+   * setting that governs the invisible flag. */
   return ([name isEqualToString: @".DS_Store"]
           || [name hasPrefix: @"._"]
-          || [name isEqualToString: @"__MACOSX"]);
+          || [name isEqualToString: @"__MACOSX"]
+          || [name isEqualToString: @"Icon\r"]);
 }
 
 + (FSNodeRep *)sharedInstance
@@ -1016,6 +1020,24 @@ NSString * const FSNLabelTextSizeDefaultsKey = @"labeltxtsize";
 - (id)metadataProvider
 {
   return _metadataProvider;
+}
+
+- (BOOL)isExtensionHiddenForPath:(NSString *)path
+{
+  if ([_metadataProvider respondsToSelector: @selector(isExtensionHiddenForPath:)] == NO)
+    {
+      return NO;
+    }
+  return [(id <FSNMetadataProvider>)_metadataProvider isExtensionHiddenForPath: path];
+}
+
+- (BOOL)isNameLockedForPath:(NSString *)path
+{
+  if ([_metadataProvider respondsToSelector: @selector(isNameLockedForPath:)] == NO)
+    {
+      return NO;
+    }
+  return [(id <FSNMetadataProvider>)_metadataProvider isNameLockedForPath: path];
 }
 
 - (void)setIconPositionStore:(id)store

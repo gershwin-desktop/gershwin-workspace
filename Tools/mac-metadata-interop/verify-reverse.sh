@@ -183,8 +183,8 @@ for name in sorted(exp.keys()):
         typ  = be32(fi[0:4]); cre = be32(fi[4:8])
         flags = be16(fi, 8)
         label = (flags >> 1) & 0x7
-        inv   = bool(flags & (1 << 11))
-        cust  = bool(flags & (1 << 7))
+        inv   = bool(flags & (1 << 14))  # kIsInvisible 0x4000
+        cust  = bool(flags & (1 << 10))  # kHasCustomIcon 0x0400
         if "typeCode" in rec and rec["typeCode"]:
             want = int(rec["typeCode"])
             if typ != want:

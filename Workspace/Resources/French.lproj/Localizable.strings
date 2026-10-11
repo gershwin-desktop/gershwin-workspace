@@ -1208,6 +1208,8 @@
 "Hide Toolbar" = "Masquer la barre d'outils";
 
 "Show Sidebar" = "Afficher le panneau latéral";
+"Show Path Bar" = "Afficher la barre du chemin d'accès";
+"Show Status Bar" = "Afficher la barre d'état";
 
 "Hide Sidebar" = "Masquer le panneau latéral";
 
@@ -1255,7 +1257,7 @@
 
 "Make Alias" = "Créer un alias";
 
-"Quick Look" = "Aperçu rapide";
+"Look Inside" = "Regarder dedans";
 
 "AFP Server" = "Serveur AFP";
 

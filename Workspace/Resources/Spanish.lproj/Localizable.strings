@@ -1115,6 +1115,8 @@ for";
 "Hide Toolbar" = "Ocultar barra de herramientas";
 
 "Show Sidebar" = "Mostrar barra lateral";
+"Show Path Bar" = "Mostrar barra de ruta";
+"Show Status Bar" = "Mostrar barra de estado";
 
 "Hide Sidebar" = "Ocultar barra lateral";
 
@@ -1158,7 +1160,7 @@ for";
 
 "Make Alias" = "Crear alias";
 
-"Quick Look" = "Vista rápida";
+"Look Inside" = "Mirar dentro";
 
 "AFP Server" = "Servidor AFP";
 

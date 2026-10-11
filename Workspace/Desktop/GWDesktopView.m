@@ -45,7 +45,7 @@
 #import "../Network/NetworkVolumeManager.h"
 #import "Thumbnailer/GWThumbnailer.h"
 #import "X11AppSupport.h"
-#import "../QuickLook/GWQuickLookController.h"
+#import "../LookInside/GWLookInsideController.h"
 
 /* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
    library calls here take narrow strings, so use the UTF-8 form there. On
@@ -89,6 +89,9 @@ static CGFloat desktopScaleFactor(void)
 
 - (void)dealloc
 {
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSUserDefaultsDidChangeNotification
+                                                object: nil];
   RELEASE (mountedVolumes);
   RELEASE (expectedUnmountPaths);
   RELEASE (desktopInfo);
@@ -157,6 +160,14 @@ static CGFloat desktopScaleFactor(void)
       _placementDirection = FSNPlacementDirectionTopToBottomRightToLeft;
 
       [self getDesktopInfo];
+
+      /* System Preferences or defaults write change the background in the
+       * file while Workspace runs. */
+      [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector(desktopDefaultsDidChange:)
+               name: NSUserDefaultsDidChangeNotification
+             object: nil];
       dragIcon = nil;
     }
 
@@ -879,35 +890,111 @@ static CGFloat desktopScaleFactor(void)
     }
 }
 
-- (void)updateDefaults
+/* Written only when Workspace's own preferences change the background, not
+ * at quit: a quit-time write would undo what another tool stored meanwhile.
+ * Starts from the stored dictionary so keys written elsewhere are kept. */
+- (void)saveBackgroundDefaults
 {
   /* Icon layout lives in ~/Desktop/.DS_Store, but the background is not
    * a property of that folder, so it stays in the defaults that
    * -getDesktopInfo reads at launch. */
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  NSMutableDictionary *info;
   NSColor *rgbColor;
   CGFloat red, green, blue, alpha;
 
+  info = [NSMutableDictionary dictionaryWithDictionary:
+                                [defaults dictionaryForKey: @"desktopinfo"]];
+
   rgbColor = [backColor colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
   [rgbColor getRed: &red green: &green blue: &blue alpha: &alpha];
-  [desktopInfo setObject: [NSDictionary dictionaryWithObjectsAndKeys:
-                             [NSNumber numberWithFloat: red], @"red",
-                             [NSNumber numberWithFloat: green], @"green",
-                             [NSNumber numberWithFloat: blue], @"blue",
-                             [NSNumber numberWithFloat: alpha], @"alpha",
-                             nil]
-                  forKey: @"backcolor"];
+  [info setObject: [NSDictionary dictionaryWithObjectsAndKeys:
+                      [NSNumber numberWithFloat: red], @"red",
+                      [NSNumber numberWithFloat: green], @"green",
+                      [NSNumber numberWithFloat: blue], @"blue",
+                      [NSNumber numberWithFloat: alpha], @"alpha",
+                      nil]
+           forKey: @"backcolor"];
 
-  [desktopInfo setObject: [NSNumber numberWithBool: useBackImage]
-                  forKey: @"usebackimage"];
-  [desktopInfo setObject: [NSNumber numberWithInt: backImageStyle]
-                  forKey: @"imagestyle"];
+  [info setObject: [NSNumber numberWithBool: useBackImage]
+           forKey: @"usebackimage"];
+  [info setObject: [NSNumber numberWithInt: backImageStyle]
+           forKey: @"imagestyle"];
   if (imagePath != nil)
     {
-      [desktopInfo setObject: imagePath forKey: @"imagepath"];
+      [info setObject: imagePath forKey: @"imagepath"];
     }
 
-  [defaults setObject: desktopInfo forKey: @"desktopinfo"];
+  ASSIGN (desktopInfo, info);
+  [defaults setObject: info forKey: @"desktopinfo"];
+}
+
+- (void)desktopDefaultsDidChange:(NSNotification *)notif
+{
+  NSDictionary *dskinfo = [[NSUserDefaults standardUserDefaults]
+                              dictionaryForKey: @"desktopinfo"];
+  NSDictionary *c = [dskinfo objectForKey: @"backcolor"];
+  id entry;
+
+  if (dskinfo == nil)
+    {
+      return;
+    }
+
+  /* Each part is applied only for a real change: the notification also
+   * fires for our own writes and for unrelated keys. */
+  if ([c isKindOfClass: [NSDictionary class]])
+    {
+      NSColor *cur = [backColor colorUsingColorSpaceName:
+                                  NSCalibratedRGBColorSpace];
+      CGFloat r = [[c objectForKey: @"red"] floatValue];
+      CGFloat g = [[c objectForKey: @"green"] floatValue];
+      CGFloat b = [[c objectForKey: @"blue"] floatValue];
+      CGFloat a = [[c objectForKey: @"alpha"] floatValue];
+
+      if (fabs([cur redComponent] - r) > 0.0001
+          || fabs([cur greenComponent] - g) > 0.0001
+          || fabs([cur blueComponent] - b) > 0.0001
+          || fabs([cur alphaComponent] - a) > 0.0001)
+        {
+          [self setCurrentColor: [NSColor colorWithCalibratedRed: r
+                                                           green: g
+                                                            blue: b
+                                                           alpha: a]];
+        }
+    }
+
+  entry = [dskinfo objectForKey: @"imagepath"];
+  if ([entry isKindOfClass: [NSString class]]
+      && ![entry isEqualToString: imagePath])
+    {
+      CREATE_AUTORELEASE_POOL (pool);
+      NSImage *image = [[NSImage alloc] initWithContentsOfFile: entry];
+
+      if (image)
+        {
+          ASSIGN (imagePath, entry);
+          [self createBackImage: image];
+          RELEASE (image);
+          [self setNeedsDisplay: YES];
+        }
+      RELEASE (pool);
+    }
+
+  entry = [dskinfo objectForKey: @"imagestyle"];
+  if (entry && [entry intValue] != backImageStyle)
+    {
+      backImageStyle = [entry intValue];
+      [self invalidateScaledBackImageCache];
+      [self setNeedsDisplay: YES];
+    }
+
+  entry = [dskinfo objectForKey: @"usebackimage"];
+  if (entry && [entry boolValue] != useBackImage)
+    {
+      useBackImage = [entry boolValue];
+      [self setNeedsDisplay: YES];
+    }
 }
 
 /* Persist a changed icon-view setting to the desktop folder's .DS_Store via
@@ -1313,14 +1400,14 @@ static CGFloat desktopScaleFactor(void)
 	{
 	  if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
 	    {
-	      /* Same Quick Look toggle a folder window's Space bar uses (see
+	      /* Same Look Inside toggle a folder window's Space bar uses (see
 	       * GWViewerWindow -performKeyEquivalent:); -selectedNodes is
 	       * empty with nothing selected (no base-node fallback the way a
 	       * folder viewer's lastSelection has), so "no selection does
 	       * nothing" already falls out of the controller's own rule. */
-	      [[GWQuickLookController sharedController]
-		  toggleQuickLookForSelection: [self selectedNodes]
-				 sourceWindow: [self window]];
+	      [[GWLookInsideController sharedController]
+		  toggleLookInsideForSelection: [self selectedNodes]
+				  sourceWindow: [self window]];
 	    }
 	  return;
 	}
@@ -2171,7 +2258,7 @@ static CGFloat desktopScaleFactor(void)
       [self createBackImage: image];
       RELEASE (image);
       [self setNeedsDisplay: YES];
-      [self updateDefaults];
+      [self saveBackgroundDefaults];
     }
   RELEASE (pool);
 }
@@ -2185,7 +2272,7 @@ static CGFloat desktopScaleFactor(void)
 {
   useBackImage = value;
   [self setNeedsDisplay: YES];
-  [self updateDefaults];
+  [self saveBackgroundDefaults];
 }
 
 - (BackImageStyle)backImageStyle
@@ -2207,7 +2294,7 @@ static CGFloat desktopScaleFactor(void)
       else
         {
           // No image set, just save the style preference
-          [self updateDefaults];
+          [self saveBackgroundDefaults];
         }
     }
 }

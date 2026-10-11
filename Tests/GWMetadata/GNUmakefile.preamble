@@ -8,3 +8,10 @@ ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata
 # tests (t_GSAppleDouble, t_GWMetaXattr) stay display-independent.
 t_GSFileMetadata_TOOL_LIBS += -lgnustep-gui
 
+
+# The sidecar export is checked through the public API against the E28
+# fixtures, so the units are linked as objects rather than #included.
+t_SidecarExport_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m \
+                              ../../GWMetadata/GSAppleDouble.m \
+                              ../../GWMetadata/GWMetaXattr.m
+t_SidecarExport_TOOL_LIBS += -lgnustep-gui

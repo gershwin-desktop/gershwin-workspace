@@ -41,6 +41,16 @@ BOOL GSFilenameExtensionIsNumeric(NSString *ext);
 
 NSString *GSDisplayNameForFilename(NSString *filename, GSFilenameExtensionDisplayMode mode);
 
+/* The display name once a file's own "hide extension" bit is taken into
+ * account.  A global choice to show all extensions wins over the bit. */
+NSString *GSDisplayNameForFilenameHidingExtension(NSString *filename, GSFilenameExtensionDisplayMode mode, BOOL extensionHidden);
+
+/* The name a rename editor's text means, or nil when it leaves the file's
+ * name as it is.  The editor shows the full name; text without any dot gets
+ * the extension the display mode hides appended, so renaming "report" in a
+ * mode that hides ".txt" keeps the type. */
+NSString *GSRenamedFilename(NSString *editedText, NSString *currentName, GSFilenameExtensionDisplayMode mode);
+
 NSString *GSFilenameHiddenExtension(NSString *filename, GSFilenameExtensionDisplayMode mode);
 
 NSString *GSDirectoryDescriptionForPath(NSString *path);
@@ -93,6 +103,20 @@ NSComparisonResult compareWithExtType(id r1, id r2, void *context);
 
 NSString *sizeDescription(unsigned long long size);
 
+/* A size as Finder writes it in the size column: units of 1000, no fraction
+ * for bytes and kilobytes, one decimal below 10 (and none when it would be
+ * .0) for the larger ones.  The decimal separator is the given one, or the
+ * current locale's when nil. */
+NSString *FSNFinderSizeDescription(unsigned long long bytes, NSString *decimalSeparator);
+
+/* A whole number with the thousands separator of the language (given, or the
+ * current locale's when nil). */
+NSString *FSNGroupedInteger(long long number, NSString *groupingSeparator);
+
+/* The space a file takes on its disk (blocks used, which is what Finder lists
+ * as its size), 0 when there is no such file.  Symbolic links are not followed. */
+unsigned long long FSNAllocatedSizeOfPath(NSString *path);
+
 NSArray *makePathsSelection(NSArray *selnodes);
 
 double myrintf(double a);
@@ -138,5 +162,13 @@ NSEvent *FSNNextMouseUpOrDraggedEvent(NSWindow *window);
 /* Puts an event that a tracking loop took off the queue back at the head of
  * it, ahead of anything that arrived behind it. */
 void FSNPutBackDequeuedEvent(NSWindow *window, NSEvent *event);
+
+/* The date as Finder words it: "Today at 2:05 PM" / "Heute, 14:05" when
+ * relative is YES and date is on today's or yesterday's day (local time zone)
+ * relative to now, otherwise the short date and time of the language.  The
+ * words and formats come from table when it has the key, else from the
+ * framework's Localizable.strings.  The single source of date wording. */
+NSString *FSNFinderDateDescription(NSDate *date, NSDate *now, BOOL relative,
+                                   NSDictionary *table);
 
 #endif // FSN_FUNCTIONS_H

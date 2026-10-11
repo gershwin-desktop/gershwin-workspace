@@ -1,0 +1,36 @@
+/* Strings of the Inspector's Finder Info pane. */
+
+"Finder Info" = "Finder-Info";
+"Finder Info Inspector" = "Finder-Info-Inspektor";
+"Select a single item" = "Einzelnes Objekt ausw\u00e4hlen";
+"Hide extension" = "Dateiendung ausblenden";
+"Locked" = "Gesperrt";
+"Name locked" = "Name gesperrt";
+"Stationery pad" = "Briefblock";
+"Invisible" = "Unsichtbar";
+"Label:" = "Etikett:";
+"None" = "Kein";
+"Red" = "Rot";
+"Orange" = "Orange";
+"Yellow" = "Gelb";
+"Green" = "Gr\u00fcn";
+"Blue" = "Blau";
+"Purple" = "Violett";
+"Grey" = "Grau";
+"Type code:" = "Typcode:";
+"Creator code:" = "Erstellercode:";
+"Custom icon:" = "Eigenes Symbol:";
+"Paste Icon" = "Symbol einf\u00fcgen";
+"Clear Icon" = "Symbol entfernen";
+"Comment:" = "Kommentar:";
+"Revert" = "Zur\u00fccksetzen";
+"Apply" = "Anwenden";
+"OK" = "OK";
+"Unknown error" = "Unbekannter Fehler";
+"Could not change Finder Info" = "Finder-Info konnte nicht ge\u00e4ndert werden";
+"The image could not be used as an icon." = "Das Bild kann nicht als Symbol verwendet werden.";
+"Type and creator codes must be empty or exactly four printable ASCII characters." = "Typ- und Erstellercodes m\u00fcssen leer sein oder genau vier druckbare ASCII-Zeichen enthalten.";
+"The .DS_Store of the folder could not be read; the comment was not stored there." = "Die .DS_Store des Ordners konnte nicht gelesen werden; der Kommentar wurde dort nicht gespeichert.";
+"The .DS_Store of the folder could not be written." = "Die .DS_Store des Ordners konnte nicht geschrieben werden.";
+"The icon file could not be created in the folder." = "Die Symboldatei konnte im Ordner nicht angelegt werden.";
+"The icon file could not be removed from the folder." = "Die Symboldatei konnte nicht aus dem Ordner entfernt werden.";

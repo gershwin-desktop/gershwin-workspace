@@ -31,10 +31,6 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
 
-/* Minimum column width used for reversible column count calculation
- * on window resize (see _recalcColumnCount).  Must match DEFAULT_INCR
- * in GWViewer.m so that initial and dynamic counts are consistent. */
-#define FSNBROWSER_MIN_COL_WIDTH 150.0
 #import "FSNBrowser.h"
 #import "FSNBrowserColumn.h"
 #import "FSNBrowserMatrix.h"
@@ -42,7 +38,10 @@
 #import "FSNIcon.h"
 #import "FSNIconLoader.h"
 #import "FSNFunctions.h"
+#import "FSNBrowserLayout.h"
+#import "FSNIconsView.h"
 
+static id<FSNPreviewProvider> previewProvider = nil;
 
 #define DEFAULT_ISIZE 24
 
@@ -88,6 +87,7 @@
   RELEASE (cellPrototype);
   RELEASE (charBuffer);
   RELEASE (backColor);
+  RELEASE (columnWidths);
 
   [super dealloc];
 }
@@ -118,7 +118,6 @@
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
     NSString *appName = [defaults stringForKey: @"DesktopApplicationName"];
     NSString *selName = [defaults stringForKey: @"DesktopApplicationSelName"];
-    id defentry;
     NSInteger i;
     
     fsnodeRep = [FSNodeRep sharedInstance];
@@ -154,14 +153,19 @@
     acceptsDnd = dnd;
     selColumn = selcol;
 
+    options = [FSNColumnViewOptions sharedOptions];
+    showsPreviewColumn = [options showsPreviewColumn];
+    arrangement = [options arrangement];
+    defaultColumnWidth = [options columnWidth];
+    columnWidths = [NSMutableDictionary new];
+
     updateViewsLock = 0;
-   
-    if ([defaults objectForKey:@"NSFontSize"])
-      fontSize = [defaults integerForKey:@"NSFontSize"];
-    else
-      fontSize = 12;
+
+    fontSize = [options textSize];
     cellPrototype = [FSNBrowserCell new];
     [cellPrototype setFont: [NSFont systemFontOfSize: fontSize]];
+    [cellPrototype setShowsIcon: [options showsIcons]];
+    [cellPrototype setShowsIconPreview: [options showsIconPreview]];
 
     columns = [NSMutableArray new];
   
@@ -198,6 +202,10 @@
     lastDisplayMode = GSCurrentExtensionDisplayMode();
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(defaultsChanged:) name:NSUserDefaultsDidChangeNotification object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver: self
+                                             selector: @selector(columnViewOptionsDidChange:)
+                                                 name: FSNColumnViewOptionsDidChangeNotification
+                                               object: options];
   }
   
   return self;
@@ -205,8 +213,6 @@
 
 - (void)defaultsChanged:(NSNotification *)not
 {
-  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-  NSInteger newSize;
   GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
   BOOL displayModeChanged = (mode != lastDisplayMode);
 
@@ -215,16 +221,6 @@
       lastDisplayMode = mode;
     }
 
-  if ([defaults objectForKey:@"NSFontSize"]) {
-    newSize = [defaults integerForKey:@"NSFontSize"];
-    if (newSize != fontSize) {
-      fontSize = newSize;
-      [cellPrototype setFont: [NSFont systemFontOfSize: fontSize]];
-      [nameEditor setFont: [cellPrototype font]];
-      [self setVisibleColumns:[self visibleColumns]];
-    }
-  }
-
   /* Relabeling every cell of every column is only needed when the
    * extension display mode changed; viewer windows persist per-folder
    * state through NSUserDefaults on open, navigation and close, and each
@@ -232,6 +228,24 @@
   if (displayModeChanged)
     {
       [self reloadExtensionDisplay];
+    }
+}
+
+/* The options are the same for every column view, so all of them follow
+ * a change at once.  A column width set by the user for one column is kept
+ * unless the width of all columns changed. */
+- (void)columnViewOptionsDidChange:(NSNotification *)notification
+{
+  FSNColumnViewOptions *opts = [notification object];
+
+  [self setLabelTextSize: [opts textSize]];
+  [self setShowsIcons: [opts showsIcons]];
+  [self setShowsIconPreview: [opts showsIconPreview]];
+  [self setShowsPreviewColumn: [opts showsPreviewColumn]];
+  [self setArrangement: [opts arrangement]];
+  if ([opts columnWidth] != defaultColumnWidth)
+    {
+      [self setDefaultColumnWidth: [opts columnWidth]];
     }
 }
 
@@ -420,19 +434,7 @@
 
     bc = [self lastLoadedColumn];
     [bc selectCellsOfNodes: selection sendAction: NO];
-
-    if (selColumn) {
-      if ([selection count] == 1) {
-        FSNode *node = [selection objectAtIndex: 0];
-
-        if (([node isDirectory] == NO) || [node isPackage]) {
-          [self addFillingColumn];
-        }
-
-      } else {
-        [self addFillingColumn];
-      }
-    }
+    [self addColumnAfterSelection: [bc selectedNodes]];
 
     updateViewsLock--;
     [self tile];
@@ -477,17 +479,7 @@
 
     bc = [self lastLoadedColumn];
     [bc selectCellsWithPaths: selpaths sendAction: NO];
-
-    if (selColumn) {
-      if ([selpaths count] == 1) {
-        if (([node isDirectory] == NO) || [node isPackage]) {
-          [self addFillingColumn];
-        }
-
-      } else {
-        [self addFillingColumn];
-      }
-    }
+    [self addColumnAfterSelection: [bc selectedNodes]];
 
     updateViewsLock--;
     [self tile];
@@ -552,11 +544,7 @@
   updateViewsLock++;
   [self setLastColumn: i];
   isLoaded = YES;
-
-  if ((i > 0) && ((i - 1) == lastVisibleColumn))
-    {
-      [self scrollColumnsRightBy: 1];
-    }
+  [self revealColumn: i];
 
   updateViewsLock--;
   [self tile];
@@ -577,11 +565,7 @@
         
   updateViewsLock++;
   [self setLastColumn: i];
-
-  if ((i > 0) && ((i - 1) == lastVisibleColumn))
-    { 
-      [self scrollColumnsRightBy: 1];
-    } 
+  [self revealColumn: i];
   
   updateViewsLock--;
   [self tile];
@@ -598,7 +582,7 @@
   for (i = column; i < count; ++i) {
 		bc = [columns objectAtIndex: i];
 
-		if ([bc isLoaded]) {			
+		if ([bc isLoaded] || [bc previewNode]) {
 	  	[bc showContentsOfNode: nil];
 		}
 		
@@ -715,17 +699,8 @@
     [[self window] makeFirstResponder: [col cmatrix]];
 
     if (selection) {
-      if (selColumn && (index == lastColumnLoaded)) {
-        if ([selection count] == 1) {
-          FSNode *node = [selection objectAtIndex: 0];
-        
-          if (([node isDirectory] == NO) || [node isPackage]) {
-            [self addFillingColumn];
-          }
-        
-        } else {
-          [self addFillingColumn];
-        }
+      if (index == lastColumnLoaded) {
+        [self addColumnAfterSelection: selection];
       }
     
       [self notifySelectionChange: selection];	
@@ -759,6 +734,46 @@
   }
 }
 
+/* The column after the last loaded one, once its selection is known:
+ * Finder's preview column for a single file, otherwise the empty column of
+ * a viewer that wants one after a selection.  A selected folder gets its
+ * own column elsewhere.  Returns whether a column was added. */
+- (BOOL)addColumnAfterSelection:(NSArray *)selection
+{
+  FSNode *file = nil;
+
+  if (selection == nil || [selection count] == 0)
+    {
+      return NO;
+    }
+
+  if ([selection count] == 1)
+    {
+      FSNode *node = [selection objectAtIndex: 0];
+
+      if ([node isDirectory] && ([node isPackage] == NO))
+        {
+          return NO;
+        }
+      file = node;
+    }
+
+  if (showsPreviewColumn && file != nil)
+    {
+      [self addFillingColumn];
+      [[columns objectAtIndex: lastColumnLoaded] showPreviewOfNode: file];
+      return YES;
+    }
+
+  if (selColumn)
+    {
+      [self addFillingColumn];
+      return YES;
+    }
+
+  return NO;
+}
+
 - (void)setLastColumn:(int)column
 {
   lastColumnLoaded = column;
@@ -779,6 +794,91 @@
 }
 
 
+/* The widths of the first count columns, for FSNBrowserLayout. */
+- (NSMutableData *)columnWidthsForCount:(NSInteger)count
+{
+  NSMutableData *data = [NSMutableData dataWithLength: MAX (count, 1) * sizeof (CGFloat)];
+  CGFloat *widths = [data mutableBytes];
+  NSInteger i;
+
+  for (i = 0; i < count; i++)
+    {
+      widths[i] = [self widthOfColumnAtIndex: i];
+    }
+  return data;
+}
+
+/* The first column to show so that column is the last one visible whole,
+ * with as many columns before it as fit. */
+- (NSInteger)firstColumnShowing:(NSInteger)column
+{
+  NSMutableData *widths;
+
+  if (column <= 0)
+    {
+      return 0;
+    }
+  widths = [self columnWidthsForCount: column + 1];
+  return FSNBrowserFirstColumnShowing ([widths bytes], column, NSWidth ([self bounds]));
+}
+
+/* Lays the columns out from the first visible one; returns the last one
+ * visible whole.  origins and shown may be NULL when only that is wanted;
+ * they point into an autoreleased buffer. */
+- (NSInteger)layoutColumnsWithOrigins:(CGFloat **)origins shown:(CGFloat **)shown
+{
+  NSInteger count = [columns count];
+  NSMutableData *buf;
+  CGFloat *widths;
+
+  if (count == 0)
+    {
+      return -1;
+    }
+  buf = [NSMutableData dataWithLength: 3 * count * sizeof (CGFloat)];
+  widths = [buf mutableBytes];
+  memcpy (widths, [[self columnWidthsForCount: count] bytes], count * sizeof (CGFloat));
+  if (origins)
+    *origins = widths + count;
+  if (shown)
+    *shown = widths + 2 * count;
+  return FSNBrowserLayoutColumns (widths, count, firstVisibleColumn,
+                                  NSWidth ([self bounds]),
+                                  widths + count, widths + 2 * count);
+}
+
+/* Which columns fit after the first visible one decides the last visible
+ * one; the count-based code (scroller, shifting) reads it from
+ * visibleColumns. */
+- (void)updateVisibleRange
+{
+  NSInteger last = [self layoutColumnsWithOrigins: NULL shown: NULL];
+
+  if (last >= 0)
+    {
+      lastVisibleColumn = last;
+      visibleColumns = last - firstVisibleColumn + 1;
+    }
+}
+
+/* Columns do not stretch to fill the view: empty columns do, as Finder
+ * shows empty space in the columns after the last one. */
+- (void)addColumnsCoveringWidth:(CGFloat)width
+{
+  CGFloat x = 0;
+  NSInteger i = firstVisibleColumn;
+
+  while (x < width)
+    {
+      if (i >= (NSInteger)[columns count])
+        {
+          [self createEmptyColumn];
+        }
+      x += [self widthOfColumnAtIndex: i] + 1;
+      i++;
+    }
+}
+
 - (void)tile
 {
   updateViewsLock = (updateViewsLock < 0) ? 0 : updateViewsLock;
@@ -786,56 +886,30 @@
   if (updateViewsLock == 0) {
     NSWindow *window = [self window];
     NSRect r = [self bounds];
-    float frameWidth = r.size.width - visibleColumns;
-    NSInteger count = [columns count];
-    NSRect colrect;
-    NSInteger i;
+    CGFloat *origins = NULL, *shown = NULL;
+    NSInteger last, count, i;
 
-    columnSize.height = r.size.height;
-    columnSize.width = myrintf(frameWidth / visibleColumns);
-    
+    [self addColumnsCoveringWidth: NSWidth (r)];
+    count = [columns count];
+    last = [self layoutColumnsWithOrigins: &origins shown: &shown];
+    if (last >= 0)
+      {
+        lastVisibleColumn = last;
+        visibleColumns = last - firstVisibleColumn + 1;
+      }
+
     [window disableFlushWindow];
-    
+
     for (i = 0; i < count; i++)
       {
-	NSInteger n = i - firstVisibleColumn;
-    
-	colrect = NSZeroRect;
-	colrect.size = columnSize;
-	colrect.origin.y = 0;
-
-	if (i < firstVisibleColumn)
-	  {
-	    colrect.origin.x = (n * columnSize.width) - 8;
-	  }
-	else
-	  {
-	    if (i == firstVisibleColumn)
-	      {
-		colrect.origin.x = (n * columnSize.width);
-	      }
-	    else if (i <= lastVisibleColumn)
-	      {
-		colrect.origin.x = (n * columnSize.width) + n;
-	      }
-	    else
-	      {
-		colrect.origin.x = (n * columnSize.width) + n + 8;
-	      }
-	  }
-
-	if (i == lastVisibleColumn)
-	  {
-	    colrect.size.width = [self bounds].size.width - colrect.origin.x;
-	  }
-      
-	[[columns objectAtIndex: i] setFrame: colrect];
+        [[columns objectAtIndex: i]
+          setFrame: NSMakeRect (origins[i], 0, shown[i], r.size.height)];
       }
-    
+
     [self synchronizeViewer];
     [self updateScroller];
     [self stopCellEditing];
-        
+
     [window enableFlushWindow];
     [window flushWindowIfNeeded];
   }
@@ -920,58 +994,48 @@
   [scroller setNeedsDisplay: YES];
 }
 
-- (void)scrollColumnsLeftBy:(int)shiftAmount
-{	
-  if ((firstVisibleColumn - shiftAmount) < 0) {
-    shiftAmount = firstVisibleColumn;
-	}
-	
-  if (shiftAmount <= 0) {
-    return;
-	}
-		
-  firstVisibleColumn = firstVisibleColumn - shiftAmount;
-  lastVisibleColumn = lastVisibleColumn - shiftAmount;
-
+/* Scrolling moves the first visible column; the last one follows from the
+ * widths.  Never further right than showing the last loaded column at the
+ * right edge. */
+- (void)setFirstVisibleColumn:(NSInteger)first
+{
+  first = MIN (first, [self firstColumnShowing: lastColumnLoaded]);
+  first = MAX (first, 0);
+  if (first == firstVisibleColumn)
+    {
+      return;
+    }
+  firstVisibleColumn = first;
+  [self updateVisibleRange];
   [self tile];
-  
   [self setNeedsDisplay: YES];
 }
 
-- (void)scrollColumnsRightBy:(int)shiftAmount
-{	
-  if ((shiftAmount + lastVisibleColumn) > lastColumnLoaded) {
-    shiftAmount = lastColumnLoaded - lastVisibleColumn;
-	}
-	
-  if (shiftAmount <= 0) {
-    return;
-	}
-		
-  firstVisibleColumn = firstVisibleColumn + shiftAmount;
-  lastVisibleColumn = lastVisibleColumn + shiftAmount;
+/* A column just loaded or added is scrolled into view. */
+- (void)revealColumn:(NSInteger)column
+{
+  [self updateVisibleRange];
+  if (column > lastVisibleColumn)
+    {
+      [self setFirstVisibleColumn: [self firstColumnShowing: column]];
+    }
+}
 
-  [self tile];
+- (void)scrollColumnsLeftBy:(int)shiftAmount
+{
+  [self setFirstVisibleColumn: firstVisibleColumn - shiftAmount];
+}
+
+- (void)scrollColumnsRightBy:(int)shiftAmount
+{
+  [self setFirstVisibleColumn: firstVisibleColumn + shiftAmount];
 }
 
 - (void)scrollColumnToVisible:(NSInteger)column
 {
-  NSInteger i;
-	
-  if (lastVisibleColumn == column)
-    return;
-	
-  if ((lastColumnLoaded + 1) <= visibleColumns)
-    return;
-		
-  i = lastVisibleColumn - column;
-  if (i > 0)
+  if (lastVisibleColumn != column)
     {
-      [self scrollColumnsLeftBy: i];
-    }
-  else
-    {
-      [self scrollColumnsRightBy: -i];
+      [self setFirstVisibleColumn: [self firstColumnShowing: column]];
     }
 }
 
@@ -1319,15 +1383,15 @@
           added = 1;
           
         }
-      else if (selColumn)
+      else if ([self addColumnAfterSelection: selection])
         {
-          [self addFillingColumn];
-        }  
+          added = 1;
+        }
     }
-  else if (selColumn)
+  else
     {
-      [self addFillingColumn];
-    } 
+      [self addColumnAfterSelection: selection];
+    }
   
   if (selColumn == NO)
     {
@@ -1575,24 +1639,24 @@
   [self _recalcColumnCount];
 }
 
+/* Keeps the last loaded column in view, with as many before it as fit. */
 - (void)_recalcColumnCount
 {
-  NSRect r = [[self superview] bounds];
-  [self setFrame: r];
-
-  if (r.size.width > 0) {
-    /* Use a fixed minimum column width so that the column count
-     * is purely a function of the current width — fully reversible
-     * when the window is made larger then smaller again. */
-    NSInteger ncols = r.size.width / FSNBROWSER_MIN_COL_WIDTH;
-    if (ncols < 1) ncols = 1;
-    if (ncols != visibleColumns) {
-      updateViewsLock++;
-      [self setVisibleColumns: ncols];
-      updateViewsLock--;
+  if ([self superview])
+    {
+      [self setFrame: [[self superview] bounds]];
     }
-  }
 
+  if (NSWidth ([self bounds]) > 0)
+    {
+      NSInteger first = [self firstColumnShowing: lastColumnLoaded];
+
+      if (first != firstVisibleColumn)
+        {
+          firstVisibleColumn = first;
+          [self updateVisibleRange];
+        }
+    }
   [self tile];
 }
 
@@ -2389,7 +2453,8 @@
   if (nameEditor) {
     FSNode *cellnode = [cell node];
     BOOL canedit = (([cell isLocked] == NO) 
-                        && ([cellnode isMountPoint] == NO));
+                        && ([cellnode isMountPoint] == NO)
+                        && ([cellnode isNameLocked] == NO));
     
     [self stopCellEditing];
 
@@ -2461,10 +2526,7 @@
       {
       NSString *userName = [nameEditor stringValue];
       NSString *origName = [ednode name];
-      GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
-      NSString *dispName = GSDisplayNameForFilename(origName, mode);
-      NSString *hiddenExt = GSFilenameHiddenExtension(origName, mode);
-      NSString *newname = userName;
+      NSString *newname = GSRenamedFilename(userName, origName, GSCurrentExtensionDisplayMode());
       NSString *newpath;
       NSString *extension;
       NSCharacterSet *notAllowSet = [NSCharacterSet characterSetWithCharactersInString: @"/\\*:?\33"];
@@ -2472,17 +2534,7 @@
       NSArray *dirContents;
       NSMutableDictionary *opinfo;
 
-      if ([userName isEqualToString: dispName])
-	{
-	  CLEAREDITING;
-	}
-
-      if ([hiddenExt length] > 0 && [userName rangeOfString: @"."].location == NSNotFound)
-	{
-	  newname = [userName stringByAppendingString: hiddenExt];
-	}
-
-      if ([newname isEqualToString: origName])
+      if (newname == nil)
 	{
 	  CLEAREDITING;
 	}
@@ -2522,6 +2574,162 @@
       [self stopCellEditing];
       [desktopApp performFileOperation: opinfo];
     }
+}
+
+@end
+
+
+@implementation FSNBrowser (ViewOptions)
+
++ (int)clampedLabelTextSize:(int)size
+{
+  return [FSNIconsView clampedLabelTextSize: size];
+}
+
+- (void)setLabelTextSize:(int)size
+{
+  size = [FSNBrowser clampedLabelTextSize: size];
+  if (size == fontSize)
+    {
+      return;
+    }
+  /* The row height follows the font, and a column only sizes its rows
+   * when it is made: the columns are made again. */
+  fontSize = size;
+  [cellPrototype setFont: [NSFont systemFontOfSize: fontSize]];
+  [nameEditor setFont: [cellPrototype font]];
+  [self setVisibleColumns: [self visibleColumns]];
+}
+
+/* Every column follows the prototype, and columns made later copy it. */
+- (void)iconOptionsDidChange
+{
+  NSUInteger i;
+
+  for (i = 0; i < [columns count]; i++)
+    {
+      [[columns objectAtIndex: i] iconOptionsDidChange];
+    }
+}
+
+- (void)setShowsIcons:(BOOL)flag
+{
+  if ([cellPrototype showsIcon] != flag)
+    {
+      [cellPrototype setShowsIcon: flag];
+      [self iconOptionsDidChange];
+    }
+}
+
+- (BOOL)showsIcons
+{
+  return [cellPrototype showsIcon];
+}
+
+- (void)setShowsIconPreview:(BOOL)flag
+{
+  if ([cellPrototype showsIconPreview] != flag)
+    {
+      [cellPrototype setShowsIconPreview: flag];
+      [self iconOptionsDidChange];
+    }
+}
+
+- (BOOL)showsIconPreview
+{
+  return [cellPrototype showsIconPreview];
+}
+
+- (void)setShowsPreviewColumn:(BOOL)flag
+{
+  FSNBrowserColumn *col;
+
+  if (showsPreviewColumn == flag)
+    {
+      return;
+    }
+  showsPreviewColumn = flag;
+
+  /* The column after the selection is made again for the new setting. */
+  col = [self lastLoadedColumn];
+  if (col != nil)
+    {
+      NSArray *selection = [col selectedNodes];
+
+      updateViewsLock++;
+      [self setLastColumn: [col index]];
+      [self addColumnAfterSelection: selection];
+      updateViewsLock--;
+      [self tile];
+    }
+}
+
+- (BOOL)showsPreviewColumn
+{
+  return showsPreviewColumn;
+}
+
+- (void)setArrangement:(FSNIconsArrangement)value
+{
+  NSUInteger i;
+
+  if (arrangement == value)
+    {
+      return;
+    }
+  arrangement = value;
+
+  for (i = 0; i < [columns count]; i++)
+    {
+      [[columns objectAtIndex: i] sortCells];
+    }
+}
+
+- (FSNIconsArrangement)arrangement
+{
+  return arrangement;
+}
+
+- (void)setDefaultColumnWidth:(CGFloat)width
+{
+  defaultColumnWidth = FSNBrowserClampedColumnWidth (width);
+  [columnWidths removeAllObjects];
+  [self updateVisibleRange];
+  [self tile];
+}
+
+- (CGFloat)defaultColumnWidth
+{
+  return defaultColumnWidth;
+}
+
+- (void)setWidth:(CGFloat)width forColumnAtIndex:(NSInteger)index
+{
+  if (index < 0)
+    {
+      return;
+    }
+  [columnWidths setObject: [NSNumber numberWithDouble: FSNBrowserClampedColumnWidth (width)]
+                   forKey: [NSNumber numberWithInteger: index]];
+  [self updateVisibleRange];
+  [self tile];
+}
+
+- (CGFloat)widthOfColumnAtIndex:(NSInteger)index
+{
+  NSNumber *w = [columnWidths objectForKey: [NSNumber numberWithInteger: index]];
+
+  return w ? [w doubleValue] : defaultColumnWidth;
+}
+
++ (void)setPreviewProvider:(id<FSNPreviewProvider>)provider
+{
+  ASSIGN (previewProvider, provider);
+}
+
++ (id<FSNPreviewProvider>)previewProvider
+{
+  return previewProvider;
 }
 
 @end

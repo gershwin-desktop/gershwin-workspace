@@ -30,13 +30,20 @@
 
 - (instancetype)initWithDirectoryPath:(NSString *)path
 {
+  NSString *norm = [[path stringByStandardizingPath] stringByResolvingSymlinksInPath];
+
+  return [self initWithDirectoryPath:path
+                         volumeCache:[GWVolumeCache cacheForPath:(norm ? norm : path)]];
+}
+
+- (instancetype)initWithDirectoryPath:(NSString *)path volumeCache:(GWVolumeCache *)cache
+{
   self = [super init];
   if (self) {
     /* Normalise */
     NSString *norm = [[path stringByStandardizingPath] stringByResolvingSymlinksInPath];
     _directoryPath = [(norm ? norm : path) copy];
-
-    _volumeCache = [[GWVolumeCache cacheForPath:_directoryPath] retain];
+    _volumeCache = [cache retain];
   }
   return self;
 }
@@ -54,40 +61,23 @@
 
 - (DSStoreInfo *)readSettings
 {
-  DSStoreInfo *info = nil;
-
-  /* Tier 1: per-folder .DS_Store */
-  NSString *dotDSStore = [self folderDSStorePath];
   NSFileManager *fm = [NSFileManager defaultManager];
+  BOOL hasOwnStore = [fm fileExistsAtPath:[self folderDSStorePath]];
 
-  if ([fm fileExistsAtPath:dotDSStore]) {
-    info = [DSStoreInfo infoForDirectoryPath:_directoryPath];
-    if ([info loaded]) {
-      return info;
-    }
-    /* +infoForDirectoryPath: returns an autoreleased object — do NOT
-     * release it here (that would over-release / double-free when the
-     * autorelease pool drains).  Just drop the reference and fall through. */
-    info = nil;
-  }
+  /* The folder's own "." records, its record in the parent's store (which
+   * wins, being what Finder 10.6 reads [O:E1]) and the FinderInfo fallback. */
+  DSStoreInfo *info = [DSStoreInfo infoForDirectoryPath:_directoryPath];
 
-  /* Tier 2: per-volume cache */
+  /* The volume cache stands in for whatever store could not be written: the
+   * folder's own (then it holds the icon positions too) or the parent's (then
+   * only the folder's records).  It only fills what the stores left open. */
   if (_volumeCache) {
-    info = [_volumeCache readInfoForDirectoryPath:_directoryPath];
-  }
-
-  /* Tier 3 / merge: whatever we resolved above (.DS_Store or volume cache),
-   * make sure it is loaded and consult the folder's own com.apple.FinderInfo
-   * DInfo (the classic / spatial macOS channel) for any view-style or
-   * window-geometry values the .DS_Store / cache did not supply.  When nothing
-   * was found at all, build a fresh info that loads .DS_Store + FinderInfo.
-   * (No .DS_Store exists on this path by the time we reach here, so re-loading
-   * a cache-resolved info only ever fills FinderInfo gaps, never clobbers the
-   * cache's own fields.) */
-  if (info != nil) {
-    [info load];
-  } else {
-    info = [DSStoreInfo infoForDirectoryPath:_directoryPath];
+    DSStoreInfo *cached = hasOwnStore
+      ? [_volumeCache readDirectoryInfoForDirectoryPath:_directoryPath]
+      : [_volumeCache readInfoForDirectoryPath:_directoryPath];
+    if (cached) {
+      [info mergeMissingFieldsFromInfo:cached];
+    }
   }
   return info;
 }
@@ -100,38 +90,60 @@
 {
   if (!info) return NO;
 
+  BOOL storesAllowed = ![self isNetworkStoreWriteBlocked];
   BOOL wroteFolder = NO;
-  NSString *dotDSStore = [self folderDSStorePath];
+  BOOL wroteParent = NO;
 
-  /* Check whether we should try writing the per-folder .DS_Store */
-  BOOL canWriteFolder = [self isDirectoryWritable]
-                         && ![self isNetworkStoreWriteBlocked];
-
-  if (canWriteFolder) {
-    wroteFolder = [info saveToPath:dotDSStore];
-    if (wroteFolder) {
-
-      /* Spec §3 step 3: cache cleanup — remove stale entry from cache */
-      if (_volumeCache) {
-        [_volumeCache removeRecordForDirectoryPath:_directoryPath];
-      }
-    } else {
-    }
-  } else {
+  if (storesAllowed && [self isDirectoryWritable]) {
+    wroteFolder = [info saveToPath:[self folderDSStorePath]];
+  }
+  if (storesAllowed) {
+    wroteParent = [info saveToParentStore];
   }
 
-  /* Spec §3 step 2: fallback to per-volume cache */
-  if (!wroteFolder && _volumeCache) {
-    BOOL wroteCache = [_volumeCache writeInfo:info forDirectoryPath:_directoryPath];
-    if (wroteCache) {
-      return YES;
-    } else {
-      return NO;
-    }
-  } else if (!wroteFolder) {
+  if (_volumeCache == nil) {
+    return wroteFolder;
   }
+  if (!wroteFolder) {
+    return [_volumeCache writeInfo:info forDirectoryPath:_directoryPath];
+  }
+  /* Finder persists nothing for a folder whose parent cannot be written
+   * [O:E14]; the cache keeps it for us.  A volume root or the home folder has
+   * no parent record: its "." is all there is. */
+  if (!wroteParent && [info hasFinderViewRecords]
+      && [DSStoreInfo parentStorePathForDirectory:_directoryPath] != nil) {
+    return [_volumeCache writeFinderViewRecordsOfInfo:info forDirectoryPath:_directoryPath];
+  }
+  /* Both stores hold the settings now; a cached copy would only go stale. */
+  [_volumeCache removeRecordForDirectoryPath:_directoryPath];
+  return YES;
+}
 
-  return wroteFolder;
+/* Removes @p code under @p key from the store at @p path, if both exist. */
+static void
+removeRecord(NSString *path, NSString *key, NSString *code)
+{
+  DSStore *store;
+
+  if (path == nil || ![[NSFileManager defaultManager] fileExistsAtPath:path]) {
+    return;
+  }
+  store = [DSStore storeWithPath:path];
+  if (![store load] || [store entryForFilename:key code:code] == nil) {
+    return;
+  }
+  [store removeEntryForFilename:key code:code];
+  if (![store save]) {
+    NSLog(@"GWViewSettingsManager: cannot write %@", path);
+  }
+}
+
+- (void)removeViewStyle
+{
+  removeRecord([DSStoreInfo parentStorePathForDirectory:_directoryPath],
+               [_directoryPath lastPathComponent], @"vstl");
+  removeRecord([self folderDSStorePath], @".", @"vstl");
+  removeRecord([_volumeCache cacheFilePath], _directoryPath, @"vstl");
 }
 
 /* ------------------------------------------------------------------ */

@@ -36,9 +36,68 @@
 @class FSNListView;
 @class FSNListViewNodeRep;
 @class FSNListViewNameEditor;
+@class FSNFolderSizeCalculator;
+
+/* Column identifiers as Finder writes them in the "columns" array of the
+ * lsvp record.  A table column itself is identified by an NSNumber (an
+ * FSNInfoType, or one of the FSNListColumnType values below) so that the
+ * per-folder column descriptions already stored by older versions keep
+ * working; use the class methods of FSNListViewDataSource (FinderListOptions)
+ * to translate. */
+extern NSString * const FSNListColumnIdName;
+extern NSString * const FSNListColumnIdDateModified;
+extern NSString * const FSNListColumnIdDateCreated;
+extern NSString * const FSNListColumnIdSize;
+extern NSString * const FSNListColumnIdKind;
+extern NSString * const FSNListColumnIdLabel;
+extern NSString * const FSNListColumnIdVersion;
+extern NSString * const FSNListColumnIdComments;
+extern NSString * const FSNListColumnIdDateLastOpened;
+/* Not a Finder column; the owner column this list view has always had. */
+extern NSString * const FSNListColumnIdOwner;
+
+/* Table column identifiers for the columns FSNInfoType has no value for.
+ * Kept well apart from FSNInfoType so that it can grow. */
+enum {
+  FSNListColumnTypeDateCreated = 100,
+  FSNListColumnTypeDateLastOpened = 101,
+  FSNListColumnTypeLabel = 102,
+  FSNListColumnTypeVersion = 103,
+  FSNListColumnTypeComments = 104
+};
+
+/* Posted (object: the FSNListView) when the USER changed a list option by
+ * hand - a click on a column header, a column dragged to a new place.  The
+ * option is in the userInfo under FSNListViewChangedOptionKey.  Changes made
+ * through the setters below never post it, so that applying stored settings
+ * does not write them straight back. */
+extern NSString * const FSNListViewOptionsDidChangeNotification;
+extern NSString * const FSNListViewChangedOptionKey;
+/* Values of FSNListViewChangedOptionKey. */
+extern NSString * const FSNListViewOptionSort;        /* column and/or direction */
+extern NSString * const FSNListViewOptionColumnOrder;
+
+/* Optional per-file metadata the list view asks the metadata provider
+ * (FSNodeRep -metadataProvider) for; a column whose provider method is
+ * missing shows "--". */
+@protocol FSNListViewMetadataProvider <NSObject>
+@optional
+- (NSString *)commentForPath:(NSString *)path;
+- (NSString *)labelNameForPath:(NSString *)path;
+@end
 
 #import "FSNIconLoader.h"
 #import "FSNSpringLoader.h"
+
+/* Sums the sizes of the files below paths on a thread of its own, one
+ * folder at a time.  Delegate messages arrive on the main thread, and none
+ * after -cancel returned. */
+@protocol FSNFolderSizeCalculatorDelegate <NSObject>
+- (void)sizeCalculator:(FSNFolderSizeCalculator *)calculator
+        didComputeSize:(unsigned long long)size
+               forPath:(NSString *)path;
+- (void)sizeCalculatorDidFinish:(FSNFolderSizeCalculator *)calculator;
+@end
 
 @interface FSNListViewDataSource : NSObject <NSTextFieldDelegate, FSNDecorationClient, FSNSpringFlashing>
 {
@@ -73,6 +132,18 @@
   FSNodeRep *fsnodeRep;
 
   id <DesktopApplication> desktopApp;
+
+  /* Finder list options (see FinderListOptions below). */
+  BOOL sortAscending;
+  BOOL usesRelativeDates;
+  BOOL calculatesAllSizes;
+  NSFont *listFont;          /* nil: the cells' own default */
+  NSInteger listIconSize;
+  NSMutableDictionary *folderSizes;   /* path -> NSNumber, from the calculator */
+  FSNFolderSizeCalculator *sizeCalculator;
+  NSMutableDictionary *columnDirections;   /* identifier -> BOOL ascending of the columns left */
+  NSMutableDictionary *hiddenColumnWidths;  /* identifier -> width, to restore */
+  NSUInteger programmaticChanges;
 }
 
 - (id)initForListView:(FSNListView *)aview;
@@ -122,6 +193,95 @@
 @end
 
 
+/* What Finder's list view options need.  Column ids are the Finder names
+ * (FSNListColumnId...). */
+@interface FSNListViewDataSource (FinderListOptions)
+
++ (NSArray *)finderColumnIds;
+
+/* nil for an id this list view has no column for. */
++ (NSNumber *)tableIdentifierForColumnId:(NSString *)columnId;
+
+/* nil for a column without a Finder name (extended info, description...). */
++ (NSString *)columnIdForTableIdentifier:(NSNumber *)identifier;
+
+/* The direction a column sorts in when it is clicked for the first time:
+ * ascending for text columns, descending (newest, biggest first) for dates
+ * and sizes. */
++ (BOOL)defaultSortAscendingForColumnId:(NSString *)columnId;
+
+/* "Today 2:05 PM" / "Heute, 14:05" when relative is YES and date is on
+ * today's or yesterday's calendar day (local time zone) relative to now,
+ * otherwise the short date and time of the language ("08.10.2026 09:30"),
+ * as the Finder of that language shows them. */
++ (NSString *)descriptionOfDate:(NSDate *)date
+                     relativeTo:(NSDate *)now
+                  relativeNames:(BOOL)relative;
+
+/* The same with the words and formats taken from a strings table (a
+ * Localizable.strings of one language) instead of the framework's bundle. */
++ (NSString *)descriptionOfDate:(NSDate *)date
+                     relativeTo:(NSDate *)now
+                  relativeNames:(BOOL)relative
+                        strings:(NSDictionary *)table;
+
+/* Row height for a text size (points; 0 for the default) and icon size. */
++ (CGFloat)rowHeightForTextSize:(CGFloat)textSize iconSize:(NSInteger)iconSize;
+
+/* Sorting.  Unknown or hidden ids are refused (NO). Ascending means the
+ * values in their natural order: A to Z, oldest first, smallest first. */
+- (BOOL)setSortColumnId:(NSString *)columnId ascending:(BOOL)ascending;
+- (NSString *)sortColumnId;
+/* Every column keeps the direction it was last sorted in (its first-click
+ * one before that), also while it is not the sort column. */
+- (BOOL)sortAscendingForColumnId:(NSString *)columnId;
+- (void)setSortAscending:(BOOL)ascending;
+- (BOOL)sortAscending;
+
+/* Columns.  The name column is always shown and always first.  Hiding a
+ * column the list is sorted by sorts by name instead. */
+- (BOOL)setColumn:(NSString *)columnId visible:(BOOL)visible;
+- (BOOL)isColumnVisible:(NSString *)columnId;
+
+/* Finder ids of the shown columns, left to right (columns without a Finder
+ * id are left out). */
+- (NSArray *)columnOrder;
+
+/* Moves the listed shown columns to the left, in that order, name first;
+ * ids that are unknown or hidden are skipped, other shown columns follow. */
+- (void)setColumnOrder:(NSArray *)columnIds;
+
+- (BOOL)setColumnWidth:(CGFloat)width forColumnId:(NSString *)columnId;
+- (CGFloat)columnWidthForColumnId:(NSString *)columnId;
+
+/* Dates of the date columns as "Today at ..." / "Yesterday at ...". */
+- (void)setUsesRelativeDates:(BOOL)flag;
+- (BOOL)usesRelativeDates;
+
+/* Folder sizes in the size column, computed on a background thread; started
+ * by this call and by every (re)load of the shown folder, cancelled when
+ * another folder is shown, when this is turned off and when the view goes
+ * away.  Without it folders show "--" like Finder's. */
+- (void)setCalculatesAllSizes:(BOOL)flag;
+- (BOOL)calculatesAllSizes;
+- (BOOL)isCalculatingSizes;
+/* The computed size of a shown folder, nil as long as not known. */
+- (NSNumber *)calculatedSizeForPath:(NSString *)path;
+
+/* Text size of all cells in points; 0 selects the default. */
+- (void)setTextSize:(CGFloat)points;
+- (CGFloat)textSize;
+
+/* Size of the icons in the name column in points, 16 to 128. */
+- (void)setListIconSize:(NSInteger)points;
+- (NSInteger)listIconSize;
+
+/* Stops background work; for a list view that is going away. */
+- (void)detachFromListView;
+
+@end
+
+
 @interface FSNListViewDataSource (NSTableViewDataSource)
 
 - (NSInteger)numberOfRowsInTableView:(NSTableView *)aTableView;
@@ -163,7 +323,7 @@
               row:(NSInteger)rowIndex;
 
 - (void)tableView:(NSTableView *)tableView
-            mouseDownInHeaderOfTableColumn:(NSTableColumn *)tableColumn;
+            didClickTableColumn:(NSTableColumn *)tableColumn;
 
 - (NSImage *)tableView:(NSTableView *)tableView
       dragImageForRows:(NSArray *)dragRows;
@@ -273,6 +433,29 @@
 @end
 
 
+@interface FSNFolderSizeCalculator : NSObject
+{
+  NSArray *paths;
+  id <FSNFolderSizeCalculatorDelegate> delegate;   /* not retained */
+  int cancelled;                                   /* read by the worker */
+  BOOL finished;
+}
+
+- (id)initWithPaths:(NSArray *)folderPaths
+           delegate:(id <FSNFolderSizeCalculatorDelegate>)aDelegate;
+
+- (void)start;
+- (void)cancel;
+- (BOOL)isFinished;
+
+/* The logical size of everything below path (symbolic links not followed,
+ * other file systems not entered), stopping early when *stop becomes
+ * nonzero.  Safe to call from any thread. */
++ (unsigned long long)sizeOfTreeAtPath:(NSString *)path stop:(const int *)stop;
+
+@end
+
+
 @interface FSNListViewNodeRep : NSObject <FSNodeRep>
 {
   FSNode *node;
@@ -295,6 +478,10 @@
   /* NO between initForNode: and -decorate (lazy icon loading). */
   BOOL decorated;
 
+  /* Values of the columns that need a stat, a bundle or the metadata
+   * provider, read when first asked for; NSNull for "none". */
+  NSMutableDictionary *lazyValues;
+
   FSNListViewDataSource *dataSource;
   FSNodeRep *fsnodeRep;
 }
@@ -309,6 +496,15 @@
 - (void)decorate;
 
 - (BOOL)isDecorated;
+
+/* Forget the icons so that -decorate loads them again, at the size the data
+ * source has by now. */
+- (void)invalidateIcons;
+
+/* The value behind a date last opened, version, comment or label column
+ * (an NSDate, NSString or, for FSNListColumnTypeLabel, NSColor); nil when
+ * there is none. */
+- (id)lazyValueForColumnType:(NSInteger)type;
 
 - (NSImage *)openIcon;
 
@@ -360,7 +556,21 @@
   NSTimeInterval lastKeyPressedTime;
 
   NSTimer *clickTimer;
+
+  /* Scroll position asked for by the owner, held until the user scrolls */
+  NSPoint _savedScroll;
+  BOOL _hasSavedScroll;
+  BOOL _applyingScroll;
+  NSClipView *_observedClip;   /* not retained */
 }
+
+/* The scrolled position as Finder keeps it per folder (lsvp scrollPositionX/Y,
+ * the same convention as the icon view): points from the left and from the top
+ * edge of the content to the corner of the visible part.  Setting it works
+ * before the rows are there too: it is applied again after every (re)load until
+ * the user scrolls. */
+- (NSPoint)scrollPosition;
+- (void)setScrollPosition:(NSPoint)position;
 
 - (id)initWithFrame:(NSRect)frameRect
     dataSourceClass:(Class)dsclass;

@@ -1,0 +1,80 @@
+=== zu-ours-sidecar
+/__MACOSX {}
+/proj {}
+/__MACOSX/proj {}
+/__MACOSX/proj/._bigxattr.txt {u'quarantine': 15}
+/__MACOSX/proj/._commentonly.txt {u'quarantine': 15}
+/__MACOSX/proj/._labeled.txt {u'quarantine': 15}
+/__MACOSX/proj/._subfolder {u'quarantine': 15}
+/__MACOSX/proj/subfolder {}
+/__MACOSX/proj/subfolder/._Icon {u'quarantine': 15}
+/proj/bigxattr.txt {u'quarantine': 15}
+/proj/commentonly.txt {u'quarantine': 15}
+/proj/labeled.txt {u'quarantine': 15}
+/proj/plain.txt {u'quarantine': 15}
+/proj/subfolder {}
+/proj/subfolder/Icon {u'quarantine': 15}
+/proj/subfolder/inner.txt {u'quarantine': 15}
+=== zd-ours-sidecar
+/proj {}
+/proj/bigxattr.txt {u'org.example.big': 300}
+/proj/commentonly.txt {u'metadata:kMDItemFinderComment': 56}
+/proj/labeled.txt {'FI': '0000000000000000040c0000', u'ResourceFork': 69783, u'metadata:kMDItemFinderComment': 62}
+/proj/plain.txt {}
+/proj/subfolder {'FI': '000000000000000004080000'}
+/proj/subfolder/Icon {'FI': '000000000000000040000000', u'ResourceFork': 69783, u'TextEncoding': 11}
+/proj/subfolder/inner.txt {}
+=== zf-ours-sidecar
+/ours-sidecar.zip {}
+/proj {}
+/proj/bigxattr.txt {u'org.example.big': 300}
+/proj/commentonly.txt {u'metadata:kMDItemFinderComment': 56}
+/proj/labeled.txt {'FI': '0000000000000000040c0000', u'ResourceFork': 69783, u'metadata:kMDItemFinderComment': 62}
+/proj/plain.txt {}
+/proj/subfolder {'FI': '000000000000000004080000'}
+/proj/subfolder/Icon {'FI': '000000000000000040000000', u'ResourceFork': 69783, u'TextEncoding': 11}
+/proj/subfolder/inner.txt {}
+=== zu-ours-xattr
+/__MACOSX {}
+/proj {}
+/__MACOSX/proj {}
+/__MACOSX/proj/._bigxattr.txt {u'quarantine': 15}
+/__MACOSX/proj/._commentonly.txt {u'quarantine': 15}
+/__MACOSX/proj/._labeled.txt {u'quarantine': 15}
+/__MACOSX/proj/._subfolder {u'quarantine': 15}
+/__MACOSX/proj/subfolder {}
+/__MACOSX/proj/subfolder/._Icon {u'quarantine': 15}
+/proj/bigxattr.txt {u'quarantine': 15}
+/proj/commentonly.txt {u'quarantine': 15}
+/proj/labeled.txt {u'quarantine': 15}
+/proj/plain.txt {u'quarantine': 15}
+/proj/subfolder {}
+/proj/subfolder/Icon {u'quarantine': 15}
+/proj/subfolder/inner.txt {u'quarantine': 15}
+=== zd-ours-xattr
+/proj {}
+/proj/bigxattr.txt {u'org.example.big': 300}
+/proj/commentonly.txt {u'metadata:kMDItemFinderComment': 56}
+/proj/labeled.txt {'FI': '0000000000000000040c0000', u'ResourceFork': 69783, u'metadata:kMDItemFinderComment': 62}
+/proj/plain.txt {}
+/proj/subfolder {'FI': '000000000000000004080000'}
+/proj/subfolder/Icon {'FI': '000000000000000040000000', u'ResourceFork': 69783, u'TextEncoding': 11}
+/proj/subfolder/inner.txt {}
+=== zf-ours-xattr
+/ours-xattr.zip {}
+/proj {}
+/proj/bigxattr.txt {u'org.example.big': 300}
+/proj/commentonly.txt {u'metadata:kMDItemFinderComment': 56}
+/proj/labeled.txt {'FI': '0000000000000000040c0000', u'ResourceFork': 69783, u'metadata:kMDItemFinderComment': 62}
+/proj/plain.txt {}
+/proj/subfolder {'FI': '000000000000000004080000'}
+/proj/subfolder/Icon {'FI': '000000000000000040000000', u'ResourceFork': 69783, u'TextEncoding': 11}
+/proj/subfolder/inner.txt {}
+=== original proj
+/bigxattr.txt {u'org.example.big': 300}
+/commentonly.txt {u'metadata:kMDItemFinderComment': 56}
+/labeled.txt {'FI': '0000000000000000040c0000', u'ResourceFork': 69783, u'metadata:kMDItemFinderComment': 62}
+/plain.txt {}
+/subfolder {'FI': '000000000000000004080000'}
+/subfolder/Icon {'FI': '000000000000000040000000', u'ResourceFork': 69783, u'TextEncoding': 11}
+/subfolder/inner.txt {}

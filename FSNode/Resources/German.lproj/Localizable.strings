@@ -83,3 +83,45 @@
 
 "unknown" = "unbekannt";
 
+/* List and icon views: dates, columns, item info */
+"Today" = "Heute";
+
+"Yesterday" = "Gestern";
+
+"%@ at %@" = "%@, %@";
+
+/* strftime-style formats of a list view date and its time, as the Finder of that language shows them */
+"Date format" = "%d.%m.%Y";
+
+"Time format" = "%H:%M";
+
+"Date Created" = "Erstellungsdatum";
+
+"Date Last Opened" = "Zuletzt ge\u00f6ffnet";
+
+"Label" = "Etikett";
+
+"Version" = "Version";
+
+"Comments" = "Kommentare";
+
+"Zero items" = "Keine Objekte";
+
+"1 item" = "1 Objekt";
+
+"%lu items" = "%lu Objekte";
+
+"Zero bytes" = "0 Byte";
+
+"1 byte" = "1 Byte";
+
+"%lu bytes" = "%lu Byte";
+
+"%@ x %@" = "%@ \U00D7 %@";
+
+/* Preview column of the column view */
+"Name:" = "Name:";
+"Kind:" = "Art:";
+"Size:" = "Gr\u00f6\u00dfe:";
+"Created:" = "Erstellt:";
+"Modified:" = "Ge\u00e4ndert:";

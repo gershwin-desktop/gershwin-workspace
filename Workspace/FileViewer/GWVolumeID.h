@@ -22,6 +22,14 @@
  */
 + (NSString *)volumeIDForPath:(NSString *)path;
 
+/* The name a file system's identity carries in one of @p directories
+ * (Linux /dev/disk/by-uuid, FreeBSD /dev/ufsid and /dev/gptid): the entry
+ * that is, or links to, the same device as @p devicePath.  nil when none
+ * is.  Unlike f_fsid, which follows the device number, it is the same every
+ * time removable media is inserted. */
++ (NSString *)filesystemIdentityForDevice:(NSString *)devicePath
+                            inDirectories:(NSArray *)directories;
+
 /**
  * Return the cache directory ~/Library/Caches/com.apple.finder/,
  * creating it if necessary.
@@ -33,6 +41,11 @@
  *   ~/Library/Caches/com.apple.finder/<VOLUME_ID>.DS_Store
  */
 + (NSString *)cacheFilePathForPath:(NSString *)path;
+
+/* A cache file that older versions named after the device id of the
+ * volume @p path is on is renamed to the name +cacheFilePathForPath: gives,
+ * so the layouts kept in it are found again. */
++ (void)adoptLegacyCacheFileForPath:(NSString *)path;
 
 /**
  * Return YES if @p path resides on a network mount.

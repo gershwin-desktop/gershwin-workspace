@@ -1,0 +1,44 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/FileViewer -I../../DSStore \
+                           -I../../GWMetadata -I../../FSNode -I../../FSNode/ExtendedInfo
+
+# clang 19 / binutils 2.44: the ABI 2.2 .objc_init section references the
+# constant string section bounds even when a tool has no such section.
+ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
+                      -Wl,--defsym=__stop___objc_constant_string=0
+
+DSSTORE_SOURCES = ../../DSStore/DSStore.m \
+                  ../../DSStore/DSStoreCodecs.m \
+                  ../../DSStore/DSStoreEntry.m \
+                  ../../DSStore/DSBuddyAllocator.m \
+                  ../../DSStore/SimpleColor.m
+
+# DSStoreInfo writes FinderInfo through GSFileMetadata; the settings manager
+# falls back to the volume cache.
+SETTINGS_SOURCES = ../../Workspace/FileViewer/DSStoreInfo.m \
+                   ../../Workspace/FileViewer/GWViewerChrome.m \
+                   ../../Workspace/FileViewer/GWViewSettingsManager.m \
+                   ../../Workspace/FileViewer/GWVolumeCache.m \
+                   ../../Workspace/FileViewer/GWVolumeID.m \
+                   ../../GWMetadata/GSFileMetadata.m \
+                   ../../GWMetadata/GSAppleDouble.m \
+                   ../../GWMetadata/GWMetaXattr.m \
+                   $(DSSTORE_SOURCES)
+
+t_FinderRecords_OBJC_FILES += $(SETTINGS_SOURCES)
+t_FinderRecords_TOOL_LIBS += -lgnustep-gui
+
+# t_FolderViewOptions drives real FSNIconsView / FSNListView objects, so it
+# links the built framework; the old DT_RPATH tag makes the loader prefer it
+# over the installed one LD_LIBRARY_PATH points at.
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
+                      -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+t_FolderViewOptions_OBJC_FILES += ../../Workspace/FileViewer/GWFolderViewOptions.m \
+                                  ../../Workspace/FileViewer/GWViewerGeometry.m \
+                                  $(SETTINGS_SOURCES)
+# gnustep-make puts -L/System/Library/Libraries into the flags ahead of
+# every lib dir; only ADDITIONAL_LDFLAGS come before it, and without this
+# the installed FSNode is linked instead of the one just built.
+ADDITIONAL_LDFLAGS += -L$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+t_FolderViewOptions_TOOL_LIBS += -lFSNode -lgnustep-gui

@@ -35,20 +35,7 @@
 #import "FileOpInfo.h"
 #import "Operation.h"
 #import "Functions.h"
-
-
-/*
- * Return the AppleDouble sidecar path for a given file path.
- * e.g. /foo/bar.txt -> /foo/._bar.txt
- */
-static NSString *
-sidecar_path(NSString *filePath)
-{
-  NSString *dir = [filePath stringByDeletingLastPathComponent];
-  NSString *file = [filePath lastPathComponent];
-  return [dir stringByAppendingPathComponent:
-           [NSString stringWithFormat: @"._%@", file]];
-}
+#import "GWMetadataCopier.h"
 
 
 #define PROGR_STEPS (100.0)
@@ -834,6 +821,7 @@ shouldMakeNewConnection:(NSConnection*)newConn
   RELEASE (destination);
   RELEASE (files);
   RELEASE (procfiles);
+  RELEASE (metaCopier);
   [super dealloc];
 }
 
@@ -843,6 +831,7 @@ shouldMakeNewConnection:(NSConnection*)newConn
   
   if (self) {
     fm = [NSFileManager defaultManager];
+    metaCopier = [GWMetadataCopier new];
 		samename = NO;
     onlyolder = NO;
   }
@@ -1110,16 +1099,9 @@ filename = [fileinfo objectForKey: @"name"];
 	  NSString *src = [source stringByAppendingPathComponent: filename];
 	  NSString *dst = [destination stringByAppendingPathComponent: filename];
 	  
-	  if ([fm movePath: src toPath: dst handler: self])
-	    {    
-	      [procfiles addObject: filename];	
-          /* Move AppleDouble sidecar if present */
-          {
-            NSString *sc_src = sidecar_path(src);
-            NSString *sc_dst = sidecar_path(dst);
-            if ([fm fileExistsAtPath: sc_src])
-              [fm movePath: sc_src toPath: sc_dst handler: self];
-          }
+	  if ([self moveItem: src to: dst])
+	    {
+	      [procfiles addObject: filename];
 	    }
 	  else
 	    {
@@ -1162,16 +1144,10 @@ filename = [fileinfo objectForKey: @"name"];
       
       if ((samename == NO) || (samename && [self removeExisting: fileinfo]))
         {
-          if ([fm copyPath: [source stringByAppendingPathComponent: filename]
-                    toPath: [destination stringByAppendingPathComponent: filename]
-                   handler: self])
+          if ([self copyItem: [source stringByAppendingPathComponent: filename]
+                          to: [destination stringByAppendingPathComponent: filename]])
             {
               [procfiles addObject: filename];
-              /* Copy AppleDouble sidecar if present */
-              NSString *sc_src = sidecar_path([source stringByAppendingPathComponent: filename]);
-              NSString *sc_dst = sidecar_path([destination stringByAppendingPathComponent: filename]);
-              if ([fm fileExistsAtPath: sc_src])
-                [fm copyPath: sc_src toPath: sc_dst handler: self];	
             }
         }
       [files removeObject: fileinfo];
@@ -1275,7 +1251,7 @@ filename = [fileinfo objectForKey: @"name"];
       if ([fm removeFileAtPath: srcpath handler: self])
         {
           /* Remove AppleDouble sidecar (._filename) if present */
-          NSString *scpath = sidecar_path(srcpath);
+          NSString *scpath = [GWMetadataCopier sidecarPathForPath: srcpath];
           if ([fm fileExistsAtPath: scpath])
             [fm removeFileAtPath: scpath handler: self];
 
@@ -1340,9 +1316,8 @@ filename = [fileinfo objectForKey: @"name"];
       }
 	  }
 
-	  if ([fm copyPath: [destination stringByAppendingPathComponent: filename]
-				      toPath: destpath 
-			       handler: self]) {
+	  if ([self copyItem: [destination stringByAppendingPathComponent: filename]
+				      to: destpath]) {
       [procfiles addObject: newname];	
     }
 	  [files removeObject: fileinfo];
@@ -1475,14 +1450,8 @@ filename = [fileinfo objectForKey: @"name"];
 	    }
     }
 
-	  if ([fm movePath: srcpath toPath: destpath handler: self]) {
+	  if ([self moveItem: srcpath to: destpath]) {
       [procfiles addObject: newname];
-        /* Move AppleDouble sidecar if present */
-        NSString *sc_src2 = sidecar_path(srcpath);
-        NSString *sc_dst2 = sidecar_path(destpath);
-        if ([fm fileExistsAtPath: sc_src2])
-          [fm movePath: sc_src2 toPath: sc_dst2 handler: self];	
-      
     } else {
       /* check for broken symlink */
       NSDictionary *attributes = [fm fileAttributesAtPath: srcpath traverseLink: NO];
@@ -1511,6 +1480,47 @@ filename = [fileinfo objectForKey: @"name"];
       [fileOp removeProcessedFiles];
     }
   [fileOp cleanUpExecutor];                                         
+}
+
+/* Copying and moving go through GWMetadataCopier because NSFileManager
+ * leaves behind everything a Mac keeps beside the data: extended attributes
+ * (quarantine, resource fork, tags, other programs' own) and the sidecar. */
+- (BOOL)moveItem:(NSString *)src to:(NSString *)dst
+{
+  NSError *error = nil;
+  BOOL moved = [metaCopier moveItemAtPath: src
+                                   toPath: dst
+                                  handler: self
+                            metadataError: &error];
+
+  if (error != nil && ![self continueAfterMetadataError: error])
+    stopped = YES;
+  return moved;
+}
+
+- (BOOL)copyItem:(NSString *)src to:(NSString *)dst
+{
+  NSError *error = nil;
+  BOOL copied = [metaCopier copyItemAtPath: src
+                                    toPath: dst
+                                   handler: self
+                             metadataError: &error];
+
+  if (error != nil && ![self continueAfterMetadataError: error])
+    stopped = YES;
+  return copied;
+}
+
+- (BOOL)continueAfterMetadataError:(NSError *)error
+{
+  NSString *msg = [NSString stringWithFormat: @"%@ %@\n%@ %@\n",
+                     NSLocalizedString(@"File operation error:", @""),
+                     [error localizedDescription],
+                     NSLocalizedString(@"with file:", @""),
+                     [[error userInfo] objectForKey: NSFilePathErrorKey]];
+
+  return [fileOp requestUserConfirmationWithMessage: msg title: @"Error"]
+           == NSAlertDefaultReturn;
 }
 
 - (BOOL)removeExisting:(NSDictionary *)info

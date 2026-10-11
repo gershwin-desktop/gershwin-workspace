@@ -2,7 +2,8 @@
   *
   * Used by Tools/mac-alias-interop/verify-alias-reverse.sh: it produces a
   * real Mac alias on Linux (via FSNAlias) - an empty data fork plus a "._"
-  * AppleDouble sidecar carrying the resource fork and Finder Info - ships it
+  * AppleDouble sidecar carrying the resource fork and Finder Info (written
+  * explicitly: FSNAlias keeps them in extended attributes where it can) - ships it
   * to a Mac, and the Mac resolves it.  This proves Gershwin's alias format is
   * understood by macOS without any template blobs.
   *
@@ -11,6 +12,7 @@
 
 #import <Foundation/Foundation.h>
 #import "FSNAlias.h"
+#import "GSFileMetadata.h"
 
 int
 main(int argc, char **argv)
@@ -37,6 +39,16 @@ main(int argc, char **argv)
               argv[1]);
       [pool release];
       return 2;
+    }
+
+  /* verify-alias-reverse.sh ships the sidecar to the Mac, which has no use
+   * for Linux extended attributes. */
+  if ([[GSFileMetadata metadataForFileAtPath: aliasPath]
+	writeSidecarToFileAtPath: aliasPath error: NULL] == NO)
+    {
+      fprintf(stderr, "gw-alias-writer: cannot write the sidecar\n");
+      [pool release];
+      return 3;
     }
 
   printf("%s\n", [aliasPath UTF8String]);

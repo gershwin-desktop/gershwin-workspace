@@ -90,13 +90,10 @@ fi = bytearray(32)
 fi[0:4] = b"TEXT"
 fi[4:8] = b"ttxt"
 # kColor label is fdFlags bits 1-3 (label position n stored as n<<1).
-# The *colour* assigned to each position depends on the OS label palette:
-# Snow Leopard (10.6) uses the classic palette
-#   1=Grey 2=Green 3=Purple 4=Blue 5=Orange 6=Red 7=Yellow,
-# while modern macOS/Linux use 1=Red 2=Orange 3=Yellow 4=Green ...
-# The label NUMBER is the portable interop unit; we pin the position that
-# yields the intended colour on the reference 10.6 Mac.  "red label" =>
-# position 6; kIsInvisible => bit 14 (0x4000).
+# The field holds Finder's colour number, observed on 10.6 (evidence E24):
+#   1=Grey 2=Green 3=Purple 4=Blue 5=Yellow 6=Red 7=Orange,
+# which GSFileMetadata maps to its own GSFileLabel menu order.
+# "red label" => 6; kIsInvisible => bit 14 (0x4000).
 # FinderInfo is big-endian on disk (TN1150): fdFlags is the 16-bit value at
 # bytes 8-9, high byte first.
 flags = (1 << 14) | (6 << 1)

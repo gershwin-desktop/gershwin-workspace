@@ -12,6 +12,7 @@
 #import "GWMetaArchive.h"
 #import "GSFileMetadata.h"
 #import "GSAppleDouble.h"
+#import "GWMetaXattr.h"
 
 #include <archive.h>
 #include <archive_entry.h>
@@ -87,6 +88,76 @@ copy_fd_to_archive(struct archive *a, int fd)
   return (n == 0) ? ARCHIVE_OK : ARCHIVE_FATAL;
 }
 
+/* An all-zero FinderInfo alone is what a Mac writes for an item it has
+ * nothing to say about (Finder's Compress does it for .DS_Store); it
+ * carries no information and must not be applied or written. */
+static BOOL
+appledouble_is_empty(GSAppleDouble *ad)
+{
+  if ([[ad extendedAttributes] count] > 0 || [[ad resourceFork] length] > 0)
+    return NO;
+  if (![ad hasFinderInfo])
+    return YES;
+  const uint8_t *b = [[ad finderInfo] bytes];
+  NSUInteger n = [[ad finderInfo] length];
+  while (n > 0 && b[n - 1] == 0)
+    n--;
+  return n == 0;
+}
+
+/*
+ * The AppleDouble a Mac's ditto/Finder would write for the item, built from
+ * everything the item carries: FinderInfo, resource fork and every user.*
+ * attribute (not just the ones GSFileMetadata models), with the item's own
+ * "._" sidecar as base for volumes without attributes.  Returns nil when the
+ * item has nothing a Mac would keep, so no empty "._" entry is written.
+ */
+static NSData *
+appledouble_for_path(NSString *path)
+{
+  const char *cpath = GW_FSREP(path);
+  NSString *sidecar = [[path stringByDeletingLastPathComponent]
+    stringByAppendingPathComponent:
+      [@"._" stringByAppendingString: [path lastPathComponent]]];
+  NSData *base = [NSData dataWithContentsOfFile: sidecar];
+  GSAppleDouble *ad = base ? [[GSAppleDouble alloc] initWithData: base] : nil;
+
+  if (ad == nil)
+    ad = [[GSAppleDouble alloc] init];
+
+  gs_xattr_list_t *list = gs_xattr_list_for_path(cpath, "user.");
+  int i;
+  for (i = 0; list != NULL && i < list->count; i++)
+    {
+      NSString *name = [NSString stringWithUTF8String: list->entries[i].name];
+      NSData *value = [NSData dataWithBytes: list->entries[i].value
+                                     length: list->entries[i].size];
+      if (name == nil)
+        continue;
+      name = [name substringFromIndex: 5];  /* "user." */
+      if ([name isEqualToString: @"com.apple.FinderInfo"])
+        {
+          /* Only 32 bytes are FinderInfo; 10.6 ignores any other length. */
+          if ([value length] == 32)
+            [ad setFinderInfo: value];
+        }
+      else if ([name isEqualToString: @"com.apple.ResourceFork"])
+        [ad setResourceFork: value];
+      else if ([name isEqualToString: @"com.apple.quarantine"])
+        [ad setXattr: [GSFileMetadata sidecarQuarantine: value] forKey: name];
+      else
+        [ad setXattr: value forKey: name];
+    }
+  if (list != NULL)
+    gs_xattr_list_free(list);
+
+  BOOL nothing = appledouble_is_empty(ad);
+
+  NSData *out = nothing ? nil : [ad appleDoubleData];
+  [ad release];
+  return out;
+}
+
 /*
  * Write a __MACOSX/._ companion entry containing the AppleDouble blob.
  * This is the standard macOS zip format for file metadata.
@@ -155,14 +226,9 @@ add_file_to_archive(struct archive *a, NSString *path, NSString *arcname)
   if (r < ARCHIVE_WARN) return r;
 
   /* Write __MACOSX companion if metadata exists */
-  GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
-  if (md)
-    {
-      NSData *ad = [md appleDoubleData];
-      if (ad && [ad length] > 0)
-        r = write_macosx_entry(a, arcname, ad);
-    }
-  /* md is autoreleased */
+  NSData *ad = appledouble_for_path(path);
+  if (ad && [ad length] > 0)
+    r = write_macosx_entry(a, arcname, ad);
 
   return r;
 }
@@ -186,13 +252,9 @@ add_dir_to_archive(struct archive *a, NSString *path, NSString *arcname)
   /* __MACOSX companion for directories too (custom icons, labels) */
   if (r >= ARCHIVE_OK)
     {
-      GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
-      if (md)
-        {
-          NSData *ad = [md appleDoubleData];
-          if (ad && [ad length] > 0)
-            r = write_macosx_entry(a, arcname, ad);
-        }
+      NSData *ad = appledouble_for_path(path);
+      if (ad && [ad length] > 0)
+        r = write_macosx_entry(a, arcname, ad);
     }
   return r;
 }
@@ -266,6 +328,124 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
                        ? canonicalDir
                        : [canonicalDir stringByAppendingString: @"/"];
   return [std hasPrefix: prefix];
+}
+
+/* AppleDouble header magic, to tell a real "._" companion from a user's
+ * file that merely has such a name. */
+static BOOL
+is_appledouble(NSData *d)
+{
+  const uint8_t *b = [d bytes];
+  return [d length] >= 26 && b[0] == 0x00 && b[1] == 0x05
+         && b[2] == 0x16 && b[3] == 0x07;
+}
+
+/* The path of the item an AppleDouble companion describes, from the entry
+ * path of the companion itself: dir/._name -> dir/name. */
+static NSString *
+real_path_from_companion(NSString *epath)
+{
+  NSString *name = [epath lastPathComponent];
+  return [[epath stringByDeletingLastPathComponent]
+    stringByAppendingPathComponent: [name substringFromIndex: 2]];
+}
+
+/*
+ * Give the extracted item the metadata of its AppleDouble: FinderInfo
+ * (label, flags, type), resource fork (custom icon) and every attribute
+ * (comment, tags, quarantine, other programs').  They become user.*
+ * attributes; where the volume has none, or one value does not fit (E2BIG,
+ * ENOSPC), everything stays in the item's "._" sidecar, which is how a Mac
+ * keeps it on such a volume.  Any other failure is reported.
+ */
+static BOOL
+apply_appledouble(NSData *ad, NSString *destPath, NSString **why)
+{
+  GSAppleDouble *parsed = [[[GSAppleDouble alloc] initWithData: ad] autorelease];
+  if (parsed == nil)
+    {
+      *why = @"not a valid AppleDouble";
+      return NO;
+    }
+
+  if (appledouble_is_empty(parsed))
+    return YES;
+
+  NSMutableDictionary *items = [NSMutableDictionary dictionary];
+  if ([parsed hasFinderInfo])
+    [items setObject: [parsed finderInfo] forKey: @"user.com.apple.FinderInfo"];
+  if ([parsed hasResourceFork] && [[parsed resourceFork] length] > 0)
+    [items setObject: [parsed resourceFork]
+              forKey: @"user.com.apple.ResourceFork"];
+  NSDictionary *attrs = [parsed extendedAttributes];
+  for (NSString *name in attrs)
+    {
+      NSData *value = [attrs objectForKey: name];
+      /* The Mac's own attribute holds the plain value; "q/" is only the
+       * sidecar's spelling. */
+      if ([name isEqualToString: @"com.apple.quarantine"])
+        value = [GSFileMetadata plainQuarantine: value];
+      [items setObject: value
+                forKey: [@"user." stringByAppendingString: name]];
+    }
+
+  NSString *sidecar = [GSFileMetadata sidecarPathForFilePath: destPath];
+  const char *cdst = GW_FSREP(destPath);
+  struct stat st;
+  BOOL widened = NO;
+  BOOL inSidecar = NO;
+  NSMutableArray *written = [NSMutableArray array];
+
+  /* Setting a user attribute needs write permission, an archive may well
+   * hold a read-only file. */
+  if (stat(cdst, &st) == 0 && (st.st_mode & S_IWUSR) == 0
+      && chmod(cdst, st.st_mode | S_IWUSR) == 0)
+    widened = YES;
+
+  int support = gs_xattr_supported(cdst);
+  if (support < 0)
+    {
+      *why = [NSString stringWithFormat: @"cannot tell whether attributes are supported: %s",
+                strerror(errno)];
+      if (widened)
+        chmod(cdst, st.st_mode & 07777);
+      return NO;
+    }
+  inSidecar = (support == 0);
+  for (NSString *name in items)
+    {
+      if (inSidecar)
+        break;
+      NSData *value = [items objectForKey: name];
+      /* gs_setxattr refuses a NULL value pointer; an empty value needs one. */
+      const void *bytes = [value length] ? [value bytes] : "";
+      if (gs_setxattr(cdst, [name UTF8String], bytes, [value length], 0) == 0)
+        {
+          [written addObject: name];
+          continue;
+        }
+      if (errno == E2BIG || errno == ENOSPC)
+        {
+          for (NSString *done in written)
+            gs_removexattr(cdst, [done UTF8String]);
+          inSidecar = YES;
+          break;
+        }
+      *why = [NSString stringWithFormat: @"cannot set %@: %s", name, strerror(errno)];
+      if (widened)
+        chmod(cdst, st.st_mode & 07777);
+      return NO;
+    }
+  if (widened)
+    chmod(cdst, st.st_mode & 07777);
+
+  if (inSidecar && ![ad writeToFile: sidecar atomically: YES])
+    {
+      *why = [NSString stringWithFormat: @"cannot write %@", sidecar];
+      return NO;
+    }
+  [GSFileMetadata invalidateCachedMetadataForPath: destPath];
+  return YES;
 }
 
 @implementation GWMetaArchive
@@ -398,7 +578,10 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
 {
   NSFileManager *fm = [NSFileManager defaultManager];
 
-  if (![fm fileExistsAtPath: destDir])
+  /* Only a folder this call creates may take the metadata of the archive's
+   * stripped top folder; a folder that was there is the user's. */
+  BOOL createdDest = ![fm fileExistsAtPath: destDir];
+  if (createdDest)
     {
       if (![fm createDirectoryAtPath: destDir attributes: nil])
         {
@@ -443,6 +626,7 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
    */
   NSMutableDictionary *metadataDict = [NSMutableDictionary dictionary];
   NSMutableArray *entryPaths = [NSMutableArray array];
+  NSMutableSet *companions = [NSMutableSet set];
   BOOL ok = YES;
   struct archive_entry *entry;
 
@@ -466,21 +650,35 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
 
       NSString *epath = [NSString stringWithUTF8String: ename];
 
+      NSString *lastName = [epath lastPathComponent];
+      int64_t esize = archive_entry_size(entry);
+
       if ([epath hasPrefix: @"__MACOSX/"])
         {
+          /* Finder's "Compress": metadata in a tree of its own. */
           NSString *real = real_path_from_macosx(epath);
-          int64_t esize = archive_entry_size(entry);
           if (real && esize > 0 && esize <= MAX_METADATA_ENTRY_SIZE)
             {
               NSMutableData *ad = [NSMutableData dataWithLength: (NSUInteger)esize];
               ssize_t nread = archive_read_data(a, [ad mutableBytes], [ad length]);
-              if (nread > 0)
+              if (nread == esize && is_appledouble(ad))
                 [metadataDict setObject: ad forKey: real];
             }
           archive_read_data_skip(a);
         }
-      else if ([[epath lastPathComponent] hasPrefix: @"._"])
+      else if ([lastName hasPrefix: @"._"] && [lastName length] > 2
+               && esize > 0 && esize <= MAX_METADATA_ENTRY_SIZE)
         {
+          /* tar, ditto -c and cpio: the companion sits beside its item. */
+          NSMutableData *ad = [NSMutableData dataWithLength: (NSUInteger)esize];
+          ssize_t nread = archive_read_data(a, [ad mutableBytes], [ad length]);
+          if (nread == esize && is_appledouble(ad))
+            {
+              [metadataDict setObject: ad forKey: real_path_from_companion(epath)];
+              [companions addObject: epath];
+            }
+          else
+            [entryPaths addObject: epath];
           archive_read_data_skip(a);
         }
       else
@@ -556,8 +754,7 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
       if (epath == nil) { archive_read_data_skip(a); continue; }
 
       /* Skip metadata entries on second pass */
-      if ([epath hasPrefix: @"__MACOSX/"] ||
-          [[epath lastPathComponent] hasPrefix: @"._"])
+      if ([epath hasPrefix: @"__MACOSX/"] || [companions containsObject: epath])
         {
           archive_read_data_skip(a);
           continue;
@@ -572,6 +769,15 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
 
       /* Zip-Slip defense */
       if (!path_is_within(canonicalDest, destPath))
+        {
+          archive_read_data_skip(a);
+          continue;
+        }
+
+      /* A .DS_Store is the view settings of the folder it sits in. Where
+       * the folder already has one, those are the user's, not the archive's. */
+      if ([[destPath lastPathComponent] isEqualToString: @".DS_Store"]
+          && [fm fileExistsAtPath: destPath])
         {
           archive_read_data_skip(a);
           continue;
@@ -625,14 +831,27 @@ path_is_within(NSString *canonicalDir, NSString *candidate)
           continue;
         }
 
-      /* Apply metadata from pass 1 (matched against original epath) */
-      NSData *ad = [metadataDict objectForKey: epath];
+      /* Apply metadata from pass 1.  A directory entry may end in "/",
+       * its companion's key does not.  With a stripped top folder the
+       * destination stands for it and gets its label (relpath is empty),
+       * but only when we created it. */
+      NSString *key = epath;
+      while ([key length] > 1 && [key hasSuffix: @"/"])
+        key = [key substringToIndex: [key length] - 1];
+      NSData *ad = ([relpath length] > 0 || createdDest)
+        ? [metadataDict objectForKey: key] : nil;
       if (ad)
         {
-          GSFileMetadata *md = [GSFileMetadata metadataFromAppleDoubleData: ad];
-          if (md)
+          NSString *why = nil;
+          if (!apply_appledouble(ad, destPath, &why))
             {
-              [md writeToFileAtPath: destPath error: NULL];
+              if (error)
+                *error = [NSError errorWithDomain: @"GWMetaArchive" code: 17
+                  userInfo: @{NSLocalizedDescriptionKey:
+                    [NSString stringWithFormat: @"Cannot apply metadata to %@: %@",
+                      destPath, why]}];
+              ok = NO;
+              break;
             }
         }
     }

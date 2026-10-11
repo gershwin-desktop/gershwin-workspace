@@ -44,7 +44,8 @@
 - (BOOL)openForWriting;
 
 - (void)close;
-- (void)flush;
+/* NO when the file could not be written. */
+- (BOOL)flush;
 
 /* Reader support: a block whose content begins at `offset' (caller already
  * adds the +4 lead). */
@@ -86,6 +87,8 @@
 - (void)invalidate;
 
 - (NSUInteger)tell;
+/* Bytes between the read position and the end of the block. */
+- (NSUInteger)bytesLeft;
 - (void)seek:(NSUInteger)position;
 
 - (NSData *)readBytes:(NSUInteger)length;

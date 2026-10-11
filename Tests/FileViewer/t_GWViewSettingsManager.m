@@ -16,10 +16,20 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
+#import "GWTestTemporaryDirectory.h"
 
 #include <unistd.h>
 
 #include "../../Workspace/FileViewer/GWViewSettingsManager.m"
+
+/* A cache of the test's own, so nothing lands in the user's caches. */
+static GWVolumeCache *
+scratchCache(void)
+{
+  return [[[GWVolumeCache alloc] initWithCacheFilePath:
+             [GWTestTemporaryDirectory() stringByAppendingPathComponent: @"scratch.DS_Store"]]
+           autorelease];
+}
 
 int
 main(void)
@@ -27,7 +37,7 @@ main(void)
   NSAutoreleasePool *arp = [NSAutoreleasePool new];
   NSFileManager *fm = [NSFileManager defaultManager];
 
-  NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+  NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                     [NSString stringWithFormat: @"t_gwvsm_%d", (int)getpid()]];
   [fm removeFileAtPath: dir handler: nil];
   [fm createDirectoryAtPath: dir attributes: nil];
@@ -35,7 +45,7 @@ main(void)
   /* --- bare folder: defaults tier, nothing set --- */
   {
     GWViewSettingsManager *sm =
-      [[[GWViewSettingsManager alloc] initWithDirectoryPath: dir] autorelease];
+      [[[GWViewSettingsManager alloc] initWithDirectoryPath: dir volumeCache: scratchCache()] autorelease];
     DSStoreInfo *info = [sm readSettings];
 
     PASS(info != nil, "readSettings on a bare folder returns an info");
@@ -47,7 +57,7 @@ main(void)
   /* --- write -> folder .DS_Store -> read back with a fresh manager --- */
   {
     GWViewSettingsManager *sm =
-      [[[GWViewSettingsManager alloc] initWithDirectoryPath: dir] autorelease];
+      [[[GWViewSettingsManager alloc] initWithDirectoryPath: dir volumeCache: scratchCache()] autorelease];
     DSStoreInfo *info = [sm readSettings];
 
     [info takeValuesFromViewerPrefs: @{ @"viewtype" : @"List",
@@ -57,7 +67,7 @@ main(void)
          "writeSettings created the folder .DS_Store");
 
     GWViewSettingsManager *sm2 =
-      [[[GWViewSettingsManager alloc] initWithDirectoryPath: dir] autorelease];
+      [[[GWViewSettingsManager alloc] initWithDirectoryPath: dir volumeCache: scratchCache()] autorelease];
     DSStoreInfo *back = [sm2 readSettings];
 
     PASS(back != nil && back.loaded, "a fresh manager reads the folder tier");
@@ -71,7 +81,7 @@ main(void)
    * bare names (regression: the key+"/" prefix was "//" for "/", so scoped
    * "/usr" entries were never stripped back to "usr") --- */
   {
-    NSString *cachePath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *cachePath = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                             [NSString stringWithFormat: @"t_gwvsm_root_%d.DS_Store",
                                         (int)getpid()]];
     [fm removeFileAtPath: cachePath handler: nil];
@@ -117,7 +127,7 @@ main(void)
    * label edits pass a positions-only or labels-only DSStoreInfo.  Without
    * merging, that partial write would drop the cached window geometry. */
   {
-    NSString *cachePath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *cachePath = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                             [NSString stringWithFormat: @"t_gwvsm_merge_%d.DS_Store",
                                         (int)getpid()]];
     [fm removeFileAtPath: cachePath handler: nil];
@@ -163,7 +173,7 @@ main(void)
    * must prefer the bare-name form; a legacy scoped "<key>/<filename>" entry
    * is only a fallback when no bare entry exists. */
   {
-    NSString *cachePath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *cachePath = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                             [NSString stringWithFormat: @"t_gwvsm_scoped_%d.DS_Store",
                                         (int)getpid()]];
     [fm removeFileAtPath: cachePath handler: nil];
@@ -219,7 +229,7 @@ main(void)
   /* --- cooperative editor: the volume-cache write must not discard unknown
    * record types for the directory key (forward compatibility) --- */
   {
-    NSString *cachePath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *cachePath = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                             [NSString stringWithFormat: @"t_gwvsm_preserve_%d.DS_Store",
                                         (int)getpid()]];
     [fm removeFileAtPath: cachePath handler: nil];
@@ -259,7 +269,7 @@ main(void)
   /* --- cooperative editor: the volume-cache write must not discard unknown
    * record types for the directory key (forward compatibility) --- */
   {
-    NSString *cachePath = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *cachePath = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                             [NSString stringWithFormat: @"t_gwvsm_preserve_%d.DS_Store",
                                         (int)getpid()]];
     [fm removeFileAtPath: cachePath handler: nil];
@@ -305,6 +315,10 @@ main(void)
     [fm createFileAtPath: [dir stringByAppendingPathComponent: @"a.txt"]
                 contents: [NSData data] attributes: nil];
     [fm removeFileAtPath: [dir stringByAppendingPathComponent: @".DS_Store"] handler: nil];
+    /* The records earlier cases left in the parent's store would win over
+     * the "." ones this case is about. */
+    [fm removeFileAtPath: [[dir stringByDeletingLastPathComponent]
+                            stringByAppendingPathComponent: @".DS_Store"] handler: nil];
     NSData *unk = [NSData dataWithBytes: "\x01\x02\x03\x04\x05" length: 5];
     {
       DSStore *store = [DSStore createStoreAtPath:
@@ -321,7 +335,7 @@ main(void)
 
     /* Workspace writes an icon position for a.txt via the facade. */
     GWViewSettingsManager *sm =
-      [[[GWViewSettingsManager alloc] initWithDirectoryPath: dir] autorelease];
+      [[[GWViewSettingsManager alloc] initWithDirectoryPath: dir volumeCache: scratchCache()] autorelease];
     DSStoreInfo *info = [sm readSettings];
     DSStoreIconInfo *ii = [DSStoreIconInfo infoForFilename: @"a.txt"];
     ii.position = NSMakePoint(100, 50);

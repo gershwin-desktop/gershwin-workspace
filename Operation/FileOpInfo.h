@@ -197,6 +197,8 @@
 @end 
 
 
+@class GWMetadataCopier;
+
 @interface FileOpExecutor: NSObject
 {
   NSString *operation;
@@ -213,6 +215,7 @@
   BOOL samename;
   BOOL onlyolder;
   NSFileManager *fm;
+  GWMetadataCopier *metaCopier;
   id <FileOpInfoProtocol> fileOp;
 }
 
@@ -229,6 +232,12 @@
 - (oneway void)performOperation;
 
 - (NSData *)processedFiles;
+
+- (BOOL)moveItem:(NSString *)src to:(NSString *)dst;
+
+- (BOOL)copyItem:(NSString *)src to:(NSString *)dst;
+
+- (BOOL)continueAfterMetadataError:(NSError *)error;
 
 - (void)doMove;
 

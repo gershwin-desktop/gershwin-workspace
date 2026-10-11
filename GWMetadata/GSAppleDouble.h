@@ -82,6 +82,9 @@ typedef NS_ENUM(uint32_t, GSAppleDoubleEntryID) {
                                   // that macOS embeds inside entry ID 9
                                   // when a file carries xattrs (e.g.
                                   // com.apple.metadata:_kMDItemUserTags).
+  NSData *_finderInfoTail;        // bytes behind the 32 FinderInfo bytes in
+                                  // entry 9 that are not an ATTR blob; kept
+                                  // so a rewrite does not delete them.
 }
 
 /**
@@ -156,6 +159,8 @@ typedef NS_ENUM(uint32_t, GSAppleDoubleEntryID) {
  * Keys use the raw macOS names (e.g. "com.apple.metadata:_kMDItemUserTags").
  */
 - (void)setXattr:(NSData *)value forKey:(NSString *)name;
+/* (A nil value unstages the attribute; an empty NSData stages an attribute
+ * with a zero-length value, which is how macOS stores marker attributes.) */
 
 /**
  * Extended attributes carried in the Apple "ATTR" blob (entry ID 9,
@@ -166,6 +171,21 @@ typedef NS_ENUM(uint32_t, GSAppleDoubleEntryID) {
  * is a copy; mutate via -setXattr:forKey:.
  */
 - (NSDictionary<NSString *, NSData *> *)extendedAttributes;
+
+/**
+ * Merge freshly generated sidecar content over an existing sidecar without
+ * deleting what the caller does not manage.  `fresh` (may be nil) is the
+ * new FinderInfo, resource fork and managed attributes, as produced by
+ * -appleDoubleData.  Everything in `existing` (may be nil) is carried over
+ * byte for byte except entries 9 and 2, which `fresh` replaces, and the
+ * ATTR records named in `managedNames`, which `fresh` replaces or, when
+ * absent from it, removes.  Unknown entry ids, unknown attribute names and
+ * unparsed bytes behind the FinderInfo are therefore never lost by a
+ * rewrite.  Returns nil when nothing is left to write.
+ */
++ (NSData *)appleDoubleDataByUpdatingSidecar:(NSData *)existing
+                                 withContent:(NSData *)fresh
+                           managedXattrNames:(NSSet *)managedNames;
 
 @end
 

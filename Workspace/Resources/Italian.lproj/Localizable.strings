@@ -1171,6 +1171,8 @@
 "Hide Toolbar" = "Nascondi barra strumenti";
 
 "Show Sidebar" = "Mostra barra laterale";
+"Show Path Bar" = "Mostra barra del percorso";
+"Show Status Bar" = "Mostra barra di stato";
 
 "Hide Sidebar" = "Nascondi barra laterale";
 
@@ -1216,7 +1218,7 @@
 
 "Make Alias" = "Crea alias";
 
-"Quick Look" = "Anteprima rapida";
+"Look Inside" = "Guarda dentro";
 
 "AFP Server" = "Server AFP";
 

@@ -126,6 +126,13 @@
 
   // Pixel placement data
   FSNIconItemData *_placementData;
+
+  /* Finder's "show item info" and "show icon preview" options, and the
+   * label (0 none, 1-7 as in the lclr record) arrange-by-label sorts on. */
+  BOOL showsItemInfo;
+  BOOL showsPreview;
+  NSInteger labelIndex;
+  NSString *itemInfoText;
 }
 
 @property (nonatomic, retain) FSNIconItemData *placementData;
@@ -185,6 +192,49 @@
  * including the label margin.  Used by the container to give a wide label
  * a frame up to 2x the grid cell so the text is not clipped to one cell. */
 - (float)labelTextWidth;
+
+/* Item count of a folder, as Finder words the line under its name. */
++ (NSString *)itemInfoForItemCount:(NSUInteger)count;
+
+/* Pixel size of an image, "2,560 x 1,600" with the thousands separator of the
+ * language (or the given one) and the multiplication sign. */
++ (NSString *)itemInfoForPixelWidth:(NSInteger)width height:(NSInteger)height;
++ (NSString *)itemInfoForPixelWidth:(NSInteger)width
+                             height:(NSInteger)height
+                  groupingSeparator:(NSString *)separator;
+
+/* Show a second line under the name with the item count of a folder, the
+ * size of a file or the pixel size of an image.  An explicitly chosen info
+ * type (kind, date, ...) takes the line instead.  The line is worked out when
+ * the icon is decorated, because counting a folder reads it. */
+- (void)setShowsItemInfo:(BOOL)flag;
+- (BOOL)showsItemInfo;
+
+/* The text of that line; empty while the option is off, the icon is not yet
+ * decorated, or the item has nothing to report (a package). */
+- (NSString *)itemInfo;
+
+/* Whether a second line is drawn at all: an info type or the item info. */
+- (BOOL)hasInfoLine;
+
+/* Draw image files as a thumbnail of their own pixels instead of the generic
+ * type icon.  Other files are not affected. */
+- (void)setShowsPreview:(BOOL)flag;
+- (BOOL)showsPreview;
+
+/* The image the icon is drawn with, nil until decorated. */
+- (NSImage *)iconImage;
+
+- (void)setLabelIndex:(NSInteger)index;
+- (NSInteger)labelIndex;
+
+- (int)compareAccordingToCrDate:(id)aIcon;
+
+/* Labelled items before unlabelled ones, by label index. */
+- (int)compareAccordingToLabel:(id)aIcon;
+
+/* The localized name of the icon's label, nil without one. */
+- (NSString *)labelName;
 
 // DS_Store tag/label color support
 - (void)setTagColor:(NSColor *)color;

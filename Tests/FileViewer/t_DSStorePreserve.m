@@ -21,6 +21,7 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
+#import "GWTestTemporaryDirectory.h"
 
 #import "../../DSStore/DSStore.h"
 #import "../../DSStore/DSStoreEntry.h"
@@ -28,7 +29,7 @@
 
 static NSString *tmpStorePath(NSString *tag)
 {
-  return [NSTemporaryDirectory()
+  return [GWTestTemporaryDirectory()
            stringByAppendingPathComponent:
              [NSString stringWithFormat: @"t_preserve_%@_%d.DS_Store", tag, (int)getpid()]];
 }
@@ -405,7 +406,7 @@ main(void)
    * carry unknown records and partial icvo fields forward unchanged. --- */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                       [NSString stringWithFormat: @"t_preserve_integ_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
@@ -452,11 +453,11 @@ main(void)
     PASS(unkE != nil && [[unkE value] isEqual: unk],
          "integration: unknown record 'qqqq' survives the DSStoreInfo write");
 
+    /* The legacy icvo is no longer written, so it is kept byte for byte. */
     DSStoreEntry *icvoE = [chk entryForFilename: @"." code: @"icvo"];
     NSData *icvoV = (NSData *)[icvoE value];
     PASS([icvoV length] == 24, "integration: icvo keeps its 24-byte shape");
     const uint8_t *b = [icvoV bytes];
-    PASS(b[12] == 0 && b[13] == 128, "integration: icvo size updated to 128");
     PASS(memcmp(b + 14, "auto", 4) == 0,
          "integration: icvo arrangement 'auto' preserved (not normalized)");
     NSData *gotTail = [icvoV subdataWithRange: NSMakeRange(18, 6)];
@@ -471,7 +472,7 @@ main(void)
    * a saveToPath: that changes a different directory field --- */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                       [NSString stringWithFormat: @"t_preserve_dirunk_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];

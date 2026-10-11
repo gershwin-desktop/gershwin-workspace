@@ -74,6 +74,9 @@ static GWDesktopManager *desktopManager = nil;
 
 - (void)dealloc
 {
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSUserDefaultsDidChangeNotification
+                                                object: nil];
   [[ws notificationCenter] removeObserver: self];
   [nc removeObserver: self];
   RELEASE (dskNode);
@@ -151,6 +154,13 @@ static GWDesktopManager *desktopManager = nil;
     [nc addObserver: self
            selector: @selector(screenParametersDidChange:)
                name: NSApplicationDidChangeScreenParametersNotification
+             object: nil];
+
+    /* Other tools (System Preferences, defaults write) change the Dock
+     * settings in the file while Workspace runs. */
+    [nc addObserver: self
+           selector: @selector(dockDefaultsDidChange:)
+               name: NSUserDefaultsDidChangeNotification
              object: nil];
 
     [nc addObserver: self 
@@ -430,6 +440,49 @@ static GWDesktopManager *desktopManager = nil;
 - (BOOL)dockActive
 {
   return !hidedock;
+}
+
+- (void)dockDefaultsDidChange:(NSNotification *)notif
+{
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  id entry;
+  int value;
+
+  /* Each setter is only called for a real change: the notification also
+   * fires for our own writes and for unrelated keys. */
+  entry = [defaults objectForKey: @"dockposition"];
+  value = entry ? [entry intValue] : DockPositionRight;
+  if ((value == DockPositionLeft || value == DockPositionRight
+       || value == DockPositionBottom) && (DockPosition)value != dockPosition)
+    {
+      [self setDockPosition: (DockPosition)value];
+    }
+
+  if ([defaults boolForKey: @"hidedock"] != hidedock)
+    {
+      [self setDockActive: hidedock];
+    }
+
+  entry = [defaults objectForKey: @"dockstyle"];
+  value = ([entry intValue] == DockStyleModern) ? DockStyleModern
+                                                : DockStyleClassic;
+  if (dock && (DockStyle)value != [dock style])
+    {
+      [dock setStyle: (DockStyle)value];
+    }
+}
+
+- (void)saveDockDefaults
+{
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+
+  /* Written when Workspace's own preferences change them, not at quit:
+   * a quit-time write would undo what another tool stored meanwhile. */
+  [defaults setObject: [NSNumber numberWithInt: dockPosition]
+               forKey: @"dockposition"];
+  [defaults setBool: hidedock forKey: @"hidedock"];
+  [defaults setObject: [NSNumber numberWithInt: [dock style]]
+               forKey: @"dockstyle"];
 }
 
 - (NSRect)desktopWindowFrame
@@ -926,16 +979,11 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
 
-  [defaults setObject: [NSNumber numberWithInt: dockPosition]
-               forKey: @"dockposition"];
-
   [defaults setBool: singleClickLaunch forKey: @"singleclicklaunch"];
 
   [defaults setBool: usexbundle forKey: @"xbundle"];
-  [defaults setBool: hidedock forKey: @"hidedock"];
-  
+
   [dock updateDefaults];
-  [desktopView updateDefaults];
 }
 
 - (void)setContextHelp

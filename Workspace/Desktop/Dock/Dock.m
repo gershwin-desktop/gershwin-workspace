@@ -1389,8 +1389,6 @@ static inline CGFloat _dockScaleFactor(void)
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
   NSUInteger i;  
 
-  [defaults setObject: [NSNumber numberWithInt: style]
-               forKey: @"dockstyle"];
   [defaults setBool: singleClickLaunch forKey: @"singleclicklaunch"];
   /* The magnification settings are not written back: the Dock never changes
    * them itself, and saving them over what is on disk would undo a

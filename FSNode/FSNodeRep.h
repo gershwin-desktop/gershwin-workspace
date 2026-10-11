@@ -433,6 +433,10 @@ typedef enum FSNSelectionMask {
 - (void)setMetadataProvider:(id)provider;
 - (id)metadataProvider;
 
+/* Finder flags answered by the metadata provider; NO without one. */
+- (BOOL)isExtensionHiddenForPath:(NSString *)path;
+- (BOOL)isNameLockedForPath:(NSString *)path;
+
 /* Icon-position store (persists dragged/cleaned-up positions).  Injected by
  * the application; nil in a plain FSNode client (positions not persisted). */
 - (void)setIconPositionStore:(id)store;

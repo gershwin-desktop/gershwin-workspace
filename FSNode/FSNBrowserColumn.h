@@ -34,6 +34,7 @@
 @class FSNBrowserCell;
 @class FSNBrowserMatrix;
 @class FSNBrowserScroll;
+@class FSNBrowserPreviewView;
 
 @interface FSNBrowserColumn : NSView <FSNDecorationClient>
 {
@@ -62,6 +63,8 @@
   NSInteger generation;
 
   FSNBrowser *browser;
+  /* Set while the column is the preview column of a selected file. */
+  FSNBrowserPreviewView *previewView;
   NSColor *backColor;
 
   FSNodeRep *fsnodeRep;
@@ -83,6 +86,21 @@
 - (void)showContentsOfNode:(FSNode *)anode;
 
 - (FSNode *)shownNode;
+
+/* Makes the column the preview column of anode (a file selected in the
+ * column before); nil turns it back into an empty column.  A preview
+ * column shows no folder: -shownNode is nil and it is not loaded. */
+- (void)showPreviewOfNode:(FSNode *)anode;
+- (FSNode *)previewNode;
+- (FSNBrowserPreviewView *)previewView;
+
+/* Puts the rows in the browser's arrangement again (the selection stays). */
+- (void)sortCells;
+
+/* The browser's prototype cell changed its icon options: the rows follow. */
+- (void)iconOptionsDidChange;
+
+- (FSNBrowser *)browser;
 
 /* The visible row range changed (scroll): decorate rows that just came
  * into view.  Called by FSNBrowserScroll. */

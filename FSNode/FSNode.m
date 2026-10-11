@@ -45,9 +45,7 @@
   RELEASE (fileType);
   RELEASE (typeDescription);
   RELEASE (crDate);
-  RELEASE (crDateDescription);
   RELEASE (modDate);
-  RELEASE (modDateDescription);
   RELEASE (owner);
   RELEASE (ownerId);
   RELEASE (group);
@@ -559,7 +557,12 @@
   if ([[self path] isEqualToString: @"/"]) {
     return @"System Disk";
   }
-  return GSDisplayNameForFilename(name, GSCurrentExtensionDisplayMode());
+  /* The global display mode is the user's "show all filename extensions"
+   * choice (GSFilenameExtensionDisplayAll); it already exists as a Workspace
+   * preference, so the file's own bit is combined with it rather than with
+   * a second key. */
+  return GSDisplayNameForFilenameHidingExtension(name, GSCurrentExtensionDisplayMode(),
+                                                 [fsnodeRep isExtensionHiddenForPath: path]);
 }
 
 - (NSString *)fileType
@@ -841,22 +844,16 @@
   return (crDate ? crDate : (NSDate *)[NSDate date]);
 }
 
+/* Not cached: "Today" turns into "Yesterday" at midnight. */
+static NSString *
+finderDateText(NSDate *date)
+{
+  return FSNFinderDateDescription (date, [NSDate date], YES, nil);
+}
+
 - (NSString *)crDateDescription
 {
-  NSDate *date = [self creationDate];
-  
-  if (date) {
-    if (crDateDescription == nil) {
-      NSString *descr = [date descriptionWithCalendarFormat: @"%b %d %Y" 
-                            timeZone: [NSTimeZone localTimeZone] locale: nil];
-
-      ASSIGN (crDateDescription, descr);   
-    }
-
-    return crDateDescription;
-  }
-
-  return [NSString string];
+  return finderDateText ([self creationDate]);
 }
 
 - (NSDate *)modificationDate
@@ -871,18 +868,7 @@
 
 - (NSString *)modDateDescription
 {
-  NSDate *date = [self modificationDate];
-
-  if (date) {
-    if (modDateDescription == nil) {
-      NSString *descr = [date descriptionWithCalendarFormat: @"%b %d %Y %H:%M" 
-                            timeZone: [NSTimeZone localTimeZone] locale: nil];
-      ASSIGN (modDateDescription, descr);   
-    }
-    return modDateDescription;
-  }
-
-  return [NSString string];
+  return finderDateText ([self modificationDate]);
 }
 
 - (unsigned long long)fileSize
@@ -1091,6 +1077,11 @@
   return [fsnodeRep isNodeLocked: self];
 }
 
+- (BOOL)isNameLocked
+{
+  return [fsnodeRep isNameLockedForPath: path];
+}
+
 - (BOOL)isFinderInvisible
 {
     if ([self isPlain] || [self isDirectory])
@@ -1283,6 +1274,58 @@
 @end
 
 
+/* Case-insensitive, digit runs by value ("file2" before "file10"), files and
+ * folders mixed.  Written out because GNUstep's localizedStandardCompare:
+ * does none of that and its numeric search drops the case folding. */
+static NSComparisonResult
+FSNFinderNameCompare(NSString *n1, NSString *n2)
+{
+  NSCharacterSet *digits = [NSCharacterSet decimalDigitCharacterSet];
+  NSUInteger l1 = [n1 length], l2 = [n2 length], i = 0, j = 0;
+
+  while (i < l1 && j < l2)
+    {
+      BOOL d1 = [digits characterIsMember: [n1 characterAtIndex: i]];
+      BOOL d2 = [digits characterIsMember: [n2 characterAtIndex: j]];
+
+      if (d1 && d2)
+        {
+          NSUInteger si = i, sj = j, zi, zj;
+
+          while (i < l1 && [digits characterIsMember: [n1 characterAtIndex: i]]) i++;
+          while (j < l2 && [digits characterIsMember: [n2 characterAtIndex: j]]) j++;
+          /* Leading zeros do not count; a longer run is the bigger number. */
+          for (zi = si; zi + 1 < i && [n1 characterAtIndex: zi] == '0'; zi++);
+          for (zj = sj; zj + 1 < j && [n2 characterAtIndex: zj] == '0'; zj++);
+          if ((i - zi) != (j - zj))
+            {
+              return (i - zi) < (j - zj) ? NSOrderedAscending : NSOrderedDescending;
+            }
+          {
+            NSComparisonResult r = [[n1 substringWithRange: NSMakeRange (zi, i - zi)]
+                                     compare: [n2 substringWithRange: NSMakeRange (zj, j - zj)]];
+            if (r != NSOrderedSame) return r;
+          }
+        }
+      else
+        {
+          NSString *c1 = [n1 substringWithRange: NSMakeRange (i, 1)];
+          NSString *c2 = [n2 substringWithRange: NSMakeRange (j, 1)];
+          NSComparisonResult r;
+
+          /* A digit sorts before any other character, as in the standard order. */
+          if (d1 != d2) return d1 ? NSOrderedAscending : NSOrderedDescending;
+          r = [c1 caseInsensitiveCompare: c2];
+          if (r != NSOrderedSame) return r;
+          i++;
+          j++;
+        }
+    }
+  if (i < l1) return NSOrderedDescending;
+  if (j < l2) return NSOrderedAscending;
+  return NSOrderedSame;
+}
+
 @implementation FSNode (Comparing)
 
 - (NSComparisonResult)compareAccordingToPath:(FSNode *)aNode
@@ -1292,18 +1335,8 @@
 
 - (NSComparisonResult)compareAccordingToName:(FSNode *)aNode
 {
-  NSString *n1 = [self name];
-  NSString *n2 = [aNode name];
-
-  if ([n2 hasPrefix: @"."] || [n1 hasPrefix: @"."]) {
-    if ([n2 hasPrefix: @"."] && [n1 hasPrefix: @"."]) {
-      return [n1 caseInsensitiveCompare: n2];
-    } else {
-      return [n2 caseInsensitiveCompare: n1];
-    }
-  }
-  
-  return [n1 caseInsensitiveCompare: n2];
+  /* Finder orders by the name it shows (an application without .app). */
+  return FSNFinderNameCompare ([self displayName], [aNode displayName]);
 }
 
 - (NSComparisonResult)compareAccordingToParent:(FSNode *)aNode
