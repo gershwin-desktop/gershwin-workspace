@@ -41,6 +41,16 @@ BOOL GSFilenameExtensionIsNumeric(NSString *ext);
 
 NSString *GSDisplayNameForFilename(NSString *filename, GSFilenameExtensionDisplayMode mode);
 
+/* The display name once a file's own "hide extension" bit is taken into
+ * account.  A global choice to show all extensions wins over the bit. */
+NSString *GSDisplayNameForFilenameHidingExtension(NSString *filename, GSFilenameExtensionDisplayMode mode, BOOL extensionHidden);
+
+/* The name a rename editor's text means, or nil when it leaves the file's
+ * name as it is.  The editor shows the full name; text without any dot gets
+ * the extension the display mode hides appended, so renaming "report" in a
+ * mode that hides ".txt" keeps the type. */
+NSString *GSRenamedFilename(NSString *editedText, NSString *currentName, GSFilenameExtensionDisplayMode mode);
+
 NSString *GSFilenameHiddenExtension(NSString *filename, GSFilenameExtensionDisplayMode mode);
 
 NSString *GSDirectoryDescriptionForPath(NSString *path);

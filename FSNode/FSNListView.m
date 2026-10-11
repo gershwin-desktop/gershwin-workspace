@@ -2838,7 +2838,8 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     {
       FSNListViewNodeRep *rep = [nodeReps objectAtIndex: row];
       FSNode *nd = [rep node];
-      BOOL canedit = (([rep isLocked] == NO) && ([nd isMountPoint] == NO));
+      BOOL canedit = (([rep isLocked] == NO) && ([nd isMountPoint] == NO)
+		      && ([nd isNameLocked] == NO));
 
       if (canedit)
 	{
@@ -2896,10 +2897,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     {
       NSString *userName = [nameEditor stringValue];
       NSString *origName = [ednode name];
-      GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
-      NSString *dispName = GSDisplayNameForFilename(origName, mode);
-      NSString *hiddenExt = GSFilenameHiddenExtension(origName, mode);
-      NSString *newname = userName;
+      NSString *newname = GSRenamedFilename(userName, origName, GSCurrentExtensionDisplayMode());
       NSString *newpath;
       NSString *extension;
       NSCharacterSet *notAllowSet = [NSCharacterSet characterSetWithCharactersInString: @"/\\*:?\33"];
@@ -2907,17 +2905,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
       NSArray *dirContents;
       NSMutableDictionary *opinfo;
 
-      if ([userName isEqualToString: dispName])
-	{
-	  CLEAREDITING;
-	}
-
-      if ([hiddenExt length] > 0 && [userName rangeOfString: @"."].location == NSNotFound)
-	{
-	  newname = [userName stringByAppendingString: hiddenExt];
-	}
-
-      if ([newname isEqualToString: origName])
+      if (newname == nil)
 	{
 	  CLEAREDITING;
 	}

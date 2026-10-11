@@ -1018,6 +1018,24 @@ NSString * const FSNLabelTextSizeDefaultsKey = @"labeltxtsize";
   return _metadataProvider;
 }
 
+- (BOOL)isExtensionHiddenForPath:(NSString *)path
+{
+  if ([_metadataProvider respondsToSelector: @selector(isExtensionHiddenForPath:)] == NO)
+    {
+      return NO;
+    }
+  return [(id <FSNMetadataProvider>)_metadataProvider isExtensionHiddenForPath: path];
+}
+
+- (BOOL)isNameLockedForPath:(NSString *)path
+{
+  if ([_metadataProvider respondsToSelector: @selector(isNameLockedForPath:)] == NO)
+    {
+      return NO;
+    }
+  return [(id <FSNMetadataProvider>)_metadataProvider isNameLockedForPath: path];
+}
+
 - (void)setIconPositionStore:(id)store
 {
   _iconPositionStore = store;   /* not retained: the app owns its lifetime */

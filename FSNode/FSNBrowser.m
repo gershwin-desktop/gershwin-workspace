@@ -118,7 +118,6 @@
     NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
     NSString *appName = [defaults stringForKey: @"DesktopApplicationName"];
     NSString *selName = [defaults stringForKey: @"DesktopApplicationSelName"];
-    id defentry;
     NSInteger i;
     
     fsnodeRep = [FSNodeRep sharedInstance];
@@ -2389,7 +2388,8 @@
   if (nameEditor) {
     FSNode *cellnode = [cell node];
     BOOL canedit = (([cell isLocked] == NO) 
-                        && ([cellnode isMountPoint] == NO));
+                        && ([cellnode isMountPoint] == NO)
+                        && ([cellnode isNameLocked] == NO));
     
     [self stopCellEditing];
 
@@ -2461,10 +2461,7 @@
       {
       NSString *userName = [nameEditor stringValue];
       NSString *origName = [ednode name];
-      GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
-      NSString *dispName = GSDisplayNameForFilename(origName, mode);
-      NSString *hiddenExt = GSFilenameHiddenExtension(origName, mode);
-      NSString *newname = userName;
+      NSString *newname = GSRenamedFilename(userName, origName, GSCurrentExtensionDisplayMode());
       NSString *newpath;
       NSString *extension;
       NSCharacterSet *notAllowSet = [NSCharacterSet characterSetWithCharactersInString: @"/\\*:?\33"];
@@ -2472,17 +2469,7 @@
       NSArray *dirContents;
       NSMutableDictionary *opinfo;
 
-      if ([userName isEqualToString: dispName])
-	{
-	  CLEAREDITING;
-	}
-
-      if ([hiddenExt length] > 0 && [userName rangeOfString: @"."].location == NSNotFound)
-	{
-	  newname = [userName stringByAppendingString: hiddenExt];
-	}
-
-      if ([newname isEqualToString: origName])
+      if (newname == nil)
 	{
 	  CLEAREDITING;
 	}

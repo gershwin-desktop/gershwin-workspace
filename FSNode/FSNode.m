@@ -559,7 +559,12 @@
   if ([[self path] isEqualToString: @"/"]) {
     return @"System Disk";
   }
-  return GSDisplayNameForFilename(name, GSCurrentExtensionDisplayMode());
+  /* The global display mode is the user's "show all filename extensions"
+   * choice (GSFilenameExtensionDisplayAll); it already exists as a Workspace
+   * preference, so the file's own bit is combined with it rather than with
+   * a second key. */
+  return GSDisplayNameForFilenameHidingExtension(name, GSCurrentExtensionDisplayMode(),
+                                                 [fsnodeRep isExtensionHiddenForPath: path]);
 }
 
 - (NSString *)fileType
@@ -1089,6 +1094,11 @@
 - (BOOL)isLocked
 {
   return [fsnodeRep isNodeLocked: self];
+}
+
+- (BOOL)isNameLocked
+{
+  return [fsnodeRep isNameLockedForPath: path];
 }
 
 - (BOOL)isFinderInvisible

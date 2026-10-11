@@ -202,6 +202,39 @@ GSDisplayNameForFilename(NSString *filename, GSFilenameExtensionDisplayMode mode
 }
 
 NSString *
+GSDisplayNameForFilenameHidingExtension(NSString *filename, GSFilenameExtensionDisplayMode mode, BOOL extensionHidden)
+{
+  NSString *shown = GSDisplayNameForFilename(filename, mode);
+
+  /* Only when the global mode left the name alone: it may already have cut
+   * the extension, and cutting a second one would eat the base name. */
+  if (extensionHidden && mode != GSFilenameExtensionDisplayAll
+      && [shown isEqualToString: filename]) {
+    NSString *stripped = [filename stringByDeletingPathExtension];
+
+    if ([stripped length] > 0 && [filename hasPrefix: @"."] == NO) {
+      return stripped;
+    }
+  }
+  return shown;
+}
+
+NSString *
+GSRenamedFilename(NSString *editedText, NSString *currentName, GSFilenameExtensionDisplayMode mode)
+{
+  NSString *hiddenExt = GSFilenameHiddenExtension(currentName, mode);
+  NSString *newName = editedText;
+
+  if ([editedText isEqualToString: GSDisplayNameForFilename(currentName, mode)]) {
+    return nil;
+  }
+  if ([hiddenExt length] > 0 && [editedText rangeOfString: @"."].location == NSNotFound) {
+    newName = [editedText stringByAppendingString: hiddenExt];
+  }
+  return [newName isEqualToString: currentName] ? nil : newName;
+}
+
+NSString *
 GSFilenameHiddenExtension(NSString *filename, GSFilenameExtensionDisplayMode mode)
 {
   if ([filename length] == 0 || [filename hasPrefix: @"."]) {

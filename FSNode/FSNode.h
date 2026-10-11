@@ -243,6 +243,10 @@
 
 - (BOOL)isLocked;
 
+/* The Finder "name locked" bit: the file cannot be renamed in place.  Not
+ * -isLocked, which is about file operations on the path. */
+- (BOOL)isNameLocked;
+
 - (BOOL)isValid;
 
 - (BOOL)hasValidPath;

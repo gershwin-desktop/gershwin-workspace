@@ -4526,7 +4526,8 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 - (BOOL)canStartRepNameEditing
 {
   return (editIcon && ([editIcon isLocked] == NO)
-	  && ([[editIcon node] isMountPoint] == NO));
+	  && ([[editIcon node] isMountPoint] == NO)
+	  && ([[editIcon node] isNameLocked] == NO));
 }
 
 - (void)controlTextDidChange:(NSNotification *)aNotification
@@ -4599,10 +4600,7 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
     {
       NSString *userName = [nameEditor stringValue];
       NSString *origName = [ednode name];
-      GSFilenameExtensionDisplayMode mode = GSCurrentExtensionDisplayMode();
-      NSString *dispName = GSDisplayNameForFilename(origName, mode);
-      NSString *hiddenExt = GSFilenameHiddenExtension(origName, mode);
-      NSString *newname = userName;
+      NSString *newname = GSRenamedFilename(userName, origName, GSCurrentExtensionDisplayMode());
       NSString *newpath;
       NSString *extension;
       NSCharacterSet *notAllowSet = [NSCharacterSet characterSetWithCharactersInString: @"/\\*:?\33"];
@@ -4610,17 +4608,7 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
       NSArray *dirContents;
       NSMutableDictionary *opinfo;
 
-      if ([userName isEqualToString: dispName])
-	{
-	  CLEAREDITING;
-	}
-
-      if ([hiddenExt length] > 0 && [userName rangeOfString: @"."].location == NSNotFound)
-	{
-	  newname = [userName stringByAppendingString: hiddenExt];
-	}
-
-      if ([newname isEqualToString: origName])
+      if (newname == nil)
 	{
 	  CLEAREDITING;
 	}
