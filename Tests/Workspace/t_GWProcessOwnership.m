@@ -16,22 +16,31 @@
 #include <stdlib.h>
 #include <sys/wait.h>
 
-/* A sleeping child with exactly the given DISPLAY (nil: no DISPLAY at all),
+/* A waiting child with exactly the given DISPLAY (nil: no DISPLAY at all),
  * so the ownership check sees a real foreign-display process. */
 static NSTask *childWithDisplay(NSString *display)
 {
   NSMutableDictionary *env = [NSMutableDictionary dictionary];
   NSTask *task = [NSTask new];
+  NSPipe *ready = [NSPipe pipe];
 
   [env setObject: @"/bin:/usr/bin" forKey: @"PATH"];
   if (display != nil)
     {
       [env setObject: display forKey: @"DISPLAY"];
     }
-  [task setLaunchPath: @"/bin/sleep"];
-  [task setArguments: [NSArray arrayWithObject: @"30"]];
+  /* Until the child has exec'd, its environment is still a copy of ours, so
+   * reading it right after -launch raced. The shell prints a line once it
+   * runs with env and then blocks in read without exec'ing again, because
+   * the environment cannot be read either while an exec is in progress. */
+  [task setLaunchPath: @"/bin/sh"];
+  [task setArguments: [NSArray arrayWithObjects:
+    @"-c", @"echo ready; read line", nil]];
   [task setEnvironment: env];
+  [task setStandardOutput: ready];
+  [task setStandardInput: [NSPipe pipe]];
   [task launch];
+  [[ready fileHandleForReading] availableData];
   return [task autorelease];
 }
 
