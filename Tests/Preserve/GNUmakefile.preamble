@@ -8,3 +8,20 @@ t_ADPreserve_OBJC_FILES += ../../GWMetadata/GSAppleDouble.m
 t_MetadataCopier_OBJC_FILES += ../../Operation/GWMetadataCopier.m \
                                ../../GWMetadata/GSAppleDouble.m \
                                ../../GWMetadata/GWMetaXattr.m
+
+# The comment record goes into the destination folder's .DS_Store, so these
+# tools link the store library sources and, for the file's own comment,
+# GSFileMetadata (which needs gnustep-gui for its icon helpers).
+ADDITIONAL_INCLUDE_DIRS += -I../../DSStore
+DSSTORE_SRC = ../../DSStore/DSStore.m ../../DSStore/DSStoreCodecs.m \
+              ../../DSStore/DSStoreEntry.m ../../DSStore/DSBuddyAllocator.m \
+              ../../DSStore/SimpleColor.m
+t_CommentRecord_OBJC_FILES += ../../Operation/GWMetadataCopier.m \
+                              ../../GWMetadata/GSAppleDouble.m \
+                              ../../GWMetadata/GWMetaXattr.m \
+                              ../../GWMetadata/GSFileMetadata.m $(DSSTORE_SRC)
+t_CommentRecord_TOOL_LIBS += -lgnustep-gui
+t_DSStoreComment_OBJC_FILES += $(DSSTORE_SRC)
+t_DSStoreComment_TOOL_LIBS += -lgnustep-gui
+t_MetadataCopier_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m $(DSSTORE_SRC)
+t_MetadataCopier_TOOL_LIBS += -lgnustep-gui

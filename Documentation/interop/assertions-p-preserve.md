@@ -48,3 +48,15 @@ Mac-written `._` file seen on the build machine (modern macOS, not stored).
 - MI-PRS-23 When storing an attribute fails with E2BIG or ENOSPC, all metadata of the item goes into the sidecar and attributes already written are removed; any other errno fails hard. [D: user decision 2026-10-11, OPEN-3 option A; GSFileMetadata does the same]
 - MI-PRS-22 gs_xattr_list_for_path returns an empty list for a file with no attributes (and on filesystems without), lists empty-valued attributes, and returns NULL only on failure. [G]
 - Only the "user" namespace is copied (Linux: user.*; FreeBSD: EXTATTR_NAMESPACE_USER). OpenBSD has none: every copy takes the sidecar path. [S: GWMetaXattr.m]
+
+## Comment record in the destination folder (referee M2)
+
+- MI-PRS-24 A copy of an item with a Finder comment writes the cmmt record for its name into the destination folder's .DS_Store. [O: referee 2026-10-11 M2, Finder 10.6 shows a comment only with the record]
+- MI-PRS-25 A duplicate gets its own cmmt record; other records and positions in the store stay. [O: M2]
+- MI-PRS-26 A move into another folder writes the record there. [O: M2]
+- MI-PRS-27 A move across filesystems writes the record there. [O: M2]
+- MI-PRS-28 An item without a comment leaves no .DS_Store behind. [G]
+- MI-PRS-29 An unreadable destination .DS_Store is reported, never replaced; the copy stays. [G]
+- MI-PRS-30 The shared writer (+[DSStore setComment:forItemAtPath:error:]) creates, replaces and removes only that record. [O: INS E8]
+- MI-PRS-31 Every item of a copied folder with a comment gets its cmmt record in the .DS_Store of the folder it sits in; items without a comment get none. [O: M2]
+- MI-PRS-32 A move or rename removes the old name's cmmt record from the source folder's .DS_Store (other records stay), within and across filesystems. [G: Finder drops it; a stale record would show on a new item of that name]

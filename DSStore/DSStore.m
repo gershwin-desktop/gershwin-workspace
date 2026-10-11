@@ -22,6 +22,8 @@ BOOL gDSStoreVerbose = NO;
 - (void)_setLsvpDict:(NSMutableDictionary *)d;
 @end
 
+NSString * const DSStoreCommentErrorDomain = @"DSStoreCommentErrorDomain";
+
 @implementation DSStore
 
 + (id)storeWithPath:(NSString *)path {
@@ -1347,6 +1349,47 @@ static NSString *entryKey(NSString *filename, NSString *code)
     // don't need iconHeight adjustment - just coordinate system flip
     CGFloat dsY = viewHeight - gnustepPoint.y;
     return NSMakePoint(gnustepPoint.x, dsY);
+}
+
++ (BOOL)setComment:(NSString *)comment
+     forItemAtPath:(NSString *)path
+             error:(NSError **)error
+{
+  NSString *item = [path lastPathComponent];
+  NSString *storePath = [[path stringByDeletingLastPathComponent]
+                          stringByAppendingPathComponent: @".DS_Store"];
+  BOOL exists = [[NSFileManager defaultManager] fileExistsAtPath: storePath];
+  BOOL clear = [comment length] == 0;
+  NSString *problem = nil;
+  DSStore *store;
+
+  if ([path isEqualToString: @"/"])
+    return YES;
+  if (!exists && clear)
+    return YES;
+  if (exists) {
+    store = [DSStore storeWithPath: storePath];
+    if ([store load] == NO)
+      problem = @"The .DS_Store of the folder could not be read; the comment was not stored there.";
+  } else {
+    store = [DSStore createStoreAtPath: storePath withEntries: nil];
+  }
+  if (problem == nil) {
+    if (clear)
+      [store removeEntriesForFilename: item
+                                codes: [NSSet setWithObject: @"cmmt"]];
+    else
+      [store setCommentsForFilename: item comments: comment];
+    if ([store save] == NO)
+      problem = @"The .DS_Store of the folder could not be written.";
+  }
+  if (problem != nil && error)
+    *error = [NSError errorWithDomain: DSStoreCommentErrorDomain
+                                 code: 1
+                             userInfo: [NSDictionary dictionaryWithObjectsAndKeys:
+                                         problem, NSLocalizedDescriptionKey,
+                                         storePath, NSFilePathErrorKey, nil]];
+  return problem == nil;
 }
 
 @end

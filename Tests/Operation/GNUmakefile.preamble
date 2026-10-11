@@ -1,7 +1,7 @@
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 
 ADDITIONAL_OBJCFLAGS += -Wno-deprecated
-ADDITIONAL_INCLUDE_DIRS += -I../../Operation -I../../FSNode -I../../GWMetadata
+ADDITIONAL_INCLUDE_DIRS += -I../../Operation -I../../FSNode -I../../GWMetadata -I../../DSStore
 
 # FileOpInfo.m pulls in most of AppKit (nib loading, IBOutlets, NSWorkspace
 # operation constants) plus FSNAlias (from the FSNode framework, used by
@@ -13,7 +13,11 @@ t_FileOpInfoRemoveProcessedFiles_OBJC_FILES += ../../Operation/FileOpInfo.m \
                                                ../../Operation/Functions.m \
                                                ../../Operation/GWMetadataCopier.m \
                                                ../../GWMetadata/GSAppleDouble.m \
-                                               ../../GWMetadata/GWMetaXattr.m
+                                               ../../GWMetadata/GWMetaXattr.m \
+                                               ../../GWMetadata/GSFileMetadata.m \
+                                               ../../DSStore/DSStore.m ../../DSStore/DSStoreCodecs.m \
+                                               ../../DSStore/DSStoreEntry.m ../../DSStore/DSBuddyAllocator.m \
+                                               ../../DSStore/SimpleColor.m
 t_FileOpInfoRemoveProcessedFiles_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                                               -lFSNode -lgnustep-gui -ldispatch
 ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \

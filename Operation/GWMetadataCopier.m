@@ -6,6 +6,8 @@
 #import "GWMetadataCopier.h"
 #import "GSAppleDouble.h"
 #import "GWMetaXattr.h"
+#import "GSFileMetadata.h"
+#import "DSStore.h"
 #import <GNUstepBase/GNUstep.h>
 
 #include <errno.h>
@@ -330,6 +332,55 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
   return src.st_dev == dstDir.st_dev;
 }
 
+/* Finder 10.6 shows a comment only when the folder's own .DS_Store has the
+ * item's cmmt record; the attribute alone is not enough.  The record is
+ * keyed by name, so every copy, duplicate or move to a new name or folder
+ * needs its own. */
+- (void)_storeCommentRecordForItemAtPath:(NSString *)path
+                                   error:(NSError **)error
+{
+  GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
+
+  if ([md.finderComment length] == 0)
+    return;
+  [DSStore setComment: md.finderComment forItemAtPath: path error: error];
+}
+
+/* A copied folder holds more items than the one dropped: each needs its
+ * record in the .DS_Store of the folder it now sits in (the copied store, if
+ * any, only has the records its source folder had). */
+- (void)_storeCommentRecordsOfTreeAtPath:(NSString *)path
+                                   error:(NSError **)error
+{
+  NSDirectoryEnumerator *en;
+  NSString *rel;
+  NSError *failure = nil;
+
+  [self _storeCommentRecordForItemAtPath: path error: &failure];
+  en = [[NSFileManager defaultManager] enumeratorAtPath: path];
+  while (failure == nil && (rel = [en nextObject]) != nil)
+    {
+      if ([[rel lastPathComponent] isEqual: @".DS_Store"])
+        continue;
+      [self _storeCommentRecordForItemAtPath:
+              [path stringByAppendingPathComponent: rel]
+                                       error: &failure];
+    }
+  if (failure != nil && error)
+    *error = failure;
+}
+
+/* The record is keyed by the old name in the old folder; left behind it
+ * would show the comment again on any new item of that name. */
+- (void)_dropCommentRecordOfMovedItemAtPath:(NSString *)oldPath
+                                    toPath:(NSString *)newPath
+                                      error:(NSError **)error
+{
+  if ([oldPath isEqual: newPath])
+    return;
+  [DSStore setComment: @"" forItemAtPath: oldPath error: error];
+}
+
 - (BOOL)copyItemAtPath:(NSString *)srcPath
                 toPath:(NSString *)dstPath
                handler:(id)handler
@@ -339,9 +390,10 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
                                          toPath: dstPath
                                         handler: handler])
     return NO;
-  [self copyMetadataOfTreeAtPath: srcPath
-                          toPath: dstPath
-                           error: metadataError];
+  if ([self copyMetadataOfTreeAtPath: srcPath
+                              toPath: dstPath
+                               error: metadataError])
+    [self _storeCommentRecordsOfTreeAtPath: dstPath error: metadataError];
   return YES;
 }
 
@@ -360,6 +412,10 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
         return NO;
       if ([fm fileExistsAtPath: srcSidecar])
         [fm movePath: srcSidecar toPath: dstSidecar handler: handler];
+      [self _storeCommentRecordForItemAtPath: dstPath error: metadataError];
+      [self _dropCommentRecordOfMovedItemAtPath: srcPath
+                                         toPath: dstPath
+                                          error: metadataError];
       return YES;
     }
 
@@ -382,6 +438,9 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
     return NO;
   if ([fm fileExistsAtPath: srcSidecar])
     [fm removeFileAtPath: srcSidecar handler: handler];
+  [self _dropCommentRecordOfMovedItemAtPath: srcPath
+                                     toPath: dstPath
+                                      error: metadataError];
   return YES;
 }
 

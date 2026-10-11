@@ -38,6 +38,9 @@ ADDITIONAL_INCLUDE_DIRS += -I../FSNode -I../../FSNode
 # before this framework.
 ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata -I../../GWMetadata
 LIBRARIES_DEPEND_UPON += -L../GSMetadata/obj -lGSMetadata
+# ... and records an item's comment in the destination folder's .DS_Store.
+ADDITIONAL_INCLUDE_DIRS += -I../DSStore -I../../DSStore
+LIBRARIES_DEPEND_UPON += -L../DSStore/obj -lDSStore
 # Link against the in-tree FSNode framework explicitly: in a from-source CI
 # build FSNode is not installed, so gnustep-make's sibling-subproject path
 # propagation (triggered by ADDITIONAL_GUI_LIBS, not LIBRARIES_DEPEND_UPON)
