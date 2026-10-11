@@ -266,6 +266,7 @@
 - (void)newObjectAtPath:(NSString *)basePath 
             isDirectory:(BOOL)directory;
 
+- (void)duplicateFiles:(id)sender;
 - (void)duplicateFiles;
 - (void)makeAliasFiles:(id)sender;
 

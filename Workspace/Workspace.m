@@ -2780,6 +2780,18 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 			  tag: &tag];
 }
 
+/* The File menu sends duplicateFiles:; with the menu bar owned by another
+ * process there is often no key window to take it, so the application
+ * delegate must answer it like makeAliasFiles:, or Duplicate stays disabled. */
+- (void)duplicateFiles:(id)sender
+{
+  if ([selectedPaths count] == 0)
+    {
+      return;
+    }
+  [self duplicateFiles];
+}
+
 - (void)duplicateFiles
 {  NSString *basePath;
   NSMutableArray *files;
