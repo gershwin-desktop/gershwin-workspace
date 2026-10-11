@@ -37,6 +37,7 @@ GWVolumeCacheIsScopedChild(NSString *filename, NSString *directory)
 
 + (instancetype)cacheForPath:(NSString *)path
 {
+  [GWVolumeID adoptLegacyCacheFileForPath:path];
   NSString *cachePath = [GWVolumeID cacheFilePathForPath:path];
   if (!cachePath) return nil;
 

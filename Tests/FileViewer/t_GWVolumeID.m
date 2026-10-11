@@ -45,6 +45,42 @@ main(void)
   PASS(cf != nil && [cf hasSuffix: @".DS_Store"],
        "cacheFilePathForPath: / ends in .DS_Store");
 
+  /* --- removable media keep their cache file: the id is the file
+   * system's own identity, not the device number --- */
+  {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *source = [GWVolumeID mountSourceForPath: @"/"];
+    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+                      [NSString stringWithFormat: @"t_GWVolumeID_%d", (int)getpid()]];
+    NSString *plain = [dir stringByAppendingPathComponent: @"plain"];
+
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [fm createSymbolicLinkAtPath: [dir stringByAppendingPathComponent: @"1234-ABCD"]
+                     pathContent: source];
+    [fm createFileAtPath: plain contents: [NSData data] attributes: nil];
+
+    PASS_EQUAL([GWVolumeID filesystemIdentityForDevice: source
+                                         inDirectories: [NSArray arrayWithObject: dir]],
+               @"1234-ABCD",
+               "MI-IV-87 the identity is the name that links to the volume's device");
+    PASS([GWVolumeID filesystemIdentityForDevice: plain
+                                   inDirectories: [NSArray arrayWithObject: dir]] == nil,
+         "MI-IV-88 something that is not a device has none");
+    if ([fm fileExistsAtPath: @"/dev/disk/by-uuid"])
+      {
+        NSString *uuid = [GWVolumeID filesystemIdentityForDevice: source
+                                                   inDirectories:
+                                    [NSArray arrayWithObject: @"/dev/disk/by-uuid"]];
+
+        PASS(uuid == nil
+             || [[GWVolumeID volumeIDForPath: @"/"]
+                  isEqual: [@"uuid_" stringByAppendingString: uuid]],
+             "MI-IV-89 a volume with a file system UUID is named after it");
+      }
+    [fm removeFileAtPath: dir handler: nil];
+  }
+
   [arp release];
   return 0;
 }
