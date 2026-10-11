@@ -86,11 +86,13 @@ main(int argc, const char **argv)
               [rec setObject:
                 [NSNumber numberWithInteger: (flags >> 1) & 0x7]
                   forKey: @"labelNumber"];
+              /* kIsInvisible is 0x4000 (bit 14), kHasCustomIcon 0x0400
+               * (bit 10), see GSFileMetadata.h and evidence E18. */
               [rec setObject:
-                [NSNumber numberWithBool: (flags & (1 << 11)) != 0]
+                [NSNumber numberWithBool: (flags & (1 << 14)) != 0]
                   forKey: @"invisible"];
               [rec setObject:
-                [NSNumber numberWithBool: (flags & (1 << 7)) != 0]
+                [NSNumber numberWithBool: (flags & (1 << 10)) != 0]
                   forKey: @"customIcon"];
             }
           NSArray *tags = [md userTags];
