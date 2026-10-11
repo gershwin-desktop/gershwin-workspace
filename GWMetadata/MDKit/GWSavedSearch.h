@@ -26,8 +26,8 @@
   NSMutableArray *unsupported;
   NSMutableArray *notes;
   NSArray *paths;
+  NSMutableArray *fileTerms;
   BOOL parsed;
-  id tree;
 }
 
 /* Reads the file; nil with a message in *error when it is no saved search
@@ -58,6 +58,13 @@
 /* MDKit query text, or nil when anything is unsupported. Relative dates
  * ($time.today(-7)) are resolved against date. */
 - (NSString *)mdkQueryStringAtDate:(NSDate *)date;
+
+/* Size and date terms the index cannot answer: dictionaries with
+ * attribute, operator and value, valid after -mdkQueryStringAtDate:. */
+- (NSArray *)fileTerms;
+
+/* YES when the file at path satisfies every one of them. */
+- (BOOL)fileMatchesFileTerms:(NSString *)path;
 
 - (NSArray *)unsupportedTerms;
 - (NSArray *)notes;

@@ -41,13 +41,12 @@ int main(void)
 
   raws = [NSArray arrayWithObjects:
     @"kMDItemFSName = \"*foo*\"cdw",
-    @"kMDItemFSContentChangeDate >= $time.today(-7)",
-    @"kMDItemFSContentChangeDate <= $time.today",
-    @"kMDItemFSSize > 5 && kMDItemFSSize <= 90",
+    @"kMDItemFSContentChangeDate >= $time.today(-7) && kMDItemFSName = \"a\"",
+    @"kMDItemPixelWidth > 5 && kMDItemPixelWidth <= 90",
     @"kMDItemContentTypeTree = 'public.image'",
     @"kMDItemContentTypeTree = 'public.folder' || kMDItemFSName = \"a\"c",
-    @"InRange(kMDItemFSCreationDate,$time.today(-1),$time.today(1))",
-    @"!(kMDItemFSName = \"a\"c && kMDItemFSSize > 5)",
+    @"InRange(kMDItemFSCreationDate,$time.today(-1),$time.today(1)) && kMDItemFSName = \"a\"",
+    @"!(kMDItemFSName = \"a\"c && kMDItemPixelWidth > 5)",
     @"kMDItemTextContent = \"hello\"cdw && "
     @"(kMDItemFSName = \"x*\"c || kMDItemFSName = \"y*\"c)",
     nil];

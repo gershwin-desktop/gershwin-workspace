@@ -64,7 +64,22 @@
 
 - (void)appendRawResults:(NSArray *)lines
 {
-  [results addObjectsFromArray: lines];
+  NSArray *line;
+  NSUInteger before = [results count];
+
+  /* gmds sends one array per hit: the path first, then the score. The
+   * size and date terms are not in the index, so they are decided here. */
+  for (line in lines) {
+    NSString *path = [line objectAtIndex: 0];
+
+    if ([results containsObject: path] == NO
+        && [search fileMatchesFileTerms: path]) {
+      [results addObject: path];
+    }
+  }
+  if ([results count] == before) {
+    return;
+  }
   if ([delegate respondsToSelector:
        @selector(savedSearchRunnerDidChangeResults:)]) {
     [delegate savedSearchRunnerDidChangeResults: self];

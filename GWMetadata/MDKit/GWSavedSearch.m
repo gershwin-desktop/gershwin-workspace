@@ -10,7 +10,7 @@
 #include <string.h>
 #include <time.h>
 
-enum { NodeAnd, NodeOr, NodeNot, NodeCompare, NodeRange };
+enum { NodeAnd, NodeOr, NodeNot, NodeCompare, NodeRange, NodeTrue };
 enum { ValString, ValNumber, ValTime };
 enum { AttrString, AttrNumber, AttrDate };
 
@@ -241,6 +241,11 @@ enum { AttrString, AttrNumber, AttrDate };
     [self fail: @"expected an attribute name"];
     return nil;
   }
+  /* The Finder wraps its queries in "(true) &&" and "&& (true)". */
+  if ([attr isEqualToString: @"true"]) {
+    n->kind = NodeTrue;
+    return n;
+  }
   if ([attr isEqualToString: @"InRange"] && [self accept: @"("]) {
     n->kind = NodeRange;
     n->attr = [[self scanIdentifier] retain];
@@ -362,6 +367,28 @@ enum { AttrString, AttrNumber, AttrDate };
                  doubleValue];
     return v;
   }
+  /* The Finder leaves content types and group ids unquoted. */
+  {
+    NSUInteger start = pos;
+
+    while (pos < [text length]) {
+      unichar d = [text characterAtIndex: pos];
+
+      if ([[NSCharacterSet alphanumericCharacterSet] characterIsMember: d]
+          || d == '_' || d == '.' || d == '-') {
+        pos++;
+      } else {
+        break;
+      }
+    }
+    if (pos > start) {
+      v->type = ValString;
+      v->string = [[text substringWithRange: NSMakeRange(start, pos - start)]
+                   retain];
+      v->mods = [@"" retain];
+      return v;
+    }
+  }
   [self fail: @"expected a value"];
   return nil;
 }
@@ -375,6 +402,8 @@ typedef struct {
   const char *mdk;
   int type;
   const char *note;
+  /* Not in the metadata index: MDKit checks it on the file (see below). */
+  int fs;
 } AttrMap;
 
 /* Every row names an attribute that exists in MDKit's attributes.plist
@@ -383,10 +412,13 @@ static const AttrMap attrMap[] = {
   { "kMDItemFSName", "GSMDItemFSName", AttrString, NULL },
   { "kMDItemDisplayName", "GSMDItemFSName", AttrString,
     "the display name is searched as the file name" },
-  { "kMDItemFSSize", "GSMDItemFSSize", AttrNumber, NULL },
+  { "kMDItemFSSize", "GSMDItemFSSize", AttrNumber, NULL, 1 },
+  { "kMDItemContentModificationDate", "GSMDItemFSModificationDate", AttrDate,
+    "the content modification date is searched as the file modification date",
+    1 },
   { "kMDItemFSContentChangeDate", "GSMDItemFSModificationDate", AttrDate,
-    NULL },
-  { "kMDItemFSCreationDate", "GSMDItemFSCreationDate", AttrDate, NULL },
+    NULL, 1 },
+  { "kMDItemFSCreationDate", "GSMDItemFSCreationDate", AttrDate, NULL, 1 },
   { "kMDItemTextContent", "GSMDItemTextContent", AttrString, NULL },
   { "kMDItemFinderComment", "GSMDItemFinderComment", AttrString, NULL },
   { "kMDItemTitle", "GSMDItemTitle", AttrString, NULL },
@@ -615,6 +647,44 @@ numberText(double n)
 - (void)note:(NSString *)what;
 @end
 
+/* The top level "and" terms of a tree; a negated "or" is an "and" of
+ * negated terms, a range is two terms. */
+static void
+flattenAnd(GWSSNode *n, BOOL neg, NSMutableArray *out)
+{
+  if (n->kind == NodeNot) {
+    flattenAnd([n->kids objectAtIndex: 0], !neg, out);
+  } else if ((n->kind == NodeAnd && !neg) || (n->kind == NodeOr && neg)) {
+    GWSSNode *k;
+
+    for (k in n->kids) {
+      flattenAnd(k, neg, out);
+    }
+  } else if (n->kind == NodeRange && !neg) {
+    GWSSNode *lo = [[GWSSNode new] autorelease];
+    GWSSNode *hi = [[GWSSNode new] autorelease];
+
+    lo->kind = hi->kind = NodeCompare;
+    lo->attr = [n->attr retain];
+    hi->attr = [n->attr retain];
+    lo->op = [@">=" retain];
+    hi->op = [@"<=" retain];
+    lo->value = [n->value retain];
+    hi->value = [n->value2 retain];
+    [out addObject: [NSArray arrayWithObjects: lo, [NSNumber numberWithBool: NO],
+                     nil]];
+    [out addObject: [NSArray arrayWithObjects: hi, [NSNumber numberWithBool: NO],
+                     nil]];
+  } else {
+    [out addObject: [NSArray arrayWithObjects: n, [NSNumber numberWithBool: neg],
+                     nil]];
+  }
+}
+
+static NSString *const FileTermMark = @"\002";
+static NSString *const TrueText = @"\001true";
+static NSString *const FalseText = @"\001false";
+
 static NSString *
 inverseOp(NSString *op)
 {
@@ -645,10 +715,12 @@ inverseOp(NSString *op)
 - (NSString *)translate:(GWSSNode *)n negated:(BOOL)neg at:(NSDate *)now
 {
   NSMutableArray *parts;
-  BOOL failed = NO;
+  BOOL failed = NO, isAnd, sawAbsorbing = NO;
   NSUInteger i;
 
   switch (n->kind) {
+    case NodeTrue:
+      return neg ? FalseText : TrueText;
     case NodeNot:
       return [self translate: [n->kids objectAtIndex: 0]
                      negated: !neg at: now];
@@ -660,12 +732,22 @@ inverseOp(NSString *op)
       break;
   }
   parts = [NSMutableArray array];
+  /* De Morgan: MDKit has no NOT, only inverted comparisons. */
+  isAnd = ((n->kind == NodeAnd) != neg);
   for (i = 0; i < [n->kids count]; i++) {
     NSString *s = [self translate: [n->kids objectAtIndex: i]
                           negated: neg at: now];
 
     if (s == nil) {
       failed = YES;
+    } else if ([s isEqualToString: TrueText]) {
+      if (isAnd == NO) {
+        sawAbsorbing = YES;
+      }
+    } else if ([s isEqualToString: FalseText]) {
+      if (isAnd) {
+        sawAbsorbing = YES;
+      }
     } else {
       [parts addObject: s];
     }
@@ -673,10 +755,17 @@ inverseOp(NSString *op)
   if (failed) {
     return nil;
   }
-  /* De Morgan: MDKit has no NOT, only inverted comparisons. */
+  if (sawAbsorbing) {
+    return isAnd ? FalseText : TrueText;
+  }
+  if ([parts count] == 0) {
+    return isAnd ? TrueText : FalseText;
+  }
+  if ([parts count] == 1) {
+    return [parts objectAtIndex: 0];
+  }
   return [NSString stringWithFormat: @"(%@)",
-          [parts componentsJoinedByString:
-           ((n->kind == NodeAnd) != neg) ? @" && " : @" || "]];
+          [parts componentsJoinedByString: isAnd ? @" && " : @" || "]];
 }
 
 - (NSString *)translateContentType:(GWSSNode *)n negated:(BOOL)neg
@@ -726,6 +815,32 @@ inverseOp(NSString *op)
   GWSSValue *v = n->value;
   NSString *desc;
 
+  if ([n->attr isEqualToString: @"_kMDItemGroupId"]) {
+    /* Only the ids the Finder was seen to write (E36) are known. */
+    int gid = (v->type == ValNumber) ? (int)v->number : -1;
+    NSString *uti = (gid == 13) ? @"public.image"
+      : (gid == 9) ? @"public.folder" : nil;
+    GWSSNode *c;
+
+    if (uti == nil || ([n->op isEqualToString: @"=="] == NO
+                       && [n->op isEqualToString: @"!="] == NO)) {
+      [self refuse: [NSString stringWithFormat:
+                     @"_kMDItemGroupId %@ %@ (kind group not known)", n->op,
+                     v->type == ValNumber ? numberText(v->number)
+                     : v->string]];
+      return nil;
+    }
+    c = [[GWSSNode new] autorelease];
+    c->kind = NodeCompare;
+    c->attr = [@"kMDItemContentTypeTree" retain];
+    c->op = [n->op retain];
+    c->value = [[GWSSValue new] autorelease];
+    c->value->type = ValString;
+    c->value->string = [uti retain];
+    c->value->mods = [@"" retain];
+    [c->value retain];
+    return [self translateContentType: c negated: neg];
+  }
   if ([n->attr isEqualToString: @"kMDItemContentTypeTree"]
       || [n->attr isEqualToString: @"kMDItemContentType"]) {
     return [self translateContentType: n negated: neg];
@@ -782,8 +897,11 @@ inverseOp(NSString *op)
       [self refuse: desc];
       return nil;
     }
-    return [NSString stringWithFormat: @"%s %@ %@", m->mdk, op,
-            numberText(v->number)];
+    return m->fs
+      ? [NSString stringWithFormat: @"%@%s|%@|%@", FileTermMark, m->mdk, op,
+         numberText(v->number)]
+      : [NSString stringWithFormat: @"%s %@ %@", m->mdk, op,
+         numberText(v->number)];
   }
   {
     double secs = 0;
@@ -798,7 +916,10 @@ inverseOp(NSString *op)
     if (v->type == ValTime && [v->string isEqualToString: @"iso"] == NO) {
       [self note: @"relative dates are resolved when the search is opened"];
     }
-    return [NSString stringWithFormat: @"%s %@ %.0f", m->mdk, op, secs];
+    return m->fs
+      ? [NSString stringWithFormat: @"%@%s|%@|%.0f", FileTermMark, m->mdk, op,
+         secs]
+      : [NSString stringWithFormat: @"%s %@ %.0f", m->mdk, op, secs];
   }
 }
 
@@ -844,15 +965,8 @@ spotlightValue(GWSSValue *v, const AttrMap *m, NSString **why)
   if (m->type == AttrNumber) {
     return numberText(v->number);
   }
-  {
-    time_t t = (time_t)(v->number + NSTimeIntervalSince1970);
-    struct tm tmv;
-    char buf[40];
-
-    gmtime_r(&t, &tmv);
-    strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%SZ", &tmv);
-    return [NSString stringWithFormat: @"$time.iso(%s)", buf];
-  }
+  /* Absolute times the way the Finder writes them in InRange (E36). */
+  return [NSString stringWithFormat: @"%.6f", v->number];
 }
 
 static NSString *
@@ -927,6 +1041,7 @@ spotlightForNode(GWSSNode *n, NSString **why)
   [unsupported release];
   [notes release];
   [paths release];
+  [fileTerms release];
   [super dealloc];
 }
 
@@ -1047,7 +1162,6 @@ spotlightForNode(GWSSNode *n, NSString **why)
 {
   GWSSParser *p;
   GWSSNode *root;
-  NSString *q;
 
   [unsupported removeAllObjects];
   [notes removeAllObjects];
@@ -1059,11 +1173,103 @@ spotlightForNode(GWSSNode *n, NSString **why)
                    [p error]]];
     return nil;
   }
-  q = [self translate: root negated: NO at: date];
-  if ([unsupported count]) {
-    return nil;
+  /* Size and dates are not in the index, so they can only narrow down what
+   * the index finds: they must be top level "and" terms. */
+  {
+    NSMutableArray *conj = [NSMutableArray array];
+    NSMutableArray *dbParts = [NSMutableArray array];
+    NSUInteger i;
+
+    [fileTerms release];
+    fileTerms = [NSMutableArray new];
+    flattenAnd(root, NO, conj);
+    for (i = 0; i < [conj count]; i++) {
+      NSArray *pair = [conj objectAtIndex: i];
+      NSString *s = [self translate: [pair objectAtIndex: 0]
+                            negated: [[pair objectAtIndex: 1] boolValue]
+                                 at: date];
+
+      if (s == nil || [s isEqualToString: TrueText]) {
+        continue;
+      }
+      if ([s isEqualToString: FalseText]) {
+        [self refuse: @"the query matches nothing"];
+      } else if ([s hasPrefix: FileTermMark]) {
+        NSArray *f = [[s substringFromIndex: 1] componentsSeparatedByString:
+                      @"|"];
+
+        [fileTerms addObject: [NSDictionary dictionaryWithObjectsAndKeys:
+          [f objectAtIndex: 0], @"attribute", [f objectAtIndex: 1], @"operator",
+          [NSNumber numberWithDouble: [[f objectAtIndex: 2] doubleValue]],
+          @"value", nil]];
+      } else if ([s rangeOfString: FileTermMark].location != NSNotFound) {
+        [self refuse: @"size and date terms can only be combined with and"];
+      } else {
+        [dbParts addObject: s];
+      }
+    }
+    if ([unsupported count]) {
+      return nil;
+    }
+    if ([dbParts count] == 0) {
+      [self refuse: [fileTerms count]
+       ? @"a search needs at least one term besides size and dates"
+       : @"the query matches everything"];
+      return nil;
+    }
+    if ([fileTerms count]) {
+      [self note: @"size and dates are checked on the files found"];
+    }
+    return [dbParts count] == 1 ? [dbParts objectAtIndex: 0]
+      : [NSString stringWithFormat: @"(%@)",
+         [dbParts componentsJoinedByString: @" && "]];
   }
-  return q;
+}
+
+- (NSArray *)fileTerms
+{
+  return fileTerms;
+}
+
+- (BOOL)fileMatchesFileTerms:(NSString *)path
+{
+  NSDictionary *at = [[NSFileManager defaultManager]
+                      attributesOfItemAtPath: path error: NULL];
+  NSDictionary *term;
+
+  if (at == nil) {
+    return NO;
+  }
+  for (term in fileTerms) {
+    NSString *a = [term objectForKey: @"attribute"];
+    NSString *op = [term objectForKey: @"operator"];
+    double want = [[term objectForKey: @"value"] doubleValue];
+    double have;
+
+    if ([a isEqualToString: @"GSMDItemFSSize"]) {
+      have = (double)[[at objectForKey: NSFileSize] unsignedLongLongValue];
+    } else if ([a isEqualToString: @"GSMDItemFSModificationDate"]) {
+      have = [[at objectForKey: NSFileModificationDate]
+              timeIntervalSinceReferenceDate];
+    } else {
+      NSDate *c = [at objectForKey: NSFileCreationDate];
+
+      /* Without a creation time the term cannot hold. */
+      if (c == nil) {
+        return NO;
+      }
+      have = [c timeIntervalSinceReferenceDate];
+    }
+    if (([op isEqualToString: @"=="] && have != want)
+        || ([op isEqualToString: @"!="] && have == want)
+        || ([op isEqualToString: @"<"] && !(have < want))
+        || ([op isEqualToString: @"<="] && !(have <= want))
+        || ([op isEqualToString: @">"] && !(have > want))
+        || ([op isEqualToString: @">="] && !(have >= want))) {
+      return NO;
+    }
+  }
+  return YES;
 }
 
 - (NSArray *)unsupportedTerms
@@ -1120,23 +1326,51 @@ spotlightForNode(GWSSNode *n, NSString **why)
     }
     return nil;
   }
+  if ([searchPaths count] > 1) {
+    if (error) {
+      *error = @"a Finder smart folder searches one folder or the whole computer";
+    }
+    return nil;
+  }
   return [self savedSearchWithRawQuery: raw
                                 scopes: [searchPaths count] ? searchPaths
                                 : [NSArray arrayWithObject:
                                    @"kMDQueryScopeComputer"]];
 }
 
+/* Finder 10.6 crashes on a file without SearchCriteria (E36), and opens one
+ * that has FXScope, FXScopeArrayOfPaths and CurrentFolderPath without any
+ * criteria rows. The codes are four character codes read as integers:
+ * 'SCev' this Mac, 'SCcf' the current folder. */
+enum { ScopeThisMac = 1396925814, ScopeFolder = 1396925286 };
+
 - (NSDictionary *)propertyList
 {
-  NSDictionary *inner = [NSDictionary dictionaryWithObjectsAndKeys:
-    rawQuery, @"RawQuery",
-    scopes, @"SearchScopes",
-    [NSNumber numberWithBool: finderFilesOnly], @"FinderFilesOnly",
-    [NSNumber numberWithBool: userFilesOnly], @"UserFilesOnly", nil];
-  NSDictionary *crit = [NSDictionary dictionaryWithObjectsAndKeys:
-    scopes, @"FXScopeArrayOfPaths",
-    [NSArray array], @"FXCriteriaSlices", nil];
+  NSMutableDictionary *inner = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+    rawQuery, @"RawQuery", scopes, @"SearchScopes", nil];
+  NSMutableDictionary *crit = [NSMutableDictionary dictionaryWithObjectsAndKeys:
+    @"", @"AnyAttributeContains", scopes, @"FXScopeArrayOfPaths", nil];
 
+  if ([scopes count] == 1 && [[scopes objectAtIndex: 0] hasPrefix: @"/"]) {
+    [crit setObject: [NSNumber numberWithInt: ScopeFolder] forKey: @"FXScope"];
+    [crit setObject: scopes forKey: @"CurrentFolderPath"];
+  } else if ([scopes count] == 1
+             && [[scopes objectAtIndex: 0]
+                 isEqualToString: @"kMDQueryScopeComputer"]) {
+    [crit setObject: [NSNumber numberWithInt: ScopeThisMac]
+             forKey: @"FXScope"];
+  } else {
+    /* Which FXScope the Finder wants for several folders is not known. */
+    return nil;
+  }
+  /* The Finder writes both as YES; we do not apply them, so they stay out
+   * unless the file we read had them. */
+  if (finderFilesOnly) {
+    [inner setObject: [NSNumber numberWithBool: YES] forKey: @"FinderFilesOnly"];
+  }
+  if (userFilesOnly) {
+    [inner setObject: [NSNumber numberWithBool: YES] forKey: @"UserFilesOnly"];
+  }
   return [NSDictionary dictionaryWithObjectsAndKeys:
     [NSNumber numberWithInt: 1], @"CompatibleVersion",
     rawQuery, @"RawQuery",
@@ -1146,7 +1380,9 @@ spotlightForNode(GWSSNode *n, NSString **why)
 
 - (BOOL)writeToFile:(NSString *)path atomically:(BOOL)flag
 {
-  return [[self propertyList] writeToFile: path atomically: flag];
+  NSDictionary *pl = [self propertyList];
+
+  return pl ? [pl writeToFile: path atomically: flag] : NO;
 }
 
 @end
