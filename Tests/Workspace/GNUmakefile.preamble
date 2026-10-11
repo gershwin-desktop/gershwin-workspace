@@ -31,9 +31,28 @@ ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
 ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
                       -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
 t_AppImageProbeCache_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
-                                  -lFSNode -lgnustep-gui -lsquashfs
+                                  -lFSNode -lgnustep-gui
 t_AppImageDirIconCycle_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
-                                    -lFSNode -lgnustep-gui -lsquashfs
+                                    -lFSNode -lgnustep-gui
+# Workspace is built without AppImage support when libsquashfs is missing
+# (configure.ac); the two tests then say so instead of failing to compile.
+# The same probes as configure: pkg-config under either name, then the header.
+GW_SQUASHFS_PC := $(firstword $(foreach p,libsquashfs squashfs,\
+                    $(shell pkg-config --exists $(p) 2>/dev/null && echo $(p))))
+ifneq ($(GW_SQUASHFS_PC),)
+GW_SQUASHFS_FLAGS := $(shell pkg-config --cflags $(GW_SQUASHFS_PC))
+GW_SQUASHFS_LIBS := $(shell pkg-config --libs $(GW_SQUASHFS_PC))
+else ifneq ($(wildcard /usr/include/sqfs/predef.h /usr/local/include/sqfs/predef.h),)
+GW_SQUASHFS_FLAGS := -I/usr/local/include
+GW_SQUASHFS_LIBS := -L/usr/local/lib -lsquashfs
+else
+GW_SQUASHFS_FLAGS := -DGW_NO_SQUASHFS
+GW_SQUASHFS_LIBS :=
+endif
+t_AppImageProbeCache_OBJCFLAGS += $(GW_SQUASHFS_FLAGS)
+t_AppImageDirIconCycle_OBJCFLAGS += $(GW_SQUASHFS_FLAGS)
+t_AppImageProbeCache_TOOL_LIBS += $(GW_SQUASHFS_LIBS)
+t_AppImageDirIconCycle_TOOL_LIBS += $(GW_SQUASHFS_LIBS)
 
 # VMPathIsActiveMountPoint is a `static inline` predicate declared directly
 # in VolumeManager.h (not VolumeManager.m), specifically so this test can
