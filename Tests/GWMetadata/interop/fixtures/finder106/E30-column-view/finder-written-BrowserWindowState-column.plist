@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>BrowserWindowState</key>
+	<array>
+		<dict>
+			<key>BrowserViewState</key>
+			<dict>
+				<key>ColumnViewInnerScrollOrigins</key>
+				<array>
+					<string>{0, 18}</string>
+					<string>{0, 0}</string>
+					<string>{0, 0}</string>
+				</array>
+				<key>ColumnViewOuterScrollOrigin</key>
+				<string>{0, 0}</string>
+			</dict>
+			<key>ShowPathbar</key>
+			<false/>
+			<key>ShowSidebar</key>
+			<true/>
+			<key>ShowStatusBar</key>
+			<true/>
+			<key>ShowToolbar</key>
+			<true/>
+			<key>SidebarWidth</key>
+			<integer>192</integer>
+			<key>TargetPath</key>
+			<array>
+				<string>file://localhost/Users/user/Desktop/</string>
+				<string>file://localhost/Users/user/Desktop/mi/</string>
+				<string>file://localhost/Users/user/Desktop/mi/c1/</string>
+			</array>
+			<key>TargetURL</key>
+			<string>file://localhost/Users/user/Desktop/mi/c1/</string>
+			<key>ViewStyle</key>
+			<string>Column</string>
+			<key>WindowBounds</key>
+			<string>{{10, 43}, {1004, 277}}</string>
+		</dict>
+	</array>
+</dict>
+</plist>

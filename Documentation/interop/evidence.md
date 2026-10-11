@@ -720,3 +720,144 @@ Dumps below come from `mac-oracle dump`, i.e. decoded by this repo's DSStore cod
   mount / Mail setup on the oracle).
 - Fixtures: `E28-p-links2/as-written/` (incl. the n = 1 sidecars),
   `E28-p-links2/fixed-sidecars/`, `shot-1.png`, `shot-2.png`, `mklinks2.m`.
+
+## E30 - column view options are global, in com.apple.finder, not in any .DS_Store
+
+- Date: 2026-10-11
+- Steps: folder c1 (a.txt, b.txt, pic.jpg, sub/deep) opened and switched to
+  column view by AppleScript; the View Options panel (Cmd-J) listed and each
+  checkbox clicked by UI scripting (`view-option-click`), the popups set by UI
+  scripting; Finder quit after every change (`flush`), then
+  `com.apple.finder.plist` and the stores of mi, c1, c1/sub, c1/sub/deep
+  diffed against the previous snapshot. The same options set by AppleScript
+  `column view options` and read back in a second folder c2.
+- Observed: the panel has text size, "Symbole einblenden" (show icons),
+  "Symbolvorschau einblenden" (show icon preview, disabled while icons are
+  off), "Vorschau einblenden" (show preview column), "Ausrichten nach"
+  (arrange by) and "Immer in Spaltendarstellung oeffnen"; there is no "Als
+  Standard verwenden" button. No change wrote anything into any .DS_Store (no
+  record in the parent, none in the folder's own store, none in the subfolders).
+  The first change creates `StandardViewOptions` -> `ColumnViewOptions` in
+  com.apple.finder.plist (absent in the baseline), with: ArrangeBy (string,
+  four-char code), ColumnShowFolderArrow (bool), ColumnShowIcons (bool),
+  ColumnWidth (integer, 205), FontSize (integer, 12), PreviewDisclosureState
+  (bool), SharedArrangeBy (string, kipl), ShowIconThumbnails (bool),
+  ShowPreview (bool). A value set in c2 is at once the value in c1: the options
+  are global.
+- Key mapping (two of the names are swapped against their meaning; proven by
+  single AppleScript changes, the panel state, screenshots and E31):
+  show icons = `ShowPreview`; show preview column = `ColumnShowIcons`; show icon
+  preview = `ShowIconThumbnails`; text size = `FontSize` (10..16); preview pane
+  disclosure ("Vorschau:" triangle, AppleScript `discloses preview pane`) =
+  `PreviewDisclosureState`; column width = `ColumnWidth`.
+- ArrangeBy codes: Name `dnam`, Date Modified `modd`, Date Created `ascd`,
+  Size `phys`, Kind `kipl`, Label `labl`. SharedArrangeBy stayed `kipl` (no
+  UI for it on a local folder).
+- Switching a window to column view also sets the global last-used view
+  `FXPreferredViewStyle` = `clmv` (E5).
+- Fixtures: `E30-column-view/finder-written-first-ColumnViewOptions.plist`
+  (the excerpt Finder wrote), `shot-icons-on-preview-off.png`.
+
+## E31 - written ColumnViewOptions are honoured, if typed correctly
+
+- Date: 2026-10-11
+- Steps: Finder stopped (`killall -STOP`), StandardViewOptions.ColumnViewOptions
+  written with typed values (`setcvo.py`, Foundation on the Mac), Finder killed
+  and relaunched by launchd; c1 opened in column view, AppleScript `column view
+  options` read, View Options panel and AX column widths read, item order of the
+  c1 column read (AXFilename), `shot`. Three rounds: (1) ShowPreview false,
+  ColumnShowIcons true, ShowIconThumbnails false, FontSize 14, ColumnWidth 300,
+  ArrangeBy phys; (2) ShowPreview true, ArrangeBy kipl, FontSize 10,
+  PreviewDisclosureState false, ColumnShowFolderArrow false; (3)
+  ShowIconThumbnails true, ColumnShowIcons false, FontSize 16, ColumnWidth 180,
+  ArrangeBy dnam. Before that, the same keys written with `defaults write` in
+  the old-style plist syntax.
+- Observed: (1) icons hidden, preview column shown, text 14, every column 300
+  wide, order b.txt, a.txt, sub, pic.jpg (495932 B), big.bin (500000 B), i.e.
+  size smallest first, as in icon view (E25). (2) icons shown, text 10, order
+  by kind (pic.jpg JPEG-Bild, big.bin, sub Ordner, a.txt, b.txt). (3) text 16,
+  columns 180, name order, pic.jpg drawn as a thumbnail, no preview column.
+  So FontSize, ColumnWidth, ArrangeBy, ShowPreview, ColumnShowIcons and
+  ShowIconThumbnails are honoured on read. ColumnShowFolderArrow false had no
+  visible effect (folder arrows still drawn). PreviewDisclosureState was not
+  honoured from the file: file 0 read as disclosed, file 1 read as collapsed;
+  only changes made inside Finder took effect (not explained).
+- `defaults write` with the old plist syntax stores every value as a string;
+  Finder then logs `-[NSCFString _getValue:forType:]: unrecognized selector`
+  repeatedly and stops answering AppleScript for its windows. The types must be
+  integer and boolean as Finder writes them.
+- Fixtures: `E30-column-view/setcvo.py`,
+  `shot-written-prefs-noicons-preview-w300-size.png`,
+  `shot-written-prefs-thumbs-text16-w180.png`, `shot-preview-collapsed.png`.
+
+## E32 - column widths: only Option-drag persists, and globally
+
+- Date: 2026-10-11
+- Steps: the resize grip at the bottom right of a column (under its vertical
+  scroller, AX geometry read first) dragged by `mac-oracle drag` (+80 px), then
+  window closed and reopened in the same Finder session, another folder opened,
+  Finder relaunched; the same with `drag --mods alt` (Option held, +60 px).
+- Observed: a plain drag widens only that column (205 -> 285); after closing
+  and reopening the window, or opening another folder, all columns are 205
+  again, and nothing was written anywhere. An Option-drag widens every column
+  (205 -> 265), sets `ColumnWidth` = 265 in ColumnViewOptions, applies to
+  other folders and survives a Finder relaunch. There is no per-column or
+  per-folder width.
+- Fixture: none (geometry numbers above).
+
+## E33 - per folder in column view: vstl clmv and bwsp; Workspace's writer is honoured
+
+- Date: 2026-10-11
+- Steps: (a) fresh folders c3, c7: "Immer in Spaltendarstellung oeffnen"
+  clicked by UI scripting, window closed, Finder quit, stores dumped; c7 and c8
+  also switched to column view by AppleScript with bounds set, without the
+  click. (b) Reverse: a tool built from this tree's
+  Workspace/FileViewer/DSStoreInfo.m (+ DSStore, GWMetadata; run on a private
+  Xvfb :613) set viewStyle column, a window frame, sidebar width and toolbar
+  and called `-saveToParentStore` for c4 (frame {{40,300},{800,300}}, sidebar
+  260, toolbar on) and c5 ({{100,200},{700,250}}, sidebar 180, toolbar off);
+  the records were pushed with the global last-used view set to icon; Finder
+  read current view, bounds, toolbar, sidebar width; `shot`.
+- Observed (a): the checkbox writes `vstl` type `clmv` into the PARENT store
+  under the folder's name, nothing else; AppleScript `current view` writes no
+  vstl (as E5). Window geometry, toolbar and sidebar width in column view are
+  the same `bwsp` record in the parent store as in the other views. Once (c1,
+  trigger not reproduced in c7/c8) Finder also wrote a legacy `fwi0` blob
+  023f000a02d803f6636c6d7600010000 (top 575, left 10, bottom 728, right 1014,
+  view clmv, then 0001 0000) next to vstl clmv.
+- Observed (b): both folders open in column view although the global view is
+  icon; c4 bounds 31,306,646,537 = WindowBounds {{31, 231}, {615, 253}} by the
+  E7 formula, toolbar on, sidebar width 260; c5 toolbar off, bounds
+  77,422,615,614 = {{77, 154}, {538, 214}} (sidebar width reads 0 while the
+  toolbar is hidden, E8). All honoured.
+- Notes on the writer: DSStoreInfo divided the frame by GSScaleFactor 1.3 of
+  this host (pixels -> points, intended) and also wrote a default `icvp` for
+  these column view folders although no icon option was changed; Finder 10.6
+  never writes an icvp for a column view folder (harmless, but not what Finder
+  does).
+- Fixtures: `E30-column-view/workspace-written-c4-c5.parent.DS_Store`,
+  `parent-after-all.DS_Store` (Finder-written c1 bwsp/fwi0/vstl, c3 vstl,
+  c6/c7/c8 bwsp), `cvwriter.m`, `shot-workspace-c4-c5.png` (a Bluetooth setup
+  dialog of the oracle covers part of it).
+
+## E34 - selected path and scroll positions in column view are window restore state only
+
+- Date: 2026-10-11
+- Steps: c1 opened in column view, window target set to c1/sub/deep and d.txt
+  selected; window closed and c1 reopened; Finder relaunched with the window
+  open; com.apple.finder `BrowserWindowState` read. Reverse: with no window
+  open and Finder stopped, a BrowserWindowState with one entry (TargetURL
+  c1/sub, ViewStyle Column, WindowBounds {{100, 100}, {800, 300}}, SidebarWidth
+  150, `setbws.py`) written; Finder killed and relaunched.
+- Observed: no per-folder record of the selected path or the column scroll
+  positions exists. Reopening c1 shows c1 again, not the deeper path. Only the
+  windows open when Finder quits are stored, globally, in
+  `BrowserWindowState` (array of dicts: TargetURL, TargetPath = every folder
+  from the Desktop down to the target, ViewStyle `Column`, WindowBounds,
+  ShowToolbar, ShowSidebar, ShowStatusBar, ShowPathbar, SidebarWidth,
+  BrowserViewState with ColumnViewInnerScrollOrigins = one "{x, y}" string per
+  column and ColumnViewOuterScrollOrigin), next to BrowserWindowRestoreAttempted
+  0. The written state was honoured at relaunch: one window on c1/sub, column
+  view, bounds 100,390,900,668 (E7 formula), sidebar width 150.
+- Fixtures: `E30-column-view/finder-written-BrowserWindowState-column.plist`,
+  `setbws.py`.
