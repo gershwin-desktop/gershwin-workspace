@@ -84,7 +84,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWViewer.h"
 #import "Finder.h"
 #import "Inspector.h"
-#import "QuickLook/GWQuickLookController.h"
+#import "LookInside/GWLookInsideController.h"
 #import "Operation.h"
 #import "History/History.h"
 #import "X11AppSupport.h"
@@ -447,7 +447,7 @@ static Workspace *gworkspace = nil;
   [menuItem setTarget:self];
   menuItem = [menu addItemWithTitle:_(@"Make Alias") action:@selector(makeAliasFiles:) keyEquivalent:@"l"];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Quick Look") action:@selector(quickLook:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Look Inside") action:@selector(lookInside:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
   // Share submenu
@@ -1769,7 +1769,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       || sel_isEqual(action, @selector(makeThumbnails:))
       || sel_isEqual(action, @selector(removeThumbnails:))
       || sel_isEqual(action, @selector(notImplemented:))
-      || sel_isEqual(action, @selector(quickLook:))
+      || sel_isEqual(action, @selector(lookInside:))
       || sel_isEqual(action, @selector(cleanUp:))
       || sel_isEqual(action, @selector(cleanUpBy:)))
     {
@@ -5739,15 +5739,15 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
                   @"OK", nil, nil);
 }
 
-- (void)quickLook:(id)sender
+- (void)lookInside:(id)sender
 {
   /* Menu entry point: uses the app-wide current selection, same as Get
    * Info's menu item does; the Space bar path in GWViewerWindow instead
    * uses the key folder window's own live selection (see
    * -performKeyEquivalent: there for why). */
-  [[GWQuickLookController sharedController]
-      toggleQuickLookForPaths: selectedPaths
-                 sourceWindow: [NSApp keyWindow]];
+  [[GWLookInsideController sharedController]
+      toggleLookInsideForPaths: selectedPaths
+                  sourceWindow: [NSApp keyWindow]];
 }
 
 + (NSArray *)volumeMountRoots

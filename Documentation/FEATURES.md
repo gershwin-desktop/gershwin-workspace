@@ -139,7 +139,7 @@ store of the folder the item sits in.  Finder 10.6 does not use `vSrn`,
 
 | Finder feature | Metadata | Implementation | Notes | Implementation Status |
 |----------------|----------|----------------|------|-----------------------|
-| Look Inside | None | Workspace's own preview window on the space bar (Workspace/QuickLook/), showing a file's contents; not metadata-driven | Being improved | **Partial** (tests only) |
+| Look Inside | None | Workspace's own preview window on the space bar (Workspace/LookInside/), showing a file's contents; not metadata-driven | Being improved | **Partial** (tests only) |
 | iCloud integration | ubiquity metadata | Requires iCloud services | | **Not implemented** |
 | AirDrop | None | Needs Bonjour and AWDL | | **Not implemented** |
 | Finder Sync extensions | extension-specific | Introduced in OS X 10.10 | | **Not implemented** |

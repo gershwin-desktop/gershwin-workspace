@@ -5,7 +5,7 @@
  */
 
 #include <math.h>
-#import "GWQuickLookGeometry.h"
+#import "GWLookInsideGeometry.h"
 
 /* Whatever unit convention the caller's visible frame already uses (plain
  * points at GSScaleFactor 1.0, or the larger device-pixel numbers a higher
@@ -14,7 +14,7 @@
  * it never needs to multiply by the scale factor itself: it just centers
  * an 80%-sized rect inside whatever rect it is given. */
 NSRect
-GWQuickLookFrameForVisibleFrame(NSRect visibleFrame)
+GWLookInsideFrameForVisibleFrame(NSRect visibleFrame)
 {
   CGFloat w = floor(visibleFrame.size.width * 0.8);
   CGFloat h = floor(visibleFrame.size.height * 0.8);
@@ -34,9 +34,9 @@ GWQuickLookFrameForVisibleFrame(NSRect visibleFrame)
  * is not headless-testable; this is the plain-arithmetic half of that
  * same contract, pulled out so it is. */
 NSRect
-GWQuickLookContentRectForVisibleFrame(NSRect visibleFrame, CGFloat scale)
+GWLookInsideContentRectForVisibleFrame(NSRect visibleFrame, CGFloat scale)
 {
-  NSRect contentRect = GWQuickLookFrameForVisibleFrame(visibleFrame);
+  NSRect contentRect = GWLookInsideFrameForVisibleFrame(visibleFrame);
 
   contentRect.size.width /= scale;
   contentRect.size.height /= scale;

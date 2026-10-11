@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later OR BSD-2-Clause
  */
 
-/* GWQuickLookPanel.h
+/* GWLookInsidePanel.h
  *
  * The window Space opens over a folder window's current selection: a
  * normal titled window - not borderless - covering 80% of the screen's
@@ -21,9 +21,9 @@
 
 #import <AppKit/AppKit.h>
 
-@interface GWQuickLookPanel : NSWindow
+@interface GWLookInsidePanel : NSWindow
 {
-  id _sourceWindow;          /* the folder window Quick Look was opened
+  id _sourceWindow;          /* the folder window Look Inside was opened
                                * from; arrow keys are forwarded to its
                                * first responder so the folder's own
                                * selection moves, and the shown item
@@ -32,7 +32,7 @@
                                * / GenericView instance currently shown -
                                * never owned uniquely by this panel (all
                                * three kinds are cached and reused across
-                               * Quick Look invocations, like Inspector's
+                               * Look Inside invocations, like Inspector's
                                * own Contents does), kept only so
                                * -stopTasks can be sent before swapping. */
   NSView *_currentViewerView;
@@ -42,7 +42,7 @@
 - (id)initWithPaths:(NSArray *)paths sourceWindow:(id)sourceWindow;
 
 /* Swaps the displayed content without recreating the window - used for
- * arrow-key navigation while Quick Look is open. */
+ * arrow-key navigation while Look Inside is open. */
 - (void)showPaths:(NSArray *)paths;
 
 /* Maps the window, asking the WindowManager for the birth animation. */

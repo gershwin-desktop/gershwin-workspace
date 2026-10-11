@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later OR BSD-2-Clause
  */
 
-/* GWQuickLookController.h - whether the Quick Look panel should be open,
+/* GWLookInsideController.h - whether the Look Inside panel should be open,
  * kept apart from the window itself so the toggle rule can be red/green
  * tested without a display: closing always wins (a second Space, from
  * either the panel or the folder window, closes whatever is open, no
@@ -16,22 +16,22 @@
 
 typedef enum
 {
-  GWQuickLookActionNone = 0,
-  GWQuickLookActionOpen,
-  GWQuickLookActionClose
-} GWQuickLookAction;
+  GWLookInsideActionNone = 0,
+  GWLookInsideActionOpen,
+  GWLookInsideActionClose
+} GWLookInsideAction;
 
-@interface GWQuickLookController : NSObject
+@interface GWLookInsideController : NSObject
 {
   BOOL _open;
   id _panel;
 }
 
-+ (GWQuickLookController *)sharedController;
++ (GWLookInsideController *)sharedController;
 
 /* Pure decision, no side effects - the part a headless test drives
  * directly. */
-+ (GWQuickLookAction)actionForSpaceKeyWithSelectionCount:(NSUInteger)count
++ (GWLookInsideAction)actionForSpaceKeyWithSelectionCount:(NSUInteger)count
                                                   isOpen:(BOOL)isOpen;
 
 - (BOOL)isOpen;
@@ -40,19 +40,19 @@ typedef enum
  * else responding to -path); returns YES if the key press was consumed
  * (the panel opened or closed), NO if there was nothing to do (no
  * selection and nothing open), so the caller can fall through to its
- * normal handling exactly as it did before Quick Look existed. */
-- (BOOL)toggleQuickLookForSelection:(NSArray *)selection
-                        sourceWindow:(id)sourceWindow;
+ * normal handling exactly as it did before Look Inside existed. */
+- (BOOL)toggleLookInsideForSelection:(NSArray *)selection
+                         sourceWindow:(id)sourceWindow;
 
 /* Same toggle, for a caller that already has plain path strings (the
- * "Quick Look" menu item, which uses Workspace's own selectedPaths). */
-- (BOOL)toggleQuickLookForPaths:(NSArray *)paths
-                    sourceWindow:(id)sourceWindow;
+ * "Look Inside" menu item, which uses Workspace's own selectedPaths). */
+- (BOOL)toggleLookInsideForPaths:(NSArray *)paths
+                     sourceWindow:(id)sourceWindow;
 
 - (void)close;
 
-/* Overridable seam: the production body (in GWQuickLookController.m)
- * looks GWQuickLookPanel up by name so this class never links the
+/* Overridable seam: the production body (in GWLookInsideController.m)
+ * looks GWLookInsidePanel up by name so this class never links the
  * window/AppKit/Inspector-bundle-heavy panel implementation just to be
  * compiled into a headless test; a test subclass overrides both methods
  * to only count calls, so the toggle state above is covered without a

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: GPL-2.0-or-later OR BSD-2-Clause
  */
 
-/* t_GWQuickLookGeometry.m - Quick Look's window covers 80% of the screen's
+/* t_GWLookInsideGeometry.m - Look Inside's window covers 80% of the screen's
  * visible frame, centered in it, regardless of the scale-factor convention
  * the visible frame itself already carries (see the
  * gnustep-scale-factor-pitfalls skill: NSScreen frames are device pixels
@@ -15,7 +15,7 @@
 #include <math.h>
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-#include "../../Workspace/QuickLook/GWQuickLookGeometry.m"
+#include "../../Workspace/LookInside/GWLookInsideGeometry.m"
 
 int main(void)
 {
@@ -25,7 +25,7 @@ int main(void)
    * strip already excluded from the visible frame's height. */
   {
     NSRect visible = NSMakeRect(0, 0, 1920, 1058);
-    NSRect got = GWQuickLookFrameForVisibleFrame(visible);
+    NSRect got = GWLookInsideFrameForVisibleFrame(visible);
 
     PASS(got.size.width == floor(visible.size.width * 0.8),
       "width is 80%% of the visible frame (1.0 convention)");
@@ -45,7 +45,7 @@ int main(void)
    * silently assumes the frame starts at (0,0) would be caught. */
   {
     NSRect visible = NSMakeRect(2400, 60, 2400, 1260);
-    NSRect got = GWQuickLookFrameForVisibleFrame(visible);
+    NSRect got = GWLookInsideFrameForVisibleFrame(visible);
 
     PASS(got.size.width == floor(visible.size.width * 0.8),
       "width is 80%% of the visible frame (1.25 convention)");
@@ -60,7 +60,7 @@ int main(void)
   }
 
   /* The window is CONSTRUCTED with a content rect in points (screen-pixel
-   * origin, point-sized - see GWQuickLookPanel.m -initWithPaths:
+   * origin, point-sized - see GWLookInsidePanel.m -initWithPaths:
    * sourceWindow: on why only the size divides by the scale factor, not
    * the origin): at GSScaleFactor 1.25 a 1920x1080 visible frame's 80%
    * pixel rect (1536x864, centered at 192,108) must become a 1228.8x691.2
@@ -70,7 +70,7 @@ int main(void)
    * then multiplies AGAIN, growing the window past 80%). */
   {
     NSRect visible = NSMakeRect(0, 0, 1920, 1080);
-    NSRect content = GWQuickLookContentRectForVisibleFrame(visible, 1.25);
+    NSRect content = GWLookInsideContentRectForVisibleFrame(visible, 1.25);
 
     PASS(EQ(content.origin.x, 192) && EQ(content.origin.y, 108),
       "content rect origin stays in screen pixels (1.25 scale)");
@@ -86,8 +86,8 @@ int main(void)
    * no-op), matching the live desktop's unaffected behavior. */
   {
     NSRect visible = NSMakeRect(0, 0, 1920, 1058);
-    NSRect pixelRect = GWQuickLookFrameForVisibleFrame(visible);
-    NSRect content = GWQuickLookContentRectForVisibleFrame(visible, 1.0);
+    NSRect pixelRect = GWLookInsideFrameForVisibleFrame(visible);
+    NSRect content = GWLookInsideContentRectForVisibleFrame(visible, 1.0);
 
     PASS(NSEqualRects(content, pixelRect),
       "content rect equals the pixel rect at scale 1.0");
@@ -96,7 +96,7 @@ int main(void)
   /* Scale 1.5, a second non-trivial factor. */
   {
     NSRect visible = NSMakeRect(0, 0, 1920, 1080);
-    NSRect content = GWQuickLookContentRectForVisibleFrame(visible, 1.5);
+    NSRect content = GWLookInsideContentRectForVisibleFrame(visible, 1.5);
 
     PASS(EQ(content.size.width, 1024) && EQ(content.size.height, 576),
       "content size is the 1536x864px rect halved-plus-a-third at 1.5 scale");

@@ -134,7 +134,7 @@ static BOOL getVolumeInfo(const char *path, unsigned long long *total,
 static unsigned long lastExtents_[4];
 static BOOL hasLastExtents_ = NO;
 
-/* Accessor for lastSelection used by GWViewerWindow quicklook guard */
+/* Accessor for lastSelection used by GWViewerWindow Look Inside guard */
 
 - (void)dealloc
 {

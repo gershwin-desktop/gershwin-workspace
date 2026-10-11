@@ -10,9 +10,9 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
 
-#import "GWQuickLookPanel.h"
-#import "GWQuickLookGeometry.h"
-#import "GWQuickLookController.h"
+#import "GWLookInsidePanel.h"
+#import "GWLookInsideGeometry.h"
+#import "GWLookInsideController.h"
 
 #import "FSNode.h"
 #import "Contents.h"                 /* TextViewer, GenericView fallbacks */
@@ -27,13 +27,13 @@
  * back for a path-based display - the data-only viewers (NSTIFFViewer,
  * NSColorViewer, NSRTFViewer, IBViewViewer) never answer YES to
  * -canDisplayPath:, so they are never chosen here and never send
- * -dataContentsReadyForType:useIcon: back.  A no-op is enough: Quick Look
+ * -dataContentsReadyForType:useIcon: back.  A no-op is enough: Look Inside
  * has no title/icon strip of its own for a viewer to refresh - the panel
  * sets its own window title directly from the path. */
-@interface GWQuickLookViewerHost : NSObject
+@interface GWLookInsideViewerHost : NSObject
 @end
 
-@implementation GWQuickLookViewerHost
+@implementation GWLookInsideViewerHost
 - (void)contentsReadyAt:(NSString *)path
 {
 }
@@ -50,15 +50,15 @@
  * own Contents class scans, and instantiates every principal class that
  * conforms to ContentViewersProtocol.  Kept apart from Contents itself
  * because Contents requires loading its own nib and a live Inspector
- * window (win/titleField/iconView outlets) neither of which Quick Look
+ * window (win/titleField/iconView outlets) neither of which Look Inside
  * has any use for - reusing the viewer classes directly is the minimal
  * option (see the sprint brief on hosting a content viewer outside the
  * Inspector). */
 static NSMutableArray *
-QuickLookLoadContentViewers(void)
+LookInsideLoadContentViewers(void)
 {
   NSMutableArray *loaded = [[NSMutableArray alloc] init];
-  GWQuickLookViewerHost *host = [[GWQuickLookViewerHost new] autorelease];
+  GWLookInsideViewerHost *host = [[GWLookInsideViewerHost new] autorelease];
   NSFileManager *fm = [NSFileManager defaultManager];
   NSEnumerator *e = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory,
                                                           NSAllDomainsMask, YES)
@@ -103,29 +103,29 @@ QuickLookLoadContentViewers(void)
  * to -canDisplayPath: for this path.  Only the discovery/capability check
  * uses the cached 1x1 prototypes - the actual displayed instance is always
  * built fresh, at the real content size, by the caller (see the note on
- * QuickLookFreshViewerForPath below on why).
+ * LookInsideFreshViewerForPath below on why).
  *
  * ImageViewer is skipped by name (the same string-comparison convention
  * Contents.m itself uses to special-case it) rather than loaded: it hands
  * the decoded image to a SEPARATE resizer process over Distributed Objects
  * and reads the result back asynchronously, sized from its own imageview's
- * bounds at the moment -displayPath: runs.  Built fresh at Quick Look's
+ * bounds at the moment -displayPath: runs.  Built fresh at Look Inside's
  * much larger content size (instead of the Inspector's small, fixed box),
  * that path produced negative-size NSViews and crashed Workspace outright
  * - reproduced with more than one otherwise-valid PNG, so this is a real
  * defect in the bundle's own resize math at this scale, not a fixture
  * artifact.  ImageViewer.m is read-only reused code (Inspector/
- * ContentViewers), so QuickLookImageViewForPath below stands in with a
+ * ContentViewers), so LookInsideImageViewForPath below stands in with a
  * plain, synchronous NSImageView instead. */
 static Class
-QuickLookViewerClassForPath(NSString *path)
+LookInsideViewerClassForPath(NSString *path)
 {
   static NSMutableArray *viewers = nil;
   NSUInteger i;
 
   if (viewers == nil)
     {
-      viewers = QuickLookLoadContentViewers();
+      viewers = LookInsideLoadContentViewers();
     }
 
   for (i = 0; i < [viewers count]; i++)
@@ -150,7 +150,7 @@ QuickLookViewerClassForPath(NSString *path)
  * plain NSImageView showing the file's contents at its natural aspect
  * ratio, scaled down to fit if larger than the content area. */
 static NSView *
-QuickLookImageViewForPath(NSString *path, NSRect frame)
+LookInsideImageViewForPath(NSString *path, NSRect frame)
 {
   NSImage *image = [[[NSImage alloc] initWithContentsOfFile: path] autorelease];
   NSImageView *imageView = [[[NSImageView alloc] initWithFrame: frame] autorelease];
@@ -164,7 +164,7 @@ QuickLookImageViewForPath(NSString *path, NSRect frame)
 }
 
 static BOOL
-QuickLookPathIsImage(NSString *path)
+LookInsidePathIsImage(NSString *path)
 {
   NSString *extension = [[path pathExtension] lowercaseString];
 
@@ -177,14 +177,14 @@ QuickLookPathIsImage(NSString *path)
  * and given no resizing mask at all) lay out their subviews only at
  * construction time and never again, so a cached instance built small and
  * stretched afterward stays visibly empty however large its own frame
- * grows.  Quick Look's frame is neither fixed nor Inspector's size, so
+ * grows.  Look Inside's frame is neither fixed nor Inspector's size, so
  * every display builds a fresh instance at the real, final content size
  * instead of reusing one built small. */
 static id
-QuickLookFreshViewerForPath(NSString *path, NSRect frame)
+LookInsideFreshViewerForPath(NSString *path, NSRect frame)
 {
-  Class cls = QuickLookViewerClassForPath(path);
-  GWQuickLookViewerHost *host;
+  Class cls = LookInsideViewerClassForPath(path);
+  GWLookInsideViewerHost *host;
   id vwr;
 
   if (cls == Nil)
@@ -192,27 +192,27 @@ QuickLookFreshViewerForPath(NSString *path, NSRect frame)
       return nil;
     }
 
-  host = [[GWQuickLookViewerHost new] autorelease];
+  host = [[GWLookInsideViewerHost new] autorelease];
   vwr = [[[cls alloc] initWithFrame: frame inspector: host] autorelease];
   return vwr;
 }
 
 static TextViewer *
-QuickLookFreshTextViewer(NSRect frame)
+LookInsideFreshTextViewer(NSRect frame)
 {
-  GWQuickLookViewerHost *host = [[GWQuickLookViewerHost new] autorelease];
+  GWLookInsideViewerHost *host = [[GWLookInsideViewerHost new] autorelease];
 
   return [[[TextViewer alloc] initWithFrame: frame forInspector: host] autorelease];
 }
 
 static GenericView *
-QuickLookFreshGenericView(NSRect frame)
+LookInsideFreshGenericView(NSRect frame)
 {
   return [[[GenericView alloc] initWithFrame: frame] autorelease];
 }
 
 static NSView *
-QuickLookMultipleSelectionView(NSUInteger count, NSRect frame)
+LookInsideMultipleSelectionView(NSUInteger count, NSRect frame)
 {
   NSTextField *label = [[[NSTextField alloc] initWithFrame: frame] autorelease];
 
@@ -236,7 +236,7 @@ QuickLookMultipleSelectionView(NSUInteger count, NSRect frame)
  * class (which expects a full GWViewer/GWSpatialViewer "aviewer", not a
  * plain window). */
 static unsigned long
-QuickLookX11WindowID(NSWindow *window)
+LookInsideX11WindowID(NSWindow *window)
 {
   GSDisplayServer *server = GSServerForWindow(window);
   void *winptr;
@@ -263,7 +263,7 @@ QuickLookX11WindowID(NSWindow *window)
  *   Inspector's small, fixed Contents-pane size; its NSTextView carries
  *   both a content-driven vertical size (-setVerticallyResizable:) and a
  *   plain Height|WidthSizable autoresizing mask, which do not agree once
- *   the view is stretched to Quick Look's much larger frame - the clip
+ *   the view is stretched to Look Inside's much larger frame - the clip
  *   view can end up scrolled to a document position that shows no glyphs.
  *
  * - Any NSTextView left with a nil -textColor (built bare via
@@ -272,7 +272,7 @@ QuickLookX11WindowID(NSWindow *window)
  *   explicitly, or its glyphs paint nothing at all despite the text
  *   genuinely being in its text storage. */
 static void
-QuickLookFixupContentView(NSView *view)
+LookInsideFixupContentView(NSView *view)
 {
   if ([view isKindOfClass: [NSScrollView class]])
     {
@@ -301,12 +301,12 @@ QuickLookFixupContentView(NSView *view)
 
     while ((sub = [e nextObject]) != nil)
       {
-        QuickLookFixupContentView(sub);
+        LookInsideFixupContentView(sub);
       }
   }
 }
 
-@implementation GWQuickLookPanel
+@implementation GWLookInsidePanel
 
 - (id)initWithPaths:(NSArray *)paths sourceWindow:(id)sourceWindow
 {
@@ -339,7 +339,7 @@ QuickLookFixupContentView(NSView *view)
                               screen: screen];
   if (self != nil)
     {
-      NSRect pixelRect = GWQuickLookFrameForVisibleFrame([screen visibleFrame]);
+      NSRect pixelRect = GWLookInsideFrameForVisibleFrame([screen visibleFrame]);
 
       [self setFrame: frameRectForScreenContentRect(self, pixelRect) display: NO];
 
@@ -383,7 +383,7 @@ QuickLookFixupContentView(NSView *view)
 
   if ([paths count] > 1)
     {
-      newView = QuickLookMultipleSelectionView([paths count], contentBounds);
+      newView = LookInsideMultipleSelectionView([paths count], contentBounds);
       [self setTitle: [NSString stringWithFormat: @"%lu %@",
                                  (unsigned long)[paths count],
                                  NSLocalizedString(@"Items", @"")]];
@@ -391,22 +391,22 @@ QuickLookFixupContentView(NSView *view)
   else if (path != nil)
     {
       /* Built fresh, at the real content size, every time - see
-       * QuickLookFreshViewerForPath on why these classes cannot be built
+       * LookInsideFreshViewerForPath on why these classes cannot be built
        * small once and stretched later.  Images go through the plain,
        * synchronous stand-in instead of the bundle's ImageViewer - see
-       * QuickLookViewerClassForPath on why. */
-      if (QuickLookPathIsImage(path))
+       * LookInsideViewerClassForPath on why. */
+      if (LookInsidePathIsImage(path))
         {
-          newView = QuickLookImageViewForPath(path, contentBounds);
+          newView = LookInsideImageViewForPath(path, contentBounds);
         }
-      else if ((viewer = QuickLookFreshViewerForPath(path, contentBounds)) != nil)
+      else if ((viewer = LookInsideFreshViewerForPath(path, contentBounds)) != nil)
         {
           [viewer displayPath: path];
           newView = viewer;
         }
       else
         {
-          TextViewer *textViewer = QuickLookFreshTextViewer(contentBounds);
+          TextViewer *textViewer = LookInsideFreshTextViewer(contentBounds);
 
           if ([textViewer tryToDisplayPath: path])
             {
@@ -414,7 +414,7 @@ QuickLookFixupContentView(NSView *view)
             }
           else
             {
-              GenericView *genericView = QuickLookFreshGenericView(contentBounds);
+              GenericView *genericView = LookInsideFreshGenericView(contentBounds);
 
               [genericView showInfoOfPath: path];
               newView = genericView;
@@ -434,7 +434,7 @@ QuickLookFixupContentView(NSView *view)
   [newView setAutoresizingMask: NSViewWidthSizable | NSViewHeightSizable];
   [[self contentView] addSubview: newView];
   ASSIGN(_currentViewerView, newView);
-  QuickLookFixupContentView(newView);
+  LookInsideFixupContentView(newView);
 }
 
 - (void)showAnimated
@@ -474,7 +474,7 @@ QuickLookFixupContentView(NSView *view)
       NSRect target = (node != nil)
         ? [[GWViewersManager viewersManager] resolveIconScreenRectForNode: node]
         : NSZeroRect;
-      unsigned long xwindow = QuickLookX11WindowID(self);
+      unsigned long xwindow = LookInsideX11WindowID(self);
 
       /* Sent while still mapped; the WM shrinks/fades on the UnmapNotify
        * that -close (below) causes, or falls back to a plain fade when
@@ -489,7 +489,7 @@ QuickLookFixupContentView(NSView *view)
   [self close];
 }
 
-/* Space and Escape close Quick Look - checked before the first responder
+/* Space and Escape close Look Inside - checked before the first responder
  * (mirroring how GWViewerWindow -performKeyEquivalent: catches the same
  * Space bar), so it works regardless of which subview inside the panel
  * currently has focus. */
@@ -503,7 +503,7 @@ QuickLookFixupContentView(NSView *view)
 
       if (character == ' ' || character == 0x1B)
         {
-          [[GWQuickLookController sharedController] close];
+          [[GWLookInsideController sharedController] close];
           return YES;
         }
     }
@@ -516,7 +516,7 @@ QuickLookFixupContentView(NSView *view)
  * stays correct no matter how the window was closed. */
 - (void)performClose:(id)sender
 {
-  [[GWQuickLookController sharedController] close];
+  [[GWLookInsideController sharedController] close];
 }
 
 - (void)keyDown:(NSEvent *)theEvent
@@ -531,7 +531,7 @@ QuickLookFixupContentView(NSView *view)
        * how to move its selection; forwarding the raw event there is
        * cheaper and more correct than reimplementing arrow-key selection
        * here, and it is what makes the shown item follow the arrow keys
-       * while Quick Look is open. */
+       * while Look Inside is open. */
       id responder = nil;
 
       if ([_sourceWindow respondsToSelector: @selector(firstResponder)])
