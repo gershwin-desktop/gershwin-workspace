@@ -38,6 +38,7 @@
 #import "GWDockWindow.h"
 #import "DockStack.h"
 #import "DockMiniatures.h"
+#import "DockInsertion.h"
 #import "DockMiniatureWatcher.h"
 #import "DockMiniatureTile.h"
 #import <GNUstepGUI/GSDisplayServer.h>
@@ -107,6 +108,14 @@ static inline CGFloat _dockScaleFactor(void)
 
 @end
 
+@interface Dock (Insertion)
+
+- (void)growIn:(NSView *)item;
+- (CGFloat)presenceOf:(NSView *)item;
+- (CGFloat)missingLength;
+
+@end
+
 @interface Dock (Magnification)
 
 - (void)layoutIcons;
@@ -136,6 +145,9 @@ static inline CGFloat _dockScaleFactor(void)
 #if HAVE_DBUS
   DockServiceDBusStop();
 #endif
+  [insertionTimer invalidate];
+  insertionTimer = nil;
+  RELEASE (insertions);
   [miniatureWatcher stop];
   RELEASE (miniatureWatcher);
   RELEASE (miniatureTiles);
@@ -412,6 +424,7 @@ static inline CGFloat _dockScaleFactor(void)
       [icons insertObject: icon atIndex: icnindex];
       [icon setSingleClickLaunch: singleClickLaunch];
       [self addSubview: icon];
+      [self growIn: icon];
       RELEASE (icon);
       
       [manager addWatcherForPath: [node path]];
@@ -487,6 +500,7 @@ static inline CGFloat _dockScaleFactor(void)
   [icon setDocked: YES];
   [icons insertObject: icon atIndex: index];
   [self addSubview: icon];
+  [self growIn: icon];
   RELEASE (icon);
 
   /* Told when the folder is deleted or moved away, like an application. */
@@ -1066,8 +1080,8 @@ static inline CGFloat _dockScaleFactor(void)
   /* Armed, the bar lies in the middle of the room kept for the whole
    * effect, so that no tile ever needs more of it than there is. */
   CGFloat lead = magnifyArmed ? magnification.spread : 0.0;
-  CGFloat pos = lead;
-  CGFloat barStart, barEnd, start, size;
+  CGFloat pos = lead + DockInsertionLead([self missingLength]);
+  CGFloat barStart, barEnd, start, size, cell;
   NSUInteger trash = [self trashIndex];
   NSUInteger i;
 
@@ -1103,13 +1117,17 @@ static inline CGFloat _dockScaleFactor(void)
           pos += baseCell;
         }
 
-      DockMagnificationSpan(shown, magnifyPos, pos, baseCell, &start, &size);
+      cell = baseCell * [self presenceOf: icon];
+      DockMagnificationSpan(shown, magnifyPos, pos, cell, &start, &size);
+      /* A growing icon is drawn at the size of its cell, like a magnified
+       * one, instead of at its own size cut off by the cell. */
       [icon setMagnifiedIconSize:
-              ((magnifyFraction > 0.0) ? (iconSize * size / baseCell) : 0.0)
+              ((magnifyFraction > 0.0 || cell < baseCell)
+               ? (iconSize * size / baseCell) : 0.0)
                            frame: [self rectForSpanStart: start
                                                   length: size
                                                thickness: size]];
-      pos += baseCell;
+      pos += cell;
 
       if ((targetIndex != -1) && ((NSInteger)i == targetIndex))
         pos += baseCell;
@@ -2864,6 +2882,7 @@ static inline CGFloat _dockScaleFactor(void)
                                          title: [watcher titleOfWindow:
                                                            [w unsignedLongValue]]]);
           [self addSubview: tile];
+          [self growIn: tile];
           changed = YES;
         }
       [tiles addObject: tile];
@@ -2905,10 +2924,12 @@ static inline CGFloat _dockScaleFactor(void)
 
   for (i = 0; i < [miniatureTiles count]; i++)
     {
-      DockMagnificationSpan(shown, magnifyPos, *pos, baseCell, &start, &size);
-      [[miniatureTiles objectAtIndex: i]
-        setFrame: [self rectForSpanStart: start length: size thickness: size]];
-      *pos += baseCell;
+      NSView *tile = [miniatureTiles objectAtIndex: i];
+      CGFloat cell = baseCell * [self presenceOf: tile];
+
+      DockMagnificationSpan(shown, magnifyPos, *pos, cell, &start, &size);
+      [tile setFrame: [self rectForSpanStart: start length: size thickness: size]];
+      *pos += cell;
     }
 }
 
@@ -2956,3 +2977,79 @@ static inline CGFloat _dockScaleFactor(void)
 }
 
 @end
+
+@implementation Dock (Insertion)
+
+/* An item added while the Dock is on the screen grows in; one added while
+ * it is built, or into a gap a drag has already opened, is simply there. */
+- (void)growIn:(NSView *)item
+{
+  if ([[self window] isVisible] == NO
+      || targetIndex != -1 || folderTargetIndex != -1
+      || [[NSUserDefaults standardUserDefaults] boolForKey: @"GSReduceMotion"])
+    return;
+
+  if (insertions == nil)
+    insertions = [NSMutableDictionary new];
+  [insertions setObject: [NSNumber numberWithDouble:
+                                     [NSDate timeIntervalSinceReferenceDate]]
+                 forKey: [NSValue valueWithNonretainedObject: item]];
+  if (insertionTimer == nil)
+    insertionTimer = [NSTimer scheduledTimerWithTimeInterval: 1.0 / 60.0
+                                                      target: self
+                                                    selector: @selector(insertionTick:)
+                                                    userInfo: nil
+                                                     repeats: YES];
+}
+
+- (CGFloat)presenceOf:(NSView *)item
+{
+  NSNumber *added = [insertions objectForKey:
+                                  [NSValue valueWithNonretainedObject: item]];
+
+  if (added == nil)
+    return 1.0;
+  return DockInsertionPresence([NSDate timeIntervalSinceReferenceDate]
+                                 - [added doubleValue],
+                               DOCK_INSERTION_DURATION);
+}
+
+/* The length the growing items do not take yet. */
+- (CGFloat)missingLength
+{
+  NSEnumerator *e = [insertions keyEnumerator];
+  NSValue *key;
+  CGFloat missing = 0;
+
+  while ((key = [e nextObject]) != nil)
+    missing += baseCell * (1.0 - [self presenceOf: [key nonretainedObjectValue]]);
+  return missing;
+}
+
+- (void)insertionTick:(NSTimer *)timer
+{
+  NSEnumerator *e = [[insertions allKeys] objectEnumerator];
+  NSValue *key;
+
+  /* Items that are in, or were taken out again meanwhile, are done. */
+  while ((key = [e nextObject]) != nil)
+    {
+      NSView *item = [key nonretainedObjectValue];
+
+      if ([item superview] != self || [self presenceOf: item] >= 1.0)
+        [insertions removeObjectForKey: key];
+    }
+
+  [self layoutIcons];
+
+  if ([insertions count] == 0)
+    {
+      [insertionTimer invalidate];
+      insertionTimer = nil;
+      /* Applications' windows minimize into where their icons ended up. */
+      [self updateIconGeometries];
+    }
+}
+
+@end
+

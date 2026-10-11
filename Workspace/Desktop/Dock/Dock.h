@@ -193,6 +193,10 @@ typedef enum DockStyle
    * DockMiniatureWatcher.h).  Windows the Dock had no room for when they
    * were minimized stay in refusedMiniatures while they are minimized. */
   NSMutableArray *miniatureTiles;
+  /* Items growing in (see DockInsertion.h): when each was added, keyed by
+   * the item, and the timer that lays them out until they are in. */
+  NSMutableDictionary *insertions;
+  NSTimer *insertionTimer;
   NSMutableArray *refusedMiniatures;
   DockMiniatureWatcher *miniatureWatcher;
 
