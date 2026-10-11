@@ -1,0 +1,23 @@
+
+PACKAGE_NAME = gworkspace
+include $(GNUSTEP_MAKEFILES)/common.make
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+
+BUNDLE_NAME = FModuleTags
+BUNDLE_EXTENSION = .finder
+
+
+OBJCFLAGS += -Wall
+
+FModuleTags_OBJC_FILES = FModuleTags.m 
+
+FModuleTags_PRINCIPAL_CLASS = FModuleTags
+
+
+include GNUmakefile.preamble
+
+include $(GNUSTEP_MAKEFILES)/bundle.make
+
+include GNUmakefile.postamble
+
+

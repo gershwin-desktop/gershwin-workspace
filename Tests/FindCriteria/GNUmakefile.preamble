@@ -12,3 +12,15 @@ t_FindCriteria_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m \
                              ../../GWMetadata/GSAppleDouble.m \
                              ../../GWMetadata/GWMetaXattr.m
 t_FindCriteria_TOOL_LIBS += -lgnustep-gui
+
+# The Find modules ask GSFileMetadata for label and tags and are #included
+# whole, so the metadata classes are linked beside them.
+ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Finder/Modules
+t_FindModuleLabel_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m \
+                                ../../GWMetadata/GSAppleDouble.m \
+                                ../../GWMetadata/GWMetaXattr.m
+t_FindModuleLabel_TOOL_LIBS += -lgnustep-gui
+t_FindModuleTags_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m \
+                               ../../GWMetadata/GSAppleDouble.m \
+                               ../../GWMetadata/GWMetaXattr.m
+t_FindModuleTags_TOOL_LIBS += -lgnustep-gui

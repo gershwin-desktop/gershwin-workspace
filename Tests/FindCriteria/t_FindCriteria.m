@@ -93,6 +93,24 @@ int main(void)
       "exactly a day");
   }
 
+  /* label (Finder colour number) and tags */
+  #define LB(how, num) d(@"FModuleLabel", [NSDictionary dictionaryWithObjectsAndKeys: \
+    [NSNumber numberWithInt: how], @"how", [NSNumber numberWithInt: num], @"what", nil])
+  #define TG(how, text) d(@"FModuleTags", [NSDictionary dictionaryWithObjectsAndKeys: \
+    [NSNumber numberWithInt: how], @"how", text, @"what", nil])
+  PASS_EQUAL(raw(LB(0, 6)), @"kMDItemFSLabel == 6", "label is red");
+  PASS_EQUAL(raw(LB(1, 6)), @"kMDItemFSLabel != 6", "label is not red");
+  PASS_EQUAL(raw(LB(0, 0)), @"kMDItemFSLabel == 0", "no label");
+  PASS(raw(LB(0, 8)) == nil, "no colour 8");
+  PASS_EQUAL(raw(TG(0, @"Taxes")), @"kMDItemUserTags == \"Taxes\"", "tag is");
+  PASS_EQUAL(raw(TG(1, @"ax")), @"kMDItemUserTags == \"*ax*\"", "tag contains");
+  PASS(raw(TG(0, @"a*b")) == nil, "wildcard in a tag refused");
+  PASS(raw(TG(0, @"")) == nil, "empty tag refused");
+  s = [GWFindCriteria savedSearchForCriteria: LB(0, 6)
+                                 searchPaths: one recursive: YES error: &err];
+  PASS_EQUAL([s mdkQueryStringAtDate: [NSDate date]],
+             @"GSMDItemFSLabel == \"6\"", "the label search reads back");
+
   /* what cannot be expressed is named */
   s = [GWFindCriteria savedSearchForCriteria:
        d(@"FModuleContents", [NSDictionary dictionaryWithObject: @"x" forKey: @"what"])

@@ -162,10 +162,11 @@ Attributes: use `mdfind -a` for the full list of 70+ `GSMDItem*` attributes
 Label and tags are read by `mdextractor` through `GSFileMetadata`
 (`GMDSFinderAttributes`) whenever a path is indexed or re-indexed, so they
 follow the same update path as every other attribute (new file, changed
-file, `GSMetadataUserAttributeModifiedNotification`, rescan). A label change
-alone does not touch the file's mtime or raise an inotify event on Linux
-(`IN_ATTRIB` is not watched), so it reaches the index with the next
-notification or rescan of that path.
+file, `GSMetadataUserAttributeModifiedNotification`, rescan). A label or tag
+change alone touches neither the mtime nor file content; the file watcher
+reports it as a modification (inotify `IN_ATTRIB`, kqueue `NOTE_ATTRIB`), so
+it reaches the index at once, and the directory rescan compares the stored
+rows with the current ones as a safety net.
 
 ### a) Command line (`mdfind`)
 

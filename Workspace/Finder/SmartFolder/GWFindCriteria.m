@@ -12,6 +12,8 @@ enum { NameContains, NameIs, NameNotContains, NameStarts, NameEnds };
 enum { SizeGreater, SizeLess };
 enum { KindIs, KindIsNot };
 enum { KindPlain, KindFolder, KindExecutable, KindLink, KindApplication };
+enum { LabelIs, LabelIsNot };
+enum { TagIs, TagContains };
 enum { DateToday, DateWithin, DateBefore, DateAfter, DateExactly };
 
 #define DAY 86400.0
@@ -45,6 +47,39 @@ nameTerm(NSDictionary *c, NSString **why)
   }
   *why = NSLocalizedString(@"name", @"");
   return nil;
+}
+
+/* what is Finder's colour number (0 none, 6 red), the same number the index
+ * and kMDItemFSLabel use. */
+static NSString *
+labelTerm(NSDictionary *c, NSString **why)
+{
+  int color = [[c objectForKey: @"what"] intValue];
+
+  if (color < 0 || color > 7) {
+    *why = NSLocalizedString(@"label", @"");
+    return nil;
+  }
+  return [NSString stringWithFormat: @"kMDItemFSLabel %@ %d",
+          [[c objectForKey: @"how"] intValue] == LabelIsNot ? @"!=" : @"==",
+          color];
+}
+
+static NSString *
+tagTerm(NSDictionary *c, NSString **why)
+{
+  NSString *s = [c objectForKey: @"what"];
+
+  /* Spotlight wildcards would change what the text means. */
+  if ([s length] == 0 || [s rangeOfString: @"*"].location != NSNotFound
+      || [s rangeOfString: @"\""].location != NSNotFound
+      || [s rangeOfString: @"\\"].location != NSNotFound) {
+    *why = NSLocalizedString(@"tags that are empty or contain *, \" or \\", @"");
+    return nil;
+  }
+  return [NSString stringWithFormat: @"kMDItemUserTags == \"%@%@%@\"",
+          [[c objectForKey: @"how"] intValue] == TagContains ? @"*" : @"", s,
+          [[c objectForKey: @"how"] intValue] == TagContains ? @"*" : @""];
 }
 
 /* The module compares whole kilobytes (size >> 10). */
@@ -134,6 +169,10 @@ dateTerm(NSDictionary *c, NSString *attr, NSString **why)
       term = sizeTerm(c);
     } else if ([module isEqualToString: @"FModuleKind"]) {
       term = kindTerm(c, &why);
+    } else if ([module isEqualToString: @"FModuleLabel"]) {
+      term = labelTerm(c, &why);
+    } else if ([module isEqualToString: @"FModuleTags"]) {
+      term = tagTerm(c, &why);
     } else if ([module isEqualToString: @"FModuleModDate"]) {
       term = dateTerm(c, @"kMDItemContentModificationDate", &why);
     } else if ([module isEqualToString: @"FModuleCrDate"]) {
