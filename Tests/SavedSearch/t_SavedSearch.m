@@ -8,6 +8,7 @@
 #include <stdlib.h>
 /* The tables are file-static; the test checks them against MDKit's own. */
 #include "GWSavedSearch.m"
+#import "GSFileMetadata.h"
 
 static NSDate *fixedNow;
 
@@ -266,6 +267,9 @@ int main(void)
     PASS([s writeToFile: f atomically: YES], "written");
     PASS_EQUAL([[GWSavedSearch savedSearchWithContentsOfFile: f error: &err]
                 rawQuery], [s rawQuery], "written file reads back");
+    [GSFileMetadata invalidateCachedMetadataForPath: f];
+    PASS([[GSFileMetadata metadataForFileAtPath: f] isExtensionHidden],
+         "written file hides its extension like the Finder's (fdFlags 0x0010)");
   }
 
   /* E36: files the 10.6 Finder wrote or ships */

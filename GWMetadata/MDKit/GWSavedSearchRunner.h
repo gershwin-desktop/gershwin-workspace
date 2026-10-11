@@ -17,6 +17,7 @@
   GWSavedSearch *search;
   id query;
   NSMutableArray *results;
+  NSMutableSet *seen;
   NSString *statusText;
   id delegate;
   BOOL running;

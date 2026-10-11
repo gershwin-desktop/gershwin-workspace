@@ -16,6 +16,7 @@
   [query release];
   [search release];
   [results release];
+  [seen release];
   [statusText release];
   [super dealloc];
 }
@@ -26,6 +27,7 @@
   search = [aSearch retain];
   delegate = aDelegate;
   results = [NSMutableArray new];
+  seen = [NSMutableSet new];
   return self;
 }
 
@@ -39,6 +41,7 @@
     return NO;
   }
   [results removeAllObjects];
+  [seen removeAllObjects];
   [query setDelegate: nil];
   [query release];
   /* A malformed translation must not be hidden: let MDKit's exception
@@ -72,8 +75,9 @@
   for (line in lines) {
     NSString *path = [line objectAtIndex: 0];
 
-    if ([results containsObject: path] == NO
+    if ([seen containsObject: path] == NO
         && [search fileMatchesFileTerms: path]) {
+      [seen addObject: path];
       [results addObject: path];
     }
   }

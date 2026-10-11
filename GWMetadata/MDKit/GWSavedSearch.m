@@ -5,6 +5,7 @@
  */
 
 #import "GWSavedSearch.h"
+#import "GSFileMetadata.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -799,7 +800,7 @@ inverseOp(NSString *op)
         [parts addObject: [NSString stringWithFormat:
                            @"GSMDItemFSExtension %@ \"%@\"", op, e]];
       }
-      [self note: @"content types are matched by file name extension"];
+      [self note: NSLocalizedString(@"content types are matched by file name extension", @"")];
       return [NSString stringWithFormat: @"(%@)",
               [parts componentsJoinedByString: eq ? @" || " : @" && "]];
     }
@@ -825,7 +826,7 @@ inverseOp(NSString *op)
     if (uti == nil || ([n->op isEqualToString: @"=="] == NO
                        && [n->op isEqualToString: @"!="] == NO)) {
       [self refuse: [NSString stringWithFormat:
-                     @"_kMDItemGroupId %@ %@ (kind group not known)", n->op,
+                     NSLocalizedString(@"_kMDItemGroupId %@ %@ (kind group not known)", @""), n->op,
                      v->type == ValNumber ? numberText(v->number)
                      : v->string]];
       return nil;
@@ -853,11 +854,14 @@ inverseOp(NSString *op)
   m = attrForSpotlight(n->attr);
   if (m == NULL) {
     [self refuse: [NSString stringWithFormat:
-                   @"%@ (attribute not indexed)", desc]];
+                   NSLocalizedString(@"%@ (attribute not indexed)", @""), desc]];
     return nil;
   }
   if (m->note) {
-    [self note: [NSString stringWithUTF8String: m->note]];
+    /* Looked up by key since the text sits in the table; the keys are in
+     * the Localizable.strings files. */
+    [self note: [[NSBundle mainBundle] localizedStringForKey:
+                 [NSString stringWithUTF8String: m->note] value: nil table: nil]];
   }
   if (m->type == AttrString) {
     BOOL insens;
@@ -870,7 +874,7 @@ inverseOp(NSString *op)
     if ([op isEqualToString: @"=="] == NO
         && [op isEqualToString: @"!="] == NO) {
       [self refuse: [NSString stringWithFormat:
-                     @"%@ (text cannot be ordered)", desc]];
+                     NSLocalizedString(@"%@ (text cannot be ordered)", @""), desc]];
       return nil;
     }
     insens = ([v->mods rangeOfString: @"c"].location != NSNotFound);
@@ -882,12 +886,12 @@ inverseOp(NSString *op)
         || [s rangeOfString: @"["].location != NSNotFound
         || (insens && [s rangeOfString: @"_"].location != NSNotFound)) {
       [self refuse: [NSString stringWithFormat:
-                     @"%@ (character not searchable)", desc]];
+                     NSLocalizedString(@"%@ (character not searchable)", @""), desc]];
       return nil;
     }
     if ([v->mods rangeOfString: @"d"].location != NSNotFound
         || [v->mods rangeOfString: @"w"].location != NSNotFound) {
-      [self note: @"diacritic and word matching modifiers are not applied"];
+      [self note: NSLocalizedString(@"diacritic and word matching modifiers are not applied", @"")];
     }
     return [NSString stringWithFormat: @"%s %@ \"%@\"%@", m->mdk, op, s,
             insens ? @"c" : @""];
@@ -910,11 +914,11 @@ inverseOp(NSString *op)
       secs = v->number;
     } else if (v->type != ValTime || evalTime(v, now, &secs) == NO) {
       [self refuse: [NSString stringWithFormat:
-                     @"%@ (date not understood)", desc]];
+                     NSLocalizedString(@"%@ (date not understood)", @""), desc]];
       return nil;
     }
     if (v->type == ValTime && [v->string isEqualToString: @"iso"] == NO) {
-      [self note: @"relative dates are resolved when the search is opened"];
+      [self note: NSLocalizedString(@"relative dates are resolved when the search is opened", @"")];
     }
     return m->fs
       ? [NSString stringWithFormat: @"%@%s|%@|%.0f", FileTermMark, m->mdk, op,
@@ -1139,16 +1143,16 @@ spotlightForNode(GWSSNode *n, NSString **why)
       [dirs addObject: [sc stringByStandardizingPath]];
     } else {
       [self refuse: [NSString stringWithFormat:
-                     @"search location %@", sc]];
+                     NSLocalizedString(@"search location %@", @""), sc]];
     }
   }
   [paths release];
   paths = everywhere ? nil : [dirs copy];
   if (finderFilesOnly) {
-    [self note: @"the Finder-files-only option is not applied"];
+    [self note: NSLocalizedString(@"the Finder-files-only option is not applied", @"")];
   }
   if (userFilesOnly) {
-    [self note: @"the user-files-only option is not applied"];
+    [self note: NSLocalizedString(@"the user-files-only option is not applied", @"")];
   }
 }
 
@@ -1169,7 +1173,7 @@ spotlightForNode(GWSSNode *n, NSString **why)
   p = [[[GWSSParser alloc] initWithString: rawQuery] autorelease];
   root = [p parse];
   if (root == nil) {
-    [self refuse: [NSString stringWithFormat: @"query not understood (%@)",
+    [self refuse: [NSString stringWithFormat: NSLocalizedString(@"query not understood (%@)", @""),
                    [p error]]];
     return nil;
   }
@@ -1193,7 +1197,7 @@ spotlightForNode(GWSSNode *n, NSString **why)
         continue;
       }
       if ([s isEqualToString: FalseText]) {
-        [self refuse: @"the query matches nothing"];
+        [self refuse: NSLocalizedString(@"the query matches nothing", @"")];
       } else if ([s hasPrefix: FileTermMark]) {
         NSArray *f = [[s substringFromIndex: 1] componentsSeparatedByString:
                       @"|"];
@@ -1203,7 +1207,7 @@ spotlightForNode(GWSSNode *n, NSString **why)
           [NSNumber numberWithDouble: [[f objectAtIndex: 2] doubleValue]],
           @"value", nil]];
       } else if ([s rangeOfString: FileTermMark].location != NSNotFound) {
-        [self refuse: @"size and date terms can only be combined with and"];
+        [self refuse: NSLocalizedString(@"size and date terms can only be combined with and", @"")];
       } else {
         [dbParts addObject: s];
       }
@@ -1213,12 +1217,12 @@ spotlightForNode(GWSSNode *n, NSString **why)
     }
     if ([dbParts count] == 0) {
       [self refuse: [fileTerms count]
-       ? @"a search needs at least one term besides size and dates"
-       : @"the query matches everything"];
+       ? NSLocalizedString(@"a search needs at least one term besides size and dates", @"")
+       : NSLocalizedString(@"the query matches everything", @"")];
       return nil;
     }
     if ([fileTerms count]) {
-      [self note: @"size and dates are checked on the files found"];
+      [self note: NSLocalizedString(@"size and dates are checked on the files found", @"")];
     }
     return [dbParts count] == 1 ? [dbParts objectAtIndex: 0]
       : [NSString stringWithFormat: @"(%@)",
@@ -1381,8 +1385,19 @@ enum { ScopeThisMac = 1396925814, ScopeFolder = 1396925286 };
 - (BOOL)writeToFile:(NSString *)path atomically:(BOOL)flag
 {
   NSDictionary *pl = [self propertyList];
+  GSFileMetadata *md;
 
-  return pl ? [pl writeToFile: path atomically: flag] : NO;
+  if (pl == nil || [pl writeToFile: path atomically: flag] == NO) {
+    return NO;
+  }
+  /* The Finder hides the extension of the smart folders it saves (E36). */
+  [GSFileMetadata invalidateCachedMetadataForPath: path];
+  md = [GSFileMetadata metadataForFileAtPath: path];
+  if (md == nil) {
+    md = [[[GSFileMetadata alloc] init] autorelease];
+  }
+  [md setExtensionHidden: YES];
+  return [md writeToFileAtPath: path error: NULL];
 }
 
 @end

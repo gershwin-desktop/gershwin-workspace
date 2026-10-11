@@ -13,6 +13,8 @@ ADDITIONAL_CFLAGS += -Wall
 # Additional include directories the compiler should search
 ADDITIONAL_INCLUDE_DIRS += -I../../FSNode 
 ADDITIONAL_INCLUDE_DIRS += -I../../DBKit 
+ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata -I../../GSMetadata
+ADDITIONAL_LDFLAGS += -L../../GSMetadata/obj
 
 # Additional LDFLAGS to pass to the linker
 ADDITIONAL_LDFLAGS +=  
