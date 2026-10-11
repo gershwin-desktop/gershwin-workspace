@@ -71,7 +71,7 @@ jobs:
           mem: 4096
           prepare: |
             pkg update
-            pkg install -y git xorg-vfbserver dejavu
+            pkg install -y git xorg-vfbserver
           run: |
             set -e
             BASE="$(pwd)"
@@ -85,6 +85,7 @@ jobs:
             make corelibs
             make workspace
             # The unit suites run against what make workspace installed.
+            sh "$BASE/gershwin-workspace/Tests/ci-install-gershwin-fonts.sh" "$PWD"
             sh "$BASE/gershwin-workspace/Tests/run-suites.sh"
 
   build-archlinux-x86_64:
@@ -133,7 +134,8 @@ jobs:
         # Each Tests/ directory with a TestInfo marker, against the installed
         # build, on a private Xvfb started by the script.
         run: |
-          pacman -S --noconfirm xorg-server-xvfb ttf-dejavu
+          pacman -S --noconfirm xorg-server-xvfb
+          sh gershwin-workspace/Tests/ci-install-gershwin-fonts.sh gershwin-developer
           sh gershwin-workspace/Tests/run-suites.sh
 
   build-debian-x86_64:
@@ -182,7 +184,8 @@ jobs:
         # Each Tests/ directory with a TestInfo marker, against the installed
         # build, on a private Xvfb started by the script.
         run: |
-          apt-get -y install xvfb fonts-dejavu-core
+          apt-get -y install xvfb
+          sh gershwin-workspace/Tests/ci-install-gershwin-fonts.sh gershwin-developer
           sh gershwin-workspace/Tests/run-suites.sh
 
   build-openbsd-78-amd64:
@@ -241,4 +244,5 @@ jobs:
             make corelibs
             make workspace
             # The unit suites run against what make workspace installed.
+            sh "$BASE/gershwin-workspace/Tests/ci-install-gershwin-fonts.sh" "$PWD"
             sh "$BASE/gershwin-workspace/Tests/run-suites.sh"

@@ -38,10 +38,19 @@ if [ -z "$DISPLAY" ]; then
   echo "Running the suites on Xvfb $DISPLAY"
 fi
 
-# Views measure and draw text; without a single font NSFont is nil and the
-# view suites fail with exceptions that say nothing about the cause.
-if [ -z "$(fc-list 2>/dev/null | head -n 1)" ]; then
-  echo "FATAL: fontconfig finds no fonts; install one (e.g. DejaVu) to run the view suites" >&2
+# Views measure and draw text in the desktop's own fonts (NSFont is
+# Inter-Medium). They live in /System/Library/Fonts and fontconfig finds them
+# only through the Gershwin fonts.conf, the same setup gershwin-system's
+# Gershwin.sh and gershwin-developer's run-uitests.sh use; a stock container
+# fontconfig does not look there, and a fallback font ignores the size the
+# tests ask for.
+export FONTCONFIG_PATH=/System/Library/Preferences
+export FONTCONFIG_FILE=$FONTCONFIG_PATH/fonts.conf
+if command -v fc-cache >/dev/null 2>&1; then
+  fc-cache -f /System/Library/Fonts >/dev/null 2>&1
+fi
+if [ -z "$(fc-list Inter 2>/dev/null | head -n 1)" ]; then
+  echo "FATAL: the Gershwin fonts (Inter in /System/Library/Fonts, via $FONTCONFIG_FILE) are not installed; the view suites need them" >&2
   exit 1
 fi
 
