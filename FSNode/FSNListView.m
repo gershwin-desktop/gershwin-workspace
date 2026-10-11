@@ -2483,6 +2483,12 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
 - (id)addRepForSubnode:(FSNode *)anode
 {
+  /* The listing leaves internal metadata out, but a file that appears
+   * while the folder is shown (a .DS_Store written by the viewer itself)
+   * arrives here from the watcher; the icon view refuses it the same way. */
+  if ([FSNodeRep isInternalMetadataName: [anode name]])
+    return nil;
+
   FSNListViewNodeRep *rep = [[FSNListViewNodeRep alloc] initForNode: anode
                                                          dataSource: self];
   [nodeReps addObject: rep];

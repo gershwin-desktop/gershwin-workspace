@@ -620,6 +620,27 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
     [lv release];
   }
 
+  /* --- internal metadata files ----------------------------------------- */
+
+  {
+    NSArray *internal = NAMES (@".DS_Store", @"._file", @"__MACOSX", @"Icon\r");
+    BOOL anyShown = NO;
+    NSInteger n = [ds numberOfRowsInTableView: nil];
+
+    for (i = 0; i < [internal count]; i++)
+      {
+        FSNode *meta = [FSNode nodeWithRelativePath: [internal objectAtIndex: i]
+                                             parent: [ds shownNode]];
+
+        /* What the watcher does for a file that appeared after the listing. */
+        if ([ds addRepForSubnode: meta] != nil
+            || [ds repOfSubnode: meta] != nil)
+          anyShown = YES;
+      }
+    PASS (anyShown == NO && [ds numberOfRowsInTableView: nil] == n,
+          "MI-LST-90 a metadata file that appears later is not listed, as in the icon view");
+  }
+
   [view release];
   [observer release];
   [fm removeItemAtPath: root error: NULL];
