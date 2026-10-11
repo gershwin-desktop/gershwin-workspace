@@ -236,42 +236,84 @@
   return title;
 }
 
+/* The date text without its time: "08.10.2026 09:30" -> "08.10.2026",
+ * "1/9/26 9:30 AM" -> "1/9/26", "Heute, 09:51" -> "Heute".  nil when the
+ * text has no time. */
+static NSString *
+dateWithoutTime(NSString *title)
+{
+  NSMutableArray *words = [[[title componentsSeparatedByString: @" "] mutableCopy] autorelease];
+  NSString *last = [words lastObject];
+
+  if ([last length] && [last rangeOfString: @":"].location == NSNotFound
+      && [words count] > 2)
+    {
+      /* An AM/PM marker follows the clock time. */
+      [words removeLastObject];
+      last = [words lastObject];
+    }
+  if ([words count] < 2 || [last rangeOfString: @":"].location == NSNotFound)
+    {
+      return nil;
+    }
+  [words removeLastObject];
+
+  title = [words componentsJoinedByString: @" "];
+  while ([title hasSuffix: @","])
+    {
+      title = [title substringToIndex: [title length] - 1];
+    }
+  return title;
+}
+
+/* "08.10.2026" -> "08.10.26": the four digit year of a numeric date as two. */
+static NSString *
+dateWithShortYear(NSString *date)
+{
+  NSUInteger i, n = [date length];
+
+  for (i = 0; i + 4 <= n; i++)
+    {
+      NSRange r = NSMakeRange (i, 4);
+      NSString *year = [date substringWithRange: r];
+      BOOL digits = [[year stringByTrimmingCharactersInSet:
+                       [NSCharacterSet decimalDigitCharacterSet]] length] == 0;
+      BOOL edges = (i == 0 || ![[NSCharacterSet decimalDigitCharacterSet]
+                                 characterIsMember: [date characterAtIndex: i - 1]])
+                   && (i + 4 == n || ![[NSCharacterSet decimalDigitCharacterSet]
+                                        characterIsMember: [date characterAtIndex: i + 4]]);
+
+      if (digits && edges && i > 0)
+        {
+          return [date stringByReplacingCharactersInRange: r
+                                               withString: [year substringFromIndex: 2]];
+        }
+    }
+  return nil;
+}
+
 - (NSString *)cutDateTitle:(NSString *)title
                 toFitWidth:(float)width
 {
-  NSUInteger tl = [title length];
+  NSString *candidate = dateWithoutTime (title);
+  NSString *shorter;
 
-  if (tl <= 5)
+  /* Finder drops the time before anything else of a date, then shows the
+   * numeric short date; only when even that does not fit is it dotted. */
+  if (candidate && [candidate sizeWithAttributes: fontAttr].width <= width)
     {
-      return dots;
+      return candidate;
     }
-  else
+  if (candidate == nil)
     {
-      NSString *format = @"%b %d %Y";
-      NSCalendarDate *date = [NSCalendarDate dateWithString: title
-                                             calendarFormat: format];
-      if (date)
-        {
-          NSString *descr;
-
-          format = @"%m/%d/%y";
-          descr = [date descriptionWithCalendarFormat: format
-                                             timeZone: [NSTimeZone localTimeZone] locale: nil];
-
-          if ([descr sizeWithAttributes: fontAttr].width > width) {
-            return [self cutTitle: descr toFitWidth: width];
-          } else {
-            return descr;
-          }
-
-        }
-      else
-        {
-          return [self cutTitle: title toFitWidth: width];
-        }
+      candidate = title;
     }
-
-  return title;
+  shorter = dateWithShortYear (candidate);
+  if (shorter && [shorter sizeWithAttributes: fontAttr].width <= width)
+    {
+      return shorter;
+    }
+  return [self cutTitle: (shorter ? shorter : candidate) toFitWidth: width];
 }
 
 - (void)drawInteriorWithFrame:(NSRect)cellFrame
