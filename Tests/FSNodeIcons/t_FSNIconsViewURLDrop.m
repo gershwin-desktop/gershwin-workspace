@@ -116,7 +116,7 @@ main(void)
     PASS([view prepareForDragOperation: url], "MI-LNK-22 and may be prepared");
     PASS([view performDragOperation: url], "MI-LNK-23 and performed");
     PASS([fm fileExistsAtPath:
-	    [dir stringByAppendingPathComponent: @"example.org.webloc"]],
+	    [dir stringByAppendingPathComponent: @"example.org:a.webloc"]],
 	 "MI-LNK-24 the location file lands in the viewed folder");
     [view concludeDragOperation: url];
     PASS([[fm directoryContentsAtPath: dir] count] == 2,
@@ -139,7 +139,7 @@ main(void)
 	   "MI-LNK-26 a link dropped on a folder icon is accepted");
       PASS([folder performDragOperation: url], "MI-LNK-27 and performed");
       PASS([fm fileExistsAtPath:
-	      [sub stringByAppendingPathComponent: @"example.org.webloc"]],
+	      [sub stringByAppendingPathComponent: @"example.org:b.webloc"]],
 	   "MI-LNK-28 the location file lands inside that folder");
     }
 
