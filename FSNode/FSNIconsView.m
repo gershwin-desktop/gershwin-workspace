@@ -272,9 +272,16 @@ const int FSNMaxLabelTextSize = 16;
   [self setNeedsDisplay: YES];
 }
 
-/* Arrange By orders; ties fall back to the name so the result does not depend
- * on the order the directory was read in.  Sizes and dates run largest and
- * newest first, as Finder lists them. */
+/* Arrange By orders as the Mac mini lists them (E25); ties fall back to the
+ * name so the result does not depend on the order the directory was read in.
+ * Dates run newest first, sizes smallest first with the folders ahead, and
+ * folders have no precedence in the name and kind orders. */
+static NSComparisonResult
+compareNames(FSNode *a, FSNode *b)
+{
+  return [[a name] caseInsensitiveCompare: [b name]];
+}
+
 static NSComparisonResult
 compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
 {
@@ -286,7 +293,8 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
   switch (arrangement)
     {
       case FSNIconsArrangeKind:
-        return [na compareAccordingToKind: nb];
+        result = [[na typeDescription] caseInsensitiveCompare: [nb typeDescription]];
+        break;
       case FSNIconsArrangeDateModified:
         result = [[nb modificationDate] compare: [na modificationDate]];
         break;
@@ -295,11 +303,11 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
         break;
       case FSNIconsArrangeSize:
         {
-          unsigned long long sa = [na fileSize];
-          unsigned long long sb = [nb fileSize];
+          unsigned long long sa = [na isDirectory] ? 0 : [na fileSize];
+          unsigned long long sb = [nb isDirectory] ? 0 : [nb fileSize];
 
           result = (sa == sb) ? NSOrderedSame
-            : ((sa > sb) ? NSOrderedAscending : NSOrderedDescending);
+            : ((sa < sb) ? NSOrderedAscending : NSOrderedDescending);
         }
         break;
       case FSNIconsArrangeLabel:
@@ -309,7 +317,7 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
         break;
     }
 
-  return (result != NSOrderedSame) ? result : [na compareAccordingToName: nb];
+  return (result != NSOrderedSame) ? result : compareNames (na, nb);
 }
 
 - (void)sortIcons
@@ -1052,13 +1060,10 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
 }
 
 /* Snap to Grid.  Every icon with a saved position gets the center of the
- * cell nearest to it; icons are served in display order, so when two want the
- * same cell the later one takes the nearest cell still free instead of
- * sitting on top of the first. */
+ * cell nearest to it; two icons that want one cell share it, as in Finder. */
 - (NSDictionary *)snappedCentersOfSavedPositions
 {
   NSMutableDictionary *result = [NSMutableDictionary dictionary];
-  NSMutableSet *taken = [NSMutableSet set];
   NSPoint origin = [self gridOriginForLayout];
   NSSize cell = _cachedCellSize;
   NSUInteger i;
@@ -1073,9 +1078,7 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
       FSNIconItemData *data = [icon placementData];
       NSValue *saved = [customIconPositions objectForKey: filename];
       NSPoint center;
-      FSNGridCell want, best = FSNGridCellNone;
-      CGFloat bestDistance = 0;
-      NSInteger radius;
+      FSNGridCell want, best;
 
       if (saved)
         center = [self viewCenterForIlocCenter: [saved pointValue]];
@@ -1087,44 +1090,9 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
 
       want = [self nearestGridCellForCenter: center origin: origin];
 
-      /* Rings of cells around the wanted one; the first ring with a free
-       * cell has the nearest, because a farther ring never beats it by more
-       * than a cell. */
-      for (radius = 0; FSNGridCellsEqual(best, FSNGridCellNone); radius++)
-        {
-          NSInteger dc, dr;
+      /* Finder does not avoid a cell that is taken: both icons sit in it (E25). */
+      best = want;
 
-          for (dc = -radius; dc <= radius; dc++)
-            for (dr = -radius; dr <= radius; dr++)
-              {
-                NSInteger c = (NSInteger)want.col + dc;
-                NSInteger r = (NSInteger)want.row + dr;
-                NSPoint cc;
-                CGFloat d;
-
-                if (c < 0 || r < 0
-                    || (labs(dc) != radius && labs(dr) != radius))
-                  continue;
-                if ([taken containsObject:
-                           [NSString stringWithFormat: @"%ld:%ld", (long)c, (long)r]])
-                  continue;
-
-                cc = [self centerForGridCell: FSNGridCellMake(c, r)
-                                    cellSize: cell
-                                        gapX: _cachedGapX
-                                      origin: origin];
-                d = hypot(cc.x - center.x, cc.y - center.y);
-                if (FSNGridCellsEqual(best, FSNGridCellNone) || d < bestDistance)
-                  {
-                    best = FSNGridCellMake(c, r);
-                    bestDistance = d;
-                  }
-              }
-        }
-
-      [taken addObject: [NSString stringWithFormat: @"%lu:%lu",
-                                  (unsigned long)best.col,
-                                  (unsigned long)best.row]];
       [result setObject:
                 [NSValue valueWithPoint:
                            [self centerForGridCell: best

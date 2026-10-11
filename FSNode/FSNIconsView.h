@@ -148,14 +148,15 @@ extern const int FSNMaxLabelTextSize;
 + (int)clampedLabelTextSize:(int)size;
 
 /* Arrange By.  Arranging sorts the icons and lays them out in the grid in
- * that order; the order of sizes and dates is largest and newest first.
- * Labelled items come before unlabelled ones, by label index. */
+ * that order, as Finder does: dates newest first, sizes smallest first with
+ * folders ahead, kinds and label names alphabetical (unlabelled first), names
+ * A to Z with folders mixed in. */
 - (void)setArrangement:(FSNIconsArrangement)value;
 - (FSNIconsArrangement)arrangement;
 
 /* Snap to Grid, a switch of its own: while no arrangement is set, icons that
  * have a saved position are drawn at the center of the nearest grid cell,
- * and an icon whose cell is taken moves to the nearest free one.  The saved
+ * (two icons may share one cell, as in Finder).  The saved
  * positions themselves are left alone. */
 - (void)setSnapsToGrid:(BOOL)flag;
 - (BOOL)snapsToGrid;

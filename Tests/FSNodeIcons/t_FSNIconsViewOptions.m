@@ -14,6 +14,8 @@
 #import "FSNIconsView.h"
 #import "FSNIcon.h"
 #import "FSNode.h"
+#import "FSNodeRep.h"
+#import "FSNMetadataProvider.h"
 
 /* A view that keeps saved positions, like the spatial one. */
 @interface PositionedIconsView : FSNIconsView
@@ -139,6 +141,26 @@ centerColor(NSImage *image)
   return [rep colorAtX: [rep pixelsWide] / 2 y: [rep pixelsHigh] / 2];
 }
 
+/* Label names and numbers for the arrange by label test. */
+@interface LabelProvider : NSObject <FSNMetadataProvider>
+@end
+
+@implementation LabelProvider
+- (NSColor *)labelColorForPath:(NSString *)path { return nil; }
+- (BOOL)isInvisibleAtPath:(NSString *)path { return NO; }
+- (NSImage *)customIconForPath:(NSString *)path { return nil; }
+- (NSPoint)iconPositionForPath:(NSString *)path { return NSZeroPoint; }
+- (void)invalidateCaches {}
+- (NSInteger)labelIndexForPath:(NSString *)path
+{
+  return [path hasSuffix: @"/b.txt"] ? 2 : ([path hasSuffix: @"/c.txt"] ? 1 : 0);
+}
+- (NSString *)labelNameForPath:(NSString *)path
+{
+  return [path hasSuffix: @"/b.txt"] ? @"Blue" : ([path hasSuffix: @"/c.txt"] ? @"Red" : nil);
+}
+@end
+
 int
 main(void)
 {
@@ -240,7 +262,7 @@ main(void)
     [view setIconSize: 64];
     [view setShowsIconPreview: YES];
     decorateAll(view);
-    PASS([view showsIconPreview], "MI-ICN-26 icon preview can be turned on");
+    PASS([view showsIconPreview], "MI-ICN-26 [O:2026-10-11 E26] icon preview can be turned on");
     pngOn = [iconNamed(view, @"d.png") iconImage];
     txtOn = [iconNamed(view, @"a.txt") iconImage];
     c = [centerColor(pngOn) colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
@@ -254,7 +276,7 @@ main(void)
     c = [centerColor(pngOff) colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
     PASS(pngOff != nil && !([c redComponent] > 0.8 && [c greenComponent] < 0.2
                             && [c blueComponent] < 0.2),
-         "MI-ICN-28 with preview off an image file shows the generic type icon");
+         "MI-ICN-28 [O:2026-10-11 E26] with preview off an image file shows the document type icon of the system, not a thumbnail");
     PASS(txtOn == txtOff,
          "MI-ICN-29 files that are not images look the same either way");
     [view setShowsIconPreview: YES];
@@ -267,27 +289,36 @@ main(void)
 
     [view setArrangement: FSNIconsArrangeName];
     want = [NSArray arrayWithObjects: @"a.txt", @"b.txt", @"c.txt", nil];
-    PASS_EQUAL(textOrder(view), want, "MI-ICN-31 arrange by name sorts A to Z");
+    PASS_EQUAL(textOrder(view), want, "MI-ICN-31 [O:2026-10-11 E25] arrange by name sorts A to Z, folders not first");
 
     [view setArrangement: FSNIconsArrangeSize];
-    want = [NSArray arrayWithObjects: @"b.txt", @"c.txt", @"a.txt", nil];
-    PASS_EQUAL(textOrder(view), want, "MI-ICN-32 arrange by size puts the largest first");
+    want = [NSArray arrayWithObjects: @"a.txt", @"c.txt", @"b.txt", nil];
+    PASS_EQUAL(textOrder(view), want,
+               "MI-ICN-32 [O:2026-10-11 E25] arrange by size puts the smallest first");
+    PASS_EQUAL(leaf([[view icons] objectAtIndex: 0]), @"Folder",
+               "MI-ICN-54 [O:2026-10-11 E25] and folders before files");
 
     [view setArrangement: FSNIconsArrangeDateModified];
     want = [NSArray arrayWithObjects: @"b.txt", @"a.txt", @"c.txt", nil];
     PASS_EQUAL(textOrder(view), want,
-               "MI-ICN-33 arrange by date modified puts the newest first");
+               "MI-ICN-33 [O:2026-10-11 E25] arrange by date modified puts the newest first");
 
+    [[FSNodeRep sharedInstance] setMetadataProvider: [[LabelProvider new] autorelease]];
     [iconNamed(view, @"b.txt") setLabelIndex: 2];
     [iconNamed(view, @"c.txt") setLabelIndex: 1];
     [view setArrangement: FSNIconsArrangeLabel];
-    want = [NSArray arrayWithObjects: @"c.txt", @"b.txt", @"a.txt", nil];
+    want = [NSArray arrayWithObjects: @"a.txt", @"b.txt", @"c.txt", nil];
     PASS_EQUAL(textOrder(view), want,
-               "MI-ICN-34 arrange by label orders by label color, unlabeled last");
+               "MI-ICN-34 [O:2026-10-11 E25] arrange by label: unlabelled first, then by the label name (Blue of b before Red of c, whatever the numbers)");
 
     [view setArrangement: FSNIconsArrangeKind];
-    PASS_EQUAL(leaf([[view icons] objectAtIndex: 0]), @"Folder",
-               "MI-ICN-35 arrange by kind lists folders first");
+    {
+      NSArray *kinds = [[view icons] valueForKeyPath: @"node.typeDescription"];
+      NSArray *sorted = [kinds sortedArrayUsingSelector: @selector(caseInsensitiveCompare:)];
+
+      PASS_EQUAL(kinds, sorted,
+                 "MI-ICN-35 [O:2026-10-11 E25] arrange by kind is alphabetical by the kind string, folders have no precedence");
+    }
     want = [NSArray arrayWithObjects: @"a.txt", @"b.txt", @"c.txt", nil];
     PASS_EQUAL(textOrder(view), want,
                "MI-ICN-36 items of one kind are ordered by name");
@@ -374,9 +405,8 @@ main(void)
                         cellSize: cell gapX: gap origin: origin];
     PASS(fabs(back.x - cb.x) < 0.5 && fabs(back.y - cb.y) < 0.5,
          "MI-ICN-42 a snapped icon sits exactly on a grid cell center");
-    PASS(NSIntersectsRect(NSInsetRect(fa, 1, 1), NSInsetRect(fb, 1, 1)) == NO
-         && fabs(cb.x - ca.x) + fabs(cb.y - ca.y) <= cell.width + gap + cell.height,
-         "MI-ICN-43 two icons that want one cell get two cells next to each other");
+    PASS(fabs(cb.x - ca.x) < 0.5 && fabs(cb.y - ca.y) < 0.5,
+         "MI-ICN-43 [O:2026-10-11 E25] two icons that want one cell both take it, there is no collision handling");
 
     [pv setArrangement: FSNIconsArrangeName];
     [pv tile];

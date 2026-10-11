@@ -233,6 +233,9 @@
 /* Labelled items before unlabelled ones, by label index. */
 - (int)compareAccordingToLabel:(id)aIcon;
 
+/* The localized name of the icon's label, nil without one. */
+- (NSString *)labelName;
+
 // DS_Store tag/label color support
 - (void)setTagColor:(NSColor *)color;
 - (NSColor *)tagColor;

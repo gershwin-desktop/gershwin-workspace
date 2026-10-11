@@ -31,19 +31,20 @@ Fixtures with `icvp` bytes were not available in this tree, so no [F:].
 - MI-ICN-16 sizes are clamped to 10..16 by +clampedLabelTextSize: [S]
 
 ## Show icon preview
-- MI-ICN-26 preview can be turned on (default on) [S: icvp showIconPreview; G: default]
+- MI-ICN-26 preview is on by default (no icvp) [O:2026-10-11 E26]
 - MI-ICN-27 an image file shows a thumbnail of its own pixels [S]
-- MI-ICN-28 with preview off an image file shows the generic type icon [S]
+- MI-ICN-28 with preview off an image file shows the document type icon of its type, not a thumbnail [O:2026-10-11 E26]
 - MI-ICN-29 non-image files look the same either way [G]
 
 ## Arrange by
 - MI-ICN-30 not arranged by default [S: arrangeBy none]
-- MI-ICN-31 by name: A to Z, case-insensitive [S]
-- MI-ICN-32 by size: largest first [G: direction]
-- MI-ICN-33 by date modified: newest first [G: direction]
-- MI-ICN-34 by label: label color order, unlabeled last [G: order, placement of unlabeled]
-- MI-ICN-35 by kind: folders first [G: Finder groups by kind name]
+- MI-ICN-31 by name: A to Z, case-insensitive, folders not first [O:2026-10-11 E25]
+- MI-ICN-32 by size: smallest first, folders ahead of files [O:2026-10-11 E25]
+- MI-ICN-33 by date modified (and created): newest first [O:2026-10-11 E25]
+- MI-ICN-34 by label: unlabelled first, then alphabetical by localized label name [O:2026-10-11 E25]
+- MI-ICN-35 by kind: alphabetical by the kind string, folders have no precedence [O:2026-10-11 E25]
 - MI-ICN-36 same kind ordered by name [G]
+- MI-ICN-54 folders before files in the size order [O:2026-10-11 E25]
 - MI-ICN-37 arranging can be switched off [S]
 - MI-ICN-38 the order is the reading order of the grid [S]
 - MI-ICN-44 an arrangement ignores saved positions; snap is a separate switch [S: Finder keeps "snap to grid" and "arrange by" as different arrangeBy values, grid vs name...]
@@ -55,7 +56,7 @@ Fixtures with `icvp` bytes were not available in this tree, so no [F:].
 - MI-ICN-40 snap can be turned on [S: arrangeBy grid]
 - MI-ICN-41 with snap an icon moves to the center of the nearest cell [S]
 - MI-ICN-42 a snapped icon sits exactly on a cell center [S]
-- MI-ICN-43 two icons that want one cell get adjacent cells [G: Finder avoids overlap]
+- MI-ICN-43 two icons that want one cell both take it, no collision handling [O:2026-10-11 E25]
 
 ## Scroll position
 - MI-ICN-46 a freshly shown folder is at the top left [G]

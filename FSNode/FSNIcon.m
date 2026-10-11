@@ -2129,18 +2129,38 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
   return [node compareAccordingToCrDate: [aIcon node]];
 }
 
+- (NSString *)labelName
+{
+  id<FSNMetadataProvider> provider = [fsnodeRep metadataProvider];
+
+  if (labelIndex != 0 && [provider respondsToSelector: @selector(labelNameForPath:)])
+    {
+      return [provider labelNameForPath: [node path]];
+    }
+  return nil;
+}
+
+/* Finder: unlabelled first, then alphabetical by the label's localized name,
+ * which is not the order of the label numbers. */
 - (int)compareAccordingToLabel:(id)aIcon
 {
   NSInteger mine = [self labelIndex];
   NSInteger theirs = [aIcon labelIndex];
+  NSString *myName, *theirName;
 
-  if (mine == theirs)
-    return NSOrderedSame;
-  if (mine == 0)
-    return NSOrderedDescending;
-  if (theirs == 0)
-    return NSOrderedAscending;
-  return (mine < theirs) ? NSOrderedAscending : NSOrderedDescending;
+  if (mine == 0 || theirs == 0)
+    {
+      return (mine == theirs) ? NSOrderedSame
+        : (mine == 0 ? NSOrderedAscending : NSOrderedDescending);
+    }
+  myName = [self labelName];
+  theirName = [aIcon labelName];
+  if (myName && theirName)
+    {
+      return [myName caseInsensitiveCompare: theirName];
+    }
+  return (mine < theirs) ? NSOrderedAscending
+    : (mine > theirs ? NSOrderedDescending : NSOrderedSame);
 }
 
 - (int)compareAccordingToOwner:(id)aIcon
