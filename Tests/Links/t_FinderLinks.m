@@ -274,6 +274,32 @@ int main(void)
       }
   }
 
+  /* --- E27: the name Finder gives a dragged URL: the URL without scheme
+   * and "//", its "/" stored as ":" (shown as "/" by Finder) --- */
+  {
+    NSString *e27 = [[fm currentDirectoryPath] stringByAppendingPathComponent:
+      @"../GWMetadata/interop/fixtures/finder106/E27-dragged-locations"];
+    NSString *out = [root stringByAppendingPathComponent: @"e27"];
+    NSArray *names = [NSArray arrayWithObjects: @"a@example.com.mailtoloc",
+      @"ftp.example.org:.ftploc", @"example.com:x.webloc", nil];
+    NSString *name;
+
+    [fm createDirectoryAtPath: out withIntermediateDirectories: YES
+		   attributes: nil error: NULL];
+    for (name in names)
+      {
+	NSURL *u = [FSNLocationFile URLForLocationFileAtPath:
+		      [e27 stringByAppendingPathComponent: name]];
+	NSString *p = [FSNLocationFile writeWeblocForURL: u title: nil
+					     inDirectory: out];
+
+	PASS(u != nil, "E27 %s: fixture URL read", [name UTF8String]);
+	PASS_EQUAL([p lastPathComponent], name,
+		   "E27: dragged %s gets Finder's name",
+		   [[u absoluteString] UTF8String]);
+      }
+  }
+
   [fm removeItemAtPath: root error: NULL];
   [arp release];
   return 0;

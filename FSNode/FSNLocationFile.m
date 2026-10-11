@@ -110,6 +110,39 @@ safeFileName(NSString *title)
   return s;
 }
 
+/* The name Finder gives a URL dragged into a folder (evidence E27): the URL
+ * without its scheme and "//", with "/" stored as ":", which a Mac shows as
+ * "/" again.  Very long URLs are cut so the name fits NAME_MAX. */
+static NSString *
+finderNameForURL(NSURL *url)
+{
+  NSString *s = [url absoluteString];
+  NSRange colon = [s rangeOfString: @":"];
+
+  if (colon.location != NSNotFound)
+    {
+      s = [s substringFromIndex: NSMaxRange(colon)];
+    }
+  if ([s hasPrefix: @"//"])
+    {
+      s = [s substringFromIndex: 2];
+    }
+  s = [s stringByReplacingOccurrencesOfString: @"/" withString: @":"];
+  s = [s stringByTrimmingCharactersInSet:
+	   [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+  while ([s hasPrefix: @"."])
+    {
+      s = [s substringFromIndex: 1];
+    }
+  while ([s lengthOfBytesUsingEncoding: NSUTF8StringEncoding] > 200)
+    {
+      s = [s substringToIndex:
+	       [s rangeOfComposedCharacterSequenceAtIndex: [s length] - 1]
+		 .location];
+    }
+  return s;
+}
+
 /* The classic fork and Finder Info of a Finder-made location file, so an
  * older Finder opens the file and shows its name without the extension. */
 /* The plist exactly as the Finder writes it (tab indented); the GNUstep XML
@@ -214,8 +247,7 @@ storeForks(NSString *path, NSString *type, NSURL *url)
     {
       return nil;
     }
-  base = safeFileName([title length] ? title : ([url host] ? [url host]
-						 : [url absoluteString]));
+  base = [title length] ? safeFileName(title) : finderNameForURL(url);
   if ([base length] == 0)
     {
       base = @"Internet Location";

@@ -25,8 +25,9 @@
 + (NSURL *)URLForLocationFileAtPath:(NSString *)path;
 
 /* Create "<title>.webloc" in directory as an XML property list with a URL
- * key, which is what the Finder opens.  A nil or empty title falls back to
- * the host of the URL.  An existing name gets " 2", " 3", ... appended.
+ * key, which is what the Finder opens.  A nil or empty title gives the
+ * name Finder gives a dragged URL: the URL without scheme and "//", "/"
+ * stored as ":".  An existing name gets " 2", " 3", ... appended.
  * Returns the new path, or nil if the URL is not absolute or the file cannot
  * be written. */
 + (NSString *)writeWeblocForURL:(NSURL *)url

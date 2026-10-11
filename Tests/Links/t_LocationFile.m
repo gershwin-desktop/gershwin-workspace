@@ -172,8 +172,8 @@ main(void)
       PASS_EQUAL([p2 lastPathComponent], @"My- page-1 2.webloc",
 		 "name collision gets a number");
       PASS_EQUAL([[L writeWeblocForURL: ok title: nil inDirectory: root]
-		   lastPathComponent], @"example.org.webloc",
-		 "host is the default title");
+		   lastPathComponent], @"example.org:x:y?q=a%20b.webloc",
+		 "the URL without scheme is the default title (E27)");
       PASS([L writeWeblocForURL: [NSURL URLWithString: @"nonsense"]
 			  title: @"x" inDirectory: root] == nil,
 	   "relative URL refused");
@@ -214,8 +214,8 @@ main(void)
 
       p = [L writeWeblocFromPasteboard: pb([NSDictionary
 	dictionaryWithObject: u forKey: NSURLPboardType]) inDirectory: root];
-      PASS_EQUAL([p lastPathComponent], @"example.org 2.webloc",
-		 "dropped URL becomes a webloc named after the host");
+      PASS_EQUAL([p lastPathComponent], @"example.org:a.webloc",
+		 "dropped URL becomes a webloc named as Finder names it");
       PASS_EQUAL([[L URLForLocationFileAtPath: p] absoluteString], u,
 		 "and opens to the same URL");
       PASS([L writeWeblocFromPasteboard: pb([NSDictionary
