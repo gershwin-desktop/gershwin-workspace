@@ -805,6 +805,33 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return success;
 }
 
+/* The windows the window manager lists as minimizing into, or shown in,
+ * a Dock tile of their own (_WINDOW_LIVE_MINIATURES): their
+ * _NET_WM_ICON_GEOMETRY is their tile's, which the application's icon must
+ * not overwrite. */
+- (NSSet *)liveMiniatureWindows:(Display *)dpy
+{
+    NSMutableSet *windows = [NSMutableSet set];
+    Atom type;
+    int format;
+    unsigned long count = 0, after = 0;
+    unsigned char *data = NULL;
+
+    if (XGetWindowProperty(dpy, DefaultRootWindow(dpy),
+                           XInternAtom(dpy, "_WINDOW_LIVE_MINIATURES", False),
+                           0, 1024, False, XA_WINDOW, &type, &format,
+                           &count, &after, &data) == Success && data) {
+        if (type == XA_WINDOW && format == 32) {
+            unsigned long *ids = (unsigned long *)data;
+            for (unsigned long i = 0; i < count; i++) {
+                [windows addObject:[NSNumber numberWithUnsignedLong:ids[i]]];
+            }
+        }
+        XFree(data);
+    }
+    return windows;
+}
+
 - (BOOL)setIconGeometry:(NSRect)rect forPID:(pid_t)pid
 {
     if (pid <= 0) return NO;
@@ -818,11 +845,15 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         Atom iconGeometry = XInternAtom(dpy, "_NET_WM_ICON_GEOMETRY", False);
         unsigned long count = 0;
         Window *clients = [self getClientList:dpy count:&count];
+        NSSet *live = [self liveMiniatureWindows:dpy];
 
         if (clients) {
             for (unsigned long i = 0; i < count; i++) {
                 pid_t winPID = [self getPIDForWindow:dpy window:clients[i]];
                 if (winPID != pid) {
+                    continue;
+                }
+                if ([live containsObject:[NSNumber numberWithUnsignedLong:clients[i]]]) {
                     continue;
                 }
 
@@ -861,6 +892,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         Atom iconGeometry = XInternAtom(dpy, "_NET_WM_ICON_GEOMETRY", False);
         unsigned long count = 0;
         Window *clients = [self getClientList:dpy count:&count];
+        NSSet *live = [self liveMiniatureWindows:dpy];
 
         if (clients) {
             for (unsigned long i = 0; i < count; i++) {
@@ -875,6 +907,9 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
                 }
 
                 if (!matches) {
+                    continue;
+                }
+                if ([live containsObject:[NSNumber numberWithUnsignedLong:clients[i]]]) {
                     continue;
                 }
 

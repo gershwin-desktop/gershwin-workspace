@@ -114,6 +114,8 @@ typedef enum DockStyle
   DockStyleModern = 1
 } DockStyle;
 
+@class DockMiniatureWatcher;
+
 @interface Dock : NSView 
 {
   DockPosition position;
@@ -185,6 +187,14 @@ typedef enum DockStyle
   /* The unmagnified size of one cell, and the bar in view coordinates. */
   CGFloat baseCell;
   NSRect barRect;
+
+  /* Live miniatures: a tile per minimized window, in front of the Trash,
+   * into which the window manager paints the window's content (see
+   * DockMiniatureWatcher.h).  Windows the Dock had no room for when they
+   * were minimized stay in refusedMiniatures while they are minimized. */
+  NSMutableArray *miniatureTiles;
+  NSMutableArray *refusedMiniatures;
+  DockMiniatureWatcher *miniatureWatcher;
 
   GWDesktopManager *manager; 
   Workspace *gw;

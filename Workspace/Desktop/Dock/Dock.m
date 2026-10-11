@@ -37,6 +37,10 @@
 #import "X11AppSupport.h"
 #import "GWDockWindow.h"
 #import "DockStack.h"
+#import "DockMiniatures.h"
+#import "DockMiniatureWatcher.h"
+#import "DockMiniatureTile.h"
+#import <GNUstepGUI/GSDisplayServer.h>
 
 #if HAVE_DBUS
 #import "DockServiceDBus.h"
@@ -93,6 +97,16 @@ static inline CGFloat _dockScaleFactor(void)
 }
 @end
 
+@interface Dock (Miniatures) <DockMiniatureWatcherDelegate>
+
+- (void)startMiniatures;
+- (void)layoutMiniaturesFrom:(CGFloat *)pos
+                   magnified:(DockMagnification)shown;
+- (void)placeMiniatures;
+- (NSRect)x11RectForRect:(NSRect)rect inView:(NSView *)view;
+
+@end
+
 @interface Dock (Magnification)
 
 - (void)layoutIcons;
@@ -122,6 +136,10 @@ static inline CGFloat _dockScaleFactor(void)
 #if HAVE_DBUS
   DockServiceDBusStop();
 #endif
+  [miniatureWatcher stop];
+  RELEASE (miniatureWatcher);
+  RELEASE (miniatureTiles);
+  RELEASE (refusedMiniatures);
   RELEASE (icons);
   RELEASE (backColor);
   
@@ -269,6 +287,7 @@ static inline CGFloat _dockScaleFactor(void)
 
       [self loadDockedFolders];
       [self createTrashIcon];
+      [self startMiniatures];
 
       /* Register for drag notifications */
       [[NSNotificationCenter defaultCenter] addObserver: self
@@ -1049,6 +1068,7 @@ static inline CGFloat _dockScaleFactor(void)
   CGFloat lead = magnifyArmed ? magnification.spread : 0.0;
   CGFloat pos = lead;
   CGFloat barStart, barEnd, start, size;
+  NSUInteger trash = [self trashIndex];
   NSUInteger i;
 
   dividerRect = NSZeroRect;
@@ -1069,6 +1089,9 @@ static inline CGFloat _dockScaleFactor(void)
                                      thickness: baseCell];
           pos += dividerLength;
         }
+
+      if (i == trash)
+        [self layoutMiniaturesFrom: &pos magnified: shown];
 
       if ((NSInteger)i == folderTargetIndex)
         {
@@ -1091,6 +1114,8 @@ static inline CGFloat _dockScaleFactor(void)
       if ((targetIndex != -1) && ((NSInteger)i == targetIndex))
         pos += baseCell;
     }
+  if (trash >= [icons count])
+    [self layoutMiniaturesFrom: &pos magnified: shown];
 
   /* The bar runs from where the first tile begins to where the last one
    * ends, so it grows with the icons instead of leaving them hanging over
@@ -1101,6 +1126,9 @@ static inline CGFloat _dockScaleFactor(void)
                          thickness: baseCell];
 
   [self setNeedsDisplay: YES];
+  /* The window manager paints each miniature where its tile is now, so it
+   * follows the magnification too. */
+  [self placeMiniatures];
 }
 
 - (void)tile
@@ -1120,7 +1148,8 @@ static inline CGFloat _dockScaleFactor(void)
   BOOL divided = (docs > 0) && (docs < [icons count]);
   CGFloat dividerLength = divided ? DIVIDER_SIZE : 0;
   /* The icons, and the gaps opened where a dragged item would go. */
-  CGFloat slots = [icons count] + ((targetIndex != -1) ? 1 : 0)
+  CGFloat slots = [icons count] + [miniatureTiles count]
+                                + ((targetIndex != -1) ? 1 : 0)
                                 + ((folderTargetIndex != -1) ? 1 : 0);
   CGFloat sf = _dockScaleFactor();
   CGFloat cell, scaledCell, barLength, viewLength, viewThickness, screenLength;
@@ -1268,21 +1297,9 @@ static inline CGFloat _dockScaleFactor(void)
 
 - (NSRect)x11IconRectForDockIcon:(DockIcon *)icon
 {
-  if (!icon || ![icon window]) {
-    return NSZeroRect;
-  }
-
-  NSRect iconBounds = [icon bounds];
-  NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
-  NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
-  NSScreen *screen = [[icon window] screen] ?: [NSScreen mainScreen];
-  CGFloat screenHeight = [screen frame].size.height;
-
-  NSRect x11Rect = rectOnScreen;
-  x11Rect.origin.y = screenHeight - (rectOnScreen.origin.y + rectOnScreen.size.height);
-
-  return x11Rect;
+  return [self x11RectForRect: [icon bounds] inView: icon];
 }
+
 
 - (void)updateIconGeometryForDockIcon:(DockIcon *)icon
 {
@@ -2785,9 +2802,157 @@ static inline CGFloat _dockScaleFactor(void)
 
 @end
 
+@implementation Dock (Miniatures)
 
+/* At most this many windows are shown live at once (GWDockLiveMiniatureLimit);
+ * each one keeps its full-size picture in the window manager. */
+#define DEFAULT_MINIATURE_LIMIT 8
 
+- (void)startMiniatures
+{
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  id enabled = [defaults objectForKey: @"GWDockLiveMiniatures"];
 
+  miniatureTiles = [NSMutableArray new];
+  refusedMiniatures = [NSMutableArray new];
+  if (enabled != nil && ![enabled boolValue])
+    return;
 
+  miniatureWatcher = [[DockMiniatureWatcher alloc] initWithDelegate: self];
+  [self miniatureWatcherListChanged: miniatureWatcher];
+}
 
+- (NSUInteger)miniatureLimit
+{
+  id limit = [[NSUserDefaults standardUserDefaults]
+               objectForKey: @"GWDockLiveMiniatureLimit"];
 
+  return (limit != nil) ? (NSUInteger)MAX(0, [limit intValue])
+                        : DEFAULT_MINIATURE_LIMIT;
+}
+
+- (void)miniatureWatcherListChanged:(DockMiniatureWatcher *)watcher
+{
+  NSArray *listed = [watcher listedWindows];
+  NSMutableArray *shown = [NSMutableArray array];
+  NSArray *toShow;
+  NSMutableArray *tiles = [NSMutableArray array];
+  NSUInteger i;
+  BOOL changed = NO;
+
+  for (i = 0; i < [miniatureTiles count]; i++)
+    [shown addObject: [NSNumber numberWithUnsignedLong:
+                         [[miniatureTiles objectAtIndex: i] clientWindow]]];
+
+  toShow = DockMiniaturesToShow(listed, shown, refusedMiniatures,
+                                [self miniatureLimit]);
+
+  for (i = 0; i < [toShow count]; i++)
+    {
+      NSNumber *w = [toShow objectAtIndex: i];
+      NSUInteger at = [shown indexOfObject: w];
+      DockMiniatureTile *tile;
+
+      if (at != NSNotFound)
+        {
+          tile = [miniatureTiles objectAtIndex: at];
+        }
+      else
+        {
+          tile = AUTORELEASE ([[DockMiniatureTile alloc]
+                                initWithWindow: [w unsignedLongValue]
+                                         title: [watcher titleOfWindow:
+                                                           [w unsignedLongValue]]]);
+          [self addSubview: tile];
+          changed = YES;
+        }
+      [tiles addObject: tile];
+    }
+
+  for (i = 0; i < [miniatureTiles count]; i++)
+    {
+      DockMiniatureTile *tile = [miniatureTiles objectAtIndex: i];
+
+      if ([tiles indexOfObjectIdenticalTo: tile] == NSNotFound)
+        {
+          [watcher forgetWindow: [tile clientWindow]];
+          [tile removeFromSuperview];
+          changed = YES;
+        }
+    }
+
+  [miniatureTiles setArray: tiles];
+
+  /* Left out now means left out for as long as the window stays listed. */
+  [refusedMiniatures removeAllObjects];
+  for (i = 0; i < [listed count]; i++)
+    {
+      id w = [listed objectAtIndex: i];
+
+      if (![toShow containsObject: w])
+        [refusedMiniatures addObject: w];
+    }
+
+  if (changed)
+    [self tile];
+}
+
+- (void)layoutMiniaturesFrom:(CGFloat *)pos
+                   magnified:(DockMagnification)shown
+{
+  NSUInteger i;
+  CGFloat start, size;
+
+  for (i = 0; i < [miniatureTiles count]; i++)
+    {
+      DockMagnificationSpan(shown, magnifyPos, *pos, baseCell, &start, &size);
+      [[miniatureTiles objectAtIndex: i]
+        setFrame: [self rectForSpanStart: start length: size thickness: size]];
+      *pos += baseCell;
+    }
+}
+
+- (NSRect)x11RectForRect:(NSRect)rect inView:(NSView *)icon
+{
+  if (!icon || ![icon window]) {
+    return NSZeroRect;
+  }
+
+  NSRect rectInWindow = [icon convertRect: rect toView: nil];
+  NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
+  NSScreen *screen = [[icon window] screen] ?: [NSScreen mainScreen];
+  CGFloat screenHeight = [screen frame].size.height;
+
+  NSRect x11Rect = rectOnScreen;
+  x11Rect.origin.y = screenHeight - (rectOnScreen.origin.y + rectOnScreen.size.height);
+
+  return x11Rect;
+}
+
+- (void)placeMiniatures
+{
+  NSWindow *win = [self window];
+  unsigned long dockWindow;
+  NSUInteger i;
+
+  if (miniatureWatcher == nil || win == nil || [miniatureTiles count] == 0)
+    return;
+
+  /* The window the window manager paints the miniatures right above. */
+  dockWindow = (unsigned long)(uintptr_t)
+    [GSServerForWindow(win) windowDevice: [win windowNumber]];
+  if (dockWindow == 0)
+    return;
+
+  for (i = 0; i < [miniatureTiles count]; i++)
+    {
+      DockMiniatureTile *tile = [miniatureTiles objectAtIndex: i];
+
+      [miniatureWatcher placeTile: [self x11RectForRect: [tile contentRect]
+                                                 inView: tile]
+                        forWindow: [tile clientWindow]
+                       dockWindow: dockWindow];
+    }
+}
+
+@end

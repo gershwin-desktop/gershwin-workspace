@@ -32,7 +32,8 @@ ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
 # all five have to exist in the link even though this test only ever calls
 # two ivar-only methods on a bare `[Dock alloc]` (see the file comment).
 # X11AppSupport.m/GWProcessOwnership.m are linked for real (GWX11AppManager,
-# and GWX11WindowManager for -closeThreadDisplay); Workspace, DockIcon,
+# and GWX11WindowManager for -closeThreadDisplay), and so are the live
+# miniature classes, which need nothing beyond it; Workspace, DockIcon,
 # DockStack and GWDockWindow get link-only empty stand-ins instead
 # (Collab/DockLaunchRefreshThreadStubs.m - kept out of this directory's top
 # level so gnustep-tests does not also register it as its own test tool)
@@ -43,6 +44,8 @@ ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
 ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata -I../../DSStore
 t_DockLaunchRefreshThread_OBJC_FILES += ../../Workspace/GWProcessOwnership.m \
                                         ../../Workspace/X11AppSupport.m \
+                                        ../../Workspace/Desktop/Dock/DockMiniatureTile.m \
+                                        ../../Workspace/Desktop/Dock/DockMiniatureWatcher.m \
                                         Collab/DockLaunchRefreshThreadStubs.m
 t_DockLaunchRefreshThread_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                                        -lFSNode -lgnustep-gui -lX11
