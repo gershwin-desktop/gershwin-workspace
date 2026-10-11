@@ -682,7 +682,9 @@ Dumps below come from `mac-oracle dump`, i.e. decoded by this repo's DSStore cod
   extension is chosen by scheme (http -> .webloc, ftp -> .ftploc, mailto ->
   .mailtoloc). Content as in E19: XML plist (tab indented), resources drag 128,
   TEXT 256, url 256, FinderInfo ilht/ilft/ilma + MACS, fdFlags 0x0010.
-- Fixtures: `E27-dragged-locations/` (data + `._` as fetched with tar).
+- Fixtures: `E27-dragged-locations/` (data + `._` as fetched with tar; the
+  ":" of the on-disk names is stored as "%3A" so the repository checks out
+  on Windows).
 
 ## E28 - p-links2 952191a2 aliases and location files on 10.6 (S15 part 2)
 
