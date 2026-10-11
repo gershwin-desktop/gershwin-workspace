@@ -47,9 +47,7 @@
 
   unsigned long long filesize;
   NSDate *crDate;
-  NSString *crDateDescription;
   NSDate *modDate;
-  NSString *modDateDescription;
   unsigned long permissions;
   NSString *owner;
   NSNumber *ownerId;
@@ -242,6 +240,10 @@
 - (BOOL)isDeletable;
 
 - (BOOL)isLocked;
+
+/* The Finder "name locked" bit: the file cannot be renamed in place.  Not
+ * -isLocked, which is about file operations on the path. */
+- (BOOL)isNameLocked;
 
 - (BOOL)isValid;
 

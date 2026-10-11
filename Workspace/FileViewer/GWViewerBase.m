@@ -21,8 +21,20 @@
 #import "Workspace.h"
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
+#import "FSNIconsView.h"
+#import "FSNListView.h"
+#import "DSStoreInfo.h"
+#import "GWFolderViewOptions.h"
+#import "GWViewSettingsManager.h"
 
 @implementation GWViewerBase
+
+- (void)dealloc
+{
+  RELEASE (pendingScrollPosition);
+  RELEASE (appliedViewState);
+  [super dealloc];
+}
 
 /* Abstract hooks implemented by the concrete viewer classes (GWViewer and
  * GWSpatialViewer).  GWViewerBase is never instantiated directly, so these
@@ -31,6 +43,140 @@
 {
   [NSException raise: NSInternalInconsistencyException
               format: @"%s not implemented by %@", __PRETTY_FUNCTION__, [self class]];
+}
+
+- (void)applyFolderViewOptions:(DSStoreInfo *)info includingScrollPosition:(BOOL)scroll
+{
+  if ([nodeView isKindOfClass: [FSNIconsView class]])
+    {
+      [GWFolderViewOptions applyIconViewOptionsOf: info
+                                      toIconsView: nodeView
+                          includingScrollPosition: scroll];
+      if (scroll && [info hasScrollPosition])
+        ASSIGN (pendingScrollPosition, [NSValue valueWithPoint: [info scrollPosition]]);
+    }
+  else if ([nodeView isKindOfClass: [FSNListView class]])
+    {
+      [GWFolderViewOptions applyListViewOptionsOf: info
+                                     toDataSource: [nodeView dataSource]];
+      if (scroll && [info hasListScrollPosition])
+        {
+          [GWFolderViewOptions applyListScrollPositionOf: info toListView: nodeView];
+          ASSIGN (pendingScrollPosition, [NSValue valueWithPoint: [info listScrollPosition]]);
+        }
+    }
+  ASSIGN (appliedViewState, [self currentViewState]);
+}
+
+- (NSDictionary *)currentViewState
+{
+  if ([nodeView isKindOfClass: [FSNIconsView class]])
+    return [GWFolderViewOptions iconViewStateOf: nodeView];
+  if ([nodeView isKindOfClass: [FSNListView class]])
+    return [GWFolderViewOptions listViewStateOf: [nodeView dataSource]];
+  return nil;
+}
+
+- (void)takeWindowChromeInto:(DSStoreInfo *)info
+{
+}
+
+- (BOOL)isSpatial
+{
+  [self subclassResponsibility: _cmd];
+  return NO;
+}
+
+- (void)forgetChosenViewType
+{
+  viewTypeChosenByUser = NO;
+}
+
+/* Finder's windows without a toolbar are its spatial ones [decision A].
+ * Only a window of another kind than the folder would open in records it:
+ * a folder merely opened in the usual kind of window keeps no bwsp of its
+ * own for that, as Finder writes none for an untouched window [O:E8]. */
+- (void)takeWindowKindInto:(DSStoreInfo *)info
+{
+  BOOL spatial = [self isSpatial];
+  BOOL wouldOpenSpatially =
+    [GWFolderViewOptions opensSpatially: info
+                              byDefault: ([gworkspace defaultViewerType] == SPATIAL)];
+
+  if ([info hasShowToolbar] || wouldOpenSpatially != spatial)
+    {
+      [info setShowToolbar: !spatial];
+      [info setHasShowToolbar: YES];
+    }
+}
+
+- (DSStoreInfo *)saveFolderSettingsWithPrefs:(NSDictionary *)prefs
+{
+  GWViewSettingsManager *sm =
+    [GWViewSettingsManager managerForDirectoryPath: [baseNode path]];
+  /* Read first, so the write keeps icon positions persisted since the
+   * window opened and every record Finder wrote. */
+  DSStoreInfo *info = [sm readSettings];
+  NSMutableDictionary *folderPrefs =
+    [NSMutableDictionary dictionaryWithDictionary: [GWFolderViewOptions folderPrefsFromViewerPrefs: prefs]];
+
+  if (viewTypeChosenByUser == NO && [info hasViewStyle] == NO)
+    {
+      /* Without a per-folder view Finder uses its last used one [O:E5];
+       * storing ours for every folder opened would pin them all. */
+      [folderPrefs removeObjectForKey: @"viewtype"];
+    }
+  [info takeValuesFromViewerPrefs: folderPrefs];
+
+  /* The node view of a browsing window may show another folder by now;
+   * its options are not this folder's. */
+  if ([[[nodeView shownNode] path] isEqual: [baseNode path]])
+    {
+      /* Options the user did not touch stay as stored: taking them all
+       * would create an icvp or lsvp for every folder opened, and turn
+       * values from records Finder ignores into ones it reads. */
+      BOOL changed = ![[self currentViewState] isEqual: appliedViewState];
+
+      if (changed && [nodeView isKindOfClass: [FSNIconsView class]])
+        {
+          [GWFolderViewOptions takeIconViewOptionsOf: nodeView into: info];
+        }
+      else if (changed && [nodeView isKindOfClass: [FSNListView class]])
+        {
+          [GWFolderViewOptions takeListViewOptionsOf: [nodeView dataSource] into: info];
+          [GWFolderViewOptions takeListScrollPositionOf: nodeView into: info];
+        }
+
+      /* The live layout, not whatever a stale .DS_Store (possibly with
+       * foreign colliding positions) had. */
+      if ([nodeView respondsToSelector: @selector(liveIconPositions)])
+        {
+          NSDictionary *live = [nodeView liveIconPositions];
+
+          if ([live count] > 0)
+            [info setLiveIconPositions: live];
+        }
+    }
+  [self takeWindowChromeInto: info];
+  [self takeWindowKindInto: info];
+
+  [sm writeSettings: info];
+  return info;
+}
+
+- (void)listViewOptionsDidChange:(NSNotification *)notification
+{
+  GWViewSettingsManager *sm;
+  DSStoreInfo *info;
+
+  if ([notification object] != nodeView || [nodeView shownNode] == nil)
+    return;
+
+  sm = [GWViewSettingsManager managerForDirectoryPath: [[nodeView shownNode] path]];
+  info = [sm readSettings];
+  [GWFolderViewOptions takeListViewOptionsOf: [nodeView dataSource] into: info];
+  [GWFolderViewOptions takeListScrollPositionOf: nodeView into: info];
+  [sm writeSettings: info];
 }
 
 - (void)updatePreviewPaneForCurrentType
@@ -267,6 +413,11 @@
   if ([nodeView isSingleNode]) {
     [nodeView scrollSelectionToVisible];
   }
+  if (pendingScrollPosition && [nodeView respondsToSelector: @selector(setScrollPosition:)])
+    {
+      [nodeView setScrollPosition: [pendingScrollPosition pointValue]];
+    }
+  DESTROY (pendingScrollPosition);
 }
 
 - (void)setHistoryPosition:(int)pos

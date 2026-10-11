@@ -6,12 +6,13 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 #include "../../FSNode/FSNAlias.m"
+#include "../../FSNode/FSNAliasFile.m"
 
 static NSString *
 tmpRoot(void)
 {
   return [NSString stringWithFormat:@"%@/aliasc_t_%ld",
-	    @"/tmp/opencode", (long)getpid()];
+	    NSTemporaryDirectory(), (long)getpid()];
 }
 
 int
@@ -38,12 +39,16 @@ main(void)
 	   "default name is \"<name> alias.<ext>\"");
       PASS([fm fileExistsAtPath: aliasPath], "alias file exists");
 
-      /* The created file must itself be a resolvable alias record. */
-      NSData *data = [NSData dataWithContentsOfFile: aliasPath];
-      FSNAlias *parsed = [[FSNAlias alloc] initWithData: data];
-      PASS(parsed != nil, "created file parses as alias record");
+      /* The record travels in the resource fork (sidecar), the data fork is
+       * empty, exactly as a Finder alias file is laid out. */
+      PASS([[NSData dataWithContentsOfFile: aliasPath] length] == 0,
+	   "data fork of a Finder-form alias is empty");
+      PASS([FSNAlias isAliasFileAtPath: aliasPath],
+	   "kIsAlias set in the Finder Info");
+      FSNAlias *parsed = [FSNAlias aliasWithContentsOfFile: aliasPath];
+      PASS(parsed != nil, "created file resolves as alias record");
       PASS_EQUAL([parsed posixPath], target, "record points at target");
-      PASS([FSNAlias isAliasData: data], "'alis' magic on disk");
+      PASS_EQUAL([parsed resolvePath], target, "record resolves to target");
 
       /* Second alias for the same target must not collide. */
       NSString *second = [FSNAlias writeAliasFileForPath: target

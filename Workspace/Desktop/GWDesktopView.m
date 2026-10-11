@@ -45,7 +45,7 @@
 #import "../Network/NetworkVolumeManager.h"
 #import "Thumbnailer/GWThumbnailer.h"
 #import "X11AppSupport.h"
-#import "../QuickLook/GWQuickLookController.h"
+#import "../LookInside/GWLookInsideController.h"
 
 /* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the C
    library calls here take narrow strings, so use the UTF-8 form there. On
@@ -1400,14 +1400,14 @@ static CGFloat desktopScaleFactor(void)
 	{
 	  if (!(flags & (NSCommandKeyMask | NSShiftKeyMask | NSAlternateKeyMask | NSControlKeyMask)))
 	    {
-	      /* Same Quick Look toggle a folder window's Space bar uses (see
+	      /* Same Look Inside toggle a folder window's Space bar uses (see
 	       * GWViewerWindow -performKeyEquivalent:); -selectedNodes is
 	       * empty with nothing selected (no base-node fallback the way a
 	       * folder viewer's lastSelection has), so "no selection does
 	       * nothing" already falls out of the controller's own rule. */
-	      [[GWQuickLookController sharedController]
-		  toggleQuickLookForSelection: [self selectedNodes]
-				 sourceWindow: [self window]];
+	      [[GWLookInsideController sharedController]
+		  toggleLookInsideForSelection: [self selectedNodes]
+				  sourceWindow: [self window]];
 	    }
 	  return;
 	}

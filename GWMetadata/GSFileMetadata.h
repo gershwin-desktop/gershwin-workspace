@@ -54,6 +54,7 @@ typedef NS_OPTIONS(uint16_t, GSFileFinderFlags) {
   GSFileFinderIsOnDesk       = 1 << 0,
   GSFileFinderColorFlag      = 1 << 1,   /* bit 1 + bits 2-3 = label colour */
   GSFileFinderColorBits      = (1 << 1) | (1 << 2) | (1 << 3),
+  GSFileFinderIsExtensionHidden = 1 << 4, /* 0x0010 kExtensionIsHidden */
   GSFileFinderIsShared       = 1 << 6,   /* 0x0040 */
   GSFileFinderHasNoINITs     = 1 << 7,   /* 0x0080 */
   GSFileFinderHasBeenInited  = 1 << 8,   /* 0x0100 */
@@ -66,14 +67,15 @@ typedef NS_OPTIONS(uint16_t, GSFileFinderFlags) {
 };
 
 /*
- * Standard label colours (0-7), matching the on-disk encodings: the
- * FinderInfo fdFlags kColor field (bits 1-3) and the .DS_Store lclr
- * record both use 1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Blue, 6=Purple,
- * 7=Grey (see TN1150 "Finder Info":
- * https://developer.apple.com/library/archive/technotes/tn/tn1150.html,
- * and the Finder Interface Reference for the value-to-colour mapping).
- * GSFileLabel is deliberately identical to DSStoreLabelColor so the two
- * storage encodings never disagree.
+ * Standard label colours (0-7) in menu order: 1=Red, 2=Orange, 3=Yellow,
+ * 4=Green, 5=Blue, 6=Purple, 7=Grey.  GSFileLabel is deliberately identical
+ * to DSStoreLabelColor, and every label API of this class speaks it.
+ *
+ * The FinderInfo fdFlags kColor field (bits 1-3) does NOT use these values
+ * but Finder's own colour numbers, observed on a 10.6 Finder (evidence E24)
+ * and used by NSURLLabelNumberKey and the "Name\nN" tags of later systems:
+ * 1=Grey, 2=Green, 3=Purple, 4=Blue, 5=Yellow, 6=Red, 7=Orange.
+ * +labelForFinderColor: / +finderColorForLabel: are the only conversion.
  */
 typedef NS_ENUM(NSInteger, GSFileLabel) {
   GSFileLabelNone    = 0,
@@ -125,6 +127,16 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
     NSInteger labelNumber;
   } _parsed;
 
+  /* Which of resource fork, comment, tags and quarantine a setter changed
+   * (_modified) or that were read from disk (_loaded).  A write touches only
+   * the modified ones, so a field nobody changed stays as it is on disk. */
+  NSUInteger _modified;
+  NSUInteger _loaded;
+
+  /* Per FinderInfo byte, the bits a setter has set (value as set, 0
+   * included).  A write patches exactly those over the bytes on disk. */
+  uint8_t _fiTouched[32];
+
   /* Sidecar mode override */
   BOOL _forceSidecar;
 }
@@ -137,10 +149,10 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 @property (nonatomic, copy) NSData *finderInfo;
 
 /** Raw resource fork data. */
-@property (copy) NSData *resourceFork;
+@property (nonatomic, copy) NSData *resourceFork;
 
 /** Finder/Spotlight comment (kMDItemFinderComment). */
-@property (copy) NSString *finderComment;
+@property (nonatomic, copy) NSString *finderComment;
 
 /* =================================================================
  * Convenient parsed properties from FinderInfo
@@ -157,6 +169,13 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 
 /** File is locked (name locked). */
 @property (getter=isLocked) BOOL locked;
+
+/** Finder.h kNameLocked; same bit as -isLocked, under the name Finder uses. */
+@property (getter=isNameLocked) BOOL nameLocked;
+
+/** Finder.h kExtensionIsHidden (fdFlags 0x0010): views show the name
+ *  without its extension. */
+@property (getter=isExtensionHidden) BOOL extensionHidden;
 
 /** File has a custom icon (check resource fork for icns data). */
 @property (getter=hasCustomIcon) BOOL customIcon;
@@ -229,7 +248,7 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
 @property (copy) NSArray *userTags;
 
 /** Raw _kMDItemUserTags xattr value (binary plist), or nil when unset. */
-@property (copy) NSData *userTagsData;
+@property (nonatomic, copy) NSData *userTagsData;
 
 /**
  * Quarantine record (com.apple.quarantine), e.g.
@@ -239,14 +258,23 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  * are rewritten to "0000;00000000;;", so string equality only holds on
  * the pre-ingest bytes.
  */
-@property (copy) NSString *quarantine;
+@property (nonatomic, copy) NSString *quarantine;
 
 /** The standard tag name for a label (e.g. GSFileLabelRed -> "Red"),
  *  or nil for GSFileLabelNone. */
 + (NSString *)tagNameForLabel:(GSFileLabel)label;
 
-/** The label for a standard tag name, or GSFileLabelNone. */
+/** The label for a standard tag name, or GSFileLabelNone.  A tag with a
+ *  colour number ("Red\n6", as later Finders write) is decided by the
+ *  number, so localized names work too. */
 + (GSFileLabel)labelForTagName:(NSString *)tagName;
+
+/** The label for a FinderInfo fdFlags colour field value (0-7, i.e.
+ *  (fdFlags >> 1) & 7), which uses Finder's colour numbers (see above). */
++ (GSFileLabel)labelForFinderColor:(NSUInteger)color;
+
+/** The fdFlags colour field value (0-7) Finder shows as `label`. */
++ (NSUInteger)finderColorForLabel:(GSFileLabel)label;
 
 /* =================================================================
  * Read / Write
@@ -315,6 +343,40 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  */
 - (NSData *)customIconData;
 
+/* Classic Resource Manager forks (Inside Macintosh, More Macintosh Toolbox,
+ * Resource Manager chapter).  Readers never trust an offset or size from the
+ * fork: anything that points outside it makes the lookup return nil. */
+
+/** Four-character code ("icns", "url ") as a GSOType; nil or a string that
+ *  is not four MacRoman characters gives 0. */
++ (GSOType)osTypeFromString:(NSString *)string;
+
+/** The data of resource `type`/`rid` in `fork`, or nil when absent or the
+ *  fork is malformed.  An empty resource yields empty data. */
++ (NSData *)dataForResourceType:(GSOType)type
+                     resourceID:(NSInteger)rid
+                         inFork:(NSData *)fork;
+
+/** The data of the resource of `type` with the lowest ID, or nil. */
++ (NSData *)firstDataForResourceType:(GSOType)type inFork:(NSData *)fork;
+
+/** One entry for +resourceForkWithResources:. */
++ (NSDictionary *)resourceEntryWithType:(GSOType)type
+                             resourceID:(NSInteger)rid
+                                   data:(NSData *)data;
+
+/** Builds a fork holding the given entries (from
+ *  +resourceEntryWithType:resourceID:data:).  nil for no entries, an ID
+ *  outside SInt16 or a fork the format cannot address (24 bit offsets). */
++ (NSData *)resourceForkWithResources:(NSArray *)entries;
+
+/** Fork holding `icns` as the 'icns' resource -16455 (the custom icon). */
++ (NSData *)resourceForkWithICNS:(NSData *)icns;
+
+/** The custom icon data of a fork: resource 'icns' -16455, or the data itself
+ *  when it is a bare icns container (the form older versions stored). */
++ (NSData *)icnsDataFromResourceFork:(NSData *)fork;
+
 /**
  * Set a custom icon from raw icns data.  Embeds the icns data in the
  * resource fork and sets the kHasCustomIcon FinderInfo flag - per TN1150 a
@@ -333,6 +395,36 @@ typedef NS_ENUM(NSInteger, GSFileLabel) {
  * Extract custom icon as an NSImage for display.
  */
 - (NSImage *)customIconAsImage;
+
+/**
+ * The icns custom icon of the item at `path`, nil when it has none.  For a
+ * folder it is read from the invisible "Icon\r" file inside it, where Finder
+ * keeps it, once the folder carries kHasCustomIcon; for anything else from
+ * the item's own resource fork.
+ */
++ (NSData *)customIconDataForPath:(NSString *)path;
+
+/** The same icon decoded for display, nil when none or undecodable. */
++ (NSImage *)customIconImageForPath:(NSString *)path;
+
+/**
+ * Stores `icns` as the custom icon of the folder at `folder` the way Finder
+ * does: an invisible, empty "Icon\r" file inside it holding the icon in its
+ * resource fork.  The folder's own kHasCustomIcon flag is not touched.
+ * -setCustomIconData: followed by a write does this for a directory.
+ */
+/** The value of com.apple.quarantine as the Mac's own attribute holds it
+ *  ("0000;..."): a "q/" prefix from a sidecar or tar is removed. */
++ (NSData *)plainQuarantine:(NSData *)value;
+
+/** The value to store in a "._" sidecar: 10.6 tar and dot_clean drop a
+ *  quarantine value that lacks the "q/" prefix.  Never doubled. */
++ (NSData *)sidecarQuarantine:(NSData *)value;
+
++ (BOOL)writeFolderIconICNS:(NSData *)icns atPath:(NSString *)folder error:(NSError **)error;
+
+/** Removes the "Icon\r" file (and its sidecar) of the folder; YES if none. */
++ (BOOL)removeFolderIconAtPath:(NSString *)folder error:(NSError **)error;
 
 /**
  * Utility: return the sidecar path for a given file path

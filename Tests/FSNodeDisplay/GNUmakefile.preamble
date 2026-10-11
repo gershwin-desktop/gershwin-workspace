@@ -1,0 +1,24 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+ADDITIONAL_INCLUDE_DIRS += -I../../FSNode -I../../FSNode/ExtendedInfo
+
+# The tests drive the real views and FSNode, so they link the built
+# framework.  Without the rpath the tool runs against the installed one and
+# reports on /System rather than on what was just built (it has to be
+# DT_RPATH: GNUstep.sh puts the installed libraries in LD_LIBRARY_PATH, which
+# the loader searches before a DT_RUNPATH).
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
+                      -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+t_FSNHiddenExtension_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current -lFSNode -lgnustep-gui
+t_FSNHiddenExtensionShowAll_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current -lFSNode -lgnustep-gui
+t_FSNNameLocked_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current -lFSNode -lgnustep-gui
+t_FSNTextCellFont_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current -lFSNode -lgnustep-gui
+t_FSNLocalizedStrings_TOOL_LIBS += -lgnustep-gui
+
+# clang 19 / binutils 2.44: see Tests/FSNode/GNUmakefile.preamble.
+ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
+                      -Wl,--defsym=__stop___objc_constant_string=0
+t_FSNIconLabelIndex_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current -lFSNode -lgnustep-gui
+t_FSNFinderSize_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current -lFSNode -lgnustep-gui
+
+# The build's own FSNode before the installed one in /System, for -lFSNode too.
+ADDITIONAL_LDFLAGS += -L$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current

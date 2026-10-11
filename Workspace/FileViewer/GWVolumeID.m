@@ -259,60 +259,79 @@ static NSString *stringForFSMagic(long magic)
   }
 }
 
+/* The id older versions named the cache file after, from f_fsid (or the
+ * mount source / mount point when the file system reports none). */
+static NSString *deviceVolumeID(NSString *resolved, struct statfs *buf)
+{
+  int val0 = FSID_VAL(*buf, 0);
+  int val1 = FSID_VAL(*buf, 1);
+
+  if (val0 != 0 || val1 != 0) {
+    return [NSString stringWithFormat:@"%08X%08X", val0, val1];
+  }
+  NSString *source = [mountInfoForPath(resolved) objectForKey:@"source"];
+  if ([source length] > 0) {
+    return [NSString stringWithFormat:@"src_%lu", (unsigned long)[source hash]];
+  }
+  return [NSString stringWithFormat:@"mp_%lu",
+                   (unsigned long)[[GWVolumeID mountPointForPath:resolved] hash]];
+}
+
+static NSString *resolvedPath(NSString *path)
+{
+  NSString *resolved = [[path stringByStandardizingPath] stringByResolvingSymlinksInPath];
+  return resolved ? resolved : path;
+}
+
 + (NSString *)volumeIDForPath:(NSString *)path
 {
   if (!path) return nil;
 
-  /* Resolve to absolute, real path */
-  NSString *resolved = [[path stringByStandardizingPath] stringByResolvingSymlinksInPath];
-  if (!resolved) resolved = path;
-
-  /* Check cache */
-  if (sVolumeIDCache) {
-    NSString *cached = [sVolumeIDCache objectForKey:resolved];
-    if (cached) return cached;
-  }
+  NSString *resolved = resolvedPath(path);
+  NSString *volID = [sVolumeIDCache objectForKey:resolved];
+  if (volID) return volID;
 
   struct statfs buf;
   if (statfs([resolved UTF8String], &buf) != 0) {
-    /* Fallback: hash the path itself */
-    NSString *fallback = [NSString stringWithFormat:@"path_%lu",
-                                   (unsigned long)[resolved hash]];
-    if (sVolumeIDCache) {
-      [sVolumeIDCache setObject:fallback forKey:resolved];
-    }
-    return fallback;
+    volID = [NSString stringWithFormat:@"path_%lu", (unsigned long)[resolved hash]];
+  } else {
+    /* The file system's own identity first: f_fsid is made from the device
+     * number, so removable media got another cache file after every insert
+     * and the layout kept for it was never found again. */
+    NSString *identity = [self filesystemIdentityForDevice:
+                                 [mountInfoForPath(resolved) objectForKey:@"source"]
+                                             inDirectories:
+                                 [NSArray arrayWithObjects:@"/dev/disk/by-uuid",
+                                          @"/dev/ufsid", @"/dev/gptid", nil]];
+    volID = identity ? [@"uuid_" stringByAppendingString:identity]
+                     : deviceVolumeID(resolved, &buf);
   }
-
-  /* Build volume ID from f_fsid */
-  int val0 = FSID_VAL(buf, 0);
-  int val1 = FSID_VAL(buf, 1);
-  NSString *volID = nil;
-
-  if (val0 != 0 || val1 != 0) {
-    volID = [NSString stringWithFormat:@"%08X%08X", val0, val1];
-  }
-
-  /* If f_fsid is all zeros, use mount source info */
-  if (!volID || [volID isEqualToString:@"0000000000000000"]) {
-    NSDictionary *mi = mountInfoForPath(resolved);
-    NSString *source = [mi objectForKey:@"source"];
-    if (source && [source length] > 0) {
-      volID = [NSString stringWithFormat:@"src_%lu",
-                         (unsigned long)[source hash]];
-    } else {
-      /* Last resort: hash the mount point */
-      NSString *mp = [self mountPointForPath:resolved];
-      volID = [NSString stringWithFormat:@"mp_%lu",
-                         (unsigned long)[mp hash]];
-    }
-  }
-
-  if (sVolumeIDCache) {
-    [sVolumeIDCache setObject:volID forKey:resolved];
-  }
-
+  [sVolumeIDCache setObject:volID forKey:resolved];
   return volID;
+}
+
++ (NSString *)filesystemIdentityForDevice:(NSString *)devicePath
+                            inDirectories:(NSArray *)directories
+{
+  struct stat device;
+
+  if (devicePath == nil || stat(GW_FSREP(devicePath), &device) != 0
+      || !(S_ISBLK(device.st_mode) || S_ISCHR(device.st_mode))) {
+    return nil;
+  }
+  for (NSString *dir in directories) {
+    NSArray *names = [[NSFileManager defaultManager] contentsOfDirectoryAtPath:dir error:NULL];
+    for (NSString *name in [names sortedArrayUsingSelector:@selector(compare:)]) {
+      struct stat entry;
+      NSString *path = [dir stringByAppendingPathComponent:name];
+      if (stat(GW_FSREP(path), &entry) == 0
+          && (entry.st_mode & S_IFMT) == (device.st_mode & S_IFMT)
+          && entry.st_rdev == device.st_rdev) {
+        return name;
+      }
+    }
+  }
+  return nil;
 }
 
 + (NSString *)cacheDirectory
@@ -347,7 +366,27 @@ static NSString *stringForFSMagic(long magic)
   if (!cacheDir) return nil;
 
   return [cacheDir stringByAppendingPathComponent:
-           [volID stringByAppendingString:@".DS_Store"]];
+                    [volID stringByAppendingString:@".DS_Store"]];
+}
+
++ (void)adoptLegacyCacheFileForPath:(NSString *)path
+{
+  NSString *cachePath = [self cacheFilePathForPath:path];
+  NSFileManager *fm = [NSFileManager defaultManager];
+  struct statfs buf;
+
+  if (![[self volumeIDForPath:path] hasPrefix:@"uuid_"] || cachePath == nil
+      || [fm fileExistsAtPath:cachePath]
+      || statfs([resolvedPath(path) UTF8String], &buf) != 0) {
+    return;
+  }
+  NSString *legacy = [[cachePath stringByDeletingLastPathComponent]
+                       stringByAppendingPathComponent:
+                         [deviceVolumeID(resolvedPath(path), &buf)
+                           stringByAppendingString:@".DS_Store"]];
+  if ([fm fileExistsAtPath:legacy]) {
+    [fm moveItemAtPath:legacy toPath:cachePath error:NULL];
+  }
 }
 
 + (BOOL)isNetworkMount:(NSString *)path

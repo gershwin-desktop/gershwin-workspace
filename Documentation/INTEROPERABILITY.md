@@ -61,32 +61,31 @@ update the per-file FinderInfo xattr).
 
 ## 1. Per-folder `.DS_Store` (primary for writable directories)
 
-Location: `$FOLDER/.DS_Store`
+Location: `.DS_Store` of the parent folder (a folder's own store for its items)
 
 Written by `DSStoreInfo saveToPath:` via `GWViewSettingsManager writeSettings:`.
 Used whenever the folder is writable and network-store writes are not blocked
 (`DSDontWriteNetworkStores`).
 
-### Directory-level entries (keyed by `.` in the file)
+### Folder view and window records (parent's store)
 
-Stored as DSStore entries on the special filename `.`:
+Finder 10.6 keeps a folder's view and window records in the **parent's**
+`.DS_Store`, under the folder's name, and ignores `.` records in the folder's
+own store (evidence E1, E2).  Only a volume root and the home folder keep them
+as `.` in their own store (E14).  The records are:
 
-| Setting                         | Code | Notes                              |
-| ------------------------------- | ---- | ---------------------------------- |
-| View style (icon/list/columns)  | `vstl` / `icnv`, `Nlsv`, `clmv`, `glyv`, `Flwv` | |
-| Icon size                       | `icvo` (iconSize slot) | 1-512, 0 = unset |
-| Icon arrangement (free/grid)    | `icvo` (arrangement slot) | |
-| Label position (bottom/right)   | `icvo` (labelPosition slot) | |
-| Grid spacing                    | `icvo` (gridSpacing slot) | |
-| Background color                | `BKGD`   | RGB, 16-bit components |
-| Background image                | `BKGD`   | path |
-| Sidebar width                   | `icvo` (sidebarWidth slot) | |
-| Window geometry                 | `bwsp` + `fwi0` | GNUstep saved-frame parsed and stored as DS-Store content rect |
-| List view settings (sort column, ascending, text/icon size, column widths/visibility) | `lsvp` | |
+| Setting                         | Record | Notes                              |
+| ------------------------------- | ------ | ---------------------------------- |
+| View style (icon/list/columns)  | `vstl` (`icnv`, `Nlsv`, `clmv`, `glyv`, `Flwv`) | only after "Always open in" (E5) |
+| Icon view options (size, text size, label position, grid spacing, arrange by, item info, icon preview, background colour or picture, scroll position) | `icvp` | created only when an option changed (E6) |
+| List view options (sort column, per-column direction, text/icon size, column widths/order/visibility, relative dates, calculate sizes, scroll position) | `lsvp` | wins over legacy `lsvo`/`LSVO`/`lsvt` (E10) |
+| Window geometry, toolbar, sidebar width | `bwsp` | origin bottom left (E7); bars other than the toolbar and the sidebar width are global (E13) |
 
-These are written by the shared helper
-`DSStoreInfo +writeStoreEntriesForInfo:key:toStore:` (key `.` for the folder
-file, or the full directory path for the volume cache - see below).
+The pre-10.6 records (`BKGD`, `fwi0`, `fwsw`, `iarr`, `icsp`, `icvo`, `lblp`,
+`vSrn`) are no longer written; they are read only when nothing newer exists
+and are left untouched in the store.
+
+These are written by `DSStoreInfo` through `GWViewSettingsManager`.
 
 ### Per-file entries (keyed by the on-disk filename)
 
@@ -94,7 +93,7 @@ file, or the full directory path for the volume cache - see below).
 | --------- | ------ | ---------------------------------- |
 | Icon position | `Iloc` | 16-byte blob; icon CENTER, top-left origin, y grows downward |
 | Comment   | `cmmt` | ustr |
-| Label color | `lclr` | long |
+| Label color | (none) | Finder 10.6 keeps a label only in FinderInfo `fdFlags` (section 3) and ignores `lclr`; an `lclr` already in a store is still read |
 
 Keys are the **bare, on-disk filename** (e.g. `Desktop`, not the translated
 display name `Schreibtisch`).  This matches the macOS Finder convention
@@ -115,7 +114,7 @@ directory's own record (`.` / the path) is never pruned.
 
 `GWViewSettingsManager readSettings:` reads in this order:
 
-1.  `$FOLDER/.DS_Store` (if it loads, it wins)
+1.  the parent's `.DS_Store` (for a volume root or the home folder: its own store)
 2.  the volume cache for the folder's volume
 3.  empty defaults (fresh, unloaded `DSStoreInfo`)
 
@@ -156,7 +155,7 @@ layout (big-endian):
 | ----- | ------ | ----- |
 | Type code (`fdType`) | 0-3 | FourCharCode |
 | Creator code (`fdCreator`) | 4-7 | FourCharCode |
-| Flags (`fdFlags`) | 8-9 | bit 0 `kIsOnDesk`, bits 1-3 label colour (`kColor` = 0x000E), bit 7 `kHasCustomIcon`, bit 8 `kIsStationery`, bit 9 `kNameLocked`, bit 11 `kIsInvisible`, bit 12 `kIsAlias` |
+| Flags (`fdFlags`) | 8-9 | bit 0 `kIsOnDesk`, bits 1-3 label colour (`kColor` = 0x000E), bit 4 extension hidden (0x0010), bit 10 `kHasCustomIcon` (0x0400), bit 11 `kIsStationery`, bit 12 `kNameLocked` (0x1000), bit 14 `kIsInvisible` (0x4000), bit 15 `kIsAlias` (0x8000) |
 | Icon position (`fdLocation`) | v at 10-11, h at 12-13 | big-endian int16; (-1,-1) = none |
 | Extended info / `fdFldr` | 14-31 | carried forward untouched |
 
@@ -168,12 +167,18 @@ both" behaviour.  `(0,0)` and `(-1,-1)` are treated as "no position".
 
 ### Labels and tags
 
-- The label colour uses the **same numeric encoding** everywhere: the
-  `fdFlags` `kColor` field (bits 1-3), the `.DS_Store` `lclr` record, and
-  `GSFileLabel` / `DSStoreLabelColor` all agree on 1=Red, 2=Orange, 3=Yellow,
-  4=Green, 5=Blue, 6=Purple, 7=Grey (0=none).  `GSFileLabel` is deliberately
-  identical to `DSStoreLabelColor` so the two storage encodings never
-  disagree.
+- `GSFileLabel` (and `DSStoreLabelColor`, deliberately identical) number
+  the labels in menu order: 1=Red, 2=Orange, 3=Yellow, 4=Green, 5=Blue,
+  6=Purple, 7=Grey (0=none).  Every label API of `GSFileMetadata` speaks
+  this order.
+- The `fdFlags` `kColor` field (bits 1-3) holds **Finder's colour number**
+  instead, read off a 10.6 Finder (evidence E24): 1=Grey, 2=Green,
+  3=Purple, 4=Blue, 5=Yellow, 6=Red, 7=Orange - so Red is `fdFlags` 0x000C,
+  Orange 0x000E.  The same numbers follow the newline in the colour tags of
+  later systems (`Red\n6`).  `+[GSFileMetadata labelForFinderColor:]` and
+  `+finderColorForLabel:` are the one conversion; nothing else may shift
+  label bits.  (AppleScript's `label index` is a third order, 1=Orange ..
+  7=Grey, equal to 8 minus the colour number; Workspace never stores it.)
 - Setting a label writes both the `fdFlags` bits **and** the matching
   standard tag in `com.apple.metadata:_kMDItemUserTags` (see section 5
   below).  Reading prefers `fdFlags`; if that is unset it falls back to the

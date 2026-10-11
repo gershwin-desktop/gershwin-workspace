@@ -87,17 +87,13 @@ Ground truth is `MANIFEST.plist`.  macOS 10.6 label numbering: 0 none,
 ### Finding: 10.6 uses the classic label palette (grey/blue, not red/green)
 
 When the VNC eyeball first showed **grey** on `file01` and **blue** on
-`file05`, that looked wrong (the fixtures intend red/green).  It is **not** a
-Gershwin bug - it is the Snow Leopard label palette.  The label *number* is
-correct; only the *colour* differs by OS palette version:
-
-- Gershwin / modern macOS palette: `1=Red 2=Orange 3=Yellow 4=Green 5=Blue 6=Purple 7=Grey`.
-- 10.6 classic palette: `1=Grey 2=Green 3=Purple 4=Blue 5=Orange 6=Red 7=Yellow`.
-
-`file01` carries `fdFlags 0x4002` => label **position 1** => classic palette =
-**Grey** (exactly what the Mac showed).  `file05` carries `0x4408` => position
-**4** => classic = **Blue**.  So Gershwin's `labelNumber` decode
-(`(flags >> 1) & 0x7`) is right; the coloured swatch is palette-dependent.
+`file05` although the fixtures intended red and green, Gershwin decoded the
+label wrongly: the `fdFlags` colour field holds Finder's colour number
+(1=Grey 2=Green 3=Purple 4=Blue 5=Yellow 6=Red 7=Orange, evidence E24), not
+Gershwin's menu order (1=Red .. 7=Grey).  `file01` carries `fdFlags 0x4002`
+=> colour 1 => Grey, `file05` `0x4408` => colour 4 => Blue, exactly what the
+Mac showed.  `GSFileMetadata` now converts with `+labelForFinderColor:` /
+`+finderColorForLabel:`; there is no palette difference between OS versions.
 (Finder's AppleScript `label index` property is a red herring - it returns
 `8 - position`, hence "7" for `file01`.)
 

@@ -43,6 +43,7 @@
 {
   NSView *mainView;
   NSView *topBox;
+  BOOL showStatusBar; /* the item count line (bwsp ShowStatusBar) */
   NSTextField *elementsLabel;
   NSTextField *spaceLabel;
   GWViewerPathsPopUp *pathsPopUp;
@@ -112,9 +113,9 @@
 - (void)setupDSStoreWatcher;
 - (void)teardownDSStoreWatcher;
 - (void)reapplyDSStoreSettings;
-- (void)applyDSStoreSettingsToIconView:(id)iconView;
-- (void)applyDSStoreSettingsToListView:(id)listView;
-- (void)applyDSStoreSettingsToBrowserView:(id)browserView;
+- (void)applyDSStoreSettingsIncludingScrollPosition:(BOOL)restoreScroll;
+- (BOOL)isStatusBarShown;
+- (void)setStatusBarShown:(BOOL)shown;
 - (DSStoreInfo *)dsStoreInfo;
 - (GWViewSettingsManager *)settingsManager;
 

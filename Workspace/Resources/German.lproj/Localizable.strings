@@ -665,9 +665,7 @@
 
 "Put Away" = "Wiederherstellen";
 
-"Quick Look" = "Kurzblick";
-
-"Quick Look \"item\"" = "Quick Look \"item\"";
+"Look Inside" = "Hineinsehen";
 
 "Quit" = "Beenden";
 
@@ -776,6 +774,8 @@
 "Show Recycler" = "Papierkorb anzeigen";
 
 "Show Sidebar" = "Seitenleiste zeigen";
+"Show Path Bar" = "Pfadleiste zeigen";
+"Show Status Bar" = "Statusleiste zeigen";
 
 "Show Tabbed Shelf" = "Fach anzeigen";
 

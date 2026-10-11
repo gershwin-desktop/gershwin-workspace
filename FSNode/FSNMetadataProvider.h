@@ -41,6 +41,25 @@
  * next read reflects external changes). */
 - (void)invalidateCaches;
 
+@optional
+
+/* Finder label number 0..7 (0 = none); the order the list view's Label column
+ * sorts by. */
+- (NSInteger)labelIndexForPath:(NSString *)path;
+
+/* Finder label name ("Red", ...), or nil when the file has no label. */
+- (NSString *)labelNameForPath:(NSString *)path;
+
+/* Finder comment, or nil when there is none. */
+- (NSString *)commentForPath:(NSString *)path;
+
+/* YES if the file's Finder metadata asks to show its name without the
+ * extension. */
+- (BOOL)isExtensionHiddenForPath:(NSString *)path;
+
+/* YES if the file's Finder metadata marks its name as not renameable. */
+- (BOOL)isNameLockedForPath:(NSString *)path;
+
 @end
 
 #endif /* FSN_METADATA_PROVIDER_H */

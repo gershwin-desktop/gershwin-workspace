@@ -90,11 +90,17 @@ typedef NS_ENUM(NSInteger, DSStoreSortBy) {
 extern "C" {
 #endif
 
+extern NSString * const DSStoreCommentErrorDomain;
+
 @interface DSStore : NSObject
 {
     NSString *_filePath;
     DSBuddyAllocator *_allocator;
     NSMutableArray *_entries;
+    /* (filename, code) -> entry, built on the first lookup and dropped by
+     * every change but -setEntry:; without it writing a folder of thousands
+     * of icons scanned the whole list once per icon. */
+    NSMutableDictionary *_entryIndex;
     BOOL _isLoaded;
     BOOL _dirty;
     
@@ -131,6 +137,8 @@ extern "C" {
 - (void)setEntry:(DSStoreEntry *)entry;
 - (void)removeEntryForFilename:(NSString *)filename code:(NSString *)code;
 - (void)removeAllEntriesForFilename:(NSString *)filename;
+/* All records of every file in @p filenames, in one pass over the store. */
+- (void)removeAllEntriesForFilenames:(NSSet *)filenames;
 /* Remove every entry for @p filename whose code is in @p codes, keeping all
  * other codes (unknown or not owned by the caller).  Used for a cooperative
  * merge where only the caller's known records are replaced. */
@@ -211,6 +219,19 @@ extern "C" {
 
 // File metadata
 - (NSString *)commentsForFilename:(NSString *)filename;
+
+/**
+ * Store (or, for an empty comment, remove) the cmmt record of the item at
+ * path in the .DS_Store of its parent folder, as Finder does next to the
+ * comment attribute.  Only that record is touched, so positions and view
+ * settings other tools keep in the store survive.  The store is created when
+ * a comment is to be stored and none exists.  A store that cannot be read or
+ * written is an error (domain DSStoreCommentErrorDomain); it is never
+ * replaced.  The root has no parent folder and needs no record.
+ */
++ (BOOL)setComment:(NSString *)comment
+     forItemAtPath:(NSString *)path
+             error:(NSError **)error;
 - (void)setCommentsForFilename:(NSString *)filename comments:(NSString *)comments;
 - (long long)logicalSizeForFilename:(NSString *)filename;
 - (void)setLogicalSizeForFilename:(NSString *)filename size:(long long)size;

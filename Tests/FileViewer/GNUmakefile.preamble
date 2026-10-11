@@ -1,4 +1,19 @@
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+
+# The DSStore back-end, linked as separate objects by every tool that reads
+# or writes a store.
+DSSTORE_SOURCES = ../../DSStore/DSStore.m \
+                  ../../DSStore/DSStoreCodecs.m \
+                  ../../DSStore/DSStoreEntry.m \
+                  ../../DSStore/DSBuddyAllocator.m \
+                  ../../DSStore/SimpleColor.m
+
+# DSStoreInfo mirrors view style and window bounds into the folder's
+# FinderInfo through GSFileMetadata, so every tool that has DSStoreInfo in it
+# needs these as well.
+METADATA_SOURCES = ../../GWMetadata/GSFileMetadata.m \
+                   ../../GWMetadata/GSAppleDouble.m \
+                   ../../GWMetadata/GWMetaXattr.m
 # Include path so in-process test sources (compiled via #include of the .m
 # under test) find their headers under Workspace/FileViewer/.
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/FileViewer
@@ -15,14 +30,7 @@ t_GWAlignLogically_TOOL_LIBS += -lFSNode -lgnustep-gui
 # GSFileMetadata (view style / window geometry fallback), so link those
 # sources too.  DSStoreInfo references NSColor, so link gnustep-gui too.
 ADDITIONAL_INCLUDE_DIRS += -I../../DSStore -I../../GWMetadata
-t_DSStoreInfo_OBJC_FILES += ../../DSStore/DSStore.m \
-                            ../../DSStore/DSStoreCodecs.m \
-                            ../../DSStore/DSStoreEntry.m \
-                            ../../DSStore/DSBuddyAllocator.m \
-                            ../../DSStore/SimpleColor.m \
-                            ../../GWMetadata/GSFileMetadata.m \
-                            ../../GWMetadata/GSAppleDouble.m \
-                            ../../GWMetadata/GWMetaXattr.m
+t_DSStoreInfo_OBJC_FILES += $(DSSTORE_SOURCES) $(METADATA_SOURCES)
 t_DSStoreInfo_TOOL_LIBS += -lgnustep-gui
 
 # t_GWViewSettingsManager compiles the facade in-process; its collaborators
@@ -31,68 +39,47 @@ t_DSStoreInfo_TOOL_LIBS += -lgnustep-gui
 t_GWViewSettingsManager_OBJC_FILES += ../../Workspace/FileViewer/DSStoreInfo.m \
                             ../../Workspace/FileViewer/GWVolumeCache.m \
                             ../../Workspace/FileViewer/GWVolumeID.m \
-                            ../../DSStore/DSStore.m \
-                            ../../DSStore/DSStoreCodecs.m \
-                            ../../DSStore/DSStoreEntry.m \
-                            ../../DSStore/DSBuddyAllocator.m \
-                            ../../DSStore/SimpleColor.m
+                            $(DSSTORE_SOURCES) $(METADATA_SOURCES)
 t_GWViewSettingsManager_TOOL_LIBS += -lgnustep-gui
+
+# t_GWViewSettingsRouting includes the facade the same way.
+t_GWViewSettingsRouting_OBJC_FILES += ../../Workspace/FileViewer/DSStoreInfo.m \
+                            ../../Workspace/FileViewer/GWVolumeCache.m \
+                            ../../Workspace/FileViewer/GWVolumeID.m \
+                            $(DSSTORE_SOURCES) $(METADATA_SOURCES)
+t_GWViewSettingsRouting_TOOL_LIBS += -lgnustep-gui
 
 # t_DSStorePreserve links the DSStore back-end as separate objects so it can
 # seed files with unknown/partial records and verify they survive a write
 # cycle.
-t_DSStorePreserve_OBJC_FILES += ../../DSStore/DSStore.m \
-                            ../../DSStore/DSStoreCodecs.m \
-                            ../../DSStore/DSStoreEntry.m \
-                            ../../DSStore/DSBuddyAllocator.m \
-                            ../../DSStore/SimpleColor.m
+t_DSStorePreserve_OBJC_FILES += $(DSSTORE_SOURCES) $(METADATA_SOURCES)
 t_DSStorePreserve_TOOL_LIBS += -lgnustep-gui
 
 # t_DSStoreWriter exercises the writer end-to-end (build a file, read it back
 # with ds_store on the Mac oracle).  Links the DSStore back-end as objects.
-t_DSStoreWriter_OBJC_FILES += ../../DSStore/DSStore.m \
-                            ../../DSStore/DSStoreCodecs.m \
-                            ../../DSStore/DSStoreEntry.m \
-                            ../../DSStore/DSBuddyAllocator.m \
-                            ../../DSStore/SimpleColor.m
+t_DSStoreWriter_OBJC_FILES += $(DSSTORE_SOURCES)
 t_DSStoreWriter_TOOL_LIBS += -lgnustep-gui
 
 # t_DSStoreInterop loads real Mac .DS_Store fixtures (Iloc only) and asserts
 # Gershwin parses them exactly, without inventing view/window records.  Links
 # the DSStore back-end as objects.
-t_DSStoreInterop_OBJC_FILES += ../../DSStore/DSStore.m \
-                            ../../DSStore/DSStoreCodecs.m \
-                            ../../DSStore/DSStoreEntry.m \
-                            ../../DSStore/DSBuddyAllocator.m \
-                            ../../DSStore/SimpleColor.m
+t_DSStoreInterop_OBJC_FILES += $(DSSTORE_SOURCES)
 t_DSStoreInterop_TOOL_LIBS += -lgnustep-gui
 
 # t_DSStoreVTypes locks in multi-record-type writers: folder self-entry (vstl,
 # icvo, bwsp) plus child Iloc, round-tripped.  Links the DSStore back-end.
-t_DSStoreVTypes_OBJC_FILES += ../../DSStore/DSStore.m \
-                            ../../DSStore/DSStoreCodecs.m \
-                            ../../DSStore/DSStoreEntry.m \
-                            ../../DSStore/DSBuddyAllocator.m \
-                            ../../DSStore/SimpleColor.m
+t_DSStoreVTypes_OBJC_FILES += $(DSSTORE_SOURCES)
 t_DSStoreVTypes_TOOL_LIBS += -lgnustep-gui
 
 # t_DSStoreRecordTypes exercises EVERY record type the writer supports
 # (folder self-entry settings + per-file records), round-tripped.  Links the
 # DSStore back-end.
-t_DSStoreRecordTypes_OBJC_FILES += ../../DSStore/DSStore.m \
-                            ../../DSStore/DSStoreCodecs.m \
-                            ../../DSStore/DSStoreEntry.m \
-                            ../../DSStore/DSBuddyAllocator.m \
-                            ../../DSStore/SimpleColor.m
+t_DSStoreRecordTypes_OBJC_FILES += $(DSSTORE_SOURCES)
 t_DSStoreRecordTypes_TOOL_LIBS += -lgnustep-gui
 
 # t_DSStoreViewWindowInterop: every view style (vstl) round-trips, plus the
 # browser window frame (bwsp) and legacy window geometry (fwi0); and a real
 # Mac 10.6 .DS_Store is read without inventing view/window records.  Links the
 # DSStore back-end.
-t_DSStoreViewWindowInterop_OBJC_FILES += ../../DSStore/DSStore.m \
-                            ../../DSStore/DSStoreCodecs.m \
-                            ../../DSStore/DSStoreEntry.m \
-                            ../../DSStore/DSBuddyAllocator.m \
-                            ../../DSStore/SimpleColor.m
+t_DSStoreViewWindowInterop_OBJC_FILES += $(DSSTORE_SOURCES)
 t_DSStoreViewWindowInterop_TOOL_LIBS += -lgnustep-gui

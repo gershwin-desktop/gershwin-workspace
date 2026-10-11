@@ -36,6 +36,9 @@
 #include <X11/Xatom.h>
 #endif
 #include <stdint.h>
+#import "DSStoreInfo.h"
+#import "GWViewSettingsManager.h"
+#import "GWFolderViewOptions.h"
 #import "GWViewersManager.h"
 #import "GWViewer.h"
 #import "GWSpatialViewer.h"
@@ -732,8 +735,13 @@ static GWViewersManager *vwrsmanager = nil;
   } else {
     [self setPendingOpenAnimationRectFromFocusedViewerForNode: node];
   }
-  int defaultType = [gworkspace defaultViewerType];
-  if (defaultType == SPATIAL) {
+  /* A folder Finder (or this Workspace) kept without a toolbar opens as a
+   * spatial window, one kept with a toolbar as a browsing window, whatever
+   * kind of window folders open in otherwise. */
+  DSStoreInfo *info =
+    [[GWViewSettingsManager managerForDirectoryPath: [node path]] readSettings];
+  if ([GWFolderViewOptions opensSpatially: info
+                                byDefault: ([gworkspace defaultViewerType] == SPATIAL)]) {
     [self viewerOfType: SPATIAL
               showType: nil
                forNode: node

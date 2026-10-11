@@ -110,8 +110,10 @@ typedef struct {
  *
  * @param path   Filesystem path
  * @param prefix Optional name prefix filter (e.g. "user.com.apple.")
- * @return A newly allocated list, or NULL on failure.
- *         Free with gs_xattr_list_free().
+ * @return A newly allocated list (count 0 when the file has no matching
+ *         attributes or the filesystem has none), or NULL on failure with
+ *         errno set.  An attribute with an empty value has value NULL and
+ *         size 0.  Free with gs_xattr_list_free().
  */
 gs_xattr_list_t *gs_xattr_list_for_path(const char *path, const char *prefix);
 
@@ -122,6 +124,15 @@ void gs_xattr_list_free(gs_xattr_list_t *list);
 
 #ifdef __cplusplus
 }
+#endif
+
+/* GNUstep's -fileSystemRepresentation returns UTF-16 on Windows, but the gs_*xattr
+   functions take narrow strings, so use the UTF-8 form there. On
+   the other platforms this is the plain -fileSystemRepresentation call. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
 #endif
 
 #endif /* GWMETAXATTR_H */

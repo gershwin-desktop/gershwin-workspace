@@ -1,0 +1,21 @@
+/* Strings of Look Inside, Workspace's space bar preview
+ * (Workspace/LookInside). */
+
+"1 item" = "1 onderdeel";
+"%lu items" = "%lu onderdelen";
+"Kind" = "Soort";
+"Contents" = "Inhoud";
+"Size" = "Grootte";
+"Calculating..." = "Bezig met berekenen...";
+"Modified" = "Gewijzigd";
+"Play" = "Speel af";
+"Stop" = "Stop";
+"Previous" = "Vorige";
+"Next" = "Volgende";
+"All Items" = "Alle onderdelen";
+"Full Screen" = "Volledig scherm";
+"Exit Full Screen" = "Volledig scherm verlaten";
+"Open" = "Open";
+"Open with %@" = "Open met %@";
+"%lu Items" = "%lu onderdelen";
+"%lu of %lu" = "%lu van %lu";

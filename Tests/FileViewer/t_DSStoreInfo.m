@@ -13,14 +13,78 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
+#import "GWTestTemporaryDirectory.h"
+#include <time.h>
 #import "GSFileMetadata.h"
 
 #include "../../Workspace/FileViewer/DSStoreInfo.m"
+
+/* The scale factor the conversions see, set for this process only so the
+ * tests neither depend on nor change the user's own GSScaleFactor. */
+static void
+setTestScaleFactor(float scale)
+{
+  NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+
+  [defs removeVolatileDomainForName: NSArgumentDomain];
+  [defs setVolatileDomain: [NSDictionary dictionaryWithObject:
+                                           [NSNumber numberWithFloat: scale]
+                                                       forKey: @"GSScaleFactor"]
+                  forName: NSArgumentDomain];
+}
+
+/* CPU seconds -saveToPath: takes for a folder of @p count icon positions. */
+static double
+cpuSecondsToSave(NSUInteger count)
+{
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *dir = [GWTestTemporaryDirectory()
+                    stringByAppendingPathComponent: @"t_DSStoreInfo_big"];
+  DSStoreInfo *big;
+  clock_t start;
+  double spent;
+  NSUInteger i;
+  NSUInteger reps = 0;
+
+  [fm removeFileAtPath: dir handler: nil];
+  [fm createDirectoryAtPath: dir attributes: nil];
+  big = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
+  for (i = 0; i < count; i++)
+    {
+      NSString *name = [NSString stringWithFormat: @"file%lu.txt", (unsigned long)i];
+      DSStoreIconInfo *icon = [[[DSStoreIconInfo alloc] initWithFilename: name] autorelease];
+
+      icon.position = NSMakePoint((i % 100) * 10, (i / 100) * 10);
+      icon.hasPosition = YES;
+      [big setIconInfo: icon forFilename: name];
+    }
+  /* clock() ticks only 128 times a second on FreeBSD, where one save of a
+   * thousand positions took about one tick; saving again until a quarter of
+   * a second has passed makes the tick a small part of what is measured. */
+  start = clock();
+  do
+    {
+      NSAutoreleasePool *inner = [NSAutoreleasePool new];
+
+      [fm removeFileAtPath: [dir stringByAppendingPathComponent: @".DS_Store"] handler: nil];
+      [big saveToPath: [dir stringByAppendingPathComponent: @".DS_Store"]];
+      [inner release];
+      reps++;
+    }
+  while (clock() - start < CLOCKS_PER_SEC / 4);
+  spent = (double)(clock() - start) / CLOCKS_PER_SEC / reps;
+  [fm removeFileAtPath: dir handler: nil];
+  [pool release];
+  return spent;
+}
 
 int
 main(void)
 {
   NSAutoreleasePool *arp = [NSAutoreleasePool new];
+
+  setTestScaleFactor(1.0);
 
   /* --- viewer-prefs -> DSStoreInfo mapping (the migration path) --- */
   {
@@ -88,7 +152,7 @@ main(void)
    *     now persist to) --- */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                       [NSString stringWithFormat: @"t_dsstore_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
@@ -97,20 +161,24 @@ main(void)
 
     DSStoreInfo *w = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
     [w takeValuesFromViewerPrefs: @{ @"viewtype" : @"List",
-                                     @"geometry" : NSStringFromRect(NSMakeRect(100, 150, 600, 400)),
-                                     @"hligh_table_col" : @2,   /* dateModified */
-                                     @"list_view_columns" : @{
-                                         @"0" : @{ @"identifier" : @0, @"width" : @220 },
-                                         @"2" : @{ @"identifier" : @2, @"width" : @140 }
-                                     } }];
+                                     @"geometry" : NSStringFromRect(NSMakeRect(100, 150, 600, 400)) }];
+    /* List options come from the list view itself (GWFolderViewOptions),
+     * not from the viewer prefs. */
+    w.sortColumn = @"dateModified";
+    w.hasSortColumn = YES;
+    w.listColumns = @{ @"name" : @{ @"width" : @220 },
+                       @"dateModified" : @{ @"width" : @140 } };
     DSStoreIconInfo *icon =
       [[[DSStoreIconInfo alloc] initWithFilename: @"doc.txt"] autorelease];
     icon.position = NSMakePoint(80, 160);
     icon.hasPosition = YES;
     [w setIconInfo: icon forFilename: @"doc.txt"];
 
+    /* The folder's records go to its parent's store, the icon positions to
+     * its own [O:E1]. */
     NSString *dsPath = [dir stringByAppendingPathComponent: @".DS_Store"];
     PASS([w saveToPath: dsPath], "saveToPath writes a .DS_Store binary");
+    PASS([w saveToParentStore], "saveToParentStore writes the folder's records");
     PASS([fm fileExistsAtPath: dsPath], "the .DS_Store file exists on disk");
 
     DSStoreInfo *r = [DSStoreInfo infoForDirectoryPath: dir];
@@ -216,7 +284,7 @@ main(void)
    * ghosts collide with live files on reopen, so loading must drop them. */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                       [NSString stringWithFormat: @"t_dsstore_prune_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
@@ -270,7 +338,7 @@ main(void)
    * live on-screen layout and DROP any foreign colliding/stale position. */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
                       [NSString stringWithFormat: @"t_dsstore_live_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
@@ -339,13 +407,15 @@ main(void)
    * load from that fallback and must mirror back into it on save. */
   {
     NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory() stringByAppendingPathComponent:
+    NSString *dir = [GWTestTemporaryDirectory() stringByAppendingPathComponent:
         [NSString stringWithFormat: @"t_fi_%d", (int)getpid()]];
     [fm removeFileAtPath: dir handler: nil];
     [fm createDirectoryAtPath: dir attributes: nil];
 
     /* Write a folder FinderInfo (DInfo) carrying view=column + a window rect,
-     * with NO .DS_Store present - this is the classic macOS spatial case. */
+     * with NO .DS_Store present - this is the classic macOS spatial case.
+     * Only the window rect is taken from it: a frView of 0, which every
+     * folder FinderInfo has, would read as a chosen icon view. */
     GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
     [md setViewStyleCodeForDirectory: @"clmv"];
     [md setWindowBoundsForDirectory: NSMakeRect(50, 60, 400, 300)];
@@ -357,26 +427,23 @@ main(void)
     /* DSStoreInfo should fall back to it when there is no .DS_Store. */
     DSStoreInfo *info = [DSStoreInfo infoForDirectoryPath: dir];
     PASS(info != nil && info.loaded, "FinderInfo-only folder loads");
-    PASS(info.hasViewStyle && info.viewStyle == DSStoreViewStyleColumn,
-         "view style read from folder FinderInfo fallback");
+    PASS(info.hasViewStyle == NO,
+         "no view style is read from folder FinderInfo");
     PASS(info.hasWindowFrame
          && NSEqualRects(info.windowFrame,
                          [DSStoreInfo gnustepRectFromDSStoreRect:
                             NSMakeRect(50, 60, 400, 300)]),
          "window geometry read from folder FinderInfo fallback (GNUstep coords)");
 
-    /* Saving a different view/window must mirror into FinderInfo. */
+    /* A save leaves the folder's FinderInfo as it was: the stores carry the
+     * view and window, and Finder 10.6 does not read them from there. */
     [info takeValuesFromViewerPrefs: @{ @"viewtype" : @"List",
                                         @"geometry" : NSStringFromRect(NSMakeRect(100, 150, 600, 400)) }];
     PASS([info saveToPath: [dir stringByAppendingPathComponent: @".DS_Store"]],
-         "saveToPath writes .DS_Store and mirrors FinderInfo");
+         "saveToPath writes .DS_Store");
     GSFileMetadata *re = [GSFileMetadata metadataForFileAtPath: dir];
-    PASS(re != nil && [[re viewStyleCodeForDirectory] isEqualToString: @"Nlsv"],
-         "save mirrors view style into folder FinderInfo");
-    NSRect expected = [info dsStoreWindowFrameForScreen: [DSStoreInfo safeMainScreen]];
-    NSRect got = [re windowBoundsForDirectory];
-    PASS(!NSEqualRects(got, NSZeroRect) && NSEqualRects(got, expected),
-         "save mirrors window geometry into folder FinderInfo");
+    PASS(re != nil && NSEqualRects([re windowBoundsForDirectory], NSMakeRect(50, 60, 400, 300)),
+         "save leaves the folder FinderInfo alone");
 
     [fm removeFileAtPath: dir handler: nil];
   }
@@ -385,41 +452,17 @@ main(void)
      linear time to write: the per-file loop used to ask for a copy of the
      whole position dictionary once per file --- */
   {
-    NSFileManager *fm = [NSFileManager defaultManager];
-    NSString *dir = [NSTemporaryDirectory()
-                      stringByAppendingPathComponent: @"t_DSStoreInfo_big"];
-    DSStoreInfo *big;
-    NSDate *start;
-    NSTimeInterval spent;
-    NSUInteger i;
+    double small = cpuSecondsToSave(1000);
+    double large = cpuSecondsToSave(3000);
 
-    [fm removeFileAtPath: dir handler: nil];
-    [fm createDirectoryAtPath: dir attributes: nil];
-
-    big = [[[DSStoreInfo alloc] initWithDirectoryPath: dir] autorelease];
-    for (i = 0; i < 3000; i++)
-      {
-        NSString *name = [NSString stringWithFormat: @"file%lu.txt",
-                                   (unsigned long)i];
-        DSStoreIconInfo *icon =
-          [[[DSStoreIconInfo alloc] initWithFilename: name] autorelease];
-
-        icon.position = NSMakePoint((i % 100) * 10, (i / 100) * 10);
-        icon.hasPosition = YES;
-        [big setIconInfo: icon forFilename: name];
-      }
-
-    start = [NSDate date];
-    PASS([big saveToPath: [dir stringByAppendingPathComponent: @".DS_Store"]],
-         "a folder of three thousand icon positions writes its .DS_Store");
-    spent = -[start timeIntervalSinceNow];
-    printf("writing 3000 icon positions took %.0f ms\n", spent * 1000.0);
-    /* 227 ms when the dictionary is fetched once, 1.6 s when it was fetched
-       per file - and the memory it took grew with the square of the count. */
-    PASS(spent < 0.8,
+    printf("writing 1000 / 3000 icon positions took %.0f / %.0f ms of CPU\n",
+           small * 1000.0, large * 1000.0);
+    /* Process CPU time and a ratio rather than a wall-clock limit: the suite
+       runs next to builds and other suites, which made a fixed limit fail on
+       a loaded machine.  Three times the icons take about three times as
+       long; fetching the dictionary per file made it nine. */
+    PASS(small > 0 && large < small * 6.0,
          "writing three thousand icon positions stays linear");
-
-    [fm removeFileAtPath: dir handler: nil];
   }
 
   [arp release];

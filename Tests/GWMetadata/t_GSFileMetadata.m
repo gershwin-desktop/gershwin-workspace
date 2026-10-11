@@ -226,38 +226,56 @@ main(void)
          "labelNumber picks the standard colour tag among custom tags");
   }
 
-  /* --- GSFileLabel encoding is the shared order (1=Red..7=Grey): the same
-   * values as DSStoreLabelColor, so the .DS_Store lclr record and the
-   * FinderInfo fdFlags label never disagree --- */
+  /* --- GSFileLabel is the menu order (1=Red..7=Grey), shared with
+   * DSStoreLabelColor; the fdFlags colour field uses Finder's own numbers,
+   * read off a 10.6 Finder in evidence E24 (Orange 0x0E, Red 0x0C,
+   * Yellow 0x0A, Blue 0x08, Purple 0x06, Green 0x04, Grey 0x02) --- */
   {
-    GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
-
-    struct { NSInteger label; NSString *name; } order[] = {
-      { GSFileLabelRed,     @"Red" },
-      { GSFileLabelOrange,  @"Orange" },
-      { GSFileLabelYellow,  @"Yellow" },
-      { GSFileLabelGreen,   @"Green" },
-      { GSFileLabelBlue,    @"Blue" },
-      { GSFileLabelPurple,  @"Purple" },
-      { GSFileLabelGrey,    @"Gray" },
+    struct { NSInteger label; NSString *name; uint16_t bits; } e24[] = {
+      { GSFileLabelRed,     @"Red",    0x0C },
+      { GSFileLabelOrange,  @"Orange", 0x0E },
+      { GSFileLabelYellow,  @"Yellow", 0x0A },
+      { GSFileLabelGreen,   @"Green",  0x04 },
+      { GSFileLabelBlue,    @"Blue",   0x08 },
+      { GSFileLabelPurple,  @"Purple", 0x06 },
+      { GSFileLabelGrey,    @"Gray",   0x02 },
     };
-    NSUInteger n = sizeof(order) / sizeof(order[0]);
+    NSUInteger n = sizeof(e24) / sizeof(e24[0]);
     for (NSUInteger i = 0; i < n; i++)
       {
         GSFileMetadata *m = [[[GSFileMetadata alloc] init] autorelease];
-        [m setLabelNumber: order[i].label];
+        [m setLabelNumber: e24[i].label];
         NSString *tag = [[m userTags] objectAtIndex: 0];
-        BOOL ok = [tag isEqualToString: order[i].name]
-                  && [m labelNumber] == order[i].label;
+        BOOL ok = [tag isEqualToString: e24[i].name]
+                  && [m labelNumber] == e24[i].label;
         PASS(ok, "label %ld maps to its Finder tag name and round-trips",
-             (long)order[i].label);
-      }
+             (long)e24[i].label);
+        PASS(([m finderFlags] & GSFileFinderColorBits) == e24[i].bits,
+             "E24: %s is written as fdFlags colour %#x",
+             [e24[i].name UTF8String], e24[i].bits);
 
-    /* The raw fdFlags label bits must equal the GSFileLabel value (the
-     * shared encoding), so a label set here is readable by Finder. */
-    [md setLabelNumber: GSFileLabelRed];
-    PASS((([md finderFlags] >> 1) & 0x7) == GSFileLabelRed,
-         "fdFlags label bits equal GSFileLabelRed (shared Finder encoding)");
+        /* What 10.6 Finder wrote reads back as the label it showed. */
+        uint8_t fi[32] = {0};
+        fi[9] = (uint8_t)e24[i].bits;
+        GSFileMetadata *r = [[[GSFileMetadata alloc] init] autorelease];
+        [r setFinderInfo: [NSData dataWithBytes: fi length: 32]];
+        PASS([r labelNumber] == e24[i].label,
+             "E24: fdFlags colour %#x reads as %s", e24[i].bits,
+             [e24[i].name UTF8String]);
+      }
+  }
+
+  /* --- Tags written by later Finders carry Finder's colour number after a
+   * newline ("Red\n6"); the number decides, as for fdFlags --- */
+  {
+    PASS([GSFileMetadata labelForTagName: @"Red\n6"] == GSFileLabelRed,
+         "tag 'Red\\n6' is the red label");
+    PASS([GSFileMetadata labelForTagName: @"Gray\n1"] == GSFileLabelGrey,
+         "tag 'Gray\\n1' is the grey label");
+    PASS([GSFileMetadata labelForTagName: @"Rot\n6"] == GSFileLabelRed,
+         "a localized colour tag name is recognised by its number");
+    PASS([GSFileMetadata labelForTagName: @"Projekt\n0"] == GSFileLabelNone,
+         "a tag with colour number 0 is no label");
   }
 
   /* --- custom icon: setting icon data writes it to the resource fork and
@@ -303,6 +321,168 @@ main(void)
          "clearCustomIcon clears the kHasCustomIcon flag");
     PASS([[md resourceFork] length] == 0 || [md resourceFork] == nil,
          "clearCustomIcon drops the resource fork");
+  }
+
+  /* E18: a folder's icon is in its "Icon\r" file; one reader serves files
+   * and folders. */
+  {
+    NSMutableData *icns = [NSMutableData dataWithBytes: "icns" length: 4];
+    uint32_t lenBE = htonl(8);
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSString stringWithFormat: @"%@/gsfm-folder-icon-%d",
+                              NSTemporaryDirectory(), (int)getpid()];
+    NSString *iconFile = [dir stringByAppendingString: @"/Icon\r"];
+    GSFileMetadata *fmd = [[[GSFileMetadata alloc] init] autorelease];
+    GSFileMetadata *imd = [[[GSFileMetadata alloc] init] autorelease];
+
+    [icns appendBytes: &lenBE length: 4];
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [GSFileMetadata invalidateAllCachedMetadata];
+
+    PASS([GSFileMetadata customIconDataForPath: dir] == nil,
+         "folder without the flag has no custom icon");
+    [fmd setCustomIcon: YES];
+    [fmd writeToFileAtPath: dir error: NULL];
+    [GSFileMetadata invalidateAllCachedMetadata];
+    PASS([GSFileMetadata customIconDataForPath: dir] == nil,
+         "flagged folder without an Icon file has no custom icon");
+    [fm createFileAtPath: iconFile contents: [NSData data] attributes: nil];
+    [imd setCustomIconData: icns];
+    [imd setCustomIcon: NO];
+    [imd writeToFileAtPath: iconFile error: NULL];
+    [GSFileMetadata invalidateAllCachedMetadata];
+    PASS([[GSFileMetadata customIconDataForPath: dir] isEqual: icns],
+         "folder icon is read from the Icon file");
+    [fm removeFileAtPath: dir handler: nil];
+    [GSFileMetadata invalidateAllCachedMetadata];
+  }
+
+  /* M7: -setCustomIconData: on a folder uses the Icon file layout, never a
+   * fork in ._folder (10.6 cannot unpack that). */
+  {
+    NSMutableData *icns = [NSMutableData dataWithBytes: "icns" length: 4];
+    uint32_t lenBE = htonl(8);
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSString stringWithFormat: @"%@/gsfm-m7-%d", NSTemporaryDirectory(), (int)getpid()];
+    NSString *iconFile = [dir stringByAppendingString: @"/Icon\r"];
+    int rnd;
+
+    [icns appendBytes: &lenBE length: 4];
+    for (rnd = 0; rnd < 2; rnd++) {
+      GSFileMetadata *md = [[[GSFileMetadata alloc] init] autorelease];
+      NSData *side;
+
+      [fm removeFileAtPath: dir handler: nil];
+      [fm createDirectoryAtPath: dir attributes: nil];
+      [GSFileMetadata invalidateAllCachedMetadata];
+      [md setCustomIconData: icns];
+      md.forceSidecar = (rnd == 1);
+      PASS([md writeToFileAtPath: dir error: NULL], "folder icon write succeeds");
+      [GSFileMetadata invalidateAllCachedMetadata];
+      PASS([fm fileExistsAtPath: iconFile], "folder icon goes to the Icon file");
+      side = [NSData dataWithContentsOfFile: [GSFileMetadata sidecarPathForFilePath: dir]];
+      PASS(side == nil || [[[[[GSAppleDouble alloc] initWithData: side] autorelease] resourceFork] length] == 0,
+           "no resource fork in ._folder");
+      PASS([[GSFileMetadata customIconDataForPath: dir] isEqual: icns], "folder icon reads back");
+      md = [[[GSFileMetadata alloc] init] autorelease];
+      [md clearCustomIcon];
+      md.forceSidecar = (rnd == 1);
+      [md writeToFileAtPath: dir error: NULL];
+      [GSFileMetadata invalidateAllCachedMetadata];
+      PASS(![fm fileExistsAtPath: iconFile], "clearing removes the Icon file");
+    }
+    [fm removeFileAtPath: dir handler: nil];
+    [GSFileMetadata invalidateAllCachedMetadata];
+  }
+
+  /* M4: 10.6 tar writes a quarantine value with a "q/" prefix; the plain
+   * value is what the Mac keeps in the xattr. */
+  {
+    GSAppleDouble *ad = [[[GSAppleDouble alloc] init] autorelease];
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSString stringWithFormat: @"%@/gsfm-m4-%d", NSTemporaryDirectory(), (int)getpid()];
+    NSString *file = [dir stringByAppendingString: @"/q.txt"];
+    NSString *sc = [GSFileMetadata sidecarPathForFilePath: file];
+    GSFileMetadata *md;
+    char buf[64];
+    ssize_t n;
+
+    [ad setEntry: GSAppleDoubleFinderInfo data: [NSMutableData dataWithLength: 32]];
+    [ad setXattr: [@"q/0000;4e8f1c2a;Safari;" dataUsingEncoding: NSUTF8StringEncoding]
+          forKey: @"com.apple.quarantine"];
+    md = [GSFileMetadata metadataFromAppleDoubleData: [ad appleDoubleData]];
+    PASS_EQUAL([md quarantine], @"0000;4e8f1c2a;Safari;", "q/ prefix dropped when reading a sidecar");
+
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [fm createFileAtPath: file contents: [NSData data] attributes: nil];
+    [[ad appleDoubleData] writeToFile: sc atomically: NO];
+    [[[[GSFileMetadata alloc] init] autorelease] _migrateSidecar: sc toFileAtPath: file];
+    n = gs_getxattr([file fileSystemRepresentation], "user.com.apple.quarantine", buf, sizeof buf);
+    PASS(n == 21 && memcmp(buf, "0000;4e8f1c2a;Safari;", 21) == 0, "migrated xattr is the plain value");
+    [fm removeFileAtPath: dir handler: nil];
+  }
+
+  /* 10.6 tar and dot_clean drop a quarantine value that lacks "q/": every
+   * sidecar we write carries it, exactly once. */
+  {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSString stringWithFormat: @"%@/gsfm-m4w-%d", NSTemporaryDirectory(), (int)getpid()];
+    NSString *file = [dir stringByAppendingString: @"/q.txt"];
+    NSString *plain = @"0000;4e8f1c2a;Safari;";
+    NSData *qv = [@"q/0000;4e8f1c2a;Safari;" dataUsingEncoding: NSUTF8StringEncoding];
+    GSFileMetadata *md;
+    GSAppleDouble *ad;
+
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [fm createFileAtPath: file contents: [NSData data] attributes: nil];
+    gs_setxattr([file fileSystemRepresentation], "user.com.apple.quarantine",
+                [plain UTF8String], [plain length], 0);
+    [GSFileMetadata invalidateAllCachedMetadata];
+    md = [GSFileMetadata metadataForFileAtPath: file];
+    PASS_EQUAL([md quarantine], plain, "quarantine xattr reads plain");
+    PASS([md writeSidecarToFileAtPath: file error: NULL], "sidecar written");
+    ad = [[[GSAppleDouble alloc] initWithData:
+      [NSData dataWithContentsOfFile: [GSFileMetadata sidecarPathForFilePath: file]]] autorelease];
+    PASS_EQUAL([[ad extendedAttributes] objectForKey: @"com.apple.quarantine"], qv,
+               "written sidecar carries q/ once");
+    ad = [[[GSAppleDouble alloc] initWithData: [md appleDoubleData]] autorelease];
+    PASS_EQUAL([[ad extendedAttributes] objectForKey: @"com.apple.quarantine"], qv,
+               "appleDoubleData carries q/");
+    md = [GSFileMetadata metadataFromAppleDoubleData: [md appleDoubleData]];
+    PASS_EQUAL([md quarantine], plain, "q/ sidecar reads back plain");
+    md.quarantine = @"q/0000;4e8f1c2a;Safari;";
+    ad = [[[GSAppleDouble alloc] initWithData: [md appleDoubleData]] autorelease];
+    PASS_EQUAL([[ad extendedAttributes] objectForKey: @"com.apple.quarantine"], qv,
+               "an already prefixed value is not doubled");
+    [fm removeFileAtPath: dir handler: nil];
+  }
+
+  /* E15 many.txt: one attribute has an empty value; migrating the sidecar
+   * must carry it as an empty xattr and all the others with it. */
+  {
+    NSFileManager *fm = [NSFileManager defaultManager];
+    NSString *dir = [NSString stringWithFormat: @"%@/gsfm-migrate-%d",
+                              NSTemporaryDirectory(), (int)getpid()];
+    NSString *file = [dir stringByAppendingString: @"/many.txt"];
+    NSString *fix = @"interop/fixtures/finder106/E15-appledouble-tar/many.txt.ad";
+    const char *c = [file fileSystemRepresentation];
+    char buf[16];
+    BOOL ok;
+
+    [fm removeFileAtPath: dir handler: nil];
+    [fm createDirectoryAtPath: dir attributes: nil];
+    [fm createFileAtPath: file contents: [NSData data] attributes: nil];
+    [fm copyPath: fix toPath: [GSFileMetadata sidecarPathForFilePath: file] handler: nil];
+    ok = [[[[GSFileMetadata alloc] init] autorelease]
+           _migrateSidecar: [GSFileMetadata sidecarPathForFilePath: file] toFileAtPath: file];
+    PASS(ok, "sidecar with an empty-valued attribute migrates");
+    PASS(gs_getxattr(c, "user.org.example.a", buf, sizeof buf) == 1, "attribute before the empty one migrated");
+    PASS(gs_getxattr(c, "user.org.example.ccc", NULL, 0) == 300, "long attribute migrated");
+    PASS(gs_getxattr(c, "user.org.example.e", buf, sizeof buf) == 0, "empty attribute migrated as empty xattr");
+    [fm removeFileAtPath: dir handler: nil];
   }
 
   /* --- directory DInfo: view style + window bounds (spatial FinderInfo) --- */

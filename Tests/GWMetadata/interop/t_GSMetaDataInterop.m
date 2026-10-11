@@ -176,7 +176,9 @@ verifyRecord(NSDictionary *rec, NSString *name, NSString *path)
   NSNumber *ln = rec[@"labelNumber"];
   if (ln != nil)
     {
-      PASS([md labelNumber] == [ln integerValue],
+      /* The manifest holds the raw fdFlags colour field (Finder numbers). */
+      PASS([md labelNumber]
+           == [GSFileMetadata labelForFinderColor: [ln unsignedIntegerValue]],
            "%s: colour label %ld matches fdFlags bits", U8(name),
            (long)[ln integerValue]);
     }

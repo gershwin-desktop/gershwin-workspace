@@ -16,6 +16,9 @@ else
 	appimage-icon-test_TOOL_LIBS += -lgnustep-gui
 	# Ensure the linker can find our FSNode framework built in-tree
 	appimage-icon-test_TOOL_LIBS += -L../../FSNode/FSNode.framework -lFSNode
+	# libFSNode needs libGSMetadata, which is not installed yet in a from-source
+	# build; naming it directly makes every linker resolve it from the tree.
+	appimage-icon-test_TOOL_LIBS += -L../../GSMetadata/obj -lGSMetadata
 
 	include $(GNUSTEP_MAKEFILES)/tool.make
 endif

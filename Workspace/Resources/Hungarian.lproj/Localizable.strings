@@ -774,3 +774,6 @@
 "timeout" = "idõtúllépés";
 
 "to use to open the current selection" = "használandó alkalmazás nevét vagy elérési útját";
+
+"Show Path Bar" = "Útvonalsáv megjelenítése";
+"Show Status Bar" = "Állapotsor megjelenítése";

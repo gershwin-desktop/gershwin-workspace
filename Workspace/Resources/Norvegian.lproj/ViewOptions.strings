@@ -1,0 +1,75 @@
+/* View Options panel of the file viewer */
+
+"View Options" = "Visningsvalg";
+
+"Icon size:" = "Ikonstørrelse:";
+
+"Grid spacing:" = "Rutenettavstand:";
+
+"Text size:" = "Tekststørrelse:";
+
+"Label position:" = "Plassering av navn:";
+
+"Bottom" = "Under";
+
+"Right" = "Til høyre";
+
+"Show item info" = "Vis objektinformasjon";
+
+"Show icon preview" = "Vis ikonforhåndsvisning";
+
+"Arrange by:" = "Ordne etter:";
+
+"None" = "Ingen";
+
+"Snap to Grid" = "Juster til rutenett";
+
+"Name" = "Navn";
+
+"Kind" = "Type";
+
+"Date Modified" = "Endringsdato";
+
+"Date Created" = "Opprettelsesdato";
+
+"Date Last Opened" = "Sist åpnet";
+
+"Size" = "Størrelse";
+
+"Label" = "Etikett";
+
+"Version" = "Versjon";
+
+"Comments" = "Kommentarer";
+
+"Background:" = "Bakgrunn:";
+
+"White" = "Hvit";
+
+"Color" = "Farge";
+
+"Picture" = "Bilde";
+
+"Select..." = "Velg...";
+
+"Small" = "Liten";
+
+"Large" = "Stor";
+
+"Show columns:" = "Vis kolonner:";
+
+"Use relative dates" = "Bruk relative datoer";
+
+"Calculate all sizes" = "Beregn alle størrelser";
+
+"Always open in icon view" = "Åpne alltid i ikonvisning";
+
+"Always open in list view" = "Åpne alltid i listevisning";
+
+"This window has no view options." = "Dette vinduet har ingen visningsvalg.";
+
+"Show icons" = "Vis ikoner";
+
+"Show preview column" = "Vis forhåndsvisningskolonne";
+
+"Always open in column view" = "Åpne alltid i kolonnevisning";

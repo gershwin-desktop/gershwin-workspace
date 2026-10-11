@@ -21,7 +21,8 @@ Operation_LANGUAGES = Resources/English Resources/German
 Operation_OBJC_FILES = \
                  Operation.m \
                  FileOpInfo.m \
-                 Functions.m 
+                 Functions.m \
+                 GWMetadataCopier.m
 
 Operation_HEADER_FILES = \
          Operation.h 
@@ -31,6 +32,15 @@ LIBRARIES_DEPEND_UPON += $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
 # FileOpInfo's alias-record operation (WorkspaceCreateAliasOperation)
 # reuses the wire-format code from the FSNode framework.
 ADDITIONAL_INCLUDE_DIRS += -I../FSNode -I../../FSNode
+
+# GWMetadataCopier carries extended attributes and AppleDouble sidecars
+# through copy and move with the Finder-metadata library, which is built
+# before this framework.
+ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata -I../../GWMetadata
+LIBRARIES_DEPEND_UPON += -L../GSMetadata/obj -lGSMetadata
+# ... and records an item's comment in the destination folder's .DS_Store.
+ADDITIONAL_INCLUDE_DIRS += -I../DSStore -I../../DSStore
+LIBRARIES_DEPEND_UPON += -L../DSStore/obj -lDSStore
 # Link against the in-tree FSNode framework explicitly: in a from-source CI
 # build FSNode is not installed, so gnustep-make's sibling-subproject path
 # propagation (triggered by ADDITIONAL_GUI_LIBS, not LIBRARIES_DEPEND_UPON)

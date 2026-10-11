@@ -772,3 +772,6 @@
 
 
 "timeout" = "Tidbegrensning";
+
+"Show Path Bar" = "Vis stilinje";
+"Show Status Bar" = "Vis statuslinje";

@@ -79,6 +79,10 @@
 
 - (id)annotations;
 
+- (void)showFinderInfo;
+
+- (id)finderInfo;
+
 - (NSWindow *)win;
 
 - (void)updateDefaults;

@@ -19,6 +19,12 @@ FSNode_OBJC_FILES = \
          FSNBrowserMatrix.m \
          FSNBrowserColumn.m \
          FSNBrowser.m \
+         FSNBrowserLayout.m \
+         FSNColumnViewOptions.m \
+         FSNBrowserPreviewView.m \
+         FSNBrowserResizeHandle.m \
+         FSNArrangement.m \
+         FSNIconPreview.m \
          FSNIcon.m \
          FSNIconsView.m \
          FSNListView.m \
@@ -26,6 +32,9 @@ FSNode_OBJC_FILES = \
          FSNPlacementEnumerator.m \
           FSNIconPlacement.m \
           FSNAlias.m \
+          FSNAliasFile.m \
+          FSNAliasIcon.m \
+          FSNLocationFile.m \
           FSNSpringLoader.m \
           FSNIconDragSession.m \
 
@@ -42,6 +51,13 @@ FSNode_HEADER_FILES = \
          FSNBrowserMatrix.h \
          FSNBrowserColumn.h \
          FSNBrowser.h \
+         FSNBrowserLayout.h \
+         FSNColumnViewOptions.h \
+         FSNBrowserPreviewView.h \
+         FSNBrowserResizeHandle.h \
+         FSNArrangement.h \
+         FSNIconPreview.h \
+         FSNPreviewProvider.h \
          FSNIcon.h \
          FSNIconsView.h \
          FSNListView.h \
@@ -51,6 +67,9 @@ FSNode_HEADER_FILES = \
          FSNMetadataProvider.h \
           FSNIconPositionStore.h \
           FSNAlias.h \
+          FSNAliasFile.h \
+          FSNAliasIcon.h \
+          FSNLocationFile.h \
           FSNSpringLoader.h \
           FSNIconDragSession.h \
 
@@ -62,10 +81,9 @@ FSNode_RESOURCE_FILES = \
     Resources/*.lproj \
     Resources/WellKnownLocations.plist \
 
-# FSNode no longer references the Finder-metadata (GWMetadata) or .DS_Store
-# (DSStore) stacks directly — the application supplies those through the
-# FSNMetadataProvider / FSNIconPositionStore protocols — so this framework
-# links and includes neither.
+# Views reach Finder metadata and .DS_Store only through the
+# FSNMetadataProvider / FSNIconPositionStore protocols; the one direct use of
+# libGSMetadata is the alias and location file reader/writer (see below).
 
 FSNode_LANGUAGES = \
 	English \
@@ -74,6 +92,9 @@ FSNode_LANGUAGES = \
 	French \
 	Spanish \
 
+# Alias and location files read and write their forks through GSFileMetadata
+# (built before this framework).
+LIBRARIES_DEPEND_UPON += -L../GSMetadata/obj -lGSMetadata
 LIBRARIES_DEPEND_UPON += $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
 
 ifeq ($(findstring darwin, $(GNUSTEP_TARGET_OS)), darwin)

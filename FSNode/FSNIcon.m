@@ -35,6 +35,9 @@
 #import "FSNFunctions.h"
 #import "FSNIconDragSession.h"
 #import "FSNMetadataProvider.h"
+#import "FSNLocationFile.h"
+#import "FSNIconPreview.h"
+#import "FSNArrangement.h"
 #import "FSNIconPlacement.h"
 #import "FSNIconsView.h"
 
@@ -167,6 +170,7 @@ static void FSNForgetForeignWindowAnswer(void)
   RELEASE (savedLabelColor);
   RELEASE (savedInfoLabelColor);
   RELEASE (spotlightComment);
+  RELEASE (itemInfoText);
   RELEASE (_placementData);
   [super dealloc];
 }
@@ -287,6 +291,10 @@ static void FSNForgetForeignWindowAnswer(void)
 
       fsnodeRep = [FSNodeRep sharedInstance];
 
+      /* On by default: Finder's own default, and what the thumbnails the
+       * user already has were showing before the option existed. */
+      showsPreview = YES;
+
       iconSize = isize;
       icnBounds = NSMakeRect(0, 0, iconSize, iconSize);
       icnPoint = NSZeroPoint;
@@ -319,6 +327,7 @@ static void FSNForgetForeignWindowAnswer(void)
       ASSIGN (tagColor,
               [[[FSNodeRep sharedInstance] metadataProvider]
                 labelColorForPath: [anode path]]);
+      [self loadLabelIndex];
 
       dndSource = dndsrc;
       acceptDnd = dndaccept;
@@ -369,7 +378,7 @@ static void FSNForgetForeignWindowAnswer(void)
       labelRect = NSIntegralRect(labelRect);
 
       infoRect = NSZeroRect;
-      if ((showType != FSNInfoNameType) && [[infolabel stringValue] length])
+      if ([self hasInfoLine] && [[infolabel stringValue] length])
 	{
 	  infoRect.size.width = [infolabel uncutTitleLenght] + [fsnodeRep labelMargin];
 	}
@@ -391,7 +400,7 @@ static void FSNForgetForeignWindowAnswer(void)
 	  r.size.width = hlightRect.size.width + labelRect.size.width;
 	  r.size.height = hlightRect.size.height;
 
-	  if (showType != FSNInfoNameType)
+	  if ([self hasInfoLine])
 	    {
 	      float lbsh = labelRect.size.height + infoRect.size.height;
 
@@ -418,7 +427,7 @@ static void FSNForgetForeignWindowAnswer(void)
 
 	  r.size.height = labelRect.size.height + hlightRect.size.height;
 
-	  if (showType != FSNInfoNameType)
+	  if ([self hasInfoLine])
 	    {
 	      r.size.height += infoRect.size.height;
 	    }
@@ -444,6 +453,8 @@ static void FSNForgetForeignWindowAnswer(void)
 	  NSArray *pbTypes = [NSArray arrayWithObjects: NSFilenamesPboardType,
 				      @"GWLSFolderPboardType",
 				      @"GWRemoteFilenamesPboardType",
+				      NSURLPboardType,
+				      NSStringPboardType,
 				      nil];
 	  [self registerForDraggedTypes: pbTypes];
 	}
@@ -554,7 +565,7 @@ static void FSNForgetForeignWindowAnswer(void)
 	  labelRect.origin.x = (frameRect.size.width - labelRect.size.width) / 2;
 	}
 
-      if (showType != FSNInfoNameType)
+      if ([self hasInfoLine])
 	{
 	  if (hasinfo)
 	    {
@@ -576,7 +587,7 @@ static void FSNForgetForeignWindowAnswer(void)
 	    }
 	}
 
-      if (showType == FSNInfoNameType)
+      if (![self hasInfoLine])
 	{
 	  labelRect.origin.y = 0;
 	  labelRect.origin.y += lblmargin / 2;
@@ -635,7 +646,7 @@ static void FSNForgetForeignWindowAnswer(void)
 	  labelRect.size.width = (frameRect.size.width - icnspacew);
 	}
 
-      if (showType != FSNInfoNameType)
+      if ([self hasInfoLine])
 	{
 	  if (hasinfo)
 	    {
@@ -658,7 +669,7 @@ static void FSNForgetForeignWindowAnswer(void)
 
       infoRect = NSIntegralRect(infoRect);
 
-      if (showType != FSNInfoNameType)
+      if ([self hasInfoLine])
 	{
 	  float lbsh = labelRect.size.height + infoRect.size.height;
 
@@ -691,7 +702,7 @@ static void FSNForgetForeignWindowAnswer(void)
       labelRect.origin.x = hlightRect.size.width;
       infoRect.origin.x = hlightRect.size.width;
 
-      if (showType != FSNInfoNameType)
+      if ([self hasInfoLine])
 	{
 	  float lbsh = labelRect.size.height + infoRect.size.height;
 
@@ -774,6 +785,191 @@ static void FSNForgetForeignWindowAnswer(void)
 
   [self setNeedsDisplay: YES];
 }
+
+#pragma mark - Item info, preview and label index
+
+/* Decoding an image on the main thread to draw its thumbnail is the price of
+ * the preview; above this size the generic icon is cheaper than the wait. */
+static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
+
+/* The framework's own strings, not the application's: the application
+ * cannot be expected to translate what FSNode puts under an icon. */
+#define itemInfoString(key, comment) \
+  NSLocalizedStringFromTableInBundle(key, nil, [NSBundle bundleForClass: [FSNode class]], comment)
+
++ (NSString *)itemInfoForItemCount:(NSUInteger)count
+{
+  if (count == 0)
+    return itemInfoString(@"Zero items", @"Item info under an empty folder");
+  return (count == 1)
+    ? itemInfoString(@"1 item", @"Item info under a folder with one entry")
+    : [NSString stringWithFormat:
+         itemInfoString(@"%lu items", @"Item info under a folder"),
+         (unsigned long)count];
+}
+
++ (NSString *)itemInfoForPixelWidth:(NSInteger)width height:(NSInteger)height
+{
+  return [self itemInfoForPixelWidth: width height: height groupingSeparator: nil];
+}
+
++ (NSString *)itemInfoForPixelWidth:(NSInteger)width
+                             height:(NSInteger)height
+                  groupingSeparator:(NSString *)separator
+{
+  return [NSString stringWithFormat: itemInfoString(@"%@ x %@", @"Item info under an image: width and height in pixels"),
+                   FSNGroupedInteger (width, separator),
+                   FSNGroupedInteger (height, separator)];
+}
+
+- (BOOL)hasInfoLine
+{
+  return (showType != FSNInfoNameType) || showsItemInfo;
+}
+
+- (BOOL)showsItemInfo
+{
+  return showsItemInfo;
+}
+
+- (NSString *)itemInfo
+{
+  return (showsItemInfo && itemInfoText) ? itemInfoText : @"";
+}
+
+/* Folders are counted without the entries Finder hides. */
+- (NSUInteger)visibleEntryCountOfPath:(NSString *)path
+{
+  NSArray *names = [[NSFileManager defaultManager]
+                     directoryContentsAtPath: path];
+  NSUInteger n = 0;
+  NSUInteger i;
+
+  for (i = 0; i < [names count]; i++)
+    {
+      if ([[names objectAtIndex: i] hasPrefix: @"."] == NO)
+        n++;
+    }
+  return n;
+}
+
+- (BOOL)isPlainImageFile
+{
+  return (selection == nil && [FSNIconPreview isPlainImageNode: node]);
+}
+
+- (NSString *)computeItemInfo
+{
+  if (node == nil || selection != nil)
+    return @"";
+
+  if ([node isDirectory])
+    {
+      /* A package is one item to the user; counting what is inside it
+       * would tell them nothing about it. */
+      if ([node isPackage] || [node isApplication] || [node isMountPoint])
+        return @"";
+      return [FSNIcon itemInfoForItemCount:
+                        [self visibleEntryCountOfPath: [node path]]];
+    }
+
+  if ([self isPlainImageFile] && [node fileSize] <= FSNPreviewMaxFileSize)
+    {
+      NSImageRep *rep = [NSImageRep imageRepWithContentsOfFile: [node path]];
+
+      if (rep != nil && [rep pixelsWide] > 0 && [rep pixelsHigh] > 0)
+        return [FSNIcon itemInfoForPixelWidth: [rep pixelsWide]
+                                       height: [rep pixelsHigh]];
+    }
+
+  /* Finder says nothing about plain files and applications. */
+  return @"";
+}
+
+/* Re-run the info type switch so the line shows the new text and the
+ * label rects follow. */
+- (void)refreshInfoLine
+{
+  if (extInfoType)
+    {
+      [self setExtendedShowType: extInfoType];
+    }
+  else
+    {
+      [self setNodeInfoShowType: showType];
+    }
+  [self setFont: [label font]];
+}
+
+- (void)setShowsItemInfo:(BOOL)flag
+{
+  if (showsItemInfo == flag)
+    return;
+
+  showsItemInfo = flag;
+  /* Counting a folder reads it, so the text waits for -decorate. */
+  ASSIGN (itemInfoText, (flag && decorated) ? [self computeItemInfo] : nil);
+  [self refreshInfoLine];
+}
+
+- (BOOL)showsPreview
+{
+  return showsPreview;
+}
+
+- (void)setShowsPreview:(BOOL)flag
+{
+  if (showsPreview == flag)
+    return;
+
+  showsPreview = flag;
+  if (decorated && selection == nil && [self isPlainImageFile])
+    {
+      ASSIGN (icon, [self loadedIconImage]);
+      drawicon = icon;
+      DESTROY (selectedicon);
+      [self tile];
+    }
+}
+
+- (NSImage *)iconImage
+{
+  return icon;
+}
+
+- (NSImage *)loadedIconImage
+{
+  if (selection != nil)
+    return [fsnodeRep iconOfSize: iconSize forNode: node];
+  return [FSNIconPreview iconForNode: node size: iconSize showsPreview: showsPreview];
+}
+
+- (NSInteger)labelIndex
+{
+  return labelIndex;
+}
+
+- (void)setLabelIndex:(NSInteger)index
+{
+  labelIndex = index;
+}
+
+/* The metadata provider hands out the colour; the number behind it is an
+ * optional second question, which a provider that cannot answer leaves as
+ * "no label". */
+- (void)loadLabelIndex
+{
+  id<FSNMetadataProvider> provider = [fsnodeRep metadataProvider];
+
+  labelIndex = 0;
+  /* The method returns a scalar, so it must be sent directly:
+   * performSelector: would treat the integer as an object pointer. */
+  if ([provider respondsToSelector: @selector(labelIndexForPath:)])
+    {
+      labelIndex = [provider labelIndexForPath: [node path]];
+    }
+}
+
 
 // DS_Store tag/label color support
 - (void)setTagColor:(NSColor *)color
@@ -1148,7 +1344,7 @@ static void FSNForgetForeignWindowAnswer(void)
           [label drawWithFrame: labelRect inView: self];
         }
 
-      if ((showType != FSNInfoNameType) && [[infolabel stringValue] length])
+      if ([self hasInfoLine] && [[infolabel stringValue] length])
         {
           [infolabel drawWithFrame: infoRect inView: self];
         }
@@ -1319,7 +1515,7 @@ static void FSNForgetForeignWindowAnswer(void)
   ASSIGN (node, anode);
   if (decorated)
     {
-      ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
+      ASSIGN (icon, [self loadedIconImage]);
       drawicon = icon;
     }
   DESTROY (selectedicon);
@@ -1341,6 +1537,12 @@ static void FSNForgetForeignWindowAnswer(void)
   ASSIGN (tagColor,
            [[[FSNodeRep sharedInstance] metadataProvider]
              labelColorForPath: [anode path]]);
+  [self loadLabelIndex];
+
+  if (showsItemInfo && decorated)
+    {
+      ASSIGN (itemInfoText, [self computeItemInfo]);
+    }
 
   /* The git-repository badge (git logo) is baked into the icon image by
    * FSNodeRep's iconOfSize:forNode:, so FSNIcon needs no separate badge
@@ -1466,7 +1668,7 @@ static void FSNForgetForeignWindowAnswer(void)
   labelRect = NSIntegralRect(labelRect);
 
   infoRect = NSZeroRect;
-  if ((showType != FSNInfoNameType) && [[infolabel stringValue] length])
+  if ([self hasInfoLine] && [[infolabel stringValue] length])
     {
       infoRect.size.width = [infolabel uncutTitleLenght] + lblmargin;
     }
@@ -1539,7 +1741,7 @@ static void FSNForgetForeignWindowAnswer(void)
     {
       if (selection == nil)
         {
-          ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
+          ASSIGN (icon, [self loadedIconImage]);
         }
       else
         {
@@ -1572,9 +1774,15 @@ static void FSNForgetForeignWindowAnswer(void)
       return;
     }
 
-  ASSIGN (icon, [fsnodeRep iconOfSize: iconSize forNode: node]);
+  ASSIGN (icon, [self loadedIconImage]);
   drawicon = icon;
   decorated = YES;
+
+  if (showsItemInfo)
+    {
+      ASSIGN (itemInfoText, [self computeItemInfo]);
+      [self refreshInfoLine];
+    }
 
   /* The icon image may arrive after the last -tile (a lazy icon is laid
    * out and tiled while its image is still nil), and tile computes the
@@ -1653,7 +1861,7 @@ static void FSNForgetForeignWindowAnswer(void)
 
   switch(showType) {
     case FSNInfoNameType:
-      [infolabel setStringValue: @""];
+      [infolabel setStringValue: [self itemInfo]];
       break;
     case FSNInfoKindType:
       [infolabel setStringValue: [node typeDescription]];
@@ -1847,6 +2055,30 @@ static void FSNForgetForeignWindowAnswer(void)
 - (int)compareAccordingToSize:(id)aIcon
 {
   return [node compareAccordingToSize: [aIcon node]];
+}
+
+- (int)compareAccordingToCrDate:(id)aIcon
+{
+  return [node compareAccordingToCrDate: [aIcon node]];
+}
+
+- (NSString *)labelName
+{
+  id<FSNMetadataProvider> provider = [fsnodeRep metadataProvider];
+
+  if (labelIndex != 0 && [provider respondsToSelector: @selector(labelNameForPath:)])
+    {
+      return [provider labelNameForPath: [node path]];
+    }
+  return nil;
+}
+
+/* Finder: unlabelled first, then alphabetical by the label's localized name,
+ * which is not the order of the label numbers. */
+- (int)compareAccordingToLabel:(id)aIcon
+{
+  return FSNCompareLabels ([self labelIndex], [self labelName],
+                           [aIcon labelIndex], [aIcon labelName]);
 }
 
 - (int)compareAccordingToOwner:(id)aIcon
@@ -2701,6 +2933,20 @@ static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
   pb = [sender draggingPasteboard];
   sourcePaths = nil;
 
+  /* A link dropped on a folder becomes an Internet location file in it. */
+  if ([FSNLocationFile URLForPasteboard: pb] != nil)
+    {
+      if (selection || isLocked || [node isDirectory] == NO
+	  || [node isPackage] || [node isWritable] == NO
+	  || [node isSubnodeOfPath: [desktopApp trashPath]])
+	{
+	  return NSDragOperationNone;
+	}
+      isDragTarget = YES;
+      negotiatedDragOp = NSDragOperationCopy;
+      return NSDragOperationCopy;
+    }
+
   if ([[pb types] containsObject: NSFilenamesPboardType])
     {
       sourcePaths = [pb propertyListForType: NSFilenamesPboardType];
@@ -3076,6 +3322,15 @@ static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
   if (dragProxied)
     return [container performDragOperation: sender];
 
+  if (isDragTarget && isLocked == NO
+      && [FSNLocationFile URLForPasteboard: [sender draggingPasteboard]] != nil)
+    {
+      /* Written here, not on conclude, so a failure refuses the drop. */
+      return [FSNLocationFile
+	       writeWeblocFromPasteboard: [sender draggingPasteboard]
+			     inDirectory: [node path]] != nil;
+    }
+
   return isLocked ? NO : isDragTarget;
 }
 
@@ -3113,6 +3368,11 @@ static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
   [self setNeedsDisplay: YES];
 
   pb = [sender draggingPasteboard];
+
+  if ([FSNLocationFile URLForPasteboard: pb] != nil)
+    {
+      return;
+    }
 
   if ([node isPackage] == NO)
     {

@@ -61,8 +61,17 @@
     // Icon view settings (icvo/icvp)
     int _iconSize;
     BOOL _hasIconSize;
-    DSStoreIconArrangement _iconArrangement;
-    BOOL _hasIconArrangement;
+    /* icvp arrangeBy as Finder writes it ("none", "grid", "name", ...);
+     * nil while unknown.  iconArrangement is derived from it. */
+    NSString *_arrangeBy;
+    CGFloat _iconTextSize;
+    BOOL _hasIconTextSize;
+    BOOL _showItemInfo;
+    BOOL _hasShowItemInfo;
+    BOOL _showIconPreview;
+    BOOL _hasShowIconPreview;
+    NSPoint _scrollPosition;
+    BOOL _hasScrollPosition;
     DSStoreLabelPosition _labelPosition;
     BOOL _hasLabelPosition;
     CGFloat _gridSpacing;
@@ -72,10 +81,21 @@
     DSStoreBackgroundType _backgroundType;
     NSColor *_backgroundColor;
     NSString *_backgroundImagePath;
+    NSData *_backgroundImageAlias;
     
     // Sidebar (fwsw)
     int _sidebarWidth;
     BOOL _hasSidebarWidth;
+
+    // Window chrome (bwsp)
+    BOOL _showToolbar;
+    BOOL _hasShowToolbar;
+    BOOL _showStatusBar;
+    BOOL _hasShowStatusBar;
+    BOOL _showPathbar;
+    BOOL _hasShowPathbar;
+    BOOL _showSidebar;
+    BOOL _hasShowSidebar;
     
     // List view settings (lsvp/lsvP)
     int _listTextSize;
@@ -84,9 +104,21 @@
     BOOL _hasListIconSize;
     NSString *_sortColumn;
     BOOL _hasSortColumn;
+    /* Used only when listColumns has no entry for the sort column. */
     BOOL _sortAscending;
-    NSDictionary *_columnWidths;  // column name -> width
-    NSDictionary *_columnVisible;  // column name -> BOOL
+    /* lsvp "columns" in Finder's own shape: column id -> {ascending, index,
+     * visible, width}; keys Workspace does not know are kept. */
+    NSDictionary *_listColumns;
+    BOOL _useRelativeDates;
+    BOOL _hasUseRelativeDates;
+    BOOL _calculateAllSizes;
+    BOOL _hasCalculateAllSizes;
+    NSPoint _listScrollPosition;
+    BOOL _hasListScrollPosition;
+
+    /* The icvp / lsvp values as loaded, to tell what Workspace changed. */
+    NSDictionary *_loadedIconValues;
+    NSDictionary *_loadedListValues;
     
     // Icon positions (Iloc)
     NSMutableDictionary *_iconInfoDict;  // filename -> DSStoreIconInfo
@@ -114,14 +146,40 @@
 @property (nonatomic, assign) CGFloat gridSpacing;
 @property (nonatomic, assign) BOOL hasGridSpacing;
 
+/* icvp keys of the same names.  arrangeBy is one of "none", "grid" (snap to
+ * grid), "name", "kind", "dateModified", "dateCreated", "size", "label". */
+@property (nonatomic, copy) NSString *arrangeBy;
+@property (nonatomic, assign) CGFloat iconTextSize;
+@property (nonatomic, assign) BOOL hasIconTextSize;
+@property (nonatomic, assign) BOOL showItemInfo;
+@property (nonatomic, assign) BOOL hasShowItemInfo;
+@property (nonatomic, assign) BOOL showIconPreview;
+@property (nonatomic, assign) BOOL hasShowIconPreview;
+/* icvp scrollPositionX/Y: points from the left and top edge of the content. */
+@property (nonatomic, assign) NSPoint scrollPosition;
+@property (nonatomic, assign) BOOL hasScrollPosition;
+
 // Background
 @property (nonatomic, assign) DSStoreBackgroundType backgroundType;
 @property (nonatomic, retain) NSColor *backgroundColor;
 @property (nonatomic, copy) NSString *backgroundImagePath;
+/* The classic alias record (version 2) Finder resolves the picture with,
+ * icvp backgroundImageAlias [O:E12]; written with backgroundType 2. */
+@property (nonatomic, copy) NSData *backgroundImageAlias;
 
 // Sidebar
 @property (nonatomic, assign) int sidebarWidth;
 @property (nonatomic, assign) BOOL hasSidebarWidth;
+
+// Window chrome (bwsp ShowToolbar, ShowStatusBar, ShowPathbar, ShowSidebar)
+@property (nonatomic, assign) BOOL showToolbar;
+@property (nonatomic, assign) BOOL hasShowToolbar;
+@property (nonatomic, assign) BOOL showStatusBar;
+@property (nonatomic, assign) BOOL hasShowStatusBar;
+@property (nonatomic, assign) BOOL showPathbar;
+@property (nonatomic, assign) BOOL hasShowPathbar;
+@property (nonatomic, assign) BOOL showSidebar;
+@property (nonatomic, assign) BOOL hasShowSidebar;
 
 // List view settings
 @property (nonatomic, assign) int listTextSize;
@@ -130,9 +188,41 @@
 @property (nonatomic, assign) BOOL hasListIconSize;
 @property (nonatomic, copy) NSString *sortColumn;
 @property (nonatomic, assign) BOOL hasSortColumn;
+/* The direction of the sort column: its "ascending" in listColumns. */
 @property (nonatomic, assign) BOOL sortAscending;
-@property (nonatomic, retain) NSDictionary *columnWidths;
-@property (nonatomic, retain) NSDictionary *columnVisible;
+@property (nonatomic, copy) NSDictionary *listColumns;
+@property (nonatomic, assign) BOOL useRelativeDates;
+@property (nonatomic, assign) BOOL hasUseRelativeDates;
+@property (nonatomic, assign) BOOL calculateAllSizes;
+@property (nonatomic, assign) BOOL hasCalculateAllSizes;
+/* lsvp scrollPositionX/Y, the icon view's convention [O:E11]. */
+@property (nonatomic, assign) NSPoint listScrollPosition;
+@property (nonatomic, assign) BOOL hasListScrollPosition;
+/* Views of listColumns: column id -> width, column id -> visible. */
+@property (nonatomic, readonly) NSDictionary *columnWidths;
+@property (nonatomic, readonly) NSDictionary *columnVisible;
+/* Ids of the visible columns, left to right. */
+- (NSArray *)listColumnOrder;
+/* The icvp / lsvp keys this object would write, with their values. */
+- (NSDictionary *)iconViewRecordValues;
+- (NSDictionary *)listViewRecordValues;
+
+/* Takes the current values as the loaded ones; -load and -markAsLoaded do
+ * this, a caller that merges more stored values in does it again. */
+- (void)rememberLoadedOptions;
+
+/* Whether the icon or list options differ from the loaded ones, i.e. were
+ * changed in Workspace.  Only then is a missing icvp / lsvp created. */
+- (BOOL)iconViewOptionsChanged;
+- (BOOL)listViewOptionsChanged;
+
+/* Whether any list view option (lsvp) is known. */
+- (BOOL)hasListViewOptions;
+/* Whether any icon view option (icvp) is known. */
+- (BOOL)hasIconViewOptions;
+
+/* The height Finder adds to a bwsp WindowBounds for the title bar. */
+extern const CGFloat DSStoreInfoFinderTitleBarHeight;
 
 // Factory methods
 + (instancetype)infoForDirectoryPath:(NSString *)path;
@@ -248,6 +338,32 @@
  * not a readable directory.  Shared by the per-file ghost filtering. */
 + (NSSet *)childrenOfDirectory:(NSString *)directoryPath;
 
+/* Read the directory-level records stored under @p key (".", the folder's
+ * name in its parent's store, or its path in a volume cache).  Values found
+ * replace the receiver's; values not found are left alone. */
+- (void)takeDirectoryRecordsFromStore:(DSStore *)store key:(NSString *)key;
+
+/* The store and key Finder 10.6 keeps a folder's view and window records
+ * under: the parent's .DS_Store, the folder's own name.  nil for "/". */
++ (NSString *)parentStorePathForDirectory:(NSString *)path;
+
+/* Write the records Finder reads for a folder (vstl, bwsp, icvp, lsvp) into
+ * the parent's .DS_Store under the folder's name.  NO when there is no
+ * parent, it cannot be written, or there is nothing to write. */
+- (BOOL)saveToParentStore;
+
+/* Whether the receiver holds anything saveToParentStore would write. */
+- (BOOL)hasFinderViewRecords;
+
+/* Write the per-file Iloc/lclr/cmmt entries of @p info. */
++ (void)writePerFileEntriesForInfo:(DSStoreInfo *)info toStore:(DSStore *)store;
+
+/* Write the Finder view records (vstl, bwsp, icvp, lsvp) of @p info under
+ * @p key, merged over any record already there. */
++ (void)writeFinderViewRecordsForInfo:(DSStoreInfo *)info
+                                  key:(NSString *)key
+                              toStore:(DSStore *)store;
+
 /* Write every persisted setting of @p info into @p store under the given
  * @p key: directory-level entries (view style, icon size, arrangement, label
  * position, grid spacing, background, sidebar, window geometry bwsp/fwi0, list
@@ -270,6 +386,11 @@
    once, at save time. */
 + (NSRect)gnustepRectFromDSStoreRect:(NSRect)dsRect;
 
+/* Stored rects are in points, as Finder means them; the window frames this
+ * object holds are screen pixels, as measured from the X window.  This is
+ * the factor between the two (GSScaleFactor). */
++ (CGFloat)scaleFactor;
+
 - (NSRect)gnustepWindowFrameForScreen:(NSScreen *)screen;
 - (NSPoint)gnustepPositionForDSStorePoint:(NSPoint)dsPoint 
                            viewHeight:(CGFloat)viewHeight 
@@ -285,10 +406,6 @@
  * in that case, which still round-trips because read and write share it. */
 + (NSScreen *)safeMainScreen;
 
-// Sort column conversion (DS_Store column name -> FSNInfoType)
-// Returns -1 if column name not recognized
-+ (int)infoTypeForSortColumnName:(NSString *)columnName;
-+ (NSString *)sortColumnNameForInfoType:(int)infoType;
 
 /* Canonical view-type name for a DS_Store view style: @"Icon", @"List" or
  * @"Browser" (Column -> Browser), defaulting to @"Icon".  Single source so

@@ -31,6 +31,7 @@
 #import "Attributes.h"
 #import "Tools.h"
 #import "Annotations.h"
+#import "FinderInfoPanel.h"
 #import "IconView.h"
 #import "Functions.h"
 
@@ -38,6 +39,7 @@
 #define CONTENTS     1
 #define TOOLS        2
 #define ANNOTATIONS  3
+#define FINDERINFO   4
 
 static NSString *nibName = @"InspectorWin";
 
@@ -112,6 +114,14 @@ static NSString *nibName = @"InspectorWin";
     [popUp insertItemWithTitle: NSLocalizedString(@"Annotations", @"") 
                        atIndex: ANNOTATIONS];
     [[popUp itemAtIndex: ANNOTATIONS] setKeyEquivalent: @"4"];
+    DESTROY (currentInspector);
+
+    currentInspector = [[FinderInfoPanel alloc] initForInspector: self];
+    [inspectors insertObject: currentInspector atIndex: FINDERINFO];
+    [popUp insertItemWithTitle: NSLocalizedStringFromTableInBundle(@"Finder Info", @"FinderInfo",
+                                  [NSBundle bundleForClass: [FinderInfoPanel class]], @"")
+                       atIndex: FINDERINFO];
+    [[popUp itemAtIndex: FINDERINFO] setKeyEquivalent: @"5"];
     DESTROY (currentInspector);
 
     [nc addObserver: self 
@@ -232,6 +242,20 @@ static NSString *nibName = @"InspectorWin";
 - (id)annotations
 {
   return [inspectors objectAtIndex: ANNOTATIONS];
+}
+
+- (void)showFinderInfo
+{
+  if ([win isVisible] == NO) {
+    [self activate];
+  }
+  [popUp selectItemAtIndex: FINDERINFO];
+  [self activateInspector: popUp];
+}
+
+- (id)finderInfo
+{
+  return [inspectors objectAtIndex: FINDERINFO];
 }
 
 - (NSWindow *)win

@@ -327,6 +327,8 @@
 - (void)setViewerType:(id)sender;
 
 - (void)toggleInspector:(id)sender;
+- (void)togglePathBar:(id)sender;
+- (void)toggleStatusBar:(id)sender;
 
 - (void)setDefaultBrowsingBehaviour:(id)sender;
 
@@ -340,7 +342,7 @@
 
 - (void)toggleHiddenFiles;
 
-- (void)quickLook:(id)sender;
+- (void)lookInside:(id)sender;
 
 - (BOOL)unmountVolumeAtPath:(NSString *)path;
 
