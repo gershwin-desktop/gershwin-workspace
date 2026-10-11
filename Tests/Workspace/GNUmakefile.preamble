@@ -53,3 +53,15 @@ t_GWLookInsideInfo_OBJC_FILES += ../../Workspace/LookInside/GWLookInsidePreviewK
                                  ../../Workspace/LookInside/GWLookInsideColumnPreviewProvider.m
 t_GWLookInsideInfo_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                                 -lFSNode -lgnustep-gui
+
+# t_GWStationery includes GWStationery.m; the copier and the Finder metadata
+# library it uses are linked as separate objects, as in Tests/Preserve.
+ADDITIONAL_INCLUDE_DIRS += -I../../Operation -I../../DSStore
+t_GWStationery_OBJC_FILES += ../../Operation/GWMetadataCopier.m \
+                             ../../GWMetadata/GSAppleDouble.m \
+                             ../../GWMetadata/GWMetaXattr.m \
+                             ../../GWMetadata/GSFileMetadata.m \
+                             ../../DSStore/DSStore.m ../../DSStore/DSStoreCodecs.m \
+                             ../../DSStore/DSStoreEntry.m ../../DSStore/DSBuddyAllocator.m \
+                             ../../DSStore/SimpleColor.m
+t_GWStationery_TOOL_LIBS += -lgnustep-gui

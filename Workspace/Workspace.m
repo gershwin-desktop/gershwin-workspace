@@ -53,6 +53,7 @@
 #import "FSNAliasFile.h"
 #import "FSNLocationFile.h"
 #import "GWViewerChrome.h"
+#import "GWStationery.h"
 #import "Workspace.h"
 
 /* Set of paths the user has recently unmounted via the GUI.
@@ -2310,67 +2311,32 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 
   aURL = nil;
 
-  /* Mac Creator code lookup + Stationery handling */
+  /* Stationery first: a pad with a creator code still opens as a new copy
+   * in that application, never as the pad itself. */
   {
     GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: fullPath];
-    if (md)
-    {
-      /* Creator code -> application mapping */
-      if ([md creatorCode] != 0)
-        {
-          NSString *appPath = [self applicationForCreatorCode: [md creatorCode]];
-          if (appPath)
-            {
-              return [[NSWorkspace sharedWorkspace] openFile: fullPath withApplication: appPath];
-            }
-        }
 
-      /* Stationery: create a copy and open the copy instead */
-      if ([md isStationery])
-        {
-          NSString *dir  = [fullPath stringByDeletingLastPathComponent];
-          NSString *name = [fullPath lastPathComponent];
-          NSString *ext  = [name pathExtension];
-          NSString *base = [name stringByDeletingPathExtension];
+    if ([md isStationery])
+      {
+        NSError *error = nil;
+        NSString *copyPath = [GWStationery makeCopyOfStationeryAtPath: fullPath
+                                                                 error: &error];
 
-          NSString *copyName;
-          if ([ext length] > 0)
-            copyName = [NSString stringWithFormat: @"%@ copy.%@", base, ext];
-          else
-            copyName = [NSString stringWithFormat: @"%@ copy", name];
+        if (copyPath == nil)
+          {
+            NSRunAlertPanel(nil, @"%@", _(@"OK"), nil, nil,
+                            [error localizedDescription]);
+            return NO;
+          }
+        return [self openFile: copyPath];
+      }
+    if ([md creatorCode] != 0)
+      {
+        NSString *appPath = [self applicationForCreatorCode: [md creatorCode]];
 
-          NSString *copyPath = [dir stringByAppendingPathComponent: copyName];
-          NSFileManager *fileMgr = [NSFileManager defaultManager];
-
-          if ([fileMgr fileExistsAtPath: copyPath])
-            {
-              NSUInteger n = 2;
-              do {
-                NSString *tryName;
-                if ([ext length] > 0)
-                  tryName = [NSString stringWithFormat: @"%@ copy %lu.%@", base, (unsigned long)n, ext];
-                else
-                  tryName = [NSString stringWithFormat: @"%@ copy %lu", name, (unsigned long)n];
-                copyPath = [dir stringByAppendingPathComponent: tryName];
-                n++;
-              } while ([fileMgr fileExistsAtPath: copyPath]);
-            }
-
-          if ([fileMgr copyPath: fullPath toPath: copyPath handler: nil])
-            {
-              GSFileMetadata *copyMd = [GSFileMetadata metadataForFileAtPath: copyPath];
-              if (!copyMd) copyMd = [[[GSFileMetadata alloc] init] autorelease];
-              [copyMd setStationery: NO];
-              [copyMd writeToFileAtPath: copyPath error: nil];
-
-              return [self openFile: copyPath];
-            }
-          else
-            {
-              return NO;
-            }
-        }
-    }
+        if (appPath)
+          return [[NSWorkspace sharedWorkspace] openFile: fullPath withApplication: appPath];
+      }
   }
 
   [ws getInfoForFile: fullPath application: &appName type: &type];
