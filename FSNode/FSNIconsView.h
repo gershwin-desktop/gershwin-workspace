@@ -42,6 +42,24 @@
 
 #import "FSNIconLoader.h"
 
+/* How an icon view orders its icons - Finder's "Arrange By".  Anything but
+ * None lays the icons out in reading order in that sequence and ignores their
+ * saved positions; None keeps the icons where they are, which after an
+ * arrangement is where it put them. */
+typedef NS_ENUM(NSInteger, FSNIconsArrangement) {
+  FSNIconsArrangeNone = 0,
+  FSNIconsArrangeName,
+  FSNIconsArrangeKind,
+  FSNIconsArrangeDateModified,
+  FSNIconsArrangeDateCreated,
+  FSNIconsArrangeSize,
+  FSNIconsArrangeLabel
+};
+
+/* The smallest and largest name text size Finder offers. */
+extern const int FSNMinLabelTextSize;
+extern const int FSNMaxLabelTextSize;
+
 @interface FSNIconsView : NSView <NSTextFieldDelegate, FSNDecorationClient>
 {
   FSNode *node;
@@ -114,7 +132,54 @@
   // Content extent (max right/top edge of laid-out icons) reported by
   // -layoutIcons and consumed by -tile to size the document view.
   NSSize _contentExtent;
+
+  FSNIconsArrangement arrangement;
+  BOOL snapsToGrid;
+  BOOL showsItemInfo;
+  BOOL showsIconPreview;
+
+  // Scroll position asked for by the owner, kept until the user scrolls
+  NSPoint _savedScroll;
+  BOOL _hasSavedScroll;
+  BOOL _applyingScroll;
 }
+
+/* The text size forced into the range Finder offers (10 to 16 points). */
++ (int)clampedLabelTextSize:(int)size;
+
+/* Arrange By.  Arranging sorts the icons and lays them out in the grid in
+ * that order; the order of sizes and dates is largest and newest first.
+ * Labelled items come before unlabelled ones, by label index. */
+- (void)setArrangement:(FSNIconsArrangement)value;
+- (FSNIconsArrangement)arrangement;
+
+/* Snap to Grid, a switch of its own: while no arrangement is set, icons that
+ * have a saved position are drawn at the center of the nearest grid cell,
+ * and an icon whose cell is taken moves to the nearest free one.  The saved
+ * positions themselves are left alone. */
+- (void)setSnapsToGrid:(BOOL)flag;
+- (BOOL)snapsToGrid;
+
+/* Show Item Info: a second line under each name, see -[FSNIcon
+ * setShowsItemInfo:]. */
+- (void)setShowsItemInfo:(BOOL)flag;
+- (BOOL)showsItemInfo;
+
+/* Show Icon Preview: image files drawn as a thumbnail, on by default. */
+- (void)setShowsIconPreview:(BOOL)flag;
+- (BOOL)showsIconPreview;
+
+/* Size of one grid cell, which follows icon size, text size and info line,
+ * and the space between two columns. */
+- (NSSize)gridCellSize;
+- (CGFloat)gridColumnGap;
+
+/* The scrolled position as Finder keeps it per folder: points from the left
+ * and from the top edge of the content to the corner of the visible part.
+ * Setting it before the view has its size or its icons works too: it is
+ * applied again by every layout until the user scrolls. */
+- (NSPoint)scrollPosition;
+- (void)setScrollPosition:(NSPoint)position;
 
 /* Layout policy: position every icon (setFrame:) and set _contentExtent to
  * the laid-out content's max right/top edge.  -tile owns the surrounding
