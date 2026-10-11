@@ -25,11 +25,13 @@
 #import <AppKit/AppKit.h>
 #import "FSNBrowserScroll.h"
 #import "FSNBrowserColumn.h"
+#import "FSNBrowserResizeHandle.h"
 
 @implementation FSNBrowserScroll
 
 - (void)dealloc
 {
+  RELEASE (resizeHandle);
   [super dealloc];
 }
 
@@ -45,6 +47,8 @@
     [self setHasVerticalScroller: YES];
     [self setAutohidesScrollers: NO];
     column = col;
+    resizeHandle = [[FSNBrowserResizeHandle alloc] initWithColumn: col];
+    [self addSubview: resizeHandle];
     if (dnd) {
       [self registerForDraggedTypes: [NSArray arrayWithObjects: 
                                                 NSFilenamesPboardType, 
@@ -55,6 +59,45 @@
   }
   
   return self;
+}
+
+- (FSNBrowserResizeHandle *)resizeHandle
+{
+  return resizeHandle;
+}
+
+/* The handle takes the bottom end of the vertical scroller, a square as
+ * wide as the scroller, where Finder has it. */
+- (void)tile
+{
+  NSScroller *scroller;
+  NSRect sr, hr;
+  CGFloat h;
+
+  [super tile];
+
+  scroller = [self verticalScroller];
+  if (resizeHandle == nil || scroller == nil)
+    {
+      return;
+    }
+
+  sr = [scroller frame];
+  h = MIN (NSWidth (sr), NSHeight (sr));
+  hr = NSMakeRect (NSMinX (sr), 0, NSWidth (sr), h);
+  sr.size.height -= h;
+  if ([self isFlipped])
+    {
+      hr.origin.y = NSMaxY (sr);
+    }
+  else
+    {
+      hr.origin.y = NSMinY (sr);
+      sr.origin.y += h;
+    }
+  [scroller setFrame: sr];
+  [resizeHandle setFrame: hr];
+  [[self window] invalidateCursorRectsForView: resizeHandle];
 }
 
 - (void)reflectScrolledClipView:(NSClipView *)aClipView

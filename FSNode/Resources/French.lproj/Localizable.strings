@@ -120,3 +120,10 @@
 "%lu bytes" = "%lu octets";
 
 "%@ x %@" = "%@ \U00D7 %@";
+
+/* Preview column of the column view */
+"Name:" = "Nom :";
+"Kind:" = "Type :";
+"Size:" = "Taille :";
+"Created:" = "Création :";
+"Modified:" = "Modification :";
