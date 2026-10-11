@@ -253,3 +253,26 @@ DSStore 'shor' decode bug reported (E10).
   root + home use "." in own store; RO folders persist nothing on 10.6.
 - Merged tree: gw-wt/merged (all but I-viewers), 0 warnings, all suites
   green. Follow-ups running: old alias compat, alias tools, URL drop.
+
+## Wave C (2026-10-11, all branch from local dev, commit on own branch)
+
+| Agent | Branch | Owns |
+|---|---|---|
+| F-meta | mi/f-meta | GWMetadata, provider, aliases, links, mac-oracle, evidence |
+| F-views | mi/f-views | FSNode views, FSNFunctions, FSNode lproj |
+| I-viewers3 | mi/i-viewers3 | Workspace/FileViewer, DSStore, Workspace.m menu, Workspace lproj |
+| P-viewopts | mi/p-viewopts | new Workspace/ViewOptions/ (View Options panel) |
+| G-info | mi/g-info | Inspector/ (folder icons Icon\r, cmmt) |
+| Referee | mi/referee | Documentation/interop/referee-*.md, the Mac |
+
+Waiting for F-meta: HFS+ volumes (osx.* xattrs on Linux hfsplus),
+`__MACOSX` in zip archives (GWMetaArchive), Quick Look-like preview.
+
+## Parked (user decision 2026-10-11)
+
+- HFS+ volumes on Linux (branch mi/p-hfs, kept, not merged): the Linux
+  hfsplus driver mounts journaled Mac disks read-only, exposes no resource
+  fork at all (neither osx.com.apple.ResourceFork nor <file>/rsrc), loses
+  the Finder comment record and truncates every listed xattr name by one
+  character. Labels, quarantine and type/creator read fine through osx.*.
+  Revisit only with a user-space reader of the raw image.
