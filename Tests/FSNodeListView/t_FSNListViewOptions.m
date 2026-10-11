@@ -316,11 +316,26 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
   PASS ([ds setColumn: @"name" visible: NO] == NO && [ds isColumnVisible: @"name"],
         "MI-LST-37 the name column cannot be hidden");
   PASS ([ds setColumn: @"bogus" visible: YES] == NO, "MI-LST-38 an unknown id is refused");
+  [ds setSortColumnId: @"name" ascending: YES];
   [ds setSortColumnId: @"kind" ascending: NO];
   [ds setColumn: @"kind" visible: NO];
   PASS_EQUAL ([ds sortColumnId], @"name",
               "MI-LST-39 hiding the column the list is sorted by sorts by name instead");
-  PASS ([ds sortAscending], "MI-LST-40 in the name column's default direction");
+  PASS ([ds sortAscending], "MI-LST-40 in the direction the name column had (A-Z here)");
+  [ds setColumn: @"kind" visible: YES];
+  [ds setSortColumnId: @"name" ascending: NO];
+  [ds setSortColumnId: @"kind" ascending: YES];
+  PASS ([ds sortAscendingForColumnId: @"name"] == NO
+        && [ds sortAscendingForColumnId: @"kind"] == YES
+        && [ds sortAscendingForColumnId: @"size"] == NO,
+        "MI-LST-77 [O:2026-10-11 E20] every column keeps its own direction, its first-click one until changed");
+  [ds setColumn: @"kind" visible: NO];
+  PASS_EQUAL ([ds sortColumnId], @"name",
+              "MI-LST-78 [O:2026-10-11 E20] hiding the sort column sorts by name");
+  PASS (![ds sortAscending],
+        "MI-LST-79 [O:2026-10-11 E20] in the direction the name column was last sorted in (Z-A here)");
+  [ds setSortColumnId: @"name" ascending: YES];
+  [ds setColumn: @"kind" visible: YES];
 
   [ds setColumnWidth: 222 forColumnId: @"size"];
   [ds setColumn: @"size" visible: YES];

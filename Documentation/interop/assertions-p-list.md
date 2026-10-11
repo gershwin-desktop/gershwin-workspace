@@ -16,7 +16,7 @@ Status of every line: implemented and covered by the test of the same id.
 
 ## Sort direction
 
-- MI-LST-5 A first click on a column sorts name and kind ascending, dates and size newest/biggest first [G: Finder first-click direction]
+- MI-LST-5 A first click on a column sorts name and kind ascending, dates and size newest/biggest first [O:2026-10-11 E20]
 - MI-LST-19 The list is sorted by name at first [S:Finder default]
 - MI-LST-20 Ascending at first [S:Finder default]
 - MI-LST-21 Name ascending is A to Z [G: FSNode compareAccordingToName order]
@@ -30,12 +30,16 @@ Status of every line: implemented and covered by the test of the same id.
 - MI-LST-29 The setters do not post the user-change notification [G: applying stored settings must not write back]
 - MI-LST-30 Clicking the header of the sorted column reverses the direction [S:Finder behaviour]
 - MI-LST-31 The rows follow the new direction [S:Finder behaviour]
-- MI-LST-32 Clicking another header sorts by it in its default direction [G: Finder first-click direction]
-- MI-LST-33 Text columns start ascending [G: Finder first-click direction]
+- MI-LST-32 Clicking another header sorts by it in its default direction [O:2026-10-11 E20]
+- MI-LST-33 Text columns start ascending [O:2026-10-11 E20]
 - MI-LST-34 Every header click is reported once as a sort change [G: API]
 - (no test id) A header dragged to reorder the columns does not sort; sorting happens on click, not on mouse down [G: Finder]
 - (no test id) The sorted column's header shows an arrow, up for ascending, down for descending [S:Finder behaviour; on-screen check]
 - (no test id) The sort direction is stored per folder next to the sort column (`hligh_table_asc`) [G: persistence of this list view]
+
+- MI-LST-77 Every column keeps its own direction, its first-click one until changed [O:2026-10-11 E20]
+- MI-LST-78 Hiding the sort column sorts by name [O:2026-10-11 E20]
+- MI-LST-79 In the direction the name column was last sorted in [O:2026-10-11 E20]
 
 ## Column visibility and order
 
@@ -43,15 +47,15 @@ Status of every line: implemented and covered by the test of the same id.
 - MI-LST-36 A hidden column is gone from the column order [G: API]
 - MI-LST-37 The name column cannot be hidden [G: Finder always shows Name]
 - MI-LST-38 An unknown id is refused [G: fail hard]
-- MI-LST-39 Hiding the column the list is sorted by sorts by name instead [G: unknown Finder behaviour]
-- MI-LST-40 In the name column's default direction [G: as above]
+- MI-LST-39 Hiding the column the list is sorted by sorts by name instead [O:2026-10-11 E20]
+- MI-LST-40 In the direction the name column was last sorted in [O:2026-10-11 E20]
 - MI-LST-41 A column given a width while hidden comes back with that width [F:lsvp columns[].width exists for hidden columns]
 - MI-LST-42 A shown column is appended at the right [G: API]
 - MI-LST-43 setColumnOrder moves the listed columns to the left, name first, the rest follow [F:lsvp columns[] array order]
 - MI-LST-44 Setting the order does not post the user-change notification [G: as MI-LST-29]
-- MI-LST-45 A column dragged by the user stays where it was dropped [S:Finder behaviour]
+- MI-LST-45 A column dragged by the user stays where it was dropped, but never left of Name [O:2026-10-11 E21]
 - MI-LST-46 The new order is reported once, after the drag settled [G: API]
-- MI-LST-47 The name column is put back at the left edge when dragged away [G: Finder pins Name]
+- MI-LST-47 The name column is put back at the left edge when dragged away [O:2026-10-11 E21]
 - MI-LST-48 No column is lost by that [G: API]
 
 ## New columns

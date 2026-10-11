@@ -140,6 +140,8 @@ columnTypeByColumnId(void)
 
 @interface FSNListViewDataSource (FinderListOptionsPrivate) <FSNFolderSizeCalculatorDelegate>
 - (BOOL)defaultAscendingForColumnType:(NSInteger)type;
+- (BOOL)ascendingForColumnType:(NSInteger)type;
+- (void)sortByColumnType:(NSInteger)type ascending:(NSNumber *)ascending;
 - (NSDictionary *)defaultColumnInfoForType:(NSInteger)type;
 - (FSNTextCell *)freshDataCell;
 - (NSFont *)effectiveFont;
@@ -447,6 +449,7 @@ static NSString *defaultColumns = @"{ \
   RELEASE (listFont);
   RELEASE (folderSizes);
   RELEASE (sizeCalculator);
+  RELEASE (columnDirections);
   RELEASE (hiddenColumnWidths);
 
   [super dealloc];
@@ -521,6 +524,7 @@ static NSString *defaultColumns = @"{ \
       listIconSize = DEFAULT_LIST_ICON_SIZE;
       folderSizes = [NSMutableDictionary new];
       hiddenColumnWidths = [NSMutableDictionary new];
+      columnDirections = [NSMutableDictionary new];
 
       ASSIGN (extInfoType, [fsnodeRep validExtendedInfoName:
                               [defaults objectForKey: FSNExtendedInfoTypeDefaultsKey]]);
@@ -574,8 +578,7 @@ static NSString *defaultColumns = @"{ \
 {
   if (sortType != hlighColId)
     {
-      hlighColId = sortType;
-      sortAscending = [self defaultAscendingForColumnType: sortType];
+      [self sortByColumnType: sortType ascending: nil];
       [self resortPreservingSelection];
     }
 }
@@ -712,8 +715,7 @@ static NSString *defaultColumns = @"{ \
 	  /* Only the sorted-by column's removal changes the order. */
 	  if ([identifier intValue] == hlighColId)
 	    {
-	      hlighColId = FSNInfoNameType;
-	      sortAscending = [self defaultAscendingForColumnType: hlighColId];
+	      [self sortByColumnType: FSNInfoNameType ascending: nil];
 	    }
 	  [self sortNodeReps];
 	  [listView reloadData];
@@ -936,6 +938,33 @@ static NSString *defaultColumns = @"{ \
 {
   /* Newest and biggest first is what one looks for in these. */
   return !(COLUMN_TYPE_IS_DATE (type) || type == FSNInfoSizeType);
+}
+
+- (BOOL)ascendingForColumnType:(NSInteger)type
+{
+  NSNumber *kept;
+
+  if (type == hlighColId)
+    {
+      return sortAscending;
+    }
+  kept = [columnDirections objectForKey: [NSNumber numberWithInteger: type]];
+  return kept ? [kept boolValue] : [self defaultAscendingForColumnType: type];
+}
+
+/* Finder remembers a direction per column, so leaving the sort column must
+ * not lose the direction it had. */
+- (void)sortByColumnType:(NSInteger)type ascending:(NSNumber *)ascending
+{
+  [columnDirections setObject: [NSNumber numberWithBool: sortAscending]
+                       forKey: [NSNumber numberWithInteger: hlighColId]];
+  if (ascending == nil)
+    {
+      ascending = [NSNumber numberWithBool:
+                     [self ascendingForColumnType: type]];
+    }
+  hlighColId = type;
+  sortAscending = [ascending boolValue];
 }
 
 - (NSDictionary *)defaultColumnInfoForType:(NSInteger)type
@@ -1370,8 +1399,8 @@ labelRank(NSColor *color)
       return NO;
     }
 
-  hlighColId = [ident intValue];
-  sortAscending = ascending;
+  [self sortByColumnType: [ident intValue]
+                ascending: [NSNumber numberWithBool: ascending]];
   [self resortPreservingSelection];
   return YES;
 }
@@ -1388,6 +1417,13 @@ labelRank(NSColor *color)
       sortAscending = ascending;
       [self resortPreservingSelection];
     }
+}
+
+- (BOOL)sortAscendingForColumnId:(NSString *)columnId
+{
+  NSNumber *ident = [[self class] tableIdentifierForColumnId: columnId];
+
+  return ident ? [self ascendingForColumnType: [ident intValue]] : YES;
 }
 
 - (BOOL)sortAscending
@@ -1854,8 +1890,7 @@ didClickTableColumn:(NSTableColumn *)tableColumn
     }
   else
     {
-      hlighColId = clicked;
-      sortAscending = [self defaultAscendingForColumnType: clicked];
+      [self sortByColumnType: clicked ascending: nil];
     }
 
   [self resortPreservingSelection];

@@ -141,6 +141,7 @@ extern NSString * const FSNListViewOptionColumnOrder;
   NSInteger listIconSize;
   NSMutableDictionary *folderSizes;   /* path -> NSNumber, from the calculator */
   FSNFolderSizeCalculator *sizeCalculator;
+  NSMutableDictionary *columnDirections;   /* identifier -> BOOL ascending of the columns left */
   NSMutableDictionary *hiddenColumnWidths;  /* identifier -> width, to restore */
   NSUInteger programmaticChanges;
 }
@@ -223,6 +224,9 @@ extern NSString * const FSNListViewOptionColumnOrder;
  * values in their natural order: A to Z, oldest first, smallest first. */
 - (BOOL)setSortColumnId:(NSString *)columnId ascending:(BOOL)ascending;
 - (NSString *)sortColumnId;
+/* Every column keeps the direction it was last sorted in (its first-click
+ * one before that), also while it is not the sort column. */
+- (BOOL)sortAscendingForColumnId:(NSString *)columnId;
 - (void)setSortAscending:(BOOL)ascending;
 - (BOOL)sortAscending;
 
