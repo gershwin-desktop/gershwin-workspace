@@ -30,6 +30,7 @@
 #import "DSStoreInfo.h"
 #import "GWViewSettingsManager.h"
 #import "GWViewerChrome.h"
+#import "GWViewerGeometry.h"
 #import "GSFileMetadata.h"
 #import "GWViewerPrefs.h"
 #import "GWSpatialViewer.h"
@@ -263,7 +264,7 @@ static BOOL hasLastExtents_ = NO;
     [vwrwin setReleasedWhenClosed: NO];
     [vwrwin setDelegate: self];
     [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_W_HEIGHT)];    
-    [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
+    [vwrwin setResizeIncrements: GWViewerResizeIncrements([self viewType], resizeIncrement)];
 
     // ================================================================
     // Apply window geometry from DS_Store (interoperability)
@@ -353,7 +354,7 @@ static BOOL hasLastExtents_ = NO;
       [scroll setHasVerticalScroller: YES];
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
-		                            visibleColumns: visibleCols
+		                            visibleColumns: GWViewerBrowserInitialColumns
                                       scroller: [scroll horizontalScroller]
                                     cellsIcons: YES
                                     acceptsDnd: YES
@@ -532,7 +533,7 @@ static BOOL hasLastExtents_ = NO;
   [mainView addSubview: scroll];
   RELEASE (scroll);
 
-  visibleCols = myrintf(r.size.width / [vwrwin resizeIncrements].width);  
+  visibleCols = myrintf(r.size.width / resizeIncrement);
   
   [vwrwin setContentView: mainView];
   RELEASE (mainView);
@@ -1040,13 +1041,17 @@ static BOOL hasLastExtents_ = NO;
   [scroll setDocumentView: nil];	
   
   resizeIncrement = [(NSNumber *)[notification object] intValue];
-  /* When the Inspector toggle is on, it occupies a fixed width of window
+  /* A column view keeps its size: its columns no longer follow this width.
+   * When the Inspector toggle is on, it occupies a fixed width of window
    * space regardless of view type. */
-  r.size.width = ((visibleCols * resizeIncrement)
-                  + (showInspector ? GW_PREVIEW_PANE_WIDTH : 0));
-  [vwrwin setFrame: r display: YES];  
+  if ([self viewType] != GWViewTypeBrowser)
+    {
+      r.size.width = ((visibleCols * resizeIncrement)
+                      + (showInspector ? GW_PREVIEW_PANE_WIDTH : 0));
+      [vwrwin setFrame: r display: YES];
+    }
   [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_W_HEIGHT)];    
-  [vwrwin setResizeIncrements: NSMakeSize(resizeIncrement, 1)];
+  [vwrwin setResizeIncrements: GWViewerResizeIncrements([self viewType], resizeIncrement)];
 
   [scroll setDocumentView: nodeView];	
   RELEASE (nodeView);
@@ -1463,7 +1468,7 @@ static BOOL hasLastExtents_ = NO;
       [scroll setDrawsTopSeparator: NO];
       nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                       inViewer: self
-		                            visibleColumns: visibleCols
+		                            visibleColumns: GWViewerBrowserInitialColumns
                                       scroller: [scroll horizontalScroller]
                                     cellsIcons: YES
                                     acceptsDnd: YES
@@ -1489,6 +1494,7 @@ static BOOL hasLastExtents_ = NO;
       ASSIGN (viewType, @"List");
     }
 
+    [vwrwin setResizeIncrements: GWViewerResizeIncrements([self viewType], resizeIncrement)];
     [scroll setDocumentView: nodeView];
     RELEASE (nodeView);
     [self applyContentBackgroundColor];
