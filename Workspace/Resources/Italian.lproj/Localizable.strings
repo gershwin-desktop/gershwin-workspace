@@ -1510,3 +1510,6 @@
   = "Spostare un elemento dal Cestino\na: %@?";
 "Move %lu items from the Recycler\nto: %@?"
   = "Spostare %lu elementi dal Cestino\na: %@?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Risultati della ricerca";

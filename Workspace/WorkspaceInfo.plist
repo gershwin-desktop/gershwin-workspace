@@ -45,6 +45,10 @@
         NSIcon = "LiveSearchFolder.tiff";
       },
       {
+        NSUnixExtensions = ( "savedSearch" );
+        NSIcon = "LiveSearchFolder.tiff";
+      },
+      {
 	NSUnixExtensions = ( "webloc" );
 	NSIcon = "FileIcon_WebLink.tiff";
       }

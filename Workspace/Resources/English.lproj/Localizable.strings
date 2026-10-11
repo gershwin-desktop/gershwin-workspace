@@ -1260,3 +1260,6 @@
   = "Move one item from the Trash\nto: %@?";
 "Move %lu items from the Recycler\nto: %@?"
   = "Move %lu items from the Trash\nto: %@?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Search Results";

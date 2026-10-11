@@ -986,3 +986,6 @@ for";
   = "Przenieść jeden element z Kosza\ndo: %@?";
 "Move %lu items from the Recycler\nto: %@?"
   = "Przenieść elementy (%lu) z Kosza\ndo: %@?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Wyniki wyszukiwania";

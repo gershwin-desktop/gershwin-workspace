@@ -100,6 +100,8 @@
   self = [super init];
   if (self) {
     FinderInfoView *v = [[FinderInfoView alloc] initWithFrame: NSMakeRect(0, 0, 272, 400)];
+    /* The label names are looked up in the application table, where the Label
+     * menu and the Find window get them from, so all three agree. */
     NSArray *labelKeys = [NSArray arrayWithObjects: @"None", @"Red", @"Orange", @"Yellow",
                                   @"Green", @"Blue", @"Purple", @"Grey", nil];
     NSUInteger i;
@@ -150,7 +152,7 @@
     _labelPopUp = [[NSPopUpButton alloc] initWithFrame: NSMakeRect(0, 0, 120, FIELD_HEIGHT)
                                              pullsDown: NO];
     for (i = 0; i < [labelKeys count]; i++)
-      [_labelPopUp addItemWithTitle: FI_([labelKeys objectAtIndex: i])];
+      [_labelPopUp addItemWithTitle: NSLocalizedString([labelKeys objectAtIndex: i], @"")];
     [_labelPopUp setTarget: self];
     [_labelPopUp setAction: @selector(controlChanged:)];
     [_view addSubview: _labelPopUp];

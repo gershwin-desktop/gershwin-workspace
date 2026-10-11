@@ -1566,3 +1566,6 @@ for";
   = "Mover um item do Lixo\npara: %@?";
 "Move %lu items from the Recycler\nto: %@?"
   = "Mover %lu itens do Lixo\npara: %@?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Resultados da pesquisa";

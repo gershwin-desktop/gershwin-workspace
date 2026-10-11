@@ -9,14 +9,6 @@
 "Stationery pad" = "Briefblock";
 "Invisible" = "Unsichtbar";
 "Label:" = "Etikett:";
-"None" = "Kein";
-"Red" = "Rot";
-"Orange" = "Orange";
-"Yellow" = "Gelb";
-"Green" = "Gr\u00fcn";
-"Blue" = "Blau";
-"Purple" = "Violett";
-"Grey" = "Grau";
 "Type code:" = "Typcode:";
 "Creator code:" = "Erstellercode:";
 "Custom icon:" = "Eigenes Symbol:";

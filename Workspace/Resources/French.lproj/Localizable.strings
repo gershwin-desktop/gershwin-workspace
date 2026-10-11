@@ -1544,3 +1544,6 @@
   = "Déplacer un élément de la corbeille\nvers : %@ ?";
 "Move %lu items from the Recycler\nto: %@?"
   = "Déplacer %lu éléments de la corbeille\nvers : %@ ?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Résultats de la recherche";

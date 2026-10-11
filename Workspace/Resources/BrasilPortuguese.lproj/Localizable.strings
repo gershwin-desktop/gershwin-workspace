@@ -841,3 +841,6 @@
   = "Mover um item da Lixeira\npara: %@?";
 "Move %lu items from the Recycler\nto: %@?"
   = "Mover %lu itens da Lixeira\npara: %@?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Resultados da busca";

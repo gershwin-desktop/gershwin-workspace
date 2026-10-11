@@ -1062,3 +1062,6 @@
   = "Ĉu movi unu eron el la rubujo\nal: %@?";
 "Move %lu items from the Recycler\nto: %@?"
   = "Ĉu movi %lu erojn el la rubujo\nal: %@?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Serĉrezultoj";

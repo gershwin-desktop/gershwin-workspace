@@ -89,6 +89,8 @@ static NSString *lsfname = @"LiveSearch.lsf";
       return self;
     }
         
+    /* The title is baked into the nib in English. */
+    [win setTitle: NSLocalizedString(@"Search Results", @"")];
     [win setFrameUsingName: @"search_results"];
     [win setAcceptsMouseMovedEvents: YES];
     [win setDelegate: self];

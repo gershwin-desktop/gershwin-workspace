@@ -798,3 +798,6 @@ for";
   = "Mutați un element din Coș\nîn: %@?";
 "Move %lu items from the Recycler\nto: %@?"
   = "Mutați %lu elemente din Coș\nîn: %@?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Rezultatele căutării";

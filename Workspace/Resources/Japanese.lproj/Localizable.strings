@@ -847,3 +847,6 @@
   = "1個の項目をゴミ箱から戻しますか?\n先: %@";
 "Move %lu items from the Recycler\nto: %@?"
   = "%lu個の項目をゴミ箱から戻しますか?\n先: %@";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "検索結果";

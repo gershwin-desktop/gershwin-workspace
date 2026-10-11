@@ -888,3 +888,6 @@
   = "Egy elem áthelyezése a Szemetesből\nide: %@?";
 "Move %lu items from the Recycler\nto: %@?"
   = "%lu elem áthelyezése a Szemetesből\nide: %@?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Keresési eredmények";

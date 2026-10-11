@@ -62,7 +62,8 @@ static NSTextField *makeText(NSFont *font, NSTextAlignment align)
     {
       return @"-";
     }
-  return FI_([names objectAtIndex: n]);
+  /* Same table as the Label menu and the Find window use. */
+  return NSLocalizedString([names objectAtIndex: n], @"");
 }
 
 - (NSString *)kindsDescription

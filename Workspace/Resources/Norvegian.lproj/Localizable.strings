@@ -886,3 +886,6 @@
   = "Flytte ett element fra papirkurven\ntil: %@?";
 "Move %lu items from the Recycler\nto: %@?"
   = "Flytte %lu elementer fra papirkurven\ntil: %@?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Søkeresultater";

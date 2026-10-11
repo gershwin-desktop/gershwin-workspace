@@ -1452,3 +1452,6 @@ for";
   = "¿Mover un elemento de la Papelera\na: %@?";
 "Move %lu items from the Recycler\nto: %@?"
   = "¿Mover %lu elementos de la Papelera\na: %@?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Resultados de la búsqueda";

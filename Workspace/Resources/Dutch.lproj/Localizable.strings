@@ -1548,3 +1548,6 @@
   = "Eén onderdeel uit de Prullenmand\nnaar %@ verplaatsen?";
 "Move %lu items from the Recycler\nto: %@?"
   = "%lu onderdelen uit de Prullenmand\nnaar %@ verplaatsen?";
+
+/* Title of the window listing what a search found. */
+"Search Results" = "Zoekresultaten";
