@@ -1026,3 +1026,17 @@
 "Calculating..." = "Kalkulante...";
 "%@ bytes" = "%@ bajtoj";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bajtoj)";
+
+"label" = "etikedo";
+"tags" = "etikedoj";
+"tags that are empty or contain *, \" or \\" = "etikedoj malplenaj aŭ kun *, \" aŭ \\";
+"%@ (colours cannot be ordered)" = "%@ (koloroj ne ordigeblas)";
+"%@ (not-equal on a list of values)" = "%@ („ne estas“ ĉe listo de valoroj)";
+"Red" = "Ruĝa";
+"Orange" = "Oranĝa";
+"Yellow" = "Flava";
+"Green" = "Verda";
+"Blue" = "Blua";
+"Purple" = "Purpura";
+"Grey" = "Griza";
+"None" = "Neniu";

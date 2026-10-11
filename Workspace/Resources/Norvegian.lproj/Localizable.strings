@@ -850,3 +850,17 @@
 "No" = "Nei";
 "%@ bytes" = "%@ byte";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ byte)";
+
+"label" = "etikett";
+"tags" = "etiketter";
+"tags that are empty or contain *, \" or \\" = "etiketter som er tomme eller inneholder *, \" eller \\";
+"%@ (colours cannot be ordered)" = "%@ (farger kan ikke sorteres)";
+"%@ (not-equal on a list of values)" = "%@ («er ikke» på en liste med verdier)";
+"Red" = "Rød";
+"Orange" = "Oransje";
+"Yellow" = "Gul";
+"Green" = "Grønn";
+"Blue" = "Blå";
+"Purple" = "Lilla";
+"Grey" = "Grå";
+"None" = "Ingen";

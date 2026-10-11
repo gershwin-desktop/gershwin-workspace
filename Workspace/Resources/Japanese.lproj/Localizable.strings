@@ -811,3 +811,17 @@
 "Calculating..." = "計算中...";
 "%@ bytes" = "%@ バイト";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ バイト)";
+
+"label" = "ラベル";
+"tags" = "タグ";
+"tags that are empty or contain *, \" or \\" = "空、または *、\"、\\ を含むタグ";
+"%@ (colours cannot be ordered)" = "%@(色は並べ替えできません)";
+"%@ (not-equal on a list of values)" = "%@(値のリストに対する「ではない」)";
+"Red" = "赤";
+"Orange" = "オレンジ";
+"Yellow" = "黄";
+"Green" = "緑";
+"Blue" = "青";
+"Purple" = "紫";
+"Grey" = "グレイ";
+"None" = "なし";

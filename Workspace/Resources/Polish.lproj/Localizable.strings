@@ -950,3 +950,17 @@ for";
 "Calculating..." = "Obliczanie...";
 "%@ bytes" = "%@ bajtów";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bajtów)";
+
+"label" = "etykieta";
+"tags" = "etykiety";
+"tags that are empty or contain *, \" or \\" = "etykiety puste lub zawierające *, \" lub \\";
+"%@ (colours cannot be ordered)" = "%@ (kolorów nie można porządkować)";
+"%@ (not-equal on a list of values)" = "%@ („nie jest” dla listy wartości)";
+"Red" = "Czerwony";
+"Orange" = "Pomarańczowy";
+"Yellow" = "Żółty";
+"Green" = "Zielony";
+"Blue" = "Niebieski";
+"Purple" = "Fioletowy";
+"Grey" = "Szary";
+"None" = "Brak";

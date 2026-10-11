@@ -1516,3 +1516,9 @@
 "Calculating..." = "Calcul en cours...";
 "%@ bytes" = "%@ octets";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ octets)";
+
+"label" = "étiquette";
+"tags" = "étiquettes";
+"tags that are empty or contain *, \" or \\" = "étiquettes vides ou contenant *, \" ou \\";
+"%@ (colours cannot be ordered)" = "%@ (les couleurs ne peuvent pas être ordonnées)";
+"%@ (not-equal on a list of values)" = "%@ (« différent de » sur une liste de valeurs)";

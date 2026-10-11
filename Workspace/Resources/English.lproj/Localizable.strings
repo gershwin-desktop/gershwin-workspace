@@ -1232,3 +1232,9 @@
 "Calculating..." = "Calculating...";
 "%@ bytes" = "%@ bytes";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bytes)";
+
+"label" = "label";
+"tags" = "tags";
+"tags that are empty or contain *, \" or \\" = "tags that are empty or contain *, \" or \\";
+"%@ (colours cannot be ordered)" = "%@ (colours cannot be ordered)";
+"%@ (not-equal on a list of values)" = "%@ (not-equal on a list of values)";

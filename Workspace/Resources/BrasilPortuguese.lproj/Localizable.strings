@@ -805,3 +805,17 @@
 "No" = "Não";
 "%@ bytes" = "%@ bytes";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bytes)";
+
+"label" = "etiqueta";
+"tags" = "etiquetas";
+"tags that are empty or contain *, \" or \\" = "etiquetas vazias ou com *, \" ou \\";
+"%@ (colours cannot be ordered)" = "%@ (as cores não podem ser ordenadas)";
+"%@ (not-equal on a list of values)" = "%@ («não é» em uma lista de valores)";
+"Red" = "Vermelho";
+"Orange" = "Laranja";
+"Yellow" = "Amarelo";
+"Green" = "Verde";
+"Blue" = "Azul";
+"Purple" = "Roxo";
+"Grey" = "Cinza";
+"None" = "Nenhum";

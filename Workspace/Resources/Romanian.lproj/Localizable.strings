@@ -762,3 +762,17 @@ for";
 "No" = "Nu";
 "%@ bytes" = "%@ octeți";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ octeți)";
+
+"label" = "etichetă";
+"tags" = "etichete";
+"tags that are empty or contain *, \" or \\" = "etichete goale sau care conțin *, \" sau \\";
+"%@ (colours cannot be ordered)" = "%@ (culorile nu pot fi ordonate)";
+"%@ (not-equal on a list of values)" = "%@ („nu este” pe o listă de valori)";
+"Red" = "Roșu";
+"Orange" = "Portocaliu";
+"Yellow" = "Galben";
+"Green" = "Verde";
+"Blue" = "Albastru";
+"Purple" = "Mov";
+"Grey" = "Gri";
+"None" = "Fără";

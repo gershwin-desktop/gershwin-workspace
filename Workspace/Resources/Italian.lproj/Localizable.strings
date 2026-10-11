@@ -1482,3 +1482,9 @@
 "No" = "No";
 "%@ bytes" = "%@ byte";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ byte)";
+
+"label" = "etichetta";
+"tags" = "tag";
+"tags that are empty or contain *, \" or \\" = "tag vuoti o contenenti *, \" o \\";
+"%@ (colours cannot be ordered)" = "%@ (i colori non possono essere ordinati)";
+"%@ (not-equal on a list of values)" = "%@ («diverso da» su un elenco di valori)";

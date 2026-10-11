@@ -1280,3 +1280,9 @@
 "Calculating..." = "Wird berechnet ...";
 "%@ bytes" = "%@ Byte";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ Byte)";
+
+"label" = "Etikett";
+"tags" = "Schlagworte";
+"tags that are empty or contain *, \" or \\" = "Schlagworte, die leer sind oder *, \" oder \\ enthalten";
+"%@ (colours cannot be ordered)" = "%@ (Farben lassen sich nicht ordnen)";
+"%@ (not-equal on a list of values)" = "%@ („ist nicht“ bei einer Liste von Werten)";

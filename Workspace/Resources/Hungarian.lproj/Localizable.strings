@@ -852,3 +852,17 @@
 "No" = "Nem";
 "%@ bytes" = "%@ bájt";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bájt)";
+
+"label" = "címke";
+"tags" = "címkék";
+"tags that are empty or contain *, \" or \\" = "üres vagy *, \" vagy \\ jelet tartalmazó címkék";
+"%@ (colours cannot be ordered)" = "%@ (a színek nem rendezhetők)";
+"%@ (not-equal on a list of values)" = "%@ (a „nem egyenlő” értékek listáján)";
+"Red" = "Piros";
+"Orange" = "Narancs";
+"Yellow" = "Sárga";
+"Green" = "Zöld";
+"Blue" = "Kék";
+"Purple" = "Lila";
+"Grey" = "Szürke";
+"None" = "Nincs";

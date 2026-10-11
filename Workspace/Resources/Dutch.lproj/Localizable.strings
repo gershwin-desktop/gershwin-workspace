@@ -1520,3 +1520,9 @@
 "Calculating..." = "Bezig met berekenen...";
 "%@ bytes" = "%@ bytes";
 "%.1f %s (%@ bytes)" = "%.1f %s (%@ bytes)";
+
+"label" = "label";
+"tags" = "labels";
+"tags that are empty or contain *, \" or \\" = "labels die leeg zijn of *, \" of \\ bevatten";
+"%@ (colours cannot be ordered)" = "%@ (kleuren kunnen niet worden gesorteerd)";
+"%@ (not-equal on a list of values)" = "%@ („is niet” bij een lijst met waarden)";
