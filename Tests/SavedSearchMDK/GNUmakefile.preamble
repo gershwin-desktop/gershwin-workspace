@@ -8,4 +8,9 @@ MDKLIBS = ../../GWMetadata/MDKit/MDKit.framework/Versions/Current \
 ADDITIONAL_LIB_DIRS += $(addprefix -L,$(MDKLIBS))
 ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags $(addprefix -Wl$(COMMA)-rpath$(COMMA)$(CURDIR)/,$(MDKLIBS))
 COMMA = ,
-t_MDKParse_TOOL_LIBS += $(CURDIR)/../../GWMetadata/MDKit/MDKit.framework/Versions/Current/libMDKit.so -lFSNode -lDBKit -lgnustep-gui
+# The MDKit just built when it is there (a plain -lMDKit would find an older
+# installed copy first, since /System/Library/Libraries leads the -L list);
+# on CI the install step has cleaned the build tree and installed this very
+# build, so -lMDKit is right there.
+MDKIT_BUILT := $(wildcard $(CURDIR)/../../GWMetadata/MDKit/MDKit.framework/Versions/Current/libMDKit.so)
+t_MDKParse_TOOL_LIBS += $(if $(MDKIT_BUILT),$(MDKIT_BUILT),-lMDKit) -lFSNode -lDBKit -lgnustep-gui
