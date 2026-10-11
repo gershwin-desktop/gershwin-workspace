@@ -168,6 +168,7 @@ static NSString *nibName = @"DesktopPref";
 - (IBAction)setColor:(id)sender
 {
   [[manager desktopView] setCurrentColor: [colorWell color]];
+  [[manager desktopView] saveBackgroundDefaults];
 }
 
 

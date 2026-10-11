@@ -935,7 +935,6 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
   [defaults setBool: hidedock forKey: @"hidedock"];
   
   [dock updateDefaults];
-  [desktopView updateDefaults];
 }
 
 - (void)setContextHelp

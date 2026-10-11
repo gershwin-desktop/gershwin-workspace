@@ -90,7 +90,7 @@ typedef enum BackImageStyle
 
 - (void)getDesktopInfo;
 
-- (void)updateDefaults;
+- (void)saveBackgroundDefaults;
 
 @end
 
