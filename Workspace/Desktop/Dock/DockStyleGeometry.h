@@ -79,8 +79,11 @@ typedef struct
   NSPoint frontRight;
   NSPoint backRight;
   NSPoint backLeft;
-  /* The front face, from the screen edge up to the surface. */
+  /* The front face, up to the surface. */
   NSRect lip;
+  /* Below the lip, down to the screen edge: where the shelf casts its
+   * shadow onto the desktop. */
+  NSRect shadow;
 } DockShelf;
 
 /* How deep the shelf looks and how thick its lip is, as parts of the
@@ -88,8 +91,13 @@ typedef struct
  * a shelf a third of a tile deep reaches over their lower edge and they
  * stand on it rather than float above it. */
 #define DOCK_SHELF_DEPTH_SHARE  0.36
-#define DOCK_SHELF_LIP_SHARE    0.08
+#define DOCK_SHELF_LIP_SHARE    0.06
 #define DOCK_SHELF_MIN_LIP      4.0
+/* The shelf floats this far above the screen edge, the room its shadow
+ * falls into.  Within the Dock's own thickness, so the window, its strut
+ * and the work area stay what they were, and the bottom row of pixels
+ * still belongs to the icons' tiles. */
+#define DOCK_SHELF_SHADOW_SHARE 0.05
 /* How far each back corner is pulled in for each point of depth: the
  * slope of the shelf's sides. */
 #define DOCK_SHELF_SLOPE        0.9
@@ -102,11 +110,13 @@ DockShelfMake(NSRect bar, CGFloat scale)
 {
   DockShelf s;
   CGFloat thickness = NSHeight(bar);
+  CGFloat room = DockPixelAlign(thickness * DOCK_SHELF_SHADOW_SHARE, scale);
+  CGFloat bottom = NSMinY(bar) + room;
   CGFloat lip = DockPixelAlign(MAX(DOCK_SHELF_MIN_LIP,
                                    thickness * DOCK_SHELF_LIP_SHARE), scale);
-  CGFloat top = DockPixelAlign(NSMinY(bar)
+  CGFloat top = DockPixelAlign(bottom
                                + thickness * DOCK_SHELF_DEPTH_SHARE, scale);
-  CGFloat front = NSMinY(bar) + lip;
+  CGFloat front = bottom + lip;
   CGFloat inset = DockPixelAlign((top - front) * DOCK_SHELF_SLOPE, scale);
   CGFloat left = DockPixelAlign(NSMinX(bar), scale);
   CGFloat right = DockPixelAlign(NSMaxX(bar), scale);
@@ -116,12 +126,76 @@ DockShelfMake(NSRect bar, CGFloat scale)
   if (2 * inset > right - left)
     inset = floor((right - left) / 2 * scale) / scale;
 
-  s.lip = NSMakeRect(left, NSMinY(bar), right - left, lip);
+  s.shadow = NSMakeRect(left, NSMinY(bar), right - left, room);
+  s.lip = NSMakeRect(left, bottom, right - left, lip);
   s.frontLeft = NSMakePoint(left, front);
   s.frontRight = NSMakePoint(right, front);
   s.backRight = NSMakePoint(right - inset, top);
   s.backLeft = NSMakePoint(left + inset, top);
   return s;
+}
+
+/* How far an icon's image is raised in its tile on the shelf: the
+ * icons stand some way back on the surface, as on a real shelf, which
+ * leaves room in front of them for their reflection.  A share of the
+ * tile, so that it grows with the magnification; small enough that the
+ * image (three quarters of the tile, centred) stays inside the tile. */
+#define DOCK_SHELF_ICON_LIFT_SHARE 0.12
+
+static inline CGFloat
+DockShelfIconLift(CGFloat tileSize, CGFloat scale)
+{
+  return DockPixelAlign(tileSize * DOCK_SHELF_ICON_LIFT_SHARE, scale);
+}
+
+/* How much of an icon its reflection shows, as a part of the icon's
+ * height, before it has faded out. */
+#define DOCK_REFLECTION_SHARE 0.35
+/* How much of the icon those rows show: more than they are long, since a
+ * surface seen at a slant foreshortens what it mirrors. */
+#define DOCK_REFLECTION_SOURCE_SHARE 0.5
+
+/* Where an icon's reflection goes: mirrored below the line the icon stands
+ * on, as far as the shelf's front edge (front) or the reflection's own
+ * length, whichever comes first.  image is where the image is drawn and
+ * bounce how far it is lifted off its place (a bouncing icon); a lifted
+ * icon's reflection sinks by as much, as in a real mirror. */
+static inline NSRect
+DockReflectionRect(NSRect image, CGFloat bounce, CGFloat front)
+{
+  CGFloat axis = NSMinY(image) - bounce;
+  CGFloat top = axis - bounce;
+  CGFloat length = MIN(NSHeight(image) * DOCK_REFLECTION_SHARE, top - front);
+
+  if (length <= 0.0)
+    return NSZeroRect;
+  return NSMakeRect(NSMinX(image), top - length, NSWidth(image), length);
+}
+
+/* The light of a running application on the shelf's front lip: a small
+ * bright core and the glow around it, centred under the icon (x) and on
+ * the lip, both on whole device pixels. */
+typedef struct
+{
+  NSRect core;
+  NSRect glow;
+} DockLipLight;
+
+static inline DockLipLight
+DockLipLightMake(NSRect lip, CGFloat x, CGFloat scale)
+{
+  DockLipLight l;
+  CGFloat mid = NSMidY(lip);
+  CGFloat coreW = MAX(4.0, NSHeight(lip) * 1.5);
+  CGFloat coreH = MAX(1.0 / scale, NSHeight(lip) * 0.35);
+  CGFloat glowW = coreW * 3.0;
+  CGFloat glowH = NSHeight(lip) * 1.6;
+
+  l.core = DockPixelAlignRect(NSMakeRect(x - coreW / 2, mid - coreH / 2,
+                                         coreW, coreH), scale);
+  l.glow = DockPixelAlignRect(NSMakeRect(x - glowW / 2, mid - glowH / 2,
+                                         glowW, glowH), scale);
+  return l;
 }
 
 /* The left end of the surface at height y, so that a divider drawn across

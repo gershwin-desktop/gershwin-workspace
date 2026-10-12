@@ -1768,14 +1768,66 @@ DockRoundedPath(NSRect r, unsigned corners, CGFloat radius)
  * slightly above, so that the icons look as if they stand on it.  The far
  * edge catches the light and the near one is darker, which is what makes
  * the surface read as lying flat rather than standing up. */
+/* The gradients of the shelf, made once: the Dock is redrawn for every
+ * frame of the magnification. */
+static NSGradient *
+DockShelfGradient(int which)
+{
+  static NSGradient *g[5];
+
+  if (g[0] == nil)
+    {
+      /* The glass of the surface, brightest at the back where it catches
+       * the light. */
+      g[0] = [[NSGradient alloc] initWithColorsAndLocations:
+        [NSColor colorWithCalibratedWhite: 0.86 alpha: 0.72], (CGFloat)0.0,
+        [NSColor colorWithCalibratedWhite: 0.93 alpha: 0.58], (CGFloat)0.5,
+        [NSColor colorWithCalibratedWhite: 0.99 alpha: 0.78], (CGFloat)1.0,
+        nil];
+      /* A broad sheen across the surface, as a window light would leave
+       * on glass. */
+      g[1] = [[NSGradient alloc] initWithColorsAndLocations:
+        [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.0], (CGFloat)0.0,
+        [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.0], (CGFloat)0.30,
+        [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.30], (CGFloat)0.42,
+        [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.0], (CGFloat)0.58,
+        [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.0], (CGFloat)1.0,
+        nil];
+      /* The glow under the back edge's highlight. */
+      g[2] = [[NSGradient alloc] initWithStartingColor:
+        [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.0]
+                                          endingColor:
+        [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.65]];
+      /* The front face, which looks down and away from the light. */
+      g[3] = [[NSGradient alloc] initWithStartingColor:
+        [NSColor colorWithCalibratedWhite: 0.72 alpha: 0.90]
+                                          endingColor:
+        [NSColor colorWithCalibratedWhite: 0.40 alpha: 0.92]];
+      /* The shelf's shadow on the desktop under it. */
+      g[4] = [[NSGradient alloc] initWithStartingColor:
+        [NSColor colorWithCalibratedWhite: 0.0 alpha: 0.38]
+                                          endingColor:
+        [NSColor colorWithCalibratedWhite: 0.0 alpha: 0.0]];
+    }
+  return g[which];
+}
+
 - (void)drawShelfWithScale:(CGFloat)sf
 {
   DockShelf s = DockShelfMake(barRect, sf);
   CGFloat px = 1.0 / sf;
   NSBezierPath *surface = [NSBezierPath bezierPath];
   NSBezierPath *rim = [NSBezierPath bezierPath];
-  NSGradient *glass;
-  NSGradient *lip;
+  NSRect glow;
+
+  /* The shadow first, softened at the ends so that it does not end in a
+   * hard corner beside the lip. */
+  if (NSHeight(s.shadow) > 0.0)
+    {
+      NSRect shadow = NSInsetRect(s.shadow, NSHeight(s.shadow), 0);
+
+      [DockShelfGradient(4) drawInRect: shadow angle: 270];
+    }
 
   [surface moveToPoint: s.frontLeft];
   [surface lineToPoint: s.frontRight];
@@ -1783,31 +1835,31 @@ DockRoundedPath(NSRect r, unsigned corners, CGFloat radius)
   [surface lineToPoint: s.backLeft];
   [surface closePath];
 
-  glass = [[NSGradient alloc] initWithColorsAndLocations:
-             [NSColor colorWithCalibratedWhite: 0.86 alpha: 0.72], (CGFloat)0.0,
-             [NSColor colorWithCalibratedWhite: 0.93 alpha: 0.58], (CGFloat)0.5,
-             [NSColor colorWithCalibratedWhite: 0.99 alpha: 0.78], (CGFloat)1.0,
-             nil];
-  [glass drawInBezierPath: surface angle: 90];
-  RELEASE (glass);
+  [DockShelfGradient(0) drawInBezierPath: surface angle: 90];
+  [DockShelfGradient(1) drawInBezierPath: surface angle: 20];
+
+  /* Light caught by the back edge, spreading a little onto the glass. */
+  glow = NSMakeRect(s.backLeft.x, s.backLeft.y - 3 * px,
+                    s.backRight.x - s.backLeft.x, 3 * px);
+  [DockShelfGradient(2) drawInRect: glow angle: 90];
 
   /* The sides and the back: a fine bright line, half a pixel inside, so
-   * that the outline stays one device pixel wide. */
+   * that the outline stays one device pixel wide; the back brightest. */
   [rim moveToPoint: NSMakePoint(s.frontLeft.x + px / 2, s.frontLeft.y)];
   [rim lineToPoint: NSMakePoint(s.backLeft.x + px / 2, s.backLeft.y - px / 2)];
-  [rim lineToPoint: NSMakePoint(s.backRight.x - px / 2, s.backRight.y - px / 2)];
+  [rim moveToPoint: NSMakePoint(s.backRight.x - px / 2, s.backRight.y - px / 2)];
   [rim lineToPoint: NSMakePoint(s.frontRight.x - px / 2, s.frontRight.y)];
   [rim setLineWidth: px];
   [[NSColor colorWithCalibratedWhite: 1.0 alpha: 0.85] set];
   [rim stroke];
+  DockBlendRect(NSMakeRect(s.backLeft.x, s.backLeft.y - px,
+                           s.backRight.x - s.backLeft.x, px),
+                [NSColor whiteColor]);
 
-  /* The front face, which looks down and away from the light. */
-  lip = [[NSGradient alloc] initWithStartingColor:
-             [NSColor colorWithCalibratedWhite: 0.72 alpha: 0.90]
-                                     endingColor:
-             [NSColor colorWithCalibratedWhite: 0.42 alpha: 0.90]];
-  [lip drawInRect: s.lip angle: 270];
-  RELEASE (lip);
+  [DockShelfGradient(3) drawInRect: s.lip angle: 270];
+  /* The lip's lower edge, where the shadow begins. */
+  DockBlendRect(NSMakeRect(NSMinX(s.lip), NSMinY(s.lip), NSWidth(s.lip), px),
+                [NSColor colorWithCalibratedWhite: 0.0 alpha: 0.30]);
 
   /* The front edge of the glass, where it is brightest. */
   DockBlendRect(NSMakeRect(NSMinX(s.lip), NSMaxY(s.lip) - px,
@@ -1826,6 +1878,27 @@ DockRoundedPath(NSRect r, unsigned corners, CGFloat radius)
       groove.origin.x += px;
       DockBlendRect(groove, [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.85]);
     }
+}
+
+/* What an icon needs to draw itself onto the 3D shelf: whether there is a
+ * shelf, and where it is in the icon's own coordinates. */
+- (BOOL)getShelf:(DockShelf *)shelf forView:(NSView *)view
+{
+  CGFloat dy;
+
+  if ((style != DockStyle3D) || ([self edge] != DockEdgeBottom)
+      || NSIsEmptyRect(barRect))
+    return NO;
+
+  *shelf = DockShelfMake(barRect, _dockScaleFactor());
+  dy = -[view frame].origin.y;
+  shelf->frontLeft.y += dy;
+  shelf->frontRight.y += dy;
+  shelf->backLeft.y += dy;
+  shelf->backRight.y += dy;
+  shelf->lip.origin.y += dy;
+  shelf->shadow.origin.y += dy;
+  return YES;
 }
 
 /* 3D at a side, and Modern everywhere: a flat translucent panel against
@@ -1848,6 +1921,19 @@ DockRoundedPath(NSRect r, unsigned corners, CGFloat radius)
   [(modern ? [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.80]
            : [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.45]) set];
   [path stroke];
+
+  if (modern == NO)
+    {
+      /* 3D: a faint second line just inside the border, the light caught
+       * by the inner edge of the glass. */
+      NSBezierPath *inner = DockRoundedPath(NSInsetRect(p.borderRect, px, px),
+                                            p.corners,
+                                            MAX(0.0, p.radius - px));
+
+      [inner setLineWidth: px];
+      [[NSColor colorWithCalibratedWhite: 1.0 alpha: 0.16] set];
+      [inner stroke];
+    }
 
   if (NSIsEmptyRect(dividerRect) == NO)
     {

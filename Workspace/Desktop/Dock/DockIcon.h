@@ -48,6 +48,11 @@
    * to; drawn instead of the at-rest images, which would only be scaled up. */
   NSImage *sharpIcon;
   NSImage *sharpTrashFullIcon;
+  /* The icon's faded mirror image on the 3D shelf, made from reflectionSource
+   * at reflectionPixels wide and kept until either changes. */
+  NSImage *reflection;
+  NSImage *reflectionSource;
+  int reflectionPixels;
   int sharpPixels;
   NSImage *ejectIcon;
   BOOL trashFull;

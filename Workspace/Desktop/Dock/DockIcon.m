@@ -77,6 +77,8 @@
   RELEASE (sharpTrashFullIcon);
   RELEASE (appName);
   RELEASE (labelText);
+  RELEASE (reflection);
+  RELEASE (reflectionSource);
   RELEASE (highlightColor);
   RELEASE (darkerColor);
   RELEASE (highlightImage);
@@ -183,8 +185,210 @@
   NSRect bounds = [self bounds];
   CGFloat side = (magnifiedSize > 0.0) ? magnifiedSize : iconSize;
 
-  return NSMakeRect(NSMidX(bounds) - side / 2, NSMidY(bounds) - side / 2,
+  return NSMakeRect(NSMidX(bounds) - side / 2,
+                    NSMidY(bounds) - side / 2 + [self shelfLift],
                     side, side);
+}
+
+- (CGFloat)scaleFactor
+{
+  CGFloat sf = [[self window] userSpaceScaleFactor];
+
+  return (sf > 0.0) ? sf : 1.0;
+}
+
+- (BOOL)getShelf:(DockShelf *)shelf
+{
+  return [container respondsToSelector: @selector(getShelf:forView:)]
+         && [(Dock *)container getShelf: shelf forView: self];
+}
+
+/* On the 3D shelf the image stands further back than the middle of its
+ * tile, leaving room in front of it for its reflection. */
+- (CGFloat)shelfLift
+{
+  DockShelf shelf;
+
+  if ([self getShelf: &shelf] == NO)
+    return 0.0;
+  return DockShelfIconLift(NSHeight([self bounds]), [self scaleFactor]);
+}
+
+/* The largest bitmap of an image, which the reflection is sampled from. */
+static NSBitmapImageRep *
+DockLargestBitmap(NSImage *image)
+{
+  NSBitmapImageRep *best = nil;
+  NSEnumerator *e = [[image representations] objectEnumerator];
+  id rep;
+
+  while ((rep = [e nextObject]) != nil)
+    {
+      if ([rep isKindOfClass: [NSBitmapImageRep class]]
+          && [rep bitsPerSample] == 8 && [rep isPlanar] == NO
+          && [rep samplesPerPixel] >= 1
+          && (best == nil || [rep pixelsWide] > [best pixelsWide]))
+        best = rep;
+    }
+  return best;
+}
+
+/* The lower part of an image, mirrored and fading out downwards, width by
+ * height pixels.  Made from the bitmap's pixels rather than by drawing:
+ * drawing into an image needs an off-screen window per image in GNUstep,
+ * and a mask to fade it out is not to be had without one either. */
+static NSImage *
+DockMakeReflection(NSImage *image, int width, int height)
+{
+  NSBitmapImageRep *src = DockLargestBitmap(image);
+  NSBitmapImageRep *dst;
+  NSImage *result;
+  unsigned char *in, *out;
+  NSInteger sw, sh, spp, bpr;
+  BOOL alpha, colour, premultiplied;
+  CGFloat span;
+  int x, y;
+
+  if (src == nil || width <= 0 || height <= 0)
+    return nil;
+
+  sw = [src pixelsWide];
+  sh = [src pixelsHigh];
+  spp = [src samplesPerPixel];
+  bpr = [src bytesPerRow];
+  alpha = [src hasAlpha];
+  colour = (spp - (alpha ? 1 : 0)) >= 3;
+  premultiplied = alpha
+    && (([src bitmapFormat] & NSAlphaNonpremultipliedBitmapFormat) == 0);
+  in = [src bitmapData];
+  /* The rows of the source the reflection shows, from its bottom up. */
+  span = sh * DOCK_REFLECTION_SOURCE_SHARE;
+
+  dst = [[NSBitmapImageRep alloc]
+          initWithBitmapDataPlanes: NULL
+                        pixelsWide: width
+                        pixelsHigh: height
+                     bitsPerSample: 8
+                   samplesPerPixel: 4
+                          hasAlpha: YES
+                          isPlanar: NO
+                    colorSpaceName: NSDeviceRGBColorSpace
+                      bitmapFormat: NSAlphaNonpremultipliedBitmapFormat
+                       bytesPerRow: width * 4
+                      bitsPerPixel: 32];
+  out = [dst bitmapData];
+
+  for (y = 0; y < height; y++)
+    {
+      /* Row 0 touches the icon; the reflection starts faint and is gone
+       * at its far end. */
+      CGFloat t = (y + 0.5) / height;
+      CGFloat fade = 0.60 * (1.0 - t) * (1.0 - t);
+      NSInteger y0 = sh - 1 - (NSInteger)(y * span / height);
+      NSInteger y1 = sh - 1 - (NSInteger)((y + 1) * span / height);
+
+      if (y1 >= y0)
+        y1 = y0 - 1;
+      if (y1 < -1)
+        y1 = -1;
+
+      for (x = 0; x < width; x++)
+        {
+          NSInteger x0 = (NSInteger)((CGFloat)x * sw / width);
+          NSInteger x1 = (NSInteger)((CGFloat)(x + 1) * sw / width);
+          double r = 0, g = 0, b = 0, a = 0;
+          NSInteger n = 0, sx, sy;
+          unsigned char *o = out + (y * width + x) * 4;
+
+          if (x1 <= x0)
+            x1 = x0 + 1;
+          if (x1 > sw)
+            x1 = sw;
+          /* The average of the source pixels this pixel covers, weighted
+           * by their opacity so that transparent edges do not darken. */
+          for (sy = y0; sy > y1; sy--)
+            for (sx = x0; sx < x1; sx++)
+              {
+                unsigned char *p = in + sy * bpr + sx * spp;
+                double pa = alpha ? p[spp - 1] / 255.0 : 1.0;
+                double k = premultiplied ? 1.0 : pa;
+
+                r += p[0] * k;
+                g += (colour ? p[1] : p[0]) * k;
+                b += (colour ? p[2] : p[0]) * k;
+                a += pa;
+                n++;
+              }
+          if (n == 0 || a <= 0.0)
+            {
+              o[0] = o[1] = o[2] = o[3] = 0;
+              continue;
+            }
+          o[0] = (unsigned char)MIN(255.0, r / a);
+          o[1] = (unsigned char)MIN(255.0, g / a);
+          o[2] = (unsigned char)MIN(255.0, b / a);
+          o[3] = (unsigned char)MIN(255.0, 255.0 * (a / n) * fade);
+        }
+    }
+
+  result = [[NSImage alloc] initWithSize: NSMakeSize(width, height)];
+  [result addRepresentation: dst];
+  RELEASE (dst);
+  return AUTORELEASE (result);
+}
+
+/* The reflection of image drawn width points wide, made again only when
+ * the image changes or its size passes another step: the magnification
+ * changes the size on every frame, and a faint, fading mirror image does
+ * not need to be sharper than a coarse step. */
+- (NSImage *)reflectionOfImage:(NSImage *)image width:(CGFloat)width
+{
+  int pixels = (int)(MAX(1.0, ceil(width * [self scaleFactor] / 64.0)) * 64.0);
+
+  if (image != reflectionSource || pixels != reflectionPixels)
+    {
+      ASSIGN (reflectionSource, image);
+      reflectionPixels = pixels;
+      ASSIGN (reflection, DockMakeReflection(image, pixels,
+                            (int)ceil(pixels * DOCK_REFLECTION_SHARE)));
+    }
+  return reflection;
+}
+
+/* A soft round patch squeezed into rect, from the gradient's first colour
+ * in the middle to its last at the edge.  Faster here than stretching a
+ * prepared bitmap, which GNUstep converts again on every draw or keeps as
+ * an off-screen window. */
+static void
+DockDrawSoftEllipse(NSRect rect, NSGradient *gradient)
+{
+  NSAffineTransform *t = [NSAffineTransform transform];
+  CGFloat r = NSWidth(rect) / 2;
+
+  if (r <= 0.0 || NSHeight(rect) <= 0.0)
+    return;
+  [NSGraphicsContext saveGraphicsState];
+  [t translateXBy: NSMidX(rect) yBy: NSMidY(rect)];
+  [t scaleXBy: 1.0 yBy: NSHeight(rect) / NSWidth(rect)];
+  [t concat];
+  [gradient drawFromCenter: NSZeroPoint radius: 0
+                  toCenter: NSZeroPoint radius: r
+                   options: 0];
+  [NSGraphicsContext restoreGraphicsState];
+}
+
+static NSGradient *
+DockLipLightGradient(void)
+{
+  static NSGradient *g = nil;
+
+  if (g == nil)
+    g = [[NSGradient alloc] initWithColorsAndLocations:
+           [NSColor colorWithCalibratedRed: 0.80 green: 0.92 blue: 1.0 alpha: 0.95], (CGFloat)0.0,
+           [NSColor colorWithCalibratedRed: 0.45 green: 0.75 blue: 1.0 alpha: 0.55], (CGFloat)0.35,
+           [NSColor colorWithCalibratedRed: 0.30 green: 0.60 blue: 1.0 alpha: 0.0], (CGFloat)1.0,
+           nil];
+  return g;
 }
 
 - (void)setWsIcon:(BOOL)value
@@ -1525,6 +1729,14 @@ x += 6; \
   {
     /* Adjust icon position when bouncing */
     NSPoint drawPoint = icnPoint;
+    DockShelf shelf;
+    BOOL onShelf = [self getShelf: &shelf];
+    CGFloat lift = onShelf ? [self shelfLift] : 0.0;
+    /* How far a bounce lifts the image off the shelf. */
+    CGFloat rise = 0.0;
+    NSImage *shown;
+
+    drawPoint.y += lift;
     if (isBouncing && bounceOffset != 0.0) {
       DockPosition pos = DockPositionBottom;
       
@@ -1538,6 +1750,7 @@ x += 6; \
         drawPoint.x -= bounceOffset;
       } else {
         drawPoint.y += bounceOffset;  /* Add to Y to move upward in Cocoa coords */
+        rise = bounceOffset;
       }
     }
     
@@ -1554,23 +1767,54 @@ x += 6; \
     NSRect iconRect = NSMakeRect(drawPoint.x, drawPoint.y,
                                  icnBounds.size.width, icnBounds.size.height);
 
-    if (isTrashIcon == NO) {
-      [self drawImage: icon inRect: iconRect fraction: 1.0];
-    } else {
-      /* When dragging mountpoints only, show Eject icon; otherwise show Trash icon */
-      if (isDragMountpointOnly && ejectIcon) {
-        [self drawImage: ejectIcon inRect: iconRect fraction: 1.0];
-      } else if (trashFull) {
-        [self drawImage: trashFullIcon inRect: iconRect fraction: 1.0];
-      } else {
-        [self drawImage: icon inRect: iconRect fraction: 1.0];
+    /* When dragging mountpoints only, show Eject icon; otherwise show Trash icon */
+    if (isTrashIcon && isDragMountpointOnly && ejectIcon)
+      shown = ejectIcon;
+    else if (isTrashIcon && trashFull)
+      shown = trashFullIcon;
+    else
+      shown = icon;
+
+    /* On the 3D shelf an icon stands on glass: a faint mirror image in
+     * front of it, and no cast shadow, which looked painted on. */
+    if (onShelf && shown != nil)
+      {
+        NSRect r = DockReflectionRect(iconRect, rise, shelf.frontLeft.y);
+        NSImage *mirror = NSIsEmptyRect(r) ? nil
+          : [self reflectionOfImage: shown width: NSWidth(iconRect)];
+
+        if (mirror != nil)
+          {
+            /* Only as much of the reflection as the shelf has room for,
+             * from the end that touches the icon. */
+            NSSize size = [mirror size];
+            CGFloat full = NSHeight(iconRect) * DOCK_REFLECTION_SHARE;
+            CGFloat part = size.height * MIN(1.0, NSHeight(r) / full);
+
+            [mirror drawInRect: r
+                      fromRect: NSMakeRect(0, size.height - part,
+                                           size.width, part)
+                     operation: NSCompositeSourceOver
+                      fraction: 1.0];
+          }
       }
-    }
+
+    [self drawImage: shown inRect: iconRect fraction: 1.0];
 
   /* The dot goes under the middle of the icon, not of the part of the view
    * that is being redrawn.  It shows that the application runs, with or
    * without a window open. */
-  if (isWsIcon || launched)
+  if ((isWsIcon || launched) && onShelf)
+    {
+      /* A light on the shelf's front lip, like those of the 10.5 Dock. */
+      DockLipLight light = DockLipLightMake(shelf.lip, NSMidX([self bounds]),
+                                            [self scaleFactor]);
+
+      DockDrawSoftEllipse(light.glow, DockLipLightGradient());
+      [[NSColor colorWithCalibratedRed: 0.92 green: 0.97 blue: 1.0 alpha: 1.0] set];
+      [[NSBezierPath bezierPathWithOvalInRect: light.core] fill];
+    }
+  else if (isWsIcon || launched)
     {
       NSPoint p;
       /* The icon is centred in its tile, magnified or not; icnBounds and

@@ -31,9 +31,14 @@ main(void)
     NSRect bar = NSMakeRect(0, 0, 640, 64);
     DockShelf s = DockShelfMake(bar, 1.0);
 
-    PASS(CLOSE(s.lip.origin.y, 0) && CLOSE(NSMinX(s.lip), 0)
-         && CLOSE(NSWidth(s.lip), 640),
-         "the lip runs along the screen edge across the whole bar");
+    PASS(CLOSE(NSMinY(s.shadow), 0) && NSHeight(s.shadow) >= 2
+         && CLOSE(NSMinY(s.lip), NSMaxY(s.shadow)),
+         "the shelf floats just above the screen edge, its shadow below the lip");
+    PASS(CLOSE(NSMinX(s.lip), 0) && CLOSE(NSWidth(s.lip), 640)
+         && CLOSE(NSWidth(s.shadow), 640),
+         "lip and shadow run across the whole bar");
+    PASS(NSMaxY(s.shadow) + NSHeight(s.lip) < 64 / 4,
+         "shadow and lip stay low, within the Dock's own thickness");
     PASS(CLOSE(s.frontLeft.y, NSMaxY(s.lip))
          && CLOSE(s.frontRight.y, NSMaxY(s.lip)),
          "the surface starts where the lip ends");
@@ -43,9 +48,18 @@ main(void)
          "the back edge is narrower than the front: the shelf is in perspective");
     PASS(CLOSE(s.backLeft.x - s.frontLeft.x, s.frontRight.x - s.backRight.x),
          "both sides slope alike");
-    /* Icons are 48 in a 64 tile and centred, so their lower edge is at 8. */
-    PASS(s.frontLeft.y < 8 && s.backLeft.y > 8,
-         "the lower edge of a centred icon lies on the surface: icons stand on the shelf");
+    /* Icons are 48 in a 64 tile, centred and then lifted. */
+    {
+      CGFloat foot = 8 + DockShelfIconLift(64, 1.0);
+
+      PASS(s.frontLeft.y < foot && s.backLeft.y > foot,
+           "the lower edge of a lifted icon lies on the surface: icons stand on the shelf");
+      PASS(foot - s.frontLeft.y >= 6,
+           "the icons stand far enough back to leave room for a reflection");
+      PASS(8 + 48 + DockShelfIconLift(64, 1.0) <= 64
+           && 16 + 96 + DockShelfIconLift(128, 1.0) <= 128,
+           "a lifted image stays inside its tile, at rest and magnified");
+    }
     PASS(s.backLeft.y < 64 / 2,
          "the shelf stays below the middle of the icons");
   }
@@ -89,6 +103,64 @@ main(void)
          && CLOSE(DockShelfInsetAtHeight(s, (s.frontLeft.y + s.backLeft.y) / 2),
                   full / 2),
          "the side of the shelf is a straight line from front to back");
+  }
+
+  /* --- reflections --- */
+  {
+    NSRect image = NSMakeRect(8, 16, 48, 48);
+    NSRect r = DockReflectionRect(image, 0, 7);
+
+    PASS(CLOSE(NSMaxY(r), 16) && CLOSE(NSMinX(r), 8) && CLOSE(NSWidth(r), 48),
+         "a reflection hangs right below its icon, as wide as it");
+    PASS(CLOSE(NSMinY(r), 7),
+         "and is cut off at the shelf's front edge");
+  }
+
+  {
+    /* A magnified icon high above a deep enough surface. */
+    NSRect image = NSMakeRect(0, 40, 96, 96);
+    NSRect r = DockReflectionRect(image, 0, 0);
+
+    PASS(CLOSE(NSHeight(r), 96 * DOCK_REFLECTION_SHARE),
+         "a reflection fades out after a part of its icon's height");
+  }
+
+  {
+    /* Bouncing 4 points up: the image is drawn at 20 instead of 16. */
+    NSRect image = NSMakeRect(8, 20, 48, 48);
+    NSRect r = DockReflectionRect(image, 4, 7);
+
+    PASS(CLOSE(NSMaxY(r), 12),
+         "a bouncing icon's reflection sinks as far as the icon rises");
+  }
+
+  {
+    NSRect image = NSMakeRect(8, 6, 48, 48);
+
+    PASS(NSIsEmptyRect(DockReflectionRect(image, 0, 7)),
+         "an icon standing in front of the shelf has no reflection on it");
+  }
+
+  /* --- running lights --- */
+  {
+    NSRect lip = NSMakeRect(0, 3, 640, 4);
+    DockLipLight l = DockLipLightMake(lip, 100, 1.0);
+
+    PASS(CLOSE(NSMidX(l.core), 100) && CLOSE(NSMidX(l.glow), 100),
+         "the light sits under the middle of its icon");
+    PASS(NSMinY(l.core) >= NSMinY(lip) && NSMaxY(l.core) <= NSMaxY(lip),
+         "its core lies on the lip");
+    PASS(NSContainsRect(l.glow, l.core) && NSWidth(l.glow) > NSWidth(l.core),
+         "and glows beyond it");
+  }
+
+  {
+    CGFloat sf = 1.5;
+    DockLipLight l = DockLipLightMake(NSMakeRect(0, 3.333, 640, 4), 100.2, sf);
+
+    PASS(onPixel(NSMinX(l.core), sf) && onPixel(NSMaxY(l.core), sf)
+         && onPixel(NSMinX(l.glow), sf) && onPixel(NSMinY(l.glow), sf),
+         "at GSScaleFactor 1.5 the light lies on device pixels and stays crisp");
   }
 
   /* --- the panel --- */

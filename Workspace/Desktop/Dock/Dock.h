@@ -323,6 +323,10 @@ DockStyleFromValue(NSInteger value)
 /* The screen edge the Dock is on, for the geometry in DockStyleGeometry.h. */
 - (DockEdge)edge;
 
+/* The 3D shelf in the coordinates of view (one of the Dock's icons), for
+ * the icons to stand on; NO for any other style or position. */
+- (BOOL)getShelf:(DockShelf *)shelf forView:(NSView *)view;
+
 - (DockStyle)style;
 
 - (void)setStyle:(DockStyle)s;
