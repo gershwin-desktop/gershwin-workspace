@@ -32,6 +32,9 @@ static NSError *posixError(int err)
 }
 #endif
 
+/* chflags() reports plain errno values, so only the sudo-helper and
+ * unsupported-system paths need a text error. */
+#if !defined(GW_BSD_FLAGS)
 static NSError *textError(NSString *text)
 {
   return [NSError errorWithDomain: @"GWFinderInfoErrorDomain"
@@ -39,6 +42,7 @@ static NSError *textError(NSString *text)
                          userInfo: [NSDictionary dictionaryWithObject: text
                                                                forKey: NSLocalizedDescriptionKey]];
 }
+#endif
 
 #pragma mark - Privileged action
 

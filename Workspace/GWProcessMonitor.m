@@ -683,8 +683,8 @@ static BOOL GWPIDHasLiveChildInBSD(pid_t pid)
   if ([name length] == 0)
     return NO;
 
-  NSString *want = [name lowercaseString];
 #if defined(__linux__)
+  NSString *want = [name lowercaseString];
   DIR *proc = opendir("/proc");
   if (proc == NULL)
     return NO;

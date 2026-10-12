@@ -210,7 +210,9 @@ static NSDictionary *mountInfoForPath(NSString *path)
             nil];
 }
 
-#ifndef _WIN32
+/* Only Linux reports the filesystem as a numeric f_type; the BSDs name it
+ * in f_fstypename. */
+#ifdef __linux__
 static NSString *stringForFSMagic(long magic)
 {
   switch (magic) {
@@ -244,7 +246,7 @@ static NSString *stringForFSMagic(long magic)
       return [NSString stringWithFormat:@"0x%08lX", magic];
   }
 }
-#endif /* !_WIN32 */
+#endif /* __linux__ */
 
 /* ------------------------------------------------------------------ */
 #pragma mark - GWVolumeID implementation
