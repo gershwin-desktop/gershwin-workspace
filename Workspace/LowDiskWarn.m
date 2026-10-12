@@ -106,8 +106,7 @@ FSIsOverlayRoot(void)
 - (void)dismissWarning:(id)sender
 {
   [panel orderOut: self];
-  NSReleaseAlertPanel(panel);
-  panel = nil;
+  DESTROY(panel);
 }
 
 - (void)stopMonitoring
@@ -160,6 +159,7 @@ FSIsOverlayRoot(void)
         {
           double freePercent = ((double)available / (double)total) * 100.0;
           NSButton *ok;
+          NSInteger tag;
 
           if (freePercent >= 3.0)
             {
@@ -169,14 +169,25 @@ FSIsOverlayRoot(void)
            * Dock and the desktop, and came back every two minutes. */
           else if (!warned && panel == nil)
             {
+              NSAlert *alert = [[NSAlert alloc] init];
+
               warned = YES;
-              panel = NSGetAlertPanel(_(@"Low Disk Space"),
+              [alert setMessageText: _(@"Low Disk Space")];
+              [alert setInformativeText: [NSString stringWithFormat:
                 _(@"The startup disk has less than 3%% free space.\n\n"
                   @"Only %.1f%% (%llu MB) available."),
-                _(@"OK"), nil, nil,
-                freePercent, available / (1024 * 1024));
-              /* Its button stops a modal session, and there is none. */
-              ok = [[panel contentView] viewWithTag: NSAlertDefaultReturn];
+                freePercent, available / (1024 * 1024)]];
+              [alert setAlertStyle: NSWarningAlertStyle];
+              [alert addButtonWithTitle: _(@"OK")];
+              /* -runModal is the only public way to get the panel built,
+               * and the theme builds it (with the warning icon) here. */
+              [alert performSelector: @selector(_setupPanel)];
+              tag = [[[alert buttons] objectAtIndex: 0] tag];
+              ASSIGN(panel, [alert window]);
+              [alert release];
+              /* Its button stops a modal session, and there is none.  The
+               * theme may draw buttons of its own, so take the one shown. */
+              ok = [[panel contentView] viewWithTag: tag];
               [ok setTarget: self];
               [ok setAction: @selector(dismissWarning:)];
               [panel center];
