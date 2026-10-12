@@ -8,7 +8,6 @@
 #import "GSFileMetadata.h"
 
 #include <string.h>
-#include <sys/stat.h>
 
 /* A record is a few hundred bytes; this only stops a mislabelled huge file
  * from being read whole. */
@@ -106,14 +105,15 @@ recordFromFirstWriterFork(NSData *fork)
   return [[[FSNAlias alloc] initWithData: record] autorelease];
 }
 
-/* lstat, not stat: a symlink must be seen as the link, and a dangling one
- * has nothing to stat at all. */
+/* The attributes of the link itself, not of what it points to: a dangling
+ * link has nothing else.  Not lstat(), which Windows does not have. */
 static BOOL
 isSymlink(NSString *path)
 {
-  struct stat st;
+  NSDictionary *attributes = [[NSFileManager defaultManager]
+			       attributesOfItemAtPath: path error: NULL];
 
-  return lstat([path fileSystemRepresentation], &st) == 0 && S_ISLNK(st.st_mode);
+  return [[attributes fileType] isEqualToString: NSFileTypeSymbolicLink];
 }
 
 + (NSString *)originalOfItemAtPath:(NSString *)path
