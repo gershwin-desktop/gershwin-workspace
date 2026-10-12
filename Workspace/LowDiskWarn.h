@@ -13,6 +13,8 @@
 {
   NSTimer *timer;
   BOOL checking;
+  BOOL warned;
+  id panel;
 }
 
 - (void)startMonitoring;

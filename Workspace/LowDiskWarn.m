@@ -84,6 +84,10 @@ FSIsOverlayRoot(void)
 - (void)dealloc
 {
   [self stopMonitoring];
+  if (panel != nil)
+    {
+      [self dismissWarning: nil];
+    }
   [super dealloc];
 }
 
@@ -97,6 +101,13 @@ FSIsOverlayRoot(void)
                                          selector: @selector(checkDiskSpace:)
                                          userInfo: nil
                                           repeats: YES];
+}
+
+- (void)dismissWarning:(id)sender
+{
+  [panel orderOut: self];
+  NSReleaseAlertPanel(panel);
+  panel = nil;
 }
 
 - (void)stopMonitoring
@@ -148,19 +159,28 @@ FSIsOverlayRoot(void)
       if (total > 0)
         {
           double freePercent = ((double)available / (double)total) * 100.0;
+          NSButton *ok;
 
-          if (freePercent < 3.0)
+          if (freePercent >= 3.0)
             {
-              NSAlert *alert = [[NSAlert alloc] init];
-              [alert setMessageText: _(@"Low Disk Space")];
-              [alert setInformativeText: [NSString stringWithFormat:
+              warned = NO;
+            }
+          /* Once per shortage, and not modal: a modal alert froze the
+           * Dock and the desktop, and came back every two minutes. */
+          else if (!warned && panel == nil)
+            {
+              warned = YES;
+              panel = NSGetAlertPanel(_(@"Low Disk Space"),
                 _(@"The startup disk has less than 3%% free space.\n\n"
                   @"Only %.1f%% (%llu MB) available."),
-                freePercent, available / (1024 * 1024)]];
-              [alert setAlertStyle: NSWarningAlertStyle];
-              [alert addButtonWithTitle: _(@"OK")];
-              [alert runModal];
-              [alert release];
+                _(@"OK"), nil, nil,
+                freePercent, available / (1024 * 1024));
+              /* Its button stops a modal session, and there is none. */
+              ok = [[panel contentView] viewWithTag: NSAlertDefaultReturn];
+              [ok setTarget: self];
+              [ok setAction: @selector(dismissWarning:)];
+              [panel center];
+              [panel orderFrontRegardless];
             }
         }
     }
