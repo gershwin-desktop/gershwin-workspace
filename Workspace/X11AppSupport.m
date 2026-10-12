@@ -609,7 +609,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         unsigned char *data = NULL;
 
         if (XGetWindowProperty(dpy, DefaultRootWindow(dpy),
-                               XInternAtom(dpy, "_GERSHWIN_ACTIVE_APP", False),
+                               XInternAtom(dpy, "_ACTIVE_APPLICATION", False),
                                0, 1, False, XA_CARDINAL, &type, &format,
                                &count, &after, &data) == Success && data) {
             if (type == XA_CARDINAL && format == 32 && count == 1) {
@@ -638,7 +638,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         memset(&event, 0, sizeof(event));
         event.xclient.type = ClientMessage;
         event.xclient.window = DefaultRootWindow(dpy);
-        event.xclient.message_type = XInternAtom(dpy, "_GERSHWIN_ACTIVATE_APP", False);
+        event.xclient.message_type = XInternAtom(dpy, "_ACTIVATE_APPLICATION", False);
         event.xclient.format = 32;
         event.xclient.data.l[0] = (long)pid;
         XSendEvent(dpy, DefaultRootWindow(dpy), False,

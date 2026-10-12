@@ -192,7 +192,7 @@
                   PropModeReplace, (unsigned char *)&allDesktops, 1);
 
   /* Without it the window manager cannot tell that a click on the desktop
-   * (reported with _GERSHWIN_ACTIVATE_APP) comes from the application whose
+   * (reported with _ACTIVATE_APPLICATION) comes from the application whose
    * window already has the focus, and takes the active window away. */
   unsigned long pid = (unsigned long)getpid();
   XChangeProperty(dpy, win, XInternAtom(dpy, "_NET_WM_PID", False),

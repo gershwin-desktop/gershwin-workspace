@@ -26,7 +26,7 @@ const char *GWSingleInstanceSelectionName(int screen)
       return NULL;
     }
   snprintf(names[screen], sizeof(names[screen]),
-           "_GERSHWIN_WORKSPACE_S%d", screen);
+           "_WORKSPACE_S%d", screen);
   return names[screen];
 }
 

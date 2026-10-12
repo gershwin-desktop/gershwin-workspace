@@ -177,7 +177,7 @@ typedef void Display;
 /**
  * Makes an application the frontmost one without focusing a window of it
  * (it has none, or its desktop was clicked), so that the global menu bar
- * shows its menu: asks the window manager with a _GERSHWIN_ACTIVATE_APP
+ * shows its menu: asks the window manager with a _ACTIVATE_APPLICATION
  * client message.
  * @param pid The process ID
  * @return YES if the request was sent

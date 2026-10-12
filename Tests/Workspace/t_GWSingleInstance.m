@@ -24,9 +24,9 @@ int main(void)
   PASS(GWSingleInstanceVictim(4242, 100) == 4242,
        "the previous owner on this display is replaced");
 
-  PASS(strcmp(GWSingleInstanceSelectionName(0), "_GERSHWIN_WORKSPACE_S0") == 0,
+  PASS(strcmp(GWSingleInstanceSelectionName(0), "_WORKSPACE_S0") == 0,
        "selection name for screen 0");
-  PASS(strcmp(GWSingleInstanceSelectionName(3), "_GERSHWIN_WORKSPACE_S3") == 0,
+  PASS(strcmp(GWSingleInstanceSelectionName(3), "_WORKSPACE_S3") == 0,
        "selection name for screen 3");
   PASS(strcmp(GWSingleInstanceSelectionName(0), "WM_S0") != 0,
        "never the window manager selection");
