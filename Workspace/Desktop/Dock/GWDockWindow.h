@@ -34,6 +34,8 @@
  */
 @interface GWDockWindow : NSWindow
 {
+  /* The input rectangle last given to X, in window pixels. */
+  NSRect inputRect;
   Dock *dockView;
 }
 
@@ -50,6 +52,10 @@
  * current position and size.  Call after the dock has been tiled.
  */
 - (void)updateX11Strut;
+
+/* Only rect (in the Dock view, points) takes pointer input; NSZeroRect
+ * gives the whole window back. */
+- (void)setInputRect:(NSRect)rect;
 
 /**
  * Re-apply the X11 dock type and state properties.

@@ -1083,7 +1083,7 @@ static inline CGFloat _dockScaleFactor(void)
   CGFloat dividerLength = divided ? DIVIDER_SIZE : 0;
   /* Armed, the bar lies in the middle of the room kept for the whole
    * effect, so that no tile ever needs more of it than there is. */
-  CGFloat lead = magnifyArmed ? magnification.spread : 0.0;
+  CGFloat lead = [self keepsMagnificationRoom] ? magnification.spread : 0.0;
   CGFloat pos = lead + DockInsertionLead([self missingLength]);
   CGFloat barStart, barEnd, start, size, cell;
   NSUInteger trash = [self trashIndex];
@@ -1218,13 +1218,17 @@ static inline CGFloat _dockScaleFactor(void)
   magnification = DockMagnificationFit(magnification,
                                        screenLength - 2 * cell - barLength);
 
-  /* Armed, the Dock takes the room the icons can grow into all at once: as
-   * tall as the largest tile, and long enough for the spread to either
-   * side.  The window is then left alone for as long as the pointer plays
-   * with the Dock, so that growing an icon never moves it.  At rest the
-   * Dock is just the bar again. */
-  viewLength = magnifyArmed ? (barLength + 2 * magnification.spread) : barLength;
-  viewThickness = magnifyArmed ? magnification.magnifiedSize : cell;
+  /* With magnification on, the Dock keeps the room the icons can grow
+   * into all the time: as tall as the largest tile, and long enough for
+   * the spread to either side.  Resizing the window when the pointer
+   * comes and goes made the bar flicker: Workspace drew the new layout
+   * before the window manager had moved the window, so for a frame the
+   * bar and the miniatures showed shifted.  Outside the bar the window
+   * is transparent and, at rest, takes no input (-updateInputShape). */
+  viewLength = [self keepsMagnificationRoom]
+    ? (barLength + 2 * magnification.spread) : barLength;
+  viewThickness = [self keepsMagnificationRoom]
+    ? magnification.magnifiedSize : cell;
 
   if (position == DockPositionBottom)
   {
@@ -1269,7 +1273,8 @@ static inline CGFloat _dockScaleFactor(void)
 
   if (inOwnDockWindow)
     {
-      [[self window] setFrame: rect display: YES];
+      if (NSEqualRects(rect, [[self window] frame]) == NO)
+        [[self window] setFrame: rect display: YES];
       [self setNeedsDisplay: YES];
     }
   else
@@ -1296,6 +1301,7 @@ static inline CGFloat _dockScaleFactor(void)
   }
 
   [self updateIconGeometries];
+  [self updateInputShape];
 }
 
 - (NSRect)barFrame
@@ -1589,7 +1595,7 @@ static inline CGFloat _dockScaleFactor(void)
   NSRect wframe = [[self window] frame];
   NSRect bounds = [self bounds];
   CGFloat sf = _dockScaleFactor();
-  CGFloat lead = magnifyArmed ? magnification.spread : 0.0;
+  CGFloat lead = [self keepsMagnificationRoom] ? magnification.spread : 0.0;
   CGFloat length = (position == DockPositionBottom)
     ? bounds.size.width : bounds.size.height;
   CGFloat pos = (position == DockPositionBottom)
@@ -1667,15 +1673,17 @@ static inline CGFloat _dockScaleFactor(void)
    * resting on the edge of the Dock does not do both every frame. */
   if ((phase > 0.0) && (magnifyArmed == NO))
     {
+      /* The window already has the room; only the input it takes grows. */
       magnifyArmed = YES;
-      [self tile];
+      [self updateInputShape];
     }
   else if ((phase == 0.0) && magnifyArmed && (distance > baseCell / 2))
     {
       magnifyPhase = 0.0;
       magnifyFraction = 0.0;
       magnifyArmed = NO;
-      [self tile];
+      [self layoutIcons];
+      [self updateInputShape];
     }
 
   magnifyPhase = phase;
@@ -1712,7 +1720,29 @@ static inline CGFloat _dockScaleFactor(void)
   /* Modern and 3D are translucent, and the shelf does not even fill its
    * bar; Classic is not opaque either while it holds room for the
    * magnification, of which it only fills the bar. */
-  return (style == DockStyleClassic) && (magnifyArmed == NO);
+  return (style == DockStyleClassic) && ([self keepsMagnificationRoom] == NO);
+}
+
+/* Whether the window holds the room for the magnification around the bar,
+ * armed or not. */
+- (BOOL)keepsMagnificationRoom
+{
+  return magnifyEnabled && (magnification.spread > 0.0);
+}
+
+/* At rest only the bar takes the pointer, so that clicks above and beside
+ * it reach the windows and the desktop below; armed, the whole room does,
+ * as the magnified icons reach into it. */
+- (void)updateInputShape
+{
+  NSWindow *win = [self window];
+
+  if ([win isKindOfClass: [GWDockWindow class]] == NO)
+    return;
+  if ([self keepsMagnificationRoom] && (magnifyArmed == NO))
+    [(GWDockWindow *)win setInputRect: barRect];
+  else
+    [(GWDockWindow *)win setInputRect: NSZeroRect];
 }
 
 - (DockEdge)edge

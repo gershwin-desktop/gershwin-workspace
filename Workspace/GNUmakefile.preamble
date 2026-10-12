@@ -45,7 +45,8 @@ ADDITIONAL_INCLUDE_DIRS += -I../GWMetadata -I../../GWMetadata
 # installed copies. Using ADDITIONAL_LIB_DIRS alone is insufficient because
 # the system -L/System/Library/Libraries is added earlier in the command.
 ifneq ($(findstring mingw,$(GNUSTEP_TARGET_OS)),mingw)
-  ADDITIONAL_LDFLAGS += -lX11
+  # libXext for the Dock window's input shape (XShapeCombineRectangles)
+  ADDITIONAL_LDFLAGS += -lX11 -lXext
 endif
 ADDITIONAL_LDFLAGS += -L../FSNode/FSNode.framework/Versions/Current
 ADDITIONAL_LDFLAGS += -L../FSNode/FSNode.framework

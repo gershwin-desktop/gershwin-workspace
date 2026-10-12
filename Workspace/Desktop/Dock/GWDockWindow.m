@@ -34,6 +34,7 @@
 #ifndef _WIN32
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
+#include <X11/extensions/shape.h>
 #endif
 
 @implementation GWDockWindow
@@ -127,6 +128,9 @@
    */
   [self updateX11DockProperties];
   [self updateX11Strut];
+  /* Mapped anew: X knows nothing of the shape given before. */
+  inputRect = NSMakeRect(-1, -1, 0, 0);
+  [dockView updateInputShape];
   [dockView setMagnificationTracking: YES];
 }
 
@@ -160,6 +164,56 @@
   return (Display *)[srv serverDevice];
 }
 #endif
+
+- (void)setInputRect:(NSRect)rect
+{
+#ifndef _WIN32
+  Display *display = [self dockDisplay];
+  Window xwin = [self dockX11Window];
+  CGFloat sf = [self userSpaceScaleFactor];
+  CGFloat h = NSHeight([self frame]);
+  NSRect px = NSZeroRect;
+
+  if (display == NULL || xwin == (Window)0)
+    return;
+  if (sf <= 0.0)
+    sf = 1.0;
+
+  /* X measures from the top left, in pixels; rounded outwards so the bar's
+   * edge pixels still take the pointer (Fitts: the screen edge row). */
+  if (NSIsEmptyRect(rect) == NO)
+    {
+      CGFloat x0 = floor(NSMinX(rect) * sf);
+      CGFloat x1 = ceil(NSMaxX(rect) * sf);
+      CGFloat y0 = floor(h - NSMaxY(rect) * sf);
+      CGFloat y1 = ceil(h - NSMinY(rect) * sf);
+
+      px = NSMakeRect(x0, y0, x1 - x0, y1 - y0);
+    }
+
+  /* Asked again on every layout; X is only told about a change. */
+  if (NSEqualRects(px, inputRect))
+    return;
+  inputRect = px;
+
+  if (NSIsEmptyRect(px))
+    {
+      XShapeCombineMask(display, xwin, ShapeInput, 0, 0, None, ShapeSet);
+    }
+  else
+    {
+      XRectangle r;
+
+      r.x = (short)NSMinX(px);
+      r.y = (short)NSMinY(px);
+      r.width = (unsigned short)NSWidth(px);
+      r.height = (unsigned short)NSHeight(px);
+      XShapeCombineRectangles(display, xwin, ShapeInput, 0, 0, &r, 1,
+                              ShapeSet, Unsorted);
+    }
+  XFlush(display);
+#endif
+}
 
 #pragma mark - X11 Dock Properties
 
