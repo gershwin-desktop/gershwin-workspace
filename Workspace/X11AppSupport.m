@@ -594,6 +594,63 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return success;
 }
 
+- (void)frontmostApplicationExited:(pid_t)pid
+{
+    if (pid <= 0) return;
+
+    Display *dpy = [self openDisplay];
+    if (!dpy) return;
+
+    pid_t frontmost = 0;
+    @try {
+        Atom type;
+        int format;
+        unsigned long count = 0, after = 0;
+        unsigned char *data = NULL;
+
+        if (XGetWindowProperty(dpy, DefaultRootWindow(dpy),
+                               XInternAtom(dpy, "_GERSHWIN_ACTIVE_APP", False),
+                               0, 1, False, XA_CARDINAL, &type, &format,
+                               &count, &after, &data) == Success && data) {
+            if (type == XA_CARDINAL && format == 32 && count == 1) {
+                frontmost = (pid_t)*(unsigned long *)data;
+            }
+            XFree(data);
+        }
+    }
+    @finally {
+        [self releaseDisplay:dpy];
+    }
+    if (frontmost == pid) {
+        [self makeApplicationFrontmostWithPID:getpid()];
+    }
+}
+
+- (BOOL)makeApplicationFrontmostWithPID:(pid_t)pid
+{
+    if (pid <= 0) return NO;
+
+    Display *dpy = [self openDisplay];
+    if (!dpy) return NO;
+
+    @try {
+        XEvent event;
+        memset(&event, 0, sizeof(event));
+        event.xclient.type = ClientMessage;
+        event.xclient.window = DefaultRootWindow(dpy);
+        event.xclient.message_type = XInternAtom(dpy, "_GERSHWIN_ACTIVATE_APP", False);
+        event.xclient.format = 32;
+        event.xclient.data.l[0] = (long)pid;
+        XSendEvent(dpy, DefaultRootWindow(dpy), False,
+                   SubstructureRedirectMask | SubstructureNotifyMask, &event);
+        XFlush(dpy);
+    }
+    @finally {
+        [self releaseDisplay:dpy];
+    }
+    return YES;
+}
+
 - (BOOL)activateWindowsForPID:(pid_t)pid
 {
     NSArray *windows = [self windowsForPID:pid];
@@ -2153,6 +2210,15 @@ static GWX11WindowManager *sharedWindowManager = nil;
 }
 
 - (BOOL)activateWindow:(unsigned long)windowID
+{
+    return NO;
+}
+
+- (void)frontmostApplicationExited:(pid_t)pid
+{
+}
+
+- (BOOL)makeApplicationFrontmostWithPID:(pid_t)pid
 {
     return NO;
 }

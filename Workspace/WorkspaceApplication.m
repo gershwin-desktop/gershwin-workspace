@@ -1144,6 +1144,26 @@
   [self activateAppWithPath:path andName:name pid:0];
 }
 
+/* An application without a window has nothing to raise or focus, so the
+ * window manager is told which one is frontmost; the menu bar then shows its
+ * menu.  The pid comes from the caller (the Dock knows it) when the app was
+ * started outside Workspace and its record has none. */
+- (void)makeFrontmostIfWindowless:(GWLaunchedApp *)app pid:(pid_t)pid
+{
+  GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
+  pid_t appPID = pid;
+
+  if (appPID <= 0 && [app identifier]) {
+    appPID = (pid_t)[[app identifier] intValue];
+  }
+  if (appPID <= 0 && [app task]) {
+    @try { appPID = [[app task] processIdentifier]; } @catch (id ex) { appPID = 0; }
+  }
+  if (appPID > 0 && [[wm windowsForPID: appPID] count] == 0) {
+    [wm makeApplicationFrontmostWithPID: appPID];
+  }
+}
+
 - (void)activateAppWithPath:(NSString *)path
                     andName:(NSString *)name
                         pid:(pid_t)pid
@@ -1200,6 +1220,7 @@
 
   if (app) {
     [app activateApplication];
+    [self makeFrontmostIfWindowless: app pid: pid];
     if ([app application] == nil) {
       /* For X11/non-GNUstep apps, try PID first, then name matching */
       pid_t appPID = pid;
@@ -1216,6 +1237,7 @@
     if (pid > 0 && [wm activateWindowsForPID:pid]) {
       return;
     }
+    [self makeFrontmostIfWindowless: nil pid: pid];
     [self _x11ActivateForApp: nil name: name];
   }
 }

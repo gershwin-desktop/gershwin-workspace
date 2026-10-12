@@ -35,6 +35,8 @@
 #import "GWDesktopManager.h"
 #import "FSNSpringLoader.h"
 #import "Dock/DockStack.h"
+#import "X11AppSupport.h"
+#include <unistd.h>
 
 @implementation GWDesktopWindow
 
@@ -47,6 +49,12 @@
 {
   [[FSNSpringLoader sharedLoader] noteEvent: theEvent inWindow: self];
   [DockStack noteEvent: theEvent inWindow: self];
+  /* A click on the desktop makes Workspace the frontmost application.  The
+   * window manager cannot tell from the focus alone: the desktop also gets
+   * it when the frontmost application's last window goes away, and when a
+   * click into the Dock activates Workspace. */
+  if ([theEvent type] == NSLeftMouseDown || [theEvent type] == NSRightMouseDown)
+    [[GWX11WindowManager sharedManager] makeApplicationFrontmostWithPID: getpid()];
   [super sendEvent: theEvent];
 }
 
@@ -182,6 +190,13 @@
   unsigned long allDesktops = 0xFFFFFFFFUL;
   XChangeProperty(dpy, win, netWmDesktop, XA_CARDINAL, 32,
                   PropModeReplace, (unsigned char *)&allDesktops, 1);
+
+  /* Without it the window manager cannot tell that a click on the desktop
+   * (reported with _GERSHWIN_ACTIVATE_APP) comes from the application whose
+   * window already has the focus, and takes the active window away. */
+  unsigned long pid = (unsigned long)getpid();
+  XChangeProperty(dpy, win, XInternAtom(dpy, "_NET_WM_PID", False),
+                  XA_CARDINAL, 32, PropModeReplace, (unsigned char *)&pid, 1);
 
   XFlush(dpy);
 #endif

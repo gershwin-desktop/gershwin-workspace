@@ -429,6 +429,7 @@
       [[GWProcessMonitor sharedMonitor] addPID: pid
                                         token: appName
                                      callback: ^(pid_t exitedPid, id token) {
+        [[GWX11WindowManager sharedManager] frontmostApplicationExited: exitedPid];
         [weakSelf setAppPID: 0];
         /* A pinned icon must survive its app quitting - that is the whole
          * point of pinning.  The kernel monitor only watches the registered
@@ -662,7 +663,16 @@
           wantPID = [[windows objectAtIndex: 0] ownerPID];
           hasWindows = [snapshot hasVisibleWindowsForPID: wantPID];
         }
-      if (!hasWindows)
+      /* An application that closed its last window is still running: it
+       * keeps its dot, and a click brings it to the front with its menu.
+       * The pid is one of this display's windows' or our own launch's, and
+       * kill() succeeding means the process is alive and the user's own. */
+#ifndef _WIN32
+      BOOL alive = (wantPID > 0 && kill(wantPID, 0) == 0);
+#else
+      BOOL alive = (wantPID > 0 && GWWin32ProcessIsAlive(wantPID));
+#endif
+      if (!hasWindows && !alive)
         wantLaunched = NO;
     }
   else if (!wasLaunched && hasWindows)
@@ -1541,12 +1551,15 @@ x += 6; \
       }
     }
 
-  /* The dot goes under the middle of the icon: not of the part of the view
-   * that is being redrawn, and not of a tile the pointer has magnified. */
-  if (isWsIcon || (launched && [self hasVisibleWindows]))
+  /* The dot goes under the middle of the icon, not of the part of the view
+   * that is being redrawn.  It shows that the application runs, with or
+   * without a window open. */
+  if (isWsIcon || launched)
     {
       NSPoint p;
-      p.x = NSMidX(icnBounds) - 1;
+      /* The icon is centred in its tile, magnified or not; icnBounds and
+         icnPoint are only kept up to date by the magnified layout. */
+      p.x = floor(NSMidX([self bounds])) - 1;
       p.y = 2;
       DRAWDOT([NSColor blackColor], [NSColor whiteColor], p);
     }

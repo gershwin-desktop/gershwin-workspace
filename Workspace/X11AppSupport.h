@@ -175,6 +175,25 @@ typedef void Display;
 - (BOOL)activateWindowsForPID:(pid_t)pid;
 
 /**
+ * Makes an application the frontmost one without focusing a window of it
+ * (it has none, or its desktop was clicked), so that the global menu bar
+ * shows its menu: asks the window manager with a _GERSHWIN_ACTIVATE_APP
+ * client message.
+ * @param pid The process ID
+ * @return YES if the request was sent
+ */
+- (BOOL)makeApplicationFrontmostWithPID:(pid_t)pid;
+
+/**
+ * Called when a process has exited: if it was the frontmost application
+ * (one without a window, which leaves no window for the focus to move
+ * from), the calling application becomes the frontmost one, so the menu bar
+ * does not keep showing the menu of an application that is gone.
+ * @param pid The process ID that exited
+ */
+- (void)frontmostApplicationExited:(pid_t)pid;
+
+/**
  * Activates windows matching a name substring.
  * @param name The substring to match
  * @return YES if at least one window was activated
