@@ -38,6 +38,8 @@
 @interface DockIcon : FSNIcon <FSNSpringOpening>
 {
   NSString *appName;
+  /* What the Dock's label says while the pointer rests on the icon. */
+  NSString *labelText;
 
   BOOL isWsIcon;
   BOOL isTrashIcon;
@@ -115,6 +117,11 @@
 - (NSString *)path;
 
 - (NSString *)appName;
+
+- (NSString *)labelText;
+
+/* Where the icon's image is drawn in the view, magnified or not. */
+- (NSRect)imageRect;
         
 - (void)setWsIcon:(BOOL)value;
 

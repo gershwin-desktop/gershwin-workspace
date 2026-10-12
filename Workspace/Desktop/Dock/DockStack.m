@@ -896,6 +896,11 @@ static NSString *DockStackOpenFolderTitle(void)
   RELEASE (stack);
 }
 
++ (BOOL)isShown
+{
+  return shownStack != nil;
+}
+
 + (void)closeForIcon:(DockIcon *)anIcon
 {
   if (shownStack != nil && [shownStack icon] == anIcon)

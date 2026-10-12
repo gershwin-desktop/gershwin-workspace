@@ -119,6 +119,7 @@ Desktop/GWDesktopIcon.m \
 Desktop/Dock/Dock.m \
 Desktop/Dock/DockIcon.m \
 Desktop/Dock/DockStack.m \
+Desktop/Dock/DockLabel.m \
 Desktop/Dock/DockService.m \
 Desktop/Dock/GWDockWindow.m \
 Desktop/Dock/DockMiniatureTile.m \

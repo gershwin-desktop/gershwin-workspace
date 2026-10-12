@@ -50,6 +50,9 @@ typedef enum
 /* Closes the stack shown, if any. */
 + (void)close;
 
+/* Whether a stack is on the screen. */
++ (BOOL)isShown;
+
 /* Closes the stack of this icon, if it is shown - the icon is going away. */
 + (void)closeForIcon:(DockIcon *)icon;
 

@@ -174,9 +174,7 @@ static inline CGFloat _dockScaleFactor(void)
       position = [manager dockPosition];
 
       defEntry = [defaults objectForKey: @"dockstyle"];
-      style = DockStyleClassic;
-      if ([defEntry intValue] == DockStyleModern)
-	style = DockStyleModern;
+      style = DockStyleFromValue([defEntry intValue]);
 
       singleClickLaunch = [defaults boolForKey: @"singleclicklaunch"];
  
@@ -220,10 +218,7 @@ static inline CGFloat _dockScaleFactor(void)
 			 nil];
       [self registerForDraggedTypes: pbTypes];
 
-      if (style == DockStyleModern)
-	[self setBackColor: [[NSColor grayColor] colorWithAlphaComponent: 0.33]];
-      else
-	[self setBackColor: [NSColor grayColor]];
+      [self setBackColor: [self backColorForStyle: style]];
       
       [self createWorkspaceIcon];
 
@@ -1007,20 +1002,29 @@ static inline CGFloat _dockScaleFactor(void)
   return position;
 }
 
+/* The colour the icons' highlight is derived from (see -setBackColor:),
+ * and the fill of the Classic bar. */
+- (NSColor *)backColorForStyle:(DockStyle)s
+{
+  if (s == DockStyleModern)
+    return [[NSColor grayColor] colorWithAlphaComponent: 0.33];
+  return [NSColor grayColor];
+}
+
 - (void)setStyle:(DockStyle)s
 {
-  if(style != s)
-    {
-      if (s == DockStyleClassic)
-	{
-	  [self setBackColor: [NSColor grayColor]];
-	}
-      else if (s == DockStyleModern)
-	{
-	  [self setBackColor: [[NSColor grayColor] colorWithAlphaComponent: 0.33]];
-	}
-    }
+  if (style == s)
+    return;
+
+  /* Assigned first: -setBackColor: lays the Dock out again, and the
+   * layout and the redraw it asks for must already see the new style. */
   style = s;
+  [self setBackColor: [self backColorForStyle: s]];
+  [self tile];
+  /* Every icon draws its highlight from the new colour: redraw the whole
+   * window now rather than when something else next touches it. */
+  [self setNeedsDisplay: YES];
+  [[self window] display];
 }
 
 - (DockStyle)style
@@ -1705,19 +1709,187 @@ static inline CGFloat _dockScaleFactor(void)
 
 - (BOOL)isOpaque
 {
-  /* Modern style draws a semi-transparent gray, so the view is not opaque;
-   * neither is a Dock holding room for the magnification, which only fills
-   * its bar. */
-  return (style != DockStyleModern) && (magnifyArmed == NO);
+  /* Modern and 3D are translucent, and the shelf does not even fill its
+   * bar; Classic is not opaque either while it holds room for the
+   * magnification, of which it only fills the bar. */
+  return (style == DockStyleClassic) && (magnifyArmed == NO);
+}
+
+- (DockEdge)edge
+{
+  switch (position)
+    {
+      case DockPositionLeft:
+        return DockEdgeLeft;
+      case DockPositionRight:
+        return DockEdgeRight;
+      case DockPositionBottom:
+      default:
+        return DockEdgeBottom;
+    }
+}
+
+/* NSRectFill copies its colour into the window, alpha and all; the lines
+ * drawn over the glass must blend with it instead. */
+static void
+DockBlendRect(NSRect r, NSColor *color)
+{
+  [color set];
+  NSRectFillUsingOperation(r, NSCompositeSourceOver);
+}
+
+static NSBezierPath *
+DockRoundedPath(NSRect r, unsigned corners, CGFloat radius)
+{
+  NSBezierPath *path = [NSBezierPath bezierPath];
+  CGFloat rMinXMinY = (corners & DockCornerMinXMinY) ? radius : 0.0;
+  CGFloat rMaxXMinY = (corners & DockCornerMaxXMinY) ? radius : 0.0;
+  CGFloat rMaxXMaxY = (corners & DockCornerMaxXMaxY) ? radius : 0.0;
+  CGFloat rMinXMaxY = (corners & DockCornerMinXMaxY) ? radius : 0.0;
+
+  [path moveToPoint: NSMakePoint(NSMinX(r) + rMinXMinY, NSMinY(r))];
+  [path appendBezierPathWithArcFromPoint: NSMakePoint(NSMaxX(r), NSMinY(r))
+                                 toPoint: NSMakePoint(NSMaxX(r), NSMaxY(r))
+                                  radius: rMaxXMinY];
+  [path appendBezierPathWithArcFromPoint: NSMakePoint(NSMaxX(r), NSMaxY(r))
+                                 toPoint: NSMakePoint(NSMinX(r), NSMaxY(r))
+                                  radius: rMaxXMaxY];
+  [path appendBezierPathWithArcFromPoint: NSMakePoint(NSMinX(r), NSMaxY(r))
+                                 toPoint: NSMakePoint(NSMinX(r), NSMinY(r))
+                                  radius: rMinXMaxY];
+  [path appendBezierPathWithArcFromPoint: NSMakePoint(NSMinX(r), NSMinY(r))
+                                 toPoint: NSMakePoint(NSMaxX(r), NSMinY(r))
+                                  radius: rMinXMinY];
+  [path closePath];
+  return path;
+}
+
+/* The 3D Dock at the bottom of the screen: a glass shelf seen from
+ * slightly above, so that the icons look as if they stand on it.  The far
+ * edge catches the light and the near one is darker, which is what makes
+ * the surface read as lying flat rather than standing up. */
+- (void)drawShelfWithScale:(CGFloat)sf
+{
+  DockShelf s = DockShelfMake(barRect, sf);
+  CGFloat px = 1.0 / sf;
+  NSBezierPath *surface = [NSBezierPath bezierPath];
+  NSBezierPath *rim = [NSBezierPath bezierPath];
+  NSGradient *glass;
+  NSGradient *lip;
+
+  [surface moveToPoint: s.frontLeft];
+  [surface lineToPoint: s.frontRight];
+  [surface lineToPoint: s.backRight];
+  [surface lineToPoint: s.backLeft];
+  [surface closePath];
+
+  glass = [[NSGradient alloc] initWithColorsAndLocations:
+             [NSColor colorWithCalibratedWhite: 0.86 alpha: 0.72], (CGFloat)0.0,
+             [NSColor colorWithCalibratedWhite: 0.93 alpha: 0.58], (CGFloat)0.5,
+             [NSColor colorWithCalibratedWhite: 0.99 alpha: 0.78], (CGFloat)1.0,
+             nil];
+  [glass drawInBezierPath: surface angle: 90];
+  RELEASE (glass);
+
+  /* The sides and the back: a fine bright line, half a pixel inside, so
+   * that the outline stays one device pixel wide. */
+  [rim moveToPoint: NSMakePoint(s.frontLeft.x + px / 2, s.frontLeft.y)];
+  [rim lineToPoint: NSMakePoint(s.backLeft.x + px / 2, s.backLeft.y - px / 2)];
+  [rim lineToPoint: NSMakePoint(s.backRight.x - px / 2, s.backRight.y - px / 2)];
+  [rim lineToPoint: NSMakePoint(s.frontRight.x - px / 2, s.frontRight.y)];
+  [rim setLineWidth: px];
+  [[NSColor colorWithCalibratedWhite: 1.0 alpha: 0.85] set];
+  [rim stroke];
+
+  /* The front face, which looks down and away from the light. */
+  lip = [[NSGradient alloc] initWithStartingColor:
+             [NSColor colorWithCalibratedWhite: 0.72 alpha: 0.90]
+                                     endingColor:
+             [NSColor colorWithCalibratedWhite: 0.42 alpha: 0.90]];
+  [lip drawInRect: s.lip angle: 270];
+  RELEASE (lip);
+
+  /* The front edge of the glass, where it is brightest. */
+  DockBlendRect(NSMakeRect(NSMinX(s.lip), NSMaxY(s.lip) - px,
+                           NSWidth(s.lip), px),
+                [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.95]);
+
+  if (NSIsEmptyRect(dividerRect) == NO)
+    {
+      /* Across the shelf from front to back, a light line beside a dark
+       * one like a groove in the glass. */
+      CGFloat x = DockPixelAlign(NSMidX(dividerRect), sf);
+      NSRect groove = NSMakeRect(x - px, s.frontLeft.y,
+                                 px, s.backLeft.y - s.frontLeft.y);
+
+      DockBlendRect(groove, [NSColor colorWithCalibratedWhite: 0.25 alpha: 0.45]);
+      groove.origin.x += px;
+      DockBlendRect(groove, [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.85]);
+    }
+}
+
+/* 3D at a side, and Modern everywhere: a flat translucent panel against
+ * the screen edge.  3D's is dark, Modern's light and frosted;
+ * both have a fine light border that keeps them apart from what is behind
+ * them. */
+- (void)drawPanelWithScale:(CGFloat)sf
+{
+  BOOL modern = (style == DockStyleModern);
+  DockEdge edge = [self edge];
+  DockPanel p = DockPanelMake(barRect, edge, modern ? 5.0 : 6.0, sf);
+  CGFloat px = 1.0 / sf;
+  NSBezierPath *path = DockRoundedPath(p.borderRect, p.corners, p.radius);
+
+  [(modern ? [NSColor colorWithCalibratedWhite: 0.94 alpha: 0.62]
+           : [NSColor colorWithCalibratedWhite: 0.08 alpha: 0.55]) set];
+  [path fill];
+
+  [path setLineWidth: px];
+  [(modern ? [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.80]
+           : [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.45]) set];
+  [path stroke];
+
+  if (NSIsEmptyRect(dividerRect) == NO)
+    {
+      NSColor *c = modern ? [NSColor colorWithCalibratedWhite: 0.0 alpha: 0.25]
+                          : [NSColor colorWithCalibratedWhite: 1.0 alpha: 0.50];
+      NSRect line;
+
+      /* A line across the Dock, short of its edges. */
+      if (edge == DockEdgeBottom)
+        line = NSMakeRect(DockPixelAlign(NSMidX(dividerRect), sf),
+                          NSMinY(dividerRect) + 8,
+                          px, NSHeight(dividerRect) - 16);
+      else
+        line = NSMakeRect(NSMinX(dividerRect) + 8,
+                          DockPixelAlign(NSMidY(dividerRect), sf),
+                          NSWidth(dividerRect) - 16, px);
+      DockBlendRect(line, c);
+    }
 }
 
 - (void)drawRect:(NSRect)rect
 {
-  // NSLog(@"DEBUG: Dock drawRect called, rect: %@, superview: %@", NSStringFromRect(rect), [self superview]);
+  CGFloat sf = _dockScaleFactor();
+
   [super drawRect: rect];
 
-  /* Only the bar itself is filled: while the pointer magnifies the Dock,
+  if (NSIsEmptyRect(barRect))
+    return;
+
+  /* Only the bar itself is drawn: while the pointer magnifies the Dock,
    * the view also covers the room the enlarged icons grow into. */
+  if (style == DockStyleClassic)
+    [self drawFlatBar: rect];
+  else if ((style == DockStyle3D) && ([self edge] == DockEdgeBottom))
+    [self drawShelfWithScale: sf];
+  else
+    [self drawPanelWithScale: sf];
+}
+
+/* Classic: the bar as it has always been, flat and opaque. */
+- (void)drawFlatBar:(NSRect)rect
+{
   [backColor set];
   NSRectFill(NSIntersectionRect(rect, barRect));
 
@@ -2751,6 +2923,11 @@ static inline CGFloat _dockScaleFactor(void)
 - (BOOL)isDragTarget
 {
   return isDragTarget;
+}
+
+- (BOOL)isDragInProgress
+{
+  return isDragTarget || (dndSourceIcon != nil);
 }
 
 - (void)_launchRefreshTimerFired:(NSTimer *)timer

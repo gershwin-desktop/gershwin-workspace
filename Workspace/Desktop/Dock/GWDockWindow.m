@@ -30,6 +30,7 @@
 #import "Dock.h"
 #import "FSNSpringLoader.h"
 #import "DockStack.h"
+#import "DockLabel.h"
 #ifndef _WIN32
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
@@ -48,6 +49,7 @@
 {
   [[FSNSpringLoader sharedLoader] noteEvent: theEvent inWindow: self];
   [DockStack noteEvent: theEvent inWindow: self];
+  [DockLabel noteEvent: theEvent inWindow: self];
   [super sendEvent: theEvent];
 }
 
@@ -131,6 +133,7 @@
 - (void)hideDock
 {
   [dockView setMagnificationTracking: NO];
+  [DockLabel hide];
   [self orderOut: self];
 }
 

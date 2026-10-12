@@ -133,6 +133,8 @@ static NSString *nibName = @"DesktopPref";
 	  [cell setTitle: NSLocalizedString(@"Classic", @"")];
 	  cell = [dockStyleMatrix cellAtRow: 1 column: 0];
 	  [cell setTitle: NSLocalizedString(@"Modern", @"")];
+	  cell = [dockStyleMatrix cellAtRow: 2 column: 0];
+	  [cell setTitle: NSLocalizedString(@"3D", @"")];
 
 	  [omnipresentCheck setTitle: _(@"Omnipresent")];
 	  [launchSingleClick setTitle: NSLocalizedString(@"Single Click Launch", @"")];
@@ -269,7 +271,8 @@ static NSString *nibName = @"DesktopPref";
   NSInteger row, col;
   
   [dockStyleMatrix getRow: &row column: &col ofCell: cell];
-  [[manager dock] setStyle: (row == 0) ? DockStyleClassic : DockStyleModern];
+  /* The rows are in the order of the DockStyle values. */
+  [[manager dock] setStyle: DockStyleFromValue(row)];
   [manager saveDockDefaults];
 }
 

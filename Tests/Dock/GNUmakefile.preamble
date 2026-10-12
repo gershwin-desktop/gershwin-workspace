@@ -1,5 +1,6 @@
 GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
-# DockMagnification.h is Foundation-only inline code kept with the Dock.
+# DockMagnification.h and DockStyleGeometry.h (t_DockStyleGeometry,
+# t_DockLabelPlacement) are Foundation-only inline code kept with the Dock.
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Desktop/Dock
 # Ahead of -I../../FSNode below: Dock.m's own #include "config.h" is a quoted
 # include with no local config.h next to it, so it resolves through this
@@ -8,8 +9,9 @@ ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Desktop/Dock
 # have the same name), or Dock.m's "#if HAVE_DBUS" reads as false and its
 # DockServiceDBus calls go undeclared.
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace
-# t_DockPoll imports Dock.h itself (for DockMagnifyPollInterval and
-# DockIconNeedsLaunchedStateScan, both Foundation-only); Dock.h drags in
+# t_DockStyle and t_DockPoll import Dock.h itself (for DockStyleFromValue,
+# DockMagnifyPollInterval and DockIconNeedsLaunchedStateScan, all
+# Foundation-only); Dock.h drags in
 # GWDesktopManager.h and, through it, FSNodeRep.h purely for declarations -
 # nothing in this suite links FSNode or the desktop manager.
 ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Desktop -I../../FSNode

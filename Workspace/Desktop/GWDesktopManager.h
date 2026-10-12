@@ -51,6 +51,8 @@ typedef enum {
   Dock *dock;
   GWDockWindow *dockWindow;
   BOOL hidedock;
+  /* Set while -saveDockDefaults writes its keys one by one. */
+  BOOL savingDockDefaults;
   DockPosition dockPosition;
   
   NSRect dockReservedFrame;

@@ -448,6 +448,13 @@ static GWDesktopManager *desktopManager = nil;
   id entry;
   int value;
 
+  /* Each write of -saveDockDefaults posts this at once, before the keys
+   * after it are written: reading them then would find the old values
+   * and undo the change being saved (a style picked in Preferences
+   * snapped straight back when the position key was written first). */
+  if (savingDockDefaults)
+    return;
+
   /* Each setter is only called for a real change: the notification also
    * fires for our own writes and for unrelated keys. */
   entry = [defaults objectForKey: @"dockposition"];
@@ -464,8 +471,7 @@ static GWDesktopManager *desktopManager = nil;
     }
 
   entry = [defaults objectForKey: @"dockstyle"];
-  value = ([entry intValue] == DockStyleModern) ? DockStyleModern
-                                                : DockStyleClassic;
+  value = DockStyleFromValue([entry intValue]);
   if (dock && (DockStyle)value != [dock style])
     {
       [dock setStyle: (DockStyle)value];
@@ -478,11 +484,13 @@ static GWDesktopManager *desktopManager = nil;
 
   /* Written when Workspace's own preferences change them, not at quit:
    * a quit-time write would undo what another tool stored meanwhile. */
+  savingDockDefaults = YES;
   [defaults setObject: [NSNumber numberWithInt: dockPosition]
                forKey: @"dockposition"];
   [defaults setBool: hidedock forKey: @"hidedock"];
   [defaults setObject: [NSNumber numberWithInt: [dock style]]
                forKey: @"dockstyle"];
+  savingDockDefaults = NO;
 }
 
 - (NSRect)desktopWindowFrame

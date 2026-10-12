@@ -27,6 +27,7 @@
 #import "GWDesktopManager.h"
 #import "FSNodeRep.h"
 #import "DockMagnification.h"
+#import "DockStyleGeometry.h"
 
 @class NSWindow;
 @class NSColor;
@@ -111,8 +112,27 @@ DockIconNeedsLaunchedStateScan(BOOL isX11OnlyApp, BOOL isLaunched, pid_t appPID)
 typedef enum DockStyle
 {   
   DockStyleClassic = 0,
-  DockStyleModern = 1
+  DockStyleModern = 1,
+  DockStyle3D = 2
 } DockStyle;
+
+/* The style a "dockstyle" default or a row of the Preferences' style
+ * radios stands for: anything unknown is Classic, so that a value written
+ * by a later version never leaves the Dock without a look.
+ * Foundation-only so it can be tested headless. */
+static inline DockStyle
+DockStyleFromValue(NSInteger value)
+{
+  switch (value)
+    {
+      case DockStyleModern:
+        return DockStyleModern;
+      case DockStyle3D:
+        return DockStyle3D;
+      default:
+        return DockStyleClassic;
+    }
+}
 
 @class DockMiniatureWatcher;
 
@@ -300,6 +320,9 @@ typedef enum DockStyle
 
 - (DockPosition)position;
 
+/* The screen edge the Dock is on, for the geometry in DockStyleGeometry.h. */
+- (DockEdge)edge;
+
 - (DockStyle)style;
 
 - (void)setStyle:(DockStyle)s;
@@ -389,5 +412,8 @@ typedef enum DockStyle
 - (void)concludeDragOperation:(id <NSDraggingInfo>)sender;
 
 - (BOOL)isDragTarget;
+
+/* Whether something is being dragged over the Dock or out of it. */
+- (BOOL)isDragInProgress;
 
 @end

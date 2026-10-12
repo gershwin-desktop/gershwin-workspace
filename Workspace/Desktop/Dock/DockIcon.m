@@ -76,6 +76,7 @@
   RELEASE (sharpIcon);
   RELEASE (sharpTrashFullIcon);
   RELEASE (appName);
+  RELEASE (labelText);
   RELEASE (highlightColor);
   RELEASE (darkerColor);
   RELEASE (highlightImage);
@@ -153,9 +154,7 @@
     progressVisible = NO;
     urgent = NO;
 
-    if (appName) {
-      [self setToolTip: appName];
-    }
+    ASSIGN (labelText, appName);
   }
 
   return self;
@@ -169,6 +168,23 @@
 - (NSString *)appName
 {
   return appName;
+}
+
+/* Shown by the Dock's own label (DockLabel) rather than as an NSView tool
+ * tip: those are small, appear at the pointer and know nothing of the
+ * Dock, its magnification or its stacks. */
+- (NSString *)labelText
+{
+  return labelText;
+}
+
+- (NSRect)imageRect
+{
+  NSRect bounds = [self bounds];
+  CGFloat side = (magnifiedSize > 0.0) ? magnifiedSize : iconSize;
+
+  return NSMakeRect(NSMidX(bounds) - side / 2, NSMidY(bounds) - side / 2,
+                    side, side);
 }
 
 - (void)setWsIcon:(BOOL)value
@@ -420,7 +436,7 @@
 
   if (pid > 0)
     {
-      [self setToolTip: [NSString stringWithFormat: @"%@ [%d]", appName, (int)pid]];
+      ASSIGN (labelText, ([NSString stringWithFormat: @"%@ [%d]", appName, (int)pid]));
 
       /* Register with kernel process monitor so we get notified the
        * instant the process exits, rather than relying on poll-based
@@ -449,7 +465,7 @@
     }
   else
     {
-      [self setToolTip: appName];
+      ASSIGN (labelText, appName);
     }
 }
 
