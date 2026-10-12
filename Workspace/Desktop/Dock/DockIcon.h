@@ -49,7 +49,7 @@
   NSImage *sharpIcon;
   NSImage *sharpTrashFullIcon;
   /* The icon's faded mirror image on the 3D shelf, made from reflectionSource
-   * at reflectionPixels wide and kept until either changes. */
+   * at reflectionPixels wide, the largest size it was drawn at so far. */
   NSImage *reflection;
   NSImage *reflectionSource;
   int reflectionPixels;

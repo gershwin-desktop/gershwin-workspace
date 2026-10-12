@@ -337,15 +337,15 @@ DockMakeReflection(NSImage *image, int width, int height)
   return AUTORELEASE (result);
 }
 
-/* The reflection of image drawn width points wide, made again only when
- * the image changes or its size passes another step: the magnification
- * changes the size on every frame, and a faint, fading mirror image does
- * not need to be sharper than a coarse step. */
+/* The reflection of image for drawing width points wide.  The largest one
+ * made so far is kept and drawn scaled down: magnification changes the
+ * size on every frame, and a pointer moving to and fro would otherwise
+ * make it again each time the size crossed a step. */
 - (NSImage *)reflectionOfImage:(NSImage *)image width:(CGFloat)width
 {
   int pixels = (int)(MAX(1.0, ceil(width * [self scaleFactor] / 64.0)) * 64.0);
 
-  if (image != reflectionSource || pixels != reflectionPixels)
+  if (image != reflectionSource || pixels > reflectionPixels)
     {
       ASSIGN (reflectionSource, image);
       reflectionPixels = pixels;
