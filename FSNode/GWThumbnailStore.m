@@ -28,6 +28,20 @@
 #include <time.h>
 #include <unistd.h>
 
+/* GNUstep's -fileSystemRepresentation is UTF-16 on Windows, which the
+ * narrow C calls used here cannot take, so they get the UTF-8 form. */
+#ifdef _WIN32
+#define GW_FSREP(path) [(path) UTF8String]
+#else
+#define GW_FSREP(path) [(path) fileSystemRepresentation]
+#endif
+
+/* Windows opens files as text unless told otherwise, which would alter
+ * the bytes of every PNG. */
+#ifndef O_BINARY
+#define O_BINARY 0
+#endif
+
 NSString * const GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNotification";
 
 /* The Software text chunk of every stored PNG. */
@@ -51,7 +65,7 @@ static const char GWThumbnailTempPrefix[] = "tmp-";
 BOOL
 GWThumbnailStampForPath(NSString *path, GWThumbnailFileStamp *stamp)
 {
-  const char *p = [path fileSystemRepresentation];
+  const char *p = GW_FSREP(path);
   struct stat st;
 
   if (p == NULL || stat(p, &st) != 0 || S_ISREG(st.st_mode) == 0
@@ -72,7 +86,7 @@ SourceState(NSString *source)
   struct stat st;
 
   memset(&state, 0, sizeof(state));
-  if (stat([source fileSystemRepresentation], &st) == 0)
+  if (stat(GW_FSREP(source), &st) == 0)
     {
       state.exists = YES;
       state.stamp.mtime = (long long)st.st_mtime;
@@ -80,7 +94,7 @@ SourceState(NSString *source)
       state.stamp.ctime = (long long)st.st_ctime;
     }
   state.parentExists =
-    (stat([[source stringByDeletingLastPathComponent] fileSystemRepresentation],
+    (stat(GW_FSREP([source stringByDeletingLastPathComponent]),
           &st) == 0 && S_ISDIR(st.st_mode));
   return state;
 }
@@ -88,7 +102,7 @@ SourceState(NSString *source)
 static NSData *
 ReadHead(NSString *path)
 {
-  int fd = open([path fileSystemRepresentation], O_RDONLY);
+  int fd = open(GW_FSREP(path), O_RDONLY | O_BINARY);
   NSMutableData *data;
   ssize_t n;
 
@@ -110,7 +124,7 @@ ReadHead(NSString *path)
 static BOOL
 EnsureDirectory(NSString *path)
 {
-  const char *p = [path fileSystemRepresentation];
+  const char *p = GW_FSREP(path);
   struct stat st;
 
   if (stat(p, &st) == 0)
@@ -123,7 +137,13 @@ EnsureDirectory(NSString *path)
       return NO;
     }
   /* Thumbnails show what the user's files contain. */
+#ifdef _WIN32
+  /* Windows' mkdir() has no mode; directories there follow the ACL of the
+   * profile they are created in. */
+  return (mkdir(p) == 0 || errno == EEXIST) ? YES : NO;
+#else
   return (mkdir(p, 0700) == 0 || errno == EEXIST) ? YES : NO;
+#endif
 }
 
 /* An exclusive lock on the whole index while it is merged and written;
@@ -155,14 +175,51 @@ IndexUnlock(int fd)
 #endif
 }
 
-/* rename() over an existing file; Windows' own rename() refuses that. */
+/* rename() over an existing file; Windows' own rename() refuses that.
+ * The names are UTF-8, as everywhere in this file. */
 static BOOL
 ReplaceExisting(const char *from, const char *to)
 {
 #ifdef _WIN32
-  return MoveFileExA(from, to, MOVEFILE_REPLACE_EXISTING) ? YES : NO;
+  NSString *source = [NSString stringWithUTF8String: from];
+  NSString *target = [NSString stringWithUTF8String: to];
+
+  return MoveFileExW((LPCWSTR)[source fileSystemRepresentation],
+                     (LPCWSTR)[target fileSystemRepresentation],
+                     MOVEFILE_REPLACE_EXISTING) ? YES : NO;
 #else
   return rename(from, to) == 0;
+#endif
+}
+
+/* A fresh, empty, private file named after template, whose last six
+ * characters are XXXXXX, which are replaced; -1 and errno on failure.
+ * Windows has no mkstemp(). */
+static int
+CreateTemporary(char *template)
+{
+#ifdef _WIN32
+  int tries;
+
+  for (tries = 0; tries < 100; tries++)
+    {
+      size_t length = strlen(template);
+      int fd;
+
+      memcpy(template + length - 6, "XXXXXX", 6);
+      if (_mktemp_s(template, length + 1) != 0)
+        {
+          return -1;
+        }
+      fd = open(template, O_RDWR | O_CREAT | O_EXCL | O_BINARY, 0600);
+      if (fd >= 0 || errno != EEXIST)
+        {
+          return fd;
+        }
+    }
+  return -1;
+#else
+  return mkstemp(template);
 #endif
 }
 
@@ -171,7 +228,13 @@ FileAge(NSString *path, time_t now)
 {
   struct stat st;
 
-  if (lstat([path fileSystemRepresentation], &st) != 0)
+  /* A symbolic link is judged by its own age; Windows has none to follow
+   * here. */
+#ifdef _WIN32
+  if (stat(GW_FSREP(path), &st) != 0)
+#else
+  if (lstat(GW_FSREP(path), &st) != 0)
+#endif
     {
       return -1;
     }
@@ -285,7 +348,7 @@ static BOOL sharedWritable = NO;
   struct stat st;
 
   if (GWThumbnailStampForPath(path, &stamp)
-      && stat([file fileSystemRepresentation], &st) == 0
+      && stat(GW_FSREP(file), &st) == 0
       && (long long)st.st_mtime >= stamp.mtime)
     {
       NSDictionary *migrated = GWThumbnailMakeEntry(name, GWThumbnailKindThumbnail,
@@ -295,7 +358,7 @@ static BOOL sharedWritable = NO;
       [pending setObject: migrated forKey: path];
       return;
     }
-  unlink([file fileSystemRepresentation]);
+  unlink(GW_FSREP(file));
   [index removeObjectForKey: path];
   [pending setObject: name forKey: path];
 }
@@ -306,7 +369,7 @@ static BOOL sharedWritable = NO;
 - (void)rebuildIndex
 {
   NSMutableDictionary *newest = [NSMutableDictionary dictionary];
-  DIR *d = opendir([directory fileSystemRepresentation]);
+  DIR *d = opendir(GW_FSREP(directory));
   struct dirent *de;
 
   [index removeAllObjects];
@@ -327,7 +390,7 @@ static BOOL sharedWritable = NO;
             GWThumbnailTextChunksInPNG(ReadHead(file)), name, &path);
           struct stat st;
 
-          if (entry != nil && stat([file fileSystemRepresentation], &st) == 0)
+          if (entry != nil && stat(GW_FSREP(file), &st) == 0)
             {
               NSNumber *age = [newest objectForKey: path];
 
@@ -348,7 +411,7 @@ static BOOL sharedWritable = NO;
 - (void)initCounter
 {
   NSEnumerator *e = [index objectEnumerator];
-  DIR *d = opendir([directory fileSystemRepresentation]);
+  DIR *d = opendir(GW_FSREP(directory));
   struct dirent *de;
   id value;
 
@@ -573,7 +636,7 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
 
   /* Merge with what is on disk under an exclusive lock, so a second
    * process writing the index at the same time loses nothing. */
-  fd = open([lockPath fileSystemRepresentation], O_RDWR | O_CREAT, 0600);
+  fd = open(GW_FSREP(lockPath), O_RDWR | O_CREAT | O_BINARY, 0600);
   if (fd < 0 || IndexLock(fd) == NO)
     {
       NSLog(@"GWThumbnailStore: cannot lock %@: %s", lockPath, strerror(errno));
@@ -620,7 +683,7 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
 /* Writes png under the next free counter name. The name is claimed with
  * O_EXCL, which fails when it exists and so keeps threads and processes
  * from taking the same one, and the complete file then replaces the empty
- * claim in one rename; mkstemp makes it 0600. */
+ * claim in one rename; the temporary file is created 0600. */
 - (NSString *)writeFile:(NSData *)png
 {
   NSString *template = [directory stringByAppendingPathComponent:
@@ -629,10 +692,10 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
   NSUInteger left = [png length];
   NSString *name = nil;
   BOOL ok = YES;
-  char *tmp = strdup([template fileSystemRepresentation]);
+  char *tmp = strdup(GW_FSREP(template));
   int fd;
 
-  if (tmp == NULL || (fd = mkstemp(tmp)) < 0)
+  if (tmp == NULL || (fd = CreateTemporary(tmp)) < 0)
     {
       NSLog(@"GWThumbnailStore: cannot write in %@: %s", directory, strerror(errno));
       free(tmp);
@@ -666,13 +729,13 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
       c = counter;
       [lock unlock];
       name = [NSString stringWithFormat: @"%lx.png", c];
-      fd = open([[directory stringByAppendingPathComponent: name]
-                  fileSystemRepresentation], O_WRONLY | O_CREAT | O_EXCL, 0600);
+      fd = open(GW_FSREP([directory stringByAppendingPathComponent: name]
+                 ), O_WRONLY | O_CREAT | O_EXCL | O_BINARY, 0600);
       if (fd >= 0)
         {
           close(fd);
-          ok = ReplaceExisting(tmp, [[directory stringByAppendingPathComponent: name]
-                                  fileSystemRepresentation]);
+          ok = ReplaceExisting(tmp, GW_FSREP([directory stringByAppendingPathComponent: name]
+                                 ));
           break;
         }
       if (errno != EEXIST)
@@ -702,7 +765,7 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
   [lock unlock];
   if (old != nil && [old isEqual: [entry objectForKey: GWThumbnailEntryName]] == NO)
     {
-      unlink([[directory stringByAppendingPathComponent: old] fileSystemRepresentation]);
+      unlink(GW_FSREP([directory stringByAppendingPathComponent: old]));
     }
   [old release];
   [self setNeedsFlush];
@@ -830,7 +893,7 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
     {
       return NO;
     }
-  unlink([[directory stringByAppendingPathComponent: name] fileSystemRepresentation]);
+  unlink(GW_FSREP([directory stringByAppendingPathComponent: name]));
   [name release];
   [self setNeedsFlush];
   return YES;
@@ -940,7 +1003,7 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
       [self setEntry: entry forPath: path];
       return;
     }
-  unlink([file fileSystemRepresentation]);
+  unlink(GW_FSREP(file));
 }
 
 - (NSArray *)removeStaleEntries
@@ -987,7 +1050,7 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
     }
   [lock unlock];
 
-  d = opendir([directory fileSystemRepresentation]);
+  d = opendir(GW_FSREP(directory));
   if (d != NULL)
     {
       while ((de = readdir(d)) != NULL)
@@ -1003,7 +1066,7 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
 
               if (FileAge(file, now) >= GW_THUMBNAIL_IN_FLIGHT)
                 {
-                  unlink([file fileSystemRepresentation]);
+                  unlink(GW_FSREP(file));
                 }
             }
           else if (GWThumbnailNameCounter(name) >= 0
@@ -1050,7 +1113,7 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
       [dirs addObject: [cacheDirectory stringByAppendingPathComponent:
         [sizes objectAtIndex: i]]];
     }
-  d = opendir([failRoot fileSystemRepresentation]);
+  d = opendir(GW_FSREP(failRoot));
   if (d != NULL)
     {
       while ((de = readdir(d)) != NULL)
@@ -1072,7 +1135,7 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
       NSString *dir = [dirs objectAtIndex: i];
       BOOL failures = [failDirs containsObject: dir];
 
-      d = opendir([dir fileSystemRepresentation]);
+      d = opendir(GW_FSREP(dir));
       if (d == NULL)
         {
           continue;
@@ -1114,7 +1177,7 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
                       moved++;
                     }
                 }
-              unlink([file fileSystemRepresentation]);
+              unlink(GW_FSREP(file));
             }
           RELEASE(pool);
         }
@@ -1122,7 +1185,7 @@ ApplyChange(NSMutableDictionary *target, NSString *path, id change)
       if (failures)
         {
           /* Fails, as it should, while other entries are still in it. */
-          rmdir([dir fileSystemRepresentation]);
+          rmdir(GW_FSREP(dir));
         }
     }
   return moved;
