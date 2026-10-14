@@ -37,6 +37,7 @@ static NSString *nibName = @"DesktopPref";
 
 - (void)dealloc
 {
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
   RELEASE (prefbox);
   RELEASE (imagePath);
   RELEASE (imagesDir);
@@ -56,8 +57,6 @@ static NSString *nibName = @"DesktopPref";
       else
 	{
 	  NSString *impath;
-	  DockPosition dockpos;
-	  DockStyle dockstyle;
 	  id cell;
 
 	  RETAIN (prefbox);
@@ -97,11 +96,15 @@ static NSString *nibName = @"DesktopPref";
 	  // General
 	  [omnipresentCheck setState: ([manager usesXBundle] ? NSOnState : NSOffState)];
 	  [launchSingleClick setState: ([manager singleClickLaunch] ? NSOnState : NSOffState)];
-	  [useDockCheck setState: ([manager dockActive] ? NSOnState : NSOffState)];
-	  dockpos = [manager dockPosition];
-	  [dockPosMatrix selectCellAtRow: dockpos column: 0];
-	  dockstyle = [[manager dock] style];
-	  [dockStyleMatrix selectCellAtRow: dockstyle column: 0];
+	  [self refreshDockControls];
+
+	  /* The Dock settings can be changed while this panel is open, by
+	     defaults write or another tool. */
+	  [[NSNotificationCenter defaultCenter]
+	    addObserver: self
+	       selector: @selector(dockSettingsDidChange:)
+		   name: GWDockSettingsDidChangeNotification
+		 object: manager];
 
 	  /* Internationalization */
 	  [[tabView tabViewItemAtIndex: 0] setLabel: NSLocalizedString(@"Background", @"")];
@@ -142,6 +145,18 @@ static NSString *nibName = @"DesktopPref";
     }
 
   return self;
+}
+
+- (void)refreshDockControls
+{
+  [useDockCheck setState: ([manager dockActive] ? NSOnState : NSOffState)];
+  [dockPosMatrix selectCellAtRow: [manager dockPosition] column: 0];
+  [dockStyleMatrix selectCellAtRow: [[manager dock] style] column: 0];
+}
+
+- (void)dockSettingsDidChange:(NSNotification *)notif
+{
+  [self refreshDockControls];
 }
 
 - (NSView *)prefView

@@ -62,6 +62,9 @@
 
 static GWDesktopManager *desktopManager = nil;
 
+NSString * const GWDockSettingsDidChangeNotification =
+  @"GWDockSettingsDidChangeNotification";
+
 @implementation GWDesktopManager
 
 + (GWDesktopManager *)desktopManager
@@ -508,6 +511,7 @@ static GWDesktopManager *desktopManager = nil;
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   id entry;
   int value;
+  BOOL changed = NO;
 
   /* Each write of -saveDockDefaults posts this at once, before the keys
    * after it are written: reading them then would find the old values
@@ -524,11 +528,13 @@ static GWDesktopManager *desktopManager = nil;
        || value == DockPositionBottom) && (DockPosition)value != dockPosition)
     {
       [self setDockPosition: (DockPosition)value];
+      changed = YES;
     }
 
   if ([defaults boolForKey: @"hidedock"] != hidedock)
     {
       [self setDockActive: hidedock];
+      changed = YES;
     }
 
   entry = [defaults objectForKey: @"dockstyle"];
@@ -536,6 +542,17 @@ static GWDesktopManager *desktopManager = nil;
   if (dock && (DockStyle)value != [dock style])
     {
       [dock setStyle: (DockStyle)value];
+      changed = YES;
+    }
+
+  /* Posted here, after the Dock was changed, and not by the panel listening
+   * to the defaults notification itself: its observer may run before ours
+   * and would then read the old state. */
+  if (changed)
+    {
+      [[NSNotificationCenter defaultCenter]
+        postNotificationName: GWDockSettingsDidChangeNotification
+                      object: self];
     }
 }
 

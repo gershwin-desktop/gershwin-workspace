@@ -33,6 +33,10 @@ typedef enum {
   DockPositionBottom
 } DockPosition;
 
+/* Posted after the Dock settings in the defaults were applied to the Dock,
+ * so a panel showing them can follow a change made from outside. */
+extern NSString * const GWDockSettingsDidChangeNotification;
+
 @class Workspace;
 @class GWDesktopView;
 @class Dock;
