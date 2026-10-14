@@ -31,6 +31,9 @@
 #import <unistd.h>
 #import <sys/stat.h>
 #import "FSNodeRep.h"
+#import "GWThumbnailStore.h"
+#import "GWThumbnailImage.h"
+#import "GWThumbnailPNG.h"
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
 
@@ -181,6 +184,103 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
   return NO;
 }
 
+/* The file NSWorkspace -iconForFile: takes an application's icon from,
+ * found the same way libs-gui does (NSIcon, then CFBundleIconFile, in the
+ * resources or the wrapper, then <name>.png and the extensions it tries
+ * after that, and a .dir.png or .dir.tiff in the wrapper above all of
+ * them), so the stored icon is validated against the file it was made
+ * from. nil when the application has no icon file of its own. */
+static NSString *
+FSNodeRepApplicationIconSource(NSString *appPath)
+{
+  NSFileManager *mgr = [NSFileManager defaultManager];
+  NSBundle *bundle = [NSBundle bundleWithPath: appPath];
+  NSString *iconPath = [[bundle infoDictionary] objectForKey: @"NSIcon"];
+  NSString *dirIcon;
+
+  if (iconPath == nil)
+    {
+      iconPath = [[bundle infoDictionary] objectForKey: @"CFBundleIconFile"];
+    }
+  if (iconPath != nil && [iconPath isAbsolutePath] == NO)
+    {
+      NSString *file = iconPath;
+
+      iconPath = [bundle pathForImageResource: file];
+      if (iconPath == nil)
+        {
+          iconPath = [appPath stringByAppendingPathComponent: file];
+          if ([mgr isReadableFileAtPath: iconPath] == NO)
+            {
+              iconPath = nil;
+            }
+        }
+    }
+  if (iconPath == nil)
+    {
+      NSString *name = [[appPath lastPathComponent] stringByDeletingPathExtension];
+
+      /* libs-gui appends each extension to the previous candidate. */
+      iconPath = [[appPath stringByAppendingPathComponent: name]
+                   stringByAppendingPathExtension: @"png"];
+      if ([mgr isReadableFileAtPath: iconPath] == NO)
+        {
+          iconPath = [iconPath stringByAppendingPathExtension: @"tiff"];
+          if ([mgr isReadableFileAtPath: iconPath] == NO)
+            {
+              iconPath = [iconPath stringByAppendingPathExtension: @"icns"];
+              if ([mgr isReadableFileAtPath: iconPath] == NO)
+                {
+                  return nil;
+                }
+            }
+        }
+    }
+
+  dirIcon = [appPath stringByAppendingPathComponent: @".dir.png"];
+  if ([mgr isReadableFileAtPath: dirIcon])
+    {
+      return dirIcon;
+    }
+  dirIcon = [appPath stringByAppendingPathComponent: @".dir.tiff"];
+  if ([mgr isReadableFileAtPath: dirIcon])
+    {
+      return dirIcon;
+    }
+  return iconPath;
+}
+
+/* A custom icon from file metadata. When the provider says which file the
+ * icon is read from, the decoded icon is kept in the thumbnail store and
+ * a path without a custom icon is answered without decoding anything. */
+- (NSImage *)customIconOfSize:(int)size forPath:(NSString *)path
+{
+  id provider = [self metadataProvider];
+  NSString *key = [path stringByAppendingString: @".customicon"];
+  NSString *source;
+  NSImage *icon;
+  BOOL watchCTime = NO;
+
+  if ([provider respondsToSelector: @selector(customIconSourceForPath:watchCTime:)] == NO)
+    {
+      icon = [provider customIconForPath: path];
+      return icon ? [self cachedIconOfSize: size forKey: key addBaseIcon: icon] : nil;
+    }
+  source = [provider customIconSourceForPath: path watchCTime: &watchCTime];
+  if (source == nil)
+    {
+      return nil;
+    }
+  icon = [self storedIconOfSize: size forKey: key path: path source: source];
+  if (icon != nil)
+    {
+      return icon;
+    }
+  icon = [provider customIconForPath: path];
+  return icon ? [self storeIcon: icon ofSize: size forKey: key path: path
+                         source: source watchCTime: watchCTime] : nil;
+}
+
 - (NSImage *)iconOfSize:(int)size 
                 forNode:(FSNode *)node
 {
@@ -317,17 +417,33 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
         NSString *realDirPath = ([node isLink]
                                    ? [nodepath stringByResolvingSymlinksInPath]
                                    : nodepath);
-        NSImage *customIcon = [[self metadataProvider] customIconForPath: realDirPath];
+        NSImage *customIcon = [self customIconOfSize: size forPath: realDirPath];
         if (customIcon)
           {
-            icon = [self cachedIconOfSize: size forKey: [realDirPath stringByAppendingString:@".customicon"] addBaseIcon: customIcon];
+            icon = customIcon;
             key = nil;  // prevent overwriting with default icon below
           }
       }
 
       if (key != nil)
 	{
-	  icon = [self cachedIconOfSize: size forKey: key];
+          /* An application's icon comes from the store while its icon
+           * file is unchanged, without decoding that file again. */
+          NSString *appIconSource = nil;
+
+          if ([node isApplication] && [node isLink] == NO)
+            {
+              appIconSource = FSNodeRepApplicationIconSource(nodepath);
+            }
+          if (appIconSource != nil)
+            {
+              icon = [self storedIconOfSize: size forKey: key path: nodepath
+                                     source: appIconSource];
+            }
+          if (icon == nil)
+            {
+	      icon = [self cachedIconOfSize: size forKey: key];
+            }
     
 	  if (icon == nil)
 	    {
@@ -366,8 +482,17 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
                       [baseIcon unlockFocus];
                       [baseIcon autorelease];
                     }
-   
-                  icon = [self cachedIconOfSize: size forKey: key addBaseIcon: baseIcon];
+
+                  if (appIconSource != nil)
+                    {
+                      icon = [self storeIcon: baseIcon ofSize: size forKey: key
+                                        path: nodepath source: appIconSource
+                                  watchCTime: NO];
+                    }
+                  else
+                    {
+                      icon = [self cachedIconOfSize: size forKey: key addBaseIcon: baseIcon];
+                    }
                 }
 	    }
 	}
@@ -411,11 +536,7 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
       // Check for a custom icon from Finder metadata (non-directory files)
       if (icon == nil)
         {
-          NSImage *customIcon = [[self metadataProvider] customIconForPath: realPath];
-          if (customIcon)
-            {
-              icon = [self cachedIconOfSize: size forKey: [realPath stringByAppendingString:@".customicon"] addBaseIcon: customIcon];
-            }
+          icon = [self customIconOfSize: size forPath: realPath];
         }
 
       if (icon == nil)
@@ -982,55 +1103,113 @@ static BOOL FSNodeRepHasAppImageMagic(NSString *path)
   return [newIcon autorelease];  
 }
 
+/* Thumbnails are read from the store when first drawn, not all at once
+ * when thumbnails are switched on: the store may hold thousands. */
 - (void)prepareThumbnailsCache
 {
-  NSString *dictName = @"thumbnails.plist";
-  NSString *dictPath = [thumbnailDir stringByAppendingPathComponent: dictName];
-  NSDictionary *tdict;
-
   DESTROY (tumbsCache);
   tumbsCache = [NSMutableDictionary new];
-  
-  if ([fm fileExistsAtPath: dictPath]) {
-    tdict = [NSDictionary dictionaryWithContentsOfFile: dictPath];
-
-    if (tdict) {
-      NSArray *keys = [tdict allKeys];
-      int i;
-
-      for (i = 0; i < [keys count]; i++) {
-        NSString *key = [keys objectAtIndex: i];
-        NSString *tumbname = [tdict objectForKey: key];
-        NSString *tumbpath = [thumbnailDir stringByAppendingPathComponent: tumbname]; 
-
-        if ([fm fileExistsAtPath: tumbpath]) {
-          NSImage *tumb = nil;
-        
-          NS_DURING
-            {
-          tumb = [[NSImage alloc] initWithContentsOfFile: tumbpath];
-          
-          if (tumb) {
-            [tumbsCache setObject: tumb forKey: key];
-            RELEASE (tumb);
-          }
-            }
-          NS_HANDLER
-            {
-            }
-          NS_ENDHANDLER
-        }
-      }
-    }   
-  }
 }
 
 - (NSImage *)thumbnailForPath:(NSString *)apath
 {
-  if (usesThumbnails && tumbsCache) {
-    return [tumbsCache objectForKey: apath];
-  }
-  return nil;
+  NSImage *tumb;
+  NSString *file;
+
+  if (usesThumbnails == NO || tumbsCache == nil)
+    {
+      return nil;
+    }
+  tumb = [tumbsCache objectForKey: apath];
+  if (tumb != nil)
+    {
+      return tumb;
+    }
+  /* A path without an entry costs one dictionary lookup, no file access. */
+  file = [[self thumbnailStore] fileForPath: apath
+                                kind: GWThumbnailKindThumbnail
+                              source: nil];
+  if (file == nil)
+    {
+      return nil;
+    }
+  tumb = [[[NSImage alloc] initWithContentsOfFile: file] autorelease];
+  if (tumb != nil)
+    {
+      [tumbsCache setObject: tumb forKey: apath];
+    }
+  return tumb;
+}
+
+/* Looked up when first needed rather than when FSNodeRep starts, so a
+ * process that never draws an icon never opens the store. */
+- (GWThumbnailStore *)thumbnailStore
+{
+  return [GWThumbnailStore sharedStore];
+}
+
+- (NSImage *)storedIconOfSize:(int)size
+                       forKey:(NSString *)key
+                         path:(NSString *)path
+                       source:(NSString *)source
+{
+  NSMutableDictionary *dict = [iconsCache objectForKey: key];
+  NSNumber *sizeKey = [NSNumber numberWithInt: size];
+  NSNumber *baseKey = [NSNumber numberWithInt: 48];
+  NSImage *icon = [dict objectForKey: sizeKey];
+  NSData *png;
+
+  if (icon != nil)
+    {
+      return icon;
+    }
+  png = [[self thumbnailStore] dataForPath: path kind: GWThumbnailKindIcon source: source];
+  icon = png ? GWThumbnailImageFromPNG(png, size, [[self thumbnailStore] scaleFactor]) : nil;
+  if (icon == nil)
+    {
+      return nil;
+    }
+  if (dict == nil)
+    {
+      dict = [NSMutableDictionary dictionary];
+      [iconsCache setObject: dict forKey: key];
+    }
+  [dict setObject: icon forKey: sizeKey];
+  /* cachedIconOfSize:forKey: resizes other sizes from the 48 point one. */
+  if ([dict objectForKey: baseKey] == nil)
+    {
+      NSImage *base = (size == 48) ? icon
+        : GWThumbnailImageFromPNG(png, 48, [[self thumbnailStore] scaleFactor]);
+
+      if (base != nil)
+        {
+          [dict setObject: base forKey: baseKey];
+        }
+    }
+  return icon;
+}
+
+- (NSImage *)storeIcon:(NSImage *)icon
+                ofSize:(int)size
+                forKey:(NSString *)key
+                  path:(NSString *)path
+                source:(NSString *)source
+            watchCTime:(BOOL)watchCTime
+{
+  NSUInteger w = 0, h = 0;
+  /* Read straight from the bitmap's memory, a few milliseconds even for a
+   * large icon; encoding and writing happen on the store's workers. Only
+   * the process that keeps the store converts anything. */
+  NSData *rgba = [[self thumbnailStore] isWritable]
+    ? GWThumbnailRGBAFromImage(icon, GW_THUMBNAIL_MAX_DECODE_SIDE, &w, &h) : nil;
+
+  if (rgba != nil)
+    {
+      [[self thumbnailStore] storeRGBAInBackground: rgba width: w height: h
+                                    forPath: path kind: GWThumbnailKindIcon
+                                     source: source watchCTime: watchCTime];
+    }
+  return [self cachedIconOfSize: size forKey: key addBaseIcon: icon];
 }
 
 /**

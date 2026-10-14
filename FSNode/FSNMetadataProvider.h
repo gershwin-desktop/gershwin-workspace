@@ -60,6 +60,13 @@
 /* YES if the file's Finder metadata marks its name as not renameable. */
 - (BOOL)isNameLockedForPath:(NSString *)path;
 
+/* The file the custom icon of path is read from, nil when path has none,
+ * without decoding the icon: the thumbnail store validates its copy of
+ * the icon against this file. *watchCTime is set when the icon lives in
+ * extended attributes, whose changes touch ctime but not mtime. */
+- (NSString *)customIconSourceForPath:(NSString *)path
+                           watchCTime:(BOOL *)watchCTime;
+
 @end
 
 #endif /* FSN_METADATA_PROVIDER_H */

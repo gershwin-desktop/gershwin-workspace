@@ -38,6 +38,11 @@ FSNode_OBJC_FILES = \
           FSNLocationFile.m \
           FSNSpringLoader.m \
           FSNIconDragSession.m \
+          GWThumbnailFormat.m \
+          GWThumbnailPNG.m \
+          GWThumbnailImage.m \
+          GWThumbnailStore.m \
+          GWWorkerPool.m \
 
 
 FSNode_HEADER_FILES = \
@@ -74,6 +79,11 @@ FSNode_HEADER_FILES = \
           FSNLocationFile.h \
           FSNSpringLoader.h \
           FSNIconDragSession.h \
+          GWThumbnailFormat.h \
+          GWThumbnailPNG.h \
+          GWThumbnailImage.h \
+          GWThumbnailStore.h \
+          GWWorkerPool.h \
 
 
 FSNode_HAS_RESOURCE_BUNDLE = yes                                          
@@ -98,6 +108,17 @@ FSNode_LANGUAGES = \
 # (built before this framework).
 LIBRARIES_DEPEND_UPON += -L../GSMetadata/obj -lGSMetadata
 LIBRARIES_DEPEND_UPON += $(GUI_LIBS) $(FND_LIBS) $(OBJC_LIBS) $(SYSTEM_LIBS)
+
+# The thumbnail store writes its PNGs, with their text chunks, through
+# libpng, which libs-gui already depends on; without it the build stops
+# here rather than at the link.
+PNG_CFLAGS := $(shell pkg-config --cflags libpng 2>/dev/null)
+PNG_LIBS := $(shell pkg-config --libs libpng 2>/dev/null)
+ifeq ($(PNG_LIBS),)
+  $(error libpng (pkg-config libpng) is required for the thumbnail store)
+endif
+ADDITIONAL_CPPFLAGS += $(PNG_CFLAGS)
+LIBRARIES_DEPEND_UPON += $(PNG_LIBS)
 
 ifeq ($(findstring darwin, $(GNUSTEP_TARGET_OS)), darwin)
   ifeq ($(OBJC_RUNTIME_LIB), gnu)

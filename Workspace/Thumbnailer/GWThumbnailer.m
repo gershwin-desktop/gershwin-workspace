@@ -32,11 +32,19 @@
 #import <dispatch/dispatch.h>
 #endif
 #import "GWThumbnailer.h"
+#import "GWThumbnailStore.h"
 
 static Thumbnailer *sharedThumbnailerInstance = nil;
 static NSInteger countInstances = 0;
 
-static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNotification";
+/* The automatic cleanup waits until startup is long over, then repeats at
+ * most daily: the store only has to keep up with files that came and went,
+ * no reason to compete with the desktop coming up. */
+#define THUMBNAIL_CHECK_FIRST_DELAY 60.0
+#define THUMBNAIL_CHECK_INTERVAL 86400.0
+
+/* The Software text chunk Workspace's entries carried in ~/.cache/thumbnails. */
+static NSString * const OldCacheSoftware = @"Gershwin Workspace";
 
 
 
@@ -82,9 +90,7 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   
       RELEASE (thumbnailers);
       RELEASE (extProviders);
-      RELEASE (thumbnailDir);
-      RELEASE (dictPath);
-      RELEASE (thumbsDict);
+      RELEASE (store);
       DESTROY (conn);
       DESTROY (dictLock);
       RELEASE (pathsInProcessing);
@@ -98,10 +104,6 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   self = [super init];
 
   if (self) {
-    NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
-    id entry;
-    BOOL isdir;
-
     if (!dictLock)
       dictLock = [[NSLock alloc] init];
 
@@ -111,58 +113,15 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
     extProviders = [NSMutableDictionary new];
     [self loadThumbnailers];
 
-    entry = [defaults objectForKey: @"thumbref"];
-    if (entry) {
-      thumbref = [(NSNumber *)entry longValue];
-    } else {
-      thumbref = 0;
+    store = RETAIN ([GWThumbnailStore sharedStore]);
+    if (store == nil) {
+      [self release];
+      return nil;
     }
-    
-    thumbnailDir = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES) lastObject];
-    thumbnailDir = [thumbnailDir stringByAppendingPathComponent: @"Thumbnails"];
-    RETAIN (thumbnailDir);
-
-    if (([fm fileExistsAtPath: thumbnailDir isDirectory: &isdir] && isdir) == NO) {
-      if ([fm createDirectoryAtPath: thumbnailDir attributes: nil] == NO) {
-        return nil;
-      }
-    }
-    
-    ASSIGN (dictPath, [thumbnailDir stringByAppendingPathComponent: @"thumbnails.plist"]);    
-    
-    if ([fm fileExistsAtPath: dictPath]) {
-      NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile: dictPath];
-    
-      if (dict) {
-        thumbsDict = [dict mutableCopy];
-      } else {
-        thumbsDict = [NSMutableDictionary new];
-      }
-    } else {
-      thumbsDict = [NSMutableDictionary new];
-    }  
-
-    [self writeDictToFile];
-
-
-
-    /* FIXME: this could be a problem with different instances for View
-    timer = [NSTimer scheduledTimerWithTimeInterval: 10.0 target: self 
-          										      selector: @selector(checkThumbnails:) 
-                                                userInfo: nil repeats: YES];   
-    */                                          
   }
 
   return self;
 }
-
-- (void)writeDictToFile
-{
-  [dictLock lock];
-  [thumbsDict writeToFile: dictPath atomically: YES];
-  [dictLock unlock];
-}
-
 
 - (void)loadThumbnailers
 {
@@ -277,68 +236,161 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
   return nil;
 }
 
-- (void)checkThumbnails:(id)sender
+/* Where an earlier Workspace build kept its AppImage icons. */
+static NSString *
+OldCacheDirectory(void)
 {
-  /* thumbsDict is also written from the detached make/remove worker
-   * threads (see makeThumbnails:/removeThumbnails:), so every read or
-   * mutation here has to go through dictLock too, not just the plist
-   * write at the end. */
-  [dictLock lock];
-  BOOL hasEntries = (thumbsDict != nil) && ([thumbsDict count] > 0);
-  NSArray *paths = hasEntries ? RETAIN ([thumbsDict allKeys]) : nil;
-  [dictLock unlock];
+  NSDictionary *env = [[NSProcessInfo processInfo] environment];
+  NSString *cache = [env objectForKey: @"XDG_CACHE_HOME"];
 
-  if (hasEntries) {
-    NSMutableArray *deleted = [NSMutableArray array];
-    NSUInteger i;
-
-    for (i = 0; i < [paths count]; i++) {
-      NSString *path = [paths objectAtIndex: i];
-
-      [dictLock lock];
-      NSString *tname = [thumbsDict objectForKey: path];
-      [dictLock unlock];
-
-      if ([fm fileExistsAtPath: path] == NO) {
-        NSString *tpath = [thumbnailDir stringByAppendingPathComponent: tname];
-
-        if ([fm fileExistsAtPath: tpath]) {
-          [fm removeFileAtPath: tpath handler: nil];
-        }
-
-        [deleted addObject: path];
-        [dictLock lock];
-        [thumbsDict removeObjectForKey: path];
-        [dictLock unlock];
-      }
+  if ([cache isAbsolutePath] == NO)
+    {
+      cache = [NSHomeDirectory() stringByAppendingPathComponent: @".cache"];
     }
-
-    RELEASE (paths);
-
-    if ([deleted count])
-      {
-        NSMutableDictionary *info = [NSMutableDictionary dictionary];
-
-        [info setObject: deleted forKey: @"deleted"];	
-        [info setObject: [NSArray array] forKey: @"created"];
-
-        [self writeDictToFile];
-      
-        [[NSDistributedNotificationCenter defaultCenter] 
-            postNotificationName: GWThumbnailsDidChangeNotification
-                          object: nil 
-                        userInfo: info];
-      }
-  }   
+  return [cache stringByAppendingPathComponent: @"thumbnails"];
 }
 
-- (NSString *)nextThumbName
+- (void)postDeleted:(NSArray *)deleted
 {
-  thumbref++;
-  if (thumbref >= (LONG_MAX - 1)) {
-    thumbref = 0;
-  }
-  return [NSString stringWithFormat: @"%lx", thumbref];
+  if ([deleted count])
+    {
+      NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:
+        deleted, @"deleted", [NSArray array], @"created", nil];
+
+      [[NSDistributedNotificationCenter defaultCenter]
+        postNotificationName: GWThumbnailsDidChangeNotification
+                      object: nil
+                    userInfo: info];
+    }
+}
+
+- (void)checkThumbnails:(id)sender
+{
+  [self postDeleted: [store removeStaleEntries]];
+  [store flush];
+}
+
+/* Right at start, so the icons an earlier build kept are there for the
+ * first views; once moved they are gone from there, so later starts find
+ * nothing to do. */
+- (void)importOldCacheInBackground:(id)unused
+{
+  NSAutoreleasePool *arp = [NSAutoreleasePool new];
+  NSUInteger moved;
+
+  [NSThread setThreadPriority: 0.0];
+  moved = [store importEntriesFromCacheDirectory: OldCacheDirectory()
+                                        software: OldCacheSoftware];
+  if (moved > 0)
+    {
+      NSLog(@"Moved %lu cached icons from %@ to %@", (unsigned long)moved,
+            OldCacheDirectory(), [store directory]);
+      [store flush];
+    }
+  [arp release];
+}
+
+- (void)startAutomaticChecks
+{
+  [[NSNotificationCenter defaultCenter]
+    addObserver: self
+       selector: @selector(fileSystemDidChange:)
+           name: @"GWFileSystemDidChangeNotification"
+         object: nil];
+  [NSThread detachNewThreadSelector: @selector(importOldCacheInBackground:)
+                           toTarget: self
+                         withObject: nil];
+  [self scheduleCheckAfter: THUMBNAIL_CHECK_FIRST_DELAY];
+}
+
+- (void)scheduleCheckAfter:(NSTimeInterval)delay
+{
+  [NSTimer scheduledTimerWithTimeInterval: delay
+                                   target: self
+                                 selector: @selector(startCheck:)
+                                 userInfo: nil
+                                  repeats: NO];
+}
+
+/* The check reads the head of every stored file, so it runs on a
+ * low-priority GNUstep thread (not libdispatch, see makeThumbnails:),
+ * never on the UI. */
+- (void)startCheck:(NSTimer *)t
+{
+  [NSThread detachNewThreadSelector: @selector(checkInBackground:)
+                           toTarget: self
+                         withObject: nil];
+}
+
+- (void)checkInBackground:(id)unused
+{
+  NSAutoreleasePool *arp = [NSAutoreleasePool new];
+
+  [NSThread setThreadPriority: 0.0];
+  [self checkThumbnails: nil];
+  [self performSelectorOnMainThread: @selector(checkFinished:)
+                         withObject: nil
+                      waitUntilDone: NO];
+  [arp release];
+}
+
+- (void)checkFinished:(id)unused
+{
+  [self scheduleCheckAfter: THUMBNAIL_CHECK_INTERVAL];
+}
+
+/* Workspace moving, renaming, trashing or deleting files itself is the
+ * cheap moment to drop their entries, and those of everything inside a
+ * moved folder, instead of waiting for the daily check. Entries whose
+ * source is still there are left alone, so copies cost only a stat. */
++ (NSArray *)sourcePathsOfFileOperation:(id)info
+{
+  NSString *source;
+  NSArray *files;
+  NSMutableArray *paths;
+  NSUInteger i;
+
+  if ([info isKindOfClass: [NSDictionary class]] == NO)
+    {
+      return [NSArray array];
+    }
+  source = [info objectForKey: @"source"];
+  files = [info objectForKey: @"files"];
+  if ([[info objectForKey: @"operation"] isEqual: @"WorkspaceRenameOperation"])
+    {
+      files = [NSArray arrayWithObject: [source lastPathComponent]];
+      source = [source stringByDeletingLastPathComponent];
+    }
+  if ([source length] == 0)
+    {
+      return [NSArray array];
+    }
+  paths = [NSMutableArray arrayWithCapacity: [files count]];
+  for (i = 0; i < [files count]; i++)
+    {
+      [paths addObject: [source stringByAppendingPathComponent: [files objectAtIndex: i]]];
+    }
+  return paths;
+}
+
+- (void)fileSystemDidChange:(NSNotification *)notif
+{
+  NSArray *paths = [Thumbnailer sourcePathsOfFileOperation: [notif object]];
+
+  if ([paths count] > 0)
+    {
+      [NSThread detachNewThreadSelector: @selector(removeEntriesInBackground:)
+                               toTarget: self
+                             withObject: paths];
+    }
+}
+
+- (void)removeEntriesInBackground:(NSArray *)paths
+{
+  NSAutoreleasePool *arp = [NSAutoreleasePool new];
+
+  [self postDeleted: [store removeStaleEntriesForPaths: paths]];
+  [arp release];
 }
 
 - (void)_makeThumbnails:(NSString *)path
@@ -362,9 +414,9 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
           NSString *fullPath = [path stringByAppendingPathComponent: fname];
           BOOL alreadyHave;
 
-          [dictLock lock];
-          alreadyHave = ([thumbsDict objectForKey: fullPath] != nil);
-          [dictLock unlock];
+          alreadyHave = ([store fileForPath: fullPath
+                                       kind: GWThumbnailKindThumbnail
+                                     source: nil] != nil);
 
           if (alreadyHave)
             continue;
@@ -386,16 +438,11 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
     }
       
     if ([added count]) {
-      NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
       NSMutableDictionary *info = [NSMutableDictionary dictionary];
 
-      [defaults setObject: [NSNumber numberWithLong: thumbref] 
-                   forKey: @"thumbref"];
-      [defaults synchronize];
-	
       [info setObject: added forKey: @"created"];	
 
-      [self writeDictToFile];
+      [store flush];
 
       [[NSDistributedNotificationCenter defaultCenter] 
 	postNotificationName: GWThumbnailsDidChangeNotification
@@ -434,19 +481,13 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
 {
   NSMutableArray *deleted;
   BOOL isdir;
-  BOOL hasEntries;
   NSUInteger i;
   NSAutoreleasePool *arp;
 
   arp = [NSAutoreleasePool new];
 
-  [dictLock lock];
-  hasEntries = (thumbsDict != nil) && ([thumbsDict count] > 0);
-  [dictLock unlock];
-
-  if (hasEntries) {
+  {
     deleted = [NSMutableArray array];
-
 
     if ([fm fileExistsAtPath: path isDirectory: &isdir])
       {
@@ -474,7 +515,7 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
       
       [info setObject: deleted forKey: @"deleted"];	
 
-      [self writeDictToFile];
+      [store flush];
       
       [[NSDistributedNotificationCenter defaultCenter] 
             postNotificationName: GWThumbnailsDidChangeNotification
@@ -515,63 +556,23 @@ static NSString *GWThumbnailsDidChangeNotification = @"GWThumbnailsDidChangeNoti
                       forPath:(NSString *)path
                 nameExtension:(NSString *)ext
 {
-  if (data && [data length]) {
-    NSString *tname;
-    NSString *tpath;
-
-    /* nextThumbName reads and increments thumbref, and the dict entry it
-     * feeds must land as one step - lock across the whole naming/write/
-     * bookkeeping sequence so two threads registering thumbnails at the
-     * same time can never hand out the same tname or race on thumbsDict. */
-    [dictLock lock];
-
-    tname = [self nextThumbName];
-    tname = [tname stringByAppendingPathExtension: ext];
-    tpath = [thumbnailDir stringByAppendingPathComponent: tname];
-
-    if ([data writeToFile: tpath atomically: YES]) {
-      NSString *oldtname = [thumbsDict objectForKey: path];
-
-      if (oldtname) {
-        NSString *oldtpath = [thumbnailDir stringByAppendingPathComponent: oldtname];
-
-        if ([fm fileExistsAtPath: oldtpath]) {
-          [fm removeFileAtPath: oldtpath handler: nil];
-        }
-      }
-
-      [thumbsDict setObject: tname forKey: path];
-      [dictLock unlock];
-      return YES;
-    } else {
-      [dictLock unlock];
-      return NO;
-    }
-  }
-
-  return NO;
+  /* The bundles hand back whatever format they like; the store keeps it
+   * as PNG, at most at its one size, with the source's stamp. */
+  return [store storeImageData: data
+                       forPath: path
+                          kind: GWThumbnailKindThumbnail
+                        source: nil] != nil;
 }
 
+/* Only thumbnails: icons kept in the same store are not this command's. */
 - (BOOL)removeThumbnailForPath:(NSString *)path
 {
-  NSString *tname;
-  BOOL removed = NO;
-
-  [dictLock lock];
-  tname = [thumbsDict objectForKey: path];
-
-  if (tname) {
-    NSString *tpath = [thumbnailDir stringByAppendingPathComponent: tname];
-
-    if ([fm fileExistsAtPath: tpath]) {
-      [fm removeFileAtPath: tpath handler: nil];
+  if ([[[store entryForPath: path] objectForKey: GWThumbnailEntryKind]
+        isEqualToString: GWThumbnailKindThumbnail] == NO)
+    {
+      return NO;
     }
-    [thumbsDict removeObjectForKey: path];
-    removed = YES;
-  }
-
-  [dictLock unlock];
-  return removed;
+  return [store removeEntryForPath: path];
 }
 
 - (NSArray *)bundlesWithExtension:(NSString *)extension 

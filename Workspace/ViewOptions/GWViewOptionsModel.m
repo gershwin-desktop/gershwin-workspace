@@ -10,6 +10,7 @@
 #import "FSNIconsView.h"
 #import "FSNListView.h"
 #import "FSNColumnViewOptions.h"
+#import "GWThumbnailStore.h"
 
 static int
 clampInt(int value, int low, int high)
@@ -75,7 +76,8 @@ clampInt(int value, int low, int high)
 }
 
 - (int)iconSize { return iconSize; }
-- (void)setIconSize:(int)size { iconSize = clampInt (size, 16, 512); }
+/* The thumbnail store keeps every image at the largest size this allows. */
+- (void)setIconSize:(int)size { iconSize = clampInt (size, 16, GWThumbnailMaximumPoints); }
 - (CGFloat)gridSpacing { return gridSpacing; }
 
 - (void)setGridSpacing:(CGFloat)spacing

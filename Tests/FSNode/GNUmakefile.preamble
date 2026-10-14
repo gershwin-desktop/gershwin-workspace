@@ -133,3 +133,27 @@ t_FSNAliasOwnership_TOOL_LIBS += -lgnustep-gui
 
 t_FSNInternalMetadataName_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                                        -lFSNode -lgnustep-gui
+
+# The rules of Workspace's thumbnail store, Foundation only.
+t_GWThumbnailFormat_OBJC_FILES += ../../FSNode/GWThumbnailFormat.m
+# The store itself: the rules above, the libpng layer and the drawing-free
+# image conversion, linked as separate objects.
+GW_THUMBNAIL_STORE_SOURCES = ../../FSNode/GWThumbnailFormat.m \
+                             ../../FSNode/GWThumbnailPNG.m \
+                             ../../FSNode/GWThumbnailImage.m \
+                             ../../FSNode/GWThumbnailStore.m \
+                             ../../FSNode/GWWorkerPool.m
+GW_PNG_FLAGS := $(shell pkg-config --cflags libpng)
+GW_PNG_LIBS := $(shell pkg-config --libs libpng)
+t_GWThumbnailStore_OBJC_FILES += $(GW_THUMBNAIL_STORE_SOURCES)
+t_GWThumbnailStore_OBJCFLAGS += $(GW_PNG_FLAGS)
+t_GWThumbnailStore_TOOL_LIBS += -lgnustep-gui $(GW_PNG_LIBS)
+# The tools above that link FSNodeRepIcons.m as a source get the store it
+# keeps icons in the same way.
+GW_FSNODEREP_TOOLS = t_FSNDirectorySnapshot t_FSNLazyAttributes t_FSNDisplayName \
+                     t_FSNSubpath t_FSNTextCellLabelLookup
+$(foreach t,$(GW_FSNODEREP_TOOLS),$(eval $(t)_OBJC_FILES += $(GW_THUMBNAIL_STORE_SOURCES)))
+$(foreach t,$(GW_FSNODEREP_TOOLS),$(eval $(t)_OBJCFLAGS += $(GW_PNG_FLAGS)))
+$(foreach t,$(GW_FSNODEREP_TOOLS),$(eval $(t)_TOOL_LIBS += $(GW_PNG_LIBS)))
+# The bounded worker threads the store and the AppImage icons use.
+t_GWWorkerPool_OBJC_FILES += ../../FSNode/GWWorkerPool.m

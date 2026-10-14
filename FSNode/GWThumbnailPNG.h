@@ -6,11 +6,11 @@
  * SPDX-License-Identifier: GPL-2.0-or-later OR BSD-2-Clause
  */
 
-/* The PNG pixel I/O of the thumbnail cache, on libpng directly: the
- * standard keeps its metadata in tEXt chunks, which NSBitmapImageRep can
- * neither write nor hand back, and decoding to plain RGBA here needs no
- * graphics context, so it is safe on the background threads that fill
- * the cache. */
+/* The PNG pixel I/O of the thumbnail store, on libpng directly: every
+ * stored file carries its source's path and stamp in tEXt chunks, which
+ * NSBitmapImageRep can neither write nor hand back, and decoding to plain
+ * RGBA here needs no graphics context, so it is safe on the background
+ * threads that fill the store. */
 
 #ifndef GW_THUMBNAIL_PNG_H
 #define GW_THUMBNAIL_PNG_H

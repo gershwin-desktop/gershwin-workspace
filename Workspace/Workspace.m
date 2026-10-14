@@ -96,6 +96,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "History/History.h"
 #import "X11AppSupport.h"
 #import "Thumbnailer/GWThumbnailer.h"
+#import "GWThumbnailStore.h"
 #import "GSGlobalShortcutsManager.h"
 #import "GSFileMetadata.h"
 #import "DSStore.h"
@@ -1198,6 +1199,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
           selector: @selector(thumbnailsDidChange:) 
               name: @"GWThumbnailsDidChangeNotification"
             object: nil];
+
+  /* Keeps the thumbnail store in step with files that come and go. */
+  [[Thumbnailer sharedThumbnailer] startAutomaticChecks];
 
   [dnc addObserver: self 
           selector: @selector(removableMediaPathsDidChange:) 
@@ -3162,10 +3166,6 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   if ([fsnodeRep usesThumbnails] == NO)
     return;
 
-  NSString *thumbnailDir = [NSSearchPathForDirectoriesInDomains(NSLibraryDirectory, NSUserDomainMask, YES) lastObject];
-
-  thumbnailDir = [thumbnailDir stringByAppendingPathComponent: @"Thumbnails"];
-  
   if (deleted && [deleted count])
     {
       for (i = 0; i < [deleted count]; i++) {
@@ -3184,23 +3184,15 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
     }
 
     if (created && [created count]) {
-      NSString *dictName = @"thumbnails.plist";
-      NSString *dictPath = [thumbnailDir stringByAppendingPathComponent: dictName];
-      
-      if ([fm fileExistsAtPath: dictPath]) {
-        NSDictionary *tdict = [NSDictionary dictionaryWithContentsOfFile: dictPath];
+      GWThumbnailStore *store = [fsnodeRep thumbnailStore];
 
-        for (i = 0; i < [created count]; i++) {
-          NSString *key = [created objectAtIndex: i];
-          NSString *dir = [key stringByDeletingLastPathComponent];
-          NSString *tumbname = [tdict objectForKey: key];
-          NSString *tumbpath = [thumbnailDir stringByAppendingPathComponent: tumbname]; 
+      for (i = 0; i < [created count]; i++) {
+        NSString *key = [created objectAtIndex: i];
+        NSString *dir = [key stringByDeletingLastPathComponent];
 
-          if ([fm fileExistsAtPath: tumbpath]) {        
-            if ([tmbdirs containsObject: dir] == NO) {
-              [tmbdirs addObject: dir];
-            }
-          }
+        if ([store fileForPath: key kind: GWThumbnailKindThumbnail source: nil]
+            && [tmbdirs containsObject: dir] == NO) {
+          [tmbdirs addObject: dir];
         }
       }
       

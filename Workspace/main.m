@@ -38,6 +38,7 @@
 
 #include "Workspace.h"
 #include "FinderInfoLocker.h"
+#include "GWThumbnailStore.h"
 #include "GWSingleInstance.h"
 
 /* Forward declaration of UI testing enable function */
@@ -75,6 +76,9 @@ int main(int argc, char **argv, char **env)
 #endif /* !_WIN32 */
     
 	CREATE_AUTORELEASE_POOL (pool);
+
+  /* Workspace keeps the thumbnail store; other processes only read it. */
+  [GWThumbnailStore setSharedStoreWritable: YES];
   
   /* Check for debug/UI testing flag */
   BOOL debugMode = NO;

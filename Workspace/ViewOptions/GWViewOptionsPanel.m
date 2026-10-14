@@ -7,6 +7,7 @@
 #import "GWViewOptionsPanel.h"
 #import "GWViewOptionsModel.h"
 #import "GWViewersManager.h"
+#import "GWThumbnailStore.h"
 #import "GWViewSettingsManager.h"
 #import "GWFolderViewOptions.h"
 #import "DSStoreInfo.h"
@@ -295,7 +296,7 @@ columnTitle (NSString *columnId)
   y = METRICS_CONTENT_TOP_MARGIN;
 
   iconSizeLabel = [self labelWithTitle: @"" inView: iconPane y: y];
-  iconSizeSlider = [self sliderFrom: 16 to: 512 inView: iconPane y: y];
+  iconSizeSlider = [self sliderFrom: 16 to: GWThumbnailMaximumPoints inView: iconPane y: y];
   y += RowHeight + 4;
 
   [self labelWithTitle: VOStr (@"Grid spacing:") inView: iconPane y: y];

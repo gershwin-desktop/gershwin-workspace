@@ -8,20 +8,17 @@ ifneq ($(with_squashfs),yes)
 else
 	TOOL_NAME = appimage-icon-test
 
-	appimage-icon-test_OBJC_FILES = main.m WorkspaceStub.m ../../Workspace/AppImageIconProvider.m \
-		../../Workspace/GWThumbnailSpec.m ../../Workspace/GWThumbnailPNG.m \
-		../../Workspace/GWThumbnailStore.m ../../Workspace/GWScaleFactor.m \
-		../../Workspace/GWWorkerPool.m
+	appimage-icon-test_OBJC_FILES = main.m WorkspaceStub.m ../../Workspace/AppImageIconProvider.m
 	appimage-icon-test_OBJCFLAGS += -I../../Workspace
 	appimage-icon-test_OBJCFLAGS += -I../../FSNode
 	appimage-icon-test_OBJCFLAGS += $(SQUASHFS_CFLAGS)
 	appimage-icon-test_LDFLAGS += $(SQUASHFS_LIBS) -ldispatch
-	# The provider's icon disk cache writes its thumbnails through libpng.
-	appimage-icon-test_OBJCFLAGS += $(shell pkg-config --cflags libpng)
-	appimage-icon-test_LDFLAGS += $(shell pkg-config --libs libpng)
 	appimage-icon-test_TOOL_LIBS += -lgnustep-gui
 	# Ensure the linker can find our FSNode framework built in-tree
-	appimage-icon-test_TOOL_LIBS += -L../../FSNode/FSNode.framework -lFSNode
+	# Named as a file: the system library directory comes first on the link
+	# line, and an installed FSNode older than the tree lacks the thumbnail
+	# store the icon provider uses.
+	appimage-icon-test_TOOL_LIBS += ../../FSNode/FSNode.framework/Versions/Current/libFSNode.so
 	# libFSNode needs libGSMetadata, which is not installed yet in a from-source
 	# build; naming it directly makes every linker resolve it from the tree.
 	appimage-icon-test_TOOL_LIBS += -L../../GSMetadata/obj -lGSMetadata

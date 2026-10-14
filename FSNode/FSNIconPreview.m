@@ -8,6 +8,10 @@
 #import "FSNIconPreview.h"
 #import "FSNode.h"
 #import "FSNodeRep.h"
+#import "GWThumbnailStore.h"
+#import "GWThumbnailImage.h"
+#import "GWThumbnailPNG.h"
+#include <math.h>
 #import "FSNMetadataProvider.h"
 
 /* Decoding an image on the main thread to draw its preview is the price of
@@ -26,6 +30,45 @@ static const unsigned long long FSNIconPreviewMaxFileSize = 4ULL * 1000 * 1000;
   ext = [[[node path] pathExtension] lowercaseString];
   return ([ext length] > 0
           && [[NSImage imageFileTypes] containsObject: ext]);
+}
+
+/* The picture from the thumbnail store, scaled in plain C to exactly
+ * the pixels needed, when it is there, still describes the file and is
+ * not smaller than needed: a 64 pixel thumbnail of a large photo made by a
+ * Thumbnailer bundle is not enough for a large icon. */
++ (NSImage *)storedPreviewOfNode:(FSNode *)node size:(int)size
+{
+  GWThumbnailStore *store = [[FSNodeRep sharedInstance] thumbnailStore];
+  NSData *png = [store dataForPath: [node path]
+                              kind: GWThumbnailKindThumbnail
+                            source: nil];
+  NSUInteger w = 0, h = 0;
+  NSUInteger needed = (NSUInteger)ceil(size * [store scaleFactor]);
+
+  if (png == nil || GWThumbnailPNGDimensions(png, &w, &h) == NO)
+    return nil;
+  if (MAX(w, h) < MIN(needed, [store pixelSize]))
+    return nil;
+  return GWThumbnailImageFromPNG(png, size, [store scaleFactor]);
+}
+
+/* Decoding the image file is what made a folder of photos slow to show;
+ * the store keeps the picture for the next start. */
++ (void)storePreview:(NSImage *)image ofNode:(FSNode *)node
+{
+  GWThumbnailStore *store = [[FSNodeRep sharedInstance] thumbnailStore];
+  NSUInteger w = 0, h = 0;
+  NSData *rgba;
+
+  if ([store isWritable] == NO)
+    return;
+  rgba = GWThumbnailRGBAFromImage(image, GW_THUMBNAIL_MAX_DECODE_SIDE, &w, &h);
+  if (rgba != nil)
+    {
+      [store storeRGBAInBackground: rgba width: w height: h forPath: [node path]
+                              kind: GWThumbnailKindThumbnail source: nil
+                        watchCTime: NO];
+    }
 }
 
 + (NSImage *)previewImageForNode:(FSNode *)node size:(int)size
@@ -48,17 +91,21 @@ static const unsigned long long FSNIconPreviewMaxFileSize = 4ULL * 1000 * 1000;
   if (image != nil)
     return image;
 
-  image = [fsnodeRep thumbnailForPath: path];
-  if (image == nil && [node fileSize] <= FSNIconPreviewMaxFileSize)
-    image = [[[NSImage alloc] initWithContentsOfFile: path] autorelease];
-  if (image == nil || [image isValid] == NO)
-    return nil;
+  image = [self storedPreviewOfNode: node size: size];
+  if (image == nil)
+    {
+      if ([node fileSize] <= FSNIconPreviewMaxFileSize)
+        image = [[[NSImage alloc] initWithContentsOfFile: path] autorelease];
+      if (image == nil || [image isValid] == NO)
+        return nil;
+      [self storePreview: image ofNode: node];
 
-  /* Blowing a picture smaller than the icon up to the icon size would only
-   * make it blurry. */
-  sz = [image size];
-  if (sz.width > size || sz.height > size)
-    image = [fsnodeRep resizedIcon: image ofSize: size];
+      /* Blowing a picture smaller than the icon up to the icon size would
+       * only make it blurry. */
+      sz = [image size];
+      if (sz.width > size || sz.height > size)
+        image = [fsnodeRep resizedIcon: image ofSize: size];
+    }
 
   [cache setObject: image forKey: key];
   return image;

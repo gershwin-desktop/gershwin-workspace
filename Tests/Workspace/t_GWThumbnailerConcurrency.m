@@ -23,15 +23,11 @@
  * Isolation: this GNUstep install resolves NSHomeDirectory()/the user
  * Library path from the real passwd entry, not from $HOME or
  * $GNUSTEP_USER_ROOT, so a plain env-var override cannot redirect
- * Thumbnailer away from the real ~/Library/Thumbnails (confirmed empirically
- * while writing this test). Sharing the real thumbnailDir/thumbsDict/plist
- * across every run would race the developer's own real thumbnail cache and
- * accumulate garbage entries in it run after run. Instead, a test-only
- * category (below) resets thumbnailDir/dictPath/thumbsDict on the
- * singleton, right after construction, to a private scratch tree - the one
- * unavoidable touch of the real dictPath is +sharedThumbnailer's own -init,
- * which reads the real plist (if any) and immediately re-saves the same
- * content back unchanged before this test gets control. */
+ * Thumbnailer away from the real ~/Library/Thumbnails. The thumbnail
+ * store it writes through is made the shared one, in a private scratch
+ * tree, before the Thumbnailer exists, so the real store is never opened
+ * (an earlier version of this test redirected the Thumbnailer only after
+ * its -init and left stub thumbnails in the developer's real store). */
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
@@ -56,23 +52,7 @@ mkdirp(NSFileManager *fm, NSString *path)
 }
 
 #include "../../Workspace/Thumbnailer/GWThumbnailer.m"
-
-/* A category shares the class's ivar layout, so this can reach
- * thumbnailDir/dictPath/thumbsDict directly even though GWThumbnailer.h
- * declares them with no access specifier (the ObjC default, @protected). */
-@interface Thumbnailer (ConcurrencyTestIsolation)
-- (void)redirectForTestingToDir:(NSString *)dir;
-@end
-
-@implementation Thumbnailer (ConcurrencyTestIsolation)
-- (void)redirectForTestingToDir:(NSString *)dir
-{
-  ASSIGN (thumbnailDir, dir);
-  ASSIGN (dictPath, [dir stringByAppendingPathComponent: @"thumbnails.plist"]);
-  RELEASE (thumbsDict);
-  thumbsDict = [NSMutableDictionary new];
-}
-@end
+#import "GWThumbnailPNG.h"
 
 /* Stands in for a real .thumb bundle: constant-cost, so the test exercises
  * the container locking under contention rather than image decoding time. */
@@ -90,7 +70,7 @@ mkdirp(NSFileManager *fm, NSString *path)
    * concurrent worker threads instead of letting each call finish before
    * the next one even starts. */
   usleep(2000);
-  return [@"stub-thumbnail-data" dataUsingEncoding: NSUTF8StringEncoding];
+  return GWThumbnailPNGEncodeRGBA([NSMutableData dataWithLength: 16], 2, 2, nil);
 }
 - (NSString *)fileNameExtension
 {
@@ -205,9 +185,11 @@ main(void)
     }
   dirPaths = [paths retain];
 
+  [GWThumbnailStore setSharedStore: [[[GWThumbnailStore alloc]
+    initWithDirectory: scratchThumbDir pixelSize: 64] autorelease]];
+  NEED(PASS([[[GWThumbnailStore sharedStore] directory] isEqual: scratchThumbDir],
+            "the store is the private one before the Thumbnailer exists"));
   t = [Thumbnailer sharedThumbnailer];
-  /* From here on nothing touches the real ~/Library/Thumbnails again. */
-  [t redirectForTestingToDir: scratchThumbDir];
   [t addThumbnailer: [[[StubThumbnailer alloc] init] autorelease]];
   doneLock = [[NSLock alloc] init];
 
@@ -278,8 +260,12 @@ main(void)
                 "(no leaked in-processing marker, no NSMutableArray corruption)");
 
   {
-    NSDictionary *finalDict = [t valueForKey: @"thumbsDict"];
+    NSDictionary *finalDict;
     NSUInteger uncontestedEntries = 0;
+
+    [[GWThumbnailStore sharedStore] flush];
+    finalDict = [NSDictionary dictionaryWithContentsOfFile:
+      [scratchThumbDir stringByAppendingPathComponent: @"thumbnails.plist"]];
 
     PASS(finalDict != nil, "thumbsDict is still a valid dictionary after the concurrent run "
                             "(no crash, no corrupted container)");
@@ -296,7 +282,7 @@ main(void)
           {
             NSString *f = [d stringByAppendingPathComponent:
               [NSString stringWithFormat: @"f%lu.txt", (unsigned long)j]];
-            NSString *tname = [finalDict objectForKey: f];
+            NSString *tname = [[finalDict objectForKey: f] objectForKey: GWThumbnailEntryName];
 
             if (tname != nil
                 && [fm fileExistsAtPath: [scratchThumbDir stringByAppendingPathComponent: tname]])
@@ -321,7 +307,7 @@ main(void)
 
       while ((key = [en nextObject]) != nil)
         {
-          NSString *tname = [finalDict objectForKey: key];
+          NSString *tname = [[finalDict objectForKey: key] objectForKey: GWThumbnailEntryName];
           NSString *tpath = [scratchThumbDir stringByAppendingPathComponent: tname];
 
           if (![fm fileExistsAtPath: tpath])

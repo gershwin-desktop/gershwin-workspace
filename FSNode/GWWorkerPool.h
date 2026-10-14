@@ -10,7 +10,8 @@
  * when there is work and ended when the queue is empty, so a burst of
  * small jobs neither starts a thread each nor waits for one another.
  * GNUstep threads rather than libdispatch: a GCD worker running ObjC can
- * race the main thread's +load dispatch (see AppImageIconProvider.m). */
+ * race the main thread's +load dispatch and crash in libobjc's
+ * load_messages_insert. */
 
 #ifndef GW_WORKER_POOL_H
 #define GW_WORKER_POOL_H

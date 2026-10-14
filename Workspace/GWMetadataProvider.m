@@ -39,6 +39,36 @@
   return [GSFileMetadata customIconImageForPath: path];
 }
 
+- (NSString *)customIconSourceForPath:(NSString *)path
+                           watchCTime:(BOOL *)watchCTime
+{
+  GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
+  NSFileManager *mgr = [NSFileManager defaultManager];
+  NSString *holder = path;
+  NSString *sidecar;
+  BOOL isDir = NO;
+
+  if (md == nil || [md hasCustomIcon] == NO)
+    {
+      return nil;
+    }
+  /* A folder's icon is in the resource fork of the Icon\r file inside it,
+   * as +customIconDataForPath: reads it. */
+  if ([mgr fileExistsAtPath: path isDirectory: &isDir] && isDir)
+    {
+      holder = [path stringByAppendingPathComponent: @"Icon\r"];
+    }
+  sidecar = [GSFileMetadata sidecarPathForFilePath: holder];
+  if ([mgr fileExistsAtPath: sidecar])
+    {
+      *watchCTime = NO;
+      return sidecar;
+    }
+  /* Kept in extended attributes: rewriting them changes ctime only. */
+  *watchCTime = YES;
+  return holder;
+}
+
 - (NSPoint)iconPositionForPath:(NSString *)path
 {
   GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];

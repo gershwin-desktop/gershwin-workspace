@@ -56,6 +56,7 @@ typedef enum FSNSelectionMask {
 @class NSBezierPath;
 @class NSFont;
 @class FSNDirEntry;
+@class GWThumbnailStore;
 
 @protocol FSNodeRep
 
@@ -404,7 +405,6 @@ typedef enum FSNSelectionMask {
     
   NSMutableDictionary *iconsCache;
   NSMutableDictionary *tumbsCache;
-  NSString *thumbnailDir;
   BOOL usesThumbnails;  
 
   NSImage *multipleSelIcon;
@@ -584,6 +584,28 @@ typedef enum FSNSelectionMask {
 - (void)prepareThumbnailsCache;
 
 - (NSImage *)thumbnailForPath:(NSString *)apath;
+
+/* An icon kept in the thumbnail store, for icons that are expensive to
+ * make (AppImage, application and custom icons): from memory at this
+ * size, else decoded from the store for exactly this size. key is the
+ * iconsCache key, path the source the entry is indexed by, source the
+ * file it is validated against (nil: path). nil when there is no valid
+ * entry. */
+- (NSImage *)storedIconOfSize:(int)size
+                       forKey:(NSString *)key
+                         path:(NSString *)path
+                       source:(NSString *)source;
+
+/* Hands icon to the thumbnail store in the background and returns it for
+ * this size as cachedIconOfSize:forKey:addBaseIcon: does. */
+- (NSImage *)storeIcon:(NSImage *)icon
+                ofSize:(int)size
+                forKey:(NSString *)key
+                  path:(NSString *)path
+                source:(NSString *)source
+            watchCTime:(BOOL)watchCTime;
+
+- (GWThumbnailStore *)thumbnailStore;
 
 @end
 

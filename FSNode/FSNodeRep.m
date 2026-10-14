@@ -154,14 +154,6 @@ NSString * const FSNLabelTextSizeDefaultsKey = @"labeltxtsize";
             [NSApp terminate: self];
           }
       }
-    thumbnailDir = [libraryDir stringByAppendingPathComponent: @"Thumbnails"];
-    RETAIN (thumbnailDir);
-    
-    if (([fm fileExistsAtPath: thumbnailDir isDirectory: &isdir] && isdir) == NO) {
-      if ([fm createDirectoryAtPath: thumbnailDir attributes: nil] == NO) {
-        [NSApp terminate: self];
-      }
-    }
     
     defSortOrder = FSNInfoNameType;
     hideSysFiles = NO;
@@ -283,7 +275,6 @@ NSString * const FSNLabelTextSizeDefaultsKey = @"labeltxtsize";
   RELEASE (hiddenPaths);
   RELEASE (iconsCache);
   RELEASE (tumbsCache);
-  RELEASE (thumbnailDir);
   RELEASE (multipleSelIcon);
   RELEASE (openFolderIcon);
   RELEASE (hardDiskIcon);
@@ -895,52 +886,18 @@ NSString * const FSNLabelTextSizeDefaultsKey = @"labeltxtsize";
 
 - (void)thumbnailsDidChange:(NSDictionary *)info
 {
-  NSArray *deleted = [info objectForKey: @"deleted"];	
-  NSArray *created = [info objectForKey: @"created"];	
+  NSMutableArray *paths = [NSMutableArray array];
   NSUInteger i;
 
-  if (usesThumbnails == NO) {
-    return;
-  }
-  
-  if ([deleted count]) {
-    for (i = 0; i < [deleted count]; i++) {
-      [tumbsCache removeObjectForKey: [deleted objectAtIndex: i]];
+  [paths addObjectsFromArray: [info objectForKey: @"deleted"]];
+  [paths addObjectsFromArray: [info objectForKey: @"created"]];
+  /* Thumbnails are read from the store again on their next draw, and so
+   * are icons kept there (AppImages, applications, custom icons). */
+  for (i = 0; i < [paths count]; i++)
+    {
+      [tumbsCache removeObjectForKey: [paths objectAtIndex: i]];
+      [iconsCache removeObjectForKey: [paths objectAtIndex: i]];
     }
-  }
-  
-  if ([created count]) {
-    NSString *dictName = @"thumbnails.plist";
-    NSString *dictPath = [thumbnailDir stringByAppendingPathComponent: dictName];
-    
-    if ([fm fileExistsAtPath: dictPath]) {
-      NSDictionary *tdict = [NSDictionary dictionaryWithContentsOfFile: dictPath];
-
-      for (i = 0; i < [created count]; i++) {
-        NSString *key = [created objectAtIndex: i];
-        NSString *tumbname = [tdict objectForKey: key];
-        NSString *tumbpath = [thumbnailDir stringByAppendingPathComponent: tumbname]; 
-
-        if ([fm fileExistsAtPath: tumbpath]) {
-          NSImage *tumb = nil;
-        
-          NS_DURING
-            {
-          tumb = [[NSImage alloc] initWithContentsOfFile: tumbpath];
-          
-          if (tumb) {
-            [tumbsCache setObject: tumb forKey: key];
-            RELEASE (tumb);
-          }
-            }
-          NS_HANDLER
-            {
-            }
-          NS_ENDHANDLER
-        }
-      }    
-    }  
-  }
 }
 
 - (NSString *)validExtendedInfoName:(id)name

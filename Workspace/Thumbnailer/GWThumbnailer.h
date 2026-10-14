@@ -39,16 +39,18 @@
 @end
 
 
+@class GWThumbnailStore;
+
+/* Makes thumbnails with the Thumbnailer bundles and keeps them, like every
+ * other image Workspace caches, in the one GWThumbnailStore; also the one
+ * that keeps that store clean. */
 @interface Thumbnailer: NSObject
 {
   NSMutableArray *thumbnailers;
   NSMutableDictionary *extProviders;
   id current;
-  NSString *thumbnailDir;
-  NSString *dictPath;
-  NSMutableDictionary *thumbsDict;
-  long thumbref; 
-  NSTimer *timer; 
+  GWThumbnailStore *store;
+  NSTimer *timer;
   NSConnection *conn;
   NSFileManager *fm;
   NSLock *dictLock;
@@ -57,17 +59,28 @@
 
 + (Thumbnailer *)sharedThumbnailer;
 
-- (void)writeDictToFile;
-
 - (void)loadThumbnailers;
 
 - (BOOL)addThumbnailer:(id)tmb;
 
 - (id)thumbnailerForPath:(NSString *)path;
 
-- (NSString *)nextThumbName;
-
+/* The cleanup: drops entries whose source is gone or changed and files no
+ * entry references, and posts GWThumbnailsDidChangeNotification for what
+ * went. Does file I/O; run it off the main thread. */
 - (void)checkThumbnails:(id)sender;
+
+/* Runs checkThumbnails: by itself, on a low-priority thread, shortly after
+ * start and then daily, and for the files Workspace's own move, rename and
+ * delete operations take away; right away, moves the entries an earlier
+ * Workspace build kept in ~/.cache/thumbnails into the store. Call once,
+ * on the main thread. */
+- (void)startAutomaticChecks;
+
+/* The paths a GWFileSystemDidChangeNotification's operation info names as
+ * its sources: the files of a move, copy, delete or recycle in its source
+ * folder, the old path of a rename. */
++ (NSArray *)sourcePathsOfFileOperation:(id)info;
 
 - (BOOL)registerThumbnailData:(NSData *)data 
                       forPath:(NSString *)path
