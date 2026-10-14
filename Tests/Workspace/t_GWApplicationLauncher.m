@@ -119,7 +119,7 @@ int main(void)
   /* The child writes the scale it was given where the test can read it
    * back: a Qt application scales itself from QT_SCALE_FACTOR alone. */
   scriptBody = [NSString stringWithFormat:
-                  @"#!/bin/sh\nprintf %s \"$QT_SCALE_FACTOR\" > '%@'\n"
+                  @"#!/bin/sh\nprintf %%s \"$QT_SCALE_FACTOR\" > '%@'\n"
                   @"echo 'fatal: something broke' >&2\nexit 3\n", probePath];
   [scriptBody writeToFile: script atomically: YES];
   [fm changeFileAttributes:
