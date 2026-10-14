@@ -87,12 +87,6 @@ buildAppImage(NSString *path, NSString *work)
   return [file writeToFile: path atomically: NO];
 }
 
-static BOOL
-exists(NSString *path)
-{
-  return [[NSFileManager defaultManager] fileExistsAtPath: path];
-}
-
 int
 main(void)
 {
