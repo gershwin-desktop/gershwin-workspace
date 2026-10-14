@@ -106,8 +106,11 @@ main(void)
   [view showContentsOfNode: [FSNode nodeWithPath: dir]];
 
   {
-    FakeDrag *url = dragOf(NSURLPboardType, @"https://example.org/a");
-    FakeDrag *text = dragOf(NSStringPboardType, @"just some text");
+    /* FakeDrag implements only what these methods ask of a drag. */
+    id<NSDraggingInfo> url
+      = (id<NSDraggingInfo>)dragOf(NSURLPboardType, @"https://example.org/a");
+    id<NSDraggingInfo> text
+      = (id<NSDraggingInfo>)dragOf(NSStringPboardType, @"just some text");
 
     PASS([view draggingEntered: text] == NSDragOperationNone,
 	 "MI-LNK-20 plain text dropped into the view is refused");
@@ -127,13 +130,14 @@ main(void)
   PASS(folder != nil, "folder icon present");
   if (folder != nil)
     {
-      FakeDrag *url = dragOf(NSURLPboardType, @"https://example.org/b");
+      FakeDrag *drag = dragOf(NSURLPboardType, @"https://example.org/b");
+      id<NSDraggingInfo> url = (id<NSDraggingInfo>)drag;
 
       /* The drop point has to be on the folder, else the icon hands the drag
        * to its view. */
       NSRect b = [folder bounds];
 
-      url->location = [folder convertPoint:
+      drag->location = [folder convertPoint:
 			 NSMakePoint(NSMidX(b), NSMidY(b)) toView: nil];
       PASS([folder draggingEntered: url] == NSDragOperationCopy,
 	   "MI-LNK-26 a link dropped on a folder icon is accepted");

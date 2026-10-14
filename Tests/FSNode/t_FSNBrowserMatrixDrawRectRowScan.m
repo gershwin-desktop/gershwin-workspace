@@ -33,10 +33,10 @@
 
 @implementation CountingBrowserMatrix
 
-- (NSRect)cellFrameAtRow:(NSInteger)row column:(NSInteger)column
+- (NSRect)cellFrameAtRow:(NSInteger)row column:(NSInteger)col
 {
   frameCalls++;
-  return [super cellFrameAtRow: row column: column];
+  return [super cellFrameAtRow: row column: col];
 }
 
 @end

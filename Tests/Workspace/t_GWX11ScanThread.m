@@ -45,7 +45,6 @@ int main(void)
   ScanCounter *counter = [ScanCounter new];
   NSThread *thread;
   int i;
-  int loops = 0;
   NSDate *deadline;
 
   START_SET("X11 app monitor scan thread")
@@ -66,10 +65,9 @@ int main(void)
   while ([counter hits] < 5 && [deadline timeIntervalSinceNow] > 0)
     {
       [NSThread sleepForTimeInterval: 0.05];
-      loops++;
     }
-  PASS_EQUAL([counter hits], 5,
-             "every scan handed to the persistent thread is delivered");
+  PASS([counter hits] == 5,
+       "every scan handed to the persistent thread is delivered");
   [manager stopScanThread];
   END_SET("X11 app monitor scan thread")
 
