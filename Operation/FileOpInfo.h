@@ -150,6 +150,8 @@
 
 - (void)detachOperationThread;
 
++ (void)executorDidFinishWithConnection:(NSConnection *)conn;
+
 - (NSInteger)requestUserConfirmationWithMessage:(NSString *)message 
                                     title:(NSString *)title;
 
@@ -248,6 +250,10 @@
   GWMetadataCopier *metaCopier;
   id <FileOpInfoProtocol> fileOp;
 }
+
+/* The executor thread's entry point: ports, the operation's connection
+ * (not retained) and the thread that made it. */
++ (void)runWithArguments:(NSArray *)args;
 
 + (void)setPorts:(NSArray *)thePorts;
 

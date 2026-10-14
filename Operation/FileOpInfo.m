@@ -334,6 +334,12 @@ static NSBundle *stringsBundle = nil;
   [self detachOperationThread];
 }
 
++ (void)executorDidFinishWithConnection:(NSConnection *)conn
+{
+  [conn invalidate];
+  RELEASE (conn);
+}
+
 - (void) threadWillExit: (NSNotification *)notification
 {
   [nc removeObserver: self
@@ -347,6 +353,7 @@ static NSBundle *stringsBundle = nil;
 {
   NSPort *port[2];
   NSArray *ports;
+  NSArray *args;
 
   port[0] = (NSPort *)[NSPort port];
   port[1] = (NSPort *)[NSPort port];
@@ -363,15 +370,26 @@ static NSBundle *stringsBundle = nil;
              name: NSConnectionDidDieNotification
            object: execconn];  
 
+  /* The executor's thread picks up references to this connection. Were
+   * the last of them dropped there, the connection would deallocate on
+   * that thread and withdraw from this thread's run loop while this thread
+   * polls it, and the run loop fails on its changed watcher list. So this
+   * thread keeps a reference the executor's thread never owns (hence the
+   * non-retained value) and invalidates and drops it itself once the
+   * executor is done. */
+  args = [NSArray arrayWithObjects: ports,
+                  [NSValue valueWithNonretainedObject: RETAIN (execconn)],
+                  [NSThread currentThread], nil];
+
   NS_DURING
     {
 #ifdef _WIN32
-      [NSThread detachNewThreadSelector: @selector(setPorts:)
+      [NSThread detachNewThreadSelector: @selector(runWithArguments:)
                                toTarget: [FileOpExecutor class]
-                             withObject: ports];
+                             withObject: args];
 #else
       dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        [FileOpExecutor setPorts:ports];
+        [FileOpExecutor runWithArguments: args];
       });
 #endif
     }
@@ -734,6 +752,9 @@ static NSBundle *stringsBundle = nil;
           if (result == NSAlertAlternateReturn)
             {
               [controller endOfFileOperation: self];
+              /* Otherwise the connection's invalidation, once the
+               * executor returns, would be reported as its crash. */
+              [self cleanUpExecutor];
               return;   
             }
           else if (result == NSAlertOtherReturn) 
@@ -842,6 +863,19 @@ shouldMakeNewConnection:(NSConnection*)newConn
 
 
 @implementation FileOpExecutor
+
++ (void)runWithArguments:(NSArray *)args
+{
+  CREATE_AUTORELEASE_POOL(pool);
+  NSConnection *conn = [[args objectAtIndex: 1] nonretainedObjectValue];
+
+  [self setPorts: [args objectAtIndex: 0]];
+  [FileOpInfo performSelector: @selector(executorDidFinishWithConnection:)
+                     onThread: [args objectAtIndex: 2]
+                   withObject: conn
+                waitUntilDone: NO];
+  RELEASE (pool);
+}
 
 + (void)setPorts:(NSArray *)thePorts
 {
