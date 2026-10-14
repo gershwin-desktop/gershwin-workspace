@@ -32,15 +32,24 @@ int main(int argc, char **argv)
   }
 
   NSWorkspace *ws = [NSWorkspace sharedWorkspace];
+  int failures = 0;
 
   for (NSString *name in contents) {
     if (!HasAppImageExtension(name)) {
       continue;
     }
     NSString *path = [dir stringByAppendingPathComponent: name];
-    [ws iconForFile: path];
+    NSImage *icon = [ws iconForFile: path];
+
+    if (icon == nil) {
+      printf("%s: no icon\n", [name UTF8String]);
+      failures++;
+    } else {
+      printf("%s: %.0fx%.0f\n", [name UTF8String],
+        [icon size].width, [icon size].height);
     }
+  }
 
   [pool drain];
-  return 0;
+  return failures ? 1 : 0;
 }
