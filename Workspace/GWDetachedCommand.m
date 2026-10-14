@@ -5,6 +5,7 @@
  */
 
 #import "GWDetachedCommand.h"
+#import "GWScaleFactor.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -58,6 +59,8 @@
   [task setStandardInput: null];
   [task setStandardOutput: null];
   [task setStandardError: null];
+  /* A Qt application learns the desktop's scale only from QT_SCALE_FACTOR. */
+  [task setEnvironment: GWEnvironmentWithScaleFactor(nil)];
   @try
     {
       [task launch];
@@ -74,7 +77,11 @@
    * are allowed, so everything the child needs is prepared here. */
   NSUInteger count = [arguments count];
   long maxfd = sysconf(_SC_OPEN_MAX);
+  NSDictionary *environment;
+  NSEnumerator *keys;
+  NSString *key;
   const char **argv;
+  const char **envp;
   NSUInteger i;
   pid_t pid;
   int status;
@@ -97,10 +104,29 @@
       argv[i] = [[arguments objectAtIndex: i] UTF8String];
     }
 
+  /* Our own environment plus QT_SCALE_FACTOR, which a Qt application
+   * needs to come up at the desktop's scale; built before the fork for the
+   * same reason as argv. */
+  environment = GWEnvironmentWithScaleFactor(nil);
+  envp = (const char **)calloc([environment count] + 1, sizeof(char *));
+  if (envp == NULL)
+    {
+      free(argv);
+      return NO;
+    }
+  keys = [environment keyEnumerator];
+  i = 0;
+  while ((key = [keys nextObject]) != nil)
+    {
+      envp[i++] = [[NSString stringWithFormat: @"%@=%@", key,
+                     [environment objectForKey: key]] UTF8String];
+    }
+
   pid = fork();
   if (pid < 0)
     {
       free(argv);
+      free(envp);
       return NO;
     }
 
@@ -131,13 +157,14 @@
       grandchild = fork();
       if (grandchild == 0)
         {
-          execv(argv[0], (char * const *)argv);
+          execve(argv[0], (char * const *)argv, (char * const *)envp);
           _exit(127);
         }
       _exit(grandchild > 0 ? 0 : 1);
     }
 
   free(argv);
+  free(envp);
   while (waitpid(pid, &status, 0) < 0)
     {
       if (errno == EINTR)

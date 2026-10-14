@@ -56,6 +56,7 @@
 #import "GWViewerChrome.h"
 #import "GWStationery.h"
 #import "Workspace.h"
+#import "GWScaleFactor.h"
 
 /* Set of paths the user has recently unmounted via the GUI.
  * Used by showMountedVolumes to suppress the "Unexpectedly" dialog.
@@ -3797,52 +3798,38 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   RELEASE (alert);
 }
 
-- (void)openGershwinHelp:(id)sender
+/* The browser comes up through xdg-open; it gets QT_SCALE_FACTOR like any
+ * application launched from the desktop, so a Qt browser is drawn at the
+ * desktop's scale. */
+- (void)openURLInBrowser:(NSString *)url
 {
-  NSString *url = @"https://github.com/gershwin-desktop/gershwin-desktop/wiki";
   NSTask *task = [NSTask new];
+  NSError *error = nil;
+
   [task setLaunchPath: @"/usr/bin/xdg-open"];
   [task setArguments: [NSArray arrayWithObject: url]];
-  
-  NSError *error = nil;
+  [task setEnvironment: GWEnvironmentWithScaleFactor(nil)];
   if (![task launchAndReturnError: &error]) {
-    NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
-                    [NSString stringWithFormat: _(@"Could not open URL:\n\n%@"), url], 
+    NSRunAlertPanel(NSLocalizedString(@"Error", @""),
+                    [NSString stringWithFormat: _(@"Could not open URL:\n\n%@"), url],
                     _(@"OK"), nil, nil);
   }
   RELEASE (task);
+}
+
+- (void)openGershwinHelp:(id)sender
+{
+  [self openURLInBrowser: @"https://github.com/gershwin-desktop/gershwin-desktop/wiki"];
 }
 
 - (void)openFeedback:(id)sender
 {
-  NSString *url = @"https://github.com/orgs/gershwin-desktop/discussions";
-  NSTask *task = [NSTask new];
-  [task setLaunchPath: @"/usr/bin/xdg-open"];
-  [task setArguments: [NSArray arrayWithObject: url]];
-  
-  NSError *error = nil;
-  if (![task launchAndReturnError: &error]) {
-    NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
-                    [NSString stringWithFormat: _(@"Could not open URL:\n\n%@"), url], 
-                    _(@"OK"), nil, nil);
-  }
-  RELEASE (task);
+  [self openURLInBrowser: @"https://github.com/orgs/gershwin-desktop/discussions"];
 }
 
 - (void)openLegal:(id)sender
 {
-  NSString *url = @"https://raw.githubusercontent.com/gershwin-desktop/gershwin-workspace/refs/heads/main/COPYING";
-  NSTask *task = [NSTask new];
-  [task setLaunchPath: @"/usr/bin/xdg-open"];
-  [task setArguments: [NSArray arrayWithObject: url]];
-  
-  NSError *error = nil;
-  if (![task launchAndReturnError: &error]) {
-    NSRunAlertPanel(NSLocalizedString(@"Error", @""), 
-                    [NSString stringWithFormat: _(@"Could not open URL:\n\n%@"), url], 
-                    _(@"OK"), nil, nil);
-  }
-  RELEASE (task);
+  [self openURLInBrowser: @"https://raw.githubusercontent.com/gershwin-desktop/gershwin-workspace/refs/heads/main/COPYING"];
 }
 
 - (void)goToComputer:(id)sender

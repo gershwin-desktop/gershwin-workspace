@@ -12,6 +12,7 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 #include "../../Workspace/GWDetachedCommand.m"
+#include "../../Workspace/GWScaleFactor.m"
 
 #include <signal.h>
 #include <stdio.h>
@@ -94,6 +95,33 @@ int main(void)
       [NSArray arrayWithObject: @"sh"]] == NO,
       "a relative program path is refused");
   END_SET("launchArguments: passes every argument through untouched")
+
+  START_SET("launchArguments: hands the program the desktop's scale")
+    /* A Qt application scales itself from QT_SCALE_FACTOR alone, so a
+     * command started by a global shortcut or a URL handler must get it
+     * like one launched from the Dock.  The scale is set for the test only,
+     * so the result does not depend on the user's own GSScaleFactor. */
+    NSArray *argv = [NSArray arrayWithObjects: @"/bin/sh", @"-c",
+      @"printf %s \"$QT_SCALE_FACTOR\" > \"$1\"", @"sh", ranFile, nil];
+
+    [[NSUserDefaults standardUserDefaults]
+      removeVolatileDomainForName: NSArgumentDomain];
+    [[NSUserDefaults standardUserDefaults]
+      setVolatileDomain: [NSDictionary dictionaryWithObject:
+                                    [NSNumber numberWithFloat: 1.25]
+                                                    forKey: @"GSScaleFactor"]
+               forName: NSArgumentDomain];
+    [fm removeFileAtPath: ranFile handler: nil];
+    PASS([GWDetachedCommand launchArguments: argv],
+      "launchArguments: starts the program");
+    for (i = 0; i < 100 && ![fm fileExistsAtPath: ranFile]; i++)
+      {
+        usleep(50000);
+      }
+    usleep(100000);
+    PASS_EQUAL([NSString stringWithContentsOfFile: ranFile], @"1.25",
+      "the program is given the scale factor to start at");
+  END_SET("launchArguments: hands the program the desktop's scale")
 
   [fm removeFileAtPath: ranFile handler: nil];
   [arp release];

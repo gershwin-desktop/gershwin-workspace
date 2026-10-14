@@ -110,6 +110,7 @@ GWURLSchemeRegistry.m \
 GWURLOpener.m \
 WorkspaceApplication.m \
 GWApplicationLauncher.m \
+GWScaleFactor.m \
 GSGlobalShortcutsManager.m \
 Desktop/GWDesktopManager.m \
 Desktop/GWMountWatchState.m \

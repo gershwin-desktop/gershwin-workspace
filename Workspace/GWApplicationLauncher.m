@@ -10,6 +10,7 @@
 #import <dispatch/dispatch.h>
 #endif
 #import "GWApplicationLauncher.h"
+#import "GWScaleFactor.h"
 #import <unistd.h>
 #include <fcntl.h>
 
@@ -68,6 +69,16 @@
       errHandle = [NSFileHandle fileHandleWithNullDevice];
     }
     [task setStandardError:errHandle];
+
+    /* Every way into a launch - Cmd-O, a double click, the Dock, Open With,
+     * Run External, the URL opener - ends in this one task, so this is the
+     * one place that has to tell a Qt application (which knows nothing of
+     * GSScaleFactor) how large the desktop's pixels are.  Set on the task
+     * rather than on ourselves: the change then lives exactly as long as the
+     * child does.  A caller that set its own environment keeps it - only
+     * QT_SCALE_FACTOR is added. */
+    [task setEnvironment: GWEnvironmentWithScaleFactor([task environment])];
+
     [task launch];
 
     /* Event-driven exit monitor via NSTaskDidTerminateNotification.

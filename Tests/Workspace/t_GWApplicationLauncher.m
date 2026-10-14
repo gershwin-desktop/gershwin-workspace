@@ -80,9 +80,25 @@ int main(void)
                          stringByAppendingPathComponent: @"Library/Logs"]
                         stringByAppendingPathComponent:
                           [name stringByAppendingPathExtension: @"log"]];
+  NSString *probePath = [NSTemporaryDirectory()
+                          stringByAppendingPathComponent:
+                            [name stringByAppendingPathExtension: @"scale"]];
   NSTimer *keepAlive;
   NSTask *task;
   NSDate *limit;
+  NSString *scriptBody;
+
+  /* The scale this process launches at, set for the test only so the
+   * assertion below does not depend on the user's own GSScaleFactor.  The
+   * argument domain is dropped first: -setVolatileDomain:forName: refuses
+   * to replace one that is already there. */
+  [[NSUserDefaults standardUserDefaults]
+    removeVolatileDomainForName: NSArgumentDomain];
+  [[NSUserDefaults standardUserDefaults]
+    setVolatileDomain: [NSDictionary dictionaryWithObject:
+                                  [NSNumber numberWithFloat: 1.25]
+                                                  forKey: @"GSScaleFactor"]
+             forName: NSArgumentDomain];
 
   displayModes = [[NSArray alloc] initWithObjects: NSDefaultRunLoopMode,
                                   NSModalPanelRunLoopMode, nil];
@@ -99,8 +115,13 @@ int main(void)
   [DisplayStandIn queue];
 
   [fm removeFileAtPath: logPath handler: nil];
-  [@"#!/bin/sh\necho 'fatal: something broke' >&2\nexit 3\n"
-    writeToFile: script atomically: YES];
+  [fm removeFileAtPath: probePath handler: nil];
+  /* The child writes the scale it was given where the test can read it
+   * back: a Qt application scales itself from QT_SCALE_FACTOR alone. */
+  scriptBody = [NSString stringWithFormat:
+                  @"#!/bin/sh\nprintf %s \"$QT_SCALE_FACTOR\" > '%@'\n"
+                  @"echo 'fatal: something broke' >&2\nexit 3\n", probePath];
+  [scriptBody writeToFile: script atomically: YES];
   [fm changeFileAttributes:
         [NSDictionary dictionaryWithObject: [NSNumber numberWithShort: 0755]
                                     forKey: NSFilePosixPermissions]
@@ -127,9 +148,13 @@ int main(void)
   PASS(displayedDuringAlert,
        "windows are still redrawn while the error alert runs its modal loop");
 
+  PASS_EQUAL([NSString stringWithContentsOfFile: probePath], @"1.25",
+             "the launched application is given the scale factor to start at");
+
   [keepAlive invalidate];
   [fm removeFileAtPath: script handler: nil];
   [fm removeFileAtPath: logPath handler: nil];
+  [fm removeFileAtPath: probePath handler: nil];
   [arp release];
   return 0;
 }
