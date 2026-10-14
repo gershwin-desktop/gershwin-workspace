@@ -390,30 +390,7 @@ static BOOL hasLastExtents_ = NO;
     [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_WIN_H)];    
     [vwrwin setResizeIncrements: GWViewerResizeIncrements(viewType, resizeIncrement)];
 
-    if (firstRootViewer) {
-      NSString *path = [baseNode path];
-      if ([path isEqual: path_separator()]) {
-        [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
-      } else {
-        [vwrwin setTitle: [baseNode name]];
-      }
-    } else {
-      if (rootViewer) {
-        NSString *path = [baseNode path];
-        if ([path isEqual: path_separator()]) {
-          [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
-        } else {
-          [vwrwin setTitle: [baseNode name]];
-        }
-      } else {
-        NSString *path = [baseNode path];
-        if ([path isEqual: path_separator()]) {
-          [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
-        } else {
-          [vwrwin setTitle: [baseNode name]];
-        }
-      }
-    }
+    [self setWindowTitleForNode: baseNode];
 
     [self createSubviews];
 
@@ -1033,6 +1010,13 @@ static BOOL hasLastExtents_ = NO;
 
   [manager selectionChanged: newsel];
 
+  /* Opening a folder in place, going back or forward, and every other way
+   * the view switches folders ends here, so this is where the window learns
+   * which folder it shows now. */
+  if ([nodeView isSingleNode]) {
+    [self setWindowTitleForNode: [nodeView shownNode]];
+  }
+
   if (lastSelection && [newsel isEqual: lastSelection]) {
     if ([[newsel objectAtIndex: 0] isEqual: [nodeView shownNode]] == NO) {
       return;
@@ -1478,8 +1462,6 @@ static BOOL hasLastExtents_ = NO;
  * again afterwards; none of that belongs in its history. */
 - (void)showNodeWithoutHistory:(FSNode *)node
 {
-  NSString *path;
-
   if (node == nil || [node isValid] == NO)
     return;
 
@@ -1487,13 +1469,34 @@ static BOOL hasLastExtents_ = NO;
   [self scrollToBeginning];
   [self applySettingsOfShownFolder];
   [self selectionChanged: [NSArray arrayWithObject: node]];
+  [self setWindowTitleForNode: node];
+}
 
-  path = [node path];
-  if ([path isEqual: path_separator()]) {
-    [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
-  } else {
-    [vwrwin setTitle: [node name]];
-  }
+/* A browsing window goes up in place, like opening a folder does, so Back
+ * returns to the folder it came from; the folder left is selected in the
+ * parent.  The columns already have their own way to step left. */
+- (void)openEnclosingFolderClosingViewer:(BOOL)close
+{
+  FSNode *child = [self shownFolderNode];
+  FSNode *parentNode = [self enclosingFolderNode];
+
+  if (viewType == GWViewTypeBrowser)
+    {
+      [nodeView moveLeft];
+      return;
+    }
+
+  if (parentNode == nil)
+    {
+      return;
+    }
+
+  [self navigateToNode: parentNode];
+  [nodeView selectRepsOfSubnodes: [NSArray arrayWithObject: child]];
+  if ([nodeView respondsToSelector: @selector(scrollSelectionToVisible)])
+    {
+      [nodeView scrollSelectionToVisible];
+    }
 }
 
 - (void)navigateToNode:(FSNode *)node
@@ -1561,15 +1564,7 @@ static BOOL hasLastExtents_ = NO;
   [self applyContentBackgroundColor];
   [nodeView showContentsOfNode: baseNode];
 
-  /* Window title */
-  {
-    NSString *path = [baseNode path];
-    if ([path isEqual: path_separator()]) {
-      [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
-    } else {
-      [vwrwin setTitle: [baseNode name]];
-    }
-  }
+  [self setWindowTitleForNode: baseNode];
 
   /* Reset the path bar to show only the new base */
   [pathsView showPathComponents: baseNodeArray selection: baseNodeArray];

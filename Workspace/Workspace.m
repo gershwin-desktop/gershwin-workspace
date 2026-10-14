@@ -4285,9 +4285,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSWindow *kwin = [NSApp keyWindow];
   
   if (kwin && [vwrsManager hasViewerWithWindow: kwin]) {
-    GWViewerWindow *viewer = [vwrsManager viewerWithWindow: kwin];
+    GWViewer *viewer = [vwrsManager viewerWithWindow: kwin];
     if (viewer) {
-      [viewer goBackwardInHistory:sender];
+      [viewer goBackwardInHistory];
     }
   }
 }
@@ -4297,9 +4297,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSWindow *kwin = [NSApp keyWindow];
   
   if (kwin && [vwrsManager hasViewerWithWindow: kwin]) {
-    GWViewerWindow *viewer = [vwrsManager viewerWithWindow: kwin];
+    GWViewer *viewer = [vwrsManager viewerWithWindow: kwin];
     if (viewer) {
-      [viewer goForwardInHistory:sender];
+      [viewer goForwardInHistory];
     }
   }
 }
@@ -4349,12 +4349,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NSWindow *kwin = [NSApp keyWindow];
   
   if (kwin && [vwrsManager hasViewerWithWindow: kwin]) {
-    GWViewer *viewer = [vwrsManager viewerWithWindow: kwin];
-    FSNode *baseNode = [viewer baseNode];
-    FSNode *parentNode = [baseNode parent];
+    GWViewerBase *viewer = [vwrsManager viewerWithWindow: kwin];
     
-    if (parentNode) {
-      [self openSelectedPaths: [NSArray arrayWithObject: [parentNode path]] newViewer: YES];
+    if ([viewer enclosingFolderNode]) {
+      [viewer openEnclosingFolderClosingViewer: NO];
     } else {
       NSRunAlertPanel(NSLocalizedString(@"Error", @""), _(@"Already at the root directory"), _(@"OK"), nil, nil);
     }

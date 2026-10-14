@@ -19,6 +19,7 @@
 #import "GWViewersManager.h"
 #import "GWViewerBrowserPreview.h"
 #import "Workspace.h"
+#import "GWDesktopManager.h"
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
 #import "FSNIconsView.h"
@@ -350,6 +351,67 @@
 - (id)nodeView
 {
   return nodeView;
+}
+
+/* A view that shows one folder at a time (icons, list) moves away from
+ * baseNode when the user opens a subfolder in place, so baseNode is only
+ * where the window started.  Everything the user reads as "this window's
+ * folder" - title, Enclosing Folder - has to follow what is shown instead. */
+- (FSNode *)shownFolderNode
+{
+  if ([nodeView isSingleNode])
+    {
+      return [nodeView shownNode];
+    }
+
+  return baseNode;
+}
+
+/* Computed from the path: -[FSNode parent] is only set for nodes that were
+ * created from their parent, which a folder opened by path is not. */
+- (FSNode *)enclosingFolderNode
+{
+  NSString *path = [[self shownFolderNode] path];
+  NSString *parentPath = [path stringByDeletingLastPathComponent];
+
+  if (path == nil || [parentPath isEqual: path])
+    {
+      return nil;
+    }
+
+  return [FSNode nodeWithPath: parentPath];
+}
+
+/* What a spatial window does: each folder has a window of its own. */
+- (void)openEnclosingFolderClosingViewer:(BOOL)close
+{
+  FSNode *parentNode = [self enclosingFolderNode];
+  FSNode *dskNode = [[[Workspace gworkspace] desktopManager] desktopNode];
+
+  if (parentNode == nil
+      || (dskNode && [[parentNode path] isEqual: [dskNode path]]))
+    {
+      return;
+    }
+
+  [manager viewerOfType: SPATIAL
+               showType: nil
+                forNode: parentNode
+          showSelection: NO
+         closeOldViewer: close ? self : nil
+               forceNew: NO];
+}
+
+- (void)setWindowTitleForNode:(FSNode *)node
+{
+  if ([[node path] isEqual: path_separator()])
+    {
+      [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
+    }
+  else
+    {
+      [vwrwin setTitle: [node name]];
+    }
 }
 
 - (void)openSelectionAsFolder

@@ -270,79 +270,13 @@
       if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
 	{
 	  // Shift-Up = Open parent folder in new viewer
-	  id delegate = [self delegate];
-	  if ([delegate respondsToSelector: @selector(baseNode)])
-	    {
-	      FSNode *baseNode = [delegate baseNode];
-	      if (baseNode)
-		{
-		  NSString *parentPath = [[baseNode path] stringByDeletingLastPathComponent];
-		  if (parentPath && ![parentPath isEqual: [baseNode path]])
-		    {
-		      FSNode *parentNode = [FSNode nodeWithPath: parentPath];
-		      if (parentNode)
-			{
-			  GWViewersManager *manager = [GWViewersManager viewersManager];
-			  if (manager)
-			    {
-			      [manager viewerForNode: parentNode
-					   showType: 0
-				      showSelection: NO
-					   forceNew: NO
-					   withKey: nil];
-			    }
-			}
-		    }
-		}
-	    }
+	  [[self delegate] openEnclosingFolderClosingViewer: NO];
 	  return;
 	}
       if (flags & NSCommandKeyMask)
 	{
-	  id delegate = [self delegate];
-	  if ([delegate respondsToSelector: @selector(baseNode)])
-	    {
-	      FSNode *baseNode = [delegate baseNode];
-	      if (baseNode)
-		{
-		  NSString *parentPath = [[baseNode path] stringByDeletingLastPathComponent];
-		  if (parentPath && ![parentPath isEqual: [baseNode path]])
-		    {
-		      FSNode *parentNode = [FSNode nodeWithPath: parentPath];
-		      FSNode *dskNode = [[[Workspace gworkspace] desktopManager] desktopNode];
-		      if (dskNode && [[parentNode path] isEqual: [dskNode path]])
-			return;
-
-		      if (parentNode)
-			{
-			  GWViewersManager *manager = [GWViewersManager viewersManager];
-			  if (manager)
-			    {
-			      if (flags & NSShiftKeyMask)
-				{
-				  // Cmd+Shift+Up = Open parent and close current viewer (spatial)
-				  [manager viewerOfType: SPATIAL
-						showType: nil
-						 forNode: parentNode
-					   showSelection: NO
-					  closeOldViewer: delegate
-						forceNew: NO];
-				}
-			      else
-				{
-				  // Cmd+Up = Open Enclosing Folder
-				  [manager viewerOfType: SPATIAL
-						showType: nil
-						 forNode: parentNode
-					   showSelection: NO
-					  closeOldViewer: nil
-						forceNew: NO];
-				}
-			    }
-			}
-		    }
-		}
-	    }
+	  // Cmd+Shift+Up also closes this viewer where Up opens a window
+	  [[self delegate] openEnclosingFolderClosingViewer: (flags & NSShiftKeyMask) != 0];
 	}
       return;
 

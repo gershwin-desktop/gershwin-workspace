@@ -133,6 +133,10 @@ typedef enum
 - (void)newFolder;
 - (void)nodeContentsWillChange:(NSDictionary *)info;
 - (id)nodeView;
+- (FSNode *)shownFolderNode;
+- (FSNode *)enclosingFolderNode;
+- (void)openEnclosingFolderClosingViewer:(BOOL)close;
+- (void)setWindowTitleForNode:(FSNode *)node;
 - (void)openSelectionAsFolder;
 - (void)openSelectionWith;
 - (void)previewPane:(GWViewerBrowserPreview *)pane didSelectInspectorAtIndex:(int)index;

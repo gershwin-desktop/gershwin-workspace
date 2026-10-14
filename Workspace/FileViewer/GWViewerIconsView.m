@@ -118,31 +118,7 @@
   // Handle Shift-Up = Open parent folder in new viewer
   if (character == NSUpArrowFunctionKey && (flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
     {
-      id delegate = viewer;
-      if ([delegate respondsToSelector: @selector(baseNode)])
-        {
-          FSNode *baseNode = [delegate baseNode];
-          if (baseNode)
-            {
-              NSString *parentPath = [[baseNode path] stringByDeletingLastPathComponent];
-              if (parentPath && ![parentPath isEqual: [baseNode path]])
-                {
-                  FSNode *parentNode = [FSNode nodeWithPath: parentPath];
-                  if (parentNode)
-                    {
-                      GWViewersManager *mgr = [GWViewersManager viewersManager];
-                      if (mgr)
-                        {
-                          [mgr viewerForNode: parentNode
-                               showType: 0
-                          showSelection: NO
-                               forceNew: NO
-                               withKey: nil];
-                        }
-                    }
-                }
-            }
-        }
+      [viewer openEnclosingFolderClosingViewer: NO];
       return;
     }
 
@@ -164,48 +140,7 @@
   // Handle Command-Shift-Up = Open parent and close current viewer (spatial)
   if (character == NSUpArrowFunctionKey && (flags & NSCommandKeyMask))
     {
-      id delegate = viewer;
-      if ([delegate respondsToSelector: @selector(baseNode)])
-	{
-	  FSNode *baseNode = [delegate baseNode];
-	  if (baseNode)
-	    {
-	      NSString *parentPath = [[baseNode path] stringByDeletingLastPathComponent];
-	      if (parentPath && ![parentPath isEqual: [baseNode path]])
-		{
-		  FSNode *parentNode = [FSNode nodeWithPath: parentPath];
-		  FSNode *dskNode = [[[Workspace gworkspace] desktopManager] desktopNode];
-		  if (dskNode && [[parentNode path] isEqual: [dskNode path]])
-		    return;
-
-		  if (parentNode)
-		    {
-		      GWViewersManager *mgr = [GWViewersManager viewersManager];
-		      if (mgr)
-			{
-			  if (flags & NSShiftKeyMask)
-			    {
-			      [mgr viewerOfType: SPATIAL
-				    showType: nil
-				     forNode: parentNode
-			       showSelection: NO
-			      closeOldViewer: delegate
-				    forceNew: NO];
-			    }
-			  else
-			    {
-			      [mgr viewerOfType: SPATIAL
-				    showType: nil
-				     forNode: parentNode
-			       showSelection: NO
-			      closeOldViewer: nil
-				    forceNew: NO];
-			    }
-			}
-		    }
-		}
-	    }
-	}
+      [viewer openEnclosingFolderClosingViewer: (flags & NSShiftKeyMask) != 0];
       return;
     }
 
