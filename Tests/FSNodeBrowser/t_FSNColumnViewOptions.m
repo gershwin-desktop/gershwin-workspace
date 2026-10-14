@@ -108,8 +108,15 @@ main(void)
   PASS (counter->count == 5, "MI-CLM-94 setting the same value posts nothing");
 
   /* --- changes from outside, e.g. defaults write or an Integrator ------- */
+  /* libs-base posts NSUserDefaultsDidChangeNotification from -synchronize
+   * (called here, or by its housekeeping timer), not from the setters, and
+   * a change written by another process arrives the same way; older
+   * libs-base posted from each setter as well, so synchronize after each
+   * change to see it taken over on its own with either. */
   [defs setInteger: 300 forKey: FSNColumnViewColumnWidthKey];
+  [defs synchronize];
   [defs setObject: @"kipl" forKey: FSNColumnViewArrangeByKey];
+  [defs synchronize];
   PASS ([options columnWidth] == 300 && [options arrangement] == FSNIconsArrangeKind
         && counter->count == 7,
         "MI-CLM-95 options changed in the defaults are taken over and posted, each change once");
