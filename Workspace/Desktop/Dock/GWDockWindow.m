@@ -113,6 +113,12 @@
 
 - (void)showDock
 {
+  /* Set before the window is mapped, so that the window manager has the
+   * window type and the strut when it first sees the Dock instead of a
+   * moment later. */
+  [self updateX11DockProperties];
+  [self updateX11Strut];
+  [dockView decorateIcons];
   [self orderFront: nil];
   /*
    * Re-assert the window level after ordering front; the windowing system

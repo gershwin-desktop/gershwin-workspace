@@ -33,6 +33,7 @@
 #import "GWDesktopWindow.h"
 #import "GWDesktopView.h"
 #import "Dock.h"
+#import "DockStartup.h"
 #import "GWDockWindow.h"
 #import "FSNFunctions.h"
 #import "Workspace.h"
@@ -82,6 +83,7 @@ static GWDesktopManager *desktopManager = nil;
   RELEASE (dskNode);
   RELEASE (win);
   RELEASE (dock);
+  [dockStartupTimer invalidate];
   RELEASE (dockWindow);
   RELEASE (mpointWatcher);
 
@@ -245,17 +247,74 @@ static GWDesktopManager *desktopManager = nil;
      * dockWindow == nil, leaving the dock hidden after reactivation). */
     if (dockWindow == nil) {
       dockWindow = [[GWDockWindow alloc] initWithDockView: dock];
+      /* Built from its saved items, but the applications that were running
+       * are only added once Workspace restores them: until then the Dock
+       * would appear short of items and fill up in front of the user. */
+      [self awaitDockItems];
+    } else {
+      [dock tile];
+      [dockWindow showDock];
     }
-    [dock tile];
-    [dockWindow showDock];
   }
   
   [mpointWatcher startWatching];  
 }
 
+- (void)awaitDockItems
+{
+  dockAwaiting = YES;
+  dockPending = DockStartupAwaitedSources;
+  dockBuiltAt = [NSDate timeIntervalSinceReferenceDate];
+  /* A source that never reports must not keep the Dock off the screen. */
+  dockStartupTimer = [NSTimer scheduledTimerWithTimeInterval:
+                                DockStartupRemainingWait(0)
+                                                      target: self
+                                                    selector: @selector(dockStartupBoundReached:)
+                                                    userInfo: nil
+                                                     repeats: NO];
+}
+
+- (void)cancelAwaitingDockItems
+{
+  [dockStartupTimer invalidate];
+  dockStartupTimer = nil;
+  dockAwaiting = NO;
+  dockPending = 0;
+}
+
+- (void)dockSourceDidFinish:(NSUInteger)source
+{
+  if (dockAwaiting == NO)
+    return;
+
+  dockPending = DockStartupSourceDone(dockPending, source);
+  if (DockStartupIsReady(dockPending, [NSDate timeIntervalSinceReferenceDate]
+                                        - dockBuiltAt))
+    [self showAwaitedDock];
+}
+
+- (void)dockStartupBoundReached:(NSTimer *)timer
+{
+  dockStartupTimer = nil;
+  if (dockAwaiting == NO)
+    return;
+
+  NSLog(@"Dock: not every source of its first items reported within %.1f s, "
+        @"showing it with what it has", DOCK_STARTUP_MAX_WAIT);
+  [self showAwaitedDock];
+}
+
+- (void)showAwaitedDock
+{
+  [self cancelAwaitingDockItems];
+  [dock tile];
+  [dockWindow showDock];
+}
+
 - (void)deactivateDesktop
 {
   [win deactivate];
+  [self cancelAwaitingDockItems];
   if (dockWindow)
     {
       [dockWindow hideDock];
@@ -420,6 +479,8 @@ static GWDesktopManager *desktopManager = nil;
 - (void)setDockActive:(BOOL)value
 {
   hidedock = !value;
+  /* Switched by the user: the Dock has what it is going to have. */
+  [self cancelAwaitingDockItems];
 
   if (hidedock && dockWindow)
     {

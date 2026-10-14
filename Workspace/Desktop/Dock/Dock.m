@@ -1304,6 +1304,17 @@ static inline CGFloat _dockScaleFactor(void)
   [self updateInputShape];
 }
 
+/* The icon images load lazily, a moment after the icons exist.  A Dock put on
+ * the screen before that shows its bar with empty places where the icons
+ * come a few frames later. */
+- (void)decorateIcons
+{
+  NSUInteger i;
+
+  for (i = 0; i < [icons count]; i++)
+    [[icons objectAtIndex: i] decorate];
+}
+
 - (NSRect)barFrame
 {
   NSRect wframe;

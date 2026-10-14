@@ -338,6 +338,10 @@ DockStyleFromValue(NSInteger value)
 
 - (void)tile;
 
+/* Loads every icon image now instead of when the run loop gets to it, so
+ * that the Dock can appear with its icons in. */
+- (void)decorateIcons;
+
 /* The bar itself, without the room the magnified icons reach into, in
  * screen coordinates: what the Dock takes up when it is left alone. */
 - (NSRect)barFrame;

@@ -51,6 +51,13 @@ typedef enum {
   Dock *dock;
   GWDockWindow *dockWindow;
   BOOL hidedock;
+  /* The Dock is built but not on the screen yet: it waits for the sources
+   * of items in dockPending (DockStartup.h) or for the timer that ends the
+   * wait, so that it appears once, with every item. */
+  BOOL dockAwaiting;
+  NSUInteger dockPending;
+  NSTimeInterval dockBuiltAt;
+  NSTimer *dockStartupTimer;
   /* Set while -saveDockDefaults writes its keys one by one. */
   BOOL savingDockDefaults;
   DockPosition dockPosition;
@@ -101,6 +108,11 @@ typedef enum {
 - (void)setDockPosition:(DockPosition)pos;
 
 - (void)setDockActive:(BOOL)value;
+
+/* Tells the desktop that a source of the Dock's first items (one of the
+ * DockStartupSources bits) has added all it has.  Once every source has
+ * reported the Dock appears.  Does nothing when the Dock is not waiting. */
+- (void)dockSourceDidFinish:(NSUInteger)source;
 
 - (BOOL)dockActive;
 

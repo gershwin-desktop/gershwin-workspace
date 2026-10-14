@@ -40,6 +40,7 @@
 #import "GWDesktopManager.h"
 #import "Dock.h"
 #import "DockIcon.h"
+#import "DockStartup.h"
 #import "GWViewersManager.h"
 #import "Operation.h"
 #import "StartAppWin.h"
@@ -507,6 +508,8 @@
 		         object: nil];
     
   [self checkLastRunningApps];
+  /* Their icons are in the Dock now; it may appear. */
+  [dtopManager dockSourceDidFinish: DockStartupRunningApps];
 
   // Init fallback timers dict for non-GNUstep apps' dock dot
   launchDotFallbacks = [NSMutableDictionary new];
