@@ -13,6 +13,18 @@ ifneq ($(with_squashfs),no)
   ADDITIONAL_CPPFLAGS += $(SQUASHFS_CFLAGS)
 endif
 
+# The AppImage icon disk cache writes its thumbnails through libpng, which
+# libs-gui already depends on; without it the build stops here rather than
+# at the link.
+ifeq ($(with_squashfs),yes)
+  PNG_CFLAGS := $(shell pkg-config --cflags libpng 2>/dev/null)
+  PNG_LIBS := $(shell pkg-config --libs libpng 2>/dev/null)
+  ifeq ($(PNG_LIBS),)
+    $(error libpng (pkg-config libpng) is required for AppImage icon support)
+  endif
+  ADDITIONAL_CPPFLAGS += $(PNG_CFLAGS)
+endif
+
 # Additional flags to pass to the Objective-C compiler
 ADDITIONAL_OBJCFLAGS += -Wall 
 
@@ -65,7 +77,7 @@ endif
 
 # Conditional libsquashfs support
 ifeq ($(with_squashfs),yes)
-  ADDITIONAL_GUI_LIBS += $(SQUASHFS_LIBS)
+  ADDITIONAL_GUI_LIBS += $(SQUASHFS_LIBS) $(PNG_LIBS)
 endif
 
 # Additional library directories the linker should search

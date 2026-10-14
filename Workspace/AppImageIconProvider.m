@@ -17,6 +17,7 @@
 #import <string.h>
 #import <stdlib.h>
 #import <errno.h>
+#import <math.h>
 
 #import <sqfs/predef.h>
 #import <sqfs/error.h>
@@ -31,6 +32,11 @@
 
 #import "FSNodeRep.h"
 #import "FSNIcon.h"
+#import "GWScaleFactor.h"
+#import "GWThumbnailPNG.h"
+#import "GWThumbnailStore.h"
+#import "GWWorkerPool.h"
+#include "config.h"
 
 #define APPIMAGE_ICON_LOG_PREFIX @"AppImageIconProvider"
 
@@ -63,6 +69,18 @@ typedef struct {
 
 
 static NSMutableDictionary *appImageLoadingState = nil;
+
+/* Loads of icons without a disk entry: a handful of threads is plenty for
+ * reads of a few hundred kilobytes each, and keeps a folder of fifty
+ * AppImages from starting fifty threads. Created and used on the main
+ * thread only. */
+#define APPIMAGE_LOADER_WORKERS 4
+static GWWorkerPool *appImageLoaderPool = nil;
+
+/* How long finished loads wait for each other before the views are
+ * refreshed once for all of them. */
+#define APPIMAGE_REFRESH_DELAY 0.1
+static BOOL appImageRefreshPending = NO;
 
 static AppImageSqfsFile *AppImageSqfsFileCreate(int fd,
                                                 off_t base_offset,
@@ -539,73 +557,6 @@ static BOOL AppImageSuperblockLooksValid(const unsigned char *buf,
   return YES;
 }
 
-static NSString *AppImageCopySquashfsToTemp(NSString *appImagePath,
-                                            off_t offset,
-                                            sqfs_u64 size)
-{
-  NSString *tempDir = NSTemporaryDirectory();
-  NSString *templatePath = [tempDir stringByAppendingPathComponent: @"appimage-sqfs-XXXXXX"];
-  const char *tmpl = [templatePath fileSystemRepresentation];
-  char *tmpPath = strdup(tmpl);
-  int outfd = -1;
-  int infd = -1;
-  NSString *result = nil;
-
-  if (tmpPath == NULL) {
-    return nil;
-  }
-
-  outfd = mkstemp(tmpPath);
-  if (outfd < 0) {
-    free(tmpPath);
-    return nil;
-  }
-
-  infd = open([appImagePath fileSystemRepresentation], O_RDONLY);
-  if (infd < 0) {
-    close(outfd);
-    unlink(tmpPath);
-    free(tmpPath);
-    return nil;
-  }
-
-  if (lseek(infd, offset, SEEK_SET) < 0) {
-    close(infd);
-    close(outfd);
-    unlink(tmpPath);
-    free(tmpPath);
-    return nil;
-  }
-
-  sqfs_u64 remaining = size;
-  unsigned char buffer[8192];
-  while (remaining > 0) {
-    size_t toRead = (remaining > sizeof(buffer)) ? sizeof(buffer) : (size_t)remaining;
-    ssize_t rd = read(infd, buffer, toRead);
-    if (rd <= 0) {
-      break;
-    }
-    ssize_t wr = write(outfd, buffer, (size_t)rd);
-    if (wr != rd) {
-      break;
-    }
-    remaining -= (sqfs_u64)rd;
-  }
-
-  close(infd);
-  close(outfd);
-
-  if (remaining != 0) {
-    unlink(tmpPath);
-    free(tmpPath);
-    return nil;
-  }
-
-  result = [NSString stringWithUTF8String: tmpPath];
-  free(tmpPath);
-  return result;
-}
-
 static BOOL AppImageValidateSquashfsOffset(int fd, off_t offset, off_t fileSize)
 {
   unsigned char buffer[sizeof(sqfs_super_t)];
@@ -843,7 +794,7 @@ static BOOL AppImageDataIsUsableImage(NSData *data)
 
 static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
 {
-  AppImageSqfsFile *fallbackFile = NULL;
+  AppImageSqfsFile *squashfsFile = NULL;
   int fd = -1;
   sqfs_super_t super;
   sqfs_compressor_config_t meta_cfg;
@@ -855,10 +806,8 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
   sqfs_inode_generic_t *inode = NULL;
   sqfs_file_t *file = NULL;
   NSData *iconData = nil;
-  NSString *tempSqfsPath = nil;
   BOOL fragmentTableReady = NO;
   struct stat st;
-  sqfs_u64 copySize = 0;
 
   fd = open([appImagePath fileSystemRepresentation], O_RDONLY);
   if (fd < 0) {
@@ -875,22 +824,16 @@ static NSData *AppImageExtractIconData(NSString *appImagePath, off_t offset)
     return nil;
   }
 
-  copySize = (sqfs_u64)(st.st_size - offset);
-  tempSqfsPath = AppImageCopySquashfsToTemp(appImagePath, offset, copySize);
-  if (tempSqfsPath == nil) {
-    fallbackFile = AppImageSqfsFileCreate(fd, offset, (sqfs_u64)(st.st_size - offset));
-    if (fallbackFile == NULL) {
-      close(fd);
-      return nil;
-    }
-    file = (sqfs_file_t *)fallbackFile;
-  } else {
-    file = sqfs_open_file([tempSqfsPath fileSystemRepresentation], SQFS_FILE_OPEN_READ_ONLY);
-    if (file == NULL) {
-      close(fd);
-      return nil;
-    }
+  /* Read in place, through a file object that starts at the squashfs
+   * offset: libsquashfs then fetches only the superblock, the tables that
+   * lead to .DirIcon and the icon's own blocks.  The whole image was once
+   * copied to a temporary file here, hundreds of megabytes per icon. */
+  squashfsFile = AppImageSqfsFileCreate(fd, offset, (sqfs_u64)(st.st_size - offset));
+  if (squashfsFile == NULL) {
+    close(fd);
+    return nil;
   }
+  file = (sqfs_file_t *)squashfsFile;
 
   if (sqfs_super_read(&super, file) != 0) {
     goto cleanup;
@@ -995,11 +938,8 @@ cleanup:
   if (file) {
     sqfs_destroy(file);
   }
-  if (fallbackFile == NULL && fd >= 0) {
+  if (squashfsFile == NULL && fd >= 0) {
     close(fd);
-  }
-  if (tempSqfsPath != nil) {
-    [[NSFileManager defaultManager] removeFileAtPath: tempSqfsPath handler: nil];
   }
 
   return iconData;
@@ -1033,6 +973,150 @@ static NSData *AppImageCopyIconData(NSString *path)
   }
 
   return iconData;
+}
+
+/* The size, in points, Workspace keeps every AppImage icon at in memory
+ * (gw_loadAppImageFinished: scales to it; smaller draws scale down from
+ * it), so it is the largest size the disk cache has to serve. */
+#define APPIMAGE_BASE_ICON_SIZE 48
+
+/* The sweep waits until startup is long over, then repeats at most daily:
+ * the cache only has to keep up with AppImages that came and went, which
+ * is no reason to compete with the desktop coming up. */
+#define APPIMAGE_SWEEP_FIRST_DELAY 60.0
+#define APPIMAGE_SWEEP_INTERVAL 86400.0
+
+/* The second level behind FSNodeRep's in-memory iconsCache: icons survive
+ * a restart in the shared thumbnail cache, so Workspace does not
+ * open every visible AppImage's squashfs again each time it starts. Set up
+ * once in +load, before any loader thread exists; immutable after that. */
+static GWThumbnailStore *appImageThumbnailStore = nil;
+
+/* Real squashfs extractions, across all loader threads; with
+ * --GNU-Debug=AppImageIcons each one is also logged, which is how a
+ * restart is shown to extract nothing. */
+static long appImageExtractionCount = 0;
+
+static NSData *AppImageExtractIconCounted(NSString *path)
+{
+  long count = __sync_add_and_fetch(&appImageExtractionCount, 1);
+
+  NSDebugLLog(@"AppImageIcons", @"extraction %ld: %@", count, path);
+  return AppImageCopyIconData(path);
+}
+
+/* The icon of an AppImage, from the disk cache when it still describes the
+ * file, extracted (and cached, or recorded as failed) otherwise. Runs on
+ * the loader thread like the extraction itself. A file the user cannot
+ * read, and files inside the cache, never touch the cache, as the standard
+ * demands. Icons that are not PNG (icns, TIFF) cannot be stored as a
+ * thumbnail and are extracted every time, as before. */
+static NSUInteger AppImageThumbnailPixels(void)
+{
+  return (NSUInteger)ceil(APPIMAGE_BASE_ICON_SIZE * GWScaleFactor());
+}
+
+/* Whether the cache may be used for path at all, and the stamp to check
+ * entries against. */
+static BOOL AppImageCacheStampForPath(NSString *path, GWThumbnailFileStamp *stamp)
+{
+  return GWThumbnailStampForPath(path, stamp)
+    && [appImageThumbnailStore containsPath: path] == NO;
+}
+
+/* An icon of APPIMAGE_BASE_ICON_SIZE points straight from a PNG, decoded
+ * and scaled in plain C. NSImage's own resizing draws through lockFocus, a
+ * round trip to the X server per icon - about 9 ms each, measured, so a
+ * folder of AppImages kept the main thread busy for a third of a second -
+ * and this needs no graphics context, so loader threads can do it too.
+ * nil when png is not a PNG libpng can decode. */
+static NSImage *AppImageBaseIconFromPNG(NSData *png)
+{
+  NSUInteger box = AppImageThumbnailPixels();
+  NSUInteger w = 0, h = 0, tw = 0, th = 0, i;
+  NSData *rgba = GWThumbnailPNGDecodeRGBA(png, GW_THUMBNAIL_MAX_DECODE_SIDE, &w, &h);
+  NSBitmapImageRep *rep;
+  const unsigned char *src;
+  unsigned char *dst;
+  NSSize points;
+  NSImage *image;
+
+  if (rgba == nil)
+    {
+      return nil;
+    }
+  GWThumbnailFitSize(w, h, box, &tw, &th);
+  if (tw != w || th != h)
+    {
+      rgba = GWThumbnailDownscaleRGBA(rgba, w, h, tw, th);
+    }
+
+  rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes: NULL
+                                                pixelsWide: tw
+                                                pixelsHigh: th
+                                             bitsPerSample: 8
+                                           samplesPerPixel: 4
+                                                  hasAlpha: YES
+                                                  isPlanar: NO
+                                            colorSpaceName: NSDeviceRGBColorSpace
+                                               bytesPerRow: tw * 4
+                                              bitsPerPixel: 32];
+  /* The default bitmap format is premultiplied, PNG is not. */
+  src = [rgba bytes];
+  dst = [rep bitmapData];
+  for (i = 0; i < tw * th; i++, src += 4, dst += 4)
+    {
+      dst[0] = (unsigned char)((src[0] * src[3] + 127) / 255);
+      dst[1] = (unsigned char)((src[1] * src[3] + 127) / 255);
+      dst[2] = (unsigned char)((src[2] * src[3] + 127) / 255);
+      dst[3] = src[3];
+    }
+  points = NSMakeSize(tw * (CGFloat)APPIMAGE_BASE_ICON_SIZE / box,
+                      th * (CGFloat)APPIMAGE_BASE_ICON_SIZE / box);
+  [rep setSize: points];
+  image = [[NSImage alloc] initWithSize: points];
+  [image addRepresentation: rep];
+  [rep release];
+  return [image autorelease];
+}
+
+static NSData *AppImageIconData(NSString *path)
+{
+  GWThumbnailFileStamp stamp;
+  NSUInteger pixels;
+  NSData *icon;
+  NSData *thumbnail;
+
+  if (AppImageCacheStampForPath(path, &stamp) == NO)
+    {
+      return AppImageExtractIconCounted(path);
+    }
+
+  pixels = AppImageThumbnailPixels();
+  thumbnail = [appImageThumbnailStore thumbnailForPath: path
+                                                 stamp: stamp
+                                                pixels: pixels];
+  if (thumbnail != nil)
+    {
+      NSDebugLLog(@"AppImageIcons", @"cached: %@", path);
+      return thumbnail;
+    }
+  if ([appImageThumbnailStore hasFailureForPath: path stamp: stamp])
+    {
+      return nil;
+    }
+
+  icon = AppImageExtractIconCounted(path);
+  if (icon == nil)
+    {
+      [appImageThumbnailStore storeFailureForPath: path stamp: stamp];
+      return nil;
+    }
+  thumbnail = [appImageThumbnailStore storeIconData: icon
+                                            forPath: path
+                                              stamp: stamp
+                                             pixels: pixels];
+  return (thumbnail != nil) ? thumbnail : icon;
 }
 
 static BOOL GWAppImagePathLooksLikeAppImage(NSString *path)
@@ -1117,27 +1201,44 @@ static void AppImageVerifyCacheStore(NSString *realPath, BOOL isAppImage)
  * before ever falling through to the real magic-byte probe. On YES,
  * *outRealPath (if non-NULL) receives the path to use for icon lookup -
  * the resolved path for a symlink, the node's own path otherwise. */
-static BOOL AppImageNodeIsAppImage(FSNode *node, NSString **outRealPath)
+static NSString *AppImageCandidatePath(FSNode *node)
 {
   NSString *nodepath = [node path];
   BOOL nodeIsLink = [node isLink];
   BOOL nameLooksLikeAppImage = GWAppImagePathLooksLikeAppImage(nodepath);
 
   if (!nameLooksLikeAppImage && !nodeIsLink) {
-    return NO;
+    return nil;
   }
 
   NSString *realPath = nodeIsLink ? [nodepath stringByResolvingSymlinksInPath] : nodepath;
 
   if (!nameLooksLikeAppImage && !GWAppImagePathLooksLikeAppImage(realPath)) {
+    return nil;
+  }
+  return realPath;
+}
+
+static BOOL AppImageProbe(NSString *realPath)
+{
+  BOOL isAppImage;
+
+  appImageProbeCallCount++;
+  isAppImage = AppImageHasType2Magic([realPath fileSystemRepresentation]);
+  AppImageVerifyCacheStore(realPath, isAppImage);
+  return isAppImage;
+}
+
+static BOOL AppImageNodeIsAppImage(FSNode *node, NSString **outRealPath)
+{
+  NSString *realPath = AppImageCandidatePath(node);
+  BOOL isAppImage = NO;
+
+  if (realPath == nil) {
     return NO;
   }
-
-  BOOL isAppImage = NO;
   if (!AppImageVerifyCacheLookup(realPath, &isAppImage)) {
-    appImageProbeCallCount++;
-    isAppImage = AppImageHasType2Magic([realPath fileSystemRepresentation]);
-    AppImageVerifyCacheStore(realPath, isAppImage);
+    isAppImage = AppImageProbe(realPath);
   }
 
   if (isAppImage && outRealPath != NULL) {
@@ -1146,17 +1247,203 @@ static BOOL AppImageNodeIsAppImage(FSNode *node, NSString **outRealPath)
   return isAppImage;
 }
 
+/* AppImageNodeIsAppImage for an icon not in memory yet: its valid disk
+ * entry, when there is one, comes back in *outThumbnail so the icon can be
+ * drawn right away instead of after a round trip through the loader. Such
+ * an entry names this very file with its current mtime and size and is
+ * only ever written after the file passed the probe, so it stands in for
+ * the magic-byte probe too. */
+static BOOL AppImageNodeIsAppImageWithThumbnail(FSNode *node, NSString **outRealPath,
+                                                NSData **outThumbnail,
+                                                BOOL *outKnownFailure)
+{
+  NSString *realPath = AppImageCandidatePath(node);
+  GWThumbnailFileStamp stamp;
+  BOOL isAppImage = NO;
+  BOOL known;
+  BOOL cacheable;
+  NSData *thumbnail = nil;
+  BOOL failure = NO;
+
+  *outThumbnail = nil;
+  *outKnownFailure = NO;
+  if (realPath == nil) {
+    return NO;
+  }
+  known = AppImageVerifyCacheLookup(realPath, &isAppImage);
+  if (known && !isAppImage) {
+    return NO;
+  }
+
+  /* A failure record is likewise written only after the probe passed, and
+   * tells the caller there is no icon to wait for. */
+  cacheable = AppImageCacheStampForPath(realPath, &stamp);
+  if (cacheable) {
+    thumbnail = [appImageThumbnailStore thumbnailForPath: realPath
+                                                   stamp: stamp
+                                                  pixels: AppImageThumbnailPixels()];
+    if (thumbnail == nil) {
+      failure = [appImageThumbnailStore hasFailureForPath: realPath stamp: stamp];
+    }
+  }
+  if (thumbnail != nil || failure) {
+    if (!known) {
+      AppImageVerifyCacheStore(realPath, YES);
+    }
+    *outThumbnail = thumbnail;
+    *outKnownFailure = failure;
+  } else if (!known && !AppImageProbe(realPath)) {
+    return NO;
+  }
+
+  *outRealPath = realPath;
+  return YES;
+}
+
 @interface NSWorkspace (GWAppImageIconProvider)
 + (void)gw_installAppImageIconProvider;
 - (NSImage *)gw_appImage_iconForFile: (NSString *)fullPath;
 @end
 
-/* Small helper class for the icon-refresh walk. */
+/* Small helper class for the icon-refresh walk and the disk cache's
+ * housekeeping. */
 @interface AppImageIconProvider : NSObject
 + (void)reloadExperienceViewsInView: (NSView *)aView;
++ (void)installThumbnailCache;
 @end
 
 @implementation AppImageIconProvider
+
++ (void)installThumbnailCache
+{
+  NSNotificationCenter *nc = [NSNotificationCenter defaultCenter];
+
+  if (appImageThumbnailStore != nil)
+    {
+      return;
+    }
+  appImageThumbnailStore = [[GWThumbnailStore alloc]
+    initWithDirectory: [GWThumbnailStore defaultDirectory]
+             software: @"Gershwin Workspace"
+             mimeType: @"application/vnd.appimage"
+              program: @"gershwin-workspace"
+              version: @PACKAGE_VERSION];
+
+  [nc addObserver: self
+         selector: @selector(applicationDidFinishLaunching:)
+             name: NSApplicationDidFinishLaunchingNotification
+           object: nil];
+  [nc addObserver: self
+         selector: @selector(fileSystemDidChange:)
+             name: @"GWFileSystemDidChangeNotification"
+           object: nil];
+}
+
++ (void)applicationDidFinishLaunching: (NSNotification *)notif
+{
+  [self scheduleSweepAfter: APPIMAGE_SWEEP_FIRST_DELAY];
+}
+
++ (void)scheduleSweepAfter: (NSTimeInterval)delay
+{
+  [NSTimer scheduledTimerWithTimeInterval: delay
+                                   target: self
+                                 selector: @selector(startSweep:)
+                                 userInfo: nil
+                                  repeats: NO];
+}
+
+/* The sweep reads the head of every thumbnail in the cache, other
+ * programs' included, so it runs on a low-priority GNUstep thread (not
+ * libdispatch, see gw_appImage_iconOfSize:forNode:), never on the UI. */
++ (void)startSweep: (NSTimer *)timer
+{
+  [NSThread detachNewThreadSelector: @selector(sweepInBackground:)
+                           toTarget: self
+                         withObject: nil];
+}
+
++ (void)sweepInBackground: (id)unused
+{
+  @autoreleasepool
+    {
+      NSUInteger removed;
+
+      [NSThread setThreadPriority: 0.0];
+      removed = [appImageThumbnailStore removeStaleEntries];
+      NSDebugLLog(@"AppImageIcons", @"sweep removed %lu entries",
+                  (unsigned long)removed);
+      [self performSelectorOnMainThread: @selector(sweepFinished:)
+                             withObject: nil
+                          waitUntilDone: NO];
+    }
+}
+
++ (void)sweepFinished: (id)unused
+{
+  [self scheduleSweepAfter: APPIMAGE_SWEEP_INTERVAL];
+}
+
+/* Workspace deleting, trashing, moving or renaming an AppImage itself is
+ * the cheap moment to drop its entries instead of waiting for the sweep.
+ * Only names that look like AppImages are passed on; a moved folder of
+ * them leaves orphans the sweep removes later. */
++ (void)fileSystemDidChange: (NSNotification *)notif
+{
+  NSDictionary *info = [notif object];
+  NSString *source;
+  NSArray *files;
+  NSMutableArray *paths;
+  NSUInteger i;
+
+  if ([info isKindOfClass: [NSDictionary class]] == NO)
+    {
+      return;
+    }
+  source = [info objectForKey: @"source"];
+  files = [info objectForKey: @"files"];
+  if ([[info objectForKey: @"operation"] isEqual: @"WorkspaceRenameOperation"])
+    {
+      files = [NSArray arrayWithObject: [source lastPathComponent]];
+      source = [source stringByDeletingLastPathComponent];
+    }
+
+  paths = [NSMutableArray array];
+  for (i = 0; i < [files count]; i++)
+    {
+      NSString *path = [source stringByAppendingPathComponent: [files objectAtIndex: i]];
+
+      if (GWAppImagePathLooksLikeAppImage(path))
+        {
+          [paths addObject: path];
+        }
+    }
+  if ([paths count] > 0)
+    {
+      [NSThread detachNewThreadSelector: @selector(removeEntriesInBackground:)
+                               toTarget: self
+                             withObject: paths];
+    }
+}
+
+/* Removes only entries whose file is really gone or changed, so a copy
+ * operation that also posts here costs nothing but a stat. */
++ (void)removeEntriesInBackground: (NSArray *)paths
+{
+  @autoreleasepool
+    {
+      NSUInteger i;
+
+      for (i = 0; i < [paths count]; i++)
+        {
+          NSUInteger removed = [appImageThumbnailStore
+            removeStaleEntriesForPath: [paths objectAtIndex: i]];
+
+          NSDebugLLog(@"AppImageIcons", @"%lu entries removed for %@",
+                      (unsigned long)removed, [paths objectAtIndex: i]);
+        }
+    }
+}
 
 /* Recursively calls reloadContents (if implemented) on aView and its
  * subviews, so list/browser views re-fetch icons after an AppImage icon
@@ -1284,114 +1571,193 @@ static BOOL AppImageNodeIsAppImage(FSNode *node, NSString **outRealPath)
   }
 }
 
-- (NSImage *)gw_appImage_iconOfSize:(int)size forNode:(FSNode *)node
+/* The icon as a view asks for it: with the link badge for a symlink, and
+ * scaled down when larger than size. */
+- (NSImage *)gw_appImage_icon:(NSImage *)icon ofSize:(int)size forNode:(FSNode *)node
 {
-  NSString *realPath = nil;
+  NSSize icnsize;
 
-  /* AppImageNodeIsAppImage skips the lstat-heavy symlink resolution and the
-   * magic-byte probe for files that cannot possibly be AppImages, and
-   * consults the bounded probe cache before ever doing real I/O for the
-   * rest - see its definition above (iconOfSize:forNode: and drawRect: are
-   * called on every redraw of every icon). */
-  if (node != nil && [node isDirectory] == NO && AppImageNodeIsAppImage(node, &realPath)) {
-    // Check if we have the proper icon cached
-    NSString *key = realPath;
-    NSMutableDictionary *iconDict = [iconsCache objectForKey: key];
+  if ([node isLink])
+    {
+      NSImage *linkIcon = [NSImage imageNamed: @"common_linkCursor"];
 
-    if (iconDict != nil) {
-      NSNumber *sizeKey = [NSNumber numberWithInt: 48];
-      NSImage *cachedIcon = [iconDict objectForKey: sizeKey];
-      if (cachedIcon != nil && ![[cachedIcon name] isEqualToString: @"AppImageGeneric"]) {
-        // Proper icon is cached
-        NSImage *icon = cachedIcon;
-        if ([node isLink]) {
-          NSImage *linkIcon = [NSImage imageNamed:@"common_linkCursor"];
-          icon = [icon copy];
-          [icon lockFocus];
-          [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
-          [icon unlockFocus];
-          [icon autorelease];
-        }
-        NSSize icnsize = [icon size];
-        if ((icnsize.width > size) || (icnsize.height > size)) {
-          return [self resizedIcon: icon ofSize: size];
-        }
-        return icon;
-      }
-    }
-
-    // Check if we're already loading this AppImage
-    NSNumber *loading = [appImageLoadingState objectForKey: key];
-    if (loading != nil && [loading boolValue]) {
-      // Still loading, return generic icon
-      NSImage *icon = [NSImage imageNamed: @"UnknownTool"];
-      if (icon == nil) {
-        icon = [NSImage imageNamed: @"Unknown"];
-      }
-      if ([node isLink]) {
-        NSImage *linkIcon = [NSImage imageNamed:@"common_linkCursor"];
-        icon = [icon copy];
-        [icon lockFocus];
-        [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
-        [icon unlockFocus];
-        [icon autorelease];
-      }
-      NSSize icnsize = [icon size];
-      if ((icnsize.width > size) || (icnsize.height > size)) {
-        return [self resizedIcon: icon ofSize: size];
-      }
-      return icon;
-    }
-
-    // Start loading
-    [appImageLoadingState setObject: [NSNumber numberWithBool: YES] forKey: key];
-
-    /* Async icon loading WITHOUT libdispatch: a GCD worker thread running
-     * ObjC (iconForFile: can load classes/bundles) races the main thread's
-     * +load dispatch and crashes the app (GPF in libobjc's
-     * load_messages_insert) - exactly what window_placement hit.  Use a
-     * GNUstep thread instead. */
-    NSDictionary *job = [NSDictionary dictionaryWithObjectsAndKeys:
-      realPath, @"path", key, @"key", nil];
-    [NSThread detachNewThreadSelector: @selector(gw_loadAppImageInBackgroundForPath:)
-                             toTarget: self
-                           withObject: job];
-
-    // Return generic icon while loading
-    NSImage *icon = [NSImage imageNamed: @"UnknownTool"];
-    if (icon == nil) {
-      icon = [NSImage imageNamed: @"Unknown"];
-    }
-    if ([node isLink]) {
-      NSImage *linkIcon = [NSImage imageNamed:@"common_linkCursor"];
-      icon = [icon copy];
+      icon = [[icon copy] autorelease];
       [icon lockFocus];
-      [linkIcon compositeToPoint:NSMakePoint(0,0) operation:NSCompositeSourceOver];
+      [linkIcon compositeToPoint: NSMakePoint(0, 0) operation: NSCompositeSourceOver];
       [icon unlockFocus];
-      [icon autorelease];
     }
-    NSSize icnsize = [icon size];
-    if ((icnsize.width > size) || (icnsize.height > size)) {
+  icnsize = [icon size];
+  if ((icnsize.width > size) || (icnsize.height > size))
+    {
       return [self resizedIcon: icon ofSize: size];
     }
-    return icon;
-  }
-
-  return [self gw_appImage_iconOfSize: size forNode: node];
+  return icon;
 }
 
-/* Background half of the async AppImage icon load.  Runs on a GNUstep thread
- * (NOT libdispatch - a GCD thread doing ObjC can race the main thread's +load
- * dispatch and crash in load_messages_insert).  iconForFile: is safe off the
- * main thread; the cache update and window refresh are posted back to the main
- * thread (NSImage lockFocus/resize is not thread-safe in GNUstep). */
+/* What an AppImage shows until its own icon has been loaded. */
+- (NSImage *)gw_appImage_placeholderOfSize:(int)size forNode:(FSNode *)node
+{
+  NSImage *icon = [NSImage imageNamed: @"UnknownTool"];
+
+  if (icon == nil)
+    {
+      icon = [NSImage imageNamed: @"Unknown"];
+    }
+  return [self gw_appImage_icon: icon ofSize: size forNode: node];
+}
+
+/* Every AppImage icon is held in memory at the base size, so icons are
+ * positioned alike whatever size their source had; returns what was
+ * stored. */
+- (NSImage *)gw_appImage_storeIcon:(NSImage *)icon forKey:(NSString *)key
+{
+  NSSize icnsize = [icon size];
+  NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+
+  if ((icnsize.width > APPIMAGE_BASE_ICON_SIZE) || (icnsize.height > APPIMAGE_BASE_ICON_SIZE))
+    {
+      NSImage *resized = [self resizedIcon: icon ofSize: APPIMAGE_BASE_ICON_SIZE];
+
+      if (resized != nil)
+        {
+          icon = resized;
+        }
+    }
+  [dict setObject: icon forKey: [NSNumber numberWithInt: APPIMAGE_BASE_ICON_SIZE]];
+  [iconsCache setObject: dict forKey: key];
+  return icon;
+}
+
+- (NSImage *)gw_appImage_memoryIconForKey:(NSString *)key
+{
+  NSImage *icon = [[iconsCache objectForKey: key]
+                    objectForKey: [NSNumber numberWithInt: APPIMAGE_BASE_ICON_SIZE]];
+
+  if (icon == nil || [[icon name] isEqualToString: @"AppImageGeneric"])
+    {
+      return nil;
+    }
+  return icon;
+}
+
+- (NSImage *)gw_appImage_iconOfSize:(int)size forNode:(FSNode *)node
+{
+  NSString *realPath;
+  NSData *thumbnail = nil;
+  NSImage *icon = nil;
+  BOOL isAppImage = NO;
+  BOOL knownFailure = NO;
+
+  if (node == nil || [node isDirectory])
+    {
+      return [self gw_appImage_iconOfSize: size forNode: node];
+    }
+  /* AppImageCandidatePath rules out the overwhelming majority of files by
+   * name alone, without touching the filesystem. */
+  realPath = AppImageCandidatePath(node);
+  if (realPath == nil)
+    {
+      return [self gw_appImage_iconOfSize: size forNode: node];
+    }
+
+  /* This runs on every redraw of every icon: an icon already in memory, or
+   * still loading, costs no more than the verify cache's stat. */
+  if (AppImageVerifyCacheLookup(realPath, &isAppImage))
+    {
+      if (isAppImage == NO)
+        {
+          return [self gw_appImage_iconOfSize: size forNode: node];
+        }
+      icon = [self gw_appImage_memoryIconForKey: realPath];
+      if (icon != nil)
+        {
+          return [self gw_appImage_icon: icon ofSize: size forNode: node];
+        }
+      if ([appImageLoadingState objectForKey: realPath] != nil)
+        {
+          return [self gw_appImage_placeholderOfSize: size forNode: node];
+        }
+    }
+
+  /* Not in memory: a valid disk entry is decoded right here, so the first
+   * paint after a restart already shows the real icon. Only icons without
+   * one go to the loader threads. */
+  if (AppImageNodeIsAppImageWithThumbnail(node, &realPath, &thumbnail,
+                                          &knownFailure) == NO)
+    {
+      return [self gw_appImage_iconOfSize: size forNode: node];
+    }
+  if (thumbnail != nil)
+    {
+      icon = AppImageBaseIconFromPNG(thumbnail);
+    }
+  else if (knownFailure)
+    {
+      /* The generic icon it ends up with anyway, without a detour through
+       * the loader and a placeholder that would change on screen. */
+      icon = [[NSWorkspace sharedWorkspace] gw_appImage_iconForFile: realPath];
+    }
+  if (icon != nil)
+    {
+      icon = [self gw_appImage_storeIcon: icon forKey: realPath];
+      return [self gw_appImage_icon: icon ofSize: size forNode: node];
+    }
+  icon = [self gw_appImage_memoryIconForKey: realPath];
+  if (icon != nil)
+    {
+      return [self gw_appImage_icon: icon ofSize: size forNode: node];
+    }
+
+  if ([appImageLoadingState objectForKey: realPath] == nil)
+    {
+      [appImageLoadingState setObject: [NSNumber numberWithBool: YES] forKey: realPath];
+      /* A few GNUstep threads, not one per icon and not libdispatch: a GCD
+       * worker running ObjC (iconForFile: can load classes/bundles) races
+       * the main thread's +load dispatch and crashes the app (GPF in
+       * libobjc's load_messages_insert) - exactly what window_placement
+       * hit. */
+      if (appImageLoaderPool == nil)
+        {
+          appImageLoaderPool = [[GWWorkerPool alloc]
+            initWithMaximumWorkers: APPIMAGE_LOADER_WORKERS
+                            target: self
+                          selector: @selector(gw_loadAppImageInBackgroundForPath:)];
+        }
+      [appImageLoaderPool addJob: [NSDictionary dictionaryWithObjectsAndKeys:
+        realPath, @"path", realPath, @"key", nil]];
+    }
+  return [self gw_appImage_placeholderOfSize: size forNode: node];
+}
+
+/* Background half of the async AppImage icon load, on a loader thread.
+ * iconForFile: is safe off the main thread; the cache update and window
+ * refresh are posted back to the main thread (NSImage lockFocus/resize is
+ * not thread-safe in GNUstep). */
 - (void)gw_loadAppImageInBackgroundForPath:(NSDictionary *)job
 {
   @autoreleasepool
     {
       NSString *realPath = [job objectForKey: @"path"];
       NSString *key = [job objectForKey: @"key"];
-      NSImage *properIcon = [[NSWorkspace sharedWorkspace] iconForFile: realPath];
+      NSData *data = AppImageIconData(realPath);
+      NSImage *properIcon = nil;
+
+      /* Scaled here, off the main thread, so the main thread only stores
+       * it; an icon that is not PNG (icns, TIFF) is left to NSImage, and
+       * an AppImage without a usable icon gets the generic one from the
+       * original iconForFile:, which would only look for it again. */
+      if (data != nil)
+        {
+          properIcon = AppImageBaseIconFromPNG(data);
+          if (properIcon == nil)
+            {
+              properIcon = [[[NSImage alloc] initWithData: data] autorelease];
+            }
+        }
+      else
+        {
+          properIcon = [[NSWorkspace sharedWorkspace] gw_appImage_iconForFile: realPath];
+        }
       NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:
         key, @"key", (properIcon ? (id)properIcon : (id)[NSNull null]), @"icon", nil];
       [self performSelectorOnMainThread: @selector(gw_loadAppImageFinished:)
@@ -1401,42 +1767,50 @@ static BOOL AppImageNodeIsAppImage(FSNode *node, NSString **outRealPath)
 }
 
 /* Main-thread half of the async AppImage icon load: cache the icon and
- * refresh the windows. */
+ * schedule a refresh of the windows. */
 - (void)gw_loadAppImageFinished:(NSDictionary *)payload
 {
   NSString *key = [payload objectForKey: @"key"];
   id iconObj = [payload objectForKey: @"icon"];
-  NSImage *properIcon = ([iconObj isKindOfClass: [NSNull class]]) ? nil : iconObj;
-  if (properIcon == nil)
+
+  [appImageLoadingState removeObjectForKey: key];
+  if ([iconObj isKindOfClass: [NSImage class]] == NO)
     {
-      [appImageLoadingState removeObjectForKey: key];
       return;
     }
+  [self gw_appImage_storeIcon: iconObj forKey: key];
 
-  /* Resize to standard base size (48) before caching so positioning is
-   * consistent. */
-  NSImage *cachedIcon = properIcon;
-  NSSize icnsize = [cachedIcon size];
-  if ((icnsize.width > 48) || (icnsize.height > 48))
+  /* A refresh reloads every file view, re-reading its folder, so the icons
+   * of a burst of loads share one instead of each paying for a reload of
+   * everything. */
+  if (appImageRefreshPending == NO)
     {
-      NSImage *resized = [self resizedIcon: cachedIcon ofSize: 48];
-      if (resized != nil) cachedIcon = resized;
+      appImageRefreshPending = YES;
+      [self performSelector: @selector(gw_appImage_refreshViews)
+                 withObject: nil
+                 afterDelay: APPIMAGE_REFRESH_DELAY
+                    inModes: [NSArray arrayWithObjects: NSDefaultRunLoopMode,
+                                      NSModalPanelRunLoopMode,
+                                      NSEventTrackingRunLoopMode, nil]];
     }
-  NSMutableDictionary *updateDict = [NSMutableDictionary dictionary];
-  [updateDict setObject: cachedIcon forKey: [NSNumber numberWithInt: 48]];
-  [iconsCache setObject: updateDict forKey: key];
-  [appImageLoadingState removeObjectForKey: key];
+}
 
-  /* Trigger a refresh of all windows.  Icon views (FSNIcon) pick the new icon
-   * up on redraw via the drawRect swizzle, but list views (FSNListView) cache
-   * the icon in their node reps, so they need a full reloadContents to
-   * re-fetch it.  Walk the view hierarchy and reload whatever supports it;
-   * fall back to a plain redraw. */
+/* Icon views (FSNIcon) pick new icons up on redraw via the drawRect
+ * swizzle, but list views (FSNListView) cache the icon in their node reps,
+ * so they need a full reloadContents to re-fetch it. Walk the view
+ * hierarchy and reload whatever supports it, then redraw. */
+- (void)gw_appImage_refreshViews
+{
   NSArray *windows = [NSApp windows];
-  for (NSWindow *win in windows)
+  NSUInteger i;
+
+  appImageRefreshPending = NO;
+  for (i = 0; i < [windows count]; i++)
     {
-      [AppImageIconProvider reloadExperienceViewsInView: [win contentView]];
-      [[win contentView] setNeedsDisplay: YES];
+      NSView *content = [[windows objectAtIndex: i] contentView];
+
+      [AppImageIconProvider reloadExperienceViewsInView: content];
+      [content setNeedsDisplay: YES];
     }
 }
 
@@ -1446,6 +1820,7 @@ static BOOL AppImageNodeIsAppImage(FSNode *node, NSString **outRealPath)
 
 + (void)load
 {
+  [AppImageIconProvider installThumbnailCache];
   [self gw_installAppImageIconProvider];
   [FSNodeRep gw_installAppImageFSNodeSwizzle];
   [FSNIcon gw_installAppImageFSNIconSwizzle];
@@ -1490,7 +1865,7 @@ static BOOL AppImageNodeIsAppImage(FSNode *node, NSString **outRealPath)
       if ([fileType isEqual: NSFileTypeRegular] == YES
           || [fileType isEqual: NSFileTypeSymbolicLink] == YES) {
         if (AppImageHasType2Magic([probePath fileSystemRepresentation])) {
-          NSData *iconData = AppImageCopyIconData(probePath);
+          NSData *iconData = AppImageIconData(probePath);
           if (iconData != nil) {
             NSImage *image = [[[NSImage alloc] initWithData: iconData] autorelease];
             if (image != nil) {

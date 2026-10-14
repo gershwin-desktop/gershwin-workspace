@@ -238,7 +238,11 @@ endif
 
 # Conditionally add AppImageIconProvider.m if libsquashfs is available
 ifeq ($(with_squashfs), yes)
-  Workspace_OBJC_FILES += AppImageIconProvider.m
+  Workspace_OBJC_FILES += AppImageIconProvider.m \
+                          GWThumbnailSpec.m \
+                          GWThumbnailPNG.m \
+                          GWThumbnailStore.m \
+                          GWWorkerPool.m
 endif
 
 -include GNUmakefile.preamble
