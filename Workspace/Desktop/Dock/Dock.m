@@ -3352,6 +3352,18 @@ DockShelfGradient(int which)
                                                      repeats: YES];
 }
 
+/* insertions does not retain its items, and even looking a key up messages
+ * the item (NSValue's -isEqual:), so an item must leave it while it is still
+ * alive.  Every way out of the Dock - -removeIcon:, a vanished miniature,
+ * -replaceSubview:with: - ends here, so none of them can leave a dangling
+ * entry for the next tick; that tick also lays out and stops by itself once
+ * nothing is left. */
+- (void)willRemoveSubview:(NSView *)subview
+{
+  [insertions removeObjectForKey: [NSValue valueWithNonretainedObject: subview]];
+  [super willRemoveSubview: subview];
+}
+
 - (CGFloat)presenceOf:(NSView *)item
 {
   NSNumber *added = [insertions objectForKey:
@@ -3381,12 +3393,10 @@ DockShelfGradient(int which)
   NSEnumerator *e = [[insertions allKeys] objectEnumerator];
   NSValue *key;
 
-  /* Items that are in, or were taken out again meanwhile, are done. */
+  /* Items taken out again meanwhile are already gone (-willRemoveSubview:). */
   while ((key = [e nextObject]) != nil)
     {
-      NSView *item = [key nonretainedObjectValue];
-
-      if ([item superview] != self || [self presenceOf: item] >= 1.0)
+      if ([self presenceOf: [key nonretainedObjectValue]] >= 1.0)
         [insertions removeObjectForKey: key];
     }
 

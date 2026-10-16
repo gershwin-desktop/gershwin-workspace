@@ -63,3 +63,14 @@ t_DockLaunchRefreshThread_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/
 t_DockLaunchRefreshThread_LDFLAGS += -Wl,--unresolved-symbols=ignore-all
 ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
                       -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+
+# t_DockInsertionRemoval compiles Dock.m in-process too, for the real
+# -growIn:/-insertionTick: bookkeeping; it needs the same link as above.
+t_DockInsertionRemoval_OBJC_FILES += ../../Workspace/GWProcessOwnership.m \
+                                     ../../Workspace/X11AppSupport.m \
+                                     ../../Workspace/Desktop/Dock/DockMiniatureTile.m \
+                                     ../../Workspace/Desktop/Dock/DockMiniatureWatcher.m \
+                                     Collab/DockLaunchRefreshThreadStubs.m
+t_DockInsertionRemoval_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                    -lFSNode -lgnustep-gui -lX11
+t_DockInsertionRemoval_LDFLAGS += -Wl,--unresolved-symbols=ignore-all
