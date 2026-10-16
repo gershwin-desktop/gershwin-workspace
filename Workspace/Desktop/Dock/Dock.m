@@ -116,6 +116,12 @@ static inline CGFloat _dockScaleFactor(void)
 
 @end
 
+@interface Dock (LaunchRefreshRound)
+
+- (NSUInteger)_runLaunchRefreshRoundOfLaunchingIcons:(BOOL)launchingOnly;
+
+@end
+
 @interface Dock (Magnification)
 
 - (void)layoutIcons;
@@ -138,6 +144,8 @@ static inline CGFloat _dockScaleFactor(void)
   [[NSNotificationCenter defaultCenter] removeObserver: self];
   [launchRefreshTimer invalidate];
   launchRefreshTimer = nil;
+  [launchScanTimer invalidate];
+  launchScanTimer = nil;
   [self stopLaunchRefreshThread];
   [magnifyTimer invalidate];
   magnifyTimer = nil;
@@ -2105,6 +2113,31 @@ DockShelfGradient(int which)
              waitUntilDone: NO];
 }
 
+/* How often a bouncing icon's app is looked for. Half a second keeps the
+ * bounce from outliving the first window by more than that, and costs one
+ * client-list read per tick only while something is launching. */
+#define DOCK_LAUNCH_SCAN_INTERVAL 0.5
+
+- (void)iconStartedLaunching:(DockIcon *)icon
+{
+  if (launchScanTimer != nil)
+    return;
+  launchScanTimer = [NSTimer scheduledTimerWithTimeInterval: DOCK_LAUNCH_SCAN_INTERVAL
+                                                     target: self
+                                                   selector: @selector(_launchScanTimerFired:)
+                                                   userInfo: nil
+                                                    repeats: YES];
+}
+
+- (void)_launchScanTimerFired:(NSTimer *)timer
+{
+  if ([self _runLaunchRefreshRoundOfLaunchingIcons: YES] == 0)
+    {
+      [launchScanTimer invalidate];
+      launchScanTimer = nil;
+    }
+}
+
 @end
 
 
@@ -3059,6 +3092,15 @@ DockShelfGradient(int which)
 
 - (void)_launchRefreshTimerFired:(NSTimer *)timer
 {
+  [self _runLaunchRefreshRoundOfLaunchingIcons: NO];
+}
+
+/* One scan round on the shared worker thread: either the bouncing icons
+ * only (the fast launch scan) or every other icon that needs one (the
+ * regular round, which leaves the bouncing ones to the fast scan). Returns
+ * how many icons the round covers. */
+- (NSUInteger)_runLaunchRefreshRoundOfLaunchingIcons:(BOOL)launchingOnly
+{
   NSMutableArray *round = [NSMutableArray arrayWithCapacity: [icons count]];
 
   /* The X window scans (windowsMatchingName:/hasWindowsForPID:) open X
@@ -3084,8 +3126,11 @@ DockShelfGradient(int which)
        * which most docked icons at rest are neither. Detaching a thread for
        * a round that would only relay every icon's own input back unread
        * costs a thread and a stack for nothing. */
+      if ([icon isLaunching] != launchingOnly)
+        continue;
+
       if (DockIconNeedsLaunchedStateScan([icon isX11OnlyApp], [icon isLaunched],
-                                         [icon appPID]) == NO)
+                                         [icon isLaunching], [icon appPID]) == NO)
         continue;
 
       [round addObject: [NSArray arrayWithObjects: icon,
@@ -3093,11 +3138,12 @@ DockShelfGradient(int which)
     }
 
   if ([round count] == 0)
-    return;
+    return 0;
 
   [self performLaunchRefreshSelector: @selector(_refreshLaunchedStatesWorker:)
                                target: self
                            withObject: round];
+  return [round count];
 }
 
 /* Worker thread: refresh every icon of the round over one X connection.

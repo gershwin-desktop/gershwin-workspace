@@ -99,14 +99,17 @@ DockDropRemovesIcon(CGFloat distance, CGFloat dockHeight)
 
 /* Whether -refreshLaunchedStateWorker: would actually touch X for an icon in
  * this state, so a round can leave out the ones it would only relay back
- * unchanged: an X11-tracked icon always re-checks its windows, and a
- * launched icon whose pid is not yet known tries once to discover it (see
- * DockIcon.m); anything else takes the early-return path that makes no X
- * call at all. Foundation-only so it can be tested headless. */
+ * unchanged: an X11-tracked icon always re-checks its windows, a bouncing
+ * icon looks for the first window of its app (that window, not the
+ * did-launch notification, is what the user waits for), and a launched icon
+ * whose pid is not yet known tries once to discover it (see DockIcon.m);
+ * anything else takes the early-return path that makes no X call at all.
+ * Foundation-only so it can be tested headless. */
 static inline BOOL
-DockIconNeedsLaunchedStateScan(BOOL isX11OnlyApp, BOOL isLaunched, pid_t appPID)
+DockIconNeedsLaunchedStateScan(BOOL isX11OnlyApp, BOOL isLaunched,
+                               BOOL isLaunching, pid_t appPID)
 {
-  return isX11OnlyApp || (isLaunched && (appPID <= 0));
+  return isX11OnlyApp || isLaunching || (isLaunched && (appPID <= 0));
 }
 
 typedef enum DockStyle
@@ -164,6 +167,10 @@ DockStyleFromValue(NSInteger value)
   DockIcon *springIcon;
   
   NSTimer *launchRefreshTimer;
+  /* Runs only while some icon bounces, much more often than the round
+   * above, so the bounce ends within a moment of the app's first window;
+   * it stops itself once no icon bounces (see -iconStartedLaunching:). */
+  NSTimer *launchScanTimer;
 
   /* The one worker thread every launch-refresh round hands its X scans to
    * (see -_launchRefreshTimerFired: in Dock.m), instead of each round
@@ -383,6 +390,10 @@ DockStyleFromValue(NSInteger value)
  * from -dealloc; exposed so Tests/Dock can prove the thread does not
  * outlive the object without building a whole Dock. */
 - (void)stopLaunchRefreshThread;
+
+/* Called by an icon that starts bouncing, so its app's first window is
+ * looked for often enough to end the bounce right away. */
+- (void)iconStartedLaunching:(DockIcon *)icon;
 
 @end
 

@@ -109,6 +109,32 @@ static BOOL GWProcessEffectiveUID(pid_t pid, uid_t *uid)
   return found;
 }
 
+static BOOL GWProcessParentPID(pid_t pid, pid_t *ppid)
+{
+  char path[64];
+  char line[256];
+  FILE *f;
+  BOOL found = NO;
+
+  snprintf(path, sizeof(path), "/proc/%d/status", (int)pid);
+  f = fopen(path, "r");
+  if (f == NULL)
+    return NO;
+  while (fgets(line, sizeof(line), f) != NULL)
+    {
+      long parent;
+
+      if (sscanf(line, "PPid: %ld", &parent) == 1)
+        {
+          *ppid = (pid_t)parent;
+          found = YES;
+          break;
+        }
+    }
+  fclose(f);
+  return found;
+}
+
 static NSString *GWProcessDisplay(pid_t pid)
 {
   char path[64];
@@ -151,6 +177,30 @@ static BOOL GWProcessEffectiveUID(pid_t pid, uid_t *uid)
   *uid = kp.ki_uid;
 #else
   *uid = kp.p_uid;
+#endif
+  return YES;
+}
+
+static BOOL GWProcessParentPID(pid_t pid, pid_t *ppid)
+{
+#if defined(__FreeBSD__)
+  int mib[4] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid};
+  struct kinfo_proc kp;
+#elif defined(__OpenBSD__)
+  int mib[6] = {CTL_KERN, KERN_PROC, KERN_PROC_PID, pid, sizeof(struct kinfo_proc), 1};
+  struct kinfo_proc kp;
+#else
+  int mib[6] = {CTL_KERN, KERN_PROC2, KERN_PROC_PID, pid, sizeof(struct kinfo_proc2), 1};
+  struct kinfo_proc2 kp;
+#endif
+  size_t len = sizeof(kp);
+
+  if (sysctl(mib, sizeof(mib) / sizeof(mib[0]), &kp, &len, NULL, 0) != 0 || len != sizeof(kp))
+    return NO;
+#if defined(__FreeBSD__)
+  *ppid = kp.ki_ppid;
+#else
+  *ppid = kp.p_ppid;
 #endif
   return YES;
 }
@@ -254,6 +304,21 @@ static NSString *GWProcessDisplay(pid_t pid)
   if (pid <= 0)
     return NO;
   return GWProcessEffectiveUID(pid, &uid) && uid == getuid();
+#endif
+}
+
++ (BOOL)isProcess:(pid_t)pid childOfProcess:(pid_t)parent
+{
+#ifdef _WIN32
+  (void)pid;
+  (void)parent;
+  return NO;
+#else
+  pid_t ppid;
+
+  if (pid <= 0 || parent <= 0)
+    return NO;
+  return GWProcessParentPID(pid, &ppid) && ppid == parent;
 #endif
 }
 

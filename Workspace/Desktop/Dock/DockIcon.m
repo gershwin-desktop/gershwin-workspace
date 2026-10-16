@@ -52,6 +52,15 @@
 - (NSDockTile *)dockTile;
 @end
 
+@interface DockIcon ()
+- (void)startBounceAnimation;
+- (void)stopBounceAnimation;
+- (void)refreshLaunchingStateWorker:(NSDictionary *)inputs
+                            windows:(GWX11ClientSnapshot *)snapshot;
+- (void)postLaunchedStateResult:(NSDictionary *)result
+                         inputs:(NSDictionary *)inputs;
+@end
+
 @implementation DockIcon
 
 /* A dock tile is wider than the image it holds, and all of it stands for the
@@ -63,8 +72,6 @@
 
 - (void)dealloc
 {
-  /* Stop bouncing and clean up timer */
-  isBouncing = NO;
   if (bounceTimer) {
     [bounceTimer invalidate];
     bounceTimer = nil;
@@ -125,7 +132,8 @@
     }
     
     docked = NO;
-    launched = NO;
+    launchState = DockLaunchIdle;
+    launchGeneration = 0;
     apphidden = NO;
     appPID = 0;
     isX11OnlyApp = NO;
@@ -136,7 +144,6 @@
     magnifiedSize = 0.0;
 
     /* Initialize bounce animation variables */
-    isBouncing = NO;
     bounceTimer = nil;
     bounceVelocity = 0.0;
     bounceOffset = 0.0;
@@ -542,7 +549,7 @@ DockLipLightGradient(void)
 
 - (BOOL)springOpensItself
 {
-  return [self isApplicationIcon] && launched;
+  return [self isApplicationIcon] && [self isLaunched];
 }
 
 - (void)springOpen
@@ -613,16 +620,46 @@ DockLipLightGradient(void)
 
 - (void)setLaunched:(BOOL)value
 {
-  launched = value;
-  if (value) {
-    [self stopBouncing];
-  }
-  [self setNeedsDisplay: YES];
+  [self handleLaunchEvent: (value ? DockLaunchEventDidLaunch
+                                  : DockLaunchEventEnded)];
 }
 
 - (BOOL)isLaunched
 {
-  return launched;
+  return DockLaunchStateIsRunning(launchState);
+}
+
+- (BOOL)isLaunching
+{
+  return DockLaunchStateBounces(launchState);
+}
+
+- (void)handleLaunchEvent:(DockLaunchEvent)event
+{
+  DockLaunchState next = DockLaunchStateAfterEvent(launchState, event);
+
+  if (next == launchState)
+    return;
+
+  /* A launch that hangs is only diagnosable from the order of what the Dock
+   * heard about it (--GNU-Debug=DockLaunch). */
+  if (GSDebugSet(@"DockLaunch"))
+    NSLog(@"DockLaunch %@ pid %d: state %d -> %d on event %d",
+          appName, (int)appPID, (int)launchState, (int)next, (int)event);
+
+  launchState = next;
+  launchGeneration++;
+
+  if (DockLaunchStateBounces(next))
+    {
+      [self startBounceAnimation];
+      [[self dock] iconStartedLaunching: self];
+    }
+  else
+    {
+      [self stopBounceAnimation];
+    }
+  [self setNeedsDisplay: YES];
 }
 
 - (void)setAppPID:(pid_t)pid
@@ -663,7 +700,11 @@ DockLipLightGradient(void)
           [(Dock *)container removeIcon: weakSelf];
         } else {
           [weakSelf setAppHidden: NO];
-          [weakSelf setLaunched: NO];
+          /* While the icon bounces the pid may be a launcher that exits once
+           * it has started the app; the bounce timer tells a failed launch
+           * from that by the pid's children and the app's name. */
+          if ([weakSelf isLaunching] == NO)
+            [weakSelf setLaunched: NO];
         }
       }];
     }
@@ -690,7 +731,7 @@ DockLipLightGradient(void)
 
 - (BOOL)hasVisibleWindows
 {
-  if (launched == NO)
+  if ([self isLaunched] == NO)
     return NO;
 
   if (isX11OnlyApp == NO)
@@ -725,7 +766,9 @@ DockLipLightGradient(void)
   return [NSDictionary dictionaryWithObjectsAndKeys:
     [NSNumber numberWithBool: isX11OnlyApp], @"x11",
     [NSNumber numberWithInt: (int)appPID], @"pid",
-    [NSNumber numberWithBool: launched], @"launched", nil];
+    [NSNumber numberWithBool: [self isLaunched]], @"launched",
+    [NSNumber numberWithBool: [self isLaunching]], @"launching",
+    [NSNumber numberWithUnsignedLong: launchGeneration], @"generation", nil];
 }
 
 - (void)refreshLaunchedStateAsync
@@ -799,6 +842,7 @@ DockLipLightGradient(void)
   BOOL x11 = [[inputs objectForKey: @"x11"] boolValue];
   pid_t pid = (pid_t)[[inputs objectForKey: @"pid"] intValue];
   BOOL wasLaunched = [[inputs objectForKey: @"launched"] boolValue];
+  BOOL launchingNow = [[inputs objectForKey: @"launching"] boolValue];
 
   BOOL wantX11 = x11;
   pid_t wantPID = pid;
@@ -810,7 +854,14 @@ DockLipLightGradient(void)
    * can also reach here through refreshLaunchedStateAsync (its own, one-icon
    * thread), so the guaranteed-no-op case is still checked - from the one
    * shared definition (Dock.h) rather than a second copy of it. */
-  if (DockIconNeedsLaunchedStateScan(x11, wasLaunched, pid) == NO)
+  if (launchingNow)
+    {
+      [self refreshLaunchingStateWorker: inputs windows: snapshot];
+      [pool drain];
+      return;
+    }
+
+  if (DockIconNeedsLaunchedStateScan(x11, wasLaunched, NO, pid) == NO)
     {
       NSDictionary *result = [NSDictionary dictionaryWithObjectsAndKeys:
         [NSNumber numberWithBool: NO], @"x11",
@@ -818,8 +869,7 @@ DockLipLightGradient(void)
         [NSNumber numberWithBool: wasLaunched], @"launched",
         [NSNumber numberWithBool: NO], @"changed",
         [NSNumber numberWithBool: NO], @"haswindows", nil];
-      [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
-                             withObject: result waitUntilDone: NO];
+      [self postLaunchedStateResult: result inputs: inputs];
       [pool drain];
       return;
     }
@@ -843,8 +893,7 @@ DockLipLightGradient(void)
             [NSNumber numberWithBool: wasLaunched], @"launched",
             [NSNumber numberWithBool: NO], @"changed",
             [NSNumber numberWithBool: NO], @"haswindows", nil];
-          [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
-                                 withObject: result waitUntilDone: NO];
+          [self postLaunchedStateResult: result inputs: inputs];
           [pool drain];
           return;
         }
@@ -867,8 +916,7 @@ DockLipLightGradient(void)
             [NSNumber numberWithBool: wantLaunched], @"launched",
             [NSNumber numberWithBool: (wantLaunched != wasLaunched)], @"changed",
             [NSNumber numberWithBool: NO], @"haswindows", nil];
-          [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
-                                 withObject: result waitUntilDone: NO];
+          [self postLaunchedStateResult: result inputs: inputs];
           [pool drain];
           return;
         }
@@ -906,9 +954,59 @@ DockLipLightGradient(void)
     [NSNumber numberWithBool: wantLaunched], @"launched",
     [NSNumber numberWithBool: (wantLaunched != wasLaunched || wantPID != pid)], @"changed",
     [NSNumber numberWithBool: hasWindows], @"haswindows", nil];
-  [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
-                         withObject: result waitUntilDone: NO];
+  [self postLaunchedStateResult: result inputs: inputs];
   [pool drain];
+}
+
+/* Worker thread, for an icon that bounces: the launch is over for the user
+ * the moment any window of the app is on the screen, so this looks for one
+ * by the launch pid (or a child it started) and by the app's name, and
+ * counts utility windows and panels too - an app such as Whisper whose only
+ * window floats is otherwise never seen. Waiting for the did-launch
+ * notification instead kept the icon bouncing for as long as that
+ * notification was late, or for good when it was lost. */
+- (void)refreshLaunchingStateWorker:(NSDictionary *)inputs
+                            windows:(GWX11ClientSnapshot *)snapshot
+{
+  BOOL x11 = [[inputs objectForKey: @"x11"] boolValue];
+  pid_t pid = (pid_t)[[inputs objectForKey: @"pid"] intValue];
+  BOOL seen = [snapshot hasMappedWindowsForProcessOrChildOf: pid];
+
+  if (seen == NO)
+    {
+      NSArray *windows = [snapshot mappedWindowsMatchingName: appName];
+
+      if ([windows count] > 0)
+        {
+          seen = YES;
+          /* Only a launch that has no pid of its own learns one here; a
+           * known pid stays, the name match may be a helper of the app. */
+          if (pid <= 0)
+            pid = [[windows objectAtIndex: 0] ownerPID];
+        }
+    }
+
+  [self postLaunchedStateResult:
+    [NSDictionary dictionaryWithObjectsAndKeys:
+      [NSNumber numberWithBool: x11], @"x11",
+      [NSNumber numberWithInt: (int)pid], @"pid",
+      [NSNumber numberWithBool: seen], @"launched",
+      [NSNumber numberWithBool: seen], @"changed",
+      [NSNumber numberWithBool: seen], @"haswindows", nil]
+                         inputs: inputs];
+}
+
+/* Worker thread: hand a scan result to the main thread, tagged with the
+ * launch generation the scan started from. */
+- (void)postLaunchedStateResult:(NSDictionary *)result
+                         inputs:(NSDictionary *)inputs
+{
+  NSMutableDictionary *tagged = [NSMutableDictionary dictionaryWithDictionary: result];
+
+  [tagged setObject: [inputs objectForKey: @"generation"] forKey: @"generation"];
+  [self performSelectorOnMainThread: @selector(applyLaunchedStateSnapshot:)
+                         withObject: tagged
+                      waitUntilDone: NO];
 }
 
 /* Main thread: apply the worker's desired state. */
@@ -923,14 +1021,19 @@ DockLipLightGradient(void)
   windowCheckResult = [[snap objectForKey: @"haswindows"] boolValue];
   lastWindowCheck = [NSDate timeIntervalSinceReferenceDate];
 
+  /* The launch state moved on while the worker scanned: what it saw
+   * belongs to a launch that is over (or to none at all). */
+  if ([[snap objectForKey: @"generation"] unsignedLongValue] != launchGeneration)
+    return;
+
   if (wantX11 != isX11OnlyApp)
     isX11OnlyApp = wantX11;
   if (wantPID != appPID)
     [self setAppPID: wantPID];
-  if (wantLaunched != launched)
+  if (wantLaunched != [self isLaunched])
     {
-      launched = wantLaunched;
-      [self setNeedsDisplay: YES];
+      [self handleLaunchEvent: (wantLaunched ? DockLaunchEventWindowSeen
+                                             : DockLaunchEventEnded)];
     }
   else if (changed)
     {
@@ -952,8 +1055,11 @@ DockLipLightGradient(void)
 
 - (void)animateLaunch
 {
-  /* Start the bouncing animation */
-  isBouncing = YES;
+  [self handleLaunchEvent: DockLaunchEventRequested];
+}
+
+- (void)startBounceAnimation
+{
   bounceVelocity = 6.32;  /* Initial upward velocity for 20px bounce height */
   bounceOffset = 0.0;
   bounceStart = [NSDate timeIntervalSinceReferenceDate];
@@ -968,10 +1074,8 @@ DockLipLightGradient(void)
   }
 }
 
-- (void)stopBouncing
+- (void)stopBounceAnimation
 {
-  /* Just set the flag; let the timer callback check it */
-  isBouncing = NO;
   [bounceTimer invalidate];
   bounceTimer = nil;
   bounceOffset = 0.0;
@@ -1064,8 +1168,7 @@ DockLipLightGradient(void)
 
 - (void)_bounceTimerFired:(NSTimer *)timer
 {
-  /* Check if we should still be bouncing */
-  if (!isBouncing) {
+  if ([self isLaunching] == NO) {
     return;
   }
 
@@ -1078,7 +1181,7 @@ DockLipLightGradient(void)
   if (appPID > 0
       && [[GWProcessMonitor sharedMonitor] processOrChildrenAlive: appPID] == NO)
     {
-      [self stopBouncing];
+      [self handleLaunchEvent: DockLaunchEventEnded];
       /* Drop the icon only if it was never pinned; a docked icon stays
        * (mirrors appTerminated:), it just stops showing as running. */
       if (([self isDocked] == NO) && ([self isSpecialIcon] == NO)) {
@@ -1100,7 +1203,7 @@ DockLipLightGradient(void)
       && ([NSDate timeIntervalSinceReferenceDate] - bounceStart) > 2.0
       && [[GWProcessMonitor sharedMonitor] processNamedAlive: appName] == NO)
     {
-      [self stopBouncing];
+      [self handleLaunchEvent: DockLaunchEventEnded];
       if (([self isDocked] == NO) && ([self isSpecialIcon] == NO)) {
         [(Dock *)container removeIcon: self];
       } else {
@@ -1239,7 +1342,7 @@ DockLipLightGradient(void)
       }
       
       if ([node isApplication]) {
-        if (launched == NO) {
+        if ([self isLaunched] == NO) {
           /* Check if the app is still running (sudo re-exec, etc.) before
            * blindly launching a new instance — this prevents duplicate icons
            * and redundant process creation when appTerminated: was called
@@ -1250,7 +1353,7 @@ DockLipLightGradient(void)
             GWX11WindowInfo *info = [windows objectAtIndex: 0];
             isX11OnlyApp = YES;
             [self setAppPID: [info ownerPID]];
-            launched = YES;
+            [self handleLaunchEvent: DockLaunchEventWindowSeen];
           } else {
             [ws launchApplication: nodePath];
             return;
@@ -1282,7 +1385,7 @@ DockLipLightGradient(void)
                 [(Dock *)container removeIcon: self];
                 return;
               }
-              launched = NO;
+              [self handleLaunchEvent: DockLaunchEventEnded];
               [ws launchApplication: nodePath];
               return;
             }
@@ -1507,7 +1610,7 @@ DockLipLightGradient(void)
   [dict setObject: [node path] forKey: @"path"];
   [dict setObject: [NSNumber numberWithBool: docked] 
            forKey: @"docked"];
-  [dict setObject: [NSNumber numberWithBool: launched] 
+  [dict setObject: [NSNumber numberWithBool: [self isLaunched]] 
            forKey: @"launched"];
   [dict setObject: [NSNumber numberWithBool: apphidden] 
            forKey: @"hidden"];
@@ -1737,7 +1840,7 @@ x += 6; \
     NSImage *shown;
 
     drawPoint.y += lift;
-    if (isBouncing && bounceOffset != 0.0) {
+    if ([self isLaunching] && bounceOffset != 0.0) {
       DockPosition pos = DockPositionBottom;
       
       if ([container respondsToSelector: @selector(position)]) {
@@ -1804,7 +1907,7 @@ x += 6; \
   /* The dot goes under the middle of the icon, not of the part of the view
    * that is being redrawn.  It shows that the application runs, with or
    * without a window open. */
-  if ((isWsIcon || launched) && onShelf)
+  if ((isWsIcon || [self isLaunched]) && onShelf)
     {
       /* A light on the shelf's front lip, like those of the 10.5 Dock. */
       DockLipLight light = DockLipLightMake(shelf.lip, NSMidX([self bounds]),
@@ -1814,7 +1917,7 @@ x += 6; \
       [[NSColor colorWithCalibratedRed: 0.92 green: 0.97 blue: 1.0 alpha: 1.0] set];
       [[NSBezierPath bezierPathWithOvalInRect: light.core] fill];
     }
-  else if (isWsIcon || launched)
+  else if (isWsIcon || [self isLaunched])
     {
       NSPoint p;
       /* The icon is centred in its tile, magnified or not; icnBounds and

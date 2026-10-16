@@ -93,6 +93,15 @@ typedef void Display;
  * title or class starts or ends with the name. */
 - (NSArray *)windowsMatchingName:(NSString *)name;
 
+/** YES if the process, or a process it started, has a mapped window of any
+ * type - utility windows and panels included, which the taskbar-minded
+ * answers above leave out. */
+- (BOOL)hasMappedWindowsForProcessOrChildOf:(pid_t)pid;
+
+/** Like -windowsMatchingName:, but every mapped window counts, whether or
+ * not it skips the taskbar. */
+- (NSArray *)mappedWindowsMatchingName:(NSString *)name;
+
 @end
 
 #pragma mark - X11 Window Operations

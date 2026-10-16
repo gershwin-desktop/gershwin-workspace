@@ -24,26 +24,34 @@ main(void)
 {
   NSAutoreleasePool *arp = [NSAutoreleasePool new];
 
-  PASS(DockIconNeedsLaunchedStateScan(NO, NO, 0) == NO,
+  PASS(DockIconNeedsLaunchedStateScan(NO, NO, NO, 0) == NO,
        "a docked, not-running icon needs no scan: refreshLaunchedStateWorker: "
        "takes its early-return path and makes no X call for it");
 
-  PASS(DockIconNeedsLaunchedStateScan(NO, YES, 4242) == NO,
+  PASS(DockIconNeedsLaunchedStateScan(NO, YES, NO, 4242) == NO,
        "a launched GNUstep icon whose pid is already known needs no scan "
        "either: same early-return path");
 
-  PASS(DockIconNeedsLaunchedStateScan(NO, YES, 0) == YES,
+  PASS(DockIconNeedsLaunchedStateScan(NO, YES, NO, 0) == YES,
        "a launched icon whose pid is still unknown needs a scan: the "
        "worker spends one X call trying to discover it");
 
-  PASS(DockIconNeedsLaunchedStateScan(YES, NO, 0) == YES,
+  PASS(DockIconNeedsLaunchedStateScan(YES, NO, NO, 0) == YES,
        "an X11-tracked icon needs a scan even while not launched: the "
        "worker always re-checks its windows once tracking has started");
 
-  PASS(DockIconNeedsLaunchedStateScan(YES, YES, 4242) == YES,
+  PASS(DockIconNeedsLaunchedStateScan(YES, YES, NO, 4242) == YES,
        "an X11-tracked, running icon needs a scan every round: only a "
        "fresh hasWindowsForPID: call can notice its windows closing "
        "without the process exiting");
+
+  PASS(DockIconNeedsLaunchedStateScan(NO, NO, YES, 4242) == YES,
+       "a bouncing GNUstep icon whose pid is known needs a scan: its window "
+       "ends the bounce even when its did-launch never arrives");
+
+  PASS(DockIconNeedsLaunchedStateScan(NO, NO, YES, 0) == YES,
+       "a bouncing icon with no pid yet needs a scan too: its window is "
+       "found by name");
 
   [arp release];
   return 0;

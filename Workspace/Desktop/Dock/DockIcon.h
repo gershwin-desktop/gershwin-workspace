@@ -27,6 +27,7 @@
 #import <AppKit/NSView.h>
 #import "FSNIcon.h"
 #import "DockStack.h"
+#import "DockLaunchState.h"
 
 @class NSColor;
 @class GWX11ClientSnapshot;
@@ -58,7 +59,12 @@
   BOOL trashFull;
   BOOL docked;
   BOOL isDragMountpointOnly;
-  BOOL launched;
+  /* Idle, bouncing or running: the one place that decides whether the icon
+   * bounces and whether it shows the running dot (DockLaunchState.h). */
+  DockLaunchState launchState;
+  /* Bumped on every launch state change, so a window scan started before
+   * it cannot apply what it saw to a launch it was not looking at. */
+  unsigned long launchGeneration;
   BOOL launching;
   BOOL apphidden;  
   BOOL appactive;  
@@ -95,7 +101,6 @@
   BOOL windowCheckResult;
 
   /* Bounce animation tracking */
-  BOOL isBouncing;
   NSTimer *bounceTimer;
   float bounceVelocity;
   float bounceOffset;
@@ -173,6 +178,14 @@
 
 - (BOOL)isLaunched;
 
+/* Whether a launch was asked for and the app has not shown up yet: the icon
+ * bounces. */
+- (BOOL)isLaunching;
+
+/* Moves the icon's launch state (see DockLaunchState.h); starting and
+ * stopping the bounce happen here and nowhere else. */
+- (void)handleLaunchEvent:(DockLaunchEvent)event;
+
 - (void)setAppPID:(pid_t)pid;
 
 - (pid_t)appPID;
@@ -202,8 +215,6 @@
 - (BOOL)isAppHidden;
 
 - (void)animateLaunch;
-
-- (void)stopBouncing;
 
 - (void)_bounceTimerFired:(NSTimer *)timer;
 

@@ -1496,7 +1496,39 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return windows;
 }
 
+- (BOOL)hasMappedWindowsForProcessOrChildOf:(pid_t)pid
+{
+    if (pid <= 0) {
+        return NO;
+    }
+    [self load];
+    for (GWX11ClientRecord *rec in clients) {
+        if (rec->pid <= 0 || ![self isViewable:rec]) {
+            continue;
+        }
+        if (rec->pid == pid
+            || [GWProcessOwnership isProcess:rec->pid childOfProcess:pid]) {
+            return YES;
+        }
+    }
+    return NO;
+}
+
 - (NSArray *)windowsMatchingName:(NSString *)name
+{
+    return [self windowsMatchingName:name mappedOnly:NO];
+}
+
+- (NSArray *)mappedWindowsMatchingName:(NSString *)name
+{
+    return [self windowsMatchingName:name mappedOnly:YES];
+}
+
+/* mappedOnly answers "is the app on the screen", so a window that skips the
+ * taskbar (a utility window, a floating panel) counts as long as it is
+ * mapped; otherwise only taskbar windows count, mapped or not, since those
+ * are what activating the app brings forward. */
+- (NSArray *)windowsMatchingName:(NSString *)name mappedOnly:(BOOL)mappedOnly
 {
     NSMutableArray *windows = [NSMutableArray array];
     if ([name length] == 0) {
@@ -1509,7 +1541,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         if (rec->pid <= 0 || rec->pid == myPID) {
             continue;
         }
-        if ([self skipsTaskbar:rec]) {
+        if (mappedOnly ? ![self isViewable:rec] : [self skipsTaskbar:rec]) {
             continue;
         }
         [self readNames:rec];
@@ -2489,6 +2521,16 @@ static GWX11AppManager *sharedX11AppManager = nil;
 }
 
 - (NSArray *)windowsMatchingName:(NSString *)name
+{
+    return [NSArray array];
+}
+
+- (BOOL)hasMappedWindowsForProcessOrChildOf:(pid_t)pid
+{
+    return NO;
+}
+
+- (NSArray *)mappedWindowsMatchingName:(NSString *)name
 {
     return [NSArray array];
 }

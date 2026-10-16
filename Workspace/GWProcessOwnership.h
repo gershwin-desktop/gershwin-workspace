@@ -38,6 +38,11 @@ extern NSString * const GWLaunchDisplayKey;
 
 /** DISPLAY from the environment of pid, or nil if it has none or the
  * environment is not readable (another user's process). */
+/* Whether parent started pid directly: an application launched through a
+ * wrapper (a shell script .app, a launcher) shows its windows under the
+ * wrapper's child, not under the pid the launcher reported. */
++ (BOOL)isProcess:(pid_t)pid childOfProcess:(pid_t)parent;
+
 + (NSString *)displayOfProcess:(pid_t)pid;
 
 /** Owned by the current user and running on the current display/screen. */
