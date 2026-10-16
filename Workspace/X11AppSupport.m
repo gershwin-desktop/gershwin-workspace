@@ -1572,8 +1572,12 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 - (NSArray *)sessionWindows
 {
     NSMutableArray *windows = [NSMutableArray array];
-    /* Asked once per process: the session check reads the environment of
-     * the process, and an application often has many windows. */
+    /* Being in this display's client list already places a window in this
+     * session; only the owner is left to check. The environment is no
+     * help here: Chromium-based browsers overwrite their own environment
+     * block to set their process title, so /proc/<pid>/environ reads as
+     * zeros and a DISPLAY check would drop them. Asked once per process,
+     * since an application often has many windows. */
     NSMutableDictionary *inSession = [NSMutableDictionary dictionary];
     pid_t myPID = getpid();
 
@@ -1586,7 +1590,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         NSNumber *ours = [inSession objectForKey:key];
         if (ours == nil) {
             ours = [NSNumber numberWithBool:
-                    [GWProcessOwnership isProcessInCurrentSession:rec->pid]];
+                    [GWProcessOwnership isProcessOwnedByCurrentUser:rec->pid]];
             [inSession setObject:ours forKey:key];
         }
         if ([ours boolValue] == NO) {
