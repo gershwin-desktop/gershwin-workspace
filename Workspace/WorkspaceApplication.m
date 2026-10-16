@@ -41,6 +41,7 @@
 #import "Dock.h"
 #import "DockIcon.h"
 #import "DockStartup.h"
+#import "DockAdoption.h"
 #import "GWViewersManager.h"
 #import "Operation.h"
 #import "StartAppWin.h"
@@ -508,7 +509,7 @@
 		         object: nil];
     
   [self checkLastRunningApps];
-  /* Their icons are in the Dock now; it may appear. */
+  /* Their icons are in the Dock now. */
   [dtopManager dockSourceDidFinish: DockStartupRunningApps];
 
   // Init fallback timers dict for non-GNUstep apps' dock dot
@@ -516,6 +517,10 @@
   
   // Set up X11 app manager delegate for non-GNUstep app lifecycle events
   [[GWX11AppManager sharedManager] setDelegate: (id<GWX11AppManagerDelegate>)self];
+
+  /* After the registry, so that the GNUstep applications it restored are
+   * not adopted a second time by their windows. */
+  [self adoptRunningX11Applications];
 }
 
 - (void)applicationName:(NSString **)appName
@@ -1324,6 +1329,11 @@
 
   if (app && [app isHidden]) {
     [app unhideApplication];
+    /* A GNUstep application announces its unhiding itself; an X11 one
+     * does not, and its icon would stay marked hidden. */
+    if ([app isX11App] && [app isHidden] == NO) {
+      [[dtopManager dock] appDidUnhide: path appName: name];
+    }
     if ([app application] == nil) {
       [self _x11ActivateForApp: app name: name];
     } else {
@@ -1535,6 +1545,126 @@
   RELEASE (newapps);  
   [storedAppinfoLock unlock];
   RELEASE (arp);
+}
+
+/* Applications that are no GNUstep applications are in no registry: only
+ * their windows tell that they run. Without this, every one of them started
+ * before Workspace (re)started ran on with no icon in the Dock. The window
+ * scan makes X round trips, so it runs on the Dock's worker thread; the
+ * result is applied here on the main thread, which then lets the Dock
+ * appear (DockStartupX11Apps). */
+- (void)adoptRunningX11Applications
+{
+  Dock *dock = [dtopManager dock];
+
+  if (dock == nil)
+    return;
+  [dock performLaunchRefreshSelector: @selector(adoptionScanWorker:)
+                               target: self
+                           withObject: [NSSet setWithArray: [launchedApps valueForKey: @"path"]]];
+}
+
+/* The application list NSWorkspace resolves names with
+ * (-fullPathForApplication:), read from where libs-gui reads it, since
+ * NSWorkspace does not hand out the whole list. */
+- (NSDictionary *)applicationList
+{
+  NSString *path = [[[NSSearchPathForDirectoriesInDomains(NSLibraryDirectory,
+                                                          NSUserDomainMask, YES)
+                       objectAtIndex: 0]
+                      stringByAppendingPathComponent: @"Services"]
+                     stringByAppendingPathComponent: @".GNUstepAppList"];
+  NSData *data = [NSData dataWithContentsOfFile: path];
+  id list = nil;
+
+  if (data != nil)
+    list = [NSDeserializer deserializePropertyListFromData: data
+                                         mutableContainers: NO];
+  if ([list isKindOfClass: [NSDictionary class]] == NO)
+    {
+      NSLog(@"Dock: no application list at %@, running applications "
+            @"without a GNUstep registry entry are not adopted", path);
+      return nil;
+    }
+  return list;
+}
+
+/* Worker thread (the Dock's launch-refresh thread and its X connection). */
+- (void)adoptionScanWorker:(NSSet *)trackedPaths
+{
+  NSAutoreleasePool *pool = [NSAutoreleasePool new];
+  GWX11ClientSnapshot *snapshot = [[GWX11WindowManager sharedManager] clientSnapshot];
+  NSArray *windows = [snapshot sessionWindows];
+  NSMutableArray *clients = [NSMutableArray arrayWithCapacity: [windows count]];
+  NSDictionary *applications;
+  NSUInteger i;
+
+  for (i = 0; i < [windows count]; i++)
+    {
+      GWX11WindowInfo *info = [windows objectAtIndex: i];
+      NSMutableDictionary *client = [NSMutableDictionary dictionary];
+
+      [client setObject: [NSNumber numberWithInt: (int)[info ownerPID]]
+                 forKey: DockAdoptionPIDKey];
+      if ([info windowInstance] != nil)
+        [client setObject: [info windowInstance] forKey: DockAdoptionInstanceKey];
+      if ([info windowClass] != nil)
+        [client setObject: [info windowClass] forKey: DockAdoptionClassKey];
+      if ([info windowName] != nil)
+        [client setObject: [info windowName] forKey: DockAdoptionTitleKey];
+      [client setObject: [NSNumber numberWithBool: ([info isHidden] || [info isIconified])]
+                 forKey: DockAdoptionHiddenKey];
+      [client setObject: [NSNumber numberWithBool: [info skipsTaskbar]]
+                 forKey: DockAdoptionSkipsTaskbarKey];
+      [clients addObject: client];
+    }
+
+  applications = DockAdoptionApplicationsInAppList([self applicationList]);
+  [self performSelectorOnMainThread: @selector(applyAdoptionPlan:)
+                         withObject: DockAdoptionPlan(clients, applications, trackedPaths)
+                      waitUntilDone: NO];
+  [pool release];
+}
+
+/* Main thread: the adopted applications are tracked like ones launched
+ * from here, so that their termination removes the icon, a click brings
+ * them forward and hiding them shows. */
+- (void)applyAdoptionPlan:(NSArray *)plan
+{
+  Dock *dock = [dtopManager dock];
+  NSUInteger i;
+
+  for (i = 0; i < [plan count]; i++)
+    {
+      NSDictionary *entry = [plan objectAtIndex: i];
+      NSString *path = [entry objectForKey: DockAdoptionPathKey];
+      NSString *name = [entry objectForKey: DockAdoptionNameKey];
+      pid_t pid = (pid_t)[[entry objectForKey: DockAdoptionPIDKey] intValue];
+      GWLaunchedApp *app;
+
+      /* Launched or reported meanwhile through the usual ways. */
+      if ([self launchedAppWithPath: path andName: name] != nil)
+        continue;
+
+      /* Running before registering: registering reports a launch, which
+       * would make an icon that is not running yet bounce. */
+      [dock appDidLaunch: path appName: name pid: pid];
+      [dock setAppIsX11Only: YES forPath: path name: name];
+      app = [GWLaunchedApp x11AppWithPath: path
+                                     name: name
+                                      pid: pid
+                       windowSearchString: name];
+      if (app == nil)
+        continue;
+      [launchedApps addObject: app];
+      if ([[entry objectForKey: DockAdoptionHiddenKey] boolValue])
+        {
+          [app setHidden: YES];
+          [dock appDidHide: path appName: name];
+        }
+    }
+
+  [dtopManager dockSourceDidFinish: DockStartupX11Apps];
 }
 
 - (void)checkLastRunningApps

@@ -6,7 +6,7 @@
  * applications and folders, the Trash and the windows already minimized,
  * all of which exist when it is built, plus the applications that were
  * already running when Workspace started, which are restored a little
- * later.  Only that last source is awaited, and never for longer than a
+ * later.  Only those last sources are awaited, and never for longer than a
  * bound, so that one that never reports cannot keep the Dock off the screen.
  * Foundation-only inline code so that it can be tested headless.
  *
@@ -30,7 +30,11 @@ typedef NSUInteger DockStartupSources;
  * them. */
 #define DockStartupRunningApps ((DockStartupSources)1)
 
-#define DockStartupAwaitedSources DockStartupRunningApps
+/* The running applications only their windows tell of (X11 applications),
+ * adopted from a window scan. */
+#define DockStartupX11Apps ((DockStartupSources)2)
+
+#define DockStartupAwaitedSources (DockStartupRunningApps | DockStartupX11Apps)
 
 static inline DockStartupSources
 DockStartupSourceDone(DockStartupSources pending, DockStartupSources source)

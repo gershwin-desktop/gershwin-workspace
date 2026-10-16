@@ -40,17 +40,22 @@ typedef void Display;
     unsigned long windowID;
     NSString *windowName;
     NSString *windowClass;
+    NSString *windowInstance;
     pid_t ownerPID;
     BOOL isHidden;
     BOOL isIconified;
+    BOOL skipsTaskbar;
 }
 
 @property (nonatomic, assign) unsigned long windowID;
 @property (nonatomic, copy) NSString *windowName;
 @property (nonatomic, copy) NSString *windowClass;
+/** WM_CLASS res_name, the program's own name for itself. */
+@property (nonatomic, copy) NSString *windowInstance;
 @property (nonatomic, assign) pid_t ownerPID;
 @property (nonatomic, assign) BOOL isHidden;
 @property (nonatomic, assign) BOOL isIconified;
+@property (nonatomic, assign) BOOL skipsTaskbar;
 
 + (instancetype)infoWithWindowID:(unsigned long)wid;
 
@@ -101,6 +106,11 @@ typedef void Display;
 /** Like -windowsMatchingName:, but every mapped window counts, whether or
  * not it skips the taskbar. */
 - (NSArray *)mappedWindowsMatchingName:(NSString *)name;
+
+/** GWX11WindowInfo for every client window of another process of this
+ * session (same user, same display), in client list order, whatever its
+ * type: what the Dock adopts when Workspace starts. */
+- (NSArray *)sessionWindows;
 
 @end
 

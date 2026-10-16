@@ -74,3 +74,7 @@ t_DockInsertionRemoval_OBJC_FILES += ../../Workspace/GWProcessOwnership.m \
 t_DockInsertionRemoval_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
                                     -lFSNode -lgnustep-gui -lX11
 t_DockInsertionRemoval_LDFLAGS += -Wl,--unresolved-symbols=ignore-all
+
+# t_DockAdoption: the Foundation-only decision which running applications
+# the Dock adopts at startup.
+t_DockAdoption_OBJC_FILES += ../../Workspace/Desktop/Dock/DockAdoption.m

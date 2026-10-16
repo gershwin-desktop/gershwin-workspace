@@ -54,6 +54,7 @@
     BOOL namesKnown;
     NSString *name;
     NSString *className;
+    NSString *instanceName;
     BOOL workspaceWindow;
 }
 @end
@@ -63,6 +64,7 @@
 {
     RELEASE(name);
     RELEASE(className);
+    RELEASE(instanceName);
     [super dealloc];
 }
 @end
@@ -154,9 +156,11 @@ void GWInstallX11IOErrorLogger(void)
 @synthesize windowID;
 @synthesize windowName;
 @synthesize windowClass;
+@synthesize windowInstance;
 @synthesize ownerPID;
 @synthesize isHidden;
 @synthesize isIconified;
+@synthesize skipsTaskbar;
 
 + (instancetype)infoWithWindowID:(unsigned long)wid
 {
@@ -169,6 +173,7 @@ void GWInstallX11IOErrorLogger(void)
 {
     RELEASE(windowName);
     RELEASE(windowClass);
+    RELEASE(windowInstance);
     [super dealloc];
 }
 
@@ -1438,9 +1443,12 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         /* GNUstep apps may not set _NET_WM_PID, so our own windows are
          * also told apart by their class hint.  A file viewer browsing a
          * volume called "xpdf" must not count as the xpdf application. */
-        if (hint.res_name != NULL && [rec->className isEqualToString:@"GNUstep"]) {
-            NSString *resName = [NSString stringWithCString:hint.res_name
-                                                   encoding:NSUTF8StringEncoding];
+        if (hint.res_name != NULL) {
+            rec->instanceName = [[NSString alloc] initWithCString:hint.res_name
+                                                         encoding:NSUTF8StringEncoding];
+        }
+        if (rec->instanceName != nil && [rec->className isEqualToString:@"GNUstep"]) {
+            NSString *resName = rec->instanceName;
             rec->workspaceWindow = [resName isEqualToString:@"Workspace"]
                                    || [resName isEqualToString:@"FileViewer"]
                                    || [resName isEqualToString:@"Window"]
@@ -1461,7 +1469,9 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     [self readNames:rec];
     info.windowName = rec->name;
     info.windowClass = rec->className;
+    info.windowInstance = rec->instanceName;
     info.ownerPID = rec->pid;
+    info.skipsTaskbar = [self skipsTaskbar:rec];
     info.isHidden = [manager isWindowHidden:display window:rec->window];
     info.isIconified = [manager checkWindowIconified:display window:rec->window];
     return info;
@@ -1555,6 +1565,38 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         if (matches && [GWProcessOwnership isProcessOwnedByCurrentUser:rec->pid]) {
             [windows addObject:[self infoForRecord:rec]];
         }
+    }
+    return windows;
+}
+
+- (NSArray *)sessionWindows
+{
+    NSMutableArray *windows = [NSMutableArray array];
+    /* Asked once per process: the session check reads the environment of
+     * the process, and an application often has many windows. */
+    NSMutableDictionary *inSession = [NSMutableDictionary dictionary];
+    pid_t myPID = getpid();
+
+    [self load];
+    for (GWX11ClientRecord *rec in clients) {
+        if (rec->pid <= 0 || rec->pid == myPID) {
+            continue;
+        }
+        NSNumber *key = [NSNumber numberWithInt:(int)rec->pid];
+        NSNumber *ours = [inSession objectForKey:key];
+        if (ours == nil) {
+            ours = [NSNumber numberWithBool:
+                    [GWProcessOwnership isProcessInCurrentSession:rec->pid]];
+            [inSession setObject:ours forKey:key];
+        }
+        if ([ours boolValue] == NO) {
+            continue;
+        }
+        [self readNames:rec];
+        if (rec->workspaceWindow) {
+            continue;
+        }
+        [windows addObject:[self infoForRecord:rec]];
     }
     return windows;
 }
@@ -2531,6 +2573,11 @@ static GWX11AppManager *sharedX11AppManager = nil;
 }
 
 - (NSArray *)mappedWindowsMatchingName:(NSString *)name
+{
+    return [NSArray array];
+}
+
+- (NSArray *)sessionWindows
 {
     return [NSArray array];
 }

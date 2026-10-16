@@ -602,6 +602,8 @@
 
 - (void)checkLastRunningApps;
 
+- (void)adoptRunningX11Applications;
+
 @end
 
 

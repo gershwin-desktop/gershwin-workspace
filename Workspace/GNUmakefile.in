@@ -122,6 +122,7 @@ Desktop/Dock/DockIcon.m \
 Desktop/Dock/DockStack.m \
 Desktop/Dock/DockLabel.m \
 Desktop/Dock/DockService.m \
+Desktop/Dock/DockAdoption.m \
 Desktop/Dock/GWDockWindow.m \
 Desktop/Dock/DockMiniatureTile.m \
 Desktop/Dock/DockMiniatureWatcher.m \

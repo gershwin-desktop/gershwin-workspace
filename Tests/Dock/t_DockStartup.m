@@ -21,6 +21,8 @@ main(void)
   PASS(pending != 0, "the Dock waits for something at startup");
   PASS((pending & DockStartupRunningApps) != 0,
        "the restored running applications are awaited");
+  PASS((pending & DockStartupX11Apps) != 0,
+       "the adopted running X11 applications are awaited");
 
   PASS(DockStartupIsReady(pending, 0.0) == NO,
        "not ready while a source is pending and the bound has not passed");
@@ -28,6 +30,9 @@ main(void)
        "still not ready half way to the bound");
 
   pending = DockStartupSourceDone(pending, DockStartupRunningApps);
+  PASS(pending != none && DockStartupIsReady(pending, 0.0) == NO,
+       "the registry alone does not let the Dock appear");
+  pending = DockStartupSourceDone(pending, DockStartupX11Apps);
   PASS(pending == none, "reporting the last source leaves nothing pending");
   PASS(DockStartupIsReady(pending, 0.0),
        "ready as soon as every source reported, without any waiting");
