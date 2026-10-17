@@ -1360,7 +1360,9 @@ static inline CGFloat _dockScaleFactor(void)
   if (pid > 0) {
     [wm setIconGeometry: x11Rect forPID: pid];
   } else if ([icon appName] && [[icon appName] length] > 0) {
-    [wm setIconGeometry: x11Rect forName: [icon appName]];
+    [wm setIconGeometry: x11Rect
+         forApplication: GWX11OwnershipForApplication([icon appName],
+                                                      [[icon node] path], 0)];
   }
 }
 
@@ -3103,7 +3105,7 @@ DockShelfGradient(int which)
 {
   NSMutableArray *round = [NSMutableArray arrayWithCapacity: [icons count]];
 
-  /* The X window scans (windowsMatchingName:/hasWindowsForPID:) open X
+  /* The X window scans (windowsOfApplication:/hasWindowsForPID:) open X
    * connections and issue synchronous round-trips.  Done on the main
    * thread they can wedge the app: while the main thread blocks in a
    * synchronous X request it stops draining the GNUstep event queue, the X

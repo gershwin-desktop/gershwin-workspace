@@ -620,7 +620,6 @@
   
   /* X11 application support for non-GNUstep applications */
   BOOL isX11App;
-  NSString *windowSearchString;
   
   Workspace *gw;   
   NSNotificationCenter *nc;
@@ -641,8 +640,7 @@
  */
 + (id)x11AppWithPath:(NSString *)apath
                 name:(NSString *)aname
-                 pid:(pid_t)pid
-  windowSearchString:(NSString *)searchString;
+                 pid:(pid_t)pid;
 
 - (NSDictionary *)appInfo;
 
@@ -695,8 +693,6 @@
 /* X11 app specific methods */
 - (BOOL)isX11App;
 - (void)setIsX11App:(BOOL)value;
-- (NSString *)windowSearchString;
-- (void)setWindowSearchString:(NSString *)searchString;
 
 @end
 

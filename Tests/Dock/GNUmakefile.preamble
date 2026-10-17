@@ -45,6 +45,7 @@ ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
 # stub's class hierarchy to link, hence -lFSNode.
 ADDITIONAL_INCLUDE_DIRS += -I../../GWMetadata -I../../DSStore
 t_DockLaunchRefreshThread_OBJC_FILES += ../../Workspace/GWProcessOwnership.m \
+                                        ../../Workspace/GWWindowOwnership.m \
                                         ../../Workspace/X11AppSupport.m \
                                         ../../Workspace/Desktop/Dock/DockMiniatureTile.m \
                                         ../../Workspace/Desktop/Dock/DockMiniatureWatcher.m \
@@ -67,6 +68,7 @@ ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
 # t_DockInsertionRemoval compiles Dock.m in-process too, for the real
 # -growIn:/-insertionTick: bookkeeping; it needs the same link as above.
 t_DockInsertionRemoval_OBJC_FILES += ../../Workspace/GWProcessOwnership.m \
+                                     ../../Workspace/GWWindowOwnership.m \
                                      ../../Workspace/X11AppSupport.m \
                                      ../../Workspace/Desktop/Dock/DockMiniatureTile.m \
                                      ../../Workspace/Desktop/Dock/DockMiniatureWatcher.m \
@@ -77,4 +79,5 @@ t_DockInsertionRemoval_LDFLAGS += -Wl,--unresolved-symbols=ignore-all
 
 # t_DockAdoption: the Foundation-only decision which running applications
 # the Dock adopts at startup.
-t_DockAdoption_OBJC_FILES += ../../Workspace/Desktop/Dock/DockAdoption.m
+t_DockAdoption_OBJC_FILES += ../../Workspace/Desktop/Dock/DockAdoption.m \
+                             ../../Workspace/GWWindowOwnership.m

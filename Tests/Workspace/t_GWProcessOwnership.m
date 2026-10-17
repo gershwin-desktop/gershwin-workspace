@@ -154,6 +154,38 @@ int main(void)
          "a process that is gone is not in the session");
   }
 
+  /* A grandchild: an app started through a wrapper script shows its
+   * windows two levels below the pid Workspace launched. */
+  {
+    NSTask *sh = [[NSTask new] autorelease];
+    NSPipe *out = [NSPipe pipe];
+    NSString *line;
+    pid_t shPID, grandPID;
+
+    [sh setLaunchPath: @"/bin/sh"];
+    [sh setArguments: [NSArray arrayWithObjects: @"-c",
+                        @"sleep 30 & echo $!; wait", nil]];
+    [sh setStandardOutput: out];
+    [sh launch];
+    shPID = [sh processIdentifier];
+    line = [[[NSString alloc] initWithData: [[out fileHandleForReading] availableData]
+                                  encoding: NSUTF8StringEncoding] autorelease];
+    grandPID = (pid_t)[line intValue];
+
+    PASS(grandPID > 0 && [GWProcessOwnership isProcess: grandPID childOfProcess: shPID],
+         "the shell started the sleep directly");
+    PASS([GWProcessOwnership isProcess: grandPID descendantOfProcess: getpid()],
+         "a grandchild descends from its grandparent");
+    PASS(![GWProcessOwnership isProcess: grandPID childOfProcess: getpid()],
+         "a grandchild is no direct child");
+    PASS(![GWProcessOwnership isProcess: getpid() descendantOfProcess: grandPID],
+         "a parent does not descend from its grandchild");
+    PASS(![GWProcessOwnership isProcess: grandPID descendantOfProcess: 0],
+         "no pid has no descendants");
+    kill(grandPID, SIGTERM);
+    [sh waitUntilExit];
+  }
+
   [arp release];
   return 0;
 }

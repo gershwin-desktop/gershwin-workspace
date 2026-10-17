@@ -322,6 +322,35 @@ static NSString *GWProcessDisplay(pid_t pid)
 #endif
 }
 
++ (BOOL)isProcess:(pid_t)pid descendantOfProcess:(pid_t)ancestor
+{
+#ifdef _WIN32
+  (void)pid;
+  (void)ancestor;
+  return NO;
+#else
+  pid_t current = pid;
+  int depth;
+
+  if (pid <= 0 || ancestor <= 0)
+    return NO;
+  /* Bounded, because a process can exit and its pid be reused while we
+   * walk, which could otherwise close a cycle. init (pid 1) ends every
+   * chain. */
+  for (depth = 0; depth < 64 && current > 1; depth++)
+    {
+      pid_t ppid;
+
+      if (GWProcessParentPID(current, &ppid) == NO)
+        return NO;
+      if (ppid == ancestor)
+        return YES;
+      current = ppid;
+    }
+  return NO;
+#endif
+}
+
 + (NSString *)displayOfProcess:(pid_t)pid
 {
   if (pid <= 0)

@@ -33,18 +33,14 @@ extern NSString * const DockAdoptionSkipsTaskbarKey; /* NSNumber BOOL */
 extern NSString * const DockAdoptionPathKey;
 extern NSString * const DockAdoptionNameKey;
 
-/* The applications of an application list as make_services writes it
- * (.GNUstepAppList, "Name.app" -> path), by name. */
-NSDictionary *DockAdoptionApplicationsInAppList(NSDictionary *appList);
-
 /* The applications to adopt, in the order their first window appears in
  * clients, at most one per bundle. applications maps bundle names to paths;
- * trackedPaths are the bundles Workspace already knows to be running. A
- * window maps to a bundle by its WM_CLASS naming the bundle (case, spaces,
- * hyphens and underscores aside) or, failing that, by its title or class
- * beginning or ending with the bundle's name as a whole word; a process
- * whose windows fit no bundle, or more than one, is left out. */
+ * classMap is GWWindowOwnershipClassMap of them; trackedPaths are the
+ * bundles Workspace already knows to be running. Nothing launched these
+ * processes from here, so a window maps to a bundle only by its WM_CLASS
+ * (GWWindowOwnership); a process whose windows fit no bundle, or more than
+ * one, is left out. */
 NSArray *DockAdoptionPlan(NSArray *clients, NSDictionary *applications,
-                          NSSet *trackedPaths);
+                          NSDictionary *classMap, NSSet *trackedPaths);
 
 #endif

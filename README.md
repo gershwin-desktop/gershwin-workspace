@@ -19,3 +19,7 @@ Optional search (database backed) and live folders.
 Workspace implements NSWorkspace, so it offers to GNUstep applications services to open files through it as well as copy and recycle operations.
 
 Workspace implements a [Spatial](https://arstechnica.com/gadgets/2003/04/finder/) mode.
+
+## Info.plist keys read by Workspace
+
+* `GSX11WindowClass` (string or array of strings): for a `.app` bundle that wraps a non-GNUstep program, the `WM_CLASS` instance or class the program's windows carry when it differs from the bundle's name (for example `vlc` for `VLC media player.app`). The Dock uses it to recognise the program's windows when it did not start the program itself, e.g. after Workspace restarted. Case, spaces, hyphens and underscores are ignored, so `Brave Origin.app` needs no key for `brave-origin`. Windows are never tied to an application by their title.

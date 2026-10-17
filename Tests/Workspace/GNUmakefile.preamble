@@ -8,6 +8,8 @@ t_GWApplicationLauncher_TOOL_LIBS += -lgnustep-gui
 t_GWApplicationLauncher_OBJC_FILES += ../../Workspace/GWScaleFactor.m
 # X11AppSupport.m talks to GNUstepGUI/GSDisplayServer and to Xlib directly.
 t_GWX11AppSupport_TOOL_LIBS += -lgnustep-gui -lX11
+# and decides which windows belong to an application through GWWindowOwnership.
+t_GWX11AppSupport_OBJC_FILES += ../../Workspace/GWWindowOwnership.m
 
 # GWArchiveOperation.m builds a progress panel from AppKit classes (never
 # actually shown - the test drives runCompress directly, not -run) and
@@ -24,6 +26,7 @@ ADDITIONAL_INCLUDE_DIRS += -I../../Workspace/Thumbnailer
 t_GWThumbnailerConcurrency_TOOL_LIBS += $(GW_FSNODE) -lgnustep-gui
 # X11AppSupport.m needs AppKit and Xlib even when only its thread is exercised.
 t_GWX11ScanThread_TOOL_LIBS += -lgnustep-gui -lX11
+t_GWX11ScanThread_OBJC_FILES += ../../Workspace/GWWindowOwnership.m
 
 # t_AppImageProbeCache and t_AppImageDirIconCycle #include
 # AppImageIconProvider.m in-process (the unit under test). Its own

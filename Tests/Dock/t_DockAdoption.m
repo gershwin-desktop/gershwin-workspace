@@ -10,6 +10,7 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 #import "DockAdoption.h"
+#import "GWWindowOwnership.h"
 
 static NSDictionary *
 win(int pid, NSString *instance, NSString *cls, NSString *title,
@@ -41,6 +42,12 @@ main(void)
     @"/System/Applications/Terminal.app", @"Terminal",
     @"/Apps/Go.app", @"Go",
     @"/Apps/Claude.app", @"Claude", nil];
+  /* The VLC wrapper declares its program's class in its Info.plist. */
+  NSDictionary *hints = [NSDictionary dictionaryWithObject:
+                           [NSArray arrayWithObject: @"vlc"]
+                                                    forKey: @"/Apps/VLC media player.app"];
+  NSDictionary *map = GWWindowOwnershipClassMap(apps, hints);
+  NSDictionary *mapWithoutHints = GWWindowOwnershipClassMap(apps, nil);
   NSSet *none = [NSSet set];
   NSArray *plan;
 
@@ -52,7 +59,7 @@ main(void)
       win(6036, @"brave-origin", @"Brave-origin", @"Notifications - Brave Origin", YES, NO),
       nil];
 
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS([plan count] == 1, "a running X11 application gets one icon");
     PASS_EQUAL([[plan lastObject] objectForKey: DockAdoptionPathKey],
                @"/home/u/Applications/Brave Origin.app",
@@ -72,7 +79,7 @@ main(void)
       win(6036, @"brave-origin", @"Brave-origin", @"b - Brave Origin", NO, NO),
       nil];
 
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS([plan count] == 1
          && [[[plan lastObject] objectForKey: DockAdoptionHiddenKey] boolValue] == NO,
          "an application with a window on screen is not hidden");
@@ -87,21 +94,39 @@ main(void)
       win(300, @"xterm", @"XTerm", @"second", NO, NO),
       nil];
 
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS_EQUAL(pathsOf(plan),
                @"/Apps/XTerm.app,/home/u/Applications/Brave Origin.app",
                "icons follow the client list, one per application");
   }
 
-  /* A class that names no bundle falls back to the Dock's name matching:
-   * the title ends with the bundle's name. */
+  /* A wrapper whose program's class differs from the bundle's name is
+   * found through the class it declares, never through the title. */
   {
     NSArray *clients = [NSArray arrayWithObjects:
       win(400, @"vlc", @"vlc", @"movie.mkv - VLC media player", NO, NO), nil];
 
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS_EQUAL(pathsOf(plan), @"/Apps/VLC media player.app",
-               "a window titled after a bundle maps to that bundle");
+               "the GSX11WindowClass hint maps the class to its bundle");
+    plan = DockAdoptionPlan(clients, apps, mapWithoutHints, none);
+    PASS([plan count] == 0,
+         "a title naming a bundle does not adopt the window for it");
+  }
+
+  /* The live case on the user's desktop: a browser page about a docked
+   * application is the browser's, not that application's. */
+  {
+    NSDictionary *more = [NSDictionary dictionaryWithObjectsAndKeys:
+      @"/home/u/Applications/Brave Origin.app", @"Brave Origin",
+      @"/home/u/Applications/Claude Desktop.app", @"Claude Desktop", nil];
+    NSArray *clients = [NSArray arrayWithObjects:
+      win(6036, @"brave-origin", @"Brave-origin",
+          @"Claude Desktop on Linux - Brave Origin", NO, NO), nil];
+
+    plan = DockAdoptionPlan(clients, more, GWWindowOwnershipClassMap(more, nil), none);
+    PASS_EQUAL(pathsOf(plan), @"/home/u/Applications/Brave Origin.app",
+               "Brave Origin is adopted, and Claude Desktop is not");
   }
 
   /* A name only counts as a whole word: "Go" is not "Google". */
@@ -109,7 +134,7 @@ main(void)
     NSArray *clients = [NSArray arrayWithObjects:
       win(500, @"google-earth", @"Google-earth", @"Google Earth", NO, NO), nil];
 
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS([plan count] == 0, "a bundle name inside a longer word does not match");
   }
 
@@ -118,7 +143,7 @@ main(void)
     NSArray *clients = [NSArray arrayWithObjects:
       win(600, @"mplayer", @"MPlayer", @"Terminal - VLC media player", NO, NO), nil];
 
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS([plan count] == 0, "an ambiguous window is left out");
   }
 
@@ -128,7 +153,7 @@ main(void)
     NSArray *clients = [NSArray arrayWithObjects:
       win(700, @"xterm", @"XTerm", @"Terminal", NO, NO), nil];
 
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS_EQUAL(pathsOf(plan), @"/Apps/XTerm.app",
                "WM_CLASS wins over a title naming another bundle");
   }
@@ -138,7 +163,7 @@ main(void)
     NSArray *clients = [NSArray arrayWithObjects:
       win(800, @"xclock", @"XClock", @"xclock", NO, NO), nil];
 
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS([plan count] == 0, "a window that maps to no bundle is skipped");
   }
 
@@ -148,7 +173,7 @@ main(void)
     NSArray *clients = [NSArray arrayWithObjects:
       win(900, @"Terminal", @"GNUstep", @"Terminal", NO, NO), nil];
 
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS([plan count] == 0, "GNUstep windows are left to the registry");
   }
 
@@ -158,13 +183,13 @@ main(void)
     NSArray *clients = [NSArray arrayWithObjects:
       win(1000, @"xterm", @"XTerm", @"tip", NO, YES), nil];
 
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS([plan count] == 0, "only taskbar windows adopt an application");
 
     clients = [NSArray arrayWithObjects:
       win(1000, @"xterm", @"XTerm", @"tip", NO, YES),
       win(1000, @"xterm", @"XTerm", @"main", YES, NO), nil];
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS([plan count] == 1
          && [[[plan lastObject] objectForKey: DockAdoptionHiddenKey] boolValue],
          "a skip-taskbar window does not keep the application from hiding");
@@ -178,7 +203,7 @@ main(void)
       win(1200, @"claude", @"Claude", @"Claude", NO, NO), nil];
     NSSet *tracked = [NSSet setWithObject: @"/Apps/XTerm.app"];
 
-    plan = DockAdoptionPlan(clients, apps, tracked);
+    plan = DockAdoptionPlan(clients, apps, map, tracked);
     PASS_EQUAL(pathsOf(plan), @"/Apps/Claude.app",
                "already tracked applications are skipped");
   }
@@ -189,24 +214,10 @@ main(void)
       win(1300, @"xterm", @"XTerm", @"one", NO, NO),
       win(1301, @"xterm", @"XTerm", @"two", NO, NO), nil];
 
-    plan = DockAdoptionPlan(clients, apps, none);
+    plan = DockAdoptionPlan(clients, apps, map, none);
     PASS([plan count] == 1
          && [[[plan lastObject] objectForKey: DockAdoptionPIDKey] intValue] == 1300,
          "one icon per application, tracking its first process");
-  }
-
-  /* The application list make_services writes maps "Name.app" to a path;
-   * its other entries (extension maps) are no applications. */
-  {
-    NSDictionary *appList = [NSDictionary dictionaryWithObjectsAndKeys:
-      @"/Apps/XTerm.app", @"XTerm.app",
-      @"/Apps/Tool.debug", @"Tool.debug",
-      [NSDictionary dictionary], @"GSExtensionsMap", nil];
-    NSDictionary *named = DockAdoptionApplicationsInAppList(appList);
-
-    PASS([named count] == 1
-         && [[named objectForKey: @"XTerm"] isEqual: @"/Apps/XTerm.app"],
-         "the bundles are read by name from the application list");
   }
 
   [arp release];

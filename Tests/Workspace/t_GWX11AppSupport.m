@@ -14,9 +14,10 @@
 
 #import <Foundation/Foundation.h>
 #import "Testing.h"
-/* X11AppSupport.m message-sends GWProcessOwnership from windowsMatchingName:,
+/* X11AppSupport.m message-sends GWProcessOwnership from windowsOfApplication:,
  * which the Objective-C runtime resolves through a class reference that must
- * still link even though this test never calls that method. */
+ * still link even though this test never calls that method; the same holds
+ * for GWWindowOwnership, linked through GNUmakefile.preamble. */
 #include "../../Workspace/GWProcessOwnership.m"
 #include "../../Workspace/X11AppSupport.m"
 

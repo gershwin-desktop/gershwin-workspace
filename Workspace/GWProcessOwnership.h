@@ -43,6 +43,11 @@ extern NSString * const GWLaunchDisplayKey;
  * wrapper's child, not under the pid the launcher reported. */
 + (BOOL)isProcess:(pid_t)pid childOfProcess:(pid_t)parent;
 
+/* Whether ancestor started pid, directly or through any number of
+ * processes in between: a wrapper script that runs a launcher that runs the
+ * program puts the windows two or more levels below the launched pid. */
++ (BOOL)isProcess:(pid_t)pid descendantOfProcess:(pid_t)ancestor;
+
 + (NSString *)displayOfProcess:(pid_t)pid;
 
 /** Owned by the current user and running on the current display/screen. */

@@ -29,6 +29,13 @@ typedef void Display;
  */
 
 @class GWLaunchedApp;
+@class GWWindowOwnership;
+
+/* The window ownership rules (GWWindowOwnership.h) for one application,
+ * with the installed bundles' WM_CLASS claims and this system's process
+ * tree.  launchedPID is 0 when the application's process is not known. */
+GWWindowOwnership *GWX11OwnershipForApplication(NSString *name, NSString *path,
+                                                pid_t launchedPID);
 
 #pragma mark - X11 Window Information
 
@@ -94,18 +101,13 @@ typedef void Display;
  * skip the taskbar. */
 - (NSArray *)windowsForPID:(pid_t)pid;
 
-/** GWX11WindowInfo for every window of another process of this user whose
- * title or class starts or ends with the name. */
-- (NSArray *)windowsMatchingName:(NSString *)name;
+/** GWX11WindowInfo for every taskbar window of another process of this
+ * user that belongs to the application (GWWindowOwnership). */
+- (NSArray *)windowsOfApplication:(GWWindowOwnership *)app;
 
-/** YES if the process, or a process it started, has a mapped window of any
- * type - utility windows and panels included, which the taskbar-minded
- * answers above leave out. */
-- (BOOL)hasMappedWindowsForProcessOrChildOf:(pid_t)pid;
-
-/** Like -windowsMatchingName:, but every mapped window counts, whether or
- * not it skips the taskbar. */
-- (NSArray *)mappedWindowsMatchingName:(NSString *)name;
+/** Like -windowsOfApplication:, but every mapped window counts, whether or
+ * not it skips the taskbar - utility windows and panels included. */
+- (NSArray *)mappedWindowsOfApplication:(GWWindowOwnership *)app;
 
 /** GWX11WindowInfo for every client window of another process of this
  * session (same user, same display), in client list order, whatever its
@@ -156,18 +158,11 @@ typedef void Display;
 - (NSArray *)windowsForPID:(pid_t)pid;
 
 /**
- * Finds windows matching a name substring (case-insensitive).
- * @param name The substring to search for in window names
+ * Finds the taskbar windows that belong to an application.
+ * @param app The application (GWX11OwnershipForApplication)
  * @return Array of GWX11WindowInfo objects
  */
-- (NSArray *)windowsMatchingName:(NSString *)name;
-
-/**
- * Finds the first window matching a name substring.
- * @param name The substring to search for
- * @return Window ID or 0 if not found
- */
-- (unsigned long)findWindowByName:(NSString *)name;
+- (NSArray *)windowsOfApplication:(GWWindowOwnership *)app;
 
 /**
  * Finds the first window owned by a specific process.
@@ -213,11 +208,11 @@ typedef void Display;
 - (void)frontmostApplicationExited:(pid_t)pid;
 
 /**
- * Activates windows matching a name substring.
- * @param name The substring to match
+ * Activates the windows that belong to an application.
+ * @param app The application
  * @return YES if at least one window was activated
  */
-- (BOOL)activateWindowsMatchingName:(NSString *)name;
+- (BOOL)activateWindowsOfApplication:(GWWindowOwnership *)app;
 
 #pragma mark Window Hide/Show (Iconify)
 
@@ -236,11 +231,11 @@ typedef void Display;
 - (BOOL)iconifyWindowsForPID:(pid_t)pid;
 
 /**
- * Iconifies windows matching a name substring.
- * @param name The substring to match
+ * Iconifies the windows that belong to an application.
+ * @param app The application
  * @return YES if at least one window was iconified
  */
-- (BOOL)iconifyWindowsMatchingName:(NSString *)name;
+- (BOOL)iconifyWindowsOfApplication:(GWWindowOwnership *)app;
 
 /**
  * Iconifies every window that no GNUstep application owns, apart from those
@@ -271,11 +266,11 @@ typedef void Display;
 - (BOOL)restoreWindowsForPID:(pid_t)pid;
 
 /**
- * Restores windows matching a name substring.
- * @param name The substring to match
+ * Restores the windows that belong to an application.
+ * @param app The application
  * @return YES if at least one window was restored
  */
-- (BOOL)restoreWindowsMatchingName:(NSString *)name;
+- (BOOL)restoreWindowsOfApplication:(GWWindowOwnership *)app;
 
 #pragma mark Window Icon Geometry
 
@@ -288,12 +283,12 @@ typedef void Display;
 - (BOOL)setIconGeometry:(NSRect)rect forPID:(pid_t)pid;
 
 /**
- * Updates _NET_WM_ICON_GEOMETRY for windows matching a name substring.
+ * Updates _NET_WM_ICON_GEOMETRY for the windows of an application.
  * @param rect The icon rectangle in root window coordinates
- * @param name The substring to match
+ * @param app The application
  * @return YES if at least one window was updated
  */
-- (BOOL)setIconGeometry:(NSRect)rect forName:(NSString *)name;
+- (BOOL)setIconGeometry:(NSRect)rect forApplication:(GWWindowOwnership *)app;
 
 #pragma mark Window State Queries
 
@@ -319,11 +314,11 @@ typedef void Display;
 - (BOOL)hasWindowsForPID:(pid_t)pid;
 
 /**
- * Checks if any window exists matching a name.
- * @param name The substring to match
+ * Checks if any window of an application exists.
+ * @param app The application
  * @return YES if at least one window exists
  */
-- (BOOL)hasWindowsMatchingName:(NSString *)name;
+- (BOOL)hasWindowsOfApplication:(GWWindowOwnership *)app;
 
 #pragma mark Window Closing
 
@@ -433,16 +428,15 @@ typedef void Display;
 + (instancetype)sharedManager;
 
 /**
- * Registers an X11 application for monitoring.
- * @param appName The application name (for window matching)
+ * Registers an X11 application for monitoring.  Its windows are those of
+ * the process and the processes it starts (GWWindowOwnership).
+ * @param appName The application name
  * @param appPath The full path to the application
  * @param pid The process ID of the launched application
- * @param windowSearchString Optional string to match window names (defaults to appName)
  */
 - (void)registerX11App:(NSString *)appName
                   path:(NSString *)appPath
-                   pid:(pid_t)pid
-    windowSearchString:(NSString *)windowSearchString;
+                   pid:(pid_t)pid;
 
 /**
  * Unregisters an X11 application.

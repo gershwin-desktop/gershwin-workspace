@@ -768,7 +768,8 @@ DockLipLightGradient(void)
     [NSNumber numberWithInt: (int)appPID], @"pid",
     [NSNumber numberWithBool: [self isLaunched]], @"launched",
     [NSNumber numberWithBool: [self isLaunching]], @"launching",
-    [NSNumber numberWithUnsignedLong: launchGeneration], @"generation", nil];
+    [NSNumber numberWithUnsignedLong: launchGeneration], @"generation",
+    ([node path] != nil ? [node path] : @""), @"path", nil];
 }
 
 - (void)refreshLaunchedStateAsync
@@ -843,6 +844,7 @@ DockLipLightGradient(void)
   pid_t pid = (pid_t)[[inputs objectForKey: @"pid"] intValue];
   BOOL wasLaunched = [[inputs objectForKey: @"launched"] boolValue];
   BOOL launchingNow = [[inputs objectForKey: @"launching"] boolValue];
+  NSString *path = [inputs objectForKey: @"path"];
 
   BOOL wantX11 = x11;
   pid_t wantPID = pid;
@@ -878,8 +880,10 @@ DockLipLightGradient(void)
     {
       /* Auto-discover X11 apps that were running before dock restart. The
        * gate above already established wasLaunched && wantPID <= 0 as the
-       * only way to reach here with wantX11 still NO. */
-      NSArray *windows = [snapshot windowsMatchingName: appName];
+       * only way to reach here with wantX11 still NO, so only a WM_CLASS
+       * can tell its windows. */
+      NSArray *windows = [snapshot windowsOfApplication:
+                            GWX11OwnershipForApplication(appName, path, 0)];
       if ([windows count] > 0)
         {
           wantX11 = YES;
@@ -901,7 +905,8 @@ DockLipLightGradient(void)
 
   if (wantPID <= 0)
     {
-      NSArray *windows = [snapshot windowsMatchingName: appName];
+      NSArray *windows = [snapshot windowsOfApplication:
+                            GWX11OwnershipForApplication(appName, path, 0)];
       if ([windows count] > 0)
         {
           wantX11 = YES;
@@ -925,12 +930,24 @@ DockLipLightGradient(void)
   hasWindows = [snapshot hasVisibleWindowsForPID: wantPID];
   if (wasLaunched && !hasWindows)
     {
-      NSArray *windows = [snapshot windowsMatchingName: appName];
-      if ([windows count] > 0)
-        {
-          wantPID = [[windows objectAtIndex: 0] ownerPID];
-          hasWindows = [snapshot hasVisibleWindowsForPID: wantPID];
-        }
+      /* While the process lives its windows are its own and those of the
+       * processes it started; once it is gone (a sudo re-exec, a restart)
+       * its successor can only be told by its WM_CLASS. */
+#ifndef _WIN32
+      BOOL launchedAlive = (wantPID > 0 && kill(wantPID, 0) == 0);
+#else
+      BOOL launchedAlive = (wantPID > 0 && GWWin32ProcessIsAlive(wantPID));
+#endif
+      NSArray *windows = [snapshot windowsOfApplication:
+                            GWX11OwnershipForApplication(appName, path,
+                                                         launchedAlive ? wantPID : 0)];
+      NSUInteger w;
+
+      if ([windows count] > 0 && launchedAlive == NO)
+        wantPID = [[windows objectAtIndex: 0] ownerPID];
+      for (w = 0; w < [windows count] && hasWindows == NO; w++)
+        hasWindows = [snapshot hasVisibleWindowsForPID:
+                                 [[windows objectAtIndex: w] ownerPID]];
       /* An application that closed its last window is still running: it
        * keeps its dot, and a click brings it to the front with its menu.
        * The pid is one of this display's windows' or our own launch's, and
@@ -960,8 +977,8 @@ DockLipLightGradient(void)
 
 /* Worker thread, for an icon that bounces: the launch is over for the user
  * the moment any window of the app is on the screen, so this looks for one
- * by the launch pid (or a child it started) and by the app's name, and
- * counts utility windows and panels too - an app such as Whisper whose only
+ * of the launch pid (or a process it started), or by WM_CLASS while no pid
+ * is known, and counts utility windows and panels too - an app such as Whisper whose only
  * window floats is otherwise never seen. Waiting for the did-launch
  * notification instead kept the icon bouncing for as long as that
  * notification was late, or for good when it was lost. */
@@ -970,21 +987,15 @@ DockLipLightGradient(void)
 {
   BOOL x11 = [[inputs objectForKey: @"x11"] boolValue];
   pid_t pid = (pid_t)[[inputs objectForKey: @"pid"] intValue];
-  BOOL seen = [snapshot hasMappedWindowsForProcessOrChildOf: pid];
+  NSString *path = [inputs objectForKey: @"path"];
+  NSArray *windows = [snapshot mappedWindowsOfApplication:
+                        GWX11OwnershipForApplication(appName, path, pid)];
+  BOOL seen = ([windows count] > 0);
 
-  if (seen == NO)
-    {
-      NSArray *windows = [snapshot mappedWindowsMatchingName: appName];
-
-      if ([windows count] > 0)
-        {
-          seen = YES;
-          /* Only a launch that has no pid of its own learns one here; a
-           * known pid stays, the name match may be a helper of the app. */
-          if (pid <= 0)
-            pid = [[windows objectAtIndex: 0] ownerPID];
-        }
-    }
+  /* Only a launch that has no pid of its own learns one here; a known pid
+   * stays, the window may be one of a process it started. */
+  if (seen && pid <= 0)
+    pid = [[windows objectAtIndex: 0] ownerPID];
 
   [self postLaunchedStateResult:
     [NSDictionary dictionaryWithObjectsAndKeys:
@@ -1348,7 +1359,8 @@ DockLipLightGradient(void)
            * and redundant process creation when appTerminated: was called
            * for the original PID but the app itself lives on. */
           GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
-          NSArray *windows = [wm windowsMatchingName: appName];
+          NSArray *windows = [wm windowsOfApplication:
+                                GWX11OwnershipForApplication(appName, nodePath, 0)];
           if ([windows count] > 0) {
             GWX11WindowInfo *info = [windows objectAtIndex: 0];
             isX11OnlyApp = YES;
@@ -1368,10 +1380,11 @@ DockLipLightGradient(void)
 #else
           if (GWWin32ProcessIsAlive(appPID) == NO) {
 #endif
-            /* Process is dead — try to rediscover it by name in X11.
+            /* Process is dead - try to rediscover it by its WM_CLASS.
              * Handles sudo re-exec (new PID), crash+restart, etc. */
             GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
-            NSArray *windows = [wm windowsMatchingName: appName];
+            NSArray *windows = [wm windowsOfApplication:
+                                  GWX11OwnershipForApplication(appName, nodePath, 0)];
             if ([windows count] > 0) {
               GWX11WindowInfo *info = [windows objectAtIndex: 0];
               isX11OnlyApp = YES;

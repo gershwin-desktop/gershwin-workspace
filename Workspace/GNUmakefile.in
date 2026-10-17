@@ -102,6 +102,7 @@ Workspace+UITesting.m \
 X11AppSupport.m \
 GWProcessMonitor.m \
 GWProcessOwnership.m \
+GWWindowOwnership.m \
 GWSingleInstance.m \
 GWStationery.m \
 GWWin32Process.m \

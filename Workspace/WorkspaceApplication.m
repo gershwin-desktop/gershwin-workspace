@@ -48,6 +48,7 @@
 #import "X11AppSupport.h"
 #import "GWApplicationLauncher.h"
 #import "GWProcessOwnership.h"
+#import "GWWindowOwnership.h"
 #ifdef _WIN32
 #import "GWWin32Process.h"
 #endif
@@ -645,9 +646,12 @@
       hasWindows = [wm hasWindowsForPID: knownPID];
     }
     
-    /* Priority 2: Fall back to name matching */
+    /* Then a process it started, or with no pid known its WM_CLASS; a
+     * window that only carries the name in its title is another program's
+     * (a browser showing a page about the app). */
     if (!hasWindows) {
-      hasWindows = [wm hasWindowsMatchingName: appName];
+      hasWindows = [wm hasWindowsOfApplication:
+                       GWX11OwnershipForApplication(appName, appPath, knownPID)];
     }
     
     if (hasWindows) {
@@ -713,11 +717,9 @@
      * will be determined in appDidLaunch: where the DO connection status
      * is known. */
     if (pid > 0) {
-      [app setWindowSearchString: appName];
       [[GWX11AppManager sharedManager] registerX11App: appName
                                                  path: appPath
-                                                  pid: pid
-                                   windowSearchString: appName];
+                                                  pid: pid];
     }
   }
   
@@ -808,11 +810,9 @@
      * call (which would trigger connectApplication: runloop spinning). */
     if (dockPid > 0 && ![app isX11App]) {
       [app setIsX11App: YES];
-      [app setWindowSearchString: name];
       [[GWX11AppManager sharedManager] registerX11App: name
                                                  path: path
-                                                  pid: dockPid
-                                   windowSearchString: name];
+                                                  pid: dockPid];
     }
   }
 }
@@ -1022,8 +1022,9 @@
     shouldShowDot = YES;
   }
   
-  /* Priority 2: Fall back to name matching */
-  if (!shouldShowDot && [wm hasWindowsMatchingName: name]) {
+  /* Then a process it started, or with no pid known its WM_CLASS. */
+  if (!shouldShowDot
+      && [wm hasWindowsOfApplication: GWX11OwnershipForApplication(name, path, appPID)]) {
     shouldShowDot = YES;
   }
 
@@ -1097,7 +1098,10 @@
 
 #pragma mark - X11 Activation (non-GNUstep apps)
 
-- (BOOL)_x11ActivateForApp:(GWLaunchedApp *)app name:(NSString *)name
+- (BOOL)_x11ActivateForApp:(GWLaunchedApp *)app
+                      name:(NSString *)name
+                      path:(NSString *)path
+                       pid:(pid_t)knownPID
 {
   GWX11WindowManager *wm = [GWX11WindowManager sharedManager];
   
@@ -1106,8 +1110,8 @@
     return [[GWX11AppManager sharedManager] activateX11App: name];
   }
   
-  pid_t pid = 0;
-  if ([app identifier]) pid = (pid_t)[[app identifier] intValue];
+  pid_t pid = knownPID;
+  if (pid <= 0 && [app identifier]) pid = (pid_t)[[app identifier] intValue];
   if (pid <= 0 && [app task]) {
     @try { pid = [[app task] processIdentifier]; } @catch (id ex) { pid = 0; }
   }
@@ -1119,7 +1123,8 @@
   }
   
   if (name) {
-    return [wm activateWindowsMatchingName: name];
+    return [wm activateWindowsOfApplication:
+                 GWX11OwnershipForApplication(name, path, pid)];
   }
   
   return NO;
@@ -1203,7 +1208,8 @@
     }
 
     if (!hasWindows && name) {
-      NSArray *windows = [wm windowsMatchingName: name];
+      NSArray *windows = [wm windowsOfApplication:
+                               GWX11OwnershipForApplication(name, path, appPID)];
       hasWindows = ([windows count] > 0);
       for (GWX11WindowInfo *info in windows) {
         if ([info isIconified]) {
@@ -1219,7 +1225,8 @@
           return;
         }
       } else if (name && [name length] > 0) {
-        if ([wm iconifyWindowsMatchingName: name]) {
+        if ([wm iconifyWindowsOfApplication:
+                  GWX11OwnershipForApplication(name, path, 0)]) {
           return;
         }
       }
@@ -1238,7 +1245,7 @@
       if (appPID > 0 && [wm activateWindowsForPID:appPID]) {
         return;
       }
-      [self _x11ActivateForApp: app name: name];
+      [self _x11ActivateForApp: app name: name path: path pid: appPID];
     }
   } else {
     /* Fallback: try PID first if provided, then by name */
@@ -1246,7 +1253,7 @@
       return;
     }
     [self makeFrontmostIfWindowless: nil pid: pid];
-    [self _x11ActivateForApp: nil name: name];
+    [self _x11ActivateForApp: nil name: name path: path pid: pid];
   }
 }
 
@@ -1335,13 +1342,13 @@
       [[dtopManager dock] appDidUnhide: path appName: name];
     }
     if ([app application] == nil) {
-      [self _x11ActivateForApp: app name: name];
+      [self _x11ActivateForApp: app name: name path: path pid: 0];
     } else {
       /* GNUstep app: activate with full DO+X11 window raising */
       [app activateApplication];
     }
   } else if (!app) {
-    [self _x11ActivateForApp: nil name: name];
+    [self _x11ActivateForApp: nil name: name path: path pid: 0];
   }
 }
 
@@ -1567,28 +1574,6 @@
 /* The application list NSWorkspace resolves names with
  * (-fullPathForApplication:), read from where libs-gui reads it, since
  * NSWorkspace does not hand out the whole list. */
-- (NSDictionary *)applicationList
-{
-  NSString *path = [[[NSSearchPathForDirectoriesInDomains(NSLibraryDirectory,
-                                                          NSUserDomainMask, YES)
-                       objectAtIndex: 0]
-                      stringByAppendingPathComponent: @"Services"]
-                     stringByAppendingPathComponent: @".GNUstepAppList"];
-  NSData *data = [NSData dataWithContentsOfFile: path];
-  id list = nil;
-
-  if (data != nil)
-    list = [NSDeserializer deserializePropertyListFromData: data
-                                         mutableContainers: NO];
-  if ([list isKindOfClass: [NSDictionary class]] == NO)
-    {
-      NSLog(@"Dock: no application list at %@, running applications "
-            @"without a GNUstep registry entry are not adopted", path);
-      return nil;
-    }
-  return list;
-}
-
 /* Worker thread (the Dock's launch-refresh thread and its X connection). */
 - (void)adoptionScanWorker:(NSSet *)trackedPaths
 {
@@ -1619,9 +1604,14 @@
       [clients addObject: client];
     }
 
-  applications = DockAdoptionApplicationsInAppList([self applicationList]);
+  applications = GWWindowOwnershipInstalledApplications();
+  if (applications == nil)
+    NSLog(@"Dock: no application list, running applications without a "
+          @"GNUstep registry entry are not adopted");
   [self performSelectorOnMainThread: @selector(applyAdoptionPlan:)
-                         withObject: DockAdoptionPlan(clients, applications, trackedPaths)
+                         withObject: DockAdoptionPlan(clients, applications,
+                                                      GWWindowOwnershipInstalledClassMap(),
+                                                      trackedPaths)
                       waitUntilDone: NO];
   [pool release];
 }
@@ -1652,8 +1642,7 @@
       [dock setAppIsX11Only: YES forPath: path name: name];
       app = [GWLaunchedApp x11AppWithPath: path
                                      name: name
-                                      pid: pid
-                       windowSearchString: name];
+                                      pid: pid];
       if (app == nil)
         continue;
       [launchedApps addObject: app];
@@ -1772,7 +1761,6 @@
 + (id)x11AppWithPath:(NSString *)apath
                 name:(NSString *)aname
                  pid:(pid_t)pid
-  windowSearchString:(NSString *)searchString
 {
   GWLaunchedApp *app = [GWLaunchedApp new];
   
@@ -1780,7 +1768,6 @@
   [app setName: aname];
   [app setIdentifier: [NSNumber numberWithInt: pid]];
   [app setIsX11App: YES];
-  [app setWindowSearchString: searchString ? searchString : aname];
   
   if (([app name] == nil) || ([app path] == nil) || (pid <= 0)) {
     DESTROY (app);
@@ -1790,8 +1777,7 @@
   /* Register with the X11 app manager for process monitoring and window management */
   [[GWX11AppManager sharedManager] registerX11App: aname
                                              path: apath
-                                              pid: pid
-                               windowSearchString: searchString ? searchString : aname];
+                                              pid: pid];
   
   return AUTORELEASE (app);
 }
@@ -1814,7 +1800,6 @@
   RELEASE (path);
   RELEASE (identifier);
   RELEASE (task);
-  RELEASE (windowSearchString);
     
   [super dealloc];
 }
@@ -1833,7 +1818,6 @@
     active = NO;
     hidden = NO;
     isX11App = NO;
-    windowSearchString = nil;
     
     gw = [Workspace gworkspace];
     nc = [NSNotificationCenter defaultCenter];      
@@ -2318,16 +2302,6 @@
 - (void)setIsX11App:(BOOL)value
 {
   isX11App = value;
-}
-
-- (NSString *)windowSearchString
-{
-  return windowSearchString;
-}
-
-- (void)setWindowSearchString:(NSString *)searchString
-{
-  ASSIGN(windowSearchString, searchString);
 }
 
 @end

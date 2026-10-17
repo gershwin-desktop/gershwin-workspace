@@ -6,6 +6,7 @@
 
 #import "X11AppSupport.h"
 #import "GWProcessOwnership.h"
+#import "GWWindowOwnership.h"
 #import <AppKit/AppKit.h>
 #import <GNUstepGUI/GSDisplayServer.h>
 
@@ -150,6 +151,30 @@ void GWInstallX11IOErrorLogger(void)
 #endif /* !_WIN32 */
 
 #pragma mark - GWX11WindowInfo Implementation
+
+static BOOL
+GWX11ProcessDescends(pid_t pid, pid_t ancestor)
+{
+    return [GWProcessOwnership isProcess:pid descendantOfProcess:ancestor];
+}
+
+GWWindowOwnership *
+GWX11OwnershipForApplication(NSString *name, NSString *path, pid_t launchedPID)
+{
+    NSDictionary *map = GWWindowOwnershipInstalledClassMap();
+    /* The class map already carries the declared classes of every
+     * installed bundle; only one it does not list is read here. */
+    NSArray *hints = (path != nil && [[map allValues] containsObject:path] == NO)
+                     ? GWWindowOwnershipClassHintsForBundle(path) : nil;
+
+    return AUTORELEASE([[GWWindowOwnership alloc]
+                         initWithName:name
+                                 path:path
+                          launchedPID:launchedPID
+                           classHints:hints
+                             classMap:map
+                             ancestry:GWX11ProcessDescends]);
+}
 
 @implementation GWX11WindowInfo
 
@@ -508,39 +533,9 @@ static NSString * const GWX11ThreadDisplayKey = @"GWX11WindowManagerDisplay";
     return [[self clientSnapshot] windowsForPID:pid];
 }
 
-/*
- * Returns YES if 'word' appears as a whole word in 'str'
- * (case-insensitive).  A whole word means it is either at the start of str
- * or preceded by a non-alphanumeric character, and either at the end of str
- * or followed by a non-alphanumeric character.  This prevents matching the
- * app name embedded inside a longer word (e.g. "CreateLiveMediaAssistant"
- * inside "CreateLiveMediaAssistantBuild").
- */
-static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
+- (NSArray *)windowsOfApplication:(GWWindowOwnership *)app
 {
-    if ([str length] < [word length])
-        return NO;
-    // Match at start (case-insensitive)
-    if ([[str substringToIndex: [word length]] caseInsensitiveCompare: word] == NSOrderedSame)
-        return YES;
-    // Match at end (case-insensitive)
-    if ([[str substringFromIndex: [str length] - [word length]] caseInsensitiveCompare: word] == NSOrderedSame)
-        return YES;
-    return NO;
-}
-
-- (NSArray *)windowsMatchingName:(NSString *)name
-{
-    return [[self clientSnapshot] windowsMatchingName:name];
-}
-
-- (unsigned long)findWindowByName:(NSString *)name
-{
-    NSArray *windows = [self windowsMatchingName:name];
-    if ([windows count] > 0) {
-        return [[windows objectAtIndex:0] windowID];
-    }
-    return 0;
+    return [[self clientSnapshot] windowsOfApplication:app];
 }
 
 - (unsigned long)findWindowByPID:(pid_t)pid
@@ -670,9 +665,9 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return success;
 }
 
-- (BOOL)activateWindowsMatchingName:(NSString *)name
+- (BOOL)activateWindowsOfApplication:(GWWindowOwnership *)app
 {
-    NSArray *windows = [self windowsMatchingName:name];
+    NSArray *windows = [self windowsOfApplication:app];
     BOOL success = NO;
     
     for (GWX11WindowInfo *info in windows) {
@@ -721,9 +716,9 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return success;
 }
 
-- (BOOL)iconifyWindowsMatchingName:(NSString *)name
+- (BOOL)iconifyWindowsOfApplication:(GWWindowOwnership *)app
 {
-    NSArray *windows = [self windowsMatchingName:name];
+    NSArray *windows = [self windowsOfApplication:app];
     BOOL success = NO;
     
     for (GWX11WindowInfo *info in windows) {
@@ -853,9 +848,9 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return success;
 }
 
-- (BOOL)restoreWindowsMatchingName:(NSString *)name
+- (BOOL)restoreWindowsOfApplication:(GWWindowOwnership *)app
 {
-    NSArray *windows = [self windowsMatchingName:name];
+    NSArray *windows = [self windowsOfApplication:app];
     BOOL success = NO;
     
     for (GWX11WindowInfo *info in windows) {
@@ -941,9 +936,10 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return success;
 }
 
-- (BOOL)setIconGeometry:(NSRect)rect forName:(NSString *)name
+- (BOOL)setIconGeometry:(NSRect)rect forApplication:(GWWindowOwnership *)app
 {
-    if (!name || [name length] == 0) return NO;
+    NSArray *windows = [self windowsOfApplication:app];
+    if ([windows count] == 0) return NO;
 
     Display *dpy = [self openDisplay];
     if (!dpy) return NO;
@@ -952,42 +948,21 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 
     @try {
         Atom iconGeometry = XInternAtom(dpy, "_NET_WM_ICON_GEOMETRY", False);
-        unsigned long count = 0;
-        Window *clients = [self getClientList:dpy count:&count];
         NSSet *live = [self liveMiniatureWindows:dpy];
+        long data[4];
 
-        if (clients) {
-            for (unsigned long i = 0; i < count; i++) {
-                NSString *winName = [self getWindowName:dpy window:clients[i]];
-                NSString *winClass = [self getWindowClass:dpy window:clients[i]];
-
-                BOOL matches = NO;
-                if (winName && [winName rangeOfString:name options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                    matches = YES;
-                } else if (winClass && [winClass rangeOfString:name options:NSCaseInsensitiveSearch].location != NSNotFound) {
-                    matches = YES;
-                }
-
-                if (!matches) {
-                    continue;
-                }
-                if ([live containsObject:[NSNumber numberWithUnsignedLong:clients[i]]]) {
-                    continue;
-                }
-
-                long data[4];
-                data[0] = (long)llround(rect.origin.x);
-                data[1] = (long)llround(rect.origin.y);
-                data[2] = (long)llround(rect.size.width);
-                data[3] = (long)llround(rect.size.height);
-
-                XChangeProperty(dpy, clients[i], iconGeometry, XA_CARDINAL, 32,
-                                PropModeReplace, (unsigned char *)data, 4);
-                success = YES;
+        data[0] = (long)llround(rect.origin.x);
+        data[1] = (long)llround(rect.origin.y);
+        data[2] = (long)llround(rect.size.width);
+        data[3] = (long)llround(rect.size.height);
+        for (GWX11WindowInfo *info in windows) {
+            if ([live containsObject:[NSNumber numberWithUnsignedLong:info.windowID]]) {
+                continue;
             }
-            XFree(clients);
+            XChangeProperty(dpy, (Window)info.windowID, iconGeometry, XA_CARDINAL, 32,
+                            PropModeReplace, (unsigned char *)data, 4);
+            success = YES;
         }
-
         XFlush(dpy);
     }
     @finally {
@@ -1045,9 +1020,9 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return [[self clientSnapshot] hasVisibleWindowsForPID:pid];
 }
 
-- (BOOL)hasWindowsMatchingName:(NSString *)name
+- (BOOL)hasWindowsOfApplication:(GWWindowOwnership *)app
 {
-    return [[self windowsMatchingName:name] count] > 0;
+    return [[self windowsOfApplication:app] count] > 0;
 }
 
 #pragma mark Window Closing
@@ -1506,42 +1481,24 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
     return windows;
 }
 
-- (BOOL)hasMappedWindowsForProcessOrChildOf:(pid_t)pid
+- (NSArray *)windowsOfApplication:(GWWindowOwnership *)app
 {
-    if (pid <= 0) {
-        return NO;
-    }
-    [self load];
-    for (GWX11ClientRecord *rec in clients) {
-        if (rec->pid <= 0 || ![self isViewable:rec]) {
-            continue;
-        }
-        if (rec->pid == pid
-            || [GWProcessOwnership isProcess:rec->pid childOfProcess:pid]) {
-            return YES;
-        }
-    }
-    return NO;
+    return [self windowsOfApplication:app mappedOnly:NO];
 }
 
-- (NSArray *)windowsMatchingName:(NSString *)name
+- (NSArray *)mappedWindowsOfApplication:(GWWindowOwnership *)app
 {
-    return [self windowsMatchingName:name mappedOnly:NO];
-}
-
-- (NSArray *)mappedWindowsMatchingName:(NSString *)name
-{
-    return [self windowsMatchingName:name mappedOnly:YES];
+    return [self windowsOfApplication:app mappedOnly:YES];
 }
 
 /* mappedOnly answers "is the app on the screen", so a window that skips the
  * taskbar (a utility window, a floating panel) counts as long as it is
  * mapped; otherwise only taskbar windows count, mapped or not, since those
  * are what activating the app brings forward. */
-- (NSArray *)windowsMatchingName:(NSString *)name mappedOnly:(BOOL)mappedOnly
+- (NSArray *)windowsOfApplication:(GWWindowOwnership *)app mappedOnly:(BOOL)mappedOnly
 {
     NSMutableArray *windows = [NSMutableArray array];
-    if ([name length] == 0) {
+    if (app == nil) {
         return windows;
     }
     [self load];
@@ -1558,11 +1515,15 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
         if (rec->workspaceWindow) {
             continue;
         }
-        BOOL matches = (rec->name != nil && stringStartsOrEndsWith(rec->name, name))
-                       || (rec->className != nil && stringStartsOrEndsWith(rec->className, name));
+        if (![app ownsWindowPID:rec->pid
+                       instance:rec->instanceName
+                    windowClass:rec->className
+                          title:rec->name]) {
+            continue;
+        }
         /* Other users' windows on this display are not this session's
          * applications. */
-        if (matches && [GWProcessOwnership isProcessOwnedByCurrentUser:rec->pid]) {
+        if ([GWProcessOwnership isProcessOwnedByCurrentUser:rec->pid]) {
             [windows addObject:[self infoForRecord:rec]];
         }
     }
@@ -1614,7 +1575,6 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 {
     NSString *appName;
     NSString *appPath;
-    NSString *windowSearchString;
     pid_t pid;
     BOOL hasWindowAppeared;
     NSUInteger windowScanCount;
@@ -1622,7 +1582,6 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 }
 @property (nonatomic, copy) NSString *appName;
 @property (nonatomic, copy) NSString *appPath;
-@property (nonatomic, copy) NSString *windowSearchString;
 @property (nonatomic, assign) pid_t pid;
 @property (nonatomic, assign) BOOL hasWindowAppeared;
 /* How often the windows of this app have been looked for, and when to look
@@ -1632,7 +1591,7 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
 @end
 
 @implementation GWX11AppInfo
-@synthesize appName, appPath, windowSearchString, pid, hasWindowAppeared;
+@synthesize appName, appPath, pid, hasWindowAppeared;
 @synthesize windowScanCount, nextWindowScan;
 
 /* An app whose window has not turned up after this many attempts is not
@@ -1640,8 +1599,8 @@ static BOOL stringStartsOrEndsWith(NSString *str, NSString *word)
  * at attempt 6 (about 15.5s in), so 20 attempts is roughly two and a half
  * minutes of trying - generous for a slow-starting GUI, past which
  * continuing to scan only pays an X round trip for a program that has
- * none (a headless helper, a tray-only client, or one whose window carries
- * nothing -windowsMatchingName: can recognise). */
+ * none (a headless helper, a tray-only client, or one whose windows come
+ * from a process it did not start). */
 static const NSUInteger GWX11MaxWindowScanAttempts = 20;
 
 /* Looking for the windows of an app costs a round trip to the X server per
@@ -1671,7 +1630,6 @@ static const NSUInteger GWX11MaxWindowScanAttempts = 20;
 {
     RELEASE(appName);
     RELEASE(appPath);
-    RELEASE(windowSearchString);
     [super dealloc];
 }
 @end
@@ -1802,7 +1760,7 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (void)monitorTimerFired:(NSTimer *)timer
 {
     /* Snapshot the registered apps on the main thread, then run the window
-     * scans on a worker thread.  windowsForPID:/windowsMatchingName: open X
+     * scans on a worker thread.  windowsForPID:/windowsOfApplication: open X
      * connections and issue synchronous round-trips per window; done on the
      * main thread they can wedge the app under window churn (X11
      * self-deadlock, the same class of bug as the DockIcon refresh). */
@@ -1832,7 +1790,6 @@ static GWX11AppManager *sharedX11AppManager = nil;
         [snapshot addObject: [NSDictionary dictionaryWithObjectsAndKeys:
             info.appName ?: @"", @"name",
             info.appPath ?: @"", @"path",
-            info.windowSearchString ?: @"", @"search",
             [NSNumber numberWithInt: (int)info.pid], @"pid",
             [NSNumber numberWithBool: info.hasWindowAppeared], @"appeared",
             [NSNumber numberWithBool: scanWindows], @"scanwindows", nil]];
@@ -1922,10 +1879,10 @@ static GWX11AppManager *sharedX11AppManager = nil;
             && [[snap objectForKey: @"scanwindows"] boolValue]) {
             NSArray *found = [windows windowsForPID:pid];
             if ([found count] == 0) {
-                NSString *search = [snap objectForKey: @"search"];
-                if ([search length] > 0) {
-                    found = [windows windowsMatchingName:search];
-                }
+                /* A wrapper's program shows its windows under a process
+                 * the launched one started. */
+                found = [windows windowsOfApplication:
+                         GWX11OwnershipForApplication(appName, appPath, pid)];
             }
             if ([found count] > 0) {
                 [appeared addObject: [NSDictionary dictionaryWithObjectsAndKeys:
@@ -1965,7 +1922,6 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (void)registerX11App:(NSString *)appName
                   path:(NSString *)appPath
                    pid:(pid_t)pid
-    windowSearchString:(NSString *)searchString
 {
     if (!appName || !appPath || pid <= 0) return;
     /* Workspace turns up in its own launch notifications. Watching for our
@@ -1977,7 +1933,6 @@ static GWX11AppManager *sharedX11AppManager = nil;
     info.appName = appName;
     info.appPath = appPath;
     info.pid = pid;
-    info.windowSearchString = searchString ? searchString : appName;
     info.hasWindowAppeared = NO;
     
     [x11Apps setObject:info forKey:appName];
@@ -2014,8 +1969,9 @@ static GWX11AppManager *sharedX11AppManager = nil;
         return YES;
     }
     
-    /* Priority 2: name/class matching (fallback) */
-    return [wm activateWindowsMatchingName:info.windowSearchString];
+    /* Then the windows of the processes it started. */
+    return [wm activateWindowsOfApplication:
+            GWX11OwnershipForApplication(info.appName, info.appPath, info.pid)];
 }
 
 - (BOOL)hideX11App:(NSString *)appName
@@ -2029,7 +1985,8 @@ static GWX11AppManager *sharedX11AppManager = nil;
         return YES;
     }
     
-    return [wm iconifyWindowsMatchingName:info.windowSearchString];
+    return [wm iconifyWindowsOfApplication:
+            GWX11OwnershipForApplication(info.appName, info.appPath, info.pid)];
 }
 
 - (BOOL)unhideX11App:(NSString *)appName
@@ -2043,7 +2000,8 @@ static GWX11AppManager *sharedX11AppManager = nil;
         return YES;
     }
     
-    return [wm restoreWindowsMatchingName:info.windowSearchString];
+    return [wm restoreWindowsOfApplication:
+            GWX11OwnershipForApplication(info.appName, info.appPath, info.pid)];
 }
 
 - (BOOL)x11AppHasVisibleWindows:(NSString *)appName
@@ -2060,9 +2018,10 @@ static GWX11AppManager *sharedX11AppManager = nil;
         windows = [wm windowsForPID:info.pid];
     }
     
-    /* Priority 2: name/class matching */
-    if ([windows count] == 0 && info.windowSearchString) {
-        windows = [wm windowsMatchingName:info.windowSearchString];
+    /* Then the windows of the processes it started. */
+    if ([windows count] == 0) {
+        windows = [wm windowsOfApplication:
+                   GWX11OwnershipForApplication(info.appName, info.appPath, info.pid)];
     }
     
     for (GWX11WindowInfo *winInfo in windows) {
@@ -2272,14 +2231,9 @@ static GWX11WindowManager *sharedWindowManager = nil;
     return [NSArray array];
 }
 
-- (NSArray *)windowsMatchingName:(NSString *)name
+- (NSArray *)windowsOfApplication:(GWWindowOwnership *)app
 {
     return [NSArray array];
-}
-
-- (unsigned long)findWindowByName:(NSString *)name
-{
-    return 0;
 }
 
 - (unsigned long)findWindowByPID:(pid_t)pid
@@ -2306,7 +2260,7 @@ static GWX11WindowManager *sharedWindowManager = nil;
     return NO;
 }
 
-- (BOOL)activateWindowsMatchingName:(NSString *)name
+- (BOOL)activateWindowsOfApplication:(GWWindowOwnership *)app
 {
     return NO;
 }
@@ -2321,7 +2275,7 @@ static GWX11WindowManager *sharedWindowManager = nil;
     return NO;
 }
 
-- (BOOL)iconifyWindowsMatchingName:(NSString *)name
+- (BOOL)iconifyWindowsOfApplication:(GWWindowOwnership *)app
 {
     return NO;
 }
@@ -2346,7 +2300,7 @@ static GWX11WindowManager *sharedWindowManager = nil;
     return NO;
 }
 
-- (BOOL)restoreWindowsMatchingName:(NSString *)name
+- (BOOL)restoreWindowsOfApplication:(GWWindowOwnership *)app
 {
     return NO;
 }
@@ -2356,7 +2310,7 @@ static GWX11WindowManager *sharedWindowManager = nil;
     return NO;
 }
 
-- (BOOL)setIconGeometry:(NSRect)rect forName:(NSString *)name
+- (BOOL)setIconGeometry:(NSRect)rect forApplication:(GWWindowOwnership *)app
 {
     return NO;
 }
@@ -2376,7 +2330,7 @@ static GWX11WindowManager *sharedWindowManager = nil;
     return NO;
 }
 
-- (BOOL)hasWindowsMatchingName:(NSString *)name
+- (BOOL)hasWindowsOfApplication:(GWWindowOwnership *)app
 {
     return NO;
 }
@@ -2472,7 +2426,6 @@ static GWX11AppManager *sharedX11AppManager = nil;
 - (void)registerX11App:(NSString *)appName
                   path:(NSString *)appPath
                    pid:(pid_t)pid
-    windowSearchString:(NSString *)windowSearchString
 {
     static BOOL warned = NO;
 
@@ -2566,17 +2519,12 @@ static GWX11AppManager *sharedX11AppManager = nil;
     return [NSArray array];
 }
 
-- (NSArray *)windowsMatchingName:(NSString *)name
+- (NSArray *)windowsOfApplication:(GWWindowOwnership *)app
 {
     return [NSArray array];
 }
 
-- (BOOL)hasMappedWindowsForProcessOrChildOf:(pid_t)pid
-{
-    return NO;
-}
-
-- (NSArray *)mappedWindowsMatchingName:(NSString *)name
+- (NSArray *)mappedWindowsOfApplication:(GWWindowOwnership *)app
 {
     return [NSArray array];
 }
