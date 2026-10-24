@@ -36,6 +36,9 @@
 /* Watches sent to fswatcher in one run-loop pass. */
 #define GIT_WATCH_SLICE 200
 
+/* Seconds the watches of a repository stay after its last icon went. */
+#define GIT_WATCH_LINGER 30.0
+
 @implementation GitContextMenu
 
 - (id)init
@@ -2202,11 +2205,19 @@
   [watchLock lock];
   NSNumber *refsNum = [repoRefcounts objectForKey: root];
   NSUInteger refs = refsNum ? [refsNum unsignedIntegerValue] : 0;
-  BOOL first = (refs == 0);
+  /* A repository whose last icon went a moment ago still has its watches
+     (see -stopWatchingNode:); only one never watched is walked. */
+  BOOL first = (refsNum == nil);
   [repoRefcounts setObject: [NSNumber numberWithUnsignedInteger: refs + 1]
                      forKey: root];
   [watchLock unlock];
 
+  if (refsNum != nil && refs == 0)
+    {
+      [NSObject cancelPreviousPerformRequestsWithTarget: self
+                                               selector: @selector (releaseIdleRepo:)
+                                                 object: root];
+    }
   if (first)
     {
       [self addWatchersForRepoRoot: root];
@@ -2228,9 +2239,14 @@
   NSUInteger refs = refsNum ? [refsNum unsignedIntegerValue] : 0;
   if (refs <= 1)
     {
-      [repoRefcounts removeObjectForKey: root];
+      /* Switching a window to another view makes all its icons anew, which
+         used to drop and re-create every watch of every checkout; the
+         watches stay a while, in case the icons come back. */
+      [repoRefcounts setObject: [NSNumber numberWithUnsignedInteger: 0] forKey: root];
       [watchLock unlock];
-      [self removeWatchersForRepoRoot: root];
+      [self performSelector: @selector (releaseIdleRepo:)
+                 withObject: root
+                 afterDelay: GIT_WATCH_LINGER];
     }
   else
     {
@@ -2238,6 +2254,21 @@
                         forKey: root];
       [watchLock unlock];
     }
+}
+
+/* The watches of a repository that has had no icon for GIT_WATCH_LINGER
+ * seconds go. */
+- (void)releaseIdleRepo:(NSString *)root
+{
+  BOOL idle;
+
+  [watchLock lock];
+  idle = ([[repoRefcounts objectForKey: root] unsignedIntegerValue] == 0);
+  if (idle)
+    [repoRefcounts removeObjectForKey: root];
+  [watchLock unlock];
+  if (idle)
+    [self removeWatchersForRepoRoot: root];
 }
 
 /* Connect to the shared fswatcher DO service (launching it if necessary) on a
