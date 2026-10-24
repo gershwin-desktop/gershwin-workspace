@@ -86,6 +86,7 @@
   RELEASE (labelText);
   RELEASE (reflection);
   RELEASE (reflectionSource);
+  RELEASE (footingSource);
   RELEASE (highlightColor);
   RELEASE (darkerColor);
   RELEASE (highlightImage);
@@ -189,10 +190,32 @@
 
 - (NSRect)imageRect
 {
-  NSRect bounds = [self bounds];
-  CGFloat side = (magnifiedSize > 0.0) ? magnifiedSize : iconSize;
+  return [self imageRectForImage: [self shownImage]];
+}
 
-  return DockIconImageRect(bounds, side, [self shelfLift], [self scaleFactor]);
+/* The image the icon shows now. */
+- (NSImage *)shownImage
+{
+  /* When dragging mountpoints only, show Eject icon; otherwise show Trash icon */
+  if (isTrashIcon && isDragMountpointOnly && ejectIcon)
+    return ejectIcon;
+  if (isTrashIcon && trashFull)
+    return trashFullIcon;
+  return icon;
+}
+
+/* Where image is drawn: on the shelf its artwork stands on the shelf's
+ * stand line, whether the icon rests or is magnified. */
+- (NSRect)imageRectForImage:(NSImage *)image
+{
+  CGFloat side = (magnifiedSize > 0.0) ? magnifiedSize : iconSize;
+  DockShelf shelf;
+
+  if ([self getShelf: &shelf] == NO)
+    return DockIconImageRect([self bounds], side, 0.0, NULL,
+                             [self scaleFactor]);
+  return DockIconImageRect([self bounds], side, [self footingOfImage: image],
+                           &shelf, [self scaleFactor]);
 }
 
 - (CGFloat)scaleFactor
@@ -206,17 +229,6 @@
 {
   return [container respondsToSelector: @selector(getShelf:forView:)]
          && [(Dock *)container getShelf: shelf forView: self];
-}
-
-/* On the 3D shelf the image stands further back than the middle of its
- * tile, leaving room in front of it for its reflection. */
-- (CGFloat)shelfLift
-{
-  DockShelf shelf;
-
-  if ([self getShelf: &shelf] == NO)
-    return 0.0;
-  return DockShelfIconLift(NSHeight([self bounds]), [self scaleFactor]);
 }
 
 /* The largest bitmap of an image, which the reflection is sampled from. */
@@ -238,8 +250,27 @@ DockLargestBitmap(NSImage *image)
   return best;
 }
 
-/* The lower part of an image, mirrored and fading out downwards, width by
- * height pixels.  Made from the bitmap's pixels rather than by drawing:
+/* How many rows at the bottom of an image's largest bitmap hold no
+ * artwork. */
+static NSInteger
+DockTransparentRowsOfImage(NSImage *image)
+{
+  NSBitmapImageRep *src = DockLargestBitmap(image);
+  NSInteger spp;
+
+  if (src == nil || [src hasAlpha] == NO)
+    return 0;
+  spp = [src samplesPerPixel];
+  return DockTransparentRowsAtBottom([src bitmapData], [src pixelsWide],
+                                     [src pixelsHigh], [src bytesPerRow], spp,
+                                     ([src bitmapFormat] & NSAlphaFirstBitmapFormat)
+                                       ? 0 : spp - 1);
+}
+
+/* The lower part of an image's artwork, mirrored and fading out downwards,
+ * width by height pixels; the transparent rows below the artwork are left
+ * out, so the mirror image touches the artwork as it stands on the shelf.
+ * Made from the bitmap's pixels rather than by drawing:
  * drawing into an image needs an off-screen window per image in GNUstep,
  * and a mask to fade it out is not to be had without one either. */
 static NSImage *
@@ -249,7 +280,7 @@ DockMakeReflection(NSImage *image, int width, int height)
   NSBitmapImageRep *dst;
   NSImage *result;
   unsigned char *in, *out;
-  NSInteger sw, sh, spp, bpr;
+  NSInteger sw, sh, spp, bpr, foot;
   BOOL alpha, colour, premultiplied;
   CGFloat span;
   int x, y;
@@ -266,8 +297,11 @@ DockMakeReflection(NSImage *image, int width, int height)
   premultiplied = alpha
     && (([src bitmapFormat] & NSAlphaNonpremultipliedBitmapFormat) == 0);
   in = [src bitmapData];
-  /* The rows of the source the reflection shows, from its bottom up. */
+  /* The rows of the source the reflection shows, from the artwork's lower
+   * edge up. */
   span = sh * DOCK_REFLECTION_SOURCE_SHARE;
+  foot = MIN(DockTransparentRowsOfImage(image),
+             (NSInteger)floor(sh * DOCK_MAX_FOOTING));
 
   dst = [[NSBitmapImageRep alloc]
           initWithBitmapDataPlanes: NULL
@@ -289,8 +323,8 @@ DockMakeReflection(NSImage *image, int width, int height)
        * at its far end. */
       CGFloat t = (y + 0.5) / height;
       CGFloat fade = 0.60 * (1.0 - t) * (1.0 - t);
-      NSInteger y0 = sh - 1 - (NSInteger)(y * span / height);
-      NSInteger y1 = sh - 1 - (NSInteger)((y + 1) * span / height);
+      NSInteger y0 = sh - 1 - foot - (NSInteger)(y * span / height);
+      NSInteger y1 = sh - 1 - foot - (NSInteger)((y + 1) * span / height);
 
       if (y1 >= y0)
         y1 = y0 - 1;
@@ -358,6 +392,24 @@ DockMakeReflection(NSImage *image, int width, int height)
                             (int)ceil(pixels * DOCK_REFLECTION_SHARE)));
     }
   return reflection;
+}
+
+/* The share of image below its artwork, kept for the image last asked
+ * about: the shelf asks on every frame, and scanning the pixels each time
+ * would cost the magnification its smoothness. */
+- (CGFloat)footingOfImage:(NSImage *)image
+{
+  NSBitmapImageRep *src;
+
+  if (image != footingSource)
+    {
+      ASSIGN (footingSource, image);
+      src = DockLargestBitmap(image);
+      footing = (src == nil) ? 0.0
+        : DockFootingShare(DockTransparentRowsOfImage(image),
+                           [src pixelsHigh]);
+    }
+  return footing;
 }
 
 /* A soft round patch squeezed into rect, from the gradient's first colour
@@ -1844,13 +1896,13 @@ x += 6; \
    * Dock until the drop is decided, so the drag never shows a gap where
    * the icon stood. */
   {
+    NSImage *shown = [self shownImage];
     /* Adjust icon position when bouncing */
-    NSPoint drawPoint = [self imageRect].origin;
+    NSPoint drawPoint = [self imageRectForImage: shown].origin;
     DockShelf shelf;
     BOOL onShelf = [self getShelf: &shelf];
     /* How far a bounce lifts the image off the shelf. */
     CGFloat rise = 0.0;
-    NSImage *shown;
 
     if ([self isLaunching] && bounceOffset != 0.0) {
       DockPosition pos = DockPositionBottom;
@@ -1882,19 +1934,15 @@ x += 6; \
     NSRect iconRect = NSMakeRect(drawPoint.x, drawPoint.y,
                                  icnBounds.size.width, icnBounds.size.height);
 
-    /* When dragging mountpoints only, show Eject icon; otherwise show Trash icon */
-    if (isTrashIcon && isDragMountpointOnly && ejectIcon)
-      shown = ejectIcon;
-    else if (isTrashIcon && trashFull)
-      shown = trashFullIcon;
-    else
-      shown = icon;
-
     /* On the 3D shelf an icon stands on glass: a faint mirror image in
      * front of it, and no cast shadow, which looked painted on. */
     if (onShelf && shown != nil)
       {
-        NSRect r = DockReflectionRect(iconRect, rise, shelf.frontLeft.y);
+        /* Mirrored at the artwork's lower edge, where it stands, not at the
+         * image's: the reflection leaves the rows below the artwork out. */
+        CGFloat foot = NSHeight(iconRect) * [self footingOfImage: shown];
+        NSRect r = DockReflectionRect(NSOffsetRect(iconRect, 0, foot), rise,
+                                      shelf.frontLeft.y);
         NSImage *mirror = NSIsEmptyRect(r) ? nil
           : [self reflectionOfImage: shown width: NSWidth(iconRect)];
 

@@ -135,34 +135,90 @@ DockShelfMake(NSRect bar, CGFloat scale)
   return s;
 }
 
-/* How far an icon's image is raised in its tile on the shelf: the
- * icons stand some way back on the surface, as on a real shelf, which
- * leaves room in front of them for their reflection.  A share of the
- * tile, so that it grows with the magnification; small enough that the
- * image (three quarters of the tile, centred) stays inside the tile. */
-#define DOCK_SHELF_ICON_LIFT_SHARE 0.12
+/* How far forward on the shelf's surface the icons stand: the lower edge
+ * of every icon's artwork lies this share of the way from the back edge to
+ * the front, as on the reference shelf (28 of its 48 px), which leaves room
+ * in front of the icons for their reflections. */
+#define DOCK_SHELF_STAND_SHARE 0.58
 
+/* The line the icons stand on, in the shelf's coordinates. */
 static inline CGFloat
-DockShelfIconLift(CGFloat tileSize, CGFloat scale)
+DockShelfStandLine(DockShelf s, CGFloat scale)
 {
-  return DockPixelAlign(tileSize * DOCK_SHELF_ICON_LIFT_SHARE, scale);
+  CGFloat depth = s.backLeft.y - s.frontLeft.y;
+
+  return DockPixelAlign(s.backLeft.y - depth * DOCK_SHELF_STAND_SHARE, scale);
 }
 
-/* Where an icon's image is drawn in its tile: a square of the icon's side,
- * centred in the tile and raised by lift (DockShelfIconLift on the shelf,
- * 0 elsewhere).  It depends on the tile only, never on the image, so that
- * every icon stands on the same line whatever size its image comes in, and
- * an image whose artwork leaves transparent margins keeps them, as on the
- * reference shelf. */
+/* Where an icon's image is drawn in its tile: a square of side, centred
+ * across the tile.  On the shelf its artwork stands on the stand line:
+ * footing is the share of the image below the artwork (transparent rows,
+ * DockFootingShare), by which the image goes lower.  The line is the
+ * shelf's, not the tile's, so a magnified icon grows upwards and sideways
+ * from where it stands.  Without a shelf (shelf NULL, the flat styles) the
+ * image is centred in the tile.  It depends on the tile and the artwork
+ * only, never on the size the image comes in, so every icon has the same
+ * size. */
 static inline NSRect
-DockIconImageRect(NSRect tile, CGFloat side, CGFloat lift, CGFloat scale)
+DockIconImageRect(NSRect tile, CGFloat side, CGFloat footing,
+                  const DockShelf *shelf, CGFloat scale)
 {
   CGFloat x = DockPixelAlign(NSMidX(tile) - side / 2, scale);
-  CGFloat y = DockPixelAlign(NSMidY(tile) - side / 2 + lift, scale);
+  CGFloat y;
 
+  if (shelf == NULL)
+    return NSMakeRect(x, DockPixelAlign(NSMidY(tile) - side / 2, scale),
+                      side, side);
+
+  y = DockPixelAlign(DockShelfStandLine(*shelf, scale) - side * footing,
+                     scale);
+  /* A tile still growing in is lower than the image would stand; the
+   * image keeps inside it rather than being cut off. */
+  if (y + side > NSMaxY(tile))
+    y = floor((NSMaxY(tile) - side) * scale) / scale;
+  if (y < NSMinY(tile))
+    y = NSMinY(tile);
   /* Origin aligned and the side kept, rather than both edges aligned, so
    * that no icon comes out a pixel smaller than its neighbours. */
   return NSMakeRect(x, y, side, side);
+}
+
+/* The most of an image that may lie below its artwork and still count:
+ * more is a picture that is meant to float, or no artwork at all. */
+#define DOCK_MAX_FOOTING 0.25
+/* Alpha at or below this (of 255) is not artwork: soft drop shadows. */
+#define DOCK_FOOTING_ALPHA 32
+
+/* How many rows at the bottom of an 8-bit bitmap hold no artwork.  rows
+ * run top first, as in a bitmap's data; alpha is the index of the alpha
+ * sample in a pixel, or -1 when there is none.  An image with no artwork
+ * at all counts as having none below it either. */
+static inline NSInteger
+DockTransparentRowsAtBottom(const unsigned char *data, NSInteger width,
+                            NSInteger height, NSInteger bytesPerRow,
+                            NSInteger samplesPerPixel, NSInteger alpha)
+{
+  NSInteger x, y;
+
+  if (data == NULL || alpha < 0)
+    return 0;
+  for (y = height - 1; y >= 0; y--)
+    {
+      const unsigned char *row = data + y * bytesPerRow;
+
+      for (x = 0; x < width; x++)
+        if (row[x * samplesPerPixel + alpha] > DOCK_FOOTING_ALPHA)
+          return height - 1 - y;
+    }
+  return 0;
+}
+
+static inline CGFloat
+DockFootingShare(NSInteger transparentRows, NSInteger height)
+{
+  if (height <= 0)
+    return 0.0;
+  return MIN(DOCK_MAX_FOOTING, (CGFloat)transparentRows / height);
 }
 
 /* How much of an icon its reflection shows, as a part of the icon's

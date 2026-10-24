@@ -45,8 +45,9 @@
   BOOL isWsIcon;
   BOOL isTrashIcon;
   NSImage *trashFullIcon;
-  /* The icon and the full trash at the resolution the pointer magnifies them
-   * to; drawn instead of the at-rest images, which would only be scaled up. */
+  /* The icon and the full trash at the resolution they are drawn at (the
+   * size the pointer magnifies them to, or the scale factor's); drawn
+   * instead of the images made for 48 points, which would only be scaled. */
   NSImage *sharpIcon;
   NSImage *sharpTrashFullIcon;
   /* The icon's faded mirror image on the 3D shelf, made from reflectionSource
@@ -54,6 +55,11 @@
   NSImage *reflection;
   NSImage *reflectionSource;
   int reflectionPixels;
+  /* The share of footingSource below its artwork (DockFootingShare), read
+   * from its pixels once, so that on the shelf the artwork rather than the
+   * image stands on the line. */
+  NSImage *footingSource;
+  CGFloat footing;
   int sharpPixels;
   NSImage *ejectIcon;
   BOOL trashFull;

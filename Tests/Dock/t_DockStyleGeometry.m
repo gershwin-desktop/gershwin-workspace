@@ -48,17 +48,14 @@ main(void)
          "the back edge is narrower than the front: the shelf is in perspective");
     PASS(CLOSE(s.backLeft.x - s.frontLeft.x, s.frontRight.x - s.backRight.x),
          "both sides slope alike");
-    /* Icons are 48 in a 64 tile, centred and then lifted. */
+    /* Icons are 48 in a 64 tile. */
     {
-      CGFloat foot = 8 + DockShelfIconLift(64, 1.0);
+      CGFloat stand = DockShelfStandLine(s, 1.0);
 
-      PASS(s.frontLeft.y < foot && s.backLeft.y > foot,
-           "the lower edge of a lifted icon lies on the surface: icons stand on the shelf");
-      PASS(foot - s.frontLeft.y >= 6,
+      PASS(s.frontLeft.y < stand && s.backLeft.y > stand,
+           "the stand line lies on the surface: icons stand on the shelf");
+      PASS(stand - s.frontLeft.y >= 6,
            "the icons stand far enough back to leave room for a reflection");
-      PASS(8 + 48 + DockShelfIconLift(64, 1.0) <= 64
-           && 16 + 96 + DockShelfIconLift(128, 1.0) <= 128,
-           "a lifted image stays inside its tile, at rest and magnified");
     }
     PASS(s.backLeft.y < 64 / 2,
          "the shelf stays below the middle of the icons");
@@ -66,52 +63,113 @@ main(void)
 
   /* --- where an icon's image goes --- */
   {
-    CGFloat scales[] = { 1.0, 1.5, 2.0 };
-    unsigned i;
+    CGFloat scales[] = { 1.0, 1.2, 1.25, 1.5, 2.0 };
+    /* Magnified tiles, as the Dock lays them out: the tile grows to size,
+     * the image to three quarters of it, and the bar keeps its thickness. */
+    CGFloat sizes[] = { 64, 70.4, 80, 96.5, 112, 128 };
+    unsigned i, j;
 
     for (i = 0; i < sizeof(scales) / sizeof(scales[0]); i++)
       {
         CGFloat sf = scales[i];
-        NSRect tile = NSMakeRect(0, 0, 64, 64);
         NSRect bar = NSMakeRect(0, 0, 640, 64);
         DockShelf s = DockShelfMake(bar, sf);
-        CGFloat lift = DockShelfIconLift(64, sf);
-        NSRect r = DockIconImageRect(tile, 48, lift, sf);
         CGFloat depth = s.backLeft.y - s.frontLeft.y;
-        CGFloat behind = (s.backLeft.y - NSMinY(r)) / depth;
+        CGFloat stand = DockShelfStandLine(s, sf);
+        NSRect rest = DockIconImageRect(NSMakeRect(0, 0, 64, 64), 48, 0.0,
+                                        &s, sf);
+        BOOL square = YES, centred = YES, aligned = YES, inside = YES;
+        BOOL still = YES, footed = YES;
 
-        PASS(CLOSE(NSWidth(r), 48) && CLOSE(NSHeight(r), 48),
-             "the image fills a square of the icon size at scale %g", sf);
-        PASS(CLOSE(NSMidX(r), NSMidX(tile)),
-             "the image is centred across its tile at scale %g", sf);
-        PASS(onPixel(NSMinX(r), sf) && onPixel(NSMinY(r), sf)
-             && onPixel(NSMaxX(r), sf) && onPixel(NSMaxY(r), sf),
-             "the image lies on device pixels at scale %g", sf);
-        /* On the reference shelf the lower edge of every icon's box lies a
-         * little more than half way back on the surface (28 of 48 px). */
-        PASS(behind > 0.4 && behind < 0.7,
-             "the lower edge of the image stands half way back on the shelf"
-             " at scale %g", sf);
-        PASS(NSMaxY(r) <= NSMaxY(tile),
-             "the lifted image stays inside its tile at scale %g", sf);
+        /* On the reference shelf the lower edge of every icon lies 28 of
+         * the surface's 48 px behind its back edge. */
+        PASS(fabs((s.backLeft.y - stand) / depth - DOCK_SHELF_STAND_SHARE)
+             <= 0.5 / sf / depth,
+             "icons stand %g of the way forward on the shelf at scale %g",
+             DOCK_SHELF_STAND_SHARE, sf);
+        PASS(CLOSE(NSMinY(rest), stand),
+             "a resting image's lower edge is on the stand line at scale %g",
+             sf);
+
+        for (j = 0; j < sizeof(sizes) / sizeof(sizes[0]); j++)
+          {
+            CGFloat size = sizes[j];
+            CGFloat side = 48 * size / 64;
+            NSRect tile = NSMakeRect(100, 0, size, size);
+            NSRect r = DockIconImageRect(tile, side, 0.0, &s, sf);
+            /* An image with an eighth of transparent rows below its
+             * artwork goes down by as much, so the artwork stands there. */
+            NSRect f = DockIconImageRect(tile, side, 0.125, &s, sf);
+
+            square = square && CLOSE(NSWidth(r), side)
+                     && CLOSE(NSHeight(r), side);
+            centred = centred && fabs(NSMidX(r) - NSMidX(tile)) <= 0.5 / sf + 0.001;
+            aligned = aligned && onPixel(NSMinX(r), sf)
+                      && onPixel(NSMinY(r), sf) && onPixel(NSMinY(f), sf);
+            inside = inside && NSMaxY(r) <= NSMaxY(tile) + 0.001;
+            still = still && CLOSE(NSMinY(r), NSMinY(rest));
+            footed = footed
+                     && fabs(NSMinY(f) + side * 0.125 - stand) <= 0.5 / sf + 0.001;
+          }
+        PASS(square, "the image fills a square of its side at scale %g", sf);
+        PASS(centred, "the image is centred across its tile at scale %g", sf);
+        PASS(aligned, "the image lies on device pixels at scale %g", sf);
+        PASS(inside, "the image stays inside its tile at scale %g", sf);
+        PASS(still,
+             "magnified, the lower edge stays where it rests: icons grow"
+             " upwards and sideways only, at scale %g", sf);
+        PASS(footed,
+             "the artwork, not the transparent rows below it, stands on the"
+             " line at scale %g", sf);
       }
   }
 
   {
-    /* Magnified, the tile and the image grow and the lower edge stays on
-     * the surface; without a shelf (lift 0) the image is centred. */
-    NSRect big = DockIconImageRect(NSMakeRect(10, 0, 128, 128), 96,
-                                   DockShelfIconLift(128, 1.0), 1.0);
-    NSRect flat = DockIconImageRect(NSMakeRect(0, 0, 64, 64), 48, 0, 1.0);
-    NSRect odd = DockIconImageRect(NSMakeRect(0, 0, 65, 65), 48, 0, 1.0);
+    NSRect flat = DockIconImageRect(NSMakeRect(0, 0, 64, 64), 48, 0.2,
+                                    NULL, 1.0);
+    NSRect odd = DockIconImageRect(NSMakeRect(0, 0, 65, 65), 48, 0.0,
+                                   NULL, 1.0);
+    DockShelf s = DockShelfMake(NSMakeRect(0, 0, 640, 64), 1.0);
+    /* A tile that is still growing in (a new icon) is smaller than the
+     * image would stand: the image keeps inside it. */
+    NSRect small = DockIconImageRect(NSMakeRect(0, 0, 32, 32), 24, 0.0,
+                                     &s, 1.0);
 
-    PASS(CLOSE(NSMidX(big), 74) && CLOSE(NSMinY(big), 16 + 15),
-         "a magnified image is centred in its tile and lifted as far again");
     PASS(NSEqualRects(flat, NSMakeRect(8, 8, 48, 48)),
-         "without a shelf the image is centred in its tile");
+         "without a shelf the image is centred in its tile, whatever its"
+         " artwork");
     PASS(onPixel(NSMinX(odd), 1.0) && onPixel(NSMinY(odd), 1.0)
          && CLOSE(NSWidth(odd), 48),
          "an odd tile still puts the image on whole pixels at its full size");
+    PASS(NSMaxY(small) <= 32 && NSMinY(small) >= 0,
+         "an image in a tile still growing in stays inside it");
+  }
+
+  /* --- the transparent rows below an icon's artwork --- */
+  {
+    /* 4 x 8 RGBA, rows top first as in a bitmap: artwork in rows 1-4, a
+     * faint shadow in row 5, nothing in rows 6 and 7. */
+    unsigned char px[8][4][4];
+    unsigned char grey[8][4];
+    int x, y;
+
+    memset(px, 0, sizeof(px));
+    memset(grey, 255, sizeof(grey));
+    for (y = 1; y <= 4; y++)
+      for (x = 0; x < 4; x++)
+        px[y][x][3] = 255;
+    px[5][2][3] = 20;
+
+    PASS(DockTransparentRowsAtBottom(&px[0][0][0], 4, 8, 16, 4, 3) == 3,
+         "rows below the artwork count as transparent, a faint shadow too");
+    PASS(DockTransparentRowsAtBottom(&grey[0][0], 4, 8, 4, 1, -1) == 0,
+         "an image without alpha has no transparent rows");
+    memset(px, 0, sizeof(px));
+    PASS(DockTransparentRowsAtBottom(&px[0][0][0], 4, 8, 16, 4, 3) == 0,
+         "an image with nothing in it is not moved at all");
+    PASS(CLOSE(DockFootingShare(1, 8), 0.125) && CLOSE(DockFootingShare(6, 8),
+                                                      DOCK_MAX_FOOTING),
+         "the footing is a share of the image, and never more than a quarter");
   }
 
   {
