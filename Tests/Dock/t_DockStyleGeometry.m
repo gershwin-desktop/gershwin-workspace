@@ -113,16 +113,15 @@ main(void)
                       && fabs(NSMidX(r) - NSMidX(tile)) <= 0.5 / sf + 0.001
                       && fabs(artMidX - NSMidX(tile)) <= 0.5 / sf + 0.001;
             aligned = aligned && onPixel(NSMinX(r), sf)
-                      && onPixel(NSMinY(r), sf) && onPixel(NSMinY(f), sf);
+                      && onPixel(NSMinY(r), sf) && onPixel(artBottom, sf);
             inside = inside && NSMaxY(r) <= NSMaxY(tile) + 0.001
                      && NSMinY(f) + framed.maxY * NSHeight(f)
                         <= NSMaxY(tile) + 0.001;
             still = still && CLOSE(NSMinY(r), NSMinY(rest));
             stillFramed = stillFramed
-                          && fabs(artBottom - (NSMinY(restFramed) + framed.minY
-                                               * NSHeight(restFramed)))
-                             <= 1.0 / sf + 0.001;
-            footed = footed && fabs(artBottom - stand) <= 0.5 / sf + 0.001;
+                          && CLOSE(artBottom, NSMinY(restFramed) + framed.minY
+                                              * NSHeight(restFramed));
+            footed = footed && CLOSE(artBottom, stand);
             grown = grown && CLOSE(NSWidth(f), side * k)
                     && CLOSE(NSHeight(f), side * k);
           }
@@ -130,7 +129,7 @@ main(void)
              " at scale %g", sf);
         PASS(centred, "the artwork is centred across its tile at scale %g",
              sf);
-        PASS(aligned, "the image lies on device pixels at scale %g", sf);
+        PASS(aligned, "the image and the lower edge of its artwork lie on device pixels at scale %g", sf);
         PASS(inside, "the artwork stays inside its tile at scale %g", sf);
         PASS(still && stillFramed,
              "magnified, the lower edge stays where it rests: icons grow"
@@ -190,6 +189,47 @@ main(void)
          "an odd tile still puts the image on whole pixels at its full size");
     PASS(NSMaxY(small) <= 32 && NSMinY(small) >= 0,
          "an image in a tile still growing in stays inside it");
+  }
+
+  /* --- a badge on the artwork (the link arrow) --- */
+  {
+    CGFloat scales[] = { 1.0, 1.2, 2.0 };
+    /* A folder: full width, an eighth free above and below. */
+    DockArtBox folder = { 0.0, 0.125, 1.0, 0.875 };
+    unsigned i;
+
+    for (i = 0; i < sizeof(scales) / sizeof(scales[0]); i++)
+      {
+        CGFloat sf = scales[i];
+        DockShelf s = DockShelfMake(NSMakeRect(0, 0, 640, 64), sf);
+        CGFloat sides[] = { 48, 72, 96 };
+        unsigned j;
+        BOOL corner = YES, sized = YES, aligned = YES;
+
+        for (j = 0; j < 3; j++)
+          {
+            CGFloat side = sides[j];
+            NSRect tile = NSMakeRect(0, 0, side * 4 / 3, side * 4 / 3);
+            NSRect image = DockIconImageRect(tile, side, folder, &s, sf);
+            NSRect b = DockBadgeRect(image, folder, NSMakeSize(16, 16), side,
+                                     sf);
+
+            corner = corner
+                     && fabs(NSMinX(b) - (NSMinX(image) + folder.minX
+                                          * NSWidth(image))) <= 0.5 / sf
+                     && fabs(NSMinY(b) - (NSMinY(image) + folder.minY
+                                          * NSHeight(image))) <= 0.5 / sf;
+            sized = sized && fabs(NSWidth(b) - 16 * side / 48) <= 1.0 / sf
+                    && fabs(NSHeight(b) - 16 * side / 48) <= 1.0 / sf;
+            aligned = aligned && onPixel(NSMinX(b), sf) && onPixel(NSMinY(b), sf)
+                      && onPixel(NSMaxX(b), sf) && onPixel(NSMaxY(b), sf);
+          }
+        PASS(corner, "the link arrow sits on the artwork's lower left corner,"
+             " not the image's, at scale %g", sf);
+        PASS(sized, "the arrow keeps its share of the icon, a third of a 48"
+             " point icon, at scale %g", sf);
+        PASS(aligned, "the arrow lies on device pixels at scale %g", sf);
+      }
   }
 
   /* --- the visible artwork of a bitmap --- */

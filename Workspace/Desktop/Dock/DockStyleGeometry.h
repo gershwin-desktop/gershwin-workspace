@@ -260,8 +260,10 @@ DockIconImageRect(NSRect tile, CGFloat side, DockArtBox art,
                                         scale),
                       size, size);
 
-  y = DockPixelAlign(DockShelfStandLine(*shelf, scale) - art.minY * size,
-                     scale);
+  /* The artwork's lower edge, not the image's, goes on the pixel row: an
+   * enlarged image's margin is no whole number of pixels, and aligning
+   * the image would move the artwork by up to a pixel as it is magnified. */
+  y = DockShelfStandLine(*shelf, scale) - art.minY * size;
   /* A tile still growing in is lower than the artwork would stand; the
    * artwork keeps inside it rather than being cut off. */
   if (y + art.maxY * size > NSMaxY(tile))
@@ -271,6 +273,27 @@ DockIconImageRect(NSRect tile, CGFloat side, DockArtBox art,
   /* Origin aligned and the size kept, rather than both edges aligned, so
    * that no icon comes out a pixel smaller than its neighbours. */
   return NSMakeRect(x, y, size, size);
+}
+
+/* The size of icon a badge's own size is meant for: FSNodeRep paints the
+ * link arrow, 16 points, into the corner of a 48 point icon. */
+#define DOCK_BADGE_BASE 48.0
+
+/* Where a badge such as the link arrow goes on an icon drawn in image (from
+ * DockIconImageRect, artwork art) at side points: on the lower left corner
+ * of the artwork, where alias arrows go, rather than of the image, so it
+ * stays on the artwork however much room the image leaves around it; as
+ * large, for the icon's side, as it is on a 48 point icon. */
+static inline NSRect
+DockBadgeRect(NSRect image, DockArtBox art, NSSize badge, CGFloat side,
+              CGFloat scale)
+{
+  CGFloat k = side / DOCK_BADGE_BASE;
+  NSRect r = NSMakeRect(NSMinX(image) + art.minX * NSWidth(image),
+                        NSMinY(image) + art.minY * NSHeight(image),
+                        badge.width * k, badge.height * k);
+
+  return DockPixelAlignRect(r, scale);
 }
 
 /* How much of an icon its reflection shows, as a part of the icon's

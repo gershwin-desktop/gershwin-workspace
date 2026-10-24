@@ -193,6 +193,49 @@
   return [self imageRectForImage: [self shownImage]];
 }
 
+/* FSNodeRep paints the link arrow into a link's icon, where it would
+ * count as artwork and keep the folder or application it points to from
+ * being sized like any other; the Dock shows the target's own icon and
+ * draws the arrow over it itself (-drawLinkArrowOnImageIn:). */
+- (BOOL)showsLinkArrow
+{
+  return (isTrashIcon == NO) && [node isLink];
+}
+
+- (NSImage *)nodeIconOfSize:(int)size
+{
+  if ([self showsLinkArrow])
+    {
+      FSNode *target = [FSNode nodeWithPath:
+                                 [[node path] stringByResolvingSymlinksInPath]];
+
+      if ([target isValid] && [target isLink] == NO)
+        return [fsnodeRep iconOfSize: size forNode: target];
+    }
+  return [fsnodeRep iconOfSize: size forNode: node];
+}
+
+/* FSNIcon loads its image here when it is decorated or refreshed. */
+- (NSImage *)loadedIconImage
+{
+  return [self nodeIconOfSize: iconSize];
+}
+
+/* The arrow on a link's icon, on its artwork's lower left corner. */
+- (void)drawLinkArrowOnImageIn:(NSRect)rect image:(NSImage *)image
+{
+  NSImage *arrow = [NSImage imageNamed: @"common_linkCursor"];
+
+  if (arrow == nil || [self showsLinkArrow] == NO)
+    return;
+  [arrow drawInRect: DockBadgeRect(rect, [self artBoxOfImage: image],
+                                   [arrow size], NSWidth([self iconSquare]),
+                                   [self scaleFactor])
+           fromRect: NSZeroRect
+          operation: NSCompositeSourceOver
+           fraction: 1.0];
+}
+
 /* The image the icon shows now. */
 - (NSImage *)shownImage
 {
@@ -497,8 +540,7 @@ DockLipLightGradient(void)
       [self setTrashFull: !(count == 0)];
     
     } else {
-      ASSIGN (icon, [fsnodeRep iconOfSize: ceil(icnBounds.size.width) 
-                                  forNode: node]);
+      ASSIGN (icon, [self nodeIconOfSize: ceil(icnBounds.size.width)]);
     }
   }
 }
@@ -1377,8 +1419,7 @@ DockLipLightGradient(void)
     ASSIGN (icon, [fsnodeRep trashIconOfSize: ceil(icnBounds.size.width)]);
     ASSIGN (trashFullIcon, [fsnodeRep trashFullIconOfSize: ceil(icnBounds.size.width)]);
   } else {
-    ASSIGN (icon, [fsnodeRep iconOfSize: ceil(icnBounds.size.width) 
-                                forNode: node]);
+    ASSIGN (icon, [self nodeIconOfSize: ceil(icnBounds.size.width)]);
   }
   DESTROY (sharpIcon);
   DESTROY (sharpTrashFullIcon);
@@ -1832,7 +1873,7 @@ DockLipLightGradient(void)
         {
           ASSIGN (sharpIcon, isTrashIcon
                                ? [fsnodeRep trashIconOfSize: pixels]
-                               : [fsnodeRep iconOfSize: pixels forNode: node]);
+                               : [self nodeIconOfSize: pixels]);
         }
       return sharpIcon;
     }
@@ -1976,6 +2017,8 @@ x += 6; \
       }
 
     [self drawImage: shown inRect: iconRect fraction: 1.0];
+    if (shown == icon)
+      [self drawLinkArrowOnImageIn: iconRect image: shown];
 
   /* The dot goes under the middle of the icon, not of the part of the view
    * that is being redrawn.  It shows that the application runs, with or
