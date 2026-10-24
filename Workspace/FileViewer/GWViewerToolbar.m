@@ -557,10 +557,18 @@ enum { kBackSegment = 0, kForwardSegment = 1 };
   state = [self windowState];
 
   if ([identifier isEqual:GWToolbarBackForwardItemIdentifier]) {
-    [view setEnabled:[GWViewerToolbarModel isControl:GWToolbarControlBack enabledInState:state]
-          forSegment:kBackSegment];
-    [view setEnabled:[GWViewerToolbarModel isControl:GWToolbarControlForward enabledInState:state]
-          forSegment:kForwardSegment];
+    BOOL back = [GWViewerToolbarModel isControl:GWToolbarControlBack enabledInState:state];
+    BOOL forward = [GWViewerToolbarModel isControl:GWToolbarControlForward enabledInState:state];
+
+    /* NSSegmentedControl does not redraw for a segment's enabled state, so
+     * a change that came without an event (a column selected) stayed
+     * invisible until something else redrew the toolbar. */
+    if (back != [view isEnabledForSegment:kBackSegment]
+        || forward != [view isEnabledForSegment:kForwardSegment]) {
+      [view setEnabled:back forSegment:kBackSegment];
+      [view setEnabled:forward forSegment:kForwardSegment];
+      [view setNeedsDisplay:YES];
+    }
   }
   else if ([identifier isEqual:GWToolbarViewModeItemIdentifier]) {
     NSUInteger count = sizeof(kViewModeSegments) / sizeof(kViewModeSegments[0]);
