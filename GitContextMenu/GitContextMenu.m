@@ -944,8 +944,13 @@
     {
       *currentOut = nil;
     }
+  NSString *git = [self gitLaunchPath];
+  if (git == nil)
+    {
+      return nil;
+    }
   NSTask *task = [[NSTask alloc] init];
-  [task setLaunchPath: @"/usr/bin/git"];
+  [task setLaunchPath: git];
   [task setArguments: [NSArray arrayWithObjects: @"for-each-ref",
                        @"--format=%(refname:short)", @"refs/heads/", nil]];
   [task setCurrentDirectoryPath: repo];
@@ -986,7 +991,7 @@
   if (currentOut != NULL)
     {
       NSTask *t2 = [[NSTask alloc] init];
-      [t2 setLaunchPath: @"/usr/bin/git"];
+      [t2 setLaunchPath: git];
       [t2 setArguments: [NSArray arrayWithObjects: @"rev-parse",
                          @"--abbrev-ref", @"HEAD", nil]];
       [t2 setCurrentDirectoryPath: repo];
@@ -1797,12 +1802,13 @@
 {
   @try
     {
-      if (repo == nil)
+      NSString *git = [self gitLaunchPath];
+      if (repo == nil || git == nil)
         {
           return nil;
         }
       NSTask *task = [[NSTask alloc] init];
-      [task setLaunchPath: @"/usr/bin/git"];
+      [task setLaunchPath: git];
       [task setArguments: args];
       [task setCurrentDirectoryPath: repo];
       NSPipe *outPipe = [NSPipe pipe];

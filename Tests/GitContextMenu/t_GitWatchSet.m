@@ -39,11 +39,20 @@
 }
 @end
 
-static void run(NSString *dir, NSArray *args)
+/* git lives in /usr/local/bin on the BSDs, so find it the way the bundle
+   does instead of hardcoding a path. */
+static void run(GitContextMenu *git, NSString *dir, NSArray *args)
 {
-  NSTask *t = [NSTask new];
+  NSString *path = [git gitLaunchPath];
+  NSTask *t;
 
-  [t setLaunchPath: @"/usr/bin/git"];
+  if (path == nil)
+    {
+      fprintf(stderr, "git not found in PATH\n");
+      exit(1);
+    }
+  t = [NSTask new];
+  [t setLaunchPath: path];
   [t setArguments: args];
   [t setCurrentDirectoryPath: dir];
   [t setStandardOutput: [NSFileHandle fileHandleWithNullDevice]];
@@ -75,8 +84,8 @@ int main(void)
   [fm removeFileAtPath: parent handler: nil];
   touch([repo stringByAppendingPathComponent: @"src/lib/code.c"]);
   touch([repo stringByAppendingPathComponent: @"build/deep/tree/out.o"]);
-  run(repo, [NSArray arrayWithObjects: @"init", @"-q", nil]);
-  run(repo, [NSArray arrayWithObjects: @"add", @"src/lib/code.c", nil]);
+  run(git, repo, [NSArray arrayWithObjects: @"init", @"-q", nil]);
+  run(git, repo, [NSArray arrayWithObjects: @"add", @"src/lib/code.c", nil]);
 
   watched = [git watchPathsForRepoRoot: repo];
   PASS([watched containsObject: repo], "the repository root is watched");
@@ -100,7 +109,7 @@ int main(void)
 
     rec->workerRepos = [NSMutableArray new];
     touch([other stringByAppendingPathComponent: @"a.c"]);
-    run(other, [NSArray arrayWithObjects: @"init", @"-q", nil]);
+    run(git, other, [NSArray arrayWithObjects: @"init", @"-q", nil]);
     [rec markShown: repo count: 1];
     [rec markShown: other count: 0];
 
