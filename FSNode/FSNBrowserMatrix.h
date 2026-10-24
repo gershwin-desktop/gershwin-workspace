@@ -30,12 +30,15 @@
 #include <AppKit/NSMatrix.h>
 #include "FSNodeRep.h"
 #import "FSNSpringLoader.h"
+#import "FSNSelectionModel.h"
 
 @class FSNBrowserColumn;
 @class FSNBrowserCell;
 
-@interface FSNBrowserMatrix : NSMatrix
+@interface FSNBrowserMatrix : NSMatrix <FSNSelectionModelDelegate>
 {
+  /* What clicks and keys do to this column's selection. */
+  FSNSelectionModel *selectionModel;
   FSNBrowserColumn *column;
   NSUInteger mouseFlags;
   NSTimeInterval editstamp;  

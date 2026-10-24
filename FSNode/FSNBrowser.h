@@ -81,10 +81,6 @@
   float mousePointX;
   float mousePointY;
   
-  NSString *charBuffer;	
-  NSTimeInterval lastKeyPressedTime;
-  NSInteger typingBufferColumn;
-
   NSColor *backColor;
 	
   id viewer;  

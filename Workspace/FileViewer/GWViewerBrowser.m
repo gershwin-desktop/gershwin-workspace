@@ -90,14 +90,10 @@
     }
 
 
-  // Handle arrow keys with modifiers
+  /* Shift with an arrow extends the selection (FSNBrowserMatrix), as in
+     the reference; opening and going up are Command's. */
   if (character == NSDownArrowFunctionKey)
     {
-      if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
-        {
-          [viewer openSelectionInNewViewer: NO];
-          return;
-        }
       if ((flags & NSCommandKeyMask) && (flags & NSShiftKeyMask))
         {
           [viewer openSelectionAsFolder];
@@ -112,35 +108,6 @@
 
   if (character == NSUpArrowFunctionKey)
     {
-      if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
-        {
-          id delegate = viewer;
-          if ([delegate respondsToSelector: @selector(baseNode)])
-            {
-              FSNode *targetNode = [delegate baseNode];
-              if (targetNode)
-                {
-                  NSString *parentPath = [[targetNode path] stringByDeletingLastPathComponent];
-                  if (parentPath && ![parentPath isEqual: [targetNode path]])
-                    {
-                      FSNode *parentNode = [FSNode nodeWithPath: parentPath];
-                      if (parentNode)
-                        {
-                          GWViewersManager *mgr = [GWViewersManager viewersManager];
-                          if (mgr)
-                            {
-                              [mgr viewerForNode: parentNode
-                                   showType: 0
-                              showSelection: NO
-                                   forceNew: NO
-                                   withKey: nil];
-                            }
-                        }
-                    }
-                }
-            }
-          return;
-        }
       if ((flags & NSCommandKeyMask))
         {
           id delegate = viewer;
@@ -189,36 +156,19 @@
         }
     }
 
-  // Handle Shift-Enter and Tab to select first item if nothing selected
-  if ((character == '\r' && (flags & NSShiftKeyMask)) || character == '\t')
+  // Shift-Return opens the selection as a folder
+  if (character == '\r' && (flags & NSShiftKeyMask) && [[self selectedNodes] count] > 0)
     {
-      NSArray *selection = [self selectedNodes];
-      if (selection == nil || [selection count] == 0)
-        {
-          // Select the first item in the first column
-          [self selectRow: 0 inColumn: 0];
-          return;
-        }
-
-      if (character == '\r' && (flags & NSShiftKeyMask))
-        {
-          [viewer openSelectionAsFolder];
-          return;
-        }
+      [viewer openSelectionAsFolder];
+      return;
     }
 
-  // Auto-select first item when pressing arrow keys with no selection
-  if ((character == NSUpArrowFunctionKey
-       || character == NSDownArrowFunctionKey
-       || character == NSLeftArrowFunctionKey
-       || character == NSRightArrowFunctionKey)
-      && !(flags & NSCommandKeyMask))
+  // Nothing selected yet: Down and Right start in the first column
+  if ((character == NSDownArrowFunctionKey || character == NSRightArrowFunctionKey)
+      && !(flags & NSCommandKeyMask) && [[self selectedNodes] count] == 0)
     {
-      NSArray *selection = [self selectedNodes];
-      if (selection == nil || [selection count] == 0)
-        {
-          [self selectRow: 0 inColumn: 0];
-        }
+      [self selectRow: 0 inColumn: 0];
+      return;
     }
 
   // Pass other keys to parent

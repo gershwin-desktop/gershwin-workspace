@@ -61,6 +61,7 @@
 
 - (void)dealloc
 {
+  RELEASE (selectionModel);
   [super dealloc];
 }
 
@@ -91,9 +92,149 @@
 	}
       editstamp = 0.0;
       editIndex = -1;
+      selectionModel = [[FSNSelectionModel alloc] initWithStyle: FSNSelectionStyleList];
+      [selectionModel setDelegate: self];
     }
 
   return self;
+}
+
+#pragma mark - Selection
+
+- (NSString *)selectionModel:(FSNSelectionModel *)model nameOfItem:(id)item
+{
+  return [[(FSNBrowserCell *)item node] name];
+}
+
+- (void)syncSelectionModel
+{
+  [selectionModel setItems: [self cells]];
+  [selectionModel setSelectedItems: [self selectedCells]];
+}
+
+/* Selects the cells the model chose; YES when that changed anything. */
+- (BOOL)applySelectionModel
+{
+  NSArray *want = [selectionModel selectedItems];
+  NSArray *have = [self selectedCells];
+  BOOL same = ([want count] == [have count]);
+  NSUInteger i;
+  id cursor;
+
+  for (i = 0; same && i < [want count]; i++)
+    same = ([have indexOfObjectIdenticalTo: [want objectAtIndex: i]] != NSNotFound);
+
+  if (same == NO)
+    {
+      [self deselectAllCells];
+      for (i = 0; i < [want count]; i++)
+        [self selectCell: [want objectAtIndex: i]];
+    }
+
+  cursor = [selectionModel cursor];
+  if (cursor != nil && [selectionModel isItemSelected: cursor])
+    {
+      NSInteger row, col;
+
+      if ([self getRow: &row column: &col ofCell: cursor])
+        [self scrollCellToVisibleAtRow: row column: col];
+    }
+  return (same == NO);
+}
+
+/* Runs one keyboard decision of the selection model; the browser then
+   shows the column of what is selected, as after a click. */
+- (void)performSelectionKey:(BOOL (^)(FSNSelectionModel *model))step
+{
+  [self syncSelectionModel];
+  if (step(selectionModel))
+    {
+      [column stopCellEditing];
+      if ([self applySelectionModel])
+        [self sendAction];
+    }
+}
+
+- (void)keyDown:(NSEvent *)theEvent
+{
+  NSString *characters = [theEvent characters];
+  NSUInteger flags = [theEvent modifierFlags];
+  BOOL extend = ((flags & NSShiftKeyMask) != 0);
+  unichar character = ([characters length] > 0) ? [characters characterAtIndex: 0] : 0;
+
+  if (acceptDnd == NO)
+    {
+      [super keyDown: theEvent];
+      return;
+    }
+
+  if (flags & (NSCommandKeyMask | NSControlKeyMask))
+    {
+      /* Command-arrows open and go up; NSMatrix would only move the
+	 selection with them, so they go straight to the browser. */
+      if (character >= NSUpArrowFunctionKey && character <= NSRightArrowFunctionKey)
+        [[self nextResponder] keyDown: theEvent];
+      else
+        [super keyDown: theEvent];
+      return;
+    }
+
+  switch (character)
+    {
+    case NSUpArrowFunctionKey:
+    case NSDownArrowFunctionKey:
+      if (flags & NSAlternateKeyMask)
+        {
+          [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+            return (character == NSUpArrowFunctionKey) ? [model selectFirstItem]
+                                                       : [model selectLastItem];
+          }];
+          return;
+        }
+      [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+        return [model moveInDirection: (character == NSUpArrowFunctionKey)
+                                       ? FSNSelectionDirectionUp : FSNSelectionDirectionDown
+                               extend: extend];
+      }];
+      return;
+
+    /* Home and End only scroll; the selection stays. */
+    case NSHomeFunctionKey:
+    case NSEndFunctionKey:
+      {
+        NSRect b = [self bounds];
+        BOOL atMaxY = ((character == NSHomeFunctionKey) != [self isFlipped]);
+
+        [self scrollRectToVisible: NSMakeRect(NSMinX(b), atMaxY ? NSMaxY(b) - 1 : NSMinY(b), 1, 1)];
+      }
+      return;
+
+    /* Tab walks the names of this column instead of leaving it. */
+    case NSTabCharacter:
+    case NSBackTabCharacter:
+      [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+        return [model selectNextInNameOrder: (character == NSTabCharacter && extend == NO)];
+      }];
+      return;
+
+    default:
+      break;
+    }
+
+  /* Typing selects in the column that has the focus. Space belongs to the
+     window (it looks inside the selection). */
+  if (character > 0x20 && character < 0xF700)
+    {
+      NSString *typed = characters;
+      NSTimeInterval when = [theEvent timestamp];
+
+      [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+        return [model typeSelect: typed atTime: when];
+      }];
+      return;
+    }
+
+  [super keyDown: theEvent];
 }
 
 - (void)visibleCellsNodes:(NSArray **)nodes
@@ -259,9 +400,14 @@
 
 - (void)mouseDown:(NSEvent*)theEvent
 {
-  int clickCount;
   NSPoint lastLocation;
   NSInteger row, col;
+  FSNBrowserCell *cell;
+  unsigned modifiers;
+  BOOL wasOnlySelected;
+  BOOL onIcon;
+  NSRect rect;
+  NSEvent *nextEvent;
 
   mouseFlags = [theEvent modifierFlags];
 
@@ -279,92 +425,90 @@
 
   [column stopCellEditing];
 
-  clickCount = [theEvent clickCount];
-
-  if (clickCount >= 2)
+  if ([theEvent clickCount] >= 2)
     {
       editIndex = -1;
       [self sendDoubleAction];
       return;
     }
 
-  lastLocation = [theEvent locationInWindow];
-  lastLocation = [self convertPoint: lastLocation
-			   fromView: nil];
+  lastLocation = [self convertPoint: [theEvent locationInWindow] fromView: nil];
 
-  if ([self getRow: &row column: &col forPoint: lastLocation])
+  if ([self getRow: &row column: &col forPoint: lastLocation] == NO)
     {
-      FSNBrowserCell *cell = [[self cells] objectAtIndex: row];
-      NSRect rect = [self cellFrameAtRow: row column: col];
-
-      if ([cell isEnabled])
-	{
-	  int sz = [cell iconSize];
-	  NSSize size = NSMakeSize(sz, sz);
-
-	  rect.size.width = size.width;
-	  rect.size.height = size.height;
-
-	  if (NSPointInRect(lastLocation, rect))
-	    {
-	      NSEvent *nextEvent;
-	      BOOL startdnd = NO;
-
-	      editIndex = -1;
-	      if (!([theEvent modifierFlags] & NSShiftKeyMask))
-		{
-		  [self deselectAllCells];
-		  if (editIndex != row)
-		    {
-		      editIndex = row;
-		    }
-		}
-
-	      [self selectCellAtRow: row column: col];
-	      [self sendAction];
-
-	      while (1)
-		{
-		  nextEvent = FSNNextMouseUpOrDraggedEvent([self window]);
-
-		  if ([nextEvent type] == NSLeftMouseUp)
-		    {
-		      break;
-
-		    }
-		  else if ([nextEvent type] == NSLeftMouseDragged)
-		    {
-		      editIndex = -1;
-		      startdnd = YES;
-		      break;
-		    }
-		}
-
-	      if (startdnd)
-		[self startExternalDragOnEvent: theEvent];
-	    }
-	  else
-	    {
-	      [super mouseDown: theEvent];
-
-	      if (editIndex != row)
-		{
-		  editIndex = row;
-		}
-	      else
-		{
-		  NSTimeInterval interval = ([theEvent timestamp] - editstamp);
-
-		  if ((interval > DOUBLE_CLICK_LIMIT)
-		      && (interval < EDIT_CLICK_LIMIT)) {
-		    [column setEditorForCell: cell];
-		  }
-		}
-	    }
-
-	  editstamp = [theEvent timestamp];
-	}
+      [super mouseDown: theEvent];
+      return;
     }
+
+  cell = [[self cells] objectAtIndex: row];
+  if ([cell isEnabled] == NO)
+    return;
+
+  modifiers = FSNSelectionModifiersFromEventFlags([theEvent modifierFlags]);
+
+  /* Control-click is the context menu, which a one-button mouse has no
+     other way to ask for; like a right click it leaves the selection. */
+  if (modifiers & FSNSelectionModifierControl)
+    {
+      NSEvent *menuEvent = [NSEvent mouseEventWithType: NSRightMouseDown
+                                              location: [theEvent locationInWindow]
+                                         modifierFlags: [theEvent modifierFlags]
+                                             timestamp: [theEvent timestamp]
+                                          windowNumber: [theEvent windowNumber]
+                                               context: [theEvent context]
+                                           eventNumber: [theEvent eventNumber]
+                                            clickCount: 1
+                                              pressure: [theEvent pressure]];
+      NSMenu *menu = [self menuForEvent: menuEvent];
+
+      if (menu != nil)
+        [NSMenu popUpContextMenu: menu withEvent: menuEvent forView: self];
+      return;
+    }
+
+  wasOnlySelected = ([[self selectedCells] count] == 1
+                     && [[self selectedCells] indexOfObjectIdenticalTo: cell] != NSNotFound);
+
+  [[self window] makeFirstResponder: self];
+  [self syncSelectionModel];
+  [selectionModel mouseDownOnItem: cell modifiers: modifiers];
+  [self applySelectionModel];
+  [self sendAction];
+
+  /* A modifier click that deselected the cell is done. */
+  if ([selectionModel isItemSelected: cell] == NO)
+    return;
+
+  rect = [self cellFrameAtRow: row column: col];
+  rect.size.width = [cell iconSize];
+  rect.size.height = [cell iconSize];
+  onIcon = NSPointInRect(lastLocation, rect);
+
+  nextEvent = FSNNextMouseUpOrDraggedEvent([self window]);
+
+  if ([nextEvent type] == NSLeftMouseDragged)
+    {
+      editIndex = -1;
+      [selectionModel mouseUpOnItem: cell dragged: YES];
+      [self startExternalDragOnEvent: theEvent];
+      return;
+    }
+
+  [selectionModel mouseUpOnItem: cell dragged: NO];
+  if ([self applySelectionModel])
+    [self sendAction];
+
+  if (wasOnlySelected && onIcon == NO
+      && (modifiers & ~FSNSelectionModifierOption) == 0)
+    {
+      NSTimeInterval interval = ([theEvent timestamp] - editstamp);
+
+      if ((interval > DOUBLE_CLICK_LIMIT) && (interval < EDIT_CLICK_LIMIT))
+        [column setEditorForCell: cell];
+    }
+
+  editIndex = row;
+  editstamp = [theEvent timestamp];
 }
 
 - (BOOL)acceptsFirstResponder

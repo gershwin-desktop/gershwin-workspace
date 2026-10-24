@@ -85,7 +85,6 @@ static id<FSNPreviewProvider> previewProvider = nil;
   RELEASE (columns);
   RELEASE (nameEditor);
   RELEASE (cellPrototype);
-  RELEASE (charBuffer);
   RELEASE (backColor);
   RELEASE (columnWidths);
 
@@ -189,11 +188,8 @@ static id<FSNPreviewProvider> previewProvider = nil;
     lastVisibleColumn = visibleColumns - 1;	
     currentshift = 0;	
     lastColumnLoaded = -1;
-    typingBufferColumn = -1;
 		
     skipUpdateScroller = NO;
-    lastKeyPressedTime = 0.0;
-    charBuffer = nil;
     simulatingDoubleClick = NO;    
     isLoaded = NO;	
 
@@ -1456,7 +1452,6 @@ static id<FSNPreviewProvider> previewProvider = nil;
 {
   NSString *characters = [theEvent characters];
   unichar character = 0;
-  NSString *characterStr = nil;
   FSNBrowserColumn *column = [self selectedColumn];
   NSMatrix *matrix;
 
@@ -1477,13 +1472,19 @@ static id<FSNPreviewProvider> previewProvider = nil;
   if ([characters length] > 0)
     {
       character = [characters characterAtIndex: 0];
-      characterStr = [characters substringToIndex: 1];
     }
 
   switch (character)
     {
     case NSUpArrowFunctionKey:
     case NSDownArrowFunctionKey:
+      if (([theEvent modifierFlags] & (NSCommandKeyMask | NSControlKeyMask)) == 0)
+        {
+          /* The column's matrix decides, as when it has the focus. */
+          [[self window] makeFirstResponder: matrix];
+          [matrix keyDown: theEvent];
+          return;
+        }
       [super keyDown: theEvent];
       return;
 	
@@ -1516,62 +1517,20 @@ static id<FSNPreviewProvider> previewProvider = nil;
     case NSCarriageReturnCharacter:
       [(FSNBrowserMatrix *)matrix setMouseFlags: [theEvent modifierFlags]];
       [matrix sendDoubleAction];
-      DESTROY(charBuffer);
       return;
     case 0x01B: // Escape
-      DESTROY(charBuffer);
       return;
     default:
       break;
   }  
   
-  if (([characters length] > 0) && (character < 0xF700))
+  /* Typing selects in the column that has the focus (FSNBrowserMatrix). */
+  if (([characters length] > 0) && (character > 0x20) && (character < 0xF700)
+      && ([theEvent modifierFlags] & (NSCommandKeyMask | NSControlKeyMask)) == 0)
     {
-      column = [self lastLoadedColumn];
-
-      if (column)
-	{
-	  NSInteger index = [column index];
-
-	  matrix = [column cmatrix];
-
-	  if (matrix == nil)
-	    {
-	      return;
-	    }
-
-	  if (charBuffer != nil)
-	    {
-	      if (([theEvent timestamp] - lastKeyPressedTime < 5.0) // seconds
-		  && (typingBufferColumn == index))
-		{
-		  NSString *appendBuffer = [charBuffer stringByAppendingString:characterStr];
-
-		  // Try selecting
-		  if ([column selectCellWithPrefix: appendBuffer])
-		    {
-		      ASSIGN(charBuffer, appendBuffer);
-		      [[self window] makeFirstResponder: matrix];
-		      return;
-		    }
-		  // unable to select - fall-through and reinit as if typed is first char
-		}
-	    }
-
-	  ASSIGN(charBuffer, characterStr);
-	  typingBufferColumn = index;
-	  lastKeyPressedTime = [theEvent timestamp];
-
-	  // Try selecting
-	  if ([column selectCellWithPrefix: charBuffer])
-            {
-              [[self window] makeFirstResponder: matrix];
-              return;
-            }
-
-	  // Selection failed, reinitialize and use mismatching character as new buffer beginning
-	  DESTROY(charBuffer);
-	}
+      [[self window] makeFirstResponder: matrix];
+      [matrix keyDown: theEvent];
+      return;
     }
 
   [super keyDown: theEvent];
