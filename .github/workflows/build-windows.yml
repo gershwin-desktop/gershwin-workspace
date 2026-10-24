@@ -25,7 +25,7 @@ env:
   # gershwin-developer branch to build with. Its stale "windows" branch still
   # builds in the deprecated MSYS2 MINGW64 environment; dev carries the
   # Windows support and the UCRT64 build that matches the setup below.
-  DEVELOPER_BRANCH: dev
+  DEVELOPER_BRANCH: ci/windows-publish-retry
 
   # Repositories checkout.sh should NOT clone: this checkout provides
   # gershwin-workspace, and nothing else beyond the core libraries is built on
