@@ -31,9 +31,9 @@
 #import "FSNodeRep.h"
 #import "HistoryPref.h"
 #import "Workspace.h"
+#import "GWNavigationHistory.h"
 
 #define CACHE_MAX 10000
-#define CACHE_MIN 4
 
 static NSString *nibName = @"HistoryPref";
 
@@ -59,7 +59,7 @@ static NSString *nibName = @"HistoryPref";
       gworkspace = [Workspace gworkspace];
 
       [stepper setMaxValue: CACHE_MAX];
-      [stepper setMinValue: CACHE_MIN];
+      [stepper setMinValue: GWNavigationHistoryMinimumLimit];
       [stepper setIncrement: 1];
       [stepper setAutorepeat: YES];
       [stepper setValueWraps: NO];

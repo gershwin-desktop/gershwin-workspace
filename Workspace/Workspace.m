@@ -84,6 +84,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWTrashFlight.h"
 #import "GWOpenItemAnimation.h"
 #import "GWViewersManager.h"
+#import "GWNavigationHistory.h"
 #import "ViewOptions/GWViewOptionsPanel.h"
 #import "GWViewer.h"
 #import "Finder.h"
@@ -260,7 +261,6 @@ static Workspace *gworkspace = nil;
   #define byowner 4
 #endif
 
-#define HISTORT_CACHE_MAX 20
 
 #ifndef TSHF_MAXF
   #define TSHF_MAXF 999
@@ -1030,12 +1030,8 @@ static Workspace *gworkspace = nil;
     [fsnodeRep setHiddenPaths: entry];
 	} 
 
-	entry = [defaults objectForKey: @"history_cache"];
-	if (entry) {
-    maxHistoryCache = [entry intValue];
-	} else {
-    maxHistoryCache = HISTORT_CACHE_MAX;
-  }
+  maxHistoryCache =
+    (int)GWNavigationHistoryLimitFromDefault([defaults objectForKey: @"history_cache"]);
   
   dontWarnOnQuit = [defaults boolForKey: @"NoWarnOnQuit"];
 

@@ -184,6 +184,23 @@ int main(void)
   }
   END_SET("repeated pairs collapse");
 
+  START_SET("the stored limit");
+  {
+    /* A stored 0 left every window with one folder, so Back and Forward
+     * never had anything to step to. */
+    PASS(GWNavigationHistoryLimitFromDefault(nil) == GWNavigationHistoryDefaultLimit,
+         "no stored value gives the default");
+    PASS(GWNavigationHistoryLimitFromDefault([NSNumber numberWithInt:0])
+             == GWNavigationHistoryDefaultLimit,
+         "a stored 0 counts as not chosen");
+    PASS(GWNavigationHistoryLimitFromDefault(@"2") == GWNavigationHistoryDefaultLimit,
+         "a value below the preferences' minimum counts as not chosen");
+    PASS(GWNavigationHistoryLimitFromDefault([NSNumber numberWithInt:50]) == 50,
+         "a chosen value is kept");
+    PASS(GWNavigationHistoryLimitFromDefault(@"4") == 4, "the minimum itself is kept");
+  }
+  END_SET("the stored limit");
+
   START_SET("clearing");
   {
     GWNavigationHistory *h = historyWith(@[ @"/a", @"/b" ]);

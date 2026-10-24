@@ -44,3 +44,13 @@
 - (void)removeAllItems;
 
 @end
+
+/* How many folders a window remembers when the user has not chosen, and
+ * the fewest the History preferences let the user choose. */
+extern const NSInteger GWNavigationHistoryDefaultLimit;
+extern const NSInteger GWNavigationHistoryMinimumLimit;
+
+/* The limit for a stored "history_cache" value.  A value below the minimum
+ * cannot come from the preferences and would leave Back and Forward with
+ * nothing to step to, so it counts as not chosen. */
+NSInteger GWNavigationHistoryLimitFromDefault(id storedValue);

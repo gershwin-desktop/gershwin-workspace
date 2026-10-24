@@ -6,6 +6,17 @@
 
 #import "GWNavigationHistory.h"
 
+const NSInteger GWNavigationHistoryDefaultLimit = 20;
+const NSInteger GWNavigationHistoryMinimumLimit = 4;
+
+NSInteger GWNavigationHistoryLimitFromDefault(id storedValue)
+{
+  if ([storedValue respondsToSelector:@selector(integerValue)]
+      && [storedValue integerValue] >= GWNavigationHistoryMinimumLimit)
+    return [storedValue integerValue];
+  return GWNavigationHistoryDefaultLimit;
+}
+
 static BOOL itemIsValid(id item)
 {
   if ([item respondsToSelector:@selector(isValid)])
