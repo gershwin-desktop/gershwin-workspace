@@ -94,8 +94,12 @@
 
 /* Re-base the viewer window to a new node (sidebar navigation).
    Recreates the node view, updates the window title and path bar,
-   and resets history. */
+   and adds the new base to the window's history. */
 - (void)openNodeInPlace:(FSNode *)newBase;
+
+/* The same without a history entry: Back and Forward use it to return to a
+ * folder outside the window's current base. */
+- (void)rebaseOnNode:(FSNode *)newBase;
 
 - (GWViewerWindow *)win;
 - (id)shelf;

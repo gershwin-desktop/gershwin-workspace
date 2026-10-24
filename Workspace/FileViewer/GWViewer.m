@@ -1535,6 +1535,14 @@ static BOOL hasLastExtents_ = NO;
     [self activate];
     return;
   }
+  [self rebaseOnNode: newBase];
+  /* A sidebar click is one more step in the window's history, as any
+   * other way of opening a folder in it. */
+  [manager addNode: baseNode toHistoryOfViewer: self];
+}
+
+- (void)rebaseOnNode:(FSNode *)newBase
+{
 
   /* Tear down watchers for the old base */
   NSUInteger i;
@@ -1551,8 +1559,6 @@ static BOOL hasLastExtents_ = NO;
     ASSIGN (baseNode, [FSNode nodeWithPath: [newBase path]]);
   }
   ASSIGN (baseNodeArray, [NSArray arrayWithObject: baseNode]);
-
-  [[self navigationHistory] removeAllItems];
 
   /* Recreate the node view bound to the new base. Match the safe
      pattern used in setViewerType:: tearing the documentView down via
@@ -1597,7 +1603,6 @@ static BOOL hasLastExtents_ = NO;
              object: nil];
   }
 
-  [manager addNode: baseNode toHistoryOfViewer: self];
   [self scrollToBeginning];
   /* After the scroll to the top, which would drop a restored position. */
   [self applySettingsOfShownFolder];

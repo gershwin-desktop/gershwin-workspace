@@ -1941,11 +1941,27 @@ static GWViewersManager *vwrsmanager = nil;
            ofViewer:(id)viewer
 {
   FSNode *node = [history objectAtIndex: position];
-  id nodeView = [viewer nodeView];
+  id nodeView;
   
   settingHistoryPath = YES;
-  
-  if ([viewer viewType] != GWViewTypeBrowser
+
+  /* A sidebar click re-bases the window, so its history can hold folders
+   * outside the current base, which the node views cannot show. */
+  if ([viewer respondsToSelector: @selector(rebaseOnNode:)]
+      && [node isEqual: [viewer baseNode]] == NO
+      && [node isSubnodeOfNode: [viewer baseNode]] == NO)
+    {
+      [viewer rebaseOnNode: node];
+    }
+  nodeView = [viewer nodeView];
+
+  if ([node isEqual: [viewer baseNode]]
+      && [viewer respondsToSelector: @selector(showNodeWithoutHistory:)])
+    {
+      /* Shown by the re-base, or already the base. */
+      [viewer showNodeWithoutHistory: node];
+    }
+  else if ([viewer viewType] != GWViewTypeBrowser
       && [viewer respondsToSelector: @selector(showNodeWithoutHistory:)])
     {
       /* Like opening the folder: title, folder settings and selection
