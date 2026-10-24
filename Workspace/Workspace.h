@@ -389,6 +389,9 @@
 
 - (void)showPreferences:(id)sender;
 
+/* The preferences window, showing the pane with the Dock settings. */
+- (void)showDockPreferences:(id)sender;
+
 - (void)showViewer:(id)sender;
 
 - (void)showHistory:(id)sender;

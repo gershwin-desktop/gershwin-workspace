@@ -556,6 +556,29 @@ NSString * const GWDockSettingsDidChangeNotification =
     }
 }
 
+- (void)changeDockPosition:(DockPosition)pos
+{
+  if (pos == dockPosition)
+    return;
+  [self setDockPosition: pos];
+  [self saveDockDefaults];
+  [nc postNotificationName: GWDockSettingsDidChangeNotification object: self];
+}
+
+- (void)changeDockMagnification:(BOOL)value
+{
+  if (value == [dock isMagnificationEnabled])
+    return;
+  [dock setMagnificationEnabled: value];
+  /* Written only here, when the user changes it, and not with the other
+   * keys in -saveDockDefaults: "dockmagnification" is also set with
+   * defaults write, and writing it along with an unrelated change would
+   * undo that. */
+  [[NSUserDefaults standardUserDefaults] setBool: value
+                                          forKey: @"dockmagnification"];
+  [nc postNotificationName: GWDockSettingsDidChangeNotification object: self];
+}
+
 - (void)saveDockDefaults
 {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];

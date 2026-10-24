@@ -50,6 +50,10 @@
 
 - (IBAction)activatePrefView:(id)sender;
 
+/* Brings the window forward showing the pane of the given class, and
+ * returns that pane (nil if there is none). */
+- (id <PrefProtocol>)activatePreferenceOfClass:(Class)prefClass;
+
 - (void)updateDefaults;
 
 - (id)myWin;

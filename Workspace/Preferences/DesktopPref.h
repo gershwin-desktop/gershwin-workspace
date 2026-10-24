@@ -95,6 +95,9 @@
 // General
 - (IBAction)setOmnipresent:(id)sender;
 
+/* Selects the tab with the Dock settings. */
+- (void)showDockSettings;
+
 - (IBAction)setUsesDock:(id)sender;
 
 - (IBAction)setDockPosition:(id)sender;

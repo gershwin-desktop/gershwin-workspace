@@ -26,12 +26,7 @@
 
 #import <Foundation/Foundation.h>
 #import "FSNodeRep.h"
-
-typedef enum {
-  DockPositionLeft,
-  DockPositionRight,
-  DockPositionBottom
-} DockPosition;
+#import "DockPosition.h"
 
 /* Posted after the Dock settings in the defaults were applied to the Dock,
  * so a panel showing them can follow a change made from outside. */
@@ -121,6 +116,14 @@ extern NSString * const GWDockSettingsDidChangeNotification;
 - (BOOL)dockActive;
 
 - (void)saveDockDefaults;
+
+/* A Dock setting changed from inside Workspace, by the preferences or by
+ * the Dock's own menu: applied, stored and announced with
+ * GWDockSettingsDidChangeNotification, so that every place showing it
+ * follows. */
+- (void)changeDockPosition:(DockPosition)pos;
+
+- (void)changeDockMagnification:(BOOL)value;
 
 - (void)setReservedFrames;
 

@@ -70,6 +70,7 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "RunExternalController.h"
 #import "StartAppWin.h"
 #import "Preferences/PrefController.h"
+#import "Preferences/DesktopPref.h"
 #import "GWApplicationLauncher.h"
 #import "GWURLOpener.h"
 #import "GWUnmountHelper.h"
@@ -3766,6 +3767,13 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 - (void)showPreferences:(id)sender
 {
   [prefController activate]; 
+}
+
+- (void)showDockPreferences:(id)sender
+{
+  /* The Dock settings live in the Desktop pane. */
+  [(DesktopPref *)[prefController activatePreferenceOfClass: [DesktopPref class]]
+                    showDockSettings];
 }
 
 - (void)activateContextHelp:(id)sender

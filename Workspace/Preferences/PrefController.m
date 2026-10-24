@@ -153,6 +153,29 @@ RELEASE (currentPref)
   [viewsBox addSubview: [currentPref prefView]];  
 }
 
+- (id <PrefProtocol>)activatePreferenceOfClass:(Class)prefClass
+{
+  id <PrefProtocol> found = nil;
+  NSUInteger i;
+
+  for (i = 0; i < [preferences count]; i++)
+    {
+      id <PrefProtocol> pref = [preferences objectAtIndex: i];
+
+      if ([(id)pref isKindOfClass: prefClass])
+        {
+          /* Through the popup, so that it shows the pane it switched to
+           * and the pane is switched the way a pick there switches it. */
+          [popUp selectItemWithTitle: [pref prefName]];
+          [self activatePrefView: popUp];
+          found = pref;
+          break;
+        }
+    }
+  [self activate];
+  return found;
+}
+
 - (void)updateDefaults
 {
   [win saveFrameUsingName: @"preferencesWin"];

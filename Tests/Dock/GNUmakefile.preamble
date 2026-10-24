@@ -81,3 +81,7 @@ t_DockInsertionRemoval_LDFLAGS += -Wl,--unresolved-symbols=ignore-all
 # the Dock adopts at startup.
 t_DockAdoption_OBJC_FILES += ../../Workspace/Desktop/Dock/DockAdoption.m \
                              ../../Workspace/GWWindowOwnership.m
+
+# t_DockSeparatorMenu: the items of the Dock separator's menu and the
+# settings each one leads to.
+t_DockSeparatorMenu_OBJC_FILES += ../../Workspace/Desktop/Dock/DockSeparatorMenu.m

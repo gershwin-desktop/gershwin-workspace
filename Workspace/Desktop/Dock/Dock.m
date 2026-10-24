@@ -41,6 +41,7 @@
 #import "DockInsertion.h"
 #import "DockMiniatureWatcher.h"
 #import "DockMiniatureTile.h"
+#import "DockSeparatorMenu.h"
 #import <GNUstepGUI/GSDisplayServer.h>
 
 #if HAVE_DBUS
@@ -49,6 +50,8 @@
 
 /* Room for the line between the applications and the folders and Trash. */
 #define DIVIDER_SIZE 12
+/* Between the bar and the menu of the line between its sections. */
+#define SEPARATOR_MENU_GAP 8
 #define MAX_ICN_SIZE 48
 #define MIN_ICN_SIZE 16
 #define ICN_INCR 4
@@ -930,6 +933,138 @@ static inline CGFloat _dockScaleFactor(void)
       [icon setAppHidden: NO];
     }
   }
+}
+
+#pragma mark - separator menu
+
+/* The line between the applications and the folders has a menu of the
+ * Dock settings, which the empty bar around it does not. */
+- (void)rightMouseDown:(NSEvent *)theEvent
+{
+  NSPoint p = [self convertPoint: [theEvent locationInWindow] fromView: nil];
+
+  if (NSPointInRect(p, dividerRect) == NO)
+    {
+      [super rightMouseDown: theEvent];
+      return;
+    }
+  [self popUpSeparatorMenu: [self separatorMenu] withEvent: theEvent];
+}
+
+/* A context menu opens at the pointer, and against the screen edge the
+ * Dock sits on it is pushed back over the pointer: the item under it was
+ * then chosen by merely releasing the button of a short click.  So the
+ * menu is placed beside the bar instead, towards the middle of the screen,
+ * clear of the pointer, the way the theme's own context menus are shown
+ * otherwise (display transient, track, close). */
+- (void)popUpSeparatorMenu:(NSMenu *)menu withEvent:(NSEvent *)theEvent
+{
+  NSMenuView *menuView = [menu menuRepresentation];
+  NSWindow *menuWindow;
+  NSRect line, frame, screen;
+  NSPoint origin;
+
+  [menu displayTransient];
+  menuWindow = [menuView window];
+  frame = [menuWindow frame];
+  screen = [[[self window] screen] frame];
+  line = [[self window] convertRectToScreen:
+                          [self convertRect: dividerRect toView: nil]];
+
+  switch (position)
+    {
+      case DockPositionLeft:
+        origin = NSMakePoint(NSMaxX(line) + SEPARATOR_MENU_GAP,
+                             NSMidY(line) - NSHeight(frame) / 2);
+        break;
+      case DockPositionRight:
+        origin = NSMakePoint(NSMinX(line) - SEPARATOR_MENU_GAP
+                               - NSWidth(frame),
+                             NSMidY(line) - NSHeight(frame) / 2);
+        break;
+      default:
+        origin = NSMakePoint(NSMidX(line) - NSWidth(frame) / 2,
+                             NSMaxY(line) + SEPARATOR_MENU_GAP);
+        break;
+    }
+  origin.x = MAX(NSMinX(screen), MIN(origin.x, NSMaxX(screen) - NSWidth(frame)));
+  origin.y = MAX(NSMinY(screen), MIN(origin.y, NSMaxY(screen) - NSHeight(frame)));
+  [menuWindow setFrameOrigin: origin];
+
+  [menuView mouseDown: theEvent];
+  [menu closeTransient];
+}
+
+- (DockSeparatorSettings)separatorSettings
+{
+  DockSeparatorSettings s;
+
+  s.magnification = magnifyEnabled;
+  s.position = position;
+  return s;
+}
+
+static NSMenu *
+separatorMenuFromEntries(NSArray *entries, NSString *title, id target)
+{
+  NSMenu *menu = AUTORELEASE ([[NSMenu alloc] initWithTitle: title]);
+  NSEnumerator *e = [entries objectEnumerator];
+  DockSeparatorMenuEntry *entry;
+
+  /* The checkmarks come from the entries, not from validation. */
+  [menu setAutoenablesItems: NO];
+  while ((entry = [e nextObject]) != nil)
+    {
+      NSMenuItem *item;
+
+      if ([entry isSeparator])
+        {
+          [menu addItem: [NSMenuItem separatorItem]];
+          continue;
+        }
+      item = AUTORELEASE ([[NSMenuItem alloc] initWithTitle: [entry title]
+                                                     action: NULL
+                                              keyEquivalent: @""]);
+      if ([entry submenu])
+        {
+          [item setSubmenu: separatorMenuFromEntries([entry submenu],
+                                                     [entry title], target)];
+        }
+      else
+        {
+          [item setTarget: target];
+          [item setAction: @selector(separatorMenuAction:)];
+          [item setTag: [entry tag]];
+          [item setState: [entry isChecked] ? NSOnState : NSOffState];
+        }
+      [menu addItem: item];
+    }
+  return menu;
+}
+
+- (NSMenu *)separatorMenu
+{
+  return separatorMenuFromEntries(
+           DockSeparatorMenuEntries([self separatorSettings]), @"Dock", self);
+}
+
+- (void)separatorMenuAction:(id)sender
+{
+  DockSeparatorSettings now = [self separatorSettings];
+  DockSeparatorSettings next;
+
+  if (DockSeparatorChoiceOpensPreferences([sender tag]))
+    {
+      [gw showDockPreferences: self];
+      return;
+    }
+  next = DockSeparatorSettingsAfterChoice(now, [sender tag]);
+  /* Through the desktop manager, as the preferences do, so that the
+   * defaults and an open preferences window follow. */
+  if (next.magnification != now.magnification)
+    [manager changeDockMagnification: next.magnification];
+  if (next.position != now.position)
+    [manager changeDockPosition: next.position];
 }
 
 - (void)iconMenuAction:(id)sender

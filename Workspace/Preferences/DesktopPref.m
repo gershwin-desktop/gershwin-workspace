@@ -264,6 +264,25 @@ static NSString *nibName = @"DesktopPref";
   }
 }
 
+- (void)showDockSettings
+{
+  NSArray *items = [tabView tabViewItems];
+  NSUInteger i;
+
+  /* Found by its contents rather than by index, so that reordering the
+   * tabs in the interface file cannot send it to the wrong one. */
+  for (i = 0; i < [items count]; i++)
+    {
+      NSTabViewItem *item = [items objectAtIndex: i];
+
+      if ([dockBox isDescendantOf: [item view]])
+        {
+          [tabView selectTabViewItem: item];
+          return;
+        }
+    }
+}
+
 - (IBAction)setUsesDock:(id)sender
 {
   [manager setDockActive: ([sender state] == NSOnState)];
@@ -276,8 +295,7 @@ static NSString *nibName = @"DesktopPref";
   NSInteger row, col;
   
   [dockPosMatrix getRow: &row column: &col ofCell: cell];
-  [manager setDockPosition: (row == 0) ? DockPositionLeft : (row == 1) ? DockPositionRight : DockPositionBottom];
-  [manager saveDockDefaults];
+  [manager changeDockPosition: (row == 0) ? DockPositionLeft : (row == 1) ? DockPositionRight : DockPositionBottom];
 }
 
 - (IBAction)setDockStyle:(id)sender
