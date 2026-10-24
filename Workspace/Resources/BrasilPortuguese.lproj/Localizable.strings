@@ -883,3 +883,5 @@
 "Left" = "Esquerda";
 "Bottom" = "Embaixo";
 "Right" = "Direita";
+"Keep in Dock" = "Manter no Dock";
+"Remove from Dock" = "Remover do Dock";

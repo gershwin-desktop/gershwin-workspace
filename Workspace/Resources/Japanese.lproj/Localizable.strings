@@ -886,3 +886,5 @@
 "Turn Magnification Off" = "拡大をオフ";
 "Position on Screen" = "画面上の位置";
 "Dock Preferences..." = "Dock環境設定...";
+"Keep in Dock" = "Dockに追加";
+"Remove from Dock" = "Dockから削除";

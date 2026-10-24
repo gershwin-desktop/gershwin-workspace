@@ -928,3 +928,5 @@
 "Left" = "Venstre";
 "Bottom" = "Nederst";
 "Right" = "Høyre";
+"Keep in Dock" = "Behold i Dock";
+"Remove from Dock" = "Fjern fra Dock";

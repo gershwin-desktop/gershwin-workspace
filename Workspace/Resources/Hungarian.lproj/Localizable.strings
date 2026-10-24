@@ -930,3 +930,5 @@
 "Left" = "Balra";
 "Bottom" = "Lent";
 "Right" = "Jobbra";
+"Keep in Dock" = "Megtartás a Dockban";
+"Remove from Dock" = "Eltávolítás a Dockból";
