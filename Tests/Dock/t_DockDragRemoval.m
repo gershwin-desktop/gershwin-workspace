@@ -1,16 +1,18 @@
-/* t_DockDragRemoval.m - headless coverage of the drag-out removal rule.
+/* t_DockDragRemoval.m - an item never leaves the Dock by being dragged.
  *
- * Removing a docked icon by drag and drop is only meant when the drag is
- * carried further out beyond the Dock's face (outward, away from the
- * screen edge) than twice the Dock's height; a drop let go nearer than
- * that comes back instead of taking the icon out, and so does a drag that
- * merely moved the icon along the Dock.  The rule
- * itself lives in Dock.h as DockDropRemovesIcon(), a Foundation-only static
- * inline, precisely so it can be proven without building a Dock (which
- * needs NSWorkspace, X11 and a running desktop) - the same pattern as
- * t_DockPoll.m for DockMagnifyPollInterval().  Dock.h drags in
- * GWDesktopManager.h and FSNodeRep.h for their declarations only; nothing
- * here links FSNode or messages an AppKit class.
+ * Dragging a Dock item out and letting go of it anywhere outside the Dock -
+ * on the desktop, on nothing at all, however far out, or on a destination
+ * that took the drop - puts it back where it was; the saved Dock contents
+ * do not change.  Taking an item out of the Dock is the context menu's
+ * "Remove from Dock" alone.  Moving an item along the Dock by dragging still
+ * reorders it.
+ *
+ * Compiles Dock.m in-process, linked like t_DockInsertionRemoval (see
+ * GNUmakefile.preamble), so the real -iconDragEnded:, -draggingUpdated:,
+ * -iconMenuAction: and -saveDockConfiguration run.  The icons are the
+ * stand-ins of Collab/DockDragStubs.m.  The Dock has no window here; the
+ * test Dock answers the bar's place on the screen itself and does not lay
+ * its icons out, which needs a screen and is not under test.
  *
  * Copyright (c) 2026 Simon Peter
  *
@@ -20,54 +22,199 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import "Testing.h"
-#import "Dock.h"
-#import <Foundation/Foundation.h>
+#include "../../Workspace/Desktop/Dock/Dock.m"
+#import "Collab/DockDragStubs.h"
 
-#define CLOSE(a, b) (fabs((a) - (b)) < 0.001)
+static NSString * const kAppA = @"/Applications/DockDragTestA.app";
+static NSString * const kAppB = @"/Applications/DockDragTestB.app";
+static NSString * const kFolder = @"/DockDragTest/Folder";
 
-int main(void)
+/* A bottom Dock 64 points high along the bottom of a 1000 point screen. */
+@interface DragTestDock : Dock
+- (void)addTestIcon:(DockIcon *)icon at:(CGFloat)x;
+- (NSArray *)testIcons;
+- (void)beginDragOf:(DockIcon *)icon;
+@end
+
+@implementation DragTestDock
+- (id)initWithFrame:(NSRect)frame
+{
+  self = [super initWithFrame: frame];
+  if (self != nil)
+    {
+      /* What -initForManager: sets up: no drag in progress, at the bottom. */
+      icons = [NSMutableArray new];
+      targetIndex = -1;
+      folderTargetIndex = -1;
+      position = DockPositionBottom;
+      baseCell = 64;
+    }
+  return self;
+}
+- (NSRect)barFrame
+{
+  return NSMakeRect(0, 0, 400, 64);
+}
+- (void)tile
+{
+}
+- (void)addTestIcon:(DockIcon *)icon at:(CGFloat)x
+{
+  [icon setFrame: NSMakeRect(x, 0, 64, 64)];
+  [icons addObject: icon];
+  [self addSubview: icon];
+}
+- (NSArray *)testIcons
+{
+  return icons;
+}
+/* What DockIcon's -startExternalDragOnEvent:withMouseOffset: tells the Dock. */
+- (void)beginDragOf:(DockIcon *)icon
+{
+  [icon setIsDndSourceIcon: YES];
+  [self setDndSourceIcon: icon];
+}
+@end
+
+/* Just enough of a drag in progress for -draggingUpdated:: who drags, and
+ * where the pointer is in the Dock's (windowless) coordinates. */
+@interface DragTestInfo : NSObject
+{
+  id source;
+  NSPoint location;
+}
+- (id)initWithSource:(id)s location:(NSPoint)p;
+@end
+
+@implementation DragTestInfo
+- (id)initWithSource:(id)s location:(NSPoint)p
+{
+  self = [super init];
+  source = s;
+  location = p;
+  return self;
+}
+- (id)draggingSource { return source; }
+- (NSPoint)draggingLocation { return location; }
+- (NSPasteboard *)draggingPasteboard { return nil; }
+- (NSDragOperation)draggingSourceOperationMask { return NSDragOperationMove; }
+@end
+
+static NSDictionary *
+savedApplications(void)
+{
+  return [[NSUserDefaults standardUserDefaults] objectForKey: @"applications"];
+}
+
+static NSString *
+savedPathAt(NSString *index)
+{
+  return [[savedApplications() objectForKey: index] objectForKey: @"path"];
+}
+
+int
+main(void)
 {
   NSAutoreleasePool *arp = [NSAutoreleasePool new];
-  CGFloat h = 64.0;
+  NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
+  NSString *domain = [[NSProcessInfo processInfo] processName];
+  DragTestDock *dock;
+  DockIcon *a, *b, *folder;
+  NSDictionary *before;
 
-  /* --- nearer than twice the Dock's height: a slip, never a removal --- */
+  /* The saved Dock contents go to this tool's own defaults domain; start
+   * from nothing and leave nothing behind. */
+  [defaults removePersistentDomainForName: domain];
+
+  dock = [[DragTestDock alloc] initWithFrame: NSMakeRect(0, 0, 400, 64)];
+  a = [[DockIcon alloc] initStandInWithPath: kAppA docked: YES];
+  b = [[DockIcon alloc] initStandInWithPath: kAppB docked: YES];
+  folder = [[DockIcon alloc] initStandInWithPath: kFolder docked: YES];
+  [dock addTestIcon: a at: 0];
+  [dock addTestIcon: b at: 64];
+  [dock addTestIcon: folder at: 128];
+  [dock saveDockConfiguration];
+  before = [savedApplications() copy];
+  NEED(PASS([before count] == 2 && [savedPathAt(@"0") isEqual: kAppA],
+            "fixture: both applications are saved in the Dock"));
+
+  /* --- dragged out and let go anywhere: it stays ---
+   * DockIcon reports the end of every drag of it this way, wherever it was
+   * let go: on the desktop, on the Trash, on another destination, on
+   * nothing, however far out. */
   {
-    PASS(DockDropRemovesIcon(0.0, h) == NO, "a drop still on the bar does not remove");
+    [dock beginDragOf: a];
+    [dock iconDragEnded: a];
+    PASS([[dock testIcons] indexOfObjectIdenticalTo: a] == 0,
+         "an application dragged out of the Dock stays in its place");
+    PASS([a isDndSourceIconForTest] == NO,
+         "it shows again once the drag is over");
 
-    PASS(DockDropRemovesIcon(h, h) == NO,
-         "dragged exactly one Dock height out does not remove yet");
+    [dock beginDragOf: folder];
+    [dock iconDragEnded: folder];
+    PASS([[dock testIcons] indexOfObjectIdenticalTo: folder] == 2,
+         "a kept folder dragged out of the Dock stays too");
 
-    PASS(DockDropRemovesIcon(2.0 * h - 0.5, h) == NO,
-         "half a point short of the span does not remove: the accidental "
-         "twitch near the edge stays on the safe side");
+    PASS([[dock testIcons] count] == 3
+         && [savedApplications() isEqual: before]
+         && [[defaults objectForKey: @"folders"] count] == 1,
+         "no drag changed the saved Dock contents");
   }
 
-  /* --- past the span: deliberate, removes --- */
+  /* --- dragged along the Dock: it reorders --- */
   {
-    PASS(DockDropRemovesIcon(2.0 * h, h) == YES,
-         "at exactly twice the Dock's height the removal counts (>=)");
+    DragTestInfo *info;
+    int i;
 
-    PASS(DockDropRemovesIcon(2.0 * h + 0.5, h) == YES, "half a point past the span removes");
+    [dock beginDragOf: a];
+    info = [[DragTestInfo alloc] initWithSource: a location: NSMakePoint(96, 32)];
+    /* The Dock lets the first two updates of a drag pass before it acts. */
+    for (i = 0; i < 3; i++)
+      [dock draggingUpdated: (id <NSDraggingInfo>)info];
+    [dock concludeDragOperation: (id <NSDraggingInfo>)info];
+    [dock iconDragEnded: a];
+    [info release];
 
-    PASS(DockDropRemovesIcon(20.0 * h, h) == YES, "a drag flung far across the desktop removes");
+    PASS([[dock testIcons] indexOfObjectIdenticalTo: a] == 1
+         && [[dock testIcons] indexOfObjectIdenticalTo: b] == 0,
+         "an application dragged onto the next one takes its place");
+    PASS([savedPathAt(@"0") isEqual: kAppB] && [savedPathAt(@"1") isEqual: kAppA],
+         "the new order is saved as soon as the drag ends");
   }
 
-  /* --- the threshold moves with the Dock's thickness --- */
+  /* --- the context menu takes it out, and that is saved --- */
   {
-    PASS(DockDropRemovesIcon(128.0, h) == YES && DockDropRemovesIcon(127.0, h) == NO,
-         "a 64 point bar takes removals from 128 points out, and only "
-         "those");
+    NSMenuItem *item = [[NSMenuItem alloc] initWithTitle:
+                          NSLocalizedString(@"Remove from Dock", @"")
+                                                  action: @selector(iconMenuAction:)
+                                           keyEquivalent: @""];
+
+    [item setRepresentedObject: a];
+    [dock iconMenuAction: item];
+    [item release];
+
+    PASS([[dock testIcons] indexOfObjectIdenticalTo: a] == NSNotFound,
+         "Remove from Dock takes a docked application out of the Dock");
+    PASS([savedApplications() count] == 1 && [savedPathAt(@"0") isEqual: kAppB],
+         "and the saved Dock contents no longer hold it");
+
+    item = [[NSMenuItem alloc] initWithTitle: NSLocalizedString(@"Remove from Dock", @"")
+                                      action: @selector(iconMenuAction:)
+                               keyEquivalent: @""];
+    [item setRepresentedObject: folder];
+    [dock iconMenuAction: item];
+    [item release];
+    PASS([[dock testIcons] indexOfObjectIdenticalTo: folder] == NSNotFound
+         && [[defaults objectForKey: @"folders"] count] == 0,
+         "Remove from Dock takes a kept folder out, and that is saved");
   }
 
-  /* --- degenerate geometry keeps the icon (fails closed) --- */
-  {
-    PASS(DockDropRemovesIcon(10000.0, 0.0) == NO,
-         "no bar to measure against means keep, not remove");
-
-    PASS(DockDropRemovesIcon(0.99, 0.5) == NO && DockDropRemovesIcon(1.5, 0.5) == YES,
-         "a hair-thin bar still splits at twice its own height");
-  }
-
+  [before release];
+  [a release];
+  [b release];
+  [folder release];
+  [dock release];
+  [defaults removePersistentDomainForName: domain];
   [arp release];
-  exit(0);
+  return 0;
 }

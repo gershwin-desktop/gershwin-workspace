@@ -1760,32 +1760,8 @@ DockLipLightGradient(void)
 	     endedAt:(NSPoint)aPoint
 	   deposited:(BOOL)flag
 {
-  Dock *dock = (Dock *)container;
-  NSPoint dropPoint;
-
   dragdelay = 0;
-  [self setIsDndSourceIcon: NO];
-  [dock setDndSourceIcon: nil];
-
-  /* aPoint is not where the pointer let go: GSDragView answers the dragged
-   * image's own position, built with an offset that folds the source
-   * window's origin into it (its `at:` argument is taken for a screen
-   * point while one is passed in window coordinates), so for a bottom
-   * Dock the point can sit a Dock-width to the left of the cursor and an
-   * ordinary reordering release read as a drop somewhere else, taking the
-   * icon out.  The drag is over and the pointer stands at the drop by the
-   * time this runs, so the cursor's own screen position is the drop. */
-  dropPoint = [NSEvent mouseLocation];
-
-  /* The icon leaves the Dock only when the Dock says the drop meant it
-   * (see -keepsDraggedIconEndedAt:deposited:): dropped back on the Dock,
-   * or let go still within twice its height of it, the icon is put back
-   * where it was rather than being taken out. */
-  if (dock != nil
-      && [dock keepsDraggedIconEndedAt: dropPoint deposited: flag] == NO)
-    {
-      [dock removeIcon: self];
-    }
+  [(Dock *)container iconDragEnded: self];
 }
 
 - (void)setMagnifiedIconSize:(CGFloat)size frame:(NSRect)frame

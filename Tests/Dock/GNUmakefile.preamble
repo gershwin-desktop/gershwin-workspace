@@ -85,3 +85,17 @@ t_DockAdoption_OBJC_FILES += ../../Workspace/Desktop/Dock/DockAdoption.m \
 # t_DockSeparatorMenu: the items of the Dock separator's menu and the
 # settings each one leads to.
 t_DockSeparatorMenu_OBJC_FILES += ../../Workspace/Desktop/Dock/DockSeparatorMenu.m
+
+# t_DockDragRemoval compiles Dock.m in-process as well, to drag icons in
+# and out of the real Dock and take them out through its context menu; its
+# DockIcon is a stand-in that keeps the state the Dock reads back
+# (Collab/DockDragStubs.m), in place of the empty one above.
+t_DockDragRemoval_OBJC_FILES += ../../Workspace/GWProcessOwnership.m \
+                                ../../Workspace/GWWindowOwnership.m \
+                                ../../Workspace/X11AppSupport.m \
+                                ../../Workspace/Desktop/Dock/DockMiniatureTile.m \
+                                ../../Workspace/Desktop/Dock/DockMiniatureWatcher.m \
+                                Collab/DockDragStubs.m
+t_DockDragRemoval_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                               -lFSNode -lgnustep-gui -lX11
+t_DockDragRemoval_LDFLAGS += -Wl,--unresolved-symbols=ignore-all
