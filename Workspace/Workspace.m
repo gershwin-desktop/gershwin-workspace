@@ -4313,6 +4313,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 {
   NSWindow *kwin = [NSApp keyWindow];
 
+  if (kwin && [self performEditAction: @selector(selectAll:) onTextOfWindow: kwin sender: sender])
+    return;
+
   if (kwin && [vwrsManager hasViewerWithWindow: kwin])
     {
       id viewer = [vwrsManager viewerWithWindow: kwin];
@@ -4412,9 +4415,25 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   [finder activate];   
 }
 
+/* While a name is being edited, the Edit menu works on its text, as in
+   any text field, and not on the selected items. YES when it did. */
+- (BOOL)performEditAction:(SEL)action onTextOfWindow:(NSWindow *)kwin sender:(id)sender
+{
+  NSResponder *fr = [kwin firstResponder];
+
+  if ([fr isKindOfClass: [NSText class]] == NO)
+    return NO;
+  if ([fr respondsToSelector: action])
+    [fr performSelector: action withObject: sender];
+  return YES;
+}
+
 - (void)cut:(id)sender
 {
   NSWindow *kwin = [NSApp keyWindow];
+
+  if (kwin && [self performEditAction: @selector(cut:) onTextOfWindow: kwin sender: sender])
+    return;
 
   if (kwin)
     {
@@ -4457,6 +4476,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 {
   NSWindow *kwin = [NSApp keyWindow];
 
+  if (kwin && [self performEditAction: @selector(copy:) onTextOfWindow: kwin sender: sender])
+    return;
+
   if (kwin) {
     if ([vwrsManager hasViewerWithWindow: kwin]
                                   || [dtopManager hasWindow: kwin]) {
@@ -4490,6 +4512,9 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
 - (void)paste:(id)sender
 {
   NSWindow *kwin = [NSApp keyWindow];
+
+  if (kwin && [self performEditAction: @selector(paste:) onTextOfWindow: kwin sender: sender])
+    return;
 
   if (kwin) {
     if ([vwrsManager hasViewerWithWindow: kwin]
@@ -5960,6 +5985,14 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 - (void)undo:(id)sender
 {
   NSError *error = nil;
+  NSResponder *fr = [[NSApp keyWindow] firstResponder];
+
+  /* Typing in a name being edited is undone there, not a file operation. */
+  if ([fr isKindOfClass: [NSText class]])
+    {
+      [[fr undoManager] undo];
+      return;
+    }
 
   if ([[GWFileUndoStack sharedStack] undo: &error] == NO && error != nil)
     {
@@ -5972,6 +6005,13 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
 - (void)redo:(id)sender
 {
   NSError *error = nil;
+  NSResponder *fr = [[NSApp keyWindow] firstResponder];
+
+  if ([fr isKindOfClass: [NSText class]])
+    {
+      [[fr undoManager] redo];
+      return;
+    }
 
   if ([[GWFileUndoStack sharedStack] redo: &error] == NO && error != nil)
     {
