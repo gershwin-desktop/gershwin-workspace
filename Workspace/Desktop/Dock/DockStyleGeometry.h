@@ -150,75 +150,127 @@ DockShelfStandLine(DockShelf s, CGFloat scale)
   return DockPixelAlign(s.backLeft.y - depth * DOCK_SHELF_STAND_SHARE, scale);
 }
 
-/* Where an icon's image is drawn in its tile: a square of side, centred
- * across the tile.  On the shelf its artwork stands on the stand line:
- * footing is the share of the image below the artwork (transparent rows,
- * DockFootingShare), by which the image goes lower.  The line is the
- * shelf's, not the tile's, so a magnified icon grows upwards and sideways
- * from where it stands.  Without a shelf (shelf NULL, the flat styles) the
- * image is centred in the tile.  It depends on the tile and the artwork
- * only, never on the size the image comes in, so every icon has the same
- * size. */
-static inline NSRect
-DockIconImageRect(NSRect tile, CGFloat side, CGFloat footing,
-                  const DockShelf *shelf, CGFloat scale)
+/* The visible artwork of an icon's image: the box around its pixels that
+ * are opaque enough to count (DOCK_ART_ALPHA), as shares of the image, y
+ * counted up from the bottom as everywhere in the view. */
+typedef struct
 {
-  CGFloat x = DockPixelAlign(NSMidX(tile) - side / 2, scale);
-  CGFloat y;
+  CGFloat minX;
+  CGFloat minY;
+  CGFloat maxX;
+  CGFloat maxY;
+} DockArtBox;
 
-  if (shelf == NULL)
-    return NSMakeRect(x, DockPixelAlign(NSMidY(tile) - side / 2, scale),
-                      side, side);
-
-  y = DockPixelAlign(DockShelfStandLine(*shelf, scale) - side * footing,
-                     scale);
-  /* A tile still growing in is lower than the image would stand; the
-   * image keeps inside it rather than being cut off. */
-  if (y + side > NSMaxY(tile))
-    y = floor((NSMaxY(tile) - side) * scale) / scale;
-  if (y < NSMinY(tile))
-    y = NSMinY(tile);
-  /* Origin aligned and the side kept, rather than both edges aligned, so
-   * that no icon comes out a pixel smaller than its neighbours. */
-  return NSMakeRect(x, y, side, side);
+static inline DockArtBox
+DockArtBoxFull(void)
+{
+  DockArtBox b = { 0.0, 0.0, 1.0, 1.0 };
+  return b;
 }
 
-/* The most of an image that may lie below its artwork and still count:
- * more is a picture that is meant to float, or no artwork at all. */
-#define DOCK_MAX_FOOTING 0.25
-/* Alpha at or below this (of 255) is not artwork: soft drop shadows. */
-#define DOCK_FOOTING_ALPHA 32
+/* Alpha at or below this (of 255, 10%) is not artwork.  Icon drop shadows
+ * and glows fade out from about a fifth of full alpha into nothing, and
+ * their outer half, the part a plain bounding box would add to the
+ * artwork, lies below a tenth; measured on the Dock's icons (Trash, home
+ * folder, Workspace, Claude), 10% leaves the shadows out and still keeps
+ * the anti-aliased edges of the artwork itself (which are lost from 20%
+ * up, by a pixel per side). */
+#define DOCK_ART_ALPHA 26
 
-/* How many rows at the bottom of an 8-bit bitmap hold no artwork.  rows
- * run top first, as in a bitmap's data; alpha is the index of the alpha
- * sample in a pixel, or -1 when there is none.  An image with no artwork
- * at all counts as having none below it either. */
-static inline NSInteger
-DockTransparentRowsAtBottom(const unsigned char *data, NSInteger width,
-                            NSInteger height, NSInteger bytesPerRow,
-                            NSInteger samplesPerPixel, NSInteger alpha)
+/* The visible artwork of an 8-bit bitmap.  rows run top first, as in a
+ * bitmap's data; alpha is the index of the alpha sample in a pixel, or -1
+ * when there is none.  An image without alpha, or with no artwork at all,
+ * is taken as it is. */
+static inline DockArtBox
+DockArtBoxOfBitmap(const unsigned char *data, NSInteger width,
+                   NSInteger height, NSInteger bytesPerRow,
+                   NSInteger samplesPerPixel, NSInteger alpha)
 {
-  NSInteger x, y;
+  NSInteger x, y, x0 = width, x1 = -1, y0 = height, y1 = -1;
+  DockArtBox b;
 
-  if (data == NULL || alpha < 0)
-    return 0;
-  for (y = height - 1; y >= 0; y--)
+  if (data == NULL || alpha < 0 || width <= 0 || height <= 0)
+    return DockArtBoxFull();
+  for (y = 0; y < height; y++)
     {
       const unsigned char *row = data + y * bytesPerRow;
 
       for (x = 0; x < width; x++)
-        if (row[x * samplesPerPixel + alpha] > DOCK_FOOTING_ALPHA)
-          return height - 1 - y;
+        if (row[x * samplesPerPixel + alpha] > DOCK_ART_ALPHA)
+          {
+            if (x < x0) x0 = x;
+            if (x > x1) x1 = x;
+            if (y < y0) y0 = y;
+            y1 = y;
+          }
     }
-  return 0;
+  if (x1 < 0)
+    return DockArtBoxFull();
+  b.minX = (CGFloat)x0 / width;
+  b.maxX = (CGFloat)(x1 + 1) / width;
+  b.minY = (CGFloat)(height - 1 - y1) / height;
+  b.maxY = (CGFloat)(height - y0) / height;
+  return b;
 }
 
+/* How large the larger side of every icon's artwork is drawn, as a share
+ * of the icon's side: that of the full-bleed icons (Books, Brave,
+ * AppGarden), which therefore keep their size, so that artwork drawn with
+ * margins comes out as large as they are. */
+#define DOCK_ART_TARGET 1.0
+/* At most this much larger: a small glyph in a large image would come out
+ * blurred and out of proportion. */
+#define DOCK_ART_MAX_ZOOM 1.35
+
+/* How much larger than the icon's side an image is drawn, so that its
+ * artwork's larger side fills DOCK_ART_TARGET of it: wide artwork is
+ * limited by its width, tall artwork by its height.  The plain bounding
+ * box is enough for tilted artwork too: its corners reach the box, so it
+ * reads as full-bleed and keeps its size.  Never smaller. */
 static inline CGFloat
-DockFootingShare(NSInteger transparentRows, NSInteger height)
+DockArtZoom(DockArtBox art)
 {
-  if (height <= 0)
-    return 0.0;
-  return MIN(DOCK_MAX_FOOTING, (CGFloat)transparentRows / height);
+  CGFloat big = MAX(art.maxX - art.minX, art.maxY - art.minY);
+
+  if (big <= 0.0)
+    return 1.0;
+  return MIN(DOCK_ART_MAX_ZOOM, MAX(1.0, DOCK_ART_TARGET / big));
+}
+
+/* Where an icon's image is drawn in its tile: a square of side, enlarged
+ * by DockArtZoom so that every icon's artwork has the same size, with the
+ * artwork centred across the tile.  On the shelf the artwork's lower edge
+ * stands on the stand line, which is the shelf's and not the tile's, so a
+ * magnified icon grows upwards and sideways from where it stands; without
+ * a shelf (shelf NULL, the flat styles) the artwork is centred in the
+ * tile.  It depends on the tile and the artwork only, never on the size
+ * the image comes in. */
+static inline NSRect
+DockIconImageRect(NSRect tile, CGFloat side, DockArtBox art,
+                  const DockShelf *shelf, CGFloat scale)
+{
+  CGFloat size = side * DockArtZoom(art);
+  CGFloat x = DockPixelAlign(NSMidX(tile) - (art.minX + art.maxX) / 2 * size,
+                             scale);
+  CGFloat y;
+
+  if (shelf == NULL)
+    return NSMakeRect(x, DockPixelAlign(NSMidY(tile)
+                                        - (art.minY + art.maxY) / 2 * size,
+                                        scale),
+                      size, size);
+
+  y = DockPixelAlign(DockShelfStandLine(*shelf, scale) - art.minY * size,
+                     scale);
+  /* A tile still growing in is lower than the artwork would stand; the
+   * artwork keeps inside it rather than being cut off. */
+  if (y + art.maxY * size > NSMaxY(tile))
+    y = floor((NSMaxY(tile) - art.maxY * size) * scale) / scale;
+  if (y + art.minY * size < NSMinY(tile))
+    y = ceil((NSMinY(tile) - art.minY * size) * scale) / scale;
+  /* Origin aligned and the size kept, rather than both edges aligned, so
+   * that no icon comes out a pixel smaller than its neighbours. */
+  return NSMakeRect(x, y, size, size);
 }
 
 /* How much of an icon its reflection shows, as a part of the icon's

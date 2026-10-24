@@ -67,6 +67,8 @@ main(void)
     /* Magnified tiles, as the Dock lays them out: the tile grows to size,
      * the image to three quarters of it, and the bar keeps its thickness. */
     CGFloat sizes[] = { 64, 70.4, 80, 96.5, 112, 128 };
+    /* Artwork that leaves an eighth of the image free on every side. */
+    DockArtBox framed = { 0.125, 0.125, 0.875, 0.875 };
     unsigned i, j;
 
     for (i = 0; i < sizeof(scales) / sizeof(scales[0]); i++)
@@ -76,10 +78,12 @@ main(void)
         DockShelf s = DockShelfMake(bar, sf);
         CGFloat depth = s.backLeft.y - s.frontLeft.y;
         CGFloat stand = DockShelfStandLine(s, sf);
-        NSRect rest = DockIconImageRect(NSMakeRect(0, 0, 64, 64), 48, 0.0,
-                                        &s, sf);
+        NSRect rest = DockIconImageRect(NSMakeRect(0, 0, 64, 64), 48,
+                                        DockArtBoxFull(), &s, sf);
+        NSRect restFramed = DockIconImageRect(NSMakeRect(0, 0, 64, 64), 48,
+                                              framed, &s, sf);
         BOOL square = YES, centred = YES, aligned = YES, inside = YES;
-        BOOL still = YES, footed = YES;
+        BOOL still = YES, footed = YES, grown = YES, stillFramed = YES;
 
         /* On the reference shelf the lower edge of every icon lies 28 of
          * the surface's 48 px behind its back edge. */
@@ -96,48 +100,91 @@ main(void)
             CGFloat size = sizes[j];
             CGFloat side = 48 * size / 64;
             NSRect tile = NSMakeRect(100, 0, size, size);
-            NSRect r = DockIconImageRect(tile, side, 0.0, &s, sf);
-            /* An image with an eighth of transparent rows below its
-             * artwork goes down by as much, so the artwork stands there. */
-            NSRect f = DockIconImageRect(tile, side, 0.125, &s, sf);
+            NSRect r = DockIconImageRect(tile, side, DockArtBoxFull(), &s, sf);
+            NSRect f = DockIconImageRect(tile, side, framed, &s, sf);
+            CGFloat k = DockArtZoom(framed);
+            CGFloat artBottom = NSMinY(f) + framed.minY * NSHeight(f);
+            CGFloat artMidX = NSMinX(f) + (framed.minX + framed.maxX) / 2
+                              * NSWidth(f);
 
             square = square && CLOSE(NSWidth(r), side)
                      && CLOSE(NSHeight(r), side);
-            centred = centred && fabs(NSMidX(r) - NSMidX(tile)) <= 0.5 / sf + 0.001;
+            centred = centred
+                      && fabs(NSMidX(r) - NSMidX(tile)) <= 0.5 / sf + 0.001
+                      && fabs(artMidX - NSMidX(tile)) <= 0.5 / sf + 0.001;
             aligned = aligned && onPixel(NSMinX(r), sf)
                       && onPixel(NSMinY(r), sf) && onPixel(NSMinY(f), sf);
-            inside = inside && NSMaxY(r) <= NSMaxY(tile) + 0.001;
+            inside = inside && NSMaxY(r) <= NSMaxY(tile) + 0.001
+                     && NSMinY(f) + framed.maxY * NSHeight(f)
+                        <= NSMaxY(tile) + 0.001;
             still = still && CLOSE(NSMinY(r), NSMinY(rest));
-            footed = footed
-                     && fabs(NSMinY(f) + side * 0.125 - stand) <= 0.5 / sf + 0.001;
+            stillFramed = stillFramed
+                          && fabs(artBottom - (NSMinY(restFramed) + framed.minY
+                                               * NSHeight(restFramed)))
+                             <= 1.0 / sf + 0.001;
+            footed = footed && fabs(artBottom - stand) <= 0.5 / sf + 0.001;
+            grown = grown && CLOSE(NSWidth(f), side * k)
+                    && CLOSE(NSHeight(f), side * k);
           }
-        PASS(square, "the image fills a square of its side at scale %g", sf);
-        PASS(centred, "the image is centred across its tile at scale %g", sf);
+        PASS(square, "full-bleed artwork fills a square of the icon's side"
+             " at scale %g", sf);
+        PASS(centred, "the artwork is centred across its tile at scale %g",
+             sf);
         PASS(aligned, "the image lies on device pixels at scale %g", sf);
-        PASS(inside, "the image stays inside its tile at scale %g", sf);
-        PASS(still,
+        PASS(inside, "the artwork stays inside its tile at scale %g", sf);
+        PASS(still && stillFramed,
              "magnified, the lower edge stays where it rests: icons grow"
              " upwards and sideways only, at scale %g", sf);
         PASS(footed,
              "the artwork, not the transparent rows below it, stands on the"
              " line at scale %g", sf);
+        PASS(grown, "artwork with margins is drawn larger, by its zoom, at"
+             " scale %g", sf);
       }
   }
 
+  /* --- how much artwork with margins is enlarged --- */
   {
-    NSRect flat = DockIconImageRect(NSMakeRect(0, 0, 64, 64), 48, 0.2,
-                                    NULL, 1.0);
-    NSRect odd = DockIconImageRect(NSMakeRect(0, 0, 65, 65), 48, 0.0,
-                                   NULL, 1.0);
+    DockArtBox full = DockArtBoxFull();
+    DockArtBox claude = { 5.0 / 58, 5.0 / 58, 53.0 / 58, 53.0 / 58 };
+    DockArtBox glyph = { 0.35, 0.35, 0.65, 0.65 };
+    DockArtBox wide = { 0.0, 0.25, 1.0, 0.75 };   /* a folder */
+    DockArtBox tall = { 0.3, 0.02, 0.7, 0.92 };   /* a microphone */
+
+    PASS(CLOSE(DockArtZoom(full), 1.0),
+         "full-bleed artwork keeps its size");
+    PASS(fabs(DockArtZoom(claude) * (48.0 / 58) - DOCK_ART_TARGET) < 0.001,
+         "artwork with margins grows until its larger side fills the target");
+    PASS(CLOSE(DockArtZoom(glyph), DOCK_ART_MAX_ZOOM),
+         "a small glyph in a large image grows no more than the cap");
+    PASS(CLOSE(DockArtZoom(wide), 1.0),
+         "wide artwork that fills the width is limited by it, not enlarged");
+    PASS(fabs(DockArtZoom(tall) * 0.9 - DOCK_ART_TARGET) < 0.001,
+         "tall artwork is limited by its height");
+    PASS(DockArtZoom((DockArtBox){ 0, 0, 1.2, 1.0 }) >= 1.0,
+         "artwork is never made smaller");
+  }
+
+  {
+    DockArtBox framed = { 0.125, 0.25, 0.875, 0.75 };
+    NSRect flat = DockIconImageRect(NSMakeRect(0, 0, 64, 64), 48,
+                                    DockArtBoxFull(), NULL, 1.0);
+    NSRect flatFramed = DockIconImageRect(NSMakeRect(0, 0, 64, 64), 48,
+                                          framed, NULL, 1.0);
+    NSRect odd = DockIconImageRect(NSMakeRect(0, 0, 65, 65), 48,
+                                   DockArtBoxFull(), NULL, 1.0);
     DockShelf s = DockShelfMake(NSMakeRect(0, 0, 640, 64), 1.0);
     /* A tile that is still growing in (a new icon) is smaller than the
-     * image would stand: the image keeps inside it. */
-    NSRect small = DockIconImageRect(NSMakeRect(0, 0, 32, 32), 24, 0.0,
-                                     &s, 1.0);
+     * image would stand: the artwork keeps inside it. */
+    NSRect small = DockIconImageRect(NSMakeRect(0, 0, 32, 32), 24,
+                                     DockArtBoxFull(), &s, 1.0);
+    CGFloat midY = NSMinY(flatFramed) + (framed.minY + framed.maxY) / 2
+                   * NSHeight(flatFramed);
 
     PASS(NSEqualRects(flat, NSMakeRect(8, 8, 48, 48)),
-         "without a shelf the image is centred in its tile, whatever its"
-         " artwork");
+         "without a shelf full-bleed artwork is centred in its tile");
+    PASS(fabs(midY - 32) <= 0.5,
+         "without a shelf the artwork, not the image, is centred");
     PASS(onPixel(NSMinX(odd), 1.0) && onPixel(NSMinY(odd), 1.0)
          && CLOSE(NSWidth(odd), 48),
          "an odd tile still puts the image on whole pixels at its full size");
@@ -145,32 +192,46 @@ main(void)
          "an image in a tile still growing in stays inside it");
   }
 
-  /* --- the transparent rows below an icon's artwork --- */
+  /* --- the visible artwork of a bitmap --- */
   {
-    /* 4 x 8 RGBA, rows top first as in a bitmap: artwork in rows 1-4, a
-     * faint shadow in row 5, nothing in rows 6 and 7. */
-    unsigned char px[8][4][4];
-    unsigned char grey[8][4];
+    /* 10 x 10 RGBA, rows top first as in a bitmap: artwork in columns 2-7
+     * of rows 1-6, a drop shadow (alpha 20) below and right of it, and a
+     * pixel at exactly the threshold, which is not artwork either. */
+    unsigned char px[10][10][4];
+    unsigned char grey[10][10];
+    DockArtBox b;
     int x, y;
 
     memset(px, 0, sizeof(px));
     memset(grey, 255, sizeof(grey));
-    for (y = 1; y <= 4; y++)
-      for (x = 0; x < 4; x++)
+    for (y = 1; y <= 6; y++)
+      for (x = 2; x <= 7; x++)
         px[y][x][3] = 255;
-    px[5][2][3] = 20;
+    for (x = 3; x <= 8; x++)
+      px[7][x][3] = 20;
+    for (y = 2; y <= 7; y++)
+      px[y][8][3] = 20;
+    px[9][0][3] = DOCK_ART_ALPHA;
 
-    PASS(DockTransparentRowsAtBottom(&px[0][0][0], 4, 8, 16, 4, 3) == 3,
-         "rows below the artwork count as transparent, a faint shadow too");
-    PASS(DockTransparentRowsAtBottom(&grey[0][0], 4, 8, 4, 1, -1) == 0,
-         "an image without alpha has no transparent rows");
+    b = DockArtBoxOfBitmap(&px[0][0][0], 10, 10, 40, 4, 3);
+    PASS(CLOSE(b.minX, 0.2) && CLOSE(b.maxX, 0.8),
+         "the artwork's columns, not its shadow's");
+    PASS(CLOSE(b.minY, 0.3) && CLOSE(b.maxY, 0.9),
+         "the artwork's rows, counted up from the bottom, not its shadow's");
+    px[9][0][3] = DOCK_ART_ALPHA + 1;
+    b = DockArtBoxOfBitmap(&px[0][0][0], 10, 10, 40, 4, 3);
+    PASS(CLOSE(b.minX, 0.0) && CLOSE(b.minY, 0.0),
+         "a pixel above the threshold counts");
+    b = DockArtBoxOfBitmap(&grey[0][0], 10, 10, 10, 1, -1);
+    PASS(CLOSE(b.minX, 0) && CLOSE(b.minY, 0) && CLOSE(b.maxX, 1)
+         && CLOSE(b.maxY, 1),
+         "an image without alpha is artwork all over");
     memset(px, 0, sizeof(px));
-    PASS(DockTransparentRowsAtBottom(&px[0][0][0], 4, 8, 16, 4, 3) == 0,
-         "an image with nothing in it is not moved at all");
-    PASS(CLOSE(DockFootingShare(1, 8), 0.125) && CLOSE(DockFootingShare(6, 8),
-                                                      DOCK_MAX_FOOTING),
-         "the footing is a share of the image, and never more than a quarter");
+    b = DockArtBoxOfBitmap(&px[0][0][0], 10, 10, 40, 4, 3);
+    PASS(CLOSE(b.minX, 0) && CLOSE(b.maxY, 1),
+         "an image with nothing in it is left as it is");
   }
+
 
   {
     /* Armed, the bar starts further in and is longer; the shelf follows it. */

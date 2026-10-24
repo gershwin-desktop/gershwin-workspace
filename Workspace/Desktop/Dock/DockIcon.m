@@ -86,7 +86,7 @@
   RELEASE (labelText);
   RELEASE (reflection);
   RELEASE (reflectionSource);
-  RELEASE (footingSource);
+  RELEASE (artSource);
   RELEASE (highlightColor);
   RELEASE (darkerColor);
   RELEASE (highlightImage);
@@ -204,18 +204,29 @@
   return icon;
 }
 
-/* Where image is drawn: on the shelf its artwork stands on the shelf's
- * stand line, whether the icon rests or is magnified. */
+/* Where image is drawn: its artwork at the size every icon's artwork has,
+ * standing on the shelf's stand line whether the icon rests or is
+ * magnified, or centred in the tile in the flat styles. */
 - (NSRect)imageRectForImage:(NSImage *)image
+{
+  return [self rectForArt: [self artBoxOfImage: image]];
+}
+
+/* Where an image whose artwork fills it is drawn: the square the badges
+ * and the dots are placed by. */
+- (NSRect)iconSquare
+{
+  return [self rectForArt: DockArtBoxFull()];
+}
+
+- (NSRect)rectForArt:(DockArtBox)art
 {
   CGFloat side = (magnifiedSize > 0.0) ? magnifiedSize : iconSize;
   DockShelf shelf;
+  BOOL onShelf = [self getShelf: &shelf];
 
-  if ([self getShelf: &shelf] == NO)
-    return DockIconImageRect([self bounds], side, 0.0, NULL,
-                             [self scaleFactor]);
-  return DockIconImageRect([self bounds], side, [self footingOfImage: image],
-                           &shelf, [self scaleFactor]);
+  return DockIconImageRect([self bounds], side, art, onShelf ? &shelf : NULL,
+                           [self scaleFactor]);
 }
 
 - (CGFloat)scaleFactor
@@ -250,31 +261,30 @@ DockLargestBitmap(NSImage *image)
   return best;
 }
 
-/* How many rows at the bottom of an image's largest bitmap hold no
- * artwork. */
-static NSInteger
-DockTransparentRowsOfImage(NSImage *image)
+/* The visible artwork of a bitmap. */
+static DockArtBox
+DockArtBoxOfRep(NSBitmapImageRep *src)
 {
-  NSBitmapImageRep *src = DockLargestBitmap(image);
   NSInteger spp;
 
   if (src == nil || [src hasAlpha] == NO)
-    return 0;
+    return DockArtBoxFull();
   spp = [src samplesPerPixel];
-  return DockTransparentRowsAtBottom([src bitmapData], [src pixelsWide],
-                                     [src pixelsHigh], [src bytesPerRow], spp,
-                                     ([src bitmapFormat] & NSAlphaFirstBitmapFormat)
-                                       ? 0 : spp - 1);
+  return DockArtBoxOfBitmap([src bitmapData], [src pixelsWide],
+                            [src pixelsHigh], [src bytesPerRow], spp,
+                            ([src bitmapFormat] & NSAlphaFirstBitmapFormat)
+                              ? 0 : spp - 1);
 }
 
 /* The lower part of an image's artwork, mirrored and fading out downwards,
- * width by height pixels; the transparent rows below the artwork are left
- * out, so the mirror image touches the artwork as it stands on the shelf.
- * Made from the bitmap's pixels rather than by drawing:
- * drawing into an image needs an off-screen window per image in GNUstep,
- * and a mask to fade it out is not to be had without one either. */
+ * width by height pixels.  The transparent rows below the artwork
+ * (artBottom, a share of the image) are left out, so that the mirror image
+ * touches the artwork as it stands on the shelf.  Made from the bitmap's
+ * pixels rather than by drawing: drawing into an image needs an off-screen
+ * window per image in GNUstep, and a mask to fade it out is not to be had
+ * without one either. */
 static NSImage *
-DockMakeReflection(NSImage *image, int width, int height)
+DockMakeReflection(NSImage *image, int width, int height, CGFloat artBottom)
 {
   NSBitmapImageRep *src = DockLargestBitmap(image);
   NSBitmapImageRep *dst;
@@ -300,8 +310,7 @@ DockMakeReflection(NSImage *image, int width, int height)
   /* The rows of the source the reflection shows, from the artwork's lower
    * edge up. */
   span = sh * DOCK_REFLECTION_SOURCE_SHARE;
-  foot = MIN(DockTransparentRowsOfImage(image),
-             (NSInteger)floor(sh * DOCK_MAX_FOOTING));
+  foot = (NSInteger)floor(sh * artBottom);
 
   dst = [[NSBitmapImageRep alloc]
           initWithBitmapDataPlanes: NULL
@@ -389,27 +398,27 @@ DockMakeReflection(NSImage *image, int width, int height)
       ASSIGN (reflectionSource, image);
       reflectionPixels = pixels;
       ASSIGN (reflection, DockMakeReflection(image, pixels,
-                            (int)ceil(pixels * DOCK_REFLECTION_SHARE)));
+                            (int)ceil(pixels * DOCK_REFLECTION_SHARE),
+                            [self artBoxOfImage: image].minY));
     }
   return reflection;
 }
 
-/* The share of image below its artwork, kept for the image last asked
- * about: the shelf asks on every frame, and scanning the pixels each time
- * would cost the magnification its smoothness. */
-- (CGFloat)footingOfImage:(NSImage *)image
+/* The visible artwork of image, kept for the image (and the size of its
+ * bitmap) last asked about: every frame asks, and scanning the pixels each
+ * time would cost the magnification its smoothness. */
+- (DockArtBox)artBoxOfImage:(NSImage *)image
 {
-  NSBitmapImageRep *src;
+  NSBitmapImageRep *src = DockLargestBitmap(image);
+  NSInteger pixels = (src != nil) ? [src pixelsWide] : 0;
 
-  if (image != footingSource)
+  if (image != artSource || pixels != artPixels)
     {
-      ASSIGN (footingSource, image);
-      src = DockLargestBitmap(image);
-      footing = (src == nil) ? 0.0
-        : DockFootingShare(DockTransparentRowsOfImage(image),
-                           [src pixelsHigh]);
+      ASSIGN (artSource, image);
+      artPixels = pixels;
+      artBox = DockArtBoxOfRep(src);
     }
-  return footing;
+  return artBox;
 }
 
 /* A soft round patch squeezed into rect, from the gradient's first colour
@@ -1897,8 +1906,12 @@ x += 6; \
    * the icon stood. */
   {
     NSImage *shown = [self shownImage];
+    /* The badges and dots keep to the icon's square; the image goes where
+     * its artwork gets the size every icon's has. */
+    NSRect square = [self iconSquare];
+    NSRect artRect = [self imageRectForImage: shown];
     /* Adjust icon position when bouncing */
-    NSPoint drawPoint = [self imageRectForImage: shown].origin;
+    NSPoint drawPoint = square.origin;
     DockShelf shelf;
     BOOL onShelf = [self getShelf: &shelf];
     /* How far a bounce lifts the image off the shelf. */
@@ -1931,8 +1944,8 @@ x += 6; \
         [[NSBezierPath bezierPathWithOvalInRect:glowRect] fill];
       }
 
-    NSRect iconRect = NSMakeRect(drawPoint.x, drawPoint.y,
-                                 icnBounds.size.width, icnBounds.size.height);
+    NSRect iconRect = NSOffsetRect(artRect, drawPoint.x - NSMinX(square),
+                                   drawPoint.y - NSMinY(square));
 
     /* On the 3D shelf an icon stands on glass: a faint mirror image in
      * front of it, and no cast shadow, which looked painted on. */
@@ -1940,7 +1953,7 @@ x += 6; \
       {
         /* Mirrored at the artwork's lower edge, where it stands, not at the
          * image's: the reflection leaves the rows below the artwork out. */
-        CGFloat foot = NSHeight(iconRect) * [self footingOfImage: shown];
+        CGFloat foot = NSHeight(iconRect) * [self artBoxOfImage: shown].minY;
         NSRect r = DockReflectionRect(NSOffsetRect(iconRect, 0, foot), rise,
                                       shelf.frontLeft.y);
         NSImage *mirror = NSIsEmptyRect(r) ? nil

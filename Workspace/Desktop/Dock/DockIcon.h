@@ -28,6 +28,7 @@
 #import "FSNIcon.h"
 #import "DockStack.h"
 #import "DockLaunchState.h"
+#import "DockStyleGeometry.h"
 
 @class NSColor;
 @class GWX11ClientSnapshot;
@@ -55,11 +56,12 @@
   NSImage *reflection;
   NSImage *reflectionSource;
   int reflectionPixels;
-  /* The share of footingSource below its artwork (DockFootingShare), read
-   * from its pixels once, so that on the shelf the artwork rather than the
-   * image stands on the line. */
-  NSImage *footingSource;
-  CGFloat footing;
+  /* The visible artwork of artSource at artPixels wide, read from its
+   * pixels once, so that every icon's artwork is drawn at the same size
+   * and stands on the shelf rather than its transparent margins. */
+  NSImage *artSource;
+  NSInteger artPixels;
+  DockArtBox artBox;
   int sharpPixels;
   NSImage *ejectIcon;
   BOOL trashFull;
