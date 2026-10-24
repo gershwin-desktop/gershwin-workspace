@@ -218,6 +218,31 @@ enum { kBackSegment = 0, kForwardSegment = 1 };
   return [button autorelease];
 }
 
+/* GSToolbarView makes an item at least 60 points and its label wide, even
+ * when only icons are shown, but shares out the flexible space by the
+ * items' minimum sizes; a minimum below the width the item really gets
+ * pushes the items at the right end out of the window.  So a view gets that
+ * width up front. */
+- (CGFloat)viewWidthForLabel:(NSString *)label minimum:(CGFloat)minimum
+{
+  NSDictionary *attrs =
+      [NSDictionary dictionaryWithObject:[NSFont systemFontOfSize:[NSFont systemFontSize]]
+                                  forKey:NSFontAttributeName];
+  CGFloat labelWidth = [label sizeWithAttributes:attrs].width + 2 * kItemLabelInset;
+
+  return ceil(MAX(minimum, MAX(kItemMinimumWidth, labelWidth) - 2 * kItemViewInset));
+}
+
+/* Look Inside and Action stand side by side as a pair, so they get one
+ * width, whichever of their labels is the longer in the user's language. */
+- (CGFloat)lookInsideAndActionWidth
+{
+  return MAX([self viewWidthForLabel:NSLocalizedString(@"Look Inside", @"")
+                             minimum:kPullDownWidth],
+             [self viewWidthForLabel:NSLocalizedString(@"Action", @"")
+                             minimum:kPullDownWidth]);
+}
+
 - (NSToolbarItem *)itemWithIdentifier:(NSString *)identifier
                                 label:(NSString *)label
                                  view:(NSView *)view
@@ -225,21 +250,8 @@ enum { kBackSegment = 0, kForwardSegment = 1 };
   NSToolbarItem *item = [[GWViewerToolbarItem alloc] initWithItemIdentifier:identifier];
   NSSize size = [view frame].size;
 
-  /* GSToolbarView makes an item at least 60 points and its label wide, even
-   * when only icons are shown, but shares out the flexible space by the
-   * items' minimum sizes; a minimum below the width the item really gets
-   * pushes the items at the right end out of the window.  So the view gets
-   * that width up front. */
-  {
-    NSDictionary *attrs =
-        [NSDictionary dictionaryWithObject:[NSFont systemFontOfSize:[NSFont systemFontSize]]
-                                    forKey:NSFontAttributeName];
-    CGFloat labelWidth = [label sizeWithAttributes:attrs].width + 2 * kItemLabelInset;
-
-    size.width = MAX(size.width, MAX(kItemMinimumWidth, labelWidth) - 2 * kItemViewInset);
-    size.width = ceil(size.width);
-    [view setFrameSize:size];
-  }
+  size.width = [self viewWidthForLabel:label minimum:size.width];
+  [view setFrameSize:size];
 
   [item setLabel:label];
   [item setPaletteLabel:label];
@@ -301,6 +313,8 @@ enum { kBackSegment = 0, kForwardSegment = 1 };
   GWToolbarMenuButton *button = [self menuButtonWithImage:@"GWToolbarAction"];
   NSMenu *menu = [button menu];
   NSMenuItem *menuItem;
+
+  [button setFrameSize:NSMakeSize([self lookInsideAndActionWidth], kControlHeight)];
 
   /* The same actions as the menu bar, sent along the responder chain so
    * they reach the window or Workspace exactly as the menu items do and
@@ -366,6 +380,8 @@ enum { kBackSegment = 0, kForwardSegment = 1 };
 {
   NSButton *button = [self buttonWithImage:spec->imageName];
 
+  if (*spec->identifier == GWToolbarLookInsideItemIdentifier)
+    [button setFrameSize:NSMakeSize([self lookInsideAndActionWidth], kControlHeight)];
   [button setAction:sel_registerName(spec->action)];
   /* The window forwards to its viewer as it does for the menus; the
    * application-wide actions go to Workspace. */
