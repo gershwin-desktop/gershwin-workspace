@@ -81,7 +81,9 @@ jobs:
           # Library/OSSupport/windows.txt, whose packages bootstrap.sh installs.
           msystem: UCRT64
           update: false
-          install: git make
+          # No packages here: gershwin-developer's bootstrap.sh installs them
+          # all (git and make included) and retries a failed download, which
+          # this action does not.
 
       - name: Bootstrap
         working-directory: gershwin-developer
