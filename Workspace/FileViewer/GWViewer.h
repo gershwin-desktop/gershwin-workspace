@@ -39,6 +39,7 @@
 @class GWViewerIconsPath;
 @class GWViewerPathsScroll;
 @class GWViewerBrowserPreview;
+@class GWViewerToolbar;
 @class NSView;
 @class Workspace;
 
@@ -53,6 +54,7 @@
   GWViewerPathsScroll *pathsScroll;
   GWViewerIconsPath *pathsView;
   GWViewerScrollView *nviewScroll;
+  GWViewerToolbar *toolbarController;
 
   GWViewType viewType;
 
@@ -143,6 +145,9 @@
 - (void)openSelectionInNewViewer:(BOOL)newv;
 - (void)setViewerBehaviour:(id)sender;
 - (void)setViewerType:(id)sender;
+/* The view type picked in the window (menu or toolbar), kept for the
+ * folder like any choice the user makes. */
+- (void)showViewType:(GWViewType)type;
 - (void)setShownType:(id)sender;
 - (void)setExtendedShownType:(id)sender;
 - (void)chooseLabelColor:(id)sender;

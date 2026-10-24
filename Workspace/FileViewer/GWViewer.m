@@ -42,6 +42,7 @@
 #import "GWViewerShelf.h"
 #import "GWViewerSidebar.h"
 #import "GWViewerIconsPath.h"
+#import "GWViewerToolbar.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
 #import "GWAlignLogically.h"
@@ -143,6 +144,8 @@ static BOOL hasLastExtents_ = NO;
      notification (network services arrive from a background thread) would
      otherwise make it message this freed viewer. */
   [sidebar viewerWillDeallocate];
+  [toolbarController invalidate];
+  RELEASE (toolbarController);
 
   RELEASE (baseNode);
   RELEASE (baseNodeArray);
@@ -388,6 +391,20 @@ static BOOL hasLastExtents_ = NO;
     [vwrwin setResizeIncrements: GWViewerResizeIncrements(viewType, resizeIncrement)];
 
     [self setWindowTitleForNode: baseNode];
+
+    /* The stored and default geometry is that of the whole client window,
+     * toolbar included, but adding a toolbar grows the window by its height
+     * to keep the content size; put the frame back so the toolbar takes its
+     * room from the content, as it does in a window that is already open.
+     * Added once the window has its size, or the toolbar lays out its
+     * items for an empty window and hides them. */
+    {
+      NSRect frame = [vwrwin frame];
+
+      toolbarController = [[GWViewerToolbar alloc] initForViewer: self];
+      [vwrwin setToolbar: [toolbarController toolbar]];
+      [vwrwin setFrame: frame display: NO];
+    }
 
     [self createSubviews];
 
@@ -1088,6 +1105,10 @@ static BOOL hasLastExtents_ = NO;
   }  
   
   [manager addNode: node toHistoryOfViewer: self];
+  /* Changes that come without an event in this window (a menu bar item,
+   * a history step) would otherwise leave the toolbar showing the old
+   * state until the next event. */
+  [[vwrwin toolbar] validateVisibleItems];
 }
 
 - (void)multipleNodeViewDidSelectSubNode:(FSNode *)node
@@ -1695,6 +1716,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
      * no longer visible). */
     [manager prepareCloseAnimationForViewer: self];
     [self updateDefaults];
+    [toolbarController invalidate];
     [vwrwin setDelegate: nil];
     [manager viewerWillClose: self];
   }
@@ -1770,8 +1792,11 @@ constrainMinCoordinate:(CGFloat)proposedMin
 
 - (void)setViewerType:(id)sender
 {
-  NSInteger tag = [sender tag];
+  [self showViewType: (GWViewType)[sender tag]];
+}
 
+- (void)showViewType:(GWViewType)tag
+{
   if (tag > 0)
     {
       NSArray *selection = [nodeView selectedNodes];
@@ -1854,6 +1879,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
         }
     
       viewTypeChosenByUser = YES;
+      [[vwrwin toolbar] validateVisibleItems];
       [vwrwin setResizeIncrements: GWViewerResizeIncrements(viewType, resizeIncrement)];
       [nviewScroll setDocumentView: nodeView];
       RELEASE (nodeView);

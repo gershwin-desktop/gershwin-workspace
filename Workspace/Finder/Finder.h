@@ -119,6 +119,11 @@
 
 - (IBAction)startFind:(id)sender;
 
+/* A name search through a folder and everything below it, as typed into a
+ * viewer window's search field.  Opens a results window like the Find
+ * panel does, without changing the panel's own criteria. */
+- (void)findItemsNamed:(NSString *)name inFolder:(NSString *)path;
+
 - (void)stopAllSearchs;
 
 - (id)resultWithAddress:(unsigned long)address;

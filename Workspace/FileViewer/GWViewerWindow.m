@@ -72,7 +72,28 @@
 
 - (BOOL)validateMenuItem:(id <NSMenuItem>)menuItem
 {	
+  SEL action = [menuItem action];
+
+  /* A browsing window is the one with the toolbar; hiding it turns the
+   * window into a spatial one and showing it turns a spatial window back,
+   * so both kinds offer the item, under the title for what it will do. */
+  if (sel_isEqual(action, @selector(toggleToolbarShown:)))
+    {
+      [menuItem setTitle: ([self toolbar] != nil)
+                ? NSLocalizedString(@"Hide Toolbar", @"")
+                : NSLocalizedString(@"Show Toolbar", @"")];
+      return YES;
+    }
+  if (sel_isEqual(action, @selector(runToolbarCustomizationPalette:)))
+    {
+      return [[self toolbar] allowsUserCustomization];
+    }
   return [[self delegate] validateItem: menuItem];
+}
+
+- (void)toggleToolbarShown:(id)sender
+{
+  [[self delegate] toggleToolbarShown: sender];
 }
 
 - (void)ejectVolumes:(id)sender

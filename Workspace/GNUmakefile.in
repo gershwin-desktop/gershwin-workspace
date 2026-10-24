@@ -134,6 +134,8 @@ ViewOptions/GWViewOptionsModel.m \
 ViewOptions/GWViewOptionsPanel.m \
  FileViewer/GWViewerChrome.m \
  FileViewer/GWNavigationHistory.m \
+ FileViewer/GWViewerToolbarModel.m \
+ FileViewer/GWViewerToolbar.m \
  FileViewer/GWViewerGeometry.m \
  FileViewer/GWViewer.m \
 FileViewer/GWViewTypeHelpers.m \

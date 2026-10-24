@@ -1521,3 +1521,8 @@
 "The original of \"%@\" cannot be found." = "Impossibile trovare l’originale di \"%@\".";
 "It may have been moved, renamed or deleted." = "Potrebbe essere stato spostato, rinominato o eliminato.";
 "Delete Alias" = "Elimina alias";
+
+/* Folder window toolbar */
+"Back/Forward" = "Indietro/Avanti";
+"Action" = "Azione";
+"Path" = "Percorso";

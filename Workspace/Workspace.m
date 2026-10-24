@@ -716,9 +716,10 @@ static Workspace *gworkspace = nil;
   
   [menu addItem:[NSMenuItem separatorItem]];
   
-  menuItem = [menu addItemWithTitle:_(@"Hide Toolbar") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Hide Toolbar") action:@selector(toggleToolbarShown:) keyEquivalent:@"t"];
+  [menuItem setKeyEquivalentModifierMask: NSCommandKeyMask | NSAlternateKeyMask];
   [menuItem setTarget:self];
-  menuItem = [menu addItemWithTitle:_(@"Customize Toolbar...") action:@selector(notImplemented:) keyEquivalent:@""];
+  menuItem = [menu addItemWithTitle:_(@"Customize Toolbar...") action:@selector(runToolbarCustomizationPalette:) keyEquivalent:@""];
   [menuItem setTarget:self];
   
   [menu addItem:[NSMenuItem separatorItem]];
@@ -1848,13 +1849,21 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   // === Window-level standard operations — forward to key window ===
   if (sel_isEqual(action, @selector(performClose:))
       || sel_isEqual(action, @selector(performMiniaturize:))
-      || sel_isEqual(action, @selector(performZoom:))
-      || sel_isEqual(action, @selector(toggleToolbarShown:)))
+      || sel_isEqual(action, @selector(performZoom:)))
     {
       NSWindow *keyWindow = [NSApp keyWindow];
       if ([keyWindow respondsToSelector:@selector(validateMenuItem:)])
         return [keyWindow validateMenuItem:anItem];
       return NO;
+    }
+
+  /* Asked of the folder window itself, which knows whether it has a toolbar
+   * and titles the item accordingly. */
+  if (sel_isEqual(action, @selector(toggleToolbarShown:))
+      || sel_isEqual(action, @selector(runToolbarCustomizationPalette:)))
+    {
+      NSWindow *win = [self _folderWindowForToolbarCommand];
+      return (win != nil) && [win validateMenuItem: anItem];
     }
 
   /* Settings of all windows, as in Finder: always available, checked while
@@ -5810,6 +5819,28 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
     }
   }
   return viewer;
+}
+
+/* Only the folder window the user is looking at: unlike the view settings,
+ * a toolbar command must never land on some other window. */
+- (NSWindow *)_folderWindowForToolbarCommand
+{
+  id viewer = [vwrsManager viewerWithWindow: [NSApp keyWindow]];
+
+  if (viewer == nil) {
+    viewer = [vwrsManager viewerWithWindow: [NSApp mainWindow]];
+  }
+  return [viewer win];
+}
+
+- (void)toggleToolbarShown:(id)sender
+{
+  [[self _folderWindowForToolbarCommand] toggleToolbarShown: sender];
+}
+
+- (void)runToolbarCustomizationPalette:(id)sender
+{
+  [[self _folderWindowForToolbarCommand] runToolbarCustomizationPalette: sender];
 }
 
 - (void)toggleInspector:(id)sender

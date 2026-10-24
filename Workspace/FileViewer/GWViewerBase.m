@@ -409,16 +409,18 @@
                forceNew: NO];
 }
 
-- (void)setWindowTitleForNode:(FSNode *)node
+- (NSString *)titleForNode:(FSNode *)node
 {
   if ([[node path] isEqual: path_separator()])
     {
-      [vwrwin setTitle: NSLocalizedString(@"System Disk", @"")];
+      return NSLocalizedString(@"System Disk", @"");
     }
-  else
-    {
-      [vwrwin setTitle: [node name]];
-    }
+  return [node name];
+}
+
+- (void)setWindowTitleForNode:(FSNode *)node
+{
+  [vwrwin setTitle: [self titleForNode: node]];
 }
 
 - (void)openSelectionAsFolder
@@ -492,6 +494,8 @@
 - (void)setHistoryPosition:(int)pos
 {
   [[self navigationHistory] setPosition: pos];
+  /* Back and Forward follow at once, not at the window's next event. */
+  [[vwrwin toolbar] validateVisibleItems];
 }
 
 - (void)setIconsPosition:(id)sender
@@ -568,6 +572,12 @@
 - (void)showAttributesInspector:(id)sender
 {
   [gworkspace showAttributesInspector: sender];
+}
+
+- (void)toggleToolbarShown:(id)sender
+{
+  [manager replaceViewer: self
+          withViewerType: ([self isSpatial] ? BROWSING : SPATIAL)];
 }
 
 - (void)ejectSelectedVolumes

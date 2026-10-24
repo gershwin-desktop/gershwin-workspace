@@ -812,6 +812,29 @@ static Finder *finder = nil;
   }
 }
 
+- (void)findItemsNamed:(NSString *)name inFolder:(NSString *)path
+{
+  NSDictionary *nameCriteria;
+  SearchResults *results;
+
+  if ([name length] == 0 || [path length] == 0)
+    return;
+
+  /* The same criteria the name module produces for "contains", so the
+   * search tool treats it exactly like a search started from the panel. */
+  nameCriteria = [NSDictionary dictionaryWithObjectsAndKeys:
+                                 name, @"what",
+                               [NSNumber numberWithInteger: 0], @"how",
+                               nil];
+  results = [SearchResults new];
+  [searchResults addObject: results];
+  RELEASE (results);
+  [results activateForSelection: [NSArray arrayWithObject: path]
+             withSearchCriteria: [NSDictionary dictionaryWithObject: nameCriteria
+                                                             forKey: @"FModuleName"]
+                      recursive: YES];
+}
+
 - (void)stopAllSearchs
 {
   /* Closing a result window synchronously triggers windowWillClose: ->

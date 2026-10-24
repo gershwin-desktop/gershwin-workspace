@@ -1577,3 +1577,8 @@ for";
 "The original of \"%@\" cannot be found." = "Não foi possível encontrar o original de \"%@\".";
 "It may have been moved, renamed or deleted." = "Pode ter sido movido, renomeado ou apagado.";
 "Delete Alias" = "Apagar alias";
+
+/* Folder window toolbar */
+"Back/Forward" = "Anterior/Seguinte";
+"Action" = "Ação";
+"Path" = "Caminho";

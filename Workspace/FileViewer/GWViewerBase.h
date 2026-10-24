@@ -137,6 +137,9 @@ typedef enum
 - (FSNode *)shownFolderNode;
 - (FSNode *)enclosingFolderNode;
 - (void)openEnclosingFolderClosingViewer:(BOOL)close;
+/* The name a folder goes by in the window title and the toolbar's Path
+ * menu. */
+- (NSString *)titleForNode:(FSNode *)node;
 - (void)setWindowTitleForNode:(FSNode *)node;
 - (void)openSelectionAsFolder;
 - (void)openSelectionWith;
@@ -153,6 +156,10 @@ typedef enum
 - (void)setOpened:(BOOL)opened repOfNode:(FSNode *)anode;
 - (void)showAttributesInspector:(id)sender;
 - (void)toggleInspector:(id)sender;
+/* Hide Toolbar turns a browsing window into a spatial one for the same
+ * folder, Show Toolbar a spatial window into a browsing one: the windows
+ * without a toolbar are the spatial ones. */
+- (void)toggleToolbarShown:(id)sender;
 - (void)ejectSelectedVolumes;
 - (void)updateWindowTitle;
 - (NSArray *)watchedNodes;

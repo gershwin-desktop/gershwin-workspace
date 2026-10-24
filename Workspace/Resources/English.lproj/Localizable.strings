@@ -1271,3 +1271,9 @@
 "The original of \"%@\" cannot be found." = "The original of \"%@\" cannot be found.";
 "It may have been moved, renamed or deleted." = "It may have been moved, renamed or deleted.";
 "Delete Alias" = "Delete Alias";
+
+/* Folder window toolbar */
+"Back/Forward" = "Back/Forward";
+"Action" = "Action";
+"Path" = "Path";
+"Show Toolbar" = "Show Toolbar";
