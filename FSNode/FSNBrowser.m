@@ -40,6 +40,7 @@
 #import "FSNFunctions.h"
 #import "FSNBrowserLayout.h"
 #import "FSNIconsView.h"
+#import "FSNRenamePolicy.h"
 
 static id<FSNPreviewProvider> previewProvider = nil;
 
@@ -1515,8 +1516,27 @@ static id<FSNPreviewProvider> previewProvider = nil;
       return;
 
     case NSCarriageReturnCharacter:
-      [(FSNBrowserMatrix *)matrix setMouseFlags: [theEvent modifierFlags]];
-      [matrix sendDoubleAction];
+    case NSEnterCharacter:
+      {
+        NSArray *selected = [matrix selectedCells];
+
+        /* Return renames, as in the reference; opening is Command-Down and
+           Command-O. */
+        if ([FSNRenamePolicy keyStartsRenaming: character
+                                     modifiers: FSNSelectionModifiersFromEventFlags([theEvent modifierFlags])
+                                selectionCount: [selected count]])
+          {
+            if ([[FSNRenameController sharedController]
+                  beginRenameOfRep: [selected lastObject] inHost: self] == NO)
+              NSBeep();
+            return;
+          }
+        if ([theEvent modifierFlags] & (NSAlternateKeyMask | NSControlKeyMask))
+          {
+            [(FSNBrowserMatrix *)matrix setMouseFlags: [theEvent modifierFlags]];
+            [matrix sendDoubleAction];
+          }
+      }
       return;
     case 0x01B: // Escape
       return;
@@ -2443,6 +2463,14 @@ static id<FSNPreviewProvider> previewProvider = nil;
 
 - (void)stopCellEditing
 {
+  /* Whatever ends editing keeps the typed name, as in the reference; the
+     controller comes back here once it has. */
+  if ([[FSNRenameController sharedController] isEditingInHost: self])
+    {
+      [[FSNRenameController sharedController] commitActiveEditing];
+      return;
+    }
+
   if (nameEditor && [[self subviews] containsObject: nameEditor]) {
     [nameEditor abortEditing];
     [nameEditor setEditable: NO];
@@ -2458,81 +2486,61 @@ static id<FSNPreviewProvider> previewProvider = nil;
   [self stopCellEditing];
 }
 
+- (NSTextField *)nameEditorForRenamingRep:(id)rep
+{
+  NSUInteger i;
+
+  for (i = 0; i < [columns count]; i++)
+    {
+      FSNBrowserColumn *col = [columns objectAtIndex: i];
+      NSMatrix *matrix = [col cmatrix];
+      NSInteger row, column;
+
+      if (matrix != nil && [matrix getRow: &row column: &column ofCell: rep])
+        {
+          if ([[matrix selectedCells] count] != 1)
+            return nil;
+          [matrix scrollCellToVisibleAtRow: row column: column];
+          [self setEditorForCell: rep inColumn: col];
+          if ([[self subviews] containsObject: nameEditor] == NO)
+            return nil;
+
+          /* As tall as the cell, for the field's bezel. */
+          {
+            NSRect r = [nameEditor frame];
+            NSRect cell = [matrix convertRect: [matrix cellFrameAtRow: row column: column]
+                                       toView: self];
+
+            r.origin.y = NSMinY(cell);
+            r.size.height = NSHeight(cell);
+            r.size.width = MIN(NSMaxX(cell) - NSMinX(r),
+                               [[nameEditor font] widthOfString: [[rep node] name]] + 24);
+            [nameEditor setFrame: NSIntegralRect(r)];
+          }
+          return nameEditor;
+        }
+    }
+  return nil;
+}
+
+- (BOOL)control:(NSControl *)control
+       textView:(NSTextView *)textView
+doCommandBySelector:(SEL)command
+{
+  return [[FSNRenameController sharedController] control: control
+                                                textView: textView
+                                     doCommandBySelector: command];
+}
+
 - (void)controlTextDidChange:(NSNotification *)aNotification
 {
 }
 
 - (void)controlTextDidEndEditing:(NSNotification *)aNotification
 {
-  FSNode *ednode = [nameEditor node];
-
-#define CLEAREDITING \
-  [self stopCellEditing]; \
-  return 
-    
-
-    if ([ednode isParentWritable] == NO)
-      {
-	showAlertNoPermission([FSNode class], [ednode parentName]);
-	CLEAREDITING;
-      }
-    else if ([ednode isSubnodeOfPath: [desktopApp trashPath]])
-      {
-	showAlertInRecycler([FSNode class]);
-	CLEAREDITING;
-      }
-    else
-      {
-      NSString *userName = [nameEditor stringValue];
-      NSString *origName = [ednode name];
-      NSString *newname = GSRenamedFilename(userName, origName, GSCurrentExtensionDisplayMode());
-      NSString *newpath;
-      NSString *extension;
-      NSCharacterSet *notAllowSet = [NSCharacterSet characterSetWithCharactersInString: @"/\\*:?\33"];
-      NSRange range;
-      NSArray *dirContents;
-      NSMutableDictionary *opinfo;
-
-      if (newname == nil)
-	{
-	  CLEAREDITING;
-	}
-
-      newpath = [[ednode parentPath] stringByAppendingPathComponent: newname];
-      extension = [newpath pathExtension];
-      range = [newname rangeOfCharacterFromSet: notAllowSet];
-      dirContents = [ednode subNodeNamesOfParent];
-      opinfo = [NSMutableDictionary dictionary];
-
-      if (([newname length] == 0) || (range.length > 0))
-	{
-	  showAlertInvalidName([FSNode class]);
-	  CLEAREDITING;
-	}
-
-      if (([extension length]
-              && ([ednode isDirectory] && ([ednode isPackage] == NO))))
-	{
-          if (showAlertExtensionChange([FSNode class], extension) == NSAlertDefaultReturn)
-            {
-              CLEAREDITING;
-            }
-	}
-
-      if ([dirContents containsObject: newname])
-	{
-	  showAlertNameInUse([FSNode class], newname);
-	  CLEAREDITING;
-	}
-
-      [opinfo setObject: @"WorkspaceRenameOperation" forKey: @"operation"];
-      [opinfo setObject: [ednode path] forKey: @"source"];
-      [opinfo setObject: newpath forKey: @"destination"];
-      [opinfo setObject: [NSArray arrayWithObject: @""] forKey: @"files"];
-
-      [self stopCellEditing];
-      [desktopApp performFileOperation: opinfo];
-    }
+  [[FSNRenameController sharedController] editorDidEndEditing: aNotification
+                                                         node: [nameEditor node]
+                                                         host: self];
 }
 
 @end

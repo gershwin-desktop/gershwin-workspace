@@ -32,6 +32,7 @@
 #import <AppKit/NSTextField.h>
 #import "FSNodeRep.h"
 #import "FSNSelectionModel.h"
+#import "FSNRenameController.h"
 
 @class NSTableColumn;
 @class FSNListView;
@@ -428,9 +429,12 @@ extern NSString * const FSNListViewOptionColumnOrder;
 @end
 
 
-@interface FSNListViewDataSource (RepNameEditing)
+@interface FSNListViewDataSource (RepNameEditing) <FSNRenameHost>
 
 - (void)setEditorAtRow:(int)row withMouseDownEvent: (NSEvent *)anEvent;
+
+/* FSNRenameHost: the editor over the row's name, past its indent and icon. */
+- (NSTextField *)nameEditorForRenamingRep:(id)rep;
 
 - (void)controlTextDidChange:(NSNotification *)aNotification;
 
@@ -585,7 +589,6 @@ extern NSString * const FSNListViewOptionColumnOrder;
   /* The rubber band while one is dragged, in view coordinates. */
   NSRect _bandRect;
 
-  NSTimer *clickTimer;
 
   /* Scroll position asked for by the owner, held until the user scrolls */
   NSPoint _savedScroll;

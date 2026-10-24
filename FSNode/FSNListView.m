@@ -36,6 +36,7 @@
 #import "FSNLocationFile.h"
 #import "FSNIconLoader.h"
 #import "FSNDirEntry.h"
+#import "FSNRenamePolicy.h"
 
 #include <sys/stat.h>
 #if !defined(_WIN32)
@@ -3403,6 +3404,14 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
 - (void)stopRepNameEditing
 {
+  /* Whatever ends editing keeps the typed name, as in the reference; the
+     controller comes back here once it has. */
+  if ([[FSNRenameController sharedController] isEditingInHost: self])
+    {
+      [[FSNRenameController sharedController] commitActiveEditing];
+      return;
+    }
+
   if ([[listView subviews] containsObject: nameEditor])
     {
       [nameEditor abortEditing];
@@ -3462,82 +3471,51 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     }
 }
 
+- (NSTextField *)nameEditorForRenamingRep:(id)rep
+{
+  NSUInteger row = [nodeReps indexOfObjectIdenticalTo: rep];
+
+  if (row == NSNotFound || [[listView selectedRowIndexes] count] != 1
+      || [listView isRowSelected: row] == NO)
+    return nil;
+
+  [listView scrollRowToVisible: row];
+  [self setEditorAtRow: row withMouseDownEvent: nil];
+  if ([[listView subviews] containsObject: nameEditor] == NO)
+    return nil;
+
+  /* As tall as the row, for the field's bezel; it still starts after the
+     row's indent and icon. */
+  {
+    NSRect r = [nameEditor frame];
+    NSRect rowRect = [listView rectOfRow: row];
+
+    r.origin.y = NSMinY(rowRect);
+    r.size.height = NSHeight(rowRect);
+    r.size.width = MIN(NSWidth(r), [[nameEditor font] widthOfString: [[rep node] name]] + 24);
+    [nameEditor setFrame: NSIntegralRect(r)];
+  }
+  return nameEditor;
+}
+
+- (BOOL)control:(NSControl *)control
+       textView:(NSTextView *)textView
+doCommandBySelector:(SEL)command
+{
+  return [[FSNRenameController sharedController] control: control
+                                                textView: textView
+                                     doCommandBySelector: command];
+}
+
 - (void)controlTextDidChange:(NSNotification *)aNotification
 {
 }
 
 - (void)controlTextDidEndEditing:(NSNotification *)aNotification
 {
-  FSNode *ednode = [nameEditor node];
-
-#define CLEAREDITING				\
-  [self stopRepNameEditing];			\
-  return
-
-
-  if ([ednode isParentWritable] == NO)
-    {
-      showAlertNoPermission([FSNode class], [ednode parentName]);
-      CLEAREDITING;
-    }
-  else if ([ednode isSubnodeOfPath: [desktopApp trashPath]])
-    {
-      showAlertInRecycler([FSNode class]);
-      CLEAREDITING;
-    }
-  else
-    {
-      NSString *userName = [nameEditor stringValue];
-      NSString *origName = [ednode name];
-      NSString *newname = GSRenamedFilename(userName, origName, GSCurrentExtensionDisplayMode());
-      NSString *newpath;
-      NSString *extension;
-      NSCharacterSet *notAllowSet = [NSCharacterSet characterSetWithCharactersInString: @"/\\*:?\33"];
-      NSRange range;
-      NSArray *dirContents;
-      NSMutableDictionary *opinfo;
-
-      if (newname == nil)
-	{
-	  CLEAREDITING;
-	}
-
-      newpath = [[ednode parentPath] stringByAppendingPathComponent: newname];
-      extension = [newpath pathExtension];
-      range = [newname rangeOfCharacterFromSet: notAllowSet];
-      dirContents = [ednode subNodeNamesOfParent];
-      opinfo = [NSMutableDictionary dictionary];
-
-      if (([newname length] == 0) || (range.length > 0))
-	{
-	  showAlertInvalidName([FSNode class]);
-	  CLEAREDITING;
-	}
-
-      if (([extension length]
-	   && ([ednode isDirectory] && ([ednode isPackage] == NO))))
-        {
-          if (showAlertExtensionChange([FSNode class], extension) == NSAlertDefaultReturn)
-            {
-              CLEAREDITING;
-            }
-        }
-
-      if ([dirContents containsObject: newname])
-	{
-	  showAlertNameInUse([FSNode class], newname);
-	  CLEAREDITING;
-	}
-
-      [opinfo setObject: @"WorkspaceRenameOperation" forKey: @"operation"];
-      [opinfo setObject: [ednode path] forKey: @"source"];
-      [opinfo setObject: newpath forKey: @"destination"];
-      [opinfo setObject: [NSArray arrayWithObject: @""] forKey: @"files"];
-
-      [self stopRepNameEditing];
-      [desktopApp performFileOperation: opinfo];
-    }
-
+  [[FSNRenameController sharedController] editorDidEndEditing: aNotification
+                                                         node: [nameEditor node]
+                                                         host: self];
 }
 
 @end
@@ -4786,14 +4764,9 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
                                                   name: NSUserDefaultsDidChangeNotification
                                                 object: nil];
 
-  /* A pending single-click timer targets self with 0.5s repeats:NO; left
-   * running past -dealloc it fires -singleClick: into a freed view. */
-  if (clickTimer != nil)
-    {
-      [clickTimer invalidate];
-      RELEASE (clickTimer);
-      clickTimer = nil;
-    }
+  /* A rename waiting for the double-click interval must not start in a
+   * view that is gone. */
+  [[FSNRenameController sharedController] cancelScheduledRename];
 
   RELEASE (selectionModel);
   RELEASE (dsource);
@@ -4911,25 +4884,6 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
     {
       [self sizeLastColumnToFit];
     }
-}
-
-- (void)singleClick: (NSTimer *)aTimer
-{
-  NSEvent *theEvent = [aTimer userInfo];
-  NSPoint location;
-  int row;
-
-  location = [theEvent locationInWindow];
-  location = [self convertPoint: location fromView: nil];
-  row = [self rowAtPoint: location];
-
-  if (row != -1)
-    {
-      [dsource setEditorAtRow: row withMouseDownEvent: theEvent];
-    }
-
-  [clickTimer release];
-  clickTimer = nil;
 }
 
 /* A click in front of a folder's icon expands or collapses it, and does
@@ -5168,12 +5122,14 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
   BOOL wasOnlySelected;
   NSEvent *next;
 
-  if (clickTimer != nil)
-    {
-      [clickTimer invalidate];
-      [clickTimer release];
-      clickTimer = nil;
-    }
+  /* A second press (the second click of a double click) opens rather
+     than renames; any press ends editing a name. */
+  [[FSNRenameController sharedController] cancelScheduledRename];
+  /* A press beside the rows that ends renaming does only that; the renamed
+     item stays selected, as in the reference. */
+  if ([[FSNRenameController sharedController] commitActiveEditing]
+      && [self rowAtPoint: [self convertPoint: [theEvent locationInWindow] fromView: nil]] < 0)
+    return;
 
   if ([self toggleDisclosureAtEvent: theEvent])
     {
@@ -5269,13 +5225,12 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
 
   /* A click on the name of the item that already was the only one
      selected starts renaming once it is clear no second click follows. */
-  if (wasOnlySelected && (modifiers & ~FSNSelectionModifierOption) == 0)
+  if ([FSNRenamePolicy clickStartsRenamingWithCount: 1
+                                             onName: YES
+                                    wasOnlySelected: wasOnlySelected
+                                          modifiers: modifiers])
     {
-      ASSIGN(clickTimer, [NSTimer scheduledTimerWithTimeInterval: [NSEvent doubleClickInterval]
-							   target: self
-							 selector: @selector(singleClick:)
-							 userInfo: theEvent
-							  repeats: NO]);
+      [[FSNRenameController sharedController] scheduleRenameOfRep: rep inHost: dsource];
     }
 }
 
@@ -5367,10 +5322,23 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
       return;
 
     case NSCarriageReturnCharacter:
+    case NSEnterCharacter:
       {
-	BOOL closesndr = ((flags == NSAlternateKeyMask)
-			  || (flags == NSControlKeyMask));
-	[dsource openSelectionInNewViewer: closesndr];
+	NSArray *selected = [dsource selectedReps];
+
+	/* Return renames, as in the reference; opening is Command-Down and
+	   Command-O. */
+	if ([FSNRenamePolicy keyStartsRenaming: character
+				     modifiers: FSNSelectionModifiersFromEventFlags(flags)
+				selectionCount: [selected count]])
+	  {
+	    if ([[FSNRenameController sharedController]
+		  beginRenameOfRep: [selected lastObject] inHost: dsource] == NO)
+	      NSBeep();
+	    return;
+	  }
+	if (flags & (NSAlternateKeyMask | NSControlKeyMask))
+	  [dsource openSelectionInNewViewer: YES];
 	return;
       }
 

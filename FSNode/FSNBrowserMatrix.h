@@ -41,8 +41,6 @@
   FSNSelectionModel *selectionModel;
   FSNBrowserColumn *column;
   NSUInteger mouseFlags;
-  NSTimeInterval editstamp;  
-  NSInteger editIndex;
   BOOL acceptDnd;
   FSNBrowserCell *dndTarget;
   /* The cell a drag rests on, for the flash before it springs open; not

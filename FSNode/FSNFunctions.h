@@ -124,10 +124,6 @@ double myrintf(double a);
 /* The one place that tells the user an item could not be opened. */
 void FSNShowCannotOpenAlert(NSString *name);
 void showAlertNoPermission(Class c, NSString *name);
-void showAlertInRecycler(Class c);
-void showAlertInvalidName(Class c);
-NSInteger showAlertExtensionChange(Class c, NSString *extension);
-void showAlertNameInUse(Class c, NSString *newname);
 
 /* The selection model's modifiers (FSNSelectionModel.h) for NSEvent flags,
  * so every view reads Shift, Command, Option and Control the same way. */

@@ -1056,6 +1056,11 @@ static CGFloat desktopScaleFactor(void)
  * editing alone, as its clicks always did. */
 - (void)selectNothingForBackgroundEvent:(NSEvent *)theEvent
 {
+  [[FSNRenameController sharedController] cancelScheduledRename];
+  /* The press that ends renaming does only that; the renamed item stays
+     selected, as in the reference. */
+  if ([[FSNRenameController sharedController] commitActiveEditing])
+    return;
   [self syncSelectionModel];
   [selectionModel mouseDownOnEmptySpaceWithModifiers:
                     FSNSelectionModifiersFromEventFlags([theEvent modifierFlags])];
@@ -1195,7 +1200,10 @@ static CGFloat desktopScaleFactor(void)
             }
         }
 
-      if (character == NSCarriageReturnCharacter)
+      /* Return renames (FSNIconsView), as in the reference; Option- or
+	 Control-Return still open. */
+      if (character == NSCarriageReturnCharacter
+	  && (flags & (NSAlternateKeyMask | NSControlKeyMask)))
 	{
 	  [manager openSelectionInNewViewer: NO];
 	  return;

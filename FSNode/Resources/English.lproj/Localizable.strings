@@ -1,6 +1,5 @@
 /*** deduplicated by dedup-strings.py ***/
 
-" is already in use!" = " is already in use!";
 
 "Application" = "Application";
 
@@ -26,7 +25,6 @@
 
 "Images" = "Images";
 
-"Invalid name" = "Invalid name";
 
 "Music" = "Music";
 
@@ -42,7 +40,6 @@
 
 "Size" = "Size";
 
-"The name " = "The name ";
 
 "Tools" = "Tools";
 
@@ -172,3 +169,27 @@
 "Microsoft Excel Spreadsheet" = "Microsoft Excel Spreadsheet";
 "OpenDocument Text" = "OpenDocument Text";
 "Spreadsheet" = "Spreadsheet";
+
+"The name \"%@\" can't be used." = "The name \"%@\" can't be used.";
+
+"Try using a name with fewer characters or no punctuation marks." = "Try using a name with fewer characters or no punctuation marks.";
+
+"You don't have the necessary permission to rename \"%@\"." = "You don't have the necessary permission to rename \"%@\".";
+
+"Are you sure you want to use a name that begins with a dot \".\"?" = "Are you sure you want to use a name that begins with a dot \".\"?";
+
+"These names are reserved for the system. If you continue, the item will be hidden." = "These names are reserved for the system. If you continue, the item will be hidden.";
+
+"Are you sure you want to change the extension from \".%@\" to \".%@\"?" = "Are you sure you want to change the extension from \".%@\" to \".%@\"?";
+
+"Are you sure you want to remove the extension \".%@\"?" = "Are you sure you want to remove the extension \".%@\"?";
+
+"If you make this change, your document may open in a different application." = "If you make this change, your document may open in a different application.";
+
+"Keep .%@" = "Keep .%@";
+
+"Use .%@" = "Use .%@";
+
+"Remove" = "Remove";
+
+"The name \"%@\" is already taken. Please choose a different name." = "The name \"%@\" is already taken. Please choose a different name.";

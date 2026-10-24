@@ -436,7 +436,7 @@ static BOOL hasLastExtents_ = NO;
                                       scroller: [nviewScroll horizontalScroller]
                                     cellsIcons: NO
                                     acceptsDnd: YES
-                                 editableCells: NO
+                                 editableCells: YES
                                selectionColumn: YES];
     }
 
@@ -1584,7 +1584,7 @@ static BOOL hasLastExtents_ = NO;
                                                 scroller: [pathsScroll horizontalScroller]
                                               cellsIcons: NO
                                               acceptsDnd: NO
-                                           editableCells: NO
+                                           editableCells: YES
                                          selectionColumn: YES];
   }
 
@@ -1840,7 +1840,7 @@ constrainMinCoordinate:(CGFloat)proposedMin
                                                       scroller: [nviewScroll horizontalScroller]
                                                     cellsIcons: NO
                                                     acceptsDnd: YES
-                                                 editableCells: NO
+                                                 editableCells: YES
                                                selectionColumn: YES];
       
           viewType = GWViewTypeBrowser;

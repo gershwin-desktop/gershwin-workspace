@@ -31,6 +31,7 @@
 #import "FSNFunctions.h"
 #import "FSNIconPlacement.h"
 #import "FSNSelectionModel.h"
+#import "FSNRenameController.h"
 
 @class NSColor;
 @class NSFont;
@@ -482,7 +483,7 @@ extern const int FSNMaxLabelTextSize;
 @end
 
 
-@interface FSNIconsView (IconNameEditing)
+@interface FSNIconsView (IconNameEditing) <FSNRenameHost>
 
 - (void)updateNameEditor;
 
@@ -491,6 +492,13 @@ extern const int FSNMaxLabelTextSize;
 - (void)stopRepNameEditing;
 
 - (BOOL)canStartRepNameEditing;
+
+/* A press on the name label of the selected icon, which the label passes
+ * on so the icon handles it like a press on itself. */
+- (void)iconNameEditorMouseDown:(NSEvent *)event;
+
+/* FSNRenameHost: the label of the selected icon becomes the editor. */
+- (NSTextField *)nameEditorForRenamingRep:(id)rep;
 
 - (void)controlTextDidChange:(NSNotification *)aNotification;
 

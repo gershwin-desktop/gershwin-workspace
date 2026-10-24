@@ -34,6 +34,7 @@
 #import "GWViewerIconsPath.h"
 #import "GWViewer.h"
 #import "Workspace.h"
+#import "FSNRenameController.h"
 
 #define DEF_ICN_SIZE 48
 #define DEF_TEXT_SIZE 12
@@ -885,70 +886,13 @@
 
 - (void)controlTextDidEndEditing:(NSNotification *)aNotification
 {
-  FSNode *ednode = [nameEditor node];
+  FSNode *ednode = RETAIN ([nameEditor node]);
+  NSString *text = [[[nameEditor stringValue] copy] autorelease];
 
-  if ([ednode isParentWritable] == NO)
-    {
-      showAlertNoPermission([FSNode class], [ednode parentName]);
-      [self updateNameEditor];
-      return;
-    }
-  if ([ednode isSubnodeOfPath: [[Workspace gworkspace] trashPath]])
-    {
-      showAlertInRecycler([FSNode class]);
-      [self updateNameEditor];
-      return;
-    } 
-  else
-    {
-      NSString *newname = [nameEditor stringValue];
-      NSString *newpath = [[ednode parentPath] stringByAppendingPathComponent: newname];
-      NSString *extension = [newpath pathExtension];
-      NSCharacterSet *notAllowSet = [NSCharacterSet characterSetWithCharactersInString: @"/\\*:?\33"];
-      NSRange range = [newname rangeOfCharacterFromSet: notAllowSet];
-      NSArray *dirContents = [ednode subNodeNamesOfParent];
-      NSMutableDictionary *opinfo = [NSMutableDictionary dictionary];
-      
-      if (([newname length] == 0) || (range.length > 0))
-        {
-	  showAlertInvalidName([FSNode class]);
-	  [self updateNameEditor];
-          return;
-        }	
-      
-      if (([extension length] 
-           && ([ednode isDirectory] && ([ednode isPackage] == NO))))
-        {
-          if (showAlertExtensionChange([FSNode class], extension) == NSAlertDefaultReturn)
-            {
-	      [self updateNameEditor];
-	      return;
-	    }
-        }
-      
-      if ([dirContents containsObject: newname])
-        {
-          if ([newname isEqual: [ednode name]])
-            {
-              [self updateNameEditor];
-              return;
-            }
-          else
-            {
-              showAlertNameInUse([FSNode class], newname);
-              [self updateNameEditor];
-              return;
-            }
-        }
-      
-      [opinfo setObject: @"WorkspaceRenameOperation" forKey: @"operation"];	
-      [opinfo setObject: [ednode path] forKey: @"source"];	
-      [opinfo setObject: newpath forKey: @"destination"];	
-      [opinfo setObject: [NSArray arrayWithObject: @""] forKey: @"files"];	
-      
-      [self stopRepNameEditing];
-      [[Workspace gworkspace] performFileOperation: opinfo];         
-    }
+  /* The same checks and questions as everywhere else items are renamed. */
+  [self updateNameEditor];
+  [[FSNRenameController sharedController] renameNode: ednode toEditedText: text];
+  RELEASE (ednode);
 }
 
 @end

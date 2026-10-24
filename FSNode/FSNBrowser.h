@@ -33,6 +33,7 @@
 #import "FSNArrangement.h"
 #import "FSNPreviewProvider.h"
 #import "FSNColumnViewOptions.h"
+#import "FSNRenameController.h"
 
 @class FSNBrowserColumn;
 @class FSNBrowserCell;
@@ -303,10 +304,13 @@
 @end
 
 
-@interface FSNBrowser (IconNameEditing)
+@interface FSNBrowser (IconNameEditing) <FSNRenameHost>
 
 - (void)setEditorForCell:(FSNBrowserCell *)cell 
                 inColumn:(FSNBrowserColumn *)col;
+
+/* FSNRenameHost: the editor over the name of a cell of any column. */
+- (NSTextField *)nameEditorForRenamingRep:(id)rep;
                 
 - (void)stopCellEditing;                
 

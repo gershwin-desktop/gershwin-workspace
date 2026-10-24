@@ -32,6 +32,7 @@ FSNode_OBJC_FILES = \
          FSNListRowModel.m \
          FSNSelectionModel.m \
          FSNRenamePolicy.m \
+         FSNRenameController.m \
          FSNPathComponentsViewer.m \
          FSNPlacementEnumerator.m \
           FSNIconPlacement.m \
@@ -74,6 +75,7 @@ FSNode_HEADER_FILES = \
          FSNListRowModel.h \
          FSNSelectionModel.h \
          FSNRenamePolicy.h \
+         FSNRenameController.h \
          FSNPathComponentsViewer.h \
          FSNIconPlacement.h \
          FSNPlacementEnumerator.h \

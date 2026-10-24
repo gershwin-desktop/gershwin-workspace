@@ -777,52 +777,6 @@ void FSNShowCannotOpenAlert(NSString *name)
                   nil, nil);
 }
 
-void showAlertInRecycler(Class c)
-{
-  NSRunAlertPanel(NSLocalizedStringFromTableInBundle(@"Error", nil, [NSBundle bundleForClass:c], @""),
-                  NSLocalizedStringFromTableInBundle(@"You can't rename an object that is in the Recycler", nil, [NSBundle bundleForClass:c], @""),
-                  NSLocalizedStringFromTableInBundle(@"Continue", nil, [NSBundle bundleForClass:c], @"")
-                  , nil, nil);   
-}
-
-void showAlertInvalidName(Class c)
-{
-  NSRunAlertPanel(NSLocalizedStringFromTableInBundle(@"Error", nil, [NSBundle bundleForClass:c], @""),
-                  NSLocalizedStringFromTableInBundle(@"Invalid name", nil, [NSBundle bundleForClass:c], @""),
-                  NSLocalizedStringFromTableInBundle(@"Continue", nil, [NSBundle bundleForClass:c], @""),
-                  nil, nil);  
-}
-
-NSInteger showAlertExtensionChange(Class c, NSString *extension)
-{
-  NSString *msg;
-  NSInteger r;
-
-  msg = NSLocalizedStringFromTableInBundle(@"Are you sure you want to add the extension", nil, [NSBundle bundleForClass:c], @"");
-
-  msg = [msg stringByAppendingFormat: @"\"%@\" ", extension];
-  msg = [msg stringByAppendingString: NSLocalizedStringFromTableInBundle(@"to the end of the name?", nil, [NSBundle bundleForClass:c], @"")];
-  msg = [msg stringByAppendingString: NSLocalizedStringFromTableInBundle(@"\nif you make this change, your folder may appear as a single file.", nil, [NSBundle bundleForClass:c], @"")];
-
-  r = NSRunAlertPanel(@"", msg, 
-                      NSLocalizedStringFromTableInBundle(@"Cancel", nil, [NSBundle bundleForClass:c], @""), 
-                      NSLocalizedStringFromTableInBundle(@"OK", nil, [NSBundle bundleForClass:c], @""), 
-                      nil);
-  return r;
-}
-
-void showAlertNameInUse(Class c, NSString *newname)
-{
-  NSRunAlertPanel(
-                  NSLocalizedStringFromTableInBundle(@"Error", nil, [NSBundle bundleForClass:c], @""),
-                  [NSString stringWithFormat: @"%@\"%@\" %@ ", 
-                            NSLocalizedStringFromTableInBundle(@"The name ", nil, [NSBundle bundleForClass:c], @""),
-                            newname,
-                            NSLocalizedStringFromTableInBundle(@" is already in use!", nil, [NSBundle bundleForClass:c], @"")], 
-                  NSLocalizedStringFromTableInBundle(@"Continue", nil, [NSBundle bundleForClass:c], @""), nil, nil); 
-}
-
-
 void
 FSNDrawLabelDot(NSRect dotRect, NSColor *color)
 {

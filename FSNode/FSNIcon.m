@@ -40,6 +40,8 @@
 #import "FSNArrangement.h"
 #import "FSNIconPlacement.h"
 #import "FSNIconsView.h"
+#import "FSNRenamePolicy.h"
+#import "FSNRenameController.h"
 
 /* Private extension for FSNIcon */
 @interface FSNIcon (Private)
@@ -1123,6 +1125,15 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
     {
       BOOL modeled = [container respondsToSelector: @selector(iconMouseDown:event:)];
       BOOL wasSelected = isSelected;
+      BOOL renames = NO;
+
+      if (modeled)
+	{
+	  /* A second press (the second click of a double click) opens rather
+	     than renames; any press ends editing another name. */
+	  [[FSNRenameController sharedController] cancelScheduledRename];
+	  [[FSNRenameController sharedController] commitActiveEditing];
+	}
 
       if (selectable == NO)
 	{
@@ -1158,20 +1169,10 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
 	  if (isSelected == NO)
 	    return;
 
-	  if (wasSelected
-	      && (FSNSelectionModifiersFromEventFlags([theEvent modifierFlags]) & ~FSNSelectionModifierOption) == 0
-	      && [[container selectedReps] count] == 1)
-	    {
-	      NSTimeInterval interval = ([theEvent timestamp] - editstamp);
-
-	      if ((interval > DOUBLE_CLICK_LIMIT)
-		  && [self mouse: selfloc inRect: labelRect]
-		  && [container respondsToSelector: @selector(setNameEditorForRep:)])
-		{
-		  [container setNameEditorForRep: self];
-		  editing = YES;
-		}
-	    }
+	  renames = [FSNRenamePolicy clickStartsRenamingWithCount: [theEvent clickCount]
+							   onName: [self mouse: selfloc inRect: labelRect]
+						  wasOnlySelected: (wasSelected && [[container selectedReps] count] == 1)
+							modifiers: FSNSelectionModifiersFromEventFlags([theEvent modifierFlags])];
 	}
       else if ([theEvent clickCount] == 1)
 	{
@@ -1258,6 +1259,9 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
 		  if (modeled)
 		    {
 		      [(FSNIconsView *)container iconMouseUp: self dragged: NO];
+		      if (renames)
+			[[FSNRenameController sharedController]
+			  scheduleRenameOfRep: self inHost: (id<FSNRenameHost>)container];
 		    }
 		  if ([container respondsToSelector: @selector(repSelected:)])
 		    {
@@ -3561,6 +3565,15 @@ static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
 
 - (void)mouseDown:(NSEvent *)theEvent
 {
+  /* Over a selected icon this field is just its name: the press belongs
+     to the icon (select, drag, open, or rename after a pause). */
+  if ([self isEditable] == NO
+      && [container respondsToSelector: @selector(iconNameEditorMouseDown:)])
+    {
+      [(FSNIconsView *)container iconNameEditorMouseDown: theEvent];
+      return;
+    }
+
   if ([self isEditable] == NO)
     {
       if ([container respondsToSelector: @selector(canStartRepNameEditing)]

@@ -1,6 +1,5 @@
 /*** deduplicated by dedup-strings.py ***/
 
-" is already in use!" = " wird bereits verwendet!";
 
 "Applications" = "Anwendungen";
 
@@ -24,7 +23,6 @@
 
 "Images" = "Bilder";
 
-"Invalid name" = "Ung\u00fcltiger Name";
 
 "Music" = "Musik";
 
@@ -40,7 +38,6 @@
 
 "Size" = "Gr\u00f6\u00dfe";
 
-"The name " = "Der Name ";
 
 "Tools" = "Werkzeuge";
 
@@ -170,3 +167,27 @@
 "Microsoft Excel Spreadsheet" = "Microsoft-Excel-Tabelle";
 "OpenDocument Text" = "OpenDocument-Text";
 "Spreadsheet" = "Tabelle";
+
+"The name \"%@\" can't be used." = "Der Name \u201e%@\u201c kann nicht verwendet werden.";
+
+"Try using a name with fewer characters or no punctuation marks." = "Versuchen Sie einen Namen mit weniger Zeichen oder ohne Satzzeichen.";
+
+"You don't have the necessary permission to rename \"%@\"." = "Sie haben nicht die notwendigen Zugriffsrechte, um das Objekt \u201e%@\u201c umzubenennen.";
+
+"Are you sure you want to use a name that begins with a dot \".\"?" = "M\u00f6chten Sie wirklich einen Namen verwenden, der mit einem Punkt \u201e.\u201c beginnt?";
+
+"These names are reserved for the system. If you continue, the item will be hidden." = "Diese Namen sind f\u00fcr das System reserviert. Wenn Sie fortfahren, wird das Objekt ausgeblendet.";
+
+"Are you sure you want to change the extension from \".%@\" to \".%@\"?" = "M\u00f6chten Sie das Suffix wirklich von \u201e.%@\u201c in \u201e.%@\u201c \u00e4ndern?";
+
+"Are you sure you want to remove the extension \".%@\"?" = "M\u00f6chten Sie das Suffix \u201e.%@\u201c wirklich entfernen?";
+
+"If you make this change, your document may open in a different application." = "Wenn Sie die \u00c4nderung machen, wird dieses Dokument m\u00f6glicherweise mit einem anderen Programm ge\u00f6ffnet.";
+
+"Keep .%@" = ".%@ behalten";
+
+"Use .%@" = ".%@ verwenden";
+
+"Remove" = "Entfernen";
+
+"The name \"%@\" is already taken. Please choose a different name." = "Der Name \u201e%@\u201c wird bereits verwendet. Bitte w\u00e4hlen Sie einen anderen Namen.";

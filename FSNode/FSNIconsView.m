@@ -39,6 +39,7 @@
 #import "FSNLocationFile.h"
 #import "FSNIconPositionStore.h"
 #import "FSNPlacementEnumerator.h"
+#import "FSNRenamePolicy.h"
 
 #define DEF_ICN_SIZE 48
 #define DEF_TEXT_SIZE 12
@@ -2137,6 +2138,11 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 
 - (void)selectNothingForBackgroundEvent:(NSEvent *)theEvent
 {
+  [[FSNRenameController sharedController] cancelScheduledRename];
+  /* The press that ends renaming does only that; the renamed item stays
+     selected, as in the reference. */
+  if ([[FSNRenameController sharedController] commitActiveEditing])
+    return;
   [self syncSelectionModel];
   [selectionModel mouseDownOnEmptySpaceWithModifiers:
                     FSNSelectionModifiersFromEventFlags([theEvent modifierFlags])];
@@ -2396,10 +2402,23 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
       return;
 
     case NSCarriageReturnCharacter:
+    case NSEnterCharacter:
       {
-	BOOL closesndr = ((flags == NSAlternateKeyMask)
-			  || (flags == NSControlKeyMask));
-	[self openSelectionInNewViewer: closesndr];
+	NSArray *selected = [self selectedReps];
+
+	/* Return renames, as in the reference; opening is Command-Down and
+	   Command-O. */
+	if ([FSNRenamePolicy keyStartsRenaming: character
+				     modifiers: FSNSelectionModifiersFromEventFlags(flags)
+				selectionCount: [selected count]])
+	  {
+	    if ([[FSNRenameController sharedController]
+		  beginRenameOfRep: [selected lastObject] inHost: self] == NO)
+	      NSBeep();
+	    return;
+	  }
+	if (flags & (NSAlternateKeyMask | NSControlKeyMask))
+	  [self openSelectionInNewViewer: YES];
 	return;
       }
 
@@ -4396,7 +4415,9 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   if (editIcon)
     {
       FSNode *ednode = [editIcon node];
-      NSString *nodeDescr = [ednode name];
+      /* Until renaming starts the field is only the selected icon's label,
+	 so it shows what the label shows. */
+      NSString *nodeDescr = [editIcon shownInfo];
       NSRect icnr = [editIcon frame];
       NSRect labr = [editIcon labelRect];
       NSCellImagePosition ipos = [editIcon iconPosition];
@@ -4489,6 +4510,14 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 {
   NSUInteger i;
 
+  /* Whatever ends editing keeps the typed name, as in the reference; the
+     controller comes back here once it has. */
+  if ([[FSNRenameController sharedController] isEditingInHost: self])
+    {
+      [[FSNRenameController sharedController] commitActiveEditing];
+      return;
+    }
+
   if ([[self subviews] containsObject: nameEditor])
     {
       NSRect edrect = [nameEditor frame];
@@ -4515,6 +4544,56 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 	  && ([[editIcon node] isNameLocked] == NO));
 }
 
+- (void)iconNameEditorMouseDown:(NSEvent *)event
+{
+  if (editIcon != nil)
+    [editIcon mouseDown: event];
+}
+
+- (NSTextField *)nameEditorForRenamingRep:(id)rep
+{
+  if ([[self selectedReps] count] != 1 || [[self selectedReps] lastObject] != rep)
+    return nil;
+
+  if (editIcon != rep || [[self subviews] containsObject: nameEditor] == NO)
+    {
+      DESTROY (lastSelection);
+      [self selectionDidChange];
+    }
+  if (editIcon != rep || [self canStartRepNameEditing] == NO)
+    return nil;
+
+  /* Above the icons, also those added after it (a reload after a rename
+     adds them anew), or they draw over the field. */
+  [nameEditor removeFromSuperview];
+  [self addSubview: nameEditor];
+
+  /* The editor holds the whole name, extension included, as the
+     reference's does; the label above showed the shortened one. */
+  [nameEditor setNode: [editIcon node] stringValue: [[editIcon node] name]];
+  [self controlTextDidChange: nil];
+  /* Larger by the field's bezel and by room for typing, as the frame
+     follows the text once editing has begun (-controlTextDidChange:). */
+  {
+    CGFloat extra = 12 + [[nameEditor font] pointSize];
+    NSRect r = [nameEditor frame];
+
+    r = NSInsetRect(r, -extra / 2, -3);
+    [nameEditor setFrame: NSIntegralRect(r)];
+  }
+  [self scrollIconToVisible: editIcon];
+  return nameEditor;
+}
+
+- (BOOL)control:(NSControl *)control
+       textView:(NSTextView *)textView
+doCommandBySelector:(SEL)command
+{
+  return [[FSNRenameController sharedController] control: control
+                                                textView: textView
+                                     doCommandBySelector: command];
+}
+
 - (void)controlTextDidChange:(NSNotification *)aNotification
 {
   NSRect icnr = [editIcon frame];
@@ -4525,6 +4604,11 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   NSRect edrect = [nameEditor frame];
 
   edwidth += margin;
+  /* The white margin of the field while renaming (FSNRenameController)
+     takes room too, and room for the next character keeps the field from
+     scrolling the start of the name away while it grows. */
+  if ([[FSNRenameController sharedController] isEditingInHost: self])
+    edwidth += 12 + [[nameEditor font] pointSize];
 
   if (ipos == NSImageAbove)
     {
@@ -4560,79 +4644,34 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 
   [self setNeedsDisplayInRect: [nameEditor frame]];
   [nameEditor setFrame: NSIntegralRect(edrect)];
+
+  /* The field editor keeps the size the field had when editing began, and
+     scrolls the start of a growing name out of sight; it grows along. */
+  {
+    NSText *fieldEditor = [nameEditor currentEditor];
+    NSView *clip = [fieldEditor superview];
+
+    if (fieldEditor != nil && [clip isKindOfClass: [NSClipView class]])
+      {
+        /* Same inset from the field's edges as when editing began. */
+        NSRect inner = [clip frame];
+
+        inner.size.width = NSWidth([nameEditor bounds]) - 2 * NSMinX(inner);
+        [clip setFrame: inner];
+        [fieldEditor setFrameSize: NSMakeSize(NSWidth(inner), NSHeight([fieldEditor frame]))];
+        [fieldEditor scrollRangeToVisible: NSMakeRange(0, 0)];
+        [fieldEditor scrollRangeToVisible: [fieldEditor selectedRange]];
+      }
+  }
+  /* The field's own bezel has to be drawn at its new size. */
+  [nameEditor setNeedsDisplay: YES];
 }
 
 - (void)controlTextDidEndEditing:(NSNotification *)aNotification
 {
-  FSNode *ednode = [nameEditor node];
-
-#define CLEAREDITING				\
-  [self stopRepNameEditing];			\
-  return
-
-
-  if ([ednode isParentWritable] == NO)
-    {
-      showAlertNoPermission([FSNode class], [ednode parentName]);
-      CLEAREDITING;
-    }
-  else if ([ednode isSubnodeOfPath: [desktopApp trashPath]])
-    {
-      showAlertInRecycler([FSNode class]);
-      CLEAREDITING;
-    }
-  else
-    {
-      NSString *userName = [nameEditor stringValue];
-      NSString *origName = [ednode name];
-      NSString *newname = GSRenamedFilename(userName, origName, GSCurrentExtensionDisplayMode());
-      NSString *newpath;
-      NSString *extension;
-      NSCharacterSet *notAllowSet = [NSCharacterSet characterSetWithCharactersInString: @"/\\*:?\33"];
-      NSRange range;
-      NSArray *dirContents;
-      NSMutableDictionary *opinfo;
-
-      if (newname == nil)
-	{
-	  CLEAREDITING;
-	}
-
-      newpath = [[ednode parentPath] stringByAppendingPathComponent: newname];
-      extension = [newpath pathExtension];
-      range = [newname rangeOfCharacterFromSet: notAllowSet];
-      dirContents = [ednode subNodeNamesOfParent];
-      opinfo = [NSMutableDictionary dictionary];
-
-      if (([newname length] == 0) || (range.length > 0))
-	{
-	  showAlertInvalidName([FSNode class]);
-	  CLEAREDITING;
-	}
-
-      if (([extension length]
-	   && ([ednode isDirectory] && ([ednode isPackage] == NO))))
-	{
-          if (showAlertExtensionChange([FSNode class], extension) == NSAlertDefaultReturn)
-            {
-              CLEAREDITING;
-            }
-	}
-
-      if ([dirContents containsObject: newname])
-	{
-	  showAlertNameInUse([FSNode class], newname);
-	  CLEAREDITING;
-	}
-
-      [opinfo setObject: @"WorkspaceRenameOperation" forKey: @"operation"];
-      [opinfo setObject: [ednode path] forKey: @"source"];
-      [opinfo setObject: newpath forKey: @"destination"];
-      [opinfo setObject: [NSArray arrayWithObject: @""] forKey: @"files"];
-
-      [self stopRepNameEditing];
-      [desktopApp performFileOperation: opinfo];
-    }
+  [[FSNRenameController sharedController] editorDidEndEditing: aNotification
+                                                         node: [nameEditor node]
+                                                         host: self];
 }
 
 @end

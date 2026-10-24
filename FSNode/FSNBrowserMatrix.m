@@ -33,6 +33,9 @@
 #import "FSNBrowserColumn.h"
 #import "FSNIcon.h"
 #import "FSNFunctions.h"
+#import "FSNBrowser.h"
+#import "FSNRenamePolicy.h"
+#import "FSNRenameController.h"
 
 /* Forward declarations for methods on Workspace resolved at runtime
  * via NSClassFromString to avoid circular library dependencies. */
@@ -54,8 +57,6 @@
 - (NSMenu *)emptySpaceContextMenuForViewer:(id)viewer;
 @end
 
-#define DOUBLE_CLICK_LIMIT  300
-#define EDIT_CLICK_LIMIT   1000
 
 @implementation FSNBrowserMatrix
 
@@ -90,8 +91,6 @@
 						  @"GWRemoteFilenamesPboardType",
 						  nil]];
 	}
-      editstamp = 0.0;
-      editIndex = -1;
       selectionModel = [[FSNSelectionModel alloc] initWithStyle: FSNSelectionStyleList];
       [selectionModel setDelegate: self];
     }
@@ -207,6 +206,13 @@
 
         [self scrollRectToVisible: NSMakeRect(NSMinX(b), atMaxY ? NSMaxY(b) - 1 : NSMinY(b), 1, 1)];
       }
+      return;
+
+    /* Return renames and Option-Return opens; the browser decides for
+       every column (NSMatrix would only start editing a cell). */
+    case NSCarriageReturnCharacter:
+    case NSEnterCharacter:
+      [[column browser] keyDown: theEvent];
       return;
 
     /* Tab walks the names of this column instead of leaving it. */
@@ -423,11 +429,13 @@
       return;
     }
 
-  [column stopCellEditing];
+  /* A second press (the second click of a double click) opens rather
+     than renames; any press ends editing a name. */
+  [[FSNRenameController sharedController] cancelScheduledRename];
+  [[FSNRenameController sharedController] commitActiveEditing];
 
   if ([theEvent clickCount] >= 2)
     {
-      editIndex = -1;
       [self sendDoubleAction];
       return;
     }
@@ -488,7 +496,6 @@
 
   if ([nextEvent type] == NSLeftMouseDragged)
     {
-      editIndex = -1;
       [selectionModel mouseUpOnItem: cell dragged: YES];
       [self startExternalDragOnEvent: theEvent];
       return;
@@ -498,17 +505,16 @@
   if ([self applySelectionModel])
     [self sendAction];
 
-  if (wasOnlySelected && onIcon == NO
-      && (modifiers & ~FSNSelectionModifierOption) == 0)
+  /* A click on the name of the only selected cell starts renaming once
+     it is clear no second click follows. */
+  if ([FSNRenamePolicy clickStartsRenamingWithCount: 1
+                                             onName: (onIcon == NO)
+                                    wasOnlySelected: wasOnlySelected
+                                          modifiers: modifiers])
     {
-      NSTimeInterval interval = ([theEvent timestamp] - editstamp);
-
-      if ((interval > DOUBLE_CLICK_LIMIT) && (interval < EDIT_CLICK_LIMIT))
-        [column setEditorForCell: cell];
+      [[FSNRenameController sharedController] scheduleRenameOfRep: cell
+                                                           inHost: [column browser]];
     }
-
-  editIndex = row;
-  editstamp = [theEvent timestamp];
 }
 
 - (BOOL)acceptsFirstResponder
