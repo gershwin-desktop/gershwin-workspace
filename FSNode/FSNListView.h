@@ -227,6 +227,12 @@ extern NSString * const FSNListViewOptionColumnOrder;
 
 /* Row height for a text size (points; 0 for the default) and icon size. */
 + (CGFloat)rowHeightForTextSize:(CGFloat)textSize iconSize:(NSInteger)iconSize;
+/* The same rounded up to whole device pixels at a scale factor. */
++ (CGFloat)rowHeightForTextSize:(CGFloat)textSize
+                        iconSize:(NSInteger)iconSize
+                     scaleFactor:(CGFloat)scale;
+/* The row height for the current text and icon size on this screen. */
+- (CGFloat)rowHeight;
 
 /* Sorting.  Unknown or hidden ids are refused (NO). Ascending means the
  * values in their natural order: A to Z, oldest first, smallest first. */

@@ -42,11 +42,13 @@
 #endif
 #include <limits.h>
 
-#define ICNSIZE (24)
-#define CELLS_HEIGHT (28.0)
 #define HLIGHT_H_FACT (0.8125)
 
-#define DEFAULT_LIST_ICON_SIZE (ICNSIZE)
+/* The reference list view shows 16 point icons in 19 point rows of 12 point
+ * text, a point below the system font; anything bigger wastes a third of
+ * the window on whitespace. */
+#define DEFAULT_LIST_ICON_SIZE (16)
+#define DEFAULT_LIST_TEXT_SIZE (12.0)
 #define MIN_LIST_ICON_SIZE (16)
 #define MAX_LIST_ICON_SIZE (128)
 /* Space above and below the icon, and above and below the text line, that
@@ -1055,17 +1057,14 @@ static NSString *defaultColumns = @"{ \
 /* The cells' own default font when no size was asked for. */
 - (NSFont *)effectiveFont
 {
-  return listFont ? listFont : [[self freshDataCell] font];
+  return listFont ? listFont : [NSFont systemFontOfSize: DEFAULT_LIST_TEXT_SIZE];
 }
 
 - (FSNTextCell *)freshDataCell
 {
   FSNTextCell *cell = AUTORELEASE ([[FSNTextCell alloc] init]);
 
-  if (listFont)
-    {
-      [cell setFont: listFont];
-    }
+  [cell setFont: [self effectiveFont]];
   return cell;
 }
 
@@ -1382,9 +1381,7 @@ compareOptional(id a, id b)
 
 + (CGFloat)rowHeightForTextSize:(CGFloat)points iconSize:(NSInteger)iconSize
 {
-  CGFloat text = (points > 0)
-    ? points
-    : [[[[FSNTextCell alloc] init] autorelease] font].pointSize;
+  CGFloat text = (points > 0) ? points : DEFAULT_LIST_TEXT_SIZE;
   CGFloat icon = 0;
 
   /* Finder: a row is the text size plus 7, also with 16 point icons, and the
@@ -1401,6 +1398,31 @@ compareOptional(id a, id b)
     }
 
   return MAX (icon, text + ROW_TEXT_MARGIN);
+}
+
++ (CGFloat)rowHeightForTextSize:(CGFloat)points
+                        iconSize:(NSInteger)iconSize
+                     scaleFactor:(CGFloat)scale
+{
+  CGFloat height = [self rowHeightForTextSize: points iconSize: iconSize];
+  CGFloat pixels;
+
+  NSAssert1 (scale > 0, @"no usable scale factor (%g)", (double)scale);
+  /* The tolerance keeps a product such as 20 * 1.1 (22.000000000000004)
+   * from being taken for a pixel and a hair, and growing by a whole pixel. */
+  pixels = ceil (height * scale - 0.001);
+
+  /* A row that ends between two device pixels is drawn one pixel taller or
+   * shorter than its neighbours, so the stripes and the text baselines
+   * wander from row to row; the next whole pixel keeps them on one grid. */
+  return pixels / scale;
+}
+
+- (CGFloat)rowHeight
+{
+  return [[self class] rowHeightForTextSize: [self textSize]
+                                   iconSize: listIconSize
+                                scaleFactor: [[NSScreen mainScreen] userSpaceScaleFactor]];
 }
 
 - (BOOL)setSortColumnId:(NSString *)columnId ascending:(BOOL)ascending
@@ -1643,8 +1665,7 @@ compareOptional(id a, id b)
   NSArray *columns = [listView tableColumns];
   NSUInteger i;
 
-  [listView setRowHeight: [[self class] rowHeightForTextSize: [self textSize]
-                                                    iconSize: listIconSize]];
+  [listView setRowHeight: [self rowHeight]];
 
   for (i = 0; i < [columns count]; i++)
     {
@@ -4324,11 +4345,11 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
       [self setAllowsColumnResizing: YES];
       [self setAllowsEmptySelection: YES];
       [self setAllowsMultipleSelection: YES];
-      [self setRowHeight: CELLS_HEIGHT];
       [self setIntercellSpacing: NSZeroSize];
       [self setUsesAlternatingRowBackgroundColors: YES];
 
       dsource = [[dsclass alloc] initForListView: self];
+      [self setRowHeight: [dsource rowHeight]];
 
       [self setDataSource: dsource];
       [self setDelegate: dsource];
@@ -4526,6 +4547,43 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
 {
   [super resizeWithOldSuperviewSize: oldFrameSize];
   [self checkSize];
+}
+
+/* Stripes by position rather than by row: the theme's version starts at
+ * the row under the top of the clip rect, and below the last item there is
+ * none, so an expose down there repaints the top rows instead and leaves
+ * the exposed area plain. */
+- (void)drawBackgroundInClipRect:(NSRect)clipRect
+{
+  NSArray *colors;
+  NSUInteger count;
+  CGFloat height = [self rowHeight];
+  NSInteger row, last;
+
+  [[self backgroundColor] set];
+  NSRectFill (clipRect);
+
+  if ([self usesAlternatingRowBackgroundColors] == NO || height <= 0)
+    {
+      return;
+    }
+  colors = [NSColor controlAlternatingRowBackgroundColors];
+  count = [colors count];
+  if (count == 0)
+    {
+      return;
+    }
+
+  row = (NSInteger) floor (NSMinY (clipRect) / height);
+  last = (NSInteger) ceil (NSMaxY (clipRect) / height);
+  for (; row < last; row++)
+    {
+      NSRect band = NSMakeRect (NSMinX (clipRect), row * height,
+                                NSWidth (clipRect), height);
+
+      [(NSColor *)[colors objectAtIndex: row % count] set];
+      NSRectFill (NSIntersectionRect (band, clipRect));
+    }
 }
 
 - (NSImage *)dragImageForRows:(NSArray *)dragRows

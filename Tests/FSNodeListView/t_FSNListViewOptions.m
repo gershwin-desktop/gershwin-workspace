@@ -128,6 +128,21 @@ main(void)
   NSArray *ids;
   NSUInteger i, columnCount;
 
+  /* The stripe colours under test come from the theme; the default theme
+   * has two different ones wherever the suite runs, whatever theme the
+   * user running it has chosen. */
+  {
+    NSUserDefaults *defs = [NSUserDefaults standardUserDefaults];
+    NSMutableDictionary *args = [NSMutableDictionary dictionaryWithDictionary:
+      [defs volatileDomainForName: NSArgumentDomain]];
+
+    [args setObject: @"GNUstep" forKey: @"GSTheme"];
+    /* Row heights are whole device pixels, so the expected values below
+     * hold at a scale of 1, not at the factor of the user's desktop. */
+    [args setObject: @"1" forKey: @"GSScaleFactor"];
+    [defs removeVolatileDomainForName: NSArgumentDomain];
+    [defs setVolatileDomain: args forName: NSArgumentDomain];
+  }
   [NSApplication sharedApplication];
 
   /* --- pure functions ------------------------------------------------ */
@@ -230,6 +245,33 @@ main(void)
   }
   PASS ([DS rowHeightForTextSize: 40 iconSize: 16] > [DS rowHeightForTextSize: 0 iconSize: 16],
         "MI-LST-13 a big text makes rows taller than a small icon needs");
+
+  /* Rows are laid out in points, so they keep their size at every scale
+   * factor; only where a row would end between two device pixels does it
+   * grow to the next whole pixel, so that the stripes and the text of every
+   * row land on the same pixel grid. */
+  PASS ([DS rowHeightForTextSize: 12 iconSize: 16 scaleFactor: 1.0] == 19.0
+        && [DS rowHeightForTextSize: 12 iconSize: 16 scaleFactor: 2.0] == 19.0,
+        "MI-LST-110 a 12 point text with 16 point icons gives 19 point rows at scale 1 and 2");
+  {
+    CGFloat factors[] = { 1.1, 1.25, 1.5, 1.75 };
+    BOOL whole = YES, atLeast = YES, close = YES;
+    unsigned k;
+
+    for (k = 0; k < sizeof (factors) / sizeof (factors[0]); k++)
+      {
+        CGFloat h = [DS rowHeightForTextSize: 12 iconSize: 16 scaleFactor: factors[k]];
+        CGFloat px = h * factors[k];
+
+        whole = whole && fabs (px - floor (px + 0.5)) < 0.001;
+        atLeast = atLeast && h >= 19.0;
+        close = close && px - 19.0 * factors[k] < 1.0;
+      }
+    PASS (whole, "MI-LST-111 at fractional scale factors a row is a whole number of device pixels");
+    PASS (atLeast && close, "MI-LST-112 and never shorter than 19 points, nor longer by a whole pixel");
+  }
+  PASS ([DS rowHeightForTextSize: 12 iconSize: 32 scaleFactor: 2.0] == 39.0,
+        "MI-LST-113 the icon still decides when it is the taller one");
 
   /* --- folder size walk ---------------------------------------------- */
 
@@ -471,7 +513,10 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
   {
     CGFloat before = [view rowHeight];
 
-    PASS (before == 28.0 && [ds listIconSize] == 24, "MI-LST-57 default row 28, icon 24");
+    PASS ([ds listIconSize] == 16, "MI-LST-57 the default icon is 16 points");
+    PASS ([ds textSize] == 12 && before == 19.0
+          && [DS rowHeightForTextSize: 0 iconSize: 16] == 19.0,
+          "MI-LST-114 the default text is 12 points and the default row 19 points");
     [ds setListIconSize: 32];
     PASS ([view rowHeight] == 39.0, "MI-LST-58 [O:2026-10-11 E24] a 32 point icon makes the rows 39 points");
     [ds setListIconSize: 1000];
@@ -479,7 +524,7 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
     [ds setListIconSize: 1];
     PASS ([ds listIconSize] == 16, "MI-LST-60 and to 16 at the least");
     [ds setListIconSize: 24];
-    PASS ([view rowHeight] == 28.0, "MI-LST-61 back to 24 points the rows are 28 again");
+    PASS ([view rowHeight] == 28.0, "MI-LST-61 at 24 points the rows are 28");
     [ds setTextSize: 30];
     PASS ([ds textSize] == 30 && [view rowHeight] > 28.0,
           "MI-LST-62 a 30 point text makes the rows taller");
@@ -488,6 +533,7 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
           "MI-LST-63 and every column's cells use it");
     [ds setTextSize: 0];
     PASS ([view rowHeight] == 28.0, "MI-LST-64 text size 0 selects the default again");
+    [ds setListIconSize: 16];
   }
 
   /* the size of a file is the space it takes */
@@ -618,6 +664,72 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
     PASS (got.y < 100000 && NSMaxY ([lv visibleRect]) <= NSMaxY ([lv bounds]) + 0.5,
           "MI-LST-109 [G] a position beyond the content is held inside it");
     [lv release];
+  }
+
+  /* the stripes go on below the last item, as far as the window shows */
+  {
+    NSScrollView *sc = [[[NSScrollView alloc] initWithFrame: NSMakeRect (0, 0, 400, 300)] autorelease];
+    FSNListView *lv = [[FSNListView alloc] initWithFrame: NSMakeRect (0, 0, 400, 300)
+                                         dataSourceClass: [FSNListViewDataSource class]];
+    NSArray *colors = [NSColor controlAlternatingRowBackgroundColors];
+    NSBitmapImageRep *rep;
+    CGFloat h;
+    NSInteger rows, probe;
+    NSColor *got, *want;
+
+    NSWindow *win = [[NSWindow alloc] initWithContentRect: NSMakeRect (0, 0, 400, 300)
+                                                styleMask: NSBorderlessWindowMask
+                                                  backing: NSBackingStoreBuffered
+                                                    defer: NO];
+
+    [win setContentView: sc];
+    [sc setDocumentView: lv];
+    [lv showContentsOfNode: [FSNode nodeWithPath: folder]];
+    rows = [lv numberOfRows];
+    h = [lv rowHeight];
+    PASS (NSHeight ([lv frame]) >= NSHeight ([[sc contentView] bounds]),
+          "MI-LST-115 a list shorter than its window still covers the whole window");
+
+    /* Redraw only the part below the items, as an expose of that area
+     * does, and look at the last whole row and the partial one under it:
+     * the stripes count on from the items and reach the bottom edge. */
+    PASS (![[colors objectAtIndex: 0] isEqual: [colors objectAtIndex: 1]],
+          "MI-LST-118 the theme's two stripe colours differ (else 116 and 117 prove nothing)");
+    {
+      /* Only the bottom one and a half rows: a clip rect that starts far
+       * below the last item is where counting from the first row goes
+       * wrong. */
+      CGFloat top = NSHeight ([lv bounds]) - 1.5 * h;
+      NSRect lower = NSMakeRect (0, top, NSWidth ([lv bounds]),
+                                 NSHeight ([lv bounds]) - top);
+      NSInteger k;
+
+      [lv lockFocus];
+      NSRectClip (lower);
+      [lv drawRect: lower];
+      rep = [[[NSBitmapImageRep alloc] initWithFocusedViewRect: [lv bounds]] autorelease];
+      [lv unlockFocus];
+
+      for (k = 1; k >= 0; k--)
+        {
+          CGFloat y;
+
+          probe = (NSInteger) floor (NSHeight ([lv bounds]) / h) - k;
+          y = MIN ((probe + 0.5) * h, NSHeight ([lv bounds]) - 2);
+          got = [[rep colorAtX: 300 y: (NSInteger) y]
+                  colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
+          want = [[colors objectAtIndex: probe % [colors count]]
+                   colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
+          PASS (rows < 8 && got != nil
+                && fabs ([got redComponent] - [want redComponent]) < 0.02
+                && fabs ([got greenComponent] - [want greenComponent]) < 0.02
+                && fabs ([got blueComponent] - [want blueComponent]) < 0.02,
+                "MI-LST-%s empty row %ld, far below the items, has its place's stripe colour",
+                (k == 1) ? "116" : "117", (long)probe);
+        }
+    }
+    [lv release];
+    [win release];
   }
 
   /* --- internal metadata files ----------------------------------------- */
