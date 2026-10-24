@@ -98,3 +98,8 @@ t_DSStoreViewWindowInterop_TOOL_LIBS += -lgnustep-gui
 # t_GWViewerToolbarModel compares the item sets with AppKit's own toolbar
 # item identifiers (flexible space, separator), which live in gnustep-gui.
 t_GWViewerToolbarModel_TOOL_LIBS += -lgnustep-gui
+
+# t_GWViewerIconsViewResize includes GWViewerIconsView.m and drives it in a
+# real scroll view, on top of the framework just built.
+t_GWViewerIconsViewResize_INCLUDE_DIRS += -I../../Workspace/Desktop
+t_GWViewerIconsViewResize_TOOL_LIBS += -lFSNode -lgnustep-gui

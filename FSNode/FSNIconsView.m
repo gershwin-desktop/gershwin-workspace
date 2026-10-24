@@ -2353,7 +2353,8 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
       vRect = [self visibleRect];
       p = vRect.origin;
       x = p.x;
-      y = p.y + vRect.size.height;
+      /* Up is toward smaller y in a flipped view (browser, spatial). */
+      y = [self isFlipped] ? p.y - vRect.size.height : p.y + vRect.size.height;
       w = vRect.size.width;
       h = vRect.size.height;
       hiddRect = NSMakeRect(x, y, w, h);
@@ -2364,7 +2365,7 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
       vRect = [self visibleRect];
       p = vRect.origin;
       x = p.x;
-      y = p.y - vRect.size.height;
+      y = [self isFlipped] ? p.y + vRect.size.height : p.y - vRect.size.height;
       w = vRect.size.width;
       h = vRect.size.height;
       hiddRect = NSMakeRect(x, y, w, h);

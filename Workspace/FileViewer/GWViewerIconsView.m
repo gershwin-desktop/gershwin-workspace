@@ -72,6 +72,17 @@
   return NO;
 }
 
+/* Laid out from the top, where the icons are read from.  Laid out from the
+   bottom, the top of the document is reached by scrolling, and NSClipView
+   rounds each scroll origin to whole window units while the height of the
+   visible area is fractional at a scale factor such as 1.2: every step of a
+   live resize then left the icons a different fraction below the top, and
+   they jumped up and down by a pixel or two all the time. */
+- (BOOL)isFlipped
+{
+  return YES;
+}
+
 - (void)selectionDidChange
 {
   if (!(selectionMask & FSNCreatingSelectionMask))
