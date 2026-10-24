@@ -293,12 +293,6 @@
       return;
 
     case NSUpArrowFunctionKey:
-      if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
-	{
-	  // Shift-Up = Open parent folder in new viewer
-	  [[self delegate] openEnclosingFolderClosingViewer: NO];
-	  return;
-	}
       if (flags & NSCommandKeyMask)
 	{
 	  // Cmd+Shift+Up also closes this viewer where Up opens a window
@@ -311,12 +305,6 @@
 	{
 	  // Command-Shift-Down = Open as Folder (alternative shortcut)
 	  [[self delegate] openSelectionAsFolder];
-	  return;
-	}
-      if (flags & NSShiftKeyMask)
-	{
-	  // Shift-Down = Open Selection
-	  [[self delegate] openSelectionInNewViewer: NO];
 	  return;
 	}
       if (flags & NSCommandKeyMask)
