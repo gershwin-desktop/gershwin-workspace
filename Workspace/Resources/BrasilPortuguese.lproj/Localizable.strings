@@ -874,3 +874,12 @@
 "Make Alias" = "Criar Atalho";
 "Clean Up" = "Organizar";
 "Show View Options" = "Mostrar Opções de Visualização";
+
+/* Dock separator menu */
+"Turn Magnification On" = "Ativar Ampliação";
+"Turn Magnification Off" = "Desativar Ampliação";
+"Position on Screen" = "Posição na Tela";
+"Dock Preferences..." = "Preferências do Dock...";
+"Left" = "Esquerda";
+"Bottom" = "Embaixo";
+"Right" = "Direita";

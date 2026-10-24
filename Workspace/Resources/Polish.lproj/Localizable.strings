@@ -1023,3 +1023,10 @@ for";
 "Copy" = "Kopiuj";
 "Clean Up" = "Uporządkuj";
 "Show View Options" = "Pokaż opcje widoku";
+
+/* Dock separator menu */
+"Turn Magnification On" = "Włącz powiększanie";
+"Turn Magnification Off" = "Wyłącz powiększanie";
+"Position on Screen" = "Położenie na ekranie";
+"Dock Preferences..." = "Preferencje Docka...";
+"Left" = "Lewo";

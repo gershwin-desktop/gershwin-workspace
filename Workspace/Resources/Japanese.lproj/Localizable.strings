@@ -880,3 +880,9 @@
 "Make Alias" = "エイリアスを作成";
 "Clean Up" = "整頓";
 "Show View Options" = "表示オプションを表示";
+
+/* Dock separator menu */
+"Turn Magnification On" = "拡大をオン";
+"Turn Magnification Off" = "拡大をオフ";
+"Position on Screen" = "画面上の位置";
+"Dock Preferences..." = "Dock環境設定...";

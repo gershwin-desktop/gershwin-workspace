@@ -1277,3 +1277,9 @@
 "Action" = "Action";
 "Path" = "Path";
 "Show Toolbar" = "Show Toolbar";
+
+/* Dock separator menu */
+"Turn Magnification On" = "Turn Magnification On";
+"Turn Magnification Off" = "Turn Magnification Off";
+"Position on Screen" = "Position on Screen";
+"Dock Preferences..." = "Dock Preferences...";

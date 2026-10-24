@@ -1564,3 +1564,9 @@
 "Back/Forward" = "Terug/Vooruit";
 "Action" = "Taak";
 "Path" = "Pad";
+
+/* Dock separator menu */
+"Turn Magnification On" = "Vergroting aan";
+"Turn Magnification Off" = "Vergroting uit";
+"Position on Screen" = "Positie op scherm";
+"Dock Preferences..." = "Dock-voorkeuren...";

@@ -921,3 +921,12 @@
 "Make Alias" = "Álnév létrehozása";
 "Clean Up" = "Rendezés";
 "Show View Options" = "Nézetbeállítások megjelenítése";
+
+/* Dock separator menu */
+"Turn Magnification On" = "Nagyítás bekapcsolása";
+"Turn Magnification Off" = "Nagyítás kikapcsolása";
+"Position on Screen" = "Elhelyezés a képernyőn";
+"Dock Preferences..." = "Dock beállításai...";
+"Left" = "Balra";
+"Bottom" = "Lent";
+"Right" = "Jobbra";

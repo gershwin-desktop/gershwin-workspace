@@ -1560,3 +1560,9 @@
 "Back/Forward" = "Précédent/Suivant";
 "Action" = "Action";
 "Path" = "Chemin";
+
+/* Dock separator menu */
+"Turn Magnification On" = "Activer l'agrandissement";
+"Turn Magnification Off" = "Désactiver l'agrandissement";
+"Position on Screen" = "Position à l'écran";
+"Dock Preferences..." = "Préférences du Dock...";

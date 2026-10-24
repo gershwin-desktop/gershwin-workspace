@@ -919,3 +919,12 @@
 "Make Alias" = "Lag alias";
 "Clean Up" = "Rydd opp";
 "Show View Options" = "Vis visningsvalg";
+
+/* Dock separator menu */
+"Turn Magnification On" = "Slå på forstørring";
+"Turn Magnification Off" = "Slå av forstørring";
+"Position on Screen" = "Plassering på skjermen";
+"Dock Preferences..." = "Dock-valg...";
+"Left" = "Venstre";
+"Bottom" = "Nederst";
+"Right" = "Høyre";

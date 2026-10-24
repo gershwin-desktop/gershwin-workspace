@@ -835,3 +835,12 @@ for";
 "Copy" = "Copiază";
 "Clean Up" = "Aranjează";
 "Show View Options" = "Arată opțiunile de vizualizare";
+
+/* Dock separator menu */
+"Turn Magnification On" = "Activează mărirea";
+"Turn Magnification Off" = "Dezactivează mărirea";
+"Position on Screen" = "Poziție pe ecran";
+"Dock Preferences..." = "Preferințe Dock...";
+"Left" = "Stânga";
+"Bottom" = "Jos";
+"Right" = "Dreapta";

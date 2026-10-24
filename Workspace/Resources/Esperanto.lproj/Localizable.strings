@@ -1095,3 +1095,9 @@
 "Make Alias" = "Krei alinomon";
 "Clean Up" = "Ordigi";
 "Show View Options" = "Montri vidoagordojn";
+
+/* Dock separator menu */
+"Turn Magnification On" = "Ŝalti grandigon";
+"Turn Magnification Off" = "Malŝalti grandigon";
+"Position on Screen" = "Pozicio sur la ekrano";
+"Dock Preferences..." = "Agordoj de la Doko...";

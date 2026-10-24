@@ -1586,3 +1586,9 @@ for";
 "Open" = "Abrir";
 "Duplicate" = "Duplicar";
 "Copy" = "Copiar";
+
+/* Dock separator menu */
+"Turn Magnification On" = "Ativar ampliação";
+"Turn Magnification Off" = "Desativar ampliação";
+"Position on Screen" = "Posição no ecrã";
+"Dock Preferences..." = "Preferências da Dock...";
