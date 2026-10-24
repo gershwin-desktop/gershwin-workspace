@@ -56,6 +56,8 @@
       _pendingWatcherAdds = [[NSMutableArray alloc] init];
       _pendingWatcherRemoves = [[NSMutableArray alloc] init];
       _watcherFlushTimer = nil;
+      _walkQueue = [[NSMutableArray alloc] init];
+      _walkerRunning = NO;
 
       recomputeTimers = [[NSMutableDictionary alloc] init];
       debounceLock = [[NSLock alloc] init];
@@ -86,6 +88,7 @@
   DESTROY (watchedPaths);
   DESTROY (dirRepoRoots);
   DESTROY (watchLock);
+  DESTROY (_walkQueue);
   DESTROY (recomputeTimers);
   DESTROY (debounceLock);
   DESTROY (recomputeQueue);
@@ -2402,37 +2405,103 @@
    * directory watch, not by any subdirectory watch. */
   [self addRepoWatch: root repoRoot: root];
 
-  /* A pool per entry: a working tree can hold hundreds of thousands of
-     entries, and the strings and attribute dictionaries of every one of
-     them would otherwise stay alive until the walk ends (40 MB for a Dock
-     folder inside a big repository), leaving the heap that large for good. */
-  NSDirectoryEnumerator *en = [fm enumeratorAtPath: root];
-  BOOL more = YES;
-  while (more)
+  /* The working tree itself is walked on a background thread: a big
+     checkout holds tens of thousands of directories, and walking them here
+     kept the window busy for seconds whenever its icon appeared (switching
+     a home folder full of checkouts to icon view). */
+  [watchLock lock];
+  if ([_walkQueue containsObject: root] == NO)
+    [_walkQueue addObject: root];
+  if (_walkerRunning == NO)
     {
-      @autoreleasepool
-        {
-          NSString *rel = [en nextObject];
+      _walkerRunning = YES;
+      [NSThread detachNewThreadSelector: @selector (walkQueuedRepos)
+                               toTarget: self
+                             withObject: nil];
+    }
+  [watchLock unlock];
+}
 
-          if (rel == nil)
+/* Background thread: the directories of each queued working tree, handed to
+   the main thread, which owns the fswatcher connection. */
+- (void)walkQueuedRepos
+{
+  NSFileManager *fm = [[NSFileManager alloc] init];
+
+  while (1)
+    {
+      NSAutoreleasePool *outer = [[NSAutoreleasePool alloc] init];
+      NSMutableArray *dirs = [NSMutableArray array];
+      NSString *root = nil;
+      NSDirectoryEnumerator *en;
+      BOOL more = YES;
+
+      [watchLock lock];
+      if ([_walkQueue count] == 0)
+        {
+          _walkerRunning = NO;
+          [watchLock unlock];
+          [outer release];
+          break;
+        }
+      root = [[[_walkQueue objectAtIndex: 0] retain] autorelease];
+      [_walkQueue removeObjectAtIndex: 0];
+      [watchLock unlock];
+
+      /* A pool per entry: a working tree can hold hundreds of thousands of
+         entries, and the strings and attribute dictionaries of every one of
+         them would otherwise stay alive until the walk ends. */
+      en = [fm enumeratorAtPath: root];
+      while (more)
+        {
+          @autoreleasepool
             {
-              more = NO;
-            }
-          else if ([[rel pathComponents] containsObject: @".git"])
-            {
-              [en skipDescendants];
-            }
-          else if ([[[en fileAttributes] fileType]
-                     isEqual: NSFileTypeDirectory])
-            {
-              [self addRepoWatch: [root stringByAppendingPathComponent: rel]
-                        repoRoot: root];
+              NSString *rel = [en nextObject];
+
+              if (rel == nil)
+                {
+                  more = NO;
+                }
+              else if ([[rel pathComponents] containsObject: @".git"])
+                {
+                  [en skipDescendants];
+                }
+              else if ([[[en fileAttributes] fileType]
+                         isEqual: NSFileTypeDirectory])
+                {
+                  [dirs addObject: [root stringByAppendingPathComponent: rel]];
+                }
             }
         }
+
+      [self performSelectorOnMainThread: @selector (addWalkedDirectories:)
+                             withObject: [NSArray arrayWithObjects: root, dirs, nil]
+                          waitUntilDone: NO];
+      [outer release];
+      /* Even freed per entry, the walk leaves a heap as big as its busiest
+         moment behind; give those pages back. */
+      FSNReleaseFreedHeapMemory();
     }
-  /* Even freed per entry, the walk leaves a heap as big as its busiest
-     moment behind; give those pages back. */
-  FSNReleaseFreedHeapMemory();
+  [fm release];
+}
+
+/* Main thread: watches for the directories a walk found, unless no icon of
+   the repository is left by now. */
+- (void)addWalkedDirectories:(NSArray *)rootAndDirs
+{
+  NSString *root = [rootAndDirs objectAtIndex: 0];
+  NSArray *dirs = [rootAndDirs objectAtIndex: 1];
+  BOOL wanted;
+  NSUInteger i;
+
+  [watchLock lock];
+  wanted = ([repoRefcounts objectForKey: root] != nil);
+  [watchLock unlock];
+  if (wanted == NO)
+    return;
+
+  for (i = 0; i < [dirs count]; i++)
+    [self addRepoWatch: [dirs objectAtIndex: i] repoRoot: root];
 }
 
 - (void)removeWatchersForRepoRoot:(NSString *)root

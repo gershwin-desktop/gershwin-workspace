@@ -72,6 +72,12 @@
   NSMutableArray *_pendingWatcherRemoves;
   NSTimer *_watcherFlushTimer;
 
+  /* Repository roots whose working tree still has to be walked for the
+   * directories to watch; one background thread at a time works through
+   * them (the walk of a big checkout takes seconds). Guards: watchLock. */
+  NSMutableArray *_walkQueue;
+  BOOL _walkerRunning;
+
   /* Debounce: scheduleRecomputeForRepo: arms (or re-arms) a per-repo timer; the
    * timer only fires 200ms after the last change, so a burst of file-system
    * events collapses into a single git run.  recomputeTimers maps repo root ->
