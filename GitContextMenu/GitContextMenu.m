@@ -63,6 +63,7 @@
       _pendingWatcherRemoves = [[NSMutableArray alloc] init];
       _watcherFlushTimer = nil;
       _walkQueue = [[NSMutableArray alloc] init];
+      _repoDirs = [[NSMutableDictionary alloc] init];
       _walkerRunning = NO;
 
       recomputeTimers = [[NSMutableDictionary alloc] init];
@@ -72,7 +73,6 @@
       recomputeCond = [[NSCondition alloc] init];
       recomputeWorkerRunning = NO;
       lastSelfRun = [[NSMutableDictionary alloc] init];
-      lastReconcile = [[NSMutableDictionary alloc] init];
     }
   return self;
 }
@@ -95,12 +95,12 @@
   DESTROY (dirRepoRoots);
   DESTROY (watchLock);
   DESTROY (_walkQueue);
+  DESTROY (_repoDirs);
   DESTROY (recomputeTimers);
   DESTROY (debounceLock);
   DESTROY (recomputeQueue);
   DESTROY (recomputeCond);
   DESTROY (lastSelfRun);
-  DESTROY (lastReconcile);
   [super dealloc];
 }
 
@@ -2157,35 +2157,20 @@
 /* Find the nearest ancestor directory that is a git repository, or nil. */
 - (NSString *)repoRootForNode:(FSNode *)node
 {
-  @try
+  /* Only a folder that is a repository itself (.git directly inside, a
+     directory or, for worktrees and submodules, a file) has a badge and is
+     watched; a folder inside a checkout, or one that holds checkouts
+     somewhere below, costs no git work and no watches. */
+  if (node == nil || [node isDirectory] == NO)
     {
-      if (node == nil || [node isDirectory] == NO)
-        {
-          return nil;
-        }
-      NSFileManager *fm = [NSFileManager defaultManager];
-      NSString *p = [node path];
-
-      while (p != nil && [p isEqual: @""] == NO)
-        {
-          if ([fm fileExistsAtPath:
-                [p stringByAppendingPathComponent: @".git"]])
-            {
-              return p;
-            }
-          NSString *parent = [p stringByDeletingLastPathComponent];
-          if ([parent isEqual: p])
-            {
-              break;
-            }
-          p = parent;
-        }
+      return nil;
     }
-  @catch (NSException *e)
+  if ([[NSFileManager defaultManager]
+        fileExistsAtPath: [[node path] stringByAppendingPathComponent: @".git"]] == NO)
     {
-      NSLog (@"GitContextMenu: repoRootForNode threw: %@", e);
+      return nil;
     }
-  return nil;
+  return [node path];
 }
 
 /* Called by FSNIcon when an icon for a git repo becomes visible.  Refcounts
@@ -2435,6 +2420,7 @@
    * is kept so ensureWatcher can re-add watches on the next reconnect. */
   [watchedPaths removeAllObjects];
   [dirRepoRoots removeAllObjects];
+  [_repoDirs removeAllObjects];
   [watchLock unlock];
 }
 
@@ -2446,7 +2432,17 @@
   NSFileManager *fm = [NSFileManager defaultManager];
   NSString *gitDir = [root stringByAppendingPathComponent: @".git"];
 
-  if ([fm fileExistsAtPath: gitDir])
+  BOOL isDir = NO;
+  BOOL rootWatched, gitWatched;
+
+  /* Called again when the index or HEAD changes; the root and .git are
+     watched once. */
+  [watchLock lock];
+  rootWatched = ([watchedPaths objectForKey: root] != nil);
+  gitWatched = ([watchedPaths objectForKey: gitDir] != nil);
+  [watchLock unlock];
+
+  if (gitWatched == NO && [fm fileExistsAtPath: gitDir isDirectory: &isDir] && isDir)
     {
       [self addRepoWatch: gitDir repoRoot: root];
     }
@@ -2454,7 +2450,8 @@
   /* Also watch the repository root itself: changes/creations of files directly
    * in the root (e.g. the typical working-tree edits) are reported by the root
    * directory watch, not by any subdirectory watch. */
-  [self addRepoWatch: root repoRoot: root];
+  if (rootWatched == NO)
+    [self addRepoWatch: root repoRoot: root];
 
   /* The working tree itself is walked on a background thread: a big
      checkout holds tens of thousands of directories, and walking them here
@@ -2473,19 +2470,15 @@
   [watchLock unlock];
 }
 
-/* Background thread: the directories of each queued working tree, handed to
-   the main thread, which owns the fswatcher connection. */
+/* Background thread: the directories to watch of each queued repository,
+   handed to the main thread, which owns the fswatcher connection. */
 - (void)walkQueuedRepos
 {
-  NSFileManager *fm = [[NSFileManager alloc] init];
-
   while (1)
     {
       NSAutoreleasePool *outer = [[NSAutoreleasePool alloc] init];
       NSMutableArray *dirs = [NSMutableArray array];
       NSString *root = nil;
-      NSDirectoryEnumerator *en;
-      BOOL more = YES;
 
       [watchLock lock];
       if ([_walkQueue count] == 0)
@@ -2499,31 +2492,7 @@
       [_walkQueue removeObjectAtIndex: 0];
       [watchLock unlock];
 
-      /* A pool per entry: a working tree can hold hundreds of thousands of
-         entries, and the strings and attribute dictionaries of every one of
-         them would otherwise stay alive until the walk ends. */
-      en = [fm enumeratorAtPath: root];
-      while (more)
-        {
-          @autoreleasepool
-            {
-              NSString *rel = [en nextObject];
-
-              if (rel == nil)
-                {
-                  more = NO;
-                }
-              else if ([[rel pathComponents] containsObject: @".git"])
-                {
-                  [en skipDescendants];
-                }
-              else if ([[[en fileAttributes] fileType]
-                         isEqual: NSFileTypeDirectory])
-                {
-                  [dirs addObject: [root stringByAppendingPathComponent: rel]];
-                }
-            }
-        }
+      [dirs addObjectsFromArray: [self directoriesToWatchForRepo: root]];
 
       [self performSelectorOnMainThread: @selector (addWalkedDirectories:)
                              withObject: [NSArray arrayWithObjects: root, dirs, nil]
@@ -2533,39 +2502,87 @@
          moment behind; give those pages back. */
       FSNReleaseFreedHeapMemory();
     }
-  [fm release];
 }
 
-/* Main thread: watches for the directories a walk found, unless no icon of
-   the repository is left by now. */
+/* The folders whose changes can change the badge of a repository: its root,
+   its .git directory (commits, checkouts, the index) and every folder holding
+   a file git tracks. Untracked folders deep in a checkout are left out (a
+   big checkout holds tens of thousands of them); new files there show in
+   the count with the next change of the index or the root. Runs git, so
+   never on the main thread. */
+- (NSArray *)directoriesToWatchForRepo:(NSString *)root
+{
+  NSMutableSet *dirs = [NSMutableSet set];
+  NSString *gitDir = [root stringByAppendingPathComponent: @".git"];
+  BOOL isDir = NO;
+  NSString *listing;
+
+  [dirs addObject: root];
+  if ([[NSFileManager defaultManager] fileExistsAtPath: gitDir isDirectory: &isDir] && isDir)
+    [dirs addObject: gitDir];
+
+  listing = [self gitOutputForArgs: [NSArray arrayWithObjects: @"ls-files", @"-z", nil]
+                              repo: root];
+  if (listing != nil)
+    {
+      NSArray *files = [listing componentsSeparatedByString:
+                                  [NSString stringWithFormat: @"%C", (unichar)0]];
+      NSUInteger i;
+
+      for (i = 0; i < [files count]; i++)
+        {
+          NSString *dir = [[files objectAtIndex: i] stringByDeletingLastPathComponent];
+
+          while ([dir length] > 0 && [dirs containsObject: [root stringByAppendingPathComponent: dir]] == NO)
+            {
+              [dirs addObject: [root stringByAppendingPathComponent: dir]];
+              dir = [dir stringByDeletingLastPathComponent];
+            }
+        }
+    }
+  return [dirs allObjects];
+}
+
+/* Main thread: the watch set of a repository becomes what a walk found,
+   unless no icon of the repository is left by now. Walks are repeated when
+   the index or HEAD changes, so folders git starts or stops tracking are
+   picked up then. */
 - (void)addWalkedDirectories:(NSArray *)rootAndDirs
 {
   NSString *root = [rootAndDirs objectAtIndex: 0];
-  NSArray *dirs = [rootAndDirs objectAtIndex: 1];
+  NSSet *wantedDirs = [NSSet setWithArray: [rootAndDirs objectAtIndex: 1]];
+  NSMutableArray *gone = [NSMutableArray array];
+  NSMutableArray *added = [NSMutableArray array];
   BOOL wanted;
-  NSUInteger i;
 
   [watchLock lock];
   wanted = ([repoRefcounts objectForKey: root] != nil);
+  if (wanted)
+    {
+      for (NSString *dir in [_repoDirs objectForKey: root])
+        {
+          if ([wantedDirs containsObject: dir] == NO)
+            [gone addObject: dir];
+        }
+      for (NSString *dir in wantedDirs)
+        {
+          if ([watchedPaths objectForKey: dir] == nil)
+            [added addObject: dir];
+        }
+    }
   [watchLock unlock];
-  if (wanted == NO)
-    return;
 
-  for (i = 0; i < [dirs count]; i++)
-    [self addRepoWatch: [dirs objectAtIndex: i] repoRoot: root];
+  for (NSString *dir in gone)
+    [self removeRepoWatch: dir];
+  for (NSString *dir in added)
+    [self addRepoWatch: dir repoRoot: root];
 }
 
 - (void)removeWatchersForRepoRoot:(NSString *)root
 {
   NSMutableArray *toRemove = [NSMutableArray array];
   [watchLock lock];
-  for (NSString *dir in [watchedPaths allKeys])
-    {
-      if ([[dirRepoRoots objectForKey: dir] isEqual: root])
-        {
-          [toRemove addObject: dir];
-        }
-    }
+  [toRemove addObjectsFromArray: [[_repoDirs objectForKey: root] allObjects]];
   [watchLock unlock];
   for (NSString *dir in toRemove)
     {
@@ -2613,6 +2630,16 @@
   [watchedPaths setObject: [NSNumber numberWithUnsignedInteger: refs + 1]
                     forKey: dir];
   [dirRepoRoots setObject: root forKey: dir];
+  {
+    NSMutableSet *set = [_repoDirs objectForKey: root];
+
+    if (set == nil)
+      {
+        set = [NSMutableSet set];
+        [_repoDirs setObject: set forKey: root];
+      }
+    [set addObject: dir];
+  }
   [watchLock unlock];
 }
 
@@ -2636,6 +2663,7 @@
             }
         }
       [watchedPaths removeObjectForKey: dir];
+      [[_repoDirs objectForKey: [dirRepoRoots objectForKey: dir]] removeObject: dir];
       [dirRepoRoots removeObjectForKey: dir];
     }
   else
@@ -2709,87 +2737,6 @@
   [removes release];
 }
 
-/* When a watched directory changes, re-scan its immediate children so that
- * sub-directories created (or removed) afterwards are watched too.  This keeps
- * the watch set in sync with the working tree without a full re-walk on every
- * event.  Newly added directories pick up their own deeper sub-directories via
- * the events they then generate. */
-- (void)reconcileWatchesForDir:(NSString *)dir repoRoot:(NSString *)root
-{
-  if (dir == nil || root == nil)
-    {
-      return;
-    }
-
-  /* Throttle: collapse a burst of events on the same directory into one
-   * reconcile per quiescence window, so we don't readdir on every single file
-   * change inside it. */
-  [watchLock lock];
-  NSDate *last = [lastReconcile objectForKey: dir];
-  if (last != nil && (-[last timeIntervalSinceNow]) < BADGE_DEBOUNCE_SECONDS)
-    {
-      [watchLock unlock];
-      return;
-    }
-  [lastReconcile setObject: [NSDate date] forKey: dir];
-  [watchLock unlock];
-
-  NSFileManager *fm = [NSFileManager defaultManager];
-  NSArray *children = [fm contentsOfDirectoryAtPath: dir error: nil];
-  if (children == nil)
-    {
-      return;
-    }
-
-  NSMutableSet *existing = [NSMutableSet set];
-
-  for (NSString *name in children)
-    {
-      NSString *abs = [dir stringByAppendingPathComponent: name];
-      /* Never descend into or watch .git. */
-      if ([[abs pathComponents] containsObject: @".git"])
-        {
-          continue;
-        }
-      BOOL isdir = NO;
-      if ([fm fileExistsAtPath: abs isDirectory: &isdir] && isdir)
-        {
-          [existing addObject: abs];
-          BOOL alreadyWatched = NO;
-          [watchLock lock];
-          alreadyWatched = ([watchedPaths objectForKey: abs] != nil);
-          [watchLock unlock];
-          if (alreadyWatched == NO)
-            {
-              [self addRepoWatch: abs repoRoot: root];
-            }
-        }
-    }
-
-  /* Drop watches for immediate sub-directories of dir that disappeared. */
-  [watchLock lock];
-  NSArray *watched = [watchedPaths allKeys];
-  [watchLock unlock];
-
-  NSString *prefix = [dir stringByAppendingString: @"/"];
-  for (NSString *wd in watched)
-    {
-      if ([wd hasPrefix: prefix] == NO)
-        {
-          continue;
-        }
-      NSString *rel = [wd substringFromIndex: [prefix length]];
-      if ([rel rangeOfString: @"/"].location != NSNotFound)
-        {
-          continue;   /* only immediate children, not deeper descendants */
-        }
-      if ([existing containsObject: wd] == NO)
-        {
-          [self removeRepoWatch: wd];
-        }
-    }
-}
-
 /* fswatcher callback: the changed path is one of our watched directories.  Map
  * it back to its repo root and recompute after the quiescence window. */
 - (void)watchedPathDidChange:(NSData *)dirinfo
@@ -2828,7 +2775,9 @@
                 }
             }
           [self scheduleRecomputeForRepo: root];
-          [self reconcileWatchesForDir: path repoRoot: root];
+          /* The index or HEAD changed: the tracked folders may have too. */
+          if ([path rangeOfString: @"/.git"].location != NSNotFound)
+            [self addWatchersForRepoRoot: root];
           [root release];
         }
     }

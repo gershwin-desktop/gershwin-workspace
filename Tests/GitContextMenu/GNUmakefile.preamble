@@ -7,3 +7,4 @@ FSNODELIB := $(wildcard $(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
 t_GitBadgeAsync_TOOL_LIBS += $(if $(FSNODELIB),$(FSNODELIB),-lFSNode) -lgnustep-gui
 ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
                       -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+t_GitWatchSet_TOOL_LIBS += $(if $(FSNODELIB),$(FSNODELIB),-lFSNode) -lgnustep-gui

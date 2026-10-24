@@ -76,6 +76,10 @@
    * directories to watch; one background thread at a time works through
    * them (the walk of a big checkout takes seconds). Guards: watchLock. */
   NSMutableArray *_walkQueue;
+  /* Repository root -> NSMutableSet of its watched folders, the reverse of
+   * dirRepoRoots, so one repository's watches are found without going
+   * through every watch of every repository. Guards: watchLock. */
+  NSMutableDictionary *_repoDirs;
   BOOL _walkerRunning;
 
   /* Debounce: scheduleRecomputeForRepo: arms (or re-arms) a per-repo timer; the
@@ -95,10 +99,6 @@
    * suppress the .git watch events that our own git status/diff commands cause
    * (they rewrite .git/index), which would otherwise feed an infinite loop. */
   NSMutableDictionary *lastSelfRun;
-  /* Timestamps (watched dir -> NSDate) throttling directory re-scanning when
-   * new sub-directories appear, so a burst of file events doesn't readdir
-   * repeatedly. */
-  NSMutableDictionary *lastReconcile;
 }
 
 - (NSString *)repoPathForNodes:(NSArray *)nodes;
