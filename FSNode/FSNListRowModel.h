@@ -51,6 +51,17 @@
  * need their items loaded and their changes watched. */
 - (NSArray *)visibleExpandedKeys;
 
+/* Expands key and the folders below it, level by level, loading their
+ * items with the block, and stops after the folder that brings the added
+ * rows past maxRows, so a huge tree cannot hang the list.  NO if it
+ * stopped there. */
+- (BOOL)expandRecursivelyFromKey:(NSString *)key
+                    isExpandable:(BOOL (^)(id item))expandable
+                    loadChildren:(NSArray *(^)(NSString *key))load
+                         maxRows:(NSUInteger)maxRows;
+/* Collapses key and every folder below it. */
+- (void)collapseRecursivelyFromKey:(NSString *)key;
+
 /* Orders the items of every folder on their own. */
 - (void)sortUsingComparator:(NSComparator)cmp;
 
@@ -64,6 +75,8 @@
 /* Horizontal geometry of the name column, in points from its left edge:
  * a disclosure column of 26 points, 21 more per level. */
 CGFloat FSNListIconXForDepth (NSUInteger depth);
+/* Where the first letter of a name starts. */
+CGFloat FSNListTextXForDepth (NSUInteger depth, CGFloat iconSize);
 NSRect FSNListDisclosureRectForDepth (NSUInteger depth, CGFloat rowHeight);
 NSRect FSNListDisclosureHitRectForDepth (NSUInteger depth, CGFloat rowHeight);
 

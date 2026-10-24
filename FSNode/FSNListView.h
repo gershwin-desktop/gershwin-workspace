@@ -300,6 +300,14 @@ extern NSString * const FSNListViewOptionColumnOrder;
 - (BOOL)isRepExpandable:(FSNListViewNodeRep *)rep;
 - (BOOL)isRepExpanded:(FSNListViewNodeRep *)rep;
 - (void)setRep:(FSNListViewNodeRep *)rep expanded:(BOOL)flag;
+/* Recursively: the folders below too; expanding stops after about a
+ * thousand rows. */
+- (void)setRep:(FSNListViewNodeRep *)rep
+      expanded:(BOOL)flag
+   recursively:(BOOL)recursively;
+/* The arrow keys: right expands the selected folder or, expanded, moves to
+ * its first item; left collapses it or moves to the folder it is in. */
+- (void)moveIntoSelection:(BOOL)inward recursively:(BOOL)recursively;
 - (NSUInteger)depthOfRep:(FSNListViewNodeRep *)rep;
 /* A change the file watcher reports in one of the expanded folders. */
 - (void)expandedFolderChanged:(NSNotification *)notification;

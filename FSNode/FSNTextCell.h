@@ -51,6 +51,9 @@
   /* Whether the label colour for nodePath has already been fetched from
    * the metadata provider, so "no label" is not retried on every draw. */
   BOOL tagColorLookedUp;
+  /* From the icon's left edge plus 2 to the title, so 8 leaves 6 points
+   * between icon and title. */
+  CGFloat iconTextSpacing;
 }
 
 - (void)setIcon:(NSImage *)icn;
@@ -62,6 +65,9 @@
 - (NSColor *)tagColor;
 
 - (void)setNodePath:(NSString *)path;
+
+/* Space from the icon to the title; see iconTextSpacing. */
+- (void)setIconTextSpacing:(CGFloat)spacing;
 
 - (float)uncutTitleLenght;
 

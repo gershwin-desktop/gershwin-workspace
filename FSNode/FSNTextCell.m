@@ -95,9 +95,15 @@
       icon = nil;
       displayIcon = nil;
       dateCell = NO;
+      iconTextSpacing = 8.0;
     }
 
   return self;
+}
+
+- (void)setIconTextSpacing:(CGFloat)spacing
+{
+  iconTextSpacing = spacing;
 }
 
 - (id)copyWithZone:(NSZone *)zone
@@ -108,6 +114,7 @@
   c->dots = [dots copyWithZone: zone];
 
   c->dateCell = dateCell;
+  c->iconTextSpacing = iconTextSpacing;
 
   if (uncutTitle) {
     c->uncutTitle = [uncutTitle copyWithZone: zone];
@@ -324,11 +331,10 @@ dateWithShortYear(NSString *date)
   NSString *cutTitle;
 
 #define LEFT_MARGIN (2.0)
-#define ICON_TEXT_SPACING (8.0)
 
   textlength = title_rect.size.width - LEFT_MARGIN;
   if (icon)
-    textlength -= ([icon size].width + ICON_TEXT_SPACING);
+    textlength -= ([icon size].width + iconTextSpacing);
 
   ASSIGN (uncutTitle, [self stringValue]);
 
@@ -380,8 +386,8 @@ dateWithShortYear(NSString *date)
       icon_rect.origin.y += icon_rect.size.height;
     }
 
-    title_rect.origin.x += (icon_rect.size.width + ICON_TEXT_SPACING);
-    title_rect.size.width -= (icon_rect.size.width + ICON_TEXT_SPACING);
+    title_rect.origin.x += (icon_rect.size.width + iconTextSpacing);
+    title_rect.size.width -= (icon_rect.size.width + iconTextSpacing);
     title_rect = NSIntegralRect(title_rect);
 
     [super drawInteriorWithFrame: title_rect inView: controlView];

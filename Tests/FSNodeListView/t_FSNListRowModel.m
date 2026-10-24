@@ -159,6 +159,59 @@ int main (void)
                 "RM-23 but it is visible, so its items can be loaded and watched");
   }
 
+  /* --- option-click: expand and collapse a whole tree -------------------- */
+  {
+    /* /t has a, b; a has a1 (folder) and af; a1 has deep; b has bf. */
+    NSDictionary *tree = [NSDictionary dictionaryWithObjectsAndKeys:
+      paths (@"/t", [NSArray arrayWithObjects: @"a", @"b", @"f", nil]), @"/t",
+      paths (@"/t/a", [NSArray arrayWithObjects: @"a1", @"af", nil]), @"/t/a",
+      paths (@"/t/a/a1", [NSArray arrayWithObjects: @"deep", nil]), @"/t/a/a1",
+      paths (@"/t/b", [NSArray arrayWithObjects: @"bf", nil]), @"/t/b",
+      [NSArray array], @"/t/a/a1/deep",
+      nil];
+    BOOL (^isFolder)(id) = ^BOOL (id item) {
+      return [tree objectForKey: item] != nil;
+    };
+    __block NSUInteger loads = 0;
+    NSArray *(^load)(NSString *) = ^NSArray *(NSString *key) {
+      loads++;
+      return [tree objectForKey: key];
+    };
+    BOOL complete;
+
+    [model resetWithRootKey: @"/t" keepExpanded: NO];
+    [model setChildren: [tree objectForKey: @"/t"] ofKey: @"/t"];
+    complete = [model expandRecursivelyFromKey: @"/t/a" isExpandable: isFolder
+                                   loadChildren: load maxRows: 1000];
+    [model sortUsingComparator: byName];
+    [model rebuildRows];
+    PASS (complete, "RM-24 a small tree expands completely");
+    PASS_EQUAL (rowsDescription (model), @"0:a 1:a1 2:deep 1:af 0:b 0:f",
+                "RM-25 expanding recursively opens every folder below, but not the neighbours");
+    PASS ([model isExpanded: @"/t/a/a1/deep"], "RM-26 down to the last level");
+
+    [model collapseRecursivelyFromKey: @"/t/a"];
+    [model rebuildRows];
+    PASS_EQUAL (rowsDescription (model), @"0:a 0:b 0:f",
+                "RM-27 collapsing recursively closes the folder");
+    [model setExpanded: YES forKey: @"/t/a"];
+    [model rebuildRows];
+    PASS_EQUAL (rowsDescription (model), @"0:a 1:a1 1:af 0:b 0:f",
+                "RM-28 and every folder below it, so a plain expand shows one level again");
+
+    [model resetWithRootKey: @"/t" keepExpanded: NO];
+    [model setChildren: [tree objectForKey: @"/t"] ofKey: @"/t"];
+    loads = 0;
+    complete = [model expandRecursivelyFromKey: @"/t/a" isExpandable: isFolder
+                                   loadChildren: load maxRows: 1];
+    [model sortUsingComparator: byName];
+    [model rebuildRows];
+    PASS (complete == NO && loads == 1,
+          "RM-29 a tree bigger than the limit stops after the folder that crossed it");
+    PASS_EQUAL (rowsDescription (model), @"0:a 1:a1 1:af 0:b 0:f",
+                "RM-30 and shows what it loaded so far");
+  }
+
   /* --- geometry --------------------------------------------------------- */
   PASS (FSNListIconXForDepth (0) == 26.0 && FSNListIconXForDepth (1) == 47.0
         && FSNListIconXForDepth (2) == 68.0,
@@ -174,6 +227,9 @@ int main (void)
     PASS (NSMinY (FSNListDisclosureRectForDepth (0, 39.0)) == 14.0,
           "RG-4 in a taller row it stays a point above the middle");
   }
+  PASS (FSNListTextXForDepth (0, 16) == 49.0 && FSNListTextXForDepth (1, 16) == 70.0
+        && FSNListTextXForDepth (0, 32) == 65.0,
+        "RG-6 the name starts 7 points after the icon, at every level and icon size");
   {
     NSRect hit = FSNListDisclosureHitRectForDepth (1, 19.0);
 

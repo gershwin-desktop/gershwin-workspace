@@ -97,14 +97,31 @@ postWatcherEvent(NSString *path, NSString *event, NSArray *files)
 }
 
 static NSEvent *
-clickAt(NSView *view, NSPoint p)
+clickWithFlags(NSView *view, NSPoint p, NSUInteger flags)
 {
   NSPoint inWindow = [view convertPoint: p toView: nil];
 
   return [NSEvent mouseEventWithType: NSLeftMouseDown location: inWindow
-                       modifierFlags: 0 timestamp: 0
+                       modifierFlags: flags timestamp: 0
                         windowNumber: [[view window] windowNumber]
                              context: nil eventNumber: 0 clickCount: 1 pressure: 1.0];
+}
+
+static NSEvent *
+clickAt(NSView *view, NSPoint p)
+{
+  return clickWithFlags (view, p, 0);
+}
+
+static NSEvent *
+arrowKey(NSWindow *win, unichar key, NSUInteger flags)
+{
+  NSString *chars = [NSString stringWithCharacters: &key length: 1];
+
+  return [NSEvent keyEventWithType: NSKeyDown location: NSZeroPoint modifierFlags: flags
+                         timestamp: 0 windowNumber: [win windowNumber] context: nil
+                        characters: chars charactersIgnoringModifiers: chars
+                         isARepeat: NO keyCode: 0];
 }
 
 static void
@@ -912,6 +929,73 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
     [lv keyDown: key];
     PASS (![lds isRepExpanded: [lds repOfSubnodePath: sub]],
           "MI-LST-142 the left arrow collapses it");
+
+    /* arrows move between a folder and its items */
+    [lv keyDown: arrowKey (win, right, 0)];
+    [lv keyDown: arrowKey (win, right, 0)];
+    PASS_EQUAL ([[[[lds selectedReps] lastObject] node] name], @"inner",
+                "MI-LST-143 the right arrow on an expanded folder moves to its first item");
+    [lv keyDown: arrowKey (win, left, 0)];
+    PASS ([[lds selectedReps] lastObject] == [lds repOfSubnodePath: sub]
+          && [lds isRepExpanded: [lds repOfSubnodePath: sub]],
+          "MI-LST-144 the left arrow on an item moves to its folder and leaves it open");
+    [lv keyDown: arrowKey (win, left, 0)];
+    [lv keyDown: arrowKey (win, left, 0)];
+    PASS ([[lds selectedReps] lastObject] == [lds repOfSubnodePath: sub]
+          && ![lds isRepExpanded: [lds repOfSubnodePath: sub]],
+          "MI-LST-145 on a collapsed folder at the top it stays where it is");
+
+    /* option expands and collapses the whole tree */
+    {
+      NSString *t1 = [sub stringByAppendingPathComponent: @"t1"];
+      NSString *t2 = [t1 stringByAppendingPathComponent: @"t2"];
+
+      [fm createDirectoryAtPath: t2 withIntermediateDirectories: YES attributes: nil error: NULL];
+      [@"x" writeToFile: [t2 stringByAppendingPathComponent: @"leaf2"]
+             atomically: NO encoding: NSUTF8StringEncoding error: NULL];
+      [lv showContentsOfNode: [FSNode nodeWithPath: root]];
+      row = [[lds reps] indexOfObjectIdenticalTo: [lds repOfSubnodePath: sub]];
+      cell = [lv frameOfCellAtColumn: [lv columnWithIdentifier: [NSNumber numberWithInt: FSNInfoNameType]]
+                                 row: row];
+      [lv toggleDisclosureAtEvent: clickWithFlags (lv, NSMakePoint (NSMinX (cell) + 12, NSMidY (cell)),
+                                                   NSAlternateKeyMask)];
+      PASS_EQUAL (rowsWithDepth (lds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 1:inner 1:t1 2:t2 3:leaf2 0:Thing.app",
+                  "MI-LST-146 option-click on a triangle expands every folder below");
+      [lv toggleDisclosureAtEvent: clickWithFlags (lv, NSMakePoint (NSMinX (cell) + 12, NSMidY (cell)),
+                                                   NSAlternateKeyMask)];
+      [lds setRep: [lds repOfSubnodePath: sub] expanded: YES];
+      PASS_EQUAL (rowsWithDepth (lds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 1:inner 1:t1 0:Thing.app",
+                  "MI-LST-147 and option-click again closes them all, so a plain click shows one level");
+      [fm removeItemAtPath: t1 error: NULL];
+    }
+
+    /* a huge tree stops after about a thousand rows */
+    {
+      NSString *huge = [root stringByAppendingPathComponent: @"huge"];
+      NSString *s1 = [huge stringByAppendingPathComponent: @"s1"];
+      NSString *s2 = [huge stringByAppendingPathComponent: @"s2"];
+      NSString *inner = [s1 stringByAppendingPathComponent: @"x"];
+      NSUInteger k;
+
+      [fm createDirectoryAtPath: inner withIntermediateDirectories: YES attributes: nil error: NULL];
+      [fm createDirectoryAtPath: s2 withIntermediateDirectories: YES attributes: nil error: NULL];
+      for (k = 0; k < 600; k++)
+        {
+          NSString *name = [NSString stringWithFormat: @"f%03lu", (unsigned long)k];
+
+          [@"" writeToFile: [s1 stringByAppendingPathComponent: name]
+                atomically: NO encoding: NSUTF8StringEncoding error: NULL];
+          [@"" writeToFile: [s2 stringByAppendingPathComponent: name]
+                atomically: NO encoding: NSUTF8StringEncoding error: NULL];
+        }
+      [lv showContentsOfNode: [FSNode nodeWithPath: root]];
+      [lds setRep: [lds repOfSubnodePath: huge] expanded: YES recursively: YES];
+      PASS ([lds isRepExpanded: [lds repOfSubnodePath: s2]]
+            && [lds repOfSubnodePath: inner] != nil
+            && ![lds isRepExpanded: [lds repOfSubnodePath: inner]],
+            "MI-LST-148 option-expanding a huge tree stops at the level that passes a thousand rows");
+      [fm removeItemAtPath: huge error: NULL];
+    }
     [lv release];
     [win release];
   }

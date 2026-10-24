@@ -196,18 +196,22 @@ columnTypeByColumnId(void)
 @end
 
 /* Horizontal padding of the list's text, measured on the reference list
- * view: text starts 16 points after a column's left edge and right aligned
- * text ends 15 points before its right edge; the cell itself keeps 2 of
- * those.  The headers' titles start a point earlier than their text. */
+ * view: text starts 15 points into a column and right aligned text ends 14
+ * points before its end; the cell itself keeps 1 of those.  A column's
+ * title starts a point before its text, ends 17 points before the column's
+ * end, and the header cell draws its title 4 points into the frame it is
+ * given. */
 #define LIST_TEXT_INSET_LEFT (14.0)
 #define LIST_TEXT_INSET_RIGHT (13.0)
-#define LIST_HEADER_INSET_LEFT (10.0)
+#define LIST_HEADER_TITLE_PAD (4.0)
+#define LIST_HEADER_INSET_LEFT (15.0 - 1.0 - LIST_HEADER_TITLE_PAD)
 #define LIST_HEADER_INSET_RIGHT (15.0)
+/* The reference's 1 point column separators in the header. */
+#define LIST_HEADER_SEPARATOR_WHITE (184.0 / 255.0)
 /* FSNTextCell draws the icon this far into its frame. */
 #define TEXT_CELL_ICON_MARGIN (2.0)
-/* The name column's title starts this far after the icons, over the
- * first letter of the names as in the reference. */
-#define NAME_HEADER_OFFSET_AFTER_ICON (2.0)
+/* Rows an option-click adds at most, so a huge tree cannot hang the list. */
+#define MAX_RECURSIVE_EXPANSION_ROWS (1000)
 
 /* A list cell: padding in every column, and in the name column the
  * disclosure triangle and the indent of the row's level. */
@@ -244,6 +248,17 @@ columnTypeByColumnId(void)
 {
   leadingInset = leading;
   trailingInset = trailing;
+}
+
+/* The reference separates its column titles with a 1 point line at the
+ * right end of each column, from below the header's top edge to its
+ * bottom. */
+- (void)drawWithFrame:(NSRect)cellFrame inView:(NSView *)controlView
+{
+  [super drawWithFrame: cellFrame inView: controlView];
+  [[NSColor colorWithCalibratedWhite: LIST_HEADER_SEPARATOR_WHITE alpha: 1.0] set];
+  NSRectFill (NSMakeRect (NSMaxX (cellFrame) - 1.0, NSMinY (cellFrame) + 1.0,
+                          1.0, NSHeight (cellFrame) - 1.0));
 }
 
 - (void)drawInteriorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView
@@ -914,7 +929,7 @@ static NSString *defaultColumns = @"{ \
                                       [NSNumber numberWithInt: FSNInfoNameType]];
 
   [(FSNListHeaderCell *)[column headerCell]
-      setLeadingInset: FSNListIconXForDepth (0) + listIconSize + NAME_HEADER_OFFSET_AFTER_ICON
+      setLeadingInset: FSNListTextXForDepth (0, listIconSize) - 1.0 - LIST_HEADER_TITLE_PAD
         trailingInset: LIST_HEADER_INSET_RIGHT];
 }
 
@@ -1263,6 +1278,10 @@ static NSString *defaultColumns = @"{ \
   if (type == FSNInfoNameType)
     {
       [cell setNameCell: YES];
+      /* The geometry says where the name starts; the cell counts its
+       * spacing from its icon margin. */
+      [cell setIconTextSpacing: FSNListTextXForDepth (0, 0) - FSNListIconXForDepth (0)
+                                + TEXT_CELL_ICON_MARGIN];
     }
   else
     {
@@ -2057,21 +2076,124 @@ compareOptional(id a, id b)
 
 - (void)setRep:(FSNListViewNodeRep *)rep expanded:(BOOL)flag
 {
+  [self setRep: rep expanded: flag recursively: NO];
+}
+
+- (void)setRep:(FSNListViewNodeRep *)rep
+      expanded:(BOOL)flag
+   recursively:(BOOL)recursively
+{
   NSString *path = [[rep node] path];
 
-  if (flag == [rowModel isExpanded: path]
+  if ((recursively == NO && flag == [rowModel isExpanded: path])
       || (flag && [self isRepExpandable: rep] == NO))
     {
       return;
     }
   [self stopRepNameEditing];
-  [rowModel setExpanded: flag forKey: path];
-  if (flag)
+  if (flag && recursively)
     {
+      BOOL complete = [rowModel expandRecursivelyFromKey: path
+        isExpandable: ^BOOL (id item) {
+          return [self isRepExpandable: item];
+        }
+        loadChildren: ^NSArray *(NSString *key) {
+          FSNode *folder = [FSNode nodeWithPath: key];
+
+          return ([folder isValid] && [folder isDirectory])
+            ? [self repsForSubnodes: [folder lazySubNodes]] : nil;
+        }
+        maxRows: MAX_RECURSIVE_EXPANSION_ROWS];
+
+      if (complete == NO)
+        {
+          NSLog (@"List view: stopped expanding %@ after %d rows", path,
+                 MAX_RECURSIVE_EXPANSION_ROWS);
+        }
+      /* Folders expanded earlier below a level the limit left out. */
+      [self loadExpandedFoldersReloadingUnder: nil];
+    }
+  else if (flag)
+    {
+      [rowModel setExpanded: YES forKey: path];
       [self loadExpandedFoldersReloadingUnder: path];
+    }
+  else if (recursively)
+    {
+      [rowModel collapseRecursivelyFromKey: path];
+    }
+  else
+    {
+      [rowModel setExpanded: NO forKey: path];
     }
   [self reloadRowsKeepingSelection];
   [self watchExpandedFolders];
+}
+
+- (FSNListViewNodeRep *)parentRepOfRep:(FSNListViewNodeRep *)rep
+{
+  NSString *parentKey = [rowModel parentKeyOfKey: [[rep node] path]];
+
+  if (parentKey == nil || [parentKey isEqual: [rowModel rootKey]])
+    {
+      return nil;
+    }
+  return [self repOfSubnodePath: parentKey];
+}
+
+- (void)moveIntoSelection:(BOOL)inward recursively:(BOOL)recursively
+{
+  NSArray *selected = [self selectedReps];
+  FSNListViewNodeRep *rep;
+  FSNListViewNodeRep *target = nil;
+  NSUInteger i;
+
+  /* Several rows: expand or collapse them all, move nowhere. */
+  if ([selected count] != 1)
+    {
+      for (i = 0; i < [selected count]; i++)
+        {
+          [self setRep: [selected objectAtIndex: i]
+              expanded: inward
+           recursively: recursively];
+        }
+      return;
+    }
+
+  rep = [selected objectAtIndex: 0];
+  if (inward)
+    {
+      if ([self isRepExpandable: rep] && [self isRepExpanded: rep] == NO)
+        {
+          [self setRep: rep expanded: YES recursively: recursively];
+          return;
+        }
+      if ([self isRepExpanded: rep])
+        {
+          NSUInteger row = [nodeReps indexOfObjectIdenticalTo: rep];
+
+          if (row + 1 < [nodeReps count]
+              && [self depthOfRep: [nodeReps objectAtIndex: row + 1]] > [self depthOfRep: rep])
+            {
+              target = [nodeReps objectAtIndex: row + 1];
+            }
+        }
+    }
+  else
+    {
+      if ([self isRepExpanded: rep])
+        {
+          [self setRep: rep expanded: NO recursively: recursively];
+          return;
+        }
+      target = [self parentRepOfRep: rep];
+    }
+
+  if (target)
+    {
+      [self selectReps: [NSArray arrayWithObject: target]];
+      [listView scrollRowToVisible: [nodeReps indexOfObjectIdenticalTo: target]];
+    }
 }
 
 - (void)expandedFolderChanged:(NSNotification *)notification
@@ -4881,7 +5003,10 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
     {
       return NO;
     }
-  [dsource setRep: rep expanded: ([dsource isRepExpanded: rep] == NO)];
+  /* Option-click opens or closes the whole tree, as in the reference. */
+  [dsource setRep: rep
+         expanded: ([dsource isRepExpanded: rep] == NO)
+      recursively: (([theEvent modifierFlags] & NSAlternateKeyMask) != 0)];
   return YES;
 }
 
@@ -4979,21 +5104,13 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
       return;
 
     /* The reference expands the selected folders with the right arrow
-     * and collapses them with the left one. */
+     * and collapses them with the left one, the whole tree with option. */
     case NSRightArrowFunctionKey:
     case NSLeftArrowFunctionKey:
-      {
-        NSArray *selected = [dsource selectedReps];
-        NSUInteger i;
-
-        [dsource stopRepNameEditing];
-        for (i = 0; i < [selected count]; i++)
-          {
-            [dsource setRep: [selected objectAtIndex: i]
-                   expanded: (character == NSRightArrowFunctionKey)];
-          }
-        return;
-      }
+      [dsource stopRepNameEditing];
+      [dsource moveIntoSelection: (character == NSRightArrowFunctionKey)
+                     recursively: (([theEvent modifierFlags] & NSAlternateKeyMask) != 0)];
+      return;
 
     case NSCarriageReturnCharacter:
       {

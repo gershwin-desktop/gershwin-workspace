@@ -13,10 +13,16 @@
 #define INDENT_PER_LEVEL (21.0)
 #define DISCLOSURE_X (8.0)
 #define DISCLOSURE_SIZE (9.0)
+#define ICON_TEXT_GAP (7.0)
 
 CGFloat FSNListIconXForDepth (NSUInteger depth)
 {
   return DISCLOSURE_COLUMN_WIDTH + INDENT_PER_LEVEL * depth;
+}
+
+CGFloat FSNListTextXForDepth (NSUInteger depth, CGFloat iconSize)
+{
+  return FSNListIconXForDepth (depth) + iconSize + ICON_TEXT_GAP;
 }
 
 NSRect FSNListDisclosureRectForDepth (NSUInteger depth, CGFloat rowHeight)
@@ -251,6 +257,77 @@ NSRect FSNListDisclosureHitRectForDepth (NSUInteger depth, CGFloat rowHeight)
       [self collectVisibleExpandedUnder: rootKey into: result];
     }
   return result;
+}
+
+- (BOOL)expandRecursivelyFromKey:(NSString *)key
+                    isExpandable:(BOOL (^)(id item))expandable
+                    loadChildren:(NSArray *(^)(NSString *key))load
+                         maxRows:(NSUInteger)maxRows
+{
+  NSMutableArray *queue = [NSMutableArray arrayWithObject: key];
+  NSUInteger added = 0;
+
+  /* Level by level, so what the limit leaves out is the deepest part. */
+  while ([queue count] > 0)
+    {
+      NSString *folder = [[[queue objectAtIndex: 0] retain] autorelease];
+      NSArray *items = load (folder);
+      NSUInteger i;
+
+      [queue removeObjectAtIndex: 0];
+      if (items == nil)
+        {
+          [expanded removeObject: folder];
+          continue;
+        }
+      [self setChildren: items ofKey: folder];
+      [expanded addObject: folder];
+      added += [items count];
+      if (added > maxRows)
+        {
+          return NO;
+        }
+      for (i = 0; i < [items count]; i++)
+        {
+          id item = [items objectAtIndex: i];
+
+          if (expandable (item))
+            {
+              [queue addObject: keyOfItem (item)];
+            }
+        }
+    }
+  return YES;
+}
+
+- (BOOL)isKey:(NSString *)key below:(NSString *)ancestor
+{
+  NSString *parent = [parents objectForKey: key];
+
+  while (parent != nil)
+    {
+      if ([parent isEqual: ancestor])
+        {
+          return YES;
+        }
+      parent = [parents objectForKey: parent];
+    }
+  return NO;
+}
+
+- (void)collapseRecursivelyFromKey:(NSString *)key
+{
+  NSEnumerator *e = [[expanded allObjects] objectEnumerator];
+  NSString *other;
+
+  [expanded removeObject: key];
+  while ((other = [e nextObject]) != nil)
+    {
+      if ([self isKey: other below: key])
+        {
+          [expanded removeObject: other];
+        }
+    }
 }
 
 - (void)sortUsingComparator:(NSComparator)cmp
