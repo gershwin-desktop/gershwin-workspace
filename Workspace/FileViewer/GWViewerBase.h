@@ -32,6 +32,7 @@ typedef enum
 @class GWViewerBrowserPreview;
 @class FSNode;
 @class GWViewersManager;
+@class GWNavigationHistory;
 @class Workspace;
 @class DSStoreInfo;
 
@@ -58,8 +59,7 @@ typedef enum
 
   FSNodeRep *fsnodeRep;
 
-  NSMutableArray *history;
-  int historyPosition;
+  GWNavigationHistory *navigationHistory;
 
   BOOL invalidated;
   BOOL closing;
@@ -122,6 +122,7 @@ typedef enum
 - (void)goForwardInHistory;
 - (void)hiddenFilesChanged:(NSArray *)paths;
 - (void)hideDotsFileChanged:(BOOL)hide;
+- (GWNavigationHistory *)navigationHistory;
 - (NSMutableArray *)history;
 - (int)historyPosition;
 - (int)inspectorPaneIndex;

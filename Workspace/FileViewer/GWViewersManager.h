@@ -210,9 +210,6 @@
 
 - (void)addNode:(FSNode *)node toHistoryOfViewer:(id)viewer;
 
-- (void)removeDuplicatesInHistory:(NSMutableArray *)history
-                         position:(int *)pos;
-           
 - (void)changeHistoryOwner:(id)viewer;
 
 - (void)goToHistoryPosition:(int)pos 

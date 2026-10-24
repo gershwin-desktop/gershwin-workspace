@@ -27,6 +27,7 @@
 #import "DSStoreInfo.h"
 #import "GWFolderViewOptions.h"
 #import "GWViewSettingsManager.h"
+#import "GWNavigationHistory.h"
 
 @implementation GWViewerBase
 
@@ -34,6 +35,7 @@
 {
   RELEASE (pendingScrollPosition);
   RELEASE (appliedViewState);
+  RELEASE (navigationHistory);
   [super dealloc];
 }
 
@@ -277,17 +279,22 @@
   [self reloadFromNode: baseNode];
 }
 
+- (GWNavigationHistory *)navigationHistory
+{
+  if (navigationHistory == nil) {
+    navigationHistory = [GWNavigationHistory new];
+  }
+  return navigationHistory;
+}
+
 - (NSMutableArray *)history
 {
-  if (!history) {
-    history = [NSMutableArray new];
-  }
-  return history;
+  return [[self navigationHistory] items];
 }
 
 - (int)historyPosition
 {
-  return historyPosition;
+  return (int)[[self navigationHistory] position];
 }
 
 - (int)inspectorPaneIndex
@@ -484,7 +491,7 @@
 
 - (void)setHistoryPosition:(int)pos
 {
-  historyPosition = pos;
+  [[self navigationHistory] setPosition: pos];
 }
 
 - (void)setIconsPosition:(id)sender

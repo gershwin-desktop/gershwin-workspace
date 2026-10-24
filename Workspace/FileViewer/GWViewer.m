@@ -152,7 +152,6 @@ static BOOL hasLastExtents_ = NO;
   RELEASE (previewPane);
   RELEASE (vwrwin);
   RELEASE (viewerPrefs);
-  RELEASE (history);
   
   [super dealloc];
 }
@@ -182,8 +181,6 @@ static BOOL hasLastExtents_ = NO;
     ASSIGN (baseNodeArray, [NSArray arrayWithObject: baseNode]);
     fsnodeRep = [FSNodeRep sharedInstance];
     lastSelection = nil;
-    history = [NSMutableArray new];
-    historyPosition = 0;
     watchedNodes = [NSMutableArray new];
     manager = [GWViewersManager viewersManager];
     gworkspace = [Workspace gworkspace];
@@ -1534,8 +1531,7 @@ static BOOL hasLastExtents_ = NO;
   }
   ASSIGN (baseNodeArray, [NSArray arrayWithObject: baseNode]);
 
-  [history removeAllObjects];
-  historyPosition = 0;
+  [[self navigationHistory] removeAllItems];
 
   /* Recreate the node view bound to the new base. Match the safe
      pattern used in setViewerType:: tearing the documentView down via

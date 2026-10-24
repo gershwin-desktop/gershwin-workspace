@@ -46,6 +46,7 @@
 #import "GWViewerWindow.h"
 #import "GWViewerPrefs.h"
 #import "History.h"
+#import "GWNavigationHistory.h"
 #import "FSNFunctions.h"
 #import "FSNListView.h"
 #import "FSNBrowser.h"
@@ -1863,130 +1864,23 @@ static GWViewersManager *vwrsmanager = nil;
 
 @implementation GWViewersManager (History)
 
+/* The rules live in GWNavigationHistory; this side only adds what needs the
+ * app: the history cache size, Recent Folders and the History panel. */
 - (void)addNode:(FSNode *)node toHistoryOfViewer:(id)viewer
 {
   if ([node isValid] && (settingHistoryPath == NO))
     {
+      GWNavigationHistory *history = [viewer navigationHistory];
+
       [[GWRecentFolders sharedRecentFolders] noteFolderAtPath: [node path]];
-      NSMutableArray *history = [viewer history];
-      int position = [viewer historyPosition];
-      id hisviewer = [historyWindow viewer];
-      int cachemax = [gworkspace maxHistoryCache];
-      int count;
-      
-      while ([history count] > cachemax)
+      [history addItem: node maxCount: [gworkspace maxHistoryCache]];
+
+      if (viewer == [historyWindow viewer])
         {
-          [history removeObjectAtIndex: 0];
-          if (position > 0) {
-            position--;
-          }
-        }
-    
-      count = [history count];
-      
-      if (position == (count - 1))
-        {
-          if ([[history lastObject] isEqual: node] == NO)
-            {
-              [history insertObject: node atIndex: count];
-            }
-          position = [history count] - 1;
-          
-        }
-      else if (count > (position + 1))
-        {
-          BOOL equalpos = [[history objectAtIndex: position] isEqual: node];
-          BOOL equalnext = [[history objectAtIndex: position + 1] isEqual: node];
-          
-          if (((equalpos == NO) && (equalnext == NO)) || equalnext)
-            {
-              position++;
-              
-              if (equalnext == NO)
-                {
-                  [history insertObject: node atIndex: position];
-                }
-              
-              while ((position + 1) < [history count])
-                {
-                  int last = [history count] - 1;
-                  [history removeObjectAtIndex: last];
-                }
-            }
-        }
-      
-      [self removeDuplicatesInHistory: history position: &position];
-      
-      [viewer setHistoryPosition: position];
-      
-      if (viewer == hisviewer) 
-        {
-          [historyWindow setHistoryNodes: history position: position];
+          [historyWindow setHistoryNodes: [history items]
+                                position: (int)[history position]];
         }
     }
-}
-
-- (void)removeDuplicatesInHistory:(NSMutableArray *)history
-                         position:(int *)pos
-{
-  int count = [history count];
-  int i;
-  
-#define CHECK_POSITION(n) \
-if (*pos >= i) *pos -= n; \
-*pos = (*pos < 0) ? 0 : *pos; \
-*pos = (*pos >= count) ? (count - 1) : *pos	
-  
-	for (i = 0; i < count; i++) {
-		FSNode *node = [history objectAtIndex: i];
-		
-		if ([node isValid] == NO) {
-			[history removeObjectAtIndex: i];
-			CHECK_POSITION (1);		
-			count--;
-			i--;
-		}
-	}
-
-	for (i = 0; i < count; i++) {
-		FSNode *node = [history objectAtIndex: i];
-
-		if (i < ([history count] - 1)) {
-			FSNode *next = [history objectAtIndex: i + 1];
-			
-			if ([next isEqual: node]) {
-				[history removeObjectAtIndex: i + 1];
-				CHECK_POSITION (1);
-				count--;
-				i--;
-			}
-		}
-	}
-  
-  count = [history count];
-  
-	if (count > 4) {
-		FSNode *na[2], *nb[2];
-		
-		for (i = 0; i < count; i++) {
-			if (i < (count - 3)) {
-				na[0] = [history objectAtIndex: i];
-				na[1] = [history objectAtIndex: i + 1];
-				nb[0] = [history objectAtIndex: i + 2]; 
-				nb[1] = [history objectAtIndex: i + 3];
-		
-				if (([na[0] isEqual: nb[0]]) && ([na[1] isEqual: nb[1]])) {
-					[history removeObjectAtIndex: i + 3];
-					[history removeObjectAtIndex: i + 2];
-					CHECK_POSITION (2);
-					count -= 2;
-					i--;
-				}
-			}
-		}
-	}
-    
-  CHECK_POSITION (0);
 }
 
 - (void)changeHistoryOwner:(id)viewer
@@ -2011,44 +1905,35 @@ if (*pos >= i) *pos -= n; \
 {
   if (viewer)
     {
-      NSMutableArray *history = [viewer history];
-      int position = [viewer historyPosition];
- 
-      [self removeDuplicatesInHistory: history position: &position];
+      GWNavigationHistory *history = [viewer navigationHistory];
 
-      if ((pos >= 0) && (pos < [history count]))
+      [history compact];
+      if ((pos >= 0) && (pos < (int)[[history items] count]))
         {
-          [self setPosition: pos inHistory: history ofViewer: viewer];
+          [self setPosition: pos inHistory: [history items] ofViewer: viewer];
         }
+    }
+}
+
+- (void)stepInHistoryOfViewer:(id)viewer by:(NSInteger)step
+{
+  GWNavigationHistory *history = [viewer navigationHistory];
+  NSInteger position = [history positionAfterStep: step];
+
+  if (position != NSNotFound)
+    {
+      [self setPosition: (int)position inHistory: [history items] ofViewer: viewer];
     }
 }
 
 - (void)goBackwardInHistoryOfViewer:(id)viewer
 {
-  NSMutableArray *history = [viewer history];
-  int position = [viewer historyPosition];
-
-  [self removeDuplicatesInHistory: history position: &position];
-
-  if ((position > 0) && (position < [history count]))
-    {
-      position--;
-      [self setPosition: position inHistory: history ofViewer: viewer];
-    }
+  [self stepInHistoryOfViewer: viewer by: -1];
 }
 
 - (void)goForwardInHistoryOfViewer:(id)viewer
 {
-  NSMutableArray *history = [viewer history];
-  int position = [viewer historyPosition];
-
-  [self removeDuplicatesInHistory: history position: &position];
-  
-  if ((position >= 0) && (position < ([history count] - 1)))
-    {
-      position++;
-      [self setPosition: position inHistory: history ofViewer: viewer];
-    }
+  [self stepInHistoryOfViewer: viewer by: 1];
 }
 
 - (void)setPosition:(int)position
@@ -2060,7 +1945,14 @@ if (*pos >= i) *pos -= n; \
   
   settingHistoryPath = YES;
   
-  if ([viewer viewType] != GWViewTypeBrowser)
+  if ([viewer viewType] != GWViewTypeBrowser
+      && [viewer respondsToSelector: @selector(showNodeWithoutHistory:)])
+    {
+      /* Like opening the folder: title, folder settings and selection
+       * follow, which showing the contents alone left stale. */
+      [viewer showNodeWithoutHistory: node];
+    }
+  else if ([viewer viewType] != GWViewTypeBrowser)
     {
       [nodeView showContentsOfNode: node];
     }
