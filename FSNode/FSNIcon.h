@@ -86,8 +86,6 @@
   NSColor *savedInfoLabelColor;
   
   BOOL isOpened;
-  /* YES while a rubber band being dragged out would select the icon. */
-  BOOL selectionPreview;
   
   BOOL nameEdited;
   BOOL isLeaf;
@@ -180,11 +178,6 @@
 /* The picture of the icon that travels with the pointer while it is
  * dragged - full image, name on a solid plate, no selection plate. */
 - (NSImage *)dragLookImage;
-
-/* Draw the icon as selected without selecting it, while a rubber band that
-   would select it is still being dragged out.  Only marks the icon for
-   redisplay; the band's own loop does the drawing. */
-- (void)setSelectionPreview:(BOOL)flag;
 
 - (void)tile;
 

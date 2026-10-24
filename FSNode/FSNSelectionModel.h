@@ -133,8 +133,8 @@ extern const NSTimeInterval FSNTypeSelectTimeout;
 /* Tab and Shift-Tab: the next or previous item in name order. */
 - (BOOL)selectNextInNameOrder:(BOOL)forward;
 
-- (BOOL)selectAll;
-- (BOOL)deselectAll;
+- (BOOL)selectAllItems;
+- (BOOL)deselectAllItems;
 
 /* Makes "item" the only selected item, the anchor and the cursor. */
 - (void)selectOnly:(id)item;

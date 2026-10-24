@@ -109,6 +109,14 @@ enum {
 - (void)setSelectedItems:(NSArray *)items
 {
   NSUInteger i;
+  BOOL same = YES;
+
+  /* Views hand their selection over before every event; when it is what
+     the model already has, the Shift range must survive it. */
+  for (i = 0; same && i < [items count]; i++)
+    same = [self isItemSelected: [items objectAtIndex: i]];
+  if (same && [items count] == [_selected count])
+    return;
 
   [_selected removeAllObjects];
   for (i = 0; i < [items count]; i++)
@@ -229,7 +237,7 @@ enum {
   DESTROY(_pendingReduce);
   if (modifiers & (FSNSelectionModifierShift | FSNSelectionModifierCommand))
     return;
-  [self deselectAll];
+  [self deselectAllItems];
 }
 
 - (void)beginBandWithModifiers:(unsigned)modifiers
@@ -452,7 +460,7 @@ enum {
   return YES;
 }
 
-- (BOOL)selectAll
+- (BOOL)selectAllItems
 {
   if ([_selected count] == [_items count])
     return NO;
@@ -461,7 +469,7 @@ enum {
   return YES;
 }
 
-- (BOOL)deselectAll
+- (BOOL)deselectAllItems
 {
   BOOL changed = ([_selected count] > 0);
 

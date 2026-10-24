@@ -165,13 +165,13 @@ int main(void)
   END_SET("icon style: band")
 
   START_SET("icon style: keys")
-  [m deselectAll];
+  [m deselectAllItems];
   [m moveInDirection: FSNSelectionDirectionDown extend: NO];
   PASS_EQUAL(joined(m), @"alpha", "Down with nothing selected selects the first item");
-  [m deselectAll];
+  [m deselectAllItems];
   [m moveInDirection: FSNSelectionDirectionUp extend: NO];
   PASS_EQUAL(joined(m), @"sub.two", "Up with nothing selected selects the last item");
-  [m deselectAll];
+  [m deselectAllItems];
   [m moveInDirection: FSNSelectionDirectionRight extend: NO];
   PASS_EQUAL(joined(m), @"sub.two", "Right with nothing selected selects the last item");
 
@@ -202,8 +202,8 @@ int main(void)
   [m moveInDirection: FSNSelectionDirectionRight extend: NO];
   PASS_EQUAL(joined(m), @"india", "arrows move from the item clicked last");
 
-  PASS([m selectAll] && [[m selectedItems] count] == [items count], "select all");
-  PASS([m deselectAll] && [[m selectedItems] count] == 0, "Escape deselects");
+  PASS([m selectAllItems] && [[m selectedItems] count] == [items count], "select all");
+  PASS([m deselectAllItems] && [[m selectedItems] count] == 0, "Escape deselects");
   END_SET("icon style: keys")
 
   START_SET("type select and Tab")
@@ -229,10 +229,10 @@ int main(void)
   [m selectNextInNameOrder: NO];
   [m selectNextInNameOrder: NO];
   PASS_EQUAL(joined(m), @"beta", "Shift-Tab goes back");
-  [m deselectAll];
+  [m deselectAllItems];
   [m selectNextInNameOrder: YES];
   PASS_EQUAL(joined(m), @"alpha", "Tab with nothing selected selects the first name");
-  [m deselectAll];
+  [m deselectAllItems];
   [m selectNextInNameOrder: NO];
   PASS_EQUAL(joined(m), @"sub.two", "Shift-Tab with nothing selected selects the last name");
   [m selectOnly: item(items, @"beta")];
@@ -258,8 +258,10 @@ int main(void)
   [m mouseDownOnItem: item(items, @"india") modifiers: FSNSelectionModifierShift];
   PASS_EQUAL(joined(m), @"alpha,alpine,beta,golf,hotel,india",
              "Command-click moves the anchor; the next range keeps the rest");
+  [m setSelectedItems: [m selectedItems]];
   [m mouseDownOnItem: item(items, @"hotel") modifiers: FSNSelectionModifierShift];
-  PASS_EQUAL(joined(m), @"alpha,alpine,beta,golf,hotel", "a range can shrink");
+  PASS_EQUAL(joined(m), @"alpha,alpine,beta,golf,hotel",
+             "a range can shrink, also after the view handed the same selection back");
   [m mouseDownOnItem: item(items, @"golf") modifiers: FSNSelectionModifierCommand];
   [m mouseDownOnItem: item(items, @"echo") modifiers: FSNSelectionModifierShift];
   PASS_EQUAL(joined(m), @"alpha,alpine,beta,echo,foxtrot,golf,hotel",
@@ -302,10 +304,10 @@ int main(void)
   END_SET("list style: band")
 
   START_SET("list style: keys")
-  [m deselectAll];
+  [m deselectAllItems];
   [m moveInDirection: FSNSelectionDirectionDown extend: NO];
   PASS_EQUAL(joined(m), @"alpha", "Down with nothing selected selects the first row");
-  [m deselectAll];
+  [m deselectAllItems];
   [m moveInDirection: FSNSelectionDirectionUp extend: NO];
   PASS_EQUAL(joined(m), @"sub.two", "Up with nothing selected selects the last row");
   [m moveInDirection: FSNSelectionDirectionDown extend: NO];

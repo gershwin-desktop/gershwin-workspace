@@ -1047,143 +1047,6 @@ static CGFloat desktopScaleFactor(void)
     }];
 }
 
-- (void)selectIconInPrevLine
-{
-  /* Pixel-based: find icon with closest Y-origin above the selected one */
-  NSUInteger i;
-  FSNIcon *selectedIcon = nil;
-  for (i = 0; i < [icons count]; i++)
-    {
-      if ([[icons objectAtIndex: i] isSelected])
-	{
-	  selectedIcon = [icons objectAtIndex: i];
-	  break;
-	}
-    }
-  if (!selectedIcon) return;
-
-  CGFloat selY = [selectedIcon frame].origin.y;
-  FSNIcon *best = nil;
-  CGFloat bestDist = CGFLOAT_MAX;
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      if (icon == selectedIcon) continue;
-      CGFloat dy = [icon frame].origin.y - selY;
-      if (dy > 0 && dy < bestDist)
-	{
-	  best = icon;
-	  bestDist = fabs(dy);
-	}
-    }
-  if (best)
-    {
-      [best select];
-      [self scrollIconToVisible: best];
-    }
-}
-
-- (void)selectIconInNextLine
-{
-  /* Pixel-based: find icon with closest Y-origin below the selected one */
-  NSUInteger i;
-  FSNIcon *selectedIcon = nil;
-  for (i = 0; i < [icons count]; i++)
-    {
-      if ([[icons objectAtIndex: i] isSelected])
-	{
-	  selectedIcon = [icons objectAtIndex: i];
-	  break;
-	}
-    }
-  if (!selectedIcon) return;
-
-  CGFloat selY = [selectedIcon frame].origin.y;
-  FSNIcon *best = nil;
-  CGFloat bestDist = CGFLOAT_MAX;
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      if (icon == selectedIcon) continue;
-      CGFloat dy = [icon frame].origin.y - selY;
-      if (dy < 0 && fabs(dy) < bestDist)
-	{
-	  best = icon;
-	  bestDist = fabs(dy);
-	}
-    }
-  if (best)
-    {
-      [best select];
-      [self scrollIconToVisible: best];
-    }
-}
-
-
-/* Desktop icons sit where the user put them, so the arrow keys walk the
- * row the selected icon is in by position, not the array order the
- * folder view uses. */
-- (FSNIcon *)selectedIcon
-{
-  NSUInteger i;
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-
-      if ([icon isSelected])
-	{
-	  return icon;
-	}
-    }
-  return nil;
-}
-
-- (FSNIcon *)neighbourOf:(FSNIcon *)icon toTheRight:(BOOL)right
-{
-  NSArray *rowicons = [self iconsWithGridOriginY: [icon frame].origin.y];
-  CGFloat x = [icon frame].origin.x;
-  FSNIcon *best = nil;
-
-  for (FSNIcon *other in rowicons)
-    {
-      CGFloat ox = [other frame].origin.x;
-
-      if (right ? (ox <= x) : (ox >= x))
-	{
-	  continue;
-	}
-      if (best == nil
-	  || (right ? (ox < [best frame].origin.x) : (ox > [best frame].origin.x)))
-	{
-	  best = other;
-	}
-    }
-  return best;
-}
-
-- (void)selectPrevIcon
-{
-  FSNIcon *icon = [self selectedIcon];
-  FSNIcon *prev = icon ? [self neighbourOf: icon toTheRight: NO] : nil;
-
-  if (prev)
-    {
-      [prev select];
-    }
-}
-
-- (void)selectNextIcon
-{
-  FSNIcon *icon = [self selectedIcon];
-  FSNIcon *next = icon ? [self neighbourOf: icon toTheRight: YES] : nil;
-
-  if (next)
-    {
-      [next select];
-    }
-}
-
 - (void)mouseUp:(NSEvent *)theEvent
 {
   [self setSelectionMask: NSSingleSelectionMask];
@@ -1193,16 +1056,12 @@ static CGFloat desktopScaleFactor(void)
  * editing alone, as its clicks always did. */
 - (void)selectNothingForBackgroundEvent:(NSEvent *)theEvent
 {
-  if ([theEvent modifierFlags] != NSShiftKeyMask)
+  [self syncSelectionModel];
+  [selectionModel mouseDownOnEmptySpaceWithModifiers:
+                    FSNSelectionModifiersFromEventFlags([theEvent modifierFlags])];
+  if ([[selectionModel selectedItems] count] == 0)
     {
-      selectionMask = NSSingleSelectionMask;
-      selectionMask |= FSNCreatingSelectionMask;
-      [self unselectOtherReps: nil];
-      selectionMask = NSSingleSelectionMask;
-
-      DESTROY (lastSelection);
-      [self selectionDidChange];
-
+      [self applySelectionModelNotifying: YES];
       [manager deselectInSpatialViewers];
     }
 }
@@ -1215,7 +1074,6 @@ static CGFloat desktopScaleFactor(void)
   NSRect oldRect;
   NSRect r;
   float x, y, w, h;
-  NSUInteger i;
 
   transparentSelection = NO;
   if ([[manager dock] style] == DockStyleModern)
@@ -1226,6 +1084,8 @@ static CGFloat desktopScaleFactor(void)
   startp = locp;
 
   oldRect = NSZeroRect;
+
+  [self beginSelectionBandWithEvent: theEvent];
 
   [[self window] disableFlushWindow];
 
@@ -1276,9 +1136,9 @@ static CGFloat desktopScaleFactor(void)
 	  continue;
 	}
 
-      /* Show what letting go now would select, before the redraw below
+      /* Select what letting go now would select, before the redraw below
 	 picks the changed icons up together with the old band. */
-      [self previewSelectionInRect: r];
+      [self updateSelectionBandWithRect: r];
 
       [self redrawSelectionBandFrom: oldRect to: r];
 
@@ -1300,36 +1160,13 @@ static CGFloat desktopScaleFactor(void)
   [[self window] enableFlushWindow];
   [[self window] flushWindow];
 
-  selectionMask = FSNMultipleSelectionMask;
-  selectionMask |= FSNCreatingSelectionMask;
-
   x = min(startp.x, locp.x);
   y = min(startp.y, locp.y);
   w = max(1, max(locp.x, startp.x) - min(locp.x, startp.x));
   h = max(1, max(locp.y, startp.y) - min(locp.y, startp.y));
 
-  r = NSMakeRect(x, y, w, h);
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      /* The name is part of the icon as far as the user is concerned, so a
-	 band that only touches the label selects too. */
-      NSRect nodeBounds = [self convertRect: [icon nodeBounds] fromView: icon];
-
-      if (NSIntersectsRect(r, nodeBounds))
-	{
-	  [icon select];
-	}
-    }
-
-  /* Only now that the real selection draws the same highlight, so the
-     icons do not flash unselected in between. */
-  [self previewSelectionInRect: NSZeroRect];
-
-  selectionMask = NSSingleSelectionMask;
-
-  [self selectionDidChange];
+  [self updateSelectionBandWithRect: NSMakeRect(x, y, w, h)];
+  [self endSelectionBand];
 }
 
 - (void)keyDown:(NSEvent *)theEvent
@@ -1346,11 +1183,6 @@ static CGFloat desktopScaleFactor(void)
       // Handle arrow keys with modifiers
       if (character == NSDownArrowFunctionKey)
         {
-          if ((flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
-            {
-              [manager openSelectionInNewViewer: NO];
-              return;
-            }
           if ((flags & NSCommandKeyMask) && (flags & NSShiftKeyMask))
             {
               [manager openSelectionAsFolder];
@@ -1411,29 +1243,6 @@ static CGFloat desktopScaleFactor(void)
 			   sourceWindow: [self window]];
 	  return;
 	}
-      if (character == 0x01B) // Escape
-	{
-	  selectionMask = NSSingleSelectionMask;
-	  selectionMask |= FSNCreatingSelectionMask;
-	  [self unselectOtherReps: nil];
-	  selectionMask = NSSingleSelectionMask;
-	  [self selectionDidChange];
-	  return;
-	}
-    }
-
-  // Auto-select first item when pressing arrow keys with no selection
-  if ((character == NSUpArrowFunctionKey
-       || character == NSDownArrowFunctionKey
-       || character == NSLeftArrowFunctionKey
-       || character == NSRightArrowFunctionKey)
-      && !(flags & NSCommandKeyMask))
-    {
-      NSArray *selection = [self selectedNodes];
-      if (selection == nil || [selection count] == 0)
-        {
-          [self selectIconWithPrefix: @""];
-        }
     }
 
   [super keyDown: theEvent];

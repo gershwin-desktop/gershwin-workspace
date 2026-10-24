@@ -33,6 +33,7 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
 #import "FSNFunctions.h"
+#import "FSNSelectionModel.h"
 #import "FSNAlias.h"
 #import "FSNodeRep.h"
 #import "FSNode.h"
@@ -1147,3 +1148,17 @@ FSNFinderDateDescription(NSDate *date, NSDate *now, BOOL relative, NSDictionary 
                    [day descriptionWithCalendarFormat: word (@"Date format")], time];
 }
 
+unsigned FSNSelectionModifiersFromEventFlags(NSUInteger flags)
+{
+  unsigned modifiers = FSNSelectionModifierNone;
+
+  if (flags & NSShiftKeyMask)
+    modifiers |= FSNSelectionModifierShift;
+  if (flags & NSCommandKeyMask)
+    modifiers |= FSNSelectionModifierCommand;
+  if (flags & NSAlternateKeyMask)
+    modifiers |= FSNSelectionModifierOption;
+  if (flags & NSControlKeyMask)
+    modifiers |= FSNSelectionModifierControl;
+  return modifiers;
+}

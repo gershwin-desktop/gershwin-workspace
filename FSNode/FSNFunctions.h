@@ -129,6 +129,10 @@ void showAlertInvalidName(Class c);
 NSInteger showAlertExtensionChange(Class c, NSString *extension);
 void showAlertNameInUse(Class c, NSString *newname);
 
+/* The selection model's modifiers (FSNSelectionModel.h) for NSEvent flags,
+ * so every view reads Shift, Command, Option and Control the same way. */
+unsigned FSNSelectionModifiersFromEventFlags(NSUInteger flags);
+
 /* Icon-position coordinate conversion (single source of truth).
  *
  * DS_Store Iloc / FinderInfo fdLocation use top-left origin (y grows down);

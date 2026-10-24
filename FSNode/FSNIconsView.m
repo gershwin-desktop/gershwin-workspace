@@ -128,7 +128,7 @@ const int FSNMaxLabelTextSize = 16;
   RELEASE (horizontalImage);
   RELEASE (verticalImage);
   RELEASE (lastSelection);
-  RELEASE (charBuffer);
+  RELEASE (selectionModel);
   RELEASE (backColor);
   RELEASE (textColor);
   RELEASE (disabledTextColor);
@@ -206,8 +206,8 @@ const int FSNMaxLabelTextSize = 16;
 
       icons = [NSMutableArray new];
       isDragTarget = NO;
-      lastKeyPressedTime = 0.0;
-      charBuffer = nil;
+      selectionModel = [[FSNSelectionModel alloc] initWithStyle: FSNSelectionStyleIcon];
+      [selectionModel setDelegate: self];
       selectionMask = NSSingleSelectionMask;
       
       // DS_Store free positioning support
@@ -1116,124 +1116,158 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
   [self scrollRectToVisible: irect];
 }
 
-- (NSString *)selectIconWithPrefix:(NSString *)prefix
+#pragma mark - Selection model
+
+- (FSNSelectionModel *)selectionModel
 {
-  NSUInteger i;
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      NSString *name = [icon shownInfo];
-
-      if ([name rangeOfString: prefix options: NSCaseInsensitiveSearch].location == 0)
-	{
-	  [icon select];
-	  [self scrollIconToVisible: icon];
-
-	  return name;
-	}
-    }
-
-  return nil;
+  return selectionModel;
 }
 
-- (void)selectIconInPrevLine
+/* The icons as they are read on screen, row by row from the top: the first
+   and last item for the arrow keys, wherever the icons were placed. */
+- (NSArray *)iconsInReadingOrder
 {
-  FSNIcon *icon;
-  NSUInteger i;
-  NSInteger pos = -1;
+  BOOL flipped = [self isFlipped];
 
-  for (i = 0; i < [icons count]; i++)
-    {
-      icon = [icons objectAtIndex: i];
+  return [icons sortedArrayUsingComparator: ^NSComparisonResult(id a, id b) {
+    NSRect ra = [a frame];
+    NSRect rb = [b frame];
+    CGFloat dy = NSMidY(ra) - NSMidY(rb);
 
-      if ([icon isSelected])
-	{
-	  NSSize sz = [self bounds].size;
-	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + _cachedGapX) / (gridSize.width + _cachedGapX)) : 1;
-	  if (i >= cols)
-	    pos = i - cols;
-	  break;
-	}
-    }
-
-  if (pos >= 0 && pos < [icons count])
-    {
-      icon = [icons objectAtIndex: pos];
-      [icon select];
-      [self scrollIconToVisible: icon];
-    }
+    if (fabs(dy) > MIN(NSHeight(ra), NSHeight(rb)) / 2)
+      {
+        if (flipped)
+          return (dy < 0) ? NSOrderedAscending : NSOrderedDescending;
+        return (dy > 0) ? NSOrderedAscending : NSOrderedDescending;
+      }
+    if (NSMinX(ra) == NSMinX(rb))
+      return NSOrderedSame;
+    return (NSMinX(ra) < NSMinX(rb)) ? NSOrderedAscending : NSOrderedDescending;
+  }];
 }
 
-- (void)selectIconInNextLine
+- (void)syncSelectionModel
 {
-  FSNIcon *icon;
-  NSUInteger i;
-  NSUInteger pos = [icons count];
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      icon = [icons objectAtIndex: i];
-
-      if ([icon isSelected])
-	{
-	  NSSize sz = [self bounds].size;
-	  NSUInteger cols = (gridSize.width > 0) ? (NSUInteger)((sz.width + _cachedGapX) / (gridSize.width + _cachedGapX)) : 1;
-	  if (i + cols < [icons count])
-	    pos = i + cols;
-	  break;
-	}
-    }
-
-  if (pos <= ([icons count] -1))
-    {
-      icon = [icons objectAtIndex: pos];
-      [icon select];
-      [self scrollIconToVisible: icon];
-    }
+  [selectionModel setItems: [self iconsInReadingOrder]];
+  [selectionModel setSelectedItems: [self selectedReps]];
 }
 
-- (void)selectPrevIcon
+- (void)applySelectionModelNotifying:(BOOL)notify
 {
   NSUInteger i;
 
+  /* Selecting an icon normally deselects the others and reports the
+     change at once; here the model has already decided the whole set. */
+  selectionMask = FSNMultipleSelectionMask | FSNCreatingSelectionMask;
   for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
 
-      if ([icon isSelected])
-	{
-	  if (i > 0)
-	    {
-	      icon = [icons objectAtIndex: i - 1];
-	      [icon select];
-	      [self scrollIconToVisible: icon];
-	    }
-	  break;
-	}
+      if ([selectionModel isItemSelected: icon])
+        [icon select];
+      else
+        [icon unselect];
+    }
+  selectionMask = NSSingleSelectionMask;
+
+  if (notify)
+    {
+      if ([[self selectedReps] count] == 0)
+        DESTROY (lastSelection);
+      [self selectionDidChange];
     }
 }
 
-- (void)selectNextIcon
+- (void)scrollSelectionCursorToVisible
+{
+  FSNIcon *cursor = [selectionModel cursor];
+
+  if (cursor != nil && [selectionModel isItemSelected: cursor])
+    [self scrollIconToVisible: cursor];
+}
+
+- (NSString *)selectionModel:(FSNSelectionModel *)model nameOfItem:(id)item
+{
+  return [(FSNIcon *)item shownInfo];
+}
+
+- (id)selectionModel:(FSNSelectionModel *)model
+            itemFrom:(id)item
+         inDirection:(FSNSelectionDirection)direction
 {
   NSUInteger count = [icons count];
+  NSUInteger from = [icons indexOfObjectIdenticalTo: item];
+  NSRect *rects;
+  NSUInteger i, found;
+
+  if (from == NSNotFound || count == 0)
+    return nil;
+
+  /* By where the icons are, not their order: icons placed by hand or
+     loaded from another system's layout sit anywhere. */
+  rects = malloc(sizeof(NSRect) * count);
+  for (i = 0; i < count; i++)
+    rects[i] = [[icons objectAtIndex: i] frame];
+  found = [FSNSelectionModel indexOfNeighborOfRect: from
+                                           inRects: rects
+                                             count: count
+                                         direction: direction
+                                           flipped: [self isFlipped]];
+  free(rects);
+  return (found == NSNotFound) ? nil : [icons objectAtIndex: found];
+}
+
+- (void)iconMouseDown:(FSNIcon *)icon event:(NSEvent *)event
+{
+  BOOL wasSelected = [icon isSelected];
+
+  [self syncSelectionModel];
+  [selectionModel mouseDownOnItem: icon
+                        modifiers: FSNSelectionModifiersFromEventFlags([event modifierFlags])];
+  if (wasSelected == NO || [icon isSelected] == NO)
+    [self stopRepNameEditing];
+  [self applySelectionModelNotifying: YES];
+}
+
+- (void)iconMouseUp:(FSNIcon *)icon dragged:(BOOL)dragged
+{
+  [selectionModel mouseUpOnItem: icon dragged: dragged];
+  [self applySelectionModelNotifying: YES];
+}
+
+- (void)beginSelectionBandWithEvent:(NSEvent *)event
+{
+  [self syncSelectionModel];
+  [selectionModel beginBandWithModifiers:
+                    FSNSelectionModifiersFromEventFlags([event modifierFlags])];
+}
+
+- (void)updateSelectionBandWithRect:(NSRect)bandRect
+{
+  NSMutableArray *touched = [NSMutableArray array];
   NSUInteger i;
 
-  for (i = 0; i < count; i++)
+  for (i = 0; i < [icons count]; i++)
     {
       FSNIcon *icon = [icons objectAtIndex: i];
 
-      if ([icon isSelected])
-	{
-	  if (i < (count - 1))
-	    {
-	      icon = [icons objectAtIndex: i + 1];
-	      [icon select];
-	      [self scrollIconToVisible: icon];
-	    }
-	  break;
-	}
+      /* The name is part of the icon as far as the user is concerned, so a
+	 band that only touches the label selects too. */
+      if (NSIsEmptyRect(bandRect) == NO
+          && NSIntersectsRect(bandRect, [self convertRect: [icon nodeBounds] fromView: icon]))
+        [touched addObject: icon];
     }
+
+  [selectionModel updateBandWithItems: touched];
+  /* The icons show the band's selection while it is dragged; the rest of
+     Workspace hears about it when it is let go. */
+  [self applySelectionModelNotifying: NO];
+}
+
+- (void)endSelectionBand
+{
+  [selectionModel endBand];
+  [self applySelectionModelNotifying: YES];
 }
 
 #pragma mark - DS_Store Free Positioning Support
@@ -1501,25 +1535,6 @@ compareForArrangement(FSNIcon *a, FSNIcon *b, void *context)
 	  x = p.x;
 	  y += [self isFlipped] ? cellH : -cellH;
 	}
-    }
-}
-
-- (void)previewSelectionInRect:(NSRect)bandRect
-{
-  NSUInteger i;
-
-  for (i = 0; i < [icons count]; i++)
-    {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      BOOL touched = NO;
-
-      /* The same test the band applies when it is let go, so the preview
-	 never promises a selection that does not happen. */
-      if (NSIsEmptyRect(bandRect) == NO)
-	touched = NSIntersectsRect(bandRect,
-				   [self convertRect: [icon nodeBounds] fromView: icon]);
-
-      [icon setSelectionPreview: touched];
     }
 }
 
@@ -2122,15 +2137,12 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 
 - (void)selectNothingForBackgroundEvent:(NSEvent *)theEvent
 {
-  if ([theEvent modifierFlags] != NSShiftKeyMask)
+  [self syncSelectionModel];
+  [selectionModel mouseDownOnEmptySpaceWithModifiers:
+                    FSNSelectionModifiersFromEventFlags([theEvent modifierFlags])];
+  if ([[selectionModel selectedItems] count] == 0)
     {
-      selectionMask = NSSingleSelectionMask;
-      selectionMask |= FSNCreatingSelectionMask;
-      [self unselectOtherReps: nil];
-      selectionMask = NSSingleSelectionMask;
-
-      DESTROY (lastSelection);
-      [self selectionDidChange];
+      [self applySelectionModelNotifying: YES];
       [self stopRepNameEditing];
     }
 }
@@ -2160,7 +2172,6 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   NSRect r;
   NSRect selrect;
   float x, y, w, h;
-  NSUInteger i;
 
   pp = NSMakePoint(0,0);
 
@@ -2190,6 +2201,8 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   sp = [self convertPoint: p  fromView: nil];
 
   oldRect = NSZeroRect;
+
+  [self beginSelectionBandWithEvent: theEvent];
 
   [[self window] disableFlushWindow];
 
@@ -2257,9 +2270,9 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 	  continue;
 	}
 
-      /* Show what letting go now would select, before the redraw below
+      /* Select what letting go now would select, before the redraw below
 	 picks the changed icons up together with the old band. */
-      [self previewSelectionInRect: r];
+      [self updateSelectionBandWithRect: r];
 
       [self redrawSelectionBandFrom: oldRect to: r];
 
@@ -2283,9 +2296,6 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
   [[self window] enableFlushWindow];
   [[self window] flushWindow];
 
-  selectionMask = FSNMultipleSelectionMask;
-  selectionMask |= FSNCreatingSelectionMask;
-
   x = min(sp.x, pp.x);
   y = min(sp.y, pp.y);
   w = max(1, max(pp.x, sp.x) - min(pp.x, sp.x));
@@ -2293,153 +2303,138 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 
   selrect = NSMakeRect(x, y, w, h);
 
-  for (i = 0; i < [icons count]; i++)
+  [self updateSelectionBandWithRect: selrect];
+  [self endSelectionBand];
+}
+
+/* Runs one keyboard decision of the selection model and shows its result. */
+- (void)performSelectionKey:(BOOL (^)(FSNSelectionModel *model))step
+{
+  [self syncSelectionModel];
+  if (step(selectionModel))
     {
-      FSNIcon *icon = [icons objectAtIndex: i];
-      /* The name is part of the icon as far as the user is concerned, so a
-	 band that only touches the label selects too. */
-      NSRect nodeBounds = [self convertRect: [icon nodeBounds] fromView: icon];
-
-      if (NSIntersectsRect(selrect, nodeBounds))
-	{
-	  [icon select];
-	}
+      [self stopRepNameEditing];
+      [self applySelectionModelNotifying: YES];
+      [self scrollSelectionCursorToVisible];
     }
+}
 
-  /* Only now that the real selection draws the same highlight, so the
-     icons do not flash unselected in between. */
-  [self previewSelectionInRect: NSZeroRect];
+- (void)scrollToEdge:(BOOL)top
+{
+  NSRect b = [self bounds];
+  BOOL atMaxY = (top != [self isFlipped]);
 
-  selectionMask = NSSingleSelectionMask;
-
-  [self selectionDidChange];
+  [self scrollRectToVisible: NSMakeRect(NSMinX(b), atMaxY ? NSMaxY(b) - 1 : NSMinY(b), 1, 1)];
 }
 
 - (void)keyDown:(NSEvent *)theEvent
 {
-  NSString *characters;
-  unichar character;
-  NSString *characterStr = nil;
+  NSString *characters = [theEvent characters];
+  NSUInteger flags = [theEvent modifierFlags];
+  BOOL extend = ((flags & NSShiftKeyMask) != 0);
+  unichar character = 0;
   NSRect vRect, hiddRect;
   NSPoint p;
   float x, y, w, h;
-
-  characters = [theEvent characters];
-  character = 0;
+  FSNSelectionDirection direction;
 
   if ([characters length] > 0)
-    {
-      character = [characters characterAtIndex: 0];
-      characterStr = [characters substringToIndex: 1];
-    }
+    character = [characters characterAtIndex: 0];
 
   switch (character)
     {
     case NSPageUpFunctionKey:
-		  vRect = [self visibleRect];
-		  p = vRect.origin;
-		  x = p.x;
-		  y = p.y + vRect.size.height;
-		  w = vRect.size.width;
-		  h = vRect.size.height;
-		  hiddRect = NSMakeRect(x, y, w, h);
-		  [self scrollRectToVisible: hiddRect];
-		  return;
-
-  case NSPageDownFunctionKey:
-    vRect = [self visibleRect];
-    p = vRect.origin;
-    x = p.x;
-    y = p.y - vRect.size.height;
-    w = vRect.size.width;
-    h = vRect.size.height;
-    hiddRect = NSMakeRect(x, y, w, h);
-    [self scrollRectToVisible: hiddRect];
-    return;
-
-  case NSUpArrowFunctionKey:
-    [self selectIconInPrevLine];
-    return;
-
-  case NSDownArrowFunctionKey:
-    [self selectIconInNextLine];
-    return;
-
-  case NSLeftArrowFunctionKey:
-    {
-      if ([theEvent modifierFlags] & NSControlKeyMask)
-	{
-	  [super keyDown: theEvent];
-	}
-      else
-	{
-	  [self selectPrevIcon];
-	}
-    }
-    return;
-
-  case NSRightArrowFunctionKey:
-    {
-      if ([theEvent modifierFlags] & NSControlKeyMask)
-	{
-	  [super keyDown: theEvent];
-	}
-      else
-	{
-	  [self selectNextIcon];
-	}
-    }
-    return;
-
-  case NSCarriageReturnCharacter:
-    {
-      unsigned flags = [theEvent modifierFlags];
-      BOOL closesndr = ((flags == NSAlternateKeyMask)
-			|| (flags == NSControlKeyMask));
-      [self openSelectionInNewViewer: closesndr];
+      vRect = [self visibleRect];
+      p = vRect.origin;
+      x = p.x;
+      y = p.y + vRect.size.height;
+      w = vRect.size.width;
+      h = vRect.size.height;
+      hiddRect = NSMakeRect(x, y, w, h);
+      [self scrollRectToVisible: hiddRect];
       return;
+
+    case NSPageDownFunctionKey:
+      vRect = [self visibleRect];
+      p = vRect.origin;
+      x = p.x;
+      y = p.y - vRect.size.height;
+      w = vRect.size.width;
+      h = vRect.size.height;
+      hiddRect = NSMakeRect(x, y, w, h);
+      [self scrollRectToVisible: hiddRect];
+      return;
+
+    /* Home and End only scroll; the selection stays. */
+    case NSHomeFunctionKey:
+      [self scrollToEdge: YES];
+      return;
+
+    case NSEndFunctionKey:
+      [self scrollToEdge: NO];
+      return;
+
+    case NSUpArrowFunctionKey:
+    case NSDownArrowFunctionKey:
+    case NSLeftArrowFunctionKey:
+    case NSRightArrowFunctionKey:
+      /* Command-Up and Command-Down open things, Control-arrows scroll:
+	 both belong to whoever handles them further up. */
+      if (flags & (NSCommandKeyMask | NSControlKeyMask))
+        break;
+      if (character == NSUpArrowFunctionKey)
+        direction = FSNSelectionDirectionUp;
+      else if (character == NSDownArrowFunctionKey)
+        direction = FSNSelectionDirectionDown;
+      else if (character == NSLeftArrowFunctionKey)
+        direction = FSNSelectionDirectionLeft;
+      else
+        direction = FSNSelectionDirectionRight;
+      [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+        return [model moveInDirection: direction extend: extend];
+      }];
+      return;
+
+    case NSCarriageReturnCharacter:
+      {
+	BOOL closesndr = ((flags == NSAlternateKeyMask)
+			  || (flags == NSControlKeyMask));
+	[self openSelectionInNewViewer: closesndr];
+	return;
+      }
+
+    /* Tab walks the names instead of leaving the view, as in the
+       reference, whose sidebar never takes the focus. */
+    case NSTabCharacter:
+    case NSBackTabCharacter:
+      if (flags & (NSCommandKeyMask | NSControlKeyMask))
+        break;
+      [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+        return [model selectNextInNameOrder: (character == NSTabCharacter && extend == NO)];
+      }];
+      return;
+
+    case 0x01B: // Escape
+      [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+        [model resetTypeSelect];
+        return [model deselectAllItems];
+      }];
+      return;
+
+    default:
+      break;
     }
-  case 0x01B: // Escape
-    DESTROY(charBuffer);
-    selectionMask = NSSingleSelectionMask;
-    selectionMask |= FSNCreatingSelectionMask;
-    [self unselectOtherReps: nil];
-    selectionMask = NSSingleSelectionMask;
-    [self selectionDidChange];
-    return;
-  default:
-    break;
-  }
 
-  if (([characters length] > 0) && (character < 0xF700))
+  if (character >= 0x20 && character < 0xF700
+      && (flags & (NSCommandKeyMask | NSControlKeyMask)) == 0)
     {
-      if (charBuffer != nil)
-	{
-	  if ([theEvent timestamp] - lastKeyPressedTime < 5.0)
-	    {
-	      NSString *appendBuffer = [charBuffer stringByAppendingString:characterStr];
+      NSString *typed = characters;
+      NSTimeInterval when = [theEvent timestamp];
 
-	      // Try selecting
-	      if ([self selectIconWithPrefix: appendBuffer])
-		{
-		  ASSIGN(charBuffer, appendBuffer);
-		  return;
-		}
-	      // unable to select - fall-through and reinit as if typed is first char
-	    }
-	}
-
-      ASSIGN(charBuffer, characterStr);
-      lastKeyPressedTime = [theEvent timestamp];
-
-      // Try selecting
-      if ([self selectIconWithPrefix: charBuffer])
-	{
-	  return;
-	}
-
-      // Selection failed, reinitialize and use mismatching character as new buffer beginning
-      DESTROY(charBuffer);
+      [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+        return [model typeSelect: typed atTime: when];
+      }];
+      return;
     }
 
   [super keyDown: theEvent];
@@ -2448,13 +2443,10 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
 - (void)cancelOperation:(id)sender
 {
   // Escape key - deselect all items
-  selectionMask = NSSingleSelectionMask;
-  selectionMask |= FSNCreatingSelectionMask;
-  [self unselectOtherReps: nil];
-  selectionMask = NSSingleSelectionMask;
-  [self selectionDidChange];
-
-  DESTROY(charBuffer);
+  [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+    [model resetTypeSelect];
+    return [model deselectAllItems];
+  }];
 }
 
 - (NSMenu *)menuForEvent:(NSEvent *)theEvent

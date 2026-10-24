@@ -1038,17 +1038,13 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
 	  return [container menuForEvent: theEvent];
 	}
 
-      // Select the icon if it's not already selected so the context menu shows
+      /* The menu of an unselected icon is about that icon alone, as in the
+         reference, so it becomes the selection; a selected icon's menu
+         covers the whole selection. */
       if (!isSelected && selectable)
         {
           [container stopRepNameEditing];
-          // If there's already a multi-selection, preserve it by adding to the selection
-          NSArray *selectedNodes = [container selectedNodes];
-          if ([selectedNodes count] > 1) {
-            [container setSelectionMask: FSNMultipleSelectionMask];
-          } else {
-            [container setSelectionMask: NSSingleSelectionMask];
-          }
+          [container setSelectionMask: NSSingleSelectionMask];
           [self select];
           [container selectionDidChange];
         }
@@ -1125,12 +1121,59 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
 
   if (onself)
     {
+      BOOL modeled = [container respondsToSelector: @selector(iconMouseDown:event:)];
+      BOOL wasSelected = isSelected;
+
       if (selectable == NO)
 	{
 	  return;
 	}
 
-      if ([theEvent clickCount] == 1)
+      /* Control-click is the context menu, which a one-button mouse has no
+	 other way to ask for; the menu decides about the selection. */
+      if ([theEvent modifierFlags] & NSControlKeyMask)
+	{
+	  NSEvent *menuEvent = [NSEvent mouseEventWithType: NSRightMouseDown
+						  location: [theEvent locationInWindow]
+					     modifierFlags: [theEvent modifierFlags]
+						 timestamp: [theEvent timestamp]
+					      windowNumber: [theEvent windowNumber]
+						   context: [theEvent context]
+					       eventNumber: [theEvent eventNumber]
+						clickCount: 1
+						  pressure: [theEvent pressure]];
+	  NSMenu *menu = [self menuForEvent: menuEvent];
+
+	  if (menu != nil)
+	    [NSMenu popUpContextMenu: menu withEvent: menuEvent forView: self];
+	  return;
+	}
+
+      if (modeled && [theEvent clickCount] == 1)
+	{
+	  [(FSNIconsView *)container iconMouseDown: self event: theEvent];
+
+	  /* A modifier click that deselected the icon is done: there is
+	     nothing left to drag. */
+	  if (isSelected == NO)
+	    return;
+
+	  if (wasSelected
+	      && (FSNSelectionModifiersFromEventFlags([theEvent modifierFlags]) & ~FSNSelectionModifierOption) == 0
+	      && [[container selectedReps] count] == 1)
+	    {
+	      NSTimeInterval interval = ([theEvent timestamp] - editstamp);
+
+	      if ((interval > DOUBLE_CLICK_LIMIT)
+		  && [self mouse: selfloc inRect: labelRect]
+		  && [container respondsToSelector: @selector(setNameEditorForRep:)])
+		{
+		  [container setNameEditorForRep: self];
+		  editing = YES;
+		}
+	    }
+	}
+      else if ([theEvent clickCount] == 1)
 	{
 	  if (isSelected == NO)
 	    {
@@ -1212,6 +1255,10 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
 
 	      if ([nextEvent type] == NSLeftMouseUp)
 		{
+		  if (modeled)
+		    {
+		      [(FSNIconsView *)container iconMouseUp: self dragged: NO];
+		    }
 		  if ([container respondsToSelector: @selector(repSelected:)])
 		    {
 		      [container repSelected: self];
@@ -1304,7 +1351,7 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
 - (void)drawRect:(NSRect)rect
 {
   [self updateLabelColorForSelectionState];
-  if ((isSelected || selectionPreview) && !suppressSelectionDrawing)
+  if (isSelected && !suppressSelectionDrawing)
     {
       NSColor *selectionColor = [self selectionHighlightColor];
 
@@ -1329,7 +1376,7 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
     {
       if (nameEdited == NO)
         {
-          if ((isSelected || selectionPreview) && !suppressSelectionDrawing)
+          if (isSelected && !suppressSelectionDrawing)
             {
               /* The plate behind the name was filled above in the highlight's
                * own color; the cell must not paint another one over it. */
@@ -1708,7 +1755,7 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
  * while another window has the focus, the container's color otherwise. */
 - (void)updateLabelColorForSelectionState
 {
-  BOOL inactive = (isSelected || selectionPreview) && !suppressSelectionDrawing
+  BOOL inactive = isSelected && !suppressSelectionDrawing
     && [container respondsToSelector: @selector(drawsSelectionInactive)]
     && [container drawsSelectionInactive];
 
@@ -2103,15 +2150,6 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
 
   return ([self mouse: selfPoint inRect: icnBounds]
 	  || [self mouse: selfPoint inRect: labelRect]);
-}
-
-- (void)setSelectionPreview:(BOOL)flag
-{
-  if (selectionPreview == flag)
-    return;
-
-  selectionPreview = flag;
-  [container setNeedsDisplayInRect: [self frame]];
 }
 
 /* The icon as it draws itself now, on a transparent picture of its bounds. */

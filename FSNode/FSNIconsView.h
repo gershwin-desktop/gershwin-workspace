@@ -30,6 +30,7 @@
 #import "FSNodeRep.h"
 #import "FSNFunctions.h"
 #import "FSNIconPlacement.h"
+#import "FSNSelectionModel.h"
 
 @class NSColor;
 @class NSFont;
@@ -60,7 +61,8 @@ typedef NS_ENUM(NSInteger, FSNIconsArrangement) {
 extern const int FSNMinLabelTextSize;
 extern const int FSNMaxLabelTextSize;
 
-@interface FSNIconsView : NSView <NSTextFieldDelegate, FSNDecorationClient>
+@interface FSNIconsView : NSView <NSTextFieldDelegate, FSNDecorationClient,
+                                   FSNSelectionModelDelegate>
 {
   FSNode *node;
   NSMutableArray *icons;
@@ -95,8 +97,8 @@ extern const int FSNMaxLabelTextSize;
   BOOL forceCopy;
   NSDragOperation negotiatedDragOp;
 
-  NSString *charBuffer;
-  NSTimeInterval lastKeyPressedTime;
+  /* What clicks, bands and keys do to the selection (FSNSelectionModel). */
+  FSNSelectionModel *selectionModel;
 
   NSColor *backColor;
   NSColor *textColor;
@@ -254,15 +256,26 @@ extern const int FSNMaxLabelTextSize;
 
 - (void)scrollIconToVisible:(FSNIcon *)icon;
 
-- (NSString *)selectIconWithPrefix:(NSString *)prefix;
+/* The selection model the clicks, bands and keys of this view go through.
+ * -syncSelectionModel hands it the icons and the current selection before
+ * an event; -applySelectionModelNotifying: selects the icons it chose, and
+ * tells the rest of Workspace only when "notify" is YES (not while a band
+ * is still being dragged). */
+- (FSNSelectionModel *)selectionModel;
+- (void)syncSelectionModel;
+- (void)applySelectionModelNotifying:(BOOL)notify;
 
-- (void)selectIconInPrevLine;
+/* An icon passes its presses on here, so the model decides. "dragged" is
+ * YES when the press turned into a drag. */
+- (void)iconMouseDown:(FSNIcon *)icon event:(NSEvent *)event;
+- (void)iconMouseUp:(FSNIcon *)icon dragged:(BOOL)dragged;
 
-- (void)selectIconInNextLine;
-
-- (void)selectPrevIcon;
-
-- (void)selectNextIcon;
+/* The selection a rubber band from startPoint to the event's location makes;
+ * shared by the folder views and the Desktop, which track the mouse in
+ * their own loops. */
+- (void)beginSelectionBandWithEvent:(NSEvent *)event;
+- (void)updateSelectionBandWithRect:(NSRect)bandRect;
+- (void)endSelectionBand;
 
 // DS_Store free positioning support for Mac interoperability
 - (void)setCustomIconPositions:(NSDictionary *)positions;
@@ -296,12 +309,6 @@ extern const int FSNMaxLabelTextSize;
    answer that keeps a move alive. */
 - (BOOL)foreignWindowIsUnderPointer;
 
-/* While a rubber band is dragged out, show which icons it would select:
-   every icon whose image or name the band touches is drawn selected.  Pass
-   NSZeroRect to take the preview away again.  Marks the icons that change for
-   redisplay; the caller redraws. */
-- (void)previewSelectionInRect:(NSRect)bandRect;
-
 /* Move the rubber band from one rect to the other, redrawing only the pixels
    whose appearance changes.  Repainting the whole band on every mouse move
    means recompositing the desktop background under it, which is far too slow
@@ -309,7 +316,7 @@ extern const int FSNMaxLabelTextSize;
 - (void)redrawSelectionBandFrom:(NSRect)oldRect to:(NSRect)newRect;
 
 /* What a click on the view's background does to the selection: drop it,
-   unless Shift extends it.  A right click there does the same before its
+   unless Shift or Command start a band that extends it.  A right click there does the same before its
    menu opens, so the menu acts on what the user sees selected. */
 - (void)selectNothingForBackgroundEvent:(NSEvent *)theEvent;
 
@@ -434,6 +441,7 @@ extern const int FSNMaxLabelTextSize;
 - (void)showNameEditor;
 
 - (void)selectionDidChange;
+
 - (void)checkLockedReps;
 - (void)setSelectionMask:(FSNSelectionMask)mask;
 - (FSNSelectionMask)selectionMask;
