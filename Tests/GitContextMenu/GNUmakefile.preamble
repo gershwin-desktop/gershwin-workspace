@@ -1,0 +1,9 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+ADDITIONAL_INCLUDE_DIRS += -I../../GitContextMenu -I../../Workspace -I../../FSNode
+
+# The extension is compiled into the test; it needs the FSNode framework of
+# this tree (DT_RPATH, so it wins over the installed one in LD_LIBRARY_PATH).
+FSNODELIB := $(wildcard $(CURDIR)/../../FSNode/FSNode.framework/Versions/Current/libFSNode.so)
+t_GitBadgeAsync_TOOL_LIBS += $(if $(FSNODELIB),$(FSNODELIB),-lFSNode) -lgnustep-gui
+ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
+                      -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current

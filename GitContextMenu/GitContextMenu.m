@@ -2267,8 +2267,25 @@
   if (idle)
     [repoRefcounts removeObjectForKey: root];
   [watchLock unlock];
-  if (idle)
-    [self removeWatchersForRepoRoot: root];
+  if (idle == NO)
+    return;
+
+  [self removeWatchersForRepoRoot: root];
+
+  /* Nothing shows its badge any more: a count still waiting to be computed
+     is not worth a git run. */
+  [badgeLock lock];
+  [[recomputeTimers objectForKey: root] invalidate];
+  [recomputeTimers removeObjectForKey: root];
+  [badgePending removeObject: root];
+  [recomputeCond lock];
+  if ([recomputeQueue containsObject: root])
+    {
+      [recomputeQueue removeObject: root];
+      [badgeInFlight removeObject: root];
+    }
+  [recomputeCond unlock];
+  [badgeLock unlock];
 }
 
 /* Connect to the shared fswatcher DO service (launching it if necessary) on a
