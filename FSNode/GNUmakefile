@@ -30,6 +30,7 @@ FSNode_OBJC_FILES = \
          FSNIconsView.m \
          FSNListView.m \
          FSNListRowModel.m \
+         FSNSelectionModel.m \
          FSNPathComponentsViewer.m \
          FSNPlacementEnumerator.m \
           FSNIconPlacement.m \
@@ -70,6 +71,7 @@ FSNode_HEADER_FILES = \
          FSNIconsView.h \
          FSNListView.h \
          FSNListRowModel.h \
+         FSNSelectionModel.h \
          FSNPathComponentsViewer.h \
          FSNIconPlacement.h \
          FSNPlacementEnumerator.h \

@@ -1,0 +1,9 @@
+GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
+ADDITIONAL_INCLUDE_DIRS += -I../../FSNode
+
+# The selection model and the rename rules are Foundation-only; each test
+# compiles the one unit it covers into itself.
+
+# clang 19 / binutils 2.44: see Tests/FSNode/GNUmakefile.preamble.
+ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
+                      -Wl,--defsym=__stop___objc_constant_string=0
