@@ -24,3 +24,7 @@ t_FindModuleTags_OBJC_FILES += ../../GWMetadata/GSFileMetadata.m \
                                ../../GWMetadata/GSAppleDouble.m \
                                ../../GWMetadata/GWMetaXattr.m
 t_FindModuleTags_TOOL_LIBS += -lgnustep-gui
+
+# t_FindModuleName #includes the name module, which builds its view with
+# AppKit classes.
+t_FindModuleName_TOOL_LIBS += -lgnustep-gui

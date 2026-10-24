@@ -820,11 +820,13 @@ static Finder *finder = nil;
   if ([name length] == 0 || [path length] == 0)
     return;
 
-  /* The same criteria the name module produces for "contains", so the
-   * search tool treats it exactly like a search started from the panel. */
+  /* The name module's criteria for "contains", as the panel produces
+   * them, plus ignoring case, which is what a search field is expected to
+   * do. */
   nameCriteria = [NSDictionary dictionaryWithObjectsAndKeys:
                                  name, @"what",
                                [NSNumber numberWithInteger: 0], @"how",
+                               [NSNumber numberWithBool: YES], @"caseInsensitive",
                                nil];
   results = [SearchResults new];
   [searchResults addObject: results];

@@ -39,6 +39,9 @@ static NSString *nibName = @"FModuleName";
   
   NSString *searchStr;
   NSInteger how;
+  /* Set by a folder window's search field; the panel's own searches keep
+   * matching case as they always have. */
+  NSStringCompareOptions compareOptions;
 }
 
 - (IBAction)popUpAction:(id)sender; 
@@ -113,6 +116,8 @@ static NSString *nibName = @"FModuleName";
   if (self) {
     ASSIGN (searchStr, [criteria objectForKey: @"what"]);
     how = [[criteria objectForKey: @"how"] integerValue];
+    compareOptions = [[criteria objectForKey: @"caseInsensitive"] boolValue]
+      ? NSCaseInsensitiveSearch : 0;
   }
   
   return self;
@@ -188,23 +193,29 @@ static NSString *nibName = @"FModuleName";
   
   switch(how) {
     case IS:
-      pathok = [fname isEqual: searchStr]; 
+      pathok = ([fname compare: searchStr options: compareOptions] == NSOrderedSame);
       break;
   
     case NOT_CONTAINS:
-      pathok = ([fname rangeOfString: searchStr].location == NSNotFound); 
+      pathok = ([fname rangeOfString: searchStr options: compareOptions].location
+                == NSNotFound);
       break;
 
     case CONTAINS:
-      pathok = ([fname rangeOfString: searchStr].location != NSNotFound); 
+      pathok = ([fname rangeOfString: searchStr options: compareOptions].location
+                != NSNotFound);
       break;
 
     case STARTS:
-      pathok = [fname hasPrefix: searchStr];
+      pathok = ([fname rangeOfString: searchStr
+                             options: compareOptions | NSAnchoredSearch].location
+                != NSNotFound);
       break;
 
     case ENDS:
-      pathok = [fname hasSuffix: searchStr];
+      pathok = ([fname rangeOfString: searchStr
+                             options: compareOptions | NSAnchoredSearch | NSBackwardsSearch]
+                  .location != NSNotFound);
       break;
   }
   
