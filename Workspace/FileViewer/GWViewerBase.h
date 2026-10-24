@@ -153,6 +153,7 @@ typedef enum
 - (void)setOpened:(BOOL)opened repOfNode:(FSNode *)anode;
 - (void)showAttributesInspector:(id)sender;
 - (void)toggleInspector:(id)sender;
+- (void)ejectSelectedVolumes;
 - (void)updateWindowTitle;
 - (NSArray *)watchedNodes;
 - (BOOL)windowShouldClose:(id)sender;

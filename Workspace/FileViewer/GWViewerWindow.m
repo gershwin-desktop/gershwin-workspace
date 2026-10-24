@@ -75,6 +75,11 @@
   return [[self delegate] validateItem: menuItem];
 }
 
+- (void)ejectVolumes:(id)sender
+{
+  [[self delegate] ejectSelectedVolumes];
+}
+
 - (void)openSelection:(id)sender
 {
   [[self delegate] openSelectionInNewViewer: NO];

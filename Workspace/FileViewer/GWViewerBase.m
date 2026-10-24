@@ -570,6 +570,11 @@
   [gworkspace showAttributesInspector: sender];
 }
 
+- (void)ejectSelectedVolumes
+{
+  [gworkspace ejectVolumesAmongNodes: lastSelection];
+}
+
 - (void)toggleInspector:(id)sender
 {
   [self setInspectorShown: !showInspector];

@@ -1642,27 +1642,7 @@ static CGFloat desktopScaleFactor(void)
 
 - (void)ejectSelection:(id)sender
 {
-  NSArray *selnodes = [self selectedNodes];
-  NSUInteger i;
-
-  for (i = 0; i < [selnodes count]; i++) {
-    FSNode *selnode = [selnodes objectAtIndex: i];
-    if ([selnode isMountPoint]) {
-      NSString *path = [selnode path];
-      
-      // Don't allow ejecting root filesystem
-      if ([[Workspace gworkspace] isRootFilesystem: path]) {
-        NSString *err = NSLocalizedString(@"Error", @"");
-        NSString *msg = NSLocalizedString(@"You cannot eject the root filesystem", @"");
-        NSString *buttstr = NSLocalizedString(@"OK", @"");
-        NSRunAlertPanel(err, msg, buttstr, nil, nil);
-        continue;
-      }
-      
-      // Use unified unmount method
-      [[Workspace gworkspace] unmountVolumeAtPath: path];
-    }
-  }
+  [[Workspace gworkspace] ejectVolumesAmongNodes: [self selectedNodes]];
 }
 
 /* Batch reposition is handled by the base class (DS_Store + fdLocation).

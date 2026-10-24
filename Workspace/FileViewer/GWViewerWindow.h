@@ -58,6 +58,8 @@
 - (void)openParentFolder;
 - (void)performClose:(id)sender;
 - (void)showAttributesInspector:(id)sender;
+/* The action of the Eject item of the context menus and the toolbar. */
+- (void)ejectVolumes:(id)sender;
 - (BOOL)performKeyEquivalent:(NSEvent *)theEvent;
 
 @end
@@ -93,5 +95,6 @@
 - (void)toggleHiddenFiles;
 - (void)lookInside:(id)sender;
 - (NSArray *)lastSelection;
+- (void)ejectSelectedVolumes;
 
 @end

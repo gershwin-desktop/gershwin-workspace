@@ -5979,6 +5979,27 @@ static DSStoreLabelColor GSFileLabelToDSStoreLabelColor(GSFileLabel gsLabel)
   return roots;
 }
 
+- (void)ejectVolumesAmongNodes:(NSArray *)nodes
+{
+  NSUInteger i;
+
+  for (i = 0; i < [nodes count]; i++) {
+    FSNode *node = [nodes objectAtIndex: i];
+    NSString *path = [node path];
+
+    if ([node isMountPoint] == NO) {
+      continue;
+    }
+    if ([self isRootFilesystem: path]) {
+      NSRunAlertPanel(NSLocalizedString(@"Error", @""),
+                      NSLocalizedString(@"You cannot eject the root filesystem", @""),
+                      NSLocalizedString(@"OK", @""), nil, nil);
+      continue;
+    }
+    [self unmountVolumeAtPath: path];
+  }
+}
+
 - (BOOL)unmountVolumeAtPath:(NSString *)path
 {
   if (!path) {

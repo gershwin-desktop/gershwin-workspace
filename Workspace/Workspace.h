@@ -349,6 +349,11 @@
 
 - (BOOL)unmountVolumeAtPath:(NSString *)path;
 
+/* Ejects the volumes among nodes (desktop, viewer windows, their toolbar);
+ * the root file system is refused with an alert, other items are left
+ * alone. */
+- (void)ejectVolumesAmongNodes:(NSArray *)nodes;
+
 /* Directories under which removable / user-mounted volumes appear.
    Returns the per-user-resolved list in priority order:
    /media, /Volumes, /run/media/$user, /media/$user. */
