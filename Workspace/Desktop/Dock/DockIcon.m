@@ -192,9 +192,7 @@
   NSRect bounds = [self bounds];
   CGFloat side = (magnifiedSize > 0.0) ? magnifiedSize : iconSize;
 
-  return NSMakeRect(NSMidX(bounds) - side / 2,
-                    NSMidY(bounds) - side / 2 + [self shelfLift],
-                    side, side);
+  return DockIconImageRect(bounds, side, [self shelfLift], [self scaleFactor]);
 }
 
 - (CGFloat)scaleFactor
@@ -1311,6 +1309,8 @@ DockLipLightGradient(void)
 
 - (void)setIconSize:(int)isize
 {
+  /* -imageRect sizes the image by it. */
+  iconSize = isize;
   icnBounds = NSMakeRect(0, 0, isize, isize);
   if (isTrashIcon) {
     ASSIGN (icon, [fsnodeRep trashIconOfSize: ceil(icnBounds.size.width)]);
@@ -1728,12 +1728,13 @@ DockLipLightGradient(void)
   [self setNeedsDisplay: YES];
 }
 
-/* The icon images are made for the size the Dock lays the icons out at, and
- * magnifying one only stretches its pixels. While the pointer magnifies the
- * Dock the icon is therefore asked for again at the size it has grown to, in
- * device pixels, rounded up to a step so that the icon is not made anew for
- * every frame of the growth. */
-- (NSImage *)sharpVersionOfImage:(NSImage *)image
+/* The icon images come at whatever size their files have: a 48 pixel TIFF
+ * stays 48 pixels, half the tile at GSScaleFactor 2, while a large source is
+ * scaled down to the size asked for.  The icon is therefore asked for again
+ * at the size it is drawn at, in device pixels, and cached.  While the
+ * pointer magnifies the Dock that size is rounded up to a step, so that the
+ * icon is not made anew for every frame of the growth. */
+- (NSImage *)sharpVersionOfImage:(NSImage *)image side:(CGFloat)side
 {
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];
   CGFloat scale = [[defaults objectForKey: @"GSScaleFactor"] floatValue];
@@ -1741,7 +1742,14 @@ DockLipLightGradient(void)
 
   if (scale <= 0.0)
     scale = 1.0;
-  pixels = (int)(ceil(magnifiedSize * scale / 32.0) * 32.0);
+  if (magnifiedSize > 0.0)
+    pixels = (int)(ceil(side * scale / 32.0) * 32.0);
+  else
+    pixels = (int)ceil(side * scale);
+
+  /* The images the icon keeps were made for this size already. */
+  if (pixels == iconSize)
+    return nil;
 
   if (pixels != sharpPixels)
     {
@@ -1771,30 +1779,23 @@ DockLipLightGradient(void)
   return nil;
 }
 
-/* An image of the icon draws at its own size at rest, and fills the tile
- * while the pointer magnifies the Dock. */
+/* An image of the icon always fills rect, at rest and magnified: drawn at
+ * its own size, an image that comes smaller than the tile would sit smaller
+ * and higher than its neighbours (compositeToPoint: ignores the size). */
 - (void)drawImage:(NSImage *)image
            inRect:(NSRect)rect
          fraction:(CGFloat)fraction
 {
+  NSImage *sharp;
+
   if (image == nil)
     return;
 
-  if (magnifiedSize > 0.0)
-    {
-      NSImage *sharp = [self sharpVersionOfImage: image];
-
-      [(sharp != nil ? sharp : image) drawInRect: rect
-                                        fromRect: NSZeroRect
-                                       operation: NSCompositeSourceOver
-                                        fraction: fraction];
-      return;
-    }
-
-  if (fraction < 1.0)
-    [image dissolveToPoint: rect.origin fraction: fraction];
-  else
-    [image compositeToPoint: rect.origin operation: NSCompositeSourceOver];
+  sharp = [self sharpVersionOfImage: image side: NSWidth(rect)];
+  [(sharp != nil ? sharp : image) drawInRect: rect
+                                    fromRect: NSZeroRect
+                                   operation: NSCompositeSourceOver
+                                    fraction: fraction];
 }
 
 - (void)drawRect:(NSRect)rect
@@ -1826,15 +1827,15 @@ x += 6; \
     NSRectFill(rect);
 
     if (highlightImage && useHligtImage) {
-      [self drawImage: highlightImage
-               inRect: NSMakeRect(0, 0, hlightRect.size.width,
-                                  hlightRect.size.height)
-             fraction: 0.2];
+      [highlightImage drawAtPoint: NSZeroPoint
+                         fromRect: NSZeroRect
+                        operation: NSCompositeSourceOver
+                         fraction: 0.2];
     }
   }
   
   if (launching) {		
-	  [self drawImage: icon inRect: icnBounds fraction: dissFract];
+	  [self drawImage: icon inRect: [self imageRect] fraction: dissFract];
 	  return;
   }
   
@@ -1844,15 +1845,13 @@ x += 6; \
    * the icon stood. */
   {
     /* Adjust icon position when bouncing */
-    NSPoint drawPoint = icnPoint;
+    NSPoint drawPoint = [self imageRect].origin;
     DockShelf shelf;
     BOOL onShelf = [self getShelf: &shelf];
-    CGFloat lift = onShelf ? [self shelfLift] : 0.0;
     /* How far a bounce lifts the image off the shelf. */
     CGFloat rise = 0.0;
     NSImage *shown;
 
-    drawPoint.y += lift;
     if ([self isLaunching] && bounceOffset != 0.0) {
       DockPosition pos = DockPositionBottom;
       

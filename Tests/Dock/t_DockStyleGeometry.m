@@ -64,6 +64,56 @@ main(void)
          "the shelf stays below the middle of the icons");
   }
 
+  /* --- where an icon's image goes --- */
+  {
+    CGFloat scales[] = { 1.0, 1.5, 2.0 };
+    unsigned i;
+
+    for (i = 0; i < sizeof(scales) / sizeof(scales[0]); i++)
+      {
+        CGFloat sf = scales[i];
+        NSRect tile = NSMakeRect(0, 0, 64, 64);
+        NSRect bar = NSMakeRect(0, 0, 640, 64);
+        DockShelf s = DockShelfMake(bar, sf);
+        CGFloat lift = DockShelfIconLift(64, sf);
+        NSRect r = DockIconImageRect(tile, 48, lift, sf);
+        CGFloat depth = s.backLeft.y - s.frontLeft.y;
+        CGFloat behind = (s.backLeft.y - NSMinY(r)) / depth;
+
+        PASS(CLOSE(NSWidth(r), 48) && CLOSE(NSHeight(r), 48),
+             "the image fills a square of the icon size at scale %g", sf);
+        PASS(CLOSE(NSMidX(r), NSMidX(tile)),
+             "the image is centred across its tile at scale %g", sf);
+        PASS(onPixel(NSMinX(r), sf) && onPixel(NSMinY(r), sf)
+             && onPixel(NSMaxX(r), sf) && onPixel(NSMaxY(r), sf),
+             "the image lies on device pixels at scale %g", sf);
+        /* On the reference shelf the lower edge of every icon's box lies a
+         * little more than half way back on the surface (28 of 48 px). */
+        PASS(behind > 0.4 && behind < 0.7,
+             "the lower edge of the image stands half way back on the shelf"
+             " at scale %g", sf);
+        PASS(NSMaxY(r) <= NSMaxY(tile),
+             "the lifted image stays inside its tile at scale %g", sf);
+      }
+  }
+
+  {
+    /* Magnified, the tile and the image grow and the lower edge stays on
+     * the surface; without a shelf (lift 0) the image is centred. */
+    NSRect big = DockIconImageRect(NSMakeRect(10, 0, 128, 128), 96,
+                                   DockShelfIconLift(128, 1.0), 1.0);
+    NSRect flat = DockIconImageRect(NSMakeRect(0, 0, 64, 64), 48, 0, 1.0);
+    NSRect odd = DockIconImageRect(NSMakeRect(0, 0, 65, 65), 48, 0, 1.0);
+
+    PASS(CLOSE(NSMidX(big), 74) && CLOSE(NSMinY(big), 16 + 15),
+         "a magnified image is centred in its tile and lifted as far again");
+    PASS(NSEqualRects(flat, NSMakeRect(8, 8, 48, 48)),
+         "without a shelf the image is centred in its tile");
+    PASS(onPixel(NSMinX(odd), 1.0) && onPixel(NSMinY(odd), 1.0)
+         && CLOSE(NSWidth(odd), 48),
+         "an odd tile still puts the image on whole pixels at its full size");
+  }
+
   {
     /* Armed, the bar starts further in and is longer; the shelf follows it. */
     NSRect bar = NSMakeRect(120, 0, 900, 64);

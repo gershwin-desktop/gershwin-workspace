@@ -148,6 +148,23 @@ DockShelfIconLift(CGFloat tileSize, CGFloat scale)
   return DockPixelAlign(tileSize * DOCK_SHELF_ICON_LIFT_SHARE, scale);
 }
 
+/* Where an icon's image is drawn in its tile: a square of the icon's side,
+ * centred in the tile and raised by lift (DockShelfIconLift on the shelf,
+ * 0 elsewhere).  It depends on the tile only, never on the image, so that
+ * every icon stands on the same line whatever size its image comes in, and
+ * an image whose artwork leaves transparent margins keeps them, as on the
+ * reference shelf. */
+static inline NSRect
+DockIconImageRect(NSRect tile, CGFloat side, CGFloat lift, CGFloat scale)
+{
+  CGFloat x = DockPixelAlign(NSMidX(tile) - side / 2, scale);
+  CGFloat y = DockPixelAlign(NSMidY(tile) - side / 2 + lift, scale);
+
+  /* Origin aligned and the side kept, rather than both edges aligned, so
+   * that no icon comes out a pixel smaller than its neighbours. */
+  return NSMakeRect(x, y, side, side);
+}
+
 /* How much of an icon its reflection shows, as a part of the icon's
  * height, before it has faded out. */
 #define DOCK_REFLECTION_SHARE 0.35
