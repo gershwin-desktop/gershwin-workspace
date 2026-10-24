@@ -29,6 +29,7 @@
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import "FSNListView.h"
+#import "FSNListRowModel.h"
 #import "FSNTextCell.h"
 #import "FSNFunctions.h"
 #import "FSNMetadataProvider.h"
@@ -148,7 +149,24 @@ columnTypeByColumnId(void)
 - (BOOL)ascendingForColumnType:(NSInteger)type;
 - (void)sortByColumnType:(NSInteger)type ascending:(NSNumber *)ascending;
 - (NSDictionary *)defaultColumnInfoForType:(NSInteger)type;
-- (FSNTextCell *)freshDataCell;
+- (FSNTextCell *)dataCellForColumnType:(NSInteger)type;
+@end
+
+@interface FSNListViewDataSource ()
+- (void)syncRows;
+- (void)updateNameHeaderInset;
+@end
+
+@interface FSNListViewDataSource (RowsPrivate)
+- (FSNListViewNodeRep *)newRepForSubnode:(FSNode *)anode;
+- (NSArray *)repsForSubnodes:(NSArray *)nodes;
+@end
+
+@interface FSNListViewDataSource (ExpansionPrivate)
+- (void)loadExpandedFoldersReloadingUnder:(NSString *)prefix;
+- (void)loadExpandedFolders:(BOOL)reloadAll;
+- (void)watchExpandedFolders;
+- (void)watchFolders:(NSSet *)paths;
 - (NSFont *)effectiveFont;
 - (void)updateSortIndicators;
 - (void)resortPreservingSelection;
@@ -168,9 +186,42 @@ columnTypeByColumnId(void)
 @interface FSNListHeaderCell : NSTableHeaderCell
 {
   int sortDirection;   /* 1 ascending, -1 descending, 0 not sorted by */
+  CGFloat leadingInset;
+  CGFloat trailingInset;
 }
 - (void)setSortDirection:(int)direction;
 - (int)sortDirection;
+/* Space before and after the title, so it lines up with the column's text. */
+- (void)setLeadingInset:(CGFloat)leading trailingInset:(CGFloat)trailing;
+@end
+
+/* Horizontal padding of the list's text, measured on the reference list
+ * view: text starts 16 points after a column's left edge and right aligned
+ * text ends 15 points before its right edge; the cell itself keeps 2 of
+ * those.  The headers' titles start a point earlier than their text. */
+#define LIST_TEXT_INSET_LEFT (14.0)
+#define LIST_TEXT_INSET_RIGHT (13.0)
+#define LIST_HEADER_INSET_LEFT (10.0)
+#define LIST_HEADER_INSET_RIGHT (15.0)
+/* FSNTextCell draws the icon this far into its frame. */
+#define TEXT_CELL_ICON_MARGIN (2.0)
+/* The name column's title starts this far after the icons, over the
+ * first letter of the names as in the reference. */
+#define NAME_HEADER_OFFSET_AFTER_ICON (2.0)
+
+/* A list cell: padding in every column, and in the name column the
+ * disclosure triangle and the indent of the row's level. */
+@interface FSNListCell : FSNTextCell
+{
+  BOOL nameCell;
+  CGFloat leftInset;
+  CGFloat rightInset;
+  NSUInteger depth;
+  int disclosure;   /* 0 none, 1 collapsed, 2 expanded */
+}
+- (void)setNameCell:(BOOL)flag;
+- (void)setLeftInset:(CGFloat)left rightInset:(CGFloat)right;
+- (void)setDepth:(NSUInteger)level disclosure:(int)state;
 @end
 
 #define SORT_ARROW_WIDTH (8.0)
@@ -189,13 +240,26 @@ columnTypeByColumnId(void)
   return sortDirection;
 }
 
+- (void)setLeadingInset:(CGFloat)leading trailingInset:(CGFloat)trailing
+{
+  leadingInset = leading;
+  trailingInset = trailing;
+}
+
 - (void)drawInteriorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView
 {
   CGFloat reserved = SORT_ARROW_WIDTH + 2 * SORT_ARROW_MARGIN;
+  NSRect padded = cellFrame;
+
+  padded.origin.x += leadingInset;
+  padded.size.width -= leadingInset + trailingInset;
 
   if (sortDirection == 0 || cellFrame.size.width <= reserved)
     {
-      [super drawInteriorWithFrame: cellFrame inView: controlView];
+      if (NSWidth (padded) > 0)
+        {
+          [super drawInteriorWithFrame: padded inView: controlView];
+        }
       return;
     }
 
@@ -210,8 +274,13 @@ columnTypeByColumnId(void)
      * would point the wrong way. */
     BOOL up = ((sortDirection > 0) == [controlView isFlipped]);
 
-    titleFrame.size.width -= reserved;
-    [super drawInteriorWithFrame: titleFrame inView: controlView];
+    /* The arrow keeps the right end; the title its padding before it. */
+    titleFrame.origin.x += leadingInset;
+    titleFrame.size.width -= reserved + leadingInset;
+    if (NSWidth (titleFrame) > 0)
+      {
+        [super drawInteriorWithFrame: titleFrame inView: controlView];
+      }
 
     if (up)
       {
@@ -229,6 +298,90 @@ columnTypeByColumnId(void)
     [[NSColor controlShadowColor] set];
     [arrow fill];
   }
+}
+
+@end
+
+
+@implementation FSNListCell
+
+- (void)setNameCell:(BOOL)flag
+{
+  nameCell = flag;
+}
+
+- (void)setLeftInset:(CGFloat)left rightInset:(CGFloat)right
+{
+  leftInset = left;
+  rightInset = right;
+}
+
+- (void)setDepth:(NSUInteger)level disclosure:(int)state
+{
+  depth = level;
+  disclosure = state;
+}
+
+/* The reference's triangle: mid grey, pointing right when collapsed and
+ * down when expanded.  On a row whose text is drawn light (an active
+ * selection) it takes that colour. */
+- (void)drawDisclosureInFrame:(NSRect)cellFrame inView:(NSView *)controlView
+{
+  NSRect box = FSNListDisclosureRectForDepth (depth, NSHeight (cellFrame));
+  NSColor *text = [[self textColor] colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
+  BOOL light = (text != nil && [text brightnessComponent] > 0.5);
+  NSBezierPath *path = [NSBezierPath bezierPath];
+  CGFloat x = NSMinX (cellFrame) + NSMinX (box);
+  CGFloat size = NSWidth (box);
+  BOOL flipped = [controlView isFlipped];
+  CGFloat y0 = flipped ? NSMinY (cellFrame) + NSMinY (box)
+                       : NSMaxY (cellFrame) - NSMinY (box) - size;
+
+  if (disclosure == 1)
+    {
+      [path moveToPoint: NSMakePoint (x + 1, y0)];
+      [path lineToPoint: NSMakePoint (x + size, y0 + size / 2.0)];
+      [path lineToPoint: NSMakePoint (x + 1, y0 + size)];
+    }
+  else
+    {
+      /* Pointing down it is a point less tall. */
+      CGFloat yTop = flipped ? y0 : y0 + size;
+      CGFloat yTip = flipped ? y0 + size - 1 : y0 + 1;
+
+      [path moveToPoint: NSMakePoint (x, yTop)];
+      [path lineToPoint: NSMakePoint (x + size, yTop)];
+      [path lineToPoint: NSMakePoint (x + size / 2.0, yTip)];
+    }
+  [path closePath];
+  [(light ? text : [NSColor colorWithCalibratedWhite: 141.0 / 255.0 alpha: 1.0]) set];
+  [path fill];
+}
+
+- (void)drawInteriorWithFrame:(NSRect)cellFrame inView:(NSView *)controlView
+{
+  NSRect frame = cellFrame;
+
+  if (nameCell)
+    {
+      CGFloat shift = FSNListIconXForDepth (depth) - TEXT_CELL_ICON_MARGIN;
+
+      if (disclosure != 0)
+        {
+          [self drawDisclosureInFrame: cellFrame inView: controlView];
+        }
+      frame.origin.x += shift;
+      frame.size.width -= shift;
+    }
+  else
+    {
+      frame.origin.x += leftInset;
+      frame.size.width -= leftInset + rightInset;
+    }
+  if (NSWidth (frame) > 0)
+    {
+      [super drawInteriorWithFrame: frame inView: controlView];
+    }
 }
 
 @end
@@ -481,7 +634,13 @@ static NSString *defaultColumns = @"{ \
   [[NSNotificationCenter defaultCenter] removeObserver: self
                                                   name: NSUserDefaultsDidChangeNotification
                                                 object: nil];
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: @"GWFileWatcherFileDidChangeNotification"
+                                                object: nil];
   [self detachFromListView];
+  [self watchFolders: [NSSet set]];
+  RELEASE (watchedFolders);
+  RELEASE (rowModel);
   RELEASE (node);
   RELEASE (extInfoType);
   RELEASE (nodeReps);
@@ -571,6 +730,10 @@ static NSString *defaultColumns = @"{ \
                               [defaults objectForKey: FSNExtendedInfoTypeDefaultsKey]]);
 
       nodeReps = [NSMutableArray new];
+      rowModel = [[FSNListRowModel alloc] initWithKeyOfItem: ^NSString *(id rep) {
+          return [[rep node] path];
+        }];
+      watchedFolders = [NSMutableSet new];
 
       nameEditor = [FSNListViewNameEditor new];
       [nameEditor setDelegate: self];
@@ -593,6 +756,14 @@ static NSString *defaultColumns = @"{ \
            selector: @selector(columnDidMove:)
                name: NSTableViewColumnDidMoveNotification
              object: aview];
+
+      /* The viewer watches the shown folder; the expanded ones are this
+       * list's own, and Workspace posts what the watcher reports here. */
+      [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector(expandedFolderChanged:)
+               name: @"GWFileWatcherFileDidChangeNotification"
+             object: nil];
     }
 
   return self;
@@ -673,10 +844,13 @@ static NSString *defaultColumns = @"{ \
   NSTableColumn *column = [(NSTableColumn *)[NSTableColumn alloc] initWithIdentifier: identifier];
 
   [column setHeaderCell: AUTORELEASE ([[FSNListHeaderCell alloc] init])];
-  [column setDataCell: [self freshDataCell]];
+  [column setDataCell: [self dataCellForColumnType: type]];
   [column setEditable: NO];
   [column setResizable: YES];
-  [[column headerCell] setAlignment: NSLeftTextAlignment];
+  [[column headerCell] setAlignment: (type == FSNInfoSizeType)
+                                      ? NSRightTextAlignment : NSLeftTextAlignment];
+  [(FSNListHeaderCell *)[column headerCell] setLeadingInset: LIST_HEADER_INSET_LEFT
+                                              trailingInset: LIST_HEADER_INSET_RIGHT];
   [column setMinWidth: minwidth];
   [column setWidth: width];
 
@@ -728,7 +902,20 @@ static NSString *defaultColumns = @"{ \
 
   [listView addTableColumn: column];
   RELEASE (column);
+  [self updateNameHeaderInset];
   [self updateSortIndicators];
+}
+
+/* The name column's title stands over the names, not over the triangles
+ * and icons, so it moves with the icon size. */
+- (void)updateNameHeaderInset
+{
+  NSTableColumn *column = [listView tableColumnWithIdentifier:
+                                      [NSNumber numberWithInt: FSNInfoNameType]];
+
+  [(FSNListHeaderCell *)[column headerCell]
+      setLeadingInset: FSNListIconXForDepth (0) + listIconSize + NAME_HEADER_OFFSET_AFTER_ICON
+        trailingInset: LIST_HEADER_INSET_RIGHT];
 }
 
 - (void)addDescriptionColumn
@@ -800,7 +987,7 @@ static NSString *defaultColumns = @"{ \
   NSInteger type = hlighColId;
   BOOL ascending = sortAscending;
 
-  [nodeReps sortUsingComparator: ^NSComparisonResult (id r1, id r2) {
+  [rowModel sortUsingComparator: ^NSComparisonResult (id r1, id r2) {
       NSComparisonResult result = [self compareRep: r1 withRep: r2 columnType: type];
 
       if (result == NSOrderedSame)
@@ -816,7 +1003,15 @@ static NSString *defaultColumns = @"{ \
       return result;
     }];
 
+  [self syncRows];
   [self updateSortIndicators];
+}
+
+/* nodeReps is what the table shows: the row model's order. */
+- (void)syncRows
+{
+  [rowModel rebuildRows];
+  [nodeReps setArray: [rowModel rows]];
 }
 
 - (void)setMouseFlags:(NSUInteger)flags
@@ -1060,11 +1255,24 @@ static NSString *defaultColumns = @"{ \
   return listFont ? listFont : [NSFont systemFontOfSize: DEFAULT_LIST_TEXT_SIZE];
 }
 
-- (FSNTextCell *)freshDataCell
+- (FSNTextCell *)dataCellForColumnType:(NSInteger)type
 {
-  FSNTextCell *cell = AUTORELEASE ([[FSNTextCell alloc] init]);
+  FSNListCell *cell = AUTORELEASE ([[FSNListCell alloc] init]);
 
   [cell setFont: [self effectiveFont]];
+  if (type == FSNInfoNameType)
+    {
+      [cell setNameCell: YES];
+    }
+  else
+    {
+      [cell setLeftInset: LIST_TEXT_INSET_LEFT rightInset: LIST_TEXT_INSET_RIGHT];
+      /* Sizes line up on their units, as in the reference. */
+      if (type == FSNInfoSizeType)
+        {
+          [cell setAlignment: NSRightTextAlignment];
+        }
+    }
   return cell;
 }
 
@@ -1666,6 +1874,8 @@ compareOptional(id a, id b)
   NSUInteger i;
 
   [listView setRowHeight: [self rowHeight]];
+  [self updateNameHeaderInset];
+  [[listView headerView] setNeedsDisplay: YES];
 
   for (i = 0; i < [columns count]; i++)
     {
@@ -1719,6 +1929,211 @@ compareOptional(id a, id b)
   [[NSNotificationCenter defaultCenter] removeObserver: self
                                                   name: NSTableViewColumnDidMoveNotification
                                                 object: nil];
+}
+
+@end
+
+
+@implementation FSNListViewDataSource (Expansion)
+
+- (BOOL)isRepExpandable:(FSNListViewNodeRep *)rep
+{
+  FSNode *nd = [rep node];
+
+  /* An application or another package opens; it is not a folder to the
+   * user. */
+  return ([nd isDirectory] && [nd isPackage] == NO);
+}
+
+- (BOOL)isRepExpanded:(FSNListViewNodeRep *)rep
+{
+  return [rowModel isExpanded: [[rep node] path]];
+}
+
+- (NSUInteger)depthOfRep:(FSNListViewNodeRep *)rep
+{
+  NSUInteger row = [rowModel rowOfKey: [[rep node] path]];
+
+  return (row == NSNotFound) ? 0 : [rowModel depthOfRow: row];
+}
+
+- (void)loadChildrenOfKey:(NSString *)key
+{
+  FSNode *folder = [FSNode nodeWithPath: key];
+
+  if ([folder isValid] && [folder isDirectory])
+    {
+      [rowModel setChildren: [self repsForSubnodes: [folder lazySubNodes]]
+                      ofKey: key];
+    }
+  else
+    {
+      [rowModel setExpanded: NO forKey: key];
+    }
+}
+
+/* Loads the items of every expanded folder on the screen that has none
+ * yet, and again those of the folders at or below prefix, which may have
+ * changed while they were hidden and unwatched. */
+- (void)loadExpandedFoldersReloadingUnder:(NSString *)prefix
+{
+  NSString *below = [prefix stringByAppendingString: @"/"];
+  NSMutableSet *done = [NSMutableSet set];
+  BOOL loaded = YES;
+
+  /* Loading a folder can show expanded folders inside it. */
+  while (loaded)
+    {
+      NSArray *keys = [rowModel visibleExpandedKeys];
+      NSUInteger i;
+
+      loaded = NO;
+      for (i = 0; i < [keys count]; i++)
+        {
+          NSString *key = [keys objectAtIndex: i];
+          BOOL stale = (prefix != nil
+                        && ([key isEqual: prefix] || [key hasPrefix: below]));
+
+          if ([done containsObject: key])
+            {
+              continue;
+            }
+          [done addObject: key];
+          if (stale || [rowModel childrenOfKey: key] == nil)
+            {
+              [self loadChildrenOfKey: key];
+              loaded = YES;
+            }
+        }
+    }
+}
+
+- (void)loadExpandedFolders:(BOOL)reloadAll
+{
+  [self loadExpandedFoldersReloadingUnder: reloadAll ? [rowModel rootKey] : nil];
+}
+
+- (void)watchFolders:(NSSet *)paths
+{
+  NSEnumerator *e = [[[watchedFolders copy] autorelease] objectEnumerator];
+  NSString *path;
+
+  while ((path = [e nextObject]) != nil)
+    {
+      if ([paths containsObject: path] == NO)
+        {
+          [desktopApp removeWatcherForPath: path];
+          [watchedFolders removeObject: path];
+        }
+    }
+  e = [paths objectEnumerator];
+  while ((path = [e nextObject]) != nil)
+    {
+      if ([watchedFolders containsObject: path] == NO)
+        {
+          [desktopApp addWatcherForPath: path];
+          [watchedFolders addObject: path];
+        }
+    }
+}
+
+- (void)watchExpandedFolders
+{
+  [self watchFolders: [NSSet setWithArray: [rowModel visibleExpandedKeys]]];
+}
+
+/* Rows were added or removed around the selection: show the new rows and
+ * keep selected what still is a row. */
+- (void)reloadRowsKeepingSelection
+{
+  NSArray *selected = [self selectedReps];
+
+  [self sortNodeReps];
+  [listView deselectAll: self];
+  [listView reloadData];
+  [self selectReps: selected];
+  [self enqueueUndecoratedReps];
+}
+
+- (void)setRep:(FSNListViewNodeRep *)rep expanded:(BOOL)flag
+{
+  NSString *path = [[rep node] path];
+
+  if (flag == [rowModel isExpanded: path]
+      || (flag && [self isRepExpandable: rep] == NO))
+    {
+      return;
+    }
+  [self stopRepNameEditing];
+  [rowModel setExpanded: flag forKey: path];
+  if (flag)
+    {
+      [self loadExpandedFoldersReloadingUnder: path];
+    }
+  [self reloadRowsKeepingSelection];
+  [self watchExpandedFolders];
+}
+
+- (void)expandedFolderChanged:(NSNotification *)notification
+{
+  NSDictionary *info = (NSDictionary *)[notification object];
+  NSString *path = [info objectForKey: @"path"];
+  NSString *event = [info objectForKey: @"event"];
+  NSArray *files = [info objectForKey: @"files"];
+  NSUInteger i;
+
+  if (path == nil || [watchedFolders containsObject: path] == NO)
+    {
+      return;
+    }
+
+  if ([event isEqual: @"GWWatchedPathDeleted"])
+    {
+      [rowModel removeItemWithKey: path];
+    }
+  else if ([event isEqual: @"GWFileDeletedInWatchedDirectory"])
+    {
+      for (i = 0; i < [files count]; i++)
+        {
+          [rowModel removeItemWithKey:
+                      [path stringByAppendingPathComponent: [files objectAtIndex: i]]];
+        }
+    }
+  else if ([event isEqual: @"GWFileCreatedInWatchedDirectory"])
+    {
+      FSNode *folder = [FSNode nodeWithPath: path];
+
+      for (i = 0; i < [files count]; i++)
+        {
+          FSNode *subnode = [FSNode nodeWithRelativePath: [files objectAtIndex: i]
+                                                  parent: folder];
+          FSNListViewNodeRep *rep;
+
+          if (subnode == nil || [subnode isValid] == NO)
+            {
+              continue;
+            }
+          rep = [rowModel itemWithKey: [subnode path]];
+          if (rep)
+            {
+              [rep setNode: subnode];
+              continue;
+            }
+          rep = [self newRepForSubnode: subnode];
+          if (rep)
+            {
+              [rowModel addChild: rep toKey: path];
+              RELEASE (rep);
+            }
+        }
+    }
+  else
+    {
+      return;
+    }
+
+  [self reloadRowsKeepingSelection];
+  [self watchExpandedFolders];
 }
 
 @end
@@ -1870,6 +2285,18 @@ objectValueForTableColumn:(NSTableColumn *)aTableColumn
     {
       FSNTextCell *cell = (FSNTextCell *)aCell;
 
+      if ([cell isKindOfClass: [FSNListCell class]])
+        {
+          int disclosure = 0;
+
+          if ([self isRepExpandable: rep])
+            {
+              disclosure = [self isRepExpanded: rep] ? 2 : 1;
+            }
+          [(FSNListCell *)cell setDepth: [rowModel depthOfRow: rowIndex]
+                             disclosure: disclosure];
+        }
+
       if ([rep iconSelected])
 	{
 	  [cell setIcon: [rep openIcon]];
@@ -1969,7 +2396,6 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   NSDictionary *colsDescr;
   NSArray *nodes;
   BOOL keepinfo;
-  NSUInteger i;
 
   BOOL sameNode = (node && [node isEqual: anode]);
 
@@ -2024,12 +2450,12 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   [nodeReps removeAllObjects];
   generation++;   /* pending loader items for the old contents are stale */
 
-  for (i = 0; i < [nodes count]; i++)
-    {
-      [self addRepForSubnode: [nodes objectAtIndex: i]];
-    }
+  [rowModel resetWithRootKey: [anode path] keepExpanded: sameNode];
+  [rowModel setChildren: [self repsForSubnodes: nodes] ofKey: [anode path]];
+  [self loadExpandedFolders: NO];
 
   [self sortNodeReps];
+  [self watchExpandedFolders];
   [listView reloadData];
   [self enqueueUndecoratedReps];
   [self startSizeCalculation];
@@ -2476,50 +2902,31 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 
 - (id)repOfSubnode:(FSNode *)anode
 {
-  NSUInteger i;
-
-  for (i = 0; i < [nodeReps count]; i++)
-    {
-      FSNListViewNodeRep *rep = [nodeReps objectAtIndex: i];
-
-      if ([[rep node] isEqual: anode])
-	{
-	  return rep;
-	}
-    }
-
-  return nil;
+  return [self repOfSubnodePath: [anode path]];
 }
 
+/* Only reps that are rows: the items of a collapsed folder are kept to
+ * restore it, but are not on the screen. */
 - (id)repOfSubnodePath:(NSString *)apath
 {
-  NSUInteger i;
-
-  for (i = 0; i < [nodeReps count]; i++)
+  if (apath == nil || [rowModel rowOfKey: apath] == NSNotFound)
     {
-      FSNListViewNodeRep *rep = [nodeReps objectAtIndex: i];
-
-      if ([[[rep node] path] isEqual: apath])
-	{
-	  return rep;
-	}
+      return nil;
     }
-
-  return nil;
+  return [rowModel itemWithKey: apath];
 }
 
-- (id)addRepForSubnode:(FSNode *)anode
+- (FSNListViewNodeRep *)newRepForSubnode:(FSNode *)anode
 {
+  FSNListViewNodeRep *rep;
+
   /* The listing leaves internal metadata out, but a file that appears
    * while the folder is shown (a .DS_Store written by the viewer itself)
    * arrives here from the watcher; the icon view refuses it the same way. */
   if ([FSNodeRep isInternalMetadataName: [anode name]])
     return nil;
 
-  FSNListViewNodeRep *rep = [[FSNListViewNodeRep alloc] initForNode: anode
-                                                         dataSource: self];
-  [nodeReps addObject: rep];
-  RELEASE (rep);
+  rep = [[FSNListViewNodeRep alloc] initForNode: anode dataSource: self];
 
   /* New rows (watcher events) decorate through the loader; visible rows
    * also decorate synchronously in -willDisplayCell. */
@@ -2528,23 +2935,58 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   return rep;
 }
 
+- (NSArray *)repsForSubnodes:(NSArray *)nodes
+{
+  NSMutableArray *reps = [NSMutableArray arrayWithCapacity: [nodes count]];
+  NSUInteger i;
+
+  for (i = 0; i < [nodes count]; i++)
+    {
+      FSNListViewNodeRep *rep = [self newRepForSubnode: [nodes objectAtIndex: i]];
+
+      if (rep)
+        {
+          [reps addObject: rep];
+          RELEASE (rep);
+        }
+    }
+  return reps;
+}
+
+- (id)addRepForSubnode:(FSNode *)anode
+{
+  NSString *parentKey = [anode parentPath];
+  FSNListViewNodeRep *rep;
+
+  /* A file in a folder that is neither shown nor expanded has no row. */
+  if ([parentKey isEqual: [rowModel rootKey]] == NO
+      && [rowModel childrenOfKey: parentKey] == nil)
+    {
+      return nil;
+    }
+  rep = [self newRepForSubnode: anode];
+  if (rep == nil)
+    {
+      return nil;
+    }
+  [rowModel addChild: rep toKey: parentKey];
+  RELEASE (rep);
+  [self syncRows];
+
+  return rep;
+}
+
 - (void)removeRepOfSubnode:(FSNode *)anode
 {
-  FSNListViewNodeRep *rep = [self repOfSubnode: anode];
-
-  if (rep)
-    {
-      [nodeReps removeObject: rep];
-    }
+  [self removeRepOfSubnodePath: [anode path]];
 }
 
 - (void)removeRepOfSubnodePath:(NSString *)apath
 {
-  FSNListViewNodeRep *rep = [self repOfSubnodePath: apath];
-
-  if (rep)
+  if ([rowModel removeItemWithKey: apath] != nil)
     {
-      [nodeReps removeObject: rep];
+      [self syncRows];
+      [self watchExpandedFolders];
     }
 }
 
@@ -2922,7 +3364,10 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
 	  NSFont *edfont = [nameEditor font];
 	  float fnheight = [fsnodeRep heightOfFont: edfont];
 
-	  float xshift = [[rep icon] size].width + 4;
+	  /* Over the name: past the row's indent and icon, as the cell
+	   * draws them (FSNListCell, FSNTextCell). */
+	  float xshift = FSNListIconXForDepth ([self depthOfRep: rep])
+	    + [[rep icon] size].width + 2;
 
 	  r.origin.y += ((r.size.height - fnheight) / 2);
 	  r.size.height = fnheight;
@@ -3039,6 +3484,19 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
   return NSPointInRect(loc, dndValidRect);
 }
 
+/* What a drop on a row goes into: a file inside an expanded folder stands
+ * for that folder, as the shown folder's files stand for it. */
+- (FSNListViewNodeRep *)dropRepAtRow:(NSInteger)row
+{
+  FSNListViewNodeRep *rep = [nodeReps objectAtIndex: row];
+
+  if ([self depthOfRep: rep] > 0 && [[rep node] isDirectory] == NO)
+    {
+      return [rowModel itemWithKey: [rowModel parentKeyOfKey: [[rep node] path]]];
+    }
+  return rep;
+}
+
 - (NSDragOperation)checkReturnValueForRep:(FSNListViewNodeRep *)arep
                          withDraggingInfo:(id <NSDraggingInfo>)sender
 {
@@ -3079,7 +3537,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     {
       if ([self checkDraggingLocation: location])
 	{
-	  dndTarget = [nodeReps objectAtIndex: row];
+	  dndTarget = [self dropRepAtRow: row];
 	  dragOperation = [dndTarget repDraggingEntered: sender];
 
 	  if (dragOperation != NSDragOperationNone)
@@ -3257,7 +3715,7 @@ shouldEditTableColumn:(NSTableColumn *)aTableColumn
     {
       if ([self checkDraggingLocation: location])
 	{
-	  FSNListViewNodeRep *rep = [nodeReps objectAtIndex: row];
+	  FSNListViewNodeRep *rep = [self dropRepAtRow: row];
 
 	  [self checkReturnValueForRep: rep withDraggingInfo: sender];
 
@@ -4399,6 +4857,34 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
   clickTimer = nil;
 }
 
+/* A click in front of a folder's icon expands or collapses it, and does
+ * not touch the selection, as in the reference. */
+- (BOOL)toggleDisclosureAtEvent:(NSEvent *)theEvent
+{
+  NSPoint p = [self convertPoint: [theEvent locationInWindow] fromView: nil];
+  NSInteger row = [self rowAtPoint: p];
+  NSInteger col = [self columnAtPoint: p];
+  FSNListViewNodeRep *rep;
+  NSRect cell, hit;
+
+  if (row < 0 || col < 0
+      || [[[[self tableColumns] objectAtIndex: col] identifier] intValue] != FSNInfoNameType)
+    {
+      return NO;
+    }
+  rep = [[dsource reps] objectAtIndex: row];
+  cell = [self frameOfCellAtColumn: col row: row];
+  hit = FSNListDisclosureHitRectForDepth ([dsource depthOfRep: rep], NSHeight (cell));
+  hit.origin.x += NSMinX (cell);
+  hit.origin.y += NSMinY (cell);
+  if (NSPointInRect (p, hit) == NO || [dsource isRepExpandable: rep] == NO)
+    {
+      return NO;
+    }
+  [dsource setRep: rep expanded: ([dsource isRepExpanded: rep] == NO)];
+  return YES;
+}
+
 - (void)mouseDown:(NSEvent *)theEvent
 {
   if (clickTimer != nil)
@@ -4406,6 +4892,11 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
       [clickTimer invalidate];
       [clickTimer release];
       clickTimer = nil;
+    }
+
+  if ([self toggleDisclosureAtEvent: theEvent])
+    {
+      return;
     }
 
   if ([theEvent clickCount] == 1
@@ -4486,6 +4977,23 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
       [dsource stopRepNameEditing];
       [dsource selectRepInNextRow];
       return;
+
+    /* The reference expands the selected folders with the right arrow
+     * and collapses them with the left one. */
+    case NSRightArrowFunctionKey:
+    case NSLeftArrowFunctionKey:
+      {
+        NSArray *selected = [dsource selectedReps];
+        NSUInteger i;
+
+        [dsource stopRepNameEditing];
+        for (i = 0; i < [selected count]; i++)
+          {
+            [dsource setRep: [selected objectAtIndex: i]
+                   expanded: (character == NSRightArrowFunctionKey)];
+          }
+        return;
+      }
 
     case NSCarriageReturnCharacter:
       {

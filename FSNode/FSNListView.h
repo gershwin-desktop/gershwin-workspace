@@ -37,6 +37,7 @@
 @class FSNListViewNodeRep;
 @class FSNListViewNameEditor;
 @class FSNFolderSizeCalculator;
+@class FSNListRowModel;
 
 /* Column identifiers as Finder writes them in the "columns" array of the
  * lsvp record.  A table column itself is identified by an NSNumber (an
@@ -144,6 +145,10 @@ extern NSString * const FSNListViewOptionColumnOrder;
   NSMutableDictionary *columnDirections;   /* identifier -> BOOL ascending of the columns left */
   NSMutableDictionary *hiddenColumnWidths;  /* identifier -> width, to restore */
   NSUInteger programmaticChanges;
+
+  /* The rows with folders expanded inline; nodeReps is its flat row order. */
+  FSNListRowModel *rowModel;
+  NSMutableSet *watchedFolders;   /* paths of the expanded folders shown */
 }
 
 - (id)initForListView:(FSNListView *)aview;
@@ -284,6 +289,20 @@ extern NSString * const FSNListViewOptionColumnOrder;
 
 /* Stops background work; for a list view that is going away. */
 - (void)detachFromListView;
+
+@end
+
+
+@interface FSNListViewDataSource (Expansion)
+
+/* Folders expand inline: their items follow them one level deeper.  A
+ * reload of the same folder keeps what was expanded. */
+- (BOOL)isRepExpandable:(FSNListViewNodeRep *)rep;
+- (BOOL)isRepExpanded:(FSNListViewNodeRep *)rep;
+- (void)setRep:(FSNListViewNodeRep *)rep expanded:(BOOL)flag;
+- (NSUInteger)depthOfRep:(FSNListViewNodeRep *)rep;
+/* A change the file watcher reports in one of the expanded folders. */
+- (void)expandedFolderChanged:(NSNotification *)notification;
 
 @end
 

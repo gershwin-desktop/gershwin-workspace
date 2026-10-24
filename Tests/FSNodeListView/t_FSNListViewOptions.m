@@ -63,6 +63,50 @@
 }
 @end
 
+/* Private to the list view; the tests drive the triangle click directly,
+ * since a mouse down that misses it starts the table's tracking loop. */
+@interface FSNListView (DisclosureForTests)
+- (BOOL)toggleDisclosureAtEvent:(NSEvent *)theEvent;
+@end
+
+static NSString *
+rowsWithDepth(FSNListViewDataSource *ds)
+{
+  NSMutableArray *parts = [NSMutableArray array];
+  NSArray *reps = [ds reps];
+  NSUInteger i;
+
+  for (i = 0; i < [reps count]; i++)
+    {
+      id rep = [reps objectAtIndex: i];
+
+      [parts addObject: [NSString stringWithFormat: @"%lu:%@",
+                                  (unsigned long)[ds depthOfRep: rep], [[rep node] name]]];
+    }
+  return [parts componentsJoinedByString: @" "];
+}
+
+static void
+postWatcherEvent(NSString *path, NSString *event, NSArray *files)
+{
+  NSDictionary *info = [NSDictionary dictionaryWithObjectsAndKeys:
+                                       path, @"path", event, @"event", files, @"files", nil];
+
+  [[NSNotificationCenter defaultCenter]
+    postNotificationName: @"GWFileWatcherFileDidChangeNotification" object: info];
+}
+
+static NSEvent *
+clickAt(NSView *view, NSPoint p)
+{
+  NSPoint inWindow = [view convertPoint: p toView: nil];
+
+  return [NSEvent mouseEventWithType: NSLeftMouseDown location: inWindow
+                       modifierFlags: 0 timestamp: 0
+                        windowNumber: [[view window] windowNumber]
+                             context: nil eventNumber: 0 clickCount: 1 pressure: 1.0];
+}
+
 static void
 spin(NSTimeInterval seconds)
 {
@@ -728,6 +772,146 @@ withIntermediateDirectories: YES attributes: nil error: NULL];
                 (k == 1) ? "116" : "117", (long)probe);
         }
     }
+    [lv release];
+    [win release];
+  }
+
+  /* --- folders expand inline ---------------------------------------- */
+  {
+    NSString *sub = [root stringByAppendingPathComponent: @"sub"];
+    NSString *deeper = [sub stringByAppendingPathComponent: @"deeper"];
+    NSArray *reps;
+    id subRep;
+
+    [fm removeItemAtPath: [root stringByAppendingPathComponent: @"many"] error: NULL];
+    [ds setSortColumnId: @"name" ascending: YES];
+    [view showContentsOfNode: [FSNode nodeWithPath: root]];
+    PASS_EQUAL (rowsWithDepth (ds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 0:Thing.app",
+                "MI-LST-120 the shown folder's items are the rows at level 0");
+    reps = [ds reps];
+    subRep = [ds repOfSubnodePath: sub];
+    PASS ([ds isRepExpandable: subRep]
+          && ![ds isRepExpandable: [ds repOfSubnodePath: [root stringByAppendingPathComponent: @"Thing.app"]]]
+          && ![ds isRepExpandable: [reps objectAtIndex: 0]],
+          "MI-LST-121 a folder expands; an application and a file do not");
+
+    [ds setRep: subRep expanded: YES];
+    PASS_EQUAL (rowsWithDepth (ds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 1:inner 0:Thing.app",
+                "MI-LST-122 expanding a folder shows its items under it, a level deeper");
+    PASS ([view numberOfRows] == 6, "MI-LST-123 and the table shows the new row");
+
+    [ds setSortColumnId: @"name" ascending: NO];
+    PASS_EQUAL (rowsWithDepth (ds), @"0:Thing.app 0:sub 1:inner 0:small.txt 0:mid.dat 0:big.bin",
+                "MI-LST-124 sorting keeps a folder's items under it");
+    [ds setSortColumnId: @"name" ascending: YES];
+
+    /* the watcher reports changes in the expanded folder */
+    [fm createDirectoryAtPath: deeper withIntermediateDirectories: YES attributes: nil error: NULL];
+    [@"x" writeToFile: [deeper stringByAppendingPathComponent: @"leaf"]
+           atomically: NO encoding: NSUTF8StringEncoding error: NULL];
+    postWatcherEvent (sub, @"GWFileCreatedInWatchedDirectory", [NSArray arrayWithObject: @"deeper"]);
+    PASS_EQUAL (rowsWithDepth (ds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 1:deeper 1:inner 0:Thing.app",
+                "MI-LST-125 a folder created in an expanded folder appears in it");
+    postWatcherEvent (root, @"GWFileCreatedInWatchedDirectory", [NSArray arrayWithObject: @"deeper"]);
+    PASS ([[ds reps] count] == 7,
+          "MI-LST-126 an event for a folder that is not expanded is left to the viewer");
+
+    [ds setRep: [ds repOfSubnodePath: deeper] expanded: YES];
+    PASS_EQUAL (rowsWithDepth (ds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 1:deeper 2:leaf 1:inner 0:Thing.app",
+                "MI-LST-127 a folder inside expands two levels deep");
+
+    /* selection survives expanding and collapsing around it */
+    [ds selectReps: [NSArray arrayWithObject: [ds repOfSubnodePath: [sub stringByAppendingPathComponent: @"inner"]]]];
+    [ds setRep: [ds repOfSubnodePath: deeper] expanded: NO];
+    PASS_EQUAL ([[[[ds selectedReps] lastObject] node] name], @"inner",
+                "MI-LST-128 collapsing a folder keeps the selection that is still a row");
+    [ds setRep: [ds repOfSubnodePath: deeper] expanded: YES];
+
+    [ds setRep: subRep expanded: NO];
+    PASS_EQUAL (rowsWithDepth (ds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 0:Thing.app",
+                "MI-LST-129 collapsing the outer folder hides both levels");
+    PASS ([ds repOfSubnodePath: [deeper stringByAppendingPathComponent: @"leaf"]] == nil,
+          "MI-LST-130 and its items are no rows any more");
+    [ds setRep: subRep expanded: YES];
+    PASS_EQUAL (rowsWithDepth (ds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 1:deeper 2:leaf 1:inner 0:Thing.app",
+                "MI-LST-131 expanding it again brings the inner folder back expanded");
+
+    [ds reloadContents];
+    PASS_EQUAL (rowsWithDepth (ds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 1:deeper 2:leaf 1:inner 0:Thing.app",
+                "MI-LST-132 a reload of the folder keeps what is expanded");
+
+    [fm removeItemAtPath: [deeper stringByAppendingPathComponent: @"leaf"] error: NULL];
+    postWatcherEvent (deeper, @"GWFileDeletedInWatchedDirectory", [NSArray arrayWithObject: @"leaf"]);
+    PASS_EQUAL (rowsWithDepth (ds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 1:deeper 1:inner 0:Thing.app",
+                "MI-LST-133 a file deleted in an expanded folder goes away");
+
+    [fm removeItemAtPath: deeper error: NULL];
+    postWatcherEvent (sub, @"GWFileDeletedInWatchedDirectory", [NSArray arrayWithObject: @"deeper"]);
+    PASS_EQUAL (rowsWithDepth (ds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 1:inner 0:Thing.app",
+                "MI-LST-134 and so does a deleted expanded folder, with what it showed");
+
+    [view showContentsOfNode: [FSNode nodeWithPath: sub]];
+    [view showContentsOfNode: [FSNode nodeWithPath: root]];
+    PASS_EQUAL (rowsWithDepth (ds), @"0:big.bin 0:mid.dat 0:small.txt 0:sub 0:Thing.app",
+                "MI-LST-135 another folder, and back, starts collapsed");
+  }
+
+  /* --- the triangle and the arrow keys --------------------------------- */
+  {
+    NSScrollView *sc = [[[NSScrollView alloc] initWithFrame: NSMakeRect (0, 0, 600, 300)] autorelease];
+    FSNListView *lv = [[FSNListView alloc] initWithFrame: NSMakeRect (0, 0, 600, 300)
+                                         dataSourceClass: [FSNListViewDataSource class]];
+    NSWindow *win = [[NSWindow alloc] initWithContentRect: NSMakeRect (0, 0, 600, 300)
+                                                styleMask: NSBorderlessWindowMask
+                                                  backing: NSBackingStoreBuffered
+                                                    defer: NO];
+    FSNListViewDataSource *lds = (FSNListViewDataSource *)[lv dataSource];
+    NSString *sub = [root stringByAppendingPathComponent: @"sub"];
+    NSInteger row;
+    NSRect cell;
+    NSEvent *key;
+    unichar right = NSRightArrowFunctionKey;
+    unichar left = NSLeftArrowFunctionKey;
+
+    [win setContentView: sc];
+    [sc setDocumentView: lv];
+    [lds setSortColumnId: @"name" ascending: YES];
+    [lv showContentsOfNode: [FSNode nodeWithPath: root]];
+    row = [[lds reps] indexOfObjectIdenticalTo: [lds repOfSubnodePath: sub]];
+    cell = [lv frameOfCellAtColumn: [lv columnWithIdentifier: [NSNumber numberWithInt: FSNInfoNameType]]
+                               row: row];
+
+    PASS ([lv toggleDisclosureAtEvent: clickAt (lv, NSMakePoint (NSMinX (cell) + 12, NSMidY (cell)))]
+          && [lds isRepExpanded: [lds repOfSubnodePath: sub]],
+          "MI-LST-136 a click on a folder's triangle expands it");
+    PASS ([[lds selectedReps] count] == 0, "MI-LST-137 without selecting it");
+    PASS (![lv toggleDisclosureAtEvent: clickAt (lv, NSMakePoint (NSMinX (cell) + 60, NSMidY (cell)))],
+          "MI-LST-138 a click on the name is no click on the triangle");
+    PASS ([lv toggleDisclosureAtEvent: clickAt (lv, NSMakePoint (NSMinX (cell) + 12, NSMidY (cell)))]
+          && ![lds isRepExpanded: [lds repOfSubnodePath: sub]],
+          "MI-LST-139 a second click collapses it again");
+    row = 0;
+    PASS (![lv toggleDisclosureAtEvent: clickAt (lv, NSMakePoint (NSMinX (cell) + 12,
+                                                               NSMidY ([lv rectOfRow: row])))],
+          "MI-LST-140 a file has no triangle to click");
+
+    [lds selectReps: [NSArray arrayWithObject: [lds repOfSubnodePath: sub]]];
+    key = [NSEvent keyEventWithType: NSKeyDown location: NSZeroPoint modifierFlags: 0
+                          timestamp: 0 windowNumber: [win windowNumber] context: nil
+                         characters: [NSString stringWithCharacters: &right length: 1]
+        charactersIgnoringModifiers: [NSString stringWithCharacters: &right length: 1]
+                          isARepeat: NO keyCode: 0];
+    [lv keyDown: key];
+    PASS ([lds isRepExpanded: [lds repOfSubnodePath: sub]],
+          "MI-LST-141 the right arrow expands the selected folder");
+    key = [NSEvent keyEventWithType: NSKeyDown location: NSZeroPoint modifierFlags: 0
+                          timestamp: 0 windowNumber: [win windowNumber] context: nil
+                         characters: [NSString stringWithCharacters: &left length: 1]
+        charactersIgnoringModifiers: [NSString stringWithCharacters: &left length: 1]
+                          isARepeat: NO keyCode: 0];
+    [lv keyDown: key];
+    PASS (![lds isRepExpanded: [lds repOfSubnodePath: sub]],
+          "MI-LST-142 the left arrow collapses it");
     [lv release];
     [win release];
   }

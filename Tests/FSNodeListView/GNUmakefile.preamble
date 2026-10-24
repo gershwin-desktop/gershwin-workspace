@@ -17,3 +17,8 @@ ADDITIONAL_LDFLAGS += -Wl,--defsym=__start___objc_constant_string=0 \
 
 # The build's own FSNode before the installed one in /System, for -lFSNode too.
 ADDITIONAL_LDFLAGS += -L$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+
+# The row model and the row geometry are Foundation-only, but live in the
+# framework, so this tool links the same build.
+t_FSNListRowModel_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current -lFSNode \
+                               -lgnustep-gui
