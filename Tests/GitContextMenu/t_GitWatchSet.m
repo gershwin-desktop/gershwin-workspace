@@ -1,7 +1,8 @@
 /* t_GitWatchSet.m - which folders the git badge extension watches and
- * badges: a repository root, its .git and the folders holding tracked files;
- * not untracked folders deep in a checkout, not a folder that only contains
- * a repository further down, not a folder inside a checkout. Needs git.
+ * badges, and when it recounts: a repository root and its .git are watched,
+ * no folder of the working tree; a folder that only contains a repository
+ * further down, or one inside a checkout, gets no badge; a window becoming
+ * key recounts the shown repositories only. Needs git.
  *
  * Copyright (c) 2026 Simon Peter
  *
@@ -10,6 +11,33 @@
 #import <Foundation/Foundation.h>
 #import "Testing.h"
 #include "../../GitContextMenu/GitContextMenu.m"
+
+/* Records which repositories git ran in, on which thread. */
+@interface TRecordingGit : GitContextMenu
+{
+@public
+  NSMutableArray *workerRepos;
+  NSUInteger mainThreadRuns;
+}
+- (void)markShown:(NSString *)root count:(NSUInteger)count;
+@end
+
+@implementation TRecordingGit
+- (NSString *)gitOutputForArgs:(NSArray *)args repo:(NSString *)repo
+{
+  if ([NSThread isMainThread])
+    mainThreadRuns++;
+  else
+    @synchronized (self) { [workerRepos addObject: repo]; }
+  return @"";
+}
+/* What -startWatchingNode: and -stopWatchingNode: record, without the
+   fswatcher connection they also set up. */
+- (void)markShown:(NSString *)root count:(NSUInteger)count
+{
+  [repoRefcounts setObject: [NSNumber numberWithUnsignedInteger: count] forKey: root];
+}
+@end
 
 static void run(NSString *dir, NSArray *args)
 {
@@ -50,18 +78,11 @@ int main(void)
   run(repo, [NSArray arrayWithObjects: @"init", @"-q", nil]);
   run(repo, [NSArray arrayWithObjects: @"add", @"src/lib/code.c", nil]);
 
-  watched = [git directoriesToWatchForRepo: repo];
+  watched = [git watchPathsForRepoRoot: repo];
   PASS([watched containsObject: repo], "the repository root is watched");
   PASS([watched containsObject: [repo stringByAppendingPathComponent: @".git"]],
        ".git is watched (commits, checkouts, the index)");
-  PASS([watched containsObject: [repo stringByAppendingPathComponent: @"src"]]
-       && [watched containsObject: [repo stringByAppendingPathComponent: @"src/lib"]],
-       "folders holding tracked files are watched");
-  PASS([watched containsObject: [repo stringByAppendingPathComponent: @"build"]] == NO
-       && [watched containsObject: [repo stringByAppendingPathComponent: @"build/deep"]] == NO
-       && [watched containsObject: [repo stringByAppendingPathComponent: @"build/deep/tree"]] == NO,
-       "untracked folders are not watched");
-  PASS([watched count] == 4, "nothing else is watched");
+  PASS([watched count] == 2, "no folder of the working tree is watched, tracked or not");
 
   PASS_EQUAL([git repoRootForNode: [FSNode nodeWithPath: repo]], repo,
              "a repository root gets a badge and watches");
@@ -71,6 +92,32 @@ int main(void)
        "a folder inside a checkout gets none");
   PASS([git badgeCountForNode: [FSNode nodeWithPath: parent]] == 0,
        "the parent of a repository has no count");
+
+  {
+    TRecordingGit *rec = [TRecordingGit new];
+    NSString *other = [parent stringByAppendingPathComponent: @"hidden-checkout"];
+    NSDate *limit;
+
+    rec->workerRepos = [NSMutableArray new];
+    touch([other stringByAppendingPathComponent: @"a.c"]);
+    run(other, [NSArray arrayWithObjects: @"init", @"-q", nil]);
+    [rec markShown: repo count: 1];
+    [rec markShown: other count: 0];
+
+    [[NSNotificationCenter defaultCenter]
+      postNotificationName: NSWindowDidBecomeKeyNotification object: nil];
+    limit = [NSDate dateWithTimeIntervalSinceNow: 10.0];
+    while ([rec->workerRepos count] == 0 && [limit timeIntervalSinceNow] > 0)
+      [[NSRunLoop currentRunLoop] runUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.05]];
+    [[NSRunLoop currentRunLoop] runUntilDate: [NSDate dateWithTimeIntervalSinceNow: 0.5]];
+    PASS([rec->workerRepos containsObject: repo],
+         "a window becoming key recounts a shown repository");
+    PASS([rec->workerRepos containsObject: other] == NO,
+         "but not one whose icons are gone");
+    PASS(rec->mainThreadRuns == 0, "the recount runs off the main thread");
+    [rec->workerRepos release];
+    [rec release];
+  }
 
   [fm removeFileAtPath: parent handler: nil];
   [git release];

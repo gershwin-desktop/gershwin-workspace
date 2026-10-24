@@ -39,6 +39,13 @@
 /* Seconds the watches of a repository stay after its last icon went. */
 #define GIT_WATCH_LINGER 30.0
 
+/* Seconds between recounts of the shown repositories. Edits deep in a
+ * working tree are not watched, so this is how soon they show without any
+ * other trigger; a minute keeps the badge current enough while costing at
+ * most one round of git runs per shown repository per minute, one after
+ * another on the serial worker. */
+#define GIT_RECOUNT_INTERVAL 60.0
+
 @implementation GitContextMenu
 
 - (id)init
@@ -62,9 +69,18 @@
       _pendingWatcherAdds = [[NSMutableArray alloc] init];
       _pendingWatcherRemoves = [[NSMutableArray alloc] init];
       _watcherFlushTimer = nil;
-      _walkQueue = [[NSMutableArray alloc] init];
       _repoDirs = [[NSMutableDictionary alloc] init];
-      _walkerRunning = NO;
+
+      /* Coming back to a window is when the user looks at the badges
+         again: recount what is shown. */
+      [[NSNotificationCenter defaultCenter] addObserver: self
+                                               selector: @selector (recountShownRepos)
+                                                   name: NSWindowDidBecomeKeyNotification
+                                                 object: nil];
+      [[NSNotificationCenter defaultCenter] addObserver: self
+                                               selector: @selector (recountShownRepos)
+                                                   name: NSApplicationDidBecomeActiveNotification
+                                                 object: nil];
 
       recomputeTimers = [[NSMutableDictionary alloc] init];
       debounceLock = [[NSLock alloc] init];
@@ -94,8 +110,10 @@
   DESTROY (watchedPaths);
   DESTROY (dirRepoRoots);
   DESTROY (watchLock);
-  DESTROY (_walkQueue);
   DESTROY (_repoDirs);
+  [[NSNotificationCenter defaultCenter] removeObserver: self];
+  [_recountTimer invalidate];
+  _recountTimer = nil;
   DESTROY (recomputeTimers);
   DESTROY (debounceLock);
   DESTROY (recomputeQueue);
@@ -2191,7 +2209,7 @@
   NSNumber *refsNum = [repoRefcounts objectForKey: root];
   NSUInteger refs = refsNum ? [refsNum unsignedIntegerValue] : 0;
   /* A repository whose last icon went a moment ago still has its watches
-     (see -stopWatchingNode:); only one never watched is walked. */
+     (see -stopWatchingNode:); only one never watched gets them. */
   BOOL first = (refsNum == nil);
   [repoRefcounts setObject: [NSNumber numberWithUnsignedInteger: refs + 1]
                      forKey: root];
@@ -2207,6 +2225,7 @@
     {
       [self addWatchersForRepoRoot: root];
     }
+  [self updateRecountTimer];
 }
 
 /* Called by FSNIcon when an icon is reused or deallocated.  The last reference
@@ -2232,12 +2251,73 @@
       [self performSelector: @selector (releaseIdleRepo:)
                  withObject: root
                  afterDelay: GIT_WATCH_LINGER];
+      [self updateRecountTimer];
     }
   else
     {
       [repoRefcounts setObject: [NSNumber numberWithUnsignedInteger: refs - 1]
                         forKey: root];
       [watchLock unlock];
+    }
+}
+
+/* A recount of every repository whose icon is shown; one already counting
+ * or waiting to be counted is left alone, and the counts run one after
+ * another on the serial worker. */
+- (void)recountShownRepos
+{
+  NSMutableArray *roots = [NSMutableArray array];
+  NSUInteger i;
+
+  [watchLock lock];
+  for (NSString *root in repoRefcounts)
+    {
+      if ([[repoRefcounts objectForKey: root] unsignedIntegerValue] > 0)
+        [roots addObject: root];
+    }
+  [watchLock unlock];
+
+  for (i = 0; i < [roots count]; i++)
+    {
+      NSString *root = [roots objectAtIndex: i];
+      BOOL busy;
+
+      [badgeLock lock];
+      busy = ([badgePending containsObject: root] || [badgeInFlight containsObject: root]);
+      [badgeLock unlock];
+      if (busy == NO)
+        [self scheduleRecomputeForRepo: root];
+    }
+}
+
+/* The periodic recount runs only while some repository icon is shown. */
+- (void)updateRecountTimer
+{
+  BOOL shown = NO;
+
+  [watchLock lock];
+  for (NSString *root in repoRefcounts)
+    {
+      if ([[repoRefcounts objectForKey: root] unsignedIntegerValue] > 0)
+        {
+          shown = YES;
+          break;
+        }
+    }
+  [watchLock unlock];
+
+  if (shown && _recountTimer == nil)
+    {
+      _recountTimer = [NSTimer scheduledTimerWithTimeInterval: GIT_RECOUNT_INTERVAL
+                                                       target: self
+                                                     selector: @selector (recountShownRepos)
+                                                     userInfo: nil
+                                                      repeats: YES];
+    }
+  else if (shown == NO && _recountTimer != nil)
+    {
+      [_recountTimer invalidate];
+      _recountTimer = nil;
     }
 }
 
@@ -2424,158 +2504,38 @@
   [watchLock unlock];
 }
 
-/* Watch the repo root (.git itself, for index/ref changes) plus every directory
- * of the working tree (so unstaged edits and new untracked files anywhere are
- * caught).  .git's own contents are not descended into. */
+/* The folders watched for a repository: its root and its .git directory
+ * (commits, checkouts, the index). Folders of the working tree are not
+ * watched - a big checkout has tens of thousands, and watching them made
+ * opening a folder of checkouts slow; edits there are picked up by the
+ * recounts (window becoming key, a change of the root or .git, the
+ * periodic recount). */
+- (NSArray *)watchPathsForRepoRoot:(NSString *)root
+{
+  NSString *gitDir = [root stringByAppendingPathComponent: @".git"];
+  BOOL isDir = NO;
+
+  if ([[NSFileManager defaultManager] fileExistsAtPath: gitDir isDirectory: &isDir] && isDir)
+    return [NSArray arrayWithObjects: root, gitDir, nil];
+  return [NSArray arrayWithObject: root];
+}
+
 - (void)addWatchersForRepoRoot:(NSString *)root
 {
-  NSFileManager *fm = [NSFileManager defaultManager];
-  NSString *gitDir = [root stringByAppendingPathComponent: @".git"];
+  NSArray *paths = [self watchPathsForRepoRoot: root];
+  NSUInteger i;
 
-  BOOL isDir = NO;
-  BOOL rootWatched, gitWatched;
-
-  /* Called again when the index or HEAD changes; the root and .git are
-     watched once. */
-  [watchLock lock];
-  rootWatched = ([watchedPaths objectForKey: root] != nil);
-  gitWatched = ([watchedPaths objectForKey: gitDir] != nil);
-  [watchLock unlock];
-
-  if (gitWatched == NO && [fm fileExistsAtPath: gitDir isDirectory: &isDir] && isDir)
+  for (i = 0; i < [paths count]; i++)
     {
-      [self addRepoWatch: gitDir repoRoot: root];
-    }
-
-  /* Also watch the repository root itself: changes/creations of files directly
-   * in the root (e.g. the typical working-tree edits) are reported by the root
-   * directory watch, not by any subdirectory watch. */
-  if (rootWatched == NO)
-    [self addRepoWatch: root repoRoot: root];
-
-  /* The working tree itself is walked on a background thread: a big
-     checkout holds tens of thousands of directories, and walking them here
-     kept the window busy for seconds whenever its icon appeared (switching
-     a home folder full of checkouts to icon view). */
-  [watchLock lock];
-  if ([_walkQueue containsObject: root] == NO)
-    [_walkQueue addObject: root];
-  if (_walkerRunning == NO)
-    {
-      _walkerRunning = YES;
-      [NSThread detachNewThreadSelector: @selector (walkQueuedRepos)
-                               toTarget: self
-                             withObject: nil];
-    }
-  [watchLock unlock];
-}
-
-/* Background thread: the directories to watch of each queued repository,
-   handed to the main thread, which owns the fswatcher connection. */
-- (void)walkQueuedRepos
-{
-  while (1)
-    {
-      NSAutoreleasePool *outer = [[NSAutoreleasePool alloc] init];
-      NSMutableArray *dirs = [NSMutableArray array];
-      NSString *root = nil;
+      NSString *path = [paths objectAtIndex: i];
+      BOOL watched;
 
       [watchLock lock];
-      if ([_walkQueue count] == 0)
-        {
-          _walkerRunning = NO;
-          [watchLock unlock];
-          [outer release];
-          break;
-        }
-      root = [[[_walkQueue objectAtIndex: 0] retain] autorelease];
-      [_walkQueue removeObjectAtIndex: 0];
+      watched = ([watchedPaths objectForKey: path] != nil);
       [watchLock unlock];
-
-      [dirs addObjectsFromArray: [self directoriesToWatchForRepo: root]];
-
-      [self performSelectorOnMainThread: @selector (addWalkedDirectories:)
-                             withObject: [NSArray arrayWithObjects: root, dirs, nil]
-                          waitUntilDone: NO];
-      [outer release];
-      /* Even freed per entry, the walk leaves a heap as big as its busiest
-         moment behind; give those pages back. */
-      FSNReleaseFreedHeapMemory();
+      if (watched == NO)
+        [self addRepoWatch: path repoRoot: root];
     }
-}
-
-/* The folders whose changes can change the badge of a repository: its root,
-   its .git directory (commits, checkouts, the index) and every folder holding
-   a file git tracks. Untracked folders deep in a checkout are left out (a
-   big checkout holds tens of thousands of them); new files there show in
-   the count with the next change of the index or the root. Runs git, so
-   never on the main thread. */
-- (NSArray *)directoriesToWatchForRepo:(NSString *)root
-{
-  NSMutableSet *dirs = [NSMutableSet set];
-  NSString *gitDir = [root stringByAppendingPathComponent: @".git"];
-  BOOL isDir = NO;
-  NSString *listing;
-
-  [dirs addObject: root];
-  if ([[NSFileManager defaultManager] fileExistsAtPath: gitDir isDirectory: &isDir] && isDir)
-    [dirs addObject: gitDir];
-
-  listing = [self gitOutputForArgs: [NSArray arrayWithObjects: @"ls-files", @"-z", nil]
-                              repo: root];
-  if (listing != nil)
-    {
-      NSArray *files = [listing componentsSeparatedByString:
-                                  [NSString stringWithFormat: @"%C", (unichar)0]];
-      NSUInteger i;
-
-      for (i = 0; i < [files count]; i++)
-        {
-          NSString *dir = [[files objectAtIndex: i] stringByDeletingLastPathComponent];
-
-          while ([dir length] > 0 && [dirs containsObject: [root stringByAppendingPathComponent: dir]] == NO)
-            {
-              [dirs addObject: [root stringByAppendingPathComponent: dir]];
-              dir = [dir stringByDeletingLastPathComponent];
-            }
-        }
-    }
-  return [dirs allObjects];
-}
-
-/* Main thread: the watch set of a repository becomes what a walk found,
-   unless no icon of the repository is left by now. Walks are repeated when
-   the index or HEAD changes, so folders git starts or stops tracking are
-   picked up then. */
-- (void)addWalkedDirectories:(NSArray *)rootAndDirs
-{
-  NSString *root = [rootAndDirs objectAtIndex: 0];
-  NSSet *wantedDirs = [NSSet setWithArray: [rootAndDirs objectAtIndex: 1]];
-  NSMutableArray *gone = [NSMutableArray array];
-  NSMutableArray *added = [NSMutableArray array];
-  BOOL wanted;
-
-  [watchLock lock];
-  wanted = ([repoRefcounts objectForKey: root] != nil);
-  if (wanted)
-    {
-      for (NSString *dir in [_repoDirs objectForKey: root])
-        {
-          if ([wantedDirs containsObject: dir] == NO)
-            [gone addObject: dir];
-        }
-      for (NSString *dir in wantedDirs)
-        {
-          if ([watchedPaths objectForKey: dir] == nil)
-            [added addObject: dir];
-        }
-    }
-  [watchLock unlock];
-
-  for (NSString *dir in gone)
-    [self removeRepoWatch: dir];
-  for (NSString *dir in added)
-    [self addRepoWatch: dir repoRoot: root];
 }
 
 - (void)removeWatchersForRepoRoot:(NSString *)root
@@ -2775,9 +2735,6 @@
                 }
             }
           [self scheduleRecomputeForRepo: root];
-          /* The index or HEAD changed: the tracked folders may have too. */
-          if ([path rangeOfString: @"/.git"].location != NSNotFound)
-            [self addWatchersForRepoRoot: root];
           [root release];
         }
     }

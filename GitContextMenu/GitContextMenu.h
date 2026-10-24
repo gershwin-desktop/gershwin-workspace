@@ -72,15 +72,15 @@
   NSMutableArray *_pendingWatcherRemoves;
   NSTimer *_watcherFlushTimer;
 
-  /* Repository roots whose working tree still has to be walked for the
-   * directories to watch; one background thread at a time works through
-   * them (the walk of a big checkout takes seconds). Guards: watchLock. */
-  NSMutableArray *_walkQueue;
   /* Repository root -> NSMutableSet of its watched folders, the reverse of
    * dirRepoRoots, so one repository's watches are found without going
    * through every watch of every repository. Guards: watchLock. */
   NSMutableDictionary *_repoDirs;
-  BOOL _walkerRunning;
+
+  /* Recounts the badges of the repositories that are shown, now and then:
+   * edits deep in a working tree are not watched. Runs only while some
+   * repository icon is shown. */
+  NSTimer *_recountTimer;
 
   /* Debounce: scheduleRecomputeForRepo: arms (or re-arms) a per-repo timer; the
    * timer only fires 200ms after the last change, so a burst of file-system
