@@ -86,6 +86,8 @@
 - (BOOL)isShowingNode:(FSNode *)anode;
 - (BOOL)isShowingPath:(NSString *)apath;
 - (void)createSubviews;
+
+- (CGFloat)pathBarHeight;
 - (void)unloadFromNode:(FSNode *)anode;
 - (void)updateShownSelection;
 - (FSNode *)shownNode;

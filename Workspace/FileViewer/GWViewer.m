@@ -71,10 +71,8 @@
 #define DEFAULT_SIDEBAR_WIDTH 160.0
 #define MAX_SIDEBAR_WIDTH 400.0
 
-/* Node view area insets (must stay in sync with createSubviews). */
-#define PREVIEW_XMARGIN 0
-#define PREVIEW_YMARGIN 0
-#define PREVIEW_PATHSCRH 46
+/* Height of the path bar's icon row; the frame is derived from it. */
+#define PATHBAR_CONTENT_H 28
 
 
 /* Helper function to get volume information using statvfs */
@@ -530,11 +528,8 @@ static BOOL hasLastExtents_ = NO;
   CGFloat w = r.size.width;
   CGFloat h = r.size.height;
   CGFloat d = 0.0;
-  int xmargin = 0;
-  int ymargin = 0;
-  int pathscrh = 46;
+  CGFloat pathscrh;
   NSUInteger resizeMask;
-  BOOL hasScroller;
 
   split = [[GWViewerSplit alloc] initWithFrame: r];
   [split setVertical: YES];
@@ -565,10 +560,14 @@ static BOOL hasLastExtents_ = NO;
   w = r.size.width;
   h = r.size.height;
   
-  r = NSMakeRect(xmargin, 0, w - (xmargin * 2), pathscrh);
+  pathscrh = [self pathBarHeight];
+  r = NSMakeRect(0, 0, w, pathscrh);
   pathsScroll = [[GWViewerPathsScroll alloc] initWithFrame: r];
   [pathsScroll setBorderType: NSBezelBorder];
-  [pathsScroll setHasHorizontalScroller: YES];
+  /* No scroller of its own: it sat below the path bar, while the
+   * content's horizontal scroller belongs right above it.  A path longer
+   * than the bar still shows its last components. */
+  [pathsScroll setHasHorizontalScroller: NO];
   [pathsScroll setHasVerticalScroller: NO];
   [pathsScroll setDelegate: nil];
   [pathsScroll setBackgroundColor: [NSColor windowBackgroundColor]];
@@ -594,7 +593,7 @@ static BOOL hasLastExtents_ = NO;
   [pathsView setCompactPathBarMode: YES iconSize: 20 labelFontSize: 12];
   RELEASE (pathsView);
 
-  r = NSMakeRect(xmargin, pathscrh, w - (xmargin * 2), h - pathscrh - ymargin);
+  r = NSMakeRect(0, pathscrh, w, h - pathscrh);
   nviewScroll = [[GWViewerScrollView alloc] initWithFrame: r inViewer: self];
   if (viewType == GWViewTypeIcon)
     {
@@ -604,9 +603,11 @@ static BOOL hasLastExtents_ = NO;
     {
       [nviewScroll setBorderType: NSBezelBorder];
     }
-  hasScroller = (viewType != GWViewTypeBrowser);
-  [nviewScroll setHasHorizontalScroller: NO];
-  [nviewScroll setHasVerticalScroller: hasScroller];
+  [nviewScroll setHasHorizontalScroller: YES];
+  [nviewScroll setHasVerticalScroller: YES];
+  /* Only the column view always shows its scroller; the icon and list
+   * view show one just when their content is wider than the window. */
+  [nviewScroll setAutohidesScrollers: (viewType != GWViewTypeBrowser)];
   resizeMask = NSViewNotSizable | NSViewWidthSizable | NSViewHeightSizable;
   [nviewScroll setAutoresizingMask: resizeMask];
   [lowBox addSubview: nviewScroll];
@@ -633,21 +634,24 @@ static BOOL hasLastExtents_ = NO;
  * width-sizable again to fill the window. */
 - (void)updatePreviewPaneForCurrentType
 {
-  NSRect low = [lowBox bounds];
-  CGFloat w = low.size.width;
-  CGFloat h = low.size.height;
-  CGFloat pathH = showPathbar ? PREVIEW_PATHSCRH : 0;
-  NSRect nr, pr;
+  GWViewerBoxLayout l = GWViewerBoxLayoutForSize([lowBox bounds].size,
+                                                 showPathbar,
+                                                 [self pathBarHeight],
+                                                 showInspector,
+                                                 GW_PREVIEW_PANE_WIDTH);
 
   [pathsScroll setHidden: !showPathbar];
+  if (showPathbar)
+    {
+      [pathsScroll setFrame: l.pathBar];
+    }
 
   if (showInspector)
     {
       if (previewPane == nil)
         {
-          pr = NSMakeRect(w - GW_PREVIEW_PANE_WIDTH, pathH,
-                          GW_PREVIEW_PANE_WIDTH, h - pathH);
-          previewPane = [[GWViewerBrowserPreview alloc] initWithFrame: pr];
+          previewPane = [[GWViewerBrowserPreview alloc]
+                          initWithFrame: l.inspector];
           [previewPane setViewer: self];
           [previewPane setAutoresizingMask: NSViewHeightSizable | NSViewMinXMargin];
           [lowBox addSubview: previewPane];
@@ -655,9 +659,7 @@ static BOOL hasLastExtents_ = NO;
       /* Apply the remembered pane for the current view type (the pane may
        * persist across view-type switches). */
       [previewPane selectInspectorAtIndex: inspectorPane];
-      nr = NSMakeRect(PREVIEW_XMARGIN, pathH,
-                      w - (PREVIEW_XMARGIN * 2) - GW_PREVIEW_PANE_WIDTH,
-                      h - pathH - PREVIEW_YMARGIN);
+      [previewPane setFrame: l.inspector];
       [nviewScroll setAutoresizingMask: NSViewNotSizable | NSViewHeightSizable];
     }
   else
@@ -667,13 +669,21 @@ static BOOL hasLastExtents_ = NO;
           [previewPane removeFromSuperview];
           DESTROY (previewPane);
         }
-      nr = NSMakeRect(PREVIEW_XMARGIN, pathH,
-                      w - (PREVIEW_XMARGIN * 2), h - pathH - PREVIEW_YMARGIN);
       [nviewScroll setAutoresizingMask: NSViewNotSizable | NSViewWidthSizable | NSViewHeightSizable];
     }
 
-  [nviewScroll setFrame: nr];
+  [nviewScroll setFrame: l.content];
   [nviewScroll setNeedsDisplay: YES];
+}
+
+/* The path bar's frame height: its icon row plus the border.  It has no
+ * scroller row, so the content's scroller is the one right above it. */
+- (CGFloat)pathBarHeight
+{
+  return [NSScrollView frameSizeForContentSize: NSMakeSize(100, PATHBAR_CONTENT_H)
+                         hasHorizontalScroller: NO
+                           hasVerticalScroller: NO
+                                    borderType: NSBezelBorder].height;
 }
 
 
@@ -1581,7 +1591,7 @@ static BOOL hasLastExtents_ = NO;
     nodeView = [[GWViewerBrowser alloc] initWithBaseNode: baseNode
                                                 inViewer: self
                                           visibleColumns: GWViewerBrowserInitialColumns
-                                                scroller: [pathsScroll horizontalScroller]
+                                                scroller: [nviewScroll horizontalScroller]
                                               cellsIcons: NO
                                               acceptsDnd: NO
                                            editableCells: YES
@@ -1847,18 +1857,12 @@ constrainMinCoordinate:(CGFloat)proposedMin
         }
       else if (tag == GWViewTypeIcon)
         {
-          NSScroller *scroller = RETAIN ([pathsScroll horizontalScroller]);
-
-          [pathsScroll setHasHorizontalScroller: NO];
-          [pathsScroll setHorizontalScroller: scroller]; 
-          [pathsScroll setHasHorizontalScroller: YES];
-          RELEASE (scroller);
-      
           [pathsView setOwnsScroller: YES];
           [pathsScroll setDelegate: pathsView];
 
+          [nviewScroll setAutohidesScrollers: YES];
           [nviewScroll setHasVerticalScroller: YES];
-          [nviewScroll setHasHorizontalScroller: NO];
+          [nviewScroll setHasHorizontalScroller: YES];
           [nviewScroll setBorderType: NSNoBorder];
 
           nodeView = [[GWViewerIconsView alloc] initForViewer: self];
@@ -1869,18 +1873,12 @@ constrainMinCoordinate:(CGFloat)proposedMin
         {
           NSRect r = [[nviewScroll contentView] bounds];
 
-          NSScroller *scroller = RETAIN ([pathsScroll horizontalScroller]);
-
-          [pathsScroll setHasHorizontalScroller: NO];
-          [pathsScroll setHorizontalScroller: scroller]; 
-          [pathsScroll setHasHorizontalScroller: YES];
-          RELEASE (scroller);
-      
           [pathsView setOwnsScroller: YES];
           [pathsScroll setDelegate: pathsView];
 
+          [nviewScroll setAutohidesScrollers: YES];
           [nviewScroll setHasVerticalScroller: YES];
-          [nviewScroll setHasHorizontalScroller: NO];
+          [nviewScroll setHasHorizontalScroller: YES];
           [nviewScroll setBorderType: NSBezelBorder];
           [nviewScroll setDrawsTopSeparator: NO];
 
