@@ -22,9 +22,10 @@ on:
   workflow_dispatch:
 
 env:
-  # gershwin-developer branch to build with. The Windows support lives on its
-  # "windows" branch until it lands in dev.
-  DEVELOPER_BRANCH: windows
+  # gershwin-developer branch to build with. Its stale "windows" branch still
+  # builds in the deprecated MSYS2 MINGW64 environment; dev carries the
+  # Windows support and the UCRT64 build that matches the setup below.
+  DEVELOPER_BRANCH: dev
 
   # Repositories checkout.sh should NOT clone: this checkout provides
   # gershwin-workspace, and nothing else beyond the core libraries is built on
@@ -76,7 +77,9 @@ jobs:
       - name: Set up MSYS2
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
+          # Must match the environment of gershwin-developer's
+          # Library/OSSupport/windows.txt, whose packages bootstrap.sh installs.
+          msystem: UCRT64
           update: false
           install: git make
 
