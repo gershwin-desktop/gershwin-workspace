@@ -33,6 +33,7 @@
   id nodeView;
   BOOL drawsTopSeparator;
   NSView *topSeparator;
+  BOOL holdsScrollerDecision;
 }
 
 - (id)initWithFrame:(NSRect)frameRect

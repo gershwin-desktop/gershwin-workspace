@@ -103,3 +103,8 @@ t_GWViewerToolbarModel_TOOL_LIBS += -lgnustep-gui
 # real scroll view, on top of the framework just built.
 t_GWViewerIconsViewResize_INCLUDE_DIRS += -I../../Workspace/Desktop
 t_GWViewerIconsViewResize_TOOL_LIBS += -lFSNode -lgnustep-gui
+
+# t_GWSpatialScrollResize includes the spatial icon view and its scroll view
+# and drives them together, like t_GWViewerIconsViewResize.
+t_GWSpatialScrollResize_INCLUDE_DIRS += -I../../Workspace/Desktop
+t_GWSpatialScrollResize_TOOL_LIBS += -lFSNode -lgnustep-gui

@@ -153,21 +153,47 @@
  * there, and the line can neither move nor be covered. */
 - (void)tile
 {
-  [super tile];
-
   if (drawsTopSeparator && topSeparator != nil)
     {
-      NSClipView *clip = [self contentView];
-      NSRect clipFrame = [clip frame];
+      NSClipView *clip;
+      NSRect clipFrame;
+
+      /* NSScrollView decides whether the scrollers are needed while it lays
+       * the clip view out over the separator's row too.  A document a
+       * fraction higher than that clip fitted there and no longer fitted
+       * the clip it really gets below: the vertical scroller came, the next
+       * pass took it away again, and the two retiled each other until the
+       * stack was gone - resizing a spatial window crashed Workspace.  So
+       * the decision waits for the clip view's real frame, set below. */
+      holdsScrollerDecision = YES;
+      [super tile];
+      holdsScrollerDecision = NO;
+
+      clip = [self contentView];
+      clipFrame = [clip frame];
 
       /* origin.y += 1 / height -= 1 moves the visual top edge down by 1px in
-       * flipped and unflipped coordinate systems alike. */
+       * flipped and unflipped coordinate systems alike.  The clip view then
+       * reports the change back through -reflectScrolledClipView:, which is
+       * where the scrollers are decided. */
       clipFrame.origin.y += 1;
       clipFrame.size.height -= 1;
       [clip setFrame: clipFrame];
 
       [self layoutTopSeparator];
     }
+  else
+    {
+      [super tile];
+    }
+}
+
+- (void)reflectScrolledClipView:(NSClipView *)aClipView
+{
+  /* See -tile: the clip view's frame is not final yet. */
+  if (holdsScrollerDecision)
+    return;
+  [super reflectScrolledClipView: aClipView];
 }
 
 - (BOOL)drawsTopSeparator
