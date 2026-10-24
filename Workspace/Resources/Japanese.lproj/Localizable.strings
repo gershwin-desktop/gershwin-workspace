@@ -857,3 +857,26 @@
 "The original of \"%@\" cannot be found." = "「%@」の元のアイテムが見つかりません。";
 "It may have been moved, renamed or deleted." = "移動、名前の変更、または削除された可能性があります。";
 "Delete Alias" = "エイリアスを削除";
+
+/* Folder window toolbar */
+"Back" = "戻る";
+"Forward" = "進む";
+"Back/Forward" = "戻る/進む";
+"Look Inside" = "中を見る";
+"Action" = "アクション";
+"Path" = "パス";
+"Search" = "検索";
+"Get Info" = "情報を見る";
+"Eject" = "取り出す";
+"Connect" = "接続";
+"as Icons" = "アイコン";
+"as List" = "リスト";
+"as Columns" = "カラム";
+"Hide Toolbar" = "ツールバーを隠す";
+"Show Toolbar" = "ツールバーを表示";
+"Customize Toolbar..." = "ツールバーをカスタマイズ...";
+"Move to Trash" = "ゴミ箱に入れる";
+"Compress" = "圧縮";
+"Make Alias" = "エイリアスを作成";
+"Clean Up" = "整頓";
+"Show View Options" = "表示オプションを表示";

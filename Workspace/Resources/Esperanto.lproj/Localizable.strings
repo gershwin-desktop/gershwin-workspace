@@ -1072,3 +1072,26 @@
 "The original of \"%@\" cannot be found." = "La originalo de \"%@\" ne troviĝas.";
 "It may have been moved, renamed or deleted." = "Eble ĝi estis movita, alinomita aŭ forigita.";
 "Delete Alias" = "Forigi la aliason";
+
+/* Folder window toolbar */
+"Back" = "Reen";
+"Forward" = "Antaŭen";
+"Back/Forward" = "Reen/Antaŭen";
+"Look Inside" = "Enrigardi";
+"Action" = "Ago";
+"Path" = "Vojo";
+"Search" = "Serĉi";
+"Get Info" = "Informoj";
+"Eject" = "Elĵeti";
+"Connect" = "Konekti";
+"as Icons" = "kiel piktogramoj";
+"as List" = "kiel listo";
+"as Columns" = "kiel kolumnoj";
+"Hide Toolbar" = "Kaŝi ilobreton";
+"Show Toolbar" = "Montri ilobreton";
+"Customize Toolbar..." = "Agordi ilobreton...";
+"Move to Trash" = "Movi al rubujo";
+"Compress" = "Densigi";
+"Make Alias" = "Krei alinomon";
+"Clean Up" = "Ordigi";
+"Show View Options" = "Montri vidoagordojn";

@@ -896,3 +896,26 @@
 "The original of \"%@\" cannot be found." = "Originalen til \"%@\" ble ikke funnet.";
 "It may have been moved, renamed or deleted." = "Den kan ha blitt flyttet, omdøpt eller slettet.";
 "Delete Alias" = "Slett alias";
+
+/* Folder window toolbar */
+"Back" = "Tilbake";
+"Forward" = "Fremover";
+"Back/Forward" = "Tilbake/Fremover";
+"Look Inside" = "Kikk inn";
+"Action" = "Handling";
+"Path" = "Bane";
+"Search" = "Søk";
+"Get Info" = "Vis info";
+"Eject" = "Løs ut";
+"Connect" = "Koble til";
+"as Icons" = "som symboler";
+"as List" = "som liste";
+"as Columns" = "som kolonner";
+"Hide Toolbar" = "Skjul verktøylinje";
+"Show Toolbar" = "Vis verktøylinje";
+"Customize Toolbar..." = "Tilpass verktøylinje...";
+"Move to Trash" = "Flytt til papirkurven";
+"Compress" = "Komprimer";
+"Make Alias" = "Lag alias";
+"Clean Up" = "Rydd opp";
+"Show View Options" = "Vis visningsvalg";

@@ -898,3 +898,26 @@
 "The original of \"%@\" cannot be found." = "A(z) \"%@\" eredetije nem található.";
 "It may have been moved, renamed or deleted." = "Lehet, hogy áthelyezték, átnevezték vagy törölték.";
 "Delete Alias" = "Alias törlése";
+
+/* Folder window toolbar */
+"Back" = "Vissza";
+"Forward" = "Előre";
+"Back/Forward" = "Vissza/Előre";
+"Look Inside" = "Betekintés";
+"Action" = "Művelet";
+"Path" = "Útvonal";
+"Search" = "Keresés";
+"Get Info" = "Információ";
+"Eject" = "Kiadás";
+"Connect" = "Kapcsolódás";
+"as Icons" = "ikonokként";
+"as List" = "listaként";
+"as Columns" = "oszlopokként";
+"Hide Toolbar" = "Eszközsor elrejtése";
+"Show Toolbar" = "Eszközsor megjelenítése";
+"Customize Toolbar..." = "Eszközsor testreszabása...";
+"Move to Trash" = "Áthelyezés a Kukába";
+"Compress" = "Tömörítés";
+"Make Alias" = "Álnév létrehozása";
+"Clean Up" = "Rendezés";
+"Show View Options" = "Nézetbeállítások megjelenítése";

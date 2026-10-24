@@ -851,3 +851,26 @@
 "The original of \"%@\" cannot be found." = "Não foi possível encontrar o original de \"%@\".";
 "It may have been moved, renamed or deleted." = "Ele pode ter sido movido, renomeado ou excluído.";
 "Delete Alias" = "Excluir alias";
+
+/* Folder window toolbar */
+"Back" = "Voltar";
+"Forward" = "Avançar";
+"Back/Forward" = "Voltar/Avançar";
+"Look Inside" = "Espiar";
+"Action" = "Ação";
+"Path" = "Caminho";
+"Search" = "Buscar";
+"Get Info" = "Obter Informações";
+"Eject" = "Ejetar";
+"Connect" = "Conectar";
+"as Icons" = "como Ícones";
+"as List" = "como Lista";
+"as Columns" = "como Colunas";
+"Hide Toolbar" = "Ocultar Barra de Ferramentas";
+"Show Toolbar" = "Mostrar Barra de Ferramentas";
+"Customize Toolbar..." = "Personalizar Barra de Ferramentas...";
+"Move to Trash" = "Mover para o Lixo";
+"Compress" = "Comprimir";
+"Make Alias" = "Criar Atalho";
+"Clean Up" = "Organizar";
+"Show View Options" = "Mostrar Opções de Visualização";
