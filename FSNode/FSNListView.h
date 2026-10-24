@@ -31,6 +31,7 @@
 #import <AppKit/NSTableView.h>
 #import <AppKit/NSTextField.h>
 #import "FSNodeRep.h"
+#import "FSNSelectionModel.h"
 
 @class NSTableColumn;
 @class FSNListView;
@@ -184,12 +185,6 @@ extern NSString * const FSNListViewOptionColumnOrder;
 - (void)selectIconOfRep:(id)aRep;
 
 - (void)unSelectIconsOfRepsDifferentFrom:(id)aRep;
-
-- (void)selectRepInPrevRow;
-
-- (void)selectRepInNextRow;
-
-- (NSString *)selectRepWithPrefix:(NSString *)prefix;
 
 - (void)redisplayRep:(id)aRep;
 
@@ -582,11 +577,13 @@ extern NSString * const FSNListViewOptionColumnOrder;
 @end
 
 
-@interface FSNListView : NSTableView
+@interface FSNListView : NSTableView <FSNSelectionModelDelegate>
 {
   id dsource;
-  NSString *charBuffer;
-  NSTimeInterval lastKeyPressedTime;
+  /* What clicks, bands and keys do to the selection (FSNSelectionModel). */
+  FSNSelectionModel *selectionModel;
+  /* The rubber band while one is dragged, in view coordinates. */
+  NSRect _bandRect;
 
   NSTimer *clickTimer;
 

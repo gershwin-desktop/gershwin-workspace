@@ -81,6 +81,14 @@ enum {
 - (void)setItems:(NSArray *)items
 {
   NSUInteger i;
+  BOOL same = ([items count] == [_items count]);
+
+  /* Views hand their items over before every event; the same items in the
+     same order must not lose the Shift range. */
+  for (i = 0; same && i < [items count]; i++)
+    same = ([items objectAtIndex: i] == [_items objectAtIndex: i]);
+  if (same)
+    return;
 
   ASSIGNCOPY(_items, (items != nil) ? items : [NSArray array]);
 

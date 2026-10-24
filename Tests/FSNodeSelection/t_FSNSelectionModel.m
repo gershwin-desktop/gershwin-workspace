@@ -258,10 +258,11 @@ int main(void)
   [m mouseDownOnItem: item(items, @"india") modifiers: FSNSelectionModifierShift];
   PASS_EQUAL(joined(m), @"alpha,alpine,beta,golf,hotel,india",
              "Command-click moves the anchor; the next range keeps the rest");
+  [m setItems: [NSArray arrayWithArray: items]];
   [m setSelectedItems: [m selectedItems]];
   [m mouseDownOnItem: item(items, @"hotel") modifiers: FSNSelectionModifierShift];
   PASS_EQUAL(joined(m), @"alpha,alpine,beta,golf,hotel",
-             "a range can shrink, also after the view handed the same selection back");
+             "a range can shrink, also after the view handed the same items and selection back");
   [m mouseDownOnItem: item(items, @"golf") modifiers: FSNSelectionModifierCommand];
   [m mouseDownOnItem: item(items, @"echo") modifiers: FSNSelectionModifierShift];
   PASS_EQUAL(joined(m), @"alpha,alpine,beta,echo,foxtrot,golf,hotel",

@@ -1096,54 +1096,6 @@ static NSString *defaultColumns = @"{ \
     }
 }
 
-- (void)selectRepInPrevRow
-{
-  NSInteger row = [listView selectedRow];
-
-  if ((row != -1) && (row > 0))
-    {
-      row--;
-      [listView selectRowIndexes: [NSIndexSet indexSetWithIndex: row]
-	    byExtendingSelection: NO];
-      [listView scrollRowToVisible: row];
-    }
-}
-
-- (void)selectRepInNextRow
-{
-  NSInteger row = [listView selectedRow];
-
-  if ((row != -1) && (row < ([nodeReps count] -1)))
-    {
-      row++;
-      [listView selectRowIndexes: [NSIndexSet indexSetWithIndex: row]
-	    byExtendingSelection: NO];
-      [listView scrollRowToVisible: row];
-    }
-}
-
-- (NSString *)selectRepWithPrefix:(NSString *)prefix
-{
-  NSUInteger i;
-
-  for (i = 0; i < [nodeReps count]; i++)
-    {
-      FSNListViewNodeRep *rep = [nodeReps objectAtIndex: i];
-      NSString *name = [[rep node] name];
-
-      if ([name rangeOfString: prefix options: NSCaseInsensitiveSearch].location == 0)
-        {
-          [listView deselectAll: self];
-          [self selectReps: [NSArray arrayWithObject: rep]];
-          [listView scrollRowToVisible: i];
-
-          return name;
-        }
-    }
-
-  return nil;
-}
-
 - (void)redisplayRep:(id)aRep
 {
   NSUInteger row = [nodeReps indexOfObjectIdenticalTo: aRep];
@@ -4843,7 +4795,7 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
       clickTimer = nil;
     }
 
-  RELEASE (charBuffer);
+  RELEASE (selectionModel);
   RELEASE (dsource);
   [super dealloc];
 }
@@ -4936,8 +4888,9 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
       [self setTarget: dsource];
       [self setDoubleAction: @selector(doubleClickOnListView:)];
 
-      lastKeyPressedTime = 0.0;
-      charBuffer = nil;
+      selectionModel = [[FSNSelectionModel alloc] initWithStyle: FSNSelectionStyleList];
+      [selectionModel setDelegate: self];
+      _bandRect = NSZeroRect;
 
       [self registerForDraggedTypes: [NSArray arrayWithObjects:
                                                 NSFilenamesPboardType,
@@ -5010,8 +4963,211 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
   return YES;
 }
 
+#pragma mark - Selection
+
+- (NSString *)selectionModel:(FSNSelectionModel *)model nameOfItem:(id)item
+{
+  return [[(FSNListViewNodeRep *)item node] name];
+}
+
+- (void)syncSelectionModel
+{
+  [selectionModel setItems: [dsource reps]];
+  [selectionModel setSelectedItems: [dsource selectedReps]];
+}
+
+- (void)applySelectionModel
+{
+  NSArray *reps = [dsource reps];
+  NSArray *selected = [selectionModel selectedItems];
+  NSMutableIndexSet *rows = [NSMutableIndexSet indexSet];
+  NSUInteger i;
+  id cursor = [selectionModel cursor];
+
+  for (i = 0; i < [selected count]; i++)
+    {
+      NSUInteger row = [reps indexOfObjectIdenticalTo: [selected objectAtIndex: i]];
+
+      if (row != NSNotFound)
+        [rows addIndex: row];
+    }
+  if ([rows isEqualToIndexSet: [self selectedRowIndexes]] == NO)
+    [self selectRowIndexes: rows byExtendingSelection: NO];
+
+  if (cursor != nil && [selectionModel isItemSelected: cursor])
+    [self scrollRowToVisible: [reps indexOfObjectIdenticalTo: cursor]];
+}
+
+/* Runs one keyboard decision of the selection model and shows its result. */
+- (void)performSelectionKey:(BOOL (^)(FSNSelectionModel *model))step
+{
+  [self syncSelectionModel];
+  if (step(selectionModel))
+    {
+      [dsource stopRepNameEditing];
+      [self applySelectionModel];
+    }
+}
+
+/* The icon and name of a row: a press there drags the item, a press
+   anywhere else in the row starts a rubber band, as in the reference. */
+- (BOOL)point:(NSPoint)p isOnNameOfRow:(NSInteger)row
+{
+  NSNumber *num = [NSNumber numberWithInt: FSNInfoNameType];
+  NSInteger col = [self columnWithIdentifier: num];
+  FSNListViewNodeRep *rep;
+  NSTableColumn *column;
+  NSFont *font;
+  NSRect cell;
+  CGFloat x, width;
+
+  if (row < 0 || col < 0)
+    return NO;
+
+  rep = [[dsource reps] objectAtIndex: row];
+  column = [[self tableColumns] objectAtIndex: col];
+  font = [[column dataCell] font];
+  cell = [self frameOfCellAtColumn: col row: row];
+  x = NSMinX(cell) + FSNListIconXForDepth([dsource depthOfRep: rep]);
+  width = [[rep icon] size].width + 2
+    + ((font != nil) ? [font widthOfString: [[rep node] name]] : NSWidth(cell)) + 4;
+
+  return (p.x >= x && p.x <= MIN(x + width, NSMaxX(cell)));
+}
+
+/* Starts dragging the selected rows, through the same data source and
+   drag image NSTableView itself uses. */
+- (BOOL)startRowDragWithEvent:(NSEvent *)theEvent
+{
+  NSIndexSet *rows = [self selectedRowIndexes];
+  NSPasteboard *pboard = [NSPasteboard pasteboardWithName: NSDragPboard];
+  NSPoint start = [self convertPoint: [theEvent locationInWindow] fromView: nil];
+  NSPoint offset = NSZeroPoint;
+  id ds = [self dataSource];
+  NSImage *image;
+  NSSize size;
+  BOOL written = NO;
+
+  if ([rows count] == 0 || [self canDragRowsWithIndexes: rows atPoint: start] == NO)
+    return NO;
+
+  if ([ds respondsToSelector: @selector(tableView:writeRowsWithIndexes:toPasteboard:)])
+    {
+      written = [ds tableView: self writeRowsWithIndexes: rows toPasteboard: pboard];
+    }
+  else if ([ds respondsToSelector: @selector(tableView:writeRows:toPasteboard:)])
+    {
+      NSMutableArray *list = [NSMutableArray array];
+      NSUInteger i = [rows firstIndex];
+
+      while (i != NSNotFound)
+        {
+          [list addObject: [NSNumber numberWithUnsignedInteger: i]];
+          i = [rows indexGreaterThanIndex: i];
+        }
+      written = [ds tableView: self writeRows: list toPasteboard: pboard];
+    }
+  if (written == NO)
+    return NO;
+
+  image = [self dragImageForRowsWithIndexes: rows
+                               tableColumns: nil
+                                      event: theEvent
+                                     offset: &offset];
+  size = [image size];
+  /* The offset is where the image's center goes; the view is flipped. */
+  start.x += offset.x - size.width / 2;
+  start.y += offset.y + size.height / 2;
+  [self dragImage: image
+               at: start
+           offset: NSZeroSize
+            event: theEvent
+       pasteboard: pboard
+           source: self
+        slideBack: YES];
+  return YES;
+}
+
+/* The rows a band from "from" to "to" touches: every row its vertical
+   extent crosses. */
+- (NSArray *)repsInBandFrom:(NSPoint)from to:(NSPoint)to
+{
+  NSArray *reps = [dsource reps];
+  NSMutableArray *touched = [NSMutableArray array];
+  CGFloat top = MIN(from.y, to.y);
+  CGFloat bottom = MAX(from.y, to.y);
+  NSUInteger i;
+
+  for (i = 0; i < [reps count]; i++)
+    {
+      NSRect r = [self rectOfRow: i];
+
+      if (NSMaxY(r) > top && NSMinY(r) < bottom)
+        [touched addObject: [reps objectAtIndex: i]];
+    }
+  return touched;
+}
+
+- (void)trackSelectionBandFromEvent:(NSEvent *)theEvent
+{
+  NSUInteger mask = NSLeftMouseUpMask | NSLeftMouseDraggedMask;
+  NSPoint start = [self convertPoint: [theEvent locationInWindow] fromView: nil];
+  NSEvent *event = theEvent;
+
+  [selectionModel beginBandWithModifiers:
+                    FSNSelectionModifiersFromEventFlags([theEvent modifierFlags])];
+
+  while ([event type] != NSLeftMouseUp)
+    {
+      CREATE_AUTORELEASE_POOL (arp);
+      NSPoint p;
+
+      event = [NSApp nextEventMatchingMask: mask
+                                 untilDate: [NSDate distantFuture]
+                                    inMode: NSEventTrackingRunLoopMode
+                                   dequeue: YES];
+      p = [self convertPoint: [event locationInWindow] fromView: nil];
+      [self autoscroll: event];
+
+      [self setNeedsDisplayInRect: NSInsetRect(_bandRect, -1, -1)];
+      _bandRect = NSMakeRect(MIN(start.x, p.x), MIN(start.y, p.y),
+                             MAX(1, fabs(p.x - start.x)), MAX(1, fabs(p.y - start.y)));
+      [self setNeedsDisplayInRect: NSInsetRect(_bandRect, -1, -1)];
+
+      [selectionModel updateBandWithItems: [self repsInBandFrom: start to: p]];
+      [self applySelectionModel];
+      [self displayIfNeeded];
+      DESTROY (arp);
+    }
+
+  [selectionModel endBand];
+  [self setNeedsDisplayInRect: NSInsetRect(_bandRect, -1, -1)];
+  _bandRect = NSZeroRect;
+  [self applySelectionModel];
+}
+
+- (void)drawRect:(NSRect)rect
+{
+  [super drawRect: rect];
+
+  if (NSIsEmptyRect(_bandRect) == NO && NSIntersectsRect(rect, _bandRect))
+    {
+      [[[NSColor selectedControlColor] colorWithAlphaComponent: 0.3] set];
+      NSRectFillUsingOperation(_bandRect, NSCompositeSourceOver);
+      [[NSColor darkGrayColor] set];
+      NSFrameRect(_bandRect);
+    }
+}
+
 - (void)mouseDown:(NSEvent *)theEvent
 {
+  NSPoint location = [self convertPoint: [theEvent locationInWindow] fromView: nil];
+  NSInteger row = [self rowAtPoint: location];
+  unsigned modifiers = FSNSelectionModifiersFromEventFlags([theEvent modifierFlags]);
+  FSNListViewNodeRep *rep;
+  BOOL wasOnlySelected;
+  NSEvent *next;
+
   if (clickTimer != nil)
     {
       [clickTimer invalidate];
@@ -5024,39 +5180,119 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
       return;
     }
 
-  if ([theEvent clickCount] == 1
-      && (!([theEvent modifierFlags] & NSShiftKeyMask)))
+  [dsource setMouseFlags: [theEvent modifierFlags]];
+
+  /* The second click of a double click opens; NSTableView sends the
+     double action for it. */
+  if ([theEvent clickCount] > 1)
     {
-      NSPoint location;
-      int row;
-
-      location = [theEvent locationInWindow];
-      location = [self convertPoint: location fromView: nil];
-      row = [self rowAtPoint: location];
-
-      if (row == [self selectedRow])
-	{
-	  // We clicked on an already-selected row.
-
-	  ASSIGN(clickTimer, [NSTimer scheduledTimerWithTimeInterval: 0.5 // FIXME: use [NSEvent doubleClickInterval]
-							      target: self
-							    selector: @selector(singleClick:)
-							    userInfo: theEvent
-							     repeats: NO]);
-	}
+      [super mouseDown: theEvent];
+      return;
     }
 
-  [dsource setMouseFlags: [theEvent modifierFlags]];
   [dsource stopRepNameEditing];
+  [[self window] makeFirstResponder: self];
 
-  [super mouseDown: theEvent];
+  /* Control-click is the context menu, which a one-button mouse has no
+     other way to ask for. */
+  if (modifiers & FSNSelectionModifierControl)
+    {
+      NSEvent *menuEvent = [NSEvent mouseEventWithType: NSRightMouseDown
+                                              location: [theEvent locationInWindow]
+                                         modifierFlags: [theEvent modifierFlags]
+                                             timestamp: [theEvent timestamp]
+                                          windowNumber: [theEvent windowNumber]
+                                               context: [theEvent context]
+                                           eventNumber: [theEvent eventNumber]
+                                            clickCount: 1
+                                              pressure: [theEvent pressure]];
+      NSMenu *menu = [self menuForEvent: menuEvent];
+
+      if (menu != nil)
+        [NSMenu popUpContextMenu: menu withEvent: menuEvent forView: self];
+      return;
+    }
+
+  [self syncSelectionModel];
+
+  if (row < 0)
+    {
+      [selectionModel mouseDownOnEmptySpaceWithModifiers: modifiers];
+      [self applySelectionModel];
+      next = FSNNextMouseUpOrDraggedEvent([self window]);
+      if ([next type] == NSLeftMouseDragged)
+        [self trackSelectionBandFromEvent: theEvent];
+      return;
+    }
+
+  rep = [[dsource reps] objectAtIndex: row];
+  wasOnlySelected = ([[self selectedRowIndexes] count] == 1 && [self isRowSelected: row]);
+
+  if ([self point: location isOnNameOfRow: row] == NO)
+    {
+      /* Beside the name a press selects the row, and a drag from there
+         is a rubber band. */
+      [selectionModel mouseDownOnItem: rep modifiers: modifiers];
+      [self applySelectionModel];
+      next = FSNNextMouseUpOrDraggedEvent([self window]);
+      if ([next type] == NSLeftMouseDragged)
+        {
+          [selectionModel mouseUpOnItem: rep dragged: YES];
+          [self trackSelectionBandFromEvent: theEvent];
+        }
+      else
+        {
+          [selectionModel mouseUpOnItem: rep dragged: NO];
+          [self applySelectionModel];
+        }
+      return;
+    }
+
+  [selectionModel mouseDownOnItem: rep modifiers: modifiers];
+  [self applySelectionModel];
+
+  /* A modifier click that deselected the row is done. */
+  if ([selectionModel isItemSelected: rep] == NO)
+    return;
+
+  next = FSNNextMouseUpOrDraggedEvent([self window]);
+
+  if ([next type] == NSLeftMouseDragged)
+    {
+      [selectionModel mouseUpOnItem: rep dragged: YES];
+      [self startRowDragWithEvent: theEvent];
+      return;
+    }
+
+  [selectionModel mouseUpOnItem: rep dragged: NO];
+  [self applySelectionModel];
+
+  /* A click on the name of the item that already was the only one
+     selected starts renaming once it is clear no second click follows. */
+  if (wasOnlySelected && (modifiers & ~FSNSelectionModifierOption) == 0)
+    {
+      ASSIGN(clickTimer, [NSTimer scheduledTimerWithTimeInterval: [NSEvent doubleClickInterval]
+							   target: self
+							 selector: @selector(singleClick:)
+							 userInfo: theEvent
+							  repeats: NO]);
+    }
+}
+
+- (void)scrollToEdge:(BOOL)top
+{
+  NSRect b = [self bounds];
+  BOOL atMaxY = (top != [self isFlipped]);
+
+  [self scrollRectToVisible: NSMakeRect(NSMinX(b), atMaxY ? NSMaxY(b) - 1 : NSMinY(b), 1, 1)];
 }
 
 - (void)keyDown:(NSEvent *)theEvent
 {
   NSString *characters = [theEvent characters];
+  NSUInteger flags = [theEvent modifierFlags];
+  BOOL extend = ((flags & NSShiftKeyMask) != 0);
   unichar character = 0;
-  NSString *characterStr = nil;
   NSRect vRect, hiddRect;
   NSPoint p;
   float x, y, w, h;
@@ -5064,7 +5300,6 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
   if ([characters length] > 0)
     {
       character = [characters characterAtIndex: 0];
-      characterStr = [characters substringToIndex: 1];
     }
 
   switch (character)
@@ -5093,14 +5328,33 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
       [self scrollRectToVisible: hiddRect];
       return;
 
-    case NSUpArrowFunctionKey:
-      [dsource stopRepNameEditing];
-      [dsource selectRepInPrevRow];
+    /* Home and End only scroll; the selection stays. */
+    case NSHomeFunctionKey:
+      [self scrollToEdge: YES];
       return;
 
+    case NSEndFunctionKey:
+      [self scrollToEdge: NO];
+      return;
+
+    case NSUpArrowFunctionKey:
     case NSDownArrowFunctionKey:
-      [dsource stopRepNameEditing];
-      [dsource selectRepInNextRow];
+      /* Command-Up and Command-Down open things, further up. */
+      if (flags & (NSCommandKeyMask | NSControlKeyMask))
+        break;
+      if (flags & NSAlternateKeyMask)
+        {
+          [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+            return (character == NSUpArrowFunctionKey) ? [model selectFirstItem]
+                                                       : [model selectLastItem];
+          }];
+          return;
+        }
+      [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+        return [model moveInDirection: (character == NSUpArrowFunctionKey)
+                                       ? FSNSelectionDirectionUp : FSNSelectionDirectionDown
+                               extend: extend];
+      }];
       return;
 
     /* The reference expands the selected folders with the right arrow
@@ -5114,49 +5368,44 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
 
     case NSCarriageReturnCharacter:
       {
-	unsigned flags = [theEvent modifierFlags];
 	BOOL closesndr = ((flags == NSAlternateKeyMask)
 			  || (flags == NSControlKeyMask));
 	[dsource openSelectionInNewViewer: closesndr];
-	DESTROY(charBuffer);
 	return;
       }
-    case 0x01B: // Escape
-      DESTROY(charBuffer);
+
+    /* Tab walks the names instead of leaving the view, as in the
+       reference, whose sidebar never takes the focus. */
+    case NSTabCharacter:
+    case NSBackTabCharacter:
+      if (flags & (NSCommandKeyMask | NSControlKeyMask))
+        break;
+      [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+        return [model selectNextInNameOrder: (character == NSTabCharacter && extend == NO)];
+      }];
       return;
+
+    case 0x01B: // Escape
+      [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+        [model resetTypeSelect];
+        return [model deselectAllItems];
+      }];
+      return;
+
     default:
       break;
     }
 
-  if (([characters length] > 0) && (character < 0xF700))
+  if (character >= 0x20 && character < 0xF700
+      && (flags & (NSCommandKeyMask | NSControlKeyMask)) == 0)
     {
-      if (charBuffer != nil)
-	{
-	  if ([theEvent timestamp] - lastKeyPressedTime < 5.0) // seconds
-	    {
-	      NSString *appendBuffer = [charBuffer stringByAppendingString:characterStr];
+      NSString *typed = characters;
+      NSTimeInterval when = [theEvent timestamp];
 
-	      // Try selecting
-	      if ([dsource selectRepWithPrefix:appendBuffer])
-		{
-		  ASSIGN(charBuffer, appendBuffer);
-		  return;
-		}
-	      // unable to select - fall-through and reinit as if typed is first char
-	    }
-	}
-
-      ASSIGN(charBuffer, characterStr);
-      lastKeyPressedTime = [theEvent timestamp];
-
-      // Try selecting
-      if ([dsource selectRepWithPrefix:charBuffer])
-	{
-	  return;
-	}
-
-      // Selection failed, reinitialize and use mismatching character as new buffer beginning
-      DESTROY(charBuffer);
+      [self performSelectionKey: ^BOOL(FSNSelectionModel *model) {
+        return [model typeSelect: typed atTime: when];
+      }];
+      return;
     }
 
   [super keyDown: theEvent];

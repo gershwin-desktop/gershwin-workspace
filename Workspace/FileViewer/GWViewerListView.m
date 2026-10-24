@@ -115,19 +115,8 @@
     {
       character = [characters characterAtIndex: 0];
     }
-  // Handle Shift-Down = Open Selection
-  if (character == NSDownArrowFunctionKey && (flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
-    {
-      [viewer openSelectionInNewViewer: NO];
-      return;
-    }
-
-  // Handle Shift-Up = Open parent folder in new viewer
-  if (character == NSUpArrowFunctionKey && (flags & NSShiftKeyMask) && !(flags & NSCommandKeyMask))
-    {
-      [viewer openEnclosingFolderClosingViewer: NO];
-      return;
-    }
+  /* Shift with an arrow extends the selection (FSNListView), as in the
+     reference; opening is Command's. */
 
   // Handle Command-Shift-Down = Open as Folder
   if (character == NSDownArrowFunctionKey && (flags & NSCommandKeyMask) && (flags & NSShiftKeyMask))
@@ -151,38 +140,11 @@
       return;
     }
 
-  // Handle Shift-Enter and Tab to select first item if nothing selected
-  if ((character == '\r' && (flags & NSShiftKeyMask)) || character == '\t')
+  // Shift-Return opens the selection as a folder
+  if (character == '\r' && (flags & NSShiftKeyMask) && [[self selectedNodes] count] > 0)
     {
-      NSArray *selection = [self selectedNodes];
-      if (selection == nil || [selection count] == 0)
-        {
-          // Let parent handle selection of first item
-          [super keyDown: theEvent];
-          return;
-        }
-
-      if (character == '\r' && (flags & NSShiftKeyMask))
-        {
-          [viewer openSelectionAsFolder];
-          return;
-        }
-    }
-
-  // Auto-select first item when pressing arrow keys with no selection
-  if ((character == NSUpArrowFunctionKey
-       || character == NSDownArrowFunctionKey
-       || character == NSLeftArrowFunctionKey
-       || character == NSRightArrowFunctionKey)
-      && !(flags & NSCommandKeyMask))
-    {
-      NSArray *selection = [self selectedNodes];
-      if (selection == nil || [selection count] == 0)
-        {
-          [self selectRowIndexes: [NSIndexSet indexSetWithIndex: 0]
-            byExtendingSelection: NO];
-          [self scrollRowToVisible: 0];
-        }
+      [viewer openSelectionAsFolder];
+      return;
     }
 
   // Pass other keys to parent
@@ -196,15 +158,17 @@
     int row = [self rowAtPoint: [self convertPoint: location fromView: nil]];
     
     if (row != -1) {
-      NSArray *selnodes = [self selectedNodes];
+      NSArray *selnodes;
+
+      /* The menu of a row that is not selected is about that row alone,
+         as in the reference, so it becomes the selection. */
+      if ([self isRowSelected: row] == NO) {
+        [self selectRowIndexes: [NSIndexSet indexSetWithIndex: row]
+          byExtendingSelection: NO];
+      }
+      selnodes = [self selectedNodes];
 
       if (selnodes && [selnodes count]) {
-        FSNListViewNodeRep *rep = [[self reps] objectAtIndex: row];
-
-        if ([selnodes containsObject: [rep node]] == NO) {
-          return [super menuForEvent: theEvent];
-        }
-        
         return [[Workspace gworkspace] contextMenuForNodes: selnodes
                                                 openTarget: [viewer win]
                                              openWithTarget: [Workspace gworkspace]
