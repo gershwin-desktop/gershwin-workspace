@@ -387,7 +387,6 @@ static BOOL hasLastExtents_ = NO;
       [vwrwin setFrame: r display: NO];
     }
 
-    [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_WIN_H)];    
     [vwrwin setResizeIncrements: GWViewerResizeIncrements(viewType, resizeIncrement)];
 
     [self setWindowTitleForNode: baseNode];
@@ -405,6 +404,13 @@ static BOOL hasLastExtents_ = NO;
       [vwrwin setToolbar: [toolbarController toolbar]];
       [vwrwin setFrame: frame display: NO];
     }
+
+    /* Set only now: adding the toolbar raises a minimum size set before
+     * by the toolbar's height, and putting the frame back then enlarged
+     * every stored window lower than MIN_WIN_H plus the toolbar, so a
+     * folder never reopened at the size it was closed at.  MIN_WIN_H is
+     * meant for the whole window, toolbar included. */
+    [vwrwin setMinSize: NSMakeSize(resizeIncrement * 2, MIN_WIN_H)];
 
     [self createSubviews];
 
