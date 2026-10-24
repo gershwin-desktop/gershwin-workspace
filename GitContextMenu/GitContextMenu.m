@@ -33,6 +33,9 @@
  * UI. */
 #define GIT_TIMEOUT 60.0
 
+/* Watches sent to fswatcher in one run-loop pass. */
+#define GIT_WATCH_SLICE 200
+
 @implementation GitContextMenu
 
 - (id)init
@@ -2602,12 +2605,28 @@
 - (void)_flushPendingWatcherOps
 {
   NSArray *adds, *removes;
+  NSUInteger nAdds, nRemoves;
+
+  /* A slice per pass: the checkouts of a home folder add tens of thousands
+     of watches, and sending them all at once kept the window from
+     answering for seconds; the rest goes out on the next passes, between
+     events. Adds go before removes, as before. */
   [watchLock lock];
-  adds = [_pendingWatcherAdds copy];
-  removes = [_pendingWatcherRemoves copy];
-  [_pendingWatcherAdds removeAllObjects];
-  [_pendingWatcherRemoves removeAllObjects];
+  nAdds = MIN([_pendingWatcherAdds count], (NSUInteger) GIT_WATCH_SLICE);
+  nRemoves = MIN([_pendingWatcherRemoves count], (NSUInteger) GIT_WATCH_SLICE - nAdds);
+  adds = [[_pendingWatcherAdds subarrayWithRange: NSMakeRange (0, nAdds)] retain];
+  removes = [[_pendingWatcherRemoves subarrayWithRange: NSMakeRange (0, nRemoves)] retain];
+  [_pendingWatcherAdds removeObjectsInRange: NSMakeRange (0, nAdds)];
+  [_pendingWatcherRemoves removeObjectsInRange: NSMakeRange (0, nRemoves)];
   _watcherFlushTimer = nil;
+  if ([_pendingWatcherAdds count] > 0 || [_pendingWatcherRemoves count] > 0)
+    {
+      _watcherFlushTimer = [NSTimer scheduledTimerWithTimeInterval: 0
+                                                           target: self
+                                                         selector: @selector (_flushPendingWatcherOps)
+                                                         userInfo: nil
+                                                          repeats: NO];
+    }
   [watchLock unlock];
 
   for (NSArray *args in adds)
@@ -2638,6 +2657,8 @@
           NSLog (@"GitContextMenu: deferred removeWatcherForPath failed: %@", e);
         }
     }
+  [adds release];
+  [removes release];
 }
 
 /* When a watched directory changes, re-scan its immediate children so that
