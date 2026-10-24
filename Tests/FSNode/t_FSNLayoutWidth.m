@@ -43,14 +43,19 @@ main(void)
   contentWithout = [scroll contentSize].width;
   withoutScroller = [view windowContentWidthForLayout];
 
+  /* Autohiding would keep the scroller off for a view this small, so force
+     it on to measure what it really takes: its width plus the line
+     NSScrollView draws between it and the clip view. */
+  [scroll setAutohidesScrollers: NO];
   [scroll setHasVerticalScroller: YES];
   [scroll tile];
   contentWith = [scroll contentSize].width;
   withScroller = [view windowContentWidthForLayout];
 
+  PASS(contentWith < contentWithout, "the scroller is shown");
   PASS_EQUAL([NSNumber numberWithDouble: withoutScroller],
-             [NSNumber numberWithDouble: contentWithout - [NSScroller scrollerWidth]],
-             "the scroller's width is kept free while the scroller is hidden");
+             [NSNumber numberWithDouble: contentWith],
+             "the space the scroller takes is kept free while it is hidden");
   PASS_EQUAL([NSNumber numberWithDouble: withoutScroller],
              [NSNumber numberWithDouble: withScroller],
              "so the layout width does not change when the scroller appears");

@@ -1855,9 +1855,18 @@ static NSUInteger FSNFrameRects(NSRect aRect, NSRect *out)
          content area needs fewer rows, fewer rows fit without scrolling,
          the scroller goes, the area grows - the scroll view and this view
          then swap sizes forever and the process stops answering.  A folder
-         of a few thousand entries reached that state every time. */
+         of a few thousand entries reached that state every time.
+         The scroller takes more than its own width: NSScrollView also
+         draws a line between it and the clip view.  Reserving only the
+         scroller width left a band of widths where the content fits one
+         more column without the scroller than with it, so the layout
+         depended on whether the window had been growing or shrinking.
+         NSScrollView's own formula counts that line. */
       if ([sv autohidesScrollers] && [sv hasVerticalScroller] == NO)
-        cw -= [NSScroller scrollerWidth];
+        cw = [NSScrollView contentSizeForFrameSize: NSMakeSize(cw, 0)
+                             hasHorizontalScroller: NO
+                               hasVerticalScroller: YES
+                                        borderType: NSNoBorder].width;
       if (cw > 0) return cw;
     }
 
