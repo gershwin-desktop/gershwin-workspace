@@ -143,6 +143,7 @@ NSString * const GWDockSettingsDidChangeNotification =
 
     win = RETAIN (window);
     RELEASE (window);
+    desktopLaidOutFactor = [GWDesktopWindow desktopScaleFactor];
 
     hidedock = [defaults boolForKey: @"hidedock"];
     
@@ -165,6 +166,15 @@ NSString * const GWDockSettingsDidChangeNotification =
      * settings in the file while Workspace runs. */
     [nc addObserver: self
            selector: @selector(dockDefaultsDidChange:)
+               name: NSUserDefaultsDidChangeNotification
+             object: nil];
+
+    /* The desktop window takes GSScaleFactor as its factor (GWDesktopWindow
+     * -userSpaceScaleFactor), so a new value has to be laid out at once,
+     * or its views keep bounds of the old factor while every size Workspace
+     * computes uses the new one. */
+    [nc addObserver: self
+           selector: @selector(scaleFactorDefaultDidChange:)
                name: NSUserDefaultsDidChangeNotification
              object: nil];
 
@@ -596,18 +606,19 @@ NSString * const GWDockSettingsDidChangeNotification =
 
 - (NSRect)desktopWindowFrame
 {
-  /* The desktop window's FRAME is in device pixels: the init path runs the
-   * logical content rect through the decoration scaling (at GSScaleFactor 2
-   * a 640x400 content rect yields a 1280x800 frame).  Passing the logical
-   * desktopFullFrame to setFrame: directly therefore shrinks the window to
-   * a quarter of the screen, so scale here, from the same GSScaleFactor
-   * default desktopFullFrame divides by (not the window's transient screen,
-   * which can be nil right after a RandR change). */
-  NSRect full = [GWDesktopWindow desktopFullFrame];
+  return [GWDesktopWindow desktopPixelFrame];
+}
+
+- (void)scaleFactorDefaultDidChange:(NSNotification *)notif
+{
   CGFloat factor = [GWDesktopWindow desktopScaleFactor];
 
-  return NSMakeRect(full.origin.x, full.origin.y,
-                    full.size.width * factor, full.size.height * factor);
+  if (fabs(factor - desktopLaidOutFactor) < 0.001)
+    return;
+  desktopLaidOutFactor = factor;
+  /* Same frame in pixels, so the reframe it schedules is what lays the
+   * window's views out again: its nudge resizes the window. */
+  [self screenParametersDidChange: nil];
 }
 
 - (void)screenParametersDidChange:(NSNotification *)notif
@@ -651,6 +662,9 @@ NSString * const GWDockSettingsDidChangeNotification =
 {
   if (dock && hidedock == NO) {
     [dock tile];
+    /* The Dock may now sit on another monitor (the primary changed) or at
+     * another height; the space it reserves has to go with it. */
+    [dockWindow updateX11Strut];
   }
 }
 
@@ -713,7 +727,8 @@ static int desktopReframeGeneration = 0;
 
 - (void)setReservedFrames
 {
-  NSRect screenFrame = [[[NSScreen screens] objectAtIndex:0] frame];
+  /* The menu bar and the Dock live on the primary monitor. */
+  NSRect screenFrame = [GWDesktopWindow primaryMonitorFrame];
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
   NSString *menuStyle = [defaults objectForKey: @"NSMenuInterfaceStyle"];
   

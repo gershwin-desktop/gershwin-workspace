@@ -54,10 +54,14 @@ if [ -z "$(fc-list Inter 2>/dev/null | head -n 1)" ]; then
   exit 1
 fi
 
-suites=""
-for marker in */TestInfo; do
-  suites="$suites ${marker%/TestInfo}"
-done
+# Suite names given as arguments (for example "Desktop") run alone; the
+# multi-monitor entry point Tests/run-multihead.sh does that.
+suites="$*"
+if [ -z "$suites" ]; then
+  for marker in */TestInfo; do
+    suites="$suites ${marker%/TestInfo}"
+  done
+fi
 [ -n "$suites" ] || { echo "FATAL: no suites found" >&2; exit 1; }
 
 # gnustep-tests exits 1 on any failed test, file or build. Its summary only

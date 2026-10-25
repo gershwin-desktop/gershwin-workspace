@@ -59,6 +59,8 @@ extern NSString * const GWDockSettingsDidChangeNotification;
   NSTimer *dockStartupTimer;
   /* Set while -saveDockDefaults writes its keys one by one. */
   BOOL savingDockDefaults;
+  /* The desktopScaleFactor the desktop window was last laid out with. */
+  CGFloat desktopLaidOutFactor;
   DockPosition dockPosition;
   
   NSRect dockReservedFrame;

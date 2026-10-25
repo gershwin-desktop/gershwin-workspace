@@ -35,6 +35,7 @@
 #include <X11/Xlib.h>
 #include <X11/Xatom.h>
 #include <X11/extensions/shape.h>
+#import "PrimaryMonitor.h"
 #endif
 
 @implementation GWDockWindow
@@ -288,15 +289,29 @@
   if (NSIsEmptyRect(windowFrame))
     windowFrame = [self frame];
 
-  /* EWMH struts are in root-window coordinates with Y measured from the top,
-   * but NSWindow frames are bottom-left origin.  Convert the vertical span
-   * for left/right docks through the screen height. */
-  CGFloat screenH = [(self.screen ? self.screen : [NSScreen mainScreen]) frame].size.height;
-  unsigned long topY    = (unsigned long)(screenH - (windowFrame.origin.y
-                                                     + windowFrame.size.height));
-  unsigned long bottomY = (unsigned long)(screenH - windowFrame.origin.y);
+  /* EWMH struts are measured from the root edges, in root coordinates
+   * with Y from the top; NSWindow frames are bottom-left origin over the
+   * whole X screen.  A Dock on a monitor that does not reach the root edge
+   * (a shorter one, or one with another beside it) reserves up to that
+   * edge over its own extent; the window manager applies it to that
+   * monitor only. */
+  NSSize rootSize = PrimaryMonitorRootSize(display);
+  NSRect barXRect = PrimaryMonitorFlipRect(windowFrame, rootSize.height);
+  PrimaryMonitorEdge edge;
 
-  DockPosition pos = [dockView position];
+  switch ([dockView position])
+    {
+      case DockPositionLeft:
+        edge = PrimaryMonitorEdgeLeft;
+        break;
+      case DockPositionRight:
+        edge = PrimaryMonitorEdgeRight;
+        break;
+      case DockPositionBottom:
+      default:
+        edge = PrimaryMonitorEdgeBottom;
+        break;
+    }
 
   /*
    * _NET_WM_STRUT: left, right, top, bottom
@@ -306,29 +321,8 @@
    *                        top_start_x, top_end_x,
    *                        bottom_start_x, bottom_end_x
    */
-  unsigned long strutPartial[12] = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-
-  switch (pos)
-    {
-      case DockPositionLeft:
-        strutPartial[0] = (unsigned long)windowFrame.size.width;  /* left */
-        strutPartial[4] = topY;     /* left_start_y (top-down) */
-        strutPartial[5] = bottomY;  /* left_end_y   (top-down) */
-        break;
-
-      case DockPositionRight:
-        strutPartial[1] = (unsigned long)windowFrame.size.width;  /* right */
-        strutPartial[6] = topY;     /* right_start_y (top-down) */
-        strutPartial[7] = bottomY;  /* right_end_y   (top-down) */
-        break;
-
-      case DockPositionBottom:
-        strutPartial[3] = (unsigned long)windowFrame.size.height; /* bottom */
-        strutPartial[10] = (unsigned long)windowFrame.origin.x;   /* bottom_start_x */
-        strutPartial[11] = (unsigned long)(windowFrame.origin.x
-                                           + windowFrame.size.width); /* bottom_end_x */
-        break;
-    }
+  unsigned long strutPartial[12];
+  PrimaryMonitorStrutForPanel(barXRect, rootSize, edge, strutPartial);
 
   Atom netWmStrut = XInternAtom(display, "_NET_WM_STRUT", False);
   Atom netWmStrutPartial = XInternAtom(display, "_NET_WM_STRUT_PARTIAL", False);

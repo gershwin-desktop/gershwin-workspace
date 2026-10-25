@@ -200,6 +200,10 @@ extern NSString * const FSNListViewOptionColumnOrder;
 
 + (NSArray *)finderColumnIds;
 
+/* Applies the row height, fonts and icons of the current text size, icon
+ * size and window scale factor to the table. */
+- (void)applyRowMetrics;
+
 /* nil for an id this list view has no column for. */
 + (NSNumber *)tableIdentifierForColumnId:(NSString *)columnId;
 

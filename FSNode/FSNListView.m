@@ -1600,9 +1600,17 @@ compareOptional(id a, id b)
 
 - (CGFloat)rowHeight
 {
+  /* The rows are aligned to the device pixels of the window they are drawn
+   * in; with monitors of different scales that need not have the main
+   * screen's factor, and rows aligned to another factor leave hairline
+   * seams between the stripes. */
+  NSWindow *win = [listView window];
+  CGFloat scale = win ? [win userSpaceScaleFactor]
+                      : [[NSScreen mainScreen] userSpaceScaleFactor];
+
   return [[self class] rowHeightForTextSize: [self textSize]
                                    iconSize: listIconSize
-                                scaleFactor: [[NSScreen mainScreen] userSpaceScaleFactor]];
+                                scaleFactor: scale];
 }
 
 - (BOOL)setSortColumnId:(NSString *)columnId ascending:(BOOL)ascending
@@ -4748,6 +4756,35 @@ NSComparisonResult sortSubviews(id view1, id view2, void *context)
 
 
 @implementation FSNListView
+
+/* The row height depends on the window's scale factor (see -rowHeight):
+ * it is applied again when the view gets a window and when that window
+ * moves to a monitor of another scale. */
+- (void)viewDidMoveToWindow
+{
+  NSNotificationCenter *center = [NSNotificationCenter defaultCenter];
+  /* By name: libs-gui only posts it where windows have per-monitor scales. */
+  NSString *name = @"NSWindowDidChangeBackingPropertiesNotification";
+
+  [super viewDidMoveToWindow];
+  [center removeObserver: self name: name object: nil];
+  if ([self window] != nil)
+    {
+      [center addObserver: self
+                 selector: @selector(windowScaleDidChange:)
+                     name: name
+                   object: [self window]];
+      [self windowScaleDidChange: nil];
+    }
+}
+
+- (void)windowScaleDidChange:(NSNotification *)notif
+{
+  if (fabs([dsource rowHeight] - [self rowHeight]) > 0.001)
+    {
+      [dsource applyRowMetrics];
+    }
+}
 
 - (void)dealloc
 {

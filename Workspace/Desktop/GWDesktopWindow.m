@@ -32,6 +32,9 @@
 #endif
 
 #import "GWDesktopWindow.h"
+#ifndef _WIN32
+#import "PrimaryMonitor.h"
+#endif
 #import "GWDesktopManager.h"
 #import "FSNSpringLoader.h"
 #import "Dock/DockStack.h"
@@ -58,14 +61,23 @@
   [super sendEvent: theEvent];
 }
 
-+ (NSRect)desktopFullFrame
+#ifndef _WIN32
+/* Only an X server has a Display to ask; the other backends keep the
+ * screen list.  NULL also before the backend is up (first init). */
+static Display *GWDesktopXDisplay(void)
 {
-  /* Union of all screen frames; width and height are divided by
-   * GSScaleFactor (like the menu bar does in Menu.app) so the desktop
-   * window keeps a constant physical size independent of the scale
-   * factor.
-   *
-   * The frames must come from the X server, not from [NSScreen screens]:
+  GSDisplayServer *server = GSCurrentServer();
+
+  if ([NSStringFromClass([server class]) hasPrefix: @"XG"]
+      && [server respondsToSelector: @selector(serverDevice)])
+    return (Display *)[server serverDevice];
+  return NULL;
+}
+#endif
+
++ (NSRect)desktopPixelFrame
+{
+  /* The frames must come from the X server, not from [NSScreen screens]:
    * after a live RandR resize NSScreen keeps reporting the pre-resize
    * geometry indefinitely (resetScreens does not refresh the backend's
    * cached screen list), which sizes the desktop from stale geometry and
@@ -75,43 +87,87 @@
    * union of all monitors; NSScreen remains as the fallback when no
    * display server is reachable yet (first init). */
 #ifndef _WIN32
-  GSDisplayServer *server = GSCurrentServer();
-  Display *dpy = NULL;
-
-  /* Only an X server has a Display to ask; the other backends keep the
-   * screen list. */
-  if ([NSStringFromClass([server class]) hasPrefix: @"XG"]
-      && [server respondsToSelector: @selector(serverDevice)])
-    dpy = (Display *)[server serverDevice];
+  Display *dpy = GWDesktopXDisplay();
 
   if (dpy)
     {
-      int w = DisplayWidth(dpy, DefaultScreen(dpy));
-      int h = DisplayHeight(dpy, DefaultScreen(dpy));
+      /* Asked of the server, not DisplayWidth/DisplayHeight: those are
+       * cached in the connection and refreshed by the backend from the
+       * FIRST RandR event of a burst (XGServerEvent.m passes the original
+       * event, not the last one it drained, to XRRUpdateConfiguration).
+       * Unplugging a monitor is such a burst - the output goes off at the
+       * old size, then the screen shrinks - so the desktop kept the old,
+       * wider size. */
+      NSSize root = PrimaryMonitorRootSize(dpy);
 
-      if (w > 0 && h > 0)
-        {
-          CGFloat factor = [GWDesktopWindow desktopScaleFactor];
-
-          return NSMakeRect(0, 0, w / factor, h / factor);
-        }
+      if (root.width > 0 && root.height > 0)
+        return NSMakeRect(0, 0, root.width, root.height);
     }
 #endif
 
-  NSArray *screens = [NSScreen screens];
-  NSRect fullFrame = [[screens objectAtIndex:0] frame];
-  for (NSUInteger i = 1; i < [screens count]; i++) {
-    fullFrame = NSUnionRect(fullFrame, [[screens objectAtIndex:i] frame]);
+  {
+    NSArray *screens = [NSScreen screens];
+    NSRect fullFrame = [[screens objectAtIndex: 0] frame];
+    NSUInteger i;
+
+    for (i = 1; i < [screens count]; i++)
+      fullFrame = NSUnionRect(fullFrame, [[screens objectAtIndex: i] frame]);
+    return fullFrame;
   }
+}
 
++ (NSRect)desktopFullFrame
+{
+  /* The pixel frame divided by GSScaleFactor (like the menu bar does in
+   * Menu.app): the size of the desktop in the points its view is laid out
+   * in, so icons keep a constant physical size at any scale factor. */
+  NSRect frame = [self desktopPixelFrame];
   CGFloat factor = [GWDesktopWindow desktopScaleFactor];
-  if (factor != 1.0)
-    {
-      fullFrame.size.width /= factor;
-      fullFrame.size.height /= factor;
-    }
 
-  return fullFrame;
+  frame.size.width /= factor;
+  frame.size.height /= factor;
+  return frame;
+}
+
++ (void)primaryMonitorXRect:(NSRect *)xRect rootSize:(NSSize *)rootSize
+{
+#ifndef _WIN32
+  /* Asked of the X server, not taken from [NSScreen screens]: that list can
+   * lag behind a RandR change (see +desktopFullFrame), and its first entry
+   * is the primary only while a RandR primary is set. */
+  Display *dpy = GWDesktopXDisplay();
+
+  if (dpy)
+    {
+      PrimaryMonitorQuery(dpy, xRect, rootSize);
+      return;
+    }
+#endif
+  {
+    /* A backend without X: its first screen is the primary by definition. */
+    NSArray *screens = [NSScreen screens];
+    NSRect full = [[screens objectAtIndex: 0] frame];
+    NSRect first = full;
+    NSUInteger i;
+
+    for (i = 1; i < [screens count]; i++)
+      full = NSUnionRect(full, [[screens objectAtIndex: i] frame]);
+    first.origin.y = NSMaxY(full) - NSMaxY(first);
+    if (xRect != NULL)
+      *xRect = first;
+    if (rootSize != NULL)
+      *rootSize = full.size;
+  }
+}
+
++ (NSRect)primaryMonitorFrame
+{
+  NSRect xRect;
+  NSSize rootSize;
+
+  [self primaryMonitorXRect: &xRect rootSize: &rootSize];
+  xRect.origin.y = rootSize.height - xRect.origin.y - xRect.size.height;
+  return xRect;
 }
 
 + (CGFloat)desktopScaleFactor
@@ -138,6 +194,14 @@
                               defer: NO];
   if (self)
     {
+      /* At desktop level from the start: libs-gui then never gives the
+       * window the factor of one of the monitors it spans, which would
+       * resize it and scale its content away from desktopScaleFactor. */
+      [self setLevel: NSDesktopWindowLevel];
+      /* initWithContentRect: scaled the frame with the factor of the main
+       * screen, which with monitors of different scales need not be the
+       * desktop's; the root window in pixels is what it must cover. */
+      [self setFrame: [GWDesktopWindow desktopPixelFrame] display: NO];
       [self setReleasedWhenClosed: NO];
       [self setExcludedFromWindowsMenu: YES];
       [self setAcceptsMouseMovedEvents: YES];
@@ -146,6 +210,15 @@
     }
 
   return self;
+}
+
+/* Every size on the desktop (desktopFullFrame, the icon grid, the
+ * wallpaper rects) is divided by desktopScaleFactor, so the window's views
+ * must be scaled by exactly that, not by the factor libs-gui would pick from
+ * the main screen or from one of the monitors the window spans. */
+- (CGFloat)userSpaceScaleFactor
+{
+  return [GWDesktopWindow desktopScaleFactor];
 }
 
 - (void)activate
