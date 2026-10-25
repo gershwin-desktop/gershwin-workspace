@@ -1291,6 +1291,7 @@ static CGFloat desktopScaleFactor(void)
       for (NSUInteger si = 0; si < (screensStale ? 1 : [screens count]); si++)
         {
           NSRect localRect;
+          CGFloat monitorFactor = desktopScaleFactor();
 
           if (screensStale)
             {
@@ -1299,28 +1300,21 @@ static CGFloat desktopScaleFactor(void)
             }
           else
             {
-          NSRect monFrame = [[screens objectAtIndex:si] frame];
-          // Convert from screen coordinates to view-local coordinates
-          // (screenFrame.origin is the view's origin in screen coords),
-          // divided by GSScaleFactor like screenFrame above.
-          {
-            CGFloat factor = desktopScaleFactor();
-            monFrame.origin.x /= factor;
-            monFrame.origin.y /= factor;
-            monFrame.size.width /= factor;
-            monFrame.size.height /= factor;
-          }
-          localRect = NSMakeRect(monFrame.origin.x - screenFrame.origin.x,
-                                        monFrame.origin.y - screenFrame.origin.y,
-                                        monFrame.size.width,
-                                        monFrame.size.height);
+              NSScreen *monitor = [screens objectAtIndex: si];
+
+              localRect = GWDesktopMonitorViewRect([monitor frame],
+                                                   screenFrame.origin,
+                                                   desktopScaleFactor());
+              monitorFactor = [monitor userSpaceScaleFactor];
             }
 
           // Only draw if this monitor intersects the dirty rect
           if (!NSIntersectsRect(localRect, rect))
             continue;
 
-          NSSize imsize = [backImage size];
+          NSSize imsize = GWDesktopBackImageSizeOnMonitor([backImage size],
+                                                          monitorFactor,
+                                                          desktopScaleFactor());
           BackImageStyle style = backImageStyle;
 
           if ((imsize.width >= localRect.size.width) || (imsize.height >= localRect.size.height))
@@ -1366,8 +1360,13 @@ static CGFloat desktopScaleFactor(void)
 
                   while (y > (localRect.origin.y - imsize.height))
                     {
-                      [backImage compositeToPoint: NSMakePoint(x, y)
-                                        operation: NSCompositeSourceOver];
+                      [backImage drawInRect: NSMakeRect(x, y, imsize.width,
+                                                        imsize.height)
+                                   fromRect: NSZeroRect
+                                  operation: NSCompositeSourceOver
+                                   fraction: 1.0
+                             respectFlipped: YES
+                                      hints: nil];
                       x += imsize.width;
                       if (x >= NSMaxX(localRect))
                         {
@@ -1383,8 +1382,13 @@ static CGFloat desktopScaleFactor(void)
                   imagePoint = NSMakePoint(
                     localRect.origin.x + (localRect.size.width - imsize.width) / 2,
                     localRect.origin.y + (localRect.size.height - imsize.height) / 2);
-                  [backImage compositeToPoint: imagePoint
-                                    operation: NSCompositeSourceOver];
+                  [backImage drawInRect: NSMakeRect(imagePoint.x, imagePoint.y,
+                                                    imsize.width, imsize.height)
+                               fromRect: NSZeroRect
+                              operation: NSCompositeSourceOver
+                               fraction: 1.0
+                         respectFlipped: YES
+                                  hints: nil];
                 }
 
               [NSGraphicsContext restoreGraphicsState];

@@ -31,3 +31,31 @@ static inline NSRect GWDesktopBackImageSourceRect(NSRect localRect, NSRect dirty
                      dirtyRect.size.width,
                      dirtyRect.size.height);
 }
+
+/* A monitor's rect in the desktop view: monitorFrame is in device pixels
+ * (-[NSScreen frame]), the view is laid out in points of desktopFactor and
+ * starts at viewOrigin (points, screen coordinates).  The wallpaper of each
+ * monitor fills exactly this rect, so it covers the monitor's pixels at any
+ * factor. */
+static inline NSRect GWDesktopMonitorViewRect(NSRect monitorFrame,
+                                              NSPoint viewOrigin,
+                                              CGFloat desktopFactor)
+{
+  return NSMakeRect(monitorFrame.origin.x / desktopFactor - viewOrigin.x,
+                    monitorFrame.origin.y / desktopFactor - viewOrigin.y,
+                    monitorFrame.size.width / desktopFactor,
+                    monitorFrame.size.height / desktopFactor);
+}
+
+/* The size a centered or tiled picture has on a monitor, in the desktop
+ * view's points: its own size at the monitor's scale.  The desktop view is
+ * scaled by desktopFactor, so a monitor of another scale would otherwise
+ * show the picture as large as the desktop's factor makes it. */
+static inline NSSize GWDesktopBackImageSizeOnMonitor(NSSize imageSize,
+                                                     CGFloat monitorFactor,
+                                                     CGFloat desktopFactor)
+{
+  CGFloat ratio = monitorFactor / desktopFactor;
+
+  return NSMakeSize(imageSize.width * ratio, imageSize.height * ratio);
+}

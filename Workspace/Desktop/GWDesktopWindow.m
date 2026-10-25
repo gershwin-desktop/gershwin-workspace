@@ -75,14 +75,9 @@ static Display *GWDesktopXDisplay(void)
 }
 #endif
 
-+ (NSRect)desktopFullFrame
++ (NSRect)desktopPixelFrame
 {
-  /* Union of all screen frames; width and height are divided by
-   * GSScaleFactor (like the menu bar does in Menu.app) so the desktop
-   * window keeps a constant physical size independent of the scale
-   * factor.
-   *
-   * The frames must come from the X server, not from [NSScreen screens]:
+  /* The frames must come from the X server, not from [NSScreen screens]:
    * after a live RandR resize NSScreen keeps reporting the pre-resize
    * geometry indefinitely (resetScreens does not refresh the backend's
    * cached screen list), which sizes the desktop from stale geometry and
@@ -104,31 +99,34 @@ static Display *GWDesktopXDisplay(void)
        * old size, then the screen shrinks - so the desktop kept the old,
        * wider size. */
       NSSize root = PrimaryMonitorRootSize(dpy);
-      CGFloat w = root.width, h = root.height;
 
-      if (w > 0 && h > 0)
-        {
-          CGFloat factor = [GWDesktopWindow desktopScaleFactor];
-
-          return NSMakeRect(0, 0, w / factor, h / factor);
-        }
+      if (root.width > 0 && root.height > 0)
+        return NSMakeRect(0, 0, root.width, root.height);
     }
 #endif
 
-  NSArray *screens = [NSScreen screens];
-  NSRect fullFrame = [[screens objectAtIndex:0] frame];
-  for (NSUInteger i = 1; i < [screens count]; i++) {
-    fullFrame = NSUnionRect(fullFrame, [[screens objectAtIndex:i] frame]);
+  {
+    NSArray *screens = [NSScreen screens];
+    NSRect fullFrame = [[screens objectAtIndex: 0] frame];
+    NSUInteger i;
+
+    for (i = 1; i < [screens count]; i++)
+      fullFrame = NSUnionRect(fullFrame, [[screens objectAtIndex: i] frame]);
+    return fullFrame;
   }
+}
 
++ (NSRect)desktopFullFrame
+{
+  /* The pixel frame divided by GSScaleFactor (like the menu bar does in
+   * Menu.app): the size of the desktop in the points its view is laid out
+   * in, so icons keep a constant physical size at any scale factor. */
+  NSRect frame = [self desktopPixelFrame];
   CGFloat factor = [GWDesktopWindow desktopScaleFactor];
-  if (factor != 1.0)
-    {
-      fullFrame.size.width /= factor;
-      fullFrame.size.height /= factor;
-    }
 
-  return fullFrame;
+  frame.size.width /= factor;
+  frame.size.height /= factor;
+  return frame;
 }
 
 + (void)primaryMonitorXRect:(NSRect *)xRect rootSize:(NSSize *)rootSize
@@ -196,6 +194,14 @@ static Display *GWDesktopXDisplay(void)
                               defer: NO];
   if (self)
     {
+      /* At desktop level from the start: libs-gui then never gives the
+       * window the factor of one of the monitors it spans, which would
+       * resize it and scale its content away from desktopScaleFactor. */
+      [self setLevel: NSDesktopWindowLevel];
+      /* initWithContentRect: scaled the frame with the factor of the main
+       * screen, which with monitors of different scales need not be the
+       * desktop's; the root window in pixels is what it must cover. */
+      [self setFrame: [GWDesktopWindow desktopPixelFrame] display: NO];
       [self setReleasedWhenClosed: NO];
       [self setExcludedFromWindowsMenu: YES];
       [self setAcceptsMouseMovedEvents: YES];
@@ -204,6 +210,15 @@ static Display *GWDesktopXDisplay(void)
     }
 
   return self;
+}
+
+/* Every size on the desktop (desktopFullFrame, the icon grid, the
+ * wallpaper rects) is divided by desktopScaleFactor, so the window's views
+ * must be scaled by exactly that, not by the factor libs-gui would pick from
+ * the main screen or from one of the monitors the window spans. */
+- (CGFloat)userSpaceScaleFactor
+{
+  return [GWDesktopWindow desktopScaleFactor];
 }
 
 - (void)activate

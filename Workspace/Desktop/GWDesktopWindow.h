@@ -33,6 +33,9 @@
 }
 
 + (NSRect)desktopFullFrame;
+/* The desktop window's frame: the whole X root window (all monitors) in
+   device pixels, whatever the scale factors are. */
++ (NSRect)desktopPixelFrame;
 /* The GSScaleFactor the desktop is sized with: 1.0 when it is not set or not
    positive; factors below 1.0 count, as everywhere else in Workspace. */
 + (CGFloat)desktopScaleFactor;
