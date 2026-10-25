@@ -55,12 +55,10 @@ typedef enum BackImageStyle
   BackImageStyle backImageStyle;
   BOOL useBackImage;
 
-  /* Fit/Scale wallpaper pre-rendered at each monitor's exact pixel size, so
-   * a partial-rect redraw (e.g. a rubber-band drag firing drawRect: many
-   * times a second with a thin dirty strip) blits a cached bitmap instead
-   * of resampling the whole source image again.  Keyed by NSStringFromSize
-   * of the monitor's local rect; cleared whenever the image, style or
-   * screen geometry changes. */
+  /* Each monitor's wallpaper rendered once at that monitor's device
+   * pixels, so a partial redraw (a rubber-band drag fires drawRect: many
+   * times a second with thin strips) is a 1:1 blit.  Cleared whenever the
+   * image, style or screen geometry changes. */
   NSMutableDictionary *_scaledBackImageCache;
 
   NSMutableArray *mountedVolumes;
@@ -143,9 +141,12 @@ typedef enum BackImageStyle
 
 - (void)setBackImageStyle:(BackImageStyle)style;
 
-/* Fit/Scale wallpaper pre-rendered once at 'size' (a monitor's local rect
- * size); cached until the image, style or screen geometry invalidates it. */
-- (NSImage *)scaledBackImageForSize:(NSSize)size style:(BackImageStyle)style;
+/* The wallpaper of one monitor (localRect, in the view), rendered with the
+ * image resampled once to that monitor's device pixels; monitorFactor is
+ * the monitor's own scale factor.  Cached until the image, style or screen
+ * geometry invalidates it. */
+- (NSImage *)backImageForMonitorRect:(NSRect)localRect
+                              factor:(CGFloat)monitorFactor;
 
 - (void)invalidateScaledBackImageCache;
 

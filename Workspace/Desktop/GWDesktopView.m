@@ -86,6 +86,11 @@ static CGFloat desktopScaleFactor(void)
 }
 
 
+@interface GWDesktopView (BackImageRendering)
+- (void)drawBackImageInMonitorRect:(NSRect)localRect
+                            factor:(CGFloat)monitorFactor;
+@end
+
 @implementation GWDesktopView
 
 - (void)dealloc
@@ -97,9 +102,9 @@ static CGFloat desktopScaleFactor(void)
   RELEASE (expectedUnmountPaths);
   RELEASE (desktopInfo);
   RELEASE (backImage);
+  RELEASE (_scaledBackImageCache);
   RELEASE (imagePath);
   RELEASE (dragIcon);
-  RELEASE (_scaledBackImageCache);
 
   [super dealloc];
 }
@@ -1312,87 +1317,27 @@ static CGFloat desktopScaleFactor(void)
           if (!NSIntersectsRect(localRect, rect))
             continue;
 
-          NSSize imsize = GWDesktopBackImageSizeOnMonitor([backImage size],
-                                                          monitorFactor,
-                                                          desktopScaleFactor());
-          BackImageStyle style = backImageStyle;
+          /* Only the part of this monitor that is actually dirty is
+           * painted, a plain copy of the monitor's rendered picture: its
+           * pixels are the monitor's, so nothing is resampled here. */
+          {
+            NSImage *picture = [self backImageForMonitorRect: localRect
+                                                      factor: monitorFactor];
+            NSGraphicsContext *ctx = [NSGraphicsContext currentContext];
+            NSImageInterpolation interpolation = [ctx imageInterpolation];
 
-          if ((imsize.width >= localRect.size.width) || (imsize.height >= localRect.size.height))
-            {
-              if (style == BackImageTileStyle)
-                style = BackImageCenterStyle;
-            }
-
-          /* Only the part of this monitor that is actually dirty needs to be
-           * painted; a rubber-band drag redraws with a thin strip many times
-           * a second, and painting (or, for Fit/Scale, rescaling) the whole
-           * monitor rect on every one of those calls is wasted work. */
-          NSRect dirtyRect = NSIntersectionRect(localRect, rect);
-
-          if (style == BackImageFitStyle || style == BackImageScaleStyle)
-            {
-              /* The scaled bitmap depends only on the image, the style and
-               * the monitor's pixel size, not on which rect is dirty, so it
-               * is computed once and reused - the per-call cost becomes a
-               * plain 1:1 blit of just the dirty sub-rect instead of a fresh
-               * resample of the whole wallpaper. */
-              NSImage *scaled = [self scaledBackImageForSize: localRect.size
-                                                        style: style];
-              NSRect srcRect = GWDesktopBackImageSourceRect(localRect, dirtyRect);
-
-              [scaled drawInRect: dirtyRect
-                        fromRect: srcRect
-                       operation: NSCompositeSourceOver
-                        fraction: 1.0
-                  respectFlipped: YES
-                           hints: nil];
-            }
-          else
-            {
-              [NSGraphicsContext saveGraphicsState];
-              NSBezierPath *clipPath = [NSBezierPath bezierPathWithRect: dirtyRect];
-              [clipPath addClip];
-
-              if (style == BackImageTileStyle)
-                {
-                  CGFloat x = localRect.origin.x;
-                  CGFloat y = NSMaxY(localRect) - imsize.height;
-
-                  while (y > (localRect.origin.y - imsize.height))
-                    {
-                      [backImage drawInRect: NSMakeRect(x, y, imsize.width,
-                                                        imsize.height)
-                                   fromRect: NSZeroRect
-                                  operation: NSCompositeSourceOver
-                                   fraction: 1.0
-                             respectFlipped: YES
-                                      hints: nil];
-                      x += imsize.width;
-                      if (x >= NSMaxX(localRect))
-                        {
-                          y -= imsize.height;
-                          x = localRect.origin.x;
-                        }
-                    }
-                }
-              else
-                {
-                  /* Center style */
-                  NSPoint imagePoint;
-                  imagePoint = NSMakePoint(
-                    localRect.origin.x + (localRect.size.width - imsize.width) / 2,
-                    localRect.origin.y + (localRect.size.height - imsize.height) / 2);
-                  [backImage drawInRect: NSMakeRect(imagePoint.x, imagePoint.y,
-                                                    imsize.width, imsize.height)
-                               fromRect: NSZeroRect
-                              operation: NSCompositeSourceOver
-                               fraction: 1.0
-                         respectFlipped: YES
-                                  hints: nil];
-                }
-
-              [NSGraphicsContext restoreGraphicsState];
-            }
+            [NSGraphicsContext saveGraphicsState];
+            NSRectClip(NSIntersectionRect(localRect, rect));
+            [ctx setImageInterpolation: NSImageInterpolationNone];
+            [picture drawInRect: localRect
+                       fromRect: NSZeroRect
+                      operation: NSCompositeSourceOver
+                       fraction: 1.0
+                 respectFlipped: YES
+                          hints: nil];
+            [ctx setImageInterpolation: interpolation];
+            [NSGraphicsContext restoreGraphicsState];
+          }
         }
     }
 
@@ -2094,71 +2039,119 @@ static CGFloat desktopScaleFactor(void)
     }
 }
 
-- (NSImage *)scaledBackImageForSize:(NSSize)size style:(BackImageStyle)style
+- (NSImage *)backImageForMonitorRect:(NSRect)localRect
+                              factor:(CGFloat)monitorFactor
 {
-  NSString *key = NSStringFromSize(size);
-  NSImage *cached = [_scaledBackImageCache objectForKey: key];
-  NSImage *scaled;
-  NSSize imsize;
+  CGFloat dsf = desktopScaleFactor();
+  NSSize pixels = NSMakeSize(rint(NSWidth(localRect) * dsf),
+                             rint(NSHeight(localRect) * dsf));
+  NSString *key = [NSString stringWithFormat: @"%gx%g@%g", pixels.width,
+                            pixels.height, monitorFactor];
+  NSImage *picture = [_scaledBackImageCache objectForKey: key];
+  NSCachedImageRep *rep;
+  NSRect bounds = NSMakeRect(0, 0, NSWidth(localRect), NSHeight(localRect));
 
-  if (cached != nil)
+  if (picture != nil || pixels.width <= 0 || pixels.height <= 0)
     {
-      return cached;
+      return picture;
     }
+  /* An unscaled cache of exactly the monitor's pixels: drawn at the
+   * monitor's place it maps 1:1 onto the window's device pixels. */
+  rep = [[NSCachedImageRep alloc] initWithSize: bounds.size
+                                    pixelsWide: (NSInteger)pixels.width
+                                    pixelsHigh: (NSInteger)pixels.height
+                                         depth: [[NSScreen mainScreen] depth]
+                                      separate: YES
+                                         alpha: YES];
+  picture = [[NSImage alloc] initWithSize: bounds.size];
+  [picture addRepresentation: rep];
+  RELEASE (rep);
+  [picture lockFocusOnRepresentation: rep];
+  [[NSColor clearColor] set];
+  NSRectFillUsingOperation(bounds, NSCompositeCopy);
+  [self drawBackImageInMonitorRect: bounds factor: monitorFactor];
+  [picture unlockFocus];
 
-  imsize = [backImage size];
-
-  scaled = [[NSImage alloc] initWithSize: size];
-  [scaled lockFocus];
-
-  if (style == BackImageFitStyle)
-    {
-      [backImage drawInRect: NSMakeRect(0, 0, size.width, size.height)
-                   fromRect: NSZeroRect
-                  operation: NSCompositeSourceOver
-                   fraction: 1.0
-             respectFlipped: YES
-                      hints: nil];
-    }
-  else
-    {
-      /* Scale style: fit the image inside 'size' preserving aspect ratio,
-       * matching the aspect-fit math the direct (uncached) path used. */
-      float imRatio = imsize.width / imsize.height;
-      float monRatio = size.width / size.height;
-      float scale;
-      NSPoint imagePoint;
-
-      if (imRatio > monRatio)
-        {
-          scale = imsize.width / size.width;
-          imagePoint = NSMakePoint(0, (size.height - imsize.height / scale) / 2);
-        }
-      else
-        {
-          scale = imsize.height / size.height;
-          imagePoint = NSMakePoint((size.width - imsize.width / scale) / 2, 0);
-        }
-      [backImage drawInRect: NSMakeRect(imagePoint.x, imagePoint.y,
-                                        imsize.width / scale, imsize.height / scale)
-                   fromRect: NSZeroRect
-                  operation: NSCompositeSourceOver
-                   fraction: 1.0
-             respectFlipped: YES
-                      hints: nil];
-    }
-
-  [scaled unlockFocus];
-
-  [_scaledBackImageCache setObject: scaled forKey: key];
-  RELEASE(scaled);
-  return scaled;
+  [_scaledBackImageCache setObject: picture forKey: key];
+  RELEASE (picture);
+  return picture;
 }
 
 - (void)invalidateScaledBackImageCache
 {
   [_scaledBackImageCache removeAllObjects];
 }
+
+/* Renders the picture of a monitor whose rect is localRect, in user space
+ * whose points are desktopScaleFactor device pixels each. */
+- (void)drawBackImageInMonitorRect:(NSRect)localRect
+                            factor:(CGFloat)monitorFactor
+{
+  CGFloat dsf = desktopScaleFactor();
+  NSImageRep *source;
+  NSGraphicsContext *ctx = [NSGraphicsContext currentContext];
+  NSImageInterpolation interpolation = [ctx imageInterpolation];
+  NSAffineTransform *toPixels = [NSAffineTransform transform];
+  NSSize pixels = NSMakeSize(rint(NSWidth(localRect) * dsf),
+                             rint(NSHeight(localRect) * dsf));
+  NSPoint origin = NSMakePoint(rint(NSMinX(localRect) * dsf),
+                               rint(NSMinY(localRect) * dsf));
+  /* A centered or tiled picture has its own size at the monitor's scale. */
+  NSSize imagePixels = GWDesktopBackImageSizeOnMonitor([backImage size],
+                                                       monitorFactor, 1.0);
+  BackImageStyle style = backImageStyle;
+
+  /* The image's own bitmap is drawn straight into the device pixels of
+   * the monitor, so it is resampled exactly once whatever the monitor's
+   * and the desktop's factors are.  Through the NSImage, or through a
+   * bitmap at the desktop's scale, it was resampled twice and blurred on
+   * every monitor whose factor is not the desktop's. */
+  source = [backImage bestRepresentationForRect: NSMakeRect(0, 0, pixels.width,
+                                                            pixels.height)
+                                        context: nil
+                                          hints: nil];
+  if (source == nil || pixels.width <= 0 || pixels.height <= 0)
+    {
+      return;
+    }
+
+  [NSGraphicsContext saveGraphicsState];
+  /* User space in device pixels, origin at the monitor's corner. */
+  [toPixels scaleBy: 1.0 / dsf];
+  [toPixels translateXBy: origin.x yBy: origin.y];
+  [toPixels concat];
+  [ctx setImageInterpolation: NSImageInterpolationHigh];
+
+  if (style == BackImageTileStyle
+      && imagePixels.width < pixels.width && imagePixels.height < pixels.height)
+    {
+      NSRect tile = GWDesktopBackImagePixelRect(GWDesktopBackImageTopLeft,
+                                                imagePixels, pixels);
+
+      for (; NSMaxY(tile) > 0; tile.origin.y -= NSHeight(tile))
+        {
+          for (tile.origin.x = 0; tile.origin.x < pixels.width;
+               tile.origin.x += NSWidth(tile))
+            {
+              [source drawInRect: tile];
+            }
+        }
+    }
+  else
+    {
+      GWDesktopBackImagePlacement placement = GWDesktopBackImageCentered;
+
+      if (style == BackImageFitStyle)
+        placement = GWDesktopBackImageFill;
+      else if (style == BackImageScaleStyle)
+        placement = GWDesktopBackImageAspect;
+      [source drawInRect: GWDesktopBackImagePixelRect(placement, imagePixels, pixels)];
+    }
+
+  [ctx setImageInterpolation: interpolation];
+  [NSGraphicsContext restoreGraphicsState];
+}
+
 
 /* Override addRepForSubnode: to create GWDesktopIcon instances
  * (with proper label rendering and double-click handling) instead of
