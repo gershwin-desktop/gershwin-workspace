@@ -88,22 +88,26 @@ int main(void)
     PASS(s[1] == 64 && s[6] == 200 && s[7] == 599,
          "right strut of a Dock on the root's right edge is its width");
 
-    /* Panels away from the root edge reserve nothing: the window manager
-     * would take the depth off every monitor. */
+    /* Panels away from the root edge reserve from that edge to their
+     * inner side, over their own monitor's range only; the window manager
+     * applies it to the monitor holding the inner edge. */
     PrimaryMonitorStrutForPanel(NSMakeRect(400, 736, 480, 64), root,
                                 PrimaryMonitorEdgeBottom, s);
-    PASS(s[3] == 0 && s[10] == 0 && s[11] == 0,
-         "no bottom strut for a Dock on a monitor shorter than the root");
+    PASS(s[3] == 344 && s[10] == 400 && s[11] == 879,
+         "bottom strut of a Dock on a shorter monitor counts from the root bottom");
     PrimaryMonitorStrutForPanel(NSMakeRect(1280, 300, 64, 400), root,
                                 PrimaryMonitorEdgeLeft, s);
-    PASS(s[0] == 0, "no left strut for a Dock on the right monitor's left edge");
+    PASS(s[0] == 1344 && s[4] == 300 && s[5] == 699,
+         "left strut of a Dock on the right monitor counts from the root left");
     PrimaryMonitorStrutForPanel(NSMakeRect(1216, 200, 64, 400), root,
                                 PrimaryMonitorEdgeRight, s);
-    PASS(s[1] == 0, "no right strut for a Dock on the left monitor's right edge");
+    PASS(s[1] == 1984 && s[6] == 200 && s[7] == 599,
+         "right strut of a Dock on the left monitor counts from the root right");
     PrimaryMonitorStrutForPanel(NSMakeRect(0, 1080, 1280, 22),
                                 NSMakeSize(1920, 1880),
                                 PrimaryMonitorEdgeTop, s);
-    PASS(s[2] == 0, "no top strut for a menu bar on a monitor below another");
+    PASS(s[2] == 1102 && s[8] == 0 && s[9] == 1279,
+         "top strut of a menu bar on a monitor below another is monitor top + bar");
 
     /* A Dock a pixel short of the root bottom (backend rounding) still
      * counts as on the edge. */

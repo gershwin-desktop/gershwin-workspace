@@ -73,13 +73,12 @@ NSRect PrimaryMonitorScreenFrame(Display *dpy);
  * monitor it sits on; the start/end range is the panel's own extent.  The
  * first four values are _NET_WM_STRUT.
  *
- * EWMH measures struts from the edges of the root window.  A panel whose
- * outer side is not on that root edge (its monitor is below, beside or
- * shorter than another one) gets no strut at all: reserving from the root
- * edge would take the same depth off every monitor for window managers
- * that ignore the start/end range, as gershwin-windowmanager does today,
- * and only the panel's own monitor is meant to give the room up.  Panels
- * such as tint2 follow the same rule. */
+ * EWMH measures struts from the edges of the root window, so a panel on a
+ * monitor that does not reach that root edge (below, beside or shorter than
+ * another monitor) reserves from the root edge to its inner side, and the
+ * range limits that to the panel's own monitor.  The window manager applies
+ * such a strut only to the monitor holding its inner edge, so the other
+ * monitors keep their space. */
 void PrimaryMonitorStrutForPanel(NSRect barXRect, NSSize rootSize,
                                  PrimaryMonitorEdge edge,
                                  unsigned long strut[12]);
