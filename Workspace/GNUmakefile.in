@@ -220,6 +220,12 @@ ISOWrite/ISOWriteProgressWindow.m \
 ISOWrite/DiskFormatOperation.m \
 ISOWrite/DeviceEraseConfirmation.m \
 
+# The primary-monitor rule (shared with Menu in gershwin-components) asks
+# the X server through RandR; there is no X server to ask on Windows.
+ifneq ($(findstring mingw,$(GNUSTEP_TARGET_OS)),mingw)
+  Workspace_OBJC_FILES += Desktop/PrimaryMonitor.m
+endif
+
 # Conditionally add DBus source files if DBus is available
 ifeq ($(with_dbus), yes)
   Workspace_OBJC_FILES += DBusConnection.m

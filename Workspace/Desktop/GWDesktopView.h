@@ -41,6 +41,10 @@ typedef enum BackImageStyle
 @interface GWDesktopView : FSNIconsView
 {
   NSRect screenFrame;
+  /* The primary monitor in this view's own coordinates (points from the
+     view's origin): where the icons go.  Cached because every layout asks
+     for it, refreshed on each screen change. */
+  NSRect primaryRect;
 
   NSImage *dragIcon;
   NSPoint dragPoint;

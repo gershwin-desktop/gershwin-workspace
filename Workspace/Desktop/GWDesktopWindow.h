@@ -36,6 +36,13 @@
 /* The GSScaleFactor the desktop is sized with: 1.0 when it is not set or not
    positive; factors below 1.0 count, as everywhere else in Workspace. */
 + (CGFloat)desktopScaleFactor;
+/* The primary monitor - where the menu bar, the desktop icons and the Dock
+   go - by the rule in PrimaryMonitor.h.  In GNUstep screen coordinates,
+   device pixels, like -[NSScreen frame]. */
++ (NSRect)primaryMonitorFrame;
+/* The same monitor in X root coordinates (origin top-left), and the size of
+   the X screen it is part of; device pixels.  Either pointer may be NULL. */
++ (void)primaryMonitorXRect:(NSRect *)xRect rootSize:(NSSize *)rootSize;
 - (void)activate;
 - (void)deactivate;
 - (void)setX11DesktopAtoms;

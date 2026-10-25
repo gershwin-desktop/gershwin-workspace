@@ -34,6 +34,7 @@
 #import "FSNIconPositionStore.h"
 #import "GWDesktopView.h"
 #import "GWDesktopBackImageGeometry.h"
+#import "GWDesktopGridGeometry.h"
 #import "GWDesktopIcon.h"
 #import "GWDesktopManager.h"
 #import "GWDesktopWindow.h"
@@ -122,6 +123,7 @@ static CGFloat desktopScaleFactor(void)
       screenFrame.origin.x /= desktopScaleFactor();
       screenFrame.origin.y /= desktopScaleFactor();
       [self setFrame: screenFrame];
+      [self updatePrimaryRect];
 
       size = NSMakeSize(screenFrame.size.width, 2);
       horizontalImage = [[NSImage allocWithZone: (NSZone *)[(NSObject *)self zone]]
@@ -665,6 +667,8 @@ static CGFloat desktopScaleFactor(void)
   /* The content view's origin in window coordinates is always (0,0);
    * only the size changes when the screen configuration changes. */
   [self setFrame: NSMakeRect(0, 0, screenFrame.size.width, screenFrame.size.height)];
+  /* The primary may be another monitor now, or have moved. */
+  [self updatePrimaryRect];
   _gridCached = NO;
   /* Monitor sizes may have changed; a size-keyed cache entry from before
    * would otherwise be reused for an unrelated monitor of the same size. */
@@ -673,42 +677,37 @@ static CGFloat desktopScaleFactor(void)
   [self setNeedsDisplay: YES];
 }
 
-/* The region of the desktop where icons may actually live: the screen minus
- * the menu-bar strip, the Dock's reserved side, and the top/bottom margins.
- * Single source for both the AUTO grid origin and the off-screen rescue
- * guard's usable rect, so a manual position under the Dock/menu bar is
+- (void)updatePrimaryRect
+{
+  /* The view's origin in screen coordinates is screenFrame.origin. */
+  primaryRect = GWDesktopPrimaryViewRect([GWDesktopWindow primaryMonitorFrame],
+                                         screenFrame.origin,
+                                         desktopScaleFactor());
+}
+
+/* The region of the desktop where icons may actually live: the primary
+ * monitor minus the menu-bar strip, the Dock's reserved side, and the
+ * top/bottom margins.  The view spans every monitor for the background,
+ * but the icons stay with the menu bar and the Dock on the primary, rather
+ * than at the right edge of all monitors together.  Single source for both
+ * the AUTO grid origin and the off-screen rescue guard's usable rect, so a
+ * manual position under the Dock/menu bar, or on another monitor, is
  * treated as off-screen and re-flowed instead of hidden. */
 - (NSRect)desktopGridRect
 {
   NSRect dckr = [manager dockReservedFrame];
   NSRect mmfr = [manager macmenuReservedFrame];
-  /* View-local (bounds) coordinates: origin (0,0), size of the spanned
-   * screens.  screenFrame is in screen space and its origin is non-zero on a
-   * multi-monitor union — icon frames are compared in this view's own space,
-   * so build the rect at the origin, not at screenFrame.origin. */
-  NSRect gridrect = NSMakeRect(0, 0, screenFrame.size.width,
-                                     screenFrame.size.height);
+  return GWDesktopIconGridRect(primaryRect, mmfr.size.height,
+                               [manager dockPosition], dckr.size,
+                               TOP_MARGIN, BOTTOM_MARGIN);
+}
 
-  gridrect.size.height -= mmfr.size.height;
-  gridrect.origin.y += BOTTOM_MARGIN;
-  gridrect.size.height -= (TOP_MARGIN + BOTTOM_MARGIN);
-
-  if ([manager dockPosition] == DockPositionLeft)
-    {
-      gridrect.size.width -= dckr.size.width;
-      gridrect.origin.x += dckr.size.width;
-    }
-  else if ([manager dockPosition] == DockPositionRight)
-    {
-      gridrect.size.width -= dckr.size.width;
-    }
-  else if ([manager dockPosition] == DockPositionBottom)
-    {
-      gridrect.origin.y += dckr.size.height;
-      gridrect.size.height -= dckr.size.height;
-    }
-
-  return gridrect;
+/* The grid's columns are counted from its origin to this width; the
+ * desktop view spans every monitor, so its own width would hand out
+ * columns on the monitors right of the primary. */
+- (CGFloat)windowContentWidthForLayout
+{
+  return NSMaxX([self desktopGridRect]);
 }
 
 - (NSPoint)gridOriginForLayout
@@ -724,13 +723,8 @@ static CGFloat desktopScaleFactor(void)
    * into it and the column looked out of step with the rest of the grid. */
   if (_gridCached)
     {
-      CGFloat cellW = _cachedCellSize.width;
-      CGFloat gapX = _cachedGapX;
-      NSUInteger nCols = (NSUInteger)(gridrect.size.width / (cellW + gapX));
-      if (nCols < 1)
-        nCols = 1;
-      CGFloat totalWidth = nCols * (cellW + gapX) - gapX;
-      CGFloat originX = NSMaxX(gridrect) - gapX / 2.0 - totalWidth;
+      CGFloat originX = GWDesktopGridOriginX(gridrect, _cachedCellSize.width,
+                                             _cachedGapX);
       return NSMakePoint(originX,
                          gridrect.origin.y + gridrect.size.height - gridTopOffset);
     }

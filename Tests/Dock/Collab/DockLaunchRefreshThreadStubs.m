@@ -5,7 +5,7 @@
  * Compiling Dock.m in-process (see t_DockLaunchRefreshThread.m) pulls in
  * every class it names anywhere in the file - createWorkspaceIcon,
  * iconMenuAction and the rest reference Workspace, DockIcon, DockStack and
- * GWDockWindow - even though this test only ever reaches -performLaunchRefresh
+ * GWDockWindow (and GWDesktopWindow) - even though this test only ever reaches -performLaunchRefresh
  * Selector:target:withObject: and -stopLaunchRefreshThread on a bare
  * `[Dock alloc]`.  The Objective-C runtime resolves every class reference in
  * a binary at load time regardless of whether the referencing code path
@@ -30,6 +30,7 @@
 #import "DockIcon.h"
 #import "DockStack.h"
 #import "GWDockWindow.h"
+#import "GWDesktopWindow.h"
 
 #pragma clang diagnostic ignored "-Wincomplete-implementation"
 #pragma clang diagnostic ignored "-Wprotocol"
@@ -45,4 +46,8 @@
 @end
 
 @implementation GWDockWindow
+@end
+
+/* Dock -tile asks it for the primary monitor; these tests never tile. */
+@implementation GWDesktopWindow
 @end

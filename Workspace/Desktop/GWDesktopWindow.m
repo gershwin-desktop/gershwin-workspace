@@ -32,6 +32,9 @@
 #endif
 
 #import "GWDesktopWindow.h"
+#ifndef _WIN32
+#import "PrimaryMonitor.h"
+#endif
 #import "GWDesktopManager.h"
 #import "FSNSpringLoader.h"
 #import "Dock/DockStack.h"
@@ -58,6 +61,20 @@
   [super sendEvent: theEvent];
 }
 
+#ifndef _WIN32
+/* Only an X server has a Display to ask; the other backends keep the
+ * screen list.  NULL also before the backend is up (first init). */
+static Display *GWDesktopXDisplay(void)
+{
+  GSDisplayServer *server = GSCurrentServer();
+
+  if ([NSStringFromClass([server class]) hasPrefix: @"XG"]
+      && [server respondsToSelector: @selector(serverDevice)])
+    return (Display *)[server serverDevice];
+  return NULL;
+}
+#endif
+
 + (NSRect)desktopFullFrame
 {
   /* Union of all screen frames; width and height are divided by
@@ -75,14 +92,7 @@
    * union of all monitors; NSScreen remains as the fallback when no
    * display server is reachable yet (first init). */
 #ifndef _WIN32
-  GSDisplayServer *server = GSCurrentServer();
-  Display *dpy = NULL;
-
-  /* Only an X server has a Display to ask; the other backends keep the
-   * screen list. */
-  if ([NSStringFromClass([server class]) hasPrefix: @"XG"]
-      && [server respondsToSelector: @selector(serverDevice)])
-    dpy = (Display *)[server serverDevice];
+  Display *dpy = GWDesktopXDisplay();
 
   if (dpy)
     {
@@ -112,6 +122,47 @@
     }
 
   return fullFrame;
+}
+
++ (void)primaryMonitorXRect:(NSRect *)xRect rootSize:(NSSize *)rootSize
+{
+#ifndef _WIN32
+  /* Asked of the X server, not taken from [NSScreen screens]: that list can
+   * lag behind a RandR change (see +desktopFullFrame), and its first entry
+   * is the primary only while a RandR primary is set. */
+  Display *dpy = GWDesktopXDisplay();
+
+  if (dpy)
+    {
+      PrimaryMonitorQuery(dpy, xRect, rootSize);
+      return;
+    }
+#endif
+  {
+    /* A backend without X: its first screen is the primary by definition. */
+    NSArray *screens = [NSScreen screens];
+    NSRect full = [[screens objectAtIndex: 0] frame];
+    NSRect first = full;
+    NSUInteger i;
+
+    for (i = 1; i < [screens count]; i++)
+      full = NSUnionRect(full, [[screens objectAtIndex: i] frame]);
+    first.origin.y = NSMaxY(full) - NSMaxY(first);
+    if (xRect != NULL)
+      *xRect = first;
+    if (rootSize != NULL)
+      *rootSize = full.size;
+  }
+}
+
++ (NSRect)primaryMonitorFrame
+{
+  NSRect xRect;
+  NSSize rootSize;
+
+  [self primaryMonitorXRect: &xRect rootSize: &rootSize];
+  xRect.origin.y = rootSize.height - xRect.origin.y - xRect.size.height;
+  return xRect;
 }
 
 + (CGFloat)desktopScaleFactor

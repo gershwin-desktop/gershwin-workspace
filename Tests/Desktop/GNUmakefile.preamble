@@ -15,3 +15,10 @@ t_GWMountWatchStateDiff_OBJC_FILES += ../../Workspace/Desktop/GWMountWatchState.
 # GWVolumeID.m is Foundation-only too; link it directly so the test proves
 # the SHIPPED mount-table reader, not a copy of its logic.
 t_GWVolumeIDMountTable_OBJC_FILES += ../../Workspace/FileViewer/GWVolumeID.m
+
+# PrimaryMonitor.m (the primary-monitor rule shared with Menu) holds the
+# RandR query next to the pure functions under test, so it links libX11 and
+# libXrandr; the test never opens a display.  GWDesktopGridGeometry.h is
+# header-only.
+t_PrimaryMonitor_OBJC_FILES += ../../Workspace/Desktop/PrimaryMonitor.m
+t_PrimaryMonitor_TOOL_LIBS += -lXrandr -lX11

@@ -32,6 +32,7 @@
 #import "DockIcon.h"
 #import "DockService.h"
 #import "GWDesktopView.h"
+#import "GWDesktopWindow.h"
 #import "Workspace.h"
 #import "GWFunctions.h"
 #import "X11AppSupport.h"
@@ -1239,7 +1240,9 @@ separatorMenuFromEntries(NSArray *entries, NSString *title, id target)
 - (void)tile
 {
   NSView *view = [self superview];
-  NSRect scrrect = [[[NSScreen screens] objectAtIndex:0] frame];
+  /* The Dock stays on the primary monitor, with the menu bar, and moves
+   * when another monitor becomes the primary. */
+  NSRect scrrect = [GWDesktopWindow primaryMonitorFrame];
   int oldIcnSize = iconSize;
   /* The length of the screen along the Dock: its width for a Dock at the
    * bottom, its height for one at the side. */
@@ -3364,8 +3367,11 @@ DockShelfGradient(int which)
 
   NSRect rectInWindow = [icon convertRect: rect toView: nil];
   NSRect rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
-  NSScreen *screen = [[icon window] screen] ?: [NSScreen mainScreen];
-  CGFloat screenHeight = [screen frame].size.height;
+  /* Screen coordinates span the whole X screen, so they flip against its
+   * height, not the height of the monitor the Dock is on: the two differ
+   * when monitors of different heights sit side by side. */
+  CGFloat screenHeight = NSHeight([GWDesktopWindow desktopFullFrame])
+                         * [GWDesktopWindow desktopScaleFactor];
 
   NSRect x11Rect = rectOnScreen;
   x11Rect.origin.y = screenHeight - (rectOnScreen.origin.y + rectOnScreen.size.height);

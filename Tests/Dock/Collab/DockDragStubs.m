@@ -23,6 +23,7 @@
 #import "GWDockWindow.h"
 #import "FSNode.h"
 #import "DockDragStubs.h"
+#import "GWDesktopWindow.h"
 
 #pragma clang diagnostic ignored "-Wincomplete-implementation"
 #pragma clang diagnostic ignored "-Wprotocol"
@@ -44,6 +45,10 @@
 @end
 
 @implementation GWDockWindow
+@end
+
+/* Dock -tile asks it for the primary monitor; these tests never tile. */
+@implementation GWDesktopWindow
 @end
 
 @implementation DockIcon

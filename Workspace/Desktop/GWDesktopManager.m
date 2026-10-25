@@ -651,6 +651,9 @@ NSString * const GWDockSettingsDidChangeNotification =
 {
   if (dock && hidedock == NO) {
     [dock tile];
+    /* The Dock may now sit on another monitor (the primary changed) or at
+     * another height; the space it reserves has to go with it. */
+    [dockWindow updateX11Strut];
   }
 }
 
@@ -713,7 +716,8 @@ static int desktopReframeGeneration = 0;
 
 - (void)setReservedFrames
 {
-  NSRect screenFrame = [[[NSScreen screens] objectAtIndex:0] frame];
+  /* The menu bar and the Dock live on the primary monitor. */
+  NSRect screenFrame = [GWDesktopWindow primaryMonitorFrame];
   NSUserDefaults *defaults = [NSUserDefaults standardUserDefaults];	
   NSString *menuStyle = [defaults objectForKey: @"NSMenuInterfaceStyle"];
   
