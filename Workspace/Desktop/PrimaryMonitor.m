@@ -10,6 +10,8 @@
 #import "PrimaryMonitor.h"
 
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <X11/extensions/Xrandr.h>
 
 NSInteger PrimaryMonitorChooseIndex(const NSRect *xRects, NSUInteger count,
@@ -44,6 +46,22 @@ NSRect PrimaryMonitorFlipRect(NSRect rect, CGFloat rootHeight)
   return rect;
 }
 
+NSSize PrimaryMonitorRootSize(Display *dpy)
+{
+  Window root, ignoredRoot;
+  int x, y;
+  unsigned int width, height, border, depth;
+
+  root = RootWindow(dpy, DefaultScreen(dpy));
+  if (!XGetGeometry(dpy, root, &ignoredRoot, &x, &y, &width, &height,
+                    &border, &depth))
+    {
+      fprintf(stderr, "PrimaryMonitorRootSize: cannot read the root window\n");
+      abort();
+    }
+  return NSMakeSize(width, height);
+}
+
 BOOL PrimaryMonitorQuery(Display *dpy, NSRect *xRect, NSSize *rootSize)
 {
   int screen;
@@ -57,7 +75,7 @@ BOOL PrimaryMonitorQuery(Display *dpy, NSRect *xRect, NSSize *rootSize)
 
   screen = DefaultScreen(dpy);
   root = RootWindow(dpy, screen);
-  size = NSMakeSize(DisplayWidth(dpy, screen), DisplayHeight(dpy, screen));
+  size = PrimaryMonitorRootSize(dpy);
   chosen = NSMakeRect(0, 0, size.width, size.height);
 
   if (XRRQueryExtension(dpy, &eventBase, &errorBase))
@@ -76,7 +94,16 @@ BOOL PrimaryMonitorQuery(Display *dpy, NSRect *xRect, NSSize *rootSize)
           NSInteger primaryIndex = -1;
           int i;
 
-          for (i = 0; rects != NULL && i < res->noutput; i++)
+          if (rects == NULL)
+            {
+              /* Out of memory for a handful of rects: nothing sensible is
+               * left to place a desktop with, and guessing the whole screen
+               * would put the panels on the wrong monitor. */
+              fprintf(stderr, "PrimaryMonitorQuery: out of memory\n");
+              abort();
+            }
+
+          for (i = 0; i < res->noutput; i++)
             {
               XRROutputInfo *oi = XRRGetOutputInfo(dpy, res, res->outputs[i]);
 
@@ -133,6 +160,10 @@ static unsigned long StrutValue(CGFloat v)
   return (v <= 0) ? 0 : (unsigned long)ceil(v);
 }
 
+/* The backend rounds a window's edges separately at a fractional scale, so
+ * a panel meant to sit on the root edge can end up to a pixel short of it. */
+static const CGFloat kEdgeSlack = 1.0;
+
 void PrimaryMonitorStrutForPanel(NSRect barXRect, NSSize rootSize,
                                  PrimaryMonitorEdge edge,
                                  unsigned long strut[12])
@@ -152,24 +183,33 @@ void PrimaryMonitorStrutForPanel(NSRect barXRect, NSSize rootSize,
   if (endY > startY)
     endY--;
 
+  /* No strut for a panel away from the root edge; see the header. */
   switch (edge)
     {
       case PrimaryMonitorEdgeTop:
+        if (NSMinY(barXRect) > kEdgeSlack)
+          return;
         strut[2] = StrutValue(NSMaxY(barXRect));
         strut[8] = startX;
         strut[9] = endX;
         break;
       case PrimaryMonitorEdgeBottom:
+        if (NSMaxY(barXRect) < rootSize.height - kEdgeSlack)
+          return;
         strut[3] = StrutValue(rootSize.height - floor(NSMinY(barXRect)));
         strut[10] = startX;
         strut[11] = endX;
         break;
       case PrimaryMonitorEdgeLeft:
+        if (NSMinX(barXRect) > kEdgeSlack)
+          return;
         strut[0] = StrutValue(NSMaxX(barXRect));
         strut[4] = startY;
         strut[5] = endY;
         break;
       case PrimaryMonitorEdgeRight:
+        if (NSMaxX(barXRect) < rootSize.width - kEdgeSlack)
+          return;
         strut[1] = StrutValue(rootSize.width - floor(NSMinX(barXRect)));
         strut[6] = startY;
         strut[7] = endY;

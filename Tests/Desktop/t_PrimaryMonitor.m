@@ -72,23 +72,44 @@ int main(void)
     PASS(s[2] == 44 && s[8] == 1280 && s[9] == 3199,
          "top strut of a bar on the right monitor starts at its x");
 
-    /* Bottom Dock on the 800-tall laptop: the root bottom is 280 px lower. */
+    /* Bottom Dock on a monitor as tall as the root. */
+    PrimaryMonitorStrutForPanel(NSMakeRect(1600, 1016, 480, 64), root,
+                                PrimaryMonitorEdgeBottom, s);
+    PASS(s[3] == 64 && s[10] == 1600 && s[11] == 2079,
+         "bottom strut of a Dock on the root's bottom edge is its height");
+
+    /* Left Dock at the root's left edge, right Dock at its right edge. */
+    PrimaryMonitorStrutForPanel(NSMakeRect(0, 300, 64, 400), root,
+                                PrimaryMonitorEdgeLeft, s);
+    PASS(s[0] == 64 && s[4] == 300 && s[5] == 699,
+         "left strut of a Dock on the root's left edge is its width");
+    PrimaryMonitorStrutForPanel(NSMakeRect(3136, 200, 64, 400), root,
+                                PrimaryMonitorEdgeRight, s);
+    PASS(s[1] == 64 && s[6] == 200 && s[7] == 599,
+         "right strut of a Dock on the root's right edge is its width");
+
+    /* Panels away from the root edge reserve nothing: the window manager
+     * would take the depth off every monitor. */
     PrimaryMonitorStrutForPanel(NSMakeRect(400, 736, 480, 64), root,
                                 PrimaryMonitorEdgeBottom, s);
-    PASS(s[3] == 344 && s[10] == 400 && s[11] == 879,
-         "bottom strut of a Dock on a shorter monitor counts from the root bottom");
-
-    /* Left Dock on a monitor that starts at x 1280. */
+    PASS(s[3] == 0 && s[10] == 0 && s[11] == 0,
+         "no bottom strut for a Dock on a monitor shorter than the root");
     PrimaryMonitorStrutForPanel(NSMakeRect(1280, 300, 64, 400), root,
                                 PrimaryMonitorEdgeLeft, s);
-    PASS(s[0] == 1344 && s[4] == 300 && s[5] == 699,
-         "left strut of a Dock on the right monitor counts from the root left");
-
-    /* Right Dock on the laptop at the left. */
+    PASS(s[0] == 0, "no left strut for a Dock on the right monitor's left edge");
     PrimaryMonitorStrutForPanel(NSMakeRect(1216, 200, 64, 400), root,
                                 PrimaryMonitorEdgeRight, s);
-    PASS(s[1] == 1984 && s[6] == 200 && s[7] == 599,
-         "right strut of a Dock on the left monitor counts from the root right");
+    PASS(s[1] == 0, "no right strut for a Dock on the left monitor's right edge");
+    PrimaryMonitorStrutForPanel(NSMakeRect(0, 1080, 1280, 22),
+                                NSMakeSize(1920, 1880),
+                                PrimaryMonitorEdgeTop, s);
+    PASS(s[2] == 0, "no top strut for a menu bar on a monitor below another");
+
+    /* A Dock a pixel short of the root bottom (backend rounding) still
+     * counts as on the edge. */
+    PrimaryMonitorStrutForPanel(NSMakeRect(400, 1015.5, 480, 64), root,
+                                PrimaryMonitorEdgeBottom, s);
+    PASS(s[3] == 65, "a panel within a pixel of the root edge keeps its strut");
 
     /* Fractional bar height (22 pt at 1.25) never reserves less. */
     PrimaryMonitorStrutForPanel(NSMakeRect(0, 0, 1280, 27.5), root,

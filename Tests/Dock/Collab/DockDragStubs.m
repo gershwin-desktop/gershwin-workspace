@@ -47,8 +47,13 @@
 @implementation GWDockWindow
 @end
 
-/* Dock -tile asks it for the primary monitor; these tests never tile. */
+/* Dock -tile asks it for the primary monitor.  A fixed 1280x800 one, so
+ * a test that does tile gets a defined layout instead of an exception. */
 @implementation GWDesktopWindow
++ (NSRect)primaryMonitorFrame
+{
+  return NSMakeRect(0, 0, 1280, 800);
+}
 @end
 
 @implementation DockIcon

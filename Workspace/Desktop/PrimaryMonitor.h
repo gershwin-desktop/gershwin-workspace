@@ -11,7 +11,8 @@
  * Kept as an identical copy in gershwin-components (Menu/PrimaryMonitor.[hm])
  * and gershwin-workspace (Workspace/Desktop/PrimaryMonitor.[hm]): the two
  * repositories share no library, and the menu bar, the desktop icons and the
- * Dock must land on the same monitor.  Change both copies together.
+ * Dock must land on the same monitor.  Change both copies together;
+ * gershwin-components Menu/Tests/check-primary-monitor-sync.sh compares them.
  *
  * The rule:
  *   1. the RandR primary output's CRTC rectangle, when a primary is set and
@@ -52,6 +53,12 @@ NSInteger PrimaryMonitorChooseIndex(const NSRect *xRects, NSUInteger count,
  * its own inverse, so it serves both directions. */
 NSRect PrimaryMonitorFlipRect(NSRect rect, CGFloat rootHeight);
 
+/* The current size of the X screen (device pixels), asked of the server.
+ * DisplayWidth()/DisplayHeight() are cached per Xlib connection and only
+ * change when that connection processes RandR events itself, which a
+ * connection opened just for queries never does. */
+NSSize PrimaryMonitorRootSize(Display *dpy);
+
 /* Asks the X server for the primary monitor.  xRect receives its rectangle
  * in X root coordinates, rootSize the size of the X screen (both device
  * pixels).  Either pointer may be NULL.  Returns NO only when dpy is NULL. */
@@ -63,11 +70,16 @@ NSRect PrimaryMonitorScreenFrame(Display *dpy);
 
 /* _NET_WM_STRUT_PARTIAL values (12 cardinals) for a panel whose window
  * occupies barXRect (X root coordinates) along the given edge of the
- * monitor it sits on.  EWMH measures struts from the edges of the root
- * window, not of a monitor, so a panel on a monitor that does not touch
- * that root edge reserves the distance from the root edge to the panel's
- * inner side; the start/end range keeps the reservation to the panel's own
- * extent.  The first four values are _NET_WM_STRUT. */
+ * monitor it sits on; the start/end range is the panel's own extent.  The
+ * first four values are _NET_WM_STRUT.
+ *
+ * EWMH measures struts from the edges of the root window.  A panel whose
+ * outer side is not on that root edge (its monitor is below, beside or
+ * shorter than another one) gets no strut at all: reserving from the root
+ * edge would take the same depth off every monitor for window managers
+ * that ignore the start/end range, as gershwin-windowmanager does today,
+ * and only the panel's own monitor is meant to give the room up.  Panels
+ * such as tint2 follow the same rule. */
 void PrimaryMonitorStrutForPanel(NSRect barXRect, NSSize rootSize,
                                  PrimaryMonitorEdge edge,
                                  unsigned long strut[12]);

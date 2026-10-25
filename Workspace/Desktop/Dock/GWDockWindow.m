@@ -289,14 +289,11 @@
   if (NSIsEmptyRect(windowFrame))
     windowFrame = [self frame];
 
-  /* EWMH struts are measured from the edges of the root window, not of the
-   * monitor the Dock is on, and in root coordinates with Y from the top;
-   * NSWindow frames are bottom-left origin over the whole X screen.  A Dock
-   * on a monitor that does not reach the root edge it is attached to (a
-   * shorter monitor, or one with another beside it) reserves up to that
-   * edge, over its own extent only. */
-  NSSize rootSize = NSMakeSize(DisplayWidth(display, DefaultScreen(display)),
-                               DisplayHeight(display, DefaultScreen(display)));
+  /* EWMH struts are in root coordinates with Y from the top; NSWindow
+   * frames are bottom-left origin over the whole X screen.  A Dock whose
+   * monitor does not reach the root edge it is attached to reserves nothing
+   * (PrimaryMonitorStrutForPanel says why). */
+  NSSize rootSize = PrimaryMonitorRootSize(display);
   NSRect barXRect = PrimaryMonitorFlipRect(windowFrame, rootSize.height);
   PrimaryMonitorEdge edge;
 
