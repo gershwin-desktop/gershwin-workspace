@@ -96,8 +96,15 @@ static Display *GWDesktopXDisplay(void)
 
   if (dpy)
     {
-      int w = DisplayWidth(dpy, DefaultScreen(dpy));
-      int h = DisplayHeight(dpy, DefaultScreen(dpy));
+      /* Asked of the server, not DisplayWidth/DisplayHeight: those are
+       * cached in the connection and refreshed by the backend from the
+       * FIRST RandR event of a burst (XGServerEvent.m passes the original
+       * event, not the last one it drained, to XRRUpdateConfiguration).
+       * Unplugging a monitor is such a burst - the output goes off at the
+       * old size, then the screen shrinks - so the desktop kept the old,
+       * wider size. */
+      NSSize root = PrimaryMonitorRootSize(dpy);
+      CGFloat w = root.width, h = root.height;
 
       if (w > 0 && h > 0)
         {
