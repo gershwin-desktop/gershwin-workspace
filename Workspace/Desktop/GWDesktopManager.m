@@ -1052,13 +1052,20 @@ inFileViewerRootedAtPath:(NSString *)rootFullpath
 
 - (void)mountedVolumeWillUnmount:(NSNotification *)notif
 {
-  if (win && [win isVisible]) {
-    NSDictionary *dict = [notif userInfo];  
-    NSString *volpath = [dict objectForKey: @"NSDevicePath"];
+  NSString *volpath = [[notif userInfo] objectForKey: @"NSDevicePath"];
 
+  if (volpath == nil) {
+    return;
+  }
+
+  /* The announcement is what tells a proper unmount by another app (Disk
+   * Utility, NSWorkspace -unmountAndEjectDeviceAtPath:) apart from a yank,
+   * and the mount watcher judges removals whether or not the desktop
+   * window is on screen, so it is recorded in either case. */
+  [[self desktopView] workspaceWillUnmountVolumeAtPath: volpath];
+
+  if (win && [win isVisible]) {
     [fsnodeRep lockPaths: [NSArray arrayWithObject: volpath]];
-    [[self desktopView] workspaceWillUnmountVolumeAtPath: volpath];
-  } else {
   }
 }
 

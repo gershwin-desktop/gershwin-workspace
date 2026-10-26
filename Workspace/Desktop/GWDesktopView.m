@@ -35,6 +35,7 @@
 #import "GWDesktopView.h"
 #import "GWDesktopBackImageGeometry.h"
 #import "GWDesktopGridGeometry.h"
+#import "GWVolumeRemovalTracker.h"
 #import "GWDesktopIcon.h"
 #import "GWDesktopManager.h"
 #import "GWDesktopWindow.h"
@@ -98,8 +99,9 @@ static CGFloat desktopScaleFactor(void)
   [[NSNotificationCenter defaultCenter] removeObserver: self
                                                   name: NSUserDefaultsDidChangeNotification
                                                 object: nil];
+  [NSObject cancelPreviousPerformRequestsWithTarget: self];
   RELEASE (mountedVolumes);
-  RELEASE (expectedUnmountPaths);
+  RELEASE (removalTracker);
   RELEASE (desktopInfo);
   RELEASE (backImage);
   RELEASE (_scaledBackImageCache);
@@ -161,7 +163,11 @@ static CGFloat desktopScaleFactor(void)
       backImageStyle = BackImageCenterStyle;
       _scaledBackImageCache = [NSMutableDictionary new];
       mountedVolumes = [NSMutableArray new];
-      expectedUnmountPaths = [NSMutableDictionary new];
+      /* Another app announces its unmount and only then runs umount and
+       * eject, which can take a while for a slow stick: 30 s covers that,
+       * yet a failed unmount does not silence a later real yank forever. */
+      removalTracker = [[GWVolumeRemovalTracker alloc]
+                         initWithAnnouncementLifetime: 30.0];
 
       /* Set desktop placement direction (top→bottom, right→left) */
       _placementDirection = FSNPlacementDirectionTopToBottomRightToLeft;
@@ -201,6 +207,7 @@ static CGFloat desktopScaleFactor(void)
       {
         [mountedVolumes addObject: norm];
       }
+    [removalTracker noteVolumeMountedAtPath: vpath];
   }
 
   /* Mark network volumes as expected unmounts briefly, so transient
@@ -213,7 +220,6 @@ static CGFloat desktopScaleFactor(void)
     NSSet *netPaths = [[NetworkVolumeManager sharedManager] allMountedPaths];
     if ([netPaths containsObject: vpath])
       {
-        [expectedUnmountPaths setObject: [NSDate date] forKey: vpath];
         [[Workspace gworkspace] noteUserInitiatedUnmountAtPath: vpath];
       }
   }
@@ -245,7 +251,7 @@ static CGFloat desktopScaleFactor(void)
 {
   if (vpath)
     {
-      [expectedUnmountPaths setObject:[NSDate date] forKey:vpath];
+      [removalTracker noteUnmountAnnouncedAtPath: vpath date: [NSDate date]];
     }
   [self checkLockedReps];
 }
@@ -259,11 +265,6 @@ static CGFloat desktopScaleFactor(void)
       return;
     }
   
-  /* Do NOT remove from expectedUnmountPaths here.
-   * The polling timer in showMountedVolumes needs to see it
-   * to avoid a false "unexpected unmount" warning.
-   * showMountedVolumes cleans up after the check. */
-
   /* Remove from the tracked mountedVolumes array so the periodic
    * timer check doesn't try to process it again.  This is critical
    * for volumes mounted via newVolumeMountedAtPath: (e.g. network
@@ -331,13 +332,46 @@ static CGFloat desktopScaleFactor(void)
 {
   if (vpath)
     {
-      [expectedUnmountPaths setObject:[NSDate date] forKey:vpath];
+      [removalTracker noteUnmountAnnouncedAtPath: vpath date: [NSDate date]];
     }
 }
 
 - (void)unlockVolumeAtPath:(NSString *)path
 {
   [self checkLockedReps];
+}
+
+- (void)reportUnexpectedRemovals:(NSArray *)candidates
+{
+  NSArray *removals = [removalTracker confirmedRemovalsAmongPaths: candidates
+                                                             date: [NSDate date]];
+  NSString *volumeList;
+  NSString *message;
+
+  if ([removals count] == 0)
+    {
+      return;
+    }
+
+  volumeList = [removals componentsJoinedByString: @"\n"];
+  if ([removals count] == 1)
+    {
+      message = [NSString stringWithFormat:
+        NSLocalizedString(@"The volume at the following path was removed without being properly ejected:\n\n%@\n\n"
+        @"Always eject removable volumes before unplugging them to prevent data loss and avoid crashes.", @""),
+        volumeList];
+    }
+  else
+    {
+      message = [NSString stringWithFormat:
+        NSLocalizedString(@"The following volumes were removed without being properly ejected:\n\n%@\n\n"
+        @"Always eject removable volumes before unplugging them to prevent data loss and avoid crashes.", @""),
+        volumeList];
+    }
+
+  NSRunAlertPanel(NSLocalizedString(@"Volume Removed Unexpectedly", @""),
+                  message,
+                  NSLocalizedString(@"OK", @""), nil, nil);
 }
 
 - (void)showMountedVolumes
@@ -456,8 +490,6 @@ static CGFloat desktopScaleFactor(void)
                   NSString *v = [volumesToRemove objectAtIndex:i];
                   if ([v isEqualToString: flagContent])
                     {
-                      /* Mark as expected unmount and record in Workspace */
-                      [expectedUnmountPaths setObject: [NSDate date] forKey: v];
                       [[Workspace gworkspace] noteUserInitiatedUnmountAtPath: v];
                     }
                 }
@@ -467,137 +499,33 @@ static CGFloat desktopScaleFactor(void)
         }
     }
   
-  // Check if any volumes were forcibly removed (not in expected unmounts)
   if ([volumesToRemove count] > 0)
     {
-      NSMutableArray *unexpectedRemovals = [NSMutableArray arrayWithCapacity:1];
-      NSTimeInterval expectedUnmountTimeout = 2.0; // seconds
       NSDate *now = [NSDate date];
-      
-      for (i = 0; i < [volumesToRemove count]; i++)
-        {
-          NSString *v = [volumesToRemove objectAtIndex:i];
-          if ([v isEqualToString:@"/"])
-            continue;
 
-          NSDate *markedDate = [expectedUnmountPaths objectForKey:v];
-          if (markedDate != nil
-              && [now timeIntervalSinceDate:markedDate] < expectedUnmountTimeout)
-            {
-              /* This unmount was expected — suppress the warning. */
-            }
-          else if ([[[NetworkVolumeManager sharedManager] recentlyUnmountedPaths] containsObject: v])
-            {
-              /* Network volume unmounted through NetworkVolumeManager — suppress. */
-            }
-          else if ([[Workspace gworkspace] isRecentUserUnmount: v])
-            {
-              /* User-initiated unmount via Workspace's unmountVolumeAtPath: — suppress. */
-            }
-          else
-            {
-              [unexpectedRemovals addObject:v];
-            }
-        }
-      
-      /* Final safety check: re-scan /proc/mounts for any volume in
-       * unexpectedRemovals.  If the volume is still mounted, it was
-       * a transient glitch — remove it from the list. */
-      if ([unexpectedRemovals count] > 0)
+      for (NSString *v in volumesToRemove)
         {
-          NSString *procContent = [NSString stringWithContentsOfFile: @"/proc/mounts"
-                                                            encoding: NSUTF8StringEncoding
-                                                               error: NULL];
-          if (procContent)
+          if ([[[NetworkVolumeManager sharedManager] recentlyUnmountedPaths] containsObject: v])
             {
-              for (NSInteger ri = [unexpectedRemovals count] - 1; ri >= 0; ri--)
-                {
-                  NSString *v = [unexpectedRemovals objectAtIndex: ri];
-                  NSRange r = [procContent rangeOfString: v];
-                  if (r.location != NSNotFound)
-                    {
-                      /* The path appears in /proc/mounts — still mounted */
-                      [unexpectedRemovals removeObjectAtIndex: ri];
-                      /* Also add to expected to prevent re-trigger next cycle */
-                      [expectedUnmountPaths setObject: [NSDate date] forKey: v];
-                      [[Workspace gworkspace] noteUserInitiatedUnmountAtPath: v];
-                    }
-                }
+              [removalTracker noteUnmountAnnouncedAtPath: v date: now];
             }
         }
 
-      /* Clean up expected-unmount entries for volumes that are now gone. */
-      for (i = 0; i < [volumesToRemove count]; i++)
+      NSArray *candidates = [removalTracker removalsToReportForVanishedPaths: volumesToRemove
+                                                                        date: now];
+      if ([candidates count] > 0)
         {
-          [expectedUnmountPaths removeObjectForKey:[volumesToRemove objectAtIndex:i]];
-        }
-
-      /* Also purge any stale entries older than the timeout. */
-      NSMutableArray *staleKeys = [NSMutableArray arrayWithCapacity:1];
-      for (NSString *key in expectedUnmountPaths)
-        {
-          NSDate *d = [expectedUnmountPaths objectForKey:key];
-          if ([now timeIntervalSinceDate:d] >= expectedUnmountTimeout)
-            {
-              [staleKeys addObject:key];
-            }
-        }
-      [expectedUnmountPaths removeObjectsForKeys:staleKeys];
-
-      // Show alert for unexpected removals
-      if ([unexpectedRemovals count] > 0)
-        {
-          /* Deduplicate the list — the same path may appear multiple times
-           * if mountedVolumes had duplicates. */
-          NSMutableArray *uniqueRemovals = [NSMutableArray arrayWithCapacity: [unexpectedRemovals count]];
-          for (NSString *v in unexpectedRemovals)
-            {
-              if (![uniqueRemovals containsObject: v])
-                {
-                  [uniqueRemovals addObject: v];
-                }
-            }
-
-          /* Mark these volumes as expected before showing the alert, so that
-           * if NSRunAlertPanel re-enters the run loop (e.g. via MPointWatcher
-           * timer) and showMountedVolumes is called again, the duplicate
-           * alert is suppressed.  The entries will be cleaned up below. */
-          for (NSString *v in uniqueRemovals)
-            {
-              [expectedUnmountPaths setObject:[NSDate date] forKey:v];
-            }
-
-          NSString *volumeList = [uniqueRemovals componentsJoinedByString:@"\n"];
-          NSString *message;
-          
-          if ([uniqueRemovals count] == 1)
-            {
-              message = [NSString stringWithFormat:
-                NSLocalizedString(@"The volume at the following path was removed without being properly ejected:\n\n%@\n\n"
-                @"Always eject removable volumes before unplugging them to prevent data loss and avoid crashes.", @""), 
-                volumeList];
-            }
-          else
-            {
-              message = [NSString stringWithFormat:
-                NSLocalizedString(@"The following volumes were removed without being properly ejected:\n\n%@\n\n"
-                @"Always eject removable volumes before unplugging them to prevent data loss and avoid crashes.", @""), 
-                volumeList];
-            }
-          
-          NSRunAlertPanel(NSLocalizedString(@"Volume Removed Unexpectedly", @""), 
-                         message,
-                         NSLocalizedString(@"OK", @""), nil, nil);
-          
-          /* Clean up the expected-unmount entries we added above, now that
-           * the alert has been dismissed and re-entrancy is no longer a risk. */
-          for (NSString *v in uniqueRemovals)
-            {
-              [expectedUnmountPaths removeObjectForKey:v];
-            }
+          /* Not shown from here: the alert's modal loop would re-enter
+           * this method from the mount watcher while the volume is still
+           * listed, and the announcement of an unmount done by another
+           * app travels through the distributed notification center, so
+           * it may arrive a moment after the mount table changed. */
+          [self performSelector: @selector(reportUnexpectedRemovals:)
+                     withObject: candidates
+                     afterDelay: 1.0];
         }
     }
-  
+
   // Remove volumes and notify (done separately to avoid iteration issues)
   for (i = 0; i < [volumesToRemove count]; i++)
     {

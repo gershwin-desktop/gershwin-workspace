@@ -38,6 +38,8 @@ typedef enum BackImageStyle
 } BackImageStyle;
 
 
+@class GWVolumeRemovalTracker;
+
 @interface GWDesktopView : FSNIconsView
 {
   NSRect screenFrame;
@@ -63,7 +65,7 @@ typedef enum BackImageStyle
 
   NSMutableArray *mountedVolumes;
   NSMutableDictionary *desktopInfo;
-  NSMutableDictionary *expectedUnmountPaths; // path -> NSDate, tracks expected unmounts
+  GWVolumeRemovalTracker *removalTracker;
 
   GWDesktopManager *manager;
 }

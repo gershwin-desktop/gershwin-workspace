@@ -22,3 +22,7 @@ t_GWVolumeIDMountTable_OBJC_FILES += ../../Workspace/FileViewer/GWVolumeID.m
 # header-only.
 t_PrimaryMonitor_OBJC_FILES += ../../Workspace/Desktop/PrimaryMonitor.m
 t_PrimaryMonitor_TOOL_LIBS += -lXrandr -lX11
+
+# GWVolumeRemovalTracker.m is Foundation-only: the test links the shipped
+# decision which vanished volumes get the "not properly ejected" alert.
+t_GWVolumeRemovalTracker_OBJC_FILES += ../../Workspace/Desktop/GWVolumeRemovalTracker.m
