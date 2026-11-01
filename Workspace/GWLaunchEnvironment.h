@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2026 Simon Peter
+ * Copyright (c) 2026 Joseph Maloney
  *
  * SPDX-License-Identifier: GPL-2.0-or-later OR BSD-2-Clause
  */
