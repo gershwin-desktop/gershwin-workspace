@@ -11,6 +11,7 @@
 #endif
 #import "GWApplicationLauncher.h"
 #import "GWScaleFactor.h"
+#import "GWLaunchEnvironment.h"
 #import <unistd.h>
 #include <fcntl.h>
 
@@ -76,8 +77,16 @@
      * GSScaleFactor) how large the desktop's pixels are.  Set on the task
      * rather than on ourselves: the change then lives exactly as long as the
      * child does.  A caller that set its own environment keeps it - only
-     * QT_SCALE_FACTOR is added. */
-    [task setEnvironment: GWEnvironmentWithScaleFactor([task environment])];
+     * QT_SCALE_FACTOR is added.
+     *
+     * The same goes for the GTK/Qt modules that put the menus into Menu and
+     * the GTK title bar preload: the session does not export them, so they
+     * reach the applications that can load them (native binaries, scripts,
+     * .app bundles) and never a Linux program, whose run-time linker would
+     * only report the native libraries as invalid. */
+    [task setEnvironment:
+      GWEnvironmentForExecutable([task launchPath],
+        GWEnvironmentWithScaleFactor([task environment]))];
 
     [task launch];
 

@@ -6,6 +6,7 @@
 
 #import "GWDetachedCommand.h"
 #import "GWScaleFactor.h"
+#import "GWLaunchEnvironment.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -60,7 +61,8 @@
   [task setStandardOutput: null];
   [task setStandardError: null];
   /* A Qt application learns the desktop's scale only from QT_SCALE_FACTOR. */
-  [task setEnvironment: GWEnvironmentWithScaleFactor(nil)];
+  [task setEnvironment: GWEnvironmentForExecutable(
+    [arguments objectAtIndex: 0], GWEnvironmentWithScaleFactor(nil))];
   @try
     {
       [task launch];
@@ -105,9 +107,11 @@
     }
 
   /* Our own environment plus QT_SCALE_FACTOR, which a Qt application
-   * needs to come up at the desktop's scale; built before the fork for the
-   * same reason as argv. */
-  environment = GWEnvironmentWithScaleFactor(nil);
+   * needs to come up at the desktop's scale, and the toolkit integration
+   * when the program is native (see GWLaunchEnvironment.h); built before
+   * the fork for the same reason as argv. */
+  environment = GWEnvironmentForExecutable([arguments objectAtIndex: 0],
+                                           GWEnvironmentWithScaleFactor(nil));
   envp = (const char **)calloc([environment count] + 1, sizeof(char *));
   if (envp == NULL)
     {

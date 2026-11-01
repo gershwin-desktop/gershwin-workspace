@@ -13,6 +13,7 @@
 #import "Testing.h"
 #include "../../Workspace/GWDetachedCommand.m"
 #include "../../Workspace/GWScaleFactor.m"
+#include "../../Workspace/GWLaunchEnvironment.m"
 
 #include <signal.h>
 #include <stdio.h>

@@ -112,6 +112,7 @@ GWURLOpener.m \
 WorkspaceApplication.m \
 GWApplicationLauncher.m \
 GWScaleFactor.m \
+GWLaunchEnvironment.m \
 GSGlobalShortcutsManager.m \
 Desktop/GWDesktopManager.m \
 Desktop/GWMountWatchState.m \
