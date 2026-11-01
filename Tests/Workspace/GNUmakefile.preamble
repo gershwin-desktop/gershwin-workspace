@@ -4,8 +4,10 @@ ADDITIONAL_INCLUDE_DIRS += -I../../Workspace
 # GWApplicationLauncher.m builds its error alert from AppKit classes.
 t_GWApplicationLauncher_TOOL_LIBS += -lgnustep-gui
 # and hands the launched child the desktop's scale factor (QT_SCALE_FACTOR)
-# through GWScaleFactor.m, which is linked here as a separate object.
-t_GWApplicationLauncher_OBJC_FILES += ../../Workspace/GWScaleFactor.m
+# through GWScaleFactor.m, and the toolkit integration through
+# GWLaunchEnvironment.m, which are linked here as separate objects.
+t_GWApplicationLauncher_OBJC_FILES += ../../Workspace/GWScaleFactor.m \
+	../../Workspace/GWLaunchEnvironment.m
 # X11AppSupport.m talks to GNUstepGUI/GSDisplayServer and to Xlib directly.
 t_GWX11AppSupport_TOOL_LIBS += -lgnustep-gui -lX11
 # and decides which windows belong to an application through GWWindowOwnership.
