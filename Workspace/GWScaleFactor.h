@@ -30,8 +30,8 @@ extern NSString *GWScaleFactorString(void);
  * exists, read by the toolkits that were not written for it.  A nil
  * `environment` means the launching process' own environment, which is what
  * NSTask would have inherited anyway; nothing else in it is changed, so
- * DISPLAY, the session bus and the GTK/Qt menu-bar modules still reach the
- * child exactly as before. */
+ * DISPLAY and the session bus still reach the child exactly as before (the
+ * GTK/Qt menu-bar modules are added by GWEnvironmentForExecutable()). */
 extern NSDictionary *GWEnvironmentWithScaleFactor(NSDictionary *environment);
 
 #endif
