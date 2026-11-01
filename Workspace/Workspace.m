@@ -2668,9 +2668,41 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   return nil;
 }
 
+/* Where a system provides runappimage (NextBSD does), AppImages are run
+   through it: it runs the AppImage with the system's Linux userland, cleans
+   up the environment and the payload mount, and explains on stderr what is
+   missing when the AppImage cannot run. */
+static NSString *const GWRunAppImagePath = @"/usr/bin/runappimage";
+
+/* An AppImage is an ELF executable with the type 2 marker 'A' 'I' 0x02 at
+   offset 8 (the AppImage specification). */
+static BOOL GWIsAppImageAtPath(NSString *path)
+{
+  NSFileHandle *fh = [NSFileHandle fileHandleForReadingAtPath: path];
+  NSData *hdr;
+  const unsigned char *b;
+
+  if (fh == nil)
+    return NO;
+  hdr = [fh readDataOfLength: 11];
+  [fh closeFile];
+  if ([hdr length] < 11)
+    return NO;
+  b = (const unsigned char *)[hdr bytes];
+  return b[0] == 0x7f && b[1] == 'E' && b[2] == 'L' && b[3] == 'F'
+    && b[8] == 'A' && b[9] == 'I' && b[10] == 0x02;
+}
+
 - (void)launchElfAndMonitor:(NSString *)path
 {
   /* Launch and monitor in background thread to avoid blocking UI. */
+  if (GWIsAppImageAtPath(path)
+      && [[NSFileManager defaultManager] isExecutableFileAtPath: GWRunAppImagePath])
+    {
+      [GWApplicationLauncher launchAndMonitor: GWRunAppImagePath
+                                withArguments: [NSArray arrayWithObject: path]];
+      return;
+    }
   [GWApplicationLauncher launchAndMonitor:path withArguments:nil];
 }
 
