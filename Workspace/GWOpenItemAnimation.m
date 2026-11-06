@@ -11,7 +11,7 @@
 /* How much larger than the icon it ends, and how long it takes: long enough
    to see where the item was, short enough to be over before the
    application's window appears. */
-static const CGFloat GWOpenItemGrowth = 2.2;
+static const CGFloat GWOpenItemGrowth = 4.4;
 static const NSTimeInterval GWOpenItemDuration = 0.28;
 static const NSTimeInterval GWOpenItemTick = 1.0 / 60.0;
 
@@ -27,7 +27,7 @@ static BOOL GWOpenItemAnimationAllowed(void)
 
 @interface GWOpenItemAnimation ()
 - (id)initWithFrame:(NSRect)frame icon:(NSImage *)anIcon iconRect:(NSRect)rect;
-- (void)_start;
+- (void)_startAfterDelay:(NSTimeInterval)delay;
 - (void)_tick:(NSTimer *)aTimer;
 - (void)_finish;
 @end
@@ -49,44 +49,132 @@ static BOOL GWOpenItemAnimationAllowed(void)
 {
   CGFloat p = MAX (0.0, MIN (1.0, progress));
 
-  return 1.0 - p * p;
+  /* Smoothstep down to 0: it flattens out at the end, so the last frames
+     drawn before the overlay goes away are already all but invisible
+     (1 - p*p still showed 12% one tick before the end, then vanished). */
+  return 1.0 - p * p * (3.0 - 2.0 * p);
 }
 
-+ (NSRect)iconPartOfRect:(NSRect)rect
++ (NSRect)rect:(NSRect)rect keptInside:(NSRect)area
 {
-  if (NSWidth (rect) <= NSHeight (rect) * 1.5)
-    return rect;
-  return NSMakeRect (NSMinX (rect), NSMinY (rect), NSHeight (rect), NSHeight (rect));
+  NSRect r = rect;
+
+  if (NSWidth (r) >= NSWidth (area))
+    {
+      r.origin.x = NSMidX (area) - NSWidth (r) / 2;
+    }
+  else
+    {
+      r.origin.x = MAX (NSMinX (area), MIN (NSMinX (r), NSMaxX (area) - NSWidth (r)));
+    }
+  if (NSHeight (r) >= NSHeight (area))
+    {
+      r.origin.y = NSMidY (area) - NSHeight (r) / 2;
+    }
+  else
+    {
+      r.origin.y = MAX (NSMinY (area), MIN (NSMinY (r), NSMaxY (area) - NSHeight (r)));
+    }
+  return r;
 }
 
-+ (void)playForNode:(FSNode *)node
-           inWindow:(NSWindow *)window
-       atScreenRect:(NSRect)screenRect
++ (NSRect)rect:(NSRect)rect fittedToAspectOfSize:(NSSize)size
 {
-  NSView *content = [window contentView];
-  NSRect rectInWindow;
-  NSRect rectInContent;
-  NSImage *anIcon;
+  CGFloat scale;
+  CGFloat w;
+  CGFloat h;
+
+  if (size.width <= 0 || size.height <= 0)
+    {
+      return rect;
+    }
+  scale = MIN (NSWidth (rect) / size.width, NSHeight (rect) / size.height);
+  w = size.width * scale;
+  h = size.height * scale;
+  return NSMakeRect (NSMidX (rect) - w / 2, NSMidY (rect) - h / 2, w, h);
+}
+
++ (NSRect)iconRectInOverlay:(NSView *)overlay
+                    forRect:(NSRect)rect
+                     ofView:(NSView *)view
+{
+  /* Into the overlay itself, not into the view it lies over: the overlay
+     draws unflipped, while the browsing viewer's content (an NSSplitView)
+     is flipped, so a rect taken over from the host as it is would grow at
+     the mirrored height. */
+  return [overlay convertRect: rect fromView: view];
+}
+
++ (void)playImage:(NSImage *)image
+           ofNode:(FSNode *)node
+         inWindow:(NSWindow *)window
+     atScreenRect:(NSRect)screenRect
+       afterDelay:(NSTimeInterval)delay
+{
+  NSView *host = [[window contentView] superview];
+  NSRect rectInOverlay;
+  NSImage *anIcon = image;
   GWOpenItemAnimation *overlay;
 
-  if (node == nil || content == nil || NSIsEmptyRect (screenRect)
+  if (node == nil || host == nil || NSIsEmptyRect (screenRect)
       || GWOpenItemAnimationAllowed () == NO)
-    return;
+    {
+      return;
+    }
 
-  rectInWindow = [window convertRectFromScreen: screenRect];
-  rectInContent = [self iconPartOfRect: [content convertRect: rectInWindow fromView: nil]];
-  anIcon = [[FSNodeRep sharedInstance]
-             iconOfSize: (int) MIN (NSWidth (rectInContent), NSHeight (rectInContent))
-                forNode: node];
+  /* Laid over the window's content from the view that holds it, not added
+     to the content view: in a browsing viewer that is an NSSplitView, which
+     takes every subview for a pane and would draw a divider after it. */
+  overlay = [[self alloc] initWithFrame: [host bounds]
+                                   icon: nil
+                               iconRect: NSZeroRect];
+  [host addSubview: overlay];
+  rectInOverlay = [self iconRectInOverlay: overlay
+                                  forRect: [window convertRectFromScreen: screenRect]
+                                   ofView: nil];
   if (anIcon == nil)
-    return;
+    {
+      anIcon = [[FSNodeRep sharedInstance]
+                 iconOfSize: (int) MIN (NSWidth (rectInOverlay), NSHeight (rectInOverlay))
+                    forNode: node];
+    }
+  if (anIcon == nil)
+    {
+      [overlay removeFromSuperview];
+      RELEASE (overlay);
+      return;
+    }
+  /* The rect is the picture's own already; fitting again only guards
+     against a rect from a rep that knows no picture (its whole bounds). */
+  rectInOverlay = [self rect: rectInOverlay fittedToAspectOfSize: [anIcon size]];
+  /* Grown near a monitor's edge the picture would be cut off by it (or by
+     the window); it moves back onto the monitor instead, at full size.  The
+     desktop window spans every monitor, so the window alone is not enough. */
+  overlay->area = [overlay bounds];
+  {
+    NSPoint center = NSMakePoint (NSMidX (screenRect), NSMidY (screenRect));
+    NSEnumerator *e = [[NSScreen screens] objectEnumerator];
+    NSScreen *screen;
 
-  overlay = [[self alloc] initWithFrame: [content bounds]
-                                   icon: anIcon
-                               iconRect: rectInContent];
-  /* last subview: drawn over the icons and everything else in the window */
-  [content addSubview: overlay];
-  [overlay _start];
+    while ((screen = [e nextObject]) != nil)
+      {
+        if (NSPointInRect (center, [screen frame]))
+          {
+            NSRect monitor = [overlay convertRect: [window convertRectFromScreen: [screen frame]]
+                                         fromView: nil];
+
+            if (NSIsEmptyRect (NSIntersectionRect (overlay->area, monitor)) == NO)
+              {
+                overlay->area = NSIntersectionRect (overlay->area, monitor);
+              }
+            break;
+          }
+      }
+  }
+  ASSIGN (overlay->icon, anIcon);
+  overlay->iconRect = rectInOverlay;
+  overlay->lastDrawnRect = rectInOverlay;
+  [overlay _startAfterDelay: delay];
   RELEASE (overlay);   /* the superview and the timer keep it */
 }
 
@@ -122,26 +210,52 @@ static BOOL GWOpenItemAnimationAllowed(void)
   return nil;
 }
 
-- (void)_start
+- (void)_startAfterDelay:(NSTimeInterval)delay
 {
-  startTime = [NSDate timeIntervalSinceReferenceDate];
+  /* The clock starts at the first tick, not here: the open that plays it
+     may hold the run loop a while longer (a sheet sliding away after
+     "Trust and Run", a launch), and a clock started now would be over
+     before a single frame was drawn. */
+  startTime = 0;
   ASSIGN (timer, [NSTimer scheduledTimerWithTimeInterval: GWOpenItemTick
                                                   target: self
                                                 selector: @selector(_tick:)
                                                 userInfo: nil
                                                  repeats: YES]);
+  if (delay > 0)
+    {
+      [timer setFireDate: [NSDate dateWithTimeIntervalSinceNow: delay]];
+    }
   [self setNeedsDisplayInRect: NSInsetRect (iconRect, -2, -2)];
+}
+
++ (CGFloat)progressAtTime:(NSTimeInterval)now startedAt:(NSTimeInterval)start
+{
+  if (start <= 0)
+    {
+      return 0.0;
+    }
+  return MAX (0.0, MIN (1.0, (now - start) / GWOpenItemDuration));
 }
 
 - (CGFloat)_progress
 {
-  return MIN (1.0, ([NSDate timeIntervalSinceReferenceDate] - startTime) / GWOpenItemDuration);
+  return [GWOpenItemAnimation progressAtTime: [NSDate timeIntervalSinceReferenceDate]
+                                   startedAt: startTime];
 }
 
 - (void)_tick:(NSTimer *)aTimer
 {
-  CGFloat progress = [self _progress];
-  NSRect now = [GWOpenItemAnimation rectForIconRect: iconRect progress: progress];
+  CGFloat progress;
+
+  if (startTime <= 0)
+    {
+      startTime = [NSDate timeIntervalSinceReferenceDate];
+    }
+  progress = [self _progress];
+  NSRect now = [GWOpenItemAnimation rect: [GWOpenItemAnimation rectForIconRect: iconRect
+                                                                     progress: progress]
+                               keptInside: area];
 
   /* repaint where the icon was and where it is now */
   [self setNeedsDisplayInRect: NSInsetRect (NSUnionRect (lastDrawnRect, now), -2, -2)];
@@ -156,7 +270,9 @@ static BOOL GWOpenItemAnimationAllowed(void)
 
   if (progress >= 1.0)
     return;
-  [icon drawInRect: [GWOpenItemAnimation rectForIconRect: iconRect progress: progress]
+  [icon drawInRect: [GWOpenItemAnimation rect: [GWOpenItemAnimation rectForIconRect: iconRect
+                                                                           progress: progress]
+                                     keptInside: area]
           fromRect: NSZeroRect
          operation: NSCompositeSourceOver
           fraction: [GWOpenItemAnimation opacityAtProgress: progress]];

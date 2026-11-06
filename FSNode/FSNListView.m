@@ -1123,6 +1123,16 @@ static NSString *defaultColumns = @"{ \
   if (NSIsEmptyRect(cellRect)) {
     cellRect = [listView rectOfRow: row];
   }
+  /* The icon itself, as the name cell draws it (FSNListCell moves the
+   * frame it hands FSNTextCell right by the row's depth), not the whole
+   * cell. */
+  if ([aRep icon] != nil) {
+    CGFloat shift = FSNListIconXForDepth([self depthOfRep: aRep]) - TEXT_CELL_ICON_MARGIN;
+
+    cellRect.origin.x += shift;
+    cellRect.size.width -= shift;
+    cellRect = FSNIconRectInCellFrame(cellRect, [[aRep icon] size]);
+  }
   NSRect rectInWindow = [listView convertRect: cellRect toView: nil];
   return [[listView window] convertRectToScreen: rectInWindow];
 }

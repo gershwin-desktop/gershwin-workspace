@@ -83,7 +83,6 @@ static NSTimeInterval recentUserUnmountTimeout = 2.0;
 #import "GWDockWindow.h"
 #import "Dock.h"
 #import "GWTrashFlight.h"
-#import "GWOpenItemAnimation.h"
 #import "GWViewersManager.h"
 #import "GWNavigationHistory.h"
 #import "ViewOptions/GWViewOptionsPanel.h"
@@ -2105,21 +2104,11 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
       NS_DURING
         {
           /* The canonical open: folders open a viewer (growing from the
-           * focused viewer's icon), everything else launches its app.  When
-           * newv is NO, directories are not opened at all. */
+           * focused viewer's icon), everything else launches its app, its
+           * icon growing out of its place (in -openNode:fromViewer:, so a
+           * double-click plays it as well as Open).  When newv is NO,
+           * directories are not opened at all. */
           if (newv || [node isDirectory] == NO) {
-            /* A document or an application grows out of its icon and fades
-             * away; a folder has its own animation, its viewer growing out
-             * of the icon. */
-            if ([node isDirectory] == NO || [node isPackage]) {
-              NSRect iconRect;
-              NSWindow *iconWindow = [vwrsManager windowShowingIconOfNode: node
-                                                               screenRect: &iconRect];
-
-              [GWOpenItemAnimation playForNode: node
-                                      inWindow: iconWindow
-                                  atScreenRect: iconRect];
-            }
             [vwrsManager openNode: node fromViewer: nil];
           }
         }
@@ -2129,6 +2118,37 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         }
       NS_ENDHANDLER
     }
+  }
+}
+
+- (BOOL)openFile:(NSString *)fullPath withApplication:(NSString *)appName
+{
+  /* The user named the application: nothing is left to ask. */
+  [vwrsManager armOpenAnimationForNode: [FSNode nodeWithPath: fullPath]
+                            fromViewer: nil];
+  [vwrsManager fireOpenAnimation];
+  return [ws openFile: fullPath withApplication: appName];
+}
+
+- (void)openPaths:(NSArray *)paths withApplicationNode:(FSNode *)app
+{
+  NSUInteger i;
+
+  /* The application is what opens, and its icon is where the user let go. */
+  [vwrsManager armOpenAnimationForNode: app fromViewer: nil];
+  [vwrsManager fireOpenAnimation];
+  for (i = 0; i < [paths count]; i++) {
+    NSString *path = [paths objectAtIndex: i];
+
+    NS_DURING
+      {
+        [ws openFile: path withApplication: [app name]];
+      }
+    NS_HANDLER
+      {
+        FSNShowCannotOpenAlert([app name]);
+      }
+    NS_ENDHANDLER
   }
 }
 
@@ -2237,6 +2257,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
                 return NO;
               }
 
+              [vwrsManager openAnimationFollowsSheet];
               [self launchElfAndMonitor: fullPath];
               return YES;
             } else {
@@ -2415,7 +2436,10 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
         NSString *appPath = [self applicationForCreatorCode: [md creatorCode]];
 
         if (appPath)
-          return [[NSWorkspace sharedWorkspace] openFile: fullPath withApplication: appPath];
+          {
+            [vwrsManager fireOpenAnimation];
+            return [[NSWorkspace sharedWorkspace] openFile: fullPath withApplication: appPath];
+          }
       }
   }
 
@@ -2500,6 +2524,7 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
               }
 
               /* Launch and monitor the program in background; return YES since we handled it. */
+              [vwrsManager openAnimationFollowsSheet];
               [self launchElfAndMonitor: fullPath];
               return YES;
             } else {
@@ -2536,9 +2561,25 @@ static BOOL swizzled_getInfoForFile(id self, SEL _cmd, NSString *fullPath, NSStr
   NS_DURING
     {
       if (aURL == nil)
-	success = [ws openFile: fullPath withApplication: appName];
+        {
+          /* Without an application NSWorkspace only says that there is
+           * none: nothing opens, so nothing animates. */
+          if (appName != nil)
+            {
+              [vwrsManager fireOpenAnimation];
+            }
+          success = [ws openFile: fullPath withApplication: appName];
+        }
       else
-	success = [self openURL: aURL];
+        {
+          /* A link may still end in a question or an error; animate only
+           * what did open. */
+          success = [self openURL: aURL];
+          if (success)
+            {
+              [vwrsManager fireOpenAnimation];
+            }
+        }
     }
   NS_HANDLER
     {
@@ -2695,6 +2736,9 @@ static BOOL GWIsAppImageAtPath(NSString *path)
 
 - (void)launchElfAndMonitor:(NSString *)path
 {
+  /* Every question about the program ("Trust This Application?") has been
+   * answered by now: the open is committed. */
+  [vwrsManager fireOpenAnimation];
   /* Launch and monitor in background thread to avoid blocking UI. */
   if (GWIsAppImageAtPath(path)
       && [[NSFileManager defaultManager] isExecutableFileAtPath: GWRunAppImagePath])
@@ -4748,7 +4792,7 @@ static BOOL GWIsAppImageAtPath(NSString *path)
     
       NS_DURING
         {
-      [ws openFile: path withApplication: appName];
+      [self openFile: path withApplication: appName];
         }
       NS_HANDLER
         {

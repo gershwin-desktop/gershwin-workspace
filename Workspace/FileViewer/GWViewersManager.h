@@ -135,6 +135,20 @@
 - (void)openNode:(FSNode *)node fromViewer:(id)viewer asFolder:(BOOL)asFolder;
 - (void)openNode:(FSNode *)node fromViewer:(id)viewer;
 
+/* The open animation (GWOpenItemAnimation: the picture of `node` the user
+ * opened grows out of its place and fades away), for every way of opening
+ * a document or an application.  Arming takes the icon now - the one in
+ * `viewer` when it shows one, otherwise wherever the desktop or a viewer
+ * shows it; firing plays it, and only where the open is committed, after
+ * any question such as "Trust This Application?"; disarming drops it when
+ * the open was cancelled or failed (GWOpenAnimationGate). */
+- (void)armOpenAnimationForNode:(FSNode *)node fromViewer:(id)viewer;
+- (void)fireOpenAnimation;
+- (void)disarmOpenAnimation;
+/* The open was committed by answering a sheet: the animation waits until
+ * the sheet has slid away. */
+- (void)openAnimationFollowsSheet;
+
 // Window open animation support (spatial Finder-like window birth)
 - (void)setPendingOpenAnimationRect:(NSRect)rect;
 - (void)setPendingOpenAnimationRectFromFocusedViewerForNode:(FSNode *)node;

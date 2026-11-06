@@ -2031,28 +2031,7 @@ compareCellsForArrangement(id a, id b, void *context)
     }
   else
     {
-      for (i = 0; i < [sourcePaths count]; i++)
-	{
-	  NSString *path = [sourcePaths objectAtIndex: i];
-
-      NS_DURING
-        {
-          /* Resolve Workspace at runtime to avoid circular link dependency. */
-          Class wsClass = NSClassFromString(@"Workspace");
-          id gw = nil;
-          if (wsClass && [wsClass respondsToSelector: @selector(gworkspace)])
-            gw = [wsClass performSelector: @selector(gworkspace)];
-          if (gw)
-            [gw openFile: path withApplication: [node name]];
-          else
-            [[NSWorkspace sharedWorkspace] openFile: path withApplication: [node name]];
-        }
-      NS_HANDLER
-        {
-          FSNShowCannotOpenAlert([node name]);
-        }
-      NS_ENDHANDLER
-	}
+      FSNOpenPathsWithApplication(sourcePaths, node);
     }
 }
 

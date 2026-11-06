@@ -251,6 +251,14 @@
 
 - (BOOL)openFile:(NSString *)fullPath;
 
+/* Open With: opens fullPath in appName, its icon growing out of its place
+ * like on any other open. */
+- (BOOL)openFile:(NSString *)fullPath withApplication:(NSString *)appName;
+
+/* Files dropped onto an application's icon: the application's icon grows
+ * out of its place and the application opens them. */
+- (void)openPaths:(NSArray *)paths withApplicationNode:(FSNode *)app;
+
 /** Opens a URL with the application registered for its scheme; asks the
  * user only when nothing is registered. */
 - (BOOL)openURL:(NSURL *)url;

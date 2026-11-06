@@ -95,6 +95,8 @@ GWAlignLogically.m \
 GWTrashFlightPath.m \
 GWTrashFlight.m \
 GWOpenItemAnimation.m \
+GWWindowAnimationGeometry.m \
+GWOpenAnimationGate.m \
 GWRecentFolders.m \
 Workspace.m \
 AppDataTrash.m \

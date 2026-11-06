@@ -161,6 +161,11 @@
 
 - (NSRect)iconBounds;
 
+/* Where the image the icon shows right now (-iconImage, a thumbnail when one
+ * is shown) is drawn, in this view's coordinates, at its own size and
+ * aspect; iconBounds while there is no image yet. */
+- (NSRect)iconImageRect;
+
 /* Image and name together: what the user sees of the node, and so what a
    rubber-band selection has to touch to catch it. */
 - (NSRect)nodeBounds;

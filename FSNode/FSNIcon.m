@@ -531,6 +531,23 @@ static void FSNForgetForeignWindowAnswer(void)
   return icnBounds;
 }
 
+- (NSRect)iconImageRect
+{
+  NSSize sz;
+
+  if (icon == nil)
+    {
+      return icnBounds;
+    }
+  /* -drawRect: centers the image in the highlight, and icnBounds is
+     centered there too, so centering in icnBounds lands on the same pixels
+     whether the view is flipped or not. */
+  sz = [icon size];
+  return NSMakeRect (NSMidX (icnBounds) - sz.width / 2,
+                     NSMidY (icnBounds) - sz.height / 2,
+                     sz.width, sz.height);
+}
+
 - (NSRect)nodeBounds
 {
   if (icnPosition == NSImageOnly)
@@ -1126,6 +1143,16 @@ static const unsigned long long FSNPreviewMaxFileSize = 4ULL * 1000 * 1000;
       BOOL modeled = [container respondsToSelector: @selector(iconMouseDown:event:)];
       BOOL wasSelected = isSelected;
       BOOL renames = NO;
+
+      /* Keys act on what was clicked: Command-Down opens it, the arrows move
+         on from it.  Left with the sidebar (or a search field) they went
+         there instead. */
+      if ([container respondsToSelector: @selector(acceptsFirstResponder)]
+          && [container acceptsFirstResponder]
+          && [[self window] firstResponder] != container)
+        {
+          [[self window] makeFirstResponder: container];
+        }
 
       if (modeled)
 	{
@@ -2413,6 +2440,12 @@ static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
 
   if (ic == nil)
     return NO;
+  /* An application opens what is dropped on it; that it is not writable
+     (every one in /System is not) only matters for filing into a folder. */
+  if ([nd isApplication])
+    {
+      return YES;
+    }
   if (([nd isDirectory] == NO) || [nd isLocked] || ([nd isWritable] == NO))
     return NO;
   if ([nd isPackage] && ([nd isApplication] == NO))
@@ -3482,31 +3515,7 @@ static void FSNRaiseDraggedIcons(NSView *container, NSArray *dragged)
 
 - (void)openDroppedPaths:(NSArray *)paths
 {
-  NSUInteger i;
-
-  for (i = 0; i < [paths count]; i++)
-    {
-      NSString *path = [paths objectAtIndex: i];
-
-      NS_DURING
-        {
-          /* Resolve Workspace at runtime to avoid circular link dependency
-           * between FSNode framework and Workspace app. */
-          Class wsClass = NSClassFromString(@"Workspace");
-          id gw = nil;
-          if (wsClass && [wsClass respondsToSelector: @selector(gworkspace)])
-            gw = [wsClass performSelector: @selector(gworkspace)];
-          if (gw)
-            [gw openFile: path withApplication: [node name]];
-          else
-            [[NSWorkspace sharedWorkspace] openFile: path withApplication: [node name]];
-        }
-      NS_HANDLER
-        {
-          FSNShowCannotOpenAlert([node name]);
-        }
-      NS_ENDHANDLER
-    }
+  FSNOpenPathsWithApplication(paths, node);
 }
 
 - (void)fileDroppedPaths:(NSArray *)paths operation:(NSString *)operation

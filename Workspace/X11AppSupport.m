@@ -27,6 +27,8 @@
 #include <string.h>
 #include <stdlib.h>
 #include <math.h>
+#import "Desktop/PrimaryMonitor.h"
+#import "GWWindowAnimationGeometry.h"
 
 /* Per-window property readers shared with GWX11ClientSnapshot. */
 @interface GWX11WindowManager (ClientSnapshotSupport)
@@ -1138,12 +1140,14 @@ static NSString * const GWX11ThreadDisplayKey = @"GWX11WindowManagerDisplay";
          * coordinates (top-left origin), matching the birth protocol. */
         long tx = 0, ty = 0, tw = 0, th = 0;
         if (!NSEqualRects(targetRect, NSZeroRect)) {
-            NSScreen *screen = [NSScreen mainScreen];
-            NSRect screenFrame = [screen frame];
-            tx = (long)llround(targetRect.origin.x);
-            ty = (long)llround(screenFrame.size.height - targetRect.origin.y - targetRect.size.height);
-            tw = (long)llround(targetRect.size.width);
-            th = (long)llround(targetRect.size.height);
+            /* Against the X screen, not the main monitor: they differ in
+             * height whenever the monitors are not level. */
+            NSRect x11Rect = GWX11RootRectForScreenRect(targetRect,
+                                                        PrimaryMonitorRootSize(dpy).height);
+            tx = (long)NSMinX(x11Rect);
+            ty = (long)NSMinY(x11Rect);
+            tw = (long)NSWidth(x11Rect);
+            th = (long)NSHeight(x11Rect);
         }
 
         XEvent event;

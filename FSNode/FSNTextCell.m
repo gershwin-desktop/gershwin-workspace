@@ -378,10 +378,8 @@ dateWithShortYear(NSString *date)
   } else {
     NSRect icon_rect;
 
-    icon_rect.origin = cellFrame.origin;
-    icon_rect.size = [icon size];
-    icon_rect.origin.x += LEFT_MARGIN;
-    icon_rect.origin.y += ((cellFrame.size.height - icon_rect.size.height) / 2.0);
+    /* The open animation starts from the same rect (FSNListView). */
+    icon_rect = FSNIconRectInCellFrame(cellFrame, [icon size]);
     if ([controlView isFlipped]) {
       icon_rect.origin.y += icon_rect.size.height;
     }

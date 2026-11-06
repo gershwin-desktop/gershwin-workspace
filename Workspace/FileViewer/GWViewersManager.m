@@ -55,14 +55,74 @@
 #import "GWDesktopManager.h"
 #import "NetworkVolumeManager.h"
 #import "X11AppSupport.h"
+#import "GWOpenItemAnimation.h"
+#import "GWOpenAnimationGate.h"
+#import "FSNIcon.h"
+#import "GWWindowAnimationGeometry.h"
+#ifndef _WIN32
+#import "PrimaryMonitor.h"
+#endif
 
 
 static GWViewersManager *vwrsmanager = nil;
+
+/* How long the WindowManager shows a frozen picture of a window whose sheet
+ * was just dismissed: the slide-out (0.25 s, URSAttachmentSlideEffect) and
+ * 0.25 s more (URSAttachmentController holdWindow:acrossUnmapForDuration:).
+ * Whatever the window draws meanwhile never reaches the screen, so an open
+ * animation played right after a question asked in a sheet ("Trust This
+ * Application?") would be over unseen. */
+static const NSTimeInterval GWSheetSlideOutDuration = 0.5;
+
+/* The screen rect of the picture a node rep shows (an icon, or a thumbnail
+ * with its own aspect), not of the rep with its name, highlight and
+ * padding: animations start from what the user saw and clicked.  Also the
+ * window it is in and the image itself.  List rows and browser cells are
+ * not views; their window is the node view's. */
+static NSRect GWIconRepScreenRect(id rep, id nodeView,
+                                  NSWindow **window, NSImage **image)
+{
+  NSRect result = NSZeroRect;
+  NSImage *shown = nil;
+  NSWindow *win = nil;
+
+  if ([rep isKindOfClass: [FSNListViewNodeRep class]]) {
+    result = [(FSNListViewNodeRep *)rep screenRect];
+    shown = [(FSNListViewNodeRep *)rep icon];
+    win = [nodeView window];
+  } else if ([rep isKindOfClass: [FSNBrowserCell class]]) {
+    if ([nodeView respondsToSelector: @selector(screenRectForCell:)]) {
+      result = [(FSNBrowser *)nodeView screenRectForCell: (FSNBrowserCell *)rep];
+    }
+    shown = [(FSNBrowserCell *)rep icon];
+    win = [nodeView window];
+  } else if ([rep isKindOfClass: [FSNIcon class]]) {
+    NSRect rectInWindow = [rep convertRect: [(FSNIcon *)rep iconImageRect] toView: nil];
+
+    win = [rep window];
+    result = [win convertRectToScreen: rectInWindow];
+    shown = [(FSNIcon *)rep iconImage];
+  } else if ([rep respondsToSelector: @selector(window)]) {
+    NSRect rectInWindow = [rep convertRect: [rep bounds] toView: nil];
+
+    win = [rep window];
+    result = [win convertRectToScreen: rectInWindow];
+  }
+  if (window != NULL) {
+    *window = win;
+  }
+  if (image != NULL) {
+    *image = shown;
+  }
+  return result;
+}
 
 @implementation GWViewersManager
 {
   NSRect pendingOpenAnimationRect;
   BOOL hasPendingOpenAnimationRect;
+  GWOpenAnimationGate *openAnimationGate;
+  BOOL openAnimationFollowsSheet;
 }
 
 + (GWViewersManager *)viewersManager
@@ -80,6 +140,7 @@ static GWViewersManager *vwrsmanager = nil;
   [nc removeObserver: self];
   RELEASE (viewers);
   RELEASE (bviewerHelp);
+  RELEASE (openAnimationGate);
     
   [super dealloc];
 }
@@ -420,34 +481,15 @@ static GWViewersManager *vwrsmanager = nil;
 // every node type, so the rect is only set when one is found.
 - (void)setPendingOpenAnimationRectFromViewer:(id)viewer forNode:(FSNode *)node
 {
-  id nodeView = [viewer nodeView];
-  if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)])
-    {
-      id icon = [nodeView repOfSubnodePath: [node path]];
-      if (icon == nil) {
-        return;
-      }
-      NSRect rectOnScreen = NSZeroRect;
-      if ([icon isKindOfClass: [FSNListViewNodeRep class]]) {
-        // List view reps are plain objects, not views; they know their own
-        // on-screen icon rect.
-        rectOnScreen = [(FSNListViewNodeRep *)icon screenRect];
-      } else if ([icon isKindOfClass: [FSNBrowserCell class]]) {
-        // Browser (columns) view cells are plain objects, not views; the
-        // browser knows the cell's on-screen rect.
-        if ([nodeView respondsToSelector: @selector(screenRectForCell:)]) {
-          rectOnScreen = [(FSNBrowser *)nodeView screenRectForCell: (FSNBrowserCell *)icon];
-        }
-      } else if ([icon respondsToSelector: @selector(window)]) {
-        // Icon / path view reps are NSViews.
-        NSRect iconBounds = [icon bounds];
-        NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
-        rectOnScreen = [[icon window] convertRectToScreen: rectInWindow];
-      }
-      if (!NSEqualRects(rectOnScreen, NSZeroRect)) {
-        [self setPendingOpenAnimationRect: rectOnScreen];
-      }
-    }
+  NSWindow *window = nil;
+  NSRect rectOnScreen = [self iconScreenRectFromViewer: viewer
+                                               forNode: node
+                                                window: &window
+                                                 image: NULL];
+
+  if (!NSEqualRects(rectOnScreen, NSZeroRect)) {
+    [self setPendingOpenAnimationRect: rectOnScreen];
+  }
 }
 
 /* Resolve the folder's CURRENT on-screen representation by identity: scan the
@@ -466,10 +508,20 @@ static GWViewersManager *vwrsmanager = nil;
 
 - (NSWindow *)windowShowingIconOfNode:(FSNode *)node screenRect:(NSRect *)screenRect
 {
+  return [self windowShowingIconOfNode: node screenRect: screenRect image: NULL];
+}
+
+- (NSWindow *)windowShowingIconOfNode:(FSNode *)node
+                           screenRect:(NSRect *)screenRect
+                                image:(NSImage **)image
+{
   NSRect result = NSZeroRect;
   NSWindow *window = nil;
 
   *screenRect = NSZeroRect;
+  if (image != NULL) {
+    *image = nil;
+  }
   if (node == nil) {
     return nil;
   }
@@ -483,10 +535,7 @@ static GWViewersManager *vwrsmanager = nil;
       if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)]) {
         id icon = [nodeView repOfSubnodePath: [node path]];
         if (icon && [icon respondsToSelector: @selector(window)]) {
-          NSRect iconBounds = [icon bounds];
-          NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
-          window = [icon window];
-          result = [window convertRectToScreen: rectInWindow];
+          result = GWIconRepScreenRect(icon, nodeView, &window, image);
           if (window == nil || ![window isVisible] || [window isMiniaturized]) {
             result = NSZeroRect;
             window = nil;
@@ -505,7 +554,7 @@ static GWViewersManager *vwrsmanager = nil;
     /* Only fall back to a viewer if the desktop did not already resolve the
      * node's icon (the desktop may show the folder even when a viewer
      * window is key, e.g. while closing that viewer). */
-    result = [self iconScreenRectFromViewer: viewer forNode: node window: &window];
+    result = [self iconScreenRectFromViewer: viewer forNode: node window: &window image: image];
   }
   if (NSEqualRects(result, NSZeroRect)) {
     /* The focused (or last) viewer didn't show the node: scan all viewers so
@@ -514,7 +563,7 @@ static GWViewersManager *vwrsmanager = nil;
     for (i = 0; i < [viewers count] && NSEqualRects(result, NSZeroRect); i++) {
       id v = [viewers objectAtIndex: i];
       if (v != viewer) {
-        result = [self iconScreenRectFromViewer: v forNode: node window: &window];
+        result = [self iconScreenRectFromViewer: v forNode: node window: &window image: image];
       }
     }
   }
@@ -525,36 +574,28 @@ static GWViewersManager *vwrsmanager = nil;
 - (NSRect)iconScreenRectFromViewer:(id)viewer
                            forNode:(FSNode *)node
                             window:(NSWindow **)window
+                             image:(NSImage **)image
 {
   *window = nil;
   id nodeView = [viewer nodeView];
   if (nodeView && [nodeView respondsToSelector: @selector(repOfSubnodePath:)]) {
     id icon = [nodeView repOfSubnodePath: [node path]];
+    NSWindow *win = nil;
+    NSImage *shown = nil;
     if (icon == nil) {
       return NSZeroRect;
     }
-    NSRect result = NSZeroRect;
-    if ([icon isKindOfClass: [FSNListViewNodeRep class]]) {
-      result = [(FSNListViewNodeRep *)icon screenRect];
-    } else if ([icon isKindOfClass: [FSNBrowserCell class]]) {
-      if ([nodeView respondsToSelector: @selector(screenRectForCell:)]) {
-        result = [(FSNBrowser *)nodeView screenRectForCell: (FSNBrowserCell *)icon];
-      }
-    } else if ([icon respondsToSelector: @selector(window)]) {
-      NSRect iconBounds = [icon bounds];
-      NSRect rectInWindow = [icon convertRect: iconBounds toView: nil];
-      result = [[icon window] convertRectToScreen: rectInWindow];
-    }
+    NSRect result = GWIconRepScreenRect(icon, nodeView, &win, &shown);
     /* Only an icon on a visible, unminimized window is a valid animation
-     * target; otherwise the animation would point at a hidden window.  List
-     * rows and browser cells are not views, so their window is the node
-     * view's. */
+     * target; otherwise the animation would point at a hidden window. */
     if (!NSEqualRects(result, NSZeroRect)) {
-      NSWindow *win = [icon respondsToSelector: @selector(window)] ? [icon window] : [nodeView window];
       if (win == nil || ![win isVisible] || [win isMiniaturized]) {
         return NSZeroRect;
       }
       *window = win;
+      if (image != NULL) {
+        *image = shown;
+      }
     }
     return result;
   }
@@ -741,6 +782,68 @@ static GWViewersManager *vwrsmanager = nil;
   }
 }
 
+- (void)armOpenAnimationForNode:(FSNode *)node fromViewer:(id)viewer
+{
+  NSRect iconRect = NSZeroRect;
+  NSWindow *iconWindow = nil;
+  NSImage *image = nil;
+
+  if (openAnimationGate == nil) {
+    openAnimationGate = [GWOpenAnimationGate new];
+  }
+  /* The viewer the user acted in shows the very icon that was clicked;
+   * the desktop, which windowShowingIconOfNode: asks first, may show the
+   * same item elsewhere.  Taken now: a question asked before the open may
+   * go ahead, and the icon may change meanwhile. */
+  if (viewer != nil) {
+    iconRect = [self iconScreenRectFromViewer: viewer
+                                      forNode: node
+                                       window: &iconWindow
+                                        image: &image];
+  }
+  if (iconWindow == nil) {
+    iconWindow = [self windowShowingIconOfNode: node
+                                    screenRect: &iconRect
+                                         image: &image];
+  }
+  if (node == nil || iconWindow == nil) {
+    [openAnimationGate disarm];
+    return;
+  }
+  [openAnimationGate arm: [NSDictionary dictionaryWithObjectsAndKeys:
+                             node, @"node",
+                             iconWindow, @"window",
+                             [NSValue valueWithRect: iconRect], @"rect",
+                             image, @"image",   /* last: may be nil */
+                             nil]];
+}
+
+- (void)fireOpenAnimation
+{
+  NSDictionary *request = [openAnimationGate fire];
+
+  if (request == nil) {
+    return;
+  }
+  [GWOpenItemAnimation playImage: [request objectForKey: @"image"]
+                          ofNode: [request objectForKey: @"node"]
+                        inWindow: [request objectForKey: @"window"]
+                    atScreenRect: [[request objectForKey: @"rect"] rectValue]
+                      afterDelay: (openAnimationFollowsSheet ? GWSheetSlideOutDuration : 0)];
+  openAnimationFollowsSheet = NO;
+}
+
+- (void)openAnimationFollowsSheet
+{
+  openAnimationFollowsSheet = YES;
+}
+
+- (void)disarmOpenAnimation
+{
+  openAnimationFollowsSheet = NO;
+  [openAnimationGate disarm];
+}
+
 // Open a viewer for the given folder node, growing from the source viewer's
 // icon when available.  Shared by openNode:fromViewer:asFolder: for both
 // regular folders and packages opened "as folder".
@@ -808,10 +911,17 @@ static GWViewersManager *vwrsmanager = nil;
     {
       if ([node isPackage] && (asFolder == NO))
         {
+          /* Workspace fires it once the open is committed (after any
+           * question it asks first); an application launches at once. */
+          [self armOpenAnimationForNode: node fromViewer: viewer];
           if ([node isApplication] == NO)
             [gworkspace openFile: [node path]];
           else
-            [[NSWorkspace sharedWorkspace] launchApplication: [node path]];
+            {
+              [self fireOpenAnimation];
+              [[NSWorkspace sharedWorkspace] launchApplication: [node path]];
+            }
+          [self disarmOpenAnimation];
         }
       else
         {
@@ -824,11 +934,14 @@ static GWViewersManager *vwrsmanager = nil;
     }
 
   /* Plain file, application, or executable: hand to the system. */
+  [self armOpenAnimationForNode: node fromViewer: viewer];
   if ([node isApplication]) {
+    [self fireOpenAnimation];
     [[NSWorkspace sharedWorkspace] launchApplication: [node path]];
   } else {
     [gworkspace openFile: [node path]];
   }
+  [self disarmOpenAnimation];
 }
 
 - (void)openSelectionInViewer:(id)viewer
@@ -1745,26 +1858,21 @@ static GWViewersManager *vwrsmanager = nil;
     return;
   }
 
-  // Convert NSRect to screen coordinates (X11 has origin at top-left)
-  NSScreen *screen = [window screen];
-  if (!screen) screen = [NSScreen mainScreen];
-  if (!screen) {
-    return;
-  }
-  NSRect screenFrame = [screen frame];
-
-  // Compute absolute X11 screen coordinates for source rect
-  // (account for screen origin and flip Y from Cocoa bottom-left to X11 top-left)
-  int32_t srcX = (int32_t)(sourceRect.origin.x + screenFrame.origin.x);
-  int32_t srcY = (int32_t)(screenFrame.origin.y + screenFrame.size.height - sourceRect.origin.y - sourceRect.size.height);
-  int32_t srcW = (int32_t)sourceRect.size.width;
-  int32_t srcH = (int32_t)sourceRect.size.height;
-
-  // Compute absolute X11 screen coordinates for target rect
-  int32_t dstX = (int32_t)(targetRect.origin.x + screenFrame.origin.x);
-  int32_t dstY = (int32_t)(screenFrame.origin.y + screenFrame.size.height - targetRect.origin.y - targetRect.size.height);
-  int32_t dstW = (int32_t)targetRect.size.width;
-  int32_t dstH = (int32_t)targetRect.size.height;
+  /* Both rects are already global (convertRectToScreen:), measured from
+   * the bottom of the whole X screen, which is taller than the window's
+   * monitor when the monitors are not level: flip against the root, and do
+   * not add the monitor's origin a second time. */
+  CGFloat rootHeight = PrimaryMonitorRootSize(display).height;
+  NSRect src = GWX11RootRectForScreenRect(sourceRect, rootHeight);
+  NSRect dst = GWX11RootRectForScreenRect(targetRect, rootHeight);
+  int32_t srcX = (int32_t)NSMinX(src);
+  int32_t srcY = (int32_t)NSMinY(src);
+  int32_t srcW = (int32_t)NSWidth(src);
+  int32_t srcH = (int32_t)NSHeight(src);
+  int32_t dstX = (int32_t)NSMinX(dst);
+  int32_t dstY = (int32_t)NSMinY(dst);
+  int32_t dstW = (int32_t)NSWidth(dst);
+  int32_t dstH = (int32_t)NSHeight(dst);
 
   // Build the 9-value data array: source(x,y,w,h), target(x,y,w,h), animationType
   //

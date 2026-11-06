@@ -168,7 +168,7 @@
                 {
                   NSString *fileName = [selpaths objectAtIndex:i];
 
-                  [[NSWorkspace sharedWorkspace] openFile:fileName withApplication: command];
+                  [gw openFile: fileName withApplication: command];
                 }
             }
           else

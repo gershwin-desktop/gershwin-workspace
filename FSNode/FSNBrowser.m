@@ -1992,6 +1992,10 @@ static id<FSNPreviewProvider> previewProvider = nil;
     return NSZeroRect;
   }
   NSRect cellRect = [matrix cellFrameAtRow: row column: 0];
+  /* The icon itself, as the cell draws it, not the whole row. */
+  if ([aCell icon] != nil) {
+    cellRect = FSNIconRectInCellFrame(cellRect, [[aCell icon] size]);
+  }
   NSRect rectInWindow = [matrix convertRect: cellRect toView: nil];
   return [[matrix window] convertRectToScreen: rectInWindow];
 }

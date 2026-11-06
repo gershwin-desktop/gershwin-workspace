@@ -777,6 +777,47 @@ void FSNShowCannotOpenAlert(NSString *name)
                   nil, nil);
 }
 
+NSRect FSNIconRectInCellFrame(NSRect cellFrame, NSSize iconSize)
+{
+  return NSMakeRect(cellFrame.origin.x + 2.0,
+                    cellFrame.origin.y + (cellFrame.size.height - iconSize.height) / 2.0,
+                    iconSize.width, iconSize.height);
+}
+
+/* Implemented by Workspace, which FSNode cannot link. */
+@interface NSObject (FSNWorkspaceOpening)
++ (id)gworkspace;
+- (void)openPaths:(NSArray *)paths withApplicationNode:(FSNode *)app;
+@end
+
+void FSNOpenPathsWithApplication(NSArray *paths, FSNode *app)
+{
+  Class wsClass = NSClassFromString(@"Workspace");
+  NSUInteger i;
+
+  /* In Workspace the drop is an open like any other and plays its
+     animation from the application's icon; another application using
+     FSNode has no Workspace to ask. */
+  if (wsClass != Nil && [wsClass respondsToSelector: @selector(gworkspace)])
+    {
+      [[wsClass gworkspace] openPaths: paths withApplicationNode: app];
+      return;
+    }
+  for (i = 0; i < [paths count]; i++)
+    {
+      NS_DURING
+        {
+          [[NSWorkspace sharedWorkspace] openFile: [paths objectAtIndex: i]
+                                  withApplication: [app name]];
+        }
+      NS_HANDLER
+        {
+          FSNShowCannotOpenAlert([app name]);
+        }
+      NS_ENDHANDLER
+    }
+}
+
 void
 FSNDrawLabelDot(NSRect dotRect, NSColor *color)
 {

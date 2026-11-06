@@ -123,6 +123,16 @@ double myrintf(double a);
 
 /* The one place that tells the user an item could not be opened. */
 void FSNShowCannotOpenAlert(NSString *name);
+
+@class FSNode;
+
+/* Where a list row or a browser cell draws its icon of iconSize: at the
+ * left of cellFrame, centered vertically. */
+NSRect FSNIconRectInCellFrame(NSRect cellFrame, NSSize iconSize);
+
+/* Files dropped onto the icon of the application `app`: opened by it, from
+ * one place for every view that takes such a drop. */
+void FSNOpenPathsWithApplication(NSArray *paths, FSNode *app);
 void showAlertNoPermission(Class c, NSString *name);
 
 /* The selection model's modifiers (FSNSelectionModel.h) for NSEvent flags,
