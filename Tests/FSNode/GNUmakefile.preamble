@@ -32,6 +32,7 @@ t_FSNDirectorySnapshot_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                      ../../FSNode/FSNAlias.m \
                                      ../../FSNode/FSNodeRep.m \
                                      ../../FSNode/FSNodeRepIcons.m \
+                                     ../../FSNode/FSNBoundedCache.m \
                                      ../../FSNode/FSNKindNames.m \
                                      ../../FSNode/FSNode.m
 t_FSNDirectorySnapshot_OBJC_FILES += $(GSMETA_OBJS)
@@ -41,6 +42,7 @@ t_FSNLazyAttributes_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                   ../../FSNode/FSNAlias.m \
                                   ../../FSNode/FSNodeRep.m \
                                   ../../FSNode/FSNodeRepIcons.m \
+                                  ../../FSNode/FSNBoundedCache.m \
                                   ../../FSNode/FSNKindNames.m \
                                   ../../FSNode/FSNode.m
 t_FSNLazyAttributes_OBJC_FILES += $(GSMETA_OBJS)
@@ -58,6 +60,7 @@ t_FSNDisplayName_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                ../../FSNode/FSNAlias.m \
                                ../../FSNode/FSNodeRep.m \
                                ../../FSNode/FSNodeRepIcons.m \
+                               ../../FSNode/FSNBoundedCache.m \
                                ../../FSNode/FSNKindNames.m \
                                ../../FSNode/FSNode.m
 t_FSNDisplayName_OBJC_FILES += $(GSMETA_OBJS)
@@ -100,6 +103,7 @@ t_FSNSubpath_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                            ../../FSNode/FSNAlias.m \
                            ../../FSNode/FSNodeRep.m \
                            ../../FSNode/FSNodeRepIcons.m \
+                           ../../FSNode/FSNBoundedCache.m \
                            ../../FSNode/FSNKindNames.m \
                            ../../FSNode/FSNode.m
 t_FSNSubpath_OBJC_FILES += $(GSMETA_OBJS)
@@ -113,6 +117,7 @@ t_FSNTextCellLabelLookup_OBJC_FILES += ../../FSNode/FSNDirEntry.m \
                                        ../../FSNode/FSNAlias.m \
                                        ../../FSNode/FSNodeRep.m \
                                        ../../FSNode/FSNodeRepIcons.m \
+                                       ../../FSNode/FSNBoundedCache.m \
                                        ../../FSNode/FSNKindNames.m \
                                        ../../FSNode/FSNode.m
 t_FSNTextCellLabelLookup_OBJC_FILES += $(GSMETA_OBJS)
@@ -157,3 +162,5 @@ $(foreach t,$(GW_FSNODEREP_TOOLS),$(eval $(t)_OBJCFLAGS += $(GW_PNG_FLAGS)))
 $(foreach t,$(GW_FSNODEREP_TOOLS),$(eval $(t)_TOOL_LIBS += $(GW_PNG_LIBS)))
 # The bounded worker threads the store and the AppImage icons use.
 t_GWWorkerPool_OBJC_FILES += ../../FSNode/GWWorkerPool.m
+# The bounded dictionary behind the icon caches.
+t_FSNBoundedCache_OBJC_FILES += ../../FSNode/FSNBoundedCache.m

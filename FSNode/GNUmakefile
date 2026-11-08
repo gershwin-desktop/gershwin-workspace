@@ -12,6 +12,7 @@ FSNode_OBJC_FILES = \
          FSNIconLoader.m \
          FSNodeRep.m \
          FSNodeRepIcons.m \
+         FSNBoundedCache.m \
          FSNFunctions.m \
          FSNKindNames.m \
          FSNTextCell.m \
@@ -54,6 +55,7 @@ FSNode_HEADER_FILES = \
          FSNDirEntry.h \
          FSNIconLoader.h \
          FSNodeRep.h \
+         FSNBoundedCache.h \
          FSNFunctions.h \
          FSNKindNames.h \
          FSNTextCell.h \

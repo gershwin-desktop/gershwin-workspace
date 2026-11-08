@@ -142,7 +142,7 @@ NSString * const FSNLabelTextSizeDefaultsKey = @"labeltxtsize";
     imagepath = [bundle pathForImageResource: @"HardDiskOpen"];
     openHardDiskIcon = [[NSImage alloc] initWithContentsOfFile: imagepath]; 
     
-    iconsCache = [NSMutableDictionary new];
+    iconsCache = [[FSNBoundedCache alloc] initWithCapacity: FSNIconCacheCapacity];
     rootPath = path_separator();
     RETAIN (rootPath);
     

@@ -28,6 +28,7 @@
 
 #import <Foundation/Foundation.h>
 #import "FSNode.h"
+#import "FSNBoundedCache.h"
 
 /* User defaults keys for the info shown under icons. */
 extern NSString * const FSNInfoTypeDefaultsKey;
@@ -389,6 +390,16 @@ typedef enum FSNSelectionMask {
 @end
 
 
+/* How many entries the icon caches keep (types, applications and custom
+ * icons; thumbnails per file).  Every image kept there holds a hidden X
+ * window once it has been drawn, so the caches must stay bounded; an icon
+ * dropped from them is read again from the thumbnail store or the theme. */
+enum
+{
+  FSNIconCacheCapacity = 128,
+  FSNThumbnailCacheCapacity = 64
+};
+
 @interface FSNodeRep : NSObject 
 {
   NSArray *extInfoModules;
@@ -403,8 +414,8 @@ typedef enum FSNSelectionMask {
   NSMutableSet *diskImageVolumes;  /* Tracks which volumes are disk images (DMG/ISO) */
   NSString *rootPath;
     
-  NSMutableDictionary *iconsCache;
-  NSMutableDictionary *tumbsCache;
+  FSNBoundedCache *iconsCache;
+  FSNBoundedCache *tumbsCache;
   BOOL usesThumbnails;  
 
   NSImage *multipleSelIcon;

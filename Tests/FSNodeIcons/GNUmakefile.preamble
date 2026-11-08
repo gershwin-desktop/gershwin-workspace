@@ -23,3 +23,5 @@ t_FSNIconsViewURLDrop_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Curr
 
 # The build's own FSNode before the installed one in /System, for -lFSNode too.
 ADDITIONAL_LDFLAGS += -L$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+t_FSNIconCacheWindows_TOOL_LIBS += -L../../FSNode/FSNode.framework/Versions/Current \
+                                   -lFSNode -lgnustep-gui

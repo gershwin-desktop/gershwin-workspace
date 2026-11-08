@@ -1108,7 +1108,7 @@ FSNodeRepApplicationIconSource(NSString *appPath)
 - (void)prepareThumbnailsCache
 {
   DESTROY (tumbsCache);
-  tumbsCache = [NSMutableDictionary new];
+  tumbsCache = [[FSNBoundedCache alloc] initWithCapacity: FSNThumbnailCacheCapacity];
 }
 
 - (NSImage *)thumbnailForPath:(NSString *)apath
