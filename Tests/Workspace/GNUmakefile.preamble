@@ -122,3 +122,5 @@ t_GWThumbnailerFileOps_TOOL_LIBS += $(GW_FSNODE) -lgnustep-gui
 # coordinates, Foundation only.
 t_GWWindowAnimationGeometry_OBJC_FILES += ../../Workspace/GWWindowAnimationGeometry.m
 t_GWOpenAnimationGate_OBJC_FILES += ../../Workspace/GWOpenAnimationGate.m
+# GWOOMProtection.m: Workspace's children leave the session's OOM protection.
+t_GWOOMProtection_OBJC_FILES += ../../Workspace/GWOOMProtection.m

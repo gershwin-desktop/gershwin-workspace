@@ -109,6 +109,7 @@ GWSingleInstance.m \
 GWStationery.m \
 GWWin32Process.m \
 GWDetachedCommand.m \
+GWOOMProtection.m \
 GWURLSchemeRegistry.m \
 GWURLOpener.m \
 WorkspaceApplication.m \

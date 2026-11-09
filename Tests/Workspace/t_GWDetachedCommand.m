@@ -14,6 +14,7 @@
 #include "../../Workspace/GWDetachedCommand.m"
 #include "../../Workspace/GWScaleFactor.m"
 #include "../../Workspace/GWLaunchEnvironment.m"
+#include "../../Workspace/GWOOMProtection.m"
 
 #include <signal.h>
 #include <stdio.h>

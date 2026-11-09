@@ -28,6 +28,7 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepBase/GNUstep.h>
 #include <unistd.h>
+#import "GWOOMProtection.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -76,6 +77,10 @@ int main(int argc, char **argv, char **env)
 #endif /* !_WIN32 */
     
 	CREATE_AUTORELEASE_POOL (pool);
+
+  /* Before anything can start a child: Workspace is part of the desktop's
+   * core, the applications it starts are not (GWOOMProtection.h). */
+  GWOOMReleaseChildrenIfProtected();
 
   /* Workspace keeps the thumbnail store; other processes only read it. */
   [GWThumbnailStore setSharedStoreWritable: YES];

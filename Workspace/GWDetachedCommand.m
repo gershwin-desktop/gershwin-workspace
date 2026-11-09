@@ -7,6 +7,7 @@
 #import "GWDetachedCommand.h"
 #import "GWScaleFactor.h"
 #import "GWLaunchEnvironment.h"
+#import "GWOOMProtection.h"
 
 #include <errno.h>
 #include <fcntl.h>
@@ -85,6 +86,7 @@
   const char **argv;
   const char **envp;
   NSUInteger i;
+  BOOL releaseChild = GWOOMReleasingChildren();
   pid_t pid;
   int status;
 
@@ -140,6 +142,13 @@
       pid_t grandchild;
 
       setsid();
+
+      /* Before stderr goes to /dev/null, so a failure is still seen; the
+       * command inherits it from here. */
+      if (releaseChild)
+        {
+          GWOOMReleaseSelf();
+        }
 
       devnull = open("/dev/null", O_RDWR);
       if (devnull < 0)
