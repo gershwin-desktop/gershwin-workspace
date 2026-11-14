@@ -257,12 +257,16 @@ main(void)
   START_SET("destination of a folder")
     NSString *dir = NSTemporaryDirectory();
     NSString *info = [root stringByAppendingPathComponent: @"mountinfo"];
+    GWDestination *d;
+
+    /* Only Linux reads the mount table from the mountinfo fixture; the
+     * BSDs ask getmntinfo(), which no test can fill. */
+#if defined(__linux__)
     long mid = -1;
     struct stat st;
     unsigned devMaj;
     unsigned devMin;
     NSString *line;
-    GWDestination *d;
 
 #if defined(STATX_MNT_ID)
     {
@@ -319,6 +323,7 @@ main(void)
     d = [newClassifier(info) destinationForDirectory: dir];
     PASS([d kind] == GWDestinationLocal && ![d usesWriteWindows]
          && ![d needsFinalFlush], "a local folder stays as it was");
+#endif
 
     setenv("GW_COPY_DESTINATION", "removable", 1);
     d = [newClassifier(info) destinationForDirectory: dir];

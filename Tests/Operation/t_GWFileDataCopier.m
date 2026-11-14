@@ -37,6 +37,27 @@ static unsigned long long syncedTotal;
 static BOOL syncContiguous;
 static int syncDelayMicros;
 
+/* Where the host has no copy_file_range() or no file-to-file sendfile()
+ * (FreeBSD before 13, the other BSDs), the fakes copy the way those calls
+ * would: from the input offset to the output's position, perhaps short. */
+static ssize_t
+emulatedKernelCopy(int in, off_t *off, int out, size_t len)
+{
+  char buf[65536];
+  ssize_t r = pread(in, buf, (len < sizeof(buf)) ? len : sizeof(buf), *off);
+
+  if (r <= 0)
+    {
+      return r;
+    }
+  if (realCalls.writeAll(out, buf, (size_t)r) < 0)
+    {
+      return -1;
+    }
+  *off += r;
+  return r;
+}
+
 static ssize_t
 fakeCopyFileRange(int in, off_t *off, int out, size_t len)
 {
@@ -50,6 +71,10 @@ fakeCopyFileRange(int in, off_t *off, int out, size_t len)
       errno = cfrErrno;
       return -1;
     }
+  if (realCalls.copyFileRange == NULL)
+    {
+      return emulatedKernelCopy(in, off, out, len);
+    }
   return realCalls.copyFileRange(in, off, out, len);
 }
 
@@ -61,6 +86,10 @@ fakeSendFile(int out, int in, off_t *off, size_t len)
     {
       errno = sendErrno;
       return -1;
+    }
+  if (realCalls.sendFile == NULL)
+    {
+      return emulatedKernelCopy(in, off, out, len);
     }
   return realCalls.sendFile(out, in, off, len);
 }
