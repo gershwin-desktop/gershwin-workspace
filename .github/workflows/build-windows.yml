@@ -287,10 +287,12 @@ jobs:
       # As root: gdomap, GNUstep's name server that the Wine run needs,
       # binds the privileged port 538 and sets up its sockets in ways the
       # runner's user is not allowed to.
+      # Ubuntu 26.04 ships wineserver only in Wine's library directory; the
+      # script stops the server with it when it ends.
       - name: Run the Workspace under Wine
         run: |
           mkdir -p run-log-wine
-          sudo -E env "PATH=$PATH" HOME=/root sh gershwin-developer/Library/Scripts/windows-wine-test.sh dist/Gershwin-Workspace-Windows-*.zip 45 "$PWD/run-log-wine/workspace-wine.png"
+          sudo env "PATH=/usr/lib/x86_64-linux-gnu/wine:$PATH" HOME=/root sh gershwin-developer/Library/Scripts/windows-wine-test.sh dist/Gershwin-Workspace-Windows-*.zip 45 "$PWD/run-log-wine/workspace-wine.png"
           sudo chown -R "$(id -u):$(id -g)" run-log-wine
 
       - name: Upload Wine run log and screenshot
