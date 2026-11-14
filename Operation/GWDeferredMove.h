@@ -57,6 +57,11 @@ GWSourceDecision GWDecideSourceDeletion(NSDictionary *recorded,
                        changed:(NSMutableArray *)changed
                          error:(NSError **)error;
 
+/* The one place a source is removed (a folder only when empty); 0 or the
+ * errno.  A subclass can make it fail where no permission can, as for
+ * root. */
+- (int)removeSourceAtPath:(NSString *)path directory:(BOOL)isDirectory;
+
 @end
 
 #endif

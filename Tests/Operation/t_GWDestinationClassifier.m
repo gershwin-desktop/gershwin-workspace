@@ -259,6 +259,8 @@ main(void)
     NSString *info = [root stringByAppendingPathComponent: @"mountinfo"];
     long mid = -1;
     struct stat st;
+    unsigned devMaj;
+    unsigned devMin;
     NSString *line;
     GWDestination *d;
 
@@ -271,16 +273,21 @@ main(void)
     }
 #endif
     stat([dir fileSystemRepresentation], &st);
+    /* Found by its mount ID, the folder's mount carries the numbers of the
+     * fixture's sdb1: the real ones are 0:N on overlayfs or tmpfs (as in a
+     * CI container), which no sysfs entry can make removable.  Without
+     * mount IDs only the real numbers find the line. */
+    devMaj = (mid >= 0) ? 8 : major(st.st_dev);
+    devMin = (mid >= 0) ? 17 : minor(st.st_dev);
 
     line = [NSString stringWithFormat:
       @"%ld 1 %u:%u / /fixture rw - vfat /dev/sdb1 rw\n",
-      mid, major(st.st_dev), minor(st.st_dev)];
+      mid, devMaj, devMin];
     [line writeToFile: info atomically: NO];
-    /* Not the fixture's 8:17: what decides is the device, so point the
-     * fixture's numbers at the removable disk. */
+    /* What decides is the device, so point its numbers at the removable
+     * disk. */
     attr([NSString stringWithFormat: @"devices/%@/block/sdb/removable", usb], @"1");
-    link_([NSString stringWithFormat: @"dev/block/%u:%u",
-                    major(st.st_dev), minor(st.st_dev)],
+    link_([NSString stringWithFormat: @"dev/block/%u:%u", devMaj, devMin],
           [NSString stringWithFormat: @"../../devices/%@/block/sdb", usb]);
     d = [newClassifier(info) destinationForDirectory: dir];
     PASS([d kind] == GWDestinationRemovable && [d needsFinalFlush]

@@ -17,6 +17,32 @@
 
 static NSString *base;
 
+/* Fails the delete of one path the way a permission would: root, as in
+ * CI, may delete anything. */
+@interface GWFailingDeferredMove : GWDeferredMove
+{
+@public
+  NSString *failing;
+}
+@end
+
+@implementation GWFailingDeferredMove
+- (void)dealloc
+{
+  [failing release];
+  [super dealloc];
+}
+
+- (int)removeSourceAtPath:(NSString *)path directory:(BOOL)isDirectory
+{
+  if ([path isEqual: failing])
+    {
+      return EACCES;
+    }
+  return [super removeSourceAtPath: path directory: isDirectory];
+}
+@end
+
 static NSString *
 put(NSString *rel, NSString *text)
 {
@@ -149,7 +175,7 @@ main(void)
   END_SET("deleting the sources")
 
   START_SET("a failing delete")
-    GWDeferredMove *mv = AUTORELEASE([GWDeferredMove new]);
+    GWFailingDeferredMove *mv = AUTORELEASE([GWFailingDeferredMove new]);
     NSMutableArray *moved = [NSMutableArray array];
     NSMutableArray *changed = [NSMutableArray array];
     NSString *srcC = [base stringByAppendingPathComponent: @"src2/C"];
@@ -166,13 +192,13 @@ main(void)
                name: @"C"];
     [mv addItemFrom: srcD to: [base stringByAppendingPathComponent: @"dst2/D"]
                name: @"D"];
-    chmod([srcC fileSystemRepresentation], 0555);
+    mv->failing = [[srcC stringByAppendingPathComponent: @"x"] retain];
     PASS(![mv deleteSourcesReporting: NULL moved: moved changed: changed
                                error: &err]
-         && err != nil, "a delete that fails is reported");
+         && err != nil && [err code] == EACCES,
+         "a delete that fails is reported");
     PASS(exists(@"src2/C/x") && exists(@"src2/D") && [moved count] == 0,
          "and everything not deleted yet stays");
-    chmod([srcC fileSystemRepresentation], 0755);
   END_SET("a failing delete")
 
   [fm removeFileAtPath: base handler: nil];
