@@ -49,6 +49,7 @@ copyError(NSString *path, NSString *what, int code)
 
 @synthesize xattrSupportProbe = _xattrSupportProbe;
 @synthesize xattrSetter = _xattrSetter;
+@synthesize fileManager = _fileManager;
 
 - (instancetype)init
 {
@@ -64,6 +65,7 @@ copyError(NSString *path, NSString *what, int code)
         return gs_setxattr(GW_FSREP(path), [name UTF8String],
                            bytes, [value length], 0) == 0 ? 0 : errno;
       } copy];
+      _fileManager = RETAIN([NSFileManager defaultManager]);
     }
   return self;
 }
@@ -72,6 +74,7 @@ copyError(NSString *path, NSString *what, int code)
 {
   DESTROY(_xattrSupportProbe);
   DESTROY(_xattrSetter);
+  DESTROY(_fileManager);
   [super dealloc];
 }
 
@@ -457,9 +460,7 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
                handler:(id)handler
          metadataError:(NSError **)metadataError
 {
-  if (![[NSFileManager defaultManager] copyPath: srcPath
-                                         toPath: dstPath
-                                        handler: handler])
+  if (![_fileManager copyPath: srcPath toPath: dstPath handler: handler])
     return NO;
   if ([self copyMetadataOfTreeAtPath: srcPath
                               toPath: dstPath
@@ -507,12 +508,28 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
     }
   if (![fm removeFileAtPath: srcPath handler: handler])
     return NO;
+  [self finishMoveOfItemAtPath: srcPath
+                        toPath: dstPath
+                       handler: handler
+                 metadataError: metadataError];
+  return YES;
+}
+
+- (void)finishMoveOfItemAtPath:(NSString *)srcPath
+                        toPath:(NSString *)dstPath
+                       handler:(id)handler
+                 metadataError:(NSError **)metadataError
+{
+  NSFileManager *fm = [NSFileManager defaultManager];
+  NSString *srcSidecar = [[self class] sidecarPathForPath: srcPath];
+
   if ([fm fileExistsAtPath: srcSidecar])
-    [fm removeFileAtPath: srcSidecar handler: handler];
+    {
+      [fm removeFileAtPath: srcSidecar handler: handler];
+    }
   [self _dropCommentRecordOfMovedItemAtPath: srcPath
                                      toPath: dstPath
                                       error: metadataError];
-  return YES;
 }
 
 @end

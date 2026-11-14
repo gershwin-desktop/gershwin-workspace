@@ -24,6 +24,7 @@
 
 
 #import <Foundation/Foundation.h>
+#import "GWFileManager.h"
 
 @class FileOpExecutor;
 
@@ -44,6 +45,20 @@
 - (void)setNumFiles:(int)n;
 
 - (void)setProgIndicatorValue:(int)n;
+
+/* Progress in bytes, for destinations where the bytes on the device are
+ * what the user waits for. */
+- (void)setProgressTotal:(double)total;
+
+- (void)setProgressValue:(double)value;
+
+/* Replaces the destination line with what is going on after the copy
+ * itself (writing to the device, deleting the originals); nil restores it. */
+- (void)setStatusText:(NSString *)text;
+
+/* Stop was pressed while the copied data is still being written: the
+ * window goes, the operation finishes behind it. */
+- (void)orderOutProgressWin;
 
 - (void)sendDidChangeNotification;
 
@@ -124,6 +139,8 @@
   IBOutlet NSProgressIndicator *progInd;
   IBOutlet NSButton *pauseButt;
   IBOutlet NSButton *stopButt;  
+  NSRect toFieldFrame;
+  BOOL showsStatus;
 }
 
 + (id)operationOfType:(NSString *)tp
@@ -166,6 +183,14 @@
 - (void)setNumFiles:(int)n;
 
 - (void)setProgIndicatorValue:(int)n;
+
+- (void)setProgressTotal:(double)total;
+
+- (void)setProgressValue:(double)value;
+
+- (void)setStatusText:(NSString *)text;
+
+- (void)orderOutProgressWin;
 
 - (void)removeProcessedFiles;
 
@@ -229,8 +254,11 @@
 
 
 @class GWMetadataCopier;
+@class GWFileManager;
+@class GWDestination;
+@class GWDeferredMove;
 
-@interface FileOpExecutor: NSObject
+@interface FileOpExecutor: NSObject <GWFileCopyObserver>
 {
   NSString *operation;
   NSString *source;
@@ -249,6 +277,18 @@
   NSFileManager *fm;
   GWMetadataCopier *metaCopier;
   id <FileOpInfoProtocol> fileOp;
+  /* Copies the data the way the destination needs (see GWFileManager). */
+  GWFileManager *copyManager;
+  GWDestination *target;
+  /* A move to a removable device: the sources wait for the final flush. */
+  GWDeferredMove *deferredMove;
+  /* What was copied to a removable device and still needs its flush. */
+  NSMutableArray *unflushedItems;
+  BOOL byteProgress;
+  double progressDone;
+  NSTimeInterval progressReported;
+  NSTimeInterval statusReported;
+  BOOL windowGone;
 }
 
 /* The executor thread's entry point: ports, the operation's connection

@@ -38,9 +38,17 @@
 #import "GWMetadataCopier.h"
 #import "GWFileUndoRecord.h"
 #import "GWFileUndoStack.h"
+#import "GWFileManager.h"
+#import "GWDestinationClassifier.h"
+#import "GWDeferredMove.h"
 
 
 #define PROGR_STEPS (100.0)
+/* In byte progress every folder entry weighs like a small file, so that a
+ * tree of empty files still moves the bar. */
+#define ENTRY_PROGRESS_BYTES (4096.0)
+/* How often the executor thread tells the window, at most. */
+#define PROGRESS_INTERVAL (0.1)
 
 /* Looked up in the application's own table (see +stringsBundle), where the
  * titles and every other string of the application live. */
@@ -445,6 +453,12 @@ static NSBundle *stringsBundle = nil;
     {
       [self endOperation];
     }
+  /* The flush in progress cannot be cut short, and the sources of a move
+   * may only go after it; the user need not watch that. */
+  if (showsStatus)
+    {
+      [self orderOutProgressWin];
+    }
   stopped = YES;   
 }
 
@@ -600,6 +614,60 @@ static NSBundle *stringsBundle = nil;
 - (void)setProgIndicatorValue:(int)n
 {
   [progInd setDoubleValue: n];
+}
+
+- (void)setProgressTotal:(double)total
+{
+  [progInd stopAnimation: self];
+  [progInd setIndeterminate: NO];
+  [progInd setMinValue: 0.0];
+  [progInd setMaxValue: (total > 0.0) ? total : 1.0];
+  [progInd setDoubleValue: 0.0];
+}
+
+- (void)setProgressValue:(double)value
+{
+  /* The bar shows what reached the device; it never moves back. */
+  if (value > [progInd doubleValue])
+    {
+      [progInd setDoubleValue: value];
+    }
+}
+
+- (void)setStatusText:(NSString *)text
+{
+  if (win == nil)
+    {
+      return;
+    }
+  if (text != nil)
+    {
+      if (showsStatus == NO)
+        {
+          /* The status needs the whole line; the "To:" label gives way. */
+          toFieldFrame = [toField frame];
+          [toField setFrame: NSUnionRect([toLabel frame], toFieldFrame)];
+          [toLabel setHidden: YES];
+          showsStatus = YES;
+        }
+      [toField setStringValue: text];
+    }
+  else if (showsStatus)
+    {
+      [toField setFrame: toFieldFrame];
+      [toLabel setHidden: NO];
+      [toField setStringValue: relativePathFittingInField(fromField, destination)];
+      showsStatus = NO;
+    }
+  [[win contentView] setNeedsDisplay: YES];
+}
+
+- (void)orderOutProgressWin
+{
+  if (showwin)
+    {
+      [win orderOut: nil];
+    }
 }
 
 - (void)cleanUpExecutor
@@ -907,6 +975,10 @@ shouldMakeNewConnection:(NSConnection*)newConn
   RELEASE (procfiles);
   RELEASE (doneitems);
   RELEASE (metaCopier);
+  RELEASE (copyManager);
+  RELEASE (target);
+  RELEASE (deferredMove);
+  RELEASE (unflushedItems);
   [super dealloc];
 }
 
@@ -969,7 +1041,32 @@ shouldMakeNewConnection:(NSConnection*)newConn
   
   procfiles = [NSMutableArray new];
   doneitems = [NSMutableArray new];
-  
+
+  if (destination != nil
+      && ([operation isEqual: NSWorkspaceMoveOperation]
+          || [operation isEqual: NSWorkspaceCopyOperation]
+          || [operation isEqual: NSWorkspaceDuplicateOperation]
+          || [operation isEqual: @"WorkspaceRecycleOutOperation"]))
+    {
+      ASSIGN (target, [[GWDestinationClassifier sharedClassifier]
+                        destinationForDirectory: destination]);
+      copyManager = [GWFileManager new];
+      [copyManager setDestination: target];
+      [copyManager setObserver: self];
+      [metaCopier setFileManager: copyManager];
+      unflushedItems = [NSMutableArray new];
+      /* On a USB stick or a share, what the user waits for is the data
+       * arriving there, so the bar counts bytes rather than files. */
+      byteProgress = [target usesWriteWindows];
+      if ([target needsFinalFlush]
+          && ([operation isEqual: NSWorkspaceMoveOperation]
+              || [operation isEqual: @"WorkspaceRecycleOutOperation"]))
+        {
+          deferredMove = [GWDeferredMove new];
+          [copyManager setJournal: deferredMove];
+        }
+    }
+
   return YES;
 }
 
@@ -1041,8 +1138,11 @@ shouldMakeNewConnection:(NSConnection*)newConn
 {
   NSUInteger i;
   NSUInteger fnum = 0;
+  double bytes = 0.0;
 
-  if (continueFrom == 0)
+  /* A paused byte-progress operation starts over with what is left, since
+   * the files done before say nothing about the bytes still to come. */
+  if (continueFrom == 0 || byteProgress)
     {
       for (i = 0; i < [files count]; i++)
         {
@@ -1071,6 +1171,12 @@ shouldMakeNewConnection:(NSConnection*)newConn
                           break;
                         }
                       fnum++;
+                      if (byteProgress
+                          && [[[enumerator fileAttributes] fileType]
+                               isEqual: NSFileTypeRegular])
+                        {
+                          bytes += [[enumerator fileAttributes] fileSize];
+                        }
                     }
                   else
                     {
@@ -1083,6 +1189,11 @@ shouldMakeNewConnection:(NSConnection*)newConn
           else
             {
               fnum++;
+              if (byteProgress)
+                {
+                  bytes += [[fm fileAttributesAtPath: path traverseLink: NO]
+                             fileSize];
+                }
             }
           
           if (stopped)
@@ -1110,7 +1221,15 @@ shouldMakeNewConnection:(NSConnection*)newConn
         {
           progstep = fnum / PROGR_STEPS;
         }
-      [fileOp setNumFiles: fnum];
+      if (byteProgress)
+        {
+          progressDone = 0.0;
+          [fileOp setProgressTotal: bytes + fnum * ENTRY_PROGRESS_BYTES];
+        }
+      else
+        {
+          [fileOp setNumFiles: fnum];
+        }
     }
   else
     {
@@ -1201,6 +1320,20 @@ shouldMakeNewConnection:(NSConnection*)newConn
 /* End of a run over many files, which may also end in a pause. */
 - (void)finishBatch
 {
+  if ([self hasDeviceWork])
+    {
+      /* Stopped: the window goes now, the data still has to reach the
+       * device before any source of a move may go. */
+      if (stopped)
+        {
+          [fileOp orderOutProgressWin];
+        }
+      [self completeDeviceWork];
+    }
+  if (byteProgress)
+    {
+      [fileOp setProgressValue: progressDone];
+    }
   [self reportProgress];
   if (([files count] == 0) || stopped)
     {
@@ -1240,7 +1373,17 @@ filename = [fileinfo objectForKey: @"name"];
 	  NSString *src = [source stringByAppendingPathComponent: filename];
 	  NSString *dst = [destination stringByAppendingPathComponent: filename];
 	  
-	  if ([self moveItem: src to: dst])
+	  if (deferredMove != nil
+	      && [metaCopier isRenameFromPath: src toPath: dst] == NO)
+	    {
+	      /* Copied now, deleted once the copy is on the device. */
+	      if ([self copyItemForMove: src to: dst])
+		{
+		  [deferredMove addItemFrom: src to: dst name: filename];
+		  [unflushedItems addObject: dst];
+		}
+	    }
+	  else if ([self moveItem: src to: dst])
 	    {
 	      [self noteDone: filename from: src to: dst];
 	    }
@@ -1281,6 +1424,7 @@ filename = [fileinfo objectForKey: @"name"];
           if ([self copyItem: src to: dst])
             {
               [self noteDone: filename from: src to: dst];
+              [unflushedItems addObject: dst];
             }
         }
       [files removeObject: fileinfo];
@@ -1414,6 +1558,7 @@ filename = [fileinfo objectForKey: @"name"];
       [self noteDone: newname
                 from: [destination stringByAppendingPathComponent: filename]
                   to: destpath];
+      [unflushedItems addObject: destpath];
     }
 	  [files removeObject: fileinfo];
     RELEASE (fileinfo);	       
@@ -1579,6 +1724,168 @@ filename = [fileinfo objectForKey: @"name"];
   return copied;
 }
 
+/* As -moveItem:to: decides for a move across filesystems: an item whose
+ * metadata did not make it keeps its source. */
+- (BOOL)copyItemForMove:(NSString *)src to:(NSString *)dst
+{
+  NSError *error = nil;
+  BOOL copied = [metaCopier copyItemAtPath: src
+                                    toPath: dst
+                                   handler: self
+                             metadataError: &error];
+
+  if (error != nil)
+    {
+      if (![self continueAfterMetadataError: error])
+        {
+          stopped = YES;
+        }
+      return NO;
+    }
+  return copied;
+}
+
+- (BOOL)hasDeviceWork
+{
+  return [target needsFinalFlush]
+    && ([unflushedItems count] > 0
+        || (deferredMove != nil && [deferredMove isEmpty] == NO));
+}
+
+- (void)showStatus:(NSString *)text force:(BOOL)force
+{
+  NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+
+  if (force || now - statusReported >= PROGRESS_INTERVAL)
+    {
+      statusReported = now;
+      [fileOp setStatusText: text];
+    }
+}
+
+- (BOOL)flushDevice:(NSError **)error
+{
+  [self showStatus: NSLocalizedString(@"Writing the copied data to the device...", @"")
+             force: YES];
+  return [target flushItemsAtPaths: unflushedItems
+                       inDirectory: destination
+                             error: error];
+}
+
+/* Only now may the sources of a move go: each one that is still what was
+ * copied, then the folders left empty. */
+- (void)deleteMovedSources
+{
+  NSMutableArray *moved = [NSMutableArray array];
+  NSMutableArray *changed = [NSMutableArray array];
+  NSError *error = nil;
+  NSEnumerator *en;
+  NSDictionary *item;
+  BOOL ok;
+
+  ok = [deferredMove deleteSourcesReporting: ^(NSString *name) {
+    [self showStatus: [NSString stringWithFormat:
+                                  NSLocalizedString(@"Deleting %@", @""), name]
+               force: NO];
+  }
+                                      moved: moved
+                                    changed: changed
+                                      error: &error];
+  en = [moved objectEnumerator];
+  while ((item = [en nextObject]) != nil)
+    {
+      NSString *src = [item objectForKey: @"source"];
+      NSString *dst = [item objectForKey: @"destination"];
+
+      [metaCopier finishMoveOfItemAtPath: src
+                                  toPath: dst
+                                 handler: nil
+                           metadataError: NULL];
+      [self noteDone: [item objectForKey: @"name"] from: src to: dst];
+    }
+  DESTROY (deferredMove);
+  deferredMove = [GWDeferredMove new];
+  [copyManager setJournal: deferredMove];
+  if (ok == NO)
+    {
+      [self showStatus: nil force: YES];
+      [fileOp showErrorAlertWithMessage:
+        [NSString stringWithFormat:
+          NSLocalizedString(@"%@ could not be deleted: %@\nThe originals not deleted yet were kept.", @""),
+          [[error userInfo] objectForKey: NSFilePathErrorKey],
+          [error localizedDescription]]];
+    }
+  if ([changed count] > 0)
+    {
+      [self showStatus: nil force: YES];
+      [fileOp showErrorAlertWithMessage:
+        [NSString stringWithFormat:
+          NSLocalizedString(@"These originals changed after they were copied and were kept:\n%@", @""),
+          [changed componentsJoinedByString: @"\n"]]];
+    }
+}
+
+/* The end of every copy to a removable device: one flush for all of it,
+ * then, for a move, the sources.  Until the flush succeeded the sources
+ * are the only safe copy, so a failed flush keeps them all. */
+- (void)completeDeviceWork
+{
+  NSError *error = nil;
+
+  if ([self hasDeviceWork] == NO)
+    {
+      return;
+    }
+  if ([self flushDevice: &error] == NO)
+    {
+      BOOL keptSources = (deferredMove != nil && [deferredMove isEmpty] == NO);
+
+      [unflushedItems removeAllObjects];
+      if (keptSources)
+        {
+          DESTROY (deferredMove);
+          deferredMove = [GWDeferredMove new];
+          [copyManager setJournal: deferredMove];
+        }
+      [self showStatus: nil force: YES];
+      [fileOp showErrorAlertWithMessage:
+        [NSString stringWithFormat:
+          keptSources
+          ? NSLocalizedString(@"The copied data could not be written to the device: %@\nThe originals were kept.", @"")
+          : NSLocalizedString(@"The copied data could not be written to the device: %@", @""),
+          [error localizedDescription]]];
+      return;
+    }
+  [unflushedItems removeAllObjects];
+  if (deferredMove != nil && [deferredMove isEmpty] == NO)
+    {
+      [self deleteMovedSources];
+    }
+  [self showStatus: nil force: YES];
+}
+
+- (BOOL)fileCopyShouldStop
+{
+  return stopped;
+}
+
+- (void)fileCopyDidAdvanceBy:(unsigned long long)bytes
+{
+  NSTimeInterval now;
+
+  if (byteProgress == NO)
+    {
+      return;
+    }
+  progressDone += bytes;
+  now = [NSDate timeIntervalSinceReferenceDate];
+  if (now - progressReported >= PROGRESS_INTERVAL)
+    {
+      progressReported = now;
+      [fileOp setProgressValue: progressDone];
+    }
+}
+
 - (BOOL)continueAfterMetadataError:(NSError *)error
 {
   NSString *msg = [NSString stringWithFormat: @"%@ %@\n%@ %@\n",
@@ -1673,10 +1980,21 @@ filename = [fileinfo objectForKey: @"name"];
 							NSLocalizedString(@"with file:", @""),
 							path];
 
+  /* Whatever went wrong, what was copied so far goes onto the device
+   * before the user is asked: the user may pull the stick at the alert. */
+  if ([self hasDeviceWork])
+    {
+      [self flushDevice: NULL];
+      [self showStatus: nil force: YES];
+    }
+
   result = [fileOp requestUserConfirmationWithMessage: msg title: @"Error"];
     
   if (result != NSAlertDefaultReturn)
     {
+      /* The items moved completely so far lose their sources now; the
+       * rest stays where it was. */
+      [self completeDeviceWork];
       [fileOp endOperation];
       [fileOp cleanUpExecutor];
     }
@@ -1726,7 +2044,9 @@ filename = [fileinfo objectForKey: @"name"];
 
 - (void)fileManager:(NSFileManager *)manager willProcessPath:(NSString *)path
 {
-  if (canupdate) {
+  if (canupdate && byteProgress) {
+    [self fileCopyDidAdvanceBy: (unsigned long long)ENTRY_PROGRESS_BYTES];
+  } else if (canupdate) {
     fcount++;
     stepcount++;
     
@@ -1736,7 +2056,9 @@ filename = [fileinfo objectForKey: @"name"];
     }
   }
   
-  if (stopped)
+  /* With copied data still to be flushed the batch's end handles the
+   * stop: the sources of a move may only go after the flush. */
+  if (stopped && [self hasDeviceWork] == NO)
     {
       [fileOp endOperation];
       [fileOp cleanUpExecutor];

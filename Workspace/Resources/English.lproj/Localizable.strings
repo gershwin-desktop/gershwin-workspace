@@ -1283,3 +1283,12 @@
 "Turn Magnification Off" = "Turn Magnification Off";
 "Position on Screen" = "Position on Screen";
 "Dock Preferences..." = "Dock Preferences...";
+
+/* Copies to removable devices: the flush at the end and the moves that
+ * delete their sources only after it. */
+"Writing the copied data to the device..." = "Writing the copied data to the device...";
+"Deleting %@" = "Deleting %@";
+"%@ could not be deleted: %@\nThe originals not deleted yet were kept." = "%@ could not be deleted: %@\nThe originals not deleted yet were kept.";
+"These originals changed after they were copied and were kept:\n%@" = "These originals changed after they were copied and were kept:\n%@";
+"The copied data could not be written to the device: %@\nThe originals were kept." = "The copied data could not be written to the device: %@\nThe originals were kept.";
+"The copied data could not be written to the device: %@" = "The copied data could not be written to the device: %@";

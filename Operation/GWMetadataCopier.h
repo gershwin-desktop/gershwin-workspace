@@ -22,7 +22,14 @@
 {
   int (^_xattrSupportProbe)(NSString *);
   int (^_xattrSetter)(NSString *, NSString *, NSData *);
+  NSFileManager *_fileManager;
 }
+
+/**
+ * The file manager that copies the data and the POSIX attributes; the
+ * default manager unless a GWFileManager tuned to the destination is set.
+ */
+@property (nonatomic, retain) NSFileManager *fileManager;
 
 /**
  * Decides whether the filesystem holding a path stores extended attributes.
@@ -81,6 +88,15 @@
                 toPath:(NSString *)dstPath
                handler:(id)handler
          metadataError:(NSError **)metadataError;
+
+/**
+ * The rest of a move whose source was deleted only after its copy reached
+ * the device: the source's sidecar and its comment record go too.
+ */
+- (void)finishMoveOfItemAtPath:(NSString *)srcPath
+                        toPath:(NSString *)dstPath
+                       handler:(id)handler
+                 metadataError:(NSError **)metadataError;
 
 /**
  * Whether a move from srcPath to a new item dstPath is a rename.

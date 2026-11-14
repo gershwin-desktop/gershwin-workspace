@@ -1330,3 +1330,12 @@
 "Turn Magnification Off" = "Vergrößerung ausschalten";
 "Position on Screen" = "Position auf dem Monitor";
 "Dock Preferences..." = "Dock-Einstellungen...";
+
+/* Copies to removable devices: the flush at the end and the moves that
+ * delete their sources only after it. */
+"Writing the copied data to the device..." = "Die kopierten Daten werden auf das Ger\u00e4t geschrieben...";
+"Deleting %@" = "%@ wird gel\u00f6scht";
+"%@ could not be deleted: %@\nThe originals not deleted yet were kept." = "%@ konnte nicht gel\u00f6scht werden: %@\nDie noch nicht gel\u00f6schten Originale wurden behalten.";
+"These originals changed after they were copied and were kept:\n%@" = "Diese Originale wurden nach dem Kopieren ver\u00e4ndert und daher behalten:\n%@";
+"The copied data could not be written to the device: %@\nThe originals were kept." = "Die kopierten Daten konnten nicht auf das Ger\u00e4t geschrieben werden: %@\nDie Originale wurden behalten.";
+"The copied data could not be written to the device: %@" = "Die kopierten Daten konnten nicht auf das Ger\u00e4t geschrieben werden: %@";

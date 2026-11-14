@@ -24,7 +24,11 @@ Operation_OBJC_FILES = \
                  Functions.m \
                  GWMetadataCopier.m \
                  GWFileUndoRecord.m \
-                 GWFileUndoStack.m
+                 GWFileUndoStack.m \
+                 GWFileDataCopier.m \
+                 GWDestinationClassifier.m \
+                 GWDeferredMove.m \
+                 GWFileManager.m
 
 Operation_HEADER_FILES = \
          Operation.h \

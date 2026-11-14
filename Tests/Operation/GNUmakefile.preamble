@@ -20,7 +20,11 @@ FILEOP_OBJC_FILES = ../../Operation/FileOpInfo.m \
                                                ../../GWMetadata/GSFileMetadata.m \
                                                ../../DSStore/DSStore.m ../../DSStore/DSStoreCodecs.m \
                                                ../../DSStore/DSStoreEntry.m ../../DSStore/DSBuddyAllocator.m \
-                                               ../../DSStore/SimpleColor.m
+                                               ../../DSStore/SimpleColor.m \
+                                               ../../Operation/GWFileDataCopier.m \
+                                               ../../Operation/GWDestinationClassifier.m \
+                                               ../../Operation/GWDeferredMove.m \
+                                               ../../Operation/GWFileManager.m
 FILEOP_TOOL_LIBS = -L../../FSNode/FSNode.framework/Versions/Current \
                                               -lFSNode -lgnustep-gui -ldispatch
 t_FileOpInfoRemoveProcessedFiles_OBJC_FILES += $(FILEOP_OBJC_FILES)
@@ -29,3 +33,10 @@ t_FileOpInfoConfirmText_OBJC_FILES += $(FILEOP_OBJC_FILES)
 t_FileOpInfoConfirmText_TOOL_LIBS += $(FILEOP_TOOL_LIBS)
 ADDITIONAL_LDFLAGS += -Wl,--disable-new-dtags \
                       -Wl,-rpath,$(CURDIR)/../../FSNode/FSNode.framework/Versions/Current
+
+# The copy engine: each tool #includes the unit it tests and links the
+# others it needs.
+t_GWFileManager_OBJC_FILES += ../../Operation/GWFileDataCopier.m \
+                              ../../Operation/GWDestinationClassifier.m \
+                              ../../Operation/GWDeferredMove.m
+t_GWFileDataCopier_TOOL_LIBS += -lpthread
