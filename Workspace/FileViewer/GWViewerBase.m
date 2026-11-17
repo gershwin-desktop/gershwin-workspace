@@ -96,21 +96,11 @@
 }
 
 /* Finder's windows without a toolbar are its spatial ones [decision A].
- * Only a window of another kind than the folder would open in records it:
- * a folder merely opened in the usual kind of window keeps no bwsp of its
- * own for that, as Finder writes none for an untouched window [O:E8]. */
+ * Every bwsp we write records the kind: left out, the write adds Finder's
+ * default ShowToolbar=YES and a spatial window would come back browsing. */
 - (void)takeWindowKindInto:(DSStoreInfo *)info
 {
-  BOOL spatial = [self isSpatial];
-  BOOL wouldOpenSpatially =
-    [GWFolderViewOptions opensSpatially: info
-                              byDefault: ([gworkspace defaultViewerType] == SPATIAL)];
-
-  if ([info hasShowToolbar] || wouldOpenSpatially != spatial)
-    {
-      [info setShowToolbar: !spatial];
-      [info setHasShowToolbar: YES];
-    }
+  [GWFolderViewOptions takeWindowKindOfSpatial: [self isSpatial] into: info];
 }
 
 - (DSStoreInfo *)saveFolderSettingsWithPrefs:(NSDictionary *)prefs

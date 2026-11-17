@@ -121,6 +121,36 @@ main(void)
     PASS([O opensSpatially: info byDefault: NO], "MI-IV-96 ShowToolbar 0 opens a spatial window");
     info.showToolbar = YES;
     PASS(![O opensSpatially: info byDefault: YES], "MI-IV-97 ShowToolbar 1 a browsing window");
+
+    {
+      DSStoreInfo *sp = [[[DSStoreInfo alloc] initWithDirectoryPath: @"/nonexistent"] autorelease];
+      DSStoreInfo *br = [[[DSStoreInfo alloc] initWithDirectoryPath: @"/nonexistent"] autorelease];
+
+      /* The default kind equals the window's: Finder's own default of
+       * ShowToolbar=YES must not turn a toolbar-less window into a browsing one. */
+      [O takeWindowKindOfSpatial: YES into: sp];
+      PASS(sp.hasShowToolbar && !sp.showToolbar && [O opensSpatially: sp byDefault: NO],
+           "MI-IV-121 a spatial window records ShowToolbar 0 even when spatial is the default kind");
+      [O takeWindowKindOfSpatial: NO into: br];
+      PASS(br.hasShowToolbar && br.showToolbar && ![O opensSpatially: br byDefault: YES],
+           "MI-IV-122 a browsing window records ShowToolbar 1 even when browsing is the default");
+
+      /* Through the store: the bwsp a spatial window leaves behind must
+       * reopen it spatially, not as the browsing window Finder's default
+       * ShowToolbar would make of it. */
+      {
+        DSStore *store = [DSStore storeWithPath:
+                            [root stringByAppendingPathComponent: @"kind.DS_Store"]];
+        DSStoreInfo *back = [[[DSStoreInfo alloc] initWithDirectoryPath: root] autorelease];
+
+        sp.windowFrame = NSMakeRect(100, 100, 400, 300);
+        sp.hasWindowFrame = YES;
+        [DSStoreInfo writeFinderViewRecordsForInfo: sp key: @"kind" toStore: store];
+        [back takeDirectoryRecordsFromStore: store key: @"kind"];
+        PASS([O opensSpatially: back byDefault: NO],
+             "MI-IV-123 a spatial window's written bwsp reopens it spatially");
+      }
+    }
   END_SET("toolbar and window kind [decision A]")
 
   START_SET("a closed window adds no default icvp [O:E33]")

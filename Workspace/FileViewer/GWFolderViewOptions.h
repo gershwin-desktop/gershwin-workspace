@@ -73,6 +73,9 @@
  * spatial ones), else @p spatialDefault. */
 + (BOOL)opensSpatially:(DSStoreInfo *)info byDefault:(BOOL)spatialDefault;
 
+/* Records the kind of window the folder is shown in, for @p info's bwsp. */
++ (void)takeWindowKindOfSpatial:(BOOL)spatial into:(DSStoreInfo *)info;
+
 /* A folder background picture as Finder 10.6 reads it: a classic alias
  * record of the image whose HFS path tag says "<volume>:<path in volume>"
  * [O:E12].  The volume name is the mount point's name, "Macintosh HD" for

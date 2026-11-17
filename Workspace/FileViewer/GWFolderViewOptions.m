@@ -283,6 +283,15 @@ withoutScrollPosition(NSDictionary *values)
   return [info hasShowToolbar] ? ([info showToolbar] == NO) : spatialDefault;
 }
 
++ (void)takeWindowKindOfSpatial:(BOOL)spatial into:(DSStoreInfo *)info
+{
+  /* Always recorded: a bwsp without ShowToolbar gets Finder's default YES
+   * when written, which would reopen a toolbar-less (spatial) window as a
+   * browsing one. */
+  [info setShowToolbar: !spatial];
+  [info setHasShowToolbar: YES];
+}
+
 + (NSData *)backgroundImageAliasForPath:(NSString *)imagePath
 {
   NSString *mountPoint = [GWVolumeID mountPointForPath: imagePath];
