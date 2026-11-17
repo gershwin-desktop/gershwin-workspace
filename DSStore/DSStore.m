@@ -559,7 +559,9 @@ static NSData *readValueBytes(DSBuddyBlock *block, uint64_t length)
                 [b zeroFill];
                 [b close];
                 [pointers addObject:[NSNumber numberWithInt:ndx]];
-                ppndx += [node count];
+                /* The node took count + 1 children (the last one as
+                 * nextNode); the next node's children start behind it. */
+                ppndx += [node count] + 1;
                 idxInLevel++;
             }
             prevPointers = [NSArray arrayWithArray:pointers];

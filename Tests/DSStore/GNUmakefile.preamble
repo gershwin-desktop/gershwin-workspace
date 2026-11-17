@@ -10,6 +10,14 @@ ADDITIONAL_OBJCFLAGS += -Wno-deprecated
 t_DSBuddyAllocatorOffsetTableBounds_OBJC_FILES += ../../DSStore/DSBuddyAllocator.m
 t_DSBuddyAllocatorOffsetTableBounds_TOOL_LIBS += -lgnustep-gui
 
+# t_DSStoreDeepTree saves and reloads a store of three B-tree levels.
+t_DSStoreDeepTree_OBJC_FILES += ../../DSStore/DSStore.m \
+                                ../../DSStore/DSStoreCodecs.m \
+                                ../../DSStore/DSStoreEntry.m \
+                                ../../DSStore/DSBuddyAllocator.m \
+                                ../../DSStore/SimpleColor.m
+t_DSStoreDeepTree_TOOL_LIBS += -lgnustep-gui
+
 t_DSStoreCyclicBTree_OBJC_FILES += ../../DSStore/DSStore.m \
                                    ../../DSStore/DSStoreCodecs.m \
                                    ../../DSStore/DSStoreEntry.m \
