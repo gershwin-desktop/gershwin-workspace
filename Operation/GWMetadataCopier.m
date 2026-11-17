@@ -379,80 +379,104 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
 /* Finder 10.6 shows a comment only when the folder's own .DS_Store has the
  * item's cmmt record; the attribute alone is not enough.  The record is
  * keyed by name, so every copy, duplicate or move to a new name or folder
- * needs its own. */
+ * needs its own.
+ * The comment itself already travelled with the item, and the record is
+ * only a copy of it for other systems, so a store that cannot take it is
+ * logged and never stops a file operation the user started for the data. */
+static void
+warnAboutCommentRecord(NSString *path, NSError *error)
+{
+  NSLog(@"GWMetadataCopier: comment record for %@ not updated: %@",
+        path, [error localizedDescription]);
+}
+
 - (void)_storeCommentRecordForItemAtPath:(NSString *)path
-                                   error:(NSError **)error
 {
   GSFileMetadata *md = [GSFileMetadata metadataForFileAtPath: path];
   NSError *failure = nil;
 
   if ([md.finderComment length] == 0)
-    return;
-  if (![DSStore setComment: md.finderComment forItemAtPath: path
-                     error: &failure])
     {
-      if (error)
-        *error = failure;
       return;
     }
-  [self _markStoreInvisibleBesideItemAtPath: path error: error];
+  if (![DSStore setComment: md.finderComment forItemAtPath: path
+                     error: &failure]
+      || ![self _markStoreInvisibleBesideItemAtPath: path error: &failure])
+    {
+      warnAboutCommentRecord(path, failure);
+    }
 }
 
 /* On a volume a Mac reads through "._" files, the .DS_Store's invisible
  * flag lives in "._.DS_Store", and a Mac writes one beside every store it
  * makes there (E35). */
-- (void)_markStoreInvisibleBesideItemAtPath:(NSString *)path
+- (BOOL)_markStoreInvisibleBesideItemAtPath:(NSString *)path
                                       error:(NSError **)error
 {
   NSString *store = [[path stringByDeletingLastPathComponent]
     stringByAppendingPathComponent: @".DS_Store"];
   GSFileMetadata *md;
+  BOOL written;
 
   if ([GSFileMetadata storesMetadataInAppleDoubleAtPath: store] != 1)
-    return;
+    {
+      return YES;
+    }
   md = [GSFileMetadata metadataForFileAtPath: store forceSidecar: NO];
   if ([md isInvisible])
-    return;
+    {
+      return YES;
+    }
   if (md == nil)
-    md = [[[GSFileMetadata alloc] init] autorelease];
+    {
+      md = [[[GSFileMetadata alloc] init] autorelease];
+    }
   [md setInvisible: YES];
-  [md writeToFileAtPath: store error: error];
+  written = [md writeToFileAtPath: store error: error];
   [GSFileMetadata invalidateCachedMetadataForPath: store];
+  return written;
 }
 
 /* A copied folder holds more items than the one dropped: each needs its
  * record in the .DS_Store of the folder it now sits in (the copied store, if
  * any, only has the records its source folder had). */
 - (void)_storeCommentRecordsOfTreeAtPath:(NSString *)path
-                                   error:(NSError **)error
 {
   NSDirectoryEnumerator *en;
   NSString *rel;
-  NSError *failure = nil;
 
-  [self _storeCommentRecordForItemAtPath: path error: &failure];
+  [self _storeCommentRecordForItemAtPath: path];
   en = [[NSFileManager defaultManager] enumeratorAtPath: path];
-  while (failure == nil && (rel = [en nextObject]) != nil)
+  while ((rel = [en nextObject]) != nil)
     {
       if ([[rel lastPathComponent] isEqual: @".DS_Store"])
-        continue;
+        {
+          continue;
+        }
       [self _storeCommentRecordForItemAtPath:
-              [path stringByAppendingPathComponent: rel]
-                                       error: &failure];
+              [path stringByAppendingPathComponent: rel]];
     }
-  if (failure != nil && error)
-    *error = failure;
 }
 
 /* The record is keyed by the old name in the old folder; left behind it
- * would show the comment again on any new item of that name. */
+ * would show the comment again on any new item of that name.  Only an item
+ * with a comment has such a record, so for any other the old folder's store
+ * is not even read. */
 - (void)_dropCommentRecordOfMovedItemAtPath:(NSString *)oldPath
                                     toPath:(NSString *)newPath
-                                      error:(NSError **)error
 {
-  if ([oldPath isEqual: newPath])
-    return;
-  [DSStore setComment: @"" forItemAtPath: oldPath error: error];
+  NSError *failure = nil;
+
+  if ([oldPath isEqual: newPath]
+      || [[[GSFileMetadata metadataForFileAtPath: newPath] finderComment]
+           length] == 0)
+    {
+      return;
+    }
+  if (![DSStore setComment: @"" forItemAtPath: oldPath error: &failure])
+    {
+      warnAboutCommentRecord(oldPath, failure);
+    }
 }
 
 - (BOOL)copyItemAtPath:(NSString *)srcPath
@@ -465,7 +489,9 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
   if ([self copyMetadataOfTreeAtPath: srcPath
                               toPath: dstPath
                                error: metadataError])
-    [self _storeCommentRecordsOfTreeAtPath: dstPath error: metadataError];
+    {
+      [self _storeCommentRecordsOfTreeAtPath: dstPath];
+    }
   return YES;
 }
 
@@ -484,10 +510,8 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
         return NO;
       if ([fm fileExistsAtPath: srcSidecar])
         [fm movePath: srcSidecar toPath: dstSidecar handler: handler];
-      [self _storeCommentRecordForItemAtPath: dstPath error: metadataError];
-      [self _dropCommentRecordOfMovedItemAtPath: srcPath
-                                         toPath: dstPath
-                                          error: metadataError];
+      [self _storeCommentRecordForItemAtPath: dstPath];
+      [self _dropCommentRecordOfMovedItemAtPath: srcPath toPath: dstPath];
       return YES;
     }
 
@@ -527,9 +551,7 @@ typedef NS_ENUM(NSInteger, GWAttrStore) {
     {
       [fm removeFileAtPath: srcSidecar handler: handler];
     }
-  [self _dropCommentRecordOfMovedItemAtPath: srcPath
-                                     toPath: dstPath
-                                      error: metadataError];
+  [self _dropCommentRecordOfMovedItemAtPath: srcPath toPath: dstPath];
 }
 
 @end

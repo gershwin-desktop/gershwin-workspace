@@ -24,3 +24,10 @@ t_DSStoreCyclicBTree_OBJC_FILES += ../../DSStore/DSStore.m \
                                    ../../DSStore/DSBuddyAllocator.m \
                                    ../../DSStore/SimpleColor.m
 t_DSStoreCyclicBTree_TOOL_LIBS += -lgnustep-gui
+
+t_DSStoreFullNode_OBJC_FILES += ../../DSStore/DSStore.m \
+                                ../../DSStore/DSStoreCodecs.m \
+                                ../../DSStore/DSStoreEntry.m \
+                                ../../DSStore/DSBuddyAllocator.m \
+                                ../../DSStore/SimpleColor.m
+t_DSStoreFullNode_TOOL_LIBS += -lgnustep-gui

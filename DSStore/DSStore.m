@@ -221,8 +221,10 @@ NSString * const DSStoreCommentErrorDomain = @"DSStoreCommentErrorDomain";
         // must be caught too.
         [_visitedBTreeBlocks addIndex:rootAddress];
 
-        // Read B-tree data (+4 for file offset correction)
-        DSBuddyBlock *btreeBlock = [_allocator blockAtOffset:btreeOffset + 4 size:btreeSize - 4];
+        /* A node holds the whole block after the 4-byte file prefix, as
+         * -save writes it; reading 4 bytes less cut off the last record of
+         * a full node and failed the whole load. */
+        DSBuddyBlock *btreeBlock = [_allocator blockAtOffset:btreeOffset + 4 size:btreeSize];
         if (!btreeBlock) {
             return NO;
         }
@@ -357,7 +359,7 @@ static NSData *readValueBytes(DSBuddyBlock *block, uint64_t length)
                 [_visitedBTreeBlocks addIndex:childNum];
                 uint32_t childAddr = [_allocator addressForBlock:childNum];
                 uint32_t childOffset = (childAddr & ~0x1FU) + 4;
-                uint32_t childSize = (1U << (childAddr & 0x1FU)) - 4;
+                uint32_t childSize = 1U << (childAddr & 0x1FU);
                 DSBuddyBlock *childBlock = [_allocator blockAtOffset:childOffset
                                                               size:childSize];
                 if (childBlock) {
@@ -380,7 +382,7 @@ static NSData *readValueBytes(DSBuddyBlock *block, uint64_t length)
             [_visitedBTreeBlocks addIndex:nextNode];
             uint32_t sibAddr = [_allocator addressForBlock:nextNode];
             uint32_t sibOffset = (sibAddr & ~0x1FU) + 4;
-            uint32_t sibSize = (1U << (sibAddr & 0x1FU)) - 4;
+            uint32_t sibSize = 1U << (sibAddr & 0x1FU);
             DSBuddyBlock *sibBlock = [_allocator blockAtOffset:sibOffset
                                                         size:sibSize];
             if (sibBlock) {

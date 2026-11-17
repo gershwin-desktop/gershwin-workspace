@@ -136,18 +136,46 @@ main(void)
   }
 
   {
-    /* MI-PRS-29: unreadable store is reported, the copy stays. */
+    /* MI-PRS-29: the comment itself travels with the item; a record the
+     * folder's store cannot take is no reason to stop the copy, and the
+     * store is not replaced. */
     NSString *h = folder(@"h"), *i = folder(@"i");
     NSString *src = commented(h, @"z.txt", text);
-    [@"junk" writeToFile: [i stringByAppendingPathComponent: @".DS_Store"]
-              atomically: NO];
+    NSString *junk = [i stringByAppendingPathComponent: @".DS_Store"];
+    [@"junk" writeToFile: junk atomically: NO];
     err = nil;
     PASS([copier copyItemAtPath: src
                          toPath: [i stringByAppendingPathComponent: @"z.txt"]
                         handler: nil metadataError: &err]
-         && err != nil
+         && err == nil
          && [fm fileExistsAtPath: [i stringByAppendingPathComponent: @"z.txt"]],
-         "MI-PRS-29 an unreadable .DS_Store is an error, not silently replaced");
+         "MI-PRS-29 an unreadable .DS_Store does not interrupt the copy");
+    PASS_EQUAL([NSString stringWithContentsOfFile: junk], @"junk",
+               "MI-PRS-29 an unreadable .DS_Store is not silently replaced");
+  }
+
+  {
+    /* An item without a comment has no record to move, so moving it must
+     * not depend on the folder's store at all. */
+    NSString *o = folder(@"o"), *q = folder(@"q");
+    NSString *junk = [o stringByAppendingPathComponent: @".DS_Store"];
+    NSString *plain = commented(o, @"plain.txt", nil);
+    NSString *plain2 = commented(o, @"plain2.txt", nil);
+    CrossFSCopier *xc = [[CrossFSCopier new] autorelease];
+    [@"junk" writeToFile: junk atomically: NO];
+    err = nil;
+    PASS([copier moveItemAtPath: plain
+                         toPath: [o stringByAppendingPathComponent: @"renamed.txt"]
+                        handler: nil metadataError: &err] && err == nil,
+         "renaming an item without a comment ignores the folder's store");
+    err = nil;
+    PASS([xc moveItemAtPath: plain2
+                     toPath: [q stringByAppendingPathComponent: @"plain2.txt"]
+                    handler: nil metadataError: &err] && err == nil
+         && ![fm fileExistsAtPath: plain2],
+         "moving an item without a comment ignores the folder's store");
+    PASS_EQUAL([NSString stringWithContentsOfFile: junk], @"junk",
+               "the folder's store stays untouched");
   }
 
   {
