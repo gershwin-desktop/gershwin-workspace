@@ -870,7 +870,7 @@
   = "Der Startdatentr\u00e4ger hat weniger als 3%% freien Speicher.\n\n";
 
 "The startup disk has less than 3%% free space.\n\nOnly %.1f%% (%llu MB) available."
-  = "The startup disk has less than 3%% free space.\n\nOnly %.1f%% (%llu MB) available.";
+  = "Der Startdatentr\u00e4ger hat weniger als 3%% freien Speicher.\n\nNur %.1f%% (%llu MB) verf\u00fcgbar.";
 
 "The volume at the following path was removed without being properly ejected:\n\n%@\n\n"
   = "Das Volume am folgenden Pfad wurde ohne ordnungsgem\u00e4\u00dfes Auswerfen entfernt:\n\n%@\n\n";
